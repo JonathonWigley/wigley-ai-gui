@@ -435,8 +435,10 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list. A switch-off sets the applied
   list and pushes the served config before it stops any part, so a disabled plugin's binds leave while their handlers
   still exist; it then stops the page parts (the page answers over `bridge:plugin-parts`), then the main parts, and
-  clears the owners' slots. A switch-on starts the main parts, sets the applied list, then starts the page parts. The
-  served config drops a disabled plugin's commands, binds and key scopes (`appliedCommands`, `appliedScopes` and
+  clears the owners' slots. A switch-on starts the main parts, sets the applied list, then starts the page parts. A
+  restart sets the plugin and its dependents as the applied paused list, whose binds alone the served config drops, and
+  pushes the served config before its page stop; it clears the list and pushes again after its main start, before its
+  page start. The served config drops a disabled plugin's commands, binds and key scopes (`appliedCommands`, `appliedScopes` and
   `withAppliedList` in `src/shared/plugin-manifests.ts`), so help, which-key and Settings' keymap section list none. A
   plugin that a running plugin depends on is locked (`neededBy` names the dependents), and naming it is a config
   problem, so the last good config stays. A part's `mayStop` refusal is also held as a `settings.json` config problem,

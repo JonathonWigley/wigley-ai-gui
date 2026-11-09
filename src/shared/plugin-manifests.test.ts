@@ -14,6 +14,7 @@ import {
   defaultBindLines,
   defaultBindStanding,
   dependencyOrder,
+  dependentsOf,
   disabledDependencyProblem,
   type DefaultKeyLayer,
   expandBind,
@@ -750,6 +751,54 @@ describe('neededBy', () => {
   );
 });
 
+describe('dependentsOf', () => {
+  it.each([
+    {
+      case: 'ADirectDependent',
+      disabled: [],
+      plugins: [
+        manifest('b', { dependsOn: { main: ['a'], page: [] } }),
+        manifest('a'),
+      ],
+      expected: ['b'],
+    },
+    {
+      case: 'ADependentOfADependent_InManifestsOrder',
+      disabled: [],
+      plugins: [
+        manifest('a'),
+        manifest('b', { dependsOn: { main: ['a'], page: [] } }),
+        manifest('c', { dependsOn: { main: [], page: ['b'] } }),
+      ],
+      expected: ['b', 'c'],
+    },
+    {
+      case: 'ADependentNamedOnlyInReads',
+      disabled: [],
+      plugins: [
+        manifest('a'),
+        manifest('b', { reads: { main: ['a'], page: [] } }),
+      ],
+      expected: [],
+    },
+    {
+      case: 'ADependentThatIsOff_AndItsOwnDependents',
+      disabled: ['b'],
+      plugins: [
+        manifest('a'),
+        manifest('b', { dependsOn: { main: ['a'], page: [] } }),
+        manifest('c', { dependsOn: { main: ['b'], page: [] } }),
+      ],
+      expected: [],
+    },
+  ])(
+    'dependentsOf_ClosureOfOnDependents_$case',
+    ({ disabled, plugins, expected }) => {
+      expect(dependentsOf('a', disabled, plugins)).toEqual(expected);
+    },
+  );
+});
+
 describe('withoutPluginBinds', () => {
   function command(id: string, plugin: string): CommandInfo {
     return { id, label: id, group: 'Test', runsIn: 'page', plugin };
@@ -838,6 +887,7 @@ describe('withAppliedList', () => {
     {
       case: 'NoneOff_ServesEmptyAndKeepsEverything',
       disabled: [],
+      paused: [],
       expected: {
         disabled: [],
         app: [pApp, qApp],
@@ -849,6 +899,7 @@ describe('withAppliedList', () => {
     {
       case: 'OneOff_DropsItsBindsCommandsAndScopes',
       disabled: ['q'],
+      paused: [],
       expected: {
         disabled: ['q'],
         app: [pApp],
@@ -860,6 +911,7 @@ describe('withAppliedList', () => {
     {
       case: 'BothOff_KeepsTheListOrderAndDropsAll',
       disabled: ['q', 'p'],
+      paused: [],
       expected: {
         disabled: ['q', 'p'],
         app: [],
@@ -868,8 +920,20 @@ describe('withAppliedList', () => {
         scopes: [],
       },
     },
-  ])('withAppliedList_$case', ({ disabled, expected }) => {
-    const served = withAppliedList(config, disabled);
+    {
+      case: 'OnePaused_DropsOnlyItsBinds',
+      disabled: [],
+      paused: ['q'],
+      expected: {
+        disabled: [],
+        app: [pApp],
+        page: [pPage],
+        commands: ['p.go', 'q.go', 'p.page', 'q.page'],
+        scopes: ['p.view', 'q.view'],
+      },
+    },
+  ])('withAppliedList_$case', ({ disabled, paused, expected }) => {
+    const served = withAppliedList(config, disabled, paused);
 
     expect({
       disabled: served.settings.plugins.disabled,

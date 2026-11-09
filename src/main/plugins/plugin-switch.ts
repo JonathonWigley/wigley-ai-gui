@@ -13,7 +13,11 @@ import type {
 import type { SlotWriter } from '../../contracts/state';
 import { errorText } from '../../shared/error-text';
 import type { PluginHost } from '../../shared/plugin-host';
-import { dependencyOrder, neededBy } from '../../shared/plugin-manifests';
+import {
+  dependencyOrder,
+  dependentsOf,
+  neededBy,
+} from '../../shared/plugin-manifests';
 import type { AppliedPlugins } from './applied-plugins';
 
 // How often a refused switch-off asks again, until the part lets go or the
@@ -37,11 +41,14 @@ export interface PluginSwitch extends PluginSwitchService {
   // shows (neededBy, then mayStop), or null.
   mayDisable(pluginId: string): Promise<string | null>;
   // Stops `pluginId` and its dependents, page parts first, then starts what
-  // stopped, main parts first; their slots are kept. When a step throws, it
-  // starts again each main part it stopped, one at a time, logging a start
-  // that throws, and each page part whose main part runs again or that has no
-  // main part, then rejects. Rejects for a plugin that is off or that no
-  // manifest has.
+  // stopped, main parts first; their slots are kept. Their binds leave first:
+  // it sets them as the applied paused list and pushes the served config
+  // before the page stop, and clears the list and pushes again after the main
+  // start, before the page start. When a step throws, it starts again each
+  // main part it stopped, one at a time, logging a start that throws, and each
+  // page part whose main part runs again or that has no main part, then clears
+  // the paused list and pushes when it is still set, then rejects. Rejects
+  // for a plugin that is off or that no manifest has, pushing nothing.
   restart(pluginId: string): Promise<void>;
   // Clears the retry timer; a later `apply` resolves null and a later
   // `restart` resolves, each doing nothing.
@@ -60,8 +67,8 @@ export interface PluginSwitchDeps {
   manifests: readonly PluginManifest[];
   // Sets or clears the switch's config problem.
   problem(message: string | null): void;
-  // The applied list changed: push the served config to the page and apply
-  // main's keys again.
+  // The applied or paused list changed: push the served config to the page
+  // and apply main's keys again.
   servedChanged(): void;
   timers: Timers;
   log: Log;
@@ -340,18 +347,31 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         const mainBefore = idsWhere(manifests, (id) => main.started.has(id));
         let pageStopped: readonly string[] = [];
         let isDone = false;
+        // The binds leave while the handlers exist, and main's come back once
+        // its handlers exist again; the page start brings the page's back.
+        applied.setPaused([
+          pluginId,
+          ...dependentsOf(pluginId, applied.disabled(), manifests),
+        ]);
+        deps.servedChanged();
         try {
           pageStopped = stoppedOf(
             await deps.page({ kind: 'stop', ids: [pluginId] }),
           );
           const mainStopped = await main.stop(pluginId);
           main.start(mainStopped);
+          applied.setPaused([]);
+          deps.servedChanged();
           await deps.page({ kind: 'start', ids: pageStopped });
           isDone = true;
           deps.log(SOURCE, `restarted ${pluginId}`);
         } finally {
           if (!isDone) {
             await startWhatStopped(mainBefore, pageStopped);
+            if (applied.paused().length > 0) {
+              applied.setPaused([]);
+              deps.servedChanged();
+            }
           }
           writeStatus();
         }

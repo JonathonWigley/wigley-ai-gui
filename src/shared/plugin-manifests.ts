@@ -111,6 +111,27 @@ export function neededBy(
     .map((manifest) => manifest.id);
 }
 
+// The ids of the plugins in `manifests`, in list order, that `disabled` does not
+// name and that depend on `pluginId`, directly or through another such
+// dependent: `neededBy` taken to its closure. `pluginId` itself is left out.
+export function dependentsOf(
+  pluginId: string,
+  disabled: readonly string[],
+  manifests: readonly PluginManifest[],
+): string[] {
+  const found = new Set<string>();
+  const pending = [pluginId];
+  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+    for (const dependent of neededBy(id, disabled, manifests)) {
+      if (dependent !== pluginId && !found.has(dependent)) {
+        found.add(dependent);
+        pending.push(dependent);
+      }
+    }
+  }
+  return manifests.map((manifest) => manifest.id).filter((id) => found.has(id));
+}
+
 // The problem with a `plugins.disabled` list: the first id it names, walking
 // `disabled` in list order, that a plugin it leaves started depends on
 // (`neededBy`), naming the first such plugin. Null when no started plugin
@@ -161,21 +182,24 @@ export function withoutPluginBinds(
 
 // `config` as main serves it: `disabled` as its `plugins.disabled`, in place
 // of the user's list, and without the binds, commands and scopes of the
-// plugins in it, every other field as it was.
+// plugins in it, every other field as it was. The plugins in `paused`, whose
+// parts restart now, lose their binds only.
 export function withAppliedList(
   config: AppConfig,
   disabled: readonly string[],
+  paused: readonly string[] = [],
 ): AppConfig {
+  const unbound = [...disabled, ...paused];
   const mainKept = withoutPluginBinds(
     config.keymap,
     config.commands,
-    disabled,
+    unbound,
     'main',
   );
   return {
     ...config,
     settings: { ...config.settings, plugins: { disabled: [...disabled] } },
-    keymap: withoutPluginBinds(mainKept, config.commands, disabled, 'page'),
+    keymap: withoutPluginBinds(mainKept, config.commands, unbound, 'page'),
     commands: appliedCommands(config.commands, disabled),
     scopes: appliedScopes(config.scopes, disabled),
   };

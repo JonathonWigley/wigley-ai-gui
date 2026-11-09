@@ -47,7 +47,9 @@ interface SetupOptions {
 // fakes answer, and a test changes them between calls. A refusal answers only
 // for a request naming its id, and a main stop forgets each part it replies
 // with even when it rejects, as the host does. `page.mayStopHold` holds a
-// page `mayStop` and `page.hold` a page stop.
+// page `mayStop` and `page.hold` a page stop. A page start naming
+// `page.startRejects` rejects after it is pushed. `setPaused` pushes
+// `paused <ids>`.
 function setup({ manifests, applied: initial = [] }: SetupOptions) {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -71,6 +73,7 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
     stopReply: null as string[] | null,
     hold: null as Promise<void> | null,
     mayStopHold: null as Promise<void> | null,
+    startRejects: null as string | null,
   };
   const applied = createAppliedPlugins(initial);
   const fakeTimers: Timers = {
@@ -124,6 +127,12 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
         await page.hold;
         return { stopped: page.stopReply ?? request.ids };
       }
+      if (
+        page.startRejects !== null &&
+        request.ids.includes(page.startRejects)
+      ) {
+        throw new Error(`page start of ${page.startRejects} failed`);
+      }
       return { started: request.ids };
     },
     applied: {
@@ -131,6 +140,11 @@ function setup({ manifests, applied: initial = [] }: SetupOptions) {
       set(disabled) {
         calls.push(`applied ${disabled.join(',')}`);
         applied.set(disabled);
+      },
+      paused: () => applied.paused(),
+      setPaused(ids) {
+        calls.push(`paused ${ids.join(',')}`.trimEnd());
+        applied.setPaused(ids);
       },
     },
     slots: { clearOwner: (id) => calls.push(`clearOwner ${id}`) },
@@ -468,7 +482,10 @@ describe('createPluginSwitch', () => {
 
   it('restart_KeepsSlotsAndStartsWhatItStopped', async () => {
     const { pluginSwitch, calls, logs, main, page } = setup({
-      manifests: [manifest('a'), manifest('b')],
+      manifests: [
+        manifest('a'),
+        manifest('b', { dependsOn: { main: ['a'], page: [] } }),
+      ],
     });
     page.stopReply = ['b', 'a'];
     main.stopReply = ['b', 'a'];
@@ -476,9 +493,13 @@ describe('createPluginSwitch', () => {
     await pluginSwitch.restart('a');
 
     expect(calls).toEqual([
+      'paused a,b',
+      'servedChanged',
       'page stop a',
       'main stop a',
       'main start b,a',
+      'paused',
+      'servedChanged',
       'page start b,a',
     ]);
     expect(logs).toEqual(['[plugin-switch] restarted a']);
@@ -492,7 +513,16 @@ describe('createPluginSwitch', () => {
       manifests: [manifest('a'), manifest('b')],
       id: 'a',
       fail: { stopRejects: 'a' },
-      calls: ['page stop a', 'main stop a', 'main start a', 'page start a'],
+      calls: [
+        'paused a',
+        'servedChanged',
+        'page stop a',
+        'main stop a',
+        'main start a',
+        'page start a',
+        'paused',
+        'servedChanged',
+      ],
       logs: [],
     },
     {
@@ -500,7 +530,16 @@ describe('createPluginSwitch', () => {
       manifests: [manifest('a'), manifest('b')],
       id: 'a',
       fail: { startThrowsAt: 'a' },
-      calls: ['page stop a', 'main stop a', 'main start a', 'main start a'],
+      calls: [
+        'paused a',
+        'servedChanged',
+        'page stop a',
+        'main stop a',
+        'main start a',
+        'main start a',
+        'paused',
+        'servedChanged',
+      ],
       logs: ['[plugin-switch] failed: start of a failed'],
     },
     {
@@ -518,19 +557,43 @@ describe('createPluginSwitch', () => {
         startThrowsAt: 'y',
       },
       calls: [
+        'paused x,z,y',
+        'servedChanged',
         'page stop x',
         'main stop x',
         'main start x',
         'main start z',
         'main start y',
         'page start z,x',
+        'paused',
+        'servedChanged',
       ],
       logs: ['[plugin-switch] failed: start of y failed'],
+    },
+    {
+      case: 'page start rejects',
+      manifests: [manifest('a'), manifest('b')],
+      id: 'a',
+      fail: {},
+      pageStartRejects: 'a',
+      calls: [
+        'paused a',
+        'servedChanged',
+        'page stop a',
+        'main stop a',
+        'main start a',
+        'paused',
+        'servedChanged',
+        'page start a',
+        'page start a',
+      ],
+      logs: ['[plugin-switch] failed: page start of a failed'],
     },
   ])('restart_StepFails_StartsWhatItStopped: $case', async (row) => {
     const switched = setup({ manifests: row.manifests });
     Object.assign(switched.main, row.fail);
     switched.page.stopReply = row.pageStopped ?? null;
+    switched.page.startRejects = row.pageStartRejects ?? null;
 
     await expect(switched.pluginSwitch.restart(row.id)).rejects.toThrow(
       /failed$/,

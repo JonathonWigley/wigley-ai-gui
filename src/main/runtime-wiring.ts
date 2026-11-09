@@ -35,8 +35,8 @@ export interface RuntimeWiring {
   handledKeymap(keymap: Keymap): Keymap;
   // Called on `render-process-gone`. Writes the empty page catalog.
   pageProcessGone(): void;
-  // Called when the served config changed with no store change (the applied list): applies the
-  // served keymap main can run, as a store change does.
+  // Called when the served config changed with no store change (the applied or paused list): applies
+  // the served keymap main can run, as a store change does.
   servedChanged(): void;
 }
 

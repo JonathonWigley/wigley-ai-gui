@@ -1061,6 +1061,7 @@ function createWindow(
     withAppliedList(
       applySelfTestConfig(store.current(), selfTestConfig),
       applied.disabled(),
+      applied.paused(),
     );
   const startServed = served();
   ipcMain.handle(BRIDGE_CHANNELS.config, () => served());
