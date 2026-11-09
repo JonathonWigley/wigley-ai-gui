@@ -110,7 +110,7 @@ Out of scope:
 - [x] [Paused run row label](01-paused-run-row-label.md)
 
 ### Wave 2
-- [ ] [Doc re-read](02-doc-re-read.md) — after 01
+- [x] [Doc re-read](02-doc-re-read.md) — after 01
 
 ### Wave 3
 - [ ] [Final verification](03-final-verification.md) — after 02
@@ -121,6 +121,7 @@ Review base: 631595fa
 
 ### Groups
 - 01 · b7244ddc, a728f9d8 · diff read: both Produces present in contract.ts; tsc failed on the test's partial PageStage cast, fixed in a728f9d8; typecheck and lint pass · concerns: page-level Small/Medium tests drawing a paused stage were not run by the worker; left to the test gate
+- 02 · b44679f3 · diff read: one stale cell in session-titles rank table fixed; workflow design, DESIGN.md and other Needs you lines checked true · concerns: none
 ### Contract changes
 ### Rulings
 - contract.test.ts builds a whole PageStage literal in stageWith, since stageOf is private to workflow-view.test.ts — a later shared builder could replace it · group 01

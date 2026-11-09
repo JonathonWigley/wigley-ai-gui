@@ -1,6 +1,6 @@
 # 02 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -23,3 +23,4 @@ Commit:    one commit for the group, or none when nothing is stale
 
 ## Proof
 
+Commit b44679f3 · proof: diff read: one stale cell in session-titles rank table fixed; workflow design, DESIGN.md and other Needs you lines checked true · concerns: none
