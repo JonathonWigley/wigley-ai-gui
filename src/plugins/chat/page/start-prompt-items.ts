@@ -24,7 +24,6 @@ type SectionItem = Extract<FolderItem | ProjectItem, { kind: 'section' }>;
 export const CHOOSE_FOLDER_LABEL = 'Choose folder…';
 export const FOLDERS_HEADING = 'Folders';
 export const PROJECT_STEP_TITLE = 'Project';
-export const BRANCH_STEP_TITLE = 'Branch';
 export const OTHER_FOLDER_LABEL = 'Other folder…';
 export const PROJECTS_HEADING = 'Projects';
 
@@ -133,19 +132,6 @@ export function projectSection(
     return item.section;
   }
   return showsSections ? PROJECTS_HEADING : null;
-}
-
-// The index in `after` of the branch at `cursor` in `before`; 0 when `cursor`
-// is null or `after` lacks it.
-export function branchSelected(
-  before: readonly string[],
-  cursor: number | null,
-  after: readonly string[],
-): number {
-  if (cursor === null) {
-    return 0;
-  }
-  return Math.max(0, after.indexOf(before[cursor]));
 }
 
 // The folder step's row name: a recent folder's own name; the choose-folder

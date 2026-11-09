@@ -270,9 +270,9 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, one of the resume
 // sections the start prompt lists, and one of the pool provider a pool
-// project's branches, clones and claim come from. It names each row's project
-// from the `projects` setting for the side bar, and lists the projects, a pool
-// project's branches and a project's saved sessions for the start prompt.
+// project's clones come from. It names each row's project from the `projects`
+// setting for the side bar, and lists the projects and a project's saved
+// sessions for the start prompt.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -380,9 +380,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.channel.handle('loaded', () => accounts.cancelRunning());
     api.channel.handle('start', (request) => chat.start(request));
     api.channel.handle('projects', () => [...projects]);
-    api.channel.handle('branches', (project, refresh) =>
-      chat.branches(project, refresh),
-    );
     api.channel.handle('projectPastSessions', (project, profile) =>
       chat.projectPastSessions(project, profile),
     );

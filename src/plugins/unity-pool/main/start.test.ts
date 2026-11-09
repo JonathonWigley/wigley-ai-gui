@@ -17,7 +17,6 @@ import {
 } from '../../sessions/contract';
 import { unityPoolSnapshotSlot } from '../contract';
 import { unityPoolManifest } from '../manifest';
-import { claimCommandArgs } from './pool-cli';
 import {
   poolStateText,
   SELFTEST_POOL,
@@ -61,13 +60,6 @@ function startOnHarness(os: OsName = 'macos') {
     disposedRegistrations: () => disposed,
   });
 }
-
-const CLAIM = {
-  pool: SELFTEST_POOL,
-  branch: 'main',
-  hostSessionId: 'host-1',
-  rowId: 'row-1',
-};
 
 describe('unityPoolMainPart', () => {
   it('stop_LeavesNoLiveRegistration', async () => {
@@ -155,65 +147,4 @@ describe('unityPoolMainPart', () => {
     );
     expect(harness.foldersAtChanges).toContainEqual(['/x/1', '/x/2']);
   });
-
-  it('poolProvider_Claim_Diverged_ReadsTheStateFile', async () => {
-    const harness = startOnHarness();
-    const script = '/home/.local/bin/unity-pool';
-    await harness.files.write(script, '');
-    const state = JSON.parse(
-      poolStateText(
-        { rowId: 'row-9', clonePaths: ['/x/1', '/x/2'], startedAt: 1_000 },
-        'panel',
-      ),
-    );
-    state.clones['2'].claim = {
-      kind: 'agent',
-      session: 'host-1',
-      row: 'row-1',
-      since: 990,
-      renewedAt: 990,
-    };
-    await harness.files.write(
-      `/home/${SELFTEST_STATE_PATH}`,
-      JSON.stringify(state),
-    );
-    harness.processes.script(
-      'python3',
-      claimCommandArgs(script, SELFTEST_POOL, 'main'),
-      {
-        code: 1,
-        stdout: '{"ok": false, "error": "diverged", "message": "m"}\n',
-        stderr: '',
-        timedOut: false,
-      },
-    );
-
-    const result = await harness.providers[0].claim(
-      CLAIM,
-      new AbortController().signal,
-      () => {},
-    );
-
-    expect(result).toEqual({ ok: true, path: '/x/2', note: 'm' });
-  });
-
-  it.each([
-    ['windows', '/home/wigley-agents/tools/unity-pool/unity-pool'],
-    ['macos', '/home/.local/bin/unity-pool'],
-  ] as const)(
-    'poolProvider_Claim_EmptyScriptPath_LooksUpPlatformDefault: %s',
-    async (platform, script) => {
-      const harness = startOnHarness(platform);
-      const stat = vi.spyOn(harness.files, 'stat');
-
-      const result = await harness.providers[0].claim(
-        CLAIM,
-        new AbortController().signal,
-        () => {},
-      );
-
-      expect(stat).toHaveBeenCalledWith(script);
-      expect(result).toMatchObject({ ok: false, error: 'no-cli' });
-    },
-  );
 });

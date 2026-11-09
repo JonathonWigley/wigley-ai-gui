@@ -13,7 +13,7 @@ import type { ChatProject, LaunchRequest } from '../contract';
 export const START_SESSION_TOOL: ToolDefinition = {
   name: 'start_session',
   description:
-    "Start a new, independent chat session in the Auri app with `prompt` as its first message. It opens in the background as a new row in the side bar, without taking focus. It is a full agent session running the user's whole agent setup, not a lightweight subagent: even a one-word prompt spends tens of thousands of tokens of the user's plan, so start one only when the work needs its own session. It always runs on Claude, whichever agent calls this tool. It runs on its own: its output does not come back here, and this tool cannot message or end it. Name where it starts with `folder` or `project`, not both; with neither it starts in this session's folder when there is one. `folder` must be an absolute path to a folder that exists. `project` names one of the app's projects: a folder project starts in its folder, and a Unity pool project needs `branch` and starts once the app has claimed a clone on that branch. `profile` defaults to the project's own profile when it has one, else to this session's when the app started this session, else to the app's first profile; a project with its own profile refuses any other. Returns the new session's id.",
+    "Start a new, independent chat session in the Auri app with `prompt` as its first message. It opens in the background as a new row in the side bar, without taking focus. It is a full agent session running the user's whole agent setup, not a lightweight subagent: even a one-word prompt spends tens of thousands of tokens of the user's plan, so start one only when the work needs its own session. It always runs on Claude, whichever agent calls this tool. It runs on its own: its output does not come back here, and this tool cannot message or end it. Name where it starts with `folder` or `project`, not both; with neither it starts in this session's folder when there is one. `folder` must be an absolute path to a folder that exists. `project` names one of the app's projects: a folder project starts in its folder, and a Unity pool project starts in the pool's lowest-numbered clone and claims no clone, so name the branch in `prompt` when the work needs one. `profile` defaults to the project's own profile when it has one, else to this session's when the app started this session, else to the app's first profile; a project with its own profile refuses any other. Returns the new session's id.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -30,11 +30,6 @@ export const START_SESSION_TOOL: ToolDefinition = {
         type: 'string',
         description:
           "The name of one of the app's projects to start in, in place of folder.",
-      },
-      branch: {
-        type: 'string',
-        description:
-          'For a Unity pool project: the branch its clone checks out. Only with project.',
       },
       profile: {
         type: 'string',
@@ -65,13 +60,10 @@ interface StartSessionArgs {
   folder?: unknown;
   profile?: unknown;
   project?: unknown;
-  branch?: unknown;
 }
 
-// A project and its branch, the args name, each null when absent.
-type ProjectChoice =
-  | { project: string | null; branch: string | null }
-  | { problem: string };
+// The project the args name, null when absent.
+type ProjectChoice = { project: string | null } | { problem: string };
 
 // A value an argument settled on, or the problem that stops the call.
 type Choice = { value: string } | { problem: string };
@@ -113,23 +105,13 @@ function chooseProfile(
 function chooseProject(named: StartSessionArgs): ProjectChoice {
   const isFolderNamed = !isAbsent(named.folder);
   const isProjectNamed = !isAbsent(named.project);
-  const isBranchNamed = !isAbsent(named.branch);
   if (isFolderNamed && isProjectNamed) {
     return { problem: 'Name folder or project, not both.' };
-  }
-  if (isBranchNamed && !isProjectNamed) {
-    return { problem: 'branch is only for a project.' };
   }
   if (isProjectNamed && !isNonBlankString(named.project)) {
     return { problem: 'project must be a non-empty string.' };
   }
-  if (isBranchNamed && !isNonBlankString(named.branch)) {
-    return { problem: 'branch must be a non-empty string.' };
-  }
-  return {
-    project: isProjectNamed ? (named.project as string) : null,
-    branch: isBranchNamed ? (named.branch as string) : null,
-  };
+  return { project: isProjectNamed ? (named.project as string) : null };
 }
 
 async function chooseFolder(
@@ -161,19 +143,6 @@ async function chooseFolder(
   return { value: folder };
 }
 
-// What a launch at `project` reports: a branch's claim is still to come.
-function projectLaunchedText(
-  id: string,
-  project: string,
-  branch: string | null,
-  profile: string,
-): string {
-  if (branch === null) {
-    return `Launched session ${id} in project ${project} under profile ${profile}. A failure to start shows on its row.`;
-  }
-  return `Launched session ${id} in project ${project} on branch ${branch} under profile ${profile}. It starts once a Unity clone on ${branch} is claimed; a failure shows on its row.`;
-}
-
 // Starts a session from valid args; a bad argument or a failed launch is an
 // error result, and a bad argument starts nothing. A failed launch or a rejected
 // stat also writes a log line. A call naming a project stats no folder.
@@ -190,7 +159,7 @@ async function startSession(
   if ('problem' in target) {
     return errorResult(target.problem);
   }
-  const { project, branch } = target;
+  const { project } = target;
   const profile = chooseProfile(deps, session.id, named.profile, project);
   if ('problem' in profile) {
     return errorResult(profile.problem);
@@ -203,9 +172,9 @@ async function startSession(
   let request: LaunchRequest;
   let launchedText: (id: string) => string;
   if (project !== null) {
-    request = { project, branch, ...fields };
+    request = { project, ...fields };
     launchedText = (id) =>
-      projectLaunchedText(id, project, branch, profile.value);
+      `Launched session ${id} in project ${project} under profile ${profile.value}. A failure to start shows on its row.`;
   } else {
     const folder = await chooseFolder(deps, session, named.folder);
     if ('problem' in folder) {

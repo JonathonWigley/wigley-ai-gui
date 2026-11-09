@@ -330,7 +330,6 @@ function startChatPart(
         dispose: () => undefined,
       };
     },
-    relocate: () => undefined,
     addToolCallGuard: (guard: ToolCallGuard) => {
       toolCallGuards.push(guard);
       return { dispose: () => undefined };
@@ -488,24 +487,14 @@ function startChatPart(
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const NEW_GAMES_SETTING: ProjectSetting = {
-  name: 'New Games',
-  pool: 'ng',
-  pinnedBranches: ['main'],
-};
+const NEW_GAMES_SETTING: ProjectSetting = { name: 'New Games', pool: 'ng' };
 
 // A provider over pool `ng`'s clones, `/pool/ng-1` and `/pool/ng-2` unless
-// `clones` says otherwise, listing `feature/x` then `main`, whose claims never
-// settle.
+// `clones` says otherwise.
 function fakePoolProvider(
   clones: () => readonly string[] = () => ['/pool/ng-1', '/pool/ng-2'],
 ): PoolProvider {
-  return {
-    folders: (pool) => (pool === 'ng' ? clones() : []),
-    branches: () => Promise.resolve(['feature/x', 'main']),
-    claim: () => new Promise(() => {}),
-    release: () => Promise.resolve(),
-  };
+  return { folders: (pool) => (pool === 'ng' ? clones() : []) };
 }
 
 // A data folder holding one saved session whose process id is `p1`.
@@ -1133,11 +1122,15 @@ describe('chat main part', () => {
       contribution: 'a pool provider',
       contribute: (view: ChatMainExports) =>
         view.addPoolProvider(fakePoolProvider()),
-      observe: async (chat: ReturnType<typeof startChatPart>) => {
-        const listing = chat.invoke('branches', 'New Games', false) as Promise<
-          string[]
-        >;
-        return listing.catch((error: unknown) => (error as Error).message);
+      observe: (chat: ReturnType<typeof startChatPart>) => {
+        try {
+          return chat.invoke('start', {
+            project: 'New Games',
+            profile: 'work',
+          });
+        } catch (error) {
+          return (error as Error).message;
+        }
       },
       expected: expect.stringContaining('No Unity pool provider'),
     },
@@ -1224,17 +1217,18 @@ describe('chat main part', () => {
     },
   );
 
-  it('branches_ThroughTheRegisteredProvider', async () => {
+  it('start_PoolProject_StartsInTheRegisteredProvidersLowestClone', () => {
     const chat = startChatPart({ projects: [NEW_GAMES_SETTING] });
     const before = chat.namerChanges.count;
 
     chat.exports.addPoolProvider(fakePoolProvider());
+    chat.invoke('start', { project: 'New Games', profile: 'work' });
 
     expect(chat.namerChanges.count).toBe(before + 1);
-    await expect(chat.invoke('branches', 'New Games', false)).resolves.toEqual([
-      'main',
-      'feature/x',
-    ]);
+    expect(chat.starts.count).toBe(1);
+    expect(chat.sessionsInSlots().map((session) => session.projectDir)).toEqual(
+      ['/pool/ng-1'],
+    );
   });
 
   it('exports_AddResumeSection_ReachesResumeSections', async () => {

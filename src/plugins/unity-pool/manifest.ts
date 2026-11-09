@@ -45,7 +45,7 @@ export const unityPoolManifest = definePlugin({
     scriptPath: {
       label: 'unity-pool command',
       description:
-        "The unity-pool script the panel's Hold and Release buttons, and the claim for a new session in a pool project, run with the Python command. ~ is the home folder. Empty, it is ~/.local/bin/unity-pool, and on Windows ~/wigley-agents/tools/unity-pool/unity-pool, since a Windows install writes launchers, not a symlink Python can run.",
+        "The unity-pool script the panel's Hold and Release buttons run with the Python command. ~ is the home folder. Empty, it is ~/.local/bin/unity-pool, and on Windows ~/wigley-agents/tools/unity-pool/unity-pool, since a Windows install writes launchers, not a symlink Python can run.",
     },
     pythonCommand: {
       label: 'Python command',

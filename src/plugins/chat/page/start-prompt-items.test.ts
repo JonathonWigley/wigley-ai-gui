@@ -8,7 +8,6 @@ import type {
   ResumeSectionRow,
 } from '../contract';
 import {
-  branchSelected,
   displayPath,
   FOLDERS_HEADING,
   type FolderItem,
@@ -53,7 +52,6 @@ const newGames: ChatProject = {
   name: 'New Games',
   pool: 'new-games-prototypes',
   profile: 'work',
-  pinnedBranches: ['main'],
 };
 const aiDev: ChatProject = {
   kind: 'folder',
@@ -353,38 +351,5 @@ describe('start prompt items', () => {
     },
   ])('projectSection: $name', ({ item, showsSections, heading }) => {
     expect(projectSection(item, showsSections)).toBe(heading);
-  });
-
-  it.each([
-    {
-      name: 'moved down by a new branch',
-      before: ['main', 'a'],
-      cursor: 1,
-      after: ['main', 'b', 'a'],
-      expected: 2,
-    },
-    {
-      name: 'gone',
-      before: ['main', 'a'],
-      cursor: 1,
-      after: ['main', 'b'],
-      expected: 0,
-    },
-    {
-      name: 'no cursor',
-      before: ['main'],
-      cursor: null,
-      after: ['x', 'main'],
-      expected: 0,
-    },
-    {
-      name: 'moved up',
-      before: ['main', 'b', 'a'],
-      cursor: 2,
-      after: ['a', 'main'],
-      expected: 0,
-    },
-  ])('branchSelected: $name', ({ before, cursor, after, expected }) => {
-    expect(branchSelected(before, cursor, after)).toBe(expected);
   });
 });

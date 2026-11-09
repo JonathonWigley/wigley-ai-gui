@@ -59,54 +59,17 @@ export interface ProjectSetting {
   folder?: string;
   pool?: string;
   profile?: string;
-  pinnedBranches?: string[];
 }
 
 // One entry `readProjects` kept. `folder` is as written, a `~` unexpanded;
 // `profile` null when the project fixes none.
 export type ChatProject =
   | { kind: 'folder'; name: string; folder: string; profile: string | null }
-  | {
-      kind: 'pool';
-      name: string;
-      pool: string;
-      profile: string | null;
-      pinnedBranches: readonly string[];
-    };
-
-export interface PoolClaimRequest {
-  pool: string;
-  branch: string;
-  hostSessionId: string;
-  rowId: string;
-}
-
-// `note` is the CLI's message on a `diverged` claim, else null. `error` is the
-// CLI's error code (`dirty`, `unknown-branch`, `diverged`, `internal` and the
-// rest), `no-cli` when the CLI is missing, `cli-failed` when it ran but gave
-// no answer, or `cancelled` when the claim's signal aborted. Chat records
-// `internal` itself for a provider that throws or a move to the clone that
-// fails.
-export type PoolClaimResult =
-  | { ok: true; path: string; note: string | null }
-  | { ok: false; error: string; message: string };
+  | { kind: 'pool'; name: string; pool: string; profile: string | null };
 
 export interface PoolProvider {
   // The pool's clone paths by clone number; [] for an unknown pool.
   folders(pool: string): readonly string[];
-  // Origin's branch names, newest commit first; `refresh` true fetches first.
-  branches(pool: string, refresh: boolean): Promise<string[]>;
-  // Claims a clone on `branch` for the session's ids, calling `queued` when
-  // the claim waits in the pool's queue; stops the claim when `signal` aborts.
-  // A claim that does not answer ok leaves no clone held.
-  claim(
-    request: PoolClaimRequest,
-    signal: AbortSignal,
-    queued: () => void,
-  ): Promise<PoolClaimResult>;
-  // Releases the clone a claim under the request's ids landed, for a landed
-  // claim chat drops; never rejects.
-  release(request: PoolClaimRequest): Promise<void>;
 }
 
 // `changed()` says the provider's `folders` changed, so chat re-asks every
@@ -116,11 +79,8 @@ export interface PoolProviderHandle extends Disposable {
 }
 
 // Where a new session starts: a folder, or a project from chat's `projects`
-// setting with the branch a pool project's clone checks out (null for a folder
-// project).
-export type StartTarget =
-  | { projectDir: string }
-  | { project: string; branch: string | null };
+// setting.
+export type StartTarget = { projectDir: string } | { project: string };
 
 // `headless`: true opens the row headless.
 export type StartRequest = StartTarget & {
@@ -399,17 +359,13 @@ export interface ChatChannel extends ChannelShape {
     // folder each profile's harness saved sessions in, one per folder, missing
     // folders and those in the OS's temp folders left out.
     recentFolders(): Promise<RecentFolder[]>;
-    // The new row's sessionId; a pool project's row opens resting and starts
-    // its agent once a clone on the branch is claimed. Throws, opening nothing,
-    // on an unknown project, a missing or stray branch, a profile other than
-    // the project's, no pool provider, or a pool with no clones.
+    // The new row's sessionId; a pool project's row starts in the pool's
+    // lowest-numbered clone. Throws, opening nothing, on an unknown project, a
+    // profile other than the project's, no pool provider, or a pool with no
+    // clones.
     start(request: StartRequest): string;
     // Chat's checked projects, in settings order.
     projects(): ChatProject[];
-    // A pool project's branches: pinned first, then every other origin branch,
-    // newest commit first. Rejects for a folder or unknown project, or with no
-    // pool provider.
-    branches(project: string, refresh: boolean): Promise<string[]>;
     // The saved sessions of every folder the project covers under the
     // profile, newest first, each with its folder.
     projectPastSessions(
@@ -654,9 +610,9 @@ export interface ChatMainExports {
   // such a row raises no `Turn finished` mark. Resolves to the new row's
   // sessionId; rejects, opening nothing, on an image chat refuses (with the
   // refusal text), an unknown profile, no chat harness, an unknown project, a
-  // missing or stray branch, a profile other than the project's, no pool
-  // provider, or a pool with no clones. A pool project's launch resolves once
-  // the row is open, its first message waiting for the claim.
+  // profile other than the project's, no pool provider, or a pool with no
+  // clones. A pool project's session starts in the pool's lowest-numbered
+  // clone.
   launch(request: LaunchRequest): Promise<string>;
   // The channel's resume for another plugin: resolves to the row's sessionId.
   // A row chat holds for the host id is returned as it is only when its owner
@@ -734,8 +690,8 @@ export interface ChatMainExports {
   addResumeSection(section: ResumeSection): Disposable;
   // The newest provider still registered answers every pool question;
   // disposing the handle removes it, and the one registered before it answers
-  // again. With none registered a pool project lists no branches and cannot
-  // start. Each row's project is re-asked at the add, at the handle's
+  // again. With none registered a pool project can neither start nor list its
+  // saved sessions. Each row's project is re-asked at the add, at the handle's
   // `changed()` and at its `dispose`; `changed()` after `dispose` does nothing.
   addPoolProvider(provider: PoolProvider): PoolProviderHandle;
 }

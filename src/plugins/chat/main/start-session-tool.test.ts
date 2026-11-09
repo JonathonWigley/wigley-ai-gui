@@ -48,7 +48,6 @@ const NEW_GAMES_TOOL: ChatProject = {
   name: 'New Games',
   pool: 'ng',
   profile: 'work',
-  pinnedBranches: [],
 };
 
 const ROWS: Row[] = [
@@ -213,7 +212,6 @@ const ROWS: Row[] = [
     args: { prompt: 'go', project: 'AI Dev' },
     launched: {
       project: 'AI Dev',
-      branch: null,
       profile: 'home',
       message: message('go'),
       headless: false,
@@ -224,16 +222,15 @@ const ROWS: Row[] = [
   },
   {
     name: 'a pool project’s own profile beats the caller’s default',
-    args: { prompt: 'go', project: 'New Games', branch: 'main' },
+    args: { prompt: 'go', project: 'New Games' },
     launched: {
       project: 'New Games',
-      branch: 'main',
       profile: 'work',
       message: message('go'),
       headless: false,
     },
     success:
-      'Launched session row-7 in project New Games on branch main under profile work. It starts once a Unity clone on main is claimed; a failure shows on its row.',
+      'Launched session row-7 in project New Games under profile work. A failure to start shows on its row.',
     statCalled: false,
   },
   {
@@ -241,7 +238,6 @@ const ROWS: Row[] = [
     args: { prompt: 'go', project: 'AI Dev', profile: 'work' },
     launched: {
       project: 'AI Dev',
-      branch: null,
       profile: 'work',
       message: message('go'),
       headless: false,
@@ -252,33 +248,21 @@ const ROWS: Row[] = [
   },
   {
     name: 'a named profile other than the project’s goes to chat to refuse',
-    args: {
-      prompt: 'go',
-      project: 'New Games',
-      branch: 'main',
-      profile: 'home',
-    },
+    args: { prompt: 'go', project: 'New Games', profile: 'home' },
     launched: {
       project: 'New Games',
-      branch: 'main',
       profile: 'home',
       message: message('go'),
       headless: false,
     },
     success:
-      'Launched session row-7 in project New Games on branch main under profile home. It starts once a Unity clone on main is claimed; a failure shows on its row.',
+      'Launched session row-7 in project New Games under profile home. A failure to start shows on its row.',
     statCalled: false,
   },
   {
     name: 'folder and project together',
     args: { prompt: 'go', folder: '/other', project: 'AI Dev' },
     errors: ['folder', 'project'],
-    statCalled: false,
-  },
-  {
-    name: 'a branch with no project',
-    args: { prompt: 'go', branch: 'main' },
-    errors: ['branch'],
     statCalled: false,
   },
   {
@@ -298,12 +282,6 @@ const ROWS: Row[] = [
     },
     success:
       'Launched session row-7 in /caller under profile home. A failure to start shows on its row.',
-  },
-  {
-    name: 'a non-string branch',
-    args: { prompt: 'go', project: 'New Games', branch: 7 },
-    errors: ['branch'],
-    statCalled: false,
   },
 ];
 

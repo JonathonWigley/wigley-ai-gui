@@ -3,12 +3,7 @@ import type { Paths } from '../../../contracts/paths';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { ChatProject, PoolProvider, ProjectSetting } from '../contract';
-import {
-  branchChoices,
-  createPoolProviders,
-  projectOf,
-  readProjects,
-} from './projects';
+import { createPoolProviders, projectOf, readProjects } from './projects';
 
 function read(raw: readonly ProjectSetting[]) {
   const logged: string[] = [];
@@ -45,37 +40,20 @@ describe('readProjects', () => {
       skipped: [],
     },
     {
-      name: 'a pool project keeps its profile and pinned order',
-      raw: [
-        {
-          name: 'New Games',
-          pool: 'ngp',
-          profile: 'work',
-          pinnedBranches: ['protos/b', 'main'],
-        },
-      ],
+      name: 'a pool project keeps its profile',
+      raw: [{ name: 'New Games', pool: 'ngp', profile: 'work' }],
       expected: [
-        {
-          kind: 'pool',
-          name: 'New Games',
-          pool: 'ngp',
-          profile: 'work',
-          pinnedBranches: ['protos/b', 'main'],
-        },
+        { kind: 'pool', name: 'New Games', pool: 'ngp', profile: 'work' },
       ],
       skipped: [],
     },
     {
-      name: 'a pool with no pinned branches takes none',
-      raw: [{ name: 'New Games', pool: 'ngp' }],
+      name: 'a key no project reads is ignored',
+      raw: [
+        { name: 'New Games', pool: 'ngp', pinnedBranches: ['main'] },
+      ] as unknown as ProjectSetting[],
       expected: [
-        {
-          kind: 'pool',
-          name: 'New Games',
-          pool: 'ngp',
-          profile: null,
-          pinnedBranches: [],
-        },
+        { kind: 'pool', name: 'New Games', pool: 'ngp', profile: null },
       ],
       skipped: [],
     },
@@ -88,12 +66,6 @@ describe('readProjects', () => {
     {
       name: 'both folder and pool',
       raw: [{ name: 'A', folder: '/a', pool: 'p' }],
-      expected: [],
-      skipped: [0],
-    },
-    {
-      name: 'pinned branches on a folder project',
-      raw: [{ name: 'A', folder: '/a', pinnedBranches: ['main'] }],
       expected: [],
       skipped: [0],
     },
@@ -136,15 +108,6 @@ describe('readProjects', () => {
       skipped: [0, 1, 2, 3],
     },
     {
-      name: 'pinned branches that are not names',
-      raw: [
-        { name: 'A', pool: 'p', pinnedBranches: ['main', 4] },
-        { name: 'B', pool: 'p', pinnedBranches: ['main', ''] },
-      ] as unknown as ProjectSetting[],
-      expected: [],
-      skipped: [0, 1],
-    },
-    {
       name: 'a skipped entry leaves the rest in order',
       raw: [
         { name: 'A', folder: '/a' },
@@ -153,13 +116,7 @@ describe('readProjects', () => {
       ],
       expected: [
         { kind: 'folder', name: 'A', folder: '/a', profile: null },
-        {
-          kind: 'pool',
-          name: 'C',
-          pool: 'p',
-          profile: null,
-          pinnedBranches: [],
-        },
+        { kind: 'pool', name: 'C', pool: 'p', profile: null },
       ],
       skipped: [1],
     },
@@ -202,7 +159,6 @@ describe('projectOf', () => {
     name: 'New Games',
     pool: 'ngp',
     profile: 'work',
-    pinnedBranches: [],
   };
   const DEV: ChatProject = {
     kind: 'folder',
@@ -254,15 +210,7 @@ describe('projectOf', () => {
     {
       name: 'a pool the provider does not know',
       folder: '/Users/u/dev/ngp',
-      projects: [
-        {
-          kind: 'pool',
-          name: 'Other',
-          pool: 'other',
-          profile: null,
-          pinnedBranches: [],
-        },
-      ],
+      projects: [{ kind: 'pool', name: 'Other', pool: 'other', profile: null }],
       expected: null,
     },
     {
@@ -296,51 +244,6 @@ describe('projectOf', () => {
       );
 
       expect(found?.name ?? null).toBe(expected);
-    },
-  );
-});
-
-describe('branchChoices', () => {
-  it.each<{
-    name: string;
-    pinned: string[];
-    origin: string[];
-    expected: string[];
-  }>([
-    {
-      name: "pinned in their order, then origin's rest in its order",
-      pinned: ['main', 'protos/b'],
-      origin: ['protos/a', 'main', 'protos/c', 'protos/b'],
-      expected: ['main', 'protos/b', 'protos/a', 'protos/c'],
-    },
-    {
-      name: 'a pinned branch missing from origin stays',
-      pinned: ['release/x'],
-      origin: ['main'],
-      expected: ['release/x', 'main'],
-    },
-    {
-      name: "no pinned branches leaves origin's order",
-      pinned: [],
-      origin: ['b', 'a'],
-      expected: ['b', 'a'],
-    },
-    {
-      name: 'a repeated name shows once',
-      pinned: ['main', 'main'],
-      origin: ['dev', 'main'],
-      expected: ['main', 'dev'],
-    },
-    {
-      name: 'names differing only in case are two',
-      pinned: ['Main'],
-      origin: ['main'],
-      expected: ['Main', 'main'],
-    },
-  ])(
-    'branchChoices_PinnedFirstThenOrigin: $name',
-    ({ pinned, origin, expected }) => {
-      expect(branchChoices(pinned, origin)).toEqual(expected);
     },
   );
 });

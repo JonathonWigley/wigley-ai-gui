@@ -36,9 +36,6 @@ export interface SessionSlots {
       Omit<ChatSessionInfo, 'sessionId' | 'projectDir' | 'profile'>
     >,
   ): void;
-  // The one move a row makes: from a pool project's placeholder clone to the
-  // claimed one, before its process starts.
-  relocate(projectDir: string): void;
   entries(): readonly ChatEntry[];
   putEntry(entry: ChatEntry): void;
   replaceEntries(entries: readonly ChatEntry[]): void;
@@ -144,13 +141,6 @@ export function createChatSlots(writers: ChatSlotWriters): ChatSlots {
             return;
           }
           writers.session.set(sessionId, { ...info(), ...change });
-        },
-        relocate(projectDir) {
-          if (detached !== null) {
-            detached = { ...detached, projectDir };
-            return;
-          }
-          writers.session.set(sessionId, { ...info(), projectDir });
         },
         entries,
         putEntry(entry) {

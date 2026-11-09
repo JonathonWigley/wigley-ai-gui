@@ -28,7 +28,6 @@ import {
 } from './resume-items';
 import { createStartPrompt } from './start-prompt';
 import {
-  BRANCH_STEP_TITLE,
   CHOOSE_FOLDER_LABEL,
   FOLDERS_HEADING,
   type FolderItem,
@@ -59,7 +58,6 @@ interface ChannelAnswers {
   accountStatus: () => Promise<AccountStatus>;
   pastSessions: () => Promise<PastSessionRow[]>;
   projects: () => Promise<ChatProject[]>;
-  branches: (project: string, refresh: boolean) => Promise<string[]>;
   projectPastSessions: () => Promise<ProjectPastSessionRow[]>;
   start: (request: StartRequest) => Promise<string>;
   resume: (request: ResumeRequest) => Promise<string>;
@@ -95,9 +93,7 @@ function setUp(
   const recent = options.recent ?? [app];
   const opened: Opened[] = [];
   const invoked: string[] = [];
-  // The arguments of each `branches`, `projectPastSessions` and
-  // `accountStatus` invoke.
-  const branchReads: [string, boolean][] = [];
+  // The arguments of each `projectPastSessions` and `accountStatus` invoke.
   const projectSessionReads: [string, string][] = [];
   const statusAsked: string[] = [];
   const started: StartRequest[] = [];
@@ -119,7 +115,6 @@ function setUp(
     chooseFolder: () => Promise.resolve('/Users/u/dev/new'),
     pastSessions: () => Promise.resolve([]),
     projects: () => Promise.resolve([]),
-    branches: () => Promise.resolve(['main', 'a']),
     projectPastSessions: () => Promise.resolve([]),
     start: () => Promise.resolve('row-1'),
     resume: () => Promise.resolve('row-2'),
@@ -169,11 +164,6 @@ function setUp(
       archiveWrites.push({ hostSessionId, archived });
       return answers.setArchived(hostSessionId, archived);
     }
-    if (method === 'branches') {
-      const [project, refresh] = args as [string, boolean];
-      branchReads.push([project, refresh]);
-      return answers.branches(project, refresh);
-    }
     if (method === 'projectPastSessions') {
       projectSessionReads.push(args as [string, string]);
     }
@@ -183,7 +173,7 @@ function setUp(
     return answers[
       method as Exclude<
         keyof ChannelAnswers,
-        'start' | 'resume' | 'setArchived' | 'branches'
+        'start' | 'resume' | 'setArchived'
       >
     ]();
   };
@@ -206,7 +196,6 @@ function setUp(
     prompt,
     opened,
     invoked,
-    branchReads,
     projectSessionReads,
     statusAsked,
     started,
@@ -339,7 +328,6 @@ const newGames: ChatProject = {
   name: 'New Games',
   pool: 'new-games-prototypes',
   profile: 'work',
-  pinnedBranches: ['main'],
 };
 const aiDev: ChatProject = {
   kind: 'folder',
@@ -375,38 +363,6 @@ async function pickInTurn(run: ReturnType<typeof setUp>, ...labels: string[]) {
 
 function titlesOf(run: ReturnType<typeof setUp>): string[] {
   return run.opened.map(({ title }) => title);
-}
-
-function branchStepsOf(run: ReturnType<typeof setUp>): Opened[] {
-  return run.opened.filter(({ title }) => title === BRANCH_STEP_TITLE);
-}
-
-// One branch read's answer: its list, or the error it rejects with.
-type BranchAnswer = ['cached' | 'fresh', string[] | Error];
-
-// The prompt opened with projects, each branch read held until settled.
-function setUpWithBranchReads() {
-  const reads = { cached: deferred<string[]>(), fresh: deferred<string[]>() };
-  const run = setUpWithProjects({
-    branches: (_project, refresh) =>
-      refresh ? reads.fresh.promise : reads.cached.promise,
-  });
-  return { run, reads };
-}
-
-// Settles each read in turn, letting the prompt settle after each.
-async function settleBranchReads(
-  reads: ReturnType<typeof setUpWithBranchReads>['reads'],
-  ...answers: BranchAnswer[]
-) {
-  for (const [read, answer] of answers) {
-    if (answer instanceof Error) {
-      reads[read].reject(answer);
-    } else {
-      reads[read].resolve(answer);
-    }
-    await flush();
-  }
 }
 
 describe('start prompt', () => {
@@ -1277,201 +1233,14 @@ describe('start prompt', () => {
     ]);
   });
 
-  it('branchStep_CachedThenRefreshed_KeepsTheCursorsBranch', async () => {
-    const refreshed = deferred<string[]>();
-    const run = setUpWithProjects({
-      branches: (_project, refresh) =>
-        refresh ? refreshed.promise : Promise.resolve(['main', 'a']),
-    });
-    await flush();
-    await pickInTurn(run, NEW_GAMES_LABEL);
-    expect(run.last().labels).toEqual(['main', 'a']);
-    run.moveCursor(1);
-
-    refreshed.resolve(['main', 'b', 'a']);
-    await flush();
-
-    const steps = branchStepsOf(run);
-    expect(steps).toHaveLength(2);
-    expect(steps[1].labels).toEqual(['main', 'b', 'a']);
-    expect(steps[1].selected).toBe(2);
-    expect(steps[1].request.keepFilter).toBe(true);
-    expect(run.branchReads).toEqual([
-      ['New Games', false],
-      ['New Games', true],
-    ]);
-  });
-
-  it('branchStep_RefreshUnchanged_DoesNotReopen', async () => {
-    const run = setUpWithProjects();
-    await flush();
-
-    await pickInTurn(run, NEW_GAMES_LABEL);
-
-    expect(branchStepsOf(run)).toHaveLength(1);
-  });
-
-  it.each([
-    {
-      name: 'cached after the fresh one opened the step',
-      first: ['fresh', ['main', 'b']] as BranchAnswer,
-      between: (_run: ReturnType<typeof setUp>) => undefined,
-      later: ['cached', ['main', 'a']] as BranchAnswer,
-      labels: ['main', 'b'],
-    },
-    {
-      name: 'fresh after a branch was picked',
-      first: ['cached', ['main', 'a']] as BranchAnswer,
-      between: (run: ReturnType<typeof setUp>) => pickItem(run.last(), 'main'),
-      later: ['fresh', ['main', 'b', 'a']] as BranchAnswer,
-      labels: ['main', 'a'],
-    },
-    {
-      name: 'fresh after another list replaced the step',
-      first: ['cached', ['main', 'a']] as BranchAnswer,
-      between: (run: ReturnType<typeof setUp>) =>
-        run.openOther('Mode', ['default', 'plan']),
-      later: ['fresh', ['main', 'b', 'a']] as BranchAnswer,
-      labels: ['main', 'a'],
-    },
-  ])(
-    'branchStep_LaterList_ReopensNothing: $name',
-    async ({ first, between, later, labels }) => {
-      const { run, reads } = setUpWithBranchReads();
-      await flush();
-      await pickInTurn(run, NEW_GAMES_LABEL);
-      await settleBranchReads(reads, first);
-      between(run);
-
-      await settleBranchReads(reads, later);
-
-      expect(branchStepsOf(run).map((step) => step.labels)).toEqual([labels]);
-      expect(run.toasts).toEqual([]);
-    },
-  );
-
-  // A notice, not an error: the step still lists the clones' last fetch.
-  it.each([
-    {
-      name: 'cached rejects, then fresh lists',
-      answers: [
-        ['cached', new Error('no refs')],
-        ['fresh', ['main', 'b']],
-      ] as BranchAnswer[],
-      labels: ['main', 'b'],
-      toasts: [],
-    },
-    {
-      name: 'fresh rejects, then cached lists',
-      answers: [
-        ['fresh', new Error('offline')],
-        ['cached', ['main', 'a']],
-      ] as BranchAnswer[],
-      labels: ['main', 'a'],
-      toasts: [{ text: 'Branches not refreshed: offline', tone: 'info' }],
-    },
-    {
-      name: 'cached lists, then fresh rejects',
-      answers: [
-        ['cached', ['main', 'a']],
-        ['fresh', new Error('offline')],
-      ] as BranchAnswer[],
-      labels: ['main', 'a'],
-      toasts: [{ text: 'Branches not refreshed: offline', tone: 'info' }],
-    },
-    {
-      name: 'cached lists, then fresh answers none',
-      answers: [
-        ['cached', ['main', 'a']],
-        ['fresh', []],
-      ] as BranchAnswer[],
-      labels: ['main', 'a'],
-      toasts: [
-        {
-          text: 'Branches not refreshed: no branches on origin',
-          tone: 'info',
-        },
-      ],
-    },
-  ])(
-    'branchStep_OneReadFails_OpensOnTheOther: $name',
-    async ({ answers, labels, toasts }) => {
-      const { run, reads } = setUpWithBranchReads();
-      await flush();
-      await pickInTurn(run, NEW_GAMES_LABEL);
-
-      await settleBranchReads(reads, ...answers);
-
-      expect(branchStepsOf(run).map((step) => step.labels)).toEqual([labels]);
-      expect(run.toasts).toEqual(toasts);
-    },
-  );
-
-  it.each([
-    {
-      name: 'both reject, cached first',
-      answers: [
-        ['cached', new Error('no refs')],
-        ['fresh', new Error('offline')],
-      ] as BranchAnswer[],
-      toast: 'Branches not listed: offline',
-    },
-    {
-      name: 'both reject, fresh first',
-      answers: [
-        ['fresh', new Error('offline')],
-        ['cached', new Error('no refs')],
-      ] as BranchAnswer[],
-      toast: 'Branches not listed: offline',
-    },
-    {
-      name: 'both answer none',
-      answers: [
-        ['cached', []],
-        ['fresh', []],
-      ] as BranchAnswer[],
-      toast: 'Branches not listed: no branches on origin',
-    },
-  ])('branchStep_BothReject_Toasts: $name', async ({ answers, toast }) => {
-    const { run, reads } = setUpWithBranchReads();
-    await flush();
-    await pickInTurn(run, NEW_GAMES_LABEL);
-
-    await settleBranchReads(reads, ...answers);
-
-    expect(run.toasts).toEqual([{ text: toast, tone: 'error' }]);
-    expect(branchStepsOf(run)).toEqual([]);
-  });
-
-  it('startPrompt_ReopenedWhileBranchesRead_OpensNoBranchStep', async () => {
-    const cached = deferred<string[]>();
-    const refreshed = deferred<string[]>();
-    const run = setUpWithProjects({
-      branches: (_project, refresh) =>
-        refresh ? refreshed.promise : cached.promise,
-    });
-    await flush();
-    await pickInTurn(run, NEW_GAMES_LABEL);
-    run.prompt.open();
-    await flush();
-
-    cached.resolve(['main']);
-    refreshed.resolve(['main', 'a']);
-    await flush();
-
-    expect(branchStepsOf(run)).toEqual([]);
-    expect(run.last().title).toBe(PROJECT_STEP_TITLE);
-  });
-
   it.each([
     {
       name: 'fixed profile skips the step',
       project: newGames,
-      picks: [NEW_GAMES_LABEL, 'main'],
+      picks: [NEW_GAMES_LABEL],
       profileSelected: null,
       statusAsked: ['work'],
       toasts: [],
-      branchReads: 2,
       reachesSessionStep: true,
     },
     {
@@ -1481,17 +1250,15 @@ describe('start prompt', () => {
       profileSelected: 1,
       statusAsked: [],
       toasts: [],
-      branchReads: 0,
       reachesSessionStep: false,
     },
     {
       name: 'pool project with no profile',
       project: { ...newGames, profile: null },
-      picks: [NEW_GAMES_LABEL, 'main'],
+      picks: [NEW_GAMES_LABEL],
       profileSelected: 0,
       statusAsked: [],
       toasts: [],
-      branchReads: 2,
       reachesSessionStep: false,
     },
     {
@@ -1506,7 +1273,6 @@ describe('start prompt', () => {
           tone: 'error',
         },
       ],
-      branchReads: 0,
       reachesSessionStep: false,
     },
   ])(
@@ -1517,7 +1283,6 @@ describe('start prompt', () => {
       profileSelected,
       statusAsked,
       toasts,
-      branchReads,
       reachesSessionStep,
     }) => {
       const run = setUp({
@@ -1543,7 +1308,6 @@ describe('start prompt', () => {
       );
       expect(run.statusAsked).toEqual(statusAsked);
       expect(run.toasts).toEqual(toasts);
-      expect(run.branchReads).toHaveLength(branchReads);
       expect(titlesOf(run).includes(SESSION_STEP_TITLE)).toBe(
         reachesSessionStep,
       );
@@ -1559,7 +1323,7 @@ describe('start prompt', () => {
         ]),
     });
     await flush();
-    await pickInTurn(run, NEW_GAMES_LABEL, 'main');
+    await pickInTurn(run, NEW_GAMES_LABEL);
     expect(run.last().title).toBe(SESSION_STEP_TITLE);
 
     await pickInTurn(run, rowLabel(beta));
@@ -1578,11 +1342,10 @@ describe('start prompt', () => {
 
   it.each([
     {
-      name: 'New Games on main',
-      picks: [NEW_GAMES_LABEL, 'main'],
+      name: 'New Games under its own profile',
+      picks: [NEW_GAMES_LABEL],
       started: {
         project: 'New Games',
-        branch: 'main',
         profile: 'work',
         headless: false,
       },
@@ -1592,7 +1355,6 @@ describe('start prompt', () => {
       picks: [AI_DEV_LABEL, 'work · ~/.claude'],
       started: {
         project: 'Wigley AI Dev',
-        branch: null,
         profile: 'work',
         headless: false,
       },
@@ -1613,7 +1375,7 @@ describe('start prompt', () => {
     const run = setUpWithProjects();
     await flush();
 
-    await pickInTurn(run, NEW_GAMES_LABEL, 'main');
+    await pickInTurn(run, NEW_GAMES_LABEL);
     expect(run.last().title).toBe(SESSION_STEP_TITLE);
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
@@ -1626,7 +1388,6 @@ describe('start prompt', () => {
     expect(run.started).toEqual([
       {
         project: 'New Games',
-        branch: 'main',
         profile: 'work',
         headless: false,
       },
@@ -1647,7 +1408,7 @@ describe('start prompt', () => {
       OTHER_FOLDER_LABEL,
     ]);
 
-    await pickInTurn(run, NEW_GAMES_LABEL, 'main');
+    await pickInTurn(run, NEW_GAMES_LABEL);
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
       NEW_HEADLESS_SESSION_LABEL,
@@ -1659,7 +1420,6 @@ describe('start prompt', () => {
     expect(run.started).toEqual([
       {
         project: 'New Games',
-        branch: 'main',
         profile: 'work',
         headless: false,
       },

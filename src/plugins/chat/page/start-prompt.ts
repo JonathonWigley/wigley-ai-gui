@@ -14,7 +14,6 @@ import type {
 } from '../contract';
 import type { Picker, PickerHandle } from './picker';
 import {
-  branchRowInput,
   folderRowInput,
   profileRowInput,
   projectRowInput,
@@ -32,8 +31,6 @@ import {
 } from './resume-items';
 import type { SignInDialog } from './sign-in-dialog';
 import {
-  BRANCH_STEP_TITLE,
-  branchSelected,
   displayPath,
   type FolderItem,
   folderName,
@@ -62,8 +59,7 @@ export interface StartPromptDeps {
 }
 
 // `open` asks for a project — or, through `Other folder…` or with no
-// projects, a folder — then a branch for a pool project, then a profile
-// unless the project fixes one or there is one, then signs a signed-out
+// projects, a folder — then a profile unless the project fixes one or there is one, then signs a signed-out
 // profile in through the sign-in dialog, then asks for a new session, a new
 // headless session or one of the project's or folder's saved sessions, and
 // starts or resumes a chat session there, revealing its Chat tab. Its first
@@ -81,11 +77,10 @@ export interface StartPrompt {
   showArchived(): void;
 }
 
-// Where the prompt starts a session: a folder, or a project with the branch
-// picked for a pool project (null for a folder project).
+// Where the prompt starts a session: a folder, or a project.
 type PromptTarget =
   | { kind: 'folder'; projectDir: string }
-  | { kind: 'project'; project: ChatProject; branch: string | null };
+  | { kind: 'project'; project: ChatProject };
 
 // The session step: its saved sessions, each resuming in its own folder, the
 // lines last opened, and the picker handle of the request showing them.
@@ -219,118 +214,12 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         if (item.kind === 'section') {
           resumeSectionRow(context, item.row);
         } else if (item.kind === 'project') {
-          pickProject(context, item.project);
+          openProfileStep(context, { kind: 'project', project: item.project });
         } else {
           openFolderStep(context);
         }
       },
     });
-  };
-
-  // Goes on to the branch step for a pool project, else to the profile; a
-  // fixed profile missing from the settings stops here.
-  const pickProject = (context: PromptContext, project: ChatProject) => {
-    if (fixedProfileOrReport(context, project) === false) {
-      return;
-    }
-    if (project.kind === 'pool') {
-      openBranchStep(context, project);
-    } else {
-      openProfileStep(context, { kind: 'project', project, branch: null });
-    }
-  };
-
-  // Reads the pool project's branches from the clones' last fetch and from a
-  // fresh fetch at once. The first list to arrive opens the step; the fresh
-  // one arriving later, while the step is still shown, reopens it when it
-  // differs, keeping the cursor's branch and the typed filter. The cached
-  // list arriving after the fresh one opened the step is ignored. An empty
-  // list counts as a failed read. A failed fresh read beside a shown cached
-  // list toasts a notice; when both fail, the step does not open.
-  const openBranchStep = (
-    context: PromptContext,
-    project: Extract<ChatProject, { kind: 'pool' }>,
-  ) => {
-    let shown: { branches: string[]; handle: PickerHandle } | null = null;
-    const openWith = (
-      branches: string[],
-      selected: number,
-      keepFilter: boolean,
-    ) => {
-      const handle = deps.picker.open<string>({
-        title: BRANCH_STEP_TITLE,
-        items: branches,
-        label: (branch) => branch,
-        rowInput: branchRowInput,
-        selected,
-        keepFilter,
-        picked: (branch) =>
-          openProfileStep(context, { kind: 'project', project, branch }),
-      });
-      shown = { branches, handle };
-    };
-    // The fresh read's reason once it has failed; null until then.
-    let refreshFailure: string | null = null;
-    const toastNotRefreshed = (reason: string) =>
-      deps.toast(`Branches not refreshed: ${reason}`, 'info');
-    const listed = (branches: string[], refresh: boolean) => {
-      if (isStale(context.isCurrent, 'branches')) {
-        return;
-      }
-      if (shown === null) {
-        openWith(branches, 0, false);
-        if (refreshFailure !== null) {
-          toastNotRefreshed(refreshFailure);
-        }
-        return;
-      }
-      const before = shown.branches;
-      const isSameList =
-        branches.length === before.length &&
-        branches.every((branch, index) => branch === before[index]);
-      const isStepShown = shown.handle.isOpen();
-      if (!refresh || !isStepShown || isSameList) {
-        return;
-      }
-      openWith(
-        branches,
-        branchSelected(before, deps.picker.cursorIndex(), branches),
-        true,
-      );
-    };
-    // Toasts the fresh read's reason as an error once both reads have failed,
-    // and as a notice when it fails while the cached list's step is shown.
-    let cachedFailed = false;
-    const failed = (reason: string, refresh: boolean) => {
-      log(`branches not read: ${reason}`);
-      if (refresh) {
-        refreshFailure = reason;
-      } else {
-        cachedFailed = true;
-      }
-      if (isStale(context.isCurrent, 'branches')) {
-        return;
-      }
-      if (cachedFailed && refreshFailure !== null) {
-        deps.toast(`Branches not listed: ${refreshFailure}`, 'error');
-      } else if (refresh && shown?.handle.isOpen() === true) {
-        toastNotRefreshed(reason);
-      }
-    };
-    const read = (refresh: boolean) => {
-      void channel.invoke('branches', project.name, refresh).then(
-        (branches) => {
-          if (branches.length === 0) {
-            failed('no branches on origin', refresh);
-            return;
-          }
-          listed(branches, refresh);
-        },
-        (error: unknown) => failed(errorText(error), refresh),
-      );
-    };
-    read(false);
-    read(true);
   };
 
   // Opens the folder step with the cursor on its first folder, below the
@@ -770,7 +659,7 @@ function resumeSession(
     );
 }
 
-// Starts a session at `target`: a folder, or a project with its branch.
+// Starts a session at `target`: a folder, or a project.
 function startSession(
   context: PromptContext,
   target: PromptTarget,
@@ -799,10 +688,10 @@ function startSession(
 function startTargetOf(target: PromptTarget): StartTarget {
   return target.kind === 'folder'
     ? { projectDir: target.projectDir }
-    : { project: target.project.name, branch: target.branch };
+    : { project: target.project.name };
 }
 
-// The folder as the prompt shows it, or the project's name with its branch.
+// The folder as the prompt shows it, or the project's name.
 function targetName(
   target: PromptTarget,
   deps: Pick<StartPromptDeps, 'homeDir' | 'paths'>,
@@ -810,6 +699,5 @@ function targetName(
   if (target.kind === 'folder') {
     return displayPath(target.projectDir, deps.homeDir, deps.paths);
   }
-  const { project, branch } = target;
-  return branch === null ? project.name : `${project.name} on ${branch}`;
+  return target.project.name;
 }

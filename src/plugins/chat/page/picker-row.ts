@@ -50,11 +50,6 @@ export function projectRowInput(
   return { list: 'choices', label: item.label, isCurrent: false };
 }
 
-// Draws as a `choices` row of the branch name.
-export function branchRowInput(branch: string): PickerItemInput {
-  return { list: 'choices', label: branch, isCurrent: false };
-}
-
 export function profileRowInput(profile: ChatProfile): PickerItemInput {
   return { list: 'profile', name: profile.name, configDir: profile.configDir };
 }

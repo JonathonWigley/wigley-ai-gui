@@ -6,19 +6,10 @@ import type {
 } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
 import { isJsonObject } from '../../../shared/json';
-import {
-  SESSION_IDENTITY_ENV,
-  SESSION_ROW_ENV,
-} from '../../../shared/session-env';
-import type { PoolClaimRequest } from '../../chat/contract';
+import { SESSION_IDENTITY_ENV } from '../../../shared/session-env';
 import type { PoolAction, PoolActionResult } from '../contract';
 
 const RUN_TIMEOUT_MS = 30_000;
-const HOST_SESSION_ENV = 'CLAUDE_CODE_SESSION_ID';
-
-// What a claim run answered: the clone's path, or the CLI's error code (`no-cli`, `cli-failed` and `cancelled` when
-// it gave none).
-export type ClaimAnswer = { ok: true; path: string } | CliFailure;
 
 type CliFailure = { ok: false; error: string; message: string };
 
@@ -40,48 +31,6 @@ export function poolCommandArgs(
   clone: number,
 ): string[] {
   return ['-X', 'utf8', scriptPath, action, pool, String(clone), '--json'];
-}
-
-// The Python arguments of `unity-pool claim --branch <branch> --pool <pool> --wait --json`.
-export function claimCommandArgs(
-  scriptPath: string,
-  pool: string,
-  branch: string,
-): string[] {
-  return [
-    '-X',
-    'utf8',
-    scriptPath,
-    'claim',
-    '--branch',
-    branch,
-    '--pool',
-    pool,
-    '--wait',
-    '--json',
-  ];
-}
-
-// The Python arguments of `unity-pool release --json`.
-export function releaseCommandArgs(scriptPath: string): string[] {
-  return ['-X', 'utf8', scriptPath, 'release', '--json'];
-}
-
-// The claim's JSON answer from the last non-empty stdout line, read as `readActionResult` reads an action's.
-export function readClaimAnswer(result: ProcessResult): ClaimAnswer {
-  const answer = parseJson(lastLine(result.stdout));
-  if (isJsonObject(answer)) {
-    if (answer.ok === true) {
-      return typeof answer.path === 'string'
-        ? { ok: true, path: answer.path }
-        : {
-            ok: false,
-            error: 'cli-failed',
-            message: 'unity-pool claim answered no path',
-          };
-    }
-  }
-  return failureOf(answer, result);
 }
 
 // The CLI's JSON answer from the last non-empty stdout line; its `ok` decides, not the exit code.
@@ -157,61 +106,6 @@ export async function runPoolCommand(
   }
 }
 
-// Runs `unity-pool claim --branch <branch> --pool <pool> --wait --json` under the session's two ids
-// (`CLAUDE_CODE_SESSION_ID` the host session id, `WIGLEY_SESSION_ROW` the row id) and no other session's, with no
-// timeout: only `signal` stops it, answering `cancelled`. It releases nothing: the caller runs `runPoolRelease` when
-// the CLI may have granted a clone. Once the part stops the platform kills its processes, so no release runs after a
-// stop and the pool's claim expiry frees the clone.
-export async function runPoolClaim(
-  deps: CliDeps,
-  request: PoolClaimRequest,
-  signal: AbortSignal,
-): Promise<ClaimAnswer> {
-  const script = await findScript(deps);
-  if (typeof script !== 'string') {
-    return script;
-  }
-  try {
-    const result = await deps.processes.run(
-      deps.pythonCommand,
-      claimCommandArgs(script, request.pool, request.branch),
-      { signal, ...sessionEnv(request) },
-    );
-    return readClaimAnswer(result);
-  } catch (error) {
-    return signal.aborted
-      ? { ok: false, error: 'cancelled', message: 'claim cancelled' }
-      : { ok: false, error: 'cli-failed', message: errorText(error) };
-  }
-}
-
-// Runs `unity-pool release --json` under the request's two ids, as `runPoolClaim` runs the claim, in the home folder:
-// a cwd inside a clone would name that clone's pool, so the CLI finds the pool from the session's claim instead. A
-// session holding no clone answers `not-holder`.
-export async function runPoolRelease(
-  deps: CliDeps,
-  request: PoolClaimRequest,
-): Promise<PoolActionResult> {
-  const script = await findScript(deps);
-  if (typeof script !== 'string') {
-    return script;
-  }
-  try {
-    const result = await deps.processes.run(
-      deps.pythonCommand,
-      releaseCommandArgs(script),
-      {
-        cwd: deps.homeDir,
-        timeoutMs: RUN_TIMEOUT_MS,
-        ...sessionEnv(request),
-      },
-    );
-    return readActionResult(result);
-  } catch (error) {
-    return { ok: false, error: 'cli-failed', message: errorText(error) };
-  }
-}
-
 // The script the deps name with `~` expanded, or `no-cli` when no file is there.
 async function findScript(deps: CliDeps): Promise<string | CliFailure> {
   const script = deps.paths.expandTilde(deps.scriptPath, deps.homeDir);
@@ -225,24 +119,8 @@ async function findScript(deps: CliDeps): Promise<string | CliFailure> {
   return script;
 }
 
-// The run's environment as the request's session: every other session name dropped, its two ids set.
-function sessionEnv(request: PoolClaimRequest): {
-  unsetEnv: readonly string[];
-  setEnv: Readonly<Record<string, string>>;
-} {
-  return {
-    unsetEnv: SESSION_IDENTITY_ENV.filter(
-      (name) => name !== HOST_SESSION_ENV && name !== SESSION_ROW_ENV,
-    ),
-    setEnv: {
-      [HOST_SESSION_ENV]: request.hostSessionId,
-      [SESSION_ROW_ENV]: request.rowId,
-    },
-  };
-}
-
 // The last non-empty line of `text`, trimmed; null when it has none.
-export function lastLine(text: string): string | null {
+function lastLine(text: string): string | null {
   const lines = text.split(/\r?\n/).filter((line) => line.trim() !== '');
   return lines.length === 0 ? null : lines[lines.length - 1].trim();
 }

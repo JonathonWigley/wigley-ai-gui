@@ -1,32 +1,21 @@
-import { readIfPresent } from '../../../contracts/files';
 import type { MainApi, MainPart } from '../../../contracts/plugin';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
-import {
-  type PoolState,
-  type UnityPoolChannel,
-  unityPoolSnapshotSlot,
-} from '../contract';
+import { type UnityPoolChannel, unityPoolSnapshotSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { unityPoolManifest } from '../manifest';
-import {
-  resolveScriptPath,
-  runPoolClaim,
-  runPoolCommand,
-  runPoolRelease,
-} from './pool-cli';
+import { resolveScriptPath, runPoolCommand } from './pool-cli';
 import { createPoolProvider } from './pool-provider';
-import { createPoolWatch, STATE_FILE } from './pool-watch';
+import { createPoolWatch } from './pool-watch';
 import { unityPoolSelfTestScript } from './selftest-script';
-import { readStateFile } from './state-file';
 
 type UnityPoolApi = MainApi<typeof unityPoolManifest, UnityPoolChannel>;
 
 // Watches unity-pool's state files and writes `unity-pool.snapshot` at start and on each change, and runs the CLI for
 // the panel's Hold and Release, logging each run's outcome and reading every pool again after it in case the OS
-// watcher misses the write. Registers as chat's pool provider, which claims a clone under a new session's ids and
-// reads every pool again after each claim, and tells chat at each change that the clones' folders may have changed.
+// watcher misses the write. Registers as chat's pool provider, which gives each pool's clone folders, and tells chat at
+// each change that those folders may have changed.
 // Registers the layouts and hands the self-test the badge and panel script.
 export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
   manifest: unityPoolManifest,
@@ -56,26 +45,6 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
         pythonCommand,
       };
     };
-    const readPool = async (pool: string): Promise<PoolState | null> => {
-      const text = await readIfPresent(
-        services.files,
-        services.paths.join(stateRoot, pool, STATE_FILE),
-      );
-      if (text === null) {
-        return null;
-      }
-      const read = readStateFile(text);
-      return read.kind === 'pool' ? read.pool : null;
-    };
-    const provider = createPoolProvider({
-      processes: services.processes,
-      snapshot: () => watch.snapshot(),
-      readPool,
-      runClaim: (request, signal) => runPoolClaim(cliDeps(), request, signal),
-      runRelease: (request) => runPoolRelease(cliDeps(), request),
-      rescan: () => watch.rescan(),
-      log: services.log,
-    });
     const watch = createPoolWatch({
       files: services.files,
       paths: services.paths,
@@ -85,12 +54,13 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
       // Never called before `createPoolWatch` returns: its first scan is async.
       changed: (snapshot) => {
         poolSnapshot.set(snapshot);
-        provider.snapshotChanged(snapshot);
         registration.changed();
       },
     });
     poolSnapshot.set(watch.snapshot());
-    const registration = chat.addPoolProvider(provider);
+    const registration = chat.addPoolProvider(
+      createPoolProvider(() => watch.snapshot()),
+    );
     const originName = createOriginRepoNames(services.git);
 
     api.channel.handle('originName', (folder) => originName(folder));
@@ -119,7 +89,6 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
       commands: {},
       dispose: () => {
         registration.dispose();
-        provider.dispose();
         watch.dispose();
       },
     };

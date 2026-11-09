@@ -1,6 +1,5 @@
 // The pure project rules: the `projects` setting's checks, which project a
-// folder belongs to, a pool project's branch order, and the pool provider
-// registry.
+// folder belongs to, and the pool provider registry.
 import type { Disposable } from '../../../contracts/disposable';
 import type { Paths } from '../../../contracts/paths';
 import type { ChatProject, PoolProvider, ProjectSetting } from '../contract';
@@ -10,7 +9,7 @@ type ProjectFields = Record<string, unknown>;
 // Each element of `raw` checked in order, the kept ones returned in settings
 // order. `raw` may hold any JSON whatever its type says, since the settings
 // check types no element of an empty default list. A key holding null counts
-// as absent. An element failing a check is left out and logs one line naming
+// as absent, and a key no project reads is ignored. An element failing a check is left out and logs one line naming
 // its index, its name and its fault. A name is taken only by a kept entry.
 // `folder` is kept as written, a `~` unexpanded; no profile or path is checked
 // against anything outside the element.
@@ -48,16 +47,6 @@ export function projectOf(
         ),
   );
   return covering ?? null;
-}
-
-// A pool project's Branch list: `pinned` in its order, then each name of
-// `origin` not pinned, in origin order; each name once, compared with ===. A
-// pinned name origin lacks is still listed.
-export function branchChoices(
-  pinned: readonly string[],
-  origin: readonly string[],
-): string[] {
-  return [...new Set([...pinned, ...origin])];
 }
 
 export interface PoolProviders {
@@ -120,13 +109,6 @@ function readProject(
   ) {
     return 'profile must be a non-empty string';
   }
-  const pinnedBranches = present(element, 'pinnedBranches');
-  if (pinnedBranches !== undefined && folder !== undefined) {
-    return 'pinnedBranches belongs to a pool project';
-  }
-  if (pinnedBranches !== undefined && !isNameList(pinnedBranches)) {
-    return 'pinnedBranches must be a list of non-empty branch names';
-  }
   if (kept.some((project) => project.name === name)) {
     return 'the name an earlier project took';
   }
@@ -138,15 +120,7 @@ function readProject(
     name,
     pool: pool as string,
     profile: profile ?? null,
-    pinnedBranches: pinnedBranches ?? [],
   };
-}
-
-function isNameList(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) &&
-    value.every((branch) => typeof branch === 'string' && branch !== '')
-  );
 }
 
 function isPlainObject(value: unknown): value is ProjectFields {
