@@ -49,6 +49,12 @@ export const MODES_SHOW: CommandKey<string, 'modes.show'> = {
   id: 'modes.show',
 };
 
+// Loads the user plugin its arg names again from its folder, as a save under
+// that folder does; rejects for a built-in or unknown id.
+export const CORE_RELOAD_PLUGIN: CommandKey<string, 'core.reloadPlugin'> = {
+  id: 'core.reloadPlugin',
+};
+
 // What an intercept reads of the run it wraps.
 export interface CommandRunContext {
   readonly id: CommandId;

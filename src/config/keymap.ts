@@ -1,5 +1,6 @@
 import {
   type CommandId,
+  CORE_RELOAD_PLUGIN,
   MODES_SHOW,
   PICKER_CANCEL,
   PICKER_CHOOSE_ROW,
@@ -66,6 +67,12 @@ export const coreCommands: Record<CommandId, CommandDecl> = {
     label: 'show the mode',
     group: 'modes',
     runsIn: 'page',
+    arg: 'string',
+  },
+  [CORE_RELOAD_PLUGIN.id]: {
+    label: 'Reload plugin',
+    group: 'plugins',
+    runsIn: 'main',
     arg: 'string',
   },
 };

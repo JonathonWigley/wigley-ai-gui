@@ -37,11 +37,13 @@ import type {
   Timers,
 } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
+import { CORE_RELOAD_PLUGIN } from '../contracts/commands';
 import {
   corePluginsSlot,
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
 } from '../contracts/core-state';
+import type { Disposable } from '../contracts/disposable';
 import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
 import type { OsName, Platform } from '../contracts/platform';
@@ -52,10 +54,12 @@ import type { UserConfig } from '../contracts/user-config';
 import type {
   CommandHandler,
   MainCommandContext,
+  MainPart,
   MainServices,
   MainStart,
   PluginManifest,
 } from '../contracts/plugin';
+import type { PluginCatalog } from '../contracts/plugin-catalog';
 import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
 import { manifests } from '../plugins/manifests';
@@ -72,7 +76,6 @@ import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
   commandLabel,
   qualify,
-  requireListed,
   withAppliedList,
 } from '../shared/plugin-manifests';
 import { posixPaths } from '../shared/paths/posix-paths';
@@ -102,6 +105,7 @@ import {
   registerAppSchemes,
   serveDataScheme,
   serveLayoutScheme,
+  servePluginScheme,
   serveVisualScheme,
 } from './data-protocol/data-protocol';
 import { type DriveRun, startDriveRun } from './drive/drive-run';
@@ -127,6 +131,14 @@ import { startWindowFocusSlot } from './state/window-focus-slot';
 import { createSessionHostClient } from './session-host/session-host-client';
 import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi, type MainApiServices } from './plugins/main-api';
+import { createBuiltInSource } from './plugin-catalog/built-in-source';
+import { importModuleFrom } from './plugin-catalog/import-module';
+import { startPluginCatalog } from './plugin-catalog/plugin-catalog';
+import {
+  emittedTypesFolder,
+  writePluginTypes,
+} from './plugin-catalog/plugin-types';
+import { createUserFolderSource } from './plugin-catalog/user-folder-source';
 import { createPageCommands } from './page-commands';
 import { createPageLog } from './page-log';
 import { createPageParts } from './page-parts';
@@ -137,7 +149,11 @@ import {
   createAppliedPlugins,
 } from './plugins/applied-plugins';
 import { createPluginChannels } from './plugins/plugin-channel';
-import { createPluginSwitch, type PluginSwitch } from './plugins/plugin-switch';
+import {
+  createPluginSwitch,
+  heldAtStart,
+  type PluginSwitch,
+} from './plugins/plugin-switch';
 import { addPluginSwitchActions } from './plugins/plugin-switch-drive';
 import { nativeImageEncoder } from './images/native-image-encoder';
 import { createNodeProcesses } from './processes/node-processes';
@@ -470,12 +486,16 @@ const pageLog = createPageLog((source, message) => {
   }
 });
 
-// What the window and the plugins start from besides the config, read once
-// the app is ready so that a bad manifest or run folder fails the start
-// through failStart.
+// What the window and the plugins start from besides the config and the
+// plugin catalog, read once the app is ready so that a bad run folder fails
+// the start through failStart.
 interface StartInputs {
   homeDir: string;
   dataRoot: string;
+  // The folder of each user plugin's per-revision code copies.
+  pluginCode: string;
+  // The user plugin folders, `<config folder>/plugins`.
+  pluginsFolder: string;
   uiStatePath: string;
   pastedFolder: string;
   tempFolders: readonly string[];
@@ -545,6 +565,15 @@ function dataFolder(homeDir: string): string {
     : path.join(homeDir, 'plugin-data');
 }
 
+// The folder of each user plugin's per-revision code copies, which main
+// imports from and the `wigley-plugin:` scheme serves; outside a live run it
+// sits inside the run's own home folder beside the plugin data.
+function pluginCodeFolder(homeDir: string): string {
+  return runMode === 'live'
+    ? path.join(app.getPath('userData'), 'plugin-code')
+    : path.join(homeDir, 'plugin-code');
+}
+
 // The session host's folder: the app instance's, or a drive run's, own user data;
 // in the self-test, whose user data every self-test shares, its temp home.
 function sessionHostFolder(homeDir: string): string {
@@ -591,11 +620,12 @@ async function runTempFolders(): Promise<string[]> {
 }
 
 async function readStartInputs(): Promise<StartInputs> {
-  requireListed(mainParts, manifests);
   const homeDir = homeFolder();
   return {
     homeDir,
     dataRoot: dataFolder(homeDir),
+    pluginCode: pluginCodeFolder(homeDir),
+    pluginsFolder: userPluginsFolder(homeDir),
     uiStatePath: uiStateFilePath(homeDir),
     pastedFolder: pastedFolder(homeDir),
     tempFolders: await runTempFolders(),
@@ -610,6 +640,32 @@ async function readStartInputs(): Promise<StartInputs> {
 // The user config folder in `homeDir`, shared by the stable and dev apps.
 function configFolder(homeDir: string): string {
   return path.join(homeDir, '.config', 'wigley-ai-gui');
+}
+
+// The user plugin folders in the user config folder in `homeDir`.
+function userPluginsFolder(homeDir: string): string {
+  return path.join(configFolder(homeDir), 'plugins');
+}
+
+// The plugin catalog over the built-in plugins and the user plugin folders
+// `inputs` names. Only a built-in bug rejects it: a user plugin that fails to
+// load is the catalog's problem, not the start's.
+function startCatalog(
+  inputs: StartInputs,
+): Promise<PluginCatalog & Disposable> {
+  return startPluginCatalog({
+    builtIn: createBuiltInSource({ manifests, mainParts }),
+    user: createUserFolderSource({
+      pluginsFolder: scopedFiles(files, inputs.pluginsFolder, paths),
+      userRoot: inputs.pluginsFolder,
+      codeFolder: scopedFiles(files, inputs.pluginCode, paths),
+      codeRoot: inputs.pluginCode,
+      paths,
+      importModule: importModuleFrom,
+      log: pageLog.log,
+    }),
+    log: pageLog.log,
+  });
 }
 
 // The layouts folder in the user config folder in `homeDir`.
@@ -627,10 +683,13 @@ function defaultSettings() {
     : defaults;
 }
 
-// What the ConfigStore over the user config folder in `homeDir` reads,
-// logging to the page and serving the real path of `homeDir`, since index
-// entries and session folders are real paths.
-async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
+// What the ConfigStore over the user config folder in `homeDir` and the
+// plugins `catalog` holds reads, logging to the page and serving the real path
+// of `homeDir`, since index entries and session folders are real paths.
+async function configStoreDeps(
+  homeDir: string,
+  catalog: PluginCatalog,
+): Promise<ConfigStoreDeps> {
   return {
     files,
     folder: configFolder(homeDir),
@@ -640,14 +699,7 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
     defaultKeymap,
     coreCommands,
     coreScopes,
-    plugins: manifests.map((manifest) => ({
-      manifest,
-      origin: 'built-in',
-      revision: 0,
-      main: mainParts.find((part) => part.manifest === manifest) ?? null,
-      pageUrl: null,
-      folder: null,
-    })),
+    plugins: catalog.entries(),
     coreThemeTokens,
     builtInThemes,
     resolveTheme,
@@ -660,23 +712,30 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
   };
 }
 
-// The ConfigStore over the user config folder in `homeDir`, the `userConfig`
-// service writing that folder through the store's checks, and the applied list
-// the store's `plugins.disabled` starts it on, without the ids no manifest has.
-async function loadConfig(homeDir: string): Promise<{
+// The ConfigStore over the user config folder in `homeDir` and the plugins
+// `catalog` holds, the `userConfig` service writing that folder through the
+// store's checks, and the applied list it starts on: the store's
+// `plugins.disabled` ids the store admitted, then the plugins the switch
+// starts after launch (`heldAtStart`), each once.
+async function loadConfig(
+  homeDir: string,
+  catalog: PluginCatalog,
+): Promise<{
   store: ConfigStore;
   userConfig: UserConfig;
   applied: AppliedPlugins;
 }> {
-  const deps = await configStoreDeps(homeDir);
+  const deps = await configStoreDeps(homeDir, catalog);
   const store = await loadConfigStore(deps);
-  const applied = createAppliedPlugins(
-    store
-      .current()
-      .settings.plugins.disabled.filter((id) =>
-        manifests.some((manifest) => manifest.id === id),
-      ),
-  );
+  const admitted = store.plugins();
+  const switchedOff = store
+    .current()
+    .settings.plugins.disabled.filter((id) =>
+      admitted.some((entry) => entry.manifest.id === id),
+    );
+  const applied = createAppliedPlugins([
+    ...new Set([...switchedOff, ...heldAtStart(admitted)]),
+  ]);
   return {
     store,
     userConfig: createUserConfig({
@@ -746,15 +805,16 @@ function serveSlots(window: BrowserWindow, log: Log): SlotHolder {
   return holder;
 }
 
-// The core layouts service over the layouts folder in `homeDir` and each
-// owner's default folder in `repoDir`, sending each owner's set to the
-// window's page and answering the page's reads; held in `layoutService` for
-// the `wigley-layout:` scheme. With no `repoDir` it logs once under source
-// `layouts`.
+// The core layouts service over the layouts folder in `homeDir`, each
+// owner's default folder in `repoDir` and each user plugin's own folder in
+// `catalog`, sending each owner's set to the window's page and answering the
+// page's reads; held in `layoutService` for the `wigley-layout:` scheme. With
+// no `repoDir` it logs once under source `layouts`.
 function serveLayouts(
   window: BrowserWindow,
   homeDir: string,
   repoDir: string | null,
+  catalog: PluginCatalog,
   log: Log,
 ): LayoutService {
   if (repoDir === null) {
@@ -768,6 +828,7 @@ function serveLayouts(
     paths,
     folder: layoutsFolder(homeDir),
     repoDir,
+    userPluginFolder: (owner) => catalog.entry(owner)?.folder ?? null,
     kitTypes,
     send: (owner, set) =>
       livePage(window)?.send(BRIDGE_CHANNELS.layoutsChanged, owner, set),
@@ -780,8 +841,9 @@ function serveLayouts(
   return service;
 }
 
-// Starts every plugin's main part `disabled` does not name, each with its own
-// API over one plugin channel router to the window's page, the settings
+// Starts the main part of every plugin `store` admitted that `disabled` does
+// not name, each with its own API over one plugin channel router to the
+// window's page, the settings
 // `store` serves with no self-test layer, one event bus, the shared
 // `services`, its own host from `selfTest` (null outside the self-test, and
 // for a part started once `isLaunchStartDone` is true, since the handover has
@@ -804,7 +866,7 @@ function startMainParts(
   disabled: readonly string[],
   commands: RuntimeCommands<MainCommandContext<any>>,
   state: SlotStore,
-): PluginHost<MainStart<PluginManifest>> {
+): PluginHost<MainStart<PluginManifest>, MainPart> {
   // The stops a quit runs end the rows the next start restores, and a page told
   // of it would save them as gone: panes, recency.
   const channels = createPluginChannels(ipcMain, () =>
@@ -812,7 +874,9 @@ function startMainParts(
   );
   const bus = createEventBus();
   return startPlugins(
-    mainParts,
+    store
+      .plugins()
+      .flatMap((entry) => (entry.main === null ? [] : [entry.main])),
     'main',
     (part, context) => {
       const started = part.start(
@@ -847,7 +911,7 @@ function startMainParts(
       }
       return started;
     },
-    manifests,
+    () => store.plugins().map((entry) => entry.manifest),
     disabled,
     (source, message) => {
       if (runMode !== 'live') {
@@ -863,6 +927,7 @@ function startMainParts(
 // overlay follow the theme and the effective transparency.
 function createWindow(
   inputs: StartInputs,
+  catalog: PluginCatalog,
   store: ConfigStore,
   userConfig: UserConfig,
   applied: AppliedPlugins,
@@ -921,7 +986,7 @@ function createWindow(
   // every hosted process running; a drive run stops them after the parts, so chat
   // has detached and sees no `closed`, unless its `quit` command kept them for a
   // `restart`.
-  let mainHost: PluginHost<MainStart<PluginManifest>> | null = null;
+  let mainHost: PluginHost<MainStart<PluginManifest>, MainPart> | null = null;
   stoppingParts = () => mainHost?.stopping() ?? [];
   let stopsSessionsOnQuit = runMode === 'drive';
   // Added ahead of the parts: as on a quit, the page has gone before they stop,
@@ -951,7 +1016,13 @@ function createWindow(
     onQuit(() => driveRun.dispose());
     driveRun.listening.catch(failStart);
   }
-  const layouts = serveLayouts(window, inputs.homeDir, inputs.repoDir, log);
+  const layouts = serveLayouts(
+    window,
+    inputs.homeDir,
+    inputs.repoDir,
+    catalog,
+    log,
+  );
   const holder = serveSlots(window, log);
   const slots = holder.store;
   startWindowFocusSlot(slots, {
@@ -1125,7 +1196,9 @@ function createWindow(
     applied,
     slots: holder,
     status: slots.publish(corePluginsSlot),
-    manifests,
+    catalog,
+    config: store,
+    configDisabled: () => store.current().settings.plugins.disabled,
     problem: (message) => store.setPluginsProblem(message),
     servedChanged() {
       livePage(window)?.send(BRIDGE_CHANNELS.configChanged, served());
@@ -1135,6 +1208,16 @@ function createWindow(
     log,
   });
   pluginSwitch = liveSwitch;
+  // Lives as long as the window. A built-in or unknown id rejects, and the
+  // router reports it as any failed command.
+  commands.registry.register(
+    CORE_RELOAD_PLUGIN.id,
+    async (context: MainCommandContext<string>) => {
+      await catalog.reload(context.arg);
+      await liveSwitch.settled();
+    },
+    'core',
+  );
   // At quit, or with the window or its page destroyed, the page never comes
   // back, so a request it holds resolves empty rather than holding the
   // switch's queue. A crashed page that reloads is not gone: its requests wait.
@@ -1161,7 +1244,8 @@ function createWindow(
     addPluginSwitchActions(driveRun.driveFor('core'), {
       pluginSwitch: liveSwitch,
       userConfig,
-      manifests,
+      ids: () => store.plugins().map((entry) => entry.manifest.id),
+      reload: (id) => catalog.reload(id),
       disabled: () => store.current().settings.plugins.disabled,
     });
   }
@@ -1261,9 +1345,28 @@ function startApp() {
         process.env.PATH = shellPath;
       }
       const inputs = await readStartInputs();
-      const { store, userConfig, applied } = await loadConfig(inputs.homeDir);
+      const catalog = await startCatalog(inputs);
+      onQuit(() => catalog.dispose());
+      onSelfTestExit('the plugin catalog', () => catalog.dispose());
+      const { store, userConfig, applied } = await loadConfig(
+        inputs.homeDir,
+        catalog,
+      );
       onSelfTestExit('the config store', () => store.dispose());
+      // Logs its own failure and never rejects, so the start goes on.
+      await writePluginTypes({
+        files,
+        typesFolder: path.join(inputs.pluginsFolder, '_types'),
+        emittedFolder: emittedTypesFolder({
+          isPackaged: app.isPackaged,
+          appPath: app.getAppPath(),
+          resourcesPath: process.resourcesPath,
+        }),
+        paths,
+        log: pageLog.log,
+      });
       serveDataScheme(inputs.dataRoot, paths);
+      servePluginScheme(inputs.pluginCode, paths);
       serveLayoutScheme(
         layoutsFolder(inputs.homeDir),
         paths,
@@ -1289,7 +1392,7 @@ function startApp() {
         timers,
         log: pageLog.log,
       });
-      createWindow(inputs, store, userConfig, applied, sessionHost);
+      createWindow(inputs, catalog, store, userConfig, applied, sessionHost);
       // Starts with createWindow's quit tasks, ahead of every part but the first
       // to stop; `current` still answers after it, for the parts still stopping.
       onQuit(() => store.dispose());
