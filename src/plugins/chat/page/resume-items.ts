@@ -5,13 +5,14 @@ import type {
   ResumeSectionRows,
 } from '../contract';
 
-export type SessionItem =
+// `R` is the step's row type, which a line's `row` keeps.
+export type SessionItem<R extends PastSessionRow = PastSessionRow> =
   | { kind: 'new'; label: string; headless: boolean }
-  | { kind: 'past'; row: PastSessionRow; label: string }
+  | { kind: 'past'; row: R; label: string }
   | {
       kind: 'section';
       section: string;
-      row: PastSessionRow;
+      row: R;
       closed: ResumeSectionRow;
       label: string;
     };
@@ -56,23 +57,25 @@ export function sectionRowsOnce(
   return once;
 }
 
-// The session step's lines: the section rows of `step`'s folder and profile
-// whose session `rows` holds unarchived, then the new-session line and the
-// new-headless-session line, then the other rows in the order given, the
-// archived ones only when `showArchived`.
-export function sessionItems(
-  rows: readonly PastSessionRow[],
+// The session step's lines: the section rows of `step`'s folder — any folder
+// when `step.projectDir` is null — and profile whose session `rows` holds
+// unarchived, then the new-session line and the new-headless-session line,
+// then the other rows in the order given, the archived ones only when
+// `showArchived`.
+export function sessionItems<R extends PastSessionRow>(
+  rows: readonly R[],
   sections: readonly ResumeSectionRows[],
-  step: { projectDir: string; profile: string },
+  step: { projectDir: string | null; profile: string },
   paths: Paths,
   showArchived: boolean,
-): SessionItem[] {
-  const sectionItems: SessionItem[] = [];
+): SessionItem<R>[] {
+  const sectionItems: SessionItem<R>[] = [];
   const inSection = new Set<string>();
   for (const { section, row: closed } of sectionRowsOnce(sections)) {
-    const isInStep =
-      paths.samePath(closed.projectDir, step.projectDir) &&
-      closed.profile === step.profile;
+    const isInStepFolder =
+      step.projectDir === null ||
+      paths.samePath(closed.projectDir, step.projectDir);
+    const isInStep = isInStepFolder && closed.profile === step.profile;
     const saved = rows.find(
       (row) => row.hostSessionId === closed.hostSessionId && !row.archived,
     );
@@ -87,7 +90,7 @@ export function sessionItems(
       });
     }
   }
-  const pastItems: SessionItem[] = rows
+  const pastItems: SessionItem<R>[] = rows
     .filter(
       (row) =>
         (showArchived || !row.archived) && !inSection.has(row.hostSessionId),
@@ -133,11 +136,11 @@ function pastLabel(row: PastSessionRow): string {
 }
 
 // A copy of `rows` with the `hostSessionId` row's `archived` set.
-export function withArchived(
-  rows: readonly PastSessionRow[],
+export function withArchived<R extends PastSessionRow>(
+  rows: readonly R[],
   hostSessionId: string,
   archived: boolean,
-): PastSessionRow[] {
+): R[] {
   return rows.map((row) =>
     row.hostSessionId === hostSessionId ? { ...row, archived } : row,
   );

@@ -4,7 +4,11 @@ import type { ChatProfile } from '../contract';
 import type { PickerItemInput } from '../layouts/layout';
 import { valueLabel } from './chat-state';
 import { type SessionItem, sessionTime, withNote } from './resume-items';
-import { type FolderItem, folderSectionDetail } from './start-prompt-items';
+import {
+  type FolderItem,
+  folderSectionDetail,
+  type ProjectItem,
+} from './start-prompt-items';
 
 // Each list's row input for the `pickerRow` part, spelled as the row shows
 // it.
@@ -32,6 +36,23 @@ export function folderRowInput(
     profile: item.folder.profile,
     lastUsed: item.folder.lastUsed,
   };
+}
+
+// A section row draws as the folder step's; a project and the other-folder
+// line draw as a `choices` row of their label.
+export function projectRowInput(
+  item: ProjectItem,
+  paths: Paths,
+): PickerItemInput {
+  if (item.kind === 'section') {
+    return folderRowInput(item, paths);
+  }
+  return { list: 'choices', label: item.label, isCurrent: false };
+}
+
+// Draws as a `choices` row of the branch name.
+export function branchRowInput(branch: string): PickerItemInput {
+  return { list: 'choices', label: branch, isCurrent: false };
 }
 
 export function profileRowInput(profile: ChatProfile): PickerItemInput {

@@ -97,7 +97,7 @@ describe('resume items', () => {
   it.each<{
     given: string;
     sections: ResumeSectionRows[];
-    step?: { projectDir: string; profile: string };
+    step?: { projectDir: string | null; profile: string };
     paths?: typeof posixPaths;
     showArchived?: boolean;
     lines: string[];
@@ -154,6 +154,28 @@ describe('resume items', () => {
       sections: [{ title: 'Recently closed', rows: [closedRow('b')] }],
       showArchived: true,
       lines: ['new', 'new-headless', 'a', 'b', 'c'],
+    },
+    {
+      given: 'a project step and a row of another folder',
+      sections: [
+        {
+          title: 'Recently closed',
+          rows: [closedRow('a', { projectDir: '/c/3' })],
+        },
+      ],
+      step: { projectDir: null, profile: 'work' },
+      lines: ['Recently closed:a', 'new', 'new-headless', 'c'],
+    },
+    {
+      given: 'a project step and a row of another profile',
+      sections: [
+        {
+          title: 'Recently closed',
+          rows: [closedRow('a', { projectDir: '/c/3', profile: 'personal' })],
+        },
+      ],
+      step: { projectDir: null, profile: 'work' },
+      lines: ['new', 'new-headless', 'a', 'c'],
     },
     {
       given: 'two sections holding one session',

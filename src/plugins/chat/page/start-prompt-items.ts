@@ -1,6 +1,7 @@
 import type { Paths } from '../../../contracts/paths';
 import type {
   ChatProfile,
+  ChatProject,
   RecentFolder,
   ResumeSectionRow,
   ResumeSectionRows,
@@ -12,8 +13,20 @@ export type FolderItem =
   | { kind: 'recent'; folder: RecentFolder; label: string }
   | { kind: 'choose'; label: string };
 
+export type ProjectItem =
+  | { kind: 'section'; section: string; row: ResumeSectionRow; label: string }
+  | { kind: 'project'; project: ChatProject; label: string }
+  | { kind: 'other'; label: string };
+
+// A section row on the folder or project step.
+type SectionItem = Extract<FolderItem | ProjectItem, { kind: 'section' }>;
+
 export const CHOOSE_FOLDER_LABEL = 'Choose folder…';
 export const FOLDERS_HEADING = 'Folders';
+export const PROJECT_STEP_TITLE = 'Project';
+export const BRANCH_STEP_TITLE = 'Branch';
+export const OTHER_FOLDER_LABEL = 'Other folder…';
+export const PROJECTS_HEADING = 'Projects';
 
 // `projectDir` in the OS's own spelling with the home folder shown as `~`.
 export function displayPath(
@@ -35,6 +48,19 @@ export function folderSectionDetail(
   );
 }
 
+// Every section's rows once, as the first step's lines.
+function sectionItems(
+  sections: readonly ResumeSectionRows[],
+  paths: Paths,
+): SectionItem[] {
+  return sectionRowsOnce(sections).map(({ section, row }) => ({
+    kind: 'section',
+    section,
+    row,
+    label: `${row.title} · ${folderSectionDetail(row, paths)}`,
+  }));
+}
+
 // The folder step's lines: the section rows, then the recent folders in the
 // order given, then the choose-folder line.
 export function folderItems(
@@ -43,24 +69,83 @@ export function folderItems(
   homeDir: string,
   paths: Paths,
 ): FolderItem[] {
-  const sectionItems: FolderItem[] = sectionRowsOnce(sections).map(
-    ({ section, row }) => ({
-      kind: 'section',
-      section,
-      row,
-      label: `${row.title} · ${folderSectionDetail(row, paths)}`,
-    }),
-  );
   const recentItems: FolderItem[] = recent.map((folder) => ({
     kind: 'recent',
     folder,
     label: displayPath(folder.projectDir, homeDir, paths),
   }));
   return [
-    ...sectionItems,
+    ...sectionItems(sections, paths),
     ...recentItems,
     { kind: 'choose', label: CHOOSE_FOLDER_LABEL },
   ];
+}
+
+// `<name> · <folder, ~ for the home folder>` or `<name> · <pool>`.
+export function projectLabel(
+  project: ChatProject,
+  homeDir: string,
+  paths: Paths,
+): string {
+  const where =
+    project.kind === 'pool'
+      ? project.pool
+      : paths.tilde(paths.expandTilde(project.folder, homeDir), homeDir);
+  return `${project.name} · ${where}`;
+}
+
+// The project step's lines: the section rows, then each project in settings
+// order, then the other-folder line.
+export function projectItems(
+  projects: readonly ChatProject[],
+  sections: readonly ResumeSectionRows[],
+  homeDir: string,
+  paths: Paths,
+): ProjectItem[] {
+  const projectLines: ProjectItem[] = projects.map((project) => ({
+    kind: 'project',
+    project,
+    label: projectLabel(project, homeDir, paths),
+  }));
+  return [
+    ...sectionItems(sections, paths),
+    ...projectLines,
+    { kind: 'other', label: OTHER_FOLDER_LABEL },
+  ];
+}
+
+// The project step's row name: the project's name; the other-folder line's
+// label; empty for a section row, which matches only on its label.
+export function projectName(item: ProjectItem): string {
+  if (item.kind === 'section') {
+    return '';
+  }
+  return item.kind === 'project' ? item.project.name : item.label;
+}
+
+// The heading `item` sits under: its section, else `PROJECTS_HEADING`; null
+// for every line of a step that shows no section rows.
+export function projectSection(
+  item: ProjectItem,
+  showsSections: boolean,
+): string | null {
+  if (item.kind === 'section') {
+    return item.section;
+  }
+  return showsSections ? PROJECTS_HEADING : null;
+}
+
+// The index in `after` of the branch at `cursor` in `before`; 0 when `cursor`
+// is null or `after` lacks it.
+export function branchSelected(
+  before: readonly string[],
+  cursor: number | null,
+  after: readonly string[],
+): number {
+  if (cursor === null) {
+    return 0;
+  }
+  return Math.max(0, after.indexOf(before[cursor]));
 }
 
 // The folder step's row name: a recent folder's own name; the choose-folder

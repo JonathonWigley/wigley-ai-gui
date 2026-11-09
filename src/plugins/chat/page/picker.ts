@@ -30,6 +30,9 @@ export interface PickerRequest<T> {
   name?(item: T): string;
   // The item index highlighted on open; 0 when left out or out of range.
   selected?: number;
+  // True, while the picker is open, keeps its typed filter and the filter
+  // box's focus (`ListPickerRequest.keepFilter`); false when left out.
+  keepFilter?: boolean;
   // True when the list acts on the shown Chat tab's session, so
   // `closeSessionBound` closes it; false when left out.
   sessionBound?: boolean;
@@ -129,7 +132,10 @@ export function createPicker(deps: PickerDeps): Picker {
 
   return {
     open(next) {
-      blurFocusedElement();
+      const keepsFilter = next.keepFilter === true && list.isOpen();
+      if (!keepsFilter) {
+        blurFocusedElement();
+      }
       isSessionBound = next.sessionBound ?? false;
       const nextScope = next.scope ?? 'picker';
       if (list.isOpen() && nextScope !== scope) {
@@ -146,6 +152,7 @@ export function createPicker(deps: PickerDeps): Picker {
         label: next.label,
         name: next.name,
         selected: next.selected,
+        keepFilter: next.keepFilter,
         headerEnd: headers[nextScope],
         cursorEnd:
           nextScope === 'resume'

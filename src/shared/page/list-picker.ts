@@ -282,7 +282,11 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
         });
         pushed = scope;
       }
-      filter?.setText('');
+      const keptFilter =
+        next.keepFilter === true && request !== null ? state.filter : null;
+      if (keptFilter === null) {
+        filter?.setText('');
+      }
       request = {
         title: next.title,
         chooseAt: (index) => next.chosen(next.items[index]),
@@ -299,6 +303,9 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
         next.selected ?? 0,
         next.name && next.items.map(next.name),
       );
+      if (keptFilter !== null) {
+        state = filteredKeepingCursor(state, keptFilter, deps.matcher);
+      }
       title.textContent = next.title;
       const filterHint = filter === null ? null : deps.filterHint?.();
       head.replaceChildren(
@@ -370,4 +377,20 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     },
   };
   return picker;
+}
+
+// `state` filtered by `filter`, the cursor kept on its item when the filter
+// shows it, else on the best match; `filterPicker` always takes the best match.
+function filteredKeepingCursor(
+  state: PickerState,
+  filter: string,
+  matcher: FuzzyMatcher,
+): PickerState {
+  const filtered = { ...state, filter };
+  const visible = visibleIndexes(filtered, matcher);
+  const keepsCursor = visible.includes(state.cursor);
+  return {
+    ...filtered,
+    cursor: keepsCursor ? state.cursor : (visible[0] ?? -1),
+  };
 }

@@ -1,15 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
-import type { ChatProfile, RecentFolder, ResumeSectionRow } from '../contract';
+import type {
+  ChatProfile,
+  ChatProject,
+  RecentFolder,
+  ResumeSectionRow,
+} from '../contract';
 import {
+  branchSelected,
   displayPath,
   FOLDERS_HEADING,
   type FolderItem,
   folderItems,
   folderName,
   folderSection,
+  OTHER_FOLDER_LABEL,
+  PROJECTS_HEADING,
+  type ProjectItem,
   preselectedProfile,
+  projectItems,
+  projectLabel,
+  projectSection,
 } from './start-prompt-items';
 
 const home = '/Users/u';
@@ -35,6 +47,20 @@ function closedRow(hostSessionId: string, title: string): ResumeSectionRow {
     at: new Date(2026, 0, 2, 10, 0).getTime(),
   };
 }
+
+const newGames: ChatProject = {
+  kind: 'pool',
+  name: 'New Games',
+  pool: 'new-games-prototypes',
+  profile: 'work',
+  pinnedBranches: ['main'],
+};
+const aiDev: ChatProject = {
+  kind: 'folder',
+  name: 'Wigley AI Dev',
+  folder: '~/Documents/ai-dev',
+  profile: null,
+};
 
 const profiles: ChatProfile[] = [
   { name: 'work', configDir: '~/.claude' },
@@ -247,4 +273,118 @@ describe('start prompt items', () => {
       );
     },
   );
+  it.each([
+    {
+      name: 'a pool',
+      project: newGames,
+      label: 'New Games · new-games-prototypes',
+    },
+    {
+      name: 'a folder with ~',
+      project: aiDev,
+      label: 'Wigley AI Dev · ~/Documents/ai-dev',
+    },
+    {
+      name: 'a folder in full',
+      project: { ...aiDev, folder: '/Users/u/Documents/ai-dev' },
+      label: 'Wigley AI Dev · ~/Documents/ai-dev',
+    },
+  ])('projectLabel: $name', ({ project, label }) => {
+    expect(projectLabel(project, home, posixPaths)).toBe(label);
+  });
+
+  it('projectItems_SectionsThenProjectsThenOtherFolder', () => {
+    const sections = [
+      { title: 'Recently closed', rows: [closedRow('one', 'Fix login')] },
+    ];
+    const kindsAndNames = (items: ProjectItem[]) =>
+      items.map((item) =>
+        item.kind === 'project' ? item.project.name : item.kind,
+      );
+
+    const items = projectItems([aiDev, newGames], sections, home, posixPaths);
+
+    expect(kindsAndNames(items)).toEqual([
+      'section',
+      'Wigley AI Dev',
+      'New Games',
+      'other',
+    ]);
+    expect(items[items.length - 1].label).toBe(OTHER_FOLDER_LABEL);
+    expect(
+      kindsAndNames(projectItems([aiDev, newGames], [], home, posixPaths)),
+    ).toEqual(['Wigley AI Dev', 'New Games', 'other']);
+  });
+
+  it.each<{
+    name: string;
+    item: ProjectItem;
+    showsSections: boolean;
+    heading: string | null;
+  }>([
+    {
+      name: 'a section row',
+      item: {
+        kind: 'section',
+        section: 'Recently closed',
+        row: closedRow('one', 'Fix login'),
+        label: 'Fix login',
+      },
+      showsSections: true,
+      heading: 'Recently closed',
+    },
+    {
+      name: 'a project beside section rows',
+      item: { kind: 'project', project: newGames, label: 'New Games' },
+      showsSections: true,
+      heading: PROJECTS_HEADING,
+    },
+    {
+      name: 'the other-folder line beside section rows',
+      item: { kind: 'other', label: OTHER_FOLDER_LABEL },
+      showsSections: true,
+      heading: PROJECTS_HEADING,
+    },
+    {
+      name: 'a project with no section rows',
+      item: { kind: 'project', project: newGames, label: 'New Games' },
+      showsSections: false,
+      heading: null,
+    },
+  ])('projectSection: $name', ({ item, showsSections, heading }) => {
+    expect(projectSection(item, showsSections)).toBe(heading);
+  });
+
+  it.each([
+    {
+      name: 'moved down by a new branch',
+      before: ['main', 'a'],
+      cursor: 1,
+      after: ['main', 'b', 'a'],
+      expected: 2,
+    },
+    {
+      name: 'gone',
+      before: ['main', 'a'],
+      cursor: 1,
+      after: ['main', 'b'],
+      expected: 0,
+    },
+    {
+      name: 'no cursor',
+      before: ['main'],
+      cursor: null,
+      after: ['x', 'main'],
+      expected: 0,
+    },
+    {
+      name: 'moved up',
+      before: ['main', 'b', 'a'],
+      cursor: 2,
+      after: ['a', 'main'],
+      expected: 0,
+    },
+  ])('branchSelected: $name', ({ before, cursor, after, expected }) => {
+    expect(branchSelected(before, cursor, after)).toBe(expected);
+  });
 });

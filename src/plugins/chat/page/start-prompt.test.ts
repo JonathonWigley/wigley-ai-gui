@@ -9,7 +9,9 @@ import {
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   ChatProfile,
+  ChatProject,
   PastSessionRow,
+  ProjectPastSessionRow,
   RecentFolder,
   ResumeRequest,
   ResumeSectionRow,
@@ -26,9 +28,13 @@ import {
 } from './resume-items';
 import { createStartPrompt } from './start-prompt';
 import {
+  BRANCH_STEP_TITLE,
   CHOOSE_FOLDER_LABEL,
   FOLDERS_HEADING,
   type FolderItem,
+  OTHER_FOLDER_LABEL,
+  PROJECT_STEP_TITLE,
+  PROJECTS_HEADING,
 } from './start-prompt-items';
 
 const HOME = '/Users/u';
@@ -52,6 +58,9 @@ interface ChannelAnswers {
   resumeSections: () => Promise<ResumeSectionRows[]>;
   accountStatus: () => Promise<AccountStatus>;
   pastSessions: () => Promise<PastSessionRow[]>;
+  projects: () => Promise<ChatProject[]>;
+  branches: (project: string, refresh: boolean) => Promise<string[]>;
+  projectPastSessions: () => Promise<ProjectPastSessionRow[]>;
   start: (request: StartRequest) => Promise<string>;
   resume: (request: ResumeRequest) => Promise<string>;
   setArchived: (hostSessionId: string, archived: boolean) => Promise<void>;
@@ -86,6 +95,11 @@ function setUp(
   const recent = options.recent ?? [app];
   const opened: Opened[] = [];
   const invoked: string[] = [];
+  // The arguments of each `branches`, `projectPastSessions` and
+  // `accountStatus` invoke.
+  const branchReads: [string, boolean][] = [];
+  const projectSessionReads: [string, string][] = [];
+  const statusAsked: string[] = [];
   const started: StartRequest[] = [];
   const resumed: ResumeRequest[] = [];
   const archiveWrites: { hostSessionId: string; archived: boolean }[] = [];
@@ -104,6 +118,9 @@ function setUp(
       Promise.resolve({ signedIn: true, account: 'me@example.invalid' }),
     chooseFolder: () => Promise.resolve('/Users/u/dev/new'),
     pastSessions: () => Promise.resolve([]),
+    projects: () => Promise.resolve([]),
+    branches: () => Promise.resolve(['main', 'a']),
+    projectPastSessions: () => Promise.resolve([]),
     start: () => Promise.resolve('row-1'),
     resume: () => Promise.resolve('row-2'),
     setArchived: () => Promise.resolve(),
@@ -152,10 +169,21 @@ function setUp(
       archiveWrites.push({ hostSessionId, archived });
       return answers.setArchived(hostSessionId, archived);
     }
+    if (method === 'branches') {
+      const [project, refresh] = args as [string, boolean];
+      branchReads.push([project, refresh]);
+      return answers.branches(project, refresh);
+    }
+    if (method === 'projectPastSessions') {
+      projectSessionReads.push(args as [string, string]);
+    }
+    if (method === 'accountStatus') {
+      statusAsked.push(args[0] as string);
+    }
     return answers[
       method as Exclude<
         keyof ChannelAnswers,
-        'start' | 'resume' | 'setArchived'
+        'start' | 'resume' | 'setArchived' | 'branches'
       >
     ]();
   };
@@ -178,6 +206,9 @@ function setUp(
     prompt,
     opened,
     invoked,
+    branchReads,
+    projectSessionReads,
+    statusAsked,
     started,
     resumed,
     archiveWrites,
@@ -301,6 +332,53 @@ async function atSessionStep(
   pickFolder(run.opened[0], '~/dev/app');
   await flush();
   return run;
+}
+
+const newGames: ChatProject = {
+  kind: 'pool',
+  name: 'New Games',
+  pool: 'new-games-prototypes',
+  profile: 'work',
+  pinnedBranches: ['main'],
+};
+const aiDev: ChatProject = {
+  kind: 'folder',
+  name: 'Wigley AI Dev',
+  folder: '~/Documents/ai-dev',
+  profile: null,
+};
+const NEW_GAMES_LABEL = 'New Games · new-games-prototypes';
+const AI_DEV_LABEL = 'Wigley AI Dev · ~/Documents/ai-dev';
+
+// The prompt opened with New Games and Wigley AI Dev in the settings.
+function setUpWithProjects(
+  answers: Partial<Answers> = {},
+  options: { profiles?: ChatProfile[]; recent?: RecentFolder[] } = {},
+) {
+  return setUp({
+    ...options,
+    answers: {
+      projects: () => Promise.resolve([newGames, aiDev]),
+      ...answers,
+    },
+  });
+}
+
+// Picks each label in turn on the list then shown, letting the prompt settle
+// after each.
+async function pickInTurn(run: ReturnType<typeof setUp>, ...labels: string[]) {
+  for (const label of labels) {
+    pickItem(run.last(), label);
+    await flush();
+  }
+}
+
+function titlesOf(run: ReturnType<typeof setUp>): string[] {
+  return run.opened.map(({ title }) => title);
+}
+
+function branchStepsOf(run: ReturnType<typeof setUp>): Opened[] {
+  return run.opened.filter(({ title }) => title === BRANCH_STEP_TITLE);
 }
 
 describe('start prompt', () => {
@@ -1103,5 +1181,388 @@ describe('start prompt', () => {
 
     expect(run.signIns).toEqual([]);
     expect(run.last().title).toBe('Folder');
+  });
+  it('open_ProjectsReject_OpensTheFolderStep', async () => {
+    const run = setUp({
+      answers: { projects: () => Promise.reject(new Error('bad setting')) },
+    });
+    await flush();
+
+    expect(titlesOf(run)).toEqual(['Folder']);
+    expect(run.logs).toContainEqual(
+      expect.stringContaining('projects not read:'),
+    );
+  });
+
+  it('open_Projects_OpensTheProjectStepOnTheFirstProject', async () => {
+    const run = setUpWithProjects({
+      resumeSections: recentlyClosed(closedAlpha),
+    });
+    await flush();
+
+    expect(run.last().title).toBe(PROJECT_STEP_TITLE);
+    expect(run.last().labels).toEqual([
+      folderSectionLabel(closedAlpha, 'app'),
+      NEW_GAMES_LABEL,
+      AI_DEV_LABEL,
+      OTHER_FOLDER_LABEL,
+    ]);
+    expect(sectionsOf(run.last())).toEqual([
+      'Recently closed',
+      PROJECTS_HEADING,
+      PROJECTS_HEADING,
+      PROJECTS_HEADING,
+    ]);
+    expect(run.last().selected).toBe(1);
+  });
+
+  it('projectStep_OtherFolder_OpensTheFolderStep', async () => {
+    const run = setUpWithProjects();
+    await flush();
+
+    await pickInTurn(run, OTHER_FOLDER_LABEL);
+
+    const { title, labels, selected } = run.last();
+    expect({ title, labels, selected }).toEqual({
+      title: 'Folder',
+      labels: ['~/dev/app', CHOOSE_FOLDER_LABEL],
+      selected: 0,
+    });
+  });
+
+  it('projectStep_SectionRow_Resumes', async () => {
+    const run = setUpWithProjects({
+      resumeSections: recentlyClosed(closedAlpha),
+    });
+    await flush();
+
+    await pickInTurn(run, folderSectionLabel(closedAlpha, 'app'));
+
+    expect(run.resumed).toEqual([
+      {
+        projectDir: '/Users/u/dev/app',
+        profile: 'work',
+        hostSessionId: 'a',
+        title: 'Fix login',
+        headless: false,
+      },
+    ]);
+  });
+
+  it('branchStep_CachedThenRefreshed_KeepsTheCursorsBranch', async () => {
+    const refreshed = deferred<string[]>();
+    const run = setUpWithProjects({
+      branches: (_project, refresh) =>
+        refresh ? refreshed.promise : Promise.resolve(['main', 'a']),
+    });
+    await flush();
+    await pickInTurn(run, NEW_GAMES_LABEL);
+    expect(run.last().labels).toEqual(['main', 'a']);
+    run.moveCursor(1);
+
+    refreshed.resolve(['main', 'b', 'a']);
+    await flush();
+
+    const steps = branchStepsOf(run);
+    expect(steps).toHaveLength(2);
+    expect(steps[1].labels).toEqual(['main', 'b', 'a']);
+    expect(steps[1].selected).toBe(2);
+    expect(steps[1].request.keepFilter).toBe(true);
+    expect(run.branchReads).toEqual([
+      ['New Games', false],
+      ['New Games', true],
+    ]);
+  });
+
+  it('branchStep_RefreshUnchanged_DoesNotReopen', async () => {
+    const run = setUpWithProjects();
+    await flush();
+
+    await pickInTurn(run, NEW_GAMES_LABEL);
+
+    expect(branchStepsOf(run)).toHaveLength(1);
+  });
+
+  it('branchStep_RefreshAfterBranchPicked_ReopensNothing', async () => {
+    const refreshed = deferred<string[]>();
+    const run = setUpWithProjects({
+      branches: (_project, refresh) =>
+        refresh ? refreshed.promise : Promise.resolve(['main', 'a']),
+    });
+    await flush();
+    await pickInTurn(run, NEW_GAMES_LABEL, 'main');
+
+    refreshed.resolve(['main', 'b', 'a']);
+    await flush();
+
+    expect(branchStepsOf(run)).toHaveLength(1);
+  });
+
+  it('branchStep_CachedRejects_OpensOnTheRefresh', async () => {
+    const run = setUpWithProjects({
+      branches: (_project, refresh) =>
+        refresh
+          ? Promise.resolve(['main', 'b'])
+          : Promise.reject(new Error('no refs')),
+    });
+    await flush();
+
+    await pickInTurn(run, NEW_GAMES_LABEL);
+
+    expect(branchStepsOf(run).map(({ labels }) => labels)).toEqual([
+      ['main', 'b'],
+    ]);
+    expect(run.logs).toContain('branches not read: no refs');
+  });
+
+  it.each([
+    {
+      name: 'both reject',
+      cached: () => Promise.reject(new Error('no refs')),
+      fresh: () => Promise.reject(new Error('offline')),
+      toast: 'Branches not listed: offline',
+    },
+    {
+      name: 'both answer none',
+      cached: () => Promise.resolve([]),
+      fresh: () => Promise.resolve([]),
+      toast: 'Branches not listed: no branches on origin',
+    },
+  ])(
+    'branchStep_BothReject_Toasts: $name',
+    async ({ cached, fresh, toast }) => {
+      const run = setUpWithProjects({
+        branches: (_project, refresh) => (refresh ? fresh() : cached()),
+      });
+      await flush();
+
+      await pickInTurn(run, NEW_GAMES_LABEL);
+
+      expect(run.toasts).toEqual([{ text: toast, tone: 'error' }]);
+      expect(branchStepsOf(run)).toEqual([]);
+    },
+  );
+
+  it('startPrompt_ReopenedWhileBranchesRead_OpensNoBranchStep', async () => {
+    const cached = deferred<string[]>();
+    const refreshed = deferred<string[]>();
+    const run = setUpWithProjects({
+      branches: (_project, refresh) =>
+        refresh ? refreshed.promise : cached.promise,
+    });
+    await flush();
+    await pickInTurn(run, NEW_GAMES_LABEL);
+    run.prompt.open();
+    await flush();
+
+    cached.resolve(['main']);
+    refreshed.resolve(['main', 'a']);
+    await flush();
+
+    expect(branchStepsOf(run)).toEqual([]);
+    expect(run.last().title).toBe(PROJECT_STEP_TITLE);
+  });
+
+  it.each([
+    {
+      name: 'fixed profile skips the step',
+      project: newGames,
+      picks: [NEW_GAMES_LABEL, 'main'],
+      profileSelected: null,
+      statusAsked: ['work'],
+      toasts: [],
+      branchReads: 2,
+      reachesSessionStep: true,
+    },
+    {
+      name: 'folder project pre-selects its last use',
+      project: aiDev,
+      picks: [AI_DEV_LABEL],
+      profileSelected: 1,
+      statusAsked: [],
+      toasts: [],
+      branchReads: 0,
+      reachesSessionStep: false,
+    },
+    {
+      name: 'pool project with no profile',
+      project: { ...newGames, profile: null },
+      picks: [NEW_GAMES_LABEL, 'main'],
+      profileSelected: 0,
+      statusAsked: [],
+      toasts: [],
+      branchReads: 2,
+      reachesSessionStep: false,
+    },
+    {
+      name: 'fixed profile not in settings',
+      project: { ...newGames, profile: 'gone' },
+      picks: [NEW_GAMES_LABEL],
+      profileSelected: null,
+      statusAsked: [],
+      toasts: [
+        {
+          text: "Profile gone of New Games is not in chat's profiles setting",
+          tone: 'error',
+        },
+      ],
+      branchReads: 0,
+      reachesSessionStep: false,
+    },
+  ])(
+    'projectProfile: $name',
+    async ({
+      project,
+      picks,
+      profileSelected,
+      statusAsked,
+      toasts,
+      branchReads,
+      reachesSessionStep,
+    }) => {
+      const run = setUp({
+        profiles: [work, personal],
+        recent: [
+          {
+            projectDir: '/Users/u/Documents/ai-dev',
+            profile: 'personal',
+            lastUsed: 3,
+          },
+        ],
+        answers: { projects: () => Promise.resolve([project]) },
+      });
+      await flush();
+
+      await pickInTurn(run, ...picks);
+
+      const profileSteps = run.opened.filter(
+        ({ title }) => title === 'Profile',
+      );
+      expect(profileSteps.map(({ selected }) => selected)).toEqual(
+        profileSelected === null ? [] : [profileSelected],
+      );
+      expect(run.statusAsked).toEqual(statusAsked);
+      expect(run.toasts).toEqual(toasts);
+      expect(run.branchReads).toHaveLength(branchReads);
+      expect(titlesOf(run).includes(SESSION_STEP_TITLE)).toBe(
+        reachesSessionStep,
+      );
+    },
+  );
+
+  it('projectSessionStep_ListsTheProjectsSessions_ResumesInEachRowsFolder', async () => {
+    const run = setUpWithProjects({
+      projectPastSessions: () =>
+        Promise.resolve([
+          { ...alpha, projectDir: '/c/1' },
+          { ...beta, projectDir: '/c/3' },
+        ]),
+    });
+    await flush();
+    await pickInTurn(run, NEW_GAMES_LABEL, 'main');
+    expect(run.last().title).toBe(SESSION_STEP_TITLE);
+
+    await pickInTurn(run, rowLabel(beta));
+
+    expect(run.projectSessionReads).toEqual([['New Games', 'work']]);
+    expect(run.resumed).toEqual([
+      {
+        projectDir: '/c/3',
+        profile: 'work',
+        hostSessionId: 'b',
+        title: 'Beta',
+        headless: false,
+      },
+    ]);
+  });
+
+  it.each([
+    {
+      name: 'New Games on main',
+      picks: [NEW_GAMES_LABEL, 'main'],
+      started: {
+        project: 'New Games',
+        branch: 'main',
+        profile: 'work',
+        headless: false,
+      },
+    },
+    {
+      name: 'Wigley AI Dev under work',
+      picks: [AI_DEV_LABEL, 'work · ~/.claude'],
+      started: {
+        project: 'Wigley AI Dev',
+        branch: null,
+        profile: 'work',
+        headless: false,
+      },
+    },
+  ])('projectNewSession: $name', async ({ picks, started }) => {
+    const run = setUpWithProjects({
+      projectPastSessions: () =>
+        Promise.resolve([{ ...alpha, projectDir: '/c/1' }]),
+    });
+    await flush();
+
+    await pickInTurn(run, ...picks, NEW_SESSION_LABEL);
+
+    expect(run.started).toEqual([started]);
+  });
+
+  it('projectPastSessionsEmpty_SessionStepHoldsTheNewLinesAlone', async () => {
+    const run = setUpWithProjects();
+    await flush();
+
+    await pickInTurn(run, NEW_GAMES_LABEL, 'main');
+    expect(run.last().title).toBe(SESSION_STEP_TITLE);
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
+    ]);
+    expect(run.started).toEqual([]);
+
+    await pickInTurn(run, NEW_SESSION_LABEL);
+
+    expect(run.started).toEqual([
+      {
+        project: 'New Games',
+        branch: 'main',
+        profile: 'work',
+        headless: false,
+      },
+    ]);
+  });
+
+  it('openForNewSession_Project_SessionStepHoldsTheNewLinesAlone', async () => {
+    const run = setUpWithProjects({
+      resumeSections: recentlyClosed(closedAlpha),
+      projectPastSessions: () =>
+        Promise.resolve([{ ...alpha, projectDir: '/c/1' }]),
+    });
+    run.prompt.openForNewSession();
+    await flush();
+    expect(run.last().labels).toEqual([
+      NEW_GAMES_LABEL,
+      AI_DEV_LABEL,
+      OTHER_FOLDER_LABEL,
+    ]);
+
+    await pickInTurn(run, NEW_GAMES_LABEL, 'main');
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
+    ]);
+
+    await pickInTurn(run, NEW_SESSION_LABEL);
+
+    expect(run.invoked).not.toContain('projectPastSessions');
+    expect(run.started).toEqual([
+      {
+        project: 'New Games',
+        branch: 'main',
+        profile: 'work',
+        headless: false,
+      },
+    ]);
   });
 });

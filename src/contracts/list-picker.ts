@@ -10,6 +10,11 @@ export interface ListPickerRequest<T> {
   name?(item: T): string;
   // The item index highlighted on open; 0 when left out or out of range.
   selected?: number;
+  // True keeps the typed filter when `open` replaces a request still open:
+  // the new list opens filtered by it, the cursor on `selected` when the
+  // filter shows it, else on the best match. Left out, or with the list
+  // closed, `open` clears the filter.
+  keepFilter?: boolean;
   // Runs once the list has closed on a choice.
   chosen(item: T): void;
   // Runs once the list has closed on `cancel`, or on the pushed scope's base

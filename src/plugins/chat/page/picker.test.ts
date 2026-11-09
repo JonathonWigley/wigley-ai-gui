@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorHost } from '../../../contracts/editor';
+import type { ListPickerRequest } from '../../../contracts/list-picker';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   asHtml,
   FakeElement,
+  FocusFakeElement,
   findAll,
   installFakeDom,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import type { ChatLayouts } from './chat-layouts';
 import { createPicker } from './picker';
@@ -50,15 +53,28 @@ const filterEditor = {
   create: () => ({ setText: NOOP }),
 } as unknown as EditorHost;
 
+// `listOpens` records each request the chat picker hands its list.
 function pickerSetup() {
   let layer: FakeElement | null = null;
+  const listOpens: ListPickerRequest<unknown>[] = [];
+  const service = fakeListPickerService({
+    place(element) {
+      layer = asFake(element);
+    },
+    editor: filterEditor,
+  });
   const picker = createPicker({
-    picker: fakeListPickerService({
-      place(element) {
-        layer = asFake(element);
+    picker: {
+      create(options) {
+        const list = service.create(options);
+        const open = list.open;
+        list.open = (request) => {
+          listOpens.push(request as ListPickerRequest<unknown>);
+          open(request);
+        };
+        return list;
       },
-      editor: filterEditor,
-    }),
+    },
     layouts,
     log: NOOP,
     keys: recordingAnchors().keys,
@@ -67,7 +83,22 @@ function pickerSetup() {
     platform: 'macos',
     state: noLayoutState,
   });
-  return { picker, layer: layer as unknown as FakeElement };
+  return { picker, layer: layer as unknown as FakeElement, listOpens };
+}
+
+function choicesRequest(items: string[], keepFilter?: boolean) {
+  return {
+    title: 'Branch',
+    items,
+    label: (item: string) => item,
+    rowInput: (item: string) => ({
+      list: 'choices' as const,
+      label: item,
+      isCurrent: false,
+    }),
+    keepFilter,
+    picked: NOOP,
+  };
 }
 
 describe('chat picker', () => {
@@ -101,5 +132,23 @@ describe('chat picker', () => {
       'heading Folders',
       'row ~/dev/app',
     ]);
+  });
+
+  it('open_KeepFilterWhileOpen_ReachesTheListAndBlursNothing', () => {
+    const doc = installFocusFakeDom((name, value) =>
+      vi.stubGlobal(name, value),
+    );
+    const { picker, listOpens } = pickerSetup();
+    picker.open(choicesRequest(['main', 'a']));
+    const box = new FocusFakeElement('input');
+    box.focus();
+
+    picker.open(choicesRequest(['main', 'b', 'a'], true));
+
+    expect(listOpens.map(({ keepFilter }) => keepFilter)).toEqual([
+      undefined,
+      true,
+    ]);
+    expect(doc.activeElement).toBe(box);
   });
 });

@@ -50,17 +50,20 @@ function runOnPicker(picker: ListPicker, command: CommandId, arg: CommandArg) {
 
 // A picker over a filter editor whose `type` sets the filter text as typing
 // it would, and whose `focus` and `blur` move the document's focus into and
-// out of the filter box. `filterHint` draws at the title line's end when
-// given.
+// out of the filter box. `filterText` is the box's text. `filterHint` draws at
+// the title line's end when given.
 function filteredPickerSetup(filterHint?: () => HTMLElement | null) {
   let events: EditorEvents | null = null;
+  let boxText = '';
   const focusable = document as unknown as { activeElement: unknown };
   const filterEditor = {
     create: (parent: HTMLElement, _doc: string, heard: EditorEvents) => {
       events = heard;
       return {
-        text: () => '',
-        setText: () => undefined,
+        text: () => boxText,
+        setText: (text: string) => {
+          boxText = text;
+        },
         focus: () => {
           focusable.activeElement = parent;
         },
@@ -89,7 +92,11 @@ function filteredPickerSetup(filterHint?: () => HTMLElement | null) {
     picker,
     log,
     layer: asFake(picker.element),
-    type: (text: string) => events?.changed(text),
+    type: (text: string) => {
+      boxText = text;
+      events?.changed(text);
+    },
+    filterText: () => boxText,
   };
 }
 
@@ -597,6 +604,42 @@ describe('list picker', () => {
       commands[id]();
 
       expect(calls).toEqual([method]);
+    },
+  );
+
+  it.each([
+    {
+      keepFilter: true,
+      filter: 'protos',
+      visible: ['protos/a', 'protos/b', 'protos/c'],
+    },
+    {
+      keepFilter: undefined,
+      filter: '',
+      visible: ['main', 'protos/a', 'protos/b', 'protos/c'],
+    },
+  ])(
+    'open_KeepFilter_ReopensFilteredWithTheCursorOnSelected: keepFilter $keepFilter',
+    ({ keepFilter, filter, visible }) => {
+      const { picker, layer, type, filterText } = filteredPickerSetup();
+      picker.open(request({ items: ['main', 'protos/a', 'protos/b'] }));
+      type('protos');
+
+      picker.open(
+        request({
+          items: ['main', 'protos/b', 'protos/c', 'protos/a'],
+          selected: 3,
+          keepFilter,
+        }),
+      );
+
+      expect(filterText()).toBe(filter);
+      expect(
+        rows(layer)
+          .map((row) => row.textContent)
+          .sort(),
+      ).toEqual(visible);
+      expect(picker.cursorIndex()).toBe(3);
     },
   );
 
