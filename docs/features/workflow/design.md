@@ -106,9 +106,9 @@ must learn which copy the run writes. The run reports it two ways, and the lates
   `plan.md`, and a subagent's call changes nothing. `wigley:make` calls it once it knows the folder it works in.
 
 A reported folder is read alone. With no report, or once the reported folder holds no `plan.md`, Large reads the
-**moved copy**: a copy whose progress differs from the main tree's copy with no fewer ticked boxes, the most recently
+**moved copy**: a copy whose progress differs from the main tree's copy and is not behind it (no fewer ticked boxes, and no task's `Status` ranked before main's for the same task document; the order is not started, in progress, done, and a status outside that order is never behind), the most recently
 modified of them when several differ, else the main tree's copy. A fresh worktree checks out the main tree's progress,
-and an idle worktree left behind main has fewer ticked boxes, so neither wins, however new its files' modified times
+and an idle worktree left behind main has fewer ticked boxes or an earlier `Status`, so neither wins, however new its files' modified times
 are. A report that moves the flow off an unreported folder keeps that folder in the flow's state, saved with it; once a reported folder lists no copies, as a worktree removed after its merge does, the watch lists the copies, and decides whether the plan is gone, from the main tree's copy it last listed, else from that kept folder, so an app restart still finds the main tree's copy. A plan outside a git clone (`~/wigley-features/`) has one copy. A report
 applies when its file changes; a row's file stays after the row ends, since the live `Files.trash` would fill the
 user's Trash, and a new row never reuses an old row's id.

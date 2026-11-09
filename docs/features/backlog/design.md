@@ -109,7 +109,7 @@ plan is written from them. A decision here stands unless the user changes it.
   slug and progress.
 - A plan's progress and its tasks' statuses come from the shared plan reader (`src/shared/plan-progress.ts`) over the
   plan's moved copy across the clone and its git worktrees (`src/shared/plan-copies.ts`): a copy whose progress
-  differs from the main tree's with no fewer ticked boxes, the most recently modified when several differ, else the
+  differs from the main tree's and is not behind it (no fewer ticked boxes, and no task's `Status` ranked before main's for the same task document; the order is not started, in progress, done, and a status outside that order is never behind), the most recently modified when several differ, else the
   main tree's. A run in a worktree shows in Backlog too, and neither a fresh worktree's untouched copy nor an idle
   worktree's copy left behind main wins. Each load lists a clone's worktrees once, for all its plans. The
   count is the boxes under `## Tasks`, not the docs index's count of every checkbox in the file. Opening one renders
