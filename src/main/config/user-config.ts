@@ -225,8 +225,8 @@ function userConfigSchema(
   };
 }
 
-// `schema` with the runtime commands and binds the store serves now, and the
-// commands and scopes of the applied list's plugins left out.
+// `schema` with the runtime commands, binds and group names the store serves
+// now, and the commands and scopes of the applied list's plugins left out.
 function withRuntime(
   schema: UserConfigSchema,
   deps: UserConfigDeps,

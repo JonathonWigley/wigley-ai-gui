@@ -37,7 +37,7 @@ export const keysManifest = definePlugin({
     scrollTop: { label: 'scroll to the top', group: 'help', runsIn: 'page' },
     scrollEnd: { label: 'scroll to the end', group: 'help', runsIn: 'page' },
     searchLeader: {
-      label: 'Search leader actions',
+      label: 'search leader actions',
       group: 'help',
       runsIn: 'page',
     },

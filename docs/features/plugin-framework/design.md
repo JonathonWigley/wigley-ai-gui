@@ -7,7 +7,7 @@
 - **Shell and areas** — the permanent areas and who fills them.
 - **Sessions (plan A2)** — tabs as agent sessions, the relay, tab lifecycle.
 - **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
-- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the `showHints` setting and the placement check; the core holds the scope stack and draws the key hints that replaced the bar.
+- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the leader search on `Space /`, the `showHints` setting and the placement check; the core holds the scope stack and draws the key hints that replaced the bar.
 - **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
 - **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
 - **Hot reload (Wave 4)** — the closed bridge, core services that stay fixed, live stop, start and restart, the `ready` and `mayStop` hooks, the live enable switch, and quit waiting for every stop.
@@ -111,13 +111,15 @@ command's keys into an element a view names, and the plugin's `showHints` settin
 - Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a full-width glass shelf on the
   window's bottom edge, listing what can follow in up to four columns; it redraws at once on a deeper prefix and closes when the
   sequence ends or on Esc. `whichKeyTimeoutMs` (default `null`,
-  wait for the next key or Esc) ends a sequence the panel has shown that long. A group's label and `›` draw in the `accent` colour and an action's label in `fg-secondary`, from the
+  wait for the next key or Esc) ends a sequence the shelf has shown that long. A group's label and `›` draw in the `accent` colour and an action's label in `fg-secondary`, from the
   `which-key-prefix` and `which-key-command` theme tokens.
 - It also opens inside a box in vim normal mode: `@replit/codemirror-vim` 6.4.0 keeps the typed keys in
   `getCM(view).state.vim.inputState.keyBuffer` and fires `vim-keypress` per key and `vim-command-done` when the
   pending input clears; the editor adapter reports them through `EditorHost.onPendingKeys` and `cancelPendingKeys`,
   and a test fails if an upgrade drops that state. The remaining keys come from the app's own keymap, not vim's.
-  A count-prefixed sequence (`3 Space`) gets no panel.
+  A count-prefixed sequence (`3 Space`) gets no shelf.
+- `Space /` opens the leader search: the shared list picker over the leader actions in force, which runs the pick
+  with its arg.
 - `Space ?` (`<Leader>?` in a box) opens the full help overlay; bare `?` is freed. Help lays the `help` scope
   (`keys.help`, Esc closes) over the page's scope with `api.keys.pushScope`, and closes itself when the scope under it
   changes (the `PushedScope`'s `onBaseChanged`), so a prompt such as chat's end-session confirm shows at once.

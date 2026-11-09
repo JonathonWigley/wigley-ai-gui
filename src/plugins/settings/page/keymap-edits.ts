@@ -229,7 +229,8 @@ export function withGroupName(
   return tidied({ ...layer, groups });
 }
 
-// The advanced box's text: the layer's remaps, app, intercept and global binds and its accelerator unbind entries, as 2-space JSON.
+// The advanced box's text: the layer's remaps, app, intercept and global binds
+// and its accelerator unbind entries, as 2-space JSON.
 export function advancedText(layer: UserKeymap | null): string {
   const shown: JsonObject = {};
   for (const section of ADVANCED_SECTIONS) {

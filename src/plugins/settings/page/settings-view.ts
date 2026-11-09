@@ -106,8 +106,8 @@ const FILE_NAMES: Record<ConfigFile, ProblemInput['file']> = {
 const PLUGINS_SECTION = { id: 'plugins', title: 'Plugins' };
 // Its id stays `keymap`: the keys plugin's settings already hold a section
 // `keys`.
-export const KEYS_SECTION = { id: 'keymap', title: 'Keybindings' };
-export const LEADER_SECTION = { id: 'leader', title: 'Leader menu' };
+const KEYS_SECTION = { id: 'keymap', title: 'Keybindings' };
+const LEADER_SECTION = { id: 'leader', title: 'Leader menu' };
 
 // The key of `?`'s recording, which names no row: every command id holds a
 // dot.

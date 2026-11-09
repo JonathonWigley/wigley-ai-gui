@@ -76,7 +76,7 @@ function tokensAfterLeader(keys: string): string[] | null {
 }
 
 // Whether `line` fires and sits under the leader, as which-key lists it.
-export function isLeaderLine(line: BindLine): boolean {
+function isLeaderLine(line: BindLine): boolean {
   return firesAnywhere(line) && tokensAfterLeader(line.bind.keys) !== null;
 }
 
@@ -115,7 +115,7 @@ function keyClass(key: string): number {
 
 // Letters case-insensitively, the lowercase one first (`a A b B`), then
 // digits, other characters by code point, then `<…>` tokens by text.
-export function compareKeys(a: string, b: string): number {
+function compareKeys(a: string, b: string): number {
   const byClass = keyClass(a) - keyClass(b);
   if (byClass !== 0) {
     return byClass;

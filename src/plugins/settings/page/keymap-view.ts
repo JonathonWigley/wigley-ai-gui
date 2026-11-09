@@ -73,7 +73,7 @@ export interface KeysViewState {
   findKeys: string | null;
 }
 
-// A scope as a picker line names it: `any` as Everywhere, else by its title.
+// A scope as the rows name it: `any` as Everywhere, else by its title.
 export function scopeTitle(ctx: RowContext, scope: ViewScope): string {
   if (scope === 'any') {
     return 'Everywhere';

@@ -261,7 +261,8 @@ export interface SettingsLayout {
     input: LeaderRowInput,
     kit: RowKit,
   ): HTMLElement;
-  // The Keybindings section's last row, drawn while no filter is kept.
+  // The Keybindings section's last row, drawn under the `all` chip with no `/`
+  // filter or find query.
   advancedRow?(
     parent: HTMLElement,
     input: AdvancedRowInput,

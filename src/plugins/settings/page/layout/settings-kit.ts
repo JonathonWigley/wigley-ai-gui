@@ -171,8 +171,9 @@ export function buildLeaderPanes(
   return { element: root, groupRows, itemRows };
 }
 
-// Draws a setting, plugin, key, leader, advanced or Leader menu row with `draw`, in the kit of
-// `scope`; a slot it leaves out is appended at the end of its root.
+// Draws a setting, plugin, key, leader, advanced or Leader menu row with
+// `draw`, in the kit of `scope`; a slot it leaves out is appended at the end of
+// its root.
 export function buildRow<I>(
   draw: (parent: HTMLElement, input: I, kit: RowKit) => HTMLElement,
   parent: HTMLElement,

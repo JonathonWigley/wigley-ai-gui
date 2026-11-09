@@ -50,7 +50,7 @@ Three pieces, each its own surface:
 
 Specified in `docs/features/settings/design.md` § Keybindings and Leader menu sections. Both record a key through one core
 page capability: `api.keys.captureKey`, which hands the next key or chord the user presses to its caller as vim
-notation, ahead of every bind and of the pending sequence, and returns a Disposable that cancels it. Esc is never
+notation, ahead of every bind and of the pending sequence, and returns a Disposable that disarms it with no callback. Esc is never
 captured: it cancels the capture. The core already turns a keydown into a page key for its binds
 (`src/renderer/page-keys.ts`), so the capture is that same turn, exposed.
 

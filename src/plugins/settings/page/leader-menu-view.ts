@@ -161,7 +161,7 @@ const PANE_SCOPES: Record<LeaderPane, LeaderScope> = {
 const CHORD_NOTE = 'A leader item is one key with no Ctrl, Alt or Cmd';
 const ITEMS_FIRST_NOTE = 'Move or clear its items first';
 
-export function groupRowKey(group: LeaderGroup): string {
+function groupRowKey(group: LeaderGroup): string {
   return group.path.length === 0 ? 'group top' : `group ${group.prefix}`;
 }
 
