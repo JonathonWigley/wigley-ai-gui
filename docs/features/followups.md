@@ -776,7 +776,7 @@ because the earlier items rewrite many of these tests anyway.
 - **The lost-retro log's emit-time capture has an untested second path** — *agent-ready*: the `chat.sessionClosed`
   listener in `src/plugins/auto-retro/main/start.ts` captures `isSettling` at emit, because chat's `closed()`
   (`src/plugins/chat/main/chat-sessions.ts`) deletes the `chat.session` slot entry synchronously after the emit, which
-  clears `settle` before the chained step runs. It took three fixes (6abfbd1e, 8667b07d, 3fb0358d) and the last was
+  clears `settle` before the chained step runs. It took three fixes (ab2ff884, e6baa24a, a5065f94) and the last was
   not re-reviewed. A second path clears `settle` the same way: `endClosed` calls `owned.end()` synchronously for a
   non-running session, which can drop the sessions row and reach `leaveRow` before the step. Fix: add a row for that
   path to the table test `sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone` in
