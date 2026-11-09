@@ -72,7 +72,7 @@ first dispatch.
 
 ## Docs written ahead
 
-- wigley-ai-gui `0318c8da` and `f6eb0327` (branch `plan-watch-tracking`): `docs/features/workflow/design.md` §
+- wigley-ai-gui `0318c8da`, `f6eb0327` and `fa90eb4c` (branch `plan-watch-tracking`): `docs/features/workflow/design.md` §
   Large's stages and § Signals and § Decisions, `docs/features/workflow-levels/design.md`,
   `docs/features/backlog/design.md` § Plans and features, `AGENTS.md` (the `workflow-large/` and `plan-copies.ts`
   lines).
