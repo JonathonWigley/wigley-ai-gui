@@ -26,6 +26,7 @@ import { workflowPagePart } from './workflow/page/start';
 import { workflowLargePagePart } from './workflow-large/page/start';
 import { workflowMediumPagePart } from './workflow-medium/page/start';
 import { workflowSmallPagePart } from './workflow-small/page/start';
+import { workflowSpikePagePart } from './workflow-spike/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise. `keys` starts first, so its Keys button contributes to the title
@@ -41,6 +42,7 @@ export const pageParts: readonly PagePart[] = [
   agentLinesPagePart,
   workflowPagePart,
   workflowLargePagePart,
+  workflowSpikePagePart,
   workflowSmallPagePart,
   workflowMediumPagePart,
   unityPoolPagePart,

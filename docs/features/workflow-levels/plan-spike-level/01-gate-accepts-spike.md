@@ -1,6 +1,6 @@
 # 01 — Gate accepts wigley:spike
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -17,3 +17,5 @@ Done when: `cd tools/workflow-gate && python3 -m unittest discover -s tests` pas
 Commit:    one commit for the group
 
 ## Proof
+
+Commit wigley-agents 817afc6 · proof: diff read: LEVEL_SKILLS holds wigley:spike and spike, DENIAL matches the pinned text; unittest 14 OK · concerns: none beyond line numbers drifting; no other level-skill list in the gate

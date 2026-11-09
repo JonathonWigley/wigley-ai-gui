@@ -1,0 +1,177 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  findAll,
+  installFakeDom,
+} from '../../../../shared/page/test-dom';
+import type {
+  ChipInput,
+  SideGroupInput,
+  SideItemInput,
+  SidePaneInput,
+  StripInput,
+} from '../../../workflow/layouts/layout';
+import { testWorkflowKit } from '../../../workflow/page/engine-parts.test-support';
+import layout from './layout.js';
+
+const KIT_MANIFEST = { id: 'workflow-spike', commands: {} };
+
+const chipInput: ChipInput = {
+  badge: 'X',
+  workflowLabel: 'Spike',
+  stage: 'build',
+  label: 'Build',
+  status: 'running',
+  statusText: 'Build · running',
+  detail: '',
+  countdown: null,
+  mainAction: null,
+  onRowLabel: false,
+};
+
+const stripInput: StripInput = {
+  stage: 'build',
+  label: 'Build',
+  status: 'running',
+  statusText: 'Build · running',
+  statusLine: 'Build · running 1/3',
+  detail: '',
+  countdown: null,
+  steps: [
+    { id: 'interview', label: 'Interview', state: 'done', progress: '' },
+    { id: 'build', label: 'Build', state: 'running', progress: ' 1/3' },
+  ],
+  actions: [],
+  hasChecklist: true,
+  headless: false,
+};
+
+const paneInput = (fields: Partial<SidePaneInput>): SidePaneInput => ({
+  ...stripInput,
+  checklistTitle: '',
+  checked: 0,
+  total: 0,
+  finishedGroups: [],
+  finishedOpen: false,
+  currentGroup: null,
+  laterGroups: [],
+  ...fields,
+});
+
+const groupOf = (...items: SideItemInput[]): SideGroupInput => ({
+  title: 'Tasks',
+  items,
+});
+
+const done = (text: string): SideItemInput => ({ text, state: 'done' });
+
+function drawPane(fields: Partial<SidePaneInput>): FakeElement {
+  const { kit } = testWorkflowKit(KIT_MANIFEST);
+  return asFake(
+    layout.sidePane(asHtml(new FakeElement('div')), paneInput(fields), kit)
+      .element,
+  );
+}
+
+const rowLabels = (pane: FakeElement) =>
+  findAll(pane, 'ui-row-label').map((label) => label.textContent);
+
+describe('Spike default layout', () => {
+  beforeEach(() => {
+    installFakeDom(vi.stubGlobal);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { onRowLabel: false, tags: [{ text: 'Build', state: 'running' }] },
+    { onRowLabel: true, tags: [] },
+  ])('chip_DrawsBadgeFirst onRowLabel $onRowLabel', ({ onRowLabel, tags }) => {
+    const { kit } = testWorkflowKit(KIT_MANIFEST);
+
+    const chip = asFake(
+      layout.chip(
+        asHtml(new FakeElement('div')),
+        { ...chipInput, onRowLabel },
+        kit,
+      ).element,
+    );
+
+    const [badge, ...rest] = chip.children;
+    expect(badge.classList.contains('workflow-badge')).toBe(true);
+    expect(badge.textContent).toBe('X');
+    expect(badge.title).toBe('Spike');
+    expect(
+      rest.map((tag) => ({ text: tag.textContent, state: tag.dataset.state })),
+    ).toEqual(tags);
+  });
+
+  it('strip_DrawsTheSteps', () => {
+    const { kit } = testWorkflowKit(KIT_MANIFEST);
+
+    const strip = asFake(
+      layout.strip(
+        asHtml(new FakeElement('div')),
+        { ...stripInput, countdown: '9s' },
+        kit,
+      ).element,
+    );
+
+    expect(
+      findAll(strip, 'workflow-step-label').map((step) => step.textContent),
+    ).toEqual(['Interview', 'Build 1/3']);
+    expect(findAll(strip, 'workflow-countdown')).toEqual([]);
+    expect(findAll(strip, 'ui-button')).toEqual([]);
+  });
+
+  it.each([
+    { headless: true, state: 'on' },
+    { headless: false, state: 'off' },
+  ])('strip_DrawsTheHeadlessChipLast $state', ({ headless, state }) => {
+    const { kit } = testWorkflowKit(KIT_MANIFEST);
+
+    const strip = asFake(
+      layout.strip(
+        asHtml(new FakeElement('div')),
+        { ...stripInput, headless },
+        kit,
+      ).element,
+    );
+
+    const last = strip.children.at(-1);
+    expect(last?.classList.contains('workflow-headless')).toBe(true);
+    expect(last?.dataset.state).toBe(state);
+  });
+
+  it('sidePane_DrawsTheGroups', () => {
+    const pane = drawPane({
+      checked: 1,
+      total: 4,
+      finishedGroups: [groupOf(done('a'))],
+      currentGroup: groupOf(
+        { text: 'b', state: 'running' },
+        { text: 'c', state: 'pending' },
+      ),
+      laterGroups: [groupOf({ text: 'd', state: 'pending' })],
+    });
+
+    expect(rowLabels(pane)).toEqual(['a', 'b', 'c', 'd']);
+    expect(findAll(pane, 'workflow-side-count')[0].textContent).toBe('1/4');
+    expect(findAll(pane, 'workflow-side-actions')).toEqual([]);
+  });
+
+  it('sidePane_AllDone_StillListsTheItems', () => {
+    const pane = drawPane({
+      checked: 2,
+      total: 2,
+      finishedGroups: [groupOf(done('a'), done('b'))],
+    });
+
+    expect(rowLabels(pane)).toEqual(['a', 'b']);
+    expect(findAll(pane, 'workflow-finished-fold')).toEqual([]);
+  });
+});

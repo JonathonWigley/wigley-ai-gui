@@ -114,7 +114,7 @@ layouts kit), `chat` and `sessions` contracts for its self-test, and its own fil
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Gate accepts wigley:spike](01-gate-accepts-spike.md)
+- [x] [Gate accepts wigley:spike](01-gate-accepts-spike.md)
 - [ ] [workflow-spike plugin](02-workflow-spike-plugin.md)
 
 ### Wave 2
@@ -128,10 +128,15 @@ layouts kit), `chat` and `sessions` contracts for its self-test, and its own fil
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: e0a14b8a
 
 ### Groups
+- 01 · wigley-agents 817afc6 · diff read: LEVEL_SKILLS holds wigley:spike and spike, DENIAL matches the pinned text; unittest 14 OK · concerns: none beyond line numbers drifting; no other level-skill list in the gate
 ### Contract changes
 ### Rulings
+- Rebased all three spike-level branches onto main before dispatch (gui e0a14b8a, wigley-agents 103e260, marketplace 40b959f); review bases for the other repos are those SHAs — main had moved, no conflicts · lead
+- plan-paused-needs-you landed on main before the run (folder gone after the rebase), so task 02's Open plan overlap step is moot: the copy of Small's layout files carries its change — lead
+- Marketplace origin/main is at 2.1.3 (not 2.1.2), so task 03's rule gives 2.2.0 — lead
+- Spike entries go first in each LEVEL_SKILLS group, matching the denial order — set order is not behaviour · group 01 · group 01
 ### Review rounds
 ### Test gate

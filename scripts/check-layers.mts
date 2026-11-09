@@ -270,6 +270,65 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  'workflow-spike': {
+    main: {
+      layers: [
+        'src/plugins/workflow-spike/stages',
+        'src/plugins/workflow-spike/main/selftest-script.ts',
+      ],
+    },
+    page: { layers: ['src/plugins/workflow-spike/stages'] },
+    sublayers: {
+      // Self-test support: Spike's script is built on the engine's level script.
+      'src/plugins/workflow-spike/main/selftest-script.ts': {
+        layers: ['src/contracts', 'src/plugins/workflow/main'],
+        packages: [],
+      },
+      'src/plugins/workflow-spike/stages': {
+        layers: [
+          'src/contracts',
+          'src/plugins/workflow-spike',
+          'src/plugins/workflow-spike/contract.ts',
+          'src/plugins/workflow/contract.ts',
+        ],
+        packages: [],
+      },
+      // Runs Spike's stage rules through the engine's real fold.
+      'src/plugins/workflow-spike/stages/spike-stages.test.ts': {
+        layers: [
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow-spike/contract.ts',
+          'src/plugins/workflow-spike/stages',
+        ],
+        packages: [],
+      },
+      // Starts the real engine page part and Spike's on it.
+      'src/plugins/workflow-spike/page/start.test.ts': {
+        layers: [
+          'src/shared',
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow/page',
+          'src/plugins/workflow-spike',
+          'src/plugins/workflow-spike/contract.ts',
+          'src/plugins/workflow-spike/page',
+          'src/plugins/workflow-spike/stages',
+        ],
+        packages: [],
+      },
+      // Draws with the engine's real kit.
+      'src/plugins/workflow-spike/layouts/default/layout.test.ts': {
+        layers: [
+          'src/shared/page',
+          'src/plugins/workflow-spike/layouts',
+          'src/plugins/workflow/layouts',
+          'src/plugins/workflow/page',
+        ],
+        packages: [],
+      },
+    },
+  },
   'workflow-small': {
     main: {
       layers: [
@@ -674,8 +733,8 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
-  // The three level workflows' main rules through the engine's real fold, and
-  // Small's and Medium's main parts on the real engine.
+  // The four level workflows' main rules through the engine's real fold, and
+  // Small's, Medium's and Spike's main parts on the real engine.
   'src/plugins/workflow-levels.test.ts': {
     layers: [
       'src/shared',
@@ -690,6 +749,9 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow-medium/contract.ts',
       'src/plugins/workflow-medium/main',
       'src/plugins/workflow-medium/stages',
+      'src/plugins/workflow-spike/contract.ts',
+      'src/plugins/workflow-spike/main',
+      'src/plugins/workflow-spike/stages',
     ],
     packages: [],
   },

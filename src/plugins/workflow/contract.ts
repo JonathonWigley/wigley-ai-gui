@@ -110,7 +110,7 @@ export interface MainStage {
 
 export interface MainWorkflow {
   id: WorkflowId;
-  // Small 10, medium 20, large 30. The lowest order's claim wins a skill two
+  // Small 10, medium 20, large 30, spike 40. The lowest order's claim wins a skill two
   // workflows claim.
   order: number;
   claims(signal: WorkflowSignal): boolean;
