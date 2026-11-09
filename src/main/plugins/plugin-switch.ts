@@ -48,11 +48,15 @@ export const PLUGIN_RETRY_MS = 2000;
 // no version running, or its restart did not start it), each dependent that
 // runs (`dependsOn.main` or `.page`, transitively) and lost a dependency is
 // withheld with the problem `Needs plugin "<id>"`, and starts again once the
-// dependency does. A reload or restart starts on the page the plugin and each
-// dependent it paused that runs, so a page part whose earlier start failed
-// starts again; a page start that starts a part clears the problem an earlier
-// page start recorded for it. A reload or restart stops each main part it
-// starts again as a `restart` (`PartStop`); every other stop is an `end`.
+// dependency does. A dependent withheld while it ran, by that or by its own
+// start failing on the way, stops as a switch-off does: no part of it runs in
+// either process, and its slots clear. A reload or restart starts on the page
+// the plugin and each dependent it paused that runs, so a page part whose
+// earlier start failed starts again; a page start that starts a part clears
+// the problem an earlier page start recorded for it. A reload or restart
+// stops each main part it starts again as a `restart` (`PartStop`), as does a
+// reload whose new part's handlers differ when a last good version is there
+// to start in its place; every other stop is an `end`.
 export interface PluginSwitch extends PluginSwitchService {
   // Applies a new disabled list: refuses with the host's `<id>: <reason>` when
   // a part `mayStop` refuses (a config problem, retried every
@@ -364,21 +368,38 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   const withholdForDependency = (id: string, dependency: string) =>
     withhold(id, `${NEEDS_PLUGIN} "${dependency}", which did not start`);
 
+  // Stops what still runs of `ids`, which ran and are withheld now, as a
+  // switch-off does: their page parts, then their main parts, last first, as
+  // an `end`, then their slots. A main stop that throws is logged.
+  const stopWithheld = async (ids: readonly string[]) => {
+    await deps.page({ kind: 'stop', ids });
+    if (isDisposed) {
+      return;
+    }
+    await stopStarted(ids);
+    for (const id of ids.filter((each) => !main.started.has(each))) {
+      deps.slots.clearOwner(id);
+    }
+  };
+
   // Withholds each dependent of `ids` (`dependsOn.main` or `.page`,
   // transitively) that `disabledBefore`, the applied list before they went
   // down, did not name, that the applied list does not name now, and whose
   // dependency no longer counts as started, in start order; pushes the served
-  // config when it withheld one.
-  const withholdDependentsOf = (
+  // config when it withheld one. Then stops each such dependent that is
+  // withheld now, by this call or by a start that failed since they went
+  // down, so no part of it runs in either process.
+  const withholdDependentsOf = async (
     ids: readonly string[],
     disabledBefore: readonly string[],
   ) => {
     const manifests = admittedManifests();
-    const dependents = ids.flatMap((id) =>
-      dependentsOf(id, disabledBefore, manifests),
+    const dependents = inOrder(
+      startOrder(),
+      ids.flatMap((id) => dependentsOf(id, disabledBefore, manifests)),
     );
     let isWithholding = false;
-    for (const id of inOrder(startOrder(), dependents)) {
+    for (const id of dependents) {
       const entry = admittedEntry(id);
       if (entry === undefined || applied.disabled().includes(id)) {
         continue;
@@ -392,12 +413,19 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     if (isWithholding) {
       deps.servedChanged();
     }
+    const lost = dependents.filter((id) => withheld.has(id));
+    if (lost.length > 0) {
+      await stopWithheld(lost);
+    }
   };
 
   // Starts `entry`'s main part, when it has one, and checks a user part's
-  // handlers against its manifest, stopping a part whose handlers differ.
-  // Resolves to the problem, or null.
-  const startMain = async (entry: CatalogEntry): Promise<string | null> => {
+  // handlers against its manifest, stopping a part whose handlers differ as
+  // `checkStop`. Resolves to the problem, or null.
+  const startMain = async (
+    entry: CatalogEntry,
+    checkStop: PartStop,
+  ): Promise<string | null> => {
     if (entry.main === null) {
       return null;
     }
@@ -420,7 +448,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
       return null;
     }
     try {
-      await main.stop(id);
+      await main.stop(id, checkStop);
     } catch (error) {
       logFailure(error);
     }
@@ -428,11 +456,15 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   };
 
   // Starts one admitted id when its dependencies count as started, recording
-  // the problem and withholding it when it does not start. Resolves to
+  // the problem and withholding it when it does not start; a part whose
+  // handlers differ stops as `checkStop`, an `end` when left out. Resolves to
   // whether it runs.
   const guardedStart = async (
     id: string,
-    { pageStart: isPageStarting }: { pageStart: boolean },
+    {
+      pageStart: isPageStarting,
+      checkStop = 'end',
+    }: { pageStart: boolean; checkStop?: PartStop },
   ): Promise<boolean> => {
     const entry = admittedEntry(id);
     if (entry === undefined) {
@@ -442,7 +474,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     if (dependency !== undefined) {
       return withholdForDependency(id, dependency);
     }
-    const problem = await startMain(entry);
+    const problem = await startMain(entry, checkStop);
     if (problem !== null) {
       return withhold(id, problem);
     }
@@ -515,8 +547,8 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     for (const id of ids) {
       deps.slots.clearOwner(id);
     }
-    withholdDependentsOf(ids, disabledBefore);
-    return true;
+    await withholdDependentsOf(ids, disabledBefore);
+    return !isDisposed;
   };
 
   const removePlugins = async (ids: readonly string[]) => {
@@ -644,18 +676,23 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   };
 
   // Guarded starts, without page starts, of each of `ids` that `isDue`
-  // keeps, in start order. Resolves to whether `id` runs after them.
+  // keeps, in start order; `id`'s handler check stops as `checkStop`, an
+  // `end` when left out. Resolves to whether `id` runs after them.
   const startEach = async (
     id: string,
     ids: ReadonlySet<string>,
     isDue: (each: string) => boolean,
+    checkStop: PartStop = 'end',
   ): Promise<boolean> => {
     let isRunning = false;
     for (const each of inOrder(startOrder(), ids)) {
       if (!isDue(each)) {
         continue;
       }
-      const runs = await guardedStart(each, { pageStart: false });
+      const runs = await guardedStart(each, {
+        pageStart: false,
+        checkStop: each === id ? checkStop : 'end',
+      });
       if (each === id) {
         isRunning = runs;
       }
@@ -763,7 +800,16 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
           }
         }
       }
-      const nextRuns = await startEach(id, stopped, () => true);
+      // A last good version starts at once when the new one fails, so a
+      // new part whose handlers differ stops as a `restart`.
+      const good = lastGood.get(id);
+      const restoresLastGood = good !== undefined && good !== next;
+      const nextRuns = await startEach(
+        id,
+        stopped,
+        () => true,
+        restoresLastGood ? 'restart' : 'end',
+      );
       if (isDisposed) {
         return;
       }
@@ -773,7 +819,10 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
           return;
         }
       }
-      withholdDependentsOf([id], disabledBefore);
+      await withholdDependentsOf([id], disabledBefore);
+      if (isDisposed) {
+        return;
+      }
       unpause();
       if (nextRuns) {
         const reply = await deps.page({ kind: 'reload', id });
@@ -1119,7 +1168,10 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
           if (isDisposed) {
             return;
           }
-          withholdDependentsOf([pluginId], disabledBefore);
+          await withholdDependentsOf([pluginId], disabledBefore);
+          if (isDisposed) {
+            return;
+          }
           unpause();
           await pageStartRunning(paused);
           if (stopFailure !== null) {

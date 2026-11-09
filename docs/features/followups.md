@@ -600,11 +600,11 @@ Duplication and drift with no user-visible defect.
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
 
-- **A plugin withheld because its `dependsOn.main` dependency went down keeps its page part running** —
-  *agent-ready*: when a switch stops a plugin, `withholdDependentsOf` (`src/main/plugins/plugin-switch.ts`) withholds
-  each dependent whose main dependency is now missing, but the dependent's page part is not stopped, so its page code
-  keeps running against a main side that is gone. Stop a withheld dependent's page part too. Pre-existing: the
-  runtime loader did not introduce it.
+- **A deferred built-in page part that page-depends on a user plugin withheld at launch stays unstarted** —
+  *agent-ready*: the page defers a built-in Y whose `dependsOn.page` names a user plugin X (`deferredPageIds`), and its
+  startup loop (`src/renderer/renderer.ts`) skips Y while X is withheld. When X later starts, main's
+  `pageStart([X])` names only X, so Y's page part stays unstarted. No built-in has such a dependency today.
+  Pre-existing: the runtime loader did not introduce it.
 - **A repeated `forms.openRound` shows nothing** — a second `forms.openRound` of a default round already submitted in
   that session gets its stored answers back from form-service's `replaysLastSubmitted`
   (`src/shared/agent-forms/form-service.ts`). Nothing shows and nothing logs, so a drive run that opens the same

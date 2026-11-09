@@ -99,7 +99,8 @@ function restartMark(stop: PartStop | undefined): string {
 // between calls. A refusal answers only for a request naming its id, and a
 // main stop forgets each part it replies with even when it rejects, as the
 // host does. `page.mayStopHold` holds a page `mayStop` and `page.hold` a page
-// stop. A page start naming `page.startRejects` rejects after it is pushed;
+// stop, and `page.stopRejects` makes a page stop reject after it is pushed.
+// A page start naming `page.startRejects` rejects after it is pushed;
 // `page.startProblems` are the start reply's problems for the ids it names,
 // which it does not start, `page.startsNothing` makes it start nothing with
 // no problem, as a page that is gone answers, and `page.reloadProblem` is the
@@ -145,6 +146,7 @@ function setup({
     refusal: null as string | null,
     stopReply: null as string[] | null,
     hold: null as Promise<void> | null,
+    stopRejects: false,
     mayStopHold: null as Promise<void> | null,
     startRejects: null as string | null,
     startProblems: [] as CatalogProblem[],
@@ -248,6 +250,9 @@ function setup({
       }
       if (request.kind === 'stop') {
         await page.hold;
+        if (page.stopRejects) {
+          throw new Error(`page stop of ${request.ids.join(',')} failed`);
+        }
         return { stopped: page.stopReply ?? request.ids };
       }
       if (
@@ -332,6 +337,7 @@ function setup({
   return {
     pluginSwitch,
     calls,
+    started,
     logs,
     problems,
     statuses,
@@ -955,7 +961,7 @@ describe('createPluginSwitch', () => {
         'main remove u restart',
         'main add u',
         'main start u',
-        'main stop u',
+        'main stop u restart',
         'applied u',
         'applied u,d',
         'main remove u',
@@ -991,6 +997,8 @@ describe('createPluginSwitch', () => {
         'main add u',
         'setPlugins',
         'main start u',
+        'page stop d',
+        'clearOwner d',
         'paused',
         'servedChanged',
       ],
@@ -1136,31 +1144,50 @@ describe('createPluginSwitch', () => {
     },
   );
 
-  // `p` depends on `u` in the page only and has no main part.
+  // `p` depends on `u`; `u` stops running, so `p` is withheld and no part of
+  // it runs, in either process, nor after a switch-off while withheld.
+  const PAGE_ON_U = { dependsOn: { main: [], page: ['u'] } };
   it.each([
     {
-      case: 'u leaves the catalog, then comes back',
+      case: 'page only, no main part: u leaves, then comes back',
+      p: { hasMain: false, manifest: PAGE_ON_U },
       fails: false,
-      next: (u: CatalogEntry, p: CatalogEntry) => [p],
+      next: (_u: CatalogEntry, p: CatalogEntry) => [p],
+      switchesOff: false,
       comesBack: true,
     },
     {
-      case: 'u reloads, and neither version starts',
+      case: 'page only, no main part: u reloads, and neither version starts',
+      p: { hasMain: false, manifest: PAGE_ON_U },
       fails: true,
       next: (_u: CatalogEntry, p: CatalogEntry) => [
         user('u', { revision: 2 }),
         p,
       ],
+      switchesOff: false,
+      comesBack: false,
+    },
+    {
+      case: 'page only, with a main part: u leaves, p is switched off, u comes back',
+      p: { manifest: PAGE_ON_U },
+      fails: false,
+      next: (_u: CatalogEntry, p: CatalogEntry) => [p],
+      switchesOff: true,
+      comesBack: true,
+    },
+    {
+      case: 'main only: u leaves',
+      p: { manifest: { dependsOn: { main: ['u'], page: [] } } },
+      fails: false,
+      next: (_u: CatalogEntry, p: CatalogEntry) => [p],
+      switchesOff: false,
       comesBack: false,
     },
   ])(
-    'catalogChange_DependencyStopsRunning_WithholdsAPageOnlyDependent: $case',
+    'catalogChange_DependencyStopsRunning_WithholdsAndStopsTheDependent: $case',
     async (row) => {
       const u = user('u');
-      const p = user('p', {
-        hasMain: false,
-        manifest: { dependsOn: { main: [], page: ['u'] } },
-      });
+      const p = user('p', row.p);
       const switched = setup({ entries: [u, p] });
       if (row.fails) {
         switched.main.startErrors = { u: ['first', 'second'] };
@@ -1173,11 +1200,20 @@ describe('createPluginSwitch', () => {
         on: false,
         problem: 'Needs plugin "u", which did not start',
       });
+      expect(calls).toContain('page stop p');
+      expect(calls).toContain('clearOwner p');
       expect(calls).not.toContain('page start p');
+      expect(switched.started.has('p')).toBe(false);
+      if (row.switchesOff) {
+        switched.configDisabled.list = ['p'];
+        expect(await switched.pluginSwitch.apply(['p'])).toBe(null);
+      }
       if (row.comesBack) {
         const back = await changeCatalog(switched, [u, p]);
-        expect(back).toContain('page start p');
-        expect(switched.row('p')?.on).toBe(true);
+        const isBack = !row.switchesOff;
+        expect(back.includes('page start p')).toBe(isBack);
+        expect(switched.row('p')?.on).toBe(isBack);
+        expect(switched.started.has('p')).toBe(isBack && p.main !== null);
       }
     },
   );
@@ -1682,6 +1718,8 @@ describe('createPluginSwitch', () => {
         'main start z',
         'main start y',
         'applied y',
+        'page stop y',
+        'clearOwner y',
         'paused',
         'servedChanged',
         'page start x,z',
@@ -1706,11 +1744,28 @@ describe('createPluginSwitch', () => {
       ],
       logs: ['[plugin-switch] on a'],
     },
+    {
+      case: 'page stop rejects',
+      manifests: [manifest('a'), manifest('b')],
+      id: 'a',
+      fail: {},
+      pageStopRejects: true,
+      calls: [
+        'paused a',
+        'servedChanged',
+        'page stop a',
+        'paused',
+        'servedChanged',
+        'page start a',
+      ],
+      logs: [],
+    },
   ])('restart_StepFails_StartsWhatItStopped: $case', async (row) => {
     const switched = setup({ manifests: row.manifests });
     Object.assign(switched.main, row.fail);
     switched.page.stopReply = row.pageStopped ?? null;
     switched.page.startRejects = row.pageStartRejects ?? null;
+    switched.page.stopRejects = row.pageStopRejects ?? false;
 
     await expect(switched.pluginSwitch.restart(row.id)).rejects.toThrow(
       /failed$/,
@@ -1741,6 +1796,8 @@ describe('createPluginSwitch', () => {
       'main start a',
       'applied a',
       'applied a,b',
+      'page stop b',
+      'clearOwner b',
       'paused',
       'servedChanged',
     ]);

@@ -499,6 +499,19 @@ describe('startPlugins', () => {
     },
   );
 
+  it('startEach readies each part before its dependents start', () => {
+    const recorded: string[] = [];
+    const host = startHooked(
+      [part('b', ['a']), part('a')],
+      recordingHooks(recorded),
+      ['a', 'b'],
+    );
+
+    host.startEach(['b', 'a']);
+
+    expect(recorded).toEqual(['start a', 'ready a', 'start b', 'ready b']);
+  });
+
   it.each([
     { dependency: 'not started', disabled: ['a', 'b'], stopsA: false },
     { dependency: 'whose stop is in flight', disabled: ['b'], stopsA: true },
