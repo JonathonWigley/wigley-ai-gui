@@ -484,6 +484,21 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: [],
   },
+  // Pure: checks a user plugin's manifest with the shared plugin checks.
+  'src/shared/plugin-catalog': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  // Loads user plugins from disk: reads, copies and imports their files.
+  'src/main/plugin-catalog': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/shared/plugin-catalog',
+    ],
+    packages: ['node:'],
+  },
   'src/main/plugins': {
     layers: [
       'src/contracts',
@@ -532,6 +547,8 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/manifests.ts',
       'src/plugins/keymap.ts',
       'src/main/layouts',
+      'src/main/plugin-catalog',
+      'src/shared/plugin-catalog',
       'src/shared/page/layout-host',
       'src/renderer/shell/layouts',
     ],
