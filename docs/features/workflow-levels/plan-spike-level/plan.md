@@ -124,7 +124,7 @@ layouts kit), `chat` and `sessions` contracts for its self-test, and its own fil
 - [x] [Marketplace version bump](03-marketplace-version-bump.md) — after 04, so the bump is the series' last marketplace commit
 
 ### Wave 4
-- [ ] [Final verification](05-final-verification.md) — after 03
+- [x] [Final verification](05-final-verification.md) — after 03
 
 ## Run log
 
@@ -135,6 +135,7 @@ Review base: e0a14b8a
 - 02 · wigley-ai-gui f7e76347 · diff read: all five Produces present; typecheck clean; worker ran npm test, lint and filtered selftest (workflow-spike) green · concerns: none
 - 04 · none (no doc stale) · every named claim checked true against 817afc6 and f7e76347; check_pointers passes; trees clean · concerns: gui AGENTS.md says build, check and interview re-enter per ask; land and done also answer any time — loose, not false
 - 03 · wigley-ai-marketplace 3ea99a0 · diff read: both manifests 2.3.0; check_manifests and --against origin/main pass · concerns: origin/main moved to 2.2.0 mid-run; marketplace branch rebased onto origin/main (8a981dd docs-ahead) before the bump
+- 05 · none (no fix needed) · every check passed; drive captures read against DESIGN.md § Workflow: the idle row draws no stage word (per DESIGN.md), Build is paused rather than running because the fake session is idle, and a re-left Check draws plain pending, the same as Land · concerns: none
 ### Contract changes
 - one new version in both manifests: 2.2.0 → 2.3.0 · why: origin/main reached 2.2.0 (f16f7a2) mid-run; the task's rule gives 2.3.0 · consumers: 05 · group 03
 ### Rulings
@@ -146,3 +147,4 @@ Review base: e0a14b8a
 - Self-test full-run why adds one clause naming the build-after-check loop · group 02 · group 02
 ### Review rounds
 ### Test gate
+- workflow-gate unittest (task 01's change, 14 OK) · marketplace AGENTS.md § Done, all lines (manifest, version, pointers, scripts tests, plugin validate, five script suites — OK) · gui npm test, typecheck, lint (pass) · selftest --plugin workflow-spike,workflow-small,workflow-medium (shared registries changed; exit 0) · drive run 20261109-135611-146a: badge X in fg-secondary, trail Interview › Build › Check › Land, after build-check-build Interview done, Build current, Check and Land pending — pass

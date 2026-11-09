@@ -1,6 +1,6 @@
 # 05 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -29,3 +29,5 @@ Done when: every check passes, and the drive captures were read against `DESIGN.
 Commit:    a fix commits in its own repo; a passing run commits nothing
 
 ## Proof
+
+Commit none (no fix needed) · proof: every check passed; drive captures read against DESIGN.md § Workflow: the idle row draws no stage word (per DESIGN.md), Build is paused rather than running because the fake session is idle, and a re-left Check draws plain pending, the same as Land · concerns: none
