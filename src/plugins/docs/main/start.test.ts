@@ -215,6 +215,31 @@ const INDEX_DOCUMENT: IndexDocument = {
   contexts: [],
 };
 
+function documentWithDoc(path: string): IndexDocument {
+  return {
+    ...INDEX_DOCUMENT,
+    entries: [
+      {
+        id: path,
+        kind: 'instructions',
+        source: 'global',
+        owner: 'mine',
+        repo: null,
+        root: null,
+        plugin: null,
+        path,
+        line: null,
+        title: 'notes',
+        meta: {},
+        walked: [],
+        headings: [],
+        links: [],
+        lastLoaded: null,
+      },
+    ],
+  };
+}
+
 describe('docs main part', () => {
   it('sessionSource_RegisteredWhileConnected', async () => {
     const docs = startDocsPart();
@@ -279,63 +304,70 @@ describe('docs main part', () => {
     });
   });
 
-  it('sessionSource_HostSessionChanged_RebuildAllowsItsDocWrites', async () => {
-    const docs = startDocsPart();
-    const path = '/p/notes.md';
-    await docs.files.makeFolder('/p');
-    await docs.files.write(path, 'one');
-    const document: IndexDocument = {
-      ...INDEX_DOCUMENT,
-      entries: [
-        {
-          id: path,
-          kind: 'instructions',
-          source: 'global',
-          owner: 'mine',
-          repo: null,
-          root: null,
-          plugin: null,
-          path,
-          line: null,
-          title: 'notes',
-          meta: {},
-          walked: [],
-          headings: [],
-          links: [],
-          lastLoaded: null,
-        },
-      ],
-    };
-    docs.processes.script(
-      'python3',
-      ['-X', 'utf8', '/script.py', 'session', 'new-host'],
-      {
-        code: 0,
-        stdout: JSON.stringify(document),
-        stderr: '',
-        timedOut: false,
-      },
-    );
-    const info: SessionInfo = {
-      sessionId: 'old-host',
-      projectDir: '/p',
-      harness: 'claude',
-    };
-    docs.emit('sessions.connected', { id: 'row-1', info, owned: true });
-    docs.emit('sessions.hostSessionChanged', {
-      id: 'row-1',
-      info: { ...info, sessionId: 'new-host' },
-    });
-    await expect(
-      docs.invoke('writeDoc', path, 'two', 'one') as Promise<unknown>,
-    ).rejects.toThrow(path);
+  // Each run, old and new, indexes one doc of its own, so a source re-added
+  // from the session's old info allows the old doc's writes and not the new.
+  // A Codex session indexes its folder with `context`, so its run names the
+  // folder a relocate moved it to.
+  it.each<{
+    event: 'sessions.hostSessionChanged' | 'sessions.relocated';
+    info: SessionInfo;
+    changed: SessionInfo;
+    oldRun: string[];
+    oldPath: string;
+    newRun: string[];
+    newPath: string;
+  }>([
+    {
+      event: 'sessions.hostSessionChanged',
+      info: { sessionId: 'old-host', projectDir: '/p', harness: 'claude' },
+      changed: { sessionId: 'new-host', projectDir: '/p', harness: 'claude' },
+      oldRun: ['session', 'old-host'],
+      oldPath: '/p/old.md',
+      newRun: ['session', 'new-host'],
+      newPath: '/p/notes.md',
+    },
+    {
+      event: 'sessions.relocated',
+      info: { sessionId: 'host', projectDir: '/p', harness: 'codex' },
+      changed: { sessionId: 'host', projectDir: '/q', harness: 'codex' },
+      oldRun: ['context', '/p'],
+      oldPath: '/p/notes.md',
+      newRun: ['context', '/q'],
+      newPath: '/q/notes.md',
+    },
+  ])(
+    'sessionSource_$event_RebuildAllowsOnlyTheNewRunsDocWrites',
+    async ({ event, info, changed, oldRun, oldPath, newRun, newPath }) => {
+      const docs = startDocsPart();
+      for (const [run, path] of [
+        [oldRun, oldPath],
+        [newRun, newPath],
+      ] as const) {
+        await docs.files.makeFolder(path.slice(0, path.lastIndexOf('/')));
+        await docs.files.write(path, 'one');
+        docs.processes.script('python3', ['-X', 'utf8', '/script.py', ...run], {
+          code: 0,
+          stdout: JSON.stringify(documentWithDoc(path)),
+          stderr: '',
+          timedOut: false,
+        });
+      }
+      docs.emit('sessions.connected', { id: 'row-1', info, owned: true });
+      docs.emit(event, { id: 'row-1', info: changed });
+      await expect(
+        docs.invoke('writeDoc', newPath, 'two', 'one') as Promise<unknown>,
+      ).rejects.toThrow(newPath);
 
-    await docs.invoke('rebuildIndex', 'session:row-1');
+      await docs.invoke('rebuildIndex', 'session:row-1');
 
-    expect(await docs.invoke('writeDoc', path, 'two', 'one')).toEqual({
-      type: 'written',
-    });
-  });
+      expect(await docs.invoke('writeDoc', newPath, 'two', 'one')).toEqual({
+        type: 'written',
+      });
+      await expect(
+        docs.invoke('writeDoc', oldPath, 'two', 'one') as Promise<unknown>,
+      ).rejects.toThrow(oldPath);
+    },
+  );
 
   it('pluginStatus_MachineSourceNoClones_Empty', async () => {
     const docs = startDocsPart();

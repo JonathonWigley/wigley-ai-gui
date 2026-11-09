@@ -267,14 +267,16 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     // The new source holds no entries until the session's Docs tab, with
     // `docs-session-tab` on (disabled by default; the self-test starts it),
     // loads it.
-    api.events.on('sessions.hostSessionChanged', (session) => {
+    const replaceSessionSource = (session: AgentSession) => {
       const source = sessionSources.get(session.id);
       if (source === undefined) {
         return;
       }
       source.dispose();
       addSessionSource(session);
-    });
+    };
+    api.events.on('sessions.hostSessionChanged', replaceSessionSource);
+    api.events.on('sessions.relocated', replaceSessionSource);
     api.events.on('sessions.ended', ({ sessionId }) => {
       sessionSources.get(sessionId)?.dispose();
       sessionSources.delete(sessionId);
