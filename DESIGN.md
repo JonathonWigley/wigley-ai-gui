@@ -175,7 +175,7 @@ means something.
 - **Density:** tree rows `row-tree`, list and menu rows `row-list`, tabs `tab-height`, the title
   bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width`,
   the side bar's opening width `sidebar-width` and the right bar's `rightbar-width` (until the user resizes them), icon buttons `icon-button-sm` and `icon-button`, icons
-  `icon-size`, the docs page's right column `docs.aside-width`. The title bar leaves `traffic-light-inset` at its left for macOS's window
+  `icon-size`, the docs page's right column `docs.aside-width`, the system stats panel's number columns `system-stats.column-width`. The title bar leaves `traffic-light-inset` at its left for macOS's window
   buttons.
 - **Radii by hierarchy:** `radius-sm` for rows, tags and inline code; `radius-md` for buttons,
   inputs, cards and code blocks; `radius-lg` for sheets, menus and pickers; `radius-xl` for

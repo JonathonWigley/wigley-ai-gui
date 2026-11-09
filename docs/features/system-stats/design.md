@@ -30,7 +30,7 @@ The adapters use the OS's own commands, with no npm dependency and no `sudo`. Wi
 |---|---|---|
 | Per-process CPU time, RSS, parent pid, path | `ps -axo pid,ppid,time,rss,comm` | `Win32_Process` |
 | Total CPU time, core count | Node's `os.cpus()` times | Node's `os.cpus()` times |
-| Memory used, pressure, swap | `vm_stat`, `sysctl hw.memsize vm.swapusage kern.memorystatus_vm_pressure_level` (1 normal, 2 warning, 4 critical) | `Win32_OperatingSystem`, `Win32_PageFileUsage` |
+| Memory used, pressure, swap | `vm_stat`, `sysctl hw.memsize vm.swapusage kern.memorystatus_vm_pressure_level` (1 normal, 2 warning, 4 critical) | `Win32_OperatingSystem`, `Win32_PerfRawData_PerfOS_Memory` (`AvailableBytes`), `Win32_PageFileUsage` |
 | GPU total | `ioreg -r -d 1 -w 0 -c IOAccelerator` → `Device Utilization %` | `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine`, 3D engines |
 | GPU per process | `ioreg -r -d 1 -w 0 -c AGXDeviceUserClient` → `accumulatedGPUTime` (ns) per `IOUserClientCreator` pid | `Win32_PerfRawData_GPUPerformanceCounters_GPUEngine` `RunningTime`, 3D engines, per `pid_N` |
 | Network bytes | `netstat -ibn`, `en*` interfaces only (loopback, `utun` and `bridge` would count bytes twice) | `Win32_PerfRawData_Tcpip_NetworkInterface` |
@@ -53,8 +53,8 @@ module, which takes the two samples and the time between them:
   smoothed `%cpu` is not used.
 - **RAM used** counts memory as Activity Monitor does: app memory, wired and compressed, out of total
   RAM. Memory pressure and swap used are shown on a line under the meter.
-- **Grouping**: a process inside a `.app` bundle (macOS) or with the same executable name (Windows)
-  joins its app's group, which shows the summed numbers. A Chat session's process tree forms a group
+- **Grouping**: a process joins its app's group (its outermost `.app` bundle on macOS, else its
+  executable name, on any OS), which shows the summed numbers. A Chat session's process tree forms a group
   of its own (below). A group opens to show its processes.
 - **History** is a ring of the last 60 seconds per meter, kept in main and published with the
   snapshot, so a page reload keeps it and an app restart starts it again.
