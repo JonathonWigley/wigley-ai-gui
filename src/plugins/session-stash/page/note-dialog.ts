@@ -2,7 +2,10 @@ import type { PushedScope } from '../../../contracts/plugin';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 import { textBoxInput } from '../../../shared/page/text-box';
-import { createDialog } from '../../../shared/page/ui/dialog';
+import {
+  createDialog,
+  restoreFocusAfterDialog,
+} from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type { SessionStashPart } from '../layouts/layout';
 import type { SessionStashParts } from './layout/session-stash-parts';
@@ -74,30 +77,13 @@ export function createNoteDialog(deps: NoteDialogDeps): NoteDialog {
     });
   };
 
-  // Focus left on the closed dialog, or on nothing, goes back to what held it
-  // as the dialog opened.
-  const restoreFocus = (focusedBefore: Element | null) => {
-    const active = document.activeElement;
-    const isFocusLost =
-      active === null ||
-      active === document.body ||
-      dialog.element.contains(active);
-    if (
-      isFocusLost &&
-      focusedBefore instanceof HTMLElement &&
-      focusedBefore.isConnected
-    ) {
-      focusedBefore.focus();
-    }
-  };
-
   const hide = () => {
     const shown = stashing;
     dialog.hide();
     disposeBody();
     shown?.scope.dispose();
     stashing = null;
-    restoreFocus(shown?.focusedBefore ?? null);
+    restoreFocusAfterDialog(dialog, shown?.focusedBefore ?? null);
   };
 
   const noteDialog: NoteDialog = {

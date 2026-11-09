@@ -3,7 +3,10 @@ import { errorText } from '../../../shared/error-text';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 import { textBoxInput } from '../../../shared/page/text-box';
-import { createDialog } from '../../../shared/page/ui/dialog';
+import {
+  createDialog,
+  restoreFocusAfterDialog,
+} from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type { ImportBoxInput, PracticePane } from '../layouts/layout';
 import type { PracticeViewDeps } from './practice-view';
@@ -84,23 +87,6 @@ export function createImportBox(deps: ImportBoxDeps): ImportBox {
 
   input.addEventListener('input', () => showProblem(null));
 
-  // Focus left on the closed dialog, or on nothing, goes back to what held it
-  // as the dialog opened.
-  const restoreFocus = (focusedBefore: Element | null) => {
-    const active = document.activeElement;
-    const isFocusLost =
-      active === null ||
-      active === document.body ||
-      dialog.element.contains(active);
-    if (
-      isFocusLost &&
-      focusedBefore instanceof HTMLElement &&
-      focusedBefore.isConnected
-    ) {
-      focusedBefore.focus();
-    }
-  };
-
   const hide = () => {
     const shown = importing;
     dialog.hide();
@@ -109,7 +95,7 @@ export function createImportBox(deps: ImportBoxDeps): ImportBox {
     shown?.scope.dispose();
     importing = null;
     isAccepting = false;
-    restoreFocus(shown?.focusedBefore ?? null);
+    restoreFocusAfterDialog(dialog, shown?.focusedBefore ?? null);
     log('import box closed');
   };
 

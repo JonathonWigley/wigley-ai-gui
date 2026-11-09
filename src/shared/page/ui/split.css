@@ -11,10 +11,11 @@
 }
 
 /* An end-sized split (`is-end-sized`) holds the end pane's size in
-   `--ui-split-end`, the start pane taking the rest. */
+   `--ui-split-end`, the start pane taking the rest and keeping
+   `--ui-split-end-min`. */
 .ui-split.is-end-sized {
   grid-template-columns:
-    minmax(0, 1fr) var(--wg-space-1)
+    minmax(var(--ui-split-end-min, 0), 1fr) var(--wg-space-1)
     minmax(0, calc(var(--ui-split-end) * 1px));
 }
 
@@ -27,7 +28,7 @@
 
 .ui-split.is-column.is-end-sized {
   grid-template-rows:
-    minmax(0, 1fr) var(--wg-space-1)
+    minmax(var(--ui-split-end-min, 0), 1fr) var(--wg-space-1)
     minmax(0, calc(var(--ui-split-end) * 1px));
 }
 
@@ -98,6 +99,10 @@
 
 .ui-split.is-start-hidden {
   grid-template-columns: 1fr;
+}
+
+.ui-split.is-column.is-start-hidden {
+  grid-template-rows: 1fr;
 }
 
 .ui-split.is-start-hidden > .ui-split-start,

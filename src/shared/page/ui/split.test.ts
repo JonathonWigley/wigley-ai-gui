@@ -8,11 +8,12 @@ type Listener = (event: Event) => void;
 
 // The DOM surface the split uses. Pointer capture is a set of pointer ids the
 // test adds to through setPointerCapture and removes from by hand; `rect` is
-// what getBoundingClientRect reports and `clientRects` what getClientRects
-// does.
+// what getBoundingClientRect reports, `clientRects` what getClientRects does
+// and `properties` each style property set.
 interface FakeElement {
   className: string;
   classes: Set<string>;
+  properties: Map<string, string>;
   captured: Set<number>;
   children: FakeElement[];
   rect: Rect;
@@ -27,22 +28,24 @@ interface Rect {
   height: number;
 }
 
-// A rect at the client's top-left corner, `width` wide on a row and `height`
-// tall on a column.
-function rectOn(axis: 'row' | 'column', size: number): Rect {
+// A rect `size` wide from `start` on a row, or `size` tall from `start` on a
+// column.
+function rectOn(axis: 'row' | 'column', size: number, start = 0): Rect {
   return axis === 'row'
-    ? { left: 0, top: 0, width: size, height: 0 }
-    : { left: 0, top: 0, width: 0, height: size };
+    ? { left: start, top: 0, width: size, height: 0 }
+    : { left: 0, top: start, width: 0, height: size };
 }
 
 function fakeElement(): FakeElement {
   const classes = new Set<string>();
+  const properties = new Map<string, string>();
   const captured = new Set<number>();
   const children: FakeElement[] = [];
   const listeners = new Map<string, Listener[]>();
   const node: FakeElement & Record<string, unknown> = {
     className: '',
     classes,
+    properties,
     captured,
     children,
     rect: rectOn('row', 0),
@@ -54,7 +57,9 @@ function fakeElement(): FakeElement {
       toggle: (name: string, force: boolean) =>
         force ? classes.add(name) : classes.delete(name),
     },
-    style: { setProperty: () => undefined },
+    style: {
+      setProperty: (name: string, value: string) => properties.set(name, value),
+    },
     append: (...nodes: FakeElement[]) => children.push(...nodes),
     getBoundingClientRect: () => node.rect,
     getClientRects: () => node.clientRects,
@@ -164,14 +169,31 @@ function splitWithHandle(
   return { split, handle, timers, anchor };
 }
 
-// Presses at `clientX`; each split test presses on the start pane's edge, the
-// drawn width from the root's left edge at 0.
-function press(handle: FakeElement, pointerId: number, clientX: number) {
-  handle.fire('pointerdown', { button: 0, pointerId, clientX });
+// The pointer at `at` along `axis`, clientX on a row and clientY on a column,
+// and at 50 across it.
+function pointerAt(at: number, axis: 'row' | 'column') {
+  return axis === 'row'
+    ? { clientX: at, clientY: 50 }
+    : { clientX: 50, clientY: at };
 }
 
-function move(handle: FakeElement, pointerId: number, clientX: number) {
-  handle.fire('pointermove', { pointerId, clientX });
+// Presses at `at`; each split test presses on the sized pane's edge.
+function press(
+  handle: FakeElement,
+  pointerId: number,
+  at: number,
+  axis: 'row' | 'column' = 'row',
+) {
+  handle.fire('pointerdown', { button: 0, pointerId, ...pointerAt(at, axis) });
+}
+
+function move(
+  handle: FakeElement,
+  pointerId: number,
+  at: number,
+  axis: 'row' | 'column' = 'row',
+) {
+  handle.fire('pointermove', { pointerId, ...pointerAt(at, axis) });
 }
 
 function loseCapture(handle: FakeElement, pointerId: number) {
@@ -246,17 +268,29 @@ afterEach(() => {
 });
 
 describe('createSplit drag', () => {
-  it('saves the dragged width when capture is lost', () => {
-    const saved = new Map<string, unknown>();
-    const { split, handle } = splitWithHandle(saved);
-    press(handle, 1, 240);
-    expect(handle.classes.has('is-active')).toBe(true);
-    move(handle, 1, 300);
-    loseCapture(handle, 1);
-    expect(split.width()).toBe(300);
-    expect(saved.get('side')).toBe(300);
-    expect(handle.classes.has('is-active')).toBe(false);
-  });
+  // The root spans 800px from 100 along its axis and the handle 4px, leaving a
+  // 796px span; an end pane drawn 240 has its divider at 656.
+  it.each([
+    { axis: 'row', sizedPane: 'start', pressAt: 340, moveTo: 400 },
+    { axis: 'column', sizedPane: 'start', pressAt: 340, moveTo: 400 },
+    { axis: 'row', sizedPane: 'end', pressAt: 656, moveTo: 596 },
+    { axis: 'column', sizedPane: 'end', pressAt: 656, moveTo: 596 },
+  ] as const)(
+    'drags along its axis and saves the dragged width when capture is lost: $axis $sizedPane',
+    ({ axis, sizedPane, pressAt, moveTo }) => {
+      const saved = new Map<string, unknown>();
+      const { split, handle } = splitWithHandle(saved, { axis, sizedPane });
+      asFakeElement(split.element).rect = rectOn(axis, 800, 100);
+      handle.rect = rectOn(axis, 4);
+      press(handle, 1, pressAt, axis);
+      expect(handle.classes.has('is-active')).toBe(true);
+      move(handle, 1, moveTo, axis);
+      loseCapture(handle, 1);
+      expect(split.width()).toBe(300);
+      expect(saved.get('side')).toBe(300);
+      expect(handle.classes.has('is-active')).toBe(false);
+    },
+  );
 
   it('keeps the first drag when a second pointer loses capture', () => {
     const saved = new Map<string, unknown>();
@@ -348,15 +382,63 @@ describe('createSplit reloadWidth', () => {
 });
 
 describe('createSplit endMin', () => {
-  it('stacks while narrower than min plus endMin, side by side at it', () => {
-    const { split } = splitWithHandle(new Map());
-    const root = asFakeElement(split.element);
+  it.each([
+    { axis: 'row', width: 359, isStacked: true },
+    { axis: 'row', width: 360, isStacked: false },
+    { axis: 'column', width: 359, isStacked: false },
+  ] as const)(
+    'stacks a row split while narrower than min plus endMin, a column split never: $axis $width',
+    ({ axis, width, isStacked }) => {
+      const { split } = splitWithHandle(new Map(), { axis });
+      const root = asFakeElement(split.element);
 
-    resized([{ contentRect: { width: 359 } }]);
-    expect(root.classes.has('is-stacked')).toBe(true);
-    resized([{ contentRect: { width: 360 } }]);
-    expect(root.classes.has('is-stacked')).toBe(false);
-  });
+      resized([{ contentRect: { width } }]);
+
+      expect(root.classes.has('is-stacked')).toBe(isStacked);
+    },
+  );
+});
+
+describe('createSplit drawing', () => {
+  it.each([
+    {
+      axis: 'row',
+      sizedPane: 'start',
+      classes: [],
+      variable: '--ui-split-start',
+    },
+    {
+      axis: 'row',
+      sizedPane: 'end',
+      classes: ['is-end-sized'],
+      variable: '--ui-split-end',
+    },
+    {
+      axis: 'column',
+      sizedPane: 'start',
+      classes: ['is-column'],
+      variable: '--ui-split-start',
+    },
+    {
+      axis: 'column',
+      sizedPane: 'end',
+      classes: ['is-column', 'is-end-sized'],
+      variable: '--ui-split-end',
+    },
+  ] as const)(
+    'marks the root and draws the sized pane in its variable: $axis $sizedPane',
+    ({ axis, sizedPane, classes, variable }) => {
+      const saved = new Map<string, unknown>([['side', 300]]);
+      const { split } = splitWithHandle(saved, { axis, sizedPane });
+      const root = asFakeElement(split.element);
+
+      expect([...root.classes].sort()).toEqual(classes);
+      expect(Object.fromEntries(root.properties)).toEqual({
+        '--ui-split-end-min': '200px',
+        [variable]: '300',
+      });
+    },
+  );
 });
 
 describe('createSplit nudge', () => {

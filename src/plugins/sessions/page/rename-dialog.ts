@@ -4,7 +4,10 @@ import { errorText } from '../../../shared/error-text';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 import { textBoxInput } from '../../../shared/page/text-box';
-import { createDialog } from '../../../shared/page/ui/dialog';
+import {
+  createDialog,
+  restoreFocusAfterDialog,
+} from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { editableTitle, type SessionRow } from '../contract';
 import type { SessionsPart } from '../layouts/layout';
@@ -90,23 +93,6 @@ export function createRenameDialog(deps: RenameDialogDeps): RenameDialog {
 
   input.addEventListener('input', () => showProblem(null));
 
-  // Focus left on the closed dialog, or on nothing, goes back to what held it
-  // as the dialog opened.
-  const restoreFocus = (focusedBefore: Element | null) => {
-    const active = document.activeElement;
-    const isFocusLost =
-      active === null ||
-      active === document.body ||
-      dialog.element.contains(active);
-    if (
-      isFocusLost &&
-      focusedBefore instanceof HTMLElement &&
-      focusedBefore.isConnected
-    ) {
-      focusedBefore.focus();
-    }
-  };
-
   const hide = () => {
     const shown = renaming;
     dialog.hide();
@@ -115,7 +101,7 @@ export function createRenameDialog(deps: RenameDialogDeps): RenameDialog {
     shown?.scope.dispose();
     renaming = null;
     isAccepting = false;
-    restoreFocus(shown?.focusedBefore ?? null);
+    restoreFocusAfterDialog(dialog, shown?.focusedBefore ?? null);
   };
 
   const renamedLine = (label: string, title: string | null) =>

@@ -63,3 +63,24 @@ export function createDialog(
     isShown: () => !scrim.hidden,
   };
 }
+
+// Focus left on the closed `dialog`, or on nothing, goes back to
+// `focusedBefore`, what held it as the dialog opened; focus that moved
+// elsewhere meanwhile stays.
+export function restoreFocusAfterDialog(
+  dialog: Dialog,
+  focusedBefore: Element | null,
+): void {
+  const active = document.activeElement;
+  const isFocusLost =
+    active === null ||
+    active === document.body ||
+    dialog.element.contains(active);
+  if (
+    isFocusLost &&
+    focusedBefore instanceof HTMLElement &&
+    focusedBefore.isConnected
+  ) {
+    focusedBefore.focus();
+  }
+}

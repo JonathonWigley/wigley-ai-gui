@@ -124,7 +124,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
   user (forms' unanswered items).
 - **Cmd** is for OS-convention app actions only: `Cmd+Enter` send or submit, `Cmd+w` close, the
-  summon chord, `Cmd+,` Settings. Nothing else takes Cmd. `Cmd+,` is an app menu accelerator
+  summon chord, `Cmd+,` Settings. Nothing else takes Cmd, but Practice's `Cmd+'` Run, which
+  matches LeetCode's own key, beside its `Cmd+Enter` Submit. `Cmd+,` is an app menu accelerator
   (`CommandOrControl+,`), since a page chord cannot hold `,`, so on Windows it is `Ctrl+,`, where
   `Win+,` belongs to the OS. `D-` is the Win key on Windows, so these binds are Win
   chords there: the user holds the four modifiers the same way on both OSes.
