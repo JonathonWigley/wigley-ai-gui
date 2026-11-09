@@ -177,7 +177,13 @@ function startWorkflowPart(
   let activeTime: ActiveTime | null = null;
   const chat: Pick<
     ChatMainExports,
-    'send' | 'clear' | 'launch' | 'profileOf' | 'activeTime' | 'addInstructions'
+    | 'send'
+    | 'clear'
+    | 'launch'
+    | 'profileOf'
+    | 'activeTime'
+    | 'addInstructions'
+    | 'isHeadless'
   > = {
     activeTime: () => activeTime,
     send: async (sessionId, message) => {
@@ -188,6 +194,7 @@ function startWorkflowPart(
     },
     launch: async () => 's2',
     profileOf: () => 'personal',
+    isHeadless: () => false,
     addInstructions: () => ({ dispose: () => undefined }),
   };
   const contributions: {
