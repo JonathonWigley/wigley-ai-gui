@@ -108,7 +108,7 @@ plan is written from them. A decision here stands unless the user changes it.
 - A plan shows its name, feature, progress (checked of total), target and written date; a primed feature shows its
   slug and progress.
 - A plan's progress and its tasks' statuses come from the shared plan reader (`src/shared/plan-progress.ts`) over the
-  plan's newest copy across the clone and its git worktrees (`src/shared/plan-copies.ts`), as Heavy's checklist reads
+  plan's newest copy across the clone and its git worktrees (`src/shared/plan-copies.ts`), as Large's checklist reads
   them, so a run in a worktree shows in Backlog too. Each load lists a clone's worktrees once, for all its plans. The
   count is the boxes under `## Tasks`, not the docs index's count of every checkbox in the file. Opening one renders
   `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a key to open the file in Docs mode for hand
@@ -147,7 +147,7 @@ plan is written from them. A decision here stands unless the user changes it.
 - Backlog's main part exports `load` (the homes), `tags` and `fileNote` (the follow-up write with the note's images)
   to the `notes` plugin, so every follow-up and image write in the app other than Docs' create dialog goes through
   Backlog.
-- `src/shared/plan-progress.ts` and `src/shared/plan-copies.ts` are the plan reader Backlog and `workflow-heavy`
+- `src/shared/plan-progress.ts` and `src/shared/plan-copies.ts` are the plan reader Backlog and `workflow-large`
   share, since neither plugin may import the other.
 - The follow-up format has two readers in two languages: the shared module here, and `docs_index.py`'s parser for
   agents and other index readers. Each is tested against the format triage.md gives; a change to the format changes

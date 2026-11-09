@@ -100,7 +100,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `keys-for.ts`: the keys that run a command, as help and hints read them,
                  `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
                  documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
-                 newest of them, both read by workflow-heavy and backlog)
+                 newest of them, both read by workflow-large and backlog)
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
@@ -311,7 +311,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -348,12 +348,12 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the chip's `No workflow` and `Working` tags are the exception to
                  the layout rule: the engine draws them with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
-  workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches every copy of a plan
+  workflow-large/ manifest.ts, contract.ts, large-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches every copy of a plan
                  folder across a clone's worktrees and git's shared folder, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
-                 the countdown, the preview samples), layouts/ (the built-in `default` layout); Heavy's workflow: the
+                 the countdown, the preview samples), layouts/ (the built-in `default` layout); Large's workflow: the
                  `wigley:feature` run, make, review, fix and close
-  workflow-light/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
-                 script), page/, layouts/ (the built-in `default` layout); claims `wigley:light`
+  workflow-small/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
+                 script), page/, layouts/ (the built-in `default` layout); claims `wigley:small`
   workflow-medium/ manifest.ts, contract.ts, medium-state.ts (fix cycles), stages/<stage>/ (interview, build, review, fix,
                  land, done), main/ (its self-test script), page/, layouts/ (the built-in `default` layout); claims
                  `wigley:medium`
@@ -540,7 +540,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   its own key scope until it hands the cursor back.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
-  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Heavy and `Checklist` for the others),
+  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Large and `Checklist` for the others),
   the agent-skills plugin's list and the context-sources plugin's breakdown are three. A side part takes no key scope and no stop: the hub is a pane of chat's
   own (Alt+l from the transcript or the box), whose cursor walks the section heads chat draws, `Enter` or `l`
   folding one.
@@ -580,7 +580,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
   `Space z l`: forms' on `Space z l o`, the primer's on `Space z l p`, sessions' on `Space z l s`, chat's on
-  `Space z l c`, agents' on `Space z l a` and workflow's (Heavy's sample session in every stage) on `Space z l w`; the gallery's `Space z g`, which shows Gallery
+  `Space z l c`, agents' on `Space z l a` and workflow's (Large's sample session in every stage) on `Space z l w`; the gallery's `Space z g`, which shows Gallery
   mode, and its `Space z s`, which swaps the shell to a test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
@@ -975,8 +975,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
-  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-heavy/main/selftest-script.ts` for
-  Heavy, `src/plugins/workflow-light/main/selftest-script.ts` for Light, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
+  Large, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)

@@ -4,41 +4,41 @@
 
 - **Status** — what is built now and where each workflow lives.
 - **Vocabulary** — workflow, level, flow, stage, status, signal, checklist, run log, main action.
-- **Heavy's stages** — each Heavy stage: when a session enters it, what it shows, and its actions.
-- **Light's stages** and **Medium's stages** — the same columns for the other two workflows.
+- **Large's stages** — each Large stage: when a session enters it, what it shows, and its actions.
+- **Small's stages** and **Medium's stages** — the same columns for the other two workflows.
 - **Stage modules** — one folder per stage, handed over through `addWorkflow`, and how to change or add a workflow.
 - **Signals** — the agent events, session events and reported steps the flow folds, the two tools, the claim rule and the run log.
 - **Where it draws** — the row chip, the composer strip with its trail, and the side pane.
-- **Auto-start** — Heavy's setting that starts Clear & make by itself, and its countdown.
+- **Auto-start** — Large's setting that starts Clear & make by itself, and its countdown.
 - **Keys** — the `<Leader>w` group.
 - **Decisions** — choices a future change would otherwise reopen.
 - **Out of scope** — what waits for a later workflow or adapter.
 
 The `workflow` plugin is the engine for the user's wigley workflows. It shows each Chat-tab session's place in the
-workflow that session runs, with the next step one press away. Three plugins register a workflow with it: `workflow-light`
-(Scope › Build › Check › Land), `workflow-medium` (Interview › Build › Review › Fix › Land) and `workflow-heavy`
+workflow that session runs, with the next step one press away. Three plugins register a workflow with it: `workflow-small`
+(Scope › Build › Check › Land), `workflow-medium` (Interview › Build › Review › Fix › Land) and `workflow-large`
 (Primer or Explore › Interview › Plan › Cold read › Make › Review › Fix › Close). The level skill a session starts picks
-its workflow; skill starts and plan folders mark Heavy's big moves, and the agent reports the steps between them. A good
+its workflow; skill starts and plan folders mark Large's big moves, and the agent reports the steps between them. A good
 outcome: every session row says where its run stands, and a new workflow or a changed stage is one plugin folder or one
 stage folder, with no engine edit. This doc holds the engine and every stage; `docs/features/workflow-levels/design.md` is
 the short why of the levels.
 
 ## Status
 
-Built. The engine is `src/plugins/workflow/`; Heavy is `src/plugins/workflow-heavy/`, Light `src/plugins/workflow-light/`
+Built. The engine is `src/plugins/workflow/`; Large is `src/plugins/workflow-large/`, Small `src/plugins/workflow-small/`
 and Medium `src/plugins/workflow-medium/`. All four build on the clear, the agent events and the row parts that earlier
 plans landed (`chat.agentEvent`, `sessions.hostSessionChanged`, `addRowPart`). Each workflow plugin hands its own
-self-test script to the fake agent harness: `src/plugins/workflow-heavy/main/selftest-script.ts`,
-`src/plugins/workflow-light/main/selftest-script.ts` and `src/plugins/workflow-medium/main/selftest-script.ts`.
+self-test script to the fake agent harness: `src/plugins/workflow-large/main/selftest-script.ts`,
+`src/plugins/workflow-small/main/selftest-script.ts` and `src/plugins/workflow-medium/main/selftest-script.ts`.
 
 ## Vocabulary
 
-- **Workflow** — a named set of stages a session runs, registered by one plugin. Light, Medium and Heavy are the first
+- **Workflow** — a named set of stages a session runs, registered by one plugin. Small, Medium and Large are the first
   three.
 - **Level** — the user's word for a workflow in its size order. The app's **Effort** control is Claude's reasoning
   effort, a different thing, so nothing here is called effort.
 - **Flow** — one session's place in its workflow: the workflow, its stage, its checklist and the workflow's own state
-  (`flow.state`; for Heavy `HeavyState`: the plan folder, the plan's progress and the countdown). Main holds one flow per
+  (`flow.state`; for Large `LargeState`: the plan folder, the plan's progress and the countdown). Main holds one flow per
   session and keeps it in the plugin data. A session starts with no workflow, and a flow holds none until a workflow
   claims a skill.
 - **Stage** — one step of a workflow, one stage module (§ Stage modules). Chat's **step** (a tool, thinking or raw
@@ -46,15 +46,15 @@ self-test script to the fake agent harness: `src/plugins/workflow-heavy/main/sel
 - **Status** — what a stage is doing now: running, paused, ready or done. A step not reached is pending.
 - **Signal** — one input the flow folds: an agent event, a clear, a reported step or checklist, or a workflow's own event
   (§ Signals).
-- **Trail** — the stepper's row of step words, each workflow's own steps: Scope to Land for Light, Interview to Land for
-  Medium, Primer or Explore to Close for Heavy.
-- **Checklist** — the work items the side pane shows. Heavy's comes from `plan.md`; the others' from the agent through
+- **Trail** — the stepper's row of step words, each workflow's own steps: Scope to Land for Small, Interview to Land for
+  Medium, Primer or Explore to Close for Large.
+- **Checklist** — the work items the side pane shows. Large's comes from `plan.md`; the others' from the agent through
   `set_workflow_checklist`.
 - **Run log** — `runs.jsonl`, one line per finished workflow (§ Signals).
 - **Main action** — the one action of a stage that `ww` runs, the strip's one button and the first of the side pane's buttons. A stage with no button has none.
 - **Key-only action** — an action that runs from its own `Space w` key and draws no button (`keyOnly`).
 
-## Heavy's stages
+## Large's stages
 
 | Stage | A session enters it when | Label and status | Status line | Button actions (main action first) | Key-only actions |
 |---|---|---|---|---|---|
@@ -71,8 +71,8 @@ self-test script to the fake agent harness: `src/plugins/workflow-heavy/main/sel
 | closed | in make, review or fix, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, done | `Close · done · 9/9` | Retro | Dismiss |
 
 A **feature run** is the stages explore, interview, plan, cold read and plan ready. A report moves the flow only from
-one of them. A session in no workflow starts at no stage: Heavy's flow enters idle only through a handed-off plan or
-Dismiss. `wigley:make` starting moves any stage to make, fix included, and claims the flow for Heavy when another
+one of them. A session in no workflow starts at no stage: Large's flow enters idle only through a handed-off plan or
+Dismiss. `wigley:make` starting moves any stage to make, fix included, and claims the flow for Large when another
 workflow or none holds it. A standalone `wigley:explore` or `wigley:review` shows its level and trail through the level
 skill that started the run.
 
@@ -94,18 +94,18 @@ plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or w
 a subagent's `set_workflow_step` or `set_workflow_checklist` call succeeds and changes nothing (§ Signals).
 
 A plan folder has a copy in each checkout of its repo: the same repo-relative folder in the main clone and in each git
-worktree of that clone. Heavy reads the **newest copy**: the one whose `plan.md` or task documents changed last. A
+worktree of that clone. Large reads the **newest copy**: the one whose `plan.md` or task documents changed last. A
 `wigley:make` run in a worktree ticks the worktree's copy, often through a shell, so the plan the session named in the
 main clone still shows the run's progress. A plan outside a git clone (`~/wigley-features/`) has one copy.
 
-## Light's stages
+## Small's stages
 
-The first claim of `wigley:light` puts the flow in scope. A report moves the flow from any Light stage, since the agent
-reports each step as it reaches it. The status line is the label, the status and the progress, as for Heavy's rows.
+The first claim of `wigley:small` puts the flow in scope. A report moves the flow from any Small stage, since the agent
+reports each step as it reaches it. The status line is the label, the status and the progress, as for Large's rows.
 
 | Stage | A session enters it when | Label and status | Status line | Button actions | Key-only actions |
 |---|---|---|---|---|---|
-| scope | `wigley:light` starts, the first time or again in the session | Scope, running or paused | `Scope · running` | none | none |
+| scope | `wigley:small` starts, the first time or again in the session | Scope, running or paused | `Scope · running` | none | none |
 | build | the agent reports `build` | Build, running or paused | `Build · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
 | check | the agent reports `check` | Check, running or paused | `Check · running` | none | none |
 | land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
@@ -125,7 +125,7 @@ the fix count.
 | land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
 | done | the agent reports `done`, which writes the run log line | Land, done | `Land · done` | none | none |
 
-Light's and Medium's stages have no actions: their `runAction` rejects with `Light has no actions` and `Medium has no
+Small's and Medium's stages have no actions: their `runAction` rejects with `Small has no actions` and `Medium has no
 actions`. `done` shares its trail slot with `land`, so the trail still ends at Land.
 
 A session with `workflow === null` draws nothing but the `No workflow` tag, after a live turn with agent work ends while
@@ -141,7 +141,7 @@ no level skill has started.
 
 A main half that declares `reportedAs` takes that value of `set_workflow_step`'s `step`: the tool's accepted values
 derive from the registered stages (§ Signals). Its entry rule still decides whether a report moves the flow. A stage with
-`finishes` writes the run log line when a flow enters it: Heavy's `closed`, Light's and Medium's `done`.
+`finishes` writes the run log line when a flow enters it: Large's `closed`, Small's and Medium's `done`.
 
 A workflow plugin hands its stages to the engine through the engine's `addWorkflow` export, once in each process: main
 takes a `MainWorkflow` (its claims, first stage and `MainStage`s, and optionally its state fold), the page a
@@ -150,11 +150,11 @@ signal through the flow's current workflow alone (`foldFlow(flow, signal, workfl
 checklist, the workflow's state and that workflow's stages in order, the first entry rule that answers wins, and the flow
 keeps its stage when none answers. Two workflows may hold a stage with one id or one `reportedAs`.
 
-Each action names a command of the owner plugin, which its key runs: `workflow-heavy`'s commands are `HEAVY_COMMANDS`,
+Each action names a command of the owner plugin, which its key runs: `workflow-large`'s commands are `LARGE_COMMANDS`,
 which its manifest joins. A button, a fold and a key all run the engine's `workflow.stageAction` with the session and
 the action (`{ sessionId, action }`: the action's short id, `mainAction` or `toggleFinishedWaves`), so one intercept on
 it sees every stage action of every workflow. The engine's gate (`runFor`) checks the action, and the flow's workflow
-runs it through its `runAction`. Light and Medium declare none.
+runs it through its `runAction`. Small and Medium declare none.
 
 To change a workflow:
 
@@ -162,7 +162,7 @@ To change a workflow:
 - a new stage — a new stage folder in its plugin, its commands and keys, and its place in the stage order
 - a stage dropped — delete its folder and its entries
 - a renamed stage id — edit every rule that names it, in every stage's `main.ts` of that workflow;
-  `workflow-heavy/stages/main-stages.test.ts` turns red on one left behind in Heavy
+  `workflow-large/stages/main-stages.test.ts` turns red on one left behind in Large
 
 To add a workflow: add a plugin folder (`manifest.ts`, `contract.ts`, `main/start.ts`, `page/start.ts`) that depends on
 `workflow` in both processes, with the skills it claims, its stages and its layout folder, and call `addWorkflow` in each
@@ -184,21 +184,21 @@ Main folds these, for owned sessions only:
 | cleared | `sessions.hostSessionChanged` | — (the flow is rekeyed to the new host session id) |
 | step reported | the `set_workflow_step` tool | the stage the step names |
 | checklist reported | the `set_workflow_checklist` tool | the whole list of `{ text, done }` items |
-| custom | a workflow plugin's own event, through the engine's `signal` export | the event, which only that workflow reads (Heavy's plan changed, plan gone, handed off and dismissed) |
+| custom | a workflow plugin's own event, through the engine's `signal` export | the event, which only that workflow reads (Large's plan changed, plan gone, handed off and dismissed) |
 
 `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that
 the Claude adapter and the fake harness emit, so the fold never reads a harness's JSON. A subagent's `skillStarted` is
-no signal. Every agent's `fileWritten` is a signal, and Heavy reads only a `plan-*/plan.md` path from it. A `sessionEnded` of the flow's current host session (a process that exits
+no signal. Every agent's `fileWritten` is a signal, and Large reads only a `plan-*/plan.md` path from it. A `sessionEnded` of the flow's current host session (a process that exits
 mid-turn) gives a subagent-finished signal for each running subagent, then a turn-ended signal. A cleared session keeps
 its stage: Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops
 the session's flow.
 
-Heavy's plan rows come from `workflow-heavy`'s plan watch: it watches every copy of the flow's plan folder, reads the
+Large's plan rows come from `workflow-large`'s plan watch: it watches every copy of the flow's plan folder, reads the
 newest copy, and signals `planChanged` with the plan's progress (title, ticked, total, current wave, review rounds, the
 task lines, each with the `Status:` line of its task document) and `planGone` when no copy is left. It lists the repo's
 worktrees again at each plan check and when git's worktree list changes, so a worktree made during the run joins. Make in new session and Dismiss signal `handedOff` and `dismissed`. All four ride `custom`.
 
-**The claim.** A workflow claims the skills that start it: Light `wigley:light`, Medium `wigley:medium`, Heavy
+**The claim.** A workflow claims the skills that start it: Small `wigley:small`, Medium `wigley:medium`, Large
 `wigley:feature`, `wigley:feature-primer` and `wigley:make`. `wigley:review` and every other skill claim nothing, so they
 run inside the level. A claim by a workflow other than the flow's current one sets `movedUpFrom` to the current workflow
 (null for a session in none), sets the new workflow, its first stage, a null `state` and a null checklist, and clears
@@ -206,18 +206,18 @@ run inside the level. A claim by a workflow other than the flow's current one se
 load. A claim by the current workflow (an own claim) nulls the checklist, so a second ask shows no old list; it changes nothing
 else on the flow's identity (`movedUpFrom` stays), and its stage rules may restart it. A claim from a stage with
 `finishes` starts a new run, so `movedUpFrom` is null for it, whichever workflow claims. When two workflows claim one
-skill, the lowest `order` wins (Light 10, Medium 20, Heavy 30).
+skill, the lowest `order` wins (Small 10, Medium 20, Large 30).
 
 The engine contributes `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools`, so every
 session's agent can call them. A wigley skill calls the step tool at each step boundary; a skill that does not call it
 leaves the flow in its last step.
 
-- `set_workflow_step`'s one required string `step` takes a `reportedAs` value of any registered workflow: Heavy's are
-  `explore`, `interview`, `plan`, `cold_read` and `fix`, Light's `build`, `check`, `land` and `done`, Medium's `build`,
+- `set_workflow_step`'s one required string `step` takes a `reportedAs` value of any registered workflow: Large's are
+  `explore`, `interview`, `plan`, `cold_read` and `fix`, Small's `build`, `check`, `land` and `done`, Medium's `build`,
   `review`, `fix`, `land` and `done`. The flow's current workflow's stage rules answer the report, so a value outside that
   workflow's stages is ignored.
 - `set_workflow_checklist`'s one required `items` is an array of `{ text, done }`. Each call replaces the whole list,
-  so a missed call cannot leave the app out of step. Heavy never calls it: Heavy's checklist comes from `plan.md`.
+  so a missed call cannot leave the app out of step. Large never calls it: Large's checklist comes from `plan.md`.
 - Only the main agent's call counts. The engine contributes both tools as main-agent-only. Sessions asks its tool-call
   guards before it runs a contributed tool, and chat's guard names the agent behind the call's tool-use id from the
   stream's tool events. A subagent's call succeeds with a
@@ -237,8 +237,8 @@ spend since then (null when no spend arrived since the run began; a process figu
 and carries), and `fixCycles` is the workflow's own review fix count. Nothing draws the log.
 
 `costUsd` runs one turn behind. Spend updates at a turn's result and a finishing stage lands mid-turn, so a run's last turn
-is not in the figure, and a one-turn run logs null. The user accepted this at landing, after the real Light check logged null
-ahead of $0.36 of spend: the log compares levels. A level whose runs are often one turn, as Light's can be, needs the line
+is not in the figure, and a one-turn run logs null. The user accepted this at landing, after the real Small check logged null
+ahead of $0.36 of spend: the log compares levels. A level whose runs are often one turn, as Small's can be, needs the line
 written at the turn's end before its cost can be compared.
 
 A re-attach replays its process's whole log, each event flagged `replayed`, over the saved flow. `flows.json` holds each
@@ -250,7 +250,7 @@ turn that ended while the app was closed, folds as usual. A flow saved without t
 ## Where it draws
 
 Each workflow draws through its own layout, over the engine's contract and kit: the built-in `default` of each workflow
-plugin, a user's override in `layouts/<workflow plugin>/<name>/` (for Heavy `layouts/workflow-heavy/<name>/`), set by the
+plugin, a user's override in `layouts/<workflow plugin>/<name>/` (for Large `layouts/workflow-large/<name>/`), set by the
 plugin's own `layout` setting. The layout preview is on `Space z l w`. One exception to Intent's layout rule: the
 `No workflow` tag is drawn by the engine with no layout, since no workflow owns such a flow, so a layout cannot restyle it.
 
@@ -259,10 +259,10 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   `raised`, so the built-in sessions layout draws it as a tinted Tag in place of a finished turn's `Done`, with a status
   edge on the card, one step under the solid Tag of an `urgent` Needs you. Its rank sits above chat's done and below chat's working, so a running turn, an error and a waiting round still
   take the label.
-- **Row chip** — a row part (sessions' `addRowPart`): the built-in layouts draw the level's badge (one letter, L, M or H,
+- **Row chip** — a row part (sessions' `addRowPart`): the built-in layouts draw the level's badge (one letter, S, M or L,
   in the level's colour, `--wg-workflow-<level>-badge`, with the full word in its tooltip), then the stage's label as
   one tag toned by its status (`running`, pulsing, while running; `success` with a check when done; neutral while
-  paused or ready), unless the row label says it, and Heavy's countdown. The row's own label shows no Working: this tag
+  paused or ready), unless the row label says it, and Large's countdown. The row's own label shows no Working: this tag
   says it. On a row too narrow for it, usage's
   bar shrinks away first, then the tag ellipsizes. A user layout can also draw the
   progress and the main action's button, which the chip's input carries. Idle draws no stage. A session in no workflow
@@ -276,11 +276,11 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   `Space w` keys. Idle draws nothing.
 - **Side pane** — one section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
   `docs/features/chat-bar/design.md` § The session hub) for each workflow, drawn only while a session's flow is of that
-  workflow. The section's title is `Plan` for Heavy and `Checklist` for Light and Medium.
-  - Heavy's pane shows from the first read of a plan until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. The
+  workflow. The section's title is `Plan` for Large and `Checklist` for Small and Medium.
+  - Large's pane shows from the first read of a plan until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. The
     checklist folds finished waves into one row, shows the current wave in full, and shows each later wave as one line.
     A task in the current wave whose task document reads `Status: in progress` shows the stage's state — running while make runs, paused while it pauses, pending in a stage that runs no tasks; every other open task shows pending.
-  - Light's and Medium's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
+  - Small's and Medium's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
     progress bar and the list as one flat list.
   - The trail stays on the strip alone.
 
@@ -290,13 +290,13 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   the mouse and keeps its scroll while the pane is out of view or hidden.
 
 Primer and explore share the first step: the one the session is in, otherwise Explore. Plan ready and make share the
-Make step, and Light's and Medium's `done` and `land` share Land. The trail is words alone: a step's weight and colour show its status (`DESIGN.md` § Workflow), and the
+Make step, and Small's and Medium's `done` and `land` share Land. The trail is words alone: a step's weight and colour show its status (`DESIGN.md` § Workflow), and the
 current step also carries what follows the status in its status line (`Make 3/7`, `Fix · cycle 1`). On a narrow pane the
 trail wraps.
 
 ## Auto-start
 
-With `workflow-heavy.autoClearAndMake` on (default off), plan ready starts a countdown of `workflow-heavy.autoStartSeconds`
+With `workflow-large.autoClearAndMake` on (default off), plan ready starts a countdown of `workflow-large.autoStartSeconds`
 (default 10) on the strip and the row chip. During it the main action is Cancel. At zero, Clear & make runs. A turn
 that starts, a clear, a Cancel or a replayed event stops it. A replayed event starts none, and neither does the plan
 read a replayed turn end causes, until a live turn starts or ends.
@@ -305,7 +305,7 @@ read a replayed turn end causes, until a live turn starts or ends.
 
 The `<Leader>w` group (which-key: workflow), each button action's key anchored on its button. The chords did not change
 when the workflow plugins split; `ww`, `ws` and `wf` stay engine commands (`workflow.*`), and `wn`, `wr`, `wo`, `wt` and
-`wd` are `workflow-heavy.*`.
+`wd` are `workflow-large.*`.
 
 | Keys | Command |
 |---|---|
@@ -316,7 +316,7 @@ when the workflow plugins split; `ww`, `ws` and `wf` stay engine commands (`work
 | `<Leader>wt` | Retro |
 | `<Leader>wd` | Dismiss |
 | `<Leader>ws` | Show or hide the side pane, in every session |
-| `<Leader>wf` | Open or fold the selected session's finished waves; with no finished group, log `nothing to run`; on a Light or Medium flat list the key flips the fold and nothing shows |
+| `<Leader>wf` | Open or fold the selected session's finished waves; with no finished group, log `nothing to run`; on a Small or Medium flat list the key flips the fold and nothing shows |
 
 The layout preview opens on `<Leader>zlw`.
 
@@ -346,7 +346,7 @@ The layout preview opens on `<Leader>zlw`.
 - **Review rounds stay a count.** The Run log gives the number of logged rounds, so the status line names the round and
   the checklist draws no row per round.
 - **One plan reader, shared with Backlog.** `src/shared/plan-progress.ts` reads a plan's boxes, waves, Run log and task
-  statuses, and `src/shared/plan-copies.ts` finds a plan's copies and picks the newest, so Heavy and Backlog always show
+  statuses, and `src/shared/plan-copies.ts` finds a plan's copies and picks the newest, so Large and Backlog always show
   the same count. The docs index's counts take every checkbox in the file and carry no waves or Run log.
 - **The newest copy, not the session's.** A run in a worktree ticks that worktree's copy, often through a shell that
   sends no write event, so following the session's own path or its agents' write paths would miss it.

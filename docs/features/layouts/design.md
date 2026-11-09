@@ -137,7 +137,7 @@ stays in themes.
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter and cache mark on its row, each session's context line (context bar, cache countdown) above the Chat box and its spend in the Chat status line; its whole usage line in each tab bar, through the optional `usage-tab-line` plugin; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
-| `workflow-light`, `workflow-medium`, `workflow-heavy` | `workflow-light.layout`, `workflow-medium.layout`, `workflow-heavy.layout` | each workflow's own: the status chip under each session row (the level's badge and the stage), the strip above the Chat composer (the stepper's trail and the main action), the side pane beside the transcript (Heavy's status, plan checklist by wave and actions; Light's and Medium's status, count and flat checklist) |
+| `workflow-small`, `workflow-medium`, `workflow-large` | `workflow-small.layout`, `workflow-medium.layout`, `workflow-large.layout` | each workflow's own: the status chip under each session row (the level's badge and the stage), the strip above the Chat composer (the stepper's trail and the main action), the side pane beside the transcript (Large's status, plan checklist by wave and actions; Small's and Medium's status, count and flat checklist) |
 | `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its widen and expand controls, and the full-size overlay |
 
 Each owner's `layout.d.ts` names its parts exactly.
@@ -154,7 +154,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l c` | chat: a session of every entry kind, idle after a finished turn, so the activity dock shows that turn's finished line (the preview holds a `result` entry); its result entry as a turn divider; its steps, grouped into finished activity lines, show in the transcript only under a layout that sets `activityInTranscript`; the agent strip above the composer; the session hub's Skills section, one skill by `main` and one by a subagent; and a paused run time on its row |
 | `Space z l s` | sessions: rows in every state |
 | `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
-| `Space z l w` | workflow: Heavy's sample session in every stage, the plan-ready countdown included |
+| `Space z l w` | workflow: Large's sample session in every stage, the plan-ready countdown included |
 
 ## The primer's columns
 

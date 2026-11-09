@@ -506,13 +506,13 @@ User-facing features, those other work builds on first.
 - **Usage's cache mark has no preview route** — *needs a feature plan*: `rowCache` draws nothing without a cache expiry,
   and no `Space z l` sample holds usage, so a usage layout author cannot see the mark in the app. Decide between a usage
   preview and seeding chat's preview session (`AGENTS.md`: a view needing agent data has a preview sample).
-- **Judge Heavy's agent count from the run log** — *needs a feature plan*: does Heavy use more agents than its results
+- **Judge Large's agent count from the run log** — *needs a feature plan*: does Large use more agents than its results
   earn? The evidence is `runs.jsonl` in the `workflow` plugin's data folder of the stable app (`plugins/workflow/` in the
   app's user data folder), one JSON object per finished workflow with `at`, `sessionId`, `projectDir`, `workflow`,
-  `movedUpFrom`, `activeMs`, `costUsd` and `fixCycles`: compare Heavy's lines against Medium's. Plan it when the file
-  holds 20 Heavy lines, so that one odd run does not set the answer. The options: keep Heavy's agents as they are;
+  `movedUpFrom`, `activeMs`, `costUsd` and `fixCycles`: compare Large's lines against Medium's. Plan it when the file
+  holds 20 Large lines, so that one odd run does not set the answer. The options: keep Large's agents as they are;
   reduce the plan drafters and cold readers in `wigley:feature`; reduce the review lanes in `wigley:review`. It waited
-  because of `docs/features/workflow-levels/design.md` § Decisions, "Heavy stays exactly as it was": published guidance
+  because of `docs/features/workflow-levels/design.md` § Decisions, "Large stays exactly as it was": published guidance
   against many agents on coding work is vendor evidence, and the log gives the user's own.
 
 ## Code cleanup
@@ -625,7 +625,7 @@ because the earlier items rewrite many of these tests anyway.
   have the script open the session it waits on.
 - **A failing worktree list goes unreported** — *agent-ready*: `planCopies` (`src/shared/plan-copies.ts`) falls back to
   the plan's own copy, with no log, when `git.worktrees` rejects, so a list that keeps failing hides every worktree
-  copy from Heavy and Backlog in silence. Log the rejection once per clone.
+  copy from Large and Backlog in silence. Log the rejection once per clone.
 - **Backlog reloads once per worktree edit** — *agent-ready*: each change under a linked worktree's `docs/features`
   sends `changed`, and the Backlog page runs a full, uncoalesced load for each one (`src/plugins/backlog/main/start.ts`
   `watchWorktrees`). Coalesce the page's `changed` reloads if a burst of worktree edits proves slow.

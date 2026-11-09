@@ -183,7 +183,7 @@ auto-compact, at each workflow.flows change and each chat.turnFinished (idle):
 - **Compact during an agent wait** (2026-11-08) — the main agent sits idle while its subagents run, and every result
   they return lands on its context; compacting then costs the user no wait. It fires at once when the turn ends, with
   no delay.
-- **Only sessions at a workflow level** (2026-11-08) — Light, Medium and Heavy alike; the trigger reads the
+- **Only sessions at a workflow level** (2026-11-08) — Small, Medium and Large alike; the trigger reads the
   workflow engine's flow, which tracks every running subagent, nested ones included. Background shell tasks do not count.
 - **Its own threshold** (2026-11-08) — `agentWaitMinTokens`, default 200000, 0 off, independent of `minTokens`, so
   either rule can be off while the other is on.

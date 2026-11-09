@@ -81,7 +81,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 ├── .chat-main        entries + floating composer
 └── .chat-side-parts  264 px wide until the user drags it
       ▾ Main agent   2:05     chat: the activity dock
-      ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws); Checklist for Light and Medium
+      ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws); Checklist for Small and Medium
       ▾ Skills       4        agent-skills: each skill the main agent started
       ▾ Context  128k · 13%   context-sources: where the main agent's context comes from
       ▾ Session               chat: project, branch, folder, harness, model · effort
@@ -107,8 +107,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   session, kept in `uiState` as `hub-width` across a relaunch. While the hub has the keys `Alt+Shift+h`/`l` move it 24 px; from the
   transcript, box or strip they stay with the chat panes' dividers and the side bar.
 - **Plan or Checklist:** the section is the workflow plugin's side pane, one section for each workflow, drawn only while
-  a session's flow is of that workflow. It is titled `Plan` for Heavy, which draws it from the first read of a plan until
-  Dismiss or a new plan, and `Checklist` for Light and Medium, which draw it once the agent has set a checklist
+  a session's flow is of that workflow. It is titled `Plan` for Large, which draws it from the first read of a plan until
+  Dismiss or a new plan, and `Checklist` for Small and Medium, which draw it once the agent has set a checklist
   (`workflow/design.md` § Where it draws). The section hides at every other time.
 - **Skills:** the skills the main agent started in this row's session, by a Skill call or a typed slash command (the
   `skillStarted` agent event): one row per skill, in start order, showing only its name, a project-scoped skill's without
