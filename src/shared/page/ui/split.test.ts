@@ -15,9 +15,24 @@ interface FakeElement {
   classes: Set<string>;
   captured: Set<number>;
   children: FakeElement[];
-  rect: { left: number; width: number };
+  rect: Rect;
   clientRects: unknown[];
   fire(type: string, fields?: Record<string, unknown>): Record<string, unknown>;
+}
+
+interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+// A rect at the client's top-left corner, `width` wide on a row and `height`
+// tall on a column.
+function rectOn(axis: 'row' | 'column', size: number): Rect {
+  return axis === 'row'
+    ? { left: 0, top: 0, width: size, height: 0 }
+    : { left: 0, top: 0, width: 0, height: size };
 }
 
 function fakeElement(): FakeElement {
@@ -30,7 +45,7 @@ function fakeElement(): FakeElement {
     classes,
     captured,
     children,
-    rect: { left: 0, width: 0 },
+    rect: rectOn('row', 0),
     clientRects: [{}],
     classList: {
       add: (name: string) => classes.add(name),
@@ -127,19 +142,24 @@ function fakeAnchor() {
   return { anchor, named };
 }
 
-// The split's root reports an 800px wide rect at the client's left edge; the
-// handle is the element createSplit gives the `ui-split-handle` class.
-function splitWithHandle(saved: Map<string, unknown>) {
+// The split's root reports an 800px rect along its axis, wide on a row and
+// tall on a column, at the client's top-left corner; the handle is the element
+// createSplit gives the `ui-split-handle` class.
+function splitWithHandle(
+  saved: Map<string, unknown>,
+  options: { axis?: 'row' | 'column'; sizedPane?: 'start' | 'end' } = {},
+) {
   const timers = fakeTimers();
   const anchor = fakeAnchor();
   const split = createSplit({
     ...limits,
+    ...options,
     uiState: stateOver(saved),
     stateKey: 'side',
     anchor: anchor.anchor,
     timers: timers.timers,
   });
-  asFakeElement(split.element).rect = { left: 0, width: 800 };
+  asFakeElement(split.element).rect = rectOn(options.axis ?? 'row', 800);
   const handle = created.find((node) => node.className === 'ui-split-handle')!;
   return { split, handle, timers, anchor };
 }
@@ -341,18 +361,49 @@ describe('createSplit endMin', () => {
 
 describe('createSplit nudge', () => {
   it.each([
-    { stored: 240, direction: 'right', width: 264, written: 264 },
-    { stored: 240, direction: 'left', width: 216, written: 216 },
-    { stored: 160, direction: 'left', width: 160, written: undefined },
-    { stored: 700, direction: 'left', width: 572, written: 572 },
-    { stored: 700, direction: 'right', width: 700, written: undefined },
+    { axis: 'row', stored: 240, direction: 'right', width: 264, written: 264 },
+    { axis: 'row', stored: 240, direction: 'left', width: 216, written: 216 },
+    {
+      axis: 'row',
+      stored: 160,
+      direction: 'left',
+      width: 160,
+      written: undefined,
+    },
+    { axis: 'row', stored: 700, direction: 'left', width: 572, written: 572 },
+    {
+      axis: 'row',
+      stored: 700,
+      direction: 'right',
+      width: 700,
+      written: undefined,
+    },
+    {
+      axis: 'column',
+      stored: 240,
+      direction: 'down',
+      width: 264,
+      written: 264,
+    },
+    { axis: 'column', stored: 240, direction: 'up', width: 216, written: 216 },
+    {
+      axis: 'column',
+      sizedPane: 'end',
+      stored: 200,
+      direction: 'up',
+      width: 224,
+      written: 224,
+    },
   ] as const)(
-    'nudges one step from the drawn width, stores only a changed width and takes the press, at a limit too: $stored $direction',
-    ({ stored, direction, width, written }) => {
+    'nudges one step from the drawn width, stores only a changed width and takes the press, at a limit too: $axis $stored $direction',
+    ({ axis, stored, direction, width, written, ...sized }) => {
       const saved = new Map<string, unknown>([['side', stored]]);
-      const { split, handle, timers } = splitWithHandle(saved);
-      // A 4px handle leaves a 796px span, the start pane drawn at most 596.
-      handle.rect = { left: 0, width: 4 };
+      const { split, handle, timers } = splitWithHandle(saved, {
+        axis,
+        ...sized,
+      });
+      // A 4px handle leaves a 796px span, the sized pane drawn at most 596.
+      handle.rect = rectOn(axis, 4);
       saved.delete('side');
 
       const took = split.nudge(direction);
@@ -365,12 +416,17 @@ describe('createSplit nudge', () => {
     },
   );
 
-  it.each(['up', 'down'] as const)(
-    'turns down a press off its axis and keeps its width: $0',
-    (direction) => {
+  it.each([
+    { axis: 'row', direction: 'up' },
+    { axis: 'row', direction: 'down' },
+    { axis: 'column', direction: 'left' },
+    { axis: 'column', direction: 'right' },
+  ] as const)(
+    'turns down a press off its axis and keeps its width: $axis $direction',
+    ({ axis, direction }) => {
       const saved = new Map<string, unknown>([['side', 240]]);
-      const { split, handle } = splitWithHandle(saved);
-      handle.rect = { left: 0, width: 4 };
+      const { split, handle } = splitWithHandle(saved, { axis });
+      handle.rect = rectOn(axis, 4);
 
       const took = split.nudge(direction);
 
@@ -425,21 +481,42 @@ describe('createSplit nudge', () => {
 });
 
 describe('createSplit prompt', () => {
-  it('anchors the resize prompt in the handle', () => {
-    const { handle, anchor } = splitWithHandle(new Map());
-    const prompt = handle.children.find((child) =>
-      child.className.split(' ').includes('ui-split-prompt'),
-    );
+  it.each([
+    {
+      axis: 'row',
+      commands: ['panes.resizePaneLeft', 'panes.resizePaneRight'],
+    },
+    {
+      axis: 'column',
+      commands: ['panes.resizePaneUp', 'panes.resizePaneDown'],
+    },
+  ] as const)(
+    'anchors the resize prompt in the handle: $axis',
+    ({ axis, commands }) => {
+      const { handle, anchor } = splitWithHandle(new Map(), { axis });
+      const prompt = handle.children.find((child) =>
+        child.className.split(' ').includes('ui-split-prompt'),
+      );
 
-    expect(
-      anchor.named.map(({ command, options }) => ({ command, options })),
-    ).toEqual([
-      { command: 'panes.resizePaneLeft', options: undefined },
-      { command: 'panes.resizePaneRight', options: undefined },
-    ]);
-    for (const { element } of anchor.named) {
-      expect(prompt?.children).toContain(element);
-    }
+      expect(
+        anchor.named.map(({ command, options }) => ({ command, options })),
+      ).toEqual(commands.map((command) => ({ command, options: undefined })));
+      for (const { element } of anchor.named) {
+        expect(prompt?.children).toContain(element);
+      }
+    },
+  );
+});
+
+describe('createSplit setEndHidden', () => {
+  it('marks the root while the end pane is hidden', () => {
+    const { split } = splitWithHandle(new Map());
+    const root = asFakeElement(split.element);
+
+    split.setEndHidden(true);
+    expect(root.classes.has('is-end-hidden')).toBe(true);
+    split.setEndHidden(false);
+    expect(root.classes.has('is-end-hidden')).toBe(false);
   });
 });
 

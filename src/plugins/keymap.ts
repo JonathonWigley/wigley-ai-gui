@@ -841,6 +841,58 @@ export const defaultKeymap = {
     { keys: '/', scope: 'practice.list', command: 'practice.filter' },
     { keys: '<CR>', scope: 'practice.box', command: 'practice.boxAccept' },
     { keys: '<Esc>', scope: 'practice.box', command: 'practice.boxCancel' },
+    // A chord fires inside a box and the editor as well, ahead of vim.
+    ...(
+      [
+        'practice.list',
+        'practice.problem',
+        'practice.editor',
+        'practice.console',
+      ] as const
+    ).flatMap((scope) => [
+      { keys: "<D-'>", scope, command: 'practice.run' as const },
+      { keys: '<D-Enter>', scope, command: 'practice.submit' as const },
+    ]),
+    { keys: 'j', scope: 'practice.problem', command: 'practice.paneDown' },
+    { keys: 'k', scope: 'practice.problem', command: 'practice.paneUp' },
+    { keys: 'gg', scope: 'practice.problem', command: 'practice.paneTop' },
+    { keys: 'G', scope: 'practice.problem', command: 'practice.paneBottom' },
+    {
+      keys: '<CR>',
+      scope: 'practice.problem',
+      command: 'practice.openSubmission',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'practice.problem',
+      command: 'practice.closeSubmission',
+      where: 'page',
+    },
+    // The problem pane's and the console's tabs, box and scroll keys; Esc in
+    // a box's normal mode leaves the box.
+    ...(['practice.problem', 'practice.console'] as const).flatMap((scope) => [
+      { keys: 'gt', scope, command: 'practice.nextTab' as const },
+      { keys: 'gT', scope, command: 'practice.prevTab' as const },
+      {
+        keys: 'i',
+        scope,
+        command: 'practice.editBox' as const,
+        where: 'page' as const,
+      },
+      {
+        keys: '<Esc>',
+        scope,
+        command: 'practice.leaveBox' as const,
+        where: 'box' as const,
+      },
+      { keys: '<C-j>', scope, command: 'practice.lineDown' as const },
+      { keys: '<C-k>', scope, command: 'practice.lineUp' as const },
+      { keys: '<C-S-j>', scope, command: 'practice.halfPageDown' as const },
+      { keys: '<C-S-k>', scope, command: 'practice.halfPageUp' as const },
+    ]),
+    { keys: 'y', scope: 'practice.confirm', command: 'practice.confirmYes' },
+    { keys: 'n', scope: 'practice.confirm', command: 'practice.confirmNo' },
+    { keys: '<Esc>', scope: 'practice.confirm', command: 'practice.confirmNo' },
 
     // ── Notes ──────────────────────────────────────────────────────────────
     { keys: '<Leader>nn', scope: 'any', command: 'notes.open' },

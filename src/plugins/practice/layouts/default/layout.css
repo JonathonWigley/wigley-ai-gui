@@ -64,3 +64,87 @@
 [data-layout-owner='practice'].is-open .ui-row-label {
   font-weight: var(--wg-weight-semibold);
 }
+
+/* The column's tabbed panes: a header of tabs and keys over the body that
+   scrolls; the editor pane: a header of the file and its save state over the
+   editor. */
+.practice-pane--tabbed[data-layout-owner='practice'],
+.practice-pane--editor[data-layout-owner='practice'] {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+}
+
+[data-layout-owner='practice'] .practice-pane-header {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-2);
+  padding: 0 var(--wg-space-3);
+}
+
+[data-layout-owner='practice'] .practice-file-name {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+  padding: var(--wg-space-2) 0;
+}
+
+[data-layout-owner='practice'] .practice-console-actions {
+  display: flex;
+  gap: var(--wg-space-2);
+  margin-left: auto;
+}
+
+[data-layout-owner='practice'] .practice-save-state {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  margin-left: auto;
+}
+
+/* A tab's document, box or result, inside the body that scrolls. */
+.practice-doc[data-layout-owner='practice'],
+.practice-box-tab[data-layout-owner='practice'],
+.practice-result[data-layout-owner='practice'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-3);
+}
+
+[data-layout-owner='practice'] .practice-doc-title {
+  margin: 0;
+}
+
+[data-layout-owner='practice'] .practice-doc-marks,
+[data-layout-owner='practice'] .practice-result-line {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='practice'] .practice-box-tab .practice-hint {
+  align-self: flex-end;
+}
+
+[data-layout-owner='practice'] .practice-output {
+  background: var(--wg-sheet-background);
+  border: 1px solid var(--wg-border-default);
+  border-radius: var(--wg-radius-sm);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+  margin: 0;
+  overflow-x: auto;
+  padding: var(--wg-space-2);
+  white-space: pre-wrap;
+}
+
+[data-layout-owner='practice'] .practice-output-label,
+[data-layout-owner='practice'] .practice-case-label {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+}
+
+.practice-case[data-layout-owner='practice'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+}

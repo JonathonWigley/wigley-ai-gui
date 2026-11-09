@@ -618,8 +618,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `api.panes.setResizeTarget(target)` each time it sets its key scope, after `keys.setScope`: the right divider of
   the focused pane when it has one, else its left one, as tmux picks, and `null` when no split pane has focus. Every
   base scope change drops the target. A `ResizeTarget` (`src/contracts/panes.ts`) is one `nudge(direction)`, which
-  returns false when the direction's axis is not its own (a side-by-side `Split` given up or down) or its handle has
-  no layout box (a stacked or start-hidden `Split`), so a hidden view divider passes the press on; every `Split` is
+  returns false when the direction's axis is not its own (a side-by-side `Split` given up or down, a column `Split`
+  given left or right) or its handle has no layout box (a stacked, start-hidden or end-hidden `Split`), so a hidden view divider passes the press on; every `Split` is
   one. A press goes to the view's target, then, when it returns false or none is set, to the outer panes' target, then
   to the side bar (left and right only); a press nothing takes logs `no pane divider runs <direction>`.
 - **A focus target** is how the core's focus commands (`panes.focusLeft` / `Right` / `Up` / `Down`, `Alt+hjkl`) move

@@ -26,8 +26,9 @@ const TITLE = 'Practice';
 // column in the sheet, drawn with the layout the `layout` setting names.
 // `showMode` shows the mode, or toggles its side bar while it shows. Each
 // `changed` message reads the list again, keeping the selection. The place
-// (selection, open problem, filter) goes to `practice.place` on each change,
-// and a page load puts the last page's back.
+// (selection, open problem, filter, the workspace's pane and tabs) goes to
+// `practice.place` on each change, and a page load puts the last page's back.
+// The page may not stop while a draft is unsaved.
 export const practicePagePart: PagePart<typeof practiceManifest> = {
   manifest: practiceManifest,
   start(api: PracticeApi) {
@@ -54,6 +55,11 @@ export const practicePagePart: PagePart<typeof practiceManifest> = {
       opened: (problem) =>
         mode.setContext({ title: TITLE, detail: problem.summary.title }),
       runKey: keyRunner(api.commands, services.log),
+      editor: services.editor,
+      uiState: services.uiState,
+      timers: services.timers,
+      run: (command) => api.commands.run(command),
+      addOverlay: (element) => api.areas.overlay.contribute(element),
       savedPlace: placeWriter.get() ?? null,
       placeChanged: (value) => place.write(value),
     });
@@ -104,7 +110,10 @@ export const practicePagePart: PagePart<typeof practiceManifest> = {
         showMode,
         ...view.commands,
         openProblemRow: ({ arg }) => view.openProblemRow(arg),
+        showTab: ({ arg }) => view.showTab(arg),
+        openSubmissionRow: ({ arg }) => view.openSubmissionRow(arg),
       },
+      mayStop: () => view.mayStop(),
       dispose: () => view.dispose(),
     };
   },

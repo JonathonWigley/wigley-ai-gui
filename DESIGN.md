@@ -306,11 +306,13 @@ The primitives, each a builder in `src/shared/page/ui/`:
   sideways with no scroll bar when too narrow for its tabs, each tab keeping its full width.
 - **Sheet** (`sheet`): the solid L2 content sheet.
 - **Split** (`createSplit`): two panes with a drag handle, each pane with a least width and no most
-  width; the start pane's width lives in `uiState`, written when a drag ends and on each keyboard resize. The
+  width, side by side or, with `axis: 'column'`, one above the other; the sized pane's width (or height) lives in
+  `uiState`, written when a drag ends and on each keyboard resize. The sized pane is the start pane unless
+  `sizedPane: 'end'` names the end one, and either pane can be hidden. The
   shell's side bar resizes through the same split core. Three columns are two nested splits, the
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
-  `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
-  and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
+  `⌥⇧H ◂ ▸ ⌥⇧L` (`⌥⇧K ▴ ▾ ⌥⇧J` on a column split), centred on it and taking no space, while the pointer is over it,
+  while a drag runs and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
 - **HScroller** (`createHScroller`): a row that scrolls sideways, with a `sheet-background` IconButton chevron lying over
   each end, taking no space so overflow moves no item, that scrolls by one item and hides while nothing lies further
   that way, and a `reveal(item)` that scrolls an item into view.

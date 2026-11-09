@@ -1795,13 +1795,15 @@ export function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-// An editor host that counts the editors it holds live and every one it made;
-// `type` edits the last one made. After `stop()`, `live` cannot fail, as the
+// An editor host that counts the editors it holds live and every one it made,
+// boxes and document editors alike; `type` edits the last one made, and
+// `typeDocument` the last document editor made. After `stop()`, `live` cannot fail, as the
 // per-plugin view destroys what the part left: it is only meaningful mid-life.
 export function countingEditors() {
   let live = 0;
   let made = 0;
   let type: (text: string) => void = () => undefined;
+  let typeDocument: (text: string) => void = () => undefined;
   const host: EditorHost = {
     create(_parent, doc, events) {
       live += 1;
@@ -1819,8 +1821,36 @@ export function countingEditors() {
         },
       };
     },
-    createDocument() {
-      throw new Error('part harness: countingEditors makes no document editor');
+    createDocument(_parent, doc, _options, events) {
+      live += 1;
+      made += 1;
+      let text = doc;
+      typeDocument = (typed) => {
+        text = typed;
+        events.changed(typed);
+      };
+      type = typeDocument;
+      return {
+        text: () => text,
+        setText(next) {
+          text = next;
+        },
+        insert() {},
+        charBeforeCursor: () => '',
+        focus() {},
+        blur() {},
+        destroy() {
+          live -= 1;
+        },
+        goToLine() {},
+        scrollBy: () =>
+          Promise.resolve({
+            moved: false,
+            atEnd: true,
+            cursorMoved: false,
+            top: { line: 1, cut: false },
+          }),
+      };
     },
     contains: () => false,
     takesChordKey: () => false,
@@ -1834,5 +1864,6 @@ export function countingEditors() {
     live: () => live,
     made: () => made,
     type: (text: string) => type(text),
+    typeDocument: (text: string) => typeDocument(text),
   };
 }

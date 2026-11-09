@@ -1,7 +1,7 @@
 // The practice plugin's channel between its main and page parts: the problem
 // list, one problem opened with its attempt and submissions, the user's saves,
 // Run and Submit through the judge, the Solution tab's peek, and the import and
-// interviewer sessions. Also the page's place and its row-click command.
+// interviewer sessions. Also the page's place and its click commands.
 
 import type { CommandKey } from '../../contracts/commands';
 import type { ChannelShape } from '../../contracts/plugin';
@@ -129,12 +129,17 @@ export interface PracticeChannel extends ChannelShape {
   };
 }
 
-// Where the Practice page was: the selected and open problems' slugs and the
-// list's filter text. A reloaded page puts it back once the list loads.
+// Where the Practice page was: the selected and open problems' slugs, the
+// list's filter text, the problem column's pane holding the keys and the tabs
+// its problem pane and console show (never Solution, which asks first). A
+// reloaded page puts it back once the list loads.
 export interface PracticePlace {
   selectedSlug: string | null;
   openSlug: string | null;
   filter: string;
+  pane: 'problem' | 'editor' | 'console';
+  problemTab: 'description' | 'submissions' | 'notes';
+  consoleTab: 'testcase' | 'result';
 }
 
 export const practicePlaceSlot: SlotKey<PracticePlace, 'page', 'practice'> = {
@@ -149,3 +154,16 @@ export const practiceOpenProblemRowCommand: CommandKey<
   string,
   'practice.openProblemRow'
 > = { id: 'practice.openProblemRow' };
+
+// Shows the tab whose id is `arg` (`description`, `submissions`, `notes`,
+// `solution`, `testcase` or `result`), as a click on that tab does.
+export const practiceShowTabCommand: CommandKey<string, 'practice.showTab'> = {
+  id: 'practice.showTab',
+};
+
+// Shows the code of the submission whose ISO 8601 time is `arg`, as a click
+// on its Submissions row does.
+export const practiceOpenSubmissionRowCommand: CommandKey<
+  string,
+  'practice.openSubmissionRow'
+> = { id: 'practice.openSubmissionRow' };

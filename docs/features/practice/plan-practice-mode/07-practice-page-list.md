@@ -1,6 +1,6 @@
 # 07 — Practice page: mode, list and layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -227,3 +227,5 @@ checks (the mode's look, keys, side bar toggle, placement check) defer to "12 �
 Commit:    one commit for the group
 
 ## Proof
+
+Commit bf1cce38 · proof: diff read: practice-state exports, PracticeView/createPracticeView/setFocus/openProblemRow, PracticePlace/practicePlaceSlot/practiceOpenProblemRowCommand, layout.d.ts types, PracticeBaseScope/createPracticeKit present; keymap kp, list keys, page registration, layout register reviewed; typecheck clean; worker ran 18 files 224 tests and lint clean · concerns: practice-state.ts duplicates problem.ts's private DIFFICULTIES; layouts design.md lacks a practice adopter row (task 11); view.dispose disposes its draws though backlog's does not, untested; changed-reread test checks via practice.place

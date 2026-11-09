@@ -1,5 +1,6 @@
 /* The start pane takes its width while the end pane keeps
-   `--ui-split-end-min`, and gives way below that. */
+   `--ui-split-end-min`, and gives way below that; a column split (`is-column`)
+   lays the same tracks top to bottom. */
 .ui-split {
   display: grid;
   grid-template-columns:
@@ -7,6 +8,27 @@
     minmax(var(--ui-split-end-min, 0), 1fr);
   min-width: 0;
   min-height: 0;
+}
+
+/* An end-sized split (`is-end-sized`) holds the end pane's size in
+   `--ui-split-end`, the start pane taking the rest. */
+.ui-split.is-end-sized {
+  grid-template-columns:
+    minmax(0, 1fr) var(--wg-space-1)
+    minmax(0, calc(var(--ui-split-end) * 1px));
+}
+
+.ui-split.is-column {
+  grid-template-columns: 1fr;
+  grid-template-rows:
+    minmax(0, calc(var(--ui-split-start) * 1px)) var(--wg-space-1)
+    minmax(var(--ui-split-end-min, 0), 1fr);
+}
+
+.ui-split.is-column.is-end-sized {
+  grid-template-rows:
+    minmax(0, 1fr) var(--wg-space-1)
+    minmax(0, calc(var(--ui-split-end) * 1px));
 }
 
 .ui-split-start,
@@ -30,6 +52,19 @@
   width: 1px;
   background: var(--wg-border-default);
   transition: background-color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.ui-split.is-column > .ui-split-handle {
+  cursor: row-resize;
+}
+
+.ui-split.is-column > .ui-split-handle::after {
+  top: 50%;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 1px;
 }
 
 .ui-split-handle:hover::after,
@@ -70,40 +105,55 @@
   display: none;
 }
 
-/* At 640px and narrower, and in a split too narrow for its panes
-   (`is-stacked`), the panes stack. */
-.ui-split.is-stacked {
+.ui-split.is-end-hidden {
+  grid-template-columns: 1fr;
+}
+
+.ui-split.is-column.is-end-hidden {
+  grid-template-rows: 1fr;
+}
+
+.ui-split.is-end-hidden > .ui-split-end,
+.ui-split.is-end-hidden > .ui-split-handle {
+  display: none;
+}
+
+/* At 640px and narrower, and in a side-by-side split too narrow for its panes
+   (`is-stacked`), the panes stack; a column split stacks already. */
+.ui-split:not(.is-column).is-stacked {
   grid-template-columns: 1fr;
   grid-template-rows: fit-content(40%) 1fr;
 }
 
-.ui-split.is-stacked > .ui-split-handle {
+.ui-split:not(.is-column).is-stacked > .ui-split-handle {
   display: none;
 }
 
-.ui-split.is-stacked > .ui-split-start {
+.ui-split:not(.is-column).is-stacked > .ui-split-start {
   border-bottom: 1px solid var(--wg-border-default);
 }
 
-.ui-split.is-stacked.is-start-hidden {
+.ui-split:not(.is-column).is-stacked.is-start-hidden,
+.ui-split:not(.is-column).is-stacked.is-end-hidden {
   grid-template-rows: 1fr;
 }
 
 @media (max-width: 640px) {
-  .ui-split {
+  .ui-split:not(.is-column) {
     grid-template-columns: 1fr;
     grid-template-rows: fit-content(40%) 1fr;
   }
 
-  .ui-split > .ui-split-handle {
+  .ui-split:not(.is-column) > .ui-split-handle {
     display: none;
   }
 
-  .ui-split-start {
+  .ui-split:not(.is-column) > .ui-split-start {
     border-bottom: 1px solid var(--wg-border-default);
   }
 
-  .ui-split.is-start-hidden {
+  .ui-split:not(.is-column).is-start-hidden,
+  .ui-split:not(.is-column).is-end-hidden {
     grid-template-rows: 1fr;
   }
 }

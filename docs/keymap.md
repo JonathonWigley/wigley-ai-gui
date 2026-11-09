@@ -56,7 +56,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the bigger step. The
   views are the doc, its editor too while editing, the chat transcript, the session hub, an open
   agent-strip box's tool list, the form and its review, the primer card and its review, the Backlog
-  list and detail, the gallery and the key help; the docs tree takes both pairs and scrolls the doc
+  list and detail, the Practice problem pane and console, the gallery and the key help; the docs tree takes both pairs and scrolls the doc
   beside it.
   In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
@@ -82,8 +82,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   popup's selection instead, and Tab accepts it, ahead of every bind; Shift+Tab still moves to the previous box.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
   between a view's own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog list and
-  detail, the primer popup's tasks, items and card columns, and a Chat tab's transcript, box and
-  session hub), then, at the view's edge, to the neighbouring chat pane in Sessions mode, then, at main's edge, to
+  detail, the primer popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat
+  tab's transcript, box and session hub), then, at the view's edge, to the neighbouring chat pane in Sessions mode, then, at main's edge, to
   the shown mode's side bar on the left (the Sessions list, the docs tree, the Backlog homes, the Settings sections)
   and the right bar on the right (each part of it that has rows, Alt+j/k between them). From the side bar Alt+l, and
   from the right bar Alt+h, return to main's last pane. A hidden side bar or right bar is no stop: focus stops at the
@@ -99,7 +99,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
 - **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line
   where the pane has no rows): the doc, the Backlog detail, the form and its review, the primer card and its
-  review, the session hub (its section heads), the doc's right column, the gallery and the key help. The doc's right
+  review, the session hub (its section heads), the doc's right column, the Practice problem pane, the gallery and the
+  key help. The doc's right
   column also opens its cursor row on `Enter` or `l` and returns to the doc on `Esc`.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
   pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider

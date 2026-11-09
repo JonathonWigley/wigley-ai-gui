@@ -107,7 +107,10 @@ export function difficultyCounts(
   });
 }
 
-export function placeOf(state: PracticeState): PracticePlace {
+// The list's part of the place; the workspace keeps the pane and tabs.
+export function placeOf(
+  state: PracticeState,
+): Pick<PracticePlace, 'selectedSlug' | 'openSlug' | 'filter'> {
   return {
     selectedSlug: state.selectedSlug,
     openSlug: state.openSlug,

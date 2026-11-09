@@ -9,6 +9,18 @@ const LAYOUT_PARTS: Record<keyof PracticeLayout, true> = {
   problemRow: true,
   empty: true,
   noProblem: true,
+  problemPane: true,
+  editorPane: true,
+  consolePane: true,
+  descriptionTab: true,
+  submissionRow: true,
+  submissionCode: true,
+  notesTab: true,
+  solutionTab: true,
+  testcaseTab: true,
+  resultTab: true,
+  caseResult: true,
+  confirmBody: true,
 };
 
 // The Practice layout a user's `layout.js` module exports as its default. A

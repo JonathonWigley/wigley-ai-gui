@@ -238,7 +238,7 @@ does not consume.
 - [x] [Practice: tools, import and interviewer sessions](06-practice-tools-sessions.md) — after 02, 05
 
 ### Wave 4
-- [ ] [Practice page: mode, list and layout](07-practice-page-list.md) — after 06
+- [x] [Practice page: mode, list and layout](07-practice-page-list.md) — after 06
 
 ### Wave 5
 - [ ] [Practice page: problem workspace](08-practice-workspace.md) — after 07
@@ -266,9 +266,11 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 03 · 626a107b · diff read: ChatMount, ChatPageExports.mountChat, ChatTabs.mount, ChatViewDeps.ownerOf/onRowAdded, TabHost present; npm run typecheck clean; worker ran chat-view + chat-commands tests (208 passed) · concerns: mount before page ready() attaches at once if key present, untested; dispose logs 'chat view unmounted: <name>' (unspecified log line); lint blocked only by 05's in-progress practice files
 - 05 · e307542a · diff read: practiceManifest, contract types and PracticeChannel, judge/problem-store/progress/practice-runs exports, practiceMainPart present; typecheck clean; npm run lint clean over all practice (closes 04's deferred lint proof); worker ran src/plugins/practice tests 148 green incl. real clang · concerns: case time includes sanitizer crash report, slow symbolizing may read as TLE (ProcessRunner has no env option for ASAN_OPTIONS symbolize=0); UBSan null load exits 0, runtimeError only via stderr rule; files.watch creates <folder>/problems at start; no .exe so not Windows-ready (out of scope)
 - 06 · afe8e279 · diff read: INTERVIEWER/IMPORT_INSTRUCTIONS, both tool definitions, PracticeToolsDeps, startPracticeTools, HOST_ID_WAIT_MS, PracticeSessionsDeps/PracticeSessions/createPracticeSessions present, start.ts wires events, tools and channel; typecheck clean; worker ran practice tests 175 green and lint clean · concerns: PracticeToolsDeps.log unused; AGENTS.md ~322 lists only launch/resume/defaultProfile as chat exports practice uses (also profileOf, send, close); tests use a hand-fired Timers double, not fake timers; tests store row-0 where doc says row-1
+- 07 · bf1cce38 · diff read: practice-state exports, PracticeView/createPracticeView/setFocus/openProblemRow, PracticePlace/practicePlaceSlot/practiceOpenProblemRowCommand, layout.d.ts types, PracticeBaseScope/createPracticeKit present; keymap kp, list keys, page registration, layout register reviewed; typecheck clean; worker ran 18 files 224 tests and lint clean · concerns: practice-state.ts duplicates problem.ts's private DIFFICULTIES; layouts design.md lacks a practice adopter row (task 11); view.dispose disposes its draws though backlog's does not, untested; changed-reread test checks via practice.place
 ### Contract changes
 - driverSource include of solutionPath: a C string literal with \ and " escaped → the path written verbatim, driverSource throwing on a path holding " or a line break · why: clang reads an #include "…" path literally with no escape processing, so escaping breaks any backslash path · consumers: 05 · group 04
 - 05 main/problem-store.ts ProblemStoreDeps gains log: PluginLog (logs unparsable submission files and 'watch stopped: <reason>'); consumers: 06 builds nothing from it (only start.ts builds the store)
+- PracticeViewDeps.opened(problem) set the title-bar context and called mode.picked() → opened only sets the context; a separate picked() dep is called by Enter, a row click and focusMain · why: l and the restore-on-load open keep list focus, and picked() closes a narrow window's side-bar overlay, moving focus to main · consumers: 08, 09 · group 07
 ### Rulings
 - 04's `npm run lint` proof moves to 05: check-layers.mts fails a plugin folder with no manifest.ts (line 817), and 05 adds the manifest — typecheck and the five tests prove 04 — a layer break in the root modules surfaces one wave later · lead
 - activateExistingRow checks the owner before the no-row check, logging 'activateExistingRow for session <id> with an owner ignored' — the owner rule holds whether a row exists or not — only the log line differs if wrong · group 01 · group 01
@@ -297,5 +299,12 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 06: opened while hostIdOf waits hands the id straight to the waiting read · group 06
 - 06: read_practice_state prints failing case as Input/Expected/Output/Stdout/Stderr JSON lines, (empty) for no solution, None. for no attempt · group 06
 - 06: askInterviewer rejects '<slug> has no interviewer; ask again.' when a new attempt opened between reads · group 06
+- 07: PracticeAction loadFailed sets message, keeps isLoaded and rows; no layout surface shows message · group 07
+- 07: placeRestored keeps openSlug only when a loaded problem holds it · group 07
+- 07: an open overtaken by a later open is dropped (request counter) · group 07
+- 07: resize target null for list and main focus; 08 replaces main · group 07
+- 07: select and focus return the same state when nothing changes · group 07
+- 07: default problemRow builds icon and marks then passes them to kit.row as leading/trailing · group 07
+- 07: layout.css rules all scoped under [data-layout-owner='practice'] · group 07
 ### Review rounds
 ### Test gate

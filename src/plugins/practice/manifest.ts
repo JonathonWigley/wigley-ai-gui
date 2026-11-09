@@ -6,7 +6,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // names `chat` and `sessions` for the import and interviewer sessions; its page
 // names `chat` for the interviewer's chat view. `layout` names the layout
 // Practice draws with. `openProblemRow` is the click on a list row, naming its
-// problem, so it has no key.
+// problem, `showTab` the click on a tab and `openSubmissionRow` the click on a
+// Submissions row, so they have no key.
 export const practiceManifest = definePlugin({
   id: 'practice',
   label: 'Practice',
@@ -43,6 +44,56 @@ export const practiceManifest = definePlugin({
       runsIn: 'page',
       arg: 'string',
     },
+    run: {
+      label: 'run the examples and your cases',
+      group: 'judge',
+      runsIn: 'page',
+    },
+    submit: { label: 'submit the solution', group: 'judge', runsIn: 'page' },
+    nextTab: { label: 'next tab', group: 'tabs', runsIn: 'page' },
+    prevTab: { label: 'previous tab', group: 'tabs', runsIn: 'page' },
+    showTab: {
+      label: 'show this tab',
+      group: 'tabs',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    paneDown: { label: 'next row or line', group: 'pane', runsIn: 'page' },
+    paneUp: { label: 'previous row or line', group: 'pane', runsIn: 'page' },
+    paneTop: { label: 'top', group: 'pane', runsIn: 'page' },
+    paneBottom: { label: 'bottom', group: 'pane', runsIn: 'page' },
+    lineDown: { label: 'scroll a line down', group: 'pane', runsIn: 'page' },
+    lineUp: { label: 'scroll a line up', group: 'pane', runsIn: 'page' },
+    halfPageDown: {
+      label: 'scroll half a page down',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    halfPageUp: {
+      label: 'scroll half a page up',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    openSubmission: {
+      label: "show the submission's code",
+      group: 'pane',
+      runsIn: 'page',
+    },
+    openSubmissionRow: {
+      label: "show this submission's code",
+      group: 'pane',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    closeSubmission: {
+      label: 'back to the submissions',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    editBox: { label: 'edit the box', group: 'box', runsIn: 'page' },
+    leaveBox: { label: 'leave the box', group: 'box', runsIn: 'page' },
+    confirmYes: { label: 'open it', group: 'confirm', runsIn: 'page' },
+    confirmNo: { label: 'keep solving', group: 'confirm', runsIn: 'page' },
   },
   scopes: {
     list: 'In the practice list',
@@ -50,6 +101,7 @@ export const practiceManifest = definePlugin({
     editor: 'In the practice editor',
     console: 'In the practice console',
     box: 'In the practice filter box',
+    confirm: 'In a practice confirmation',
   },
   settings: {
     folder: '~/leetcode',
