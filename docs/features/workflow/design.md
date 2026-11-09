@@ -130,6 +130,7 @@ reports each step as it reaches it. The status line is the label, the status and
 | check | the agent reports `check` | Check, running or paused | `Check · running` | none | none |
 | land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
 | done | the agent reports `done`, which writes the run log line | Land, running while a turn or subagent runs, then done | `Land · done` | none | none |
+| answered | the agent reports `answered` for a session that only answered and built nothing, which writes the run log line | Answered, no status: a neutral tag with no check, off the trail, so every step reads pending | `Answered` | none | none |
 
 ## Medium's stages
 
@@ -249,7 +250,7 @@ session's agent can call them. A wigley skill calls the step tool at each step b
 leaves the flow in its last step.
 
 - `set_workflow_step`'s one required string `step` takes a `reportedAs` value of any registered workflow: Large's are
-  `explore`, `interview`, `plan`, `cold_read` and `fix`, Small's `build`, `check`, `land` and `done`, Medium's `build`,
+  `explore`, `interview`, `plan`, `cold_read` and `fix`, Small's `build`, `check`, `land`, `done` and `answered`, Medium's `build`,
   `review`, `fix`, `land` and `done`, Spike's `interview`, `build`, `check`, `land` and `done`. The flow's current workflow's stage rules answer the report, so a value outside that
   workflow's stages is ignored.
 - `set_workflow_checklist`'s one required `items` is an array of `{ text, done }`. Each call replaces the whole list,
@@ -307,7 +308,7 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
 - **Paused run** — a stage whose status reads paused, and which declares no `rowActivity` of its own, sets Needs you
   (`attention`, `urgent`) at rank 18, so a session that stopped mid-run says so even when the agent asked in chat
   rather than in a round. A stage that ends its run (Small's, Medium's and Spike's Done, Large's Closed) reads running while busy and done after, never paused, plan ready
-  reads ready and Large's idle has no status, so none of them sets it. The rank
+  reads ready and Large's idle and Small's answered have no status, so none of them sets it. The rank
   sits under chat's working, so a session waiting on its own background command or Monitor still reads Working, and
   under chat's error, so an unseen error shows first. It lasts until a turn or a subagent starts; viewing the session
   leaves it.

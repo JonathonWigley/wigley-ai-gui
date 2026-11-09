@@ -7,6 +7,8 @@ import {
   startsSkill,
 } from '../../workflow/contract';
 import { SMALL_WORKFLOW_ID } from '../contract';
+import { answeredMainStage } from './answered/main';
+import { answeredPageStage } from './answered/page';
 import { buildMainStage } from './build/main';
 import { buildPageStage } from './build/page';
 import { checkMainStage } from './check/main';
@@ -24,6 +26,7 @@ export const SMALL_MAIN_STAGES: readonly MainStage[] = [
   checkMainStage,
   landMainStage,
   doneMainStage,
+  answeredMainStage,
 ];
 
 export const SMALL_PAGE_STAGES: readonly PageStage[] = [
@@ -32,6 +35,7 @@ export const SMALL_PAGE_STAGES: readonly PageStage[] = [
   checkPageStage,
   landPageStage,
   donePageStage,
+  answeredPageStage,
 ];
 
 export const smallMainWorkflow: MainWorkflow = {

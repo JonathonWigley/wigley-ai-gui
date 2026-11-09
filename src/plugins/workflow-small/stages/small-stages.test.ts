@@ -80,6 +80,8 @@ describe('Small stages', () => {
       { from: 'check', signal: step('land'), stage: 'land' },
       { from: 'land', signal: step('done'), stage: 'done' },
       { from: 'scope', signal: step('done'), stage: 'done' },
+      { from: 'scope', signal: step('answered'), stage: 'answered' },
+      { from: 'answered', signal: skill('wigley:small'), stage: 'scope' },
       { from: 'check', signal: step('build'), stage: 'build' },
       { from: 'done', signal: skill('wigley:small'), stage: 'scope' },
       { from: 'build', signal: step('review'), stage: 'build' },
@@ -114,10 +116,11 @@ describe('Small stages', () => {
       'check',
       'land',
       'done',
+      'answered',
     ]);
     expect(
       SMALL_MAIN_STAGES.filter((s) => s.finishes === true).map((s) => s.id),
-    ).toEqual(['done']);
+    ).toEqual(['done', 'answered']);
   });
 
   it('smallPageStages_MatchMainHalves', () => {
@@ -129,7 +132,7 @@ describe('Small stages', () => {
 
   it('smallTrail_ReadsFourWords', () => {
     const bySlot = new Map(
-      SMALL_PAGE_STAGES.map((stage) => [
+      SMALL_PAGE_STAGES.filter((stage) => stage.inStepper).map((stage) => [
         stage.stepSlot ?? stage.id,
         stage.label,
       ]),
@@ -144,6 +147,8 @@ describe('Small stages', () => {
     { stage: 'land', turnRunning: false, status: 'paused' },
     { stage: 'done', turnRunning: true, status: 'running' },
     { stage: 'done', turnRunning: false, status: 'done' },
+    { stage: 'answered', turnRunning: true, status: null },
+    { stage: 'answered', turnRunning: false, status: null },
   ])(
     'smallStatus $stage turnRunning $turnRunning',
     ({ stage, turnRunning, status }) => {

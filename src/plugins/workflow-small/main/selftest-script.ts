@@ -14,7 +14,7 @@ const SMALL_SEND = '/wigley:small';
 
 const SENDS_AFTER_LAUNCH = [
   SMALL_SEND,
-  reportSend('done'),
+  reportSend('answered'),
   SMALL_SEND,
   reportSend('build'),
   CHECKLIST_SEND,
@@ -28,7 +28,7 @@ const { line, anchored } = levelLines(SELFTEST_PROJECT_NAME);
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'answer only',
-    why: 'A session that only answers goes from Scope straight to done, with the S badge and the trail, and the No workflow tag leaves on the claim.',
+    why: 'A session that only answers goes from Scope to Answered, a neutral end with no step of the trail done, with the S badge and the trail, and the No workflow tag leaves on the claim.',
     steps: [
       {
         width: 1200,
@@ -41,9 +41,9 @@ const GROUPS: SelfTestGroup[] = [
         screenshot: 'small-scope',
       },
       {
-        keys: sendKeys(reportSend('done')),
-        expect: line('shows done'),
-        screenshot: 'small-answer-done',
+        keys: sendKeys(reportSend('answered')),
+        expect: line('shows answered'),
+        screenshot: 'small-answered',
       },
     ],
   },
