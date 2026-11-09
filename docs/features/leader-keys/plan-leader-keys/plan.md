@@ -247,5 +247,7 @@ Review base: a42ed9f9
 - while recording, the Keybindings prompt replaces the hints — both do not fit at 900 px — visual only · group 07 fix · group 07
 ### Review rounds
 - Round 1 (a42ed9f9..56771239): 6 lanes, NEEDS FIXES — 6 Important, 26 Minor, 2 pre-existing; 9 applied in d7b8cd54; 12 determined dispatched; 13 open to triage. Report /tmp/claude-leader-keys/review-56771239.md
+- Round 2 re-review (16186640, 55772185, 18ee30d8, 32109dcc): correctness ×2, NEEDS FIXES — 1 Important (group lookup misses a non-<Leader> spelling, repeat of R1-9), 4 Minor. /tmp/claude-leader-keys/rr1-keys.md
 ### Test gate
 - vitest: page-keys, page-api, key-sequences (01 capture); src/plugins/keys (03); src/plugins/settings (04, 05); keymap.test (02 tree); key-hints, keymap-checks, plugin-manifests (05 unnamedGroupName, 03 manifest); src/shared/layouts (layout contracts of keys and settings); src/main/config and src/contracts (05 defaultGroups) · 40 files, 917 tests pass; lint clean; typecheck clean
+- Full selftest after round-2 fixes: the leader-keys unplaced 'a' is gone; K/J unplaced, 3 fits-width and forms/docs/sessions Codex-tab failures fail on base a42ed9f9 too; notes, workflow-heavy and docs failures in the full run pass filtered (flaky under load).
