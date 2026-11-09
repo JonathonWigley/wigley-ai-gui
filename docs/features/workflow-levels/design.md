@@ -61,8 +61,9 @@ stage rules, so two workflows may both have a `build` stage. Each plugin owns it
   missed call cannot leave the app out of step. Large never calls it: Large's skills are unchanged.
 - **Only the main agent** moves the stage and sets the checklist. A subagent's call of either tool succeeds and changes
   nothing, so delegated work never overwrites the session's own step.
-- **Large's checklist** reads the newest copy of the plan across the clone and its worktrees, and shows a task as
-  running while its task document reads `Status: in progress`.
+- **Large's checklist** reads the copy of the plan the run reported, through `plan.py` or `set_workflow_plan`, else
+  the moved copy across the clone and its worktrees (`docs/features/workflow/design.md` § Large's stages), and shows
+  a task as running while its task document reads `Status: in progress`.
 
 ## Where it draws
 

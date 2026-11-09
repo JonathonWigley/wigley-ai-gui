@@ -100,7 +100,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `keys-for.ts`: the keys that run a command, as help and hints read them,
                  `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
                  documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
-                 newest of them, both read by workflow-large and backlog)
+                 moved one among them (progress unlike the main tree's), both read by workflow-large and backlog)
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
@@ -367,7 +367,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the layout rule: the engine draws them with no layout, since no workflow owns such a flow or the flag; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
   workflow-large/ manifest.ts, contract.ts, large-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches every copy of a plan
-                 folder across a clone's worktrees and git's shared folder, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
+                 folder across a clone's worktrees and git's shared folder, follows the copy a run reports through
+                 `plan.py`'s `plan-runs/<row>.json` in the endpoint folder or its own `set_workflow_plan` tool, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
                  the countdown, the preview samples), layouts/ (the built-in `default` layout); Large's workflow: the
                  `wigley:feature` run, make, review, fix and close
   workflow-small/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test

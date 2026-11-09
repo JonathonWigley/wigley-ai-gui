@@ -94,9 +94,21 @@ plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or w
 a subagent's `set_workflow_step` or `set_workflow_checklist` call succeeds and changes nothing (§ Signals).
 
 A plan folder has a copy in each checkout of its repo: the same repo-relative folder in the main clone and in each git
-worktree of that clone. Large reads the **newest copy**: the one whose `plan.md` or task documents changed last. A
-`wigley:make` run in a worktree ticks the worktree's copy, often through a shell, so the plan the session named in the
-main clone still shows the run's progress. A plan outside a git clone (`~/wigley-features/`) has one copy.
+worktree of that clone. A `wigley:make` run in a worktree ticks the worktree's copy, often through a shell, so the app
+must learn which copy the run writes. The run reports it two ways, and the latest report wins:
+
+- **`plan.py`** — every progress write (`base`, `start`, `land`, `strike`, `log`) in a session the app started writes
+  `{"planDir": <absolute folder>, "at": <epoch ms>}` to `plan-runs/<row id>.json` in the app's endpoint folder, read
+  from `WIGLEY_AI_GUI_ENDPOINT_DIR` and `WIGLEY_SESSION_ROW`. A failed write warns and never fails the command, and
+  `close` writes nothing.
+- **`set_workflow_plan`** — the agent's tool, which `workflow-large` contributes. It takes `folder`, refuses one with no
+  `plan.md`, and a subagent's call changes nothing. `wigley:make` calls it once it knows the folder it works in.
+
+A reported folder is read alone. With no report, or once the reported folder holds no `plan.md`, Large reads the
+**moved copy**: a copy whose progress differs from the main tree's copy, the most recently modified of them when
+several differ, else the main tree's copy. A fresh worktree checks out the main tree's progress, so it never wins,
+however new its files' modified times are. A plan outside a git clone (`~/wigley-features/`) has one copy. The app
+deletes a row's report file when the row ends.
 
 ## Small's stages
 
@@ -194,9 +206,11 @@ its stage: Clear & make's own clear must not reset plan ready. `sessions.ended` 
 the session's flow.
 
 Large's plan rows come from `workflow-large`'s plan watch: it watches every copy of the flow's plan folder, reads the
-newest copy, and signals `planChanged` with the plan's progress (title, ticked, total, current wave, review rounds, the
+reported copy or else the moved copy, and signals `planChanged` with the plan's progress (title, ticked, total, current wave, review rounds, the
 task lines, each with the `Status:` line of its task document) and `planGone` when no copy is left. It lists the repo's
-worktrees again at each plan check and when git's worktree list changes, so a worktree made during the run joins. Make in new session and Dismiss signal `handedOff` and `dismissed`. All four ride `custom`.
+worktrees again at each plan check and when git's worktree list changes, so a worktree made during the run joins. A report from `plan.py` or `set_workflow_plan` signals `planReported` with the folder, which sets the flow's plan
+folder and marks it reported. Make in new session and Dismiss signal `handedOff` and `dismissed`. All five ride
+`custom`.
 
 **The claim.** A workflow claims the skills that start it: Small `wigley:small`, Medium `wigley:medium`, Large
 `wigley:feature`, `wigley:feature-primer` and `wigley:make`. `wigley:review` and every other skill claim nothing, so they
@@ -362,10 +376,14 @@ The layout preview opens on `<Leader>zlw`.
 - **Review rounds stay a count.** The Run log gives the number of logged rounds, so the status line names the round and
   the checklist draws no row per round.
 - **One plan reader, shared with Backlog.** `src/shared/plan-progress.ts` reads a plan's boxes, waves, Run log and task
-  statuses, and `src/shared/plan-copies.ts` finds a plan's copies and picks the newest, so Large and Backlog always show
-  the same count. The docs index's counts take every checkbox in the file and carry no waves or Run log.
-- **The newest copy, not the session's.** A run in a worktree ticks that worktree's copy, often through a shell that
-  sends no write event, so following the session's own path or its agents' write paths would miss it.
+  statuses, and `src/shared/plan-copies.ts` finds a plan's copies and picks the moved one, so Backlog and an unreported
+  Large run show the same copy. The docs index's counts take every checkbox in the file and carry no waves or Run log.
+- **A reported copy, not a guessed one.** A run in a worktree ticks that worktree's copy, often through a shell that
+  sends no write event, so following the session's own path or its agents' write paths would miss it. Picking the
+  copy with the newest modified time failed too: every new worktree checks the plan out with fresh times. `plan.py`
+  is the one writer of a run's progress, so its report rides on writes that already happen; the agent's tool covers a
+  resumed run before its first write. The moved-copy rule is the fallback for terminal sessions and for Backlog,
+  which has no session.
 - **Only the main agent reports.** A subagent's step or checklist describes its own task, not the session's, and the
   user asked for no per-agent surface: its call changes nothing.
 - **Only scroll events move the side list's kept scroll.** A draw writes the kept value and never reads the list. A
