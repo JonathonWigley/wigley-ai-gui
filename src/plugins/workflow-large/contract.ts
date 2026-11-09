@@ -20,7 +20,8 @@ export interface LargeState {
   // The plan folder (holding plan.md), full path.
   planDir: string | null;
   // True when the run reported `planDir` through `plan.py` or
-  // `set_workflow_plan`: the plan watch then reads that folder alone.
+  // `set_workflow_plan`: the plan watch then reads that folder alone while it
+  // holds a plan.md.
   planReported: boolean;
   // Null until the plan folder is read.
   progress: PlanProgress | null;

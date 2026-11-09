@@ -31,7 +31,7 @@ describe('createPlanReports', () => {
       logged: 1,
     },
     {
-      name: "plan.py's atomic-write temp file",
+      name: 'a name not ending in .json',
       file: 's1.json.tmp',
       text: '{"planDir": "/w/p/plan-a"}\n',
       reports: [],
