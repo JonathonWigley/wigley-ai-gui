@@ -17,6 +17,8 @@ Files:
 - create `src/shared/fake-system-stats.ts` · test `src/shared/fake-system-stats.test.ts`
 - modify `src/contracts/plugin.ts` · `src/main/main.ts` · `scripts/check-layers.mts` ·
   `src/shared/plugin-part-harness.test-support.ts`
+- modify `src/main/run-mode.ts` · test `src/main/run-mode.test.ts`; `scripts/drive-args.mts` · test
+  `scripts/drive-args.test.mts`; `scripts/drive.mts` — the drive's `--system-stats` flag
 
 Consumes:
 - `ProcessRunner`, `ProcessResult` in `src/contracts/processes.ts` (in the tree)
@@ -62,7 +64,7 @@ Decisions:
   | network | `/usr/sbin/netstat` | `-ibn` | yes |
   | disk | `/usr/sbin/ioreg` | `-r`, `-d`, `1`, `-w`, `0`, `-c`, `IOBlockStorageDriver` | yes |
 
-  `-d 1` on the disk read is deliberate: design.md's table names `-l`, which also prints the nested APFS
+  `-d 1` on the disk read is deliberate (design.md agrees): `-l` also prints the nested APFS
   containers' `Statistics` with the same `Bytes (Read)` keys and counts the same bytes twice. Measured on this Mac.
 - A required reading fails when its run rejects, times out (`timedOut: true`) or exits non-zero; then `sample()`
   rejects with an `Error` whose message names the program (`/bin/ps exited with code 1`,
@@ -101,15 +103,24 @@ Decisions:
   column is empty on some rows: `Ibytes` is the 5th token from the end, `Obytes` the 2nd. The sums are
   `receivedBytes` and `sentBytes`; no matching row → `0` and `0`.
 - `parseBlockStorage`: the sums of every `"Bytes (Read)"=N` and every `"Bytes (Write)"=N` in the output. Output with
-  no `"Statistics"` throws an `Error` naming `ioreg`.
+  no `IOBlockStorageDriver` block at all (empty stdout: a VM, a Mac with no block driver) reads `{ readBytes: 0,
+  writtenBytes: 0 }`, so a missing disk counter never fails the whole sample; a block with no `"Statistics"` line
+  throws an `Error` naming `ioreg`.
 - Linux (an OS with no adapter yet): main.ts hands `createUnavailableSystemStats(platform.os)`, whose `sample()`
   rejects with `new Error('System stats are not available on <os>')` (`System stats are not available on linux`).
   The plugin (05) shows a rejection's message in its panel; this task adds nothing for that.
 - Wiring in main.ts. `ModeServices.forWindow`'s `Pick<MainServices, …>` gains `'systemStats'`, built lazily there
   because `modeServicesOf` runs before `platform` and `processes` are defined:
   - `liveServices().forWindow` returns `systemStats: systemStatsFor(platform.os, processes)`;
-  - `offscreenRunServices(...).forWindow` returns `systemStats: createFakeSystemStats()`, so the self-test and every
-    drive run (fake or Claude harness) read the fake.
+  - `offscreenRunServices(...).forWindow` returns `systemStats: createFakeSystemStats()` for the self-test and for a
+    drive run by default (fake or Claude harness), and `systemStatsFor(platform.os, processes)` for a drive run
+    started with `--system-stats live`. The flag follows `--harness` end to end: `drive-args.mts` accepts
+    `start [--system-stats fake|live]` (`fake` when absent; any other value is the usage error `--harness` gives);
+    `drive.mts` passes it as `WIGLEY_DRIVE_SYSTEM_STATS` and keeps it in the run's start file, so `restart` keeps
+    it; `run-mode.ts` reads it into the drive mode beside the harness and throws on an unknown value, naming it.
+    Tests: a row in `drive-args.test.mts` beside the `--harness` rows, and a row in `run-mode.test.ts` beside the
+    `WIGLEY_DRIVE_HARNESS` ones (`live` read; `real` throws naming `WIGLEY_DRIVE_SYSTEM_STATS`). Task 08's live
+    checks need it: the fake's pids never hold a real Chat session's process.
   - A new function `systemStatsFor(osName: OsName, runner: ProcessRunner): SystemStats` sits beside `alertsFor`:
     `'macos'` → `createMacSystemStats(runner, os.cpus)`; any other OS → `createUnavailableSystemStats(osName)`. Task 02
     adds the `'windows'` branch.
@@ -217,6 +228,7 @@ Tests: fixtures are text in the test file, taken from this Mac (M2 Max, macOS 26
   |---|---|
   | two `+-o IOBlockStorageDriver …` blocks with `"Statistics" = {"Operations (Write)"=138447617,"Bytes (Read)"=109060200710144,"Bytes (Write)"=7874327449600,"Operations (Read)"=23440236787}` and `"Statistics" = {"Bytes (Read)"=371620864,"Bytes (Write)"=0}` | `{ readBytes: 109060572331008, writtenBytes: 7874327449600 }` |
   | `+-o IOBlockStorageDriver …` with no `Statistics` line | throws, message matches `/ioreg/` |
+  | empty stdout | `{ readBytes: 0, writtenBytes: 0 }` |
 
 `src/main/system-stats/cpu-totals.test.ts`:
 - `cpuTotals_SumsBusyAndIdleOverCores` — two cores `{ user: 1000, nice: 20, sys: 300, idle: 5000, irq: 7 }` and

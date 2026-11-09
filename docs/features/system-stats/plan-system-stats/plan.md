@@ -43,7 +43,8 @@ Committed on `system-stats` in one commit (sha in the docs-ahead commit, `git lo
 - `docs/features/system-stats/design.md` — the whole design; every task reads it.
 - `AGENTS.md` — plugin entry, `src/main/system-stats/` layer line, `systemStats` ambient service, self-test script list.
 - `DESIGN.md` — the Sparkline primitive and the System stats panel section.
-- `docs/keymap.md`, `docs/features/session-host/design.md`, `docs/features/layouts/design.md` (and `docs/features/agent-chat/design.md` where it covers session fields) — the binds, the pid in the protocol, the layout owner.
+- `docs/keymap.md`, `docs/features/session-host/design.md`, `docs/features/layouts/design.md` — the binds, the pid in the protocol, the layout owner.
+- `.agents/skills/drive/SKILL.md` — `start --system-stats live` (`368e02c0`, with the RAM tone lines in design.md and DESIGN.md and AGENTS.md's kit list; `ea65e439` holds the measured commands in design.md).
 
 ## Mandatory Reads
 
@@ -176,7 +177,9 @@ export type StatsFixtureVariant = 'busy' | 'error'; // the drive and self-test s
 
 - `src/contracts/plugin.ts` — `MainServices.systemStats` (01)
 - `src/main/main.ts` — picks the SystemStats adapter by OS (01 mac + fallback, 02 windows)
-- `src/main/main.ts` `ModeServices.forWindow` — `systemStats` built lazily per mode: the OS adapter live, the fake under self-test and every drive run (01)
+- `src/main/main.ts` `ModeServices.forWindow` — `systemStats` built lazily per mode: the OS adapter live and under `drive start --system-stats live`, the fake under self-test and other drive runs (01)
+- `src/main/run-mode.ts`, `scripts/drive-args.mts`, `scripts/drive.mts` — the drive's `--system-stats fake|live` flag, kept by `restart` (01)
+- `src/session-host/host-children.test.ts` — follows `fakeChild`'s new pid (03)
 - `src/shared/fake-system-stats.ts` — `FAKE_SESSION_PID` replaced by an import of `FAKE_AGENT_PID` (05)
 - `src/main/processes/node-processes.ts` — `windowsHide: true`, so a PowerShell sample flashes no console (02)
 - `src/shared/plugin-part-harness.test-support.ts` — `systemStats: notFaked(...)` (01)

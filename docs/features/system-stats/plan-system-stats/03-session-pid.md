@@ -14,6 +14,8 @@ Files:
 - modify `src/session-host/process-table.ts` — `ProcessSubscriber.spawned`, the pid in `subscribe`
 - modify `src/session-host/host-server.ts` — push `spawned` to the spawner, `pid` in the `subscribe` reply
 - modify `src/session-host/session-host-test-doubles.ts` — `fakeChild` pid, `recordingSubscriber` records `spawned`
+- modify `src/session-host/host-children.test.ts` — its `[1, REPORT]` keys and `pid: 1` record follow `fakeChild`'s
+  new pid (4321)
 - modify `src/main/session-host/host-link.ts` — route `spawned` to `pushed`
 - modify `src/main/session-host/session-host-client.ts` — hold the pid per process entry
 - modify `src/shared/fake-session-host.ts` — `spawned(id, pid)`, `addRunning` pid, `HostedProcess.pid`
@@ -84,25 +86,31 @@ Decisions:
 - **Client pid per entry.** `ProcessEntry` in `session-host-client.ts` gains `pid: number | null` (null at creation).
   A pushed `spawned` sets `entry.pid` and calls the live subscriber's `events.spawned(pid)`, through the same
   `pushed` → buffer → `deliver` path as a `line` (the `buffer` union gains `SpawnedEvent`). `attachOver` sets
-  `entry.pid = reply.pid` when the reply is `running` with a log. `endEntry` and `hostDied` set `entry.pid = null`.
+  `entry.pid = reply.pid` when the reply is `running` with a log. `deliver` always sets `entry.pid` on `spawned`,
+  and calls the subscriber's `spawned` only when `spawn` made that subscriber (a `fromSpawn` flag): a same-id
+  `attach` replaces the subscriber, and its events never hear `spawned`. `endEntry` and `hostDied` set `entry.pid = null`.
   `hostedProcess(entry, subscriber)` returns an object with `get pid() { return entry.ended ? null : entry.pid; }`.
   The refused-duplicate object `spawn` returns has `pid` null (its entry is ended).
 - **Fake session host.** `spawn` and `addRunning` records start with `pid` null (or `addRunning`'s `pid`).
   `spawned(id, pid)` sets the last open record's `pid` and calls its `events?.spawned(pid)` at once, as `output` does;
   it throws for an unknown or closed id, as `output` does. Its `HostedProcess.pid` reads `record.closed === null ?
   record.pid : null`. `spawn` calls `spawned` on nothing by itself, so harness tests that do not call it see no pid.
+  The record keeps the events `spawn` was given (`spawnEvents`); `spawned` calls them only while `record.events ===
+  spawnEvents`, so after an `attach` replaced them it only sets the pid. Update the file's header comment, which
+  lists what calls a record's events at once, to name `spawned`.
 - **Agent contract member.** `AgentProcessEvents.pid(pid: number)` beside `activity`, with this comment: the OS pid of
   the session's agent process, once the harness knows it — after `start` once the process runs, and during an
   `attach` before its promise resolves; at most once per process object; a harness with no OS process of its own never
   calls it; the process's pid ends with `ended`. A non-null event was picked over `pid(number | null)`: `ended`
   already marks the end, so null would be a second signal for one fact.
-- **Claude adapter, start.** `withSpawnHint` passes `spawned` through. `createPipeForwarder` queues a `spawned` that
-  arrives before `goLive` (keep the latest pid) and delivers it in `goLive` before the queued lines; after `goLive` it
-  forwards at once. `createClaudeSession`'s `pipeEvents` gains `spawned(pid)`: when not detached and not closed,
+- **Claude adapter, start.** `withSpawnHint` passes `spawned` through. `createPipeForwarder` forwards `spawned` when live and drops it
+  before `goLive`, with a one-line comment that it cannot arrive earlier: `goLive` runs synchronously after
+  `host.spawn`, and the host's `spawned` comes on a later socket read. `createClaudeSession`'s `pipeEvents` gains `spawned(pid)`: when not detached and not closed,
   `emit(() => events.pid(pid))` — through the microtask queue, as every other emission.
 - **Claude adapter, attach.** In `attachClaudeProcess`, after the loop that calls `reportEffect` for the replay
   effects and before `forwarder.goLive`, call `events.pid(attached.process.pid)` directly when it is not null. A
-  process that closed during the attach then still fires `pid` before its `ended`.
+  process whose `closed` was already delivered reads null and fires no `pid`; either way the `ended` that follows
+  clears chat's pid.
 - **Fake agent harness.** `startProcess` emits `events.pid(FAKE_AGENT_PID)` in the opening microtask of a started
   (not attached) process, right after `sessionStarted` and before `controls`. An attached fake process emits no pid of
   its own: a test's `replay` calls `events.pid(...)` when it needs one, as it stands for every other start emission.
@@ -139,7 +147,8 @@ Tests:
   - rows added to existing assertions: `keepWindow_Ending_ListsNotRunningAndRefusesAnAttach` expects
     `{ running: false, log: null, pid: null }`; `appendFailure_OneProcess_DeliversItsLinesAndRefusesItsAttach` expects
     `{ running: true, log: null, pid: 4321 }` and `{ running: true, log: logFile('healthy.jsonl'), pid: 4321 }`.
-- `host-server.test.ts`: new `spawned_GoesToTheSpawnerOnly_AndTheSubscribeReplyCarriesThePid` — connection `first`
+- `host-server.test.ts`: the two rows of `subscribe_Cases_RepliesThenPushesLines` gain the `pid` key (`known`:
+  4321, `unknown`: null). New `spawned_GoesToTheSpawnerOnly_AndTheSubscribeReplyCarriesThePid` — connection `first`
   spawns `a`; connection `second` exists; `first` receives `{ type: 'spawned', id: 'a', pid: 4321 }`; after
   `settled(second)`, `second` received no `spawned`; `second`'s `subscribe` reply for `a` equals
   `{ type: 'subscribe', requestId, id: 'a', running: true, log: <a.jsonl path>, pid: 4321 }`; its reply for `nope`

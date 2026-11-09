@@ -130,19 +130,31 @@ Decisions:
   the ring), contributed with `{ order: PANEL_ORDER, focus: focusPanel, left: leavePanel }` while shown, and
   disposed on hide, as unity-pool's `hidePanel`. A hide while the panel holds the keys hands them back to main
   through that dispose.
-- **Hidden flag:** `services.uiState` key `hidden`: `true` while hidden, `undefined` while shown. Shown when absent.
+- **Hidden flag:** `services.uiState` key `hidden`: `true` while hidden, `false` or `undefined` while shown. Absent
+  means shown, except under `services.runMode === 'selfTest'`, where absent means hidden: a default-shown,
+  focusable right-bar panel would change every other plugin's self-test (docs' `<A-l>` step at
+  `src/plugins/docs/main/selftest-script.ts:345-348` expects `[page] no pane right`, and the screenshots and
+  `checksFit` runs lose the right bar's width). So under self-test a show stores `false`, a hide `true`; live and
+  drive runs store `undefined` on show, as written above.
 - **setShown:** at start the page invokes `setShown(!hidden)`, and each toggle invokes it with the new state. A
-  rejection logs `setShown failed: <errorText>`. `dispose` invokes nothing.
+  rejection logs `setShown failed: <errorText>`. `dispose` invokes nothing: an old page's `false` could land after a
+  new page's `true`. The accepted cost: a page part stopped with no new page starting (a plugin stop, a renderer
+  crash) leaves main sampling until the next report. The slot read before main's first write is `undefined`; the
+  page reads `snapshot ?? null`.
 - **View state** is private to the page and resets on each page load: `sort` starts at `cpu`; `openIds` empty;
-  `cursorId` null; `hasKeys` false.
+  `cursorId` null; `lastIndex` 0 (the cursor's index at the last draw that showed it); `hasKeys` false. A hide sets
+  `hasKeys` false and keeps `sort`, `openIds`, `cursorId` and `lastIndex` for the page's life.
 - **Sort** (`visibleRows`): descending by the column (`cpuPercent`, `rssBytes`, `gpuPercent`); a null GPU sorts after
   every number; ties by `name` ascending (code-unit order), then by `id`. `nextSort`: `cpu` → `ram` → `gpu` → `cpu`.
 - **Cut:** the first `max(1, processRows)` top-level rows after the sort; each open group among them is followed by its
   children, sorted by the same column, at `depth` 1. `moreRows` = top-level count − shown top-level count. An id in
   `openIds` that the snapshot no longer holds is dropped at the next draw.
-- **Cursor:** kept as a row id across redraws. When that id is not visible after a draw, the cursor takes the row at
-  its last index, clamped to the list; with no rows it is null. `focusPanel` keeps a visible cursor id, else takes
-  the first row. `movedCursor` clamps at both ends.
+- **Cursor:** kept as a row id across redraws; `panelInput` gets `cursorId` only while `hasKeys` (else null), as
+  unity-pool passes `hasKeys ? cursor : null`, so the ring shows only while the panel holds the keys. When the id
+  is not visible after a draw: a child row whose group is still visible moves the cursor to that group; otherwise
+  the cursor takes the row at `lastIndex`, clamped to the list; with no rows it is null. While `hasKeys`, a draw with
+  `cursorId` null and rows present puts the cursor on the first row and logs `cursor on <name>`. `focusPanel` keeps
+  a visible cursor id, else takes the first row. `movedCursor` treats an index of -1 as 0 and clamps at both ends.
 - **Open and close:** `openGroup` on a closed group adds its id to `openIds`; on an open group it logs
   `already open: <name>`; on a process row it logs `no group: <name>`. `closeGroup` goes through `closeTarget`: the
   cursor's own open group, else the group of the child row the cursor is on (the cursor then moves to that group);
@@ -157,7 +169,7 @@ Decisions:
   needs an anchor: a box hint at the end of the column heading row, `kit.keyHint(header, 'cycleSort', { label: 'sort' })`.
   It shows only while `system-stats.panel` holds the keys, keeping its space.
 - **Formats** (`stats-view-model.ts`): `formatPercent` one decimal then `%` (`22.5%`, `0.0%`); `formatBytes` below
-  1 GiB (2^30) a whole number of MiB (bytes / 2^20) then ` MB`, else GiB with one decimal then ` GB` (`700 MB`,
+  1 GiB (2^30) `Math.round(bytes / 2^20)` MiB then ` MB` (so 1023.96 MiB prints `1024 MB`), else GiB with one decimal then ` GB` (`700 MB`,
   `1.8 GB`); `formatGpu` null → `—` (U+2014), else `formatPercent`. Meter `value` is the snapshot's `label`;
   RAM's `note` is the snapshot's `memoryNote`, null when that is empty.
 - **Copy (pinned):**
@@ -173,7 +185,9 @@ Decisions:
   the Sparkline; RAM's note sits under its row in `text-12` `fg-tertiary`. Process rows are `kit.row` with
   `density: 'tree'`, `depth` from the input, a `chevron-right` or `chevron-down` icon as `leading` on a group, and the
   three number cells as `trailing`, each `var(--wg-system-stats-column-width)` wide, right-aligned, tabular. Names
-  ellipsize on one line. The column heading row uses the same grid as the rows.
+  ellipsize on one line. The column heading row is the layout's own element: a leading spacer the chevron's width,
+  the `Process` heading taking the rest, then a trailing box of three cells each
+  `var(--wg-system-stats-column-width)` wide, so its columns line up with the rows'.
 - **Page log lines** (the self-test reads them; each prefixed `[system-stats] ` by `services.log`):
   - `panel shown: <names>` at start while shown and at each show; `<names>` is the top-level visible names joined by
     `, `, or `reading` with no snapshot, or `no processes`
@@ -196,8 +210,9 @@ Self-test groups (lines from the `busy` fixture; each `expect` is prefixed `[sys
 
 | group (why) | keys | expect | also / screenshot |
 |---|---|---|---|
-| `toggle` (Space v y hides the panel and shows it again with the seeded rows by CPU, fitting the window) | `' ', 'v', 'y'` | `panel hidden` | screenshot `hidden` |
-| | `' ', 'v', 'y'` | `panel shown: Google Chrome, WindowServer, claude · fix login, Finder` | screenshot `panel`, `checksFit: true` |
+| `toggle` (the self-test starts hidden; Space v y shows the panel with the seeded rows by CPU, fitting the window, hides it, and shows it again) | `' ', 'v', 'y'` | `panel shown: Google Chrome, WindowServer, claude · fix login, Finder` | screenshot `panel`, `checksFit: true` |
+| | `' ', 'v', 'y'` | `panel hidden` | screenshot `hidden` |
+| | `' ', 'v', 'y'` | `panel shown: Google Chrome, WindowServer, claude · fix login, Finder` | |
 | `cursor` (Alt+l gives the panel the keys with the cursor on the first row; j, G, gg and k move it and stop at the ends) | `'<A-l>', '<A-l>'` | `panel focused` | alsoExpect `/^\[system-stats\] cursor on Google Chrome$/`, screenshot `panel-cursor` |
 | | `'j'` | `cursor on WindowServer` | |
 | | `'G'` | `cursor on Finder` | |
@@ -214,8 +229,10 @@ Self-test groups (lines from the `busy` fixture; each `expect` is prefixed `[sys
 | | `'G'` | `cursor on Finder` | |
 | | `'l'` | `no group: Finder` | |
 | | `'<A-h>'` | `[page] focus back in main` (whole) | |
+| `hide-last` (the panel ends hidden, so later scripts see the right bar as they did) | `' ', 'v', 'y'` | `panel hidden` | |
 
-GIVEN no `hidden` key in uiState WHEN the page starts THEN it invokes `setShown(true)` and logs `panel shown: …`
+GIVEN no `hidden` key in uiState in a live or drive run WHEN the page starts THEN it invokes `setShown(true)` and
+  logs `panel shown: …`; in a self-test run it invokes `setShown(false)`
 GIVEN the panel shown WHEN `togglePanel` runs THEN uiState `hidden` is `true`, it invokes `setShown(false)`, and the
   contribution is disposed
 GIVEN the cursor on a child row WHEN `closeGroup` runs THEN the group closes and the cursor sits on the group
@@ -227,15 +244,28 @@ Tests:
   - `visibleRows_SortCutAndOpen` — rows: CPU sort, `processRows` 3 of 5 (names in order, `moreRows` 2); RAM sort;
     GPU sort with one null last; a CPU tie ordered by name; an open group in the cut (its children at depth 1, sorted
     by the column); an open group cut off (no children shown); `processRows` 0 (shows 1).
+  - `panelInput_MapsSnapshotToRows` — rows: null snapshot → `reading` true with the five meters empty; an error
+    snapshot with no rows → `error` set, no rows; empty `memoryNote` → RAM `note` null; a cut list → `moreRows`;
+    an open group with the cursor on its child → `isOpen`, the child at `depth` 1 with `isCursor`; meters in the
+    order CPU, GPU, RAM, Network, Disk with each `label` as `value`.
   - `movedCursor_ClampsAtEnds` — (2, 5, down) → 3; (4, 5, down) → 4; (0, 5, up) → 0; (3, 5, top) → 0;
     (1, 5, bottom) → 4.
   - `closeTarget_OwnGroupOrParent` — cursor on an open group → that group; on its child → the parent; on a closed
     group → null; on a lone process → null.
   - `formats_Cells` — `formatPercent` 22.5 → `22.5%`, 0.04 → `0.0%`; `formatBytes` 1_072_693_248 (1023 MiB) →
-    `1023 MB`, 1_073_741_824 → `1.0 GB`, 2_726_297_600 → `2.5 GB`; `formatGpu` null → `—`, 31 → `31.0%`.
+    `1023 MB`, 1_073_700_000 → `1024 MB`, 1_073_741_824 → `1.0 GB`, 2_726_297_600 → `2.5 GB`; `formatGpu` null → `—`, 31 → `31.0%`.
 - `start.test.ts` (`startPagePart` with an `invoke` recorder and a replaced `uiState`)
-  - `start_ReportsShownState` — rows: uiState empty → `setShown(true)` and `panel shown: reading`; uiState
-    `hidden: true` → `setShown(false)` and no `panel shown` line.
+  - `start_ReportsShownState` — rows: live, uiState empty → `setShown(true)` and `panel shown: reading`; live,
+    `hidden: true` → `setShown(false)` and no `panel shown` line; selfTest, uiState empty → `setShown(false)`;
+    selfTest, `hidden: false` → `setShown(true)`.
+  - `snapshotChange_LogsErrorOnce` — error text set, the same text again, then null: `error: <text>` once, then
+    `error cleared`.
+  - `hiddenPanel_DrawsNothingOnSnapshot` — hidden, the slot changes: the layout's draw is not called and no line
+    is logged; on show, `panel shown: <names>` from the current slot.
+  - `cursorFallback_RowsChangeUnderTheCursor` — with the capture-layout pattern of unity-pool's page test: rows
+    (a) cursor on a child, its group closes from a new snapshot → cursor on the group; (b) cursor row gone, others
+    remain → the row at `lastIndex`, clamped; (c) focused on an empty panel, then a snapshot with rows → cursor on
+    the first row and `cursor on <name>` logged.
   - `togglePanel_FlipsHiddenAndReports` — two runs: uiState `hidden` goes `true` then `undefined`; invokes
     `setShown(false)` then `setShown(true)`.
   - `stop_LeavesNoLiveRegistration`, as unity-pool's page test.

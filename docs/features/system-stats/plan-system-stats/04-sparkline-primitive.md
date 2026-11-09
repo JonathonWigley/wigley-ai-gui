@@ -38,7 +38,8 @@ Decisions:
   → `polyline` (`class="ui-sparkline-line"`, `points` from `sparklineShape`). The root is a `span`, so the builder
   returns an `HTMLElement` as `BaseKit` declares and `appended` accepts. SVG parts take their class through
   `setAttribute('class', …)`, since an SVG element's `className` is read-only.
-- `sparklineShape`: each value is clamped to 0–100. Point `i` is `x = i`, `y = 100 − value`, written `x,y` and joined
+- `sparklineShape`: each value is clamped to 0–100, and a non-finite value (`NaN`) counts as 0, so one bad number
+  never blanks the line (an invalid `points` attribute drops the whole polyline). Point `i` is `x = i`, `y = 100 − value`, written `x,y` and joined
   by one space, numbers as JavaScript prints them (no rounding). `viewBox` is `0 0 <max(n − 1, 1)> 100`. One value
   draws a flat line: `0,y 1,y`. No values give `points` `''` (the polyline draws nothing, the space stays).
 - The line spans the full width for any count, so a history still filling up stretches; the caller decides how
@@ -51,7 +52,8 @@ Decisions:
   - `.ui-sparkline[data-tone='normal'] .ui-sparkline-line` `stroke: var(--wg-status-success)`; `'warning'` →
     `var(--wg-status-warning)`; `'critical'` → `var(--wg-status-error)` — the Meter's fill colours.
 - Gallery: a `section('Sparkline', sparklineCells)` right after `section('Meter', meterCells)` in `sectionSpecs`.
-  `sparklineCells()` returns one row of four cells, the Meter's three tones plus the empty state:
+  `sparklineCells()` returns one row of four wide cells (`cell(sparkline(values, tone), caption, true)`: the line
+  fills its parent, and only a wide cell gives it a real width), the Meter's three tones plus the empty state:
   | caption | values | tone |
   |---|---|---|
   | `Normal` | `[12, 18, 15, 30, 26, 22, 35, 28, 31, 24]` | `normal` |
@@ -71,6 +73,7 @@ Tests:
   | `[40]` | `0 0 1 100` | `0,60 1,60` |
   | `[10, 55, 100]` | `0 0 2 100` | `0,90 1,45 2,0` |
   | `[-5, 120, 37.5, 64]` | `0 0 3 100` | `0,100 1,0 2,62.5 3,36` |
+  | `[NaN, 50]` | `0 0 1 100` | `0,100 1,50` |
 - `src/shared/page/layout-host/base-kit.test.ts`, `sparkline_AppendsALineInItsTone` — beside
   `meter_AppendsAMeterFilledToItsPercentInItsTone`: `kit.sparkline(parent, [10, 55, 100], 'critical')`; `parent`'s
   children are `[node]`, `node.className` is `ui-sparkline`, `node.dataset.tone` is `critical`, its `aria-hidden` is
