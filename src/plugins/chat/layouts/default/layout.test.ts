@@ -1643,6 +1643,26 @@ describe('default chat layout surfaces', () => {
     expect(branchName.textContent).toBe('feature');
   });
 
+  it('sessionFacts_Default_UnchangedUpdateKeepsEveryChild', () => {
+    const { kit } = fakeSurfaceKit();
+    const facts: SessionFactsInput = {
+      repo: 'app',
+      branch: 'main',
+      folder: '~/dev/app',
+      worktrees: ['app-fix'],
+      harness: 'claude',
+      modelEffort: null,
+    };
+    const view = drawSurface('sessionFacts', facts, kit);
+    const before = [...asFake(view.element).children];
+
+    view.update?.({ ...facts, worktrees: ['app-fix'] });
+
+    expect(
+      asFake(view.element).children.map((child, i) => child === before[i]),
+    ).toEqual([true, true, true]);
+  });
+
   it('imageViewer_Default_UpdateMovesCounterAndHidesItForOneAndTheRemoveHintWhenNotRemovable', () => {
     const { kit } = fakeSurfaceKit();
     const view = drawSurface(

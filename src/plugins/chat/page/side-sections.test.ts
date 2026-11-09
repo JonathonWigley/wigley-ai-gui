@@ -277,6 +277,20 @@ describe('createSideSections', () => {
     },
   );
 
+  it('sessionPart_DefaultLayout_FramesItHeadlessWithItsBody', () => {
+    const { parts, openTab } = setUp();
+    parts.add(recordingPart('chat.session', 0).part);
+
+    const { root } = openTab();
+
+    const [wrapper] = findAll(root, 'chat-side-part');
+    expect({
+      headed: findAll(wrapper, 'chat-side-section-head').length,
+      header: findAll(wrapper, 'chat-side-header').length,
+      content: wrapper.textContent,
+    }).toEqual({ headed: 0, header: 1, content: 'content chat.session' });
+  });
+
   it("setSummary changes that tab's frame only, and null empties it", () => {
     const { parts, openTab } = setUp();
     const part = recordingPart('part');
@@ -655,6 +669,28 @@ describe('the section cursor', () => {
 
       expect(act(side.cursor)).toBe(title);
       expect(markedParts(root)).toEqual([marked]);
+    },
+  );
+
+  it.each<{ case: string; given: Step[]; act: Step }>([
+    { case: 'enter', given: [], act: enter },
+    { case: 'move(-1) from the first titled', given: [enter], act: up },
+    { case: "toEdge('first')", given: [enter, last], act: first },
+  ])(
+    'sectionCursor_SessionHeader_CursorPassesOverIt: $case',
+    ({ given, act }) => {
+      const { parts, openTab } = setUp();
+      parts.add(recordingPart('chat.session', 0).part);
+      parts.add(recordingPart('a', 10).part);
+      parts.add(recordingPart('b', 20).part);
+      const { root, side } = openTab();
+      showHeads(root, ['a', 'b']);
+      for (const step of given) {
+        step(side.cursor);
+      }
+
+      expect(act(side.cursor)).toBe('Title a');
+      expect(markedParts(root)).toEqual(['a']);
     },
   );
 

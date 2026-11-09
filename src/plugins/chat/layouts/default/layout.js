@@ -564,6 +564,23 @@ function fillSessionHeader(header, input, kit) {
   header.append(title, folder, tags);
 }
 
+/**
+ * @param {import('../layout').SessionFactsInput} a
+ * @param {import('../layout').SessionFactsInput} b
+ */
+function sameSessionFacts(a, b) {
+  const sameFields =
+    a.repo === b.repo &&
+    a.branch === b.branch &&
+    a.folder === b.folder &&
+    a.harness === b.harness &&
+    a.modelEffort === b.modelEffort;
+  const sameWorktrees =
+    a.worktrees.length === b.worktrees.length &&
+    a.worktrees.every((worktree, index) => worktree === b.worktrees[index]);
+  return sameFields && sameWorktrees;
+}
+
 const WAITING_TEXT = 'Waiting for the sign-in link…';
 
 /** @param {string | null} link */
@@ -876,14 +893,20 @@ const layout = {
     };
   },
   // The session hub's header: the repo with its branch, the folder, then a tag
-  // per worktree, the harness and the model · effort.
+  // per worktree, the harness and the model · effort. An update that changes
+  // nothing draws nothing, keeping an open tooltip and a selection.
   sessionFacts(parent, input, kit) {
     const header = el('div', 'chat-session-header');
     parent.append(header);
     fillSessionHeader(header, input, kit);
+    let shown = input;
     return {
       element: header,
       update(next) {
+        if (sameSessionFacts(shown, next)) {
+          return;
+        }
+        shown = next;
         fillSessionHeader(header, next, kit);
       },
     };

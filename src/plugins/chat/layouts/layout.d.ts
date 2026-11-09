@@ -632,8 +632,8 @@ export interface ChatLayout {
     input: SideSectionInput,
     kit: SideSectionKit,
   ): PartView<SideSectionInput>;
-  // The session hub's Session facts, the body of the hub's first part. The app sends the input again after each status line draw; a part with
-  // no `update` draws again.
+  // The session hub's Session facts, the body of the hub's first part. The app sends the input again after each
+  // status line draw; a part with no `update` draws again.
   sessionFacts?(
     parent: HTMLElement,
     input: SessionFactsInput,

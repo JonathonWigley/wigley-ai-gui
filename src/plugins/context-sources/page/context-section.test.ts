@@ -142,17 +142,46 @@ describe('createContextSection', () => {
     expect([before, after]).toEqual([false, true]);
   });
 
-  it('defaultLayout_SevenSources_ListsFiveUntilTheMoreLineShowsAll', () => {
-    const seven: ContextBreakdownAgentEvent = {
+  it.each<{
+    case: string;
+    count: number;
+    expected: { rows: number; more: string | undefined }[];
+  }>([
+    {
+      case: 'Five_AllListedAndNoMoreLine',
+      count: 5,
+      expected: [
+        { rows: 5, more: undefined },
+        { rows: 5, more: undefined },
+      ],
+    },
+    {
+      case: 'Six_FiveUntilTheMoreLineShowsAll',
+      count: 6,
+      expected: [
+        { rows: 5, more: '+ 1 more' },
+        { rows: 6, more: 'Show fewer' },
+      ],
+    },
+    {
+      case: 'Seven_FiveUntilTheMoreLineShowsAll',
+      count: 7,
+      expected: [
+        { rows: 5, more: '+ 2 more' },
+        { rows: 7, more: 'Show fewer' },
+      ],
+    },
+  ])('defaultLayout_$case', ({ count, expected }) => {
+    const breakdown: ContextBreakdownAgentEvent = {
       ...BREAKDOWN,
-      sources: [1, 2, 3, 4, 5, 6, 7].map((n) => ({
-        id: `source-${n}`,
-        label: `Source ${n}`,
+      sources: Array.from({ length: count }, (_, i) => ({
+        id: `source-${i + 1}`,
+        label: `Source ${i + 1}`,
         tokens: 1000,
         items: [],
       })),
     };
-    const { section, parent, build } = setUp(seven);
+    const { section, parent, build } = setUp(breakdown);
     section.setLayouts(withUser<Layout>(defaultLayout, {}));
     build();
     const shown = () => ({
@@ -162,12 +191,9 @@ describe('createContextSection', () => {
 
     const first = shown();
     findAll(parent, 'context-sources-more')[0]?.click();
-    const all = shown();
+    const after = shown();
 
-    expect([first, all]).toEqual([
-      { rows: 5, more: '+ 2 more' },
-      { rows: 7, more: 'Show fewer' },
-    ]);
+    expect([first, after]).toEqual(expected);
   });
 
   it('toggle_ThenANewBreakdown_KeepsTheSourceOpen', () => {
