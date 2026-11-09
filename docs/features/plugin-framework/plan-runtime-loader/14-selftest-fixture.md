@@ -1,6 +1,6 @@
 # 14 — Fixture user plugin in the self-test
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 11, 12, 13 (13 and 14 both edit `src/main/main.ts`)
 Plan: [plan.md](plan.md)
@@ -264,3 +264,5 @@ Concerns:
   lines before anything else.
 
 ## Proof
+
+Commit 3ceee39b · proof: diff read: seed before startCatalog in selfTest mode, script handed over last before closeHandover, SelfTestStep.remove + runner + stepLabel, applySelfTestConfig drop rule; typecheck 0, lint 0, 80 tests in 3 files pass; selftest --plugin selftest-user: 12 steps PASS, result as expected, all passed · concerns: layout.js has @ts-check but no @import (../_types/plugin does not resolve from layouts/default); fixture seeded on every self-test run so other scripts run with selftest-user loaded (<Leader>zu bind, a Plugins row) — whole-run effect untested

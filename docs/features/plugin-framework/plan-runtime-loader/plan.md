@@ -417,7 +417,7 @@ for that task's own files. Tasks in one wave share no file.
 - [x] [Main composition over the catalog](13-main-wiring.md) — after 07, 08, 09, 10, 11
 
 ### Wave 6
-- [ ] [Fixture user plugin in the self-test](14-selftest-fixture.md) — after 11, 12, 13 (13 and 14 both edit `main.ts`)
+- [x] [Fixture user plugin in the self-test](14-selftest-fixture.md) — after 11, 12, 13 (13 and 14 both edit `main.ts`)
 
 ### Wave 7
 - [ ] [Doc re-read](15-doc-re-read.md) — after 14
@@ -443,6 +443,7 @@ Review base: 71b605ce
 - 12 · 211756ee · diff read; originText, PluginRowInput originText+problem, layout parts present; settings tests 155 pass; settings self-test deferred to the test gate (main.ts waits on 13) · concerns: settings self-test not yet run; a whitespace-only problem still draws a line
 - 11 · 70101139 · diff read; servePluginScheme, pluginFilePath, page-part-loader, ownerLayoutShow, PageLayoutShow, userPluginFolder, CSP present; task tests pass; tsc red only in main.ts (13) · concerns: harness fake show.draw throws (layer rule); deferred user parts are host.add-ed after startPlugins, not disabled; initial config strips deferred and failed page binds; renderer's load code kept inline (~40 lines)
 - 13 · 6173d6b5 · diff read: catalog started before loadConfig, catalog.entries() into the store, writePluginTypes, servePluginScheme, userPluginFolder, switch catalog/config/configDisabled, drive ids/reload, core.reloadPlugin registered; typecheck 0 (was 3), lint 0, selftest --plugin settings all passed · concerns: label 'Reload plugin' is sentence case unlike lowercase core labels; reload registration handle kept for window life; runtime claims (user plugin after built-ins, reload rejection, types-folder failure line) left to 16
+- 14 · 3ceee39b · diff read: seed before startCatalog in selfTest mode, script handed over last before closeHandover, SelfTestStep.remove + runner + stepLabel, applySelfTestConfig drop rule; typecheck 0, lint 0, 80 tests in 3 files pass; selftest --plugin selftest-user: 12 steps PASS, result as expected, all passed · concerns: layout.js has @ts-check but no @import (../_types/plugin does not resolve from layouts/default); fixture seeded on every self-test run so other scripts run with selftest-user loaded (<Leader>zu bind, a Plugins row) — whole-run effect untested
 ### Contract changes
 - startPlugins known: default function → optional parameter, left out reads the held parts' manifests · why: a parameter default cannot reach held · consumers: 10, 11, 13 · group 03
 - validate-manifest.ts: as planned → also exports TOKEN_KINDS, PROCESS_NAMES, SETTING_KINDS, ARG_KINDS, BIND_WHERES, EDITOR_MODES (satisfies Record<Union, true>), which manifest-schema reads · why: one member list for checks and schema · consumers: 07 · group 02
@@ -474,5 +475,6 @@ Review base: 71b605ce
 - the initial page config strips binds of page parts not started at load; loads moved right after bridge.config() · group 11 · group 11
 - the catalog is built in a startCatalog(inputs) helper; seeding (14) goes before its call · group 13
 - types folder is path.join(inputs.pluginsFolder, '_types') · group 13
+- problems/result tests live in selftest-user-plugin.test.ts, the module they test · group 14
 ### Review rounds
 ### Test gate
