@@ -14,10 +14,16 @@ export interface SettingsSchema {
   settingChoices: Readonly<Record<string, readonly string[]>>;
 }
 
+// `ignored` holds each top-level key the merge left out as a plugin's section
+// whose plugin is not loaded.
 export interface UserSettings {
   settings: Settings;
   pluginSettings: Record<string, object>;
+  ignored: string[];
 }
+
+// A top-level key that may be a section of a plugin that is not loaded.
+const PLUGIN_SECTION_KEY = /^[a-z0-9-]+$/;
 
 // The kinds a setting named in `optionalSettings` takes, by name.
 const OPTIONAL_KINDS = {
@@ -149,14 +155,25 @@ export function settingsFileDefaults(
 }
 
 // The settings `text`, a `settings.json`, deep-merges over the defaults: core
-// settings by name, each plugin's under its id. Throws an Error whose message
-// is the first problem found, as the user reads it.
+// settings by name, each plugin's under its id. A top-level object under a
+// plugin-id-shaped key that is no core setting and no plugin's id is a plugin
+// that is not loaded: it is ignored and listed in `ignored`. Throws an Error
+// whose message is the first problem found, as the user reads it.
 export function mergeUserSettings(
   text: string,
   schema: SettingsSchema,
 ): UserSettings {
-  const user = parseJsonObject(text);
+  const file = parseJsonObject(text);
   const defaults = settingsFileDefaults(schema.defaults, schema.pluginDefaults);
+  const ignored = Object.keys(file).filter(
+    (key) =>
+      !Object.hasOwn(defaults, key) &&
+      PLUGIN_SECTION_KEY.test(key) &&
+      isJsonObject(file[key]),
+  );
+  const user = Object.fromEntries(
+    Object.entries(file).filter(([key]) => !ignored.includes(key)),
+  );
   const merged = mergeObject('', defaults, user, schema);
   const settings = Object.fromEntries(
     Object.keys(schema.defaults).map((key) => [key, merged[key]]),
@@ -167,5 +184,5 @@ export function mergeUserSettings(
       Object.hasOwn(schema.defaults, id) ? fallback : (merged[id] as object),
     ]),
   );
-  return { settings, pluginSettings };
+  return { settings, pluginSettings, ignored };
 }

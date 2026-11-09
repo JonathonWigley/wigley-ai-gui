@@ -31,12 +31,13 @@ import {
 import { expandBind } from '../../shared/plugin-manifests';
 import { jsonKind, parseJsonObject } from './config-json';
 
-// The commands and scopes a user bind may name, by qualified id, and the
-// default keymap's leader, which a bind's checks expand it with when the file
-// sets none.
+// The commands and scopes a user bind may name, by qualified id, the ids of
+// the loaded plugins, and the default keymap's leader, which a bind's checks
+// expand it with when the file sets none.
 export interface KeymapNames {
   commands: Record<CommandId, CommandInfo>;
   scopes: readonly ScopeInfo[];
+  plugins: readonly string[];
   defaultLeader: string;
 }
 
@@ -191,6 +192,33 @@ function commandInfoOf(id: CommandId, names: KeymapNames) {
   return Object.hasOwn(names.commands, id) ? names.commands[id] : undefined;
 }
 
+function isKnownScope(scope: string, names: KeymapNames): boolean {
+  return names.scopes.some((info) => info.id === scope);
+}
+
+function idPrefix(id: string): string {
+  return id.split('.')[0];
+}
+
+// The plugin the command or scope `id` names, the text before its first `.`,
+// when that plugin is not loaded: the prefix is not `core`, no loaded plugin's
+// id, and no known command's or scope's. Null when the prefix is known.
+function absentPlugin(id: string, names: KeymapNames): string | null {
+  const prefix = idPrefix(id);
+  const isKnown =
+    prefix === 'core' ||
+    names.plugins.includes(prefix) ||
+    Object.keys(names.commands).some((known) => idPrefix(known) === prefix) ||
+    names.scopes.some((info) => idPrefix(info.id) === prefix);
+  return isKnown ? null : prefix;
+}
+
+// The line for the entry at `path`, kept in the file and left out of the
+// keymap because it names `plugin`, which is not loaded.
+function ignoredLine(path: string, plugin: string): string {
+  return `keymap.json ${path} names plugin "${plugin}", which is not loaded; kept and ignored`;
+}
+
 // What is wrong with a known command as the bind at `entryPath`'s: it runs in the
 // other process, or the bind's `arg` does not fit it.
 function knownCommandProblem(
@@ -236,13 +264,16 @@ function readArg(entry: Record<string, unknown>): { arg?: CommandArg } {
   return Object.hasOwn(entry, 'arg') ? { arg: entry.arg as CommandArg } : {};
 }
 
+// The scope at `path`. A scope of a plugin that is not loaded stays, for
+// `heldBackUserBinds` to leave out.
 function requireScope(
   path: string,
   value: unknown,
   names: KeymapNames,
 ): string {
   const scope = requireString(path, value);
-  if (!names.scopes.some((info) => info.id === scope)) {
+  const isOfAbsentPlugin = absentPlugin(scope, names) !== null;
+  if (!isKnownScope(scope, names) && !isOfAbsentPlugin) {
     throw new Error(`"${path}" names no scope "${scope}".`);
   }
   return scope;
@@ -515,9 +546,10 @@ function readGroups(value: unknown): KeyGroups {
 }
 
 // The user keymap `text`, a `keymap.json`, holds, its leader spelled as
-// `readLeader` gives it, each bind naming a scope of `names` and either a command
-// of `names` that runs in the bind's process and fits the bind's `arg`, or an id
-// `names` does not hold, for `heldBackUserBinds` to judge; each bind's and
+// `readLeader` gives it, each bind naming a scope of `names` or of a plugin that
+// is not loaded, and either a command of `names` that runs in the bind's process
+// and fits the bind's `arg`, or an id `names` does not hold, for
+// `heldBackUserBinds` to judge; each unbind's scope one a bind may name; each bind's and
 // unbind's keys and `where` ones the merge expands, each insert bind a key of
 // `UNBOUND_INSERT_KEYS`, and each accelerator one Electron accepts. Throws an
 // Error whose message is the first problem found, as the user reads it.
@@ -582,27 +614,55 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
   return keymap;
 }
 
-// `user` without each bind whose command `fixedCommands` does not hold and `names`
-// cannot run: an unknown id, the wrong process or a bad `arg`. Each gives one
-// problem, with the text the parse would give and the bind's path in `user`. A part
-// can register the command later, so the caller decides when these are reported.
+// `user` without each bind or unbind that names a plugin that is not loaded,
+// in its command or scope, and without each bind whose command `fixedCommands`
+// does not hold and `names` cannot run: an unknown id, the wrong process or a bad
+// `arg`. The first give one `ignored` line each, and the file keeps them for when
+// the plugin loads. The others give one problem each, with the text the parse
+// would give and the bind's path in `user`. A part can register the command
+// later, so the caller decides when these are reported.
 export function heldBackUserBinds(
   user: UserKeymap,
   names: KeymapNames,
   fixedCommands: KeymapNames['commands'],
-): { kept: UserKeymap; problems: string[] } {
+): { kept: UserKeymap; problems: string[]; ignored: string[] } {
   const problems: string[] = [];
-  const keptOf = <B extends { command: CommandId; arg?: CommandArg }>(
+  const ignored: string[] = [];
+  // The absent plugin the first unknown name of `bind` belongs to, if any.
+  const absentPluginOf = (bind: { command?: CommandId; scope?: string }) => {
+    const unknownNames = [
+      ...(bind.command !== undefined &&
+      commandInfoOf(bind.command, names) === undefined
+        ? [bind.command]
+        : []),
+      ...(bind.scope !== undefined && !isKnownScope(bind.scope, names)
+        ? [bind.scope]
+        : []),
+    ];
+    return (
+      unknownNames
+        .map((name) => absentPlugin(name, names))
+        .find((plugin) => plugin !== null) ?? null
+    );
+  };
+  const keptOf = <
+    B extends { command: CommandId; arg?: CommandArg; scope?: string },
+  >(
     section: 'binds' | 'app' | 'intercept' | 'global',
     binds: readonly B[],
     runsIn: ProcessName,
     noun: string,
   ): B[] =>
     binds.filter((bind, index) => {
+      const path = `${section}[${index}]`;
+      const absent = absentPluginOf(bind);
+      if (absent !== null) {
+        ignored.push(ignoredLine(path, absent));
+        return false;
+      }
       if (Object.hasOwn(fixedCommands, bind.command)) {
         return true;
       }
-      const path = `${section}[${index}]`;
       const info = commandInfoOf(bind.command, names);
       const problem =
         info === undefined
@@ -631,5 +691,14 @@ export function heldBackUserBinds(
   if (user.global !== undefined) {
     kept.global = keptOf('global', user.global, 'main', 'a global bind');
   }
-  return { kept, problems };
+  if (user.unbind !== undefined) {
+    kept.unbind = user.unbind.filter((unbind, index) => {
+      const absent = 'scope' in unbind ? absentPluginOf(unbind) : null;
+      if (absent !== null) {
+        ignored.push(ignoredLine(`unbind[${index}]`, absent));
+      }
+      return absent === null;
+    });
+  }
+  return { kept, problems, ignored };
 }

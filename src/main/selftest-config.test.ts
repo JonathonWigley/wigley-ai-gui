@@ -135,6 +135,7 @@ describe('applySelfTestConfig', () => {
         isDev: true,
       },
       runMode: 'live',
+      plugins: [],
       problems: [],
     };
 

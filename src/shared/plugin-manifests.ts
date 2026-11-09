@@ -25,7 +25,7 @@ import type {
 import type { AppConfig, Settings } from '../contracts/settings';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
 import type { Log } from '../contracts/log';
-import { canonicalAccelerator } from './accelerator';
+import { canonicalAccelerator, interceptChordText } from './accelerator';
 import { errorText } from './error-text';
 import { isJsonObject } from './json';
 import { editorBindMode, withLeader } from './key-hints';
@@ -705,6 +705,50 @@ export function defaultKeyLayers(
     ...dependencyOrder(manifests).map(pluginKeys),
     ...(runtime === undefined ? [] : [runtime]),
   ];
+}
+
+// `defaults` without each bind whose command `commands` does not hold, or, for
+// a page bind, whose scope `scopes` does not hold (`any` is always held), with
+// one line per dropped bind: a replaced built-in's default keys apply only to
+// what its replacement declares.
+export function withoutUndeclaredDefaults(
+  defaults: DefaultKeymap,
+  commands: Readonly<Record<CommandId, CommandInfo>>,
+  scopes: readonly ScopeInfo[],
+): { keymap: DefaultKeymap; dropped: string[] } {
+  const dropped: string[] = [];
+  const scopeIds = new Set(scopes.map((scope) => scope.id));
+  const isDeclared = (
+    keys: string,
+    bind: { command: CommandId; scope?: string },
+  ): boolean => {
+    const prefix = `default bind ${keys} of ${bind.command} dropped: its plugin declares`;
+    if (!Object.hasOwn(commands, bind.command)) {
+      dropped.push(`${prefix} no such command`);
+      return false;
+    }
+    const isScopeHeld =
+      bind.scope === undefined ||
+      bind.scope === 'any' ||
+      scopeIds.has(bind.scope);
+    if (!isScopeHeld) {
+      dropped.push(`${prefix} no scope ${bind.scope}`);
+      return false;
+    }
+    return true;
+  };
+  const keymap: DefaultKeymap = {
+    ...defaults,
+    binds: defaults.binds.filter((bind) => isDeclared(bind.keys, bind)),
+    app: defaults.app.filter((bind) => isDeclared(bind.accelerator, bind)),
+    intercept: defaults.intercept.filter((bind) =>
+      isDeclared(interceptChordText(bind), bind),
+    ),
+    global: defaults.global.filter((bind) =>
+      isDeclared(bind.accelerator, bind),
+    ),
+  };
+  return { keymap, dropped };
 }
 
 // The first clash inside one runtime layer, as text, or null: the keymap checks over

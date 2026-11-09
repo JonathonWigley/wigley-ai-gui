@@ -123,6 +123,28 @@ describe('mergeUserSettings', () => {
     expect(set.pluginSettings.window).toEqual({});
   });
 
+  it.each([
+    {
+      case: 'object under an absent id',
+      text: '{"gone":{"x":1}}',
+      ignored: ['gone'],
+    },
+    { case: 'object under a plugin id', text: '{"p":{}}', ignored: [] },
+    { case: 'object under a core name', text: '{"fonts":{}}', ignored: [] },
+  ])(
+    'mergeUserSettings_AbsentPluginSection_Ignored: $case',
+    ({ text, ignored }) => {
+      expect(mergeUserSettings(text, SCHEMA).ignored).toEqual(ignored);
+    },
+  );
+
+  it.each([
+    { case: 'scalar under an unknown key', text: '{"zz":1}' },
+    { case: 'object under a key no id can have', text: '{"Gone":{}}' },
+  ])('mergeUserSettings_UnknownKey_IsAProblem: $case', ({ text }) => {
+    expect(() => mergeUserSettings(text, SCHEMA)).toThrow('is not a setting.');
+  });
+
   it('an empty default array takes elements of any kind', () => {
     expect(pluginSettings('{"p":{"anything":[1,"a",{}]}}')).toMatchObject({
       anything: [1, 'a', {}],

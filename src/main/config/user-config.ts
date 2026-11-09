@@ -26,7 +26,6 @@ import {
   checkSettingsText,
   type ConfigCheckDeps,
   type ConfigSchema,
-  configSchema,
   KEYMAP_FILE,
   readConfigFile,
   readUserThemes,
@@ -39,8 +38,9 @@ import { settingsFileDefaults } from './user-settings';
 
 // `folder` is the absolute user config folder `store` watches; `settingInfo`
 // declares each core setting by its dotted path; the schema lists no command
-// or scope of a plugin in `applied`'s list.
-export interface UserConfigDeps extends ConfigCheckDeps {
+// or scope of a plugin in `applied`'s list. Every check reads `store.checks()`
+// at its call, so it follows the plugins the store admits.
+export interface UserConfigDeps {
   files: Files;
   folder: string;
   store: ConfigStore;
@@ -58,19 +58,20 @@ type TextCheck = (
 
 const CORE_SECTION = 'core';
 
-// The `userConfig` main service over the user config folder. Builds the
-// schema at once, so it throws on a plugin setting with no declaration or a
-// declaration naming no setting.
+// The `userConfig` main service over the user config folder. `schema()`
+// builds the schema over the plugins the store admits now, so it throws on a
+// plugin setting with no declaration or a declaration naming no setting.
 export function createUserConfig(deps: UserConfigDeps): UserConfig {
-  const fixed = configSchema(deps);
-  const schema = userConfigSchema(deps, fixed);
   const filePath = (file: string) => `${deps.folder}/${file}`;
 
-  const checkSettings: TextCheck = (text, userThemes) =>
-    settingsProblem(text, userThemes, deps, fixed);
+  const checkSettings: TextCheck = (text, userThemes) => {
+    const { deps: checks, schema } = deps.store.checks();
+    return settingsProblem(text, userThemes, checks, schema);
+  };
   const checkKeymap: TextCheck = (text) => {
+    const { deps: checks, schema } = deps.store.checks();
     try {
-      checkKeymapText(text, deps, fixed, deps.store.runtime().catalogs);
+      checkKeymapText(text, checks, schema, deps.store.runtime().catalogs);
       return null;
     } catch (error) {
       return errorText(error);
@@ -134,7 +135,14 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
   };
 
   return {
-    schema: () => withRuntime(schema, deps),
+    schema: () => {
+      const checks = deps.store.checks();
+      return withRuntime(
+        userConfigSchema(deps.settingInfo, checks.deps, checks.schema),
+        checks.deps,
+        deps,
+      );
+    },
     async read() {
       const userThemes = (await readUserThemes(deps.files, deps.folder)).texts;
       return {
@@ -148,7 +156,7 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
           checkKeymap,
           userThemes,
         ),
-        themes: themeNames(deps.builtInThemes, userThemes),
+        themes: themeNames(deps.store.checks().deps.builtInThemes, userThemes),
       };
     },
     writeSettings: (layer, expectedText) =>
@@ -182,14 +190,15 @@ function settingsProblem(
 }
 
 function userConfigSchema(
-  deps: UserConfigDeps,
+  settingInfo: UserConfigDeps['settingInfo'],
+  deps: ConfigCheckDeps,
   fixed: ConfigSchema,
 ): UserConfigSchema {
   const sections: SettingSection[] = [
     {
       id: CORE_SECTION,
       title: 'Core',
-      leaves: Object.entries(deps.settingInfo).map(([path, info]) =>
+      leaves: Object.entries(settingInfo).map(([path, info]) =>
         settingLeaf(path, info, deps, fixed),
       ),
     },
@@ -225,10 +234,11 @@ function userConfigSchema(
 // commands and scopes of the applied list's plugins left out.
 function withRuntime(
   schema: UserConfigSchema,
+  checks: ConfigCheckDeps,
   deps: UserConfigDeps,
 ): UserConfigSchema {
   const { layer } = deps.store.runtime();
-  const merged = mergeKeymap(deps.defaultKeymap, deps.manifests, {}, layer);
+  const merged = mergeKeymap(checks.defaultKeymap, checks.manifests, {}, layer);
   const disabled = deps.applied.disabled();
   return {
     ...schema,
@@ -250,7 +260,7 @@ function withRuntime(
 function settingLeaf(
   path: string,
   info: SettingInfo,
-  deps: UserConfigDeps,
+  deps: ConfigCheckDeps,
   fixed: ConfigSchema,
 ): SettingLeaf {
   const fallback = defaultAt(

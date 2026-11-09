@@ -71,7 +71,6 @@ import { platformFor } from '../shared/platform';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
   commandLabel,
-  pluginThemeTokens,
   qualify,
   requireListed,
   withAppliedList,
@@ -641,12 +640,16 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
     defaultKeymap,
     coreCommands,
     coreScopes,
-    manifests,
+    plugins: manifests.map((manifest) => ({
+      manifest,
+      origin: 'built-in',
+      revision: 0,
+      main: mainParts.find((part) => part.manifest === manifest) ?? null,
+      pageUrl: null,
+      folder: null,
+    })),
+    coreThemeTokens,
     builtInThemes,
-    themeTokens: {
-      core: coreThemeTokens,
-      plugins: pluginThemeTokens(coreThemeTokens, manifests),
-    },
     resolveTheme,
     checkTokens: titleBarOverlayProblem,
     platform,
@@ -676,7 +679,13 @@ async function loadConfig(homeDir: string): Promise<{
   );
   return {
     store,
-    userConfig: createUserConfig({ ...deps, store, settingInfo, applied }),
+    userConfig: createUserConfig({
+      files: deps.files,
+      folder: deps.folder,
+      store,
+      settingInfo,
+      applied,
+    }),
     applied,
   };
 }

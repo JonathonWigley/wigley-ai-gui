@@ -7,8 +7,12 @@ import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import { EMPTY_RUNTIME_CATALOG } from '../../shared/runtime-commands';
 import { fakePlatform } from '../../shared/platform.test-support';
 import { resolveTheme } from '../themes/theme-loader';
-import type { ConfigCheckDeps } from './config-checks';
-import { type ConfigStore, loadConfigStore } from './config-store';
+import type { PluginManifest } from '../../contracts/plugin';
+import {
+  type ConfigStore,
+  type ConfigStoreDeps,
+  loadConfigStore,
+} from './config-store';
 import { createUserConfig, type UserConfigDeps } from './user-config';
 
 const HOME = '/home';
@@ -84,7 +88,19 @@ const dependentPlugin = definePlugin({
   themeTokens: {},
 });
 
-const CHECK_DEPS: ConfigCheckDeps = {
+const MANIFESTS = [listPlugin, quietPlugin];
+
+const CHECK_DEPS: Omit<
+  ConfigStoreDeps,
+  | 'plugins'
+  | 'files'
+  | 'folder'
+  | 'platform'
+  | 'homeDir'
+  | 'appInstance'
+  | 'runMode'
+  | 'log'
+> = {
   defaults: DEFAULTS,
   optionalSettings: { 'fonts.ui': 'string' },
   settingChoices: { transparency: ['system', 'full', 'reduced'] },
@@ -94,12 +110,11 @@ const CHECK_DEPS: ConfigCheckDeps = {
     'window.summon': { label: 'Summon', group: 'Window', runsIn: 'main' },
   },
   coreScopes: [{ id: 'any', title: 'Everywhere', plugin: 'core' }],
-  manifests: [listPlugin, quietPlugin],
   builtInThemes: [
     { name: 'mocha', colorScheme: 'dark', tokens: {} },
     { name: 'dusk', colorScheme: 'light', tokens: {} },
   ],
-  themeTokens: { core: {}, plugins: {} },
+  coreThemeTokens: {},
   resolveTheme,
   checkTokens: () => null,
 };
@@ -114,11 +129,22 @@ const CORE_INFO = {
 // An applied list that switches no plugin off.
 const NONE_APPLIED: UserConfigDeps['applied'] = { disabled: () => [] };
 
-// A store over `files` for `createUserConfig`.
-function storeOver(files: MemoryFiles, manifests = CHECK_DEPS.manifests) {
+// A store over `files` for `createUserConfig`, `manifests` its built-in
+// entries.
+function storeOver(
+  files: MemoryFiles,
+  manifests: readonly PluginManifest[] = MANIFESTS,
+) {
   return loadConfigStore({
     ...CHECK_DEPS,
-    manifests,
+    plugins: manifests.map((manifest) => ({
+      manifest,
+      origin: 'built-in',
+      revision: 0,
+      main: null,
+      pageUrl: null,
+      folder: null,
+    })),
     files,
     folder: FOLDER,
     platform: fakePlatform('macos'),
@@ -135,14 +161,12 @@ function storeOver(files: MemoryFiles, manifests = CHECK_DEPS.manifests) {
 
 async function create(
   files: MemoryFiles,
-  manifests = CHECK_DEPS.manifests,
+  manifests: readonly PluginManifest[] = MANIFESTS,
   store?: ConfigStore,
   applied = NONE_APPLIED,
 ): Promise<UserConfig> {
   const served = store ?? (await storeOver(files, manifests));
   return createUserConfig({
-    ...CHECK_DEPS,
-    manifests,
     files,
     folder: FOLDER,
     store: served,
@@ -634,25 +658,9 @@ describe('createUserConfig', () => {
       themeTokens: {},
     });
     const files = createMemoryFiles();
-    const store = await loadConfigStore({
-      ...CHECK_DEPS,
-      manifests: [flagPlugin],
-      files,
-      folder: FOLDER,
-      platform: fakePlatform('macos'),
-      homeDir: HOME,
-      appInstance: {
-        id: 'wigley-ai-gui-dev',
-        displayName: 'Auri Dev',
-        isDev: true,
-      },
-      runMode: 'live',
-      log: () => undefined,
-    });
+    const store = await storeOver(files, [flagPlugin]);
 
     const schema = createUserConfig({
-      ...CHECK_DEPS,
-      manifests: [flagPlugin],
       files,
       folder: FOLDER,
       store,
@@ -706,25 +714,9 @@ describe('createUserConfig', () => {
       themeTokens: {},
     });
     const files = createMemoryFiles();
-    const store = await loadConfigStore({
-      ...CHECK_DEPS,
-      manifests: [overPlugin],
-      files,
-      folder: FOLDER,
-      platform: fakePlatform('macos'),
-      homeDir: HOME,
-      appInstance: {
-        id: 'wigley-ai-gui-dev',
-        displayName: 'Auri Dev',
-        isDev: true,
-      },
-      runMode: 'live',
-      log: () => undefined,
-    });
+    const store = await storeOver(files, [overPlugin]);
 
     const schema = createUserConfig({
-      ...CHECK_DEPS,
-      manifests: [overPlugin],
       files,
       folder: FOLDER,
       store,
@@ -738,36 +730,46 @@ describe('createUserConfig', () => {
   });
 
   it('throws on a plugin setting with no declaration', async () => {
-    const store = await loadConfigStore({
-      ...CHECK_DEPS,
-      files: createMemoryFiles(),
-      folder: FOLDER,
-      platform: fakePlatform('macos'),
-      homeDir: HOME,
-      appInstance: {
-        id: 'wigley-ai-gui-dev',
-        displayName: 'Auri Dev',
-        isDev: true,
-      },
-      runMode: 'live',
-      log: () => undefined,
-    });
     const undeclared = {
       ...listPlugin,
       settingInfo: { timeout: listPlugin.settingInfo.timeout },
     };
+    const userConfig = await create(createMemoryFiles(), [undeclared]);
 
-    expect(() =>
-      createUserConfig({
-        ...CHECK_DEPS,
-        manifests: [undeclared],
-        files: createMemoryFiles(),
-        folder: FOLDER,
-        store,
-        settingInfo: CORE_INFO,
-        applied: NONE_APPLIED,
-      }),
-    ).toThrow(/"p".*"list"/);
+    expect(() => userConfig.schema()).toThrow(/"p".*"list"/);
+  });
+
+  it('schema_AfterSetPlugins_ListsTheNewPlugin', async () => {
+    const files = createMemoryFiles();
+    const store = await storeOver(files);
+    const userConfig = await create(files, MANIFESTS, store);
+    const added = definePlugin({
+      id: 'added',
+      label: 'added',
+      description: 'A test plugin.',
+      dependsOn: { main: [], page: [] },
+      reads: { main: [], page: [] },
+      commands: { go: { label: 'Go', group: 'Added', runsIn: 'page' } },
+      scopes: {},
+      settings: { size: 1 },
+      settingInfo: { size: { label: 'Size', description: 'The size.' } },
+      themeTokens: {},
+    });
+
+    await store.setPlugins(
+      [...MANIFESTS, added].map((manifest) => ({
+        manifest,
+        origin: 'user' as const,
+        revision: 1,
+        main: null,
+        pageUrl: null,
+        folder: `/plugins/${manifest.id}`,
+      })),
+    );
+
+    const schema = userConfig.schema();
+    expect(schema.sections.map((section) => section.id)).toContain('added');
+    expect(Object.keys(schema.commands)).toContain('added.go');
   });
 
   it('tells its listener when a hand edit changes the served config', async () => {
@@ -827,7 +829,7 @@ describe('createUserConfig', () => {
     it('schema_RuntimeCommands_AreListed', async () => {
       const files = createMemoryFiles();
       const store = await storeOver(files);
-      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+      const userConfig = await create(files, MANIFESTS, store);
 
       store.setRuntime({ main, page });
       await vi.waitFor(() => {
@@ -877,7 +879,7 @@ describe('createUserConfig', () => {
     it('writeKeymap_UnknownCommandBothStarted_WritesAndTheStoreHoldsItBack', async () => {
       const files = createMemoryFiles();
       const store = await storeOver(files);
-      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+      const userConfig = await create(files, MANIFESTS, store);
       const started = { ...EMPTY_RUNTIME_CATALOG, started: true };
       store.setRuntime({ main: started, page: { ...page, started: true } });
       await vi.waitFor(() => {
@@ -901,7 +903,7 @@ describe('createUserConfig', () => {
     it('onChanged_SetRuntimeChangesCommands_Fires', async () => {
       const files = createMemoryFiles();
       const store = await storeOver(files);
-      const userConfig = await create(files, CHECK_DEPS.manifests, store);
+      const userConfig = await create(files, MANIFESTS, store);
       const changed = new Promise<void>((resolve) => {
         userConfig.onChanged(resolve);
       });

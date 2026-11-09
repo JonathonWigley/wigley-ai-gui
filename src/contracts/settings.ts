@@ -3,6 +3,7 @@ import type { CommandId } from './commands';
 import type { Keymap } from './keymap';
 import type { Platform } from './platform';
 import type { CommandInfo, RunMode, ScopeInfo } from './plugin';
+import type { ServedPlugin } from './plugin-catalog';
 import type { Theme } from './theme';
 
 // `system` follows the OS's reduce-transparency preference.
@@ -68,6 +69,8 @@ export interface AppConfig {
   // Which app runs, the stable or the dev one.
   appInstance: AppInstance;
   runMode: RunMode;
+  // One per plugin the config admitted, in catalog order.
+  plugins: readonly ServedPlugin[];
   // Every config file that could not be applied; empty when none.
   problems: ConfigProblem[];
 }

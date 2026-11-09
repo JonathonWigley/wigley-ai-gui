@@ -3,6 +3,7 @@ import type { Files } from '../../contracts/files';
 import type { RuntimeCatalog } from '../../contracts/core-state';
 import type { DefaultKeymap, KeyBind } from '../../contracts/keymap';
 import type { CommandInfo, PluginManifest } from '../../contracts/plugin';
+import type { CatalogEntry } from '../../contracts/plugin-catalog';
 import type { AppConfig, Settings } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
 import { definePlugin } from '../../shared/define-plugin';
@@ -148,9 +149,65 @@ const rejectGloom: TokenCheck = (tokens) =>
 
 const DEFAULT_PLUGIN_SETTINGS = { p: { list: ['a', 'b'], timeout: null } };
 
+function builtIn(manifest: PluginManifest): CatalogEntry {
+  return {
+    manifest,
+    origin: 'built-in',
+    revision: 0,
+    main: null,
+    pageUrl: null,
+    folder: null,
+  };
+}
+
+function userEntry(
+  manifest: PluginManifest,
+  revision = 1,
+  origin: 'user' | 'replaces-built-in' = 'user',
+): CatalogEntry {
+  return {
+    manifest,
+    origin,
+    revision,
+    main: null,
+    pageUrl: `wigley-plugin://${manifest.id}/~${revision}/page.js`,
+    folder: `/plugins/${manifest.id}`,
+  };
+}
+
+// A test plugin `id` with `overrides` over a manifest that declares nothing.
+function plugin(
+  id: string,
+  overrides: Partial<PluginManifest> = {},
+): PluginManifest {
+  return {
+    id,
+    label: id,
+    description: 'A test plugin.',
+    dependsOn: { main: [], page: [] },
+    reads: { main: [], page: [] },
+    commands: {},
+    scopes: {},
+    settings: {},
+    settingInfo: {},
+    themeTokens: {},
+    ...overrides,
+  };
+}
+
+// `<id>@<revision>` of each entry.
+function revisions(entries: readonly CatalogEntry[]): string[] {
+  return entries.map((entry) => `${entry.manifest.id}@${entry.revision}`);
+}
+
+// Loads the store over `files`, `manifests` its built-in entries unless
+// `overrides` sets `plugins`.
 function load(
   files: Files,
-  overrides: Partial<ConfigStoreDeps> = {},
+  {
+    manifests = [listPlugin],
+    ...overrides
+  }: Partial<ConfigStoreDeps> & { manifests?: readonly PluginManifest[] } = {},
 ): Promise<ConfigStore> {
   return loadConfigStore({
     files,
@@ -161,11 +218,12 @@ function load(
     defaultKeymap: DEFAULT_KEYMAP,
     coreCommands: {
       'window.summon': { label: 'Summon', group: 'window', runsIn: 'main' },
+      'modes.show': { label: 'Show', group: 'Modes', runsIn: 'page' },
     },
     coreScopes: [{ id: 'any', title: 'Everywhere', plugin: 'core' }],
-    manifests: [listPlugin],
+    plugins: manifests.map(builtIn),
     builtInThemes: [{ name: 'mocha' }, { name: 'dusk' }],
-    themeTokens: { core: {}, plugins: {} },
+    coreThemeTokens: {},
     resolveTheme,
     checkTokens: () => null,
     platform: fakePlatform('windows'),
@@ -635,21 +693,33 @@ describe('loadConfigStore', () => {
     expect(heard).toEqual([]);
   });
 
-  it('rejects a plugin layer with a clash inside it', async () => {
-    const clashing: PluginManifest = {
-      ...listPlugin,
-      keys: {
-        binds: [
-          { keys: 'j', scope: 'list', command: 'down' },
-          { keys: 'j', scope: 'list', command: 'up' },
-        ],
-      },
-    };
+  it.each([
+    { case: 'built-in', entry: builtIn, isRejected: true },
+    { case: 'user', entry: userEntry, isRejected: false },
+  ])(
+    'rejects a plugin layer with a clash inside it: $case',
+    async ({ entry, isRejected }) => {
+      const clashing: PluginManifest = {
+        ...listPlugin,
+        keys: {
+          binds: [
+            { keys: 'j', scope: 'list', command: 'down' },
+            { keys: 'j', scope: 'list', command: 'up' },
+          ],
+        },
+      };
 
-    await expect(
-      load(createMemoryFiles(), { manifests: [clashing] }),
-    ).rejects.toThrow();
-  });
+      const loading = load(createMemoryFiles(), {
+        plugins: [entry(clashing)],
+      });
+
+      if (isRejected) {
+        await expect(loading).rejects.toThrow('share a scope');
+      } else {
+        expect((await loading).plugins()).toEqual([]);
+      }
+    },
+  );
   it('runs one more rebuild for changes during a rebuild, serving the latest file', async () => {
     const memory = createMemoryFiles();
     const held = heldReads(memory);
@@ -836,22 +906,41 @@ describe('loadConfigStore', () => {
     expect(store.current().settings.window).toEqual(DEFAULTS.window);
   });
 
-  it('configSchema_DefaultBindBadArg_Throws', async () => {
-    const badArg = definePlugin({
-      ...listPlugin,
-      commands: {
-        ...listPlugin.commands,
-        pick: { label: 'Pick', group: 'Moves', runsIn: 'page', arg: 'number' },
-      },
-      keys: {
-        binds: [{ keys: 'x', scope: 'list', command: 'pick', arg: 'a' }],
-      },
-    });
+  it.each([
+    { case: 'built-in', entry: builtIn, isRejected: true },
+    { case: 'user', entry: userEntry, isRejected: false },
+  ])(
+    'configSchema_DefaultBindBadArg_Throws: $case',
+    async ({ entry, isRejected }) => {
+      const badArg = definePlugin({
+        ...listPlugin,
+        commands: {
+          ...listPlugin.commands,
+          pick: {
+            label: 'Pick',
+            group: 'Moves',
+            runsIn: 'page',
+            arg: 'number',
+          },
+        },
+        keys: {
+          binds: [{ keys: 'x', scope: 'list', command: 'pick', arg: 'a' }],
+        },
+      });
 
-    await expect(
-      load(createMemoryFiles(), { manifests: [badArg] }),
-    ).rejects.toThrow('command "p.pick" needs a number');
-  });
+      const loading = load(createMemoryFiles(), { plugins: [entry(badArg)] });
+
+      if (isRejected) {
+        await expect(loading).rejects.toThrow(
+          'command "p.pick" needs a number',
+        );
+      } else {
+        expect((await loading).pluginProblems()).toEqual([
+          { id: 'p', message: expect.stringContaining('needs a number') },
+        ]);
+      }
+    },
+  );
 
   it('setPluginsProblem_HeldMessage_IsServedAfterTheWatchProblem', async () => {
     const memory = createMemoryFiles();
@@ -1130,4 +1219,353 @@ describe('loadConfigStore', () => {
       expect(store.current().problems).toHaveLength(1);
     });
   });
+});
+
+describe('plugin admission', () => {
+  const GLOW = { kind: 'color' as const, default: '#fff' };
+  // A user plugin whose theme token name no CSS variable can carry.
+  const badToken = (id: string, overrides: Partial<PluginManifest> = {}) =>
+    plugin(id, { themeTokens: { Bad: GLOW }, ...overrides });
+  const extra = plugin('t', {
+    commands: { go: { label: 'Go', group: 'T', runsIn: 'page' } },
+    settings: { n: 1 },
+    settingInfo: { n: { label: 'N', description: 'N.' } },
+    themeTokens: { glow: GLOW },
+  });
+
+  it.each([
+    {
+      case: 'command id of a core command',
+      entries: [
+        builtIn(listPlugin),
+        userEntry(
+          plugin('modes', {
+            commands: { show: { label: 'Show', group: 'M', runsIn: 'page' } },
+          }),
+        ),
+      ],
+      ids: ['p'],
+      problems: [
+        { id: 'modes', message: 'Command "modes.show" is declared twice' },
+      ],
+    },
+    {
+      case: "theme token sharing a built-in's CSS variable",
+      entries: [
+        builtIn(plugin('ab', { themeTokens: { 'c-x': GLOW } })),
+        userEntry(plugin('ab-c', { themeTokens: { x: GLOW } })),
+      ],
+      ids: ['ab'],
+      problems: [
+        { id: 'ab-c', message: expect.stringContaining('--wg-ab-c-x') },
+      ],
+    },
+    {
+      case: 'settings under a core setting name',
+      entries: [
+        builtIn(listPlugin),
+        userEntry(plugin('window', { settings: { a: 1 } })),
+      ],
+      ids: ['p'],
+      problems: [
+        { id: 'window', message: expect.stringContaining('declares settings') },
+      ],
+    },
+    {
+      case: "default key clashing with a built-in's",
+      entries: [
+        builtIn(listPlugin),
+        userEntry(
+          plugin('u', {
+            commands: { go: { label: 'Go', group: 'U', runsIn: 'page' } },
+            keys: { binds: [{ keys: 'jj', scope: 'any', command: 'go' }] },
+          }),
+        ),
+      ],
+      ids: ['p'],
+      problems: [
+        { id: 'u', message: expect.stringContaining('share a scope') },
+      ],
+    },
+    {
+      case: 'dependent of a refused entry',
+      entries: [
+        builtIn(listPlugin),
+        userEntry(badToken('a')),
+        userEntry(plugin('b', { dependsOn: { main: ['a'], page: [] } })),
+      ],
+      ids: ['p'],
+      problems: [
+        { id: 'a', message: expect.stringContaining('"Bad"') },
+        { id: 'b', message: 'needs plugin "a", which is not loaded' },
+      ],
+    },
+    {
+      case: 'refused replacement of a built-in and its built-in dependent',
+      entries: [
+        builtIn(listPlugin),
+        userEntry(badToken('a'), 1, 'replaces-built-in'),
+        builtIn(plugin('b', { dependsOn: { main: [], page: ['a'] } })),
+      ],
+      ids: ['p'],
+      problems: [
+        { id: 'a', message: expect.stringContaining('"Bad"') },
+        { id: 'b', message: 'needs plugin "a", which is not loaded' },
+      ],
+    },
+  ])(
+    'admission_UserEntry_LeftOutWithAProblem: $case',
+    async ({ entries, ids, problems }) => {
+      const store = await load(createMemoryFiles(), { plugins: entries });
+
+      expect(store.plugins().map((entry) => entry.manifest.id)).toEqual(ids);
+      expect(store.pluginProblems()).toEqual(problems);
+    },
+  );
+
+  it('setPlugins_RefusedNewRevision_KeepsTheLastAdmitted', async () => {
+    const store = await load(createMemoryFiles(), {
+      plugins: [builtIn(listPlugin), userEntry(plugin('x'), 1)],
+    });
+
+    await store.setPlugins([builtIn(listPlugin), userEntry(badToken('x'), 2)]);
+
+    expect(revisions(store.plugins())).toEqual(['p@0', 'x@1']);
+    expect(store.pluginProblems().map((problem) => problem.id)).toEqual(['x']);
+  });
+
+  it('setPlugins_RebuildThrows_ResolvesAndKeepsTheAdmitted', async () => {
+    const lines: string[] = [];
+    const store = await load(createMemoryFiles(), {
+      plugins: [builtIn(listPlugin), userEntry(extra)],
+      log: (_source, line) => lines.push(line),
+    });
+    const clashingBuiltIn = plugin('c', {
+      commands: { go: { label: 'Go', group: 'C', runsIn: 'page' } },
+      scopes: { s: 'S' },
+      keys: {
+        binds: [
+          { keys: 'x', scope: 's', command: 'go' },
+          { keys: 'x', scope: 's', command: 'go' },
+        ],
+      },
+    });
+
+    await store.setPlugins([builtIn(listPlugin), builtIn(clashingBuiltIn)]);
+
+    expect(revisions(store.plugins())).toEqual(['p@0', 't@1']);
+    expect(lines).toContainEqual(expect.stringMatching(/^config not read: /));
+  });
+
+  it.each([
+    {
+      case: 'add p',
+      before: [plugin('q', { settings: { n: 1 } })],
+      after: [plugin('q', { settings: { n: 1 } }), listPlugin],
+      sections: { q: { n: 2 }, p: DEFAULT_PLUGIN_SETTINGS.p },
+    },
+    {
+      case: 'remove q',
+      before: [plugin('q', { settings: { n: 1 } }), listPlugin],
+      after: [listPlugin],
+      sections: { p: DEFAULT_PLUGIN_SETTINGS.p },
+    },
+  ])(
+    'setPlugins_BrokenSettings_RebasesTheKeptSlice: $case',
+    async ({ before, after, sections }) => {
+      const files = createMemoryFiles();
+      await files.write(`${FOLDER}/settings.json`, '{"q":{"n":2}}');
+      const store = await load(files, { manifests: before });
+      await writeAndWait(files, store, 'settings.json', '{');
+
+      await store.setPlugins(after.map(builtIn));
+
+      expect(store.current().pluginSettings).toEqual(sections);
+    },
+  );
+
+  it('drops_EveryProducer_LoggedOncePerLine', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{"gone":{"x":1}}');
+    await files.write(
+      `${FOLDER}/keymap.json`,
+      JSON.stringify({
+        binds: [{ keys: 'y', scope: 'gone.main', command: 'gone.run' }],
+      }),
+    );
+    const lines: string[] = [];
+    const store = await load(files, {
+      defaultKeymap: {
+        ...DEFAULT_KEYMAP,
+        binds: [{ keys: 'x', scope: 'any', command: 'p.send' }],
+      },
+      log: (_source, line) => lines.push(line),
+    });
+    const atLoad = [...lines];
+
+    store.setPluginsProblem('again');
+    await nextChange(store);
+
+    expect(atLoad).toEqual([
+      'keymap.json binds[0] names plugin "gone", which is not loaded; kept and ignored',
+      'settings.json "gone" names no loaded plugin; kept and ignored',
+      'default bind x of p.send dropped: its plugin declares no such command',
+    ]);
+    expect(lines).toEqual(atLoad);
+  });
+
+  it.each([
+    {
+      case: 'add',
+      before: [builtIn(listPlugin)],
+      after: [builtIn(listPlugin), userEntry(extra)],
+      isServed: true,
+    },
+    {
+      case: 'remove',
+      before: [builtIn(listPlugin), userEntry(extra)],
+      after: [builtIn(listPlugin)],
+      isServed: false,
+    },
+  ])(
+    'setPlugins_AddsAndRemoves_ServesSchemaAndPlugins: $case',
+    async ({ before, after, isServed }) => {
+      const store = await load(createMemoryFiles(), { plugins: before });
+
+      await store.setPlugins(after);
+
+      const config = store.current();
+      expect({
+        command: Object.hasOwn(config.commands, 't.go'),
+        setting: Object.hasOwn(config.pluginSettings, 't'),
+        token: Object.hasOwn(store.checks().deps.themeTokens.plugins, 't.glow'),
+        plugin: config.plugins.some((served) => served.id === 't'),
+      }).toEqual({
+        command: isServed,
+        setting: isServed,
+        token: isServed,
+        plugin: isServed,
+      });
+    },
+  );
+
+  it('setPlugins_DuringAFileRebuild_RunsAfterIt', async () => {
+    const memory = createMemoryFiles();
+    const held = heldReads(memory);
+    const store = await load(held.files);
+
+    held.hold();
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1000}}');
+    const setting = store.setPlugins([builtIn(listPlugin), userEntry(extra)]);
+    held.release();
+    await setting;
+
+    expect(store.current().settings.window.width).toBe(1000);
+    expect(store.current().plugins.map((served) => served.id)).toEqual([
+      'p',
+      't',
+    ]);
+  });
+
+  it('setPluginProblems_ServedAfterFileProblems', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/keymap.json`, '{');
+    const store = await load(files, {
+      plugins: [builtIn(listPlugin), userEntry(badToken('x'))],
+    });
+
+    store.setPluginProblems([{ id: 'y', message: 'm' }]);
+    const config = await nextChange(store);
+
+    expect(config.problems).toEqual([
+      { file: 'keymap.json', message: expect.any(String) },
+      { file: 'plugins/y', message: 'm' },
+      { file: 'plugins/x', message: expect.stringContaining('"Bad"') },
+    ]);
+  });
+
+  it.each([
+    {
+      case: 'settings object under an absent id',
+      file: 'settings.json',
+      text: '{"gone":{"x":1}}',
+      problems: [],
+      line: 'settings.json "gone" names no loaded plugin; kept and ignored',
+    },
+    {
+      case: 'scalar under an unknown key',
+      file: 'settings.json',
+      text: '{"zz":1}',
+      problems: [{ file: 'settings.json', message: '"zz" is not a setting.' }],
+      line: null,
+    },
+    {
+      case: "bind to an absent plugin's command",
+      file: 'keymap.json',
+      text: JSON.stringify({
+        binds: [
+          { keys: 'y', scope: 'any', command: 'gone.run' },
+          { keys: 'z', scope: 'p.list', command: 'p.down' },
+        ],
+      }),
+      problems: [],
+      line: 'keymap.json binds[0] names plugin "gone", which is not loaded; kept and ignored',
+    },
+    {
+      case: "bind in an absent plugin's scope",
+      file: 'keymap.json',
+      text: JSON.stringify({
+        binds: [
+          { keys: 'y', scope: 'gone.main', command: 'p.up' },
+          { keys: 'z', scope: 'p.list', command: 'p.down' },
+        ],
+      }),
+      problems: [],
+      line: 'keymap.json binds[0] names plugin "gone", which is not loaded; kept and ignored',
+    },
+    {
+      case: "unbind in an absent plugin's scope",
+      file: 'keymap.json',
+      text: JSON.stringify({ unbind: [{ keys: 'j', scope: 'gone.main' }] }),
+      problems: [],
+      line: 'keymap.json unbind[0] names plugin "gone", which is not loaded; kept and ignored',
+    },
+    {
+      case: 'bind to an unknown command of a loaded plugin',
+      file: 'keymap.json',
+      text: JSON.stringify({
+        binds: [{ keys: 'y', scope: 'any', command: 'p.nope' }],
+      }),
+      problems: [
+        {
+          file: 'keymap.json',
+          message: '"binds[0].command" names no command "p.nope".',
+        },
+      ],
+      line: null,
+    },
+  ])(
+    'absentPlugin_SettingsAndBinds_KeptAndIgnored: $case',
+    async ({ file, text, problems, line }) => {
+      const files = createMemoryFiles();
+      await files.write(`${FOLDER}/${file}`, text);
+      const lines: string[] = [];
+      const store = await load(files, {
+        log: (_source, logged) => lines.push(logged),
+      });
+
+      await setRuntimeAndWait(store, NO_CATALOG, 'r.marker');
+
+      expect(store.current().problems).toEqual(problems);
+      expect(lines.filter((logged) => logged.includes('ignored'))).toEqual(
+        line === null ? [] : [line],
+      );
+      expect(pageCommands(store.current())).toEqual(
+        expect.arrayContaining(['j p.down', 'k p.up']),
+      );
+      expect(pageCommands(store.current())).not.toContainEqual(
+        expect.stringMatching(/^y /),
+      );
+    },
+  );
 });

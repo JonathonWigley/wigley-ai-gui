@@ -34,6 +34,7 @@ const NAMES: KeymapNames = {
     { id: 'any', title: 'Everywhere', plugin: 'core' },
     { id: 'test.list', title: 'List', plugin: 'test' },
   ],
+  plugins: ['test'],
   defaultLeader: '<Space>',
 };
 
@@ -240,13 +241,18 @@ describe('parseUserKeymap', () => {
   });
 
   it('parseUserKeymap_UnknownCommand_KeepsTheBind', () => {
-    const binds = [{ keys: 'x', scope: 'any', command: 'later.go', arg: 1 }];
+    const binds = [
+      { keys: 'x', scope: 'any', command: 'later.go', arg: 1 },
+      { keys: 'y', scope: 'gone.main', command: 'gone.run' },
+    ];
     const app = [{ accelerator: 'Alt+K', command: 'later.main' }];
+    const unbind = [{ keys: 'z', scope: 'gone.main' }];
 
-    const parsed = parse({ binds, app });
+    const parsed = parse({ binds, app, unbind });
 
     expect(parsed.binds).toEqual(binds);
     expect(parsed.app).toEqual(app);
+    expect(parsed.unbind).toEqual(unbind);
   });
 
   it('heldBackUserBinds_UnknownWrongProcessBadArg_DropsWithPathInText', () => {
@@ -275,14 +281,26 @@ describe('parseUserKeymap', () => {
     const wrong = { keys: 'd', scope: 'any', command: 'later.main' };
     const badArg = { keys: 'e', scope: 'any', command: 'later.nth' };
     const goneApp = { accelerator: 'Alt+K', command: 'later.gone' };
+    const absentPlugin = { keys: 'f', scope: 'any', command: 'gone.run' };
+    const absentScope = { keys: 'g', scope: 'gone.main', command: 'test.pick' };
+    const absentUnbind = { keys: 'h', scope: 'gone.main' };
 
-    const { kept, problems } = heldBackUserBinds(
-      { binds: [keep, good, gone, wrong, badArg], app: [goneApp] },
+    const { kept, problems, ignored } = heldBackUserBinds(
+      {
+        binds: [keep, good, gone, wrong, badArg, absentPlugin, absentScope],
+        app: [goneApp],
+        unbind: [absentUnbind],
+      },
       names,
       fixed,
     );
 
-    expect(kept).toEqual({ binds: [keep, good], app: [] });
+    expect(kept).toEqual({ binds: [keep, good], app: [], unbind: [] });
+    expect(ignored).toEqual([
+      'keymap.json binds[5] names plugin "gone", which is not loaded; kept and ignored',
+      'keymap.json binds[6] names plugin "gone", which is not loaded; kept and ignored',
+      'keymap.json unbind[0] names plugin "gone", which is not loaded; kept and ignored',
+    ]);
     expect(problems).toEqual([
       '"binds[2].command" names no command "later.gone".',
       expect.stringMatching(/^"binds\[3\]\.command" names "later\.main"/),

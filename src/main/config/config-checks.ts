@@ -53,7 +53,7 @@ import { heldBackUserBinds, parseUserKeymap } from './user-keymap';
 import { mergeUserSettings, type UserSettings } from './user-settings';
 
 // What the checks of the user config files read: the core settings and keys,
-// the plugins' manifests and the themes. `resolveTheme` resolves a theme as
+// the manifests of the plugins the ConfigStore admitted, and the themes. `resolveTheme` resolves a theme as
 // the theme loader does, running `checkTokens`, the check of the tokens the
 // native window takes, on every theme it resolves.
 export interface ConfigCheckDeps {
@@ -71,11 +71,13 @@ export interface ConfigCheckDeps {
 }
 
 // What every check reads with the defaults, worked out once from the deps:
-// every command and scope, each plugin's defaults by id, every optional
-// setting's kind (plugin paths qualified), and the keymap with no user layer.
+// every command and scope, the plugins' ids, each plugin's defaults by id, every
+// optional setting's kind (plugin paths qualified), and the keymap with no user
+// layer.
 export interface ConfigSchema {
   commands: AppConfig['commands'];
   scopes: AppConfig['scopes'];
+  plugins: readonly string[];
   pluginDefaults: Record<string, object>;
   optionalSettings: Readonly<Record<string, SettingKind>>;
   defaultKeymap: Keymap;
@@ -127,6 +129,7 @@ export function configSchema(deps: ConfigCheckDeps): ConfigSchema {
   return {
     commands,
     scopes: scopeInfos(deps.coreScopes, deps.manifests),
+    plugins: deps.manifests.map((manifest) => manifest.id),
     pluginDefaults: pluginSettings(deps.manifests),
     optionalSettings: {
       ...deps.optionalSettings,
@@ -233,8 +236,10 @@ export function keptRuntimeLayer(
 }
 
 // What a keymap check gives. `heldBack` is a problem for each user bind no command
-// can run yet, `kept` the user layer without those binds, `layer` the runtime binds
-// in force, and `dropped` a line for each runtime bind left out.
+// can run yet, `kept` the user layer without those binds and those naming a plugin
+// that is not loaded, `layer` the runtime binds in force, and `dropped` a line for
+// each user entry naming a plugin that is not loaded, then each runtime bind left
+// out.
 export interface CheckedKeymap {
   keymap: Keymap;
   heldBack: string[];
@@ -259,14 +264,18 @@ export function checkUserKeymap(
       ...runtime.page.commands,
     ]),
   };
-  const { kept, problems } = heldBackUserBinds(user, names, schema.commands);
+  const { kept, problems, ignored } = heldBackUserBinds(
+    user,
+    names,
+    schema.commands,
+  );
   const { layer, dropped } = keptRuntimeLayer(runtime, deps, kept);
   return {
     keymap: mergeKeymap(deps.defaultKeymap, deps.manifests, kept, layer),
     heldBack: problems,
     kept,
     layer,
-    dropped,
+    dropped: [...ignored, ...dropped],
   };
 }
 

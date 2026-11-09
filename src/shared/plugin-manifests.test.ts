@@ -30,6 +30,7 @@ import {
   scopeInfos,
   withAppliedList,
   withoutPluginBinds,
+  withoutUndeclaredDefaults,
   withoutUnhandledRuntimeBinds,
 } from './plugin-manifests';
 
@@ -1130,6 +1131,95 @@ describe('pluginSettingInfo', () => {
 
     expect(Object.keys(infos).sort()).toEqual(['p.fonts.ui', 'p.window.width']);
   });
+});
+
+describe('withoutUndeclaredDefaults', () => {
+  const chat = manifest('chat', {
+    commands: { open: { label: 'Open', group: 'Chat', runsIn: 'page' } },
+    scopes: { list: 'In the list' },
+  });
+  const commands = commandInfos(
+    { 'core.quit': { label: 'Quit', group: 'App', runsIn: 'page' } },
+    [chat],
+  );
+  const scopes = scopeInfos(
+    [{ id: 'any', title: 'Everywhere', plugin: 'core' }],
+    [chat],
+  );
+  const none = { binds: [], app: [], intercept: [], global: [] };
+
+  it.each([
+    {
+      case: 'page bind with an undeclared command',
+      keys: { binds: [{ keys: 'x', scope: 'any', command: 'chat.send' }] },
+      kept: none,
+      dropped: [
+        'default bind x of chat.send dropped: its plugin declares no such command',
+      ],
+    },
+    {
+      case: 'app accelerator with an undeclared command',
+      keys: { app: [{ accelerator: 'Alt+S', command: 'chat.send' }] },
+      kept: none,
+      dropped: [
+        'default bind Alt+S of chat.send dropped: its plugin declares no such command',
+      ],
+    },
+    {
+      case: 'intercept with an undeclared command',
+      keys: { intercept: [{ key: 'S', control: true, command: 'chat.send' }] },
+      kept: none,
+      dropped: [
+        'default bind Control+S of chat.send dropped: its plugin declares no such command',
+      ],
+    },
+    {
+      case: 'page bind in an undeclared scope',
+      keys: {
+        binds: [{ keys: 'y', scope: 'chat.gone', command: 'chat.open' }],
+      },
+      kept: none,
+      dropped: [
+        'default bind y of chat.open dropped: its plugin declares no scope chat.gone',
+      ],
+    },
+    {
+      case: 'bind in any and in a declared scope kept',
+      keys: {
+        binds: [
+          { keys: 'z', scope: 'any', command: 'chat.open' },
+          { keys: 'w', scope: 'chat.list', command: 'chat.open' },
+        ],
+      },
+      kept: {
+        ...none,
+        binds: [
+          { keys: 'z', scope: 'any', command: 'chat.open' },
+          { keys: 'w', scope: 'chat.list', command: 'chat.open' },
+        ],
+      },
+      dropped: [],
+    },
+    {
+      case: 'core command kept',
+      keys: { global: [{ accelerator: 'Alt+Q', command: 'core.quit' }] },
+      kept: {
+        ...none,
+        global: [{ accelerator: 'Alt+Q', command: 'core.quit' }],
+      },
+      dropped: [],
+    },
+  ])(
+    'withoutUndeclaredDefaults_DropsWhatNoPluginDeclares: $case',
+    ({ keys, kept, dropped }) => {
+      const defaults = defaultKeymap({ ...none, ...keys });
+
+      const result = withoutUndeclaredDefaults(defaults, commands, scopes);
+
+      expect(result.keymap).toEqual({ ...defaults, ...kept });
+      expect(result.dropped).toEqual(dropped);
+    },
+  );
 });
 
 describe('pluginThemeTokens', () => {
