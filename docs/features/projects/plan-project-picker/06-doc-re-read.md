@@ -12,7 +12,7 @@ Files:     modify, only where a line is stale: `docs/features/projects/design.md
            `docs/features/session-stash/design.md`
 Consumes:  the landed code of 01–05
 Produces:  docs that state what the code does
-Decisions: docs were written ahead at `67a838d6` as a hypothesis (`~/wigley-agents/decisions.md` § Docs); the code wins
+Decisions: docs were written ahead at `caee8922` as a hypothesis (`~/wigley-agents/decisions.md` § Docs); the code wins
            unless it contradicts a decision in plan.md, which is then a finding for the lead, not a doc edit
 
 Read each doc written ahead line by line against the landed code:

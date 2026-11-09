@@ -44,7 +44,7 @@ Re-run each before the first dispatch.
 
 ## Docs written ahead
 
-Commit `67a838d6` on branch `project-picker`:
+Commit `caee8922` on branch `project-picker`:
 
 - `docs/features/projects/design.md` (new) — the feature's design; every task reads it.
 - `docs/features/agent-chat/design.md` — the Flow block and the Start prompt and Resume bullets.
