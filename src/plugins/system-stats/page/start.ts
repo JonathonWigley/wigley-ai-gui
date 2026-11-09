@@ -25,6 +25,7 @@ import defaultStylesheet from '../layouts/default/layout.css?url';
 import type {
   CompleteLayout,
   Layout,
+  PanelInput,
   SystemStatsPart,
 } from '../layouts/layout';
 import { systemStatsManifest } from '../manifest';
@@ -50,6 +51,10 @@ const HIDDEN_KEY = 'hidden';
 // When a draw logs `cursor on <name>`: on a change of the cursor row's name while the panel holds the keys, or always
 // (a move, the keys' arrival).
 type CursorLog = 'changed' | 'always';
+
+// What a draw scrolls into view while the panel holds the keys: nothing, so a wheel scroll stays; the cursor's row; or
+// the cursor's opened group's last visible child, then the group.
+type Reveal = 'none' | 'cursor' | 'openedGroup';
 
 // Draws the right-bar system stats panel through the `system-stats.layout` layout while it is shown, from the
 // `system-stats.snapshot` slot, and tells main over the channel when it shows or hides, so main samples only then.
@@ -103,7 +108,6 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
     let hasKeys = false;
     let visible: VisibleRow[] = [];
     let loggedCursorName: string | null = null;
-    let scrolledCursorId: string | null = null;
     let lastError: string | null = null;
     let isDisposed = false;
 
@@ -180,7 +184,35 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
       log(lastError === null ? 'error cleared' : `error: ${lastError}`);
     };
 
-    const draw = (cursorLog: CursorLog = 'changed') => {
+    const drawPanel = (input: PanelInput) => {
+      const last = panel;
+      panel = null;
+      callEach<() => void>(
+        [
+          () => last?.dispose(),
+          () => {
+            panelSlot.replaceChildren();
+            panel = layoutParts.draw(
+              'panel',
+              panelSlot,
+              (part, slot, rollback) => part(slot, input, kitFor(rollback)),
+            );
+          },
+        ],
+        (step) => step(),
+      );
+    };
+
+    const scrollCursorRowIntoView = () => {
+      panelSlot
+        .querySelector('.is-cursor')
+        ?.scrollIntoView({ block: 'nearest' });
+    };
+
+    const draw = (
+      reveal: Reveal = 'none',
+      cursorLog: CursorLog = 'changed',
+    ) => {
       if (!isShown || isDisposed) {
         return;
       }
@@ -205,35 +237,25 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
         followCursor();
         logErrorChange(current);
       }
-      const input = panelInput(current, shown, sort, hasKeys ? cursorId : null);
-      const last = panel;
-      panel = null;
-      callEach<() => void>(
-        [
-          () => last?.dispose(),
-          () => {
-            panelSlot.replaceChildren();
-            panel = layoutParts.draw(
-              'panel',
-              panelSlot,
-              (part, slot, rollback) => part(slot, input, kitFor(rollback)),
-            );
-          },
-        ],
-        (step) => step(),
-      );
+      const isRevealed = hasKeys && reveal !== 'none';
+      // The layout marks only the cursor's row, so the last child is drawn as the cursor to scroll it into view.
+      const lastChild =
+        isRevealed && reveal === 'openedGroup'
+          ? visible.findLast(({ parentId }) => parentId === cursorId)
+          : undefined;
+      if (lastChild !== undefined) {
+        drawPanel(panelInput(current, shown, sort, lastChild.row.id));
+        scrollCursorRowIntoView();
+      }
+      drawPanel(panelInput(current, shown, sort, hasKeys ? cursorId : null));
       panelContribution ??= api.areas.rightBar.contribute(panelSlot, {
         order: PANEL_ORDER,
         focus: focusPanel,
         left: leavePanel,
       });
-      // Scrolled only on a move or the keys' arrival, so a wheel scroll stays.
-      if (hasKeys && cursorId !== scrolledCursorId) {
-        panelSlot
-          .querySelector('.is-cursor')
-          ?.scrollIntoView({ block: 'nearest' });
+      if (isRevealed) {
+        scrollCursorRowIntoView();
       }
-      scrolledCursorId = hasKeys ? cursorId : null;
       if (!isAnnounced) {
         isAnnounced = true;
         log(`panel shown: ${topNames()}`);
@@ -255,7 +277,7 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
       api.keys.setScope('panel');
       panelSlot.focus();
       log('panel focused');
-      draw('always');
+      draw('cursor', 'always');
     };
 
     // The core ended the panel's turn.
@@ -269,7 +291,6 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
       const last = panel;
       hasKeys = false;
       isAnnounced = false;
-      scrolledCursorId = null;
       panelContribution = null;
       panel = null;
       callEach<() => void>(
@@ -310,12 +331,12 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
           ? -1
           : visible.findIndex(({ row }) => row.id === cursorId);
       placeCursorAt(movedCursor(index, visible.length, move));
-      draw('always');
+      draw('cursor', 'always');
     };
 
     const cycleSort = () => {
       sort = nextSort(sort);
-      draw();
+      draw('cursor');
       log(`sorted by ${sort}: ${topNames()}`);
     };
 
@@ -335,7 +356,7 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
         return;
       }
       openIds.add(row.id);
-      draw();
+      draw('openedGroup');
       const children = visible
         .filter(({ parentId }) => parentId === row.id)
         .map((child) => child.row.name);
@@ -357,7 +378,7 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
       openIds.delete(target);
       cursorId = target;
       cursorParentId = null;
-      draw();
+      draw('cursor');
       log(`closed ${group?.row.name ?? target}`);
     };
 

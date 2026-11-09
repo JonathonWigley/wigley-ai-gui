@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunMode } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import {
+  FakeElement,
   installFakeDom,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
@@ -34,6 +35,12 @@ function proc(
     children,
   };
 }
+
+// A group above a process by CPU and below it by RAM, so a sort moves the group's row.
+const revealRows: StatsProcessRow[] = [
+  { ...proc('g', 9, [proc('g1', 5), proc('g2', 4)]), rssBytes: 1_000_000 },
+  proc('p', 2),
+];
 
 function meter(percent: number): StatsMeter {
   return { percent, tone: 'normal', history: [percent], label: `${percent}%` };
@@ -105,13 +112,20 @@ function startOnHarness({
   return { harness, invoked, focuses, disposals, stored, messages };
 }
 
-// A layout that records each panel drawn, and the harness showing it.
+// A layout that records each panel drawn and draws a row per row, titled with its name and marked `is-cursor` as the
+// contract asks, and the harness showing it.
 function captureLayout(harness: ReturnType<typeof startOnHarness>['harness']) {
   const panels: PanelInput[] = [];
   const capture: Layout = {
     panel(parent, input) {
       panels.push(input);
       const root = document.createElement('div');
+      for (const { name, isCursor } of input.rows) {
+        const row = document.createElement('div');
+        row.title = name;
+        row.classList.toggle('is-cursor', isCursor);
+        root.append(row);
+      }
       parent.append(root);
       return { element: root };
     },
@@ -262,6 +276,61 @@ describe('systemStatsPagePart', () => {
       slot.set(snapshot(rows.filter(({ id }) => id !== gone)));
 
       expect(cursorNames()).toEqual(cursor);
+    });
+
+    // Breaks: a key command that moves rows without moving the cursor's id leaving them off-screen, an opened group
+    // scrolling only its row, or a snapshot redraw yanking a wheel scroll back.
+    it.each<{
+      name: string;
+      act: (
+        commands: ReturnType<
+          ReturnType<typeof startOnHarness>['harness']['started']
+        >['commands'],
+        slot: ReturnType<typeof focused>['slot'],
+      ) => void;
+      scrolled: string[];
+    }>([
+      {
+        name: 'open scrolls the last child, then the group',
+        act: (commands) => commands.openGroup({ arg: undefined }),
+        scrolled: ['g2', 'g'],
+      },
+      {
+        name: 'close scrolls the group',
+        act: (commands) => {
+          commands.openGroup({ arg: undefined });
+          commands.cursorDown({ arg: undefined });
+          commands.closeGroup({ arg: undefined });
+        },
+        scrolled: ['g2', 'g', 'g1', 'g'],
+      },
+      {
+        name: 'a move scrolls the cursor row',
+        act: (commands) => commands.cursorDown({ arg: undefined }),
+        scrolled: ['p'],
+      },
+      {
+        name: 'sort reveals the cursor row',
+        act: (commands) => commands.cycleSort({ arg: undefined }),
+        scrolled: ['g'],
+      },
+      {
+        name: 'a snapshot redraw does not scroll',
+        act: (_commands, slot) => slot.set(snapshot(revealRows)),
+        scrolled: [],
+      },
+    ])('reveal_KeyCommandsScrollTheirRows: $name', ({ act, scrolled }) => {
+      const { harness, slot } = focused(revealRows);
+      const titles: string[] = [];
+      vi.spyOn(FakeElement.prototype, 'scrollIntoView').mockImplementation(
+        function (this: FakeElement) {
+          titles.push(this.title);
+        },
+      );
+
+      act(harness.started().commands, slot);
+
+      expect(titles).toEqual(scrolled);
     });
 
     it('an empty panel given the keys takes the first row when rows come', () => {
