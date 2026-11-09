@@ -5,7 +5,7 @@
 - **Status** — what is built now and where each workflow lives.
 - **Vocabulary** — workflow, level, flow, stage, status, signal, checklist, run log, main action.
 - **Large's stages** — each Large stage: when a session enters it, what it shows, and its actions.
-- **Small's stages** and **Medium's stages** — the same columns for the other two workflows.
+- **Small's stages**, **Medium's stages** and **Spike's stages** — the same columns for the other three workflows.
 - **Stage modules** — one folder per stage, handed over through `addWorkflow`, and how to change or add a workflow.
 - **Signals** — the agent events, session events and reported steps the flow folds, the two tools, the claim rule and the run log.
 - **Where it draws** — the row chip, the composer strip with its trail, and the side pane.
@@ -15,9 +15,10 @@
 - **Out of scope** — what waits for a later workflow or adapter.
 
 The `workflow` plugin is the engine for the user's wigley workflows. It shows each Chat-tab session's place in the
-workflow that session runs, with the next step one press away. Three plugins register a workflow with it: `workflow-small`
+workflow that session runs, with the next step one press away. Four plugins register a workflow with it: `workflow-small`
 (Scope › Build › Check › Land), `workflow-medium` (Interview › Build › Review › Fix › Land) and `workflow-large`
-(Primer or Explore › Interview › Plan › Cold read › Make › Review › Fix › Close). The level skill a session starts picks
+(Primer or Explore › Interview › Plan › Cold read › Make › Review › Fix › Close) and `workflow-spike` (Interview › Build ›
+Check › Land, looping per ask). The level skill a session starts picks
 its workflow; skill starts and plan folders mark Large's big moves, and the agent reports the steps between them. A good
 outcome: every session row says where its run stands, and a new workflow or a changed stage is one plugin folder or one
 stage folder, with no engine edit. This doc holds the engine and every stage; `docs/features/workflow-levels/design.md` is
@@ -25,17 +26,18 @@ the short why of the levels.
 
 ## Status
 
-Built. The engine is `src/plugins/workflow/`; Large is `src/plugins/workflow-large/`, Small `src/plugins/workflow-small/`
-and Medium `src/plugins/workflow-medium/`. All four build on the clear, the agent events and the row parts that earlier
+Built. The engine is `src/plugins/workflow/`; Large is `src/plugins/workflow-large/`, Small `src/plugins/workflow-small/`,
+Medium `src/plugins/workflow-medium/` and Spike `src/plugins/workflow-spike/`. All five build on the clear, the agent events and the row parts that earlier
 plans landed (`chat.agentEvent`, `sessions.hostSessionChanged`, `addRowPart`). Each workflow plugin hands its own
 self-test script to the fake agent harness: `src/plugins/workflow-large/main/selftest-script.ts`,
-`src/plugins/workflow-small/main/selftest-script.ts` and `src/plugins/workflow-medium/main/selftest-script.ts`.
+`src/plugins/workflow-small/main/selftest-script.ts`, `src/plugins/workflow-medium/main/selftest-script.ts` and
+`src/plugins/workflow-spike/main/selftest-script.ts`.
 
 ## Vocabulary
 
-- **Workflow** — a named set of stages a session runs, registered by one plugin. Small, Medium and Large are the first
-  three.
-- **Level** — the user's word for a workflow in its size order. The app's **Effort** control is Claude's reasoning
+- **Workflow** — a named set of stages a session runs, registered by one plugin. Spike, Small, Medium and Large are the
+  first four.
+- **Level** — the user's word for a workflow: Small, Medium and Large in their size order, and Spike outside it. The app's **Effort** control is Claude's reasoning
   effort, a different thing, so nothing here is called effort.
 - **Flow** — one session's place in its workflow: the workflow, its stage, its checklist and the workflow's own state
   (`flow.state`; for Large `LargeState`: the plan folder, the plan's progress and the countdown). Main holds one flow per
@@ -47,7 +49,7 @@ self-test script to the fake agent harness: `src/plugins/workflow-large/main/sel
 - **Signal** — one input the flow folds: an agent event, a clear, a reported step or checklist, or a workflow's own event
   (§ Signals).
 - **Trail** — the stepper's row of step words, each workflow's own steps: Scope to Land for Small, Interview to Land for
-  Medium, Primer or Explore to Close for Large.
+  Medium and Spike, Primer or Explore to Close for Large.
 - **Checklist** — the work items the side pane shows. Large's comes from `plan.md`; the others' from the agent through
   `set_workflow_checklist`.
 - **Run log** — `runs.jsonl`, one line per finished workflow (§ Signals).
@@ -140,8 +142,22 @@ the fix count.
 | land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
 | done | the agent reports `done`, which writes the run log line | Land, done | `Land · done` | none | none |
 
-Small's and Medium's stages have no actions: their `runAction` rejects with `Small has no actions` and `Medium has no
-actions`. `done` shares its trail slot with `land`, so the trail still ends at Land.
+## Spike's stages
+
+The first claim of `wigley:spike` puts the flow in interview. Each stage answers its own reported step from any stage,
+so the flow loops: build and check repeat for each ask, and a round in the middle of the loop goes back to interview.
+A second claim in the session, or a claim after done, returns the flow to interview.
+
+| Stage | A session enters it when | Label and status | Status line | Button actions | Key-only actions |
+|---|---|---|---|---|---|
+| interview | `wigley:spike` starts, the first time or again in the session, or the agent reports `interview` | Interview, running or paused | `Interview · running` | none | none |
+| build | the agent reports `build` | Build, running or paused | `Build · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
+| check | the agent reports `check` | Check, running or paused | `Check · running` | none | none |
+| land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
+| done | the agent reports `done`, which writes the run log line | Land, done | `Land · done` | none | none |
+
+Small's, Medium's and Spike's stages have no actions: their `runAction` rejects with `Small has no actions`, `Medium has
+no actions` and `Spike has no actions`. `done` shares its trail slot with `land`, so the trail still ends at Land.
 
 A session with `workflow === null` draws nothing but the `No workflow` tag, after a live turn with agent work ends while
 no level skill has started.
@@ -156,7 +172,7 @@ no level skill has started.
 
 A main half that declares `reportedAs` takes that value of `set_workflow_step`'s `step`: the tool's accepted values
 derive from the registered stages (§ Signals). Its entry rule still decides whether a report moves the flow. A stage with
-`finishes` writes the run log line when a flow enters it: Large's `closed`, Small's and Medium's `done`.
+`finishes` writes the run log line when a flow enters it: Large's `closed`, Small's, Medium's and Spike's `done`.
 
 A workflow plugin hands its stages to the engine through the engine's `addWorkflow` export, once in each process: main
 takes a `MainWorkflow` (its claims, first stage and `MainStage`s, and optionally its state fold), the page a
@@ -169,7 +185,7 @@ Each action names a command of the owner plugin, which its key runs: `workflow-l
 which its manifest joins. A button, a fold and a key all run the engine's `workflow.stageAction` with the session and
 the action (`{ sessionId, action }`: the action's short id, `mainAction` or `toggleFinishedWaves`), so one intercept on
 it sees every stage action of every workflow. The engine's gate (`runFor`) checks the action, and the flow's workflow
-runs it through its `runAction`. Small and Medium declare none.
+runs it through its `runAction`. Small, Medium and Spike declare none.
 
 To change a workflow:
 
@@ -216,14 +232,14 @@ folder and marks it reported. Make in new session and Dismiss signal `handedOff`
 `custom`.
 
 **The claim.** A workflow claims the skills that start it: Small `wigley:small`, Medium `wigley:medium`, Large
-`wigley:feature`, `wigley:feature-primer` and `wigley:make`. `wigley:review` and every other skill claim nothing, so they
+`wigley:feature`, `wigley:feature-primer` and `wigley:make`, Spike `wigley:spike`. `wigley:review` and every other skill claim nothing, so they
 run inside the level. A claim by a workflow other than the flow's current one sets `movedUpFrom` to the current workflow
 (null for a session in none), sets the new workflow, its first stage, a null `state` and a null checklist, and clears
 `missedLevel`. The engine does not check that the move is upward: moving down is the user's word, by the same skill
 load. A claim by the current workflow (an own claim) nulls the checklist, so a second ask shows no old list; it changes nothing
 else on the flow's identity (`movedUpFrom` stays), and its stage rules may restart it. A claim from a stage with
 `finishes` starts a new run, so `movedUpFrom` is null for it, whichever workflow claims. When two workflows claim one
-skill, the lowest `order` wins (Small 10, Medium 20, Large 30).
+skill, the lowest `order` wins (Small 10, Medium 20, Large 30, Spike 40).
 
 The engine contributes `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools`, so every
 session's agent can call them. A wigley skill calls the step tool at each step boundary; a skill that does not call it
@@ -231,7 +247,7 @@ leaves the flow in its last step.
 
 - `set_workflow_step`'s one required string `step` takes a `reportedAs` value of any registered workflow: Large's are
   `explore`, `interview`, `plan`, `cold_read` and `fix`, Small's `build`, `check`, `land` and `done`, Medium's `build`,
-  `review`, `fix`, `land` and `done`. The flow's current workflow's stage rules answer the report, so a value outside that
+  `review`, `fix`, `land` and `done`, Spike's `interview`, `build`, `check`, `land` and `done`. The flow's current workflow's stage rules answer the report, so a value outside that
   workflow's stages is ignored.
 - `set_workflow_checklist`'s one required `items` is an array of `{ text, done }`. Each call replaces the whole list,
   so a missed call cannot leave the app out of step. Large never calls it: Large's checklist comes from `plan.md`.
@@ -285,7 +301,7 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   take the label.
 - **Paused run** — a stage whose status reads paused, and which declares no `rowActivity` of its own, sets Needs you
   (`attention`, `urgent`) at rank 18, so a session that stopped mid-run says so even when the agent asked in chat
-  rather than in a round. A stage that ends its run (Small's and Medium's Done, Large's Closed) reads done, plan ready
+  rather than in a round. A stage that ends its run (Small's, Medium's and Spike's Done, Large's Closed) reads done, plan ready
   reads ready and Large's idle has no status, so none of them sets it. The rank
   sits under chat's working, so a session waiting on its own background command or Monitor still reads Working, and
   under chat's error, so an unseen error shows first. It lasts until a turn or a subagent starts; viewing the session
@@ -309,11 +325,11 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   `Space w` keys. Idle draws nothing.
 - **Side pane** — one section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
   `docs/features/chat-bar/design.md` § The session hub) for each workflow, drawn only while a session's flow is of that
-  workflow. The section's title is `Plan` for Large and `Checklist` for Small and Medium.
+  workflow. The section's title is `Plan` for Large and `Checklist` for Small, Medium and Spike.
   - Large's pane shows from the first read of a plan until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. The
     checklist folds finished waves into one row, shows the current wave in full, and shows each later wave as one line.
     A task in the current wave whose task document reads `Status: in progress` shows the stage's state — running while make runs, paused while it pauses, pending in a stage that runs no tasks; every other open task shows pending.
-  - Small's and Medium's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
+  - Small's, Medium's and Spike's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
     progress bar and the list as one flat list.
   - The trail stays on the strip alone.
 
@@ -323,7 +339,7 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   the mouse and keeps its scroll while the pane is out of view or hidden.
 
 Primer and explore share the first step: the one the session is in, otherwise Explore. Plan ready and make share the
-Make step, and Small's and Medium's `done` and `land` share Land. The trail is words alone: a step's weight and colour show its status (`DESIGN.md` § Workflow), and the
+Make step, and Small's, Medium's and Spike's `done` and `land` share Land. Spike's trail can go back: a report of an earlier step makes it the current one, and every later step reads pending again. The trail is words alone: a step's weight and colour show its status (`DESIGN.md` § Workflow), and the
 current step also carries what follows the status in its status line (`Make 3/7`, `Fix · cycle 1`). On a narrow pane the
 trail wraps.
 
@@ -349,7 +365,7 @@ when the workflow plugins split; `ww`, `ws` and `wf` stay engine commands (`work
 | `<Leader>wt` | Retro |
 | `<Leader>wd` | Dismiss |
 | `<Leader>ws` | Show or hide the side pane, in every session |
-| `<Leader>wf` | Open or fold the selected session's finished waves; with no finished group, log `nothing to run`; on a Small or Medium flat list the key flips the fold and nothing shows |
+| `<Leader>wf` | Open or fold the selected session's finished waves; with no finished group, log `nothing to run`; on a Small, Medium or Spike flat list the key flips the fold and nothing shows |
 
 The layout preview opens on `<Leader>zlw`.
 
