@@ -116,8 +116,9 @@ export interface SessionPanes {
   tree(): PaneTree;
   sessions(): PaneSessions;
   focusedPaneId(): string;
-  // The focused pane's slot, which holds its tab area.
-  focusedPaneSlot(): HTMLElement;
+  // The pane whose slot, which holds its tab area, holds `node`; null when
+  // no pane's does.
+  paneHolding(node: Node | null): string | null;
   // The focused pane's session; null for an empty pane.
   focusedSessionId(): string | null;
   // Shows `sessionId` in pane `paneId`, null emptying it; the frame it showed
@@ -434,7 +435,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     tree: () => treeView.tree(),
     sessions: () => assigned,
     focusedPaneId: () => treeView.tree().focusedId,
-    focusedPaneSlot: () => treeView.slot(treeView.tree().focusedId),
+    paneHolding: (node) => treeView.leafHolding(node),
     focusedSessionId: () => assigned.get(treeView.tree().focusedId) ?? null,
     load(paneId, sessionId) {
       assigned.set(paneId, sessionId);

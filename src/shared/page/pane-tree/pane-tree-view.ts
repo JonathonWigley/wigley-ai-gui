@@ -49,6 +49,8 @@ export interface PaneTreeView {
   // The slot of leaf `id`; the same element for as long as the leaf lives.
   // Throws when `id` is not a leaf.
   slot(id: string): HTMLElement;
+  // The leaf whose slot holds `node`; null when no slot does.
+  leafHolding(node: Node | null): string | null;
   // Draws `tree` in place of the current one; slots of leaves it drops leave
   // the document, after `leaving`.
   restore(tree: PaneTree): void;
@@ -337,11 +339,13 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     }
   };
 
+  const leafHolding = (node: Node | null) => {
+    const holding = [...slots].find(([, slot]) => slot.contains(node));
+    return holding === undefined ? null : holding[0];
+  };
+
   const notePress = (event: PointerEvent) => {
-    const pressed = [...slots].find(([, slot]) =>
-      slot.contains(event.target as Node),
-    );
-    pressedId = pressed === undefined ? null : pressed[0];
+    pressedId = leafHolding(event.target as Node);
   };
   const forgetPress = () => {
     pressedId = null;
@@ -412,6 +416,7 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       }
       return slotFor(id);
     },
+    leafHolding,
     restore(tree) {
       current = tree;
       dropSlotsMissingFrom(tree);

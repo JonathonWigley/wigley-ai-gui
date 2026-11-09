@@ -528,14 +528,15 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // Ends the list's turn and gives main's scope and keys back; `picked`
     // closes a narrow window's side bar overlay, so the keys never sit in a
     // pane under it. `leave` runs first, so the `sideBarHidden` it may cause
-    // finds the list already left. A DOM focus already inside the focused
-    // pane stays, as `endListByMain` leaves it: only main's scope is set again.
+    // finds the list already left. A DOM focus already inside a pane stays,
+    // as `endListByMain` leaves it: only main's scope is set again. A press
+    // in another pane moves pane focus on its release, after this runs.
     const focusMain = () => {
       if (view.list.leave()) {
         log('list left');
         mode.picked();
       }
-      if (view.panes.focusedPaneSlot().contains(document.activeElement)) {
+      if (view.panes.paneHolding(document.activeElement) !== null) {
         setMainScope();
       } else {
         keysToFocusedPane();

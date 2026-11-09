@@ -459,35 +459,45 @@ describe('the sessions list in the page part', () => {
   });
 
   // Breaks: `focusMain` blurring a click's focus in the focused pane (the
-  // chat box), or keeping a focus left outside it.
-  it.each([
-    { case: 'inside the focused pane stays', inPane: true, kept: true },
-    { case: 'outside the focused pane blurs', inPane: false, kept: false },
-  ])(
-    'focusMain_KeepsOnlyAFocusInTheFocusedPane: $case',
-    async ({ inPane, kept }) => {
-      const setup = await startWithList(['s1'], 's1');
-      const tabElement = document.createElement('div');
+  // chat box), or in another pane, whose press moves pane focus only on its
+  // release; or keeping a focus left outside the panes.
+  it.each<{ case: string; at: 'focused' | 'other' | 'outside'; kept: boolean }>(
+    [
+      { case: 'in the focused pane stays', at: 'focused', kept: true },
+      { case: 'in another pane stays', at: 'other', kept: true },
+      { case: 'outside the panes blurs', at: 'outside', kept: false },
+    ],
+  )('focusMain_KeepsOnlyAFocusInAPane: $case', async ({ at, kept }) => {
+    const setup = await startWithList(['s1', 's2'], 's1', savedSplit('a'));
+    const tabOf = (sessionId: string) => {
+      const element = document.createElement('div');
       const shown = vi.fn();
-      setup.exports.addTab('s1', {
+      setup.exports.addTab(sessionId, {
         id: 'tab',
         title: 'Tab',
         icon: 'book',
-        element: tabElement,
+        element,
         beforeClose: () => true,
         shown,
       });
-      const focused = inPane ? tabElement : document.createElement('div');
-      focused.focus();
-      shown.mockClear();
+      return { element, shown };
+    };
+    const focusedTab = tabOf('s1');
+    const otherTab = tabOf('s2');
+    const focused = {
+      focused: focusedTab.element,
+      other: otherTab.element,
+      outside: document.createElement('div'),
+    }[at];
+    focused.focus();
+    focusedTab.shown.mockClear();
 
-      setup.mode.focusMain();
+    setup.mode.focusMain();
 
-      expect(document.activeElement === focused).toBe(kept);
-      expect(shown).toHaveBeenCalledTimes(1);
-      await setup.harness.stop();
-    },
-  );
+    expect(document.activeElement === focused).toBe(kept);
+    expect(focusedTab.shown).toHaveBeenCalledTimes(1);
+    await setup.harness.stop();
+  });
 
   it('paneKeyFocused_ReshowsTheTab', async () => {
     const runs: unknown[] = [];
