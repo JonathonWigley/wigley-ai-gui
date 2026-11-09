@@ -6,8 +6,8 @@ import {
   encodedPath,
   isRevisionSegment,
   parsedSchemeUrl,
+  plainSegment,
 } from './file-url';
-import { relativeSegments } from './scoped-files';
 
 // The scheme that serves the page the files of each owner's layouts.
 export const LAYOUT_SCHEME = 'wigley-layout';
@@ -61,17 +61,4 @@ export function layoutFilePath(
       : paths.join(defaultFolder, ...pathSegments);
   }
   return paths.join(layoutsRoot, owner, name, ...pathSegments);
-}
-
-// `segment` when it names one entry: not empty, `.` or `..`, and holding no
-// `/`, `\` or drive prefix; else null. The URL parser folds a `.` or `..`
-// name, `%2E` forms included, before it reaches here.
-function plainSegment(segment: string | null): string | null {
-  if (segment === null) {
-    return null;
-  }
-  const segments = relativeSegments(segment);
-  return segments !== null && segments.length === 1 && segments[0] === segment
-    ? segment
-    : null;
 }

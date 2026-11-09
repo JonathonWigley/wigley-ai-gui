@@ -35,7 +35,13 @@ function setUp() {
     layouts: {
       show(options) {
         shows.push(options as unknown as ShowLayoutOptions<Layout>);
-        return { refresh: () => undefined, dispose: () => undefined };
+        return {
+          refresh: () => undefined,
+          draw() {
+            throw new Error('not faked');
+          },
+          dispose: () => undefined,
+        };
       },
     },
   };

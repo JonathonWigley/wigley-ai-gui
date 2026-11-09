@@ -1,6 +1,6 @@
 import { relativeSegments } from './scoped-files';
 
-// The `~<revision>` segment both file schemes put in a URL's path.
+// The `~<revision>` segment the file schemes put in a URL's path.
 const REVISION_SEGMENT = /^~\d+$/;
 
 // `path`'s `/`-joined segments, each URI-encoded.
@@ -14,7 +14,9 @@ export function parsedSchemeUrl(url: string, scheme: string): URL | null {
   return parsed === null || parsed.protocol !== `${scheme}:` ? null : parsed;
 }
 
-export function isRevisionSegment(segment: string | undefined): boolean {
+export function isRevisionSegment(
+  segment: string | undefined,
+): segment is string {
   return segment !== undefined && REVISION_SEGMENT.test(segment);
 }
 
@@ -45,4 +47,17 @@ export function decodedSegment(encoded: string): string | null {
   } catch {
     return null;
   }
+}
+
+// `segment` when it names one entry: not empty, `.` or `..`, and holding no
+// `/`, `\` or drive prefix; else null. The URL parser folds a `.` or `..`
+// name, `%2E` forms included, before it reaches here.
+export function plainSegment(segment: string | null): string | null {
+  if (segment === null) {
+    return null;
+  }
+  const segments = relativeSegments(segment);
+  return segments !== null && segments.length === 1 && segments[0] === segment
+    ? segment
+    : null;
 }

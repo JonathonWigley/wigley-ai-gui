@@ -21,9 +21,10 @@ import type {
   CommandHandler,
   KeyHints,
   PageCommandContext,
+  PagePart,
 } from '../contracts/plugin';
+import type { ServedPlugin } from '../contracts/plugin-catalog';
 import type { AppConfig } from '../contracts/settings';
-import { manifests } from '../plugins/manifests';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
@@ -60,6 +61,12 @@ import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
+import {
+  deferredPageIds,
+  loadPagePart,
+  pagePartIds,
+  startCheckedPart,
+} from './page-part-loader';
 import { createPageRestores } from './page-restores';
 import {
   createPaneTargets,
@@ -102,12 +109,12 @@ const timers: Timers = {
 
 const clock: Clock = { now: () => Date.now() };
 
-// Throws for a page part main served nothing for: its manifest is missing from
-// the built-in manifests list, so it would get no keys, labels or settings.
+// Throws for a page part main served no settings for: main did not admit its
+// plugin, so it would get no keys, labels or settings.
 function requireServedSettings(config: AppConfig, pluginId: string) {
   if (!Object.hasOwn(config.pluginSettings, pluginId)) {
     throw new Error(
-      `Plugin "${pluginId}" has a page part but its manifest is not in the built-in manifests list`,
+      `Plugin "${pluginId}" has a page part but main served no settings for it`,
     );
   }
 }
@@ -128,9 +135,46 @@ async function start() {
     }
   });
   const served = await bridge.config();
+  // Read by the start callback, the live `known` and the answer below, so it
+  // is set before the first part starts.
+  let lastPush = served;
+  const loadPart = (plugin: ServedPlugin) =>
+    loadPagePart(plugin, {
+      builtIns: pageParts,
+      importModule: (url) => import(/* @vite-ignore */ url),
+    });
+  const loads = await Promise.allSettled(served.plugins.map(loadPart));
+  const loadedParts: PagePart[] = [];
+  loads.forEach((load, index) => {
+    if (load.status === 'rejected') {
+      log(
+        'plugin-switch',
+        `page.js of ${served.plugins[index].id} not loaded: ${errorText(load.reason)}`,
+      );
+    } else if (load.value !== null) {
+      loadedParts.push(load.value);
+    }
+  });
+  // A user part, and each part depending on one in the page, starts after
+  // load, one at a time, so a throw in one fails only that part. The host
+  // gets them through `add` after it starts the rest: as `disabled` ids, a
+  // built-in naming one in `dependsOn.main` would fail the disabled check.
+  const deferred = deferredPageIds(served.plugins);
+  const startsAtLoad = loadedParts
+    .map((part) => part.manifest.id)
+    .filter((id) => !deferred.includes(id));
   const registry = new CommandRegistry<PageCommandContext<any>>(log);
   const hasHandler = (id: string) => registry.has(id);
-  const config = startedPluginsConfig(served, [], hasHandler);
+  // Without the binds of the page parts the host does not start with the
+  // rest, so `requireRegistered` below meets no bind of a deferred part or of
+  // a page.js that failed to load.
+  const config = startedPluginsConfig(
+    served,
+    pagePartIds(served.plugins, pageParts).filter(
+      (id) => !startsAtLoad.includes(id),
+    ),
+    hasHandler,
+  );
   // Read before the plugins start, so each reads its state as it starts.
   const uiState = createPageUiState(await bridge.uiState(), (key, value) =>
     bridge.setUiState(key, value),
@@ -378,36 +422,40 @@ async function start() {
     },
   });
   const pageHost = startPlugins(
-    pageParts,
+    loadedParts.filter((part) => startsAtLoad.includes(part.manifest.id)),
     'page',
     (part, context) => {
       const { id } = part.manifest;
-      requireServedSettings(config, id);
-      const started = part.start(
-        createPageApi(part.manifest, {
-          areas,
-          modes,
-          setLayout: (layout) => shell.setLayout(layout),
-          transparency,
-          bridge,
-          scopeStack,
-          pendingKeys,
-          config: live,
-          services,
-          uiState,
-          commands,
-          dependency: context.dependency,
-          registrations: context.registrations,
-          bus,
-          layouts,
-          paneTargets,
-          drops,
-          restores,
-          state,
-          anchors,
-          boxFocus,
-          pickerCommands,
-        }),
+      requireServedSettings(lastPush, id);
+      const origin =
+        lastPush.plugins.find((plugin) => plugin.id === id)?.origin ?? 'user';
+      const started = startCheckedPart(part, origin, (checked) =>
+        checked.start(
+          createPageApi(checked.manifest, {
+            areas,
+            modes,
+            setLayout: (layout) => shell.setLayout(layout),
+            transparency,
+            bridge,
+            scopeStack,
+            pendingKeys,
+            config: live,
+            services,
+            uiState,
+            commands,
+            dependency: context.dependency,
+            registrations: context.registrations,
+            bus,
+            layouts,
+            paneTargets,
+            drops,
+            restores,
+            state,
+            anchors,
+            boxFocus,
+            pickerCommands,
+          }),
+        ),
       );
       const handlers: Record<
         string,
@@ -420,12 +468,28 @@ async function start() {
       }
       return started;
     },
-    manifests,
+    // Read at each check, so a plugin added live finds a dependency added in
+    // the same change.
+    () => lastPush.plugins.map((plugin) => plugin.manifest),
     // Main serves the applied list in `plugins.disabled`, and no command, bind
     // or scope of those plugins.
     served.settings.plugins.disabled,
     log,
   );
+  // The ids the host holds, in its held order, for the answer below.
+  const held = new Set(startsAtLoad);
+  for (const id of deferred) {
+    const part = loadedParts.find((each) => each.manifest.id === id);
+    if (part === undefined) {
+      continue;
+    }
+    try {
+      pageHost.add(part);
+      held.add(id);
+    } catch (error) {
+      log('plugin-switch', `page start failed: ${errorText(error)}`);
+    }
+  }
   anchors.reveal();
   registry.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
@@ -436,6 +500,9 @@ async function start() {
     restores,
     reapplyPush: () => applyLivePush(lastPush),
     log,
+    served: () => lastPush,
+    loadPart,
+    held,
   };
   bridge.onPluginParts((request) =>
     answerPluginParts(pageHost, request, answerDeps),
@@ -475,12 +542,13 @@ async function start() {
   );
   // The page binds rule: main has stripped the plugins that are off, and the
   // page strips the page parts its host has not started yet, so
-  // `requireRegistered` meets no bind of a part still to start.
+  // `requireRegistered` meets no bind of a part still to start. Only plugins
+  // with a page part are stripped: a main-only plugin keeps its page binds,
+  // and a page.js that failed to load keeps its binds stripped.
   const notStarted = () =>
-    pageParts
-      .map((part) => part.manifest.id)
-      .filter((id) => !pageHost.started.has(id));
-  let lastPush = served;
+    pagePartIds(lastPush.plugins, pageParts).filter(
+      (id) => !pageHost.started.has(id),
+    );
   const applyLivePush = (next: AppConfig) => {
     lastPush = next;
     applyStartedPush(startedPluginsConfig(next, notStarted(), hasHandler));
@@ -505,13 +573,12 @@ async function start() {
     },
     answerDeps,
   );
+  // One request per id, in dependency order, so a throw in one part does not
+  // stop the next; a failure is logged, and main's own `start` for the id
+  // carries it to the Settings row.
   const toStart = notStarted().filter((id) => !loadDisabled.includes(id));
-  if (toStart.length > 0) {
-    await answerPluginParts(
-      pageHost,
-      { kind: 'start', ids: toStart },
-      answerDeps,
-    );
+  for (const id of toStart) {
+    await answerPluginParts(pageHost, { kind: 'start', ids: [id] }, answerDeps);
   }
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.

@@ -8,6 +8,8 @@ const FOLDER = '/c/layouts';
 const KIT_TYPES = 'export interface BaseKit {}';
 const CLONE = '/clone';
 const FORMS_DEFAULT = `${CLONE}/src/plugins/forms/layouts/default`;
+const USER_FOLDER = '/c/plugins/forms';
+const USER_DEFAULT = `${USER_FOLDER}/layouts/default`;
 
 let files: MemoryFiles;
 let sent: [LayoutOwner, LayoutSet][];
@@ -17,12 +19,18 @@ beforeEach(() => {
   sent = [];
 });
 
-function createService(repoDir: string | null = null): LayoutService {
+// `userFolder` is the folder `userPluginFolder` returns for every owner; null
+// for a service whose owners are all built in.
+function createService(
+  repoDir: string | null = null,
+  userFolder: string | null = null,
+): LayoutService {
   return createLayoutService({
     files,
     paths: posixPaths,
     folder: FOLDER,
     repoDir,
+    userPluginFolder: () => userFolder,
     kitTypes: KIT_TYPES,
     send: (owner, set) => sent.push([owner, set]),
     log: () => undefined,
@@ -183,10 +191,12 @@ describe('createLayoutService', () => {
     },
   );
 
+  // Breaks if the user folder is ignored, or if no clone hides it.
   it.each([
     {
       state: 'clone holds the default, listed',
       repoDir: CLONE,
+      userFolder: null,
       waitsForFirstSet: true,
       defaultBuiltIn: false,
       defaultFolderPath: FORMS_DEFAULT,
@@ -194,6 +204,7 @@ describe('createLayoutService', () => {
     {
       state: 'clone holds the default, not yet listed',
       repoDir: CLONE,
+      userFolder: null,
       waitsForFirstSet: false,
       defaultBuiltIn: null,
       defaultFolderPath: FORMS_DEFAULT,
@@ -201,20 +212,41 @@ describe('createLayoutService', () => {
     {
       state: 'no clone, listed',
       repoDir: null,
+      userFolder: null,
       waitsForFirstSet: true,
       defaultBuiltIn: true,
       defaultFolderPath: null,
     },
+    {
+      state: 'user plugin, clone present',
+      repoDir: CLONE,
+      userFolder: USER_FOLDER,
+      waitsForFirstSet: true,
+      defaultBuiltIn: false,
+      defaultFolderPath: USER_DEFAULT,
+    },
+    {
+      state: 'user plugin, no clone',
+      repoDir: null,
+      userFolder: USER_FOLDER,
+      waitsForFirstSet: true,
+      defaultBuiltIn: false,
+      defaultFolderPath: USER_DEFAULT,
+    },
   ])(
-    'register_DefaultFolder_ReadFromTheClone: $state',
+    'register_DefaultFolder_ReadFromTheUserFolderElseTheClone: $state',
     async ({
       repoDir,
+      userFolder,
       waitsForFirstSet,
       defaultBuiltIn,
       defaultFolderPath,
     }) => {
-      await files.write(`${FORMS_DEFAULT}/layout.js`, '// live default');
-      const service = createService(repoDir);
+      // The clone's default only for the built-in rows, so a user row that
+      // read the clone would list a built-in default.
+      const liveDefault = userFolder === null ? FORMS_DEFAULT : USER_DEFAULT;
+      await files.write(`${liveDefault}/layout.js`, '// live default');
+      const service = createService(repoDir, userFolder);
 
       if (waitsForFirstSet) {
         await registered(service, 'forms');
@@ -229,6 +261,23 @@ describe('createLayoutService', () => {
       expect(service.defaultFolderPath('forms')).toBe(defaultFolderPath);
     },
   );
+
+  // Breaks if a default folder made after load is never watched.
+  it('register_DefaultFolder_ReadFromTheUserFolderElseTheClone: user plugin, no default folder on disk', async () => {
+    const service = createService(CLONE, USER_FOLDER);
+    await registered(service, 'forms');
+
+    expect(await files.stat(USER_DEFAULT)).toMatchObject({ isFolder: true });
+    sent = [];
+    await files.write(`${USER_DEFAULT}/layout.js`, '// live default');
+
+    await vi.waitFor(() =>
+      expect(
+        sent.at(-1)?.[1].layouts.find((entry) => entry.name === 'default')
+          ?.builtIn,
+      ).toBe(false),
+    );
+  });
 
   it('dispose_Registration_SendsNoMoreSetsAndFreesTheOwner', async () => {
     const service = createService();

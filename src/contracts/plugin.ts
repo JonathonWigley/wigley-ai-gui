@@ -587,6 +587,68 @@ export interface LayoutShow {
   dispose(): void;
 }
 
+// A layout part `draw` draws: `(parent, input, kit)` returning an object
+// whose `element` it appended to `parent`. The kit parameter is matched as
+// `never`, so this file names no kit type.
+type LayoutPartShape = (
+  parent: HTMLElement,
+  input: never,
+  kit: never,
+) => { element: HTMLElement };
+
+// The names of `L`'s parts of that shape (an optional part included).
+export type LayoutPartName<L> = {
+  [K in keyof L]-?: NonNullable<L[K]> extends LayoutPartShape ? K : never;
+}[keyof L] &
+  string;
+
+// The input and the returned object of part `K` of `L`, read from its builder.
+export type LayoutPartInput<L, K extends keyof L> =
+  NonNullable<L[K]> extends (
+    parent: HTMLElement,
+    input: infer I,
+    kit: never,
+  ) => unknown
+    ? I
+    : never;
+export type LayoutPartBuilt<L, K extends keyof L> =
+  NonNullable<L[K]> extends (...args: never[]) => infer R ? R : never;
+
+// A drawn part: the part's returned object, the name of the layout that
+// drew it, and the dispose of every anchor, slot subscription and markdown
+// mount its kit recorded. `dispose` does not remove `built.element`.
+export interface DrawnLayoutPart<R> {
+  built: R;
+  layoutName: string;
+  dispose(): void;
+}
+
+// `scope` is a short scope the plugin's manifest declares; the part's key
+// hints show in it. Left out: no scope, so a hint shows in every scope.
+export interface LayoutPartDrawOptions {
+  scope?: string;
+}
+
+// The show a page part's `layouts.show` returns.
+export interface PageLayoutShow<L> extends LayoutShow {
+  // Draws part `part` into `parent` with the layout the show picks now (the
+  // user's layout when it defines the part, else `defaultLayout`; before the
+  // first `setLayouts`, `defaultLayout`) and with the plugin's base kit, its
+  // key hints in `options.scope`. A user layout's part that throws is rolled
+  // back, logged once as `layout <name> <part> failed: <error>`, and
+  // `defaultLayout` draws in its place. The root gets `data-layout` and
+  // `data-layout-owner`. Throws for a scope the manifest does not declare,
+  // drawing nothing, and when `defaultLayout`'s part throws. The show's
+  // `dispose` disposes every draw not yet disposed; removing a drawn element
+  // stays with the caller.
+  draw<K extends LayoutPartName<L>>(
+    part: K,
+    parent: HTMLElement,
+    input: LayoutPartInput<L, K>,
+    options?: LayoutPartDrawOptions,
+  ): DrawnLayoutPart<LayoutPartBuilt<L, K>>;
+}
+
 // `editor` is the text box a key fired in. `arg` is the command's argument.
 export interface PageCommandContext<A = undefined> {
   editor?: TextEditor;
@@ -761,7 +823,8 @@ export interface PageRestores {
 // fresh. `layouts.show` shows the plugin's own layouts, loading each set main
 // announces for the plugin and handing `options.setLayouts` the result, and
 // refreshes the show on each change of the plugin's settings until the
-// show's `dispose`. `state` is as `PluginState` says, and `state.forLayouts` reads
+// show's `dispose`; the show's `draw` draws a part of those layouts with the
+// plugin's base kit, so a user `page.js` draws through its layout kit. `state` is as `PluginState` says, and `state.forLayouts` reads
 // any slot by its id, for a layout's kit.
 export interface PageApi<
   M extends PluginManifest,
@@ -808,7 +871,7 @@ export interface PageApi<
     key: DependencyKey<E, 'page', Id>,
   ): E;
   dataUrl(path: string, revision: number): string;
-  layouts: { show<L>(options: ShowLayoutOptions<L>): LayoutShow };
+  layouts: { show<L>(options: ShowLayoutOptions<L>): PageLayoutShow<L> };
   state: PluginState<M, 'page'> & { forLayouts: LayoutState };
 }
 
@@ -1021,7 +1084,8 @@ export interface PluginSwitchService {
 // `drive` is the plugin's own drive host, null outside a drive run.
 // `services.log` logs under the plugin's id, called as `log(message)`.
 // `layouts.register` writes the plugin's layout contract `layoutTypes` to its
-// layouts folder and watches that folder, and the plugin's default folder
+// layouts folder and watches that folder, and the plugin's default folder:
+// `layouts/default` in a user plugin's own folder, else
 // `src/plugins/<id>/layouts/default` in the repo clone, until the returned
 // `Disposable`'s `dispose`; it throws for a second registration.
 // `layouts.names` lists the plugin's layouts, `default` first; only `default`

@@ -37,6 +37,10 @@ import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { keysFor } from '../../shared/keys-for';
 import { element } from '../../shared/page/dom';
 import { createListPicker } from '../../shared/page/list-picker';
+import {
+  ownerKitServicesOf,
+  ownerLayoutShow,
+} from '../../shared/page/layout-host/owner-show';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { pluginLog } from '../../shared/plugin-log';
 import {
@@ -136,7 +140,9 @@ export function liveKeysFor(
 // they leave out `main`, which only the mode registry fills, and the activity
 // bar and side bar, which the core draws from the modes. Its
 // settings are its own entry in the config's plugin settings, and its ui state
-// and `services.log` are scoped to its id. Its layout shows run under its id.
+// and `services.log` are scoped to its id. Its layout shows run under its id,
+// and each show's `draw` draws with a base kit made from this API's own
+// markdown, key hints, commands, platform, layout state and log.
 // Every registration it makes through the API is filed in
 // `deps.registrations`. Editors, timers, pane targets and the transparency
 // override are held per plugin and filed as one entry each, so a destroyed editor or a run timer leaves nothing in the store;
@@ -158,7 +164,12 @@ export function createPageApi(
   const areas = pluginAreas(deps.areas, registrations);
   const log = pluginLog(deps.services.log, manifest.id);
   const editor = trackedEditor(deps.services.editor, registrations);
-  return {
+  const api: PageApi<
+    PluginManifest,
+    ChannelShape,
+    UntypedEvents,
+    UntypedEvents
+  > = {
     areas,
     channel: {
       invoke: channel.invoke,
@@ -250,13 +261,22 @@ export function createPageApi(
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
     layouts: {
       show: (options) =>
-        registrations.track(deps.layouts.show(manifest.id, options)),
+        track(
+          ownerLayoutShow({
+            manifest,
+            kit: ownerKitServicesOf(api),
+            log,
+            options,
+            show: (shown) => deps.layouts.show(manifest.id, shown),
+          }),
+        ),
     },
     state: {
       ...pluginState(deps.state, manifest.id, 'page', track),
       forLayouts: layoutState(deps.state, manifest.id, track),
     },
   };
+  return api;
 }
 
 // A pushed scope the store forgets at its `pop`: the stack's `pop` throws on a

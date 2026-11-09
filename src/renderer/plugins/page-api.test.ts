@@ -38,6 +38,7 @@ import {
   type RuntimeCatalog,
 } from '../../contracts/core-state';
 import type { SlotKey } from '../../contracts/state';
+import type { BaseKit } from '../../shared/page/layout-host/kit';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { CommandRegistry } from '../../shared/command-registry';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
@@ -1529,5 +1530,77 @@ describe('createPageApi commands', () => {
 
     expect(catalog()?.binds.binds).toEqual([]);
     expect(catalog()?.commands.map((info) => info.id)).toEqual(['o.kept']);
+  });
+});
+
+describe('createPageApi layouts.show draw', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => vi.unstubAllGlobals());
+
+  interface ViewLayout {
+    view?(
+      parent: HTMLElement,
+      input: { text: string },
+      kit: BaseKit,
+    ): { element: HTMLElement };
+  }
+
+  // Breaks if `page-api.ts` wires the kit to another manifest or skips the
+  // owner show.
+  it('createPageApi_LayoutsShowDraw_DrawsWithThePluginsKit', () => {
+    const anchored: string[] = [];
+    const anchors = {
+      anchor(_element: HTMLElement, command: string) {
+        anchored.push(command);
+        return { dispose: () => {} };
+      },
+    } as unknown as PageApiDeps['anchors'];
+    const hinting: ViewLayout = {
+      view(parent, input, kit) {
+        const root = kit.el(parent, 'div', '', input.text);
+        kit.keyHint(root, 'hello');
+        return { element: root };
+      },
+    };
+    // Hands the show a set whose user layout `mine` is `hinting`.
+    const layouts: PageLayouts = {
+      show(_owner, options) {
+        options.setLayouts({
+          layouts: new Map([
+            ['default', options.defaultLayout],
+            ['mine', hinting as never],
+          ]),
+          user: 'mine',
+        });
+        return { refresh: () => undefined, dispose: () => undefined };
+      },
+    };
+    const api = createPageApi(
+      {
+        ...manifest,
+        commands: { hello: { label: 'Hello', group: 'P', runsIn: 'page' } },
+      },
+      deps({ anchors, layouts }),
+    );
+    const parent = new FakeElement('section');
+
+    const show = api.layouts.show<ViewLayout>({
+      defaultLayout: {
+        view: (slot) => ({
+          element: slot.appendChild(asHtml(new FakeElement('p'))),
+        }),
+      },
+      defaultStylesheet: null,
+      read: () => ({}),
+      userLayout: () => 'mine',
+      setLayouts: () => undefined,
+    });
+    const { built } = show.draw('view', asHtml(parent), { text: 't' });
+
+    expect(anchored).toEqual(['p.hello']);
+    expect(asFake(built.element).dataset).toMatchObject({
+      layout: 'mine',
+      layoutOwner: 'p',
+    });
   });
 });

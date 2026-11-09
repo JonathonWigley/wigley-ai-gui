@@ -30,7 +30,6 @@ import type {
   CommandInfo,
   DependencyKey,
   DriveHost,
-  LayoutShow,
   MainApi,
   MainPart,
   MainServices,
@@ -38,6 +37,7 @@ import type {
   Mode,
   ModeHandle,
   PageApi,
+  PageLayoutShow,
   PageModes,
   PagePart,
   PageServices,
@@ -1284,14 +1284,19 @@ function fakeMarkdown(
   );
 }
 
+// A show whose `draw` throws `not faked`: the owner show that draws lives in
+// `src/shared/page/layout-host`, a layer this module may not import.
 function fakeLayoutShow<L>(
   shows: Listeners<ShownLayouts<unknown>>,
   setLayouts: (shown: ShownLayouts<L>) => void,
   register: CommonApi['register'],
-): LayoutShow {
+): PageLayoutShow<L> {
   const listening = shows.add((shown) => setLayouts(shown as ShownLayouts<L>));
-  return register<LayoutShow>({
+  return register<PageLayoutShow<L>>({
     refresh() {},
+    draw() {
+      throw new Error('layouts.show draw not faked');
+    },
     dispose: () => listening.dispose(),
   });
 }

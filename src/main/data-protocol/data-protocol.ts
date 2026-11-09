@@ -6,6 +6,7 @@ import type { LayoutOwner } from '../../contracts/layouts';
 import type { Paths } from '../../contracts/paths';
 import { DATA_SCHEME, dataFilePath } from '../../shared/data-url';
 import { LAYOUT_SCHEME, layoutFilePath } from '../../shared/layout-url';
+import { PLUGIN_SCHEME, pluginFilePath } from '../../shared/plugin-url';
 import { VISUAL_SCHEME } from '../../shared/visual-url';
 import { createVisualDocuments } from './visual-documents';
 
@@ -27,7 +28,7 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 const OTHER_CONTENT_TYPE = 'text/plain; charset=utf-8';
 
-// The privileges both file schemes take: a standard, secure origin the page
+// The privileges the file schemes take: a standard, secure origin the page
 // may fetch from and import modules from across origins.
 const FILE_SCHEME_PRIVILEGES = {
   standard: true,
@@ -47,12 +48,12 @@ const VISUAL_SCHEME_PRIVILEGES = {
   secure: true,
 };
 
-// Registers `wigley-data:`, `wigley-layout:` and `wigley-visual:`. Electron
-// takes scheme privileges once, before the app is ready, so all three go in
-// this one call.
+// Registers `wigley-data:`, `wigley-layout:`, `wigley-plugin:` and
+// `wigley-visual:`. Electron takes scheme privileges once, before the app is
+// ready, so all four go in this one call.
 export function registerAppSchemes(): void {
   protocol.registerSchemesAsPrivileged([
-    ...[DATA_SCHEME, LAYOUT_SCHEME].map((scheme) => ({
+    ...[DATA_SCHEME, LAYOUT_SCHEME, PLUGIN_SCHEME].map((scheme) => ({
       scheme,
       privileges: FILE_SCHEME_PRIVILEGES,
     })),
@@ -66,6 +67,15 @@ export function registerAppSchemes(): void {
 // anything but a file, answers 404.
 export function serveDataScheme(dataRoot: string, paths: Paths): void {
   serveFiles(DATA_SCHEME, (url) => dataFilePath(url, dataRoot, paths));
+}
+
+// Serves each user plugin's per-revision copies under `codeRoot`, as
+// `serveDataScheme` serves plugin data: a URL naming no file, a folder, a
+// missing revision, or a path outside the plugin's copy answers 404. A
+// relative import inside `page.js` resolves under the same `~<revision>`, so
+// it loads from that revision's copy.
+export function servePluginScheme(codeRoot: string, paths: Paths): void {
+  serveFiles(PLUGIN_SCHEME, (url) => pluginFilePath(url, codeRoot, paths));
 }
 
 // Serves each owner's layouts under `layoutsRoot`, and its `default` from the

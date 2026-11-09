@@ -20,6 +20,9 @@ export interface LayoutServiceDeps {
   // The absolute repo clone each owner's live `default` is read from; null
   // when the clone is missing.
   repoDir: string | null;
+  // The user plugin's folder (`<config folder>/plugins/<id>`) for an owner the
+  // catalog holds as a user plugin; null otherwise.
+  userPluginFolder(owner: LayoutOwner): string | null;
   // The text of `src/shared/page/layout-host/kit.d.ts`.
   kitTypes: string;
   send(owner: LayoutOwner, set: LayoutSet): void;
@@ -28,17 +31,21 @@ export interface LayoutServiceDeps {
 
 // The core's layouts folder, one registry per registered owner over its own
 // `<folder>/<owner>/`. `register` starts the owner's registry, which writes
-// the owner's `layout.d.ts` and also watches the owner's `defaultFolder`
-// (relative to `repoDir`, `/`-separated) for a live `default`, and sends the
-// owner's first set once it has listed, then each set the registry announces;
-// with no `repoDir` the `default` stays built in. It throws
+// the owner's `layout.d.ts` and also watches the owner's default folder for a
+// live `default`, and sends the owner's first set once it has listed, then
+// each set the registry announces. The default folder is read at `register`:
+// `<userPluginFolder(owner)>/layouts/default` for a user plugin, made first
+// when missing so a `layout.js` written there later is watched, clone or no
+// clone; else `defaultFolder` (relative to `repoDir`, `/`-separated), and with
+// no `repoDir` the `default` stays built in. It throws
 // `<owner> is no layout owner` for an owner that is not lowercase letters,
 // digits and `-`, and `layouts of <owner> already registered` while the owner
 // holds a registration. Disposing a registration closes its watches and drops
 // the owner; disposing it again, or after `dispose`, does nothing. `names` reads `['default']` and `read` resolves null for an
 // owner not registered or not yet listed. `defaultFolderPath` is the absolute
 // default folder of a registered owner, listed or not; null for an owner not
-// registered or with no `repoDir`. `dispose` drops every owner.
+// registered, or for one that is no user plugin with no `repoDir`. `dispose`
+// drops every owner.
 export interface LayoutService {
   register(
     owner: LayoutOwner,
@@ -59,7 +66,7 @@ const DEFAULT_NAME = 'default';
 const LOG_SOURCE = 'layouts';
 
 // One owner's registration: its registry once it has listed, until disposed,
-// and its absolute default folder, null with no clone.
+// and its absolute default folder, null for a built-in with no clone.
 interface Registration {
   registry: LayoutRegistry | null;
   isDisposed: boolean;
@@ -97,29 +104,51 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
       if (registrations.has(owner)) {
         throw new Error(`layouts of ${owner} already registered`);
       }
+      const userFolder = deps.userPluginFolder(owner);
+      const userDefault =
+        userFolder === null
+          ? null
+          : paths.join(userFolder, 'layouts', DEFAULT_NAME);
       const defaultFolderPath =
-        deps.repoDir === null ? null : paths.join(deps.repoDir, defaultFolder);
+        userDefault ??
+        (deps.repoDir === null
+          ? null
+          : paths.join(deps.repoDir, defaultFolder));
       const held: Registration = {
         registry: null,
         isDisposed: false,
         defaultFolderPath,
       };
       registrations.set(owner, held);
-      startLayoutRegistry({
-        folder: scopedFiles(files, paths.join(deps.folder, owner), paths),
-        defaultFolder:
-          defaultFolderPath === null
-            ? null
-            : scopedFiles(files, defaultFolderPath, paths),
-        send: (set) => {
-          if (!held.isDisposed) {
-            deps.send(owner, set);
-          }
-        },
-        log,
-        logSource: owner,
-        layoutTypes,
-      }).then(
+      // The registry leaves a default folder missing at its start unwatched,
+      // so a user plugin's is made first; a failed make is logged and the
+      // registry starts anyway.
+      const folderMade =
+        userDefault === null
+          ? Promise.resolve()
+          : files
+              .makeFolder(userDefault)
+              .catch((error: unknown) =>
+                log(owner, `${userDefault} not made: ${errorText(error)}`),
+              );
+      const started = folderMade.then(() =>
+        startLayoutRegistry({
+          folder: scopedFiles(files, paths.join(deps.folder, owner), paths),
+          defaultFolder:
+            defaultFolderPath === null
+              ? null
+              : scopedFiles(files, defaultFolderPath, paths),
+          send: (set) => {
+            if (!held.isDisposed) {
+              deps.send(owner, set);
+            }
+          },
+          log,
+          logSource: owner,
+          layoutTypes,
+        }),
+      );
+      started.then(
         (registry) => {
           if (held.isDisposed) {
             registry.dispose();
