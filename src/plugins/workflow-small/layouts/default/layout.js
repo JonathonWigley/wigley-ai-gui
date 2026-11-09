@@ -60,7 +60,9 @@ const layout = {
   chip(parent, input, kit) {
     const chip = kit.el(parent, 'div', 'workflow-chip');
     kit.badge(chip, input.badge, input.workflowLabel);
-    kit.stageTag(chip, input.label, input.status);
+    if (!input.onRowLabel) {
+      kit.stageTag(chip, input.label, input.status);
+    }
     return { element: chip };
   },
 

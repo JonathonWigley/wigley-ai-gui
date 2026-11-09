@@ -87,19 +87,27 @@ describe('Small default layout', () => {
     vi.unstubAllGlobals();
   });
 
-  it('chip_DrawsBadgeFirst', () => {
+  it.each([
+    { onRowLabel: false, tags: [{ text: 'Build', state: 'running' }] },
+    { onRowLabel: true, tags: [] },
+  ])('chip_DrawsBadgeFirst onRowLabel $onRowLabel', ({ onRowLabel, tags }) => {
     const { kit } = testWorkflowKit(KIT_MANIFEST);
 
     const chip = asFake(
-      layout.chip(asHtml(new FakeElement('div')), chipInput, kit).element,
+      layout.chip(
+        asHtml(new FakeElement('div')),
+        { ...chipInput, onRowLabel },
+        kit,
+      ).element,
     );
 
-    const [badge, tag] = chip.children;
+    const [badge, ...rest] = chip.children;
     expect(badge.classList.contains('workflow-badge')).toBe(true);
     expect(badge.textContent).toBe('S');
     expect(badge.title).toBe('Small');
-    expect(tag.textContent).toBe('Build');
-    expect(tag.dataset.state).toBe('running');
+    expect(
+      rest.map((tag) => ({ text: tag.textContent, state: tag.dataset.state })),
+    ).toEqual(tags);
   });
 
   it('strip_DrawsTheSteps', () => {
