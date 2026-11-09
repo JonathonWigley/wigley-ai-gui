@@ -11,6 +11,7 @@ import {
   parseSysctl,
   parseVmStatUsedBytes,
 } from './mac-parsers';
+import { requiredStdout } from './required-stdout';
 
 const RUN_TIMEOUT_MS = 5000;
 
@@ -51,7 +52,7 @@ const IOREG_BLOCK_STORAGE = [
 // The macOS SystemStats: every reading from the OS's own commands, run at once
 // through `processes`, and the CPU totals from `cpus`, read as `ps` returns.
 // A required command that cannot run, times out or exits non-zero rejects the
-// sample naming it; the GPU readings are null instead.
+// sample naming it and its first stderr line; the GPU readings are null instead.
 export function createMacSystemStats(
   processes: ProcessRunner,
   cpus: () => readonly CpuTimes[],
@@ -67,16 +68,24 @@ export function createMacSystemStats(
         netstat,
         blockStorage,
       ] = await Promise.all([
-        requiredStdout(processes, PS, PS_ARGS).then((stdout) => ({
+        requiredStdout(processes, PS, PS_ARGS, {
+          timeoutMs: RUN_TIMEOUT_MS,
+        }).then((stdout) => ({
           rows: parsePs(stdout),
           cpu: cpuTotals(cpus()),
         })),
-        requiredStdout(processes, VM_STAT, []),
+        requiredStdout(processes, VM_STAT, [], {
+          timeoutMs: RUN_TIMEOUT_MS,
+        }),
         sysctlStdout(processes),
         optionalStdout(processes, IOREG, IOREG_ACCELERATORS),
         optionalStdout(processes, IOREG, IOREG_GPU_CLIENTS),
-        requiredStdout(processes, NETSTAT, NETSTAT_ARGS),
-        requiredStdout(processes, IOREG, IOREG_BLOCK_STORAGE),
+        requiredStdout(processes, NETSTAT, NETSTAT_ARGS, {
+          timeoutMs: RUN_TIMEOUT_MS,
+        }),
+        requiredStdout(processes, IOREG, IOREG_BLOCK_STORAGE, {
+          timeoutMs: RUN_TIMEOUT_MS,
+        }),
       ]);
       return {
         ...ps.cpu,
@@ -110,35 +119,13 @@ function withGpuTimes(
   }));
 }
 
-// The stdout of a run that must succeed; rejects naming `program` when it
-// times out or exits non-zero.
-async function requiredStdout(
-  processes: ProcessRunner,
-  program: string,
-  args: string[],
-): Promise<string> {
-  const result = await processes.run(program, args, {
-    timeoutMs: RUN_TIMEOUT_MS,
-  });
-  if (result.timedOut) {
-    throw new Error(`${program} timed out`);
-  }
-  if (result.code !== 0) {
-    throw new Error(`${program} exited with code ${result.code}`);
-  }
-  return result.stdout;
-}
-
 // `sysctl` exits 1 when one of its names is unknown but still prints the
 // others, so only a timeout fails it.
-async function sysctlStdout(processes: ProcessRunner): Promise<string> {
-  const result = await processes.run(SYSCTL, SYSCTL_ARGS, {
+function sysctlStdout(processes: ProcessRunner): Promise<string> {
+  return requiredStdout(processes, SYSCTL, SYSCTL_ARGS, {
     timeoutMs: RUN_TIMEOUT_MS,
+    anyExitCode: true,
   });
-  if (result.timedOut) {
-    throw new Error(`${SYSCTL} timed out`);
-  }
-  return result.stdout;
 }
 
 // The stdout of a run the sample can do without; null when it cannot run,
@@ -149,7 +136,9 @@ async function optionalStdout(
   args: string[],
 ): Promise<string | null> {
   try {
-    return await requiredStdout(processes, program, args);
+    return await requiredStdout(processes, program, args, {
+      timeoutMs: RUN_TIMEOUT_MS,
+    });
   } catch {
     return null;
   }

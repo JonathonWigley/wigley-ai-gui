@@ -78,8 +78,8 @@ const CPUS = [
   { times: { user: 2000, nice: 0, sys: 400, idle: 4000, irq: 3 } },
 ];
 
-function exited(code: number, stdout: string): ProcessResult {
-  return { code, stdout, stderr: '', timedOut: false };
+function exited(code: number, stdout: string, stderr = ''): ProcessResult {
+  return { code, stdout, stderr, timedOut: false };
 }
 
 // Every command scripted to succeed, then `failure`'s command scripted with its result.
@@ -148,8 +148,8 @@ describe('createMacSystemStats', () => {
   }>([
     {
       name: '/bin/ps exits 1',
-      failure: [PS, exited(1, '')],
-      error: /\/bin\/ps/,
+      failure: [PS, exited(1, '', '\nps: illegal option -- y\nusage: ps')],
+      error: /\/bin\/ps.*: ps: illegal option -- y$/,
     },
     {
       name: 'netstat times out',

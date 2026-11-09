@@ -70,20 +70,26 @@ describe('createWindowsSystemStats', () => {
     ]);
   });
 
-  it.each<{ name: string; result: ProcessResult | Error }>([
+  it.each<{ name: string; result: ProcessResult | Error; error: RegExp }>([
     {
       name: 'exits 1',
-      result: exited(1, '', 'Get-CimInstance : Invalid class'),
+      result: exited(1, '', '\r\nGet-CimInstance : Invalid class\r\nAt line:1'),
+      error: /powershell\.exe.*: Get-CimInstance : Invalid class$/,
     },
-    { name: 'times out', result: { ...exited(-1, ''), timedOut: true } },
+    {
+      name: 'times out',
+      result: { ...exited(-1, ''), timedOut: true },
+      error: /powershell\.exe/,
+    },
     {
       name: 'cannot run',
       result: new Error('Could not run powershell.exe: ENOENT'),
+      error: /powershell\.exe/,
     },
-  ])('sample_PowerShellFailure ($name)', async ({ result }) => {
+  ])('sample_PowerShellFailure ($name)', async ({ result, error }) => {
     const stats = createWindowsSystemStats(powerShell(result), () => CPUS);
 
-    await expect(stats.sample()).rejects.toThrow(/powershell\.exe/);
+    await expect(stats.sample()).rejects.toThrow(error);
   });
 
   it('windowsSampleScript_HoldsNoDoubleQuote', () => {

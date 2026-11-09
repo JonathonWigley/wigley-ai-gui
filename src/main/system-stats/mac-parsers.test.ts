@@ -34,6 +34,7 @@ describe('mac-parsers', () => {
       '  521     1   2:12.49  12992 /Applications/Splashtop Streamer.app/Contents/MacOS/SRStreamerDaemon',
       '  526     1   3:16.72   6320 Core Audio Driver (BlackHole2ch.driver)',
       ' 7154 19058   0:00.03  22608 (Python)',
+      ' 42 1 1:02,50 100 /bin/zsh',
       'not a process line',
     ].join('\n');
 
@@ -69,6 +70,14 @@ describe('mac-parsers', () => {
         path: '',
         cpuTimeMs: 30,
         rssBytes: 23150592,
+      },
+      {
+        pid: 42,
+        ppid: 1,
+        name: 'zsh',
+        path: '/bin/zsh',
+        cpuTimeMs: 62500,
+        rssBytes: 102400,
       },
     ]);
   });

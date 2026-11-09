@@ -1,6 +1,7 @@
 import type { ProcessRunner } from '../../contracts/processes';
 import type { SystemSample, SystemStats } from '../../contracts/system-stats';
 import { type CpuTimes, cpuTotals } from './cpu-totals';
+import { requiredStdout } from './required-stdout';
 import { parseWindowsReading } from './windows-parsers';
 
 const RUN_TIMEOUT_MS = 10000;
@@ -35,23 +36,21 @@ const POWERSHELL_ARGS = [
 // The Windows SystemStats: every reading from one PowerShell run of
 // `WINDOWS_SAMPLE_SCRIPT` through `processes`, and the CPU totals from `cpus`.
 // A run that cannot run, times out, exits non-zero or prints no document
-// rejects the sample naming `powershell.exe`; the GPU readings are null instead.
+// rejects the sample naming `powershell.exe`, with the first stderr line of a
+// non-zero exit; the GPU readings are null instead.
 export function createWindowsSystemStats(
   processes: ProcessRunner,
   cpus: () => readonly CpuTimes[],
 ): SystemStats {
   return {
     async sample(): Promise<SystemSample> {
-      const result = await processes.run(POWERSHELL, POWERSHELL_ARGS, {
-        timeoutMs: RUN_TIMEOUT_MS,
-      });
-      if (result.timedOut) {
-        throw new Error(`${POWERSHELL} timed out`);
-      }
-      if (result.code !== 0) {
-        throw new Error(`${POWERSHELL} exited with code ${result.code}`);
-      }
-      return { ...cpuTotals(cpus()), ...parseWindowsReading(result.stdout) };
+      const stdout = await requiredStdout(
+        processes,
+        POWERSHELL,
+        POWERSHELL_ARGS,
+        { timeoutMs: RUN_TIMEOUT_MS },
+      );
+      return { ...cpuTotals(cpus()), ...parseWindowsReading(stdout) };
     },
   };
 }
