@@ -125,7 +125,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  gets those answers again), the wake (a form the user finishes
                  while no call waits on it sends its session a message naming the collect tool, through the
                  `AgentFormWake` the service is handed: chat's `send` for a session chat owns, nothing for any
-                 other), the saved-form folder and memory stores,
+                 other), the detach at an app quit (forms' and primer's `quit` stop: no waiting call is
+                 answered and no form closes, so the relay holds each call and sends it to the next app run,
+                 where a re-sent collect reopens the session's newest form an earlier connection left open),
+                 the saved-form folder and memory stores,
                  the channel and scripted presenters, the MCP tool session, the drive actions that open a
                  form type's forms in a drive run's sessions, and the layout preview helper
                  (`agent-form-preview.ts`: a form type's sample in a session of its own, its form asked again and a
@@ -456,7 +459,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   started; `stop(id)` stops the plugin's dependents first, in reverse start order, then awaits the part's `dispose`
   and disposes its registrations; `restart(id)` stops the plugin with its dependents and starts them again, new
   registrations and the same slots. A main part's `dispose` hears how it stops (`PartStop`): `restart` for a restart
-  or reload that starts it again, `end` for a switch-off, a removal and quit. A part's optional `ready()` runs once every part of its process has started,
+  or reload that starts it again, `end` for a switch-off and a removal, `quit` for the app's quit. A part's optional `ready()` runs once every part of its process has started,
   and after a live start once the parts that start brought up have started: put work that needs its siblings
   started there, not in `start`. A part's optional `mayStop()` gives a reason in words the user reads when it must
   not stop now (a round is open); the switch asks it before a switch-off, and a restart and quit do not. Quit

@@ -73,7 +73,10 @@ const fakeFormsSession: FormsSession = {
   end: () => undefined,
 };
 
-const fakeForms: FormsService = { startSession: () => fakeFormsSession };
+const fakeForms: FormsService = {
+  startSession: () => fakeFormsSession,
+  detach: () => undefined,
+};
 
 function connect(info: SessionInfo): ConnectedSession {
   connects.push(info);

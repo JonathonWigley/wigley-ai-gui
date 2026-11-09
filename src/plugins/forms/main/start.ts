@@ -243,7 +243,10 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     return {
       commands: {},
       mayStop: () => presenter.mayStop(),
-      dispose: () => {
+      dispose: (stop) => {
+        if (stop === 'quit') {
+          forms.detach();
+        }
         preview.dispose();
         return layouts.dispose();
       },

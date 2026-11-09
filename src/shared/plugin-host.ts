@@ -98,10 +98,10 @@ export interface PluginHost<Started, Part = unknown> {
   mayStop(pluginIds: readonly string[]): string | null;
   // The ids whose stop is in flight now, in the order their stops began.
   stopping(): readonly string[];
-  // Stops every started part in reverse start order, as an `end`, logging
-  // `stopping <id>` before each, with the same error and overlap rules as
-  // `stop`. From its first call on, `start` throws.
-  stopAll(): Promise<void>;
+  // Stops every started part in reverse start order, as `stop` says (a
+  // `quit` when left out), logging `stopping <id>` before each, with the same
+  // error and overlap rules as `stop`. From its first call on, `start` throws.
+  stopAll(stop?: PartStop): Promise<void>;
 }
 
 type Provider = { exports?(consumer: Registrations): unknown };
@@ -565,12 +565,12 @@ export function startPlugins<
     stopping() {
       return [...inFlight.keys()];
     },
-    async stopAll() {
+    async stopAll(kind: PartStop = 'quit') {
       stopAllBegan = true;
       const errors: unknown[] = [];
       for (const id of [...started.keys()].reverse()) {
         log?.('plugin-host', `stopping ${id}`);
-        errors.push(...(await stopPart(id, 'end', started, records, inFlight)));
+        errors.push(...(await stopPart(id, kind, started, records, inFlight)));
       }
       throwFirst(errors);
     },

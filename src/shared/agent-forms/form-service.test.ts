@@ -1862,3 +1862,105 @@ describe('auto-answer', () => {
     },
   );
 });
+
+describe('a collect after an app quit', () => {
+  it('reopens the form an earlier run left open, pre-filled, and returns its answers', async () => {
+    const earlier = saveEarlier(NAMING_ARGS, 'open', HALF_BODY);
+
+    const pending = startSession().collect(true, live());
+    const shown = presenter.latest();
+    presenter.submit(shown.formId, body('choice 1'));
+    const payload = await pending;
+
+    expect(shown.formId).toBe(earlier.id);
+    expect(shown.draft).toEqual(HALF_BODY);
+    expect(payload.outcome).toBe('submitted');
+    expect(payload.note).toBe('choice 1');
+    expect(savedFile(earlier.id).returned).toBe(true);
+  });
+
+  it('with wait false shows the form and returns its draft at once', async () => {
+    saveEarlier(NAMING_ARGS, 'open', HALF_BODY);
+
+    const payload = await startSession().collect(false, live());
+
+    expect(payload.outcome).toBe('draft');
+    expect(payload.note).toBe('half done');
+    expect(presenter.shown).toHaveLength(1);
+  });
+
+  it.each([
+    {
+      case: 'a newer form of the session was answered',
+      save: () => {
+        saveEarlier(NAMING_ARGS, 'open', HALF_BODY);
+        nowMs = 2_000_000;
+        store.markReturned(saveEarlier(PLACEMENT_ARGS, 'submitted', HALF_BODY));
+      },
+    },
+    {
+      case: "the form is another session's",
+      save: () => {
+        saveEarlier(NAMING_ARGS, 'open', HALF_BODY, {
+          sessionId: 'session-2',
+          projectDir: '/work/wigley',
+        });
+      },
+    },
+  ])('reopens nothing when $case', async ({ save }) => {
+    save();
+
+    const payload = await startSession().collect(true, live());
+
+    expect(payload.outcome).toBe('no_form');
+    expect(presenter.shown).toEqual([]);
+  });
+});
+
+describe('the detach at an app quit', () => {
+  function startDetachable() {
+    const service = newService();
+    const session = service.startSession({ id: 'app-1', info: SESSION });
+    return { service, session };
+  }
+
+  it('leaves a waiting call unanswered and its form open, in the window and on disk, once the session ends', async () => {
+    const { service, session } = startDetachable();
+    const pending = watch(session.open(NAMING_ARGS, null, live()));
+    const { formId } = presenter.latest();
+
+    service.detach();
+    session.end();
+    await expireDeadline();
+
+    expect(pending.settled).toBe(false);
+    expect(presenter.closed).toEqual([]);
+    expect(savedFile(formId).outcome).toBe('open');
+  });
+
+  it('leaves unanswered a call the host cancels after it, closing nothing', async () => {
+    const { service, session } = startDetachable();
+    const host = new AbortController();
+    const pending = watch(session.open(NAMING_ARGS, null, host.signal));
+
+    service.detach();
+    host.abort();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(pending.settled).toBe(false);
+    expect(presenter.closed).toEqual([]);
+  });
+
+  it('runs no call made after it', async () => {
+    const { service, session } = startDetachable();
+
+    service.detach();
+    const opened = watch(session.open(NAMING_ARGS, null, live()));
+    const collected = watch(session.collect(true, live()));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(opened.settled).toBe(false);
+    expect(collected.settled).toBe(false);
+    expect(presenter.shown).toEqual([]);
+  });
+});

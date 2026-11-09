@@ -162,7 +162,8 @@ export interface PartHarness<Started> {
   readonly emitted: readonly HarnessEvent[];
   readonly state: SlotStore;
   readonly commandRuns: readonly HarnessCommandRun[];
-  stop(): Promise<void>;
+  // Stops every part as `stop` says, an `end` when left out.
+  stop(stop?: PartStop): Promise<void>;
   restart(): Promise<void>;
 }
 
@@ -319,7 +320,7 @@ interface PartLifecycle<Started> {
   start(): void;
   started(): Started;
   ready(): void;
-  stop(): Promise<void>;
+  stop(stop?: PartStop): Promise<void>;
   restart(): Promise<void>;
 }
 
@@ -733,10 +734,10 @@ function partLifecycle<Started>(
     ready() {
       runningHost().ready();
     },
-    async stop() {
+    async stop(stop: PartStop = 'end') {
       const stopping = host;
       host = null;
-      await stopping?.stopAll();
+      await stopping?.stopAll(stop);
     },
     async restart() {
       await lifecycle.stop();

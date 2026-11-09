@@ -69,6 +69,11 @@ interface FinishedForm<Form, Body> {
   autoAnswered: boolean;
 }
 
+// Shared by every session of one service; `detach` sets it at an app quit.
+interface DetachState {
+  detached: boolean;
+}
+
 // One connected session: at most one open form, and the last finished one.
 interface SessionContext<Form, Body, Payload> {
   // The app's id for the session, which every form it shows carries.
@@ -93,6 +98,9 @@ interface SessionContext<Form, Body, Payload> {
   // Ids of unreturned saved forms that no longer parse, already reported to
   // a call.
   reportedUnreadable: Set<string>;
+  // Ids of the forms this connection showed, which a collect never reopens.
+  shownIds: Set<string>;
+  detach: DetachState;
 }
 
 // The host's soft deadline when its record names a positive number of
@@ -306,14 +314,17 @@ function abandonForm<Form, Body, Payload>(
 }
 
 // A call stops waiting on the open form: the host cancelling the last one
-// abandons the form, so the session's next form shows.
+// abandons the form, so the session's next form shows. After a detach the
+// form stays, since the quit, not the host, ended the call.
 function releaseCaller<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
   host: AbortSignal,
 ): void {
   open.callers -= 1;
-  if (host.aborted && open.callers === 0) {
+  const hostLeftTheForm =
+    host.aborted && open.callers === 0 && !session.detach.detached;
+  if (hostLeftTheForm) {
     abandonForm(session, open);
   }
 }
@@ -476,26 +487,14 @@ function formListener<Form, Body, Payload>(
   };
 }
 
-function openNewForm<Form, Body, Payload>(
+// Shows the form of `record` in the window with `draft`, as the session's.
+function showForm<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   form: Form,
-  formFingerprint: string,
-  args: unknown,
-  toolUseId: string | null,
+  record: SavedAgentForm,
+  draft: Body | null,
 ): OpenForm<Form, Body> {
   const { type } = session;
-  const draft = prefillDraft(
-    type,
-    form,
-    session.store.newestFor(formFingerprint),
-  );
-  const record = session.store.create(
-    session.info,
-    formFingerprint,
-    args,
-    draft,
-    toolUseId,
-  );
   const open: OpenForm<Form, Body> = {
     form,
     record,
@@ -505,6 +504,7 @@ function openNewForm<Form, Body, Payload>(
     waiters: new Set(),
     callers: 0,
   };
+  session.shownIds.add(record.id);
   session.presenter.show(
     {
       formId: record.id,
@@ -516,6 +516,52 @@ function openNewForm<Form, Body, Payload>(
     formListener(session, open),
   );
   return open;
+}
+
+function openNewForm<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  form: Form,
+  formFingerprint: string,
+  args: unknown,
+  toolUseId: string | null,
+): OpenForm<Form, Body> {
+  const draft = prefillDraft(
+    session.type,
+    form,
+    session.store.newestFor(formFingerprint),
+  );
+  const record = session.store.create(
+    session.info,
+    formFingerprint,
+    args,
+    draft,
+    toolUseId,
+  );
+  return showForm(session, form, record, draft);
+}
+
+// The session's newest saved form, shown again with its saved answers, when an
+// earlier connection left it with no answer: what an app quit leaves for the
+// collect the relay sends again. Throws when that form no longer parses.
+function reopenFormLeftOpen<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+): OpenForm<Form, Body> | null {
+  const record = session.store.newestOwned(session.info);
+  const isLeftOpenEarlier =
+    record !== null &&
+    record.outcome === 'open' &&
+    !session.shownIds.has(record.id) &&
+    !session.reportedUnreadable.has(record.id);
+  if (!isLeftOpenEarlier) {
+    return null;
+  }
+  const form = formFromRecord(session, record);
+  return showForm(
+    session,
+    form,
+    record,
+    session.type.readBody(form, record.body),
+  );
 }
 
 // The draft a call returns when its form was never shown, so its answers are
@@ -841,9 +887,20 @@ async function collectLastForm<Form, Body, Payload>(
     return lastFinishedPayload(session, last);
   }
   const handed = takeUnreturnedFinished(session);
-  return handed === null
-    ? session.type.noFormPayload()
-    : finishedPayload(session.type, handed);
+  if (handed !== null) {
+    return finishedPayload(session.type, handed);
+  }
+  const reopened = reopenFormLeftOpen(session);
+  if (reopened === null) {
+    return session.type.noFormPayload();
+  }
+  session.open = reopened;
+  return presentOpen(
+    session,
+    reopened,
+    wait ? session.deadlineSeconds : 0,
+    signal,
+  );
 }
 
 // Answers the call's form with `autoAnswer` at once, outside the call queue,
@@ -907,16 +964,46 @@ async function autoAnswerForm<Form, Body, Payload>(
   return autoAnswer.payload(form, body);
 }
 
+// After a detach the open form stays as it is, in the window and on disk.
 function endSession<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
 ): void {
   session.ended = true;
-  closeOpenForm(session);
+  if (!session.detach.detached) {
+    closeOpenForm(session);
+  }
+}
+
+// The call's answer, or none at all once the service detached: a call made
+// after the detach never runs, and one settling after it never settles.
+function answerUnlessDetached<Payload>(
+  detach: DetachState,
+  run: () => Promise<Payload>,
+): Promise<Payload> {
+  if (detach.detached) {
+    return new Promise(() => {});
+  }
+  const call = run();
+  return new Promise((resolve, reject) => {
+    call.then(
+      (payload) => {
+        if (!detach.detached) {
+          resolve(payload);
+        }
+      },
+      (error: unknown) => {
+        if (!detach.detached) {
+          reject(error);
+        }
+      },
+    );
+  });
 }
 
 function startSession<Form, Body, Payload>(
   owner: AgentFormOwner,
   deps: AgentFormServiceDeps<Form, Body, Payload>,
+  detach: DetachState,
 ): AgentFormSession<Payload> {
   const { info } = owner;
   const session: SessionContext<Form, Body, Payload> = {
@@ -935,24 +1022,37 @@ function startSession<Form, Body, Payload>(
     askTurn: null,
     ended: false,
     reportedUnreadable: new Set(),
+    shownIds: new Set(),
+    detach,
   };
   return {
-    open: (args, toolUseId, signal) => {
-      const { autoAnswer } = session;
-      return autoAnswer?.isOn(session.sessionId)
-        ? autoAnswerForm(session, autoAnswer, args, toolUseId, signal)
-        : openFormInTurn(session, args, toolUseId, signal);
-    },
-    collect: (wait, signal) => collectLastForm(session, wait, signal),
+    open: (args, toolUseId, signal) =>
+      answerUnlessDetached(detach, () => {
+        const { autoAnswer } = session;
+        return autoAnswer?.isOn(session.sessionId)
+          ? autoAnswerForm(session, autoAnswer, args, toolUseId, signal)
+          : openFormInTurn(session, args, toolUseId, signal);
+      }),
+    collect: (wait, signal) =>
+      answerUnlessDetached(detach, () =>
+        collectLastForm(session, wait, signal),
+      ),
     end: () => endSession(session),
   };
 }
 
 // Form logic every form source reaches, for one form type: validation,
 // re-send, replay, hand-back, pre-fill, the soft deadline, the saved forms,
-// the wake for a form no call will return, and the optional auto-answer.
+// the wake for a form no call will return, the optional auto-answer, and the
+// detach at an app quit.
 export function createAgentFormService<Form, Body, Payload>(
   deps: AgentFormServiceDeps<Form, Body, Payload>,
 ): AgentFormService<Payload> {
-  return { startSession: (owner) => startSession(owner, deps) };
+  const detach: DetachState = { detached: false };
+  return {
+    startSession: (owner) => startSession(owner, deps, detach),
+    detach: () => {
+      detach.detached = true;
+    },
+  };
 }

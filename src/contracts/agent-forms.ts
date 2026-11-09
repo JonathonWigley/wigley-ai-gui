@@ -119,6 +119,9 @@ export interface AgentFormSession<Payload> {
     toolUseId: string | null,
     signal: AbortSignal,
   ): Promise<Payload>;
+  // With no form of its own, a collect reopens the session's newest saved form
+  // when an earlier connection left it unanswered, as an app quit does, and
+  // waits on it as on the open form.
   collect(wait: boolean, signal: AbortSignal): Promise<Payload>;
   // The session disconnected: its open form closes, and every call waiting to
   // open a form or on an unanswered one rejects; answers stay saved.
@@ -128,6 +131,10 @@ export interface AgentFormSession<Payload> {
 // Form sources (MCP now, the wigley harness next) reach form logic only here.
 export interface AgentFormService<Payload> {
   startSession(owner: AgentFormOwner): AgentFormSession<Payload>;
+  // The app is quitting: from now on no call of any session answers and a
+  // session's end leaves its form be, so the relay holds each waiting call for
+  // the next app run and each unanswered form stays open on disk.
+  detach(): void;
 }
 
 // What one kind of agent form supplies to the shared service.

@@ -116,5 +116,6 @@ export function withKnownLayouts(
         end: () => session.end(),
       };
     },
+    detach: () => service.detach(),
   };
 }

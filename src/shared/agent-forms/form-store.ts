@@ -95,6 +95,8 @@ export interface AgentFormStore {
     owner: AgentFormOwnerRef,
     excluding: ReadonlySet<string>,
   ): FinishedSavedAgentForm | null;
+  // The newest by `updated` of this owner's forms, in any state.
+  newestOwned(owner: AgentFormOwnerRef): SavedAgentForm | null;
   // The args of the newest forms by `updated` that were not auto-answered,
   // newest first: one per fingerprint, at most `limit`.
   recentArgs(limit: number): unknown[];
@@ -241,7 +243,7 @@ export function formQueries(
   paths: Paths,
 ): Pick<
   AgentFormStore,
-  'newestFor' | 'newestUnreturnedFinished' | 'recentArgs'
+  'newestFor' | 'newestUnreturnedFinished' | 'newestOwned' | 'recentArgs'
 > {
   return {
     newestFor: (fingerprint) =>
@@ -260,6 +262,10 @@ export function formQueries(
             isOwnedBy(record, owner, paths) &&
             !excluding.has(record.id),
         ),
+      ),
+    newestOwned: (owner) =>
+      newestUpdated(
+        readAll().filter((record) => isOwnedBy(record, owner, paths)),
       ),
     recentArgs: (limit) => recentArgsOf(readAll(), limit),
   };

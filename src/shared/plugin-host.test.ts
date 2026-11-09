@@ -296,6 +296,11 @@ describe('startPlugins', () => {
     {
       case: 'stopAll',
       act: (host) => host.stopAll(),
+      stops: ['b quit', 'a quit'],
+    },
+    {
+      case: 'stopAll as an end',
+      act: (host) => host.stopAll('end'),
       stops: ['b end', 'a end'],
     },
   ])(

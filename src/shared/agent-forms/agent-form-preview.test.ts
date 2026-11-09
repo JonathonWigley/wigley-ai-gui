@@ -61,6 +61,7 @@ const fakeFormSession: AgentFormSession<Payload> = {
 
 const fakeForms: AgentFormService<Payload> = {
   startSession: () => fakeFormSession,
+  detach: () => undefined,
 };
 
 function connect(info: Info): PreviewConnection {

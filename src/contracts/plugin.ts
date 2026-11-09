@@ -1174,8 +1174,9 @@ export interface MainStart<M extends PluginManifest> {
 
 // How the host stops a part: `restart` when it starts the part again right
 // after, as a restart or a reload of the plugin, or of a plugin it depends on,
-// does (that start may still fail); `end` for a switch-off, a removal and quit.
-export type PartStop = 'restart' | 'end';
+// does (that start may still fail); `end` for a switch-off and a removal;
+// `quit` for the app's quit, which stops every part.
+export type PartStop = 'restart' | 'end' | 'quit';
 
 // Starts at launch, and again when the host starts or restarts it live.
 export interface MainPart<M extends PluginManifest = PluginManifest> {

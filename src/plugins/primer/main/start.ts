@@ -138,7 +138,12 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
     return {
       commands: {},
       mayStop: () => presenter.mayStop(),
-      dispose: () => preview.dispose(),
+      dispose: (stop) => {
+        if (stop === 'quit') {
+          primer.detach();
+        }
+        preview.dispose();
+      },
     };
   },
 };

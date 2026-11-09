@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -209,6 +209,34 @@ describe('forms main part', () => {
     expect([...(harness.drive?.actions.keys() ?? [])]).toEqual([]);
     await expect(answers?.run({ sessionId: 'a' })).rejects.toThrow(/ask_round/);
     await expect(answers?.run({ sessionId: 'b' })).rejects.toThrow(/ask_round/);
+    rmSync(homeDir, { recursive: true, force: true });
+  });
+
+  it('a quit leaves each open round open on disk, in the window and unanswered, for the relay to send again', async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-quit-'));
+    const harness = startMainPart(formsMainPart, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat()],
+      drive: true,
+      services: {
+        homeDir,
+        alerts: { setOpenCount() {} },
+        git: { originRepoName: () => Promise.resolve(null) } as never,
+      },
+    });
+    await harness.drive?.run('openRound', { sessionId: 'a' });
+    const roundsDir = path.join(homeDir, '.agents', 'wigley-forms', 'rounds');
+
+    await harness.stop('quit');
+
+    const outcomes = readdirSync(roundsDir).map(
+      (name) =>
+        JSON.parse(readFileSync(path.join(roundsDir, name), 'utf8')).outcome,
+    );
+    expect(outcomes).toEqual(['open']);
+    expect(
+      harness.sent.filter((sent) => sent.message === 'formClosed'),
+    ).toEqual([]);
     rmSync(homeDir, { recursive: true, force: true });
   });
 

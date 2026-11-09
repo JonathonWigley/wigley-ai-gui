@@ -345,11 +345,12 @@ Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-a
 - **A live start gets a restore window.** Every live start (a reload, a restart, a switch-on) opens a restore window,
   as a page load does, and parts that prune saved places prune on `api.restores.onSettled`. `ready()` keeps its shape.
   A `ready` context saying load or live was rejected: each part would write its own branch on it.
-- **A stop says whether a start follows.** Main's `dispose` gets `'restart'` or `'end'` (`PartStop`), so chat keeps its
+- **A stop says whether a start follows.** Main's `dispose` gets `'restart'`, `'end'` or `'quit'` (`PartStop`), so chat keeps its
   session rows through a restart, and the restarted chat adopts them (`open({rowId})`). Rows not adopted within
   `KEPT_SESSION_MS` end. Without this, each restart dropped every row-keyed place: the selected tab, Docs' views and
   their unsaved edits, and the open panes. Deferring the deletes to `onSettled` was rejected, because sessions'
-  `onSettled` hears only sessions' own start window.
+  `onSettled` hears only sessions' own start window. `quit` is told apart from `end` so forms and the primer leave
+  each waiting call unanswered at a quit, for the relay to send again to the next app run, where a switch-off answers it.
 - **A missed watch event is rescanned.** On macOS, a watch opening or closing in the process drops the other watches'
   pending events. Each plugin restart opens and closes watches, so a save made while one runs could be lost.
   `Files.watch` reports this through `onMissed`, and the user plugin source, the config store and the layout registry

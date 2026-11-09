@@ -47,6 +47,7 @@ const fakePrimerSession: AgentFormSession<PrimerPayload> = {
 
 const fakePrimer: AgentFormService<PrimerPayload> = {
   startSession: () => fakePrimerSession,
+  detach: () => undefined,
 };
 
 function connect(info: SessionInfo): ConnectedSession {
