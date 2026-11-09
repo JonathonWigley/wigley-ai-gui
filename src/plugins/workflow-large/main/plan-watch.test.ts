@@ -10,6 +10,7 @@ import { readPlanProgress } from '../../../shared/plan-progress';
 import { largeSignal } from '../contract';
 import {
   createPlanWatch,
+  type FollowedPlan,
   MAX_WATCH_REOPENS,
   type PlanWatch,
 } from './plan-watch';
@@ -41,6 +42,15 @@ const PLAN_TWO = planTicked(2);
 const PLAN_ALL = planTicked(3);
 
 const settled = () => new Promise((settle) => setImmediate(settle));
+
+// The plan a flow holding `planDir` follows.
+function followed(
+  planDir: string | null,
+  planReported = false,
+  unreportedPlanDir: string | null = null,
+): FollowedPlan {
+  return { planDir, planReported, unreportedPlanDir };
+}
 
 // Git that finds every folder outside a clone, so each plan has one copy.
 const NO_CLONE: WatchDeps['git'] = {
@@ -182,7 +192,7 @@ describe('createPlanWatch', () => {
     await files.write(PLAN_FILE, PLAN);
     const { watch, signals } = startWatch(files);
 
-    watch.follow('s1', PLAN_DIR, false);
+    watch.follow('s1', followed(PLAN_DIR));
     await settled();
     await files.write(PLAN_FILE, PLAN_TICKED);
     await settled();
@@ -227,13 +237,13 @@ describe('createPlanWatch', () => {
           return files.watch(folder, onChange, options);
         },
       });
-      watch.follow('s1', PLAN_DIR, false);
+      watch.follow('s1', followed(PLAN_DIR));
       await settled();
       await close(files);
       await files.write(PLAN_FILE, PLAN_TICKED);
       signals.length = 0;
 
-      watch.follow('s1', PLAN_DIR, false);
+      watch.follow('s1', followed(PLAN_DIR));
       await settled();
 
       expect(signals).toEqual([changed(PLAN_TICKED)]);
@@ -244,7 +254,7 @@ describe('createPlanWatch', () => {
     const files = createMemoryFiles();
     const { watch, signals } = startWatch(files);
 
-    watch.follow('s1', PLAN_DIR, false);
+    watch.follow('s1', followed(PLAN_DIR));
     await settled();
 
     expect(signals).toEqual([PLAN_GONE]);
@@ -258,7 +268,7 @@ describe('createPlanWatch', () => {
         watch: PlanWatch,
         resolveReads: ((text: string) => void)[],
       ) => {
-        watch.follow('s1', null, false);
+        watch.follow('s1', followed(null));
         resolveReads[0](PLAN);
       },
       signals: [],
@@ -287,7 +297,7 @@ describe('createPlanWatch', () => {
           resolveReads.push(resolve);
         }),
     });
-    subject.watch.follow('s1', PLAN_DIR, false);
+    subject.watch.follow('s1', followed(PLAN_DIR));
     await settled();
 
     await act(subject.watch, resolveReads);
@@ -302,7 +312,7 @@ describe('createPlanWatch', () => {
     await writeAt(20, `${W_PLAN_DIR}/plan.md`, PLAN_ONE);
     const { watch, signals } = startWatch(files, cloneGit(['/r', '/w']));
 
-    watch.follow('s1', PLAN_DIR, false);
+    watch.follow('s1', followed(PLAN_DIR));
     await settled();
     await writeAt(30, `${W_PLAN_DIR}/plan.md`, PLAN_TWO);
     await settled();
@@ -327,7 +337,7 @@ describe('createPlanWatch', () => {
     await files.write(PLAN_FILE, plan);
     const { watch, signals } = startWatch(files);
 
-    watch.follow('s1', PLAN_DIR, false);
+    watch.follow('s1', followed(PLAN_DIR));
     await settled();
     await files.write(`${PLAN_DIR}/01-a.md`, task);
     await settled();
@@ -413,7 +423,7 @@ describe('createPlanWatch', () => {
           }
         : files;
       const { watch, signals } = startWatch(watchedFiles, cloneGit(checkouts));
-      watch.follow('s1', PLAN_DIR, false);
+      watch.follow('s1', followed(PLAN_DIR));
       await settled();
 
       checkouts.push(added);
@@ -527,7 +537,7 @@ describe('createPlanWatch', () => {
       await files.write(`${W_PLAN_DIR}/plan.md`, PLAN);
       const subject = trackedFiles(files);
       const { watch, logs } = startWatch(subject.files, cloneGit(['/r', '/w']));
-      watch.follow('s1', PLAN_DIR, false);
+      watch.follow('s1', followed(PLAN_DIR));
       await settled();
 
       await act(subject, files, watch);
@@ -547,7 +557,7 @@ describe('createPlanWatch', () => {
     await writeAt(20, PLAN_FILE, PLAN_ONE);
     await writeAt(10, `${W_PLAN_DIR}/plan.md`, PLAN_TWO);
     const { watch, signals } = startWatch(files, cloneGit(['/r', '/w']));
-    watch.follow('s1', PLAN_DIR, false);
+    watch.follow('s1', followed(PLAN_DIR));
     await settled();
 
     files.remove(PLAN_DIR);
@@ -584,13 +594,36 @@ describe('createPlanWatch', () => {
       await writeAt(10, `${W_PLAN_DIR}/01-a.md`, '# 01 — A\n');
       await writeAt(20, PLAN_FILE, PLAN_TWO);
       const { watch, signals } = startWatch(files, cloneGit(['/r', '/w']));
-      watch.follow('s1', W_PLAN_DIR, true);
+      watch.follow('s1', followed(W_PLAN_DIR, true));
       await settled();
 
       if (removed !== null) {
         files.remove(removed);
         await settled();
       }
+
+      expect(signals).toEqual(expected);
+    },
+  );
+
+  it.each([
+    {
+      name: 'held before the report',
+      unreportedPlanDir: PLAN_DIR,
+      signals: [changed(PLAN_TWO), changed(PLAN_ALL)],
+    },
+    { name: 'none', unreportedPlanDir: null, signals: [PLAN_GONE] },
+  ])(
+    'follow_ReportedWorktreeRemoved_ListsFromTheUnreportedFolder ($name)',
+    async ({ unreportedPlanDir, signals: expected }) => {
+      const files = createMemoryFiles();
+      await files.write(PLAN_FILE, PLAN_TWO);
+      const { watch, signals } = startWatch(files, cloneGit(['/r']));
+
+      watch.follow('s1', followed(W_PLAN_DIR, true, unreportedPlanDir));
+      await settled();
+      await files.write(PLAN_FILE, PLAN_ALL);
+      await settled();
 
       expect(signals).toEqual(expected);
     },
@@ -611,11 +644,11 @@ describe('createPlanWatch', () => {
       },
       cloneGit(['/r', '/w']),
     );
-    watch.follow('s1', PLAN_DIR, false);
+    watch.follow('s1', followed(PLAN_DIR));
     await settled();
     const openedBefore = watchesOpened;
 
-    watch.follow('s1', PLAN_DIR, true);
+    watch.follow('s1', followed(PLAN_DIR, true));
     await settled();
 
     expect(signals).toEqual([changed(PLAN_TWO), changed(PLAN_ONE)]);
@@ -637,12 +670,12 @@ describe('createPlanWatch', () => {
       },
     };
     const { watch, signals } = startWatch(files, git);
-    watch.follow('s1', PLAN_DIR, false);
+    watch.follow('s1', followed(PLAN_DIR));
     await settled();
     await files.write(PLAN_FILE, PLAN_TICKED);
     await settled();
 
-    watch.follow('s1', PLAN_DIR, false);
+    watch.follow('s1', followed(PLAN_DIR));
     await settled();
 
     expect(signals).toEqual([changed(PLAN_TICKED)]);

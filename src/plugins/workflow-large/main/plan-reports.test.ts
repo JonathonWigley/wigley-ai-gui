@@ -46,7 +46,10 @@ describe('createPlanReports', () => {
       paths: posixPaths,
       log: (line) => logs.push(line),
       folder: FOLDER,
-      report: (rowId, planDir) => reported.push([rowId, planDir]),
+      reportPlan: async (rowId, planDir) => {
+        reported.push([rowId, planDir]);
+        return true;
+      },
     });
 
     await files.write(`${FOLDER}/${file}`, text);
@@ -54,5 +57,59 @@ describe('createPlanReports', () => {
 
     expect(reported).toEqual(reports);
     expect(logs).toHaveLength(logged);
+  });
+
+  it('createPlanReports_WatchThrows_LogsAndStarts', () => {
+    const logs: string[] = [];
+    const files = {
+      ...createMemoryFiles(),
+      watch: () => {
+        throw new Error('watcher refused');
+      },
+    };
+
+    const reports = createPlanReports({
+      files,
+      paths: posixPaths,
+      log: (line) => logs.push(line),
+      folder: FOLDER,
+      reportPlan: async () => true,
+    });
+
+    expect(logs).toEqual([
+      expect.stringContaining('watcher refused') as string,
+    ]);
+    expect(() => reports.dispose()).not.toThrow();
+  });
+
+  it('createPlanReports_DisposedMidRead_ReportsNothing', async () => {
+    const memory = createMemoryFiles();
+    const held = Promise.withResolvers<void>();
+    const files = {
+      ...memory,
+      read: async (path: string) => {
+        await held.promise;
+        return memory.read(path);
+      },
+    };
+    const reported: string[] = [];
+    const reports = createPlanReports({
+      files,
+      paths: posixPaths,
+      log: () => undefined,
+      folder: FOLDER,
+      reportPlan: async (rowId) => {
+        reported.push(rowId);
+        return true;
+      },
+    });
+    await memory.write(`${FOLDER}/s1.json`, '{"planDir": "/w/p/plan-a"}\n');
+    await settled();
+
+    reports.dispose();
+    held.resolve();
+    await settled();
+
+    expect(reported).toEqual([]);
   });
 });

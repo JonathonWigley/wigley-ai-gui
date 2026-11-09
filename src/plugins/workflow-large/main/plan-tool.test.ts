@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { ToolCallContext } from '../../sessions/contract';
-import type {
-  SessionFlow,
-  WorkflowMainExports,
-  WorkflowSignal,
-} from '../../workflow/contract';
-import { LARGE_WORKFLOW_ID, largeSignal } from '../contract';
-import { largePlanReporter, startPlanTool } from './plan-tool';
+import { startPlanTool } from './plan-tool';
 
 const NO_CALL_CONTEXT: ToolCallContext = {
   toolUseId: null,
@@ -89,35 +83,4 @@ describe('set_workflow_plan', () => {
     expect(result.isError === true).toBe(error);
     expect(result.content[0].text).toBe(text);
   });
-});
-
-describe('largePlanReporter', () => {
-  it.each([
-    { workflow: LARGE_WORKFLOW_ID, resolves: true, signals: 1 },
-    { workflow: 'workflow-small', resolves: false, signals: 0 },
-  ])(
-    'in a $workflow flow resolves $resolves',
-    async ({ workflow, resolves, signals }) => {
-      const signalled: [string, WorkflowSignal, string][] = [];
-      const engine: Pick<WorkflowMainExports, 'ready' | 'flowOf' | 'signal'> = {
-        ready: Promise.resolve(),
-        flowOf: (sessionId) =>
-          sessionId === 's1' ? ({ workflow } as SessionFlow) : null,
-        signal: (sessionId, signal, origin) => {
-          signalled.push([sessionId, signal, origin]);
-        },
-      };
-
-      const applied = await largePlanReporter(engine)('s1', PLAN_DIR);
-
-      expect(applied).toBe(resolves);
-      expect(signalled).toEqual(
-        Array.from({ length: signals }, () => [
-          's1',
-          largeSignal({ type: 'planReported', planDir: PLAN_DIR }),
-          'live',
-        ]),
-      );
-    },
-  );
 });

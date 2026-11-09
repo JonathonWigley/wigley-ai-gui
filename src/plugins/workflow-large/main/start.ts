@@ -9,9 +9,9 @@ import {
   workflowMainKey,
 } from '../../workflow/contract';
 import {
+  EMPTY_LARGE_STATE,
   LARGE_WORKFLOW_ID,
   type LargeState,
-  largeSignal,
   largeStateOf,
   type WorkflowLargeChannel,
   withLargeState,
@@ -23,11 +23,8 @@ import { LARGE_MAIN_STAGES } from '../stages';
 import { createWorkflowActions } from './actions';
 import { createCountdown } from './countdown';
 import { createPlanReports, PLAN_RUNS_FOLDER } from './plan-reports';
-import {
-  largePlanReporter,
-  planToolDefinition,
-  startPlanTool,
-} from './plan-tool';
+import { largePlanReporter } from './plan-report';
+import { planToolDefinition, startPlanTool } from './plan-tool';
 import { createPlanWatch } from './plan-watch';
 import { workflowLargeSelfTestScript } from './selftest-script';
 
@@ -69,12 +66,13 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
       signal: (sessionId, signal) =>
         workflow.signal(sessionId, signal, 'observed'),
     });
+    const reportPlan = largePlanReporter(workflow);
     sessions.contributeTools(
       [planToolDefinition()],
       startPlanTool({
         paths: services.paths,
         files: services.files,
-        reportPlan: largePlanReporter(workflow),
+        reportPlan,
       }),
       { mainAgentOnly: true },
     );
@@ -87,15 +85,7 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
       paths: services.paths,
       log,
       folder: planRunsFolder,
-      report: (rowId, planDir) => {
-        if (workflow.flowOf(rowId)?.workflow === LARGE_WORKFLOW_ID) {
-          workflow.signal(
-            rowId,
-            largeSignal({ type: 'planReported', planDir }),
-            'observed',
-          );
-        }
-      },
+      reportPlan,
     });
     const countdown = createCountdown({
       timers: services.timers,
@@ -174,7 +164,7 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
     };
 
     const followPlan = ({ sessionId, before, after, signal }: FoldEvent) => {
-      const { planDir, planReported } = largeStateOf(after);
+      const plan = largeStateOf(after);
       const was = largeStateOf(before);
       if (signal.type === 'turnEnded') {
         planWatch.check(sessionId);
@@ -182,9 +172,11 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
       const wrotePlan =
         signal.type === 'fileWritten' && isPlanFile(signal.path);
       const followedPlanChanged =
-        planDir !== was.planDir || planReported !== was.planReported;
+        plan.planDir !== was.planDir ||
+        plan.planReported !== was.planReported ||
+        plan.unreportedPlanDir !== was.unreportedPlanDir;
       if (wrotePlan || followedPlanChanged) {
-        planWatch.follow(sessionId, planDir, planReported);
+        planWatch.follow(sessionId, plan);
       }
     };
 
@@ -217,14 +209,13 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
 
     const stopSession = (sessionId: string) => {
       countdown.stop(sessionId);
-      planWatch.follow(sessionId, null, false);
+      planWatch.follow(sessionId, EMPTY_LARGE_STATE);
       replayedTurnEnds.delete(sessionId);
     };
 
     const follow = (flow: SessionFlow) => {
       if (flow.workflow === LARGE_WORKFLOW_ID) {
-        const { planDir, planReported } = largeStateOf(flow);
-        planWatch.follow(flow.sessionId, planDir, planReported);
+        planWatch.follow(flow.sessionId, largeStateOf(flow));
         cancelCountdown(flow.sessionId);
       }
     };

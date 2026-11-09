@@ -9,8 +9,7 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
-import type { WorkflowMainExports } from '../../workflow/contract';
-import { LARGE_WORKFLOW_ID, largeSignal } from '../contract';
+import { normalPlanDir, type PlanReporter } from './plan-report';
 
 export const SET_WORKFLOW_PLAN_TOOL = 'set_workflow_plan';
 
@@ -37,14 +36,7 @@ export function planToolDefinition(): ToolDefinition {
 export interface PlanToolDeps {
   paths: Paths;
   files: Pick<Files, 'stat'>;
-  // Folds the report; resolves whether a Large flow holds the session.
-  reportPlan(sessionId: string, planDir: string): Promise<boolean>;
-}
-
-// `folder` normalized with no trailing separator, the form `fileWritten`'s
-// plan path gives its parent; symlinks are kept.
-export function planDirOf(paths: Paths, folder: string): string {
-  return paths.parent(paths.join(folder, 'plan.md'));
+  reportPlan: PlanReporter;
 }
 
 // A folder that is not absolute or holds no `plan.md` is an error naming it; a
@@ -58,7 +50,7 @@ async function setWorkflowPlan(
   if (typeof folder !== 'string' || !deps.paths.isAbsolute(folder)) {
     return errorResult('folder must be an absolute path.');
   }
-  const planDir = planDirOf(deps.paths, folder);
+  const planDir = normalPlanDir(deps.paths, folder);
   try {
     const stat = await deps.files.stat(deps.paths.join(planDir, 'plan.md'));
     if (stat === null || stat.isFolder) {
@@ -86,23 +78,4 @@ export function startPlanTool(
     },
     end: () => undefined,
   });
-}
-
-// `reportPlan` over the engine: once flows load, signals `planReported` live
-// when a Large flow holds the session.
-export function largePlanReporter(
-  workflow: Pick<WorkflowMainExports, 'ready' | 'flowOf' | 'signal'>,
-): (sessionId: string, planDir: string) => Promise<boolean> {
-  return async (sessionId, planDir) => {
-    await workflow.ready;
-    if (workflow.flowOf(sessionId)?.workflow !== LARGE_WORKFLOW_ID) {
-      return false;
-    }
-    workflow.signal(
-      sessionId,
-      largeSignal({ type: 'planReported', planDir }),
-      'live',
-    );
-    return true;
-  };
 }

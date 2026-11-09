@@ -25,6 +25,7 @@ function flowWith(fields: FlowFields): SessionFlow {
   const {
     planDir,
     planReported,
+    unreportedPlanDir,
     progress,
     reviewRoundsAtMake,
     countdownEndsAt,
@@ -37,6 +38,7 @@ function flowWith(fields: FlowFields): SessionFlow {
     state: {
       planDir: planDir ?? null,
       planReported: planReported ?? false,
+      unreportedPlanDir: unreportedPlanDir ?? null,
       progress: progress ?? null,
       reviewRoundsAtMake: reviewRoundsAtMake ?? null,
       countdownEndsAt: countdownEndsAt ?? null,
@@ -100,6 +102,7 @@ const PLAN_X = '/r/docs/features/x/plan-a';
 // One plan in the repo and its copy in a worktree.
 const PLAN_IN_REPO = '/r/p/plan-a';
 const PLAN_IN_WORKTREE = '/w/p/plan-a';
+const PLAN_IN_WORKTREE_2 = '/w2/p/plan-a';
 const UNCHANGED = 'unchanged';
 // A stage no Large rule names, so only the bookkeeping moves.
 const IN_C = { stage: 'c' } as const;
@@ -455,6 +458,24 @@ const FOLD_ROWS: {
       stage: 'make',
       planDir: PLAN_IN_WORKTREE,
       planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
+    }),
+  },
+  {
+    name: 'planReported of another folder after a report keeps the unreported folder',
+    flow: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE,
+      planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+    }),
+    signal: planReported(PLAN_IN_WORKTREE_2),
+    expected: flowWith({
+      ...IN_C,
+      planDir: PLAN_IN_WORKTREE_2,
+      planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
     }),
   },
   {
@@ -485,6 +506,7 @@ const FOLD_ROWS: {
       stage: 'make',
       planDir: PLAN_IN_WORKTREE,
       planReported: true,
+      unreportedPlanDir: PLAN_X,
       progress: PROGRESS,
     }),
     signal: skill('wigley:make', PLAN_IN_REPO),
@@ -496,6 +518,7 @@ const FOLD_ROWS: {
       ...IN_C,
       planDir: PLAN_IN_WORKTREE,
       planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
       progress: PROGRESS,
     }),
     signal: skill('wigley:feature', null),
@@ -507,6 +530,7 @@ const FOLD_ROWS: {
       ...IN_C,
       planDir: PLAN_IN_WORKTREE,
       planReported: true,
+      unreportedPlanDir: PLAN_X,
       progress: PROGRESS,
     }),
     signal: { type: 'fileWritten', path: `${PLAN_IN_REPO}/plan.md` },
@@ -518,6 +542,7 @@ const FOLD_ROWS: {
       ...IN_C,
       planDir: PLAN_IN_WORKTREE,
       planReported: true,
+      unreportedPlanDir: PLAN_IN_REPO,
       progress: PROGRESS,
     }),
     signal: { type: 'fileWritten', path: `${PLAN_IN_WORKTREE}/plan.md` },
@@ -580,17 +605,12 @@ describe('largeStateOf', () => {
       state: stateWithTask({ wave: 1, text: 'first', done: true }),
     },
     {
-      name: 'no planReported',
-      state: {
-        planDir: PLAN_X,
-        progress: null,
-        reviewRoundsAtMake: null,
-        countdownEndsAt: null,
-      },
-    },
-    {
       name: 'a planReported not a boolean',
       state: { ...EMPTY_LARGE_STATE, planReported: 'yes' },
+    },
+    {
+      name: 'an unreportedPlanDir not a string',
+      state: { ...EMPTY_LARGE_STATE, unreportedPlanDir: 3 },
     },
   ])('largeStateOf_BadShape_ReadsEmpty ($name)', ({ state }) => {
     expect(largeStateOf({ ...newFlow('s1', '/r'), state })).toBe(
@@ -605,6 +625,21 @@ describe('largeStateOf', () => {
     },
   ])('largeStateOf_ValidState_ReadsThatObject ($name)', ({ state }) => {
     expect(largeStateOf({ ...newFlow('s1', '/r'), state })).toBe(state);
+  });
+
+  it('largeStateOf_SavedBeforeReports_ReadsUnreported', () => {
+    const state = {
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 1,
+      countdownEndsAt: null,
+    };
+
+    expect(largeStateOf({ ...newFlow('s1', '/r'), state })).toEqual({
+      ...state,
+      planReported: false,
+      unreportedPlanDir: null,
+    });
   });
 
   it('withLargeState patches the state and keeps the rest of the flow', () => {
@@ -661,6 +696,12 @@ describe('sameLargeState', () => {
       name: 'another planReported',
       a: EMPTY_LARGE_STATE,
       b: { ...EMPTY_LARGE_STATE, planReported: true },
+      same: false,
+    },
+    {
+      name: 'another unreportedPlanDir',
+      a: EMPTY_LARGE_STATE,
+      b: { ...EMPTY_LARGE_STATE, unreportedPlanDir: PLAN_X },
       same: false,
     },
     {

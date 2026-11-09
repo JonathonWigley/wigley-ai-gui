@@ -58,6 +58,7 @@ export function sameLargeState(a: unknown, b: unknown): boolean {
   return (
     left.planDir === right.planDir &&
     left.planReported === right.planReported &&
+    left.unreportedPlanDir === right.unreportedPlanDir &&
     left.progress === right.progress &&
     left.reviewRoundsAtMake === right.reviewRoundsAtMake &&
     left.countdownEndsAt === right.countdownEndsAt
@@ -92,8 +93,7 @@ function applySignal(next: LargeState, signal: WorkflowSignal): void {
         }
         next.reviewRoundsAtMake ??= event.progress.reviewRounds;
       } else if (event?.type === 'planReported') {
-        setPlanDir(next, event.planDir);
-        next.planReported = true;
+        reportPlanDir(next, event.planDir);
       }
       break;
     }
@@ -166,18 +166,31 @@ function setPlanDir(next: LargeState, planDir: string): void {
   }
 }
 
+// A reported folder: marks it, and a new one keeps the unreported folder it
+// moves away from, or the one an earlier report kept.
+function reportPlanDir(next: LargeState, planDir: string): void {
+  if (planDir !== next.planDir && !next.planReported) {
+    next.unreportedPlanDir = next.planDir;
+  }
+  setPlanDir(next, planDir);
+  next.planReported = true;
+}
+
 // A folder seen in a write or a make argument, not reported: a new one drops
-// the report mark, and the folder already held keeps it.
+// the report mark and the unreported folder kept, and the folder already held
+// keeps both.
 function followPlanDir(next: LargeState, planDir: string): void {
   if (planDir !== next.planDir) {
     setPlanDir(next, planDir);
     next.planReported = false;
+    next.unreportedPlanDir = null;
   }
 }
 
 function clearPlan(next: LargeState): void {
   next.planDir = null;
   next.planReported = false;
+  next.unreportedPlanDir = null;
   next.progress = null;
 }
 

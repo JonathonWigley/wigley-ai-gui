@@ -21,8 +21,12 @@ export interface LargeState {
   planDir: string | null;
   // True when the run reported `planDir` through `plan.py` or
   // `set_workflow_plan`: the plan watch then reads that folder alone while it
-  // holds a plan.md.
+  // holds a plan.md. A flow saved before reports reads false.
   planReported: boolean;
+  // The unreported folder held before a report moved `planDir` away, else
+  // null: the plan watch lists the plan's copies from it once the reported
+  // folder lists none. A flow saved before reports reads null.
+  unreportedPlanDir: string | null;
   // Null until the plan folder is read.
   progress: PlanProgress | null;
   // The plan's review rounds when make was last entered: review lights only on
@@ -36,14 +40,28 @@ export interface LargeState {
 export const EMPTY_LARGE_STATE: LargeState = {
   planDir: null,
   planReported: false,
+  unreportedPlanDir: null,
   progress: null,
   reviewRoundsAtMake: null,
   countdownEndsAt: null,
 };
 
-// `state` when it has Large's shape, else the empty state.
+// `state` when it has Large's shape, a missing `planReported` read false and a
+// missing `unreportedPlanDir` null; else the empty state. A state holding both
+// is returned as is.
 export function largeStateIn(state: unknown): LargeState {
-  return isLargeState(state) ? state : EMPTY_LARGE_STATE;
+  if (!isSavedLargeState(state)) {
+    return EMPTY_LARGE_STATE;
+  }
+  const holdsEveryField =
+    state.planReported !== undefined && state.unreportedPlanDir !== undefined;
+  return holdsEveryField
+    ? (state as LargeState)
+    : {
+        ...state,
+        planReported: state.planReported ?? false,
+        unreportedPlanDir: state.unreportedPlanDir ?? null,
+      };
 }
 
 // The flow's state when it has Large's shape, whichever workflow holds the flow.
@@ -118,11 +136,18 @@ export interface WorkflowLargeChannel extends ChannelShape {
   messages: Record<never, never>;
 }
 
-function isLargeState(value: unknown): value is LargeState {
+// Large's state as a flow saved before the report fields may hold it.
+type SavedLargeState = Omit<LargeState, 'planReported' | 'unreportedPlanDir'> &
+  Partial<Pick<LargeState, 'planReported' | 'unreportedPlanDir'>>;
+
+function isSavedLargeState(value: unknown): value is SavedLargeState {
   return (
     isJsonObject(value) &&
-    (value.planDir === null || typeof value.planDir === 'string') &&
-    typeof value.planReported === 'boolean' &&
+    isStringOrNull(value.planDir) &&
+    (value.planReported === undefined ||
+      typeof value.planReported === 'boolean') &&
+    (value.unreportedPlanDir === undefined ||
+      isStringOrNull(value.unreportedPlanDir)) &&
     (value.progress === null || isPlanProgress(value.progress)) &&
     isNumberOrNull(value.reviewRoundsAtMake) &&
     isNumberOrNull(value.countdownEndsAt)
@@ -152,6 +177,10 @@ function isPlanTaskLine(value: unknown): value is PlanTaskLine {
     (value.status === null ||
       (TASK_STATUSES as readonly unknown[]).includes(value.status))
   );
+}
+
+function isStringOrNull(value: unknown): boolean {
+  return value === null || typeof value === 'string';
 }
 
 function isNumberOrNull(value: unknown): boolean {

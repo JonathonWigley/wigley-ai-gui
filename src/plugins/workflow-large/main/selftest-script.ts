@@ -53,12 +53,14 @@ export interface WorkflowLargeSelfTestDeps {
 }
 
 // The launched session's id, or the launch's error; `turnEnds` holds the
-// session id of each main turn end main heard during the run.
+// session id of each main turn end main heard during the run, and
+// `planReportErrors` each plan report file write that failed.
 interface WorkflowLargeSelfTestResult {
   project: string;
   sessionId: string | null;
   launchError: string | null;
   turnEnds: readonly string[];
+  planReportErrors: readonly string[];
 }
 
 // Types the text in insert mode, Esc to normal mode, where Enter in the box
@@ -236,6 +238,9 @@ function runProblems(
       `${String(turnEnds.length)} main turn ends for ${String(sends.length)} sends`,
     );
   }
+  for (const error of result.planReportErrors) {
+    problems.push(`plan report not written: ${error}`);
+  }
   return problems;
 }
 
@@ -245,7 +250,8 @@ function runProblems(
 // label, and the flows of the project's sessions. It then launches one session
 // in the project, counting the main turn ends main hears until the next run
 // opens, and makes the step call a report send asks for at that send's turn end,
-// or writes the session's plan report file after a plan report send.
+// or writes the session's plan report file after a plan report send, a failed
+// write counted among the run's problems.
 // The fake writes, ticks and deletes the plan itself; problems reads its records,
 // which the steps keep changing in place, when it runs.
 export function workflowLargeSelfTestScript(
@@ -301,6 +307,7 @@ export function workflowLargeSelfTestScript(
     const project = await made;
     await undoEarlierRun(project);
     const turnEnds: string[] = [];
+    const planReportErrors: string[] = [];
     turnEndListener = hooks.onMainTurnEnded((sessionId) => {
       turnEnds.push(sessionId);
       const lastSend = projectRecords(marks, project).flatMap(sendTexts).at(-1);
@@ -311,7 +318,9 @@ export function workflowLargeSelfTestScript(
         );
       }
       if (lastSend === REPORT_PLAN_SEND) {
-        void writePlanReport(sessionId);
+        writePlanReport(sessionId).catch((error: unknown) => {
+          planReportErrors.push(errorText(error));
+        });
       }
     });
     try {
@@ -321,13 +330,20 @@ export function workflowLargeSelfTestScript(
         message: { text: 'hello', images: [] },
       });
       sessions.activate(sessionId);
-      return { project, sessionId, launchError: null, turnEnds };
+      return {
+        project,
+        sessionId,
+        launchError: null,
+        turnEnds,
+        planReportErrors,
+      };
     } catch (error) {
       return {
         project,
         sessionId: null,
         launchError: errorText(error),
         turnEnds,
+        planReportErrors,
       };
     }
   }

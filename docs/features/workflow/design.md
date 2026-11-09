@@ -109,7 +109,7 @@ A reported folder is read alone. With no report, or once the reported folder hol
 **moved copy**: a copy whose progress differs from the main tree's copy with no fewer ticked boxes, the most recently
 modified of them when several differ, else the main tree's copy. A fresh worktree checks out the main tree's progress,
 and an idle worktree left behind main has fewer ticked boxes, so neither wins, however new its files' modified times
-are. A reported worktree folder removed after its merge falls back to the main tree's copy the watch last listed. A plan outside a git clone (`~/wigley-features/`) has one copy. A report
+are. A report that moves the flow off an unreported folder keeps that folder in the flow's state, saved with it; once a reported folder lists no copies, as a worktree removed after its merge does, the watch lists the copies, and decides whether the plan is gone, from the main tree's copy it last listed, else from that kept folder, so an app restart still finds the main tree's copy. A plan outside a git clone (`~/wigley-features/`) has one copy. A report
 applies when its file changes; a row's file stays after the row ends, since the live `Files.trash` would fill the
 user's Trash, and a new row never reuses an old row's id.
 

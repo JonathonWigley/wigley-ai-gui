@@ -16,6 +16,7 @@ import { createSlotStore } from '../shared/state/slot-store';
 import { type ChatMainEvents, type ChatMainExports } from './chat/contract';
 import {
   type AgentSession,
+  type ContributeToolsOptions,
   type SessionsMainEvents,
   type SessionsMainExports,
   type ToolCallContext,
@@ -46,6 +47,8 @@ import {
   type LargeState,
   largeStateOf,
 } from './workflow-large/contract';
+import { PLAN_RUNS_FOLDER } from './workflow-large/main/plan-reports';
+import { SET_WORKFLOW_PLAN_TOOL } from './workflow-large/main/plan-tool';
 import { workflowLargeMainPart } from './workflow-large/main/start';
 import { readPlanProgress } from '../shared/plan-progress';
 
@@ -56,6 +59,11 @@ const PLAN =
   '# Plan A — plan\n\n## Tasks\n\n- [x] one\n- [ ] two\n- [ ] three\n';
 const PLAN_TICKED =
   '# Plan A — plan\n\n## Tasks\n\n- [x] one\n- [x] two\n- [ ] three\n';
+// The plan folder's copy in a worktree, outside the clone the test git finds.
+const W_PLAN_DIR = '/w/docs/features/x/plan-a';
+// s1's `plan.py` report file, in the endpoint folder of the home `/home` and
+// the app instance `app`.
+const S1_PLAN_RUN_FILE = `/home/.agents/app/${PLAN_RUNS_FOLDER}/s1.json`;
 
 // The events the engine's main part hears.
 type WorkflowHeard = QualifiedEvents<'chat', ChatMainEvents> &
@@ -202,12 +210,13 @@ function startWorkflowPart(
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
+    options: ContributeToolsOptions | undefined;
   }[] = [];
   const sessions: Pick<SessionsMainExports, 'label' | 'contributeTools'> = {
     label: (sessionId) =>
       sessionId === 's1' ? (options.sessionLabel ?? null) : null,
-    contributeTools: (tools, start) => {
-      const contribution = { tools, start };
+    contributeTools: (tools, start, options) => {
+      const contribution = { tools, start, options };
       contributions.push(contribution);
       return {
         dispose: () => {
@@ -343,20 +352,26 @@ function startWorkflowPart(
     settingsListener(next);
     await settled();
   };
-  // A call of the live contribution of the step tool from session `id`.
-  const callStepTool = async (id: string, step: string) => {
+  // The live contribution that holds the tool `name`.
+  const contributionOf = (name: string) => {
     const contribution = contributions.find(({ tools }) =>
-      tools.some((tool) => tool.name === SET_WORKFLOW_STEP_TOOL),
+      tools.some((tool) => tool.name === name),
     );
     if (contribution === undefined) {
-      throw new Error(`no contribution of ${SET_WORKFLOW_STEP_TOOL}`);
+      throw new Error(`no contribution of ${name}`);
     }
-    const pending = contribution
+    return contribution;
+  };
+  // A call of the live contribution of the tool `name` from session `id`.
+  const callTool = async (id: string, name: string, args: unknown) => {
+    const pending = contributionOf(name)
       .start(session(id, 'h1'))
-      .call(SET_WORKFLOW_STEP_TOOL, { step }, NO_CALL_CONTEXT);
+      .call(name, args, NO_CALL_CONTEXT);
     await settled();
     return pending;
   };
+  const callStepTool = (id: string, step: string) =>
+    callTool(id, SET_WORKFLOW_STEP_TOOL, { step });
   return {
     data,
     project,
@@ -379,6 +394,8 @@ function startWorkflowPart(
     changeSettings,
     runAction: (command: string) =>
       handlers.get('runAction')?.({ sessionId: 's1', command }),
+    contributionOf,
+    callTool,
     callStepTool,
   };
 }
@@ -432,6 +449,7 @@ async function savedFlowData(fields: FlowFields): Promise<MemoryFiles> {
   const {
     planDir,
     planReported,
+    unreportedPlanDir,
     progress,
     reviewRoundsAtMake,
     countdownEndsAt,
@@ -452,6 +470,7 @@ async function savedFlowData(fields: FlowFields): Promise<MemoryFiles> {
             state: {
               planDir: planDir ?? null,
               planReported: planReported ?? false,
+              unreportedPlanDir: unreportedPlanDir ?? null,
               progress: progress ?? null,
               reviewRoundsAtMake: reviewRoundsAtMake ?? null,
               countdownEndsAt: countdownEndsAt ?? null,
@@ -907,6 +926,77 @@ describe('workflowLargeMainPart', () => {
       savedAt: START + 5,
     });
   });
+
+  it('PlanTool_ContributedForTheMainAgentOnly', () => {
+    const workflow = startWorkflowPart(SETTINGS);
+
+    expect(workflow.contributionOf(SET_WORKFLOW_PLAN_TOOL).options).toEqual({
+      mainAgentOnly: true,
+    });
+  });
+
+  it.each([
+    {
+      name: 'set_workflow_plan of a worktree copy',
+      source: 'tool',
+      large: true,
+      folder: W_PLAN_DIR,
+      expected: { planDir: W_PLAN_DIR, planReported: true, plan: PLAN_TICKED },
+    },
+    {
+      name: 'a report file naming a worktree copy',
+      source: 'file',
+      large: true,
+      folder: W_PLAN_DIR,
+      expected: { planDir: W_PLAN_DIR, planReported: true, plan: PLAN_TICKED },
+    },
+    {
+      name: 'set_workflow_plan of the folder already held',
+      source: 'tool',
+      large: true,
+      folder: PLAN_DIR,
+      expected: { planDir: PLAN_DIR, planReported: true, plan: PLAN },
+    },
+    {
+      name: 'a report file from a flow that is not Large',
+      source: 'file',
+      large: false,
+      folder: W_PLAN_DIR,
+      expected: { planDir: null, planReported: false, plan: null },
+    },
+  ])(
+    'PlanReport_FoldsIntoTheFlow ($name)',
+    async ({ source, large, folder, expected }) => {
+      const workflow = startWorkflowPart(SETTINGS);
+      workflow.exported().addWorkflow(stubWorkflow());
+      await workflow.project.write(PLAN_FILE, PLAN);
+      await workflow.project.write(`${W_PLAN_DIR}/plan.md`, PLAN_TICKED);
+      await workflow.openS1();
+      await workflow.agentEvent(
+        large ? skill('wigley:make', PLAN_DIR) : skill('x:stub', ''),
+      );
+
+      if (source === 'tool') {
+        await workflow.callTool('s1', SET_WORKFLOW_PLAN_TOOL, { folder });
+      } else {
+        await workflow.project.write(
+          S1_PLAN_RUN_FILE,
+          `${JSON.stringify({ planDir: folder })}\n`,
+        );
+      }
+      await settled();
+      await settled();
+
+      expect(workflow.lastLarge()).toMatchObject({
+        planDir: expected.planDir,
+        planReported: expected.planReported,
+        progress:
+          expected.plan === null
+            ? null
+            : readPlanProgress(expected.plan, new Map()),
+      });
+    },
+  );
 
   it.each([
     { seconds: 3, line: 'settings: autoClearAndMake on, autoStartSeconds 3' },
