@@ -27,7 +27,7 @@ type SystemStatsApi = MainApi<typeof systemStatsManifest, SystemStatsChannel>;
 
 // Registers the layouts and writes `system-stats.snapshot`: null at start and at each show, then a snapshot from
 // each pair of good samples while the page reports the panel shown, the first sample of a show giving only the
-// earlier reading. A rejected sample keeps the last snapshot with its error set, logged once per distinct text. A
+// earlier reading. Each show starts an empty history, so a sparkline never joins readings across a hide. A rejected sample keeps the last snapshot with its error set, logged once per distinct text. A
 // seed, from a drive run or the self-test's script, writes a fixed snapshot and stops sampling for the run. Hands the
 // self-test the panel script.
 export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
@@ -107,6 +107,7 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
       }
       shown = next;
       if (next) {
+        history = emptyHistory(historyCapacity(refreshSeconds()));
         snapshot.set(null);
         services.log('sampling started');
       } else {

@@ -96,7 +96,7 @@ function drawHeadings(parent, input, kit) {
  */
 function drawRow(parent, input, kit) {
   const chevron = kit.el(parent, 'span', 'system-stats-chevron');
-  if (input.kind !== 'process') {
+  if (input.kind === 'app' || input.kind === 'session') {
     kit.icon(chevron, input.isOpen ? 'chevron-down' : 'chevron-right');
   }
   const cells = kit.el(parent, 'span', 'system-stats-cells');

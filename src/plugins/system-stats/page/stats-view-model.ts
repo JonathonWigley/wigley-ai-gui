@@ -21,6 +21,7 @@ export interface VisibleRow {
 
 const MIB = 2 ** 20;
 const GIB = 2 ** 30;
+const NO_READING = '—';
 
 const NEXT_SORT: Record<StatsSortColumn, StatsSortColumn> = {
   cpu: 'ram',
@@ -34,7 +35,7 @@ export function nextSort(sort: StatsSortColumn): StatsSortColumn {
 
 // A group row: an app or a Chat session's process tree, which opens to show its processes.
 export function isGroup(row: StatsProcessRow): boolean {
-  return row.kind !== 'process';
+  return row.kind === 'app' || row.kind === 'session';
 }
 
 // The top-level rows sorted by `sort`: every Chat session group, and the first `max(1, processRows)` of the other
@@ -113,8 +114,12 @@ export function formatBytes(bytes: number): string {
     : `${(bytes / GIB).toFixed(1)} GB`;
 }
 
+export function formatRam(bytes: number | null): string {
+  return bytes === null ? NO_READING : formatBytes(bytes);
+}
+
 export function formatGpu(percent: number | null): string {
-  return percent === null ? '—' : formatPercent(percent);
+  return percent === null ? NO_READING : formatPercent(percent);
 }
 
 // The layout's input: `reading` with no snapshot, else the five meters and the visible rows, the cursor on the row
@@ -154,7 +159,7 @@ export function panelInput(
       depth,
       isOpen: isOpenAt(visible.rows, index),
       cpu: formatPercent(row.cpuPercent),
-      ram: formatBytes(row.rssBytes),
+      ram: formatRam(row.rssBytes),
       gpu: formatGpu(row.gpuPercent),
       isCursor: row.id === cursorId,
     })),
@@ -183,7 +188,7 @@ function isOpenAt(visible: readonly VisibleRow[], index: number): boolean {
   return entry.depth === 0 && visible[index + 1]?.parentId === entry.row.id;
 }
 
-// Descending by the column, a null GPU after every number, then by name in code-unit order, then by id.
+// Descending by the column, a null RAM or GPU after every number, then by name in code-unit order, then by id.
 function byColumn(
   sort: StatsSortColumn,
 ): (a: StatsProcessRow, b: StatsProcessRow) => number {

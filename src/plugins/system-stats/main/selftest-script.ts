@@ -10,7 +10,8 @@ export interface SystemStatsSelfTestDeps {
 
 const line = (text: string) => `[system-stats] ${text}`;
 const TOGGLE = [' ', 'v', 'y'];
-const BY_CPU = 'Google Chrome, WindowServer, claude · fix login, Finder';
+const OTHER = 'Other (exited processes, system)';
+const BY_CPU = `Google Chrome, WindowServer, claude · fix login, ${OTHER}, Finder`;
 const CHROME_OPENED =
   'opened Google Chrome: Google Chrome Helper (Renderer), Google Chrome';
 
@@ -53,19 +54,19 @@ export function systemStatsSelfTestScript(
     },
     {
       name: 'sort',
-      why: 's cycles the sort through RAM, GPU and back to CPU, a missing GPU reading sorting last.',
+      why: 's cycles the sort through RAM, GPU and back to CPU, a missing RAM or GPU reading sorting last.',
       steps: [
         {
           keys: ['s'],
           expect: line(
-            'sorted by ram: Finder, Google Chrome, claude · fix login, WindowServer',
+            `sorted by ram: Finder, Google Chrome, claude · fix login, WindowServer, ${OTHER}`,
           ),
           screenshot: 'sorted-ram',
         },
         {
           keys: ['s'],
           expect: line(
-            'sorted by gpu: WindowServer, Google Chrome, Finder, claude · fix login',
+            `sorted by gpu: WindowServer, Google Chrome, Finder, ${OTHER}, claude · fix login`,
           ),
         },
         { keys: ['s'], expect: line(`sorted by cpu: ${BY_CPU}`) },
@@ -73,7 +74,7 @@ export function systemStatsSelfTestScript(
     },
     {
       name: 'groups',
-      why: 'Enter and l open the cursor’s group with its processes sorted under it, h closes it from a child or from the group, a lone process has no group, and Alt+h gives the keys back.',
+      why: 'Enter and l open the cursor’s group with its processes sorted under it, h closes it from a child or from the group, a lone process and the Other row have no group, and Alt+h gives the keys back.',
       steps: [
         {
           keys: ['Enter'],
@@ -93,6 +94,8 @@ export function systemStatsSelfTestScript(
         { keys: ['h'], expect: line('closed Google Chrome') },
         { keys: ['G'], expect: line('cursor on Finder') },
         { keys: ['l'], expect: line('no group: Finder') },
+        { keys: ['k'], expect: line(`cursor on ${OTHER}`) },
+        { keys: ['l'], expect: line(`no group: ${OTHER}`) },
         { keys: ['<A-h>'], expect: '[page] focus back in main' },
       ],
     },

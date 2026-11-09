@@ -51,7 +51,7 @@ function setup(refreshSeconds = 3) {
   });
   const flush = () => new Promise((settle) => setImmediate(settle));
   const resolveNext = async () => {
-    pending.shift()?.resolve(fakeSystemSample(calls));
+    pending.shift()?.resolve(fakeSystemSample(clock.at));
     await flush();
   };
   const rejectNext = async (reason: unknown) => {
@@ -160,16 +160,26 @@ describe('createStatsPoller', () => {
     expect(run.failed).toEqual([]);
   });
 
-  it('rejectedSample_ReportsAndKeepsSampling', async () => {
-    const run = setup();
-    const reason = new Error('ps exited with code 1');
-    run.poller.setShown(true);
+  it.each([
+    { case: 'before a good sample', goodSamples: 0 },
+    { case: 'after the first good sample', goodSamples: 1 },
+  ])(
+    'rejectedSample_ReportsAndWaitsTheInterval: $case',
+    async ({ goodSamples }) => {
+      const run = setup(3);
+      const reason = new Error('ps exited with code 1');
+      run.poller.setShown(true);
+      if (goodSamples === 1) {
+        await run.resolveNext();
+        run.fire();
+      }
 
-    await run.rejectNext(reason);
+      await run.rejectNext(reason);
 
-    expect(run.failed).toEqual([reason]);
-    expect(run.armedMs()).toEqual([FIRST_GAP_MS]);
-  });
+      expect(run.failed).toEqual([reason]);
+      expect(run.armedMs()).toEqual([3000]);
+    },
+  );
 
   it('dispose_ClearsTimerAndStopsSampling', async () => {
     const run = setup();

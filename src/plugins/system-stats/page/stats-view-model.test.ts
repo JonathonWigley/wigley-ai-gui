@@ -11,6 +11,8 @@ import {
   formatBytes,
   formatGpu,
   formatPercent,
+  formatRam,
+  isGroup,
   movedCursor,
   panelInput,
   visibleRows,
@@ -77,6 +79,11 @@ function session(
 ): StatsProcessRow {
   return { ...proc(id, cpuPercent, ramMib, null, children), kind: 'session' };
 }
+const OTHER: StatsProcessRow = {
+  ...proc('other', 6, 0, null),
+  kind: 'other',
+  rssBytes: null,
+};
 const IDLE_SESSION = session('s0', 0, 315, [proc('s0a', 0, 315, null)]);
 const BUSY_SESSION = session('s1', 40, 600, [proc('s1a', 40, 600, null)]);
 
@@ -146,6 +153,24 @@ describe('visibleRows', () => {
       processRows: 2,
       shown: ['0:e', '0:d'],
       moreRows: 4,
+    },
+    {
+      name: 'the Other row sorts by CPU and takes a place in the cut',
+      rows: [OTHER, ...ROWS],
+      sort: 'cpu',
+      openIds: [],
+      processRows: 3,
+      shown: ['0:e', '0:d', '0:other'],
+      moreRows: 3,
+    },
+    {
+      name: "the Other row's null RAM sorts last",
+      rows: [OTHER, ...ROWS],
+      sort: 'ram',
+      openIds: [],
+      processRows: 10,
+      shown: ['0:a', '0:b', '0:c', '0:d', '0:e', '0:other'],
+      moreRows: 0,
     },
     {
       name: 'processRows 0 shows one',
@@ -311,6 +336,17 @@ describe('panelInput', () => {
   });
 });
 
+describe('isGroup', () => {
+  it.each([
+    { row: GROUP, isGroup: true },
+    { row: IDLE_SESSION, isGroup: true },
+    { row: proc('p', 1, 10, 0), isGroup: false },
+    { row: OTHER, isGroup: false },
+  ])('isGroup_AppsAndSessions: $row.kind', ({ row, isGroup: expected }) => {
+    expect(isGroup(row)).toBe(expected);
+  });
+});
+
 describe('movedCursor', () => {
   it.each<[number, number, CursorMove, number]>([
     [2, 5, 'down', 3],
@@ -357,6 +393,8 @@ describe('formats', () => {
     ['formatBytes just under 1 GiB', formatBytes(1_073_700_000), '1024 MB'],
     ['formatBytes 1 GiB', formatBytes(1_073_741_824), '1.0 GB'],
     ['formatBytes 2.54 GiB', formatBytes(2_726_297_600), '2.5 GB'],
+    ['formatRam null', formatRam(null), '—'],
+    ['formatRam 1 GiB', formatRam(1_073_741_824), '1.0 GB'],
     ['formatGpu null', formatGpu(null), '—'],
     ['formatGpu 31', formatGpu(31), '31.0%'],
   ])('formats_Cells: %s', (_name, formatted, expected) => {

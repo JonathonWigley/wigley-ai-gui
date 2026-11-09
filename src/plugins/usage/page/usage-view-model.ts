@@ -4,6 +4,7 @@ import type {
   UsageAgentEvent,
 } from '../../../contracts/agent';
 import { formatTokens } from '../../../shared/format-tokens';
+import { percentTone } from '../../../shared/percent-tone';
 import type { ProfilePlan, SessionUsage, UsageSnapshot } from '../contract';
 import type {
   ContextLineInput,
@@ -18,7 +19,6 @@ import type {
   SpendLineInput,
   StatusLineInput,
   StatusLinePlanInput,
-  UsageTone,
 } from '../layouts/layout';
 import {
   formatDuration,
@@ -27,10 +27,6 @@ import {
   formatUsd,
 } from './usage-format';
 
-// The shares of the autocompact limit at which the context meter turns
-// `warning` and `critical`.
-const CONTEXT_WARNING_PERCENT = 70;
-const CONTEXT_CRITICAL_PERCENT = 90;
 const MINUTE_MS = 60_000;
 
 const COMPACTING_CHIPS: Record<CompactionTrigger, string> = {
@@ -311,7 +307,7 @@ function contextMeter(usage: UsageAgentEvent): MeterInput {
     label: 'Context',
     text: `${formatTokens(used)}/${formatTokens(limit)}`,
     percent: Math.min(100, share),
-    tone: contextTone(share),
+    tone: percentTone(share),
   };
 }
 
@@ -323,13 +319,6 @@ function zeroContextMeter(): MeterInput {
     percent: 0,
     tone: 'normal',
   };
-}
-
-function contextTone(share: number): UsageTone {
-  if (share < CONTEXT_WARNING_PERCENT) {
-    return 'normal';
-  }
-  return share < CONTEXT_CRITICAL_PERCENT ? 'warning' : 'critical';
 }
 
 function rowMeter(row: PlanRow): MeterInput {

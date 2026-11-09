@@ -15,11 +15,11 @@ export interface StatsMeter {
 }
 
 export interface StatsProcessRow {
-  id: string; // stable across samples: 'app:<bundle or exe>', 'session:<sessionId>', 'pid:<pid>'
-  name: string; // app name, 'claude · <session title>', or process name
-  kind: 'app' | 'session' | 'process';
+  id: string; // stable across samples: 'app:<bundle or exe>', 'session:<sessionId>', 'pid:<pid>', 'other'
+  name: string; // app name, 'claude · <session title>', process name, or the Other row's name
+  kind: 'app' | 'session' | 'process' | 'other'; // 'other': the CPU no process row holds, never opened
   cpuPercent: number; // share of the whole machine
-  rssBytes: number;
+  rssBytes: number | null; // null on the Other row
   gpuPercent: number | null;
   children: StatsProcessRow[]; // the group's processes, [] for a lone process
 }
@@ -32,7 +32,7 @@ export interface StatsSnapshot {
   network: StatsMeter;
   disk: StatsMeter;
   memoryNote: string; // the line under RAM: pressure and swap used
-  rows: StatsProcessRow[]; // every group and lone process, unsorted; the page sorts and cuts
+  rows: StatsProcessRow[]; // every group and lone process, then the Other row, unsorted; the page sorts and cuts
   error: string | null; // the last sample()'s rejection message; null after a good sample
 }
 

@@ -14,6 +14,7 @@ import { statsFixture } from './stats-fixture';
 
 // The fake machine's time between two steps.
 const STEP_MS = 2000;
+const REFRESH_MS = systemStatsManifest.settings.refreshSeconds * 1000;
 
 // Each `sample` takes the next outcome: `good` is the fake machine's reading at the next step, an Error rejects.
 // Past the queue every sample is good.
@@ -80,6 +81,7 @@ describe('systemStatsMainPart', () => {
       'app:Fake Browser.app',
       'app:node',
       'pid:4242',
+      'other',
     ]);
   });
 
@@ -88,7 +90,7 @@ describe('systemStatsMainPart', () => {
     const run = startOnHarness([failure, failure]);
 
     await run.show(true);
-    await run.advance(FIRST_GAP_MS);
+    await run.advance(REFRESH_MS);
 
     expect(run.stats.calls).toBe(2);
     expect(run.slot.get()?.error).toBe('ps exited with code 1');
@@ -100,9 +102,9 @@ describe('systemStatsMainPart', () => {
     const run = startOnHarness([failure, 'good', 'good', failure]);
 
     await run.show(true);
+    await run.advance(REFRESH_MS);
     await run.advance(FIRST_GAP_MS);
-    await run.advance(FIRST_GAP_MS);
-    await run.advance(systemStatsManifest.settings.refreshSeconds * 1000);
+    await run.advance(REFRESH_MS);
 
     expect(run.stats.calls).toBe(4);
     expect(run.logged('sample failed: ps exited with code 1')).toBe(2);
@@ -113,22 +115,23 @@ describe('systemStatsMainPart', () => {
     await run.show(true);
     expect(run.slot.get()?.error).toBe('ps exited with code 1');
 
-    await run.advance(FIRST_GAP_MS);
+    await run.advance(REFRESH_MS);
 
     expect(run.slot.get()?.error).toBeNull();
   });
 
-  it('hideThenShow_StartsFromAFreshFirstSample', async () => {
+  it('hideThenShow_StartsFromAFreshFirstSampleAndHistory', async () => {
     const run = startOnHarness();
     await run.show(true);
     await run.advance(FIRST_GAP_MS);
-    expect(run.slot.get()).not.toBeNull();
+    await run.advance(REFRESH_MS);
+    expect(run.slot.get()?.cpu.history).toHaveLength(2);
 
     await run.show(false);
     await run.show(true);
     expect(run.slot.get()).toBeNull();
     await run.advance(FIRST_GAP_MS);
-    expect(run.slot.get()).not.toBeNull();
+    expect(run.slot.get()?.cpu.history).toHaveLength(1);
 
     const fixture = await run.harness.drive?.run('seed');
     await run.show(false);
@@ -147,7 +150,7 @@ describe('systemStatsMainPart', () => {
     // The third sample compares with the first: the browser's two processes grew 3600 ms of CPU time per step,
     // so two steps over 2000 ms on 8 cores is 45%, where one step would be 22.5%.
     clock.at = 7_000;
-    await run.advance(systemStatsManifest.settings.refreshSeconds * 1000);
+    await run.advance(REFRESH_MS);
     const browser = run.slot
       .get()
       ?.rows.find(({ id }) => id === 'app:Fake Browser.app');
@@ -174,17 +177,16 @@ describe('systemStatsMainPart', () => {
 
   it('settingsChange_KeepsTheHistory', async () => {
     const run = startOnHarness();
-    const refreshMs = systemStatsManifest.settings.refreshSeconds * 1000;
     await run.show(true);
     await run.advance(FIRST_GAP_MS);
-    await run.advance(refreshMs);
+    await run.advance(REFRESH_MS);
     const before = run.slot.get()?.cpu.history ?? [];
 
     run.harness.pushSettings({
       ...systemStatsManifest.settings,
       processRows: 25,
     });
-    await run.advance(refreshMs);
+    await run.advance(REFRESH_MS);
 
     expect(run.slot.get()?.cpu.history.slice(0, -1)).toEqual(before);
     expect(before).toHaveLength(2);

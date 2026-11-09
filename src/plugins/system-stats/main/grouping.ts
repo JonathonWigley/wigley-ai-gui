@@ -5,6 +5,7 @@ import type { StatsProcessRow } from '../contract';
 import type { ProcessRate, SessionProcess } from './snapshot';
 
 const APP_BUNDLE = '.app';
+const OTHER_ROW_NAME = 'Other (exited processes, system)';
 
 // The app a process belongs to: the outermost `.app` bundle in its path, else its own name.
 export function appKeyOf(process: Pick<ProcessSample, 'name' | 'path'>): {
@@ -72,6 +73,24 @@ export function groupProcesses(
       : groupRow(id, name, 'app', members),
   );
   return [...sessionRows, ...appRows];
+}
+
+// The CPU meter's share no top-level row holds: kernel and system time, and processes that started and exited between
+// the two samples. It has no RAM or GPU reading and never opens.
+export function otherRow(
+  cpuPercent: number,
+  rows: readonly StatsProcessRow[],
+): StatsProcessRow {
+  const rowsCpu = sum(rows.map((row) => row.cpuPercent));
+  return {
+    id: 'other',
+    name: OTHER_ROW_NAME,
+    kind: 'other',
+    cpuPercent: Math.max(0, cpuPercent - rowsCpu),
+    rssBytes: null,
+    gpuPercent: null,
+    children: [],
+  };
 }
 
 // One entry per Chat session with a running process and a sidebar row, titled as its row is.

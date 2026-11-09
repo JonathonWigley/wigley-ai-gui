@@ -396,7 +396,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   bar; in a tab bar the slot keeps room for the bar and a few of the chip's characters, and the strip scrolls instead.
   Its context bar pulses at `duration-pulse`, unbroken across redraws, static under reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
   `warning`, `critical`); the context bar by its share of the limit
-  (`warning` from 70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note
+  (`warning` from 70 %, `critical` from 90 %, of the share rounded to a whole percent). The context bar carries no label; a stale profile's rows and a note
   (`plan loading`, `plan unavailable`) draw in `fg-tertiary`. The details bar
   (right bar, `Space v u`) is a card per profile, each a header (the name, its muted `text-12` freshness beside it —
   `updated <ago>` from the poll's time, or `stale, last good <ago>` — and the default profile's tag at the end) over
@@ -426,11 +426,13 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **System stats:** the right bar holds the system stats panel while it is shown (`Space v y`): a section header
   with the sort key's hint at its end, then five meter rows (CPU, GPU, RAM, Network, Disk), each its label, a Meter,
   its value in tabular numerals and a Sparkline of the last 60 seconds in the meter's tone (`warning` from 70 %,
-  `critical` from 90 %; RAM by memory pressure where the OS reports it); RAM's pressure and swap sit on a `text-12`
+  `critical` from 90 % of the percent rounded to a whole percent, as the context bar; RAM by memory pressure where the
+  OS reports it); RAM's pressure and swap sit on a `text-12`
   `fg-tertiary` line under its row. The process list follows under a heading row naming the columns, the sorted one
   marked: one row per group or process, its name, then CPU, RAM and GPU columns in tabular numerals, sorted by one of
   them; the keyboard cursor's row takes `is-cursor`. A group row (an app, or `claude · <session title>`) opens to show
-  its processes under it. A process with no GPU reading shows a dash in its GPU column. Under a 360px container query
+  its processes under it. A process with no GPU reading shows a dash in its GPU column. An `Other (exited processes,
+  system)` row holds the CPU no other row does, sorts with them, never opens, and shows dashes for RAM and GPU. Under a 360px container query
   each meter takes two lines and a row's cells drop under its name.
 - **Popup:** a session's form (round or primer) is an L2 content sheet raised over the session's tabs, with no shadow
   (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the `sessions.popup-top` token

@@ -3,13 +3,15 @@ import type {
   ProcessSample,
   SystemSample,
 } from '../../../contracts/system-stats';
+import { percentTone } from '../../../shared/percent-tone';
 import type { StatsMeter, StatsSnapshot, StatsTone } from '../contract';
-import { groupProcesses } from './grouping';
+import { groupProcesses, otherRow } from './grouping';
 
 export const MIN_REFRESH_SECONDS = 1;
 export const DEFAULT_REFRESH_SECONDS = 2;
 export const HISTORY_SECONDS = 60;
-export const RATE_FLOOR_BYTES = 1_000_000; // 1 MB/s: the least full scale of the network and disk meters
+export const RATE_SCALE_LOW_BYTES = 1_000; // 1 KB/s: 0% on the network and disk meters' logarithmic scale
+export const RATE_SCALE_HIGH_BYTES = 1_000_000_000; // 1 GB/s: 100% on that scale
 export const RATE_CEILING_BYTES = 10_000_000_000; // 10 GB/s: a tick above it is a device appearing, read as 0
 
 const GIB = 2 ** 30;
@@ -63,20 +65,9 @@ export function emptyHistory(capacity: number): StatsHistory {
   return { capacity, cpu: [], gpu: [], ram: [], networkRate: [], diskRate: [] };
 }
 
-// The tone of the whole percent a label shows, so a label and its tone agree at a threshold.
+// The tone of the whole percent a label shows; `normal` with no reading.
 export function toneOf(percent: number | null): StatsTone {
-  if (percent === null) {
-    return 'normal';
-  }
-  const shown = wholePercent(percent);
-  if (shown < 70) {
-    return 'normal';
-  }
-  return shown < 90 ? 'warning' : 'critical';
-}
-
-function wholePercent(percent: number): number {
-  return Math.round(percent);
+  return percent === null ? 'normal' : percentTone(percent);
 }
 
 // The memory pressure's tone where the OS reports one, since a healthy Mac counts compressed and wired memory as
@@ -103,8 +94,9 @@ export function formatRate(bytesPerSecond: number): string {
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${unit.unit}`;
 }
 
-// Each of `next`'s processes with its CPU and GPU share over `elapsedMs`. `prev` lists every process, so one with no
-// entry of the same pid and name started since and grows from zero counters. A counter that went down reads 0.
+// Each of `next`'s processes with its CPU and GPU share over `elapsedMs`. `prev` lists every process, so a pid with no
+// entry there, or whose CPU time went down (the pid reused), started since and grows from zero counters. A GPU counter
+// that went down reads 0.
 export function processRates(
   prev: readonly ProcessSample[],
   next: readonly ProcessSample[],
@@ -114,8 +106,8 @@ export function processRates(
   const prevByPid = new Map(prev.map((process) => [process.pid, process]));
   return next.map((process) => {
     const before = prevByPid.get(process.pid);
-    const start =
-      before?.name === process.name ? before : startedSincePrev(process);
+    const isNew = before === undefined || process.cpuTimeMs < before.cpuTimeMs;
+    const start = isNew ? startedSincePrev(process) : before;
     const cpuMs = growth(start.cpuTimeMs, process.cpuTimeMs);
     return {
       pid: process.pid,
@@ -165,6 +157,10 @@ export function buildSnapshot(
     networkRate: appended(history.networkRate, networkRate, history.capacity),
     diskRate: appended(history.diskRate, diskRate, history.capacity),
   };
+  const rows = groupProcesses(
+    processRates(prev.processes, next.processes, elapsedMs, next.cores),
+    sessions,
+  );
   const snapshot: StatsSnapshot = {
     takenAt,
     cpu: percentMeter(cpu, toneOf(cpu), nextHistory.cpu),
@@ -186,10 +182,7 @@ export function buildSnapshot(
       `${formatRate(read / seconds)} r ${formatRate(written / seconds)} w`,
     ),
     memoryNote: memoryNoteOf(memory.pressure, memory.swapUsedBytes),
-    rows: groupProcesses(
-      processRates(prev.processes, next.processes, elapsedMs, next.cores),
-      sessions,
-    ),
+    rows: [...rows, otherRow(cpu, rows)],
     error: null,
   };
   return { snapshot, history: nextHistory };
@@ -240,20 +233,27 @@ function percentMeter(
     percent,
     tone,
     history,
-    label: percent === null ? NO_READING : `${wholePercent(percent)}%`,
+    label: percent === null ? NO_READING : `${Math.round(percent)}%`,
   };
 }
 
-// The rate against the highest rate in the ring, with `RATE_FLOOR_BYTES` the least full scale; the ring is
-// rescaled each time, so the line keeps its shape when the scale moves.
 function rateMeter(rate: number, ring: number[], label: string): StatsMeter {
-  const fullScale = Math.max(...ring, RATE_FLOOR_BYTES);
   return {
-    percent: clampPercent((rate / fullScale) * 100),
+    percent: ratePercent(rate),
     tone: 'normal',
-    history: ring.map((each) => clampPercent((each / fullScale) * 100)),
+    history: ring.map(ratePercent),
     label,
   };
+}
+
+// The rate on a logarithmic scale from `RATE_SCALE_LOW_BYTES` at 0% to `RATE_SCALE_HIGH_BYTES` at 100%.
+function ratePercent(rate: number): number {
+  if (rate <= RATE_SCALE_LOW_BYTES) {
+    return 0;
+  }
+  const decades = Math.log10(rate / RATE_SCALE_LOW_BYTES);
+  const scaleDecades = Math.log10(RATE_SCALE_HIGH_BYTES / RATE_SCALE_LOW_BYTES);
+  return clampPercent((decades / scaleDecades) * 100);
 }
 
 // The process as it stood when it started: every counter at zero.

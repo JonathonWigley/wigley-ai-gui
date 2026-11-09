@@ -2,46 +2,82 @@ import { describe, expect, it } from 'vitest';
 import type { SystemSample } from '../contracts/system-stats';
 import { createFakeSystemStats } from './fake-system-stats';
 
-// The counters a rate is read from.
+const CREATED_AT = 40_000;
+
+// The network and disk counters a rate is read from.
 function countersOf(sample: SystemSample) {
-  const browser = sample.processes.find((process) => process.pid === 101);
   return {
-    cpuBusyMs: sample.cpuBusyMs,
-    cpuTotalMs: sample.cpuTotalMs,
-    receivedBytes: sample.network.receivedBytes,
-    sentBytes: sample.network.sentBytes,
-    readBytes: sample.disk.readBytes,
-    writtenBytes: sample.disk.writtenBytes,
-    browserCpuTimeMs: browser?.cpuTimeMs ?? 0,
-    browserGpuTimeNs: browser?.gpuTimeNs ?? 0,
+    received: sample.network.receivedBytes,
+    sent: sample.network.sentBytes,
+    read: sample.disk.readBytes,
+    written: sample.disk.writtenBytes,
   };
 }
 
 type Counters = ReturnType<typeof countersOf>;
 
-// Each counter's growth per second from `before` to `after`.
-function ratesOf(before: Counters, after: Counters, elapsedMs: number) {
-  return Object.fromEntries(
-    Object.entries(after).map(([counter, value]) => [
-      counter,
-      ((value - before[counter as keyof Counters]) * 1000) / elapsedMs,
-    ]),
-  );
-}
+const PERIOD_0 = {
+  received: 750_000,
+  sent: 100_000,
+  read: 1_500_000,
+  written: 400_000,
+};
 
 describe('createFakeSystemStats', () => {
-  it('fakeSystemStats_RatesHoldWhateverTheGap', async () => {
-    const clock = { at: 40_000, now: () => clock.at };
-    const stats = createFakeSystemStats(clock);
+  it.each<{ case: string; fromMs: number; toMs: number; rates: Counters }>([
+    { case: 'period 0, half a second', fromMs: 0, toMs: 500, rates: PERIOD_0 },
+    {
+      case: 'period 0, a second and a half',
+      fromMs: 500,
+      toMs: 2_000,
+      rates: PERIOD_0,
+    },
+    {
+      case: 'period 2',
+      fromMs: 4_500,
+      toMs: 5_500,
+      rates: {
+        received: 12_000_000,
+        sent: 900_000,
+        read: 45_000_000,
+        written: 8_000_000,
+      },
+    },
+    {
+      case: 'half in period 0, half in period 1',
+      fromMs: 1_500,
+      toMs: 2_500,
+      rates: {
+        received: 395_000,
+        sent: 54_000,
+        read: 760_000,
+        written: 202_500,
+      },
+    },
+    {
+      case: 'period 0 of the next cycle',
+      fromMs: 10_000,
+      toMs: 11_000,
+      rates: PERIOD_0,
+    },
+  ])(
+    'fakeSystemStats_RatesFollowThePeriodWhateverTheGap: $case',
+    async ({ fromMs, toMs, rates }) => {
+      const clock = { at: CREATED_AT, now: () => clock.at };
+      const stats = createFakeSystemStats(clock);
 
-    const first = countersOf(await stats.sample());
-    clock.at += 1_000;
-    const second = countersOf(await stats.sample());
-    clock.at += 3_000;
-    const third = countersOf(await stats.sample());
+      clock.at = CREATED_AT + fromMs;
+      const before = countersOf(await stats.sample());
+      clock.at = CREATED_AT + toMs;
+      const after = countersOf(await stats.sample());
 
-    const overOneSecond = ratesOf(first, second, 1_000);
-    expect(Object.values(overOneSecond).every((rate) => rate > 0)).toBe(true);
-    expect(ratesOf(second, third, 3_000)).toEqual(overOneSecond);
-  });
+      const elapsedSeconds = (toMs - fromMs) / 1000;
+      expect({
+        received: (after.received - before.received) / elapsedSeconds,
+        sent: (after.sent - before.sent) / elapsedSeconds,
+        read: (after.read - before.read) / elapsedSeconds,
+        written: (after.written - before.written) / elapsedSeconds,
+      }).toEqual(rates);
+    },
+  );
 });

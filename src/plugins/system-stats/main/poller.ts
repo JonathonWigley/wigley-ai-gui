@@ -3,7 +3,7 @@ import type { Clock, Timers } from '../../../contracts/ambient';
 import { errorText } from '../../../shared/error-text';
 import { refreshSecondsOf } from './snapshot';
 
-// The wait after a show's first sample, so the panel gets its first numbers fast.
+// The wait after a show's first good sample, so the panel gets its first numbers fast.
 export const FIRST_GAP_MS = 1000;
 
 // `refreshSeconds` is read at each arming. `sampled` hears each good sample with the clock's time when `sample` was
@@ -18,8 +18,9 @@ export interface StatsPollerDeps {
   log(message: string): void;
 }
 
-// `setShown(true)` from hidden samples at once, the second sample `FIRST_GAP_MS` after the first good one settles,
-// and each later one the refresh interval after the last settles; two samples never overlap. `setShown(false)` clears
+// `setShown(true)` from hidden samples at once, the next sample `FIRST_GAP_MS` after the show's first good one
+// settles, and every other one the refresh interval after the last settles, a rejection's included; two samples never
+// overlap. `setShown(false)` clears
 // the timer and drops a running sample's result. `reschedule` re-arms a waiting interval timer from now with the
 // interval read now. After `dispose`, nothing samples or reports.
 export interface StatsPoller {
@@ -38,7 +39,7 @@ export function createStatsPoller(deps: StatsPollerDeps): StatsPoller {
   // Bumped by each hide and the dispose, so a sample started before reports nothing.
   let generation = 0;
   let sampling = false;
-  // Good samples since the last show: the wait stays `FIRST_GAP_MS` until a snapshot can be built.
+  // Good samples since the last show: the wait after the first is `FIRST_GAP_MS`.
   let goodSamples = 0;
   let timer: { handle: number; isInterval: boolean } | null = null;
 
@@ -79,7 +80,8 @@ export function createStatsPoller(deps: StatsPollerDeps): StatsPoller {
     if (outcome.ok) {
       goodSamples += 1;
     }
-    arm(goodSamples >= 2);
+    const isFirstGood = outcome.ok && goodSamples === 1;
+    arm(!isFirstGood);
     try {
       if (outcome.ok) {
         deps.sampled(outcome.sample, outcome.at);

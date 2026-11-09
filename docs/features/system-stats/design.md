@@ -49,16 +49,27 @@ module, which takes the two samples and the time between them:
 
 - **Rates** come from counter differences over the elapsed time, read from the injected clock. A
   process's CPU share is its CPU-time difference over the elapsed time times the core count, so a
-  process is shown as a **share of the whole machine** and the rows add up to the CPU meter. `ps`'s
-  smoothed `%cpu` is not used.
+  process is shown as a **share of the whole machine**. `ps`'s smoothed `%cpu` is not used. A pid
+  absent from the earlier sample, or whose CPU time went down (the pid reused), counts from zero; a
+  process that renames itself keeps its pid and counts only its growth.
+- **The Other row**: the process rows count only processes alive at both samples, so they fall short
+  of the CPU meter. An `Other (exited processes, system)` row holds the rest, the meter less the
+  top-level rows (never below 0): kernel and system time, which belong to no process `ps` lists, and
+  processes that started and exited between the samples. It sorts with the other rows and counts
+  toward `system-stats.processRows`; it never opens, and its RAM and GPU show dashes.
+- **Network and disk scale**: each meter reads its rate on a fixed logarithmic scale, 1 KB/s at 0%
+  and 1 GB/s at 100% (1 MB/s reads 50%), so a steady rate does not read full and one spike does not
+  flatten the rest of the minute.
 - **RAM used** counts memory as Activity Monitor does: app memory, wired and compressed, out of total
   RAM. Memory pressure and swap used are shown on a line under the meter.
 - **Grouping**: a process joins its app's group (its outermost `.app` bundle on macOS, else its
   executable name, on any OS), which shows the summed numbers. A Chat session's process tree forms a group
   of its own (below). A group opens to show its processes.
 - **History** is a ring of the last 60 seconds per meter, kept in main and published with the
-  snapshot, so a page reload keeps it and an app restart starts it again.
-- **Tones**: the CPU and GPU meters take `warning` from 70% and `critical` from 90%, matching the context bar.
+  snapshot, so a page reload keeps it and an app restart starts it again. Each show of the panel
+  starts it empty, so a sparkline never joins readings from before a hide.
+- **Tones**: the CPU and GPU meters take `warning` from 70% and `critical` from 90% of the percent rounded to a
+  whole number, so the label and its tone agree; the context bar uses the same helper (`src/shared/percent-tone.ts`).
   RAM takes the memory pressure's tone where the OS reports one (macOS), since a healthy Mac counts compressed
   and wired memory as used and reads 75–90%; elsewhere it takes the same percent thresholds.
 

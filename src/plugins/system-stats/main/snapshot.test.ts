@@ -102,18 +102,19 @@ describe('processRates', () => {
       gpuPercent: 50,
     },
     {
-      case: 'same pid, other name counts its whole time',
-      prev: [process({ name: 'zsh', cpuTimeMs: 100 })],
-      next: process({ cpuTimeMs: 1_200, gpuTimeNs: 5e8 }),
+      // `Python` renaming itself `(Python)` keeps its pid and its CPU time.
+      case: 'same pid, other name counts the growth',
+      prev: [process({ name: 'zsh', cpuTimeMs: 100, gpuTimeNs: 3e8 })],
+      next: process({ cpuTimeMs: 1_300, gpuTimeNs: 5e8 }),
       cpuPercent: 7.5,
-      gpuPercent: 25,
+      gpuPercent: 10,
     },
     {
-      case: 'CPU time went down',
+      case: 'CPU time went down: a reused pid counts its whole time',
       prev: [process({ cpuTimeMs: 14_000 })],
-      next: process({ cpuTimeMs: 10_000 }),
-      cpuPercent: 0,
-      gpuPercent: 0,
+      next: process({ cpuTimeMs: 1_200, gpuTimeNs: 4e8 }),
+      cpuPercent: 7.5,
+      gpuPercent: 20,
     },
     {
       case: 'GPU time grew',
@@ -254,6 +255,7 @@ describe('buildSnapshot', () => {
     },
   );
 
+  // The scale is logarithmic, 1 KB/s at 0% to 1 GB/s at 100%; `next` grows over `ELAPSED_MS`, 2 s.
   it.each<{
     case: string;
     next: SystemSample;
@@ -263,24 +265,44 @@ describe('buildSnapshot', () => {
     history: number[];
   }>([
     {
-      case: 'below the floor',
+      case: 'a steady 1 MB/s reads half, not full',
       next: next({
-        network: { receivedBytes: 5_600_000, sentBytes: 1_200_000 },
+        network: { receivedBytes: 6_500_000, sentBytes: 1_500_000 },
       }),
-      ring: [200_000],
-      meter: 'network',
-      percent: 40,
-      history: [20, 40],
-    },
-    {
-      case: 'highest in the window',
-      next: next({
-        network: { receivedBytes: 7_000_000, sentBytes: 2_000_000 },
-      }),
-      ring: [3_000_000],
+      ring: [1_000_000, 1_000_000],
       meter: 'network',
       percent: 50,
-      history: [100, 50],
+      history: [50, 50, 50],
+    },
+    {
+      case: 'a spike leaves the rest of the minute in place',
+      next: next({
+        network: { receivedBytes: 6_500_000, sentBytes: 1_500_000 },
+      }),
+      ring: [1_000_000, 1_000_000_000],
+      meter: 'network',
+      percent: 50,
+      history: [50, 100, 50],
+    },
+    {
+      case: 'at or below 1 KB/s reads 0',
+      next: next({
+        network: { receivedBytes: 5_001_000, sentBytes: 1_001_000 },
+      }),
+      ring: [500],
+      meter: 'network',
+      percent: 0,
+      history: [0, 0],
+    },
+    {
+      case: 'past 1 GB/s reads full',
+      next: next({
+        network: { receivedBytes: 9_005_000_000, sentBytes: 1_000_000 },
+      }),
+      ring: [],
+      meter: 'network',
+      percent: 100,
+      history: [100],
     },
     {
       case: 'counter went down',
@@ -304,14 +326,14 @@ describe('buildSnapshot', () => {
     },
     {
       case: 'disk read and written',
-      next: next({ disk: { readBytes: 10_500_000, writtenBytes: 2_100_000 } }),
-      ring: [1_600_000],
+      next: next({ disk: { readBytes: 10_500_000, writtenBytes: 2_500_000 } }),
+      ring: [1_000],
       meter: 'disk',
       percent: 50,
-      history: [100, 50],
+      history: [0, 50],
     },
   ])(
-    'networkScale_HighestInWindowWithFloor: $case',
+    'rateScale_FixedLogarithmic: $case',
     ({ next: nextSample, ring, meter, percent, history }) => {
       const before: StatsHistory = {
         ...emptyHistory(30),
@@ -325,6 +347,55 @@ describe('buildSnapshot', () => {
         percent: snapshot[meter].percent,
         history: snapshot[meter].history,
       }).toEqual({ percent, history });
+    },
+  );
+
+  it.each<{
+    case: string;
+    prev: ProcessSample[];
+    next: ProcessSample[];
+    cpuPercent: number;
+  }>([
+    {
+      // The meter is 25%; the matched process grew 12.5% of the machine.
+      case: 'the meter less the rows',
+      prev: [process({ cpuTimeMs: 10_000 })],
+      next: [process({ cpuTimeMs: 12_000 })],
+      cpuPercent: 12.5,
+    },
+    {
+      case: 'a process that exited leaves its time to Other',
+      prev: [process({ cpuTimeMs: 10_000 }), process({ pid: 611 })],
+      next: [process({ cpuTimeMs: 11_000 })],
+      cpuPercent: 18.75,
+    },
+    {
+      case: 'rows past the meter leave 0',
+      prev: [process({ cpuTimeMs: 10_000 })],
+      next: [process({ cpuTimeMs: 16_000 })],
+      cpuPercent: 0,
+    },
+  ])(
+    'otherRow_HoldsTheMeterLessTheRows: $case',
+    ({ prev, next: nextProcesses, cpuPercent }) => {
+      const snapshot = buildSnapshot(
+        { ...PREV, processes: prev },
+        next({ processes: nextProcesses }),
+        ELAPSED_MS,
+        [],
+        emptyHistory(30),
+        7_000,
+      ).snapshot;
+
+      expect(snapshot.rows.at(-1)).toEqual({
+        id: 'other',
+        name: 'Other (exited processes, system)',
+        kind: 'other',
+        cpuPercent,
+        rssBytes: null,
+        gpuPercent: null,
+        children: [],
+      });
     },
   );
 
@@ -376,12 +447,9 @@ describe('buildSnapshot', () => {
 
 describe('toneOf', () => {
   it.each([
-    { percent: 69.4, tone: 'normal' },
     { percent: 69.5, tone: 'warning' },
-    { percent: 89.4, tone: 'warning' },
-    { percent: 89.5, tone: 'critical' },
     { percent: null, tone: 'normal' },
-  ])('toneOf_Thresholds: $percent', ({ percent, tone }) => {
+  ])('toneOf_PercentToneOrNormal: $percent', ({ percent, tone }) => {
     expect(toneOf(percent)).toBe(tone);
   });
 });

@@ -6,10 +6,21 @@ import type {
 } from '../contracts/system-stats';
 import { FAKE_AGENT_PID } from './fake-agent-harness';
 
+// How long each of the fake machine's periods lasts: the GPU total and the
+// network and disk rates hold through a period and change at the next one,
+// through the five periods of a cycle.
+const PERIOD_SECONDS = 2;
+const GPU_PERCENTS = [20, 30, 40, 50, 60];
+const RECEIVED_RATES = [750_000, 40_000, 12_000_000, 300_000, 2_000];
+const SENT_RATES = [100_000, 8_000, 900_000, 60_000, 500];
+const READ_RATES = [1_500_000, 20_000, 45_000_000, 400_000, 0];
+const WRITTEN_RATES = [400_000, 5_000, 8_000_000, 120_000, 0];
+
 // The fake machine's reading `elapsedMs` after it started: fixed processes on
-// a busy machine, every cumulative counter grown at a fixed rate per second,
-// so any two samples give the same non-zero rates whatever the gap between
-// them.
+// a busy machine. The CPU counters grow at a fixed rate per second; the
+// network and disk counters at their period's rate. Every reading is a
+// function of the time alone, so two samples in one period give that period's
+// rates whatever the gap between them.
 export function fakeSystemSample(elapsedMs: number): SystemSample {
   const seconds = elapsedMs / 1000;
   return {
@@ -22,14 +33,15 @@ export function fakeSystemSample(elapsedMs: number): SystemSample {
       swapUsedBytes: 1_073_741_824,
       pressure: 'normal',
     },
-    gpuPercent: 20 + 10 * (Math.floor(seconds / 2) % 5),
+    gpuPercent:
+      GPU_PERCENTS[Math.floor(seconds / PERIOD_SECONDS) % GPU_PERCENTS.length],
     network: {
-      receivedBytes: 5_000_000 + 750_000 * seconds,
-      sentBytes: 1_000_000 + 100_000 * seconds,
+      receivedBytes: 5_000_000 + bytesByPeriod(RECEIVED_RATES, seconds),
+      sentBytes: 1_000_000 + bytesByPeriod(SENT_RATES, seconds),
     },
     disk: {
-      readBytes: 9_000_000 + 1_500_000 * seconds,
-      writtenBytes: 2_000_000 + 400_000 * seconds,
+      readBytes: 9_000_000 + bytesByPeriod(READ_RATES, seconds),
+      writtenBytes: 2_000_000 + bytesByPeriod(WRITTEN_RATES, seconds),
     },
     processes: fakeProcesses(seconds),
   };
@@ -42,6 +54,22 @@ export function createFakeSystemStats(clock: Clock): SystemStats {
   return {
     sample: () => Promise.resolve(fakeSystemSample(clock.now() - startedAt)),
   };
+}
+
+// The bytes counted in the first `seconds`, at `rates[i]` bytes per second
+// through the i-th period of each cycle.
+function bytesByPeriod(rates: readonly number[], seconds: number): number {
+  const cycleSeconds = PERIOD_SECONDS * rates.length;
+  const cycles = Math.floor(seconds / cycleSeconds);
+  const perCycle = PERIOD_SECONDS * rates.reduce((sum, rate) => sum + rate, 0);
+  let bytes = cycles * perCycle;
+  let left = seconds - cycles * cycleSeconds;
+  for (const rate of rates) {
+    const span = Math.min(left, PERIOD_SECONDS);
+    bytes += rate * span;
+    left -= span;
+  }
+  return bytes;
 }
 
 function fakeProcesses(seconds: number): ProcessSample[] {
