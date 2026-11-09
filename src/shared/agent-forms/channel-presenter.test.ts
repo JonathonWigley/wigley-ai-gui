@@ -72,8 +72,6 @@ function fakeSessions(calls: string[], labels: ReadonlyMap<string, string>) {
       calls.push(`mark ${sessionId}`);
       marks.push(options);
     },
-    activateExistingRow: (sessionId) =>
-      calls.push(`activateExistingRow ${sessionId}`),
     addCloseGuard: (mayClose, cancelHold) => {
       guards.push({ mayClose, cancelHold });
       return {
@@ -168,7 +166,7 @@ describe('createAgentFormChannelPresenter', () => {
     expect(logged).toEqual(['form shown: wigley-ai-gui · Pick a theme']);
   });
 
-  it('counts only forms that are not quiet open, and a quiet form ending leaves the count', () => {
+  it('counts only the forms that are not quiet, and a quiet form ending leaves the count', () => {
     const { page, attention, presenter, openForms, finish } = setUp();
     const quietForm = { ...FORM, formId: 'form-q', sessionId: 'app-q' };
     presenter.quiet.show(quietForm, fakeListener().listener);

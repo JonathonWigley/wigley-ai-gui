@@ -173,8 +173,6 @@ export interface AgentFormMarkOptions {
 // The parts of the sessions plugin's main exports a presenter uses.
 export interface AgentFormSessions {
   mark(sessionId: string, options: AgentFormMarkOptions): void;
-  // Selects the session's row only when it holds one.
-  activateExistingRow(sessionId: string): void;
   // `mayClose` refuses with a reason; `cancelHold` ends what it holds when
   // the user's close key asks.
   addCloseGuard(

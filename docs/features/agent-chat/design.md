@@ -7,7 +7,7 @@
 - **Flow** — a session from start to end, with a form swapping in and back.
 - **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
 - **Sessions and tabs** — owned sessions, joining the relay, the attention mark.
-- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys, starting a session from an agent.
+- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, the turn-finished mark, keys, starting a session from an agent.
 - **Layouts** — chat layouts on the core layout service and the page host.
 - **Plans** — what plans A to F each land.
 - **Out of scope** — follow-ups.

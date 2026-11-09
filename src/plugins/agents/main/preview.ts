@@ -8,8 +8,7 @@ import type {
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { Roster, RosterAgent, RosterTask } from '../contract';
 
-// Holds no alerts or window, so the preview cannot raise a notification, a
-// Dock bounce or a badge. `clock` dates the sample's starts at open.
+// Holds no alerts or window, so the preview cannot raise a badge. `clock` dates the sample's starts at open.
 export interface AgentsPreviewDeps {
   sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   clock: Clock;

@@ -118,7 +118,7 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Interrupt in the gap before a message's init** — *agent-ready*: `interruptAnswered` with no turn open
   (`src/main/claude-code/turn-tracker.ts`) also closes a message after its `queued`/`started` frame and before its
   `init` — e.g. Ctrl+C in `/compact`'s gap between `started` and `init` (`agent-chat/claude-stream.md` § Message
-  lifecycle) — so the session shows idle and the turn-finished alert fires, then the init shows working again. Option:
+  lifecycle) — so the session shows idle and the turn-finished mark fires, then the init shows working again. Option:
   in lifecycle mode keep a uuid whose last state was `started` open through `interruptAnswered`.
 - **Terminal resume of a cleared conversation** — *needs a feature plan*: after `/clear`, the sessions list refuses
   any relay hello carrying the row's pre-clear host id while the row lives (`retiredHostIds`,

@@ -803,7 +803,7 @@ describe('createSessionList', () => {
   // marked; 00000003 is connected with no row.
   it.each<{
     name: string;
-    method: 'activate' | 'activateExistingRow';
+    method: 'activate';
     sessionId: string;
     rows: [string, boolean][];
   }>([
@@ -824,15 +824,6 @@ describe('createSessionList', () => {
         ['00000001', false],
         ['00000002', true],
         ['00000003', false],
-      ],
-    },
-    {
-      name: 'a marked row, by activateExistingRow',
-      method: 'activateExistingRow',
-      sessionId: '00000002',
-      rows: [
-        ['00000001', false],
-        ['00000002', false],
       ],
     },
   ])(
@@ -1282,25 +1273,19 @@ describe('createSessionList', () => {
     },
   );
 
-  it('ignores unknown sessions, and activateExistingRow of a session with no row, with a log line', () => {
+  it('ignores unknown sessions with a log line', () => {
     const { list, states, logged, activated } = setUp();
     connectWithRow(list, info('/work/x'));
-    const released = connectWithRow(list, info('/work/x')).session.id;
-    list.release(released);
     const sentBefore = states.length;
 
     list.mark('ffffffff', MARK);
     list.activate('fffffffe');
     expect(list.closeSession('fffffffd', false)).toBeNull();
-    list.activateExistingRow('fffffffc');
-    list.activateExistingRow(released);
 
     expect(logged).toEqual([
       expect.stringMatching(/mark .*ffffffff/),
       expect.stringMatching(/activate .*fffffffe/),
       expect.stringMatching(/closeSession .*fffffffd/),
-      expect.stringMatching(/activateExistingRow .*fffffffc/),
-      expect.stringMatching(/activateExistingRow .*00000002.*no row/),
     ]);
     expect(activated).toEqual([]);
     expect(states).toHaveLength(sentBefore);
@@ -1487,11 +1472,6 @@ describe('createSessionList', () => {
       call: 'activate',
       selectFirst: false,
       act: (list: SessionList, id: string) => list.activate(id),
-    },
-    {
-      call: 'activateExistingRow',
-      selectFirst: false,
-      act: (list: SessionList, id: string) => list.activateExistingRow(id),
     },
   ])(
     'rowWithAnOwner_MarkAndActivate_WriteNothingAndLog: $call, another row selected $selectFirst',

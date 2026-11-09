@@ -547,10 +547,10 @@ export interface ChatMainEvents extends EventShape {
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
   // selected row as it was. With `unattended` true the row denies each
-  // permission prompt at once and raises no `Turn finished` alert.
+  // permission prompt at once and raises no `Turn finished` mark.
   // `instructions` follow the global `addInstructions` texts at each of the
   // row's process starts; `owner` names the plugin the row belongs to, and
-  // such a row raises no `Turn finished` alert. Resolves to the new row's
+  // such a row raises no `Turn finished` mark. Resolves to the new row's
   // sessionId; rejects, opening nothing, on an image chat refuses (with the
   // refusal text), an unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
@@ -619,7 +619,7 @@ export interface ChatMainExports {
   // Compacts an idle session chat holds (trigger `app`), its dock showing
   // `reason` from the call until the compaction ends; messages sent meanwhile
   // queue behind it, and a working stretch that ran only it raises no
-  // `Turn finished` alert. True when it started one. False, logged, starting
+  // `Turn finished` mark. True when it started one. False, logged, starting
   // nothing, for a session chat does not hold, one whose process is not
   // running or still attaching, one not idle, one with a compaction running or
   // a hold up, or when the harness refuses.

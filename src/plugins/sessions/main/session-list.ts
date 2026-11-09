@@ -246,13 +246,12 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // from none, or `release` closed another selected row. A mark that reaches a
 // row not selected stores its options as the row's `markToast` unless the row
 // is still marked, so a toast left on a row a mark selected never outlives the
-// next mark; an activate clears it. `activateExistingRow` selects
-// only a row the session holds and logs and ignores one with none. `mark`,
-// `activate` and `activateExistingRow` log and ignore a session opened with an
+// next mark; an activate clears it. `mark` and
+// `activate` log and ignore a session opened with an
 // `owner`, and a closed selected row passes the selection to the nearest row
 // with no owner, right then left, so main never selects a row with an owner.
-// `mark`, `activate`, `activateExistingRow`, `release` and `closeSession` write
-// only what changed; `mark`, `activate`, `activateExistingRow`
+// `mark`, `activate`, `release` and `closeSession` write
+// only what changed; `mark`, `activate`
 // and `closeSession` log and ignore an unknown session, `release` silently
 // ignores a session it cannot act on. `release` and `closeSession` log and
 // keep a row a close guard refuses, and emit `closed` for a row they close;
@@ -283,7 +282,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const { rows, selection } = deps;
   // The session whose selected row `release` closed, and when: its next mark
   // selects the row again within RESELECT_WINDOW_MS. Null after that mark, an
-  // activate or activateExistingRow, a selecting open, the session's end, or a
+  // activate, a selecting open, the session's end, or a
   // mark that selects another session from none; a release of another
   // selected row replaces it.
   let reselectOnReturn: { sessionId: string; releasedAt: number } | null = null;
@@ -805,28 +804,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       lookUpHostName(entry);
       return activateRow(entry);
-    },
-    activateExistingRow(sessionId) {
-      const entry = entries.get(sessionId);
-      if (entry === undefined) {
-        deps.log(
-          `activateExistingRow for unknown session ${sessionId} ignored`,
-        );
-        return;
-      }
-      if (entry.owner !== null) {
-        deps.log(
-          `activateExistingRow for session ${sessionId} with an owner ignored`,
-        );
-        return;
-      }
-      if (rows.get(sessionId) === undefined) {
-        deps.log(
-          `activateExistingRow for session ${sessionId} with no row ignored`,
-        );
-        return;
-      }
-      activateRow(entry);
     },
     release(sessionId) {
       const entry = entries.get(sessionId);

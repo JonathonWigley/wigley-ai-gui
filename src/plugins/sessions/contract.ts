@@ -240,7 +240,7 @@ export interface SessionsMainExports {
   // marks it; a connected session with no row, or a row the user closed, gets
   // its row at the end first. A row `release` closed while selected comes back
   // selected when this mark comes within 30 seconds of the release, unless in
-  // between came an `activate` or `activateExistingRow`, a selecting `open`,
+  // between came an `activate`, a selecting `open`,
   // a mark that selected another session from none, or a `release` of another
   // selected row; the session's end drops it too. A mark that finds the row
   // unmarked stores its `options` as the row's `markToast`, and one that finds
@@ -252,9 +252,6 @@ export interface SessionsMainExports {
   // connected session with no row, or a row the user closed, gets its row at
   // the end first. A session opened with an `owner` is logged and ignored.
   activate(sessionId: string): void;
-  // `activate` for a session that holds a row; adds none, and logs and
-  // ignores a session with no row or one opened with an `owner`.
-  activateExistingRow(sessionId: string): void;
   // Closes a connected session's row once every close guard allows, emitting
   // `closed`; a guard refusing keeps the row and logs. An unknown or owned
   // session, or one with no row, is left alone without a log line.

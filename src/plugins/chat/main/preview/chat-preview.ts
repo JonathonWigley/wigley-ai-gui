@@ -14,8 +14,7 @@ import {
   previewEntries,
 } from './preview-session';
 
-// Holds no alerts, window or mark, so the preview cannot raise a
-// notification, a Dock bounce, a badge or an attention mark. `clock` stamps
+// Holds no window or mark, so the preview cannot raise an attention mark. `clock` stamps
 // the `at` of each notice the preview adds and dates the sample's agent
 // events. `emit` publishes chat's `agentEvent`.
 export interface ChatPreviewDeps {
