@@ -1,6 +1,6 @@
 # 09 — Practice page: interviewer pane and import box
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 03, 08
 Plan: [plan.md](plan.md)
@@ -225,3 +225,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit dff5247b · proof: diff read: createInterviewerPane/InterviewerPane, createImportBox/ImportBox, six manifest commands, ask and import scopes, askBox/importBox parts, keymap vi/a/ask/import binds present; typecheck clean; worker ran 21 files 275 tests and lint clean · concerns: import-box.ts copies rename-dialog.ts's restoreFocus closure (shared helper would need rename-dialog edit); ask frame's CodeMirror box is moved not remounted on layout redraw, unchecked live; pane holding keys with nothing shown sets practice.ask and focuses the root, untested; keys.anchor takes an options object, not the doc's positional scope

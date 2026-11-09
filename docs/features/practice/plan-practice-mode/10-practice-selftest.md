@@ -1,6 +1,6 @@
 # 10 — Practice self-test and drive action
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 7 · Depends on: 09
 Plan: [plan.md](plan.md)

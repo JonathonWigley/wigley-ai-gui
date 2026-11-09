@@ -244,7 +244,7 @@ does not consume.
 - [x] [Practice page: problem workspace](08-practice-workspace.md) — after 07
 
 ### Wave 6
-- [ ] [Practice page: interviewer pane and import box](09-practice-interviewer-import.md) — after 03, 08
+- [x] [Practice page: interviewer pane and import box](09-practice-interviewer-import.md) — after 03, 08
 
 ### Wave 7
 - [ ] [Practice self-test and drive action](10-practice-selftest.md) — after 09
@@ -268,6 +268,7 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 06 · afe8e279 · diff read: INTERVIEWER/IMPORT_INSTRUCTIONS, both tool definitions, PracticeToolsDeps, startPracticeTools, HOST_ID_WAIT_MS, PracticeSessionsDeps/PracticeSessions/createPracticeSessions present, start.ts wires events, tools and channel; typecheck clean; worker ran practice tests 175 green and lint clean · concerns: PracticeToolsDeps.log unused; AGENTS.md ~322 lists only launch/resume/defaultProfile as chat exports practice uses (also profileOf, send, close); tests use a hand-fired Timers double, not fake timers; tests store row-0 where doc says row-1
 - 07 · bf1cce38 · diff read: practice-state exports, PracticeView/createPracticeView/setFocus/openProblemRow, PracticePlace/practicePlaceSlot/practiceOpenProblemRowCommand, layout.d.ts types, PracticeBaseScope/createPracticeKit present; keymap kp, list keys, page registration, layout register reviewed; typecheck clean; worker ran 18 files 224 tests and lint clean · concerns: practice-state.ts duplicates problem.ts's private DIFFICULTIES; layouts design.md lacks a practice adopter row (task 11); view.dispose disposes its draws though backlog's does not, untested; changed-reread test checks via practice.place
 - 08 · 8de85a0e · diff read: Split axis/sizedPane/setEndHidden, createProblemWorkspace/ProblemWorkspace/WorkspacePane, focusColumn/applyOpened, workspace-state and case-text exports, practiceShowTabCommand/practiceOpenSubmissionRowCommand, PracticePlace pane/problemTab/consoleTab present; AGENTS.md and DESIGN.md split prose read; typecheck clean; worker ran 77 files 1952 tests and lint clean · concerns: edits outside Files: DESIGN.md (stale Split entry) and practice-state.ts (placeOf); task doc said 'type' drives the code editor but it reaches the last box, so typeDocument was added; split layout, confirm placement, real editor :w/:wq/:q and focus moves unchecked live (task 12)
+- 09 · dff5247b · diff read: createInterviewerPane/InterviewerPane, createImportBox/ImportBox, six manifest commands, ask and import scopes, askBox/importBox parts, keymap vi/a/ask/import binds present; typecheck clean; worker ran 21 files 275 tests and lint clean · concerns: import-box.ts copies rename-dialog.ts's restoreFocus closure (shared helper would need rename-dialog edit); ask frame's CodeMirror box is moved not remounted on layout redraw, unchecked live; pane holding keys with nothing shown sets practice.ask and focuses the root, untested; keys.anchor takes an options object, not the doc's positional scope
 ### Contract changes
 - driverSource include of solutionPath: a C string literal with \ and " escaped → the path written verbatim, driverSource throwing on a path holding " or a line break · why: clang reads an #include "…" path literally with no escape processing, so escaping breaks any backslash path · consumers: 05 · group 04
 - 05 main/problem-store.ts ProblemStoreDeps gains log: PluginLog (logs unparsable submission files and 'watch stopped: <reason>'); consumers: 06 builds nothing from it (only start.ts builds the store)
@@ -275,6 +276,7 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - PracticeView also has showTab, openSubmissionRow and mayStop; PracticeViewDeps gains editor, uiState, timers, run(CommandId), addOverlay, and pushScope takes 'box' | 'confirm' · why: start.ts routes arg commands and mayStop through the view; the workspace needs those deps · consumers: 09 · group 08
 - placeOf(state) returns Pick<PracticePlace, 'selectedSlug' | 'openSlug' | 'filter'>; the view merges the workspace's pane and tabs · why: PracticePlace gained fields the list does not own · consumers: none outside the view · group 08
 - countingEditors.createDocument returns a counted no-op DocumentEditor; adds typeDocument(text) driving the last document editor · why: the testcase box mounts after the code editor, so type reaches the box · consumers: practice start tests · group 08
+- PracticeViewDeps gains showMode(), setOuterPanes(panes), mountChat(element, sessionId); pushScope takes 'box' | 'confirm' | 'import'; PracticeView gains hidden() and shown() sets outer panes; PracticeBaseScope gains 'ask' and PracticeKitScope 'import'; InterviewerPaneDeps takes drawAskBox, focus(), problemTitle(); ImportBoxDeps takes drawBody · why: the view builds pane and box and owns the parts; ask is a main-view scope · consumers: start.ts, 10, 11 · group 09
 ### Rulings
 - 04's `npm run lint` proof moves to 05: check-layers.mts fails a plugin folder with no manifest.ts (line 817), and 05 adds the manifest — typecheck and the five tests prove 04 — a layer break in the root modules surfaces one wave later · lead
 - activateExistingRow checks the owner before the no-row check, logging 'activateExistingRow for session <id> with an owner ignored' — the owner rule holds whether a row exists or not — only the log line differs if wrong · group 01 · group 01
@@ -318,5 +320,12 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 08: scroll keys act on the problem body, or the console body when the console holds keys · group 08
 - 08: the workspace mounts into main as soon as an open lands, before show() finishes saving old drafts · group 08
 - 08: a peek answer after leaving the problem is logged and dropped · group 08
+- 09: practice.ask is a base scope set via setScope (main-view scope in the C-n list), not pushed; import is pushed · group 09
+- 09: opening the pane with a live mount takes keys at once without re-asking interviewerOf · group 09
+- 09: opening takes keys when the interviewerOf answer lands; hide, modeHidden or a pair change first cancels · group 09
+- 09: toggleInterviewer with Practice hidden and the pane shown only shows Practice · group 09
+- 09: a click into the ask box gives the pane the keys; a click into a mounted chat view does not · group 09
+- 09: logs 'interviewer not read <slug>: <err>' and 'interviewer not mounted <slug>: <err>' with error toasts · group 09
+- 09: import box closes its scope with dispose(), sends trimmed requests, logs 'import failed' even after close · group 09
 ### Review rounds
 ### Test gate

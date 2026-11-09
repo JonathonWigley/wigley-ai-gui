@@ -25,6 +25,11 @@ import {
 } from './practice-tools';
 import { createProblemStore, type ProblemStore } from './problem-store';
 import { createProgress, type Progress } from './progress';
+import {
+  PRACTICE_FIXTURE_SLUGS,
+  writePracticeFixture,
+} from './selftest-fixture';
+import { practiceSelfTestScript } from './selftest-script';
 
 type PracticeApi = MainApi<
   typeof practiceManifest,
@@ -38,7 +43,8 @@ type PracticeApi = MainApi<
 // slug of each change; a change of the `folder` setting moves the watch. Runs
 // the import and interviewer sessions through chat, hearing chat's session
 // events, and gives every session the `add_practice_problem` and
-// `read_practice_state` tools. Registers the Practice layout contract.
+// `read_practice_state` tools. Registers the Practice layout contract. Hands
+// the self-test its script, and offers a drive run the `writeFixture` action.
 export const practiceMainPart: MainPart<typeof practiceManifest> = {
   manifest: practiceManifest,
   start(api: PracticeApi) {
@@ -152,6 +158,27 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
       watch?.dispose();
       watchedFolder = folder();
       watch = watchProblems();
+    });
+    const reload = () => channel.send('changed', { slug: null });
+    services.selfTest?.run(
+      practiceSelfTestScript({
+        files: services.files,
+        paths: services.paths,
+        processes: services.processes,
+        folder,
+        compiler: () => api.settings().compiler,
+        reload,
+      }),
+    );
+    api.drive?.add('writeFixture', {
+      description:
+        'Writes the Practice fixture into the practice folder (the folder setting, default <home>/leetcode), replacing every problem in its problems folder: Two Sum (a function problem, anyOrder, with a correct solution.cpp) and LRU Cache (a design problem whose solution.cpp get always returns -1, so Submit gives Wrong Answer). Tells the page to list again. Returns { folder, problems }.',
+      args: '{}',
+      async run() {
+        await writePracticeFixture(services, folder());
+        reload();
+        return { folder: folder(), problems: [...PRACTICE_FIXTURE_SLUGS] };
+      },
     });
     return { commands: {} };
   },
