@@ -1,6 +1,6 @@
 # 01b — docs and workflow follow a relocated row
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -43,3 +43,5 @@ Done when: `npm run typecheck`, `npm run lint` and the two test files pass.
 Commit:    `docs and workflow re-read a session's folder when its owner relocates it`.
 
 ## Proof
+
+Commit 29ab3be6 · diff read (docs and workflow both hear sessions.relocated), typecheck and lint clean after 03, docs and workflow start tests 103 pass · concerns: none

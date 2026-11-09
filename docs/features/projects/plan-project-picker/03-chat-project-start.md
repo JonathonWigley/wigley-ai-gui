@@ -1,6 +1,6 @@
 # 03 — Chat: start path for projects, channels and start_session
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -533,3 +533,4 @@ side bar, lists projects, branches and project sessions on its channel, and star
 
 ## Proof
 
+Commit f979b7c1 · proof: diff read (StartTarget, StartRequest, LaunchRequest, ProjectPastSessionRow, channel projects/branches/projectPastSessions, SessionSlots.relocate present), typecheck and lint clean, chat and usage tests 1764 pass · concerns: claimSettled has no trailing catch, so a throw outside its two try blocks is an unhandled rejection; a profile configDir change mid-claim gives sessionOpened the old one; a move throwing after sessions.relocate leaves sessions' row in the clone while chat's slot may name the placeholder; worker ran npx vitest once (the repo's own vitest, nothing installed)

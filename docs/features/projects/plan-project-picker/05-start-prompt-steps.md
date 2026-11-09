@@ -1,6 +1,6 @@
 # 05 — Start prompt: Project, Branch and Other folder steps
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)

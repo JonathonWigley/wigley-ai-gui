@@ -217,9 +217,9 @@ Boundary rules: chat imports no unity-pool file; sessions imports no chat file; 
 - [x] [Chat: projects setting, membership and pool provider registry](02-chat-projects-core.md)
 
 ### Wave 2
-- [ ] [docs and workflow follow a relocated row](01b-relocated-listeners.md) — after 01
-- [ ] [Chat: start path for projects, channels and start_session](03-chat-project-start.md) — after 01, 02
-- [ ] [unity-pool: pool provider](04-unity-pool-provider.md) — after 02
+- [x] [docs and workflow follow a relocated row](01b-relocated-listeners.md) — after 01
+- [x] [Chat: start path for projects, channels and start_session](03-chat-project-start.md) — after 01, 02
+- [x] [unity-pool: pool provider](04-unity-pool-provider.md) — after 02
 
 ### Wave 3
 - [ ] [Start prompt: Project, Branch and Other folder steps](05-start-prompt-steps.md) — after 03
@@ -237,12 +237,24 @@ Review base: 7ec307f1
 ### Groups
 - 01 · fdaa002d · diff read (all Produces present word for word), typecheck and lint clean, session-list and start tests pass · concerns: test 5 catches a stale group but not a stale number (test 4 covers the number); addEntry asks namers before tool sessions start, so a throwing start has asked a namer for a session that never exists
 - 02 · 3a2a0444 · diff read (every Produces present; ChatProject pool variant only reformatted), typecheck and lint clean, projects.test.ts 36 pass · concerns: readProject casts pool as string since unknown does not narrow; branchChoices relies on Set insertion order
+- 04 · 006640e7 · diff read (every Produces present), typecheck and lint clean on the whole tree after 03, unity-pool and node-processes tests 173 pass · concerns: a part stop aborts the follow-up release of a cancelled claim, so a granted clone falls to pool expiry; a release for a session that never got a clone answers not-holder, only logged; scriptPath setting description and unity-pool design § Status left stale for 06
+- 03 · f979b7c1 · diff read (StartTarget, StartRequest, LaunchRequest, ProjectPastSessionRow, channel projects/branches/projectPastSessions, SessionSlots.relocate present), typecheck and lint clean, chat and usage tests 1764 pass · concerns: claimSettled has no trailing catch, so a throw outside its two try blocks is an unhandled rejection; a profile configDir change mid-claim gives sessionOpened the old one; a move throwing after sessions.relocate leaves sessions' row in the clone while chat's slot may name the placeholder; worker ran npx vitest once (the repo's own vitest, nothing installed)
+- 01b · 29ab3be6 · diff read (docs and workflow both hear sessions.relocated), typecheck and lint clean after 03, docs and workflow start tests 103 pass · concerns: none
 ### Contract changes
+- runPoolClaim deps: as planned → gains log; releaseCommandArgs and lastLine exported from pool-cli.ts; pool-watch.ts exports STATE_FILE · why: the release after a cancelled claim runs inside runPoolClaim, which alone holds the script path and python command · consumers: 04 only · group 04
+- emitSessionOpened (private): (session, profileName, profileDir, origin) → (row: {sessionId, hostSessionId, projectDir}, profileName, profileDir, origin) · why: openRow emits before the HeldSession exists, and a claim landing emits with the clone · consumers: none outside chat-sessions.ts · group 03
 ### Rulings
 - A project lookup landing for an entry the list no longer holds, or for a folder the session no longer holds, changes nothing — closes a reused-rowId hazard — a late project would be lost only for an ended entry · group 01 · group 01
 - The consumer view relocates only sessions that dependent opened, throwing otherwise; it wraps end before filing it so a dependent's stop forgets the id — chat must relocate through its own sessions view, which it does — a plugin relocating another's row would throw · group 01 · group 01
 - relocate has no isStopped check, since the task named none — a relocate after sessions stops would write a row — low, owners stop with sessions · group 01 · group 01
 - A JSON null counts as absent for every key of a project entry, not only folder and profile — matches the null-as-absent decision — a null pinnedBranches reads as none · group 02 · group 02
 - A skipped entry's log line names a string name through JSON.stringify (empty shows as ""), any other as unnamed — cosmetic · group 02 · group 02
+- plan.py resolves a task by its leading digits, so 01b resolves to 01; the lead sets 01b's Status and tick by hand, and keeps its Groups line through plan.py log — editor tooling only · lead
+- HeldSession gains recordsRecentFolder, false for a pool row and a folder-project start, so a project row never records a recent folder on any process start in the run; not saved, so a restored project row records again — a project row's restarts stay out of recents · group 03 · group 03
+- startNew checks profile and harness before resolveTarget, so an unknown profile's error wins over a project rejection — only which error text shows · group 03 · group 03
+- A move that throws fails the claim with error code internal — plan named no code · group 03 · group 03
+- start_session's chooseProject runs after the prompt check and before the profile choice, JSON null as absent for folder, project and branch; a project call never stats a folder · group 03 · group 03
+- addPoolProvider's registration and its dispose each call namer.changed(), so rows in a pool's clones regroup when a provider comes or goes · group 03 · group 03
+- Workflow overwrites its connected entry on relocated even for a row with none; the docs test pins the move through a Codex session's context run — relocate precedes sessionOpened by design · group 01b
 ### Review rounds
 ### Test gate

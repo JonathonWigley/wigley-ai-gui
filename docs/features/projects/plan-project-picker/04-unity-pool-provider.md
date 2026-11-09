@@ -1,6 +1,6 @@
 # 04 — unity-pool: pool provider
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -286,3 +286,5 @@ Commit: one commit for the group — "unity-pool registers as chat's pool provid
 newest first, and the claim run under the session's ids (ProcessRunOptions.setEnv)".
 
 ## Proof
+
+Commit 006640e7 · proof: diff read (every Produces present), typecheck and lint clean on the whole tree after 03, unity-pool and node-processes tests 173 pass · concerns: a part stop aborts the follow-up release of a cancelled claim, so a granted clone falls to pool expiry; a release for a session that never got a clone answers not-holder, only logged; scriptPath setting description and unity-pool design § Status left stale for 06
