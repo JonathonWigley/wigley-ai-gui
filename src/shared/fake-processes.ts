@@ -11,6 +11,7 @@ export interface FakeRun {
   cwd: string | undefined;
   timeoutMs: number | undefined;
   unsetEnv: readonly string[] | undefined;
+  setEnv: Readonly<Record<string, string>> | undefined;
 }
 
 type ScriptedResult = ProcessResult | Error | Promise<ProcessResult>;
@@ -43,6 +44,7 @@ export class FakeProcesses implements ProcessRunner {
       cwd: options?.cwd,
       timeoutMs: options?.timeoutMs,
       unsetEnv: options?.unsetEnv,
+      setEnv: options?.setEnv,
     });
     const signal = options?.signal;
     if (signal?.aborted) {

@@ -7,7 +7,7 @@ import type {
 } from '../../contracts/processes';
 
 // `ProcessRunner` through `node:child_process`, in the app's environment less
-// `unsetEnv`.
+// `unsetEnv` plus `setEnv`.
 // Output is collected whole unless `maxOutputBytes` caps each stream, which
 // marks the result `truncated` once either is cut. A run that cannot start
 // rejects naming the program, or the folder when `cwd` does not exist. Past
@@ -31,7 +31,7 @@ function runToEnd(
     }
     const child = spawn(command, args, {
       cwd: options?.cwd,
-      env: envWithout(options?.unsetEnv),
+      env: runEnv(options?.unsetEnv, options?.setEnv),
       stdio: ['ignore', 'pipe', 'pipe'],
       // Off Windows the flag does nothing; on it, no console window flashes.
       windowsHide: true,
@@ -83,18 +83,21 @@ function runToEnd(
   });
 }
 
-// Undefined, the child inherits the app's environment as it is.
-function envWithout(
-  names: readonly string[] | undefined,
+// The app's environment without `unsetEnv`, then with `setEnv`'s names set.
+// Undefined only when both are, so the child inherits the app's environment as
+// it is.
+function runEnv(
+  unsetEnv: readonly string[] | undefined,
+  setEnv: Readonly<Record<string, string>> | undefined,
 ): NodeJS.ProcessEnv | undefined {
-  if (names === undefined) {
+  if (unsetEnv === undefined && setEnv === undefined) {
     return undefined;
   }
   const env = { ...process.env };
-  for (const name of names) {
+  for (const name of unsetEnv ?? []) {
     delete env[name];
   }
-  return env;
+  return { ...env, ...setEnv };
 }
 
 // One stream's kept chunks, their byte count, and whether any byte was dropped.

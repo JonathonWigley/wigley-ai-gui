@@ -10,7 +10,8 @@ import { errorText } from '../../../shared/error-text';
 import type { PoolSnapshot, PoolState } from '../contract';
 import { readStateFile } from './state-file';
 
-const STATE_FILE = 'state.json';
+// The file each pool folder holds (the tool's `state_path`).
+export const STATE_FILE = 'state.json';
 const MISSING_ROOT_CHECK_MS = 60_000;
 
 // Holds every pool under unity-pool's state folder `stateRoot`, one folder per pool holding its `state.json`, and

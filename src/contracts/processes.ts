@@ -21,12 +21,16 @@ export interface ProcessRunOptions {
   // The most bytes kept of each of stdout and stderr; the rest is read and
   // dropped. Unset, all of both is kept.
   maxOutputBytes?: number;
+  // Names set for this run, after `unsetEnv` is applied, so a name in both is
+  // set; every other variable passes through.
+  setEnv?: Readonly<Record<string, string>>;
 }
 
 // Runs the machine's programs.
 export interface ProcessRunner {
   // Runs `command` with `args`, no shell, in `cwd` when given, in the app's
-  // environment without the names in `unsetEnv`. Resolves once
+  // environment without the names in `unsetEnv`, then with `setEnv`'s names
+  // set. Resolves once
   // the program ends, a non-zero exit included, or once `timeoutMs` passes and
   // the program is killed; rejects with `Could not run <command>: <reason>`
   // when it cannot start. When `signal` aborts the program is killed and the

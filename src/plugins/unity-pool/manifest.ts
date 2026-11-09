@@ -5,7 +5,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // files and changed only through its CLI. The panel is a right-bar stop: while it holds the keys, `j`/`k`/`gg`/`G`
 // walk a cursor over its session holders and Enter shows the cursor's session. Its click commands each name what
 // they act on, so none has a key: Hold and Release a clone, and a holder's label selecting that session's row. It
-// names `sessions` for the rows it badges and the sessions it matches, and `chat` for its self-test's launch.
+// names `sessions` for the rows it badges and the sessions it matches, and `chat` for the pool provider it registers
+// and its self-test's launch.
 export const unityPoolManifest = definePlugin({
   id: 'unity-pool',
   label: 'Unity pool',

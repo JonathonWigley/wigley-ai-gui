@@ -107,6 +107,42 @@ describe('createNodeProcesses', () => {
     }
   });
 
+  it.each<{
+    unsetEnv: string[] | undefined;
+    setEnv: Record<string, string>;
+    sees: (string | null)[];
+  }>([
+    {
+      unsetEnv: ['SET_ENV_TEST_A', 'SET_ENV_TEST_B'],
+      setEnv: { SET_ENV_TEST_A: '2' },
+      sees: ['2', null, '1'],
+    },
+    {
+      unsetEnv: undefined,
+      setEnv: { SET_ENV_TEST_A: '3' },
+      sees: ['3', '1', '1'],
+    },
+  ])(
+    'run_SetEnv_SetsAfterUnset: unsetEnv $unsetEnv',
+    async ({ unsetEnv, setEnv, sees }) => {
+      process.env.SET_ENV_TEST_A = '1';
+      process.env.SET_ENV_TEST_B = '1';
+      process.env.SET_ENV_TEST_KEPT = '1';
+      try {
+        const result = await runScript(
+          'const env = process.env; process.stdout.write(JSON.stringify([env.SET_ENV_TEST_A ?? null, env.SET_ENV_TEST_B ?? null, env.SET_ENV_TEST_KEPT ?? null]))',
+          { unsetEnv, setEnv },
+        );
+
+        expect(JSON.parse(result.stdout)).toEqual(sees);
+      } finally {
+        delete process.env.SET_ENV_TEST_A;
+        delete process.env.SET_ENV_TEST_B;
+        delete process.env.SET_ENV_TEST_KEPT;
+      }
+    },
+  );
+
   it('run_LargeOutput_KeepsPastOneMegabyte', async () => {
     const result = await runScript('process.stdout.write("x".repeat(2000000))');
 
