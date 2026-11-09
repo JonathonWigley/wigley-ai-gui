@@ -619,6 +619,14 @@ Duplication and drift with no user-visible defect.
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
 
+- **The Node files watcher can lose a rename's target** — *agent-ready*: the Node Files adapter
+  (`src/main/files/node-files.ts`, `TEMP_FILE` and its check in the watch handler) drops every event whose name has
+  its own temp shape `.<name>.<8 hex>.tmp`. When macOS FSEvents reports a temp-then-rename `write` under the temp name
+  only, the target is never reported, which breaks the `Files.watch` promise in `src/contracts/files.ts` that a write
+  reports its target. Seen as the self-test losing the target about 1 run in 5 with `files.write` (it switched to
+  `append`), and why plan.py writes its plan-runs report in place. When a temp-shaped name arrives and its target
+  exists, report the target instead of dropping the event; else correct the contract line. Exposure: every
+  `files.watch` consumer whose folder receives a `Files.write`, about 17 non-test call sites, unscoped.
 - **A repeated `forms.openRound` shows nothing** — a second `forms.openRound` of a default round already submitted in
   that session gets its stored answers back from form-service's `replaysLastSubmitted`
   (`src/shared/agent-forms/form-service.ts`). Nothing shows and nothing logs, so a drive run that opens the same
