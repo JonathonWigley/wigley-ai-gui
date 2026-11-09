@@ -94,7 +94,7 @@ new registration in the plugin that knows it, with no edit to sessions.
 | error | chat | 30 | `error` Tag | the process stopped while a turn ran or with an error, until the user views the session or sends a message |
 | working | chat | 20 | `status-running` text, pulsing | a turn runs |
 | needs you | workflow (a run paused short of its end) | 18 | `attention` Tag | nothing runs, until a turn or a subagent starts |
-| ready to make, closed | workflow (Large's plan ready and closed) | 15 | tinted Tag | the flow is paused at that stage |
+| ready to make, closed | workflow (Large's plan ready and closed) | 15 | tinted Tag | the flow is at that stage and not busy |
 | done | chat | 10 | `fg-tertiary` text | the turn ended while the session was not the focused pane's, until the user views it or sends a message |
 
 Idle draws nothing. "Views the session" is the session becoming the focused pane's session. Clearing the
