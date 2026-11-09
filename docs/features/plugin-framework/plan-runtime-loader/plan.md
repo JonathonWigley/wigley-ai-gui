@@ -427,7 +427,7 @@ for that task's own files. Tasks in one wave share no file.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 71b605ce
 
 ### Groups
 ### Contract changes
