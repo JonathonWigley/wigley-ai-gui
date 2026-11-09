@@ -225,7 +225,7 @@ Boundary rules: chat imports no unity-pool file; sessions imports no chat file; 
 - [x] [Start prompt: Project, Branch and Other folder steps](05-start-prompt-steps.md) — after 03
 
 ### Wave 4
-- [ ] [Doc re-read](06-doc-re-read.md) — after 04, 05
+- [x] [Doc re-read](06-doc-re-read.md) — after 04, 05
 
 ### Wave 5
 - [ ] [Final verification](07-final-verification.md) — after 06
@@ -241,6 +241,7 @@ Review base: 7ec307f1
 - 03 · f979b7c1 · diff read (StartTarget, StartRequest, LaunchRequest, ProjectPastSessionRow, channel projects/branches/projectPastSessions, SessionSlots.relocate present), typecheck and lint clean, chat and usage tests 1764 pass · concerns: claimSettled has no trailing catch, so a throw outside its two try blocks is an unhandled rejection; a profile configDir change mid-claim gives sessionOpened the old one; a move throwing after sessions.relocate leaves sessions' row in the clone while chat's slot may name the placeholder; worker ran npx vitest once (the repo's own vitest, nothing installed)
 - 01b · 29ab3be6 · diff read (docs and workflow both hear sessions.relocated), typecheck and lint clean after 03, docs and workflow start tests 103 pass · concerns: none
 - 05 · 503785ff · diff read (every Produces present); typecheck 0, lint 0, chat+shared-page vitest 2390 passed · concerns: branch reopen reads picker.cursorIndex() assuming the Branch request is still open; cached branch list may open the step after the refresh failed (ruling); list-picker.test filteredPickerSetup now records filter text
+- 06 · 43746236 · diff read; lint 0, typecheck 0 (worker); AGENTS.md, agent-chat Flow and Resume bullets checked with no change · concerns: none
 ### Contract changes
 - runPoolClaim deps: as planned → gains log; releaseCommandArgs and lastLine exported from pool-cli.ts; pool-watch.ts exports STATE_FILE · why: the release after a cancelled claim runs inside runPoolClaim, which alone holds the script path and python command · consumers: 04 only · group 04
 - emitSessionOpened (private): (session, profileName, profileDir, origin) → (row: {sessionId, hostSessionId, projectDir}, profileName, profileDir, origin) · why: openRow emits before the HeldSession exists, and a claim landing emits with the clone · consumers: none outside chat-sessions.ts · group 03

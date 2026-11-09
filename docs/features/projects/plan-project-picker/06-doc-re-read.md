@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04, 05
 Plan: [plan.md](plan.md)
@@ -41,3 +41,5 @@ Done when: every stale line is fixed, or the run log names each doc as checked w
 Commit:    one commit, `Projects docs re-read against the landed code` plus what changed.
 
 ## Proof
+
+Commit 43746236 · proof: diff read; lint 0, typecheck 0 (worker); AGENTS.md, agent-chat Flow and Resume bullets checked with no change · concerns: none
