@@ -1,6 +1,6 @@
 # 01 — Main imports a module from disk
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -75,3 +75,5 @@ Done when:
 Commit:    one commit for the group
 
 ## Proof
+
+Commit cb945bea · proof: diff read; Produces present; import-module tests pass; layer check clean · concerns: the bundle's import( vs require( check needs a build: deferred to the test gate and task 14's self-test, which imports a real main.js

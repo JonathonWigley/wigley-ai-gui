@@ -1,6 +1,6 @@
 # 05 — Keys leave with a restarted page part
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -116,3 +116,5 @@ Done when: compiles; the tests named above pass by name; `grep -n "applied.pause
 Commit: one commit for the task.
 
 ## Proof
+
+Commit 6563da8a · proof: diff read; dependentsOf, withAppliedList paused, AppliedPlugins.paused/setPaused, main.ts served() present; 189 tests pass, no type errors · concerns: runtime-wiring.ts servedChanged comment reworded (outside the file list)

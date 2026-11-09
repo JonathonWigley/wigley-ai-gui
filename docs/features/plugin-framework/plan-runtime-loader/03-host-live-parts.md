@@ -1,6 +1,6 @@
 # 03 — Host adds and removes parts
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -104,3 +104,5 @@ Done when: `npm test -- src/shared/plugin-host.test.ts src/renderer/plugin-parts
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 11ed15c4 · proof: diff read; add/remove/known present; plugin-host tests 49 pass · concerns: an add of an id whose remove is still in flight throws duplicate id (a reload awaits remove first)

@@ -394,24 +394,24 @@ for that task's own files. Tasks in one wave share no file.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Main imports a module from disk](01-main-module-import.md)
-- [ ] [Manifest checks and schema](02-manifest-checks.md)
-- [ ] [Host adds and removes parts](03-host-live-parts.md)
-- [ ] [A restore window per live start](04-live-restore-window.md)
+- [x] [Main imports a module from disk](01-main-module-import.md)
+- [x] [Manifest checks and schema](02-manifest-checks.md)
+- [x] [Host adds and removes parts](03-host-live-parts.md)
+- [x] [A restore window per live start](04-live-restore-window.md)
 
 ### Wave 2
-- [ ] [Keys leave with a restarted page part](05-restart-keys-gap.md) — after 04
-- [ ] [Plugin sources and the catalog](08-plugin-catalog.md) — after 01, 02
+- [x] [Keys leave with a restarted page part](05-restart-keys-gap.md) — after 04
+- [x] [Plugin sources and the catalog](08-plugin-catalog.md) — after 01, 02
 
 ### Wave 3
-- [ ] [Visual reads chat's focused entry through a slot](06-focused-entry-slot.md) — after 04 (chat's page start and contract), 05 (`AGENTS.md`)
-- [ ] [Contract types for user plugins](07-plugin-types.md) — after 01, 02, 08
-- [ ] [Config over a live catalog](09-config-live-catalog.md) — after 05, 08
-- [ ] [Switch over the catalog, with reload](10-switch-reload.md) — after 03, 05, 08
+- [x] [Visual reads chat's focused entry through a slot](06-focused-entry-slot.md) — after 04 (chat's page start and contract), 05 (`AGENTS.md`)
+- [x] [Contract types for user plugins](07-plugin-types.md) — after 01, 02, 08
+- [x] [Config over a live catalog](09-config-live-catalog.md) — after 05, 08
+- [x] [Switch over the catalog, with reload](10-switch-reload.md) — after 03, 05, 08
 
 ### Wave 4
-- [ ] [Page loads user page parts](11-page-loading.md) — after 04, 09, 10
-- [ ] [Settings shows a plugin's origin and problem](12-settings-plugin-rows.md) — after 10
+- [x] [Page loads user page parts](11-page-loading.md) — after 04, 09, 10
+- [x] [Settings shows a plugin's origin and problem](12-settings-plugin-rows.md) — after 10
 
 ### Wave 5
 - [ ] [Main composition over the catalog](13-main-wiring.md) — after 07, 08, 09, 10, 11
@@ -430,7 +430,46 @@ for that task's own files. Tasks in one wave share no file.
 Review base: 71b605ce
 
 ### Groups
+- 01 · cb945bea · diff read; Produces present; import-module tests pass; layer check clean · concerns: the bundle's import( vs require( check needs a build: deferred to the test gate and task 14's self-test, which imports a real main.js
+- 03 · 11ed15c4 · diff read; add/remove/known present; plugin-host tests 49 pass · concerns: an add of an id whose remove is still in flight throws duplicate id (a reload awaits remove first)
+- 02 · e0fe3448 · diff read; validateManifest, handlerProblems, SHORT_ID_PATTERN, manifestSchema, PLUGIN_ID_PATTERN, pluginIdProblem present; 125 tests pass · concerns: validManifest builder moved to manifest.test-support.ts so the schema test can share it
+- 04 · 2ce4dc5e · diff read; reopen, restores deps, ChatChannel.invoke.restored present; renderer, sessions/chat/docs/notes tests 1630 pass, no type errors · concerns: harness without holdsRestores fires onSettled inside start; no main-side test of chat's restored handler; AGENTS.md pruneKeys source-map line also corrected
+- 05 · 6563da8a · diff read; dependentsOf, withAppliedList paused, AppliedPlugins.paused/setPaused, main.ts served() present; 189 tests pass, no type errors · concerns: runtime-wiring.ts servedChanged comment reworded (outside the file list)
+- 08 · f4d2a555 · diff read; contracts, sources, startPluginCatalog, pluginUrl, isLayoutFileName present; 82 tests pass, no type errors · concerns: importModule called a microtask after the timer starts, so a sync throw reads as main.js failed to import; watch tests drain the queue through a probe reload
+- 07 · 3f5ae444 · diff read; writePluginTypes, emittedTypesFolder, tsconfig, forge hook present; plugin-types tests pass; manual tsc emit exits 0 · concerns: forge generateAssets hook and extraResource not yet seen in a real start or package: checked at the test gate (self-test start runs the hook); emittedTypesFolder joins with / (mixed separators on Windows)
+- 06 · 4615a79e · diff read; ChatFocus, chatFocusSlot present, focusedEntry/focusedBlock gone; chat page and visual tests 959 pass; filtered chat self-test deferred to the test gate (main.ts mid-edit by 09/10 at the time) · concerns: chat self-test not yet run; stale focusedEntry mention in docs/features/practice/plan-practice-mode/03-chat-page-mount.md (another feature's plan)
+- 09 · 54640471 · diff read; setPlugins, plugins, pluginProblems, setPluginProblems, checks, AppConfig.plugins, withoutUndeclaredDefaults present; 322 tests pass · concerns: main.ts edited minimally to compile against the new store (task 13's file): builds built-in entries from manifests and mainParts
+- 10 · 1e3f20fe · diff read; settled, heldAtStart, catalog/config/configDisabled deps, PluginStatus origin+problem, bridge reload/remove, reloadPlugin drive action present; 274 tests pass; tsc red only in main.ts (13) and plugin-parts-answer.ts (11) by plan order · concerns: typecheck red at HEAD until 11 and 13 land; the no-last-good row covered by a built-in returning after its replacement fails
+- 12 · 211756ee · diff read; originText, PluginRowInput originText+problem, layout parts present; settings tests 155 pass; settings self-test deferred to the test gate (main.ts waits on 13) · concerns: settings self-test not yet run; a whitespace-only problem still draws a line
+- 11 · 70101139 · diff read; servePluginScheme, pluginFilePath, page-part-loader, ownerLayoutShow, PageLayoutShow, userPluginFolder, CSP present; task tests pass; tsc red only in main.ts (13) · concerns: harness fake show.draw throws (layer rule); deferred user parts are host.add-ed after startPlugins, not disabled; initial config strips deferred and failed page binds; renderer's load code kept inline (~40 lines)
 ### Contract changes
+- startPlugins known: default function → optional parameter, left out reads the held parts' manifests · why: a parameter default cannot reach held · consumers: 10, 11, 13 · group 03
+- validate-manifest.ts: as planned → also exports TOKEN_KINDS, PROCESS_NAMES, SETTING_KINDS, ARG_KINDS, BIND_WHERES, EDITOR_MODES (satisfies Record<Union, true>), which manifest-schema reads · why: one member list for checks and schema · consumers: 07 · group 02
+- ChatFocus entryId of a queued stop: bare message id → queued:<id>, activity stops activity:<id> · why: matches entryIdOfStop · consumers: visual (06) · group 06
+- ConfigSchema and KeymapNames gain plugins (admitted ids); heldBackUserBinds also returns ignored and filters unbinds; UserSettings gains ignored · why: ignore-and-keep for absent plugins · consumers: none outside 09 · group 09
+- PluginSwitchDeps.config: Pick<ConfigStore,...> → inline type of the four task-09 members · why: src/main/plugins may not import src/main/config · consumers: 13 · group 10
+- reload of an off or withheld plugin: start only → page reload then start · why: the page would otherwise start the old page.js it holds · consumers: 11 · group 10
+- PluginPartsAnswerDeps: served()+loadPart() → also held: Set<string> · why: the host has no holds member · consumers: renderer.ts · group 11
+- harness fake layouts.show: draws through ownerLayoutShow → draw throws 'layouts.show draw not faked' · why: src/shared may not import src/shared/page/layout-host · consumers: 14 (draws live, not through the harness) · group 11
 ### Rulings
+- add and start count a dependency known when known names it or the host holds its part; construction checks known alone · group 03 · group 03
+- remove of a held but unstarted part resolves [] and forgets it · group 03 · group 03
+- a bind naming a malformed command gets no process problem; the command's own problem covers it · group 02 · group 02
+- restores settled is logged by the host for every window; the renderer's listener for it is gone · group 04 · group 04
+- modes keep the id of a shown mode that gave way and show it again when that id is re-added · group 04 · group 04
+- restart's finally clears a still-set paused list after startWhatStopped · group 05 · group 05
+- a load step's unhandled error resolves as failed with its error text · group 08 · group 08
+- the cycle check runs over the entries that would show · group 08 · group 08
+- both candidates held back: the problem names the user candidate's missing dependency · group 08 · group 08
+- no makeFolder before each write: Files.write creates parent folders per its contract · group 07 · group 07
+- EntryList.focusedStopId() added, since place() can return a saved place rather than the live cursor · group 06 · group 06
+- an extra chat.focus write after tabs.set covers a cursor move during createTab · group 06 · group 06
+- a keymap prefix is known when it is core, an admitted plugin id, or the prefix of a known command or scope (core ids use picker., modes.) · group 09 · group 09
+- a dependent stopped by a removal is withheld with a Needs plugin problem, so the retry restarts it when the plugin returns · group 10 · group 10
+- reload step 6 also starts the reloaded id itself · group 10 · group 10
+- the launch job starts only the held ids that are withheld · group 10 · group 10
+- originText is an exhaustive switch, so a new origin fails typecheck · group 12 · group 12
+- deferred user page parts are host.add-ed after startPlugins rather than listed disabled, since the disabled check follows dependsOn.main · group 11 · group 11
+- the initial page config strips binds of page parts not started at load; loads moved right after bridge.config() · group 11 · group 11
 ### Review rounds
 ### Test gate

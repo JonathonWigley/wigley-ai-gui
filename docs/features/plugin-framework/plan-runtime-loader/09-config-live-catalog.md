@@ -1,6 +1,6 @@
 # 09 — Config over a live catalog
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 05, 08
 Plan: [plan.md](plan.md)
@@ -200,3 +200,5 @@ Done when: compiles; `npm run typecheck` passes; the tests above pass.
 Commit:    one commit for the group.
 
 ## Proof
+
+Commit 54640471 · proof: diff read; setPlugins, plugins, pluginProblems, setPluginProblems, checks, AppConfig.plugins, withoutUndeclaredDefaults present; 322 tests pass · concerns: main.ts edited minimally to compile against the new store (task 13's file): builds built-in entries from manifests and mainParts

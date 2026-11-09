@@ -1,6 +1,6 @@
 # 10 — Switch over the catalog, with reload
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03, 05, 08
 Plan: [plan.md](plan.md)
@@ -296,3 +296,5 @@ if it differs. The page's answer to `reload` and `remove` is task 11's; this tas
 `page-parts.ts`' empty replies.
 
 ## Proof
+
+Commit 1e3f20fe · proof: diff read; settled, heldAtStart, catalog/config/configDisabled deps, PluginStatus origin+problem, bridge reload/remove, reloadPlugin drive action present; 274 tests pass; tsc red only in main.ts (13) and plugin-parts-answer.ts (11) by plan order · concerns: typecheck red at HEAD until 11 and 13 land; the no-last-good row covered by a built-in returning after its replacement fails

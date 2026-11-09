@@ -1,6 +1,6 @@
 # 02 — Manifest checks and schema
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -173,3 +173,5 @@ Done when: `npm test -- src/shared/plugin-catalog/ src/shared/define-plugin.test
 Commit:    one commit for the group
 
 ## Proof
+
+Commit e0fe3448 · proof: diff read; validateManifest, handlerProblems, SHORT_ID_PATTERN, manifestSchema, PLUGIN_ID_PATTERN, pluginIdProblem present; 125 tests pass · concerns: validManifest builder moved to manifest.test-support.ts so the schema test can share it

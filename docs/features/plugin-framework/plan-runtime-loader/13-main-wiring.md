@@ -1,6 +1,6 @@
 # 13 — Main composition over the catalog
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 07, 08, 09, 10, 11 (it calls task 11's `servePluginScheme` and `userPluginFolder`, so it
 cannot share wave 4 with 11; task 14, which also edits `main.ts`, then follows in wave 6)

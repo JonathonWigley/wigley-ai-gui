@@ -1,6 +1,6 @@
 # 06 — Visual reads chat's focused entry through a slot
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 04 (both edit chat's page `start.ts` and `contract.ts`), 05 (both edit `AGENTS.md`)
 Plan: [plan.md](plan.md)
@@ -139,3 +139,5 @@ Done when: compiles; the tests named above pass by name; `grep -rn "focusedEntry
 Commit: one commit for the task.
 
 ## Proof
+
+Commit 4615a79e · proof: diff read; ChatFocus, chatFocusSlot present, focusedEntry/focusedBlock gone; chat page and visual tests 959 pass; filtered chat self-test deferred to the test gate (main.ts mid-edit by 09/10 at the time) · concerns: chat self-test not yet run; stale focusedEntry mention in docs/features/practice/plan-practice-mode/03-chat-page-mount.md (another feature's plan)

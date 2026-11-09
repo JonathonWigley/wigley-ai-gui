@@ -1,6 +1,6 @@
 # 12 — Settings shows a plugin's origin and problem
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -74,3 +74,5 @@ check 2, 6 and 7 of [16-final-verification.md](16-final-verification.md).
 Commit:    one commit for the group.
 
 ## Proof
+
+Commit 211756ee · proof: diff read; originText, PluginRowInput originText+problem, layout parts present; settings tests 155 pass; settings self-test deferred to the test gate (main.ts waits on 13) · concerns: settings self-test not yet run; a whitespace-only problem still draws a line

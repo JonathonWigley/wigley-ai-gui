@@ -1,6 +1,6 @@
 # 07 — Contract types for user plugins
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 08
 Plan: [plan.md](plan.md)
@@ -141,3 +141,5 @@ Concerns: `generateAssets` now runs tsc on every `npm start`, self-test and driv
 info keeps a re-run fast. If a cold run adds more than about 10 s, report the time in the Proof.
 
 ## Proof
+
+Commit 3f5ae444 · proof: diff read; writePluginTypes, emittedTypesFolder, tsconfig, forge hook present; plugin-types tests pass; manual tsc emit exits 0 · concerns: forge generateAssets hook and extraResource not yet seen in a real start or package: checked at the test gate (self-test start runs the hook); emittedTypesFolder joins with / (mixed separators on Windows)

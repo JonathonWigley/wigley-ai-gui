@@ -1,6 +1,6 @@
 # 11 — Page loads user page parts
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04, 09, 10
 Plan: [plan.md](plan.md)
@@ -455,3 +455,5 @@ rules. If the remaining loading code in `start()` passes about 40 lines, move it
 function the renderer calls. Report that choice in the Proof.
 
 ## Proof
+
+Commit 70101139 · proof: diff read; servePluginScheme, pluginFilePath, page-part-loader, ownerLayoutShow, PageLayoutShow, userPluginFolder, CSP present; task tests pass; tsc red only in main.ts (13) · concerns: harness fake show.draw throws (layer rule); deferred user parts are host.add-ed after startPlugins, not disabled; initial config strips deferred and failed page binds; renderer's load code kept inline (~40 lines)

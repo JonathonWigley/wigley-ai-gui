@@ -1,6 +1,6 @@
 # 08 — Plugin sources and the catalog
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -267,3 +267,5 @@ Done when: `npm test -- src/shared/plugin-url.test.ts src/shared/layouts/layout-
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f4d2a555 · proof: diff read; contracts, sources, startPluginCatalog, pluginUrl, isLayoutFileName present; 82 tests pass, no type errors · concerns: importModule called a microtask after the timer starts, so a sync throw reads as main.js failed to import; watch tests drain the queue through a probe reload

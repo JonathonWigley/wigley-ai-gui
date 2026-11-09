@@ -1,6 +1,6 @@
 # 04 — A restore window per live start
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -174,3 +174,5 @@ or `pruneEndedPlaces`; `grep -c "reopen" src/renderer/page-restores.ts` prints a
 Commit: one commit for the task.
 
 ## Proof
+
+Commit 2ce4dc5e · proof: diff read; reopen, restores deps, ChatChannel.invoke.restored present; renderer, sessions/chat/docs/notes tests 1630 pass, no type errors · concerns: harness without holdsRestores fires onSettled inside start; no main-side test of chat's restored handler; AGENTS.md pruneKeys source-map line also corrected
