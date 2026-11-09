@@ -7,7 +7,7 @@ import type {
 
 // `R` is the step's row type, which a line's `row` keeps.
 export type SessionItem<R extends PastSessionRow = PastSessionRow> =
-  | { kind: 'new'; label: string; headless: boolean }
+  | { kind: 'new'; label: string }
   | { kind: 'past'; row: R; label: string }
   | {
       kind: 'section';
@@ -21,7 +21,6 @@ export type SessionItem<R extends PastSessionRow = PastSessionRow> =
 export type ArchiveState = 'live' | 'archived';
 
 export const NEW_SESSION_LABEL = 'New session';
-export const NEW_HEADLESS_SESSION_LABEL = 'New headless session';
 export const SESSION_STEP_TITLE = 'Session';
 export const SESSIONS_HEADING = 'Sessions';
 
@@ -59,8 +58,7 @@ export function sectionRowsOnce(
 
 // The session step's lines: the section rows of `step`'s folder — any folder
 // when `step.projectDir` is null — and profile whose session `rows` holds
-// unarchived, then the new-session line and the new-headless-session line,
-// then the other rows in the order given, the archived ones only when
+// unarchived, then the new-session line, then the other rows in the order given, the archived ones only when
 // `showArchived`.
 export function sessionItems<R extends PastSessionRow>(
   rows: readonly R[],
@@ -98,8 +96,7 @@ export function sessionItems<R extends PastSessionRow>(
     .map((row) => ({ kind: 'past', row, label: pastLabel(row) }));
   return [
     ...sectionItems,
-    { kind: 'new', label: NEW_SESSION_LABEL, headless: false },
-    { kind: 'new', label: NEW_HEADLESS_SESSION_LABEL, headless: true },
+    { kind: 'new', label: NEW_SESSION_LABEL },
     ...pastItems,
   ];
 }
@@ -116,13 +113,13 @@ export function sessionSection(
   return showsSections ? SESSIONS_HEADING : null;
 }
 
-// The `New session` line, not the headless one.
+// The `New session` line.
 export function newSessionIndex(items: readonly SessionItem[]): number {
-  return items.findIndex((item) => item.kind === 'new' && !item.headless);
+  return items.findIndex((item) => item.kind === 'new');
 }
 
 // The archive state of a saved session's line, so `live` for a section row,
-// which shows only an unarchived session; null for both new-session lines.
+// which shows only an unarchived session; null for the new-session line.
 export function archiveStateOf(item: SessionItem): ArchiveState | null {
   if (item.kind === 'new') {
     return null;
@@ -169,11 +166,8 @@ export function selectedAfterChange(
 }
 
 function isSameLine(a: SessionItem, b: SessionItem): boolean {
-  if (a.kind === 'new' && b.kind === 'new') {
-    return a.headless === b.headless;
-  }
   if (a.kind === 'new' || b.kind === 'new') {
-    return false;
+    return a.kind === b.kind;
   }
   return a.row.hostSessionId === b.row.hostSessionId;
 }

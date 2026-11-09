@@ -61,15 +61,16 @@ export interface StartPromptDeps {
 // `open` asks for a project — or, through `Other folder…` or with no
 // projects, a folder — then a profile unless the project fixes one or there
 // is one, then signs a signed-out profile in through the sign-in dialog,
-// then asks for a new session, a new headless session or one of the project's
-// or folder's saved sessions, and
-// starts or resumes a chat session there, revealing its Chat tab. Its first
-// step also lists the resume sections' rows at the top, a pick resuming that
-// session at once, and its session step those of its folders and profile. Esc
-// at any step starts nothing. Opening the prompt again drops the earlier one:
-// an answer or a sign-in that arrives for it is logged and goes no further.
+// then asks for a new session or one of the project's or folder's saved
+// sessions, and starts or resumes a chat session there, revealing its Chat
+// tab. With no saved sessions to list, archived ones counted, it skips that
+// step and starts a new session at once. Its first step also lists the resume
+// sections' rows at the top, a pick resuming that session at once, and its
+// session step those of its folders and profile. Esc at any step starts
+// nothing. Opening the prompt again drops the earlier one: an answer or a
+// sign-in that arrives for it is logged and goes no further.
 // `openForNewSession` asks the same way but lists no sections and no saved
-// sessions: its session step holds the two new-session lines alone.
+// sessions, so it starts a new session once the profile is signed in.
 // `toggleArchive` and `showArchived` act on the session step while it is open.
 export interface StartPrompt {
   open(): void;
@@ -426,13 +427,19 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     );
   };
 
-  // Opens the session step on `rows` with the cursor on `New session`.
+  // Opens the session step on `rows` with the cursor on `New session`; with no
+  // `rows`, and so no section rows, starts a new session instead.
   const openSessionStepOn = (
     context: PromptContext,
     target: PromptTarget,
     profile: ChatProfile,
     rows: ProjectPastSessionRow[],
   ) => {
+    if (rows.length === 0) {
+      step = null;
+      startSession(context, target, profile);
+      return;
+    }
     const opened: SessionStep = {
       context,
       target,
@@ -450,8 +457,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
 
   // Opens the session step on the saved sessions of the folder
   // (`pastSessions`) or of every folder the project covers
-  // (`projectPastSessions`); with none, or when the listing fails, on the two
-  // new-session lines alone.
+  // (`projectPastSessions`); with none, or when the listing fails, starts a
+  // new session at once.
   const listSessions = (
     context: PromptContext,
     target: PromptTarget,
@@ -532,12 +539,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       picked: (item) => {
         step = null;
         if (item.kind === 'new') {
-          startSession(
-            opened.context,
-            opened.target,
-            opened.profile,
-            item.headless,
-          );
+          startSession(opened.context, opened.target, opened.profile);
         } else {
           resumeSession(
             opened.context,
@@ -665,7 +667,6 @@ function startSession(
   context: PromptContext,
   target: PromptTarget,
   profile: ChatProfile,
-  headless: boolean,
 ) {
   const { deps } = context;
   deps.log(
@@ -675,7 +676,6 @@ function startSession(
     .invoke('start', {
       ...startTargetOf(target),
       profile: profile.name,
-      headless,
     })
     .then(
       (sessionId) => deps.reveal(sessionId),

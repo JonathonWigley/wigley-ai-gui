@@ -108,7 +108,7 @@ New:
 
 ### Wave 1
 - [ ] [Start prompt drops the headless line](01-start-prompt.md)
-- [ ] [The set_headless tool](02-set-headless-tool.md)
+- [x] [The set_headless tool](02-set-headless-tool.md)
 
 ### Wave 2
 - [ ] [Doc re-read and the workflows.md merge](03-doc-re-read.md) — after 01, 02
@@ -118,10 +118,12 @@ New:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: f8e35fea
 
 ### Groups
+- 02 · 46bd354e · diff read: all three Produces present in set-headless-tool.ts; wiring mainAgentOnly in start.ts; set-headless-tool + start tests 79 pass, no type errors · concerns: lint fails only on oxfmt in chat-sessions.test.ts (group 01's file, in progress)
 ### Contract changes
 ### Rulings
+- owns reads chat.sessions().some(sessionId) rather than profileOf !== null — independent of a row having a profile — none, the reads agree today · group 02 · group 02
 ### Review rounds
 ### Test gate

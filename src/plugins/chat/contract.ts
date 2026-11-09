@@ -82,11 +82,7 @@ export interface PoolProviderHandle extends Disposable {
 // setting.
 export type StartTarget = { projectDir: string } | { project: string };
 
-// `headless`: true opens the row headless.
-export type StartRequest = StartTarget & {
-  profile: string;
-  headless?: boolean;
-};
+export type StartRequest = StartTarget & { profile: string };
 
 // `unattended`: true for a session nobody answers: chat denies each permission
 // prompt at once. Kept with the row across a relaunch.

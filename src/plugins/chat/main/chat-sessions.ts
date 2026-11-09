@@ -3516,7 +3516,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         { select: true },
         {
           unattended: false,
-          headless: request.headless === true,
+          headless: false,
           instructions: [],
           owner: null,
         },

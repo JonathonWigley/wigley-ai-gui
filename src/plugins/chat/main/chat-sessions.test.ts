@@ -3863,26 +3863,19 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.sessions()[0].headless).toBe(true);
   });
 
-  it.each([
-    { given: 'headless: true', flag: { headless: true }, expected: true },
-    { given: 'headless absent', flag: {}, expected: false },
-  ])(
-    'start_HeadlessRequest_OpensTheRowHeadless: $given → $expected',
-    async ({ flag, expected }) => {
-      const test = setUp();
+  it('start_OpensTheRowNotHeadless', async () => {
+    const test = setUp();
 
-      const sessionId = test.chat.start({
-        projectDir: PROJECT_DIR,
-        profile: 'personal',
-        ...flag,
-      });
-      await flush();
+    const sessionId = test.chat.start({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
+    await flush();
 
-      expect(test.chat.isHeadless(sessionId)).toBe(expected);
-      expect(test.chat.launchedHeadless(sessionId)).toBe(expected);
-      expect(test.chat.sessions()[0].headless).toBe(expected);
-    },
-  );
+    expect(test.chat.isHeadless(sessionId)).toBe(false);
+    expect(test.chat.launchedHeadless(sessionId)).toBe(false);
+    expect(test.chat.sessions()[0].headless).toBe(false);
+  });
 
   it.each([
     { given: 'headless: true', flag: { headless: true }, expected: true },
@@ -3981,40 +3974,36 @@ describe('createChatSessions saved sessions', () => {
 
   it.each([
     {
-      given: 'headless start',
-      headless: true,
-      turnOffAndClear: false,
+      given: 'headless set, then clear',
+      flags: [true],
       expected: ['registered', HEADLESS_NOTE],
     },
     {
-      given: 'not headless',
-      headless: false,
-      turnOffAndClear: false,
+      given: 'never headless, then clear',
+      flags: [],
       expected: ['registered'],
     },
     {
-      given: 'headless turned off then clear',
-      headless: true,
-      turnOffAndClear: true,
+      given: 'headless set and turned off, then clear',
+      flags: [true, false],
       expected: ['registered'],
     },
   ])(
     'start_HeadlessRow_CarriesTheHeadlessNote: $given',
-    async ({ headless, turnOffAndClear, expected }) => {
+    async ({ flags, expected }) => {
       const test = setUp();
       test.chat.addInstructions('registered');
       const sessionId = test.chat.start({
         projectDir: PROJECT_DIR,
         profile: 'personal',
-        headless,
       });
       await flush();
 
-      if (turnOffAndClear) {
-        test.chat.setHeadless(sessionId, false);
-        test.chat.clear(sessionId);
-        await flush();
+      for (const headless of flags) {
+        test.chat.setHeadless(sessionId, headless);
       }
+      test.chat.clear(sessionId);
+      await flush();
 
       expect(test.harness.processes.at(-1)?.request.instructions).toEqual(
         expected,

@@ -1,6 +1,6 @@
 # 02 — The set_headless tool
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -48,3 +48,5 @@ Done when: compiles; `npm run lint`; the tests above pass
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 46bd354e · proof: diff read: all three Produces present in set-headless-tool.ts; wiring mainAgentOnly in start.ts; set-headless-tool + start tests 79 pass, no type errors · concerns: lint fails only on oxfmt in chat-sessions.test.ts (group 01's file, in progress)

@@ -20,7 +20,6 @@ import type {
 } from '../contract';
 import type { Picker, PickerRequest } from './picker';
 import {
-  NEW_HEADLESS_SESSION_LABEL,
   NEW_SESSION_LABEL,
   SESSION_STEP_TITLE,
   SESSIONS_HEADING,
@@ -432,7 +431,7 @@ describe('start prompt', () => {
     const run = await atSessionStep();
 
     expect(sectionsOf(run.opened[0])).toEqual([null, null]);
-    expect(sectionsOf(run.last())).toEqual([null, null, null, null]);
+    expect(sectionsOf(run.last())).toEqual([null, null, null]);
   });
 
   it('openForNewSession_AsksForNoSections', async () => {
@@ -519,12 +518,10 @@ describe('start prompt', () => {
     expect(run.last().labels).toEqual([
       label,
       NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(beta),
     ]);
     expect(sectionsOf(run.last())).toEqual([
       'Recently closed',
-      SESSIONS_HEADING,
       SESSIONS_HEADING,
       SESSIONS_HEADING,
     ]);
@@ -587,13 +584,9 @@ describe('start prompt', () => {
     await flush();
 
     expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
-    expect(run.last().labels).toEqual([
-      NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
-      rowLabel(beta),
-    ]);
+    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
     expect(run.last().selected).toBe(0);
-    expect(sectionsOf(run.last())).toEqual([null, null, null]);
+    expect(sectionsOf(run.last())).toEqual([null, null]);
     expect(run.logs).toContain('archived Fix login');
   });
 
@@ -617,10 +610,8 @@ describe('start prompt', () => {
     pickFolder(run.opened[0], '~/dev/app');
     pickItem(run.opened[1], 'work · ~/.claude');
     await flush();
-    pickItem(run.last(), NEW_SESSION_LABEL);
-    await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
+      { projectDir: '/Users/u/dev/app', profile: 'work' },
     ]);
     expect(run.revealed).toEqual(['row-1']);
     expect(run.logs).toEqual([expect.stringContaining('work')]);
@@ -631,14 +622,9 @@ describe('start prompt', () => {
     await flush();
     pickFolder(run.opened[0], '~/dev/app');
     await flush();
-    expect(run.opened.map((opened) => opened.title)).toEqual([
-      'Folder',
-      SESSION_STEP_TITLE,
-    ]);
-    pickItem(run.last(), NEW_SESSION_LABEL);
-    await flush();
+    expect(run.opened.map((opened) => opened.title)).toEqual(['Folder']);
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
+      { projectDir: '/Users/u/dev/app', profile: 'work' },
     ]);
     expect(run.revealed).toEqual(['row-1']);
   });
@@ -655,10 +641,8 @@ describe('start prompt', () => {
     expect(run.opened[1].selected).toBe(0);
     pickItem(run.opened[1], 'personal · ~/.claude-personal');
     await flush();
-    pickItem(run.last(), NEW_SESSION_LABEL);
-    await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/new', profile: 'personal', headless: false },
+      { projectDir: '/Users/u/dev/new', profile: 'personal' },
     ]);
   });
 
@@ -718,8 +702,6 @@ describe('start prompt', () => {
     await flush();
     pickFolder(run.opened[0], '~/dev/app');
     await flush();
-    pickItem(run.last(), NEW_SESSION_LABEL);
-    await flush();
     expect(run.revealed).toEqual([]);
     expect(run.logs).toEqual([
       expect.stringContaining('work'),
@@ -730,34 +712,11 @@ describe('start prompt', () => {
     ]);
   });
 
-  it('openForNewSession_savedSessions_SessionStepHoldsTheNewLinesAlone', async () => {
-    const run = setUp({
-      answers: { pastSessions: () => Promise.resolve([alpha, beta]) },
-    });
-    run.prompt.openForNewSession();
-    await flush();
-    pickFolder(run.last(), '~/dev/app');
-    await flush();
-    pickItem(run.last(), 'work · ~/.claude');
-    await flush();
-    expect(run.opened.map(({ title }) => title)).toEqual([
-      'Folder',
-      'Profile',
-      SESSION_STEP_TITLE,
-    ]);
-    expect(run.last().labels).toEqual([
-      NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
-    ]);
-    expect(run.invoked).not.toContain('pastSessions');
-  });
-
   it('sessionStep_savedSessions_opensOnNewThenUnarchivedRows', async () => {
     const run = await atSessionStep();
     expect(run.last().title).toBe('Session');
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(alpha),
       rowLabel(beta),
     ]);
@@ -765,27 +724,12 @@ describe('start prompt', () => {
     expect(run.started).toEqual([]);
   });
 
-  it('pastSessionsRejects_opensNewSessionAloneAndToasts', async () => {
-    const run = await atSessionStep({
-      pastSessions: () => Promise.reject(new Error('no folder')),
-    });
-    expect(run.last().title).toBe('Session');
-    expect(run.last().labels).toEqual([
-      NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
-    ]);
-    expect(run.logs).toEqual([expect.stringContaining('no folder')]);
-    expect(run.toasts).toEqual([
-      { text: expect.stringContaining('no folder'), tone: 'error' },
-    ]);
-  });
-
   it('newSessionPicked_startsThere', async () => {
     const run = await atSessionStep();
     pickItem(run.last(), NEW_SESSION_LABEL);
     await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
+      { projectDir: '/Users/u/dev/app', profile: 'work' },
     ]);
     expect(run.resumed).toEqual([]);
   });
@@ -822,23 +766,19 @@ describe('start prompt', () => {
 
   it('toggleArchive_shownRow_archivesItAndMovesCursorToTheNextRow', async () => {
     const run = await atSessionStep();
-    run.moveCursor(2);
+    run.moveCursor(1);
     run.prompt.toggleArchive();
     await flush();
     expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
-    expect(run.last().labels).toEqual([
-      NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
-      rowLabel(beta),
-    ]);
-    expect(run.last().selected).toBe(2);
+    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
+    expect(run.last().selected).toBe(1);
     expect(run.logs).toEqual([expect.stringContaining('Alpha')]);
   });
 
   it('toggleArchive_archivedRow_restoresItAndKeepsTheCursorOnIt', async () => {
     const run = await atSessionStep();
     run.prompt.showArchived();
-    run.moveCursor(4);
+    run.moveCursor(3);
     run.prompt.toggleArchive();
     await flush();
     expect(run.archiveWrites).toEqual([
@@ -846,12 +786,11 @@ describe('start prompt', () => {
     ]);
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(alpha),
       rowLabel(beta),
       rowLabel(gamma, false),
     ]);
-    expect(run.last().selected).toBe(4);
+    expect(run.last().selected).toBe(3);
     expect(run.logs).toContainEqual(expect.stringContaining('Gamma'));
   });
 
@@ -863,76 +802,37 @@ describe('start prompt', () => {
     expect(run.logs).toHaveLength(1);
   });
 
-  it('toggleArchive_newHeadlessSessionLine_writesNothing', async () => {
-    const run = await atSessionStep();
-    run.moveCursor(1);
-    run.prompt.toggleArchive();
-    await flush();
-    expect(run.archiveWrites).toEqual([]);
-    expect(run.logs).toEqual(['New headless session cannot be archived']);
-  });
-
-  // The session step for ~/dev/app with one profile, reached by `open` over
-  // `rows`, or by `openForNewSession`.
-  async function reachSessionStep(
-    reach: 'open' | 'openForNewSession',
-    rows: PastSessionRow[],
-  ) {
-    if (reach === 'open') {
-      return atSessionStep({}, rows);
-    }
-    const run = setUp({ profiles: [work] });
-    run.prompt.openForNewSession();
-    await flush();
-    pickFolder(run.last(), '~/dev/app');
-    await flush();
-    return run;
-  }
-
   it.each([
-    { reach: 'open', rows: [alpha], line: NEW_SESSION_LABEL, headless: false },
     {
-      reach: 'open',
+      given: 'only archived saved sessions',
+      rows: [gamma],
+      act: (_run: ReturnType<typeof setUp>) => Promise.resolve(),
+      archivedLabel: rowLabel(gamma),
+    },
+    {
+      given: 'the last live row archived',
       rows: [alpha],
-      line: NEW_HEADLESS_SESSION_LABEL,
-      headless: true,
+      act: async (run: ReturnType<typeof setUp>) => {
+        run.moveCursor(1);
+        run.prompt.toggleArchive();
+        await flush();
+      },
+      archivedLabel: rowLabel(alpha, true),
     },
-    { reach: 'open', rows: [], line: NEW_SESSION_LABEL, headless: false },
-    {
-      reach: 'open',
-      rows: [],
-      line: NEW_HEADLESS_SESSION_LABEL,
-      headless: true,
-    },
-    {
-      reach: 'openForNewSession',
-      rows: [],
-      line: NEW_SESSION_LABEL,
-      headless: false,
-    },
-    {
-      reach: 'openForNewSession',
-      rows: [],
-      line: NEW_HEADLESS_SESSION_LABEL,
-      headless: true,
-    },
-  ] as const)(
-    'sessionStep_NewHeadlessSession_StartsWithHeadless: $reach over $rows.length rows, $line → $headless',
-    async ({ reach, rows, line, headless }) => {
-      const run = await reachSessionStep(reach, [...rows]);
+  ])(
+    'sessionStep_NoLiveRows_KeepsThePickerOnNewSession: $given',
+    async ({ rows, act, archivedLabel }) => {
+      const run = await atSessionStep({}, rows);
+      await act(run);
+
       expect(run.last().title).toBe(SESSION_STEP_TITLE);
-      expect(run.last().labels.slice(0, 2)).toEqual([
-        NEW_SESSION_LABEL,
-        NEW_HEADLESS_SESSION_LABEL,
-      ]);
+      expect(run.last().labels).toEqual([NEW_SESSION_LABEL]);
       expect(run.last().selected).toBe(0);
+      expect(run.started).toEqual([]);
 
-      pickItem(run.last(), line);
-      await flush();
+      run.prompt.showArchived();
 
-      expect(run.started).toEqual([
-        { projectDir: '/Users/u/dev/app', profile: 'work', headless },
-      ]);
+      expect(run.last().labels).toEqual([NEW_SESSION_LABEL, archivedLabel]);
     },
   );
 
@@ -941,7 +841,7 @@ describe('start prompt', () => {
       setArchived: () => Promise.reject(new Error('read-only')),
     });
     const shownBefore = run.opened.length;
-    run.moveCursor(2);
+    run.moveCursor(1);
     run.prompt.toggleArchive();
     await flush();
     expect(run.opened.length).toBe(shownBefore);
@@ -959,7 +859,7 @@ describe('start prompt', () => {
           ? Promise.reject(new Error('read-only'))
           : Promise.resolve(),
     });
-    run.moveCursor(2);
+    run.moveCursor(1);
     run.prompt.toggleArchive();
     await flush();
     run.prompt.toggleArchive();
@@ -979,7 +879,6 @@ describe('start prompt', () => {
     run.prompt.showArchived();
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(alpha),
       rowLabel(beta),
       rowLabel(gamma),
@@ -987,7 +886,6 @@ describe('start prompt', () => {
     run.prompt.showArchived();
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(alpha),
       rowLabel(beta),
     ]);
@@ -1020,7 +918,7 @@ describe('start prompt', () => {
   it('setArchivedAnswersAfterTheStepClosed_reopensNothing', async () => {
     const write = deferred<void>();
     const run = await atSessionStep({ setArchived: () => write.promise });
-    run.moveCursor(2);
+    run.moveCursor(1);
     run.prompt.toggleArchive();
     run.close();
     const shownBefore = run.opened.length;
@@ -1033,17 +931,13 @@ describe('start prompt', () => {
   it('toggleArchive_writeInFlight_isIgnored', async () => {
     const write = deferred<void>();
     const run = await atSessionStep({ setArchived: () => write.promise });
-    run.moveCursor(2);
+    run.moveCursor(1);
     run.prompt.toggleArchive();
     run.prompt.toggleArchive();
     expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
     write.resolve();
     await flush();
-    expect(run.last().labels).toEqual([
-      NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
-      rowLabel(beta),
-    ]);
+    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
     expect(run.logs).toEqual([
       expect.any(String),
       expect.stringContaining('Alpha'),
@@ -1118,10 +1012,8 @@ describe('start prompt', () => {
     expect(run.logs).toContainEqual(
       expect.stringContaining('claude not found'),
     );
-    pickItem(run.last(), NEW_SESSION_LABEL);
-    await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
+      { projectDir: '/Users/u/dev/app', profile: 'work' },
     ]);
   });
 
@@ -1294,7 +1186,11 @@ describe('start prompt', () => {
             lastUsed: 3,
           },
         ],
-        answers: { projects: () => Promise.resolve([project]) },
+        answers: {
+          projects: () => Promise.resolve([project]),
+          projectPastSessions: () =>
+            Promise.resolve([{ ...alpha, projectDir: '/c/1' }]),
+        },
       });
       await flush();
 
@@ -1347,7 +1243,6 @@ describe('start prompt', () => {
       started: {
         project: 'New Games',
         profile: 'work',
-        headless: false,
       },
     },
     {
@@ -1356,7 +1251,6 @@ describe('start prompt', () => {
       started: {
         project: 'Wigley AI Dev',
         profile: 'work',
-        headless: false,
       },
     },
   ])('projectNewSession: $name', async ({ picks, started }) => {
@@ -1371,58 +1265,95 @@ describe('start prompt', () => {
     expect(run.started).toEqual([started]);
   });
 
-  it('projectPastSessionsEmpty_SessionStepHoldsTheNewLinesAlone', async () => {
-    const run = setUpWithProjects();
-    await flush();
-
-    await pickInTurn(run, NEW_GAMES_LABEL);
-    expect(run.last().title).toBe(SESSION_STEP_TITLE);
-    expect(run.last().labels).toEqual([
-      NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
-    ]);
-    expect(run.started).toEqual([]);
-
-    await pickInTurn(run, NEW_SESSION_LABEL);
-
-    expect(run.started).toEqual([
-      {
-        project: 'New Games',
-        profile: 'work',
-        headless: false,
+  it.each([
+    {
+      given: 'openForNewSession on a folder with saved sessions',
+      reach: async () => {
+        const run = setUp({
+          answers: { pastSessions: () => Promise.resolve([alpha, beta]) },
+        });
+        run.prompt.openForNewSession();
+        await flush();
+        await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
+        return run;
       },
-    ]);
-  });
-
-  it('openForNewSession_Project_SessionStepHoldsTheNewLinesAlone', async () => {
-    const run = setUpWithProjects({
-      resumeSections: recentlyClosed(closedAlpha),
-      projectPastSessions: () =>
-        Promise.resolve([{ ...alpha, projectDir: '/c/1' }]),
-    });
-    run.prompt.openForNewSession();
-    await flush();
-    expect(run.last().labels).toEqual([
-      NEW_GAMES_LABEL,
-      AI_DEV_LABEL,
-      OTHER_FOLDER_LABEL,
-    ]);
-
-    await pickInTurn(run, NEW_GAMES_LABEL);
-    expect(run.last().labels).toEqual([
-      NEW_SESSION_LABEL,
-      NEW_HEADLESS_SESSION_LABEL,
-    ]);
-
-    await pickInTurn(run, NEW_SESSION_LABEL);
-
-    expect(run.invoked).not.toContain('projectPastSessions');
-    expect(run.started).toEqual([
-      {
-        project: 'New Games',
-        profile: 'work',
-        headless: false,
+      started: { projectDir: '/Users/u/dev/app', profile: 'work' },
+      toasts: [],
+      unlisted: 'pastSessions',
+    },
+    {
+      given: 'a folder with no saved sessions',
+      reach: async () => {
+        const run = setUp();
+        await flush();
+        await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
+        return run;
       },
-    ]);
-  });
+      started: { projectDir: '/Users/u/dev/app', profile: 'work' },
+      toasts: [],
+      unlisted: null,
+    },
+    {
+      given: 'a folder whose listing rejects',
+      reach: async () => {
+        const run = setUp({
+          answers: {
+            pastSessions: () => Promise.reject(new Error('no folder')),
+          },
+        });
+        await flush();
+        await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
+        return run;
+      },
+      started: { projectDir: '/Users/u/dev/app', profile: 'work' },
+      toasts: [{ text: expect.stringContaining('no folder'), tone: 'error' }],
+      unlisted: null,
+    },
+    {
+      given: 'a project with no saved sessions',
+      reach: async () => {
+        const run = setUpWithProjects();
+        await flush();
+        await pickInTurn(run, NEW_GAMES_LABEL);
+        return run;
+      },
+      started: { project: 'New Games', profile: 'work' },
+      toasts: [],
+      unlisted: null,
+    },
+    {
+      given: 'openForNewSession on a project with saved sessions',
+      reach: async () => {
+        const run = setUpWithProjects({
+          resumeSections: recentlyClosed(closedAlpha),
+          projectPastSessions: () =>
+            Promise.resolve([{ ...alpha, projectDir: '/c/1' }]),
+        });
+        run.prompt.openForNewSession();
+        await flush();
+        expect(run.last().labels).toEqual([
+          NEW_GAMES_LABEL,
+          AI_DEV_LABEL,
+          OTHER_FOLDER_LABEL,
+        ]);
+        await pickInTurn(run, NEW_GAMES_LABEL);
+        return run;
+      },
+      started: { project: 'New Games', profile: 'work' },
+      toasts: [],
+      unlisted: 'projectPastSessions',
+    },
+  ])(
+    'sessionStep_NoRowsToList_StartsAtOnce: $given',
+    async ({ reach, started, toasts, unlisted }) => {
+      const run = await reach();
+
+      expect(titlesOf(run)).not.toContain(SESSION_STEP_TITLE);
+      expect(run.started).toStrictEqual([started]);
+      expect(run.toasts).toEqual(toasts);
+      if (unlisted !== null) {
+        expect(run.invoked).not.toContain(unlisted);
+      }
+    },
+  );
 });
