@@ -834,3 +834,22 @@ because the earlier items rewrite many of these tests anyway.
   `claudeConfigFolder` (`src/main/claude-code/claude-launch.ts`) rather than `~/.claude`. An app started from a
   personal-profile shell reads a default-profile terminal session's name from the wrong folder. The row's profile tag
   already resolves null through `AgentHarness.configFolder`, which ignores the app's environment.
+- **The composer paints over the over-bars at 480px** — *needs a decision*: at a narrow window the chat composer
+  draws above the side bar and right bar laid over the content (`.shell-side-bar[data-side-bar='over']` and
+  `.shell-right-bar[data-right-bar='over']`, `src/renderer/shell/shell.css:193,202`, both `z-index: 1`). Since
+  keyboard-reach the bars carry a key cursor, so the covered rows matter more. To decide: raise the over-bars above the
+  composer, or keep the composer on top and inset the bars. Source: the keyboard-reach review (finding 32).
+- **The Sessions title wraps letter by letter at the least width** — *agent-ready*: the Sessions header title
+  (`src/plugins/sessions/layouts/default/layout.css:35`) has no `min-width`/`white-space` rule, so at the side bar's
+  least width it breaks one letter per line beside its hints. Source: the keyboard-reach review (finding 33).
+- **Backlog records area `side` while its open editor keeps the keys** — *needs a decision*: in a narrow window with
+  the editor open, `sideBarOpenedOver` (`src/plugins/backlog/page/backlog-view.ts`) and `src/renderer/shell/modes.ts:142-145`
+  record the focus area as `side` while the editor still holds DOM focus and the keys, so the next pane move starts
+  from the wrong area. To decide: the editor keeps the area `main`, or the side bar overlay takes focus from the
+  editor. Source: the keyboard-reach review (finding 34).
+- **A click into the Backlog detail is pulled back to the list** — *agent-ready*: no Backlog `focusin` handler sets the
+  scope, so a click into the detail pane while a right-bar stop holds the keys ends the stop's turn, and the deferred
+  `focusMain` (`src/plugins/backlog/page/backlog-view.ts:986-998`) focuses `lastMainFocus`, often the list, off the
+  clicked pane. Fix: a focusin on each Backlog pane records it as `lastMainFocus` (and sets the scope) before
+  `focusMain` runs. Pre-existing before keyboard-reach (it ran synchronously then). Source: the keyboard-reach
+  re-review.
