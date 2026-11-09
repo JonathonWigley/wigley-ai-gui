@@ -113,7 +113,7 @@ Out of scope:
 - [x] [Doc re-read](02-doc-re-read.md) — after 01
 
 ### Wave 3
-- [ ] [Final verification](03-final-verification.md) — after 02
+- [x] [Final verification](03-final-verification.md) — after 02
 
 ## Run log
 
@@ -122,8 +122,10 @@ Review base: 631595fa
 ### Groups
 - 01 · b7244ddc, a728f9d8 · diff read: both Produces present in contract.ts; tsc failed on the test's partial PageStage cast, fixed in a728f9d8; typecheck and lint pass · concerns: page-level Small/Medium tests drawing a paused stage were not run by the worker; left to the test gate
 - 02 · b44679f3 · diff read: one stale cell in session-titles rank table fixed; workflow design, DESIGN.md and other Needs you lines checked true · concerns: none
+- 03 · none (verification only, at b44679f3) · drive run pnyou3 on the fake harness: paused Small row shows the peach Needs you Tag with no stage tag; clears while a turn runs; Large plan ready keeps Ready to make; Medium not exercised live (its guard is covered by its layout test) · concerns: none
 ### Contract changes
 ### Rulings
 - contract.test.ts builds a whole PageStage literal in stageWith, since stageOf is private to workflow-view.test.ts — a later shared builder could replace it · group 01
 ### Review rounds
 ### Test gate
+- Vitest: the 4 plan files (rule table, Large row-label wiring, Small/Medium chip guard) plus every workflow-small/-medium/-large and workflow/page test (other paused-stage draws) and sessions/page (row activity ranking) · 51 files, 1120 tests pass, no type errors; filtered self-test of the workflow plugins left to the drive run in 03

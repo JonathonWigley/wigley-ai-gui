@@ -1,6 +1,6 @@
 # 03 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -32,3 +32,4 @@ Commit:    none
 
 ## Proof
 
+Commit none (verification only, at b44679f3) · proof: drive run pnyou3 on the fake harness: paused Small row shows the peach Needs you Tag with no stage tag; clears while a turn runs; Large plan ready keeps Ready to make; Medium not exercised live (its guard is covered by its layout test) · concerns: none
