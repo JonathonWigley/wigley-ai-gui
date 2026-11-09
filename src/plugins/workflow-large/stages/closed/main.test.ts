@@ -15,11 +15,17 @@ const PROGRESS: PlanProgress = {
   tasks: [],
 };
 
-// A flow in `stage` whose plan folder was read.
-function flowIn(stage: string): SessionFlow {
+// A flow in `stage` whose plan folder was read, closed from review, with
+// `running` subagents.
+function flowIn(stage: string, running: readonly string[] = []): SessionFlow {
   return withLargeState(
-    { ...newFlow('s1', '/r'), workflow: LARGE_WORKFLOW_ID, stage },
-    { planDir: '/r/plan-f', progress: PROGRESS },
+    {
+      ...newFlow('s1', '/r'),
+      workflow: LARGE_WORKFLOW_ID,
+      stage,
+      runningSubagents: running,
+    },
+    { planDir: '/r/plan-f', progress: PROGRESS, closedFrom: 'review' },
   );
 }
 
@@ -50,9 +56,29 @@ describe('closedMainStage', () => {
   it.each<{
     name: string;
     from: string;
+    running?: readonly string[];
     signals: readonly WorkflowSignal[];
     stage: string;
   }>([
+    {
+      name: 'the plan read while closed and a subagent runs reopens it',
+      from: 'closed',
+      running: ['a1'],
+      signals: [PLAN_CHANGED],
+      stage: 'review',
+    },
+    {
+      name: 'the plan read while closed and nothing runs keeps it closed',
+      from: 'closed',
+      signals: [PLAN_CHANGED],
+      stage: 'closed',
+    },
+    {
+      name: 'the plan read while closed during a turn reopens it',
+      from: 'closed',
+      signals: [{ type: 'turnStarted' }, PLAN_CHANGED],
+      stage: 'review',
+    },
     {
       name: 'planGone in make',
       from: 'make',
@@ -95,7 +121,7 @@ describe('closedMainStage', () => {
       signals: [MAKE_OF_A_NEW_FOLDER, PLAN_GONE, PLAN_CHANGED, PLAN_GONE],
       stage: 'closed',
     },
-  ])('$name', ({ from, signals, stage }) => {
-    expect(foldAll(flowIn(from), signals).stage).toBe(stage);
+  ])('$name', ({ from, running, signals, stage }) => {
+    expect(foldAll(flowIn(from, running), signals).stage).toBe(stage);
   });
 });

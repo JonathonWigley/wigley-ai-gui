@@ -942,6 +942,24 @@ describe('workflowLargeMainPart', () => {
     },
   );
 
+  it('planFolderBackReadIdle_NextTurnStartReopens', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+    workflow.project.remove(PLAN_DIR);
+    await settled();
+    await workflow.project.write(PLAN_FILE, PLAN_TICKED);
+    await workflow.agentEvent({ type: 'turnEnded', at: 1 });
+    await settled();
+    expect(workflow.lastFlow()?.stage).toBe('closed');
+
+    await workflow.agentEvent({ type: 'turnStarted', at: 2 });
+    await settled();
+
+    expect(workflow.lastFlow()?.stage).toBe('make');
+  });
+
   it('StepTool_Large', async () => {
     const workflow = startWorkflowPart(SETTINGS);
     await workflow.openS1();

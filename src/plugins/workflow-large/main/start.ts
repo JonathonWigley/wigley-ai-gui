@@ -171,12 +171,17 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
     };
 
     // A closed run's watch closed with its `planGone`: each turn or subagent
-    // start or end follows the plan again, which reopens the watch, so a plan
-    // folder a branch switch brought back is read while the run still works.
+    // start or end checks the plan again and follows it, which reopens a
+    // closed watch, so a plan folder a branch switch brought back is read
+    // while the run still works, however many boundaries passed idle.
     const followPlan = ({ sessionId, before, after, signal }: FoldEvent) => {
       const plan = largeStateOf(after);
       const was = largeStateOf(before);
-      if (signal.type === 'turnEnded') {
+      const closedRunMoved =
+        after.stage === 'closed' &&
+        plan.planDir !== null &&
+        ACTIVITY_SIGNALS.has(signal.type);
+      if (signal.type === 'turnEnded' || closedRunMoved) {
         planWatch.check(sessionId);
       }
       const wrotePlan =
@@ -185,10 +190,6 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
         plan.planDir !== was.planDir ||
         plan.planReported !== was.planReported ||
         plan.unreportedPlanDir !== was.unreportedPlanDir;
-      const closedRunMoved =
-        after.stage === 'closed' &&
-        plan.planDir !== null &&
-        ACTIVITY_SIGNALS.has(signal.type);
       if (wrotePlan || followedPlanChanged || closedRunMoved) {
         planWatch.follow(sessionId, plan);
       }

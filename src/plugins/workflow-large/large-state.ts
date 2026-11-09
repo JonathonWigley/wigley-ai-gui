@@ -124,8 +124,12 @@ function applyEnteredStage(
   if (entered.stage?.clearsPlan === true && signal.type === 'skillStarted') {
     clearPlan(next);
   }
-  // A run reopening from closed keeps the review rounds its make recorded.
-  const reopens = flow.stage === 'closed' && entered.id !== flow.stage;
+  // A run a plan read reopens from closed keeps the review rounds its make
+  // recorded; a new `wigley:make` records them again.
+  const reopens =
+    flow.stage === 'closed' &&
+    entered.id !== flow.stage &&
+    largeEventOf(signal)?.type === 'planChanged';
   if (entered.stage?.recordsReviewRounds === true && !reopens) {
     next.reviewRoundsAtMake = next.progress?.reviewRounds ?? null;
   }

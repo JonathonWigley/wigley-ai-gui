@@ -666,6 +666,31 @@ const FOLD_ROWS: {
     }),
   },
   {
+    name: 'wigley:make of the same folder from closed records the review rounds again',
+    flow: flowWith({
+      stage: 'closed',
+      turnRunning: true,
+      planDir: PLAN_X,
+      progress: { ...PROGRESS, reviewRounds: 2 },
+      reviewRoundsAtMake: 0,
+      closedFrom: 'review',
+    }),
+    signal: {
+      type: 'skillStarted',
+      skill: 'wigley:make',
+      args: PLAN_X,
+      argsPath: PLAN_X,
+    },
+    expected: flowWith({
+      stage: 'make',
+      turnRunning: true,
+      planDir: PLAN_X,
+      progress: { ...PROGRESS, reviewRounds: 2 },
+      reviewRoundsAtMake: 2,
+      closedFrom: 'review',
+    }),
+  },
+  {
     name: 'the plan read again leaves a closed run saved with no stage it closed from closed',
     flow: flowWith({
       stage: 'closed',
