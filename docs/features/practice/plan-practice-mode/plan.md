@@ -257,10 +257,11 @@ does not consume.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 
 ### Groups
 ### Contract changes
 ### Rulings
+- 04's `npm run lint` proof moves to 05: check-layers.mts fails a plugin folder with no manifest.ts (line 817), and 05 adds the manifest — typecheck and the five tests prove 04 — a layer break in the root modules surfaces one wave later · lead
 ### Review rounds
 ### Test gate

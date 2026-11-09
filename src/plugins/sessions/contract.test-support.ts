@@ -16,6 +16,7 @@ export function sessionRow(
     hostSessionId: null,
     titles: { user: null, agent: null, firstMessage: null },
     profileDir: null,
+    owner: null,
     ...overrides,
   };
 }

@@ -921,6 +921,7 @@ describe('createSessionList', () => {
           hostSessionId: null,
           titles: NO_TITLES,
           profileDir: null,
+          owner: null,
         },
       ],
       selectedSessionId: '00000002',
@@ -1435,6 +1436,7 @@ describe('createSessionList', () => {
           hostSessionId: 'host-1',
           titles: NO_TITLES,
           profileDir: 'resolved:default',
+          owner: null,
         },
       ],
       selectedSessionId: '00000001',
@@ -1444,6 +1446,104 @@ describe('createSessionList', () => {
       ['connected', { id: '00000001', info: owned('host-1'), owned: true }],
     ]);
   });
+
+  it.each([
+    { options: { select: true }, owner: null, selected: '00000001' },
+    {
+      options: { select: true, owner: 'practice' },
+      owner: 'practice',
+      selected: null,
+    },
+    {
+      options: { select: false, owner: 'practice' },
+      owner: 'practice',
+      selected: null,
+    },
+  ])(
+    'open_Owner_KeepsItOnTheRowAndNeverSelectsIt: $options',
+    ({ options, owner, selected }) => {
+      const { list } = setUp();
+
+      list.open(owned('host-1'), options);
+
+      const state = list.state();
+      expect(state.rows.map((row) => row.owner)).toEqual([owner]);
+      expect(state.selectedSessionId).toBe(selected);
+    },
+  );
+
+  it.each([
+    {
+      call: 'mark',
+      selectFirst: false,
+      act: (list: SessionList, id: string) => list.mark(id, MARK),
+    },
+    {
+      call: 'mark',
+      selectFirst: true,
+      act: (list: SessionList, id: string) => list.mark(id, MARK),
+    },
+    {
+      call: 'activate',
+      selectFirst: false,
+      act: (list: SessionList, id: string) => list.activate(id),
+    },
+    {
+      call: 'activateExistingRow',
+      selectFirst: false,
+      act: (list: SessionList, id: string) => list.activateExistingRow(id),
+    },
+  ])(
+    'rowWithAnOwner_MarkAndActivate_WriteNothingAndLog: $call, another row selected $selectFirst',
+    ({ call, selectFirst, act }) => {
+      const { list, states, logged, activated } = setUp();
+      if (selectFirst) {
+        connectWithRow(list, info('/work/y'));
+      }
+      const { id } = list.open(owned('host-1'), {
+        select: false,
+        owner: 'practice',
+      }).session;
+      const sentBefore = states.length;
+
+      const returned = act(list, id);
+
+      expect(states).toHaveLength(sentBefore);
+      expect(activated).toEqual([]);
+      expect(logged.at(-1)).toMatch(new RegExp(`${call} .*${id}.*owner`));
+      if (call === 'activate') {
+        expect(returned).toBe(false);
+      }
+    },
+  );
+
+  it.each([
+    { order: ['a', 'o', 'b'], selected: 'b' },
+    { order: ['a', 'o'], selected: null },
+    { order: ['b', 'o', 'a'], selected: 'b' },
+  ])(
+    'closeSession_SelectedRowBesideARowWithAnOwner_SkipsIt: $order',
+    ({ order, selected }) => {
+      const { list } = setUp();
+      const ids = new Map<string, string>();
+      for (const name of order) {
+        const { id } =
+          name === 'o'
+            ? list.open(owned('host-o'), { select: false, owner: 'practice' })
+                .session
+            : connectWithRow(list, info(`/work/${name}`)).session;
+        ids.set(name, id);
+      }
+      const a = ids.get('a') ?? '';
+      list.activate(a);
+
+      list.release(a);
+
+      expect(list.state().selectedSessionId).toBe(
+        selected === null ? null : ids.get(selected),
+      );
+    },
+  );
 
   it.each([
     {

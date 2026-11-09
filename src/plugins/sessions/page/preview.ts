@@ -58,6 +58,7 @@ function sampleRow(
     hostSessionId: null,
     titles: PREVIEW_TITLES[sessionId] ?? NO_TITLES,
     profileDir: null,
+    owner: null,
   };
 }
 

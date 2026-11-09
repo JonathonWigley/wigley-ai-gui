@@ -1066,6 +1066,45 @@ describe('the sessions list in the page part', () => {
     return { ...setup, mode, commands, linesFrom };
   }
 
+  // Breaks: a page rule reading the rows slot without the owner filter.
+  it.each([
+    {
+      act: 'next and previous session',
+      run: (setup: Awaited<ReturnType<typeof startWithList>>) => {
+        setup.commands.nextSession({ arg: undefined });
+        setup.commands.nextSession({ arg: undefined });
+        setup.commands.prevSession({ arg: undefined });
+        setup.commands.prevSession({ arg: undefined });
+        expect(setup.activations).toContain('s2');
+        expect(setup.activations).not.toContain('o1');
+      },
+    },
+    {
+      act: 'the side bar list',
+      run: (setup: Awaited<ReturnType<typeof startWithList>>) => {
+        const start = setup.harness.logs.length;
+        setup.mode.focusSideBar?.();
+        setup.commands.listDown({ arg: undefined });
+        setup.commands.listDown({ arg: undefined });
+        setup.commands.listDown({ arg: undefined });
+        const lines = setup.linesFrom(start);
+        expect(lines.filter((line) => line.includes('label o1'))).toEqual([]);
+        expect(lines).toContain('list cursor on label s2');
+      },
+    },
+  ])(
+    'rowWithAnOwner_StaysOutOfTheSideBarAndTheStepKeys: $act',
+    async ({ run }) => {
+      const setup = await startWithList(['s1', 's2'], 's1');
+      setup.rows.set('o1', { ...hostRow('o1'), owner: 'practice' });
+      await settle();
+
+      run(setup);
+
+      await setup.harness.stop();
+    },
+  );
+
   it('listShow_KeepsTheListScope_WhileTheVisibleTabChanges', async () => {
     const setup = await startWithList(['s1', 's2'], 's1');
     setup.addTab('s1');
