@@ -827,7 +827,11 @@ const RESUME_LIST_STEPS: SelfTestStep[] = [
 ];
 
 const ARCHIVE_STEPS: SelfTestStep[] = [
-  { keys: ['j', 'x'], expect: '[chat] archived fake past session one' },
+  {
+    keys: ['j', 'j', 'x'],
+    expect: '[chat] archived fake past session one',
+    why: 'The step opens on New session, with New headless session below it, so the second j reaches the saved session.',
+  },
   {
     keys: ['.'],
     expect: '[chat] archived sessions shown',
