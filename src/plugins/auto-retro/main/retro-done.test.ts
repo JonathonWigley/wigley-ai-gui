@@ -23,6 +23,7 @@ function info(
     background,
     activeTime: { totalMs: 0, since: null },
     running,
+    pid: null,
     compaction,
     repo: 'wigley-agents',
     branch: 'main',

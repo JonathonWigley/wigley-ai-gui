@@ -1298,6 +1298,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           save();
         }
       },
+      pid(pid) {
+        if (isLive(session, processStart)) {
+          session.slots.setInfo({ pid });
+        }
+      },
       activity(activity) {
         if (!isLive(session, processStart)) {
           return;
@@ -1405,7 +1410,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
         // The row and its state stay, resting, until the user closes the row.
         // The harness ended any running compaction before `sessionEnded`.
-        session.slots.setInfo({ running: false });
+        session.slots.setInfo({ running: false, pid: null });
         session.process = null;
         forgetCompaction(session);
         showPendingCancelled(session);
@@ -1523,6 +1528,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         activeTime: { totalMs: opening.activeMs, since: null },
         commands: [],
         running: false,
+        pid: null,
         queued: [],
         compaction: null,
         returned: [],
@@ -1841,7 +1847,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.process = process;
     session.exit = null;
     running.add(process);
-    session.slots.setInfo({ running: true });
+    session.slots.setInfo({ running: true, pid: null });
     log(`session ${sessionId} process started (resume ${resume})`);
     deps.recent
       .record(projectDir, profile.name)
@@ -1893,7 +1899,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.exit = null;
     session.processId = hosted.id;
     session.historyBefore = hosted.startedAt;
-    session.slots.setInfo({ running: true });
+    session.slots.setInfo({ running: true, pid: null });
     const started: { process: AgentProcess | null } = { process: null };
     const replay = { isReplaying: true };
     session.replay = replay;
@@ -2004,7 +2010,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (held.get(sessionId) !== session || session.exit !== null) {
       return;
     }
-    session.slots.setInfo({ running: false });
+    session.slots.setInfo({ running: false, pid: null });
     session.process = null;
     session.historyBefore = null;
     clearCompaction(session, profileDirOf(profile));
@@ -3233,7 +3239,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       .catch((error: unknown) =>
         log(`session ${sessionId} end failed: ${errorText(error)}`),
       );
-    session.slots.setInfo({ running: false });
+    session.slots.setInfo({ running: false, pid: null });
     session.process = null;
     showRestingIdle(session);
   }

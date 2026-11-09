@@ -493,6 +493,7 @@ describe('process table', () => {
     expect(table.subscribe('a', late.subscriber)).toEqual({
       running: false,
       log: null,
+      pid: null,
     });
     children[0].stdout.write('last\n');
     await streamsDelivered();
@@ -583,6 +584,21 @@ describe('process table', () => {
     expect(first.closed).toEqual([]);
     expect(children).toHaveLength(1);
   });
+
+  it.each([
+    { ran: true, spawned: [{ id: 'a', pid: 4321 }] },
+    { ran: false, spawned: [] },
+  ])(
+    'spawn_ChildPid_ReportedToTheSubscriberOnlyWhenItRan (ran $ran)',
+    ({ ran, spawned }) => {
+      const { table } = setUp(0, () => fakeChild(ran).child);
+      const recorded = recordingSubscriber();
+
+      table.spawn(spawnRequest('a'), recorded.subscriber);
+
+      expect(recorded.spawned).toEqual(spawned);
+    },
+  );
 
   it('spawn_ChildError_ClosesWithTheMessage', () => {
     const failing = fakeChild(false);
@@ -692,10 +708,12 @@ describe('process table', () => {
     expect(table.subscribe('broken', late.subscriber)).toEqual({
       running: true,
       log: null,
+      pid: 4321,
     });
     expect(table.subscribe('healthy', late.subscriber)).toEqual({
       running: true,
       log: logFile('healthy.jsonl'),
+      pid: 4321,
     });
     expect(table.list().map(({ id, running }) => [id, running])).toEqual([
       ['broken', true],
@@ -738,7 +756,7 @@ describe('process table', () => {
     const { subscriber, lines } = recordingSubscriber();
     let fileAtClose = '';
     table.spawn(spawnRequest('a'), {
-      line: subscriber.line,
+      ...subscriber,
       closed: () => {
         fileAtClose = logRecords('a.jsonl');
       },

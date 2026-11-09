@@ -115,6 +115,7 @@ function stateOf(
     activeTime: NO_ACTIVE_TIME,
     commands: [],
     running: false,
+    pid: null,
     queued: [],
     returned,
     repo: 'app',

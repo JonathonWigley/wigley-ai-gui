@@ -1,6 +1,6 @@
 # 04 — Sparkline primitive
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -90,3 +90,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 615c8b4d · proof: diff read: kit.sparkline in kit.d.ts and base-kit.ts present; worker's sparkline, base-kit, layout-contracts, gallery tests pass (64); typecheck clean for 04's files (other errors are 03 in flight) · concerns: docs/keymap.md fails oxfmt --check (pre-existing on the branch, from the docs-ahead commit)

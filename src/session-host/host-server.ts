@@ -311,6 +311,7 @@ function createConnections(deps: ConnectionsDeps) {
     const subscriber: ProcessSubscriber = {
       line: (id, line) => push({ type: 'line', id, line }),
       closed: (id, exit) => push({ type: 'closed', id, exit }),
+      spawned: (id, pid) => push({ type: 'spawned', id, pid }),
     };
     socket.on('error', (error) =>
       diagnostics.append(`connection: ${error.message}`),

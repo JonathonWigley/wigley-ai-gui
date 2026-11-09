@@ -2,7 +2,7 @@ import type { HostedExit, HostedSpawn, PipeLine } from './session-host';
 
 // The version of the wire between an app and its session host, newline JSON. Any
 // shape change below that an app and a host both read needs a bump, once one has shipped.
-export const SESSION_HOST_PROTOCOL = 2;
+export const SESSION_HOST_PROTOCOL = 3;
 
 // Frozen: never change this shape. Asks a host for its protocol version.
 export interface HelloMessage {
@@ -90,13 +90,15 @@ export interface SubscribeMessage {
 }
 // Answers the `subscribe` with `requestId`: `running` is whether process `id` runs and is not ending; `log` its pipe
 // log's absolute path. A null `log` means this connection was not subscribed: with `running` false the host holds no
-// such running process; with `running` true the log is incomplete, since an append failed.
+// such running process; with `running` true the log is incomplete, since an append failed. `pid` is the process's OS
+// pid while `running` is true and the host knows it; null otherwise.
 export interface SubscribeReply {
   type: 'subscribe';
   requestId: number;
   id: string;
   running: boolean;
   log: string | null;
+  pid: number | null;
 }
 // Asks to stop process `id`'s events on this connection.
 export interface UnsubscribeMessage {
@@ -130,6 +132,12 @@ export interface ClosedEvent {
   id: string;
   exit: HostedExit;
 }
+// Process `id` started as OS process `pid`; sent only to the connection that spawned it.
+export interface SpawnedEvent {
+  type: 'spawned';
+  id: string;
+  pid: number;
+}
 
 // Every message an app sends a host.
 export type ClientMessage =
@@ -151,7 +159,8 @@ export type HostMessage =
   | SubscribeReply
   | StopAllReply
   | LineEvent
-  | ClosedEvent;
+  | ClosedEvent
+  | SpawnedEvent;
 
 const HOST_RECORD_NAME = /^host-v(\d+)\.json$/;
 const HOST_CHILDREN_NAME = /^host-v\d+\.\d+\.children\.json$/;

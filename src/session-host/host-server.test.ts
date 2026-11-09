@@ -247,11 +247,11 @@ describe('host protocol', () => {
   });
 
   it.each([
-    { known: true, running: true, hasLog: true },
-    { known: false, running: false, hasLog: false },
+    { known: true, running: true, hasLog: true, pid: 4321 },
+    { known: false, running: false, hasLog: false, pid: null },
   ])(
     'subscribe_Cases_RepliesThenPushesLines: known $known',
-    async ({ known, running: isRunning, hasLog }) => {
+    async ({ known, running: isRunning, hasLog, pid }) => {
       const running = await runningHost();
       const owner = await client(running.channel);
       const fake = await spawned(running, owner, 'a');
@@ -269,6 +269,7 @@ describe('host protocol', () => {
         id: known ? 'a' : 'b',
         running: isRunning,
         log: hasLog ? path.join(running.folder, 'logs', 'a.jsonl') : null,
+        pid,
       });
       if (known) {
         fake.stdout.write('later\n');
@@ -276,6 +277,46 @@ describe('host protocol', () => {
       }
     },
   );
+
+  it('spawned_GoesToTheSpawnerOnly_AndTheSubscribeReplyCarriesThePid', async () => {
+    const running = await runningHost();
+    const first = await client(running.channel);
+    const second = await client(running.channel);
+
+    await spawned(running, first, 'a');
+
+    await vi.waitFor(() =>
+      expect(first.received).toContainEqual({
+        type: 'spawned',
+        id: 'a',
+        pid: 4321,
+      }),
+    );
+    await settled(second);
+    expect(second.received.filter(({ type }) => type === 'spawned')).toEqual(
+      [],
+    );
+    expect(
+      await replyTo(second, { type: 'subscribe', requestId: 1, id: 'a' }),
+    ).toEqual({
+      type: 'subscribe',
+      requestId: 1,
+      id: 'a',
+      running: true,
+      log: path.join(running.folder, 'logs', 'a.jsonl'),
+      pid: 4321,
+    });
+    expect(
+      await replyTo(second, { type: 'subscribe', requestId: 2, id: 'nope' }),
+    ).toEqual({
+      type: 'subscribe',
+      requestId: 2,
+      id: 'nope',
+      running: false,
+      log: null,
+      pid: null,
+    });
+  });
 
   it('list_TwoProcesses_ListsEachWithItsLogPath', async () => {
     const running = await runningHost();

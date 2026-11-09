@@ -36,9 +36,12 @@ export interface HostedExit {
 export interface HostedProcessEvents {
   line(line: PipeLine): void; // live `out` and `err` lines only; `in` lines are logged, never echoed
   closed(exit: HostedExit): void; // once; `error` is set when the spawn failed
+  // Once, to the events `spawn` was given, when the OS reports the process's pid; never to an `attach`'s events.
+  spawned(pid: number): void;
 }
 export interface HostedProcess {
   readonly id: string;
+  readonly pid: number | null; // the OS pid once the host reports it; null before and after the process runs
   write(text: string): void; // one line; the host appends the newline and logs it as `in`
   endInput(): void;
   kill(signal: 'SIGTERM' | 'SIGKILL'): void;

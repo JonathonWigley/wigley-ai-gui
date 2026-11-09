@@ -18,6 +18,8 @@ import type { GitWorktree } from '../../../contracts/git';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import {
   createFakeAgentHarness,
+  FAKE_AGENT_PID,
+  FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
@@ -325,6 +327,7 @@ function keptSessionInfo(rowId: string): ChatSessionInfo {
     background: 0,
     activeTime: NO_ACTIVE_TIME,
     running: false,
+    pid: null,
     compaction: null,
     repo: 'app',
     branch: null,
@@ -785,6 +788,58 @@ function replyText(result: ToolResult | 'pending'): string {
 }
 
 describe('createChatSessions', () => {
+  it.each([
+    {
+      given: 'a started process',
+      expected: FAKE_AGENT_PID,
+      run: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        await flush();
+      },
+    },
+    {
+      given: 'the process ended',
+      expected: null,
+      run: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        await flush();
+        test.chat.send(ROW_ID, { text: FAKE_END_TEXT, images: [] });
+        await flush();
+      },
+    },
+    {
+      given: 'a re-attached process',
+      expected: 4321,
+      run: async (test: ReturnType<typeof setUp>) => {
+        test.harness.scriptAttach('p1', {
+          outcome: 'process',
+          replay(events) {
+            events.pid(4321);
+          },
+        });
+        restoreOne(test, hostedRecord(), [hostedP1()]);
+        await flush();
+      },
+    },
+    {
+      given: 'a restored row whose process is gone',
+      expected: null,
+      run: async (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, hostedRecord(), []);
+        await flush();
+      },
+    },
+  ])(
+    'pid_ProcessLifecycle_PublishedOnlyWhileRunning: $given',
+    async ({ expected, run }) => {
+      const test = setUp();
+
+      await run(test);
+
+      expect(test.chat.sessions()[0].pid).toBe(expected);
+    },
+  );
+
   it('start_opensTheSessionAndStartsTheHarness', async () => {
     const test = setUp();
 
@@ -828,6 +883,7 @@ describe('createChatSessions', () => {
         activeTime: { totalMs: 0, since: null },
         commands: [],
         running: false,
+        pid: null,
         queued: [],
         compaction: null,
         returned: [],

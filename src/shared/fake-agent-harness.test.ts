@@ -15,6 +15,7 @@ import {
   createFakeAgentHarness,
   type FakeAgentHarness,
   type FakeAttachScript,
+  FAKE_AGENT_PID,
   FAKE_AGENTS_TEXT,
   FAKE_BLOCKS_REPLY,
   FAKE_BLOCKS_TEXT,
@@ -77,6 +78,7 @@ function recordingEvents() {
     entry: (entry) => hear('entry', entry),
     controls: (controls) => hear('controls', controls),
     activity: (activity) => hear('activity', activity),
+    pid: (pid) => hear('pid', pid),
     commands: (commands) => hear('commands', commands),
     planUsage: (update) => hear('planUsage', update),
     agentEvent: (event) => {
@@ -165,7 +167,7 @@ async function startedProcess(
 }
 
 describe('createFakeAgentHarness', () => {
-  it('start_RecordsRequestAndEvents_ThenControlsCommandsIdle', async () => {
+  it('start_RecordsRequestAndEvents_ThenPidControlsCommandsIdle', async () => {
     const harness = createFakeAgentHarness(
       clock,
       createMemoryFiles(),
@@ -180,11 +182,13 @@ describe('createFakeAgentHarness', () => {
     expect(harness.processes[0].request).toBe(request);
     expect(harness.processes[0].events).toBe(events);
     expect(heard.map(([name]) => name)).toEqual([
+      'pid',
       'controls',
       'commands',
       'activity',
     ]);
-    const controls = heard[0][1] as Parameters<
+    expect(heard[0]).toEqual(['pid', FAKE_AGENT_PID]);
+    const controls = heard[1][1] as Parameters<
       AgentProcessEvents['controls']
     >[0];
     expect(controls.map((control) => control.id)).toEqual([
@@ -193,7 +197,7 @@ describe('createFakeAgentHarness', () => {
       'model',
       'verbosity',
     ]);
-    expect(heard[1]).toEqual([
+    expect(heard[2]).toEqual([
       'commands',
       [
         {
@@ -204,7 +208,7 @@ describe('createFakeAgentHarness', () => {
         },
       ],
     ]);
-    expect(heard[2]).toEqual(['activity', 'idle']);
+    expect(heard[3]).toEqual(['activity', 'idle']);
   });
 
   it('start_RequestControls_ReplaceStartingValues', async () => {
@@ -218,9 +222,9 @@ describe('createFakeAgentHarness', () => {
     harness.start({ ...request, controls: { effort: 'high' } }, events);
     await flush();
 
-    const controls = heard[0][1] as Parameters<
-      AgentProcessEvents['controls']
-    >[0];
+    const controls = heard.find(
+      ([name]) => name === 'controls',
+    )?.[1] as Parameters<AgentProcessEvents['controls']>[0];
     expect(controls.map((control) => [control.id, control.value])).toEqual([
       ['mode', 'auto'],
       ['effort', 'high'],

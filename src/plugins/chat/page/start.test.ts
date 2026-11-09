@@ -49,6 +49,7 @@ const SESSION: ChatSessionState = {
   activeTime: { totalMs: 0, since: null },
   commands: [],
   running: false,
+  pid: null,
   queued: [],
   compaction: null,
   returned: [],

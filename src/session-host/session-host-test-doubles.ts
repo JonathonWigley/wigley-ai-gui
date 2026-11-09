@@ -77,7 +77,7 @@ export function fakeChild(ran = true) {
     stdin,
     stdout,
     stderr,
-    pid: ran ? 1 : undefined,
+    pid: ran ? 4321 : undefined,
     kill(signal: string) {
       signals.push(signal);
       return true;
@@ -106,11 +106,13 @@ export type FakeChild = ReturnType<typeof fakeChild>;
 export function recordingSubscriber() {
   const lines: PipeLine[] = [];
   const closed: { id: string; exit: HostedExit }[] = [];
+  const spawned: { id: string; pid: number }[] = [];
   const subscriber: ProcessSubscriber = {
     line: (_id, line) => lines.push(line),
     closed: (id, exit) => closed.push({ id, exit }),
+    spawned: (id, pid) => spawned.push({ id, pid }),
   };
-  return { subscriber, lines, closed };
+  return { subscriber, lines, closed, spawned };
 }
 
 // Lets `PassThrough` data, written before now, reach its listeners.

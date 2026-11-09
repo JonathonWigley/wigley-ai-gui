@@ -216,7 +216,7 @@ export type StatsFixtureVariant = 'busy' | 'error'; // the drive and self-test s
 ### Wave 1
 - [ ] [SystemStats contract and macOS adapter](01-system-stats-contract-mac.md)
 - [ ] [Session process pid reaches chat](03-session-pid.md)
-- [ ] [Sparkline primitive](04-sparkline-primitive.md)
+- [x] [Sparkline primitive](04-sparkline-primitive.md)
 
 ### Wave 2
 - [ ] [Windows adapter](02-windows-adapter.md) — after 01
@@ -231,10 +231,12 @@ export type StatsFixtureVariant = 'busy' | 'error'; // the drive and self-test s
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: a2d6ccd32ff1520af587d0cacd1a70306f41e8f7
 
 ### Groups
+- 04 · 615c8b4d · diff read: kit.sparkline in kit.d.ts and base-kit.ts present; worker's sparkline, base-kit, layout-contracts, gallery tests pass (64); typecheck clean for 04's files (other errors are 03 in flight) · concerns: docs/keymap.md fails oxfmt --check (pre-existing on the branch, from the docs-ahead commit)
 ### Contract changes
+- kit.sparkline in kit.d.ts: one line → oxfmt wraps it over several lines, type unchanged · why: the repo formatter · consumers: 06 · group 04
 ### Rulings
 ### Review rounds
 ### Test gate

@@ -136,6 +136,7 @@ function session(
     activeTime: NO_ACTIVE_TIME,
     commands: [],
     running,
+    pid: null,
     queued: [],
     compaction: null,
     returned: [],

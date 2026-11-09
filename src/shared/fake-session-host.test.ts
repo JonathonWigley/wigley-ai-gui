@@ -30,11 +30,13 @@ function spawnRequest(id: string): HostedSpawn {
 function recordingEvents() {
   const lines: PipeLine[] = [];
   const closed: HostedExit[] = [];
+  const pids: number[] = [];
   const events: HostedProcessEvents = {
     line: (line) => lines.push(line),
     closed: (exit) => closed.push(exit),
+    spawned: (pid) => pids.push(pid),
   };
-  return { lines, closed, events };
+  return { lines, closed, pids, events };
 }
 
 const SIGNALLED: HostedExit = { code: null, signal: 'SIGTERM', error: null };
@@ -75,6 +77,22 @@ describe('createFakeSessionHost', () => {
     host.close('closed', EXITED);
 
     expect(() => host.output(id, 'out', 'x')).toThrow(id);
+  });
+
+  it('spawned_ReachesTheEventsAndThePidUntilClose', async () => {
+    const host = createFakeSessionHost(clock);
+    const heard = recordingEvents();
+    const spawned = host.spawn(spawnRequest('a'), heard.events);
+
+    host.spawned('a', 4321);
+    const attached = await host.attach('a', recordingEvents().events);
+
+    expect(heard.pids).toEqual([4321]);
+    expect(spawned.pid).toBe(4321);
+    expect(attached?.process.pid).toBe(4321);
+    host.close('a', EXITED);
+    expect(spawned.pid).toBeNull();
+    expect(attached?.process.pid).toBeNull();
   });
 
   it('write_AfterClose_ChangesNothing', () => {

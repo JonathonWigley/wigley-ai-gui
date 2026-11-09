@@ -80,6 +80,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         activeTime: { totalMs: 185_000, since: null },
         commands: [],
         running: true,
+        pid: null,
         queued: [],
         compaction: null,
         returned: [],

@@ -200,6 +200,9 @@ export interface ChatSessionInfo {
   // True while the session's process runs; false while it rests, with no
   // process yet or its process exited.
   running: boolean;
+  // The session's agent process pid while `running`; null otherwise, and
+  // until the harness reports it.
+  pid: number | null;
   // The compaction running in the session, whatever started it; null while
   // none runs.
   compaction: SessionCompaction | null;

@@ -71,6 +71,7 @@ function sessionInfo(
     background: 0,
     activeTime: { totalMs: 0, since: null },
     running: true,
+    pid: null,
     compaction: null,
     repo: 'wigley-agents',
     branch: 'main',
