@@ -1,6 +1,6 @@
 # 05 — Settings Leader menu
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 04
 Plan: [plan.md](plan.md)
@@ -374,3 +374,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 66d3cf28 · proof: diff read (defaultGroups, unnamedGroupName, withGroupName, LEADER_SECTION, leader-tree, leader-menu-view present) + typecheck clean; settings selftest all passed per worker; settings-leader-menu.png read · concerns: cosmetic: recording row prompt and command columns wrap narrowly, groups header blank space, long command ids wrap mid-word (left for 07); one npx vitest run on the local dev dependency, nothing installed

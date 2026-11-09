@@ -205,7 +205,7 @@ owner's layout (`AGENTS.md` § Intent).
 - [x] [Settings Keybindings section](04-settings-keys.md) — after 01, 03 (both edit `keymap.ts`)
 
 ### Wave 4
-- [ ] [Settings Leader menu](05-settings-leader-menu.md) — after 01, 04
+- [x] [Settings Leader menu](05-settings-leader-menu.md) — after 01, 04
 
 ### Wave 5
 - [ ] [Doc re-read](06-doc-re-read.md) — after 01–05
@@ -220,11 +220,14 @@ Review base: a42ed9f9
 - 02 · bacb7c95 · diff read (tree matches docs/keymap.md § Leader groups) + typecheck clean; worker's filtered selftest passes every moved-key step · concerns: forms 'cancelled preview' group fails 3 steps (<D-w> never logs activated Codex session) — same 3 fail on base; unit tests building their own binds left as is
 - 03 · fcf91837 · diff read (keys.searchLeader, <Leader>/ bind, WhichKeyModel.name present) + typecheck clean; screenshots forms-which-key-shelf.png and forms-leader-search.png read; 98 keys tests pass per worker · concerns: new keys.picker binds not yet through the every-key-placed check (full selftest only); label 'Search leader actions' capitalised against the lower-case keys labels
 - 04 · 484703ff · diff read (withMovedBind, KEYS_SECTION, buildRow scope arg, scopeTitle, openScopePicker, ScopePickRequest, key-recorder exports present) + typecheck clean; settings selftest passes per worker; settings-key-recording.png read · concerns: row-prompt.ts edited outside Files; a box/both bind reassigned onto a chord is refused at write with a toast, not during recording; find scrolls chips and header off the top (visual check for 07); recording row wraps to two lines at selftest width
+- 05 · 66d3cf28 · diff read (defaultGroups, unnamedGroupName, withGroupName, LEADER_SECTION, leader-tree, leader-menu-view present) + typecheck clean; settings selftest all passed per worker; settings-leader-menu.png read · concerns: cosmetic: recording row prompt and command columns wrap narrowly, groups header blank space, long command ids wrap mid-word (left for 07); one npx vitest run on the local dev dependency, nothing installed
 ### Contract changes
 - Leader picker commands and binds: six hand-named commands and hand-written binds → the shared LIST_PICKER_COMMANDS / listPickerCommands / LIST_PICKER_SCOPES pattern keyboard-reach added, gg/G included (ListPicker now has top/bottom) · why: keyboard-reach landed the shared pattern · consumers: 06 (the 'every list picker takes gg/G' doc line now holds) · group 03
 - headerEnd filter hint: planned → dropped · why: the core pluginPicker already anchors a / filter hint for a filter: true list · consumers: none · group 03
 - createKeyRecorder deps: unnamed → exported as KeyRecorderDeps, same shape · why: a named type for the deps · consumers: 05 · group 04
 - SectionDrawing: + optional emptyQuery · why: the find query's empty state names the keys pressed · consumers: none (05 may ignore) · group 04
+- RowContext.commitKeymap(layer, via) → (layer, via, written?) · why: the cursor follows an edit only once the write lands · consumers: none · group 05
+- LeaderMenuDeps + redraw(); drawRow takes a scope; LeaderMenuView + drawnRow(key); SettingsKitScope widened with leaderGroups|leaderItems; leader-tree.ts exports isLeaderLine, leaderLine, groupNameIn, compareKeys, groupTitle, LEADER · why: pane redraws, settings-view's box/recording-gone checks through drawnRow · consumers: none · group 05
 ### Rulings
 - captureKey_PluginStops_DisarmsTheCapture landed as a row in page-api.test.ts RECORDED_ROWS — that table owns part-stop disposal — none · group 01 · group 01
 - chordTokenFor returns null when its token fails parseChord — never spells a chord the matcher rejects — none · group 01 · group 01
@@ -234,5 +237,9 @@ Review base: a42ed9f9
 - Enter/Tab matched as normalVimKeys('<CR>')/('<Tab>') — normalVimKeys spells <Enter> — none · group 04 · group 04
 - a chip or find-query change moves the cursor to the first match — the cursor was left on the last row after ? then j — a test covers it · group 04 · group 04
 - the Tab box on reassign takes the keep no-op guard — typing the line's own keys writes nothing — none · group 04 · group 04
+- defaultGroups includes the runtime layer's groups — none · group 05 · group 05
+- withGroupName matches entries through normalVimKeys — <leader>b and <Leader>b are one entry — none · group 05 · group 05
+- groups/items grid minmax(0,1fr) minmax(0,2fr) — max-content squeezed the items pane, rem fails the style lint — visual only · group 05 · group 05
+- sectionList_EndsKeysThenLeaderMenu folded into the existing sections test — one test per rule — none · group 05 · group 05
 ### Review rounds
 ### Test gate
