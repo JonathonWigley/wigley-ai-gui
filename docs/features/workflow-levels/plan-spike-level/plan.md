@@ -37,7 +37,7 @@ Each was verified at plan time. `wigley:make` re-runs each before the first disp
 - The three worktrees exist on branch `spike-level`, each holding its docs-ahead commit:
   `git -C ~/Documents/ai-dev/.worktrees/wigley-agents-spike-level log --oneline -1` → `78b501f Docs ahead: Spike…`;
   `git -C ~/Documents/ai-dev/.worktrees/wigley-ai-marketplace-spike-level log --oneline -1` → `607bbc4 Docs ahead: wigley:spike skill…`;
-  `git -C ~/Documents/ai-dev/.worktrees/wigley-ai-gui-spike-level log --oneline -2` → the plan commit, then `2142aa42 Docs ahead: the workflow-spike plugin…`.
+  `git -C ~/Documents/ai-dev/.worktrees/wigley-ai-gui-spike-level log --oneline -4` → the plan's cold-read fix commit, `1784f662 Docs ahead: workflow and layouts design docs…`, `91b9c9b6` (the plan), then `2142aa42 Docs ahead: the workflow-spike plugin…`.
 - The GUI worktree links the clone's dependencies:
   `test -L ~/Documents/ai-dev/.worktrees/wigley-ai-gui-spike-level/node_modules` succeeds.
 - The marketplace plugin version is `2.1.2` in both manifests:
@@ -45,7 +45,9 @@ Each was verified at plan time. `wigley:make` re-runs each before the first disp
 - No other workflow uses the order `40` or the badge `X`:
   `grep -n "order: \|badge: '" src/plugins/workflow-*/stages/index.ts src/plugins/workflow-large/large-workflow.ts src/plugins/workflow-*/page/start.ts`
   → small 10, medium 20, large 30; badges S, M, L.
-- The token `--wg-fg-secondary` exists: `grep -rl -- '--wg-fg-secondary' src/renderer/shell/shell.css`.
+- The token `fg-secondary` is defined: `grep -n "'fg-secondary'" src/config/theme-tokens.ts` prints its entry.
+- The plan `docs/features/workflow/plan-paused-needs-you/` is open and unlanded, and its task 01 edits Small's and
+  Medium's `layout.js`: `test -d docs/features/workflow/plan-paused-needs-you`. Task 02 § Decisions handles the overlap.
 
 ## Docs written ahead
 
@@ -56,6 +58,9 @@ Each was verified at plan time. `wigley:make` re-runs each before the first disp
   `skills/wrap-up/SKILL.md`, `skills/feature/SKILL.md` (§ The interview: a spike handed in).
 - wigley-ai-gui `2142aa42`: `docs/features/workflow-levels/design.md`, `AGENTS.md` (plugin tree,
   self-test list), `DESIGN.md` (Workflow badge and token).
+- wigley-ai-gui `1784f662` (after the cold read): `docs/features/workflow/design.md` (four workflows, § Spike's
+  stages, the claim, step-word, order, pane and trail lines), `docs/features/layouts/design.md` (the
+  `workflow-spike.layout` row).
 
 ## Mandatory Reads
 
@@ -111,13 +116,15 @@ layouts kit), `chat` and `sessions` contracts for its self-test, and its own fil
 ### Wave 1
 - [ ] [Gate accepts wigley:spike](01-gate-accepts-spike.md)
 - [ ] [workflow-spike plugin](02-workflow-spike-plugin.md)
-- [ ] [Marketplace version bump](03-marketplace-version-bump.md)
 
 ### Wave 2
-- [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
+- [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02
 
 ### Wave 3
-- [ ] [Final verification](05-final-verification.md) — after 04
+- [ ] [Marketplace version bump](03-marketplace-version-bump.md) — after 04, so the bump is the series' last marketplace commit
+
+### Wave 4
+- [ ] [Final verification](05-final-verification.md) — after 03
 
 ## Run log
 

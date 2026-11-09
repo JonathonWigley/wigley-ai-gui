@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Wave: 3 · Depends on: 04
+Wave: 4 · Depends on: 03
 Plan: [plan.md](plan.md)
 
 Files:     none; a fix found here is made in its own repo's worktree and committed there
@@ -19,9 +19,11 @@ Checks, each run in its worktree:
 - wigley-ai-gui drive run (`drive` skill): start a fake-harness session that loads
   `wigley:spike`, then report `build`, `check`, `build`. The row chip shows `X` in the
   `fg-secondary` tone with the stage word, and the composer trail reads
-  `Interview › Build › Check › Land` with Build running after the second `build`. Expected; low
-  confidence on the trail drawing a step that goes back, since no shipped level loops past one
-  step — capture the strip and read it.
+  `Interview › Build › Check › Land` with Build running after the second `build`. Expected:
+  `stepState` in `src/plugins/workflow/page/workflow-view.ts` marks steps before the current one
+  done and steps after it pending, so Interview reads done, Build running, Check and Land pending.
+  Low confidence only on how Check draws when it goes from done back to pending, since no shipped
+  level does that — capture the strip and read it.
 
 Done when: every check passes, and the drive captures were read against `DESIGN.md` § Workflow.
 Commit:    a fix commits in its own repo; a passing run commits nothing
