@@ -25,6 +25,10 @@ import type {
 // - `textBox` appends the box's frame (`ui-input practice-box practice-box--notes` or `practice-box--customCases`) to
 //   `parent`, mounts the vim box in it with the draft text, and returns the frame.
 // - `failingCase` → `div.practice-failing-case`; the app draws the `caseResult` part into it when a case failed.
+// - `askBox`'s `textBox` places the app's ask frame (`ui-input practice-ask-box`, holding the vim box and the send hint)
+//   and returns it; left out, the frame is appended at the end of the part's root.
+// - `importBox`'s `textBox` places the app's import frame (`ui-input`, holding the request box) and returns it; left
+//   out, the frame is placed first in the part's root.
 // Each slot places once per draw: a slot called twice throws `<slot> placed twice`, which fails the part, so it draws
 // with `default`. A slot the part leaves out the app appends at the end of the part's root; so does a `confirmBody`'s
 // button the prompt appends to its actions row, so both commands keep an anchor.
@@ -128,6 +132,18 @@ export interface CaseResultInput {
 export interface ConfirmBodyInput {
   body: string;
 }
+// The interviewer pane's ask box, shown while the open attempt has no interviewer. `problemTitle` is the open
+// problem's title; `hint` says what the interviewer does.
+export interface AskBoxInput {
+  problemTitle: string;
+  hint: string;
+}
+// The import dialog's body, scope `practice.import`. `problem` is why the request was refused, null for none; `hint`
+// says what to type.
+export interface ImportBoxInput {
+  problem: string | null;
+  hint: string;
+}
 
 // The kit every Practice part draws with: the base kit, its keys in the part's scope.
 export interface PracticeKit extends BaseKit {}
@@ -157,6 +173,14 @@ export interface BoxKit extends PracticeKit {
 export interface ResultKit extends PracticeKit {
   failingCase(parent: HTMLElement): HTMLElement;
 }
+export interface AskBoxKit extends PracticeKit {
+  // A second call throws `textBox placed twice`, so the part draws with `default`.
+  textBox(parent: HTMLElement): HTMLElement;
+}
+export interface ImportBoxKit extends PracticeKit {
+  // A second call throws `textBox placed twice`, so the part draws with `default`.
+  textBox(parent: HTMLElement): HTMLElement;
+}
 export interface ConfirmBodyKit extends PracticeKit {
   // The prompt's own buttons (label, variant, key anchor in `practice.confirm`), each appended to `parent`.
   keepButton(parent: HTMLElement): HTMLButtonElement;
@@ -168,12 +192,14 @@ export interface ConfirmBodyKit extends PracticeKit {
 // problem column while no problem is open. The `problemPane`, `editorPane` and `consolePane` are drawn into the
 // column's three stacked panes once per layout set; the shown tab's part into its pane's `body` when what it shows
 // changes, one `submissionRow` per submission (or `empty` with `noSubmissions`), and `caseResult` into the
-// `resultTab`'s `failingCase`. `confirmBody` draws the Solution tab's confirm. Kit scopes: `list`, `listHeader`,
-// `problemRow` and `empty` `practice.list`; `noProblem`, `problemPane`, the problem pane's tabs and `empty` with
-// `noSubmissions` `practice.problem`;
+// `resultTab`'s `failingCase`. `confirmBody` draws the Solution tab's confirm. `askBox` draws into the interviewer pane
+// each time the open attempt shows with no interviewer, and again on each layout set; `importBox` draws the import
+// dialog's body (the Dialog primitive's scrim, panel and title stay the app's) each time it opens and again whenever
+// its input or the layouts change. Kit scopes: `list`, `listHeader`, `problemRow` and `empty` `practice.list`;
+// `noProblem`, `problemPane`, the problem pane's tabs and `empty` with `noSubmissions` `practice.problem`;
 // `editorPane` `practice.editor`; `consolePane`, `testcaseTab`, `resultTab` and `caseResult` `practice.console`;
-// `confirmBody` `practice.confirm`. A user layout's `list` part draws the `filter` hint itself: `/` is not a vim key;
-// its `problemPane` and `consolePane` draw the `prevTab` and `nextTab` hints, and its `notesTab` and `testcaseTab` the
+// `confirmBody` `practice.confirm`; `askBox` `practice.ask`; `importBox` `practice.import`. A user layout's `list`
+// part draws the `filter` hint itself: `/` is not a vim key; its `problemPane` and `consolePane` draw the `prevTab` and `nextTab` hints, and its `notesTab` and `testcaseTab` the
 // `editBox` hint.
 export interface PracticeLayout {
   list?(parent: HTMLElement, kit: ListKit): PracticePane;
@@ -233,6 +259,16 @@ export interface PracticeLayout {
     input: ConfirmBodyInput,
     kit: ConfirmBodyKit,
   ): HTMLElement;
+  askBox?(
+    parent: HTMLElement,
+    input: AskBoxInput,
+    kit: AskBoxKit,
+  ): PracticePane;
+  importBox?(
+    parent: HTMLElement,
+    input: ImportBoxInput,
+    kit: ImportBoxKit,
+  ): PracticePane;
 }
 
 // A layout with every part defined, as `default` is.

@@ -1,6 +1,6 @@
 # 08 — Practice page: problem workspace
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -123,8 +123,8 @@ Decisions:
     record, newest first (sorted by `time` descending), the app setting the click (`practiceOpenSubmissionRowCommand`
     with the record's `time`) and `is-selected`/`is-cursor` on the cursor row; `empty(parent, { reason:
     'noSubmissions', filter: '' }, kit)` with none. Enter (`openSubmission`) or a click shows
-    `submissionCode(parent, { time, verdictLabel }, kit: DocKit)` whose `document` mounts the markdown of a ```` ```cpp
-    ```` fence around the record's `code` (read-only by construction; no editor). Esc (`closeSubmission`) returns to
+    `submissionCode(parent, { time, verdictLabel }, kit: DocKit)` whose `document` mounts the markdown of a ```` ```cpp ```` fence
+    around the record's `code` (read-only by construction; no editor). Esc (`closeSubmission`) returns to
     the rows with the cursor kept. `time` shows as `YYYY-MM-DD HH:mm` in local time, parsed from the record's ISO
     8601 `time`.
   - `notes`: `notesTab(parent, kit: BoxKit)`; `kit.textBox(parent)` frames (`ui-input practice-box
@@ -328,3 +328,5 @@ verification".
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 8de85a0e · proof: diff read: Split axis/sizedPane/setEndHidden, createProblemWorkspace/ProblemWorkspace/WorkspacePane, focusColumn/applyOpened, workspace-state and case-text exports, practiceShowTabCommand/practiceOpenSubmissionRowCommand, PracticePlace pane/problemTab/consoleTab present; AGENTS.md and DESIGN.md split prose read; typecheck clean; worker ran 77 files 1952 tests and lint clean · concerns: edits outside Files: DESIGN.md (stale Split entry) and practice-state.ts (placeOf); task doc said 'type' drives the code editor but it reaches the last box, so typeDocument was added; split layout, confirm placement, real editor :w/:wq/:q and focus moves unchecked live (task 12)

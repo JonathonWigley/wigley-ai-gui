@@ -1,6 +1,6 @@
 # 09 — Practice page: interviewer pane and import box
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 03, 08
 Plan: [plan.md](plan.md)

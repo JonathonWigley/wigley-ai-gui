@@ -241,7 +241,7 @@ does not consume.
 - [x] [Practice page: mode, list and layout](07-practice-page-list.md) — after 06
 
 ### Wave 5
-- [ ] [Practice page: problem workspace](08-practice-workspace.md) — after 07
+- [x] [Practice page: problem workspace](08-practice-workspace.md) — after 07
 
 ### Wave 6
 - [ ] [Practice page: interviewer pane and import box](09-practice-interviewer-import.md) — after 03, 08
@@ -267,10 +267,14 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 05 · e307542a · diff read: practiceManifest, contract types and PracticeChannel, judge/problem-store/progress/practice-runs exports, practiceMainPart present; typecheck clean; npm run lint clean over all practice (closes 04's deferred lint proof); worker ran src/plugins/practice tests 148 green incl. real clang · concerns: case time includes sanitizer crash report, slow symbolizing may read as TLE (ProcessRunner has no env option for ASAN_OPTIONS symbolize=0); UBSan null load exits 0, runtimeError only via stderr rule; files.watch creates <folder>/problems at start; no .exe so not Windows-ready (out of scope)
 - 06 · afe8e279 · diff read: INTERVIEWER/IMPORT_INSTRUCTIONS, both tool definitions, PracticeToolsDeps, startPracticeTools, HOST_ID_WAIT_MS, PracticeSessionsDeps/PracticeSessions/createPracticeSessions present, start.ts wires events, tools and channel; typecheck clean; worker ran practice tests 175 green and lint clean · concerns: PracticeToolsDeps.log unused; AGENTS.md ~322 lists only launch/resume/defaultProfile as chat exports practice uses (also profileOf, send, close); tests use a hand-fired Timers double, not fake timers; tests store row-0 where doc says row-1
 - 07 · bf1cce38 · diff read: practice-state exports, PracticeView/createPracticeView/setFocus/openProblemRow, PracticePlace/practicePlaceSlot/practiceOpenProblemRowCommand, layout.d.ts types, PracticeBaseScope/createPracticeKit present; keymap kp, list keys, page registration, layout register reviewed; typecheck clean; worker ran 18 files 224 tests and lint clean · concerns: practice-state.ts duplicates problem.ts's private DIFFICULTIES; layouts design.md lacks a practice adopter row (task 11); view.dispose disposes its draws though backlog's does not, untested; changed-reread test checks via practice.place
+- 08 · 8de85a0e · diff read: Split axis/sizedPane/setEndHidden, createProblemWorkspace/ProblemWorkspace/WorkspacePane, focusColumn/applyOpened, workspace-state and case-text exports, practiceShowTabCommand/practiceOpenSubmissionRowCommand, PracticePlace pane/problemTab/consoleTab present; AGENTS.md and DESIGN.md split prose read; typecheck clean; worker ran 77 files 1952 tests and lint clean · concerns: edits outside Files: DESIGN.md (stale Split entry) and practice-state.ts (placeOf); task doc said 'type' drives the code editor but it reaches the last box, so typeDocument was added; split layout, confirm placement, real editor :w/:wq/:q and focus moves unchecked live (task 12)
 ### Contract changes
 - driverSource include of solutionPath: a C string literal with \ and " escaped → the path written verbatim, driverSource throwing on a path holding " or a line break · why: clang reads an #include "…" path literally with no escape processing, so escaping breaks any backslash path · consumers: 05 · group 04
 - 05 main/problem-store.ts ProblemStoreDeps gains log: PluginLog (logs unparsable submission files and 'watch stopped: <reason>'); consumers: 06 builds nothing from it (only start.ts builds the store)
 - PracticeViewDeps.opened(problem) set the title-bar context and called mode.picked() → opened only sets the context; a separate picked() dep is called by Enter, a row click and focusMain · why: l and the restore-on-load open keep list focus, and picked() closes a narrow window's side-bar overlay, moving focus to main · consumers: 08, 09 · group 07
+- PracticeView also has showTab, openSubmissionRow and mayStop; PracticeViewDeps gains editor, uiState, timers, run(CommandId), addOverlay, and pushScope takes 'box' | 'confirm' · why: start.ts routes arg commands and mayStop through the view; the workspace needs those deps · consumers: 09 · group 08
+- placeOf(state) returns Pick<PracticePlace, 'selectedSlug' | 'openSlug' | 'filter'>; the view merges the workspace's pane and tabs · why: PracticePlace gained fields the list does not own · consumers: none outside the view · group 08
+- countingEditors.createDocument returns a counted no-op DocumentEditor; adds typeDocument(text) driving the last document editor · why: the testcase box mounts after the code editor, so type reaches the box · consumers: practice start tests · group 08
 ### Rulings
 - 04's `npm run lint` proof moves to 05: check-layers.mts fails a plugin folder with no manifest.ts (line 817), and 05 adds the manifest — typecheck and the five tests prove 04 — a layer break in the root modules surfaces one wave later · lead
 - activateExistingRow checks the owner before the no-row check, logging 'activateExistingRow for session <id> with an owner ignored' — the owner rule holds whether a row exists or not — only the log line differs if wrong · group 01 · group 01
@@ -306,5 +310,13 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 07: select and focus return the same state when nothing changes · group 07
 - 07: default problemRow builds icon and marks then passes them to kit.row as leading/trailing · group 07
 - 07: layout.css rules all scoped under [data-layout-owner='practice'] · group 07
+- 08: applyOpened on the shown slug refreshes in place keeping tabs, pane and drafts; another slug saves old drafts first · group 08
+- 08: reload re-reads the open problem outside the open-request counter, dropped if an open started or openSlug changed; failure logs 'not refreshed <slug>: <err>' with no toast · group 08
+- 08: the place never stores the solution tab · group 08
+- 08: empty noSubmissions draws with the practice.problem kit · group 08
+- 08: setBaseScope only when the confirm's asked flips; a pane change while the confirm shows dismisses it as confirmNo · group 08
+- 08: scroll keys act on the problem body, or the console body when the console holds keys · group 08
+- 08: the workspace mounts into main as soon as an open lands, before show() finishes saving old drafts · group 08
+- 08: a peek answer after leaving the problem is logged and dropped · group 08
 ### Review rounds
 ### Test gate

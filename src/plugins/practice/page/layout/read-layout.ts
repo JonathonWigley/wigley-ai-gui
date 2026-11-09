@@ -21,6 +21,8 @@ const LAYOUT_PARTS: Record<keyof PracticeLayout, true> = {
   resultTab: true,
   caseResult: true,
   confirmBody: true,
+  askBox: true,
+  importBox: true,
 };
 
 // The Practice layout a user's `layout.js` module exports as its default. A

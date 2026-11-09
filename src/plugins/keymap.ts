@@ -265,6 +265,7 @@ export const defaultKeymap = {
         'practice.problem',
         'practice.editor',
         'practice.console',
+        'practice.ask',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -278,6 +279,11 @@ export const defaultKeymap = {
     { keys: '<Leader>kb', scope: 'any', command: 'backlog.showMode' },
     { keys: '<Leader>kp', scope: 'any', command: 'practice.showMode' },
     { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },
+    {
+      keys: '<Leader>vi',
+      scope: 'any',
+      command: 'practice.toggleInterviewer',
+    },
     {
       keys: '<Leader>va',
       scope: 'any',
@@ -839,6 +845,7 @@ export const defaultKeymap = {
       command: 'practice.openKeepingFocus',
     },
     { keys: '/', scope: 'practice.list', command: 'practice.filter' },
+    { keys: 'a', scope: 'practice.list', command: 'practice.importStart' },
     { keys: '<CR>', scope: 'practice.box', command: 'practice.boxAccept' },
     { keys: '<Esc>', scope: 'practice.box', command: 'practice.boxCancel' },
     // A chord fires inside a box and the editor as well, ahead of vim.
@@ -848,6 +855,7 @@ export const defaultKeymap = {
         'practice.problem',
         'practice.editor',
         'practice.console',
+        'practice.ask',
       ] as const
     ).flatMap((scope) => [
       { keys: "<D-'>", scope, command: 'practice.run' as const },
@@ -893,6 +901,32 @@ export const defaultKeymap = {
     { keys: 'y', scope: 'practice.confirm', command: 'practice.confirmYes' },
     { keys: 'n', scope: 'practice.confirm', command: 'practice.confirmNo' },
     { keys: '<Esc>', scope: 'practice.confirm', command: 'practice.confirmNo' },
+    // The ask box sends on Enter in normal and insert mode, as the chat box
+    // does; Esc in its normal mode leaves it.
+    ...[
+      { keys: '<CR>', command: 'practice.askSend' as const },
+      { keys: '<Esc>', command: 'practice.askLeave' as const },
+    ].map((bind) => ({
+      ...bind,
+      scope: 'practice.ask' as const,
+      where: 'box' as const,
+    })),
+    {
+      keys: '<CR>',
+      scope: 'practice.ask',
+      command: 'practice.askSend',
+      mode: 'insert',
+    },
+    {
+      keys: '<CR>',
+      scope: 'practice.import',
+      command: 'practice.importAccept',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'practice.import',
+      command: 'practice.importCancel',
+    },
 
     // ── Notes ──────────────────────────────────────────────────────────────
     { keys: '<Leader>nn', scope: 'any', command: 'notes.open' },

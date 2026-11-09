@@ -4,7 +4,11 @@ import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
+import type {
+  FocusTarget,
+  OuterPanes,
+  ResizeTarget,
+} from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
@@ -23,9 +27,10 @@ import type {
   KitCommands,
   OwnerKitServices,
 } from '../../../shared/page/layout-host/base-kit';
-import type {
-  DrawnPart,
-  RollbackDeps,
+import {
+  type DrawnPart,
+  type RollbackDeps,
+  requireElementIn,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import { createReducerStore } from '../../../shared/page/reducer-store';
@@ -33,6 +38,8 @@ import { textBoxInput } from '../../../shared/page/text-box';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
+import { qualify } from '../../../shared/plugin-manifests';
+import type { ChatMount } from '../../chat/contract';
 import {
   type OpenedProblem,
   type PracticeChannel,
@@ -47,9 +54,12 @@ import type {
   PracticeLayout,
 } from '../layouts/layout';
 import type { practiceManifest } from '../manifest';
+import { createImportBox } from './import-box';
+import { createInterviewerPane } from './interviewer-pane';
 import {
   createPracticeKit,
   type PracticeBaseScope,
+  type PracticeKitScope,
 } from './layout/practice-kit';
 import {
   difficultyCounts,
@@ -80,8 +90,21 @@ export type PracticeCommand = Exclude<
   'showMode' | 'openProblemRow' | 'showTab' | 'openSubmissionRow'
 >;
 
-// The commands the list handles; the workspace handles the rest.
-type ListCommand = Exclude<PracticeCommand, WorkspaceCommand>;
+// The commands the interviewer pane and the import box handle.
+type InterviewerCommand =
+  | 'toggleInterviewer'
+  | 'askSend'
+  | 'askLeave'
+  | 'importStart'
+  | 'importAccept'
+  | 'importCancel';
+
+// The commands the list handles; the workspace and the interviewer handle the
+// rest.
+type ListCommand = Exclude<
+  PracticeCommand,
+  WorkspaceCommand | InterviewerCommand
+>;
 
 const DIFFICULTY_LABELS: Record<
   ListHeaderInput['counts'][number]['difficulty'],
@@ -106,8 +129,15 @@ export interface PracticeViewDeps {
   setResizeTarget(target: ResizeTarget | null): void;
   // Sets the panes the focus keys move between, after each `setScope`.
   setFocusTarget(target: FocusTarget | null): void;
-  pushScope(scope: 'box' | 'confirm'): PushedScope;
+  pushScope(scope: 'box' | 'confirm' | 'import'): PushedScope;
   isShown(): boolean;
+  // Shows Practice mode.
+  showMode(): void;
+  // Sets the panes around the column, the interviewer pane's, while Practice
+  // shows; null as it hides.
+  setOuterPanes(panes: OuterPanes | null): void;
+  // Draws the interviewer's chat view of `sessionId` into `element`.
+  mountChat(element: HTMLElement, sessionId: string): ChatMount;
   // Hears each problem the user picks from the side bar, by click or Enter,
   // and main taking the keys; `l` opens one without picking it.
   picked(): void;
@@ -123,7 +153,7 @@ export interface PracticeViewDeps {
   timers: Timers;
   // Runs a command by its qualified id, as a button does.
   run(command: CommandId): void;
-  // Adds the solution confirm to the page's overlay area.
+  // Adds the solution confirm and the import box to the page's overlay area.
   addOverlay(element: HTMLElement): void;
   // The last page's place, put back once the first list loads; null for none.
   savedPlace: PracticePlace | null;
@@ -140,7 +170,8 @@ export interface PracticeViewDeps {
 // read to land puts `savedPlace` back and opens its problem again, keeping the
 // list's focus; `reload` reads it again (the channel's `changed`); `shown`
 // sets the scope and focus where the keys were left. An opened problem shows
-// in the workspace, which fills the column from then on.
+// in the workspace, which fills the column from then on, with the interviewer
+// pane in its side slot; the import box opens over the page.
 export interface PracticeView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -149,6 +180,8 @@ export interface PracticeView {
   load(): void;
   reload(): void;
   shown(): void;
+  // Practice hid: the interviewer pane gives the column its keys back.
+  hidden(): void;
   // The side bar was hidden: focus leaves it for main.
   sideBarHidden(): void;
   // The side bar opened over main: focus moves to it.
@@ -165,7 +198,8 @@ export interface PracticeView {
   applyOpened(problem: OpenedProblem): void;
   // The one setter of the focus: logs `list focused` or `main focused` when
   // the focus changes to that pane, then sets the scope, resize and focus
-  // targets and DOM focus from it; while `interviewer` holds it, none of them.
+  // targets and DOM focus from it; while `interviewer` holds it, none of them,
+  // and focus leaving `interviewer` tells the pane first.
   setFocus(focus: PracticeFocus): void;
   // Draws the list pane, the rows and the column's part again with `shown`,
   // keeping an open filter, the selection and the focus.
@@ -205,7 +239,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     platform: deps.platform,
     state: deps.state,
   };
-  const kitFor = (scope: PracticeBaseScope, rollback: RollbackDeps) =>
+  const kitFor = (scope: PracticeKitScope, rollback: RollbackDeps) =>
     createPracticeKit(kitServices, scope, rollback);
 
   // ── Workspace ──────────────────────────────────────────────────────────
@@ -236,6 +270,60 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     },
   });
 
+  // ── Interviewer and import ─────────────────────────────────────────────
+  // The open problem's title, for the ask box.
+  let openTitle = '';
+  const interviewer = createInterviewerPane({
+    channel,
+    editor: deps.editor,
+    keys: deps.keys,
+    log: deps.log,
+    toast: deps.toast,
+    setScope: deps.setScope,
+    setResizeTarget: deps.setResizeTarget,
+    setFocusTarget: deps.setFocusTarget,
+    mountChat: deps.mountChat,
+    workspace,
+    view: {
+      setFocus: (focus) => setFocus(focus),
+      focusColumn: () => focusColumn(),
+    },
+    focus: () => store.get().focus,
+    problemTitle: () => openTitle,
+    drawAskBox: (parent, input, frame) =>
+      parts.draw('askBox', parent, (askBox, into, rollback) => {
+        const slot = appSlot(frame, 'textBox', rollback);
+        const box = askBox(into, input, {
+          ...kitFor('ask', rollback),
+          textBox: slot.place,
+        });
+        slot.placeIfLeftOut(requireElementIn(into, box.element, 'askBox'));
+        return box;
+      }),
+  });
+  workspace.sidePane.append(interviewer.element);
+
+  const importBox = createImportBox({
+    channel,
+    log: deps.log,
+    toast: deps.toast,
+    pushScope: () => deps.pushScope('import'),
+    drawBody: (parent, input, frame) =>
+      parts.draw('importBox', parent, (importPart, into, rollback) => {
+        const slot = appSlot(frame, 'textBox', rollback);
+        const box = importPart(into, input, {
+          ...kitFor('import', rollback),
+          textBox: slot.place,
+        });
+        slot.placeIfLeftOut(
+          requireElementIn(into, box.element, 'importBox'),
+          'start',
+        );
+        return box;
+      }),
+  });
+  deps.addOverlay(importBox.element);
+
   // ── Elements ───────────────────────────────────────────────────────────
   // The containers stay app-owned; the list part draws inside the side bar's
   // and places the slots below.
@@ -249,6 +337,11 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   filterFrame.append(filterBox);
   const rowsList = element('ol', 'practice-rows');
   const importHint = element('span', 'practice-import-hint');
+  const importAnchor = deps.keys.anchor(
+    importHint,
+    qualify(PLUGIN_ID, 'importStart'),
+    { scope: 'practice.list', label: 'import' },
+  );
 
   const mainPane = element('div', 'practice-main');
   mainPane.tabIndex = -1;
@@ -480,8 +573,12 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   store.subscribe(notePlace);
 
   const setFocus = (focus: PracticeFocus) => {
-    const isChanged = store.get().focus !== focus;
+    const before = store.get().focus;
+    const isChanged = before !== focus;
     dispatch({ type: 'focus', focus });
+    if (before === 'interviewer' && isChanged) {
+      interviewer.columnTookKeys();
+    }
     if (isChanged && focus !== 'interviewer') {
       deps.log(`${focus} focused`);
     }
@@ -492,6 +589,8 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   const applyOpened = (problem: OpenedProblem) => {
     const slug = problem.summary.slug;
     deps.opened(problem);
+    openTitle = problem.summary.title;
+    interviewer.problemOpened(slug, problem.attempt.id);
     if (slug === workspaceSlug) {
       workspace.refresh(problem);
       return;
@@ -633,9 +732,27 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       }
     },
   };
+  const interviewerCommands: Record<InterviewerCommand, () => void> = {
+    toggleInterviewer() {
+      if (deps.isShown()) {
+        interviewer.toggle();
+        return;
+      }
+      deps.showMode();
+      if (!interviewer.isShown()) {
+        interviewer.toggle();
+      }
+    },
+    askSend: () => interviewer.send(),
+    askLeave: () => interviewer.leaveBox(),
+    importStart: () => importBox.open(),
+    importAccept: () => importBox.accept(),
+    importCancel: () => importBox.cancel(),
+  };
   const commands: Record<PracticeCommand, () => void> = {
     ...listCommands,
     ...workspace.commands,
+    ...interviewerCommands,
   };
 
   const focusColumn = () => {
@@ -655,8 +772,13 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       void refreshOpen();
     },
     shown() {
+      deps.setOuterPanes(interviewer.outerPanes);
       render(true);
       deps.log('shown');
+    },
+    hidden() {
+      interviewer.modeHidden();
+      deps.setOuterPanes(null);
     },
     sideBarHidden() {
       if (store.get().focus === 'list') {
@@ -677,6 +799,8 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       drawListPane();
       drawMain(true);
       workspace.setLayouts(next);
+      interviewer.redraw();
+      importBox.redraw();
       render(true);
       if (filterScope !== null) {
         filterBox.focus();
@@ -688,6 +812,9 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       rowDraws = disposeDraws(rowDraws);
       noProblemDraw?.dispose();
       noProblemDraw = null;
+      importAnchor.dispose();
+      importBox.cancel();
+      interviewer.dispose();
       workspace.dispose();
       parts.dispose();
     },

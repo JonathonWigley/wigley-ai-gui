@@ -94,6 +94,24 @@ export const practiceManifest = definePlugin({
     leaveBox: { label: 'leave the box', group: 'box', runsIn: 'page' },
     confirmYes: { label: 'open it', group: 'confirm', runsIn: 'page' },
     confirmNo: { label: 'keep solving', group: 'confirm', runsIn: 'page' },
+    toggleInterviewer: {
+      label: 'show or hide the interviewer',
+      group: 'interviewer',
+      runsIn: 'page',
+    },
+    askSend: {
+      label: 'ask the interviewer',
+      group: 'interviewer',
+      runsIn: 'page',
+    },
+    askLeave: { label: 'leave the box', group: 'interviewer', runsIn: 'page' },
+    importStart: { label: 'import problems', group: 'import', runsIn: 'page' },
+    importAccept: {
+      label: 'start the import',
+      group: 'import',
+      runsIn: 'page',
+    },
+    importCancel: { label: 'cancel', group: 'import', runsIn: 'page' },
   },
   scopes: {
     list: 'In the practice list',
@@ -102,6 +120,8 @@ export const practiceManifest = definePlugin({
     console: 'In the practice console',
     box: 'In the practice filter box',
     confirm: 'In a practice confirmation',
+    ask: 'In the interviewer ask box',
+    import: 'In the import box',
   },
   settings: {
     folder: '~/leetcode',
