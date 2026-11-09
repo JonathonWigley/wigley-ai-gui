@@ -800,15 +800,16 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
           }
         }
       }
-      // A last good version starts at once when the new one fails, so a
-      // new part whose handlers differ stops as a `restart`.
+      // A last good version with a main part starts it at once when the new
+      // one fails, so a new part whose handlers differ stops as a `restart`.
       const good = lastGood.get(id);
-      const restoresLastGood = good !== undefined && good !== next;
+      const lastGoodRestartsMain =
+        good !== undefined && good !== next && good.main !== null;
       const nextRuns = await startEach(
         id,
         stopped,
         () => true,
-        restoresLastGood ? 'restart' : 'end',
+        lastGoodRestartsMain ? 'restart' : 'end',
       );
       if (isDisposed) {
         return;

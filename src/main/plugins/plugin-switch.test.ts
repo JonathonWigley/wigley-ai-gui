@@ -1025,11 +1025,41 @@ describe('createPluginSwitch', () => {
       u: { on: true, problem: 'page.js failed: boom' },
       log: 'reloaded u',
     },
+    {
+      case: 'the handlers differ, and the last good has no main part',
+      held: { hasMain: false },
+      next: { manifest: { ...GO_IN_MAIN } },
+      calls: [
+        'paused u,d',
+        'servedChanged',
+        'setPlugins',
+        'page stop u',
+        'main remove u restart',
+        'main add u',
+        'main stop d restart',
+        'main start u',
+        'main stop u',
+        'applied u',
+        'applied u,d',
+        'main remove u',
+        'setPlugins',
+        'applied d',
+        'servedChanged',
+        'main start d',
+        'applied ',
+        'servedChanged',
+        'paused',
+        'servedChanged',
+        'page start u,d',
+      ],
+      u: { on: true, problem: 'Commands and handlers differ: missing go' },
+      log: 'reload of u failed: Commands and handlers differ: missing go; the last good version runs',
+    },
   ])(
     'catalogChange_ReloadStartFails_RestartsTheLastGood: $case',
     async (row) => {
       const switched = setup({
-        entries: [user('u'), user('d', { manifest: DEPENDS_ON_U })],
+        entries: [user('u', row.held), user('d', { manifest: DEPENDS_ON_U })],
       });
       switched.page.stopReply = ['d', 'u'];
       switched.main.startErrors = { u: [...(row.startErrors ?? [])] };
@@ -1145,14 +1175,17 @@ describe('createPluginSwitch', () => {
   );
 
   // `p` depends on `u`; `u` stops running, so `p` is withheld and no part of
-  // it runs, in either process, nor after a switch-off while withheld.
+  // it runs, in either process, nor after a switch-off while withheld. Its
+  // page part stops before its main part, and its slots clear last.
   const PAGE_ON_U = { dependsOn: { main: [], page: ['u'] } };
+  const STOP_OF_P = /^(page stop|main stop|clearOwner) p\b/;
   it.each([
     {
       case: 'page only, no main part: u leaves, then comes back',
       p: { hasMain: false, manifest: PAGE_ON_U },
       fails: false,
       next: (_u: CatalogEntry, p: CatalogEntry) => [p],
+      stops: ['page stop p', 'clearOwner p'],
       switchesOff: false,
       comesBack: true,
     },
@@ -1164,6 +1197,7 @@ describe('createPluginSwitch', () => {
         user('u', { revision: 2 }),
         p,
       ],
+      stops: ['page stop p', 'clearOwner p'],
       switchesOff: false,
       comesBack: false,
     },
@@ -1172,6 +1206,7 @@ describe('createPluginSwitch', () => {
       p: { manifest: PAGE_ON_U },
       fails: false,
       next: (_u: CatalogEntry, p: CatalogEntry) => [p],
+      stops: ['page stop p', 'main stop p', 'clearOwner p'],
       switchesOff: true,
       comesBack: true,
     },
@@ -1180,6 +1215,7 @@ describe('createPluginSwitch', () => {
       p: { manifest: { dependsOn: { main: ['u'], page: [] } } },
       fails: false,
       next: (_u: CatalogEntry, p: CatalogEntry) => [p],
+      stops: ['page stop p', 'clearOwner p'],
       switchesOff: false,
       comesBack: false,
     },
@@ -1200,8 +1236,7 @@ describe('createPluginSwitch', () => {
         on: false,
         problem: 'Needs plugin "u", which did not start',
       });
-      expect(calls).toContain('page stop p');
-      expect(calls).toContain('clearOwner p');
+      expect(calls.filter((call) => STOP_OF_P.test(call))).toEqual(row.stops);
       expect(calls).not.toContain('page start p');
       expect(switched.started.has('p')).toBe(false);
       if (row.switchesOff) {

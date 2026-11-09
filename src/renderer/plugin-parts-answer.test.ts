@@ -6,6 +6,7 @@ import type { AppConfig } from '../contracts/settings';
 import {
   createPluginPartsAnswers,
   type PluginPartsAnswerDeps,
+  type PluginPartsAnswers,
 } from './plugin-parts-answer';
 
 // `c` depends on `b` in the page, as the fake host stops them.
@@ -347,7 +348,7 @@ const ROWS: Row[] = [
 // push that switches `disabledDuringLoad` off before that import finishes.
 const INTERLEAVED_ROWS: {
   case: string;
-  later(answers: ReturnType<typeof createPluginPartsAnswers>): Promise<unknown>;
+  later(answers: PluginPartsAnswers): Promise<unknown>;
   disabledDuringLoad?: string[];
   reply: unknown;
   steps: string[];
