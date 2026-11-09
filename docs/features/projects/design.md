@@ -98,7 +98,8 @@ Sessions started through Other folder, sessions already open, and saved ones all
 ## Starting from an agent
 
 `start_session` and chat's `launch` take `project` and, for a pool project, `branch`, in place of `projectDir`; the
-profile is the project's, else the one the caller names, else the caller's own. The start runs the same path as the
+profile is the project's, else the one the caller names, else the caller's own; a named profile that differs from
+the project's is refused. The start runs the same path as the
 prompt, the claim on the row included.
 
 ## Decisions

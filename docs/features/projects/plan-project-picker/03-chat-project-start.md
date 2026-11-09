@@ -159,7 +159,8 @@ The pool start, as a new function beside `startNew`, for `start` (origin `new`, 
 1. `requireNotDetached(hostId)`; `hostId = deps.randomUuid()`.
 2. `openRow(placeholder, profile.name, profileDirOf(profile), { …the same opening `openAndStart` builds for a new
    session…, claim: { state: 'claiming', abort: new AbortController(), origin, branch, isQueuedShown: false } },
-   options)`.
+   options)`. A row opened with a claim skips `readBranch` and `readWorktreeRoots` at open: the placeholder's branch
+  and worktrees are not the session's.
 3. Add the info notice `Claiming a Unity clone on <branch>…`. A launch then `appendQueued`s its message (so it shows in
    `chat.queued` while the claim runs and goes out first once the process starts). Log the claiming line.
 4. Call `provider.claim({ pool, branch, hostSessionId: session.hostId, rowId: session.sessionId }, abort.signal,
@@ -173,15 +174,21 @@ When the claim settles:
 
 - **Row gone or chat detached** (`held.get(sessionId) !== session || isDetached`): log the settled-after-close line
   and do nothing else. (Closing the row and `detachAll` aborted the signal; the provider answers `cancelled`, 04.)
-- **`ok: true`**, in this order: `session.claim = null`; `sessions.relocate(sessionId, result.path)`;
-  `session.slots.relocate(result.path)`; `session.slots.setInfo({ repo: path.basename(result.path) })`; `readBranch`
-  and `readWorktreeRoots` for the new folder; the note notice when `result.note !== null`; `emitSessionOpened` with the
-  clone as `projectDir` and the claim's origin; log the claimed line. Then, in one `try`: `profileNamed(<the row's
+- **`ok: true`**, in this order, the move inside one `try`: `sessions.relocate(sessionId, result.path)`;
+  `session.slots.relocate(result.path)`; `session.slots.setInfo({ repo: path.basename(result.path), branch: null,
+  worktrees: [] })` and `session.worktreeRoots` reset, so nothing of the placeholder clone stays on the row;
+  `readBranch` and `readWorktreeRoots` for the new folder; then `session.claim = null`. A throw in the move (the row
+  ended under it, a listener throwing) takes the `ok: false` branch below with the throw's text as the message, so a
+  row never rests claim-less in the placeholder. After the move: the note notice when `result.note !== null`;
+  `emitSessionOpened` with the clone as `projectDir` and the claim's origin; log the claimed line. Then, in one `try`: `profileNamed(<the row's
   profile>)` read again (settings may have changed during the claim), `requireHarness()`, `startProcess(session,
   harness, profile, false)`, `writeNextQueued(session)`. A throw there adds the error notice `Claude did not start:
   <error>`, sends `sessionRested` with the error text, and logs; the row rests in the clone, saved, and its queued
   messages stay queued for the next send, which starts the process there as any resting row's does. Last, `save()`.
-- **`ok: false`**: `session.claim = { state: 'failed' }`; the error notice `Unity clone not claimed: <message>`;
+- A project start does not record its folder in recent folders (`deps.recent.record` is skipped for a row opened
+  with a claim, and for a folder project's start): recents feed the Other folder step, and a claimed clone varies run
+  to run.
+- **`ok: false`** (or a throw in the move above): `session.claim = { state: 'failed' }`; the error notice `Unity clone not claimed: <message>`;
   `returnAllHeld(session)`, so the launch message and anything sent during the claim go back to the box; log the
   failed line. The row stays resting in the placeholder and is never saved.
 
@@ -230,8 +237,8 @@ claimed one, before its process starts. This file is outside plan.md's File Stru
 ### `start.ts`
 
 - **Projects held.** `let projectSettings = api.settings().projects;` and `let projects = readProjects(projectSettings,
-  services.log);` once at start, so a bad entry logs once per settings change, not per read. If 02 already holds a
-  checked list in `start.ts`, use that one instead of a second read.
+  services.log);` once at start, so a bad entry logs once per settings change, not per read. This task creates
+  `projectSettings` and `projects`; 02 adds only `poolProviders` to `start.ts`.
 - **Settings change.** In the existing `api.onSettingsChanged` listener (or a second one beside it): when
   `!isSameJson(settings.projects, projectSettings)`, store the new raw value, recompute `projects`, and call
   `namer.changed()`. A change to any other setting re-reads nothing.
@@ -254,8 +261,9 @@ claimed one, before its process starts. This file is outside plan.md's File Stru
 ### `start_session`
 
 - Input gains `project` and `branch` (strings). `folder` and `project` together → error `Name folder or project, not
-  both.`; `branch` without `project` → `branch is only for a project.`; a non-string or blank `project` →
-  `project must be a non-empty string.`; a non-string or blank `branch` → `branch must be a non-empty string.` Each
+  both.`; `branch` without `project` → `branch is only for a project.`; a JSON `null` `project` or `branch` is absent, as
+  `chooseFolder` and `chooseProfile` treat null; a non-string or blank `project` → `project must be a non-empty
+  string.`; a non-string or blank `branch` → `branch must be a non-empty string.` Each
   starts nothing and stats nothing. These checks run after the prompt check and before the profile choice.
 - With `project`: no folder stat. The profile is the named one when one is named (checked against `profileNames` as
   today), else the project's own `profile` from `deps.projects()` when the project is found and has one, else
@@ -401,29 +409,39 @@ New `describe('createChatSessions projects')` in `chat-sessions.test.ts`; every 
 3. **`start_PoolProject_OpensRestingInTheFirstCloneAndClaims`** — returns `ROW_ID` synchronously; `opened[0].projectDir`
    `'/pool/ng-1'`; `openOptions` `[{ select: true }]`; `harness.processes` `[]`; the row's entries are one info notice
    `Claiming a Unity clone on main…`; `claims[0].request` equals `{ pool: 'ng', branch: 'main', hostSessionId:
-   'uuid-1', rowId: ROW_ID }`; no `sessionOpened` emitted; the last saved snapshot's `sessions` is `[]`. Break: the
+   'uuid-1', rowId: ROW_ID }`; no `sessionOpened` emitted; after `chat.titleChanged(ROW_ID)` the last saved snapshot's
+   `sessions` is `[]`; `readBranch` was not called for `/pool/ng-1`. Break: the
    agent started in the placeholder; the row saved mid-claim; wrong ids to the claim.
 4. **`claim_Lands: $name`** (`it.each`): settle the claim, `await flush()`, then assert `relocated` `[[ROW_ID,
    '/pool/ng-2']]`, the slot's `projectDir` `'/pool/ng-2'`, `processes[0].request` `projectDir` `'/pool/ng-2'` and
    `sessionId` `'uuid-1'`, one `sessionOpened` with `projectDir: '/pool/ng-2'` and `origin: 'new'`, the last saved
-   snapshot holding one record with `projectDir: '/pool/ng-2'`, and the row's notices (text and tone) equal the row's.
+   snapshot holding one record with `projectDir: '/pool/ng-2'`, the row's `worktrees` `[]` until the clone's read
+   lands, the recent folders unchanged, and the row's notices (text and tone) equal the row's.
 
    | name | result | notices |
    |---|---|---|
    | ok | `{ ok: true, path: '/pool/ng-2', note: null }` | `[['Claiming a Unity clone on main…','info']]` |
    | diverged keeps the clone with the note | `{ ok: true, path: '/pool/ng-2', note: 'main diverged from origin' }` | `[['Claiming a Unity clone on main…','info'], ['main diverged from origin','info']]` |
 
-   Break: relocate or the slot move skipped; started before the move; no save after; the note dropped.
+   Break: relocate or the slot move skipped; started before the move; no save after; the note dropped; the
+   placeholder's worktrees kept; the clone recorded in recents.
+
+   A third row, **the move throws**: the fake `sessions.relocate` throws `relocate for unknown session row-1` → the
+   last notice `Unity clone not claimed: relocate for unknown session row-1`, tone `error`, `processes` `[]`, a
+   following `chat.send(ROW_ID, IDLE_SEND)` rejects `This session has no Unity clone`. Break: a claim-less row left in
+   the placeholder, where the next send starts an agent in an unclaimed clone.
 5. **`claim_Queued_ShowsTheWaitingNoticeOnce`** — call `claims[0].queued()` twice: exactly one `Waiting for a Unity
    clone…` info notice. Break: a notice per call.
 6. **`claim_Fails_RowRestsUnsavedAndRefusesSends`** — settle `{ ok: false, error: 'dirty', message: 'clone 2 has
    uncommitted changes' }`: the last notice is `Unity clone not claimed: clone 2 has uncommitted changes`, tone
    `error`; `processes` `[]`; `relocated` `[]`; after `chat.titleChanged(ROW_ID)` the last saved snapshot's `sessions`
    is `[]`; `chat.send(ROW_ID, IDLE_SEND)` rejects with `This session has no Unity clone`, and `processes` stays `[]`;
-   `chat.clear(ROW_ID)` throws the same. Break: a failed row saved; a send starting the agent in the unclaimed
+   `chat.clear(ROW_ID)` throws the same; `chat.closed(ROW_ID, 'user')` emits no `sessionClosed`. Break: a failed row saved; a send starting the agent in the unclaimed
    placeholder.
 7. **`claimingRow_SendQueuesUntilTheClaimLands`** — while claiming, `chat.send(ROW_ID, IDLE_SEND)`: `processes` `[]`
-   and `chat.queued` holds it; `clear` throws `still claiming`; settle ok: `processes[0].calls` equals `[{ method:
+   and `chat.queued` holds it; `clear` throws `still claiming`; `sendAllNow(ROW_ID)` writes nothing and keeps the
+   queue; `sendNow` is ignored and logged; the snapshot's `selectedHostSessionId` is null while the selected row
+   claims; settle ok: `processes[0].calls` equals `[{ method:
    'send', text: 'idle send', imageCount: 0 }]`. Break: a send during the claim starting a process.
 8. **`claimingRow_Closed_AbortsAndIgnoresTheResult`** — `chat.closed(ROW_ID, 'user')`: `claims[0].signal.aborted`
    true; no `sessionClosed` emitted; `ownedEnds()` 1; settle ok afterwards: `relocated` `[]`, `processes` `[]`, the
@@ -476,6 +494,9 @@ gain `homeDir: '/home/me'` and `paths.expandTilde` (`posixPaths.expandTilde`).
 16. **`branches_ThroughTheRegisteredProvider`** — `exports.addPoolProvider(<double with folders {ng: [...]}>)`;
     `namerChanges` +1 at the registration; `invoke('branches', 'New Games', false)` resolves pinned first. Break: the
     channel not wired to chat-sessions, or the registry not passed to it.
+    Also add the row 02 hands over to `exports_ConsumerDisposed_DropsContribution`: `addPoolProvider` contributed,
+    `consumer.dispose()`, then `invoke('branches', 'New Games', false)` rejects `No Unity pool provider` and
+    `namerChanges` rose by one more. Break: a dependent's stop leaving its provider registered.
 
 **`start-session-tool.test.ts`.** `Row` gains `projects?: ChatProject[]` (default `[AI_DEV_TOOL, NEW_GAMES_TOOL]`:
 `{ kind: 'folder', name: 'AI Dev', folder: '/dev/ai', profile: null }` and `{ kind: 'pool', name: 'New Games', pool:
@@ -491,6 +512,7 @@ gain `homeDir: '/home/me'` and `paths.expandTilde` (`posixPaths.expandTilde`).
 | folder and project together | `{ prompt: 'go', folder: '/other', project: 'AI Dev' }` | errors `['folder', 'project']` | false |
 | a branch with no project | `{ prompt: 'go', branch: 'main' }` | errors `['branch']` | false |
 | a blank project | `{ prompt: 'go', project: '  ' }` | errors `['project']` | false |
+| a null project is absent | `{ prompt: 'go', project: null }` | the same launch and success text as `{ prompt: 'go' }` | the same as `{ prompt: 'go' }` |
 | a non-string branch | `{ prompt: 'go', project: 'New Games', branch: 7 }` | errors `['branch']` | false |
 
 Breaks: a project launch statting the caller's folder; the fixed profile ignored; the named profile silently replaced;

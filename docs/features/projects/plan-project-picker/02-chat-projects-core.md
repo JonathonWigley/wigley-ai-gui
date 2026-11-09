@@ -70,8 +70,7 @@ export interface PoolProviders {
 export function createPoolProviders(): PoolProviders;
 ```
 
-`projectOf` carries a fifth parameter, `paths`, that plan.md's signature lacks: see Decisions, Path compare. The lead
-reconciles plan.md and task 03 with it.
+`projectOf` takes `paths` as its fifth parameter (plan.md's signature; Decisions, Path compare).
 
 In `src/plugins/chat/main/start.ts`: `const poolProviders = createPoolProviders();` inside `chatMainPart.start`, next
 to `folderChoices`, which task 03 reads through `poolProviders.current()`.
@@ -100,6 +99,10 @@ says; each check below reads the element as `unknown`. An element failing a chec
 
 `projects[<index>] <name> skipped: <fault>` — `<index>` its place in `raw`, `<name>` its `name` as
 `JSON.stringify` writes it when the name is a string, else the word `unnamed`.
+
+A key whose value is JSON `null` counts as absent, as `start_session` treats a null `folder` or `profile`: a
+hand-written `"profile": null` keeps the project with no fixed profile. Add one table row: `{ name: 'A', folder:
+'/a', profile: null, pool: null }` → kept as a folder project, `profile` null.
 
 Checks, first failing one wins:
 
@@ -167,7 +170,7 @@ nothing in this task reads the provider through the part; task 03 adds that row 
   `RecentFolder`, each with a comment: `ProjectSetting` is one element of the `projects` setting as written, its
   fields unchecked by the settings check; `ChatProject` one entry `readProjects` kept, `folder` unexpanded;
   `PoolClaimResult.note` the CLI's message on a `diverged` claim, else null, and `error` the CLI's error code
-  (`dirty`, `unknown-branch`, `no-cli`, `internal`); `PoolProvider.folders` the pool's clone paths by clone number,
+  (`dirty`, `unknown-branch`, `no-cli`, `internal`, and `cancelled` when the claim's signal aborted, task 04; open-ended `string`); `PoolProvider.folders` the pool's clone paths by clone number,
   `[]` for an unknown pool, `branches` origin's branch names newest commit first (`refresh` true fetching first),
   `claim` claiming a clone on `branch` for the session's ids, calling `queued` when the claim waits in the pool's
   queue, and stopping the claim when `signal` aborts.
