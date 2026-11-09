@@ -1,6 +1,6 @@
 # 02 — Large state records a reported plan
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -52,3 +52,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit df8e5262 · proof: diff read; typecheck clean outside task 01's in-progress files; worker ran workflow-large tests (471) and lint · concerns: design.md Signals not updated for planReported — left to task 06

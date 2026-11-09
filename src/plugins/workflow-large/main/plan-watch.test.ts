@@ -296,7 +296,7 @@ describe('createPlanWatch', () => {
     expect(subject.signals).toEqual(signals);
   });
 
-  it('follow_PlanInTwoCheckouts_SignalsTheNewestCopy', async () => {
+  it('follow_PlanInTwoCheckouts_SignalsTheMovedCopy', async () => {
     const { files, writeAt } = clockedFiles();
     await writeAt(10, PLAN_FILE, PLAN_NONE);
     await writeAt(20, `${W_PLAN_DIR}/plan.md`, PLAN_ONE);
@@ -306,11 +306,15 @@ describe('createPlanWatch', () => {
     await settled();
     await writeAt(30, `${W_PLAN_DIR}/plan.md`, PLAN_TWO);
     await settled();
-    await writeAt(40, PLAN_FILE, PLAN_ALL);
+    // A checkout rewrites the main copy's time and not its progress.
+    await writeAt(40, PLAN_FILE, PLAN_NONE);
+    await settled();
+    await writeAt(50, PLAN_FILE, PLAN_ALL);
     await settled();
 
     expect(signals).toEqual([
       changed(PLAN_ONE),
+      changed(PLAN_TWO),
       changed(PLAN_TWO),
       changed(PLAN_ALL),
     ]);
@@ -350,7 +354,7 @@ describe('createPlanWatch', () => {
       step: (_watch: PlanWatch, files: MemoryFiles) =>
         files.write(`${GIT_FOLDER}/worktrees/w/gitdir`, '/w/.git'),
       deafGitFolder: false,
-      signals: [changed(PLAN_ONE), changed(PLAN_ONE), changed(PLAN_ALL)],
+      signals: [changed(PLAN_ONE), changed(PLAN_TWO), changed(PLAN_ALL)],
     },
     {
       by: 'check',
@@ -358,7 +362,7 @@ describe('createPlanWatch', () => {
       added: '/w',
       step: async (watch: PlanWatch) => watch.check('s1'),
       deafGitFolder: false,
-      signals: [changed(PLAN_ONE), changed(PLAN_ONE), changed(PLAN_ALL)],
+      signals: [changed(PLAN_ONE), changed(PLAN_TWO), changed(PLAN_ALL)],
     },
     {
       by: 'another change in git folder',
@@ -378,7 +382,7 @@ describe('createPlanWatch', () => {
       // The git folder watch hears the nested write as `worktrees`, as Node's
       // may not, so only the `worktrees` watch can bring the new copy in.
       deafGitFolder: true,
-      signals: [changed(PLAN_ONE), changed(PLAN_ONE), changed(PLAN_ALL)],
+      signals: [changed(PLAN_TWO), changed(PLAN_TWO), changed(PLAN_ALL)],
     },
   ])(
     'listAgain_WorktreeAdded_WatchesTheNewCopy ($by)',
@@ -553,7 +557,7 @@ describe('createPlanWatch', () => {
     watch.check('s1');
     await settled();
 
-    expect(signals).toEqual([changed(PLAN_ONE), changed(PLAN_TWO), PLAN_GONE]);
+    expect(signals).toEqual([changed(PLAN_TWO), changed(PLAN_TWO), PLAN_GONE]);
   });
 
   it('follow_OpenFails_DisposesWhatItOpened', async () => {

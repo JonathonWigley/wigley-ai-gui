@@ -1,6 +1,6 @@
 # 03 — plan.py reports its folder
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -59,3 +59,4 @@ Commit:    one commit for the group, in the marketplace worktree
 
 ## Proof
 
+Commit marketplace 7270a1d · proof: diff read; plan tests 32 OK with and without the real env vars, no plan-runs leak; check_manifests passes · concerns: report test lives in a new class for the close row's features-home layout

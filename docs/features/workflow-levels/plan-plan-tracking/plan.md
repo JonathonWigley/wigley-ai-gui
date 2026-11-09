@@ -164,8 +164,8 @@ Shared names (every task uses them as written here):
 
 ### Wave 1
 - [ ] [The moved-copy reader](01-moved-copy-reader.md)
-- [ ] [Large state records a reported plan](02-reported-state.md)
-- [ ] [plan.py reports its folder](03-plan-py-report.md)
+- [x] [Large state records a reported plan](02-reported-state.md)
+- [x] [plan.py reports its folder](03-plan-py-report.md)
 
 ### Wave 2
 - [ ] [The plan watch reads the reported copy](04-watch-reported-copy.md) — after 01, 02
@@ -184,7 +184,11 @@ Shared names (every task uses them as written here):
 Review base: 12745c21
 
 ### Groups
+- 02 · df8e5262 · diff read; typecheck clean outside task 01's in-progress files; worker ran workflow-large tests (471) and lint · concerns: design.md Signals not updated for planReported — left to task 06
+- 03 · marketplace 7270a1d · diff read; plan tests 32 OK with and without the real env vars, no plan-runs leak; check_manifests passes · concerns: report test lives in a new class for the close row's features-home layout
 ### Contract changes
 ### Rulings
+- fileWritten and make args go through followPlanDir (new folder clears the mark, held folder keeps it); the planReported event calls setPlanDir and sets the mark · group 02
+- plan_folder no longer resolves anything; the folder argument goes to report_plan_folder as given and is abspath'd there · group 03
 ### Review rounds
 ### Test gate

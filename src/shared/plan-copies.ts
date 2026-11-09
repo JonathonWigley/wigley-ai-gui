@@ -1,6 +1,7 @@
 import { type Files, isMissingFile, readIfPresent } from '../contracts/files';
 import type { Git } from '../contracts/git';
 import type { Paths } from '../contracts/paths';
+import { isSameJson } from './json';
 import { type PlanProgress, readPlanProgress } from './plan-progress';
 
 // One checkout's copy of a plan folder: `planDir` in `checkout`, and the
@@ -9,6 +10,15 @@ export interface PlanCopy {
   readonly planDir: string;
   readonly checkout: string;
   readonly changedAt: number;
+  // True for the git main tree's copy. `readCopyAt` does not look the tree
+  // up and sets false.
+  readonly isMainTree: boolean;
+}
+
+// A copy with its progress.
+export interface ReadCopy {
+  readonly copy: PlanCopy;
+  readonly progress: PlanProgress;
 }
 
 export interface PlanCopyDeps {
@@ -41,8 +51,9 @@ export async function repoTop(
 
 // The copies of `planDir` that hold a `plan.md`: the same repo-relative folder
 // in each checkout of its clone, in `git worktree list` order (the main tree
-// first). Outside a clone, or when git cannot list the checkouts, the copy at
-// `planDir` alone. Rejects on a files failure other than a missing file.
+// first), each marked whether it is the main tree's. Outside a clone, or when
+// git cannot list the checkouts, the copy at `planDir` alone, marked the main
+// tree's. Rejects on a files failure other than a missing file.
 export async function planCopies(
   planDir: string,
   deps: PlanCopyDeps,
@@ -68,27 +79,55 @@ export async function planCopies(
   }
   const copies = await Promise.all(
     trees.map((tree) =>
-      copyAt(paths.join(tree.path, ...segments), tree.path, deps),
+      copyAt(paths.join(tree.path, ...segments), tree.path, tree.isMain, deps),
     ),
   );
   return copies.filter((copy) => copy !== null);
 }
 
-// The copy with the largest `changedAt`, the earlier one in `planCopies`
-// order on a tie; null when there is none. A checkout, merge or pull rewrites
-// modified times, so the newest copy can move to a tree whose progress did not
-// change.
-export async function newestPlanCopy(
+// The copy a run moved, with its progress, among the copies whose `plan.md`
+// reads: with no main tree's copy, the newest copy. Otherwise the newest
+// worktree copy whose progress differs from the main tree's and has no fewer
+// ticked boxes, else the main tree's copy: a run only ticks boxes forward, so
+// a copy behind main's is an idle worktree left at an older state. Newest is
+// the largest `changedAt`, the earlier in `planCopies` order on a tie. Null
+// when no copy reads.
+export async function readMovedCopy(
   planDir: string,
   deps: PlanCopyDeps,
-): Promise<PlanCopy | null> {
-  let newest: PlanCopy | null = null;
-  for (const copy of await planCopies(planDir, deps)) {
-    if (newest === null || copy.changedAt > newest.changedAt) {
-      newest = copy;
+): Promise<ReadCopy | null> {
+  const copies = await planCopies(planDir, deps);
+  const progresses = await Promise.all(
+    copies.map((copy) => readPlanCopy(copy, deps)),
+  );
+  const reads: ReadCopy[] = [];
+  copies.forEach((copy, index) => {
+    const progress = progresses[index];
+    if (progress !== null) {
+      reads.push({ copy, progress });
     }
+  });
+  const main = reads.find((read) => read.copy.isMainTree);
+  if (main === undefined) {
+    return newestRead(reads);
   }
-  return newest;
+  return (
+    newestRead(reads.filter((read) => isMovedFromMain(read, main))) ?? main
+  );
+}
+
+// The copy at `planDir` alone with its progress, its tree not looked up;
+// null when `planDir` holds no `plan.md` file.
+export async function readCopyAt(
+  planDir: string,
+  deps: PlanCopyDeps,
+): Promise<ReadCopy | null> {
+  const copy = await copyAt(planDir, planDir, false, deps);
+  if (copy === null) {
+    return null;
+  }
+  const progress = await readPlanCopy(copy, deps);
+  return progress === null ? null : { copy, progress };
 }
 
 // The copy's progress, its task statuses read from the copy's own task
@@ -121,6 +160,27 @@ export async function readPlanCopy(
   return readPlanProgress(planText, taskTexts);
 }
 
+// Whether `read` is a worktree copy whose progress moved from the main tree's
+// `main`: different, and with no fewer ticked boxes.
+function isMovedFromMain(read: ReadCopy, main: ReadCopy): boolean {
+  const isWorktreeCopy = !read.copy.isMainTree;
+  const differsFromMain = !isSameJson(read.progress, main.progress);
+  const isBehindMain = read.progress.checked < main.progress.checked;
+  return isWorktreeCopy && differsFromMain && !isBehindMain;
+}
+
+// The read with the largest `changedAt`, the earlier one on a tie; null when
+// there is none.
+function newestRead(reads: readonly ReadCopy[]): ReadCopy | null {
+  let newest: ReadCopy | null = null;
+  for (const read of reads) {
+    if (newest === null || read.copy.changedAt > newest.copy.changedAt) {
+      newest = read;
+    }
+  }
+  return newest;
+}
+
 // `planDir`'s nearest existing folder, walking up to a root, which is its own
 // parent.
 async function nearestFolder(
@@ -144,7 +204,7 @@ async function copyAtPlanDir(
   planDir: string,
   deps: PlanCopyDeps,
 ): Promise<PlanCopy[]> {
-  const copy = await copyAt(planDir, planDir, deps);
+  const copy = await copyAt(planDir, planDir, true, deps);
   return copy === null ? [] : [copy];
 }
 
@@ -152,6 +212,7 @@ async function copyAtPlanDir(
 async function copyAt(
   planDir: string,
   checkout: string,
+  isMainTree: boolean,
   deps: PlanCopyDeps,
 ): Promise<PlanCopy | null> {
   const plan = await deps.files.stat(deps.paths.join(planDir, 'plan.md'));
@@ -159,7 +220,9 @@ async function copyAt(
     return null;
   }
   const changedAt = await newestChange(planDir, deps);
-  return changedAt === null ? null : { planDir, checkout, changedAt };
+  return changedAt === null
+    ? null
+    : { planDir, checkout, changedAt, isMainTree };
 }
 
 // The largest modified time of `plan.md` and the task documents directly in

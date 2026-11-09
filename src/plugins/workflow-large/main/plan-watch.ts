@@ -4,11 +4,10 @@ import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import {
-  newestPlanCopy,
   planCopies,
   type PlanCopy,
   type PlanCopyDeps,
-  readPlanCopy,
+  readMovedCopy,
   repoTop,
 } from '../../../shared/plan-copies';
 import type { WorkflowSignal } from '../../workflow/contract';
@@ -16,11 +15,11 @@ import { largeSignal } from '../contract';
 
 // Watches every copy of each session's plan folder (the folder in each
 // checkout of its clone) and git's shared folder, signalling `planChanged`
-// with the newest copy's progress on each read and `planGone` once when no
+// with the moved copy's progress on each read and `planGone` once when no
 // copy is left, which closes the watch. `follow` moves the session's watch to
 // `planDir` (null: none); following the folder it already watches does
 // nothing, unless `planGone` closed that watch, which `follow` reopens.
-// `check` lists the copies again and reads the newest, for a delete or a new
+// `check` lists the copies again and reads the moved one, for a delete or a new
 // worktree the OS watcher may not report; it does nothing while the watch is
 // still opening or after `planGone` closed it. A change to git's worktree list
 // lists the copies again too, and each list reopens a git folder watch that
@@ -169,18 +168,16 @@ export function createPlanWatch(deps: {
 
   const read = (sessionId: string, entry: Watched) => {
     const isCurrent = startCall(sessionId, latestReads);
-    const readNewest = async () => {
-      const copy = await newestPlanCopy(entry.planDir, copyDeps);
-      const progress =
-        copy === null ? null : await readPlanCopy(copy, copyDeps);
+    const readMoved = async () => {
+      const moved = await readMovedCopy(entry.planDir, copyDeps);
       if (!isCurrent()) {
         return;
       }
-      if (progress !== null) {
-        deps.signal(sessionId, largeSignal({ type: 'planChanged', progress }));
-        return;
-      }
-      if (copy !== null) {
+      if (moved !== null) {
+        deps.signal(
+          sessionId,
+          largeSignal({ type: 'planChanged', progress: moved.progress }),
+        );
         return;
       }
       const folder = await files.stat(entry.planDir);
@@ -188,7 +185,7 @@ export function createPlanWatch(deps: {
         signalGone(sessionId, entry);
       }
     };
-    readNewest().catch(logFailure(entry, 'plan.md not read'));
+    readMoved().catch(logFailure(entry, 'plan.md not read'));
   };
 
   // The folders that hold the plan's copies: `planDir` while it is a folder,

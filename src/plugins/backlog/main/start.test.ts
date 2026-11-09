@@ -517,7 +517,7 @@ describe('backlog main part', () => {
       plan: { copyPath: PLAN, checked: 1, total: 3, tasks: [] },
     },
     {
-      name: 'a newer worktree copy',
+      name: 'a newer worktree copy ahead of main',
       meta: { checked: 0, total: 2 },
       tasks: [
         ['01-a.md', 'not started'],
@@ -561,10 +561,10 @@ describe('backlog main part', () => {
       ],
       trees: [MAIN_TREE, WORKTREE],
       plan: {
-        copyPath: PLAN,
-        checked: 0,
+        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
+        checked: 1,
         total: 2,
-        tasks: [[`${PLAN_DIR}/01-a.md`, 'not started']],
+        tasks: [[`${WORKTREE_PLAN_DIR}/01-a.md`, 'in progress']],
       },
     },
     {
@@ -632,7 +632,7 @@ describe('backlog main part', () => {
       },
     },
   ])(
-    'load_PlanProgress_FromTheNewestCopy ($name)',
+    'load_PlanProgress_FromTheMovedCopy ($name)',
     async ({ meta, tasks, files, trees, plan }) => {
       const backlog = startBacklog(
         [
