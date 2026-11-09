@@ -51,6 +51,27 @@ describe('limitRuns', () => {
     await expect(Promise.all(runs)).resolves.toEqual([DONE, DONE, DONE]);
   });
 
+  it('run_SeveralWaiting_StartInCallOrder', async () => {
+    const { started, release } = setUp();
+    const inner: ProcessRunner = {
+      run: (command: string) => {
+        started.push(command);
+        return command === 'a'
+          ? new Promise((resolve) => {
+              release.a = () => resolve(DONE);
+            })
+          : Promise.resolve(DONE);
+      },
+    };
+    const limited = limitRuns(inner, 1);
+
+    const runs = ['a', 'c', 'b'].map((name) => limited.run(name, []));
+    release.a();
+    await Promise.all(runs);
+
+    expect(started).toEqual(['a', 'c', 'b']);
+  });
+
   it('run_AbortedWhileWaiting_RejectsStoppedWithoutStarting', async () => {
     const { started, release, limited } = setUp();
     const controller = new AbortController();

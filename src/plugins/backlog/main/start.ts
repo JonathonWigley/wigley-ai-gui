@@ -685,6 +685,9 @@ function createBacklogMain(deps: BacklogDeps) {
   }
 
   function load(): Promise<BacklogRead> {
+    if (queuedLoad !== null) {
+      return queuedLoad;
+    }
     if (runningLoad === null) {
       return startLoad();
     }
