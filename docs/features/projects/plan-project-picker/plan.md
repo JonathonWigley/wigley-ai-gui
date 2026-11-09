@@ -263,5 +263,7 @@ Review base: 7ec307f1
 - 05: the cached branch read still opens the Branch step after the refresh rejected; 'ignore the cached answer' applies only once the step is open — otherwise that order shows nothing and no toast
 - 07: § 1 (drive checks) and § 3 (machine note) run now; § 2 (install-app, user settings.json) needs the branch on main, so it runs after landing, on the user's yes for the app restart, and § 4 goes to the wrap-up's Needs you
 ### Review rounds
+- Round 1 (implementation review, pinned f160641a): NEEDS FIXES — 23 findings (6 Important). Picks per AGENTS.md § Review: Fix now 1, 2, 5, 7-19, 23; Follow-up 3, 4, 6; Leave it 20, 21, 22. Report /tmp/claude-0975fa3d/project-picker/review-f160641a.md
+- Round 2 (re-review of 7e0eb4e9, 73363a89, correctness lane): PASS. Every round-1 Fix now finding closed. Two Minor style findings applied by the lead in 4ac75a24. Pre-existing findScript stat rejection went to follow-ups, as did round-1 findings 3, 4 and 6; 20, 21 and 22 were left.
 ### Test gate
 - picked over 7ec307f1..HEAD (chat, sessions, unity-pool, docs, workflow, usage, shared page, processes): full vitest 573 files / 11898 tests pass; selftest --plugin sessions, unity-pool, docs pass; chat failed 10 steps, pre-existing at base (stale ARCHIVE_STEPS since ec34cedd's headless line) — fixed in dee4a633, chat 251 PASS; workflow-small 17, workflow-medium 15, workflow-large 21 PASS; typecheck 0, lint 0

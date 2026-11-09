@@ -517,6 +517,13 @@ User-facing features, those other work builds on first.
   against many agents on coding work is vendor evidence, and the log gives the user's own.
 - **An image, video, HTML and artifact viewer** — *needs a feature plan*: a viewer in the app, so a render or page
   the agent asks the user to look at is visible inside the gui.
+- **A pool project's session step ignores the picked branch** — *needs a feature plan*: New session in a pool project
+  asks project, branch, profile, then lists saved sessions from every clone of the pool
+  (`src/plugins/chat/page/start-prompt.ts`, `openSessionStep` path), and resuming one reopens it in the clone it ran in
+  on whatever branch that clone holds, discarding the branch the user picked. The plan's design chose this listing.
+  Options: show each row's clone and branch, filter the rows by the picked branch, or ask the branch only on the
+  new-session path. Source: the project-picker review; session Claude Code 5ff361e1-d9aa-4e7a-8d42-9f640a023fdf in
+  `~/Documents/dev/peoplefun/new-games-prototypes`.
 
 ## Code cleanup
 
@@ -965,3 +972,20 @@ because the earlier items rewrite many of these tests anyway.
   saves. Pin it with a row in the workspace-state tests: GIVEN a draft saved after a read began WHEN `refreshed`
   carries that read THEN the draft keeps its text. Source session: Claude Code f1855e19-7de7-4e8f-a22a-ca873386605d in
   /Users/jonathonwigley/Documents/ai-dev.
+- **Cancelling a pool claim leaves its queue ticket and can kill the CLI mid-checkout** — *needs a feature plan*: chat
+  cancels a claim by aborting `unity-pool claim --wait` (`src/plugins/unity-pool/main/pool-cli.ts`, `runPoolClaim`) and
+  running `unity-pool release`. Cancelled while queued, the ticket stays in the pool's queue up to 120 s, since
+  `release` never drops a ticket (`~/wigley-agents/tools/unity-pool/unitypool/commands.py`, about lines 641-688); at the
+  queue head it stalls every other session's claim. Cancelled during the CLI's branch sync, the abort SIGKILLs python
+  mid-checkout (`src/main/processes/node-processes.ts`), the git child keeps running, the CLI's rollback never runs, and
+  the clone may strand expired-dirty. Both need a CLI-side cancel contract in wigley-agents' unity-pool: a `release` that
+  also drops the session's ticket, and a soft stop the CLI handles (or refusing cancel past `queued`). Source: the
+  project-picker review; session Claude Code 5ff361e1-d9aa-4e7a-8d42-9f640a023fdf in
+  `~/Documents/dev/peoplefun/new-games-prototypes`.
+- **`findScript` lets a failed `stat` reject the pool runners** — *agent-ready*: `findScript`
+  (`src/plugins/unity-pool/main/pool-cli.ts`) awaits `files.stat` outside every try, so a `stat` rejection other than a
+  missing file rejects `runPoolCommand`, `runPoolClaim` and `runPoolRelease`, breaking `PoolProviderDeps`' and
+  `PoolProvider.release`'s never-reject promise; inside `claim` the rejected release skips the claim's log and
+  `deps.rescan()` (chat still maps it to `internal`). Fix: wrap the `stat` in `findScript` and answer `cli-failed`, with
+  a row in the pool-cli tests. Source: the project-picker review; session Claude Code
+  5ff361e1-d9aa-4e7a-8d42-9f640a023fdf in `~/Documents/dev/peoplefun/new-games-prototypes`.
