@@ -20,14 +20,20 @@ describe('PageLayoutShow.draw', () => {
   // Breaks if the input is not read from the part, or if a part typed with
   // `BaseKit` no longer matches the shape.
   it('draw_ReadsInputAndBuiltFromThePart', () => {
-    expectTypeOf(show.draw('view', parent, { text: 't' }).built).toEqualTypeOf<{
-      element: HTMLElement;
-    }>();
+    // The body only type-checks: `show` and `parent` are never made.
+    const typeChecksOnly = () => {
+      expectTypeOf(
+        show.draw('view', parent, { text: 't' }).built,
+      ).toEqualTypeOf<{
+        element: HTMLElement;
+      }>();
 
-    // @ts-expect-error: the input is the part's `{ text: string }`.
-    show.draw('view', parent, { text: 1 });
+      // @ts-expect-error: the input is the part's `{ text: string }`.
+      show.draw('view', parent, { text: 1 });
 
-    // @ts-expect-error: `name` is a field, not a part.
-    show.draw('name', parent, { text: 't' });
+      // @ts-expect-error: `name` is a field, not a part.
+      show.draw('name', parent, { text: 't' });
+    };
+    expectTypeOf(typeChecksOnly).toBeFunction();
   });
 });
