@@ -166,15 +166,17 @@ function setPlanDir(next: LargeState, planDir: string): void {
 }
 
 // A reported folder: marks it, and a new one keeps the unreported folder it
-// moves away from, or the one an earlier report kept, while that folder shares
-// the reported folder's name; a folder named otherwise is another plan's.
+// moves away from, or the one an earlier report kept, while that folder has the
+// reported folder's plan folder name under the same feature folder; any other
+// folder is another plan's.
 function reportPlanDir(next: LargeState, planDir: string): void {
   if (planDir !== next.planDir && !next.planReported) {
     next.unreportedPlanDir = next.planDir;
   }
   if (
     next.unreportedPlanDir !== null &&
-    folderNameOf(next.unreportedPlanDir) !== folderNameOf(planDir)
+    featureAndPlanNameOf(next.unreportedPlanDir) !==
+      featureAndPlanNameOf(planDir)
   ) {
     next.unreportedPlanDir = null;
   }
@@ -202,6 +204,16 @@ function clearPlan(next: LargeState): void {
 
 function folderNameOf(folder: string): string {
   return folder.slice(lastSeparatorIndex(folder) + 1);
+}
+
+// The last two segments: the feature folder and the plan folder in it.
+function featureAndPlanNameOf(folder: string): string {
+  const planStart = lastSeparatorIndex(folder);
+  const featureStart = Math.max(
+    folder.lastIndexOf('/', planStart - 1),
+    folder.lastIndexOf('\\', planStart - 1),
+  );
+  return folder.slice(featureStart + 1).replace(/\\/g, '/');
 }
 
 function lastSeparatorIndex(path: string): number {

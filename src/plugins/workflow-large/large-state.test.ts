@@ -104,6 +104,7 @@ const PLAN_IN_REPO = '/r/p/plan-a';
 const PLAN_IN_WORKTREE = '/w/p/plan-a';
 const PLAN_IN_WORKTREE_2 = '/w2/p/plan-a';
 const PLAN_B_IN_WORKTREE = '/w/p/plan-b';
+const PLAN_A_OTHER_FEATURE = '/w/q/plan-a';
 const UNCHANGED = 'unchanged';
 // A stage no Large rule names, so only the bookkeeping moves.
 const IN_C = { stage: 'c' } as const;
@@ -490,6 +491,20 @@ const FOLD_ROWS: {
     expected: flowWith({
       stage: 'make',
       planDir: PLAN_B_IN_WORKTREE,
+      planReported: true,
+    }),
+  },
+  {
+    name: 'planReported of the same plan name under another feature keeps no unreported folder',
+    flow: flowWith({
+      stage: 'make',
+      planDir: PLAN_IN_REPO,
+      progress: PROGRESS,
+    }),
+    signal: planReported(PLAN_A_OTHER_FEATURE),
+    expected: flowWith({
+      stage: 'make',
+      planDir: PLAN_A_OTHER_FEATURE,
       planReported: true,
     }),
   },
