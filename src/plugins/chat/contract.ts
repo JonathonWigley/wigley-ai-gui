@@ -28,6 +28,16 @@ export const CHAT_HARNESS_ID = 'claude';
 // The layout preview's row host session id; no harness holds a session by it.
 export const CHAT_PREVIEW_HOST_ID = 'chat-layout-preview';
 
+// The note a headless row's agent starts with, and the line that tells it the
+// row is headless no longer.
+export const HEADLESS_NOTE =
+  'This session is headless: nobody answers forms rounds. Build no round: ' +
+  "take each item's recommended pick and list every pick as a Decided notice " +
+  'in your reply. A hard gate still stops the run: name what it needs in the ' +
+  'reply and end the turn.';
+export const HEADLESS_OFF_NOTE =
+  'This session is no longer headless: send each round to the form again.';
+
 export interface ChatProfile {
   name: string;
   configDir: string;

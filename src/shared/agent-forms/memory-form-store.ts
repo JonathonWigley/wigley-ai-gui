@@ -2,6 +2,7 @@ import type { Clock, RandomHex } from '../../contracts/ambient';
 import type { Paths } from '../../contracts/paths';
 import {
   type AgentFormStore,
+  autoAnsweredRecord,
   formQueries,
   isFinished,
   openRecord,
@@ -29,6 +30,13 @@ export function createMemoryFormStore(
         toolUseId,
         clock,
         randomHex,
+      );
+      records.push(record);
+      return record;
+    },
+    createAutoAnswered: (owner, fingerprint, args, body, toolUseId) => {
+      const record = autoAnsweredRecord(
+        openRecord(owner, fingerprint, args, body, toolUseId, clock, randomHex),
       );
       records.push(record);
       return record;

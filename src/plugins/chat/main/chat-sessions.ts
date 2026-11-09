@@ -50,6 +50,7 @@ import {
   type ChatMainEvents,
   type ChatProfile,
   type ChatSessionState,
+  HEADLESS_NOTE,
   type LaunchRequest,
   type PastSessionRow,
   type PermissionAnswer,
@@ -1791,7 +1792,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         projectDir,
         profileDir,
         controls: session.launchControls,
-        instructions: currentInstructions(),
+        instructions: currentInstructions(session),
         idleCompactMinTokens: currentIdleCompactMinTokens(sessionId),
         rowId: sessionId,
       },
@@ -1812,10 +1813,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       );
   }
 
-  function currentInstructions(): string[] {
-    return [...instructionRegistrations].map(
+  // The registered instructions, then the headless note while the row is
+  // headless.
+  function currentInstructions(session: HeldSession): string[] {
+    const registered = [...instructionRegistrations].map(
       (registration) => registration.text,
     );
+    return session.headless ? [...registered, HEADLESS_NOTE] : registered;
   }
 
   // The newest reader's value, or null with no reader or after logging its throw.
@@ -1865,7 +1869,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           projectDir,
           profileDir,
           controls: session.launchControls,
-          instructions: currentInstructions(),
+          instructions: currentInstructions(session),
           idleCompactMinTokens: null,
           rowId: sessionId,
         },

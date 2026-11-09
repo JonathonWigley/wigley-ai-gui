@@ -239,7 +239,8 @@ export type Outcome =
   | 'draft'
   | 'cancelled'
   | 'needs_manual_open'
-  | 'no_round';
+  | 'no_round'
+  | 'auto_answered';
 
 export type AnswerStatus = 'answered' | 'not_applicable' | 'untouched';
 

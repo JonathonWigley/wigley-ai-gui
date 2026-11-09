@@ -134,9 +134,10 @@ function startWorkflowPart(
   let activeTime: ActiveTime | null = null;
   const chat: Pick<
     ChatMainExports,
-    'activeTime' | 'addInstructions' | 'profiles'
+    'activeTime' | 'addInstructions' | 'isHeadless' | 'profiles'
   > = {
     activeTime: () => activeTime,
+    isHeadless: () => false,
     profiles: () => [],
     addInstructions: (text) => {
       instructions.push(text);

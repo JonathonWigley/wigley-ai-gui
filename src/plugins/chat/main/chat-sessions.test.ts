@@ -48,6 +48,7 @@ import {
   type ChatSessionInfo,
   type ChatSessionState,
   chatSessionSlot,
+  HEADLESS_NOTE,
   type QueuedMessage,
   type ReturnedMessage,
   type SendGate,
@@ -3682,6 +3683,71 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.isHeadless(ROW_ID)).toBe(true);
     expect(test.chat.sessions()[0].headless).toBe(true);
   });
+
+  it.each([
+    {
+      given: 'headless start',
+      headless: true,
+      turnOffAndClear: false,
+      expected: ['registered', HEADLESS_NOTE],
+    },
+    {
+      given: 'not headless',
+      headless: false,
+      turnOffAndClear: false,
+      expected: ['registered'],
+    },
+    {
+      given: 'headless turned off then clear',
+      headless: true,
+      turnOffAndClear: true,
+      expected: ['registered'],
+    },
+  ])(
+    'start_HeadlessRow_CarriesTheHeadlessNote: $given',
+    async ({ headless, turnOffAndClear, expected }) => {
+      const test = setUp();
+      test.chat.addInstructions('registered');
+      const sessionId = test.chat.start({
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        headless,
+      });
+      await flush();
+
+      if (turnOffAndClear) {
+        test.chat.setHeadless(sessionId, false);
+        test.chat.clear(sessionId);
+        await flush();
+      }
+
+      expect(test.harness.processes.at(-1)?.request.instructions).toEqual(
+        expected,
+      );
+    },
+  );
+
+  it.each([
+    { headless: true, expected: ['registered', HEADLESS_NOTE] },
+    { headless: false, expected: ['registered'] },
+  ])(
+    'attach_HeadlessRestoredRow_CarriesTheHeadlessNote: $headless',
+    async ({ headless, expected }) => {
+      const test = setUp();
+      test.chat.addInstructions('registered');
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+
+      restoreOne(test, hostedRecord({ headless }), [hostedP1()]);
+      await flush();
+
+      expect(test.harness.attachCalls).toHaveLength(1);
+      expect(test.harness.attachCalls[0].instructions).toEqual(expected);
+    },
+  );
 
   it('restore_UnattendedRecord_DeniesPermissionAtOnce', async () => {
     const test = setUp();

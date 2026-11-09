@@ -236,6 +236,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const startStepToolSession = startStepTool({
       workflows: () => workflows.all(),
       reportStep,
+      isHeadless: (sessionId) => chat.isHeadless(sessionId),
     });
 
     // Folds a reported checklist as a live event; resolves whether a registered
@@ -251,7 +252,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         apply(sessionId, { type: 'checklistReported', items }, 'live');
         return true;
       });
-    const startChecklistToolSession = startChecklistTool({ reportChecklist });
+    const startChecklistToolSession = startChecklistTool({
+      reportChecklist,
+      isHeadless: (sessionId) => chat.isHeadless(sessionId),
+    });
     sessions.contributeTools(
       [checklistToolDefinition()],
       startChecklistToolSession,

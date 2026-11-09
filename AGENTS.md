@@ -111,7 +111,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
                  and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
-                 its per-session open form, deadline, re-attach and hand-back, the wake (a form the user finishes
+                 its per-session open form, deadline, re-attach and hand-back, its optional auto-answer
+                 (`AgentFormAutoAnswer`: while `isOn` holds for a session, an open call shows no form and saves and
+                 returns the type's own answers at once, the file marked `auto_answered`), the wake (a form the user finishes
                  while no call waits on it sends its session a message naming the collect tool, through the
                  `AgentFormWake` the service is handed: chat's `send` for a session chat owns, nothing for any
                  other), the saved-form folder and memory stores,
@@ -283,7 +285,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
                  `services.window.summon`)
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
-                 round), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout)
+                 round; the agents' service auto-answers a headless chat session's rounds with every item's
+                 recommendation, outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
@@ -318,7 +321,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is) and `defaultProfile` to practice, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to practice, `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; a launch copies the asking session's headless flag; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -349,7 +352,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow, run through the
                  rules of the flow's current workflow alone), main/ (the engine: hears `chat.agentEvent` and the sessions
                  events, keeps each session's flow in its plugin data and writes it to the `workflow.flows` slot, contributes
-                 `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools`, appends a line to
+                 `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools` (each result of a headless
+                 session ends on chat's `HEADLESS_NOTE`, and the first after headless turns off on `HEADLESS_OFF_NOTE`), appends a line to
                  `runs.jsonl` when a workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/
                  (hosts the row chip, the composer strip and the side pane, each drawn through the flow's workflow's layout,
                  and the preview; exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no

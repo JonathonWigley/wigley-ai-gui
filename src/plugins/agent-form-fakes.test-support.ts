@@ -11,7 +11,11 @@ import {
 
 export const fakeChat = fakeDependency(
   chatMainKey,
-  () => ({ profileOf: () => null }) as unknown as ChatMainExports,
+  () =>
+    ({
+      profileOf: () => null,
+      isHeadless: () => false,
+    }) as unknown as ChatMainExports,
 );
 
 export const SUBMITTED: ToolResult = {
