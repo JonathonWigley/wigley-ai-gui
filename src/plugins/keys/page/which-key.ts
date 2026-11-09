@@ -2,9 +2,10 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, PendingKeys } from '../../../contracts/keymap';
 import type { OsName } from '../../../contracts/platform';
 import type { CommandInfo } from '../../../contracts/plugin';
-import { pageKeysFor } from '../../../shared/key-notation';
+import { pageKeysFor, vimTokenForPageKey } from '../../../shared/key-notation';
 import {
   type CommandLabel,
+  compareKeys,
   formatKeys,
   formatVimToken,
   joinKeys,
@@ -34,13 +35,13 @@ interface Candidate {
   command: CommandId;
 }
 
-// The keys that continue `pending`, in keymap order: those firing in the
-// pending scope (or `any`), on the page or in a box. A prefix the keymap's
-// `groups` names is labelled with that name, matched in the pending keys'
-// own spelling: page keys on the page, vim tokens in a box; the model's
-// `name` is the pending keys' own group name. Neighbouring entries of one
-// kind and label merge into one, and chords print for `platform`. Null when
-// no bind continues the sequence.
+// The keys that continue `pending`, in key order (`compareKeys`, a page key
+// by its vim token): those firing in the pending scope (or `any`), on the
+// page or in a box. A prefix the keymap's `groups` names is labelled with
+// that name, matched in the pending keys' own spelling: page keys on the
+// page, vim tokens in a box; the model's `name` is the pending keys' own
+// group name. Neighbouring entries of one kind and label merge into one, and
+// chords print for `platform`. Null when no bind continues the sequence.
 export function whichKeyModel(
   pending: PendingKeys,
   keymap: Keymap,
@@ -56,17 +57,21 @@ export function whichKeyModel(
     pending.where === 'page'
       ? (key: string) => formatKeys([key], platform)
       : (token: string) => formatVimToken(token, platform);
+  const sortToken =
+    pending.where === 'page' ? vimTokenForPageKey : (token: string) => token;
   const groups = groupPrefixes(pending.where, keymap);
-  const entries = byNextKey(candidates, pending.keys.length).map(
-    ([key, binds]) =>
-      entry(
-        readKey(key),
-        binds,
-        pending.keys.length,
-        groupName([...pending.keys, key], groups),
-        command,
-        label,
-      ),
+  const nextKeys = byNextKey(candidates, pending.keys.length).sort(([a], [b]) =>
+    compareKeys(sortToken(a), sortToken(b)),
+  );
+  const entries = nextKeys.map(([key, binds]) =>
+    entry(
+      readKey(key),
+      binds,
+      pending.keys.length,
+      groupName([...pending.keys, key], groups),
+      command,
+      label,
+    ),
   );
   return {
     title: pending.keys.map(readKey).join(' '),

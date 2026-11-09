@@ -376,7 +376,10 @@ describe('installPageKeys', () => {
       fakeTimers().timers,
       { where: () => 'page', onChanged: () => ({ dispose: () => {} }) },
     );
-    const press = (key: string, pressed: Partial<CapturedPress> = {}) => {
+    const press = (
+      key: string,
+      pressed: Partial<CapturedPress & Pick<KeyboardEvent, 'repeat'>> = {},
+    ) => {
       let isPrevented = false;
       let isStopped = false;
       const event = {
@@ -553,6 +556,55 @@ describe('installPageKeys', () => {
 
     expect(first.heard).toEqual(['cancel']);
     expect(second.heard).toEqual(['t']);
+  });
+
+  it('capture_ArmedInTheReplacedOnesCancel_TheLastArmedTakesTheKey', () => {
+    const { engine, press } = installed();
+    const heard: string[] = [];
+    engine.capture(
+      (keys) => heard.push(`first ${keys}`),
+      () => {
+        heard.push('first cancel');
+        engine.capture(
+          (keys) => heard.push(`third ${keys}`),
+          () => heard.push('third cancel'),
+        );
+      },
+    );
+    engine.capture(
+      (keys) => heard.push(`second ${keys}`),
+      () => heard.push('second cancel'),
+    );
+
+    press('t', { code: 'KeyT' });
+    vi.unstubAllGlobals();
+
+    expect(heard).toEqual(['first cancel', 'second cancel', 'third t']);
+  });
+
+  it.each<[string, string]>([
+    ['x', 'KeyX'],
+    ['Escape', 'Escape'],
+  ])('capture_AutoRepeat_SwallowedAndStaysArmed %s', (key, code) => {
+    const { engine, press, runs } = installed();
+    engine.setBinds(
+      [
+        { keys: ['x'], scope: 'any', command: 'p.x' },
+        { keys: ['Escape'], scope: 'any', command: 'p.esc' },
+      ],
+      TIMEOUT_MS,
+    );
+    const { heard } = armed(engine);
+
+    const isPrevented = press(key, { code, repeat: true });
+    expect(heard).toEqual([]);
+    expect(runs).toEqual([]);
+    expect(isPrevented).toBe(true);
+
+    press('t', { code: 'KeyT' });
+    vi.unstubAllGlobals();
+
+    expect(heard).toEqual(['t']);
   });
 
   it('capture_Disposed_DisarmsWithNoCallback', () => {

@@ -61,7 +61,8 @@ interface KeyCapture {
 // Hands `event` to the armed capture, if any, reporting whether it took the
 // event. Esc cancels it; any other key `capturedKeys` spells goes to `onKey`.
 // The capture disarms before its callback runs, so the callback may arm
-// another. A press no bind can take passes on and leaves it armed.
+// another. An auto-repeat keydown is swallowed and leaves it armed; a press no
+// bind can take passes on and leaves it armed.
 function takeCapturedKey(
   event: KeyboardEvent,
   armed: KeyCapture | null,
@@ -69,6 +70,11 @@ function takeCapturedKey(
 ): boolean {
   if (armed === null) {
     return false;
+  }
+  if (event.repeat) {
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
   }
   const isCancel = event.key === 'Escape';
   const keys = isCancel ? null : capturedKeys(event);
@@ -231,7 +237,9 @@ export function createPendingTimeout(
 // keeps the pending keys past the timeout until they end, and `cancel` drops
 // them, running nothing. `capture` arms a one-shot capture that takes the next
 // key ahead of every bind, a pending sequence, an editor and a text box, as
-// `PageApi['keys'].captureKey` says; it leaves the pending keys alone.
+// `PageApi['keys'].captureKey` says, and arms before it cancels the one it
+// replaces, so a capture that cancel arms is the one left armed; it leaves the
+// pending keys alone.
 export function installPageKeys(
   timeoutMs: number,
   currentScope: () => ViewScope,
@@ -333,9 +341,8 @@ export function installPageKeys(
     capture(onKey, onCancel) {
       const replaced = armed;
       const capture: KeyCapture = { onKey, onCancel };
-      armed = null;
-      replaced?.onCancel();
       armed = capture;
+      replaced?.onCancel();
       return {
         dispose() {
           if (armed === capture) {

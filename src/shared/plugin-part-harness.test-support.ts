@@ -190,6 +190,7 @@ export interface HarnessAnchor {
 // `pressCapture` hands `keys`, in vim notation, to the capture `keys.captureKey`
 // armed, and `cancelCapture` cancels it, as an Esc would; each disarms it before
 // the callback runs, as the page key engine does, and throws when none is armed.
+// `pressCapture('<Esc>')` throws, since the engine never captures Esc.
 // `isCapturing` reads whether one is armed.
 // `picked` holds the qualified id of each mode whose handle's `picked` ran, in
 // order. `restores` holds each restore handed to `restores.track`; the harness
@@ -1390,9 +1391,8 @@ function fakePageApi(
       captureKey(onKey, onCancel) {
         const capture: HarnessCapture = { onKey, onCancel };
         const replaced = world.capture;
-        world.capture = null;
-        replaced?.onCancel();
         world.capture = capture;
+        replaced?.onCancel();
         return register<Disposable>({
           dispose() {
             if (world.capture === capture) {
@@ -1733,6 +1733,11 @@ export function startPagePart<M extends PluginManifest>(
     },
     hintsShown: () => world.hintsShown,
     pressCapture(keys) {
+      if (keys === '<Esc>') {
+        throw new Error(
+          'part harness: pressCapture never gets <Esc>; the engine cancels on Esc, so call cancelCapture',
+        );
+      }
       takeCapture(world).onKey(keys);
     },
     cancelCapture() {

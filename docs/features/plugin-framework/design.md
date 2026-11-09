@@ -109,7 +109,9 @@ command's keys into an element a view names, and the plugin's `showHints` settin
 (`docs/features/key-hints/design.md`).
 
 - Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a full-width glass shelf on the
-  window's bottom edge, listing what can follow in up to four columns; it redraws at once on a deeper prefix and closes when the
+  window's bottom edge, listing what can follow in up to four columns, in the Leader menu's key order (letters, the
+  lowercase one first, then digits, other characters, then named keys; `compareKeys` in `src/shared/key-hints.ts`),
+  not keymap order; it redraws at once on a deeper prefix and closes when the
   sequence ends or on Esc. `whichKeyTimeoutMs` (default `null`,
   wait for the next key or Esc) ends a sequence the shelf has shown that long. A group's label and `›` draw in the `accent` colour and an action's label in `fg-secondary`, from the
   `which-key-prefix` and `which-key-command` theme tokens.

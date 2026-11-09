@@ -41,13 +41,13 @@ function keymap(
 }
 
 describe('whichKeyModel', () => {
-  it('whichKeyModel_PageScope_GroupsByNextKeyInKeymapOrder', () => {
+  it('whichKeyModel_PageScope_GroupsByNextKeyInKeyOrder', () => {
     const map = keymap([
+      { keys: [' ', ' '], scope: 's', command: 'openReview' },
+      { keys: [' ', ';'], scope: 'any', command: 'closeTab' },
       { keys: [' ', 'a', '1'], scope: 's', command: 'choose1' },
       { keys: [' ', 'x'], scope: 'elsewhere', command: 'other' },
       { keys: [' ', 'a', '2'], scope: 's', command: 'choose2' },
-      { keys: [' ', ' '], scope: 's', command: 'openReview' },
-      { keys: [' ', ';'], scope: 'any', command: 'closeTab' },
     ]);
 
     const model = whichKeyModel(
@@ -63,8 +63,8 @@ describe('whichKeyModel', () => {
       name: null,
       entries: [
         { keys: 'a', label: 'choices', kind: 'prefix' },
-        { keys: 'Space', label: 'review', kind: 'command' },
         { keys: ';', label: 'close the tab', kind: 'command' },
+        { keys: 'Space', label: 'review', kind: 'command' },
       ],
     });
   });

@@ -698,10 +698,11 @@ export interface PageRestores {
 // pressed to `onKey` in the keymap's vim notation, as a bind's `keys` is written
 // (`T`, `<C-t>`, `<A-S-o>`, `<CR>`), ahead of every bind, a pending sequence
 // (it cancels one first) and a text box; Esc runs `onCancel` and is never
-// captured; a bare modifier or a key no bind can name is waited past. Arming a
-// second capture cancels the first, and the handle's `dispose` disarms with no
-// callback; the handle is filed in the part's registrations. Keys main takes
-// first (app menu accelerators, intercept and global binds) never reach it.
+// captured; a bare modifier, a key no bind can name and an auto-repeat keydown
+// are waited past. Arming a second capture cancels the first, the last armed
+// staying armed, and the handle's `dispose` disarms with no callback; the
+// handle is filed in the part's registrations. Keys main takes first (app menu
+// accelerators, intercept and global binds) never reach it.
 // `keys.keymap` reads the merged keymap as the user
 // config now sets it, every plugin's binds qualified, and
 // `keys.onKeymapChanged` hears it each time it changes, until its `dispose`;

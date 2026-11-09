@@ -9,6 +9,8 @@ import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { isSameJson } from '../../../shared/json';
 import {
+  compareKeys,
+  compareText,
   formatVimKeys,
   normalVimKeys,
   unnamedGroupName,
@@ -99,40 +101,6 @@ export function groupNameIn(
 
 function pathId(path: readonly string[]): string {
   return normalVimKeys(path.join(''));
-}
-
-// A key's sort class: a letter, a digit, another single character, then a
-// `<…>` token.
-function keyClass(key: string): number {
-  if (/^[a-z]$/i.test(key)) {
-    return 0;
-  }
-  if (/^[0-9]$/.test(key)) {
-    return 1;
-  }
-  return key.length === 1 ? 2 : 3;
-}
-
-// Letters case-insensitively, the lowercase one first (`a A b B`), then
-// digits, other characters by code point, then `<…>` tokens by text.
-function compareKeys(a: string, b: string): number {
-  const byClass = keyClass(a) - keyClass(b);
-  if (byClass !== 0) {
-    return byClass;
-  }
-  if (keyClass(a) === 0) {
-    // Uppercase sorts before lowercase in code points, so `b, a` puts the
-    // lowercase letter first.
-    return compareText(a.toLowerCase(), b.toLowerCase()) || compareText(b, a);
-  }
-  return compareText(a, b);
-}
-
-function compareText(a: string, b: string): number {
-  if (a === b) {
-    return 0;
-  }
-  return a < b ? -1 : 1;
 }
 
 // `any` first, then the scopes in `schema.scopes` order, then unknown scopes

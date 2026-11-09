@@ -394,6 +394,42 @@ export function unnamedGroupName(
   return [...groups].join(', ');
 }
 
+// A key's sort class: a letter, a digit, another single character, then a
+// `<…>` token.
+function keyClass(key: string): number {
+  if (/^[a-z]$/i.test(key)) {
+    return 0;
+  }
+  if (/^[0-9]$/.test(key)) {
+    return 1;
+  }
+  return key.length === 1 ? 2 : 3;
+}
+
+// Two vim-notation tokens in key order, as which-key and the Leader menu list
+// keys: letters case-insensitively, the lowercase one first (`a A b B`), then
+// digits, other characters by code point, then `<…>` tokens by text.
+export function compareKeys(a: string, b: string): number {
+  const byClass = keyClass(a) - keyClass(b);
+  if (byClass !== 0) {
+    return byClass;
+  }
+  if (keyClass(a) === 0) {
+    // Uppercase sorts before lowercase in code points, so `b, a` puts the
+    // lowercase letter first.
+    return compareText(a.toLowerCase(), b.toLowerCase()) || compareText(b, a);
+  }
+  return compareText(a, b);
+}
+
+// By UTF-16 code unit, not by locale.
+export function compareText(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+  return a < b ? -1 : 1;
+}
+
 // Three or more keys ending in consecutive digits after one prefix read as a
 // range, e.g. `1–9` or `Space 1–9`.
 export function joinKeys(keys: string[]): string {
