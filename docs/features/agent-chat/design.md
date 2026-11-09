@@ -401,7 +401,8 @@ interview on 2026-10-23; this file is the record of both.
   registered. On a resume the Claude CLI sends the system prompt it recorded on the conversation's first request until
   compaction (`--system-prompt-snapshot`, on by default), so a resumed conversation keeps the instructions of its
   first launch. A `launch` or `resume` request's own `instructions` follow the global ones at every start of that session's
-  process, saved with the session, so they hold across `/clear`, a relaunch and a resume.
+  process, saved with the session, so they hold across `/clear` and a relaunch, and across a resume only when the
+  request carries them again or chat still holds the row.
   A session whose process exits while the app runs rests the same way, a notice in its chat giving the exit and its
   reason. A restored session whose turn was running when its process was lost (a reboot or a host crash, since quit
   ends none) gets a notice that the app quit during that turn; one whose
@@ -518,7 +519,8 @@ interview on 2026-10-23; this file is the record of both.
   side-bar row (`docs/features/session-clock/design.md`).
 - **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the projects and above the new-session line. After the project or folder and the profile, the start prompt offers a new session or one of the
   project's or folder's saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
-  through the relay is left out, and picking one that has a chat row selects that row instead of opening a second),
+  through the relay or on a row another plugin owns is left out, and picking one that has a chat row selects that row
+  instead of opening a second; a resume onto a held row whose owner is not the request's rejects, naming both),
   resumed with its earlier conversation read from the transcript. A resume lists the session host first, so a session
   never runs two processes: a process of the session running in the current host has the row open and attach to it,
   its history pending, as a restored row does; a process running in another app version refuses, and a host that

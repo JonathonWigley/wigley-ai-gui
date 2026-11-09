@@ -187,9 +187,9 @@ export interface ChatSessions {
   // saved selection; any other row, or none, leaves it as it was.
   selected(sessionId: string | null): void;
   // The folder's saved sessions under the profile, newest first, leaving out
-  // every session open in the app on a row chat does not hold. When the
-  // archived-sessions file cannot be read, every row lists as not archived
-  // and the failure is logged; the file is left as it is.
+  // every session open in the app on a row chat does not hold or on a row with
+  // an owner. When the archived-sessions file cannot be read, every row lists
+  // as not archived and the failure is logged; the file is left as it is.
   pastSessions(projectDir: string, profile: string): Promise<PastSessionRow[]>;
   // Each resume section's rows, in registration order, never rejecting for a
   // section's failure: one that fails is logged and left out, as is one with no
@@ -205,10 +205,11 @@ export interface ChatSessions {
   // its process; resolves to the row's sessionId. The request's `instructions`
   // and `owner` are carried as `launch` carries them, and a request with an
   // `owner` opens its row unselected. A session chat holds a row for resolves
-  // to that row, keeping its own instructions and owner, and has it activated
-  // when it has no owner; one open in
-  // the app on any other row rejects, as does any after `detachAll`; both hold
-  // after each wait as well, so two resumes of one id open one row. It lists
+  // to that row when the request's owner (none when absent) is the row's,
+  // keeping the row's own instructions, and has it activated when it has no
+  // owner; one held for another owner rejects, naming both, as does one open in
+  // the app on any other row and any after `detachAll`; each holds after each
+  // wait as well, so two resumes of one id open one row. It lists
   // the host first, so a session never runs two processes: a process of the
   // session running in the current host has the row open and attach to it, as a
   // restored row does, its history pending; one running in another app version,
@@ -642,6 +643,11 @@ const FIRST_MESSAGE_TITLE_CAP = 200;
 
 function firstMessageTitleOf(text: string): string {
   return [...text.trimStart()].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
+}
+
+// A row's owner as a resume's rejection names it.
+function ownerName(owner: string | null): string {
+  return owner ?? 'no owner';
 }
 
 // The error sessions' `open` throws when another session holds `rowId`.
@@ -2615,12 +2621,26 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
+  // A session with a row that belongs to a plugin, which only its owner shows.
+  function isOwned(hostSessionId: string): boolean {
+    const existing = holding(hostSessionId);
+    return existing !== undefined && existing.owner !== null;
+  }
+
   // The row holding `hostSessionId`, activated when it has no owner, or null
   // when chat holds none; throws when the session is open on a row chat does
-  // not hold.
-  function activateRowOf(hostSessionId: string): string | null {
+  // not hold, or on a row whose owner is not `owner`.
+  function activateRowOf(
+    hostSessionId: string,
+    owner: string | null,
+  ): string | null {
     const existing = holding(hostSessionId);
     if (existing !== undefined) {
+      if (existing.owner !== owner) {
+        throw new Error(
+          `session ${hostSessionId} is open for ${ownerName(existing.owner)}, not ${ownerName(owner)}`,
+        );
+      }
       if (existing.owner === null) {
         sessions.activate(existing.sessionId);
       }
@@ -2974,7 +2994,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       archivedIdsOrNone(),
     ]);
     return saved
-      .filter((past) => !isOpenOnOtherRow(past.sessionId))
+      .filter(
+        (past) => !isOpenOnOtherRow(past.sessionId) && !isOwned(past.sessionId),
+      )
       .map((past) => ({
         hostSessionId: past.sessionId,
         title: past.title,
@@ -3025,7 +3047,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
     const { hostSessionId, projectDir } = request;
-    const rowAtStart = activateRowOf(hostSessionId);
+    const owner = request.owner ?? null;
+    const rowAtStart = activateRowOf(hostSessionId, owner);
     if (rowAtStart !== null) {
       return rowAtStart;
     }
@@ -3036,12 +3059,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const runningOfSession = (await listHost()).filter(
       (hosted) => hosted.running && hosted.id.startsWith(`${hostSessionId}-`),
     );
-    const rowAfterList = activateRowOf(hostSessionId);
+    const rowAfterList = activateRowOf(hostSessionId, owner);
     if (rowAfterList !== null) {
       return rowAfterList;
     }
     const instructions = request.instructions ?? [];
-    const owner = request.owner ?? null;
     const select = request.owner === undefined;
     const runningHere = runningOfSession.find((hosted) => hosted.current);
     if (runningHere !== undefined) {
@@ -3068,7 +3090,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       readHistory(harness, hostSessionId, projectDir, profileDir, null),
       readSavedUsage(harness, hostSessionId, projectDir, profileDir),
     ]);
-    const rowAfterRead = activateRowOf(hostSessionId);
+    const rowAfterRead = activateRowOf(hostSessionId, owner);
     if (rowAfterRead !== null) {
       return rowAfterRead;
     }

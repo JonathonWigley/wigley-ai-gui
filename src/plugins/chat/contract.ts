@@ -309,8 +309,9 @@ export interface ChatChannel extends ChannelShape {
     recentFolders(): Promise<RecentFolder[]>;
     // The new row's sessionId.
     start(request: StartRequest): string;
-    // Newest first; a session open in the app on a row chat does not hold is
-    // left out, and one with a chat row is listed.
+    // Newest first; a session open in the app on a row chat does not hold or
+    // on a row with an owner is left out, and one with another chat row is
+    // listed.
     pastSessions(
       projectDir: string,
       profile: string,
@@ -319,9 +320,9 @@ export interface ChatChannel extends ChannelShape {
     // or whose read failed (logged), is left out.
     resumeSections(): Promise<ResumeSectionRows[]>;
     setArchived(hostSessionId: string, archived: boolean): Promise<void>;
-    // Resolves to the new row's sessionId; a session with a chat row selects
-    // that row, when it has no owner, and resolves to its sessionId, and one
-    // open in the app on any other row rejects.
+    // Resolves to the new row's sessionId; a session with a chat row with no
+    // owner selects that row and resolves to its sessionId, and one on a row
+    // with an owner, or open in the app on any other row, rejects.
     resume(request: ResumeRequest): Promise<string>;
     // Starts a resting session's process first; rejects, leaving it resting,
     // when its profile is missing or the start fails. A restored session's
@@ -544,8 +545,10 @@ export interface ChatMainExports {
   // refusal text), an unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
   // The channel's resume for another plugin: resolves to the row's sessionId.
-  // A row chat holds for the host id is returned as it is, activated only when
-  // it has no owner; a session open on a row chat does not hold rejects.
+  // A row chat holds for the host id is returned as it is only when its owner
+  // is the request's (none when absent), activated only when it has no owner;
+  // a held row with another owner rejects, naming both, and so does a session
+  // open on a row chat does not hold.
   // `instructions` and `owner` are as `launch` has them, and a resume with
   // `owner` opens its row unselected.
   resume(request: ResumeRequest): Promise<string>;

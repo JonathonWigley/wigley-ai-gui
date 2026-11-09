@@ -1797,8 +1797,9 @@ export function deferred<T>() {
 
 // An editor host that counts the editors it holds live and every one it made,
 // boxes and document editors alike; `type` edits the last one made, and
-// `typeDocument` the last document editor made. After `stop()`, `live` cannot fail, as the
-// per-plugin view destroys what the part left: it is only meaningful mid-life.
+// `typeDocument` the last document editor made. After `stop()`, `live` cannot
+// fail, as the per-plugin view destroys what the part left: it is only
+// meaningful mid-life.
 export function countingEditors() {
   let live = 0;
   let made = 0;

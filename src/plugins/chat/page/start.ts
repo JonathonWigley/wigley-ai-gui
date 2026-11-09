@@ -96,8 +96,9 @@ type ChatApi = PageApi<typeof chatManifest, ChatChannel>;
 // the reason box, the confirmation, a control picker and the image viewer, and
 // leaves the sign-in dialog and the start prompt open. A session whose row has
 // an owner gets no Sessions tab: its owner draws its Chat tab into an element
-// of its own through `mountChat`, and a consumer's stop disposes its mounts. A resting session's Chat tab keys as a running one's
-// does; its control chips are disabled until a message starts its process.
+// of its own through `mountChat`, and a consumer's stop disposes its mounts. A
+// resting session's Chat tab keys as a running one's does; its control chips
+// are disabled until a message starts its process.
 // Each session's row shows its run time, and the exports and the `chat.session`
 // slot offer its clock to other plugins. Each tab's draft, cursor, open runs and
 // expanders go to `chat.place`, and its attached images to `chat.draftImages`,

@@ -1358,22 +1358,28 @@ describe('createChatSessions', () => {
     expect(test.opened).toEqual([]);
   });
 
-  it('pastSessions_OpenRows_ListsChatRowsOnly', async () => {
-    const test = setUp();
-    test.chat.restore(
-      {
-        sessions: [record(PAST_ONE.sessionId)],
-        selectedHostSessionId: null,
-      },
-      [],
-    );
-    test.chat.recordOpenHostId(connected(ROW_ID, PAST_ONE.sessionId));
-    test.chat.recordOpenHostId(connected('row-relay', PAST_TWO.sessionId));
+  it.each([
+    { given: 'a relay row', secondOwner: undefined },
+    { given: 'a chat row with an owner', secondOwner: 'practice' },
+  ])(
+    'pastSessions_OpenRows_ListsUnownedChatRowsOnly given $given',
+    async ({ secondOwner }) => {
+      const test = setUp();
+      const held = [record(PAST_ONE.sessionId)];
+      if (secondOwner !== undefined) {
+        held.push(record(PAST_TWO.sessionId, { owner: secondOwner }));
+      }
+      test.chat.restore({ sessions: held, selectedHostSessionId: null }, []);
+      test.chat.recordOpenHostId(connected(ROW_ID, PAST_ONE.sessionId));
+      test.chat.recordOpenHostId(connected('row-two', PAST_TWO.sessionId));
 
-    const rows = await test.chat.pastSessions('/w/app', 'work');
+      const rows = await test.chat.pastSessions('/w/app', 'work');
 
-    expect(rows.map((row) => row.hostSessionId)).toEqual([PAST_ONE.sessionId]);
-  });
+      expect(rows.map((row) => row.hostSessionId)).toEqual([
+        PAST_ONE.sessionId,
+      ]);
+    },
+  );
 
   it('resume_HostIdChatHolds_SelectsExistingRow', async () => {
     const test = setUp();
@@ -1402,7 +1408,7 @@ describe('createChatSessions', () => {
     expect(test.titleCalls).toEqual([]);
   });
 
-  it('resume_HostIdChatHoldsOnARowWithAnOwner_ReturnsItWithoutActivating', async () => {
+  it('resume_HostIdChatHoldsOnARowWithTheRequestsOwner_ReturnsItWithoutActivating', async () => {
     const test = setUp();
     const launchedId = test.chat.launch({
       projectDir: '/w/app',
@@ -1417,11 +1423,61 @@ describe('createChatSessions', () => {
       profile: 'work',
       hostSessionId: 'uuid-1',
       title: 'go',
+      owner: 'practice',
     });
 
     expect(sessionId).toBe(launchedId);
     expect(test.activated).toEqual([]);
   });
+
+  it.each([
+    {
+      given: 'an owned row, no owner asked',
+      rowOwner: { owner: 'practice' },
+      asked: {},
+      named: ['practice', 'no owner'],
+    },
+    {
+      given: 'an unowned row, an owner asked',
+      rowOwner: {},
+      asked: { owner: 'practice' },
+      named: ['no owner', 'practice'],
+    },
+    {
+      given: 'another owner asked',
+      rowOwner: { owner: 'practice' },
+      asked: { owner: 'backlog' },
+      named: ['practice', 'backlog'],
+    },
+  ])(
+    'resume_HostIdChatHoldsForAnotherOwner_RejectsNamingBoth given $given',
+    async ({ rowOwner, asked, named }) => {
+      const test = setUp();
+      test.chat.launch({
+        projectDir: '/w/app',
+        profile: 'work',
+        message: { text: 'go', images: [] },
+        ...rowOwner,
+      });
+      await flush();
+      const openedBefore = test.opened.length;
+
+      const resumed = test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: 'uuid-1',
+        title: 'go',
+        instructions: ['own note'],
+        ...asked,
+      });
+
+      await expect(resumed).rejects.toThrow(
+        new RegExp(`uuid-1.*${named[0]}.*${named[1]}`),
+      );
+      expect(test.activated).toEqual([]);
+      expect(test.opened).toHaveLength(openedBefore);
+    },
+  );
 
   it('commands_StoredAndSentOnChange', async () => {
     const test = await started();

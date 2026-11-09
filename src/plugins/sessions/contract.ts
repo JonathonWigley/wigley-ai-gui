@@ -232,8 +232,9 @@ export interface SessionsMainExports {
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was; with
-  // `options.owner`, added unmarked and never selected. Throws when `info.sessionId` is null, any session already holds that
-  // host id, or one already holds `options.rowId`.
+  // `options.owner`, added unmarked and never selected. Throws when
+  // `info.sessionId` is null, any session already holds that host id, or one
+  // already holds `options.rowId`.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets
@@ -243,8 +244,9 @@ export interface SessionsMainExports {
   // a mark that selected another session from none, or a `release` of another
   // selected row; the session's end drops it too. A mark that finds the row
   // unmarked stores its `options` as the row's `markToast`, and one that finds
-  // it still marked keeps the toast there; an activate clears it. A session
-  // opened with an `owner` is logged and ignored: no row, mark or selection.
+  // it still marked keeps the toast there; an activate clears it. For a session
+  // opened with an `owner`, `mark` is logged and adds no row, mark or
+  // selection.
   mark(sessionId: string, options: MarkOptions): void;
   // The user's pick: selects the session's row and clears its mark; a
   // connected session with no row, or a row the user closed, gets its row at
@@ -556,11 +558,12 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // `addSection` registers a side bar section; it throws `section id <id> is
 // reserved` for `favorites` or `recent`, and `part <id> is already added` on
 // an id another registered section holds. On each side bar draw every
-// section's `claims` is asked of every row with no owner: a claimed row leaves its project
-// group and draws in the section, newest first; a row two sections claim goes
-// to the lower `order`, a tie to the section registered first, and a `claims`
-// that throws counts as false and is logged. The sections that claim a row draw after Recent, by `order`,
-// a tie in registration order; one that claims none draws nothing. Adding a
+// section's `claims` is asked of every row with no owner: a claimed row leaves
+// its project group and draws in the section, newest first; a row two sections
+// claim goes to the lower `order`, a tie to the section registered first, and a
+// `claims` that throws counts as false and is logged. The sections that claim
+// a row draw after Recent, by `order`, a tie in registration order; one that
+// claims none draws nothing. Adding a
 // section and disposing its `Disposable` each redraw the side bar. `header`
 // builds on each side bar draw, so a header whose content changes between
 // draws redraws into its own wrapper itself.

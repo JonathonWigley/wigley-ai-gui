@@ -337,8 +337,9 @@ interface MountRecord {
 }
 
 // A held session's Chat tab. `state` is the view's last applied state: the
-// baseline a `chat.session` write compares with. `host` is null until the tab is attached, and
-// `box` and `dropTarget` until the editor mounts into the attached tab.
+// baseline a `chat.session` write compares with. `host` is null until the tab
+// is attached, and `box` and `dropTarget` until the editor mounts into the
+// attached tab.
 // `composerSize` follows the drawn composer's height for as long as the tab is
 // held, and `rootSize` the tab's own size, under which the hub can hide.
 // `unseen` is the finished turn the row still shows, and `activity` the

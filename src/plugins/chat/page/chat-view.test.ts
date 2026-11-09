@@ -1959,6 +1959,53 @@ describe('mountChatView mounts', () => {
     },
   );
 
+  // Breaks: a mount before the page's `ready` that draws the tab twice, or
+  // leaves it deaf to the slots once ready follows them.
+  it('mount_BeforeReadyWithKeyAndRow_AttachesOnceAndFollowsTheSlots', () => {
+    const mount = mounted();
+    mount.owners.set('s1', 'practice');
+    const { entries, controls, commands, queued, returned, ...info } =
+      sessionState('s1');
+    mount.writers.entries.replace('s1', entries);
+    mount.writers.controls.set('s1', controls);
+    mount.writers.commands.set('s1', commands);
+    mount.writers.queued.set('s1', queued);
+    mount.writers.returned.set('s1', returned);
+    mount.writers.session.set('s1', info);
+    const element = document.createElement('div');
+    mount.view.mount(element, 's1');
+    expect(childCount(element)).toBe(1);
+
+    mount.ready();
+    const notice: ChatEntry = {
+      kind: 'notice',
+      id: 'n1',
+      at: 1000,
+      text: 'hello',
+      tone: 'info',
+      raw: [],
+    };
+    mount.writers.entries.put('s1', notice);
+
+    expect(childCount(element)).toBe(1);
+    expect(mount.addTabs).toEqual([]);
+    expect(mount.view.session('s1')?.state.entries).toEqual([notice]);
+  });
+
+  // Breaks: a reveal of a mounted session that focuses its box while the mount
+  // is hidden, or never once it shows.
+  it('mount_Revealed_FocusesTheBoxWhenTheMountShows', () => {
+    const { mount, handle } = mountedOwned();
+    mount.boxCalls.length = 0;
+
+    mount.view.reveal('s1');
+    expect(mount.boxCalls).toEqual([]);
+    handle.shown();
+
+    expect(mount.boxCalls).toContainEqual(['focus', { insertAtEnd: true }]);
+    expect(mount.addTabs).toEqual([]);
+  });
+
   // Breaks: a dispose that ends the session, keeps the view drawn, or leaves
   // the session marked mounted.
   it('mount_Disposed_LeavesTheSessionHeld', () => {

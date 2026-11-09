@@ -1522,7 +1522,7 @@ describe('createSessionList', () => {
     { order: ['a', 'o'], selected: null },
     { order: ['b', 'o', 'a'], selected: 'b' },
   ])(
-    'closeSession_SelectedRowBesideARowWithAnOwner_SkipsIt: $order',
+    'release_SelectedRowBesideARowWithAnOwner_SkipsIt: $order',
     ({ order, selected }) => {
       const { list } = setUp();
       const ids = new Map<string, string>();
