@@ -427,13 +427,14 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   with the sort key's hint at its end, then five meter rows (CPU, GPU, RAM, Network, Disk), each its label, a Meter,
   its value in tabular numerals and a Sparkline of the last 60 seconds in the meter's tone (`warning` from 70 %,
   `critical` from 90 % of the percent rounded to a whole percent, as the context bar; RAM by memory pressure where the
-  OS reports it); RAM's pressure and swap sit on a `text-12`
-  `fg-tertiary` line under its row. The process list follows under a heading row naming the columns, the sorted one
+  OS reports it); RAM's pressure and swap are its row's
+  tooltip. The process list follows under a heading row naming the columns, the sorted one
   marked: one row per group or process, its name, then CPU, RAM and GPU columns in tabular numerals, sorted by one of
   them; the keyboard cursor's row takes `is-cursor`. A group row (an app, or `claude · <session title>`) opens to show
   its processes under it. A process with no GPU reading shows a dash in its GPU column. An `Other (exited processes,
   system)` row holds the CPU no other row does, sorts with them, never opens, and shows dashes for RAM and GPU. Under a 360px container query
-  each meter takes two lines and a row's cells drop under its name.
+  each meter keeps one line, its Meter filling the room between label and value and its Sparkline hidden, and a row's
+  cells drop under its name.
 - **Popup:** a session's form (round or primer) is an L2 content sheet raised over the session's tabs, with no shadow
   (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the `sessions.popup-top` token
   (`15%` of the frame's body), the tab under it dimmed by the `scrim`. It slides up on open and down on hide over

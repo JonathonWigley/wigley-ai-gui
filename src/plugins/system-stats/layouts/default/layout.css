@@ -129,6 +129,12 @@
 
   [data-layout-owner='system-stats'][data-layout='default']
     .system-stats-meter
+    > .ui-meter {
+    width: 100%;
+  }
+
+  [data-layout-owner='system-stats'][data-layout='default']
+    .system-stats-meter
     > .ui-sparkline {
     display: none;
   }

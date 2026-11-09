@@ -31,7 +31,7 @@ export interface StatsSnapshot {
   ram: StatsMeter;
   network: StatsMeter;
   disk: StatsMeter;
-  memoryNote: string; // the line under RAM: pressure and swap used
+  memoryNote: string; // RAM's note: pressure and swap used
   rows: StatsProcessRow[]; // every group and lone process, then the Other row, unsorted; the page sorts and cuts
   error: string | null; // the last sample()'s rejection message; null after a good sample
 }
