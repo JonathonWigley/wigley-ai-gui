@@ -51,6 +51,7 @@ import type {
   SlotReader,
   SlotWriter,
 } from './state';
+import type { SystemStats } from './system-stats';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
 import type { UserConfig } from './user-config';
@@ -969,7 +970,8 @@ export interface DriveHost {
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
 // the stable or the dev one. `images` re-encodes an image smaller, as PNG or
-// JPEG only, for `shrinkToFit`. `sessionHost` owns every agent process, so a
+// JPEG only, for `shrinkToFit`. `systemStats` reads the machine's CPU, GPU,
+// memory, network and disk counters. `sessionHost` owns every agent process, so a
 // process outlives the app (`docs/features/session-host/design.md`).
 // `pluginSwitch` tells whether a plugin may switch off now.
 export interface MainServices {
@@ -988,6 +990,7 @@ export interface MainServices {
   platform: Platform;
   alerts: Alerts;
   images: ImageEncoder;
+  systemStats: SystemStats;
   agentHarnesses: readonly AgentHarness[];
   sessionHost: SessionHost;
   window: {

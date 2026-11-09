@@ -549,6 +549,13 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/images': { layers: ['src/contracts'], packages: ['electron'] },
+  // The OS's own commands, through the ProcessRunner; no `node:` import.
+  'src/main/system-stats': { layers: ['src/contracts'], packages: [] },
+  // Over the shared FakeProcesses.
+  'src/main/system-stats/mac-system-stats.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/main/system-stats'],
+    packages: [],
+  },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   // Runs the Files contract suite, which the memory adapter runs too.
   'src/main/files/node-files.test.ts': {
@@ -614,6 +621,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/ui-state',
       'src/main/alerts',
       'src/main/images',
+      'src/main/system-stats',
       'src/main/files',
       'src/main/processes',
       'src/main/git',

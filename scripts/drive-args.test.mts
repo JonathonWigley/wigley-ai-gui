@@ -38,9 +38,18 @@ describe('parseDriveArgs', () => {
       kind: 'start',
       packaged: true,
       harness: 'claude',
+      systemStats: 'fake',
       userConfig: false,
       namesFlags: true,
       run: 'x',
+    });
+  });
+
+  it("GIVEN argv ['start', '--system-stats', 'live'] WHEN parsed THEN it is start with live system stats", () => {
+    expect(parseDriveArgs(['start', '--system-stats', 'live'])).toMatchObject({
+      kind: 'start',
+      harness: 'fake',
+      systemStats: 'live',
     });
   });
 
@@ -48,6 +57,7 @@ describe('parseDriveArgs', () => {
     { argv: ['start', '--run', 'x'], namesFlags: false },
     { argv: ['start', '--packaged'], namesFlags: true },
     { argv: ['start', '--harness', 'fake'], namesFlags: true },
+    { argv: ['start', '--system-stats', 'fake'], namesFlags: true },
     { argv: ['start', '--user-config'], namesFlags: true },
   ])(
     'GIVEN argv $argv WHEN parsed THEN namesFlags is $namesFlags',
@@ -104,6 +114,12 @@ describe('parseDriveArgs', () => {
     const parse = () => parseDriveArgs(['start', '--harness', 'real']);
     expect(parse).toThrow(/fake/);
     expect(parse).toThrow(/claude/);
+  });
+
+  it("GIVEN argv ['start', '--system-stats', 'real'] WHEN parsed THEN it throws naming fake and live", () => {
+    const parse = () => parseDriveArgs(['start', '--system-stats', 'real']);
+    expect(parse).toThrow(/fake/);
+    expect(parse).toThrow(/live/);
   });
 
   it("GIVEN argv ['query', '--run', 'x', '--', ':root', '--wg-accent'] WHEN parsed THEN --wg-accent is a style and the run is x", () => {

@@ -46,9 +46,11 @@ import {
 import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
 import type { OsName, Platform } from '../contracts/platform';
+import type { ProcessRunner } from '../contracts/processes';
 import type { SessionHost } from '../contracts/session-host';
 import type { AppConfig } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
+import type { SystemStats } from '../contracts/system-stats';
 import type { UserConfig } from '../contracts/user-config';
 import type {
   CommandHandler,
@@ -66,6 +68,7 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
+import { createFakeSystemStats } from '../shared/fake-system-stats';
 import { isSameJson } from '../shared/json';
 import { osPlatform } from '../shared/os-platform';
 import { platformFor } from '../shared/platform';
@@ -146,10 +149,13 @@ import { limitRuns } from './processes/limited-processes';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
+import { createMacSystemStats } from './system-stats/mac-system-stats';
+import { createUnavailableSystemStats } from './system-stats/unavailable-system-stats';
 import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
+  type DriveSystemStatsName,
   type RunEnvironment,
   runEnvironmentOf,
 } from './run-mode';
@@ -212,7 +218,7 @@ interface ModeServices {
     context: ModeServicesContext,
   ): Pick<
     MainServices,
-    'alerts' | 'agentHarnesses' | 'window' | 'openExternal'
+    'alerts' | 'agentHarnesses' | 'window' | 'openExternal' | 'systemStats'
   >;
 }
 
@@ -273,9 +279,17 @@ function alertsFor(osName: OsName, window: BrowserWindow, log: Log): Alerts {
     : createPlainAlerts(log);
 }
 
+// The readings of the OS `osName`, its commands run through `runner`. Linux has
+// no adapter, so its samples reject.
+function systemStatsFor(osName: OsName, runner: ProcessRunner): SystemStats {
+  return osName === 'macos'
+    ? createMacSystemStats(runner, os.cpus)
+    : createUnavailableSystemStats(osName);
+}
+
 // The user's app: the OS Trash, native alerts and dialogs, Claude Code, whose
-// relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, and
-// links opened in the user's browser.
+// relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, links
+// opened in the user's browser, and the machine's own readings.
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
@@ -286,6 +300,7 @@ function liveServices(): ModeServices {
       ],
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
+      systemStats: systemStatsFor(platform.os, processes),
     }),
   };
 }
@@ -295,10 +310,11 @@ function liveServices(): ModeServices {
 // collects nothing; alerts are silent, the window stays offscreen and shows no
 // dialog, and no link takes the user's foreground. `runName` names the run in
 // the line a window not shown or a link not opened logs; sessions run over the
-// harness `harness` builds.
+// harness `harness` builds, and plugins read the machine `systemStats` builds.
 function offscreenRunServices(
   runName: string,
   harness: (context: ModeServicesContext) => AgentHarness,
+  systemStats: () => SystemStats,
 ): ModeServices {
   return {
     trashItem: (file) => rm(file, { recursive: true }),
@@ -309,6 +325,7 @@ function offscreenRunServices(
       openExternal: gateExternalLinks(async (url) =>
         context.log('main', `external link not opened in ${runName}: ${url}`),
       ),
+      systemStats: systemStats(),
     }),
   };
 }
@@ -333,17 +350,29 @@ function driveHarness(
   );
 }
 
+// A drive run's system stats, as `WIGLEY_DRIVE_SYSTEM_STATS` named them: the
+// fake's fixed machine, or this machine's readings.
+function driveSystemStats(name: DriveSystemStatsName): SystemStats {
+  return name === 'fake'
+    ? createFakeSystemStats()
+    : systemStatsFor(platform.os, processes);
+}
+
 function modeServicesOf(environment: RunEnvironment): ModeServices {
   switch (environment.mode) {
     case 'live':
       return liveServices();
     case 'selfTest':
-      return offscreenRunServices('the self-test', () =>
-        createFakeAgentHarness(clock, files, timers),
+      return offscreenRunServices(
+        'the self-test',
+        () => createFakeAgentHarness(clock, files, timers),
+        createFakeSystemStats,
       );
     case 'drive':
-      return offscreenRunServices('a drive run', (context) =>
-        driveHarness(environment.harness, context),
+      return offscreenRunServices(
+        'a drive run',
+        (context) => driveHarness(environment.harness, context),
+        () => driveSystemStats(environment.systemStats),
       );
   }
 }

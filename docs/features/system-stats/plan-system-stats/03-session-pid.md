@@ -1,6 +1,6 @@
 # 03 — Session process pid reaches chat
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -195,3 +195,4 @@ Commit: one commit for the group: "Session host reports each hosted process's pi
 
 ## Proof
 
+Commit 620b1b34 · proof: diff read: HostedProcess.pid, AgentProcessEvents.pid, FAKE_AGENT_PID, ChatSessionInfo.pid present; worker's 17 test files pass (1284); typecheck clean for 03's files · concerns: session-part.test.ts and layout.test.ts hold ComposerInput, not ChatSessionInfo literals, left alone; a controls test now finds its event by name since pid leads; childHost double returns pid null

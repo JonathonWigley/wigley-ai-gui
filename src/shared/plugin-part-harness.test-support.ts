@@ -52,6 +52,7 @@ import type {
 } from '../contracts/plugin';
 import type { SessionHost } from '../contracts/session-host';
 import type { SlotKey, SlotWriter } from '../contracts/state';
+import type { SystemStats } from '../contracts/system-stats';
 import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
@@ -947,6 +948,7 @@ function fakeMainApi(
       git: notFaked<Git>('git'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
+      systemStats: notFaked<SystemStats>('systemStats'),
       // Refuses no switch-off.
       pluginSwitch: { mayDisable: async () => null },
       ...replaced,

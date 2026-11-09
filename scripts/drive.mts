@@ -247,6 +247,7 @@ function spawnApp(runDir: string, options: StartOptions): number {
       ...process.env,
       WIGLEY_DRIVE_DIR: path.resolve(runDir),
       WIGLEY_DRIVE_HARNESS: options.harness,
+      WIGLEY_DRIVE_SYSTEM_STATS: options.systemStats,
     },
   });
   closeSync(log);
@@ -405,8 +406,8 @@ function keptStartOptions(runId: string): StartOptions | null {
   if (!isKept) {
     return null;
   }
-  const { packaged, harness, userConfig } = readStartFile(runId);
-  return { packaged, harness, userConfig };
+  const { packaged, harness, systemStats, userConfig } = readStartFile(runId);
+  return { packaged, harness, systemStats, userConfig };
 }
 
 // Stops the run's app and, unless `keepSessions`, deletes its scratch folders;
@@ -434,9 +435,9 @@ async function quit(runId: string, keepSessions: boolean): Promise<void> {
 // Stops the run's app, its hosted processes left running, then starts it again
 // into the same run folder with the flags its start recorded.
 async function restart(runId: string): Promise<void> {
-  const { packaged, harness, userConfig } = readStartFile(runId);
+  const { packaged, harness, systemStats, userConfig } = readStartFile(runId);
   await stop(runId, { keepSessions: true });
-  await start(runId, { packaged, harness, userConfig }, false);
+  await start(runId, { packaged, harness, systemStats, userConfig }, false);
 }
 
 // Asks the run's app to quit and waits for it and the process `start` spawned
