@@ -1,6 +1,6 @@
 # 05 — Start prompt: Project, Branch and Other folder steps
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -243,3 +243,5 @@ profile a project fixes, the project's saved sessions from every folder it cover
 folder step".
 
 ## Proof
+
+Commit 503785ff · proof: diff read (every Produces present); typecheck 0, lint 0, chat+shared-page vitest 2390 passed · concerns: branch reopen reads picker.cursorIndex() assuming the Branch request is still open; cached branch list may open the step after the refresh failed (ruling); list-picker.test filteredPickerSetup now records filter text

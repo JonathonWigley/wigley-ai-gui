@@ -222,7 +222,7 @@ Boundary rules: chat imports no unity-pool file; sessions imports no chat file; 
 - [x] [unity-pool: pool provider](04-unity-pool-provider.md) — after 02
 
 ### Wave 3
-- [ ] [Start prompt: Project, Branch and Other folder steps](05-start-prompt-steps.md) — after 03
+- [x] [Start prompt: Project, Branch and Other folder steps](05-start-prompt-steps.md) — after 03
 
 ### Wave 4
 - [ ] [Doc re-read](06-doc-re-read.md) — after 04, 05
@@ -240,9 +240,11 @@ Review base: 7ec307f1
 - 04 · 006640e7 · diff read (every Produces present), typecheck and lint clean on the whole tree after 03, unity-pool and node-processes tests 173 pass · concerns: a part stop aborts the follow-up release of a cancelled claim, so a granted clone falls to pool expiry; a release for a session that never got a clone answers not-holder, only logged; scriptPath setting description and unity-pool design § Status left stale for 06
 - 03 · f979b7c1 · diff read (StartTarget, StartRequest, LaunchRequest, ProjectPastSessionRow, channel projects/branches/projectPastSessions, SessionSlots.relocate present), typecheck and lint clean, chat and usage tests 1764 pass · concerns: claimSettled has no trailing catch, so a throw outside its two try blocks is an unhandled rejection; a profile configDir change mid-claim gives sessionOpened the old one; a move throwing after sessions.relocate leaves sessions' row in the clone while chat's slot may name the placeholder; worker ran npx vitest once (the repo's own vitest, nothing installed)
 - 01b · 29ab3be6 · diff read (docs and workflow both hear sessions.relocated), typecheck and lint clean after 03, docs and workflow start tests 103 pass · concerns: none
+- 05 · 503785ff · diff read (every Produces present); typecheck 0, lint 0, chat+shared-page vitest 2390 passed · concerns: branch reopen reads picker.cursorIndex() assuming the Branch request is still open; cached branch list may open the step after the refresh failed (ruling); list-picker.test filteredPickerSetup now records filter text
 ### Contract changes
 - runPoolClaim deps: as planned → gains log; releaseCommandArgs and lastLine exported from pool-cli.ts; pool-watch.ts exports STATE_FILE · why: the release after a cancelled claim runs inside runPoolClaim, which alone holds the script path and python command · consumers: 04 only · group 04
 - emitSessionOpened (private): (session, profileName, profileDir, origin) → (row: {sessionId, hostSessionId, projectDir}, profileName, profileDir, origin) · why: openRow emits before the HeldSession exists, and a claim landing emits with the clone · consumers: none outside chat-sessions.ts · group 03
+- 05 (additions, own files): projectName exported from start-prompt-items.ts; SessionItem/sessionItems/withArchived generic over the row type (default PastSessionRow)
 ### Rulings
 - A project lookup landing for an entry the list no longer holds, or for a folder the session no longer holds, changes nothing — closes a reused-rowId hazard — a late project would be lost only for an ended entry · group 01 · group 01
 - The consumer view relocates only sessions that dependent opened, throwing otherwise; it wraps end before filing it so a dependent's stop forgets the id — chat must relocate through its own sessions view, which it does — a plugin relocating another's row would throw · group 01 · group 01
@@ -256,5 +258,6 @@ Review base: 7ec307f1
 - start_session's chooseProject runs after the prompt check and before the profile choice, JSON null as absent for folder, project and branch; a project call never stats a folder · group 03 · group 03
 - addPoolProvider's registration and its dispose each call namer.changed(), so rows in a pool's clones regroup when a provider comes or goes · group 03 · group 03
 - Workflow overwrites its connected entry on relocated even for a row with none; the docs test pins the move through a Codex session's context run — relocate precedes sessionOpened by design · group 01b
+- 05: the cached branch read still opens the Branch step after the refresh rejected; 'ignore the cached answer' applies only once the step is open — otherwise that order shows nothing and no toast
 ### Review rounds
 ### Test gate
