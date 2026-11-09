@@ -188,7 +188,7 @@ Defects seen in a drive run, a transcript or the user's own use.
   focuses the pane but does not select the tab. Pane focus moves on the release, and `drawFrame`
   (`src/plugins/sessions/page/session-tabs-view.ts`) then rebuilds the strip with `strip.replaceChildren()`, so the
   released tab leaves the document before its `click`: `pointerup` lands on the tab, `mouseup` on the `NAV`, and no
-  `click` fires. A second click selects it. The bar's other controls (Split right, Close pane) work on the first click.
+  `click` fires. A second click selects it. The bar's close-pane control works on the first click.
   Keep the tab elements across draws. Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
 - **Pane focus keys leave the keyboard in the old pane** — *agent-ready*: `Alt+h` from a focused box moves pane focus
   while `activeElement` stays in the old pane's box (seen: active in slot 1, focused slot 0). A click already moves it

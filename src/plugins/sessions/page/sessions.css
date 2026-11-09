@@ -122,6 +122,7 @@
    styles its own content. After the rule above, so it wins. */
 .session-bar-parts {
   display: flex;
+  margin-right: auto;
   flex: 0 1000 auto;
   align-items: center;
   gap: var(--wg-space-1);
@@ -141,18 +142,8 @@
   margin-right: var(--wg-space-1);
 }
 
-.session-tabs-close,
-.session-tabs-close.is-no-target ~ .session-pane-control {
-  margin-left: auto;
-}
-
-/* A split prompt is its key alone, faint beside the pane's close. */
-.session-split-hint {
-  color: var(--wg-fg-tertiary);
-}
-
 /* The close-pane control holds its icon and its key side by side, its thin
-   `chrome-close` glyph small and faint until hovered. */
+   `chrome-close` glyph small, and faint until hovered. */
 .ui-icon-button.session-pane-control {
   gap: var(--wg-space-1);
   width: auto;
