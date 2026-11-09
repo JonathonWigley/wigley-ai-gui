@@ -48,7 +48,7 @@ const BAD_ARG_KEYMAP = JSON.stringify({
 });
 
 // A user keymap moving the text box's not-applicable toggle in the form from
-// <Leader>x to <Leader>q, which nothing else binds.
+// <Leader>ax to <Leader>q, which nothing else binds.
 const MOVED_NOT_APPLICABLE_KEYMAP = JSON.stringify({
   binds: [
     {
@@ -58,7 +58,7 @@ const MOVED_NOT_APPLICABLE_KEYMAP = JSON.stringify({
       where: 'box',
     },
   ],
-  unbind: [{ keys: '<Leader>x', scope: 'forms.forms', where: 'box' }],
+  unbind: [{ keys: '<Leader>ax', scope: 'forms.forms', where: 'box' }],
 });
 
 // A user keymap making `,` the leader, on the page and in a text box.
@@ -615,8 +615,8 @@ const USER_KEYMAP_STEPS: SelfTestStep[] = [
   },
   { keys: ['a'], expect: '[forms] focused notes on question 2' },
   {
-    keys: ['Escape', ' ', 'x'],
-    expect: '[page] <Leader>x has no bind in forms.forms',
+    keys: ['Escape', ' ', 'a', 'x'],
+    expect: '[page] <Leader>ax has no bind in forms.forms',
   },
   { keys: [' ', 'q'], expect: '[forms] applicable again on question 2' },
   {
@@ -624,18 +624,18 @@ const USER_KEYMAP_STEPS: SelfTestStep[] = [
     keys: [],
     expect: '[config] applied a new config',
   },
-  { keys: [',', 'x'], expect: '[forms] not applicable on question 2' },
+  { keys: [',', 'a', 'x'], expect: '[forms] not applicable on question 2' },
   {
     writeFile: { path: USER_KEYMAP_FILE, text: '{}' },
     keys: [],
     expect: '[config] applied a new config',
   },
   {
-    keys: [' ', 'x'],
+    keys: [' ', 'a', 'x'],
     expect: '[forms] applicable again on question 2',
-    why: '{} restores the Space leader and <Leader>x, though Space was unmapped as the leader once already.',
+    why: '{} restores the Space leader and <Leader>ax, though Space was unmapped as the leader once already.',
   },
-  { keys: [' ', 'x'], expect: '[forms] not applicable on question 2' },
+  { keys: [' ', 'a', 'x'], expect: '[forms] not applicable on question 2' },
   { keys: ['Escape'], expect: '[forms] left the box' },
 ];
 
@@ -670,7 +670,7 @@ const PANE_RESIZE_STEPS: SelfTestStep[] = [
 const SECOND_SESSION_STEPS: SelfTestStep[] = [
   { ...stepToRow('<A-S-o>', 'selftest 2'), checksFit: true },
   {
-    keys: [' ', 'v', 'f'],
+    keys: [' ', 'b', 'p'],
     expect: '[sessions] hid Form popup in selftest 2',
     alsoExpect: [/^\[docs\] Docs tab shown$/],
     checksFit: true,
@@ -682,7 +682,7 @@ const SECOND_SESSION_STEPS: SelfTestStep[] = [
     why: 'The sessions scope, not the hidden round, holds the keys.',
   },
   {
-    keys: [' ', 'v', 'f'],
+    keys: [' ', 'b', 'p'],
     expect: '[sessions] opened Form popup in selftest 2',
   },
   { keys: ['j'], expect: '[page] j ran forms.nextLine' },

@@ -58,13 +58,13 @@ const formsPageChoices = DIGITS.map((digit) => ({
 // binds fire in both; `<Leader><Leader>` fires on the form's page as well.
 function formsBoxBinds(scope: 'forms.forms' | 'forms.review') {
   return [
-    { keys: '<Leader>x', command: 'forms.toggleNotApplicable' as const },
     ...DIGITS.map((digit) => ({
       keys: `<Leader>a${digit}`,
       command: 'forms.choose' as const,
       arg: Number(digit),
     })),
     { keys: '<Leader>ac', command: 'forms.clearChoice' as const },
+    { keys: '<Leader>ax', command: 'forms.toggleNotApplicable' as const },
     ...(scope === 'forms.review'
       ? [{ keys: '<Leader><Leader>', command: 'forms.openReview' as const }]
       : []),
@@ -210,7 +210,8 @@ function listPickerBinds<S extends ListPickerScope>(scope: S) {
 export const defaultKeymap = {
   leader: '<Space>',
   groups: {
-    '<Leader>k': 'windows',
+    '<Leader>b': 'session',
+    '<Leader>k': 'go to',
     '<Leader>v': 'view',
     '<Leader>z': 'debug',
     '<Leader>zl': 'layout previews',
@@ -218,13 +219,11 @@ export const defaultKeymap = {
     '<Leader>a': 'answer',
     '<Leader>n': 'notes',
     '<Leader>w': 'workflow',
-    '<Leader>r': 'rename',
     '<Leader>p': 'projects',
   },
   binds: [
     // ── Windows and modes ──────────────────────────────────────────────────
     { keys: '<Leader>ks', scope: 'any', command: 'sessions.showMode' },
-    { keys: '<Leader>kn', scope: 'any', command: 'chat.newSession' },
     // Bound per scope, since forms, the primer, the Backlog editor and notes
     // hold `<C-n>` as next box and a key cannot sit in `any` beside a scope.
     ...(
@@ -261,8 +260,6 @@ export const defaultKeymap = {
       command: 'backlog.toggleAgentReadyOnly',
     },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
-    { keys: '<Leader>vs', scope: 'any', command: 'chat.toggleSideParts' },
-    { keys: '<Leader>vf', scope: 'any', command: 'sessions.togglePopup' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },
@@ -272,8 +269,13 @@ export const defaultKeymap = {
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
     { keys: "<Leader>'", scope: 'any', command: 'session-stash.stash' },
-    { keys: '<Leader>:', scope: 'any', command: 'chat.stopAll' },
-    { keys: '<Leader>rr', scope: 'any', command: 'sessions.renameSession' },
+    { keys: '<Leader>bn', scope: 'any', command: 'chat.newSession' },
+    { keys: '<Leader>br', scope: 'any', command: 'sessions.renameSession' },
+    { keys: '<Leader>bd', scope: 'any', command: 'sessions.closeSession' },
+    { keys: '<Leader>bs', scope: 'any', command: 'session-stash.stash' },
+    { keys: '<Leader>bX', scope: 'any', command: 'chat.stopAll' },
+    { keys: '<Leader>bp', scope: 'any', command: 'sessions.togglePopup' },
+    { keys: '<Leader>bh', scope: 'any', command: 'chat.toggleSideParts' },
     { keys: '<Leader>pf', scope: 'any', command: 'sessions.favoriteProject' },
     { keys: '<Leader>pk', scope: 'any', command: 'sessions.moveProjectUp' },
     { keys: '<Leader>pj', scope: 'any', command: 'sessions.moveProjectDown' },

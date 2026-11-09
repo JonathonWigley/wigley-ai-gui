@@ -783,7 +783,7 @@ function emptyStateCells(platform: OsName): SampleCell[][] {
       cell(
         emptyState(
           'No sessions yet. Start one with',
-          kbd('Space k n', platform),
+          kbd('Space b n', platform),
         ),
         'Default',
       ),
