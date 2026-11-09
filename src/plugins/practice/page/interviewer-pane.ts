@@ -4,6 +4,7 @@ import type { OuterPanes } from '../../../contracts/panes';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { boxHint } from '../../../shared/page/ui/key-anchors';
 import { qualify } from '../../../shared/plugin-manifests';
@@ -96,14 +97,17 @@ export function createInterviewerPane(
   let mount: ChatMount | null = null;
   let askBox: AskBox | null = null;
 
+  // Draws the ask box's part again, keeping the focus in its frame.
   const drawAskBox = (box: AskBox) => {
-    box.draw?.dispose();
-    box.draw?.built.element.remove();
-    box.draw = deps.drawAskBox(
-      body,
-      { problemTitle: deps.problemTitle(), hint: ASK_HINT },
-      box.frame,
-    );
+    keepingFocusAndScroll(body, [], () => {
+      box.draw?.dispose();
+      box.draw?.built.element.remove();
+      box.draw = deps.drawAskBox(
+        body,
+        { problemTitle: deps.problemTitle(), hint: ASK_HINT },
+        box.frame,
+      );
+    });
   };
 
   const destroyAskBox = () => {
@@ -228,6 +232,7 @@ export function createInterviewerPane(
       },
       (error: unknown) => {
         if (asked === pair) {
+          takesKeysOnAnswer = false;
           log(`interviewer not read ${asked.slug}: ${errorText(error)}`);
           deps.toast(errorText(error), 'error');
         }
@@ -365,7 +370,9 @@ export function createInterviewerPane(
         drawAskBox(askBox);
       }
     },
+    // An answer landing after the dispose finds no open pair.
     dispose() {
+      pair = null;
       dropMount();
       destroyAskBox();
     },

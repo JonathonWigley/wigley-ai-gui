@@ -14,8 +14,8 @@ import type {
 // - `rows` → `ol.practice-rows`; the app replaces its children on each render: one `problemRow` per shown problem, or
 //   the `empty` part.
 // - `importHint` → `span.practice-import-hint`, the app's span for the key hint that starts an import.
-// - `tabs` → the app's `nav.ui-tabs` strip of the pane's tabs; the app toggles `is-active` on the shown tab and runs a
-//   click on a tab.
+// - `tabs` → the app's `nav.ui-tabs ui-tabs--scroll` strip of the pane's tabs, which scrolls its tabs sideways; the app
+//   toggles `is-active` on the shown tab and runs a click on a tab.
 // - `body` → `div.practice-tab-body`, the pane that scrolls; the app draws the shown tab's part into it.
 // - `actions` → `span.practice-console-actions`, holding the app's Run and Submit buttons with their key hints.
 // - `editor` → `div.practice-editor`, the document editor's parent, which fills its height; `saveState` →
@@ -62,12 +62,18 @@ export interface ProblemRowInput {
   isDue: boolean;
   isOpen: boolean;
 }
-// Why a list shows no rows: the first read has not landed, no problem exists, the filter matches none, or the open
-// problem has no submissions.
-export type EmptyReason = 'loading' | 'noProblems' | 'filter' | 'noSubmissions';
+// Why a list shows no rows: the first read has not landed, it failed, no problem exists, the filter matches none, or
+// the open problem has no submissions. `message` is the failed read's error for `failed`, else null.
+export type EmptyReason =
+  | 'loading'
+  | 'failed'
+  | 'noProblems'
+  | 'filter'
+  | 'noSubmissions';
 export interface EmptyInput {
   reason: EmptyReason;
   filter: string;
+  message: string | null;
 }
 
 // The open problem's summary, for the Description tab's head.

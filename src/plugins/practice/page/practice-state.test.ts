@@ -4,6 +4,7 @@ import type { ProblemStatus, ProblemSummary } from '../contract';
 import type { Difficulty } from '../problem';
 import {
   difficultyCounts,
+  emptyReason,
   initialPracticeState,
   type PracticeAction,
   type PracticeState,
@@ -195,6 +196,54 @@ describe('practiceReducer', () => {
       expect(next.selectedSlug).toBe(expected);
     },
   );
+});
+
+describe('emptyReason', () => {
+  it.each<{
+    case: string;
+    actions: PracticeAction[];
+    rowCount: number;
+    expected: ReturnType<typeof emptyReason>;
+  }>([
+    { case: 'before any read', actions: [], rowCount: 0, expected: 'loading' },
+    {
+      case: 'a failed first read',
+      actions: [{ type: 'loadFailed', message: 'disk full' }],
+      rowCount: 0,
+      expected: 'failed',
+    },
+    {
+      case: 'a failed read after one landed',
+      actions: [
+        { type: 'loaded', problems: FILTERED },
+        { type: 'loadFailed', message: 'disk full' },
+      ],
+      rowCount: 4,
+      expected: null,
+    },
+    {
+      case: 'a read landing after a failed one',
+      actions: [
+        { type: 'loadFailed', message: 'disk full' },
+        { type: 'loaded', problems: [] },
+      ],
+      rowCount: 0,
+      expected: 'noProblems',
+    },
+    {
+      case: 'a filter matching none',
+      actions: [{ type: 'loaded', problems: FILTERED }],
+      rowCount: 0,
+      expected: 'filter',
+    },
+  ])('$case', ({ actions, rowCount, expected }) => {
+    const state = actions.reduce(
+      (current, action) => practiceReducer(current, action, matcher),
+      initialPracticeState(),
+    );
+
+    expect(emptyReason(state, rowCount)).toBe(expected);
+  });
 });
 
 describe('difficultyCounts', () => {

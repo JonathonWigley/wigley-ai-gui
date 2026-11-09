@@ -38,9 +38,10 @@ import {
 } from '../../../shared/page/editor-boxes';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import type { OwnerKitServices } from '../../../shared/page/layout-host/base-kit';
-import type {
-  DrawnPart,
-  RollbackDeps,
+import {
+  type DrawnPart,
+  disposeDraws,
+  type RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import { createMarkdownMount } from '../../../shared/page/markdown-mount';
@@ -134,6 +135,10 @@ type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
 // The pane of the column holding the keys.
 export type WorkspacePane = 'problem' | 'editor' | 'console';
 
+// How a `show` ended: the problem shows; the shown problem was kept because a
+// draft of it did not save; or a later `show` or the dispose overtook it.
+export type ShowResult = 'shown' | 'kept' | 'overtaken';
+
 // What of the page's place the workspace keeps.
 export type WorkspacePlace = Pick<
   PracticePlace,
@@ -210,10 +215,12 @@ export interface ProblemWorkspace {
   setSidePaneShown(isShown: boolean): void;
   // The divider beside `sidePane`.
   sideResizeTarget: ResizeTarget;
-  // Saves every unsaved draft first when another problem shows, then shows
-  // `problem` on its first tabs, the problem pane holding the keys; the
-  // saved place's open problem shows with the place's pane and tabs instead.
-  show(problem: OpenedProblem): Promise<void>;
+  // Saves every unsaved draft first when another problem shows, edits typed
+  // during the save included, then shows `problem` on its first tabs, the
+  // problem pane holding the keys; the saved place's open problem shows with
+  // the place's pane and tabs instead. A draft that fails to save keeps the
+  // shown problem and its drafts, and resolves `kept`.
+  show(problem: OpenedProblem): Promise<ShowResult>;
   // Takes the shown problem read again, keeping every unsaved draft; another
   // problem is ignored.
   refresh(problem: OpenedProblem): void;
@@ -263,6 +270,9 @@ export function createProblemWorkspace(
   );
   const problemStrip = tabStrip([...problemTabs.values()]);
   const consoleStrip = tabStrip([...consoleTabs.values()]);
+  for (const strip of [problemStrip, consoleStrip]) {
+    strip.classList.add('ui-tabs--scroll');
+  }
   const problemBody = element('div', 'practice-tab-body');
   problemBody.tabIndex = -1;
   const consoleBody = element('div', 'practice-tab-body');
@@ -688,7 +698,7 @@ export function createProblemWorkspace(
         parts.draw('empty', problemBody, (empty, into, rollback) => ({
           element: empty(
             into,
-            { reason: 'noSubmissions', filter: '' },
+            { reason: 'noSubmissions', filter: '', message: null },
             kitFor('problem', rollback),
           ),
         })),
@@ -858,6 +868,9 @@ export function createProblemWorkspace(
 
   // ── Render ─────────────────────────────────────────────────────────────
   const render = () => {
+    if (isDisposed) {
+      return;
+    }
     const state = store.get();
     for (const [id, node] of problemTabs) {
       node.classList.toggle('is-active', id === state.problemTab);
@@ -995,6 +1008,7 @@ export function createProblemWorkspace(
       return;
     }
     const slug = problem.summary.slug;
+    const judgedShow = showCount;
     isJudging = true;
     try {
       const isSaved = await saveAllNow(
@@ -1024,13 +1038,14 @@ export function createProblemWorkspace(
       isJudging = false;
     }
     if (kind === 'submit') {
-      await reopen(slug);
+      await reopen(slug, judgedShow);
     }
   };
 
   // Reads `slug` again after a Submit, so the Submissions tab and the summary
-  // show the new record.
-  const reopen = async (slug: string) => {
+  // show the new record. Dropped once a `show` after `judgedShow` began, or
+  // the dispose.
+  const reopen = async (slug: string, judgedShow: number) => {
     let problem: OpenedProblem;
     try {
       problem = await channel.invoke('open', slug);
@@ -1038,7 +1053,13 @@ export function createProblemWorkspace(
       log(`not refreshed ${slug}: ${errorText(error)}`);
       return;
     }
-    deps.applyOpened(problem);
+    const isStillShown =
+      !isDisposed &&
+      showCount === judgedShow &&
+      store.get().problem?.summary.slug === slug;
+    if (isStillShown) {
+      deps.applyOpened(problem);
+    }
   };
 
   const fetchPeek = async (slug: string) => {
@@ -1166,11 +1187,14 @@ export function createProblemWorkspace(
       const shown = store.get().problem;
       const isOtherProblem =
         shown !== null && shown.summary.slug !== problem.summary.slug;
-      if (isOtherProblem) {
-        await saveAllNow(DRAFT_IDS);
-      }
-      if (count !== showCount || isDisposed) {
-        return;
+      while (isOtherProblem && !isEveryDraftSaved(store.get())) {
+        const isSaved = await saveAllNow(DRAFT_IDS);
+        if (count !== showCount || isDisposed) {
+          return 'overtaken';
+        }
+        if (!isSaved) {
+          return 'kept';
+        }
       }
       const place = takeSavedPlace(problem.summary.slug);
       if (isOtherProblem) {
@@ -1184,6 +1208,7 @@ export function createProblemWorkspace(
         consoleTab: place?.consoleTab ?? 'testcase',
       });
       setPane(place?.pane ?? 'problem', { always: true, movesFocus: true });
+      return 'shown';
     },
     refresh(problem) {
       const before = store.get();
@@ -1227,9 +1252,7 @@ export function createProblemWorkspace(
     openSubmissionRow: (time) => dispatch({ type: 'openSubmission', time }),
     mayStop() {
       const state = store.get();
-      const unsaved = DRAFT_IDS.find(
-        (id) => saveState(state.drafts[id]) !== 'saved',
-      );
+      const unsaved = unsavedDraft(state);
       return state.problem === null || unsaved === undefined
         ? null
         : `Practice is still saving ${DRAFT_FILES[unsaved]}`;
@@ -1264,6 +1287,15 @@ function tabFor(
   deps: Pick<ProblemWorkspaceDeps, 'runKey'>,
 ): HTMLButtonElement {
   return tab(TAB_TITLES[id], () => deps.runKey(practiceShowTabCommand, id));
+}
+
+// The first draft not yet saved, or undefined when every one is.
+function unsavedDraft(state: WorkspaceState): DraftId | undefined {
+  return DRAFT_IDS.find((id) => saveState(state.drafts[id]) !== 'saved');
+}
+
+function isEveryDraftSaved(state: WorkspaceState): boolean {
+  return unsavedDraft(state) === undefined;
 }
 
 function paneOfBox(id: BoxId): 'problem' | 'console' {
@@ -1353,12 +1385,4 @@ function resultInput(judge: JudgeState): ResultInput {
       };
     }
   }
-}
-
-// Disposes each of `draws`; returns the empty list that replaces them.
-function disposeDraws(draws: readonly DrawnRoot[]): DrawnRoot[] {
-  for (const draw of draws) {
-    draw.dispose();
-  }
-  return [];
 }

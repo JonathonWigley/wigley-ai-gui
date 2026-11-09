@@ -1,4 +1,6 @@
-/* The default layout's list pane, its counts line and its rows' marks. */
+/* The default layout's look: the list pane, its counts and rows' marks; the
+   column's panes, their tabs bars and headers; the tabs' documents, boxes and
+   results; the interviewer's ask box; and the import dialog's body. */
 
 /* The list pane's tracks: its header of counts and keys, the filter, then the
    rows. */
@@ -101,6 +103,7 @@
 
 [data-layout-owner='practice'] .practice-tabs-bar > .ui-tabs {
   flex: 0 1 auto;
+  margin: 0;
   min-width: 0;
 }
 

@@ -58,8 +58,9 @@ function fakeEditorHost() {
 // one per call, in call order. The fake view keeps the focus and tells the
 // pane when it leaves `interviewer`, as the real view's `setFocus` does;
 // `viewCalls` records its calls. `events` records each `interviewerOf` and
-// each mount's `dispose`, in order.
-function paneSetup() {
+// each mount's `dispose`, in order. `mountError` makes every `mountChat`
+// throw it.
+function paneSetup(options: { mountError?: string } = {}) {
   const logs: string[] = [];
   const toasts: [string, string][] = [];
   const scopes: string[] = [];
@@ -109,6 +110,9 @@ function paneSetup() {
     setResizeTarget: () => undefined,
     setFocusTarget: () => undefined,
     mountChat(element, sessionId) {
+      if (options.mountError !== undefined) {
+        throw new Error(options.mountError);
+      }
       const mount: FakeMount = {
         element,
         sessionId,
@@ -161,6 +165,11 @@ function paneSetup() {
     // Answers the oldest unanswered `interviewerOf` and lets it land.
     async answerInterviewer(sessionId: string | null) {
       interviewerAnswers.shift()!.resolve(sessionId);
+      await settle();
+    },
+    // Fails the oldest unanswered `interviewerOf` with `error`.
+    async failInterviewer(error: string) {
+      interviewerAnswers.shift()!.reject(new Error(error));
       await settle();
     },
     async answerAsk(answer: { sessionId: string } | { error: string }) {
@@ -309,15 +318,49 @@ describe('createInterviewerPane', () => {
     expect(setup.mounts[0]!.shown).toBe(1);
   });
 
-  it('drops an interviewer answer for a problem no longer open', async () => {
+  it.each<{
+    case: string;
+    leave: (pane: ReturnType<typeof paneSetup>['pane']) => void;
+  }>([
+    {
+      case: 'another problem opened',
+      leave: (pane) => pane.problemOpened('lru-cache', 'a2'),
+    },
+    { case: 'the pane disposed', leave: (pane) => pane.dispose() },
+  ])('drops an interviewer answer once $case', async ({ leave }) => {
     const setup = paneSetup();
     setup.pane.problemOpened('two-sum', 'a1');
     setup.pane.toggle();
 
-    setup.pane.problemOpened('lru-cache', 'a2');
+    leave(setup.pane);
     await setup.answerInterviewer('s1');
 
     expect(setup.mounts).toHaveLength(0);
+  });
+
+  it('takes no keys on a later answer once the read failed', async () => {
+    const setup = paneSetup();
+    setup.pane.problemOpened('two-sum', 'a1');
+    setup.pane.toggle();
+    await setup.failInterviewer('no harness');
+
+    setup.pane.problemOpened('two-sum', 'a2');
+    await setup.answerInterviewer(null);
+
+    expect(setup.focus()).toBe('main');
+    expect(setup.scopes).toEqual([]);
+    expect(setup.toasts).toEqual([['no harness', 'error']]);
+  });
+
+  it('keeps the keys in the pane when the chat view fails to mount', async () => {
+    const setup = paneSetup({ mountError: 'no view' });
+
+    await setup.openTwoSum('s1');
+
+    expect(setup.focus()).toBe('interviewer');
+    expect(setup.scopes).toEqual(['ask']);
+    expect(setup.toasts).toEqual([['no view', 'error']]);
+    expect(setup.logs).toContain('interviewer not mounted two-sum: no view');
   });
 
   it.each<{

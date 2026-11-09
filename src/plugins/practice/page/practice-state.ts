@@ -1,5 +1,6 @@
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PracticePlace, ProblemStatus, ProblemSummary } from '../contract';
+import type { EmptyReason } from '../layouts/layout';
 import type { Difficulty } from '../problem';
 
 // The pane holding the keys: the side bar's list, the problem column, or the
@@ -105,6 +106,21 @@ export function difficultyCounts(
       total: ofDifficulty.length,
     };
   });
+}
+
+// Why the list shows no rows, or null while it shows `rowCount` of them: a
+// failed read before any landed shows `failed`.
+export function emptyReason(
+  state: PracticeState,
+  rowCount: number,
+): EmptyReason | null {
+  if (!state.isLoaded) {
+    return state.message === null ? 'loading' : 'failed';
+  }
+  if (state.problems.length === 0) {
+    return 'noProblems';
+  }
+  return rowCount === 0 ? 'filter' : null;
 }
 
 // The list's part of the place; the workspace keeps the pane and tabs.

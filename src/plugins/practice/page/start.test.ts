@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
-import { installFocusFakeDom } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  type FakeElement,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
 import {
   countingEditors,
+  deferred,
+  noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import {
@@ -67,10 +73,18 @@ const ACCEPTED: JudgeResult = {
   cases: [],
 };
 
+// What a test answers an invoke with in place of the page's own answer;
+// undefined leaves it to the page.
+type HeldAnswer = (
+  method: string,
+  args: unknown[],
+) => Promise<unknown> | undefined;
+
 // A Practice page whose `list` reads both problems, whose `open` opens the
-// slug asked for and whose judge accepts; `calls` holds each invoke, `place`
-// the last page's place, `editors` the code editor and boxes it made.
-function startPracticePage(place?: PracticePlace) {
+// slug asked for and whose judge accepts, unless `held` answers first; `calls`
+// holds each invoke, `place` the last page's place, `editors` the code editor
+// and boxes it made.
+function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
   installFocusFakeDom(vi.stubGlobal);
   const editors = countingEditors();
   const calls: { method: string; args: unknown[] }[] = [];
@@ -94,6 +108,10 @@ function startPracticePage(place?: PracticePlace) {
     },
     invoke: async (method, ...args) => {
       calls.push({ method, args });
+      const answer = held?.(method, args);
+      if (answer !== undefined) {
+        return answer;
+      }
       if (method === 'list') {
         return [HARD, EASY];
       }
@@ -113,8 +131,8 @@ function startPracticePage(place?: PracticePlace) {
 }
 
 // A Practice page, shown, with `SECOND` open in the workspace.
-async function startWithProblemOpen() {
-  const page = startPracticePage();
+async function startWithProblemOpen(held?: HeldAnswer) {
+  const page = startPracticePage(undefined, held);
   const commands = page.harness.started().commands;
   commands.showMode({ arg: undefined });
   await settle();
@@ -133,6 +151,18 @@ async function settle() {
 
 const messagesOf = (harness: ReturnType<typeof startPracticePage>['harness']) =>
   harness.logs.map((line) => line.message);
+
+const placeOf = (harness: ReturnType<typeof startPracticePage>['harness']) =>
+  harness.state.read(practicePlaceSlot, 'test').get();
+
+// Focuses `target` as a click does, its `focusin` reaching it and each
+// element over it.
+function focusIn(target: FakeElement) {
+  (target as unknown as { focus(): void }).focus();
+  for (let node: FakeElement | null = target; node; node = node.parentNode) {
+    node.fire('focusin', { target });
+  }
+}
 
 describe('practicePagePart', () => {
   afterEach(() => {
@@ -270,4 +300,111 @@ describe('practicePagePart', () => {
       );
     },
   );
+
+  it('keeps the shown problem and its code when the code fails to save', async () => {
+    const { harness, editors, commands } = await startWithProblemOpen(
+      (method) =>
+        method === 'saveCode'
+          ? Promise.reject(new Error('disk full'))
+          : undefined,
+    );
+    editors.typeDocument('int solve();');
+    const made = editors.made();
+
+    commands.listUp({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    await settle();
+
+    expect(editors.made()).toBe(made);
+    expect(placeOf(harness)).toMatchObject({
+      openSlug: SECOND,
+      selectedSlug: SECOND,
+    });
+    expect(messagesOf(harness)).toEqual(
+      expect.arrayContaining([
+        `kept ${SECOND}: a draft did not save`,
+        `toast error: ${EASY.title} not opened: a draft did not save`,
+      ]),
+    );
+  });
+
+  it('saves the code typed during the save before showing another problem', async () => {
+    const firstSave = deferred<undefined>();
+    let saves = 0;
+    const { harness, calls, editors, commands } = await startWithProblemOpen(
+      (method) =>
+        method === 'saveCode' && ++saves === 1 ? firstSave.promise : undefined,
+    );
+    editors.typeDocument('int solve');
+
+    commands.listUp({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    editors.typeDocument('int solve();');
+    firstSave.resolve(undefined);
+    await settle();
+    await settle();
+
+    expect(
+      calls
+        .filter((call) => call.method === 'saveCode')
+        .map((call) => call.args),
+    ).toEqual([
+      [SECOND, 'int solve'],
+      [SECOND, 'int solve();'],
+    ]);
+    expect(placeOf(harness)).toMatchObject({ openSlug: EASY.slug });
+  });
+
+  it('drops a submit landing after another problem opened', async () => {
+    const submitted = deferred<JudgeResult>();
+    const { harness, editors, commands } = await startWithProblemOpen(
+      (method) => (method === 'submit' ? submitted.promise : undefined),
+    );
+    commands.submit({ arg: undefined });
+    await settle();
+    commands.listUp({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    await settle();
+    const made = editors.made();
+
+    submitted.resolve(ACCEPTED);
+    await settle();
+    await settle();
+
+    expect(editors.made()).toBe(made);
+    expect(placeOf(harness)).toMatchObject({ openSlug: EASY.slug });
+  });
+
+  it('hands the keys to the problem column on a click into it', async () => {
+    const { harness } = startPracticePage();
+    const commands = harness.started().commands;
+    commands.showMode({ arg: undefined });
+    await settle();
+    commands.openKeepingFocus({ arg: undefined });
+    await settle();
+    await settle();
+    const scopeBefore = harness.scope();
+
+    const body = asFake(harness.mode('practice.main').element).querySelector(
+      '.practice-tab-body',
+    );
+    focusIn(body!);
+
+    expect([scopeBefore, harness.scope()]).toEqual([
+      'practice.list',
+      'practice.problem',
+    ]);
+    expect(messagesOf(harness)).toContain('main focused');
+  });
+
+  it('stops with nothing live', async () => {
+    const { harness } = await startWithProblemOpen();
+
+    await harness.stop();
+
+    expect(harness.counts()).toEqual(noCounts);
+  });
 });

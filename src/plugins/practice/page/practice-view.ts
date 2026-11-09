@@ -29,6 +29,7 @@ import type {
 } from '../../../shared/page/layout-host/base-kit';
 import {
   type DrawnPart,
+  disposeDraws,
   type RollbackDeps,
   requireElementIn,
 } from '../../../shared/page/layout-host/draw-part';
@@ -49,7 +50,6 @@ import {
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   CompletePracticeLayout,
-  EmptyReason,
   ListHeaderInput,
   PracticeLayout,
 } from '../layouts/layout';
@@ -63,6 +63,7 @@ import {
 } from './layout/practice-kit';
 import {
   difficultyCounts,
+  emptyReason,
   initialPracticeState,
   type PracticeAction,
   type PracticeFocus,
@@ -194,7 +195,8 @@ export interface PracticeView {
   focusColumn(): void;
   // The one function that applies an `open` result: the shown problem is
   // refreshed in place, keeping its tabs, pane and unsaved drafts; another
-  // shows on its own.
+  // shows once the shown one's drafts saved. A draft that fails to save keeps
+  // the shown problem open and selected, logs `kept <slug>` and toasts.
   applyOpened(problem: OpenedProblem): void;
   // The one setter of the focus: logs `list focused` or `main focused` when
   // the focus changes to that pane, then sets the scope, resize and focus
@@ -243,8 +245,10 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     createPracticeKit(kitServices, scope, rollback);
 
   // ── Workspace ──────────────────────────────────────────────────────────
-  // The slug the workspace shows, or null before the first open lands.
+  // The slug the workspace shows or is about to show, or null before the
+  // first open lands; `shownSlug` the one it shows.
   let workspaceSlug: string | null = null;
+  let shownSlug: string | null = null;
   let workspacePlace: WorkspacePlace | null = null;
   const workspace = createProblemWorkspace({
     channel,
@@ -457,7 +461,11 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
         parts.draw('empty', rowsList, (empty, into, rollback) => ({
           element: empty(
             into,
-            { reason, filter: state.filter },
+            {
+              reason,
+              filter: state.filter,
+              message: reason === 'failed' ? state.message : null,
+            },
             kitFor('list', rollback),
           ),
         })),
@@ -484,7 +492,9 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     noProblemDraw?.built.element.remove();
     noProblemDraw = null;
     if (!isNoProblemShown) {
-      mainPane.append(workspace.element);
+      if (workspace.element.parentElement !== mainPane) {
+        mainPane.append(workspace.element);
+      }
       return;
     }
     noProblemDraw = parts.draw(
@@ -572,9 +582,14 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   store.subscribe(() => render());
   store.subscribe(notePlace);
 
-  const setFocus = (focus: PracticeFocus) => {
+  // Sets the focus; `movesFocus` moves the DOM focus to it too, else the DOM
+  // focus is already there.
+  const changeFocus = (focus: PracticeFocus, movesFocus: boolean) => {
     const before = store.get().focus;
     const isChanged = before !== focus;
+    if (!movesFocus) {
+      shownFocus = focus;
+    }
     dispatch({ type: 'focus', focus });
     if (before === 'interviewer' && isChanged) {
       interviewer.columnTookKeys();
@@ -582,21 +597,64 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     if (isChanged && focus !== 'interviewer') {
       deps.log(`${focus} focused`);
     }
-    render(true);
+    render(movesFocus);
   };
+  const setFocus = (focus: PracticeFocus) => changeFocus(focus, true);
+
+  // A click or a box's focus into the list or the column hands it the keys;
+  // the interviewer pane takes them itself.
+  for (const [pane, focus] of [
+    [listPane, 'list'],
+    [mainPane, 'main'],
+  ] as const) {
+    pane.addEventListener('focusin', (event) => {
+      const isInInterviewer =
+        event.target instanceof HTMLElement &&
+        interviewer.element.contains(event.target);
+      if (!isInInterviewer && store.get().focus !== focus) {
+        changeFocus(focus, false);
+      }
+    });
+  }
 
   // ── Reads ──────────────────────────────────────────────────────────────
-  const applyOpened = (problem: OpenedProblem) => {
-    const slug = problem.summary.slug;
+  // Tells the title bar, the ask box and the interviewer which problem shows.
+  const noteShown = (problem: OpenedProblem) => {
     deps.opened(problem);
     openTitle = problem.summary.title;
-    interviewer.problemOpened(slug, problem.attempt.id);
+    interviewer.problemOpened(problem.summary.slug, problem.attempt.id);
+  };
+
+  const applyOpened = (problem: OpenedProblem) => {
+    const slug = problem.summary.slug;
     if (slug === workspaceSlug) {
-      workspace.refresh(problem);
+      // A read landing while its show waits on a save is dropped: the show
+      // draws what it read.
+      if (slug === shownSlug) {
+        noteShown(problem);
+        workspace.refresh(problem);
+      }
       return;
     }
     workspaceSlug = slug;
-    void workspace.show(problem).then(() => render(true));
+    void workspace.show(problem).then((result) => {
+      if (result === 'overtaken') {
+        return;
+      }
+      if (result === 'kept' && shownSlug !== null) {
+        workspaceSlug = shownSlug;
+        dispatch({ type: 'opened', slug: shownSlug });
+        deps.log(`kept ${shownSlug}: a draft did not save`);
+        deps.toast(
+          `${problem.summary.title} not opened: a draft did not save`,
+          'error',
+        );
+        return;
+      }
+      shownSlug = slug;
+      noteShown(problem);
+      render(true);
+    });
   };
 
   // Opens `slug`; `isPicked` moves focus to main and tells `picked`, else the
@@ -834,26 +892,4 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     openSubmissionRow: (time) => workspace.openSubmissionRow(time),
     mayStop: () => workspace.mayStop(),
   };
-}
-
-// Why the list shows no rows, or null while it shows `rowCount` of them.
-function emptyReason(
-  state: PracticeState,
-  rowCount: number,
-): EmptyReason | null {
-  if (!state.isLoaded) {
-    return 'loading';
-  }
-  if (state.problems.length === 0) {
-    return 'noProblems';
-  }
-  return rowCount === 0 ? 'filter' : null;
-}
-
-// Disposes each of `draws`; returns the empty list that replaces them.
-function disposeDraws(draws: readonly DrawnRoot[]): DrawnRoot[] {
-  for (const draw of draws) {
-    draw.dispose();
-  }
-  return [];
 }

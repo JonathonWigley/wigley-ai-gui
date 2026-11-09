@@ -4,11 +4,12 @@
 // and each of the column's panes `div.practice-pane` with its own modifier,
 // whose tracks its `layout.css` sets.
 
-/** @type {Record<import('../layout').EmptyReason, (filter: string) => string>} */
+/** @type {Record<import('../layout').EmptyReason, (input: import('../layout').EmptyInput) => string>} */
 const EMPTY_TEXTS = {
   loading: () => 'Loading problems…',
+  failed: (input) => `Problems not loaded: ${input.message ?? ''}`,
   noProblems: () => 'No problems yet. Ask an agent to add some.',
-  filter: (filter) => `No problems match "${filter}".`,
+  filter: (input) => `No problems match "${input.filter}".`,
   noSubmissions: () => 'No submissions yet.',
 };
 
@@ -42,7 +43,7 @@ function tabsHeader(root, kit) {
     label: 'previous tab',
     className: 'practice-hint',
   });
-  kit.tabs(bar).classList.add('ui-tabs--scroll');
+  kit.tabs(bar);
   kit.keyHint(bar, 'nextTab', {
     label: 'next tab',
     className: 'practice-hint',
@@ -111,7 +112,7 @@ const layout = {
     });
   },
   empty(parent, input, kit) {
-    return kit.emptyState(parent, EMPTY_TEXTS[input.reason](input.filter));
+    return kit.emptyState(parent, EMPTY_TEXTS[input.reason](input));
   },
   noProblem(parent, kit) {
     return kit.emptyState(parent, 'Open a problem from the list.');

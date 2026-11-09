@@ -48,9 +48,10 @@ import type {
   KitCommands,
   OwnerKitServices,
 } from '../../../shared/page/layout-host/base-kit';
-import type {
-  DrawnPart,
-  RollbackDeps,
+import {
+  type DrawnPart,
+  disposeDraws,
+  type RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import { createReducerStore } from '../../../shared/page/reducer-store';
@@ -1487,12 +1488,4 @@ function paneTo(
 // A row's `cursorActions` slot, which the cursor prompt moves into.
 function cursorActionsSlot(): HTMLElement {
   return element('span', 'backlog-row-actions-slot');
-}
-
-// Disposes each of `draws`; returns the empty list that replaces them.
-function disposeDraws(draws: readonly DrawnRoot[]): DrawnRoot[] {
-  for (const draw of draws) {
-    draw.dispose();
-  }
-  return [];
 }
