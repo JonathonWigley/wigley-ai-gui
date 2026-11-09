@@ -10,15 +10,29 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { AD_HOC_IDENTITY, macSigningIdentity } from './scripts/mac-signing.mts';
 
+// `tsconfig.plugin-types.json`'s `outDir`.
+const PLUGIN_TYPES_FOLDER = '.plugin-types';
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     win32metadata: { ProductName: 'Auri', FileDescription: 'Auri' },
     // Packager adds `.ico` on Windows and `.icns` on macOS.
     icon: 'assets/icon/icon',
+    // The plugin contract types `generateAssets` emits, copied to
+    // `<Resources>/plugin-types` outside the asar for the app to write to the
+    // user's `plugins/_types/` at start.
+    extraResource: [PLUGIN_TYPES_FOLDER],
   },
   rebuildConfig: {},
   hooks: {
+    // Emits the plugin contract types for `start`, `package` and `make`. They
+    // go outside `.vite`, which the Vite plugin's own `preStart` and
+    // `prePackage` hooks delete after this hook runs. A failed emit stops
+    // start and packaging rather than ship stale or missing types.
+    generateAssets: async () => {
+      emitPluginTypes();
+    },
     // @electron/packager sets CFBundleName and CFBundleDisplayName from the app name after applying
     // `extendInfo`, so the shown name is written into the packaged Info.plist here instead.
     postPackage: async (forgeConfig, { platform, outputPaths }) => {
@@ -72,6 +86,31 @@ const config: ForgeConfig = {
     }),
   ],
 };
+
+function emitPluginTypes(): void {
+  const repoDir = import.meta.dirname;
+  const isWindows = process.platform === 'win32';
+  const tsc = path.join(
+    repoDir,
+    'node_modules',
+    '.bin',
+    isWindows ? 'tsc.cmd' : 'tsc',
+  );
+  try {
+    // Node refuses to spawn a `.cmd` file without a shell, and the shell
+    // splits an unquoted path at a space.
+    execFileSync(
+      isWindows ? `"${tsc}"` : tsc,
+      ['-p', 'tsconfig.plugin-types.json'],
+      { cwd: repoDir, shell: isWindows, encoding: 'utf8' },
+    );
+  } catch (error) {
+    const output = (error as { stdout?: string }).stdout ?? '';
+    throw new Error(`Emitting the plugin types failed:\n${output}`, {
+      cause: error,
+    });
+  }
+}
 
 function appBundleIn(outputPath: string): string {
   const bundles = readdirSync(outputPath).filter((entry) =>

@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": ".plugin-types",
+    "sourceMap": false,
+    "declarationMap": false,
+    "incremental": true,
+    "tsBuildInfoFile": ".plugin-types/.tsbuildinfo"
+  },
+  "include": ["src/contracts/*.ts", "src/plugins/*/contract.ts"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test-d.ts",
+    "src/**/*.test-support.ts"
+  ]
+}
