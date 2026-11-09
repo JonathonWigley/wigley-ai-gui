@@ -1,6 +1,6 @@
 # 13 — Main composition over the catalog
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07, 08, 09, 10, 11 (it calls task 11's `servePluginScheme` and `userPluginFolder`, so it
 cannot share wave 4 with 11; task 14, which also edits `main.ts`, then follows in wave 6)
@@ -98,3 +98,5 @@ shows only the imports and the `createBuiltInSource` call.
 Commit:    one commit for the group.
 
 ## Proof
+
+Commit 6173d6b5 · proof: diff read: catalog started before loadConfig, catalog.entries() into the store, writePluginTypes, servePluginScheme, userPluginFolder, switch catalog/config/configDisabled, drive ids/reload, core.reloadPlugin registered; typecheck 0 (was 3), lint 0, selftest --plugin settings all passed · concerns: label 'Reload plugin' is sentence case unlike lowercase core labels; reload registration handle kept for window life; runtime claims (user plugin after built-ins, reload rejection, types-folder failure line) left to 16

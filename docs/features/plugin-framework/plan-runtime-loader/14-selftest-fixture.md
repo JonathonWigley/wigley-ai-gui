@@ -1,6 +1,6 @@
 # 14 — Fixture user plugin in the self-test
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 11, 12, 13 (13 and 14 both edit `src/main/main.ts`)
 Plan: [plan.md](plan.md)

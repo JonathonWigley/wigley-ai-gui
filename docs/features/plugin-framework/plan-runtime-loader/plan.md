@@ -414,7 +414,7 @@ for that task's own files. Tasks in one wave share no file.
 - [x] [Settings shows a plugin's origin and problem](12-settings-plugin-rows.md) — after 10
 
 ### Wave 5
-- [ ] [Main composition over the catalog](13-main-wiring.md) — after 07, 08, 09, 10, 11
+- [x] [Main composition over the catalog](13-main-wiring.md) — after 07, 08, 09, 10, 11
 
 ### Wave 6
 - [ ] [Fixture user plugin in the self-test](14-selftest-fixture.md) — after 11, 12, 13 (13 and 14 both edit `main.ts`)
@@ -442,6 +442,7 @@ Review base: 71b605ce
 - 10 · 1e3f20fe · diff read; settled, heldAtStart, catalog/config/configDisabled deps, PluginStatus origin+problem, bridge reload/remove, reloadPlugin drive action present; 274 tests pass; tsc red only in main.ts (13) and plugin-parts-answer.ts (11) by plan order · concerns: typecheck red at HEAD until 11 and 13 land; the no-last-good row covered by a built-in returning after its replacement fails
 - 12 · 211756ee · diff read; originText, PluginRowInput originText+problem, layout parts present; settings tests 155 pass; settings self-test deferred to the test gate (main.ts waits on 13) · concerns: settings self-test not yet run; a whitespace-only problem still draws a line
 - 11 · 70101139 · diff read; servePluginScheme, pluginFilePath, page-part-loader, ownerLayoutShow, PageLayoutShow, userPluginFolder, CSP present; task tests pass; tsc red only in main.ts (13) · concerns: harness fake show.draw throws (layer rule); deferred user parts are host.add-ed after startPlugins, not disabled; initial config strips deferred and failed page binds; renderer's load code kept inline (~40 lines)
+- 13 · 6173d6b5 · diff read: catalog started before loadConfig, catalog.entries() into the store, writePluginTypes, servePluginScheme, userPluginFolder, switch catalog/config/configDisabled, drive ids/reload, core.reloadPlugin registered; typecheck 0 (was 3), lint 0, selftest --plugin settings all passed · concerns: label 'Reload plugin' is sentence case unlike lowercase core labels; reload registration handle kept for window life; runtime claims (user plugin after built-ins, reload rejection, types-folder failure line) left to 16
 ### Contract changes
 - startPlugins known: default function → optional parameter, left out reads the held parts' manifests · why: a parameter default cannot reach held · consumers: 10, 11, 13 · group 03
 - validate-manifest.ts: as planned → also exports TOKEN_KINDS, PROCESS_NAMES, SETTING_KINDS, ARG_KINDS, BIND_WHERES, EDITOR_MODES (satisfies Record<Union, true>), which manifest-schema reads · why: one member list for checks and schema · consumers: 07 · group 02
@@ -471,5 +472,7 @@ Review base: 71b605ce
 - originText is an exhaustive switch, so a new origin fails typecheck · group 12 · group 12
 - deferred user page parts are host.add-ed after startPlugins rather than listed disabled, since the disabled check follows dependsOn.main · group 11 · group 11
 - the initial page config strips binds of page parts not started at load; loads moved right after bridge.config() · group 11 · group 11
+- the catalog is built in a startCatalog(inputs) helper; seeding (14) goes before its call · group 13
+- types folder is path.join(inputs.pluginsFolder, '_types') · group 13
 ### Review rounds
 ### Test gate
