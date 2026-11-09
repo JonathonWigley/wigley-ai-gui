@@ -152,8 +152,8 @@ forms.
 ## Alerts
 
 `Alerts.setOpenCount(source, count)` takes a source id; the adapter sums every source's count for the badge, so the
-forms and primer presenters do not overwrite each other. The announcement for a new primer reads "Feature primer
-ready".
+forms and primer presenters do not overwrite each other. A new primer raises no system notification; it marks its
+session's row.
 
 ## Out of scope
 

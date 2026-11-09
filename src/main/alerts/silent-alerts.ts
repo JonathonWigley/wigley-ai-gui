@@ -1,7 +1,7 @@
 import type { Alerts } from '../../contracts/alerts';
 
-// For the offscreen self-test, which must never reach the user.
+// For an OS with no icon badge, and the offscreen runs, which must never reach
+// the user.
 export const silentAlerts: Alerts = {
-  announce: () => {},
   setOpenCount: () => {},
 };

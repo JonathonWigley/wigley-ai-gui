@@ -84,11 +84,9 @@ function createForms(
     channel: api.channel,
     alerts: services.alerts,
     source: 'forms',
-    announceTitle: 'New review round',
     noun: roundType.noun,
     markText: (label) => `Round from ${label}`,
     markAction: 'answer',
-    window: services.window,
     log: services.log,
     sessions,
   });

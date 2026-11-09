@@ -91,7 +91,6 @@ import { scopedFiles } from '../shared/scoped-files';
 import type { SlotStore } from '../shared/state/slot-store';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
 import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
-import { createPlainAlerts } from './alerts/electron-alerts';
 import { createMacAlerts } from './alerts/mac-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createWindowsAlerts } from './alerts/windows-alerts';
@@ -270,14 +269,12 @@ function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
   };
 }
 
-// The native alerts of the OS `osName`. Linux has no attention call and no badge.
-function alertsFor(osName: OsName, window: BrowserWindow, log: Log): Alerts {
+// The icon badge of the OS `osName`. Linux has none.
+function alertsFor(osName: OsName, window: BrowserWindow): Alerts {
   if (osName === 'macos') {
-    return createMacAlerts(log);
+    return createMacAlerts();
   }
-  return osName === 'windows'
-    ? createWindowsAlerts(window, log)
-    : createPlainAlerts(log);
+  return osName === 'windows' ? createWindowsAlerts(window) : silentAlerts;
 }
 
 // The readings of the OS `osName`, its commands run through `runner`. Linux has
@@ -293,14 +290,14 @@ function systemStatsFor(osName: OsName, runner: ProcessRunner): SystemStats {
   }
 }
 
-// The user's app: the OS Trash, native alerts and dialogs, Claude Code, whose
+// The user's app: the OS Trash, the icon badge, native dialogs, Claude Code, whose
 // relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, links
 // opened in the user's browser, and the machine's own readings.
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
     forWindow: ({ window, store, homeDir, log, sessionHost }) => ({
-      alerts: alertsFor(platform.os, window, log),
+      alerts: alertsFor(platform.os, window),
       agentHarnesses: [
         claudeHarness(store, homeDir, endpointEnv(homeDir), log, sessionHost),
       ],

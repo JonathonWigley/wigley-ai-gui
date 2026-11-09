@@ -1,19 +1,13 @@
 import { app } from 'electron';
 import type { Alerts } from '../../contracts/alerts';
-import type { Log } from '../../contracts/log';
-import { createElectronAlerts } from './electron-alerts';
+import { createOpenCounts } from './open-counts';
 
-// Notifications, a Dock bounce and the Dock badge.
-export function createMacAlerts(log: Log): Alerts {
-  return createElectronAlerts(
-    {
-      drawAttention() {
-        app.dock?.bounce('informational');
-      },
-      showOpenCount(total) {
-        app.setBadgeCount(total);
-      },
+// The Dock badge.
+export function createMacAlerts(): Alerts {
+  const openCounts = createOpenCounts();
+  return {
+    setOpenCount(source, count) {
+      app.setBadgeCount(openCounts.set(source, count));
     },
-    log,
-  );
+  };
 }

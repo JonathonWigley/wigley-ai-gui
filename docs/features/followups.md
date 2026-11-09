@@ -377,10 +377,9 @@ What Windows support and installers need.
   not a chord (`src/renderer/page-keys.ts`, `key-sequences.ts`); allow non-letter chords (`<C-/>`, `<F5>`).
 - **Per-source alert descriptions** — *agent-ready*: `Alerts.setOpenCount(source, count)` carries no per-source
   description: the core sums the counts, but the Windows overlay names every source "open agent forms"
-  (`electron-alerts.ts`), so chat waiting on the user would read as a form.
+  (`windows-alerts.ts`), so chat waiting on the user would read as a form.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
-  `packagerConfig`, no makers). On the first signed build, check live that a notification click focuses its round:
-  an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge).
+  `packagerConfig`, no makers).
 - **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`
   (`Operation not permitted`) right after the stable app relaunched, and regained it once the user changed the macOS
   privacy setting. The likely cause, not yet confirmed, is that the app is ad hoc signed with no team ID, so macOS

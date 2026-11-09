@@ -83,7 +83,7 @@ in chat, not in the Claude adapter.
 A retro row is done when its main turn has ended and no subagent or task still runs: chat's `chat.session` slot reads
 `activity` idle, `background` 0 and no compaction, after its first turn started. `chat.turnFinished` alone fires while
 the analysts still run. A process that ended (clean or crash) is done too. A short settle wait (the `settleSeconds` setting, 5 s by default) keeps a task that ends and wakes the agent from
-closing the row under a new turn. A retro row raises no Turn finished alert. A running retro whose row does not come
+closing the row under a new turn. A retro row raises no Turn finished mark. A running retro whose row does not come
 back within 30 s of a start is dropped, and the next close launches.
 
 The user can still cancel a running retro: closing its row before it is done ends the run, logs `retro <row id>

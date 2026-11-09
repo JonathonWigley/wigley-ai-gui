@@ -11,7 +11,6 @@ import type {
   UsageAgentEvent,
   UserMessage,
 } from '../../../contracts/agent';
-import type { Alerts } from '../../../contracts/alerts';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
@@ -95,8 +94,6 @@ import {
   worktreesInCommand,
 } from './worktree-name';
 
-export const TURN_FINISHED_TITLE = 'Turn finished';
-
 export interface ChatSessionsDeps {
   harnesses: readonly AgentHarness[];
   sessions: Pick<
@@ -113,8 +110,7 @@ export interface ChatSessionsDeps {
   slots: ChatSlots;
   send: MainChannel<ChatChannel>['send'];
   emit: PluginEvents<ChatMainEvents>['emit'];
-  alerts: Pick<Alerts, 'announce'>;
-  window: { show(): void; isFocused(): boolean };
+  window: { isFocused(): boolean };
   // Reads each row's repo, branch and linked worktrees at its open and after
   // each turn, and the worktrees again after a Bash call runs `git worktree`.
   git: Pick<Git, 'topLevel' | 'currentBranch' | 'worktrees'>;
@@ -158,7 +154,7 @@ export interface ChatSessions {
   // true opens it headless. The request's
   // `instructions` follow the global ones at each of the row's process starts,
   // and its `owner` goes to sessions with the row; both are kept across a clear
-  // and a relaunch, and a row with an owner raises no `Turn finished` alert.
+  // and a relaunch, and a row with an owner raises no `Turn finished` mark.
   // Throws before opening anything on an image chat would refuse to attach.
   launch(request: LaunchRequest): string;
   // Opens a row for each saved session in order, unselected, under its saved
@@ -256,7 +252,7 @@ export interface ChatSessions {
   // `interrupted` `agentEvent`, since the old process's own is dropped, and
   // messages written but not taken in and every queued message, the held row
   // included, returned in the order written; the old
-  // process raises no exit notice and no turn-finished alert. The entries
+  // process raises no exit notice and no turn-finished mark. The entries
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
   // is missing, or while the row attaches; a fresh start that throws leaves the
@@ -462,7 +458,7 @@ interface HeldSession {
   // The running guard step for `unheldProcessId`.
   unheldSettling: Promise<void> | null;
   // Nobody answers this row: each permission prompt is denied at once, and a
-  // finished turn raises no alert. Saved with the row, kept across a clear.
+  // finished turn raises no mark. Saved with the row, kept across a clear.
   unattended: boolean;
   // The row is headless; mirrored in `chat.session`. Saved with the row, kept
   // across a clear.
@@ -802,12 +798,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.slots.putEntry(nextNotice(session, text, tone));
   }
 
-  function announceTurnFinished(session: HeldSession) {
+  function markTurnFinished(session: HeldSession) {
     const { sessionId, projectDir } = session.slots.info();
-    deps.alerts.announce(TURN_FINISHED_TITLE, path.basename(projectDir), () => {
-      sessions.activate(sessionId);
-      deps.window.show();
-    });
     const label = sessions.label(sessionId) ?? path.basename(projectDir);
     sessions.mark(sessionId, {
       text: `Turn finished in ${label}`,
@@ -816,7 +808,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Keeps the ids of the subagents and background tasks still running, so a
-  // turn that ends while any runs announces nothing.
+  // turn that ends while any runs marks nothing.
   function trackBackground(session: HeldSession, event: AgentEvent) {
     const ids = session.backgroundIds;
     if (event.type === 'agentSpawned') {
@@ -873,7 +865,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     save();
   }
 
-  // A replayed turn's end announces nothing, since it ended while the app was
+  // A replayed turn's end marks nothing, since it ended while the app was
   // closed, and neither does one `stopAll` caused, an idle with a hold up, whose
   // row is still to go out, the end of a stretch that ran only an app
   // compaction, or any turn of an unattended row or a row with an owner.
@@ -913,7 +905,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       !session.unattended &&
       session.owner === null
     ) {
-      announceTurnFinished(session);
+      markTurnFinished(session);
     }
     if (turnFinished || turnStarted) {
       save();
@@ -921,7 +913,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // A resting session runs no turn, so it shows idle; unlike a turn going
-  // idle, its exit announces nothing, and a crossing outside a replay fires
+  // idle, its exit marks nothing, and a crossing outside a replay fires
   // `turnFinished` as `rested`.
   function showRestingIdle(session: HeldSession) {
     session.harnessActivity = 'idle';
@@ -1308,7 +1300,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           return;
         }
         // A queued message starts the next turn, so the session shows no idle
-        // in between and the turn-finished alert waits for the last one. A
+        // in between and the turn-finished mark waits for the last one. A
         // stopped process takes no more.
         const writesNext =
           !replay.isReplaying &&
@@ -3223,7 +3215,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Ends the session's process, interrupting its turn first, and rests the
-  // row with no exit notice and no alert; the process's later events are no
+  // row with no exit notice and no mark; the process's later events are no
   // longer live. Does nothing for a resting session.
   function endForClear(session: HeldSession) {
     const { process } = session;

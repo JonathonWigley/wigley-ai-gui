@@ -39,7 +39,7 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
   plugin from outside the repo, its own default keys (the built-ins' sit in `src/plugins/keymap.ts`); each
   part's start function returns the handlers. A missing handler is a type error.
 - Plugins never import a third-party library's adapter: the core hands them services (editor, markdown,
-  notifications, log, clock, home folder). Built-in main parts use Node directly.
+  the icon badge, log, clock, home folder). Built-in main parts use Node directly.
 - A plugin's two parts talk over one generic per-plugin Bridge channel (invoke and listen, by plugin id), typed in
   the plugin's `contract.ts`.
 - A manifest names the plugins it depends on; they start first, and a plugin's start function may return an
@@ -53,7 +53,7 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
 - Key scopes are plugin-declared and qualified (`forms.review`); plugin settings live in the manifest under the
   plugin's id (which-key's delay is a setting, 200 ms default); fonts and theme stay core settings.
 - Core: plugin host, shell and areas, commands, key engine (sequences, chords, leader), settings, themes, the
-  Bridge's plugin channel, services (editor, markdown, notifications and Dock badge, log, clock). The unwired ACP
+  Bridge's plugin channel, services (editor, markdown, the icon badge, log, clock). The unwired ACP
   adapter and mock agent wait for a harness plugin. The self-test is a core driver running a plugin's script.
 
 ## Shell and areas

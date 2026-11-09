@@ -212,7 +212,7 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - **Rows with an owner:** `LaunchRequest.owner` and `ResumeRequest.owner` name the plugin a session belongs to.
   Sessions keeps the owner on the row, and chat saves it with the session and passes it back on restore; the Sessions
   side bar, the next and previous session keys and pane placement skip such a row, and it is never the selected row
-  and raises no "Turn finished" alert.
+  and raises no "Turn finished" mark.
 - **Known limits:** a tab or popup another plugin opens for an interviewer session (a forms round, the primer) waits
   for a Sessions row that never shows, so it never appears. While chat holds an interviewer's row, the start
   prompt's saved sessions leave it out. Once chat no longer holds it, it lists in the start prompt's resume list for

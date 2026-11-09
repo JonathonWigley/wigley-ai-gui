@@ -319,7 +319,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       slots,
       send: (message, data) => api.channel.send(message, data),
       emit: (event, data) => api.events.emit(event, data),
-      alerts: services.alerts,
       window: services.window,
       git: services.git,
       files: services.files,

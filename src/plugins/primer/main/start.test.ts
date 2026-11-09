@@ -114,7 +114,7 @@ describe('primer main part', () => {
       drive: true,
       services: {
         homeDir,
-        alerts: { announce() {}, setOpenCount() {} },
+        alerts: { setOpenCount() {} },
         git: { originRepoName: () => Promise.resolve(null) } as never,
       },
     });
@@ -145,7 +145,7 @@ describe('primer main part', () => {
       drive: true,
       services: {
         homeDir,
-        alerts: { announce() {}, setOpenCount() {} },
+        alerts: { setOpenCount() {} },
         git: { originRepoName: () => Promise.resolve(null) } as never,
       },
     });

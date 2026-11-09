@@ -12,12 +12,12 @@ import type { MainChannel } from '../../contracts/plugin';
 interface OpenForm<Form, Body> {
   form: PresentedAgentForm<Form, Body>;
   listener: AgentFormListener<Body>;
-  // A quiet form raises no alert and leaves the open count.
+  // A quiet form leaves the open count.
   quiet: boolean;
 }
 
-// The presenter that announces each form and counts it open, and `quiet`,
-// a view onto the same open forms whose own forms do neither.
+// The presenter that counts each form open, and `quiet`, a view onto the same
+// open forms whose own forms it does not count.
 export interface AgentFormChannelPresenter<
   Form,
   Body,
@@ -33,31 +33,19 @@ export interface AgentFormChannelPresenter<
 // that row's close while the form is open, cancels the form when the close key
 // closes the session at once, and releases the row when the form closes.
 // Registers its channel handlers and close guard once, which the plugin's stop
-// removes. `source` names only the alert open count; `announceTitle` titles
-// each form's notification; `noun` names one form in the refusal, which a
-// close and a switch-off read alike.
+// removes. `source` names only the alert open count; `noun` names one form in
+// the refusal, which a close and a switch-off read alike.
 export function createAgentFormChannelPresenter<Form, Body>(deps: {
   channel: Pick<MainChannel<AgentFormChannel<Form, Body>>, 'handle' | 'send'>;
   alerts: Alerts;
   source: string;
-  announceTitle: string;
   noun: string;
   markText(label: string): string;
   markAction: string;
-  window: { show(): void };
   log: PluginLog;
   sessions: AgentFormSessions;
 }): AgentFormChannelPresenter<Form, Body> {
-  const {
-    channel,
-    alerts,
-    source,
-    announceTitle,
-    noun,
-    window,
-    log,
-    sessions,
-  } = deps;
+  const { channel, alerts, source, noun, log, sessions } = deps;
   const open = new Map<string, OpenForm<Form, Body>>();
   const updateOpenCount = () =>
     alerts.setOpenCount(
@@ -125,17 +113,9 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
     });
     channel.send('formShown', form);
     log(`form shown: ${form.label}`);
-    if (quiet) {
-      return;
+    if (!quiet) {
+      updateOpenCount();
     }
-    updateOpenCount();
-    // A notification click is the user's own act, so it selects the form's
-    // session's row, when the session still holds one, and brings the window
-    // forward.
-    alerts.announce(announceTitle, form.label, () => {
-      sessions.activateExistingRow(form.sessionId);
-      window.show();
-    });
   };
   const close = (formId: string) => {
     const entry = open.get(formId);

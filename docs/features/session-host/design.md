@@ -162,7 +162,7 @@ lines past the last `seq` it read.
   running in the current host has the row open and attach to it, and one in another app version or a list that rejects
   refuses the resume. So a session never runs two processes, past those § The host names: a process left alone, a
   live host's child beside a new host, and a relaunch inside a new host's hold, when `list` answers empty.
-- Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no alert fires for a
+- Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no turn-finished mark fires for a
   turn that ended while the app was closed. What a process that exits during the attach fires for that exit, its
   `sessionEnded` included, is not: that exit is real, so the agents log closes. The row still shows the session's current state.
 - Chat saves each session's queued messages with its record. A re-attached row shows them again and sends the oldest

@@ -159,7 +159,6 @@ function fakeTimers() {
 function fakeAlerts() {
   const counts: [string, number][] = [];
   const alerts: Alerts = {
-    announce: () => undefined,
     setOpenCount: (source, count) => counts.push([source, count]),
   };
   return { alerts, counts };

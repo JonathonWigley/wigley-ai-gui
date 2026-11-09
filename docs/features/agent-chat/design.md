@@ -94,7 +94,7 @@ interview on 2026-10-23; this file is the record of both.
  claude stdout ─► adapter ─► ChatEntry added / updated ─► chat channel ─► Chat tab, drawn by the chat layout
  tool needs approval ─► permission_prompt tool call ─► permission entry ─► y / n ─► tool result to claude
  agent calls ask_round ─► forms ─► round popup over the tabs ─► user answers ─► submit ─► popup disposed ─► Chat tab shows
- turn ends, window unfocused or session not on screen ─► alert + sessions.mark(row)
+ turn ends, window unfocused or session not on screen ─► sessions.mark(row)
  row closed ─► confirm while a turn runs ─► AgentProcess.end() ─► row gone
 ```
 
@@ -186,7 +186,7 @@ interview on 2026-10-23; this file is the record of both.
 - A round opens as a popup over its session's tabs (`addPopup`, `../session-popups/design.md`), which replaced the
   tab take-over (`SessionTabHandle.takeOver()`, removed): the selected tab never changes. A round for a session not on
   screen opens its popup inside that session and marks its row; the user's current session stays on screen.
-- `MainServices.window` gains `isFocused()`, for the turn-finished alert.
+- `MainServices.window` gains `isFocused()`, for the turn-finished mark.
 - Kept as they are: the relay protocol and `relay.py`, the endpoint files, the MCP adapter, forms' round logic.
 
 ## Chat plugin
@@ -277,7 +277,7 @@ interview on 2026-10-23; this file is the record of both.
     prices out of the app.
 - **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
   its own activity is not `idle`) is not written to the agent. A turn Claude runs on its own after a background task
-  ends counts as running too: the session shows working through it, its messages wait, and the turn-finished alert
+  ends counts as running too: the session shows working through it, its messages wait, and the turn-finished mark
   fires when it ends. Written into a running tool turn, Claude would fold a message into it with no turn of its own
   (claude-stream.md § Queued messages), so chat holds it until the turn ends, unless the user sends it now (Send now
   below). A permission call left waiting after the turn ended
@@ -291,7 +291,7 @@ interview on 2026-10-23; this file is the record of both.
   - **Sending**: when the harness reports the turn ended (activity `idle`) and a message is queued, chat main writes
     the oldest unsent queued message to the agent and swallows that `idle`: the activity the session shows does not change,
     so it shows no idle between turns. Each queued message runs as its own turn, in the order sent, so the
-    turn-finished alert fires once, after the last one. A write that throws puts the message back at its place in
+    turn-finished mark fires once, after the last one. A write that throws puts the message back at its place in
     the queue and logs `queued message <id> not sent: <error>`. Every message, sent at idle or sent now, joins the
     transcript as its user entry when the agent takes it in, at the place it really ran: the Claude adapter adds the
     entry on the message's `started` lifecycle line (claude-stream.md § Message lifecycle), or at the write when the
@@ -446,7 +446,7 @@ interview on 2026-10-23; this file is the record of both.
   with the row's mode and the model and effort the user picked (§ Saved sessions), so the harness loads its plugins,
   skills, MCP servers and settings again. A running turn is interrupted first; waiting permission calls are cancelled
   and written messages not yet taken in, then queued messages, are pulled back into the box, as on an exit; no exit notice shows for the old process and no
-  turn-finished alert fires. The old process's later events are no longer live: none reaches the chat, but its
+  turn-finished mark fires. The old process's later events are no longer live: none reaches the chat, but its
   `agentEvent`s that do emit keep the old host id, and its `sessionEnded` still emits; the agents roster folds each host
   id apart, so that `sessionEnded` drops only the old process's subagents. The row's active time returns to 0 (`docs/features/session-clock/design.md`). The row's entries become one info notice,
   `Conversation cleared`, followed by whatever the fresh process reports at start (its start step draws under the notice
@@ -496,8 +496,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Status**: a row's activity reads what the chat is doing — `working`, or a needs-you word while it waits for a
   permission — and shows `done` or `error` for a finished turn the user has not viewed; it is empty while idle and
   seen.
-- **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
-  the row is marked. A row launched `unattended` raises no alert and is not marked: nobody waits on it.
+- **Turn finished**: when the window is not focused or the session is not on screen, the row is marked, with no
+  system notification. A row launched `unattended` is not marked: nobody waits on it.
 - **Slash completion**: typing `/` at the start of the box offers the app slash commands and the session's commands
   and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name
   and aliases through the app's fuzzy matcher (fzf), best match first; with text typed, the completion hands the

@@ -61,7 +61,7 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   reload, plugins start and stop live from the `plugins.disabled` switch, and a plugin in the user folder reloads with
   new code on save (A user plugin, below). A built-in's code still needs a rebuild.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
-  processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
+  processes, file watching, the icon badge, the relay's transport — is an adapter behind a contract, picked in the
   composition root, so adding one is a new adapter and features carry no `process.platform` checks.
 - **Any agent harness and model, eventually.** Claude Code is the first adapter behind `AgentHarness`; Codex,
   wigley-harness and other models follow. Only the seams are built now, and no knowledge of one harness — its CLI,
@@ -179,8 +179,9 @@ src/main/        core main process; main.ts is its composition root
                  through the ConfigStore's own checks
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
-  alerts/        native notification behind Alerts, with a Mac variant (Dock bounce, badge), a Windows variant (taskbar
-                 flash, overlay dot) and a plain one for Linux; the badge sums the open counts each source sets
+  alerts/        the icon badge behind Alerts: the Dock badge on macOS, a taskbar overlay dot on Windows, none on
+                 Linux; the badge sums the open counts each source sets. The app raises no system notification: a
+                 finished turn or an open form marks its session's row instead
   images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
   system-stats/  the macOS and Windows adapters behind SystemStats, each reading the OS's own commands (`ps`, `vm_stat`,
                  `ioreg`, `netstat`; CIM and performance counters on Windows) and Node's `os.cpus()` into one raw
@@ -415,8 +416,7 @@ again once every close guard allows, as the form presenter does after every form
 any other close (the close guard of a session's other open form keeps the row). The user may also close the row,
 which `mark` or `activate` brings back; it leaves for good when the session disconnects. A row `release` closed
 while selected comes back selected when the session's next form marks it within 30 seconds (a back-to-back
-round), unless the user picked another row first; later, it comes back marked. A form's notification click
-selects only a row its session still holds (`activateExistingRow`), so a stale click adds none. A session the
+round), unless the user picked another row first; later, it comes back marked. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps

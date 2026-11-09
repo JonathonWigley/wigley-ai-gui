@@ -66,7 +66,6 @@ import {
   type ChatSessions,
   type ChatSessionsDeps,
   createChatSessions,
-  TURN_FINISHED_TITLE,
 } from './chat-sessions';
 import type {
   OpenSessions,
@@ -227,12 +226,6 @@ function messagesFrom(timeline: readonly TimelineItem[]): Message[] {
 type Emitted = {
   [K in keyof ChatMainEvents]: { event: K; data: ChatMainEvents[K] };
 }[keyof ChatMainEvents];
-
-interface Announced {
-  title: string;
-  body: string;
-  onClick: () => void;
-}
 
 const ROW_ID = 'row-1';
 const PROJECT_DIR = '/work/app';
@@ -441,7 +434,6 @@ function setUp(
   const markOptions: MarkOptions[] = [];
   const rowLabels = new Map<string, string>();
   const activated: string[] = [];
-  const announced: Announced[] = [];
   // Each slot change and `sessionRested`, in the order they left main.
   const timeline: TimelineItem[] = [];
   const store = createSlotStore(() => undefined);
@@ -458,7 +450,6 @@ function setUp(
     | { emitted: Emitted }
   )[] = [];
   let ownedEnds = 0;
-  let windowShows = 0;
   let isFocused = true;
   let selectedSessionId: string | null = ROW_ID;
   let uuidCalls = 0;
@@ -552,14 +543,7 @@ function setUp(
       notesAndEmits.push({ emitted: each });
       onEmit(each);
     },
-    alerts: {
-      announce: (title, body, onClick) =>
-        announced.push({ title, body, onClick }),
-    },
     window: {
-      show: () => {
-        windowShows++;
-      },
       isFocused: () => isFocused,
     },
     git: options.git ?? NO_CLONE,
@@ -592,7 +576,6 @@ function setUp(
     markOptions,
     rowLabels,
     activated,
-    announced,
     store,
     timeline,
     messages: () => messagesFrom(timeline),
@@ -612,7 +595,6 @@ function setUp(
     },
     hostIdChanges,
     ownedEnds: () => ownedEnds,
-    windowShows: () => windowShows,
     setFocused: (focused: boolean) => {
       isFocused = focused;
     },
@@ -1831,7 +1813,7 @@ describe('createChatSessions', () => {
     expect(test.chat.sessions()[0].controls).toEqual(controls);
   });
 
-  it('turnFinished_focusedAndSelected_noAlert', async () => {
+  it('turnFinished_focusedAndSelected_noMark', async () => {
     const test = await started();
 
     test.activity('working');
@@ -1841,24 +1823,17 @@ describe('createChatSessions', () => {
       { sessionId: ROW_ID, activity: 'working' },
       { sessionId: ROW_ID, activity: 'idle' },
     ]);
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
   });
 
-  it('turnFinished_unfocused_alertsAndMarks', async () => {
+  it('turnFinished_unfocused_marks', async () => {
     const test = await started();
     test.setFocused(false);
 
     test.activity('working');
     test.activity('idle');
 
-    expect(test.announced.map(({ title, body }) => [title, body])).toEqual([
-      [TURN_FINISHED_TITLE, 'app'],
-    ]);
     expect(test.marked).toEqual([ROW_ID]);
-    test.announced[0].onClick();
-    expect(test.activated).toEqual([ROW_ID]);
-    expect(test.windowShows()).toBe(1);
   });
 
   it.each([
@@ -1881,12 +1856,12 @@ describe('createChatSessions', () => {
   );
 
   it.each([
-    { given: 'unattended: true', flag: { unattended: true }, alerts: 0 },
-    { given: 'unattended absent', flag: {}, alerts: 1 },
-    { given: 'owner: practice', flag: { owner: 'practice' }, alerts: 0 },
+    { given: 'unattended: true', flag: { unattended: true }, marks: 0 },
+    { given: 'unattended absent', flag: {}, marks: 1 },
+    { given: 'owner: practice', flag: { owner: 'practice' }, marks: 0 },
   ])(
-    'turnFinished_LaunchedRow_AlertsUnlessUnattendedOrOwned: $given → $alerts alerts',
-    async ({ flag, alerts }) => {
+    'turnFinished_LaunchedRow_MarksUnlessUnattendedOrOwned: $given → $marks marks',
+    async ({ flag, marks }) => {
       const test = setUp();
       const sessionId = test.chat.launch({
         projectDir: PROJECT_DIR,
@@ -1901,23 +1876,21 @@ describe('createChatSessions', () => {
       events.activity('working');
       events.activity('idle');
 
-      expect(test.announced).toHaveLength(alerts);
-      expect(test.marked).toEqual(alerts === 0 ? [] : [sessionId]);
+      expect(test.marked).toEqual(marks === 0 ? [] : [sessionId]);
     },
   );
 
-  it('turnFinished_otherSessionSelected_alertsAndMarks', async () => {
+  it('turnFinished_otherSessionSelected_marks', async () => {
     const test = await started();
     test.setSelected('row-other');
 
     test.activity('working');
     test.activity('idle');
 
-    expect(test.announced).toHaveLength(1);
     expect(test.marked).toEqual([ROW_ID]);
   });
 
-  it('turnFinished_backgroundWorkRunning_noAlertUntilLastTurnEnds', async () => {
+  it('turnFinished_backgroundWorkRunning_noMarkUntilLastTurnEnds', async () => {
     const test = await started();
     test.setFocused(false);
     const { events } = test.process;
@@ -1944,7 +1917,6 @@ describe('createChatSessions', () => {
     });
     test.activity('idle');
 
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
     expect(test.chat.sessions()[0].background).toBe(2);
 
@@ -1969,7 +1941,6 @@ describe('createChatSessions', () => {
       { sessionId: ROW_ID, background: 1 },
       { sessionId: ROW_ID, background: 0 },
     ]);
-    expect(test.announced).toHaveLength(1);
     expect(test.marked).toEqual([ROW_ID]);
   });
 
@@ -2235,7 +2206,7 @@ describe('createChatSessions', () => {
     test.activity('idle');
 
     expect(test.sent('activity')).toEqual([]);
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
   });
 
   it.each([
@@ -2282,7 +2253,6 @@ describe('createChatSessions', () => {
     expect(test.chat.sessions()).toMatchObject([
       { sessionId: ROW_ID, running: false, activity: 'idle' },
     ]);
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
   });
 
@@ -2501,7 +2471,7 @@ describe('createChatSessions', () => {
     expect(test.sent('queued')).toEqual([]);
   });
 
-  it('activityIdle_Queued_WritesOneEachIdleAndAlertsAfterTheLast', async () => {
+  it('activityIdle_Queued_WritesOneEachIdleAndMarksAfterTheLast', async () => {
     const test = await started();
     test.setFocused(false);
     const [first, second] = queueTwo(test);
@@ -2520,7 +2490,7 @@ describe('createChatSessions', () => {
     expect(test.sent('activity')).toEqual([
       { sessionId: ROW_ID, activity: 'working' },
     ]);
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
 
     test.activity('idle');
 
@@ -2528,7 +2498,7 @@ describe('createChatSessions', () => {
       sessionId: ROW_ID,
       activity: 'idle',
     });
-    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toHaveLength(1);
   });
 
   it('pullBack_QueuedReturnsItAloneAndSentIsIgnored', async () => {
@@ -3241,7 +3211,6 @@ describe('createChatSessions', () => {
       expect(test.saved.saves()).toBe(savesBefore);
       expect(test.saved.last()?.sessions[0].busy).toBe(true);
       expect(test.messages()).toHaveLength(messagesBefore);
-      expect(test.announced).toEqual([]);
       expect(test.marked).toEqual([]);
     },
   );
@@ -5193,7 +5162,7 @@ describe('createChatSessions clear', () => {
     expect(test.sent('entries')).toHaveLength(1);
   });
 
-  it('clear_WorkingRowUnfocused_NoTurnFinishedAlert', async () => {
+  it('clear_WorkingRowUnfocused_NoTurnFinishedMark', async () => {
     const test = await started();
     test.setFocused(false);
     test.activity('working');
@@ -5201,7 +5170,6 @@ describe('createChatSessions clear', () => {
     test.chat.clear(ROW_ID);
     await flush();
 
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
   });
 });
@@ -6485,7 +6453,7 @@ describe('createChatSessions attaching', () => {
     ]);
   });
 
-  it('attach_ReplayedEvents_FlaggedNoAlertNoPlanUsage', async () => {
+  it('attach_ReplayedEvents_FlaggedNoMarkNoPlanUsage', async () => {
     const test = setUp();
     test.setFocused(false);
     test.harness.scriptAttach('p1', {
@@ -6523,7 +6491,7 @@ describe('createChatSessions attaching', () => {
     expect(test.emitted.filter((each) => each.event === 'planUsage')).toEqual(
       [],
     );
-    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toHaveLength(1);
   });
 
   it.each([
@@ -6977,7 +6945,7 @@ describe('createChatSessions stopAll', () => {
     expect(test.logged).toContain('stopped 2 session process(es)');
   });
 
-  it('stopAll_WorkingRow_RaisesNoAlertAndWritesNothingQueued', async () => {
+  it('stopAll_WorkingRow_MarksNothingAndWritesNothingQueued', async () => {
     const test = await started();
     const queued = { text: 'queued', images: [] };
     test.setFocused(false);
@@ -6990,7 +6958,6 @@ describe('createChatSessions stopAll', () => {
     await flush();
 
     expect(test.process.calls).toEqual([{ method: 'kill' }]);
-    expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
     expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [queued] },
@@ -7698,7 +7665,7 @@ describe('createChatSessions send gate and hold', () => {
   it.each<{
     given: string;
     act(test: Awaited<ReturnType<typeof started>>): Promise<void>;
-    alerts: number;
+    marks: number;
   }>([
     {
       given: 'a pulled-back compaction, its stretch held no turn',
@@ -7707,17 +7674,17 @@ describe('createChatSessions send gate and hold', () => {
         test.harness.releaseCompactions();
         await flush();
       },
-      alerts: 0,
+      marks: 0,
     },
     {
       given: 'an idle before the compaction ends, in the skip grace order',
       act: async (test) => {
         test.chat.interrupt(ROW_ID);
         test.activity('idle');
-        expect(test.announced).toEqual([]);
+        expect(test.marked).toEqual([]);
         await flush();
       },
-      alerts: 1,
+      marks: 1,
     },
     {
       given: 'the held row written at the end, its own turn',
@@ -7725,7 +7692,7 @@ describe('createChatSessions send gate and hold', () => {
         test.harness.releaseCompactions();
         await flush();
       },
-      alerts: 1,
+      marks: 1,
     },
     {
       given: 'a later stretch after a pulled-back compaction',
@@ -7736,7 +7703,7 @@ describe('createChatSessions send gate and hold', () => {
         test.activity('working');
         test.activity('idle');
       },
-      alerts: 1,
+      marks: 1,
     },
     {
       given: 'a stretch of the fresh process after a clear',
@@ -7747,18 +7714,18 @@ describe('createChatSessions send gate and hold', () => {
         fresh.events.activity('working');
         fresh.events.activity('idle');
       },
-      alerts: 1,
+      marks: 1,
     },
-  ])('hold_TurnFinishedAlert: $given', async ({ act, alerts }) => {
+  ])('hold_TurnFinishedMark: $given', async ({ act, marks }) => {
     const test = await startedAndHeld();
     test.setFocused(false);
 
     await act(test);
 
-    expect(test.announced).toHaveLength(alerts);
+    expect(test.marked).toHaveLength(marks);
   });
 
-  it('hold_IdleAfterARowBehindWasSentNow_NoAlertWhileTheHoldIsUp', async () => {
+  it('hold_IdleAfterARowBehindWasSentNow_NoMarkWhileTheHoldIsUp', async () => {
     const test = await startedAndHeld();
     test.setFocused(false);
     await test.chat.send(ROW_ID, LATER);
@@ -7766,7 +7733,7 @@ describe('createChatSessions send gate and hold', () => {
 
     test.activity('idle');
 
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
   });
 
   it('hold_IdleWithNoCompaction_WritesTheRowAndALaterEndReleasesNothing', async () => {
@@ -8000,7 +7967,7 @@ describe('createChatSessions compact', () => {
     expect(compacted).toBe(true);
     expect(test.chat.sessions()[0].compaction).toBeNull();
     expect(test.chat.sessions()[0].activity).toBe('idle');
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
   });
 
   it('compact_HarnessThrows_ReturnsFalseAndShowsNothing', async () => {
@@ -8032,7 +7999,7 @@ describe('createChatSessions compact', () => {
     expect(test.chat.sessions()[0].compaction).toBeNull();
     fake.processes[0].events.activity('working');
     fake.processes[0].events.activity('idle');
-    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toHaveLength(1);
   });
 
   it('compact_MessageSentDuringIt_QueuesUntilItsEnd', async () => {
@@ -8051,7 +8018,7 @@ describe('createChatSessions compact', () => {
     expect(test.process.calls.at(-1)).toEqual(sendCall(LATER));
   });
 
-  it('compact_StretchRanOnlyIt_NoTurnFinishedAlert', async () => {
+  it('compact_StretchRanOnlyIt_NoTurnFinishedMark', async () => {
     const test = await started();
     test.setFocused(false);
 
@@ -8060,10 +8027,10 @@ describe('createChatSessions compact', () => {
 
     expect(test.chat.sessions()[0].compaction).toBeNull();
     expect(test.chat.sessions()[0].activity).toBe('idle');
-    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
     test.activity('working');
     test.activity('idle');
-    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toHaveLength(1);
   });
 });
 
