@@ -24,17 +24,17 @@ OS in `src/main/system-stats/`, picked in main's composition root and handed to 
 taken at one instant. It computes no rates and keeps no state, so the adapters only run commands
 and parse them. Each parser is a pure function over the command's text, tested on captured output.
 
-The adapters use the OS's own commands, with no npm dependency and no `sudo`:
+The adapters use the OS's own commands, with no npm dependency and no `sudo`. Windows reads everything through one PowerShell script over CIM classes, whose names are not localized as counter paths are. An OS with no adapter (Linux) gets one whose `sample()` rejects, and the panel shows that message:
 
 | Reading | macOS | Windows |
 |---|---|---|
-| Per-process CPU time, RSS, parent pid, path | `ps -axo pid,ppid,time,rss,comm` | `Get-CimInstance Win32_Process` + `Get-Process` |
+| Per-process CPU time, RSS, parent pid, path | `ps -axo pid,ppid,time,rss,comm` | `Win32_Process` |
 | Total CPU time, core count | Node's `os.cpus()` times | Node's `os.cpus()` times |
 | Memory used, pressure, swap | `vm_stat`, `sysctl hw.memsize vm.swapusage kern.memorystatus_vm_pressure_level` (1 normal, 2 warning, 4 critical) | `Win32_OperatingSystem`, `Win32_PageFileUsage` |
-| GPU total | `ioreg -r -d 1 -c IOAccelerator` → `Device Utilization %` | `\GPU Engine(*)\Utilization Percentage` |
-| GPU per process | `ioreg -r -c AGXDeviceUserClient -l` → `accumulatedGPUTime` (ns) per `IOUserClientCreator` pid | `\GPU Engine(pid_*)\Running Time` |
-| Network bytes | `netstat -ib -n`, physical interfaces, loopback left out | `Win32_PerfRawData_Tcpip_NetworkInterface` |
-| Disk bytes read and written | `ioreg -r -c IOBlockStorageDriver -l` → `Bytes (Read)`, `Bytes (Write)` | `Win32_PerfRawData_PerfDisk_PhysicalDisk` |
+| GPU total | `ioreg -r -d 1 -w 0 -c IOAccelerator` → `Device Utilization %` | `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine`, 3D engines |
+| GPU per process | `ioreg -r -d 1 -w 0 -c AGXDeviceUserClient` → `accumulatedGPUTime` (ns) per `IOUserClientCreator` pid | `Win32_PerfRawData_GPUPerformanceCounters_GPUEngine` `RunningTime`, 3D engines, per `pid_N` |
+| Network bytes | `netstat -ibn`, `en*` interfaces only (loopback, `utun` and `bridge` would count bytes twice) | `Win32_PerfRawData_Tcpip_NetworkInterface` |
+| Disk bytes read and written | `ioreg -r -d 1 -w 0 -c IOBlockStorageDriver` → `Bytes (Read)`, `Bytes (Write)` (`-l` adds nested APFS statistics that count bytes twice) | `Win32_PerfRawData_PerfDisk_PhysicalDisk` |
 
 Per-process GPU time exists only on Apple Silicon (`AGXDeviceUserClient`) and on Windows. Elsewhere,
 the per-process GPU field is null and the panel shows a dash, while the GPU meter still shows the
