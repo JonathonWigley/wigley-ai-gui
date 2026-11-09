@@ -147,13 +147,20 @@ The leader tree as which-key shows it, edited in place, in two panes moved betwe
     group already holds in an overlapping scope, then opens the list picker over every page command by label. A
     command already bound under the leader shows that key in `status-warning`; picking it moves that bind instead of
     adding a second. The scope picker then opens as Add key's does; a scope where the key meets an item in an
-    overlapping scope is refused with the same note, writing nothing.
-  - **Change action** opens the same command picker and keeps the key and scope. A picked command that already has a
-    leader bind elsewhere moves that bind here and the item's old bind goes, as Add does: one leader path per command; **change key** records a new key in
-    the same group; **move to group** picks a group, then records the key there. Each is one user-layer edit: a user
-    bind's entry is rewritten, a default's becomes an `unbind` entry beside the new `binds` entry.
+    overlapping scope is refused with the same note, writing nothing. A command with several leader binds moves the
+    one in the scope chosen, else its first, and its other leader binds in a scope overlapping the one chosen go in
+    the same edit: one leader path per command per scope.
+  - **Change action** opens the same command picker and keeps the key and scope. The picked command's leader binds in
+    a scope overlapping the item's go, and the item's key now runs it, as Add does: one leader path per command per
+    scope; **change key** records a new key in the same group; **move to group** picks a group, then records the key
+    there. Each is one user-layer edit: a user bind's entry is rewritten, a default's becomes an `unbind` entry beside
+    the new `binds` entry.
   - **Clear** works as on the Keybindings section, on the one bind; **reset** works on the item's command, as on the
     Keybindings section.
+- A row's main part (key, label, id, tags) is one line; the cursor prompt follows it on that line, and wraps under
+  it when the pane is narrow.
+- A click on a row moves its pane's cursor there and gives that pane the keys. Both panes' cursors are kept across a
+  page reload with the rest of Settings mode's place, each falling back as on a first open when its row is gone.
 
 ## The userConfig service
 

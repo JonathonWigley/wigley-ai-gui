@@ -150,9 +150,8 @@
 
 /* A key row is one line. Its keys and the cursor prompt keep their width;
    the dim group gives way first, then the binds' tags and a recording's
-   prompt, each ending in an ellipsis. The label keeps its width up to half
-   the line. While a recording runs, its prompt takes the cursor prompt's
-   place. */
+   prompt, then the label, each ending in an ellipsis. While a recording
+   runs, its prompt takes the cursor prompt's place. */
 .settings-key-row .settings-row-label,
 .settings-key-row .settings-row-detail,
 .settings-key-row .settings-bind > .ui-tag,
@@ -164,21 +163,35 @@
 }
 
 .settings-key-row .settings-row-label {
-  flex: none;
-  max-width: 50%;
+  flex: 0 1 auto;
 }
 
 .settings-key-row .settings-row-detail {
   flex: 0 10000 auto;
 }
 
+/* The end shrinks no narrower than its keys: a bind or recording is a grid
+   whose keys column keeps its width while each tag or prompt column may
+   shrink to nothing, so its least width is its keys. */
 .settings-key-row .settings-row-end,
-.settings-key-row .settings-binds,
-.settings-key-row .settings-bind,
-.settings-key-row .settings-recording {
+.settings-key-row .settings-binds {
   flex: 0 100 auto;
   flex-wrap: nowrap;
-  min-width: 0;
+  min-width: auto;
+}
+
+.settings-key-row .settings-bind,
+.settings-key-row .settings-recording {
+  display: inline-grid;
+  flex: 0 100 auto;
+  grid-auto-columns: minmax(0, max-content);
+  grid-auto-flow: column;
+  align-items: center;
+}
+
+.settings-key-row .settings-bind,
+.settings-key-row .settings-recording:has(> .ui-kbd) {
+  grid-template-columns: max-content;
 }
 
 .settings-key-row .settings-row-actions {
@@ -206,8 +219,9 @@
    find by key hint or query at the end. */
 .settings-key-filters {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--wg-space-2);
+  gap: var(--wg-space-1) var(--wg-space-2);
   padding: var(--wg-space-2) var(--wg-space-2) 0;
 }
 
@@ -268,9 +282,9 @@
   outline: none;
 }
 
-/* A Leader menu row's main part is one line: its dim id, free keys and tags
-   give way, each ending in an ellipsis, while the label keeps its width up
-   to most of the line. The recording and the cursor prompt follow on that
+/* A Leader menu row's main part is one line: its key and count keep their
+   width; its dim id, free keys and tags give way first, then the label, each
+   ending in an ellipsis. The recording and the cursor prompt follow on that
    line, and wrap under it at its end when the column has no room. */
 .settings-leader-row > .settings-row-head {
   flex-wrap: wrap;
@@ -298,8 +312,12 @@
 }
 
 .settings-leader-main > .settings-row-label {
+  flex: 0 1 auto;
+}
+
+.settings-leader-main > .ui-kbd,
+.settings-leader-count {
   flex: none;
-  max-width: 70%;
 }
 
 .settings-leader-main > .ui-tag,

@@ -1,14 +1,17 @@
 import type { CommandArg } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
-import type { KeyBind, ViewScope } from '../../../contracts/keymap';
+import type { KeyBind, UserKeymap, ViewScope } from '../../../contracts/keymap';
 import type { FocusTarget } from '../../../contracts/panes';
 import type { CommandInfo } from '../../../contracts/plugin';
+import type { UserConfigSchema } from '../../../contracts/user-config';
 import { capitalised } from '../../../shared/capitalised';
 import { parseChord } from '../../../shared/chord-notation';
 import { commandTarget } from '../../../shared/command-args';
 import { formatVimKeys, normalVimKeys } from '../../../shared/key-hints';
+import { scopesOverlap } from '../../../shared/keymap-checks';
 import { element } from '../../../shared/page/dom';
 import { commandLabel } from '../../../shared/plugin-manifests';
+import type { LeaderCursors } from '../contract';
 import type {
   LeaderAddRowInput,
   LeaderGroupRowInput,
@@ -68,9 +71,10 @@ export type LeaderRowPart =
 
 // What the Leader menu draws through and hands the keys to. `drawPanes` and
 // `drawRow` draw a layout part, which the caller disposes on its next draw of
-// the rows; `redraw` draws the rows again, the Leader menu through `draw`.
-// `anchor` keeps a settings command's keys in `element` while `scope` is in
-// force, followed by `label`.
+// the rows; `drawRow` is handed the row's key, for a click on the row to move
+// the cursor to; `redraw` draws the rows again, the Leader menu through
+// `draw`. `anchor` keeps a settings command's keys in `element` while `scope`
+// is in force, followed by `label`. `cursorMoved` hears each cursor move.
 export interface LeaderMenuDeps {
   context: RowContext;
   drawPanes(parent: HTMLElement, input: LeaderPanesInput): BuiltLeaderPanes;
@@ -78,6 +82,7 @@ export interface LeaderMenuDeps {
     row: LeaderRowPart,
     parent: HTMLElement,
     scope: LeaderScope,
+    key: string,
   ): BuiltRow;
   anchor(
     element: HTMLElement,
@@ -88,6 +93,7 @@ export interface LeaderMenuDeps {
   setScope(scope: LeaderScope): void;
   setFocusTarget(target: FocusTarget): void;
   redraw(): void;
+  cursorMoved(): void;
   log(line: string): void;
 }
 
@@ -101,15 +107,21 @@ export interface LeaderMenuDeps {
 // cursors to it once its write lands; an add whose key the scope chosen
 // refuses logs `add refused <keys> in <scope>: <reason>` and toasts why. Row
 // keys: `group top`, `group <prefix>`, `item <scope> <keys>` (` set` appended
-// for a user bind), `opens <prefix>` and `add <prefix>`. `drawnRow` finds a
-// drawn row by key, for the box and the recording drawn on it. `isEdit` is
-// whether `command` on the cursor row edits the keymap rather than moving
-// the cursors.
+// for a user bind), `opens <prefix>` and `add <prefix>`. `reset` puts both
+// cursors back to their first draw's, or onto `restored`'s rows where the
+// next draw still holds them. `cursors` reads both cursors' row keys.
+// `moveTo` moves the cursor of the pane holding the row `key` to it, that pane
+// taking the keys on the next `focus`; false when no row holds `key`.
+// `drawnRow` finds a drawn row by key, for the box and the recording drawn on
+// it. `isEdit` is whether `command` on the cursor row edits the keymap rather
+// than moving the cursors.
 export interface LeaderMenuView {
   draw(parent: HTMLElement): void;
   focus(): void;
   blur(): void;
-  reset(): void;
+  reset(restored?: LeaderCursors | null): void;
+  cursors(): LeaderCursors;
+  moveTo(key: string): boolean;
   drawnRow(key: string): BuiltRow | undefined;
   isEdit(command: LeaderMenuCommand): boolean;
   commands: Record<LeaderMenuCommand, () => void>;
@@ -154,7 +166,9 @@ interface PaneRow<H extends string> {
   isOpenAMove?: boolean;
 }
 
-// Where the cursors go once an edit's write lands.
+// Where the cursors go on the next draw, once an edit's write lands or after
+// a `reset` to restored cursors; a row the draw no longer holds is passed
+// over.
 interface Follow {
   group: string;
   item: string | null;
@@ -186,6 +200,35 @@ function sameTarget(a: Runs, b: Runs): boolean {
   return (
     commandTarget(a.command.id, a.arg) === commandTarget(b.command.id, b.arg)
   );
+}
+
+// Every leader line of what `runs` runs, in the tree's order.
+function leaderLinesOf(tree: readonly LeaderGroup[], runs: Runs): BindLine[] {
+  return tree.flatMap((group) =>
+    group.entries.flatMap((entry) =>
+      entry.type === 'item' && sameTarget(entry.item, runs)
+        ? [entry.item.line]
+        : [],
+    ),
+  );
+}
+
+// `layer` without each of `lines` other than `kept` whose scope overlaps
+// `scope`, each removed as `withRemovedBind` removes it.
+function withOtherLeaderPathsRemoved(
+  layer: UserKeymap,
+  lines: readonly BindLine[],
+  kept: BindLine | undefined,
+  scope: ViewScope,
+  schema: UserConfigSchema,
+): UserKeymap {
+  let edited = layer;
+  for (const line of lines) {
+    if (line !== kept && scopesOverlap(line.bind.scope, scope)) {
+      edited = withRemovedBind(edited, line, schema);
+    }
+  }
+  return edited;
 }
 
 // A prompt span holding one anchored hint per entry of `hints`.
@@ -239,6 +282,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
     if (key !== null) {
       log(`cursor ${key}`);
     }
+    deps.cursorMoved();
   };
 
   // `key` while a row holds it; else the row now in the place of the one
@@ -432,7 +476,9 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
 
   // Records the new item's key, which meets only `any` items until the Scope
   // picker names its scope; the key is judged again in the scope chosen, and
-  // refused there it writes nothing.
+  // refused there it writes nothing. A command with leader binds moves the
+  // one in the scope chosen, else its first, and loses the rest in a scope
+  // overlapping it, so it keeps one leader path per scope.
   const addItem = (group: LeaderGroup) =>
     recordIn(
       group,
@@ -442,12 +488,18 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       null,
       (keys, itemKey) =>
         openActionPicker(actionRows(), undefined, (row) => {
-          const moving = leaderLine(row);
+          const lines = leaderLinesOf(
+            leaderTree(ctx.schema, ctx.keymapLayer()),
+            row,
+          );
+          const movingIn = (scope: ViewScope): BindLine | undefined =>
+            lines.find((line) => line.bind.scope === scope) ?? lines[0];
           const firstDefault = row.binds.find(
             (line) => line.origin === 'default',
           );
-          const bindIn = (scope: ViewScope): KeyBind =>
-            moving === undefined
+          const bindIn = (scope: ViewScope): KeyBind => {
+            const moving = movingIn(scope);
+            return moving === undefined
               ? {
                   keys,
                   scope,
@@ -455,11 +507,13 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
                   ...(row.arg !== undefined && { arg: row.arg }),
                 }
               : { ...moving.bind, keys, scope };
+          };
           openScopePicker(ctx, {
             bindIn,
             preselected:
-              moving?.bind.scope ?? firstDefault?.bind.scope ?? 'any',
+              lines[0]?.bind.scope ?? firstDefault?.bind.scope ?? 'any',
             chosen(scope, expectedText) {
+              const moving = movingIn(scope);
               const judged = judge(group, itemKey, scope, moving ?? null);
               if (judged.type === 'refused') {
                 log(`add refused ${keys} in ${scope}: ${judged.reason}`);
@@ -468,10 +522,17 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
               }
               const layer = ctx.keymapLayer();
               const to = bindIn(scope);
-              const edited =
+              const added =
                 moving === undefined
                   ? withAddedBind(layer, to, ctx.schema)
                   : withMovedBind(layer, moving, to, ctx.schema);
+              const edited = withOtherLeaderPathsRemoved(
+                added,
+                lines,
+                moving,
+                scope,
+                ctx.schema,
+              );
               commit(
                 edited,
                 { expectedText },
@@ -482,9 +543,9 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
         }),
     );
 
-  // Rebinds the item's key and scope to the picked command; a command with
-  // a leader bind elsewhere loses that bind, so each command keeps one leader
-  // path.
+  // Rebinds the item's key and scope to the picked command, which loses its
+  // other leader binds in a scope overlapping the item's, so it keeps one
+  // leader path per scope.
   const changeAction = (group: LeaderGroup, item: LeaderItem) => {
     const rows = actionRows();
     const own = rows.findIndex((row) => sameTarget(row, item));
@@ -506,11 +567,13 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
           to,
           ctx.schema,
         );
-        const other = leaderLine(row);
-        const edited =
-          other === undefined
-            ? moved
-            : withRemovedBind(moved, other, ctx.schema);
+        const edited = withOtherLeaderPathsRemoved(
+          moved,
+          leaderLinesOf(leaderTree(ctx.schema, ctx.keymapLayer()), row),
+          undefined,
+          to.scope,
+          ctx.schema,
+        );
         commit(
           edited,
           { expectedText },
@@ -793,22 +856,27 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
     scope: LeaderScope,
   ) =>
     new Map(
-      rows.map((row) => [row.key, deps.drawRow(row.draw, parent, scope)]),
+      rows.map((row) => [
+        row.key,
+        deps.drawRow(row.draw, parent, scope, row.key),
+      ]),
     );
 
   const draw = (parent: HTMLElement) => {
     tree = leaderTree(ctx.schema, ctx.keymapLayer());
     const followed = follow;
     follow = null;
-    if (followed !== null) {
-      setCursor('groups', followed.group);
-    }
     const nextGroupRows = tree.map(groupRow);
+    const isFollowedGroup =
+      followed !== null &&
+      nextGroupRows.some((row) => row.key === followed.group);
     setCursor(
       'groups',
-      cursorAfter(nextGroupRows, cursors.groups, groupRows) ??
-        nextGroupRows[0]?.key ??
-        null,
+      isFollowedGroup
+        ? followed.group
+        : (cursorAfter(nextGroupRows, cursors.groups, groupRows) ??
+            nextGroupRows[0]?.key ??
+            null),
     );
     groupRows = nextGroupRows;
     const selected = selectedGroup();
@@ -817,11 +885,14 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       cursors.items = null;
       itemRows = [];
     }
-    if (followed?.item != null) {
-      setCursor('items', followed.item);
-    }
     const nextItemRows = selected === undefined ? [] : itemRowsOf(selected);
-    let itemsCursor = cursorAfter(nextItemRows, cursors.items, itemRows);
+    const followedItem = followed?.item ?? null;
+    const isFollowedItem =
+      followedItem !== null &&
+      nextItemRows.some((row) => row.key === followedItem);
+    let itemsCursor = isFollowedItem
+      ? followedItem
+      : cursorAfter(nextItemRows, cursors.items, itemRows);
     if (itemsCursor === null && pane === 'items') {
       itemsCursor = nextItemRows[0]?.key ?? null;
     }
@@ -914,15 +985,33 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       holding = null;
       mark();
     },
-    reset() {
+    reset(restored = null) {
       pane = 'groups';
       holding = null;
       cursors.groups = null;
       cursors.items = null;
       itemsGroup = null;
-      follow = null;
+      follow =
+        restored?.groups == null
+          ? null
+          : { group: restored.groups, item: restored.items };
       groupRows = [];
       itemRows = [];
+    },
+    cursors: () => ({ ...cursors }),
+    moveTo(key) {
+      const at = (['groups', 'items'] as const).find((each) =>
+        rowsOf(each).some((row) => row.key === key),
+      );
+      if (at === undefined) {
+        return false;
+      }
+      pane = at;
+      setCursor(at, key);
+      if (at === 'groups') {
+        deps.redraw();
+      }
+      return true;
     },
     drawnRow: (key) => drawn.groups.get(key) ?? drawn.items.get(key),
     isEdit,

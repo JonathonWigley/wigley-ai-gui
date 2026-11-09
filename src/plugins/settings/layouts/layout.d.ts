@@ -96,10 +96,10 @@ export interface KeyFilterChipInput {
   isOn: boolean;
 }
 // The Keybindings section's filter bar: the chips in `f`'s order, and the find by key query: `keys` printed for the
-// platform (null with none), `isRecording` while `?` waits for its key.
+// platform (null with none), `prompt` what to press while `?` waits for its key (null while it waits for none).
 export interface KeyFiltersInput {
   chips: readonly KeyFilterChipInput[];
-  find: { keys: string | null; isRecording: boolean };
+  find: { keys: string | null; prompt: string | null };
 }
 // The leader row: the leader in force and the default leader, each printed for the platform.
 export interface LeaderRowInput {

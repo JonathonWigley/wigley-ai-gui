@@ -6,19 +6,36 @@
 // children.
 
 /**
+ * `element` with its own text as its title, so text that ends in an ellipsis
+ * can still be read whole.
+ * @param {HTMLElement} element
+ */
+function titled(element) {
+  element.title = element.textContent ?? '';
+  return element;
+}
+
+/**
  * A setting, plugin, key, leader or advanced row: the label, its dim detail
  * and its end on the first line, with the cursor prompt after them; the
- * description under them, then what `drawUnder` adds; then the open box.
+ * description under them, then what `drawUnder` adds; then the open box. On a
+ * one-line row the label and detail carry their text as a title.
  * @param {HTMLElement} parent
  * @param {import('../layout').RowKit} kit
- * @param {{ label: string, detail?: string, description: string, isSet: boolean, defaultText: string | null, drawEnd(end: HTMLElement): void, drawUnder?(row: HTMLElement): void }} lines
+ * @param {{ label: string, detail?: string, description: string, isSet: boolean, defaultText: string | null, isOneLine?: boolean, drawEnd(end: HTMLElement): void, drawUnder?(row: HTMLElement): void }} lines
  */
 function settingsRow(parent, kit, lines) {
   const row = kit.el(parent, 'li', 'settings-row');
   const head = kit.el(row, 'div', 'settings-row-head');
-  kit.el(head, 'span', 'settings-row-label', lines.label);
+  const label = kit.el(head, 'span', 'settings-row-label', lines.label);
+  if (lines.isOneLine === true) {
+    titled(label);
+  }
   if (lines.detail !== undefined) {
-    kit.el(head, 'span', 'settings-row-detail', lines.detail);
+    const detail = kit.el(head, 'span', 'settings-row-detail', lines.detail);
+    if (lines.isOneLine === true) {
+      titled(detail);
+    }
   }
   const end = kit.el(head, 'div', 'settings-row-end');
   if (lines.isSet) {
@@ -53,7 +70,7 @@ function recordingSpan(parent, kit, recording) {
   if (recording.keys !== null) {
     kit.kbd(span, recording.keys);
   }
-  kit.el(span, 'span', 'settings-recording-prompt', recording.prompt);
+  titled(kit.el(span, 'span', 'settings-recording-prompt', recording.prompt));
   return span;
 }
 
@@ -194,9 +211,8 @@ const layout = {
       drawEnd(end) {
         if (input.lockedText !== null) {
           end.classList.add('settings-row-end--locked');
-          const lock = kit.tag(end, input.lockedText);
+          const lock = titled(kit.tag(end, input.lockedText));
           lock.classList.add('settings-row-lock');
-          lock.title = input.lockedText;
         }
         kit.el(end, 'span', 'settings-row-value', input.value);
       },
@@ -210,6 +226,7 @@ const layout = {
       description: '',
       isSet: false,
       defaultText: null,
+      isOneLine: true,
       drawEnd(end) {
         if (input.lines.length === 0 && recording === null) {
           kit.el(end, 'span', 'settings-row-value is-unset', '—');
@@ -232,7 +249,7 @@ const layout = {
           bind.classList.toggle('is-struck', line.isStruck || isReplaced);
           kit.kbd(bind, line.keys);
           for (const text of line.tags) {
-            kit.tag(bind, text);
+            titled(kit.tag(bind, text));
           }
           if (isReplaced) {
             recordingSpan(binds, kit, recording);
@@ -259,13 +276,8 @@ const layout = {
       );
     }
     const end = kit.el(bar, 'span', 'settings-key-filters-end');
-    if (input.find.isRecording) {
-      kit.el(
-        end,
-        'span',
-        'settings-recording-prompt',
-        'Press a key to find what it runs — Esc cancels',
-      );
+    if (input.find.prompt !== null) {
+      kit.el(end, 'span', 'settings-recording-prompt', input.find.prompt);
     } else if (input.find.keys !== null) {
       kit.tag(end, `Finding ${input.find.keys}`, 'accent');
     } else {
@@ -339,10 +351,12 @@ const layout = {
     if (input.key !== '') {
       kit.kbd(drawn.main, input.key);
     }
-    const name = kit.el(drawn.main, 'span', 'settings-row-label', input.name);
+    const name = titled(
+      kit.el(drawn.main, 'span', 'settings-row-label', input.name),
+    );
     name.classList.toggle('is-unnamed', !input.isNamed);
     if (input.isSet) {
-      kit.tag(drawn.main, 'Set');
+      titled(kit.tag(drawn.main, 'Set'));
     }
     kit.el(drawn.main, 'span', 'settings-leader-count', String(input.count));
     return leaderRowEnd(drawn, kit, input.recording);
@@ -352,23 +366,27 @@ const layout = {
     const key = kit.kbd(drawn.main, input.key);
     key.classList.toggle('is-struck', input.recording !== null);
     const label = input.kind === 'group' ? `${input.label} ›` : input.label;
-    kit.el(drawn.main, 'span', 'settings-row-label', label);
+    titled(kit.el(drawn.main, 'span', 'settings-row-label', label));
     if (input.command !== null) {
-      kit.el(drawn.main, 'span', 'settings-leader-command', input.command);
+      titled(
+        kit.el(drawn.main, 'span', 'settings-leader-command', input.command),
+      );
     }
     for (const text of input.tags) {
-      kit.tag(drawn.main, text);
+      titled(kit.tag(drawn.main, text));
     }
     return leaderRowEnd(drawn, kit, input.recording);
   },
   leaderAddRow(parent, input, kit) {
     const drawn = leaderRow(parent, kit, input.recording);
     kit.el(drawn.main, 'span', 'settings-row-label', 'add…');
-    kit.el(
-      drawn.main,
-      'span',
-      'settings-leader-free',
-      input.freeKeys.join(' '),
+    titled(
+      kit.el(
+        drawn.main,
+        'span',
+        'settings-leader-free',
+        input.freeKeys.join(' '),
+      ),
     );
     return leaderRowEnd(drawn, kit, input.recording);
   },

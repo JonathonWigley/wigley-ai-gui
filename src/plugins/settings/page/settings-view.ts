@@ -43,6 +43,7 @@ import { textBoxInput } from '../../../shared/page/text-box';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
 import {
+  type LeaderCursors,
   type SettingsChannel,
   type SettingsPlace,
   settingsMoveToRowCommand,
@@ -329,7 +330,8 @@ export interface SettingsView {
   focusMain(): void;
   commands: Record<SettingsCommand, () => void>;
   // The cursor moves to the row `key` keys and the rows take focus, unless a
-  // box is open; a key no row holds logs `no row <key>`.
+  // box is open; in the Leader menu the cursor and focus of the pane holding
+  // the row. A key no row holds logs `no row <key>`.
   moveToRow(key: string): void;
   // Opens the section at `index` with the side bar's cursor and focus on it,
   // then tells `sectionPicked`; an index no section holds logs
@@ -338,7 +340,8 @@ export interface SettingsView {
   // Puts back a reloaded page's place, before `load`: the first show opens the
   // saved section with its filter applied, its box closed. A saved section the
   // schema no longer holds opens the first, and a saved cursor key no row
-  // holds leaves the cursor where the first draw sets it.
+  // holds, the Leader menu's included, leaves that cursor where the first draw
+  // sets it.
   restorePlace(place: SettingsPlace): void;
   // The plugin switch wrote a new status list: the rows redraw while the
   // Plugins section is open.
@@ -484,6 +487,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   let cursorKey: string | null = null;
   let openBox: OpenBox | null = null;
   let isPlaceRestored = false;
+  let restoredLeaderCursors: LeaderCursors | null = null;
   let keysState: KeysViewState = NO_KEYS_FILTER;
   const recorder = createKeyRecorder({
     captureKey: deps.captureKey,
@@ -594,13 +598,17 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     } else if (cursorKey !== null) {
       drawnRows.get(cursorKey)?.element.scrollIntoView({ block: 'nearest' });
     }
+    reportPlace();
+  };
+
+  const reportPlace = () =>
     deps.placeChanged({
       sectionsCursor,
       openSectionId,
       cursorKey,
       filter: query,
+      leaderCursors: leaderMenu.cursors(),
     });
-  };
 
   // The build of a group header, empty state or problem card for `input`.
   const entryBuild =
@@ -608,20 +616,23 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     (draw: EntryDraw<I>, parent: HTMLElement, rollback: RollbackDeps) =>
       buildEntry(draw, parent, input, 'rows', services, rollback);
 
-  // Draws `row` into `parent`; a click on it outside its box runs
-  // `settings.moveToRow` with its key.
-  const drawRowEntry = (row: SettingsRow, parent: HTMLElement) => {
-    const drawn = drawSettingsRow(row.draw, parent);
-    entryDisposes.push(drawn.dispose);
-    drawnRows.set(row.key, drawn.built);
-    drawn.built.element.addEventListener('click', (event) => {
+  // A click on the drawn row `element` outside its box runs
+  // `settings.moveToRow` with `key`.
+  const moveToRowOnClick = (element: HTMLElement, key: string) =>
+    element.addEventListener('click', (event) => {
       const isInBox =
         event.target instanceof Element &&
         event.target.closest('.settings-box') !== null;
       if (!isInBox) {
-        deps.runKey(settingsMoveToRowCommand, row.key);
+        deps.runKey(settingsMoveToRowCommand, key);
       }
     });
+
+  const drawRowEntry = (row: SettingsRow, parent: HTMLElement) => {
+    const drawn = drawSettingsRow(row.draw, parent);
+    entryDisposes.push(drawn.dispose);
+    drawnRows.set(row.key, drawn.built);
+    moveToRowOnClick(drawn.built.element, row.key);
   };
 
   const drawRows = () => {
@@ -1072,9 +1083,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       entryDisposes.push(drawn.dispose);
       return drawn.built;
     },
-    drawRow(row, parent, scope) {
+    drawRow(row, parent, scope, key) {
       const drawn = drawSettingsRow(row, parent, scope);
       entryDisposes.push(drawn.dispose);
+      moveToRowOnClick(drawn.built.element, key);
       return drawn.built;
     },
     anchor: (element, command, scope, label) =>
@@ -1082,6 +1094,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     setScope: deps.setScope,
     setFocusTarget: deps.setFocusTarget,
     redraw: () => draw(),
+    cursorMoved: reportPlace,
     log,
   });
 
@@ -1105,12 +1118,13 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       : settingSection(section, context, query);
   };
 
-  // Opens the section at `index` with `filter` and the cursor on `cursorKey`:
-  // a fresh open clears both.
+  // Opens the section at `index` with `filter` and the cursor on `cursorKey`,
+  // the Leader menu's on `leaderCursors`: a fresh open clears them.
   const openSection = (
     index: number,
     filter = '',
     openCursorKey: string | null = null,
+    leaderCursors: LeaderCursors | null = null,
   ) => {
     const section = sectionList()[index];
     if (section === undefined) {
@@ -1125,7 +1139,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     filterFrame.hidden = filter.trim() === '';
     openSectionTitle = section.title;
     if (isLeaderOpen()) {
-      leaderMenu.reset();
+      leaderMenu.reset(leaderCursors);
     }
     log(`section ${section.id}`);
     deps.sectionShown(section.title);
@@ -1135,7 +1149,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
 
   // The first show opens the first section, once the schema names it, with
   // the sections cursor on it; or the restored place's section with its
-  // filter and cursor, the sections cursor clamped to the sections there are.
+  // filter and cursors, the sections cursor clamped to the sections there
+  // are.
   const openFirstSection = () => {
     if (!hasShown || hasOpenedSection || schema === null) {
       return;
@@ -1146,7 +1161,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     );
     if (isPlaceRestored && restoredIndex !== -1) {
       sectionsCursor = Math.max(0, Math.min(list.length - 1, sectionsCursor));
-      openSection(restoredIndex, query, cursorKey);
+      openSection(restoredIndex, query, cursorKey, restoredLeaderCursors);
       return;
     }
     sectionsCursor = 0;
@@ -1167,6 +1182,19 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const next = Math.max(0, Math.min(rows.length - 1, to(index, rows.length)));
     setCursor(rows[next].key);
     markCursor();
+  };
+
+  // Moves the cursor of the rows, or of the Leader menu pane, holding the row
+  // `key` to it; false when no row holds it.
+  const moveCursorTo = (key: string): boolean => {
+    if (isLeaderOpen()) {
+      return leaderMenu.moveTo(key);
+    }
+    if (!rows.some((row) => row.key === key)) {
+      return false;
+    }
+    setCursor(key);
+    return true;
   };
 
   const move = (
@@ -1454,11 +1482,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       if (openBox !== null) {
         return;
       }
-      if (!rows.some((row) => row.key === key)) {
+      if (!moveCursorTo(key)) {
         log(`no row ${key}`);
         return;
       }
-      setCursor(key);
       focusRows();
     },
     openSectionAt(index) {
@@ -1476,6 +1503,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       sectionsCursor = place.sectionsCursor;
       openSectionId = place.openSectionId;
       cursorKey = place.cursorKey;
+      restoredLeaderCursors = place.leaderCursors;
       query = place.filter;
       filterBox.value = place.filter;
       filterFrame.hidden = place.filter.trim() === '';

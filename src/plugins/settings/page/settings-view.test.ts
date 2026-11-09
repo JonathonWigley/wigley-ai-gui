@@ -602,6 +602,8 @@ describe('createSettingsView', () => {
     },
   );
 
+  const NO_LEADER_CURSORS = { groups: null, items: null };
+
   // Section `q` sits after `p`, holding one row.
   const TWO_SECTIONS: UserConfigSchema = {
     ...SCHEMA,
@@ -631,6 +633,7 @@ describe('createSettingsView', () => {
         openSectionId: 'q',
         cursorKey: 'q.size',
         filter: 'size',
+        leaderCursors: NO_LEADER_CURSORS,
       },
       opened: 'section q',
       sectionsCursor: 1,
@@ -646,6 +649,7 @@ describe('createSettingsView', () => {
         openSectionId: 'q',
         cursorKey: 'q.size',
         filter: '',
+        leaderCursors: NO_LEADER_CURSORS,
       },
       opened: 'section q',
       sectionsCursor: 4,
@@ -659,6 +663,7 @@ describe('createSettingsView', () => {
         openSectionId: 'p',
         cursorKey: 'p.gone',
         filter: '',
+        leaderCursors: NO_LEADER_CURSORS,
       },
       opened: 'section p',
       sectionsCursor: 0,
@@ -672,6 +677,7 @@ describe('createSettingsView', () => {
         openSectionId: 'gone',
         cursorKey: 'q.size',
         filter: 'size',
+        leaderCursors: NO_LEADER_CURSORS,
       },
       opened: 'section p',
       sectionsCursor: 0,
@@ -1079,6 +1085,57 @@ describe('createSettingsView', () => {
 
     expect(logs).toContain('recording item any <Leader>ba');
     expect(capture.isArmed()).toBe(true);
+  });
+
+  it.each([
+    {
+      name: 'held rows',
+      saved: { groups: 'group <Leader>b', items: 'item any <Leader>ba' },
+      restored: { groups: 'group <Leader>b', items: 'item any <Leader>ba' },
+    },
+    {
+      name: 'gone rows',
+      saved: { groups: 'group <Leader>z', items: 'item any <Leader>za' },
+      restored: { groups: 'group top', items: null },
+    },
+  ])(
+    'leaderMenu_RestoredPlace_PutsBackItsCursors: $name',
+    async ({ saved, restored }) => {
+      const { places } = await shownView({
+        schema: LEADER_SCHEMA,
+        restored: {
+          sectionsCursor: LEADER_INDEX,
+          openSectionId: 'leader',
+          cursorKey: null,
+          filter: '',
+          leaderCursors: saved,
+        },
+      });
+
+      expect(places.at(-1)?.leaderCursors).toEqual(restored);
+    },
+  );
+
+  it('leaderMenu_RowClickAndMoves_MoveItsPaneCursorAndReportIt', async () => {
+    vi.stubGlobal('Element', FakeElement);
+    const { view, sheet, runs, logs, places } = await leaderView();
+    // The groups top and b, then Top level's items: b, c and add.
+    const row = findAll(sheet, 'settings-leader-row')[3];
+
+    row.fire('click', { target: row });
+    const [[command, key]] = runs;
+    view.moveToRow(key as string);
+
+    const clicked = places.at(-1)?.leaderCursors;
+    view.commands.up();
+
+    expect(command).toBe('settings.moveToRow');
+    expect(logs).toContain('leader items focused');
+    expect(clicked).toEqual({
+      groups: 'group top',
+      items: 'item any <Leader>c',
+    });
+    expect(places.at(-1)?.leaderCursors.items).toBe('opens <Leader>b');
   });
 
   it('pluginsChanged_PluginsSectionOpen_Redraws', async () => {

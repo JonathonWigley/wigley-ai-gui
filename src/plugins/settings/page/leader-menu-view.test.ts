@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
-import type { KeyBind, UserKeymap } from '../../../contracts/keymap';
+import type { KeyBind, UserKeymap, ViewScope } from '../../../contracts/keymap';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
@@ -28,6 +28,9 @@ function command(
 
 const CLOSE = 'sessions.closeSession';
 const NEW = 'sessions.newSession';
+// Leader binds at Top level `;` and `<Leader>bt` in `any`, and `<Leader>bu`
+// in `p.s`.
+const TWO = 'p.two';
 
 const SCHEMA: UserConfigSchema = {
   sections: [],
@@ -37,13 +40,20 @@ const SCHEMA: UserConfigSchema = {
     'p.scoped': command('p.scoped', 'scoped'),
     'p.free': command('p.free', 'free'),
     'p.pick': command('p.pick', 'pick', { arg: 'number' }),
+    [TWO]: command(TWO, 'two'),
   },
-  scopes: [{ id: 'p.s', title: 'In p', plugin: 'p' }],
+  scopes: [
+    { id: 'p.s', title: 'In p', plugin: 'p' },
+    { id: 'p.t', title: 'In t', plugin: 'p' },
+  ],
   defaultBindLayers: [
     [
       { keys: '<Leader>bd', scope: 'any', command: CLOSE },
       { keys: '<Leader>bn', scope: 'any', command: NEW },
       { keys: '<Leader>bs', scope: 'p.s', command: 'p.scoped' },
+      { keys: '<Leader>bt', scope: 'any', command: TWO },
+      { keys: '<Leader>bu', scope: 'p.s', command: TWO },
+      { keys: '<Leader>;', scope: 'any', command: TWO },
     ],
   ],
   defaultAccelerators: { app: [], global: [], intercept: [] },
@@ -117,6 +127,7 @@ function shownMenu(layer: UserKeymap | null = null) {
     setScope: (scope) => scopes.push(scope),
     setFocusTarget: (target) => targets.push(target),
     redraw: () => view.draw(parent),
+    cursorMoved: () => undefined,
     log: (line) => logs.push(line),
   });
   view.draw(parent);
@@ -160,7 +171,7 @@ function onItem(menu: Menu, downGroups: number, down: number) {
   }
 }
 
-// `<Leader>b`'s items: d, n, s, then the add row.
+// `<Leader>b`'s items: d, n, s, t, u, then the add row.
 const onSessionItem = (menu: Menu, down: number) => onItem(menu, 1, down);
 
 function pickRow(menu: Menu, index: number, id: string) {
@@ -281,13 +292,33 @@ describe('createLeaderMenuView', () => {
     {
       case: 'change action drops the argument',
       layer: { binds: [bind('<Leader>x', 'p.pick', { arg: 2 })] },
-      // Top level's items: the b group, then x.
+      // Top level's items: the b group, x, then `;`.
       on: (menu) => onItem(menu, 0, 1),
       act(menu) {
         menu.view.commands.open();
         pickRow(menu, 0, 'p.free');
       },
       expected: [{ binds: [bind('<Leader>x', 'p.free')] }],
+    },
+    {
+      case: 'change action onto a command with two leader paths keeps one per scope',
+      layer: null,
+      on: (menu) => onSessionItem(menu, 0),
+      act(menu) {
+        menu.view.commands.open();
+        pickRow(menu, 0, TWO);
+      },
+      expected: [
+        {
+          unbind: [
+            { keys: '<Leader>bd', scope: 'any' },
+            { keys: '<Leader>;', scope: 'any' },
+            { keys: '<Leader>bt', scope: 'any' },
+            { keys: '<Leader>bu', scope: 'p.s' },
+          ],
+          binds: [bind('<Leader>bd', TWO)],
+        },
+      ],
     },
     {
       case: 'clear',
@@ -302,7 +333,7 @@ describe('createLeaderMenuView', () => {
         unbind: [{ keys: '<Leader>bd', scope: 'any' }],
         binds: [bind('<Leader>bq', CLOSE)],
       },
-      // b's items: n, q, s.
+      // b's items: n, q, s, t, u.
       on: (menu) => onSessionItem(menu, 1),
       act: (menu) => menu.view.commands.reset(),
       expected: [{}],
@@ -338,11 +369,19 @@ describe('createLeaderMenuView', () => {
     expect(newRow && picker.keysOf?.(newRow)).toBe('Space b n');
   });
 
-  it.each([
+  it.each<{
+    case: string;
+    id: string;
+    key: string;
+    scope: ViewScope;
+    expected: UserKeymap[];
+    toasts: string[];
+  }>([
     {
       case: 'Add_MovesAnAlreadyBoundCommand',
       id: NEW,
       key: 'q',
+      scope: 'any',
       expected: [
         {
           unbind: [{ keys: '<Leader>bn', scope: 'any' }],
@@ -355,6 +394,7 @@ describe('createLeaderMenuView', () => {
       case: 'Add_AddsAnUnboundCommand',
       id: 'p.free',
       key: 'q',
+      scope: 'any',
       expected: [{ binds: [bind('<Leader>bq', 'p.free')] }],
       toasts: [],
     },
@@ -362,17 +402,53 @@ describe('createLeaderMenuView', () => {
       case: 'Add_AnyOverAScopedItem_Refused',
       id: 'p.free',
       key: 's',
+      scope: 'any',
       expected: [],
       toasts: ['Space b s already runs "scoped" in In p'],
     },
-  ])('leaderMenu_$case', ({ id, key, expected, toasts }) => {
+    {
+      // The first leader bind, `;`, moves; every other goes.
+      case: 'Add_TwoLeaderPathsInAny_KeepsOne',
+      id: TWO,
+      key: 'q',
+      scope: 'any',
+      expected: [
+        {
+          unbind: [
+            { keys: '<Leader>;', scope: 'any' },
+            { keys: '<Leader>bt', scope: 'any' },
+            { keys: '<Leader>bu', scope: 'p.s' },
+          ],
+          binds: [bind('<Leader>bq', TWO)],
+        },
+      ],
+      toasts: [],
+    },
+    {
+      // No bind in p.t: the first, `;`, moves; `bu` in p.s stays.
+      case: 'Add_InAScope_KeepsTheNonOverlappingPath',
+      id: TWO,
+      key: 'q',
+      scope: 'p.t',
+      expected: [
+        {
+          unbind: [
+            { keys: '<Leader>;', scope: 'any' },
+            { keys: '<Leader>bt', scope: 'any' },
+          ],
+          binds: [bind('<Leader>bq', TWO, { scope: 'p.t' })],
+        },
+      ],
+      toasts: [],
+    },
+  ])('leaderMenu_$case', ({ id, key, scope, expected, toasts }) => {
     const menu = shownMenu();
     onSessionItem(menu, 0);
 
     menu.view.commands.addBind();
     menu.recordings[0].keep(key);
     pickRow(menu, 0, id);
-    menu.pickers[1].chosen('any', null);
+    menu.pickers[1].chosen(scope, null);
 
     expect(menu.recordings[0].key).toBe('add <Leader>b');
     expect(menu.pickers.map((each) => each.title)).toEqual(['Action', 'Scope']);

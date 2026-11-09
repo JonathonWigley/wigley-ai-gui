@@ -574,6 +574,7 @@ function keyFiltersInput(
   matched: readonly CommandRow[],
   state: KeysViewState,
 ): KeyFiltersInput {
+  const recording = ctx.recording();
   return {
     chips: KEY_FILTERS.map((filter) => ({
       id: filter,
@@ -583,7 +584,7 @@ function keyFiltersInput(
     })),
     find: {
       keys: state.findKeys === null ? null : printedKeys(ctx, state.findKeys),
-      isRecording: ctx.recording()?.key === FIND_KEY,
+      prompt: recording?.key === FIND_KEY ? recording.prompt : null,
     },
   };
 }

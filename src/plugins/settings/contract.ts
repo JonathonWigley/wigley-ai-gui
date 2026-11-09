@@ -37,7 +37,8 @@ export interface SettingsChannel extends ChannelShape {
 }
 
 // Moves the cursor to the row `arg` keys and focuses the rows, as a click on
-// the row does.
+// the row does; in the Leader menu, the cursor and focus of the pane holding
+// the row.
 export const settingsMoveToRowCommand: CommandKey<
   string,
   'settings.moveToRow'
@@ -50,13 +51,21 @@ export const settingsOpenSectionAtCommand: CommandKey<
   'settings.openSectionAt'
 > = { id: 'settings.openSectionAt' };
 
+// The Leader menu's cursors: each pane's cursor row key, null for none.
+export interface LeaderCursors {
+  groups: string | null;
+  items: string | null;
+}
+
 // Where the user was in Settings mode, so a page reload puts them back: the
-// side bar's cursor, the open section, the cursor row's key and the filter.
+// side bar's cursor, the open section, the cursor row's key, the filter and
+// the Leader menu's cursors.
 export interface SettingsPlace {
   sectionsCursor: number;
   openSectionId: string;
   cursorKey: string | null;
   filter: string;
+  leaderCursors: LeaderCursors;
 }
 
 export const settingsPlaceSlot: SlotKey<SettingsPlace, 'page', 'settings'> = {

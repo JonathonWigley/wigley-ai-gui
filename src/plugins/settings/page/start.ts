@@ -31,8 +31,8 @@ const TITLE = 'Settings';
 // and redraws; each new layout set redraws in the new layouts; each change of
 // `core.plugins` redraws the Plugins section. Hiding the mode cancels a key
 // recording, so a capture never outlives the mode on screen. The cursors,
-// the open section and the filter go to `settings.place` on each change, and a
-// page load puts the last page's back.
+// the Leader menu's two among them, the open section and the filter go to
+// `settings.place` on each change, and a page load puts the last page's back.
 export const settingsPagePart: PagePart<typeof settingsManifest> = {
   manifest: settingsManifest,
   start(api: SettingsApi) {
