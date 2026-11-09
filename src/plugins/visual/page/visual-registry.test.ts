@@ -39,6 +39,7 @@ describe('createVisualRegistry', () => {
       disposed: [],
       root: 'slot 1',
       expected: ['a', 'b'],
+      held: ['A', 'B'],
     },
     {
       name: 'another slot left out',
@@ -46,6 +47,7 @@ describe('createVisualRegistry', () => {
       disposed: [],
       root: 'slot 2',
       expected: ['c'],
+      held: ['A', 'B', 'C'],
     },
     {
       name: 'disposed left out',
@@ -53,6 +55,7 @@ describe('createVisualRegistry', () => {
       disposed: ['A'],
       root: 'slot 1',
       expected: ['b'],
+      held: ['B'],
     },
     {
       name: 'whole list',
@@ -60,10 +63,11 @@ describe('createVisualRegistry', () => {
       disposed: [],
       root: 'ol',
       expected: ['a', 'b', 'c'],
+      held: ['A', 'B', 'C'],
     },
   ] as const)(
     'sourcesIn_Roots_ListsClosedVisualsInDocumentOrder $name',
-    ({ registered, disposed, root, expected }) => {
+    ({ registered, disposed, root, expected, held }) => {
       const { hosts, roots } = transcript();
       const registry = createVisualRegistry();
       const added = new Map(
@@ -77,6 +81,11 @@ describe('createVisualRegistry', () => {
       }
 
       expect(registry.sourcesIn(asHtml(roots[root]))).toEqual(expected);
+      const names = Object.keys(hosts) as Host[];
+      const heldNames = registry
+        .hosts()
+        .map((host) => names.find((name) => asHtml(hosts[name]) === host));
+      expect(heldNames.sort()).toEqual(held);
     },
   );
 });

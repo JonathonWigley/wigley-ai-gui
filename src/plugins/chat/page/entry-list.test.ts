@@ -26,6 +26,7 @@ import type {
   UserDelivery,
 } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
+import { blockIndexOfStop, entryIdOfStop } from './entry-focus';
 import {
   createEntryList,
   type EntryList,
@@ -339,7 +340,7 @@ function fakeTimers() {
 
 // A list over `shown`, its layouts, logs, toasts, disposed anchors, timers, a
 // clock whose `time` the test sets, the ids each pending row click pulled back,
-// and the count of `placeChanged` calls.
+// and the counts of `placeChanged` and `focusChanged` calls.
 // `put` puts an entry into the session's list, replacing the one holding its
 // id.
 const TURN_LINE_CLASS = 'chat-turn-line-slot';
@@ -355,6 +356,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
   const { timers, armed, fireAll } = fakeTimers();
   const clock = { time: 1000, now: () => clock.time };
   const placeChanges = { count: 0 };
+  const focusChanges = { count: 0 };
   const list = createEntryList({
     layouts,
     toastedKinds: new Set(),
@@ -396,6 +398,9 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     placeChanged: () => {
       placeChanges.count++;
     },
+    focusChanged: () => {
+      focusChanges.count++;
+    },
   });
   const held = new Map<string, ChatEntry>();
   const put = (entry: ChatEntry) => {
@@ -414,6 +419,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     clock,
     layouts,
     placeChanges,
+    focusChanges,
     put,
     entries,
   };
@@ -550,17 +556,22 @@ describe('entry list', () => {
   });
 
   it('moveFocusTo_StopNotInOrder_LeavesTheFocus', () => {
-    const { list, put } = setUpList(defaultShown());
+    const { list, put, focusChanges } = setUpList(defaultShown());
     [user('u1'), notice('n1')].forEach(put);
     list.move(-1);
     const before = list.focused();
+    focusChanges.count = 0;
 
     const moved = list.moveFocusTo('no-such-stop');
 
     expect(moved).toBe(false);
     expect(list.focused()).toEqual(before);
+    expect(focusChanges.count).toBe(0);
     expect(list.moveFocusTo('n1')).toBe(true);
     expect(list.focused()).toEqual({ kind: 'entry', entry: notice('n1') });
+    expect(focusChanges.count).toBe(1);
+    list.moveFocusTo('n1');
+    expect(focusChanges.count).toBe(1);
   });
 
   const notices = [notice('n1'), notice('n2'), notice('n3')];
@@ -755,14 +766,12 @@ describe('entry list', () => {
         scroller.fire('scroll');
       }
 
-      const cursorBlock = list.focusedBlock();
+      const blockAtCursor = cursorBlock(list);
       expect(list.focused()).toEqual(focused);
       expect(
-        cursorBlock === null
+        blockAtCursor === null
           ? null
-          : asFake(cursorBlock).parentNode!.children.indexOf(
-              asFake(cursorBlock),
-            ),
+          : blockAtCursor.parentNode!.children.indexOf(blockAtCursor),
       ).toBe(block);
     },
   );
@@ -1815,19 +1824,50 @@ describe('slots and focus', () => {
     expect(cursorLabel(list)).toBe('n');
   });
 
-  it('focusedElement_Stops_ReturnsTheFocusedSlot', () => {
-    const empty = setUpList(defaultShown());
-    expect(empty.list.focusedElement()).toBeNull();
+  it.each([
+    {
+      kind: 'a message entry',
+      shown: () => blocksShown(),
+      arrange(list: EntryList, put: (entry: ChatEntry) => void) {
+        [userText('u1', 'one\n\ntwo'), notice('n1')].forEach(put);
+        list.moveFocusTo('u1#1');
+      },
+      slotClass: 'chat-entry-slot',
+      id: 'u1',
+    },
+    {
+      kind: 'an activity slot',
+      shown: () => activityShown(),
+      arrange(list: EntryList, put: (entry: ChatEntry) => void) {
+        [user('u1'), tool('t1'), tool('t2')].forEach(put);
+        list.moveFocusTo('activity:t1');
+      },
+      slotClass: 'chat-activity-slot',
+      id: 'activity:t1',
+    },
+    {
+      kind: 'a queued slot',
+      shown: () => defaultShown(),
+      arrange(list: EntryList, put: (entry: ChatEntry) => void) {
+        put(user('u1'));
+        list.setQueued([queued('q1')]);
+        list.moveFocusTo('queued:q1');
+      },
+      slotClass: 'chat-queued-slot',
+      id: 'queued:q1',
+    },
+  ])(
+    'slot_EachKind_CarriesDataChatEntry $kind',
+    ({ shown, arrange, slotClass, id }) => {
+      const { list, put } = setUpList(shown());
+      arrange(list, put);
 
-    const { list, put } = setUpList(defaultShown());
-    put(user('u1'));
-    put(assistant('hi'));
-    const [userSlot, assistantSlot] = asFake(list.element).children;
+      const slot = slotOf(list.element, slotClass);
 
-    expect(list.focusedElement()).toBe(assistantSlot);
-    list.move(-1);
-    expect(list.focusedElement()).toBe(userSlot);
-  });
+      expect(slot.dataset.chatEntry).toBe(id);
+      expect(entryIdOfStop(list.focusedStopId()!)).toBe(id);
+    },
+  );
 });
 
 // Draws one marked `div` per paragraph of the entry's text, with the paragraph's
@@ -1899,6 +1939,32 @@ const assistantText = (
   id,
 });
 
+// The slot holding the cursor, found as a reader of `chat.focus` finds it: the
+// list's child whose `data-chat-entry` is the cursor's entry; null with no
+// cursor.
+function cursorSlot(list: EntryList): FakeElement | null {
+  const stopId = list.focusedStopId();
+  if (stopId === null) {
+    return null;
+  }
+  const entryId = entryIdOfStop(stopId);
+  return (
+    asFake(list.element).children.find(
+      (slot) => slot.dataset.chatEntry === entryId,
+    ) ?? null
+  );
+}
+
+// The cursor's block: the cursor slot's `[data-md-lines]` element at the stop's
+// block index; null on a stop with no block.
+function cursorBlock(list: EntryList): FakeElement | null {
+  const stopId = list.focusedStopId();
+  const index = stopId === null ? null : blockIndexOfStop(stopId);
+  return index === null
+    ? null
+    : (cursorSlot(list)?.querySelectorAll('[data-md-lines]')[index] ?? null);
+}
+
 // The cursor's stop as `<id>#<block>`, `<id>` on a stop with no blocks.
 function cursorLabel(list: EntryList): string | null {
   const stop = list.focused();
@@ -1911,12 +1977,11 @@ function cursorLabel(list: EntryList): string | null {
       : stop.kind === 'activity'
         ? stop.runId
         : stop.message.id;
-  const block = list.focusedBlock();
+  const block = cursorBlock(list);
   if (block === null) {
     return id;
   }
-  const fake = asFake(block);
-  return `${id}#${fake.parentNode!.children.indexOf(fake)}`;
+  return `${id}#${block.parentNode!.children.indexOf(block)}`;
 }
 
 function stopLabels(list: EntryList): string[] {
@@ -1970,7 +2035,7 @@ describe('block stops', () => {
     list.first();
 
     put(delivered('u2', 'sent'));
-    const focusedAfterRedraw = asFake(list.focusedBlock()!);
+    const focusedAfterRedraw = cursorBlock(list)!;
     const isFocusedConnected = focusedAfterRedraw.parentNode !== null;
     const isFocusedMarked = focusedAfterRedraw.classList.contains('is-cursor');
     put(delivered('u3', 'sent'));
@@ -2159,12 +2224,12 @@ describe('block stops', () => {
     const stop = list.move(-1);
 
     expect(stop).toEqual({ kind: 'entry', entry });
-    expect(list.focusedElement()).toBe(asFake(list.element).children[0]);
-    expect(list.focusedBlock()).toBe(blockAt(list, 0, 1));
+    expect(cursorSlot(list)).toBe(asFake(list.element).children[0]);
+    expect(cursorBlock(list)).toBe(blockAt(list, 0, 1));
     expect(scrolled.mock.contexts).toEqual([blockAt(list, 0, 1)]);
     list.move(1);
-    expect(list.focusedBlock()).toBeNull();
-    expect(list.focusedElement()).toBe(asFake(list.element).children[1]);
+    expect(cursorBlock(list)).toBeNull();
+    expect(cursorSlot(list)).toBe(asFake(list.element).children[1]);
   });
 
   it.each([

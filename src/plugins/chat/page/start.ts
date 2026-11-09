@@ -24,6 +24,7 @@ import {
   chatControlsSlot,
   chatDraftImagesSlot,
   chatEntriesSlot,
+  chatFocusSlot,
   type ChatPlace,
   chatPlaceSlot,
   type ChatPageExports,
@@ -100,7 +101,8 @@ type ChatApi = PageApi<typeof chatManifest, ChatChannel>;
 // slot offer its clock to other plugins. Each tab's draft, cursor, open runs and
 // expanders go to `chat.place`, and its attached images to `chat.draftImages`,
 // on each change; a page load puts the last page's back as the tab is made, and
-// a session's keys leave with its row. A draft or an attached image not yet
+// a session's keys leave with its row. The visible Chat tab's focused stop goes
+// to `chat.focus` as it moves. A draft or an attached image not yet
 // sent refuses a switch-off.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
@@ -119,6 +121,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const active = api.state.read(sessionsActiveSlot);
     const placeWriter = api.state.publish(chatPlaceSlot);
     const imagesWriter = api.state.publish(chatDraftImagesSlot);
+    const focusWriter = api.state.publish(chatFocusSlot);
+    focusWriter.set(null);
     // Each held tab's writes, by session id.
     const tabPlaces = new Map<
       string,
@@ -311,6 +315,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       clock: services.clock,
       drops: api.drops,
       placeOf,
+      writeFocus: (focus) => focusWriter.set(focus),
     });
     sessions.addRowPart(rowClock.part);
     const rowProfile = createRowProfile({
@@ -376,8 +381,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       addComposerPart: (part) => consumer.track(composerParts.add(part)),
       addStatusPart: (part) => consumer.track(statusParts.add(part)),
       addSidePart: (part) => consumer.track(sideParts.add(part)),
-      focusedEntry: () => view.focusedEntry(),
-      focusedBlock: () => view.focusedBlock(),
       activeTime: (sessionId) => view.activeTime(sessionId),
     });
     return {

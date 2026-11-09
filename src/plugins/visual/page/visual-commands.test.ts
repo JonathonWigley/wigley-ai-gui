@@ -4,6 +4,7 @@ import {
   FakeElement,
   installFakeDom,
 } from '../../../shared/page/test-dom';
+import type { ChatFocus } from '../../chat/contract';
 import { createVisualCommands } from './visual-commands';
 import type { VisualOverlay } from './visual-overlay';
 import { createVisualRegistry } from './visual-registry';
@@ -24,34 +25,58 @@ function recordingOverlay() {
   return { overlay, calls, opened };
 }
 
-type Focused = 'none' | 'no visual' | 'two visuals';
+type Focused =
+  | 'none'
+  | 'no visual'
+  | 'two visuals'
+  | 'two visuals, the same entry id in another session';
 
-// The `li` the focused entry is for `focused`, its hosts registered in
-// `registry` by source, each in a block of its own after a paragraph; `blocks`
-// holds the entry's block elements in order.
-function focusedEntry(
-  focused: Focused,
+// Chat tab `sessionId`'s root holding entry `e1` as chat marks them, its blocks
+// a paragraph then one block per source, each holding that source's host,
+// registered in `registry`; returns the entry.
+function entryInTab(
+  sessionId: string,
+  sources: readonly string[],
   registry: ReturnType<typeof createVisualRegistry>,
-): { entry: HTMLElement | null; blocks: HTMLElement[] } {
-  if (focused === 'none') {
-    return { entry: null, blocks: [] };
-  }
+): HTMLElement {
+  const root = new FakeElement('div');
+  root.dataset.chatSession = sessionId;
   const entry = new FakeElement('li');
+  entry.dataset.chatEntry = 'e1';
+  root.append(entry);
   const paragraph = new FakeElement('p');
+  paragraph.dataset.mdLines = '0,1';
   entry.append(paragraph);
-  const blocks = [asHtml(paragraph)];
-  if (focused === 'two visuals') {
-    for (const source of ['a', 'b']) {
-      const fence = new FakeElement('div');
-      const host = new FakeElement('div');
-      host.className = 'visual-host';
-      fence.append(host);
-      entry.append(fence);
-      blocks.push(asHtml(fence));
-      registry.add(asHtml(host), source);
-    }
+  sources.forEach((source, index) => {
+    const fence = new FakeElement('div');
+    fence.dataset.mdLines = `${index + 1},${index + 2}`;
+    const host = new FakeElement('div');
+    host.className = 'visual-host';
+    fence.append(host);
+    entry.append(fence);
+    registry.add(asHtml(host), source);
+  });
+  return asHtml(entry);
+}
+
+// The focused entry for `focused` in session `s1`, and the focus on its block
+// `block` that chat publishes; the other session's entry is registered first.
+function arrangeFocus(
+  focused: Focused,
+  block: number | null,
+  registry: ReturnType<typeof createVisualRegistry>,
+): { entry: HTMLElement | null; focus: ChatFocus | null } {
+  if (focused === 'none') {
+    return { entry: null, focus: null };
   }
-  return { entry: asHtml(entry), blocks };
+  if (focused === 'two visuals, the same entry id in another session') {
+    entryInTab('s2', ['z'], registry);
+  }
+  const sources = focused === 'no visual' ? [] : ['a', 'b'];
+  return {
+    entry: entryInTab('s1', sources, registry),
+    focus: { sessionId: 's1', entryId: 'e1', block },
+  };
 }
 
 describe('createVisualCommands', () => {
@@ -96,18 +121,22 @@ describe('createVisualCommands', () => {
       logs: [],
       opened: [[['a', 'b'], 0]],
     },
+    {
+      name: 'same entry id in another session',
+      focused: 'two visuals, the same entry id in another session',
+      block: 2,
+      logs: [],
+      opened: [[['a', 'b'], 1]],
+    },
   ] as const)(
     'openVisuals_FocusedEntry_OpensOrLogs $name',
     ({ focused, block, logs, opened }) => {
       const registry = createVisualRegistry();
-      const { entry, blocks } = focusedEntry(focused, registry);
+      const { focus } = arrangeFocus(focused, block, registry);
       const fake = recordingOverlay();
       const logged: string[] = [];
       const commands = createVisualCommands({
-        chat: {
-          focusedEntry: () => entry,
-          focusedBlock: () => (block === null ? null : blocks[block]),
-        },
+        focus: () => focus,
         registry,
         overlay: fake.overlay,
         log: (message: string) => logged.push(message),
@@ -153,13 +182,10 @@ describe('createVisualCommands', () => {
     'toggleWidth_FocusedEntry_FlipsTheVisualOrLogs $name',
     ({ focused, block, logs, wide }) => {
       const registry = createVisualRegistry();
-      const { entry, blocks } = focusedEntry(focused, registry);
+      const { entry, focus } = arrangeFocus(focused, block, registry);
       const logged: string[] = [];
       const commands = createVisualCommands({
-        chat: {
-          focusedEntry: () => entry,
-          focusedBlock: () => (block === null ? null : blocks[block]),
-        },
+        focus: () => focus,
         registry,
         overlay: recordingOverlay().overlay,
         log: (message: string) => logged.push(message),
@@ -178,7 +204,7 @@ describe('createVisualCommands', () => {
   it('overlayCommands_CallTheOverlay', () => {
     const fake = recordingOverlay();
     const commands = createVisualCommands({
-      chat: { focusedEntry: () => null, focusedBlock: () => null },
+      focus: () => null,
       registry: createVisualRegistry(),
       overlay: fake.overlay,
       log: () => undefined,

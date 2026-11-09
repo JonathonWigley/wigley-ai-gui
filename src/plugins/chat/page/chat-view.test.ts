@@ -23,6 +23,7 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import { createPartStore } from '../../../shared/page/contributed-parts';
+import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
@@ -31,6 +32,7 @@ import {
   type ChatComposerPart,
   chatControlsSlot,
   chatEntriesSlot,
+  type ChatFocus,
   chatQueuedSlot,
   chatReturnedSlot,
   type ChatSessionInfo,
@@ -151,7 +153,11 @@ const returnedTwo: ReturnedMessage = {
 // `boxCalls` each `focus` and `blur` on the box with its options, the fake box
 // reporting focus and blur as the editor does. `visible` is what every tab's
 // `isVisible` answers, `show` runs a session's tab's `shown`, `scopeChanged`
-// reports a scope in force, and `sideTabs` holds each tab's hub.
+// reports a scope in force, and `sideTabs` holds each tab's hub. `hide` runs a
+// session's tab's `hidden`. `focus` is `chat.focus` as the view last wrote it,
+// null before any write; while `showsInAddTab.value` is set, `addTab` runs the
+// tab's `shown` before it returns, as the sessions plugin may, and
+// `focusAtAddTab` gets the focus as `addTab` returns.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -172,6 +178,11 @@ function mounted(
   const boxCalls: [string, FocusOptions | BlurOptions | undefined][] = [];
   const visible = { value: false };
   const shownBy = new Map<string, () => void>();
+  const hiddenBy = new Map<string, () => void>();
+  const focusWrites: (ChatFocus | null)[] = [];
+  const focus = () => focusWrites.at(-1) ?? null;
+  const showsInAddTab = { value: false };
+  const focusAtAddTab: (ChatFocus | null)[] = [];
   let scopeChanged: (scope: string | undefined) => void = () => undefined;
   const sideTabs: SideTab[] = [];
   const sideParts = createPartStore<ChatSidePart>();
@@ -246,13 +257,19 @@ function mounted(
           element: HTMLElement;
           beforeClose(atOnce: boolean): boolean | Promise<boolean>;
           shown: () => void;
+          hidden: () => void;
         },
       ) => {
         readDuringAddTab.push(view.activeTime(sessionId));
         beforeCloses.set(sessionId, added.beforeClose);
         shownBy.set(sessionId, added.shown);
+        hiddenBy.set(sessionId, added.hidden);
         tab.element = asFake(added.element);
         tabElements.set(sessionId, tab.element);
+        if (showsInAddTab.value) {
+          added.shown();
+          focusAtAddTab.push(focus());
+        }
         return {
           select: noEvent,
           remove: noEvent,
@@ -339,6 +356,7 @@ function mounted(
       write: noEvent,
       writeImages: noEvent,
     }),
+    writeFocus: (written: ChatFocus | null) => focusWrites.push(written),
     toast: (text: string, tone: string) => toasts.push([text, tone]),
     visibleSessionRested: noEvent,
     confirm: {
@@ -364,6 +382,10 @@ function mounted(
     boxCalls,
     visible,
     show: (sessionId: string) => shownBy.get(sessionId)?.(),
+    hide: (sessionId: string) => hiddenBy.get(sessionId)?.(),
+    focus,
+    showsInAddTab,
+    focusAtAddTab,
     scopeChanged: (scope: string | undefined) => scopeChanged(scope),
     sideTabs,
     beforeClose: (sessionId: string, atOnce: boolean) =>
@@ -1703,5 +1725,156 @@ describe('mountChatView pane keys', () => {
       .filter(([call]) => call === 'setScope')
       .map(([, scope]) => scope);
     expect(scopes).toEqual(row.scopes);
+  });
+});
+
+describe('mountChatView focus', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const MESSAGE: ChatEntry = {
+    kind: 'user',
+    id: 'u1',
+    at: 1000,
+    text: 'one\n\ntwo',
+    images: [],
+    delivery: null,
+    raw: [],
+  };
+  const NOTICE: ChatEntry = {
+    kind: 'notice',
+    id: 'n1',
+    at: 2000,
+    text: 'hello',
+    tone: 'info',
+    raw: [],
+  };
+
+  // A view whose user entries draw two marked blocks, with a composer part
+  // whose stop takes the cursor, and session `row-1`'s tab holding `u1` then
+  // `n1`; the tab is shown unless `isShownInAddTab`, when `addTab` shows it.
+  function focusedTab(isShownInAddTab = false) {
+    const mount = mounted();
+    mount.layouts.set(
+      withUser<ChatLayout>(defaultLayout, {
+        entries: {
+          user(parent, _input, kit) {
+            const root = kit.el(parent, 'div', 'marked');
+            kit.el(root, 'div').dataset.mdLines = '0,1';
+            kit.el(root, 'div').dataset.mdLines = '2,3';
+            return { element: root };
+          },
+        },
+      }),
+    );
+    mount.composerParts.add({
+      id: 'strip',
+      build: () => ({}),
+      stop: { enter: () => true, leave: () => undefined },
+    });
+    mount.visible.value = true;
+    mount.showsInAddTab.value = isShownInAddTab;
+    mount.open(stateOf([], { entries: [MESSAGE, NOTICE] }));
+    if (!isShownInAddTab) {
+      mount.show('row-1');
+    }
+    const session = () => mount.view.session('row-1') as ChatSession;
+    return { mount, session };
+  }
+
+  it.each<{
+    case: string;
+    isShownInAddTab?: boolean;
+    act: (tab: ReturnType<typeof focusedTab>) => ChatFocus | null;
+    expected: ChatFocus | null;
+  }>([
+    {
+      case: 'a tab shown inside addTab, before its handle is set',
+      isShownInAddTab: true,
+      act: (tab) => tab.mount.focusAtAddTab[0] ?? null,
+      expected: { sessionId: 'row-1', entryId: 'n1', block: null },
+    },
+    {
+      case: 'cursor on a block',
+      act: (tab) => {
+        tab.session().entries.moveFocusTo('u1#1');
+        return tab.mount.focus();
+      },
+      expected: { sessionId: 'row-1', entryId: 'u1', block: 1 },
+    },
+    {
+      case: 'cursor on a non-message entry',
+      act: (tab) => {
+        tab.session().entries.moveFocusTo('u1#0');
+        tab.session().entries.moveFocusTo('n1');
+        return tab.mount.focus();
+      },
+      expected: { sessionId: 'row-1', entryId: 'n1', block: null },
+    },
+    {
+      case: 'composer stop holding',
+      act: (tab) => {
+        tab.session().enterStop();
+        return tab.mount.focus();
+      },
+      expected: null,
+    },
+    {
+      case: 'the tab hidden',
+      act: (tab) => {
+        tab.mount.visible.value = false;
+        tab.mount.hide('row-1');
+        return tab.mount.focus();
+      },
+      expected: null,
+    },
+    {
+      case: 'the tab removed',
+      act: (tab) => {
+        tab.mount.removeSession('row-1');
+        return tab.mount.focus();
+      },
+      expected: null,
+    },
+    {
+      case: 'the view disposed',
+      act: (tab) => {
+        tab.mount.view.dispose();
+        return tab.mount.focus();
+      },
+      expected: null,
+    },
+  ])(
+    'chatFocus_FollowsTheVisibleTabsCursor $case',
+    ({ isShownInAddTab = false, act, expected }) => {
+      const tab = focusedTab(isShownInAddTab);
+      // The shown tab's cursor follows the latest stop.
+      expect(tab.mount.focus()).toEqual({
+        sessionId: 'row-1',
+        entryId: 'n1',
+        block: null,
+      });
+
+      expect(act(tab)).toEqual(expected);
+    },
+  );
+
+  it('tabRoot_EachSession_CarriesDataChatSession', () => {
+    const mount = mounted();
+    mount.open(stateOf([]));
+    mount.open(stateOf([], { sessionId: 'row-2' }));
+
+    expect(
+      [...mount.tabElements].map(([sessionId, root]) => [
+        sessionId,
+        root.classList.contains('chat-tab'),
+        root.dataset.chatSession,
+      ]),
+    ).toEqual([
+      ['row-1', true, 'row-1'],
+      ['row-2', true, 'row-2'],
+    ]);
   });
 });

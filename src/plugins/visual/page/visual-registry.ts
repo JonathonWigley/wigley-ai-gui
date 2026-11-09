@@ -1,10 +1,12 @@
 import type { Disposable } from '../../../contracts/disposable';
 
 // Every closed visual's source by its `div.visual-host`. `add` holds `host`
-// until its Disposable's `dispose`; `hostsIn` lists the held hosts under
-// `root`, and `sourcesIn` their sources, in document order.
+// until its Disposable's `dispose`; `hosts` lists every held host; `hostsIn`
+// lists the held hosts under `root`, and `sourcesIn` their sources, in document
+// order.
 export interface VisualRegistry {
   add(host: HTMLElement, source: string): Disposable;
+  hosts(): HTMLElement[];
   hostsIn(root: HTMLElement): HTMLElement[];
   sourcesIn(root: HTMLElement): string[];
 }
@@ -20,6 +22,7 @@ export function createVisualRegistry(): VisualRegistry {
       sources.set(host, source);
       return { dispose: () => sources.delete(host) };
     },
+    hosts: () => [...sources.keys()],
     hostsIn,
     sourcesIn(root) {
       return hostsIn(root).flatMap((host) => {

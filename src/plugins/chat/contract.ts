@@ -18,7 +18,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
-import type { KeyedSlotKey, ListSlotKey } from '../../contracts/state';
+import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
 import type { SessionTitles } from '../sessions/contract';
 
 // The `id` of the agent harness chat runs its sessions on: chat's profiles are
@@ -714,11 +714,6 @@ export type CompletionRowDraw = (
 // they are, so a part whose content changes redraws into its parent itself. A
 // part whose build throws is logged and stays unbuilt in that tab until it is
 // added again or the chat layout changes.
-// `focusedEntry` is the visible Chat tab's focused stop's slot element (an
-// entry, an activity line or a pending row); null with no visible Chat tab, no
-// focused stop, or while a composer part's stop holds the cursor.
-// `focusedBlock` is the visible Chat tab's cursor block element, inside that
-// slot; null in the same cases and on a stop with no blocks.
 // `activeTime` is the session's clock in `chat.session`, null for a session with
 // no key there; read the total at a moment with `activeMsAt`.
 export interface ChatPageExports {
@@ -728,14 +723,34 @@ export interface ChatPageExports {
   addComposerPart(part: ChatComposerPart): Disposable;
   addStatusPart(part: ChatStatusPart): Disposable;
   addSidePart(part: ChatSidePart): Disposable;
-  focusedEntry(): HTMLElement | null;
-  focusedBlock(): HTMLElement | null;
   activeTime(sessionId: string): ActiveTime | null;
 }
 
 export const chatPageKey: DependencyKey<ChatPageExports, 'page', 'chat'> = {
   id: 'chat',
   process: 'page',
+};
+
+// The visible Chat tab's focused stop: the tab's session, the id of the slot the
+// stop belongs to (an entry's id, an activity line's run id or a pending row's
+// stop id; for a block stop the entry holding the block), and the block's index
+// among that entry's `[data-md-lines]` elements in document order, null on a stop
+// that is no block.
+export interface ChatFocus {
+  sessionId: string;
+  entryId: string;
+  block: number | null;
+}
+
+// The visible Chat tab's focused stop, null with no visible Chat tab, no focused
+// stop, or while a composer part's stop holds the cursor; written as the cursor
+// moves, before the key that moved it returns. A reader finds the elements by the
+// marks chat sets: each Chat tab's root carries `data-chat-session` with its
+// session id, and each slot (`.chat-entry-slot`) `data-chat-entry` with its id.
+export const chatFocusSlot: SlotKey<ChatFocus | null, 'page', 'chat'> = {
+  id: 'chat.focus',
+  process: 'page',
+  kind: 'value',
 };
 
 // The commands a click runs on what it landed on, each naming the session whose

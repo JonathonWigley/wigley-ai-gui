@@ -14,8 +14,8 @@ export const visualManifest = definePlugin({
   label: 'Visuals',
   description:
     'Draws the html code blocks an agent writes as live visuals, with a full-size view.',
-  dependsOn: { main: ['chat'], page: ['chat'] },
-  reads: { main: [], page: [] },
+  dependsOn: { main: ['chat'], page: [] },
+  reads: { main: [], page: ['chat'] },
   commands: {
     openVisuals: {
       label: "open the focused entry's visuals",

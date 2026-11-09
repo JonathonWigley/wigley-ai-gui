@@ -6,7 +6,7 @@ export const START_FOCUS: EntryFocus = {
   anchorId: null,
 };
 
-const BLOCK_SUFFIX = /#\d+$/;
+const BLOCK_SUFFIX = /#(\d+)$/;
 
 export function blockStopId(entryId: string, blockIndex: number): string {
   return `${entryId}#${blockIndex}`;
@@ -15,6 +15,12 @@ export function blockStopId(entryId: string, blockIndex: number): string {
 // The entry a stop belongs to: the id without a trailing `#<digits>`.
 export function entryIdOfStop(stopId: string): string {
   return stopId.replace(BLOCK_SUFFIX, '');
+}
+
+// The block index of a block stop: its trailing `#<digits>`; null on any other.
+export function blockIndexOfStop(stopId: string): number | null {
+  const digits = BLOCK_SUFFIX.exec(stopId)?.[1];
+  return digits === undefined ? null : Number(digits);
 }
 
 function stopsOfEntry(ids: readonly string[], entryId: string): string[] {

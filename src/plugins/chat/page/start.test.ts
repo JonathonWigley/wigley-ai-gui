@@ -24,6 +24,7 @@ import {
   chatControlsSlot,
   chatDraftImagesSlot,
   chatEntriesSlot,
+  chatFocusSlot,
   type ChatPlace,
   chatPlaceSlot,
   type ChatPageExports,
@@ -242,6 +243,13 @@ describe('chat page part', () => {
       expect(harness.counts()).toEqual(noCounts);
     },
   );
+
+  it('chatFocus_Start_WritesNull', async () => {
+    const harness = startChatPage();
+
+    expect(harness.state.read(chatFocusSlot, 'test').get()).toBeNull();
+    await harness.stop();
+  });
 
   it('stop_OneTabsDestroyThrows_TearsDownEveryTab', async () => {
     const destroyEditor = vi.fn<() => void>();

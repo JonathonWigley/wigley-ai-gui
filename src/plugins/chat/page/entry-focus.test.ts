@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EntryFocus } from '../contract';
 import {
+  blockIndexOfStop,
   blockStopId,
   clearAnchor,
   entryIdOfStop,
@@ -318,10 +319,20 @@ describe('entry focus', () => {
   it.each([
     { entryId: 'a1', blockIndex: 3 },
     { entryId: 'tool#x', blockIndex: 0 },
+    { entryId: 'run-3', blockIndex: 12 },
   ])(
     'blockStopId of $entryId round-trips through entryIdOfStop',
     ({ entryId, blockIndex }) => {
-      expect(entryIdOfStop(blockStopId(entryId, blockIndex))).toBe(entryId);
+      const stopId = blockStopId(entryId, blockIndex);
+      expect(entryIdOfStop(stopId)).toBe(entryId);
+      expect(blockIndexOfStop(stopId)).toBe(blockIndex);
+    },
+  );
+
+  it.each(['e1', 'run-3'])(
+    'blockIndexOfStop_NoBlockSuffix_IsNull %s',
+    (stopId) => {
+      expect(blockIndexOfStop(stopId)).toBeNull();
     },
   );
 

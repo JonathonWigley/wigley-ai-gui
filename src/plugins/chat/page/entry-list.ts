@@ -88,7 +88,8 @@ import { resultStepCount } from './working-turn';
 // (see `EntryList`). `turnLine` is the element the list keeps as its row after
 // the last entry; its owner draws and hides it. `placeChanged` hears each change
 // of `place()` once: the cursor, a run, or an expander as the list reads it at
-// its entry's draw or toggle.
+// its entry's draw or toggle. `focusChanged` hears each change of the focused
+// stop at once, inside the call that moved it.
 export interface EntryListDeps {
   layouts: ChatLayouts;
   toastedKinds: Set<ChatEntryKind>;
@@ -102,6 +103,7 @@ export interface EntryListDeps {
   stopClicked(stopId: string): void;
   turnLine: HTMLElement;
   placeChanged(): void;
+  focusChanged(): void;
 }
 
 // The part of a Chat tab's place the list holds.
@@ -123,7 +125,9 @@ export interface TranscriptScroll extends ContentScroll {
 
 // One session's entries, one slot per entry in the session's order, each run
 // of steps also drawn as one activity line slot right before its first step's
-// slot; a closed run's step slots are hidden. While the shown layouts leave
+// slot; a closed run's step slots are hidden. Each slot carries
+// `data-chat-entry` with its id: the entry's, the run's, or the pending row's
+// stop id. While the shown layouts leave
 // activity out of the transcript, steps get no slot, so no run or step is drawn
 // or stopped on; the flag is read when the list is created and at each rebuild.
 // The turn line follows the last entry and is no stop; the session's queued
@@ -214,11 +218,9 @@ export interface EntryList {
   // The focused stop, the entry holding it for a block stop; null with no
   // focused stop.
   focused(): EntryListStop | null;
-  // The focused stop's slot element, the slot of the entry holding it for a
-  // block stop; null with no focused stop.
-  focusedElement(): HTMLElement | null;
-  // The cursor's block element; null on a stop with no blocks.
-  focusedBlock(): HTMLElement | null;
+  // The focused stop's id (`<entryId>#<n>` for a block stop); null with no
+  // focused stop.
+  focusedStopId(): string | null;
   // On an activity line, opens the run when it is closed, else closes it. On
   // an entry, opens every expander when any is closed, else closes them all.
   // Null with no focused stop, or on a pending row, which toggles nothing.
@@ -443,11 +445,16 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   };
 
   // The one writer of the focus: a stop, range or following that differs is a
-  // change of the place.
+  // change of the place, and another stop a change of the focus.
   const setFocus = (next: EntryFocus, by: PlaceChange) => {
-    if (!isSameJson(next, focus)) {
-      focus = next;
-      placeMoved(by);
+    if (isSameJson(next, focus)) {
+      return;
+    }
+    const isOtherStop = next.stopId !== focus.stopId;
+    focus = next;
+    placeMoved(by);
+    if (isOtherStop) {
+      deps.focusChanged();
     }
   };
 
@@ -972,10 +979,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return { ...scroll, following: focus.following };
     },
     focused: focusedStop,
-    focusedElement: () =>
-      focus.stopId === null ? null : (slotOfStop(focus.stopId) ?? null),
-    focusedBlock: () =>
-      focus.stopId === null ? null : (blockOfStop(focus.stopId) ?? null),
+    focusedStopId: () => focus.stopId,
     toggleFocused() {
       const stop = focusedStop();
       if (stop === null || stop.kind === 'queued') {
@@ -1341,6 +1345,7 @@ function buildRunSlot(
   toggle: () => void,
 ): RunSlot {
   const slot = element('li', 'chat-entry-slot chat-activity-slot');
+  slot.dataset.chatEntry = row.runId;
   slot.addEventListener('click', toggle);
   return {
     element: slot,
@@ -1389,6 +1394,7 @@ function buildQueuedSlot(
   queuedPart: SlotPartDraws<'queuedMessage'>,
 ): QueuedSlot {
   const slot = element('li', 'chat-entry-slot chat-queued-slot');
+  slot.dataset.chatEntry = queuedStopId(message.id);
   slot.addEventListener('click', () => queuedPart.deps.pullBack(message.id));
   return {
     element: slot,
@@ -1445,6 +1451,7 @@ function buildSlot(
   deps: EntryListDeps,
 ): Slot {
   const slot = element('li', 'chat-entry-slot');
+  slot.dataset.chatEntry = entry.id;
   return {
     element: slot,
     entry,

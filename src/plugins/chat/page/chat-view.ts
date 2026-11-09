@@ -47,6 +47,7 @@ import {
   type ChatChannel,
   type ChatComposerPart,
   chatDenyEntryCommand,
+  type ChatFocus,
   type ChatPlace,
   chatMoveFocusCommand,
   chatOpenImageCommand,
@@ -91,6 +92,7 @@ import {
   type ComposerStopHolder,
   createComposerStopHolder,
 } from './composer-stop-holder';
+import { blockIndexOfStop, entryIdOfStop } from './entry-focus';
 import { createEntryList, type EntryList } from './entry-list';
 import { sessionFactsOf, type SessionFactsSource } from './session-part';
 import type { SideSections, SideTab } from './side-sections';
@@ -105,14 +107,6 @@ export interface ChatView {
   reveal(sessionId: string): void;
   // The session whose Chat tab is the visible tab.
   visibleSessionId(): string | null;
-  // The visible Chat tab's focused stop's slot element; null with no visible
-  // Chat tab, no focused stop, or while a composer part's stop holds the
-  // cursor.
-  focusedEntry(): HTMLElement | null;
-  // The visible Chat tab's cursor block element; null with no visible Chat
-  // tab, on a stop with no blocks, or while a composer part's stop holds the
-  // cursor.
-  focusedBlock(): HTMLElement | null;
   // The session's clock in `chat.session`, from before its tab is added; null for
   // a session with no key there.
   activeTime(sessionId: string): ActiveTime | null;
@@ -255,7 +249,8 @@ export type ChatTabScope = 'chat' | 'hub';
 // `sideSections` draws those parts as each tab's session hub.
 // `drops` registers each Chat tab as the target of the
 // files dropped or pasted on it, and saves a pasted file that is not an
-// image.
+// image. `writeFocus` writes `chat.focus` each time the visible Chat tab's focused
+// stop changes, null at the view's dispose.
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   slots: ChatSlotReaders;
@@ -293,6 +288,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   clock: Clock;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   placeOf(sessionId: string): TabPlace;
+  writeFocus(focus: ChatFocus | null): void;
 }
 
 // Chat's slots as the page reads them.
@@ -478,11 +474,15 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         drawStatusLine(shownTab);
         shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
+        writeFocus(shownTab);
       },
+      focusChanged: () => writeFocus(),
       beforeClose: (closing, atOnce) => mayClose(closing, deps, atOnce),
       resized: leaveUnreachableHub,
     });
     tabs.set(state.sessionId, tab);
+    // A focus change while `createTab` ran found the tab not yet held.
+    writeFocus();
     tab.side.sync();
     placeNewReturned(tab, state.returned);
     if (pendingReveal === tab.sessionId) {
@@ -559,6 +559,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tabs.delete(sessionId);
+    writeFocus();
     if (pendingReveal === sessionId) {
       pendingReveal = null;
     }
@@ -600,6 +601,18 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
 
   const visibleTab = () =>
     [...tabs.values()].find((tab) => tab.handle?.isVisible() === true);
+  // `chat.focus` as last written: chat's page writes null at its start.
+  let writtenFocus: ChatFocus | null = null;
+  // Writes the focus of `shownTab`, else of the visible tab, when it differs from
+  // the last written. A tab shown inside `addTab` is not yet in `tabs`, and its
+  // handle is not yet set, so `visibleTab` cannot find it.
+  const writeFocus = (shownTab?: HeldTab) => {
+    const next = focusOf(shownTab ?? visibleTab());
+    if (!isSameJson(next, writtenFocus)) {
+      writtenFocus = next;
+      deps.writeFocus(next);
+    }
+  };
   const withVisibleTab = (act: (tab: HeldTab) => void) => {
     const tab = visibleTab();
     if (tab === undefined) {
@@ -665,18 +678,6 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
     },
     visibleSessionId: () => visibleTab()?.sessionId ?? null,
-    focusedEntry: () => {
-      const tab = visibleTab();
-      return tab === undefined || tab.stop.holding() !== null
-        ? null
-        : tab.entries.focusedElement();
-    },
-    focusedBlock: () => {
-      const tab = visibleTab();
-      return tab === undefined || tab.stop.holding() !== null
-        ? null
-        : tab.entries.focusedBlock();
-    },
     activeTime: (sessionId) => slots.session.get(sessionId)?.activeTime ?? null,
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
@@ -727,10 +728,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         placeNewReturned(tab, returned);
       });
     },
+    // `chat.focus` outlives the view, so it goes null before the tabs end.
     dispose() {
       isDisposed = true;
       const held = [...tabs.values()];
       tabs.clear();
+      writeFocus();
       callEach(held, tearDownTab);
     },
     composerOf: (sessionId) => tabs.get(sessionId)?.composer ?? null,
@@ -749,6 +752,22 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     },
   };
   return view;
+}
+
+// The tab's focused stop as `chat.focus` holds it; null with no tab, no focused
+// stop, or while a composer part's stop holds the cursor.
+function focusOf(tab: HeldTab | undefined): ChatFocus | null {
+  if (tab === undefined || tab.stop.holding() !== null) {
+    return null;
+  }
+  const stopId = tab.entries.focusedStopId();
+  return stopId === null
+    ? null
+    : {
+        sessionId: tab.sessionId,
+        entryId: entryIdOfStop(stopId),
+        block: blockIndexOfStop(stopId),
+      };
 }
 
 // Whether the tab's live box holds text beyond whitespace or the tab holds an
@@ -1010,7 +1029,10 @@ function writeTabPlace(tab: HeldTab) {
 // plugin's tab the session got first. `view.shown` may run inside `addTab`,
 // before the handle and box are set. Once the box is mounted the tab element is
 // the target of the files dropped or pasted on it; `view.isHeld` answers
-// whether the tab is still held, so a take that outlives it stops.
+// whether the tab is still held, so a take that outlives it stops. The tab
+// element carries `data-chat-session` with its session id. `view.focusChanged`
+// runs on each change of the entry cursor or of the composer stop's hold, and
+// when the tab is hidden.
 function createTab(
   state: ChatSessionState,
   toastedKinds: Set<ChatEntryKind>,
@@ -1018,6 +1040,7 @@ function createTab(
   view: {
     isHeld(tab: HeldTab): boolean;
     shown(tab: HeldTab): void;
+    focusChanged(): void;
     beforeClose(tab: HeldTab, atOnce: boolean): boolean | Promise<boolean>;
     resized(tab: HeldTab): void;
   },
@@ -1079,6 +1102,7 @@ function createTab(
       deps.runKey(chatMoveFocusCommand, { sessionId, stopId }),
     turnLine: composer.turnLineSlot,
     placeChanged: () => writeTabPlace(tab),
+    focusChanged: () => view.focusChanged(),
   });
   const place = deps.placeOf(sessionId);
   attachments.onChange((images) => {
@@ -1086,6 +1110,7 @@ function createTab(
     place.writeImages(images);
   });
   const root = element('div', 'chat-tab');
+  root.dataset.chatSession = sessionId;
   const main = element('div', 'chat-main');
   main.append(entries.element);
   root.append(main);
@@ -1127,6 +1152,7 @@ function createTab(
         if (holding) {
           handTargets(tab, deps);
         }
+        view.focusChanged();
       },
       log: deps.log,
     }),
@@ -1153,6 +1179,7 @@ function createTab(
     order: 2,
     beforeClose: (atOnce) => view.beforeClose(tab, atOnce),
     shown: () => view.shown(tab),
+    hidden: () => view.focusChanged(),
   });
   tab.box = deps.editor.create(
     boxElement,
