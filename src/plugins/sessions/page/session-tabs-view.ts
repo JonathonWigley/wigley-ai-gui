@@ -187,13 +187,13 @@ export interface SessionTabsView {
 // Sessions mode's chat panes, drawn through the sessions layout. Each pane is
 // the `pane` part, whose body holds the frame of the session it shows: the
 // `tabBar` (the session's tab strip between its previous and next tab
-// prompts, the bar parts other plugins added, the close prompt and the pane
-// controls at the bar's end) on the top edge of a sheet holding the session's
-// tabs, only its selected tab showing, or the `emptyText` saying why no tab
-// shows. An empty pane's body holds a sheet with the empty text alone. The tab
-// prompts hide while the session has no other tab, and every tab bar's prompts
-// and pane control keys hide outside the focused pane, whose keys they are. A
-// tab's element fills its frame's sheet, and a frame moves between panes, the
+// prompts, the bar parts other plugins added, the close prompt, the split
+// prompts and the close-pane control at the bar's end) on the top edge of a
+// sheet holding the session's tabs, only its selected tab showing, or the
+// `emptyText` saying why no tab shows. An empty pane's body holds a sheet with
+// the empty text alone. The tab prompts hide while the session has no other
+// tab, and every tab bar's prompts and the close-pane control's key hide
+// outside the focused pane, whose keys they are. A tab's element fills its frame's sheet, and a frame moves between panes, the
 // holder and a pane part drawn again as the same element, by a connected move that
 // keeps a visual in it loaded; a closing pane's frame moves to the holder
 // (`vacate`) before its slot leaves the document. The strip follows each tab's

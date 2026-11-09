@@ -106,11 +106,14 @@ does not wrap, as the user's tmux binds stop at `pane_at_left` and the other edg
   the pane's vertical centre. Content never draws under the up or down prompt: while the pane shows
   one, its sheet leaves a strip that high free, between the tab bar and the sheet for the up
   prompt and under the sheet for the down one, so the sheet shifts when focus moves.
-- Each tab bar holds the tab strip, `⌘W` (close the session) and three pane controls: split right,
-  split down and close the pane. The focused pane's controls carry their keys. An unfocused pane's
-  bar drops every key, taking no space, so its controls are bare icons and its strip keeps room in
-  a 280 px pane. This breaks the rule that an out-of-scope hint keeps its space: a pane's bar
-  changes width when focus moves.
+- Each tab bar holds the tab strip, `⌘W` (close the session), the split prompts `⌥;` (split
+  right) and `⌥'` (split down) as faint keys alone with their action in the tooltip, and a small,
+  faint `chrome-close` button that closes the pane, holding `⌥W`. The user dropped the split
+  buttons as clutter: splitting is a key action. The bar parts other plugins add take the free
+  space after them, so this end group sits at the bar's end whether or not `⌘W` shows. An
+  unfocused pane's bar drops every key, taking no space, so it shows the bare close button and its
+  strip keeps room in a 280 px pane. This breaks the rule that an out-of-scope hint keeps its
+  space: a pane's bar changes width when focus moves.
 - A side bar row whose session shows in an unfocused pane carries a quieter on-screen mark, so the
   user sees which picks jump to a pane and which load into the focused one.
 

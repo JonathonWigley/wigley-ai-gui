@@ -17,7 +17,7 @@
 // own (`cursorPrompt`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
-// close prompt and pane controls, each tab's icon with no label, each session
+// close prompt, split prompts and close-pane control, each tab's icon with no label, each session
 // popup's sheet around its body, the hidden popups' bar (each entry's icon and
 // status, or its title with no status, then the toggle key), and the rename
 // dialog's title box over why a title was refused and the hint, in the class

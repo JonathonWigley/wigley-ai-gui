@@ -390,8 +390,8 @@
   white-space: nowrap;
 }
 
-/* `⌥I ‹`, the strip, `› ⌥O`, other plugins' bar parts, then `⌘W` and the
-   pane controls at the bar's end. The bar takes the strip's margin, so the
+/* `⌥I ‹`, the strip, `› ⌥O`, other plugins' bar parts, then `⌘W`, the
+   split prompts and the close-pane control at the bar's end. The bar takes the strip's margin, so the
    strip sits flush between its prompts; only the strip and the bar parts
    shrink. */
 .session-tabs-bar {
@@ -402,8 +402,8 @@
 }
 
 /* A prompt or key with nothing to act on takes no space here, so an
-   unfocused pane's controls are bare icons and the strip keeps room in a
-   280px pane. */
+   unfocused pane shows the bare close-pane icon and the strip keeps room in
+   a 280px pane. */
 .session-tabs-bar .is-no-target {
   display: none;
 }
