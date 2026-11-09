@@ -26,8 +26,8 @@ import { visualManifest } from './visual/manifest';
 import { windowManifest } from './window/manifest';
 import { workflowManifest } from './workflow/manifest';
 import { workflowLargeManifest } from './workflow-large/manifest';
-import { workflowSmallManifest } from './workflow-small/manifest';
 import { workflowMediumManifest } from './workflow-medium/manifest';
+import { workflowSmallManifest } from './workflow-small/manifest';
 
 // The digits that pick forms' numbered choices, which the default keymap binds.
 export { DIGITS } from './forms/manifest';

@@ -23,8 +23,8 @@ import { usageTabLinePagePart } from './usage-tab-line/page/start';
 import { visualPagePart } from './visual/page/start';
 import { workflowPagePart } from './workflow/page/start';
 import { workflowLargePagePart } from './workflow-large/page/start';
-import { workflowSmallPagePart } from './workflow-small/page/start';
 import { workflowMediumPagePart } from './workflow-medium/page/start';
+import { workflowSmallPagePart } from './workflow-small/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise. `keys` starts first, so its Keys button contributes to the title

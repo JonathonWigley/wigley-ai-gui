@@ -24,8 +24,8 @@ import { visualMainPart } from './visual/main/start';
 import { windowMainPart } from './window/main/start';
 import { workflowMainPart } from './workflow/main/start';
 import { workflowLargeMainPart } from './workflow-large/main/start';
-import { workflowSmallMainPart } from './workflow-small/main/start';
 import { workflowMediumMainPart } from './workflow-medium/main/start';
+import { workflowSmallMainPart } from './workflow-small/main/start';
 
 // Every built-in plugin's main part, in start order where no dependency says
 // otherwise.

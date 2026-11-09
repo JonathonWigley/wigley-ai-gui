@@ -18,12 +18,12 @@ import {
 } from './workflow/main/engine-fakes.test-support';
 import { LARGE_WORKFLOW_ID } from './workflow-large/contract';
 import { largeMainWorkflow } from './workflow-large/large-workflow';
-import { SMALL_WORKFLOW_ID } from './workflow-small/contract';
-import { workflowSmallMainPart } from './workflow-small/main/start';
-import { smallMainWorkflow } from './workflow-small/stages';
 import { MEDIUM_WORKFLOW_ID } from './workflow-medium/contract';
 import { workflowMediumMainPart } from './workflow-medium/main/start';
 import { mediumMainWorkflow } from './workflow-medium/stages';
+import { SMALL_WORKFLOW_ID } from './workflow-small/contract';
+import { workflowSmallMainPart } from './workflow-small/main/start';
+import { smallMainWorkflow } from './workflow-small/stages';
 
 const settled = () => new Promise((settle) => setImmediate(settle));
 
