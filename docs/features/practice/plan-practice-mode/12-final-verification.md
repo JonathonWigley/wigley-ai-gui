@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 9 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -67,3 +67,5 @@ Low-confidence:
 - The sanitizer build's start-up stays inside the 2000 ms time limit on real problems.
 
 ## Proof
+
+Commit 961cd4a4 · proof: lint, typecheck green; test gate 3037 green; filtered selftest practice+chat+sessions all passed; clang++ present so judge steps ran; live-check list carried to the wrap-up · concerns: none

@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -33,3 +33,5 @@ Done when: every stale line is fixed and the fixes are committed
 Commit:    one commit, `Practice mode docs: match the landed code`
 
 ## Proof
+
+Commit a1d139d2 · proof: diff read of five docs against code: AGENTS.md chat exports/sessions owner/practice entry, layouts practice row, chat-panes owned-session line, agent-chat per-session instructions, practice design keys/scopes/tools/interviewer/import/self-test; lint clean · concerns: design.md does not name the 'chat view unmounted' and 'watch not started' log lines

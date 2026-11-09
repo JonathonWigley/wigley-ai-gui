@@ -250,10 +250,10 @@ does not consume.
 - [x] [Practice self-test and drive action](10-practice-selftest.md) — after 09
 
 ### Wave 8
-- [ ] [Doc re-read](11-doc-re-read.md) — after 10
+- [x] [Doc re-read](11-doc-re-read.md) — after 10
 
 ### Wave 9
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
@@ -270,6 +270,8 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 08 · 8de85a0e · diff read: Split axis/sizedPane/setEndHidden, createProblemWorkspace/ProblemWorkspace/WorkspacePane, focusColumn/applyOpened, workspace-state and case-text exports, practiceShowTabCommand/practiceOpenSubmissionRowCommand, PracticePlace pane/problemTab/consoleTab present; AGENTS.md and DESIGN.md split prose read; typecheck clean; worker ran 77 files 1952 tests and lint clean · concerns: edits outside Files: DESIGN.md (stale Split entry) and practice-state.ts (placeOf); task doc said 'type' drives the code editor but it reaches the last box, so typeDocument was added; split layout, confirm placement, real editor :w/:wq/:q and focus moves unchecked live (task 12)
 - 09 · dff5247b · diff read: createInterviewerPane/InterviewerPane, createImportBox/ImportBox, six manifest commands, ask and import scopes, askBox/importBox parts, keymap vi/a/ask/import binds present; typecheck clean; worker ran 21 files 275 tests and lint clean · concerns: import-box.ts copies rename-dialog.ts's restoreFocus closure (shared helper would need rename-dialog edit); ask frame's CodeMirror box is moved not remounted on layout redraw, unchecked live; pane holding keys with nothing shown sets practice.ask and focuses the root, untested; keys.anchor takes an options object, not the doc's positional scope
 - 10 · 364c0343 + 430f11f4 · diff read: selftest-fixture (PRACTICE_FIXTURE_SLUGS), selftest-script, start.ts drive action practice.writeFixture and script handover present; selftest isolation shown (selfTest runMode mkdtemp home); typecheck clean; worker ran practice/main tests 91 green and lint clean; npm run selftest -- --plugin practice failed 3 checksFit (08 CSS overflow), fixed in 430f11f4, rerun all passed · concerns: ResizeObserver loop errors from the vite client around interviewer steps, not failing; tab strip keeps default ui-tabs margin inside the bar (sessions zeroes it) — check visually
+- 11 · a1d139d2 · diff read of five docs against code: AGENTS.md chat exports/sessions owner/practice entry, layouts practice row, chat-panes owned-session line, agent-chat per-session instructions, practice design keys/scopes/tools/interviewer/import/self-test; lint clean · concerns: design.md does not name the 'chat view unmounted' and 'watch not started' log lines
+- 12 · 961cd4a4 · lint, typecheck green; test gate 3037 green; filtered selftest practice+chat+sessions all passed; clang++ present so judge steps ran; live-check list carried to the wrap-up · concerns: none
 ### Contract changes
 - driverSource include of solutionPath: a C string literal with \ and " escaped → the path written verbatim, driverSource throwing on a path holding " or a line break · why: clang reads an #include "…" path literally with no escape processing, so escaping breaks any backslash path · consumers: 05 · group 04
 - 05 main/problem-store.ts ProblemStoreDeps gains log: PluginLog (logs unparsable submission files and 'watch stopped: <reason>'); consumers: 06 builds nothing from it (only start.ts builds the store)
@@ -333,5 +335,9 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 10: result checks compiler and submission in parallel; exactly-one submission read once the first .json appears · group 10
 - 10: groups are a module constant · group 10
 - 10 fix: header wraps, tabs bar shrinks with ui-tabs--scroll strip; narrow console actions drop under the tabs · group 10
+- 11: layouts design.md already had a practice row; rewritten against layout.d.ts instead of added · group 11
+- chat/page/start.test.ts fake Sessions addTab runs a visible tab's shown() inside addTab, per the SessionTabView contract; the view's visibleTab now depends on shown() having run (03) — the real sessions page calls tab.shown() on each visible change and the chat+sessions self-test passed — lead
 ### Review rounds
 ### Test gate
+- picks (writing-tests § Picking tests for a gate over aad3781f..HEAD): src/plugins/sessions src/plugins/chat src/plugins/practice src/plugins/notes/page/start.test.ts src/shared/page/ui src/plugins/keymap.test.ts src/plugins/manifests.test.ts src/shared/layouts src/shared/plugin-part-harness.test.ts src/plugins/backlog/page/start.test.ts src/plugins/forms/page/start.test.ts src/plugins/primer/page/start.test.ts src/renderer/plugins/page-api.test.ts src/main/built-in-themes.test.ts; plus npm run selftest -- --plugin practice --plugin chat --plugin sessions
+- result: lint and typecheck green; picks 111 files 3037 tests green after 961cd4a4 (first run failed 5 in chat/page/start.test.ts: harness published no sessions row and its fake addTab never ran shown(); fixed in the test only); npm run selftest -- --plugin practice --plugin chat --plugin sessions all passed
