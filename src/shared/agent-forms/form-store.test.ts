@@ -251,6 +251,24 @@ describe('createFolderFormStore', () => {
     expect(store.newestUnreturnedFinished(MINE, NONE)).toBeNull();
   });
 
+  it("finds the owner's newest form in any state, never another owner's", () => {
+    const store = storeIn(formsDir);
+    store.create(MINE, 'fp', ARGS, null, null);
+    nowMs = 2_000_000;
+    const newer = store.create(MINE, 'fp2', ARGS, null, null);
+    store.finish(newer, 'submitted', withNote('done'));
+    nowMs = 3_000_000;
+    store.create(
+      { sessionId: 's2', projectDir: '/p' },
+      'fp3',
+      ARGS,
+      null,
+      null,
+    );
+
+    expect(store.newestOwned(MINE)?.id).toBe(newer.id);
+  });
+
   it('passes over an excluded form to the older one behind it', () => {
     const store = storeIn(formsDir);
     const older = store.create(MINE, 'fp', ARGS, null, null);

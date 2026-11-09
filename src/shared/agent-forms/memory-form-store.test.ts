@@ -107,6 +107,18 @@ describe('createMemoryFormStore', () => {
     ]);
   });
 
+  it("newestOwned_FindsTheOwner'sNewestFormInAnyState", () => {
+    const subject = store();
+    subject.create(MINE, 'f1', {}, null, null);
+    nowMs = 2_000_000;
+    const newer = subject.create(MINE, 'f2', {}, null, null);
+    subject.finish(newer, 'cancelled', withNote('x'));
+    nowMs = 3_000_000;
+    subject.create({ sessionId: 's2', projectDir: '/p' }, 'f3', {}, null, null);
+
+    expect(subject.newestOwned(MINE)).toBe(newer);
+  });
+
   it('markReturned_RemovesFromUnreturnedFinished', () => {
     const subject = store();
     const record = subject.create(MINE, 'f1', {}, null, null);

@@ -127,7 +127,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `AgentFormWake` the service is handed: chat's `send` for a session chat owns, nothing for any
                  other), the detach at an app quit (forms' and primer's `quit` stop: no waiting call is
                  answered and no form closes, so the relay holds each call and sends it to the next app run,
-                 where a re-sent collect reopens the session's newest form an earlier connection left open),
+                 where a re-sent collect reopens the session's newest form an earlier connection left open and no
+                 live session holds),
                  the saved-form folder and memory stores,
                  the channel and scripted presenters, the MCP tool session, the drive actions that open a
                  form type's forms in a drive run's sessions, and the layout preview helper

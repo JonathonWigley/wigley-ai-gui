@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -134,6 +134,39 @@ describe('primer main part', () => {
     await expect(answers?.run({ sessionId: 'b' })).rejects.toThrow(
       /open_primer/,
     );
+    rmSync(homeDir, { recursive: true, force: true });
+  });
+
+  it('a quit leaves each open primer open on disk and in the window, for the relay to send again', async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-primer-quit-'));
+    const harness = startMainPart(primerMainPart, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat()],
+      drive: true,
+      services: {
+        homeDir,
+        alerts: { setOpenCount() {} },
+        git: { originRepoName: () => Promise.resolve(null) } as never,
+      },
+    });
+    await harness.drive?.run('openPrimer', { sessionId: 'a' });
+    const primersDir = path.join(
+      homeDir,
+      '.agents',
+      'wigley-primer',
+      'primers',
+    );
+
+    await harness.stop('quit');
+
+    const outcomes = readdirSync(primersDir).map(
+      (name) =>
+        JSON.parse(readFileSync(path.join(primersDir, name), 'utf8')).outcome,
+    );
+    expect(outcomes).toEqual(['open']);
+    expect(
+      harness.sent.filter((sent) => sent.message === 'formClosed'),
+    ).toEqual([]);
     rmSync(homeDir, { recursive: true, force: true });
   });
 

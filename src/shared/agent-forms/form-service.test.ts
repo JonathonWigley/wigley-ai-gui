@@ -1915,6 +1915,32 @@ describe('a collect after an app quit', () => {
     expect(payload.outcome).toBe('no_form');
     expect(presenter.shown).toEqual([]);
   });
+  it('reopens nothing another live session of the same owner holds open', async () => {
+    const service = newService();
+    const holder = service.startSession({ id: 'app-1', info: SESSION });
+    const other = service.startSession({ id: 'app-2', info: SESSION });
+    void holder.open(NAMING_ARGS, null, live());
+
+    const payload = await other.collect(true, live());
+
+    expect(payload.outcome).toBe('no_form');
+    expect(presenter.shown).toHaveLength(1);
+  });
+
+  it('reports a form left open that no longer parses as left open', async () => {
+    const record = store.create(
+      SESSION,
+      'unparseable',
+      { heading: 'Old review', items: [] },
+      HALF_BODY,
+      null,
+    );
+
+    await expect(startSession().collect(true, live())).rejects.toThrow(
+      `${record.id}.json) was left open with no answer`,
+    );
+    expect(presenter.shown).toEqual([]);
+  });
 });
 
 describe('the detach at an app quit', () => {

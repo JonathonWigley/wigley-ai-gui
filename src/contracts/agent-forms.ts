@@ -120,8 +120,8 @@ export interface AgentFormSession<Payload> {
     signal: AbortSignal,
   ): Promise<Payload>;
   // With no form of its own, a collect reopens the session's newest saved form
-  // when an earlier connection left it unanswered, as an app quit does, and
-  // waits on it as on the open form.
+  // when an earlier connection left it unanswered, as an app quit does, and no
+  // live session holds it, and waits on it as on the open form.
   collect(wait: boolean, signal: AbortSignal): Promise<Payload>;
   // The session disconnected: its open form closes, and every call waiting to
   // open a form or on an unanswered one rejects; answers stay saved.

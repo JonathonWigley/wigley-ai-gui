@@ -212,7 +212,7 @@ describe('forms main part', () => {
     rmSync(homeDir, { recursive: true, force: true });
   });
 
-  it('a quit leaves each open round open on disk, in the window and unanswered, for the relay to send again', async () => {
+  it('a quit leaves each open round open on disk and in the window, for the relay to send again', async () => {
     const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-quit-'));
     const harness = startMainPart(formsMainPart, {
       parts: [sessionsMainPart],

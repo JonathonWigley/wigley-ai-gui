@@ -13,7 +13,11 @@ import {
   HOST_DEADLINE_FIELD,
 } from '../../contracts/agent-forms';
 import type { Timers } from '../../contracts/ambient';
-import type { AgentFormStore, SavedAgentForm } from './form-store';
+import {
+  type AgentFormStore,
+  isFinished,
+  type SavedAgentForm,
+} from './form-store';
 
 export interface AgentFormServiceDeps<Form, Body, Payload> {
   type: AgentFormType<Form, Body, Payload>;
@@ -101,6 +105,8 @@ interface SessionContext<Form, Body, Payload> {
   // Ids of the forms this connection showed, which a collect never reopens.
   shownIds: Set<string>;
   detach: DetachState;
+  // Every session of the service not yet ended, this one included.
+  liveSessions: Set<SessionContext<Form, Body, Payload>>;
 }
 
 // The host's soft deadline when its record names a positive number of
@@ -191,8 +197,11 @@ function unreadableFormError<Form, Body, Payload>(
   const heading = type.savedHeading(record.args);
   const named =
     heading === null ? `A saved ${noun}` : `The saved ${noun} '${heading}'`;
+  const state = isFinished(record)
+    ? 'was finished but never returned'
+    : 'was left open with no answer';
   return new Error(
-    `${named} (file ${record.id}.json) was finished but never returned, and ` +
+    `${named} (file ${record.id}.json) ${state}, and ` +
       `its answers cannot be read: it was saved in a shape this app no longer ` +
       `accepts (${cause.message}). Its file is left as it was. Tell the user ` +
       `its answers were not returned. Later calls in this session pass over ` +
@@ -540,9 +549,19 @@ function openNewForm<Form, Body, Payload>(
   return showForm(session, form, record, draft);
 }
 
+function isOpenInLiveSession<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  formId: string,
+): boolean {
+  return [...session.liveSessions].some(
+    (live) => live.open?.record.id === formId,
+  );
+}
+
 // The session's newest saved form, shown again with its saved answers, when an
-// earlier connection left it with no answer: what an app quit leaves for the
-// collect the relay sends again. Throws when that form no longer parses.
+// earlier connection left it with no answer and no live session holds it: what
+// an app quit leaves for the collect the relay sends again. Throws when that
+// form no longer parses.
 function reopenFormLeftOpen<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
 ): OpenForm<Form, Body> | null {
@@ -551,7 +570,8 @@ function reopenFormLeftOpen<Form, Body, Payload>(
     record !== null &&
     record.outcome === 'open' &&
     !session.shownIds.has(record.id) &&
-    !session.reportedUnreadable.has(record.id);
+    !session.reportedUnreadable.has(record.id) &&
+    !isOpenInLiveSession(session, record.id);
   if (!isLeftOpenEarlier) {
     return null;
   }
@@ -969,6 +989,7 @@ function endSession<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
 ): void {
   session.ended = true;
+  session.liveSessions.delete(session);
   if (!session.detach.detached) {
     closeOpenForm(session);
   }
@@ -1004,6 +1025,7 @@ function startSession<Form, Body, Payload>(
   owner: AgentFormOwner,
   deps: AgentFormServiceDeps<Form, Body, Payload>,
   detach: DetachState,
+  liveSessions: Set<SessionContext<Form, Body, Payload>>,
 ): AgentFormSession<Payload> {
   const { info } = owner;
   const session: SessionContext<Form, Body, Payload> = {
@@ -1024,7 +1046,9 @@ function startSession<Form, Body, Payload>(
     reportedUnreadable: new Set(),
     shownIds: new Set(),
     detach,
+    liveSessions,
   };
+  liveSessions.add(session);
   return {
     open: (args, toolUseId, signal) =>
       answerUnlessDetached(detach, () => {
@@ -1049,8 +1073,9 @@ export function createAgentFormService<Form, Body, Payload>(
   deps: AgentFormServiceDeps<Form, Body, Payload>,
 ): AgentFormService<Payload> {
   const detach: DetachState = { detached: false };
+  const liveSessions = new Set<SessionContext<Form, Body, Payload>>();
   return {
-    startSession: (owner) => startSession(owner, deps, detach),
+    startSession: (owner) => startSession(owner, deps, detach, liveSessions),
     detach: () => {
       detach.detached = true;
     },
