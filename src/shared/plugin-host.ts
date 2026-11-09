@@ -77,18 +77,18 @@ export interface PluginHost<Started, Part = unknown> {
   // dependency cycle in this process over every held part and `part`,
   // disabled ones included, `Plugins depend on each other in a cycle: <ids>`.
   add(part: Part): void;
-  // stop(pluginId, stop), then forgets the part, also when the stop rejects; its
-  // dependents stay held, stopped. Resolves to the ids it stopped, or rejects
-  // with the stop's first error. Resolves to `[]` for an id the host does not
-  // hold. Runs after `stopAll` began, as `stop` does.
+  // stop(pluginId, stop), then forgets the part, also when the stop rejects;
+  // its dependents stay held, stopped. Resolves to the ids it stopped, or
+  // rejects with the stop's first error. Resolves to `[]` for an id the host
+  // does not hold. Runs after `stopAll` began, as `stop` does.
   remove(pluginId: string, stop?: PartStop): Promise<string[]>;
-  // stop(pluginId, 'restart'), then start(the ids it stopped), resolving to the ids in
-  // stop order. Each part gets new registrations and new views, so a
+  // stop(pluginId, 'restart'), then start(the ids it stopped), resolving to the
+  // ids in stop order. Each part gets new registrations and new views, so a
   // dependent's `dependency` gives the new provider's exports; slots are
   // untouched. When the stop rejects, it rejects with that error and starts
-  // nothing. When a start throws, it rejects with that error, as `start`
-  // leaves it: the parts started before it run and got their `ready`, the
-  // rest stay stopped.
+  // nothing. When a start throws, it rejects with that error, as `start` leaves
+  // it: the parts started before it run and got their `ready`, the rest stay
+  // stopped.
   restart(pluginId: string): Promise<string[]>;
   // The first reason a started part in `pluginIds` gives through `mayStop`, as
   // `"<id>: <reason>"`, or null. The parts are asked in start order; a part
@@ -98,8 +98,8 @@ export interface PluginHost<Started, Part = unknown> {
   // The ids whose stop is in flight now, in the order their stops began.
   stopping(): readonly string[];
   // Stops every started part in reverse start order, as an `end`, logging
-  // `stopping <id>` before each, with the same error and overlap rules as `stop`. From its
-  // first call on, `start` throws.
+  // `stopping <id>` before each, with the same error and overlap rules as
+  // `stop`. From its first call on, `start` throws.
   stopAll(): Promise<void>;
 }
 

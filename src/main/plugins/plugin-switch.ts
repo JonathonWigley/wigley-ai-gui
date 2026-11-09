@@ -33,26 +33,26 @@ import type { AppliedPlugins } from './applied-plugins';
 // list changes.
 export const PLUGIN_RETRY_MS = 2000;
 
-// Turns plugins on and off while the app runs, and follows the plugin
-// catalog: a plugin that arrives starts, one that leaves stops as a switch-off
-// does, and one with a new entry reloads, its dependents with it. `apply`,
-// `restart` and each catalog change run one at a time, each after the one
-// before it settles; `mayDisable` runs beside them. At creation it queues the
-// launch start of each held plugin (`heldAtStart`) the user did not switch
-// off, one at a time. A start that fails, a reload whose new version the
-// config refuses or that fails to start (the last good version then runs in
-// its place), and a page part that fails, each show as the plugin's problem
-// in `core.plugins` and in the config's plugin problems; a plugin that runs no
-// version stays in the applied list until a later entry or its dependency
-// starts it. When a plugin stops running (it left the catalog, the config
-// refused its reload, or its reload left no version running), each dependent
-// that runs (`dependsOn.main` or `.page`, transitively) and lost a dependency
-// is withheld with the problem `Needs plugin "<id>"`, and starts again once
-// the dependency does. A reload or restart starts on the page the plugin and
-// each dependent it paused that runs, so a page part whose earlier start
-// failed starts again; a page start that starts a part clears the problem an
-// earlier page start recorded for it. A reload or restart stops each main part
-// it starts again as a `restart` (`PartStop`); every other stop is an `end`.
+// Turns plugins on and off while the app runs, and follows the plugin catalog:
+// a plugin that arrives starts, one that leaves stops as a switch-off does, and
+// one with a new entry reloads, its dependents with it. `apply`, `restart` and
+// each catalog change run one at a time, each after the one before it settles;
+// `mayDisable` runs beside them. At creation it queues the launch start of each
+// held plugin (`heldAtStart`) the user did not switch off, one at a time. A
+// start that fails, a reload whose new version the config refuses or that fails
+// to start (the last good version then runs in its place), and a page part that
+// fails, each show as the plugin's problem in `core.plugins` and in the
+// config's plugin problems; a plugin that runs no version stays in the applied
+// list until a later entry or its dependency starts it. When a plugin stops
+// running (it left the catalog, the config refused its reload, its reload left
+// no version running, or its restart did not start it), each dependent that
+// runs (`dependsOn.main` or `.page`, transitively) and lost a dependency is
+// withheld with the problem `Needs plugin "<id>"`, and starts again once the
+// dependency does. A reload or restart starts on the page the plugin and each
+// dependent it paused that runs, so a page part whose earlier start failed
+// starts again; a page start that starts a part clears the problem an earlier
+// page start recorded for it. A reload or restart stops each main part it
+// starts again as a `restart` (`PartStop`); every other stop is an `end`.
 export interface PluginSwitch extends PluginSwitchService {
   // Applies a new disabled list: refuses with the host's `<id>: <reason>` when
   // a part `mayStop` refuses (a config problem, retried every
@@ -71,14 +71,14 @@ export interface PluginSwitch extends PluginSwitchService {
   // Stops `pluginId` and its dependents, page parts first, then starts each
   // main part that stopped, one at a time in start order and guarded as a
   // reload's are, then the page parts of `pluginId` and its dependents that
-  // run, a part whose earlier page start failed included; their slots are
-  // kept. A main start that fails withholds its plugin with the problem, as a
-  // reload's does, and resolves. Their binds leave first: it sets them as the
-  // applied paused list and pushes the served config before the page stop,
-  // and clears the list and pushes again after the main start, before the
-  // page start. A stop that throws still starts what stopped, then rejects
-  // with the stop's error. Rejects for a plugin that is off or that the config
-  // does not hold, pushing nothing.
+  // run, a part whose earlier page start failed included; their slots are kept.
+  // A main start that fails withholds its plugin, and each dependent that lost
+  // it, with the problem, as a reload's does, and resolves. Their binds leave
+  // first: it sets them as the applied paused list and pushes the served config
+  // before the page stop, and clears the list and pushes again after the main
+  // start, before the page start. A stop that throws still starts what stopped,
+  // then rejects with the stop's error. Rejects for a plugin that is off or
+  // that the config does not hold, pushing nothing.
   restart(pluginId: string): Promise<void>;
   // Resolves once the switch's queue holds no work.
   settled(): Promise<void>;

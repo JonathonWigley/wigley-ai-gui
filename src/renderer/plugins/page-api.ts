@@ -82,22 +82,21 @@ export type PageApiServices = Omit<
 // qualified scopes; `pendingKeys` is the page's one pending-key report;
 // `config` is the config main serves now, which the keymap, commands, scopes
 // and settings are read from at each call; `bus` is the page load's event bus;
-// `modes` is the core's mode registry, which takes qualified ids. `areas`
-// holds every area; plugins get the title bar, panel, status bar, right bar
-// and overlay.
-// `setLayout` replaces the shell's layout. `transparency` is the page's one
-// transparency override. `services` are the ones every plugin shares; `uiState`
-// gives each plugin its own scope of the ui state. `layouts` shows each owner's
-// layouts. `paneTargets` takes the resize and focus targets and the outer panes
-// a plugin hands the pane commands, and releases them. `drops` is the page's one
-// drop registry, and `restores` the page's restore windows; a part's tracked
-// restores stop being waited on at its stop. `registrations` is the part's own
-// store, which the host disposes when the part stops. `state` is the page
-// load's slot store, and
-// `commands` the page's commands, which each plugin reaches under its id.
-// `anchors` holds every key hint of the page load, and `boxFocus` tells whether
-// focus is in a text box. `pickerCommands` tracks each plugin's list picker for
-// the core's picker commands.
+// `modes` is the core's mode registry, which takes qualified ids. `areas` holds
+// every area; plugins get the title bar, panel, status bar, right bar and
+// overlay. `setLayout` replaces the shell's layout. `transparency` is the
+// page's one transparency override. `services` are the ones every plugin
+// shares; `uiState` gives each plugin its own scope of the ui state. `layouts`
+// shows each owner's layouts. `paneTargets` takes the resize and focus targets
+// and the outer panes a plugin hands the pane commands, and releases them.
+// `drops` is the page's one drop registry, and `restores` the page's restore
+// windows; a part's tracked restores stop being waited on at its stop.
+// `registrations` is the part's own store, which the host disposes when the
+// part stops. `state` is the page load's slot store, and `commands` the page's
+// commands, which each plugin reaches under its id. `anchors` holds every key
+// hint of the page load, and `boxFocus` tells whether focus is in a text box.
+// `pickerCommands` tracks each plugin's list picker for the core's picker
+// commands.
 export interface PageApiDeps {
   areas: ShellAreas;
   modes: Modes;
