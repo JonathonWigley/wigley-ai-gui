@@ -1,6 +1,6 @@
 # 01 — The moved-copy reader
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -74,3 +74,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d27b84e5 · proof: diff read; typecheck clean; worker ran named tests (262) and lint · concerns: plan watch now stats planDir and may signal planGone when every copy's plan.md reads null (old code stayed silent); task 04 rewrites the read

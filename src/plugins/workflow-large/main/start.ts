@@ -137,15 +137,17 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
     };
 
     const followPlan = ({ sessionId, before, after, signal }: FoldEvent) => {
-      const planDir = largeStateOf(after).planDir;
+      const { planDir, planReported } = largeStateOf(after);
+      const was = largeStateOf(before);
       if (signal.type === 'turnEnded') {
         planWatch.check(sessionId);
       }
-      if (signal.type === 'fileWritten' && isPlanFile(signal.path)) {
-        planWatch.follow(sessionId, planDir);
-      }
-      if (planDir !== largeStateOf(before).planDir) {
-        planWatch.follow(sessionId, planDir);
+      const wrotePlan =
+        signal.type === 'fileWritten' && isPlanFile(signal.path);
+      const followedPlanChanged =
+        planDir !== was.planDir || planReported !== was.planReported;
+      if (wrotePlan || followedPlanChanged) {
+        planWatch.follow(sessionId, planDir, planReported);
       }
     };
 
@@ -178,13 +180,14 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
 
     const stopSession = (sessionId: string) => {
       countdown.stop(sessionId);
-      planWatch.follow(sessionId, null);
+      planWatch.follow(sessionId, null, false);
       replayedTurnEnds.delete(sessionId);
     };
 
     const follow = (flow: SessionFlow) => {
       if (flow.workflow === LARGE_WORKFLOW_ID) {
-        planWatch.follow(flow.sessionId, largeStateOf(flow).planDir);
+        const { planDir, planReported } = largeStateOf(flow);
+        planWatch.follow(flow.sessionId, planDir, planReported);
         cancelCountdown(flow.sessionId);
       }
     };
