@@ -8,7 +8,7 @@ import { createFlowStore, FLOWS_FILE, type FlowStore } from './flow-store';
 
 const SAVED_H1: SessionFlow = {
   ...newFlow('s-old', '/r'),
-  workflow: 'light',
+  workflow: 'small',
   movedUpFrom: null,
   stage: 'build',
   checklist: [{ text: 'a', done: true }],

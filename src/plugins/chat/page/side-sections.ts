@@ -178,6 +178,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
   };
 
   const inputOf = (frame: Frame): SideSectionInput => ({
+    partId: frame.part.id,
     title: frame.part.title,
     summary: frame.summary,
     collapsed: readCollapsed(uiState).includes(frame.part.id),

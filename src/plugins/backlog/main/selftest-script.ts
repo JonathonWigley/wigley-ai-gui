@@ -118,15 +118,15 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   const createAndEdit: SelfTestStep[] = [
     { keys: ['a'], expect: '[backlog] editor open create' },
     {
-      keys: [...CREATED, '<C-n>'],
+      keys: [...CREATED, '<Tab>'],
       expect: '[backlog] focused One line box',
     },
     {
-      keys: ['i', ...CREATED_ONE_LINE, '<C-n>', '<C-n>'],
+      keys: ['i', ...CREATED_ONE_LINE, '<Tab>', '<Tab>'],
       expect: '[backlog] focused Body box',
     },
     {
-      keys: ['i', ...CREATED_BODY, '<C-p>'],
+      keys: ['i', ...CREATED_BODY, '<S-Tab>'],
       expect: '[backlog] focused Tags (comma-separated) box',
       checksFit: true,
       screenshot: 'editor',

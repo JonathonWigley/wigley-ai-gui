@@ -579,27 +579,26 @@ const PANE_KEYS_STEPS: SelfTestStep[] = [
   },
   {
     keys: ['G'],
-    expect: '[chat] hub cursor on Session',
-    why: "G goes to the last section, chat's Session (order 40).",
+    expect: '[chat] hub cursor on Main agent',
+    why: "G goes to the last section with a head: Main agent, the only one this session shows, since chat's Session header has none.",
   },
   {
     keys: ['j'],
-    expect: '[chat] hub cursor on Session',
+    expect: '[chat] hub cursor on Main agent',
     why: 'j on the last section stays.',
   },
   {
-    keys: ['k', 'j'],
-    expect: '[chat] hub cursor on Session',
-    alsoExpect: [/^\[chat\] hub cursor on (?!Session$)/],
-    why: 'k leaves Session for the section above it, j comes back.',
+    keys: ['k'],
+    expect: '[chat] hub cursor on Main agent',
+    why: 'k on the first section stays: the cursor passes over the Session header.',
   },
-  { keys: ['Enter'], expect: '[chat] section Session collapsed' },
-  { keys: ['l'], expect: '[chat] section Session expanded' },
+  { keys: ['Enter'], expect: '[chat] section Main agent collapsed' },
+  { keys: ['l'], expect: '[chat] section Main agent expanded' },
   {
     keys: ['<C-j>'],
     expect: '[page] <C-j> ran chat.hubLineDown',
     alsoExpect: [
-      /^\[chat\] (scrolled )?the Session section (did not scroll )?down/,
+      /^\[chat\] (scrolled )?the Main agent section (did not scroll )?down/,
     ],
   },
   {

@@ -58,8 +58,8 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
 - **Everything hot reloads.** A changed plugin, layout, theme, keymap or setting applies to the running app without
   a restart and without losing the user's work. So every registration a plugin makes can be undone, and state that
   must outlive a reload is kept where the reload does not reach it. Today settings, keymap, themes and layouts hot
-  reload, and plugins start and stop live from the `plugins.disabled` switch; a changed plugin's code still needs a
-  runtime loader, which is the next plan, and new code is written so it can land without reworking it.
+  reload, plugins start and stop live from the `plugins.disabled` switch, and a plugin in the user folder reloads with
+  new code on save (A user plugin, below). A built-in's code still needs a rebuild.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
   processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
   composition root, so adding one is a new adapter and features carry no `process.platform` checks.
@@ -100,7 +100,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `keys-for.ts`: the keys that run a command, as help and hints read them,
                  `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
                  documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
-                 newest of them, both read by workflow-heavy and backlog)
+                 newest of them, both read by workflow-large and backlog)
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
@@ -183,7 +183,7 @@ src/main/        core main process; main.ts is its composition root
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
                  rename, trash, folder lists and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
-                 ProcessRunner
+                 ProcessRunner; `limitRuns` caps how many of a runner's programs run at once (git's runner: 4)
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
@@ -303,6 +303,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `load`, `tags` and `fileNote` it exports to notes), page/ (Backlog mode: repos and homes in the side bar, the
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
                  layouts/ (the backlog Layout contract and the built-in `default` layout)
+  practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge
+                 that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress
+                 and the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import and
+                 interviewer sessions through chat's `launch` and `resume`), page/ (Practice mode: the problem list in
+                 the side bar, the stacked problem pane, editor and console, the interviewer pane through chat's
+                 `mountChat`), layouts/ (the practice Layout contract and the built-in `default` layout);
+                 `docs/features/practice/design.md`
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
                  `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
                  permission_prompt and start_session MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
@@ -311,8 +318,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
+                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is) and `defaultProfile` to practice, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to practice, `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the leader search (`leader-search.ts`), the title bar's Keys button, and the placement check over the core's anchors), layouts/
@@ -349,12 +356,12 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the chip's `No workflow` and `Working` tags are the exception to
                  the layout rule: the engine draws them with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
-  workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches every copy of a plan
+  workflow-large/ manifest.ts, contract.ts, large-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches every copy of a plan
                  folder across a clone's worktrees and git's shared folder, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
-                 the countdown, the preview samples), layouts/ (the built-in `default` layout); Heavy's workflow: the
+                 the countdown, the preview samples), layouts/ (the built-in `default` layout); Large's workflow: the
                  `wigley:feature` run, make, review, fix and close
-  workflow-light/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
-                 script), page/, layouts/ (the built-in `default` layout); claims `wigley:light`
+  workflow-small/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
+                 script), page/, layouts/ (the built-in `default` layout); claims `wigley:small`
   workflow-medium/ manifest.ts, contract.ts, medium-state.ts (fix cycles), stages/<stage>/ (interview, build, review, fix,
                  land, done), main/ (its self-test script), page/, layouts/ (the built-in `default` layout); claims
                  `wigley:medium`
@@ -406,7 +413,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   every key names a declared command running in the key's process (page and editor keys a page command; app,
   global and intercept keys a main one). A built-in plugin's manifest joins `src/plugins/manifests.ts`, which main
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
-  `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts at app
+  `src/plugins/page.ts`, which the built-in plugin source hands the plugin catalog (A user plugin, below). A main part starts at app
   launch and a page part on every page load, and either starts or stops live after that. The plugin host's
   `start(ids)` starts the named parts in dependency order and throws, starting none, when one depends on a part not
   started; `stop(id)` stops the plugin's dependents first, in reverse start order, then awaits the part's `dispose`
@@ -438,6 +445,18 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   and drive actions `core.stopPlugin`, `core.startPlugin` and `core.restartPlugin` do the same for a run. A view that
   can be switched off is its own plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional
   plugins).
+- **A user plugin** is a folder in `~/.config/wigley-ai-gui/plugins/<id>/`: `manifest.json`, an optional `main.js`
+  and an optional `page.js`, plain ES modules that each export a named `start(api)`, typed with `// @ts-check` against the `.d.ts` files and
+  `manifest.schema.json` the app writes to `plugins/_types/` at start, and an optional `layouts/default/`. The plugin
+  catalog (`src/main/plugin-catalog/`) is the one live list of plugins: it merges the built-in source and the
+  user-folder source, a user plugin with a built-in's id replacing the whole built-in, and the host, the switch, the
+  config schema and the `core.plugins` slot read it. `validateManifest` runs at load the checks `definePlugin` makes at
+  compile time. Main imports `main.js` from a per-revision copy of the folder; the page imports `page.js` on the
+  `wigley-plugin:` scheme. A save reloads the plugin once the edits settle, and `core.reloadPlugin` reloads it with no
+  change; a reload stops its dependents too. A load that fails keeps the last good version and shows the error as a
+  config problem and on its Settings row. Settings and binds under a plugin that is not loaded are kept and ignored.
+  A user plugin draws only through its layout kit and bundles its own packages
+  (`docs/features/plugin-framework/design.md` § Runtime loader (Wave 4 step 3)).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
   `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose
@@ -541,7 +560,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   its own key scope until it hands the cursor back.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
-  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Heavy and `Checklist` for the others),
+  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Large and `Checklist` for the others),
   the agent-skills plugin's list and the context-sources plugin's breakdown are three. A side part takes no key scope and no stop: the hub is a pane of chat's
   own (Alt+l from the transcript or the box), whose cursor walks the section heads chat draws, `Enter` or `l`
   folding one.
@@ -556,6 +575,9 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   the focused pane, and the visible surface, whose `shown` sets the key scope and whose `isVisible` reads true, is the
   focused pane's top open popup, else its selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
+  A **row with an owner** — opened with an `owner`, the plugin it belongs to; not the "owned session" of `open` — has
+  no place in the side bar, the next and previous session keys or the pane tree: it shows only where its owner mounts
+  its chat view through chat's `mountChat` (Practice's interviewer, `docs/features/practice/design.md`).
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
@@ -569,7 +591,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   leader group is named in the file's `groups` for which-key (layered the same way, by prefix). Each process checks every keymap it installs, at startup and on
   each config change, for a key that names no registered
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
-  `<D-w>`; its key is a lowercase letter, a digit, `;`, `'` or Enter, as in `<A-'>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
+  `<D-w>`; its key is a lowercase letter, a digit, `;`, `'`, Enter or Tab, as in `<A-'>`, and Tab needs no modifier: `<Tab>`, `<S-Tab>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor, except a key the editor takes itself (`EditorHost.takesChordKey`: an open completion popup's). A plugin's own text box may keep typed keys from the page keys while
   Tab, Enter, Escape and chords still reach its scope's binds (`textBoxInput`, `src/shared/page/text-box.ts`, which docs and settings share). An editor key carries a scope as a page key does and runs only while
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. It fires in normal mode,
@@ -581,7 +603,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
   `Space z l`: forms' on `Space z l o`, the primer's on `Space z l p`, sessions' on `Space z l s`, chat's on
-  `Space z l c`, agents' on `Space z l a` and workflow's (Heavy's sample session in every stage) on `Space z l w`; the gallery's `Space z g`, which shows Gallery
+  `Space z l c`, agents' on `Space z l a` and workflow's (Large's sample session in every stage) on `Space z l w`; the gallery's `Space z g`, which shows Gallery
   mode, and its `Space z s`, which swaps the shell to a test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
@@ -842,7 +864,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
   `docs/features/agent-chat/design.md` § Activity line), `working` (the activity dock in the session hub's Main agent
-  section: the running turn, then its finished line, § Activity dock), `workingLine` (its one line in the composer's `working` slot), `sideSection` and `sessionFacts` (the hub's section frame and Session rows),
+  section: the running turn, then its finished line, § Activity dock), `workingLine` (its one line in the composer's `working` slot), `sideSection` and `sessionFacts` (the hub's section frame and Session header),
   `queuedMessage` (one pending message's row, § Pending messages), `completionDescription` (a `/` completion row's description), `composer`, `statusLine`, `attachments`, `pickerRow`, `pickerHeading`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage`, `pickerHeading` and `imageViewer`
   take the base kit itself). Beside the parts, the boolean `activityInTranscript` says whether the entry list draws
@@ -926,7 +948,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   An agent session's relay finds the stable app by default. The dev app gets rounds from the sessions its own Chat tab
   starts, which the app points at its endpoint folder, and from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR`
   set to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`). The self-test's user data is
-  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`; a drive run points its Claude
+  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`, both with Chromium's HTTP and code
+  caches off, since no run reuses them (a dev start serves the page's modules from a fresh dev server URL); a drive run points its Claude
   sessions at `<run home>/.agents/<instance id>`. "Auri" is only the name the app shows (`app.setName` at start,
   for the Mac app menu's items): the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac Dock still says Electron, since Electron cannot rename
   the Dock label of an unbundled app.
@@ -959,9 +982,11 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   (`typecheck` in `vitest.config.mts`), and runs them once more at run time. Two adapters of one contract run one
   suite of shared cases, kept in a `*.test-support.ts` module (the Files contract in
   `src/shared/files-contract.test-support.ts`).
-- `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. An agent proving a change
-  runs the touched plugins' groups, and runs the whole self-test only when the user asks for it, since a whole run
-  takes half an hour or more: `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
+- `npm run selftest` is the agent's loop, run filtered to what the change touches, which the user allows any time:
+  `--plugin <id>` for each touched plugin, or `--group <name>` for the touched groups. A whole run runs every script, several
+  minutes of a full Electron app against well under one for a plugin, so it runs only when the user asks for one in
+  the current turn; a merge, a re-check after a fix and a final
+  pass all run filtered too. `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
   give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
   it or bare for that name in every script (a name several scripts share usually needs its `<plugin>: ` prefix, since a
   bare name that cuts an earlier script short is refused), together with the groups before it in its script, since a
@@ -976,8 +1001,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
-  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-heavy/main/selftest-script.ts` for
-  Heavy, `src/plugins/workflow-light/main/selftest-script.ts` for Light, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
+  Large, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)

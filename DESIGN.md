@@ -246,14 +246,14 @@ The keyboard is first; the mouse works everywhere.
     its own in Notes. Out of scope it hides in place, keeping its space.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
     Not applicable x, Notes a).
-  - **Box hint:** a key that acts on a box or a pane, on the focused box's frame (`⌃P ⌃N`) or in
+  - **Box hint:** a key that acts on a box or a pane, on the focused box's frame (`⇧⇥ ⇥`) or in
     the pane's header (`/ filter`, `a new`). The chat composer's status line holds the transcript's
     keys as box hints with no labels (`J K V y`), after the box's labelled `i` and `a`.
 - **Hints show for the scope in force:** a hint whose scope is not the one keys fire in hides and
   keeps its space, so moving between panes never shifts the layout; a hint for a bind in every
   scope (tabs, sessions) always shows. In a chat pane's tab bar a key with no target takes no
-  space, so unfocused panes' bars stay short. The keys plugin's `showHints` setting removes them all,
-  their space included (`"keys": { "showHints": false }` in `settings.json`).
+  space, so unfocused panes' bars stay short, and a session holding one tab shows no tab strip.
+  The keys plugin's `showHints` setting removes them all, their space included (`"keys": { "showHints": false }` in `settings.json`).
 - **Vim's own keys show in help only:** `j`/`k`, `gg`/`G`, `h`/`l` on a tree, Enter on a row, Esc,
   and the `⌃J`/`⌃K` scroll keys work the same on every list and pane, so a hint for them is
   noise. Leader sequences show in which-key.
@@ -436,17 +436,22 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
   under `640px` and by `Space b h`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
   chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
-  `border-subtle` line parts the sections. Main agent holds the dock, Plan the workflow side pane, Skills one row per
-  skill and agent (the name in mono, a Tag for `main` or the subagent), and Session one row per fact (a dim label, its
-  value ellipsized). While the hub is not visible, the composer's **activity line** shows the dock's header on one line,
+  `border-subtle` line parts the sections. The hub opens on the Session header, which has no title or chevron: the
+  repo in `text-14` semibold with the branch beside it (a `git-branch` icon, the name in `text-11` mono, `fg-secondary`),
+  the folder under them in `text-11` mono `fg-tertiary`, then Tags for each worktree (`accent`), the harness and the
+  model · effort (neutral), each ellipsized at the hub's width. Main agent holds the dock, Plan the workflow side pane,
+  Skills a chip per skill (the name in `text-11` mono on `card-background` under a `border-subtle` hairline, `radius-sm`)
+  grouped under each namespace in `text-11` `fg-tertiary`, and Context the breakdown, its rows the largest five until
+  its `fg-link` `+ 3 more` line shows them all. While the hub is not visible, the composer's **activity line** shows the dock's header on one line,
   or its finished line; while the hub is visible and the turn runs, the transcript's **turn line** shows that header
   under the last entry in `fg-tertiary`. While the session
   works on a turn, the dock shows a header (the turn's time as `m:ss` in tabular numerals and a state word,
   `1:05 Working…`), a `radius-md` card listing the main agent's latest three tool calls in mono (the newest in `fg`,
-  the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts, dim
-  (`Read 3 Bash 2 Edit 1`). When the turn ends, the dock shrinks to one dim `fg-tertiary` line, such as
-  `Done · 1m 05s · $0.57 · Bash 6 · Read 2`, its time compact in tabular numerals, and keeps it until the user sends
-  the next message; with no finished turn to show it takes no space. While the session compacts, the dock's header
+  the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts as chips, each
+  the tool's name in `fg-secondary` and its count in semibold `fg` tabular numerals on `card-background`, `radius-sm`,
+  `text-11`. When the turn ends, the dock shrinks to one dim `fg-tertiary` line, such as `Done · 1m 05s · $0.57`, its
+  time compact in tabular numerals, over the same chips, and keeps them until the user sends the next message; the
+  composer's activity line adds the counts to its line instead (`Done · 1m 05s · $0.57 · Bash 6 · Read 2`); with no finished turn to show it takes no space. While the session compacts, the dock's header
   reads `0:06 Compacting…` with the trigger after it in `fg-secondary`, ellipsized when narrow (`auto · cache cold · 182k`, `/compact`,
   `autocompact`), over a thin indeterminate bar in `status-running`, and no tool card. A message held for a compaction is
   a pending row reading `sends after compaction · ⌃C skips`. A finished compaction leaves a divider in the
@@ -492,12 +497,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   message under it in `status-error`. A Plugins row ends in the plugin's state, and a plugin that running plugins need,
   or Settings itself, carries a neutral Tag with the reason before it, ellipsized when the row is too narrow and whole
   in its tooltip. A file that fails its check shows an error Card at the section's top.
-- **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Light's, Medium's or Heavy's
-  own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (L, M
-  or H) in the plugin token `--wg-workflow-light-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)
-  or `--wg-workflow-heavy-badge` (`status-warning`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
+- **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Small's, Medium's or Large's
+  own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (S, M
+  or L) in the plugin token `--wg-workflow-small-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)
+  or `--wg-workflow-large-badge` (`status-warning`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
   `duration-pulse`, while running; `success`, opening on a check, when done; neutral while paused or ready), unless the
-  row's label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
+  row's label says it, and Large's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
   workflow started draws one error Tag, `No workflow`, in `status-error`, and while the session's row holds a running
   activity (chat's working: a turn, subagent or background task running) the chip ends on a running `Working` Tag,
   pulsing, unless its stage tag is already running. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a
@@ -506,11 +511,11 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status
   mark and line instead. Every stage's strip keeps the height of a line
   holding the action and starts on the composer's left edge; an idle session draws no strip. The side
-  pane sits beside the transcript from the first read of a plan (Heavy) or the agent's first checklist: the status mark and line (pending in `fg-tertiary`,
+  pane sits beside the transcript from the first read of a plan (Large) or the agent's first checklist: the status mark and line (pending in `fg-tertiary`,
   running in `status-running`, ready in `accent`, paused in `status-warning`, done in `status-success`), the stage's
-  detail, a progress meter, the checklist and every action as buttons. Heavy's checklist, titled `Plan`, folds finished waves into one
+  detail, a progress meter, the checklist and every action as buttons. Large's checklist, titled `Plan`, folds finished waves into one
   toggle row, shows the current wave under its header with a mark per task (filled once done), and lists later waves
-  one row each under `Up next`, all on the pane's left edge. Light's and Medium's pane, titled `Checklist`, draws the status
+  one row each under `Up next`, all on the pane's left edge. Small's and Medium's pane, titled `Checklist`, draws the status
   mark and line, a `<checked>/<total>` line, the progress meter and one flat list with a mark per item, and no actions. An idle session, a session with no plan or checklist and a hidden pane draw no pane. A
   disabled action draws disabled.
 - **Floating:** pickers (the leader search's rows included), help and dialogs use the floating material with `row-list` rows
@@ -544,7 +549,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-heavy-strip-*`, `workflow-heavy-side-pane-hidden`, `workflow-light-*` and `workflow-medium-*`). The
+  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-large-strip-*`, `workflow-large-side-pane-hidden`, `workflow-small-*` and `workflow-medium-*`). The
   gallery's and the keys plugin's main parts hand no self-test script, so forms' script saves the gallery's pages and
   the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer

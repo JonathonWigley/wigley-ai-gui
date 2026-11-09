@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { pageKeysFor, vimTokenForPageKey } from './key-notation';
+import { isChordKeys, pageKeysFor, vimTokenForPageKey } from './key-notation';
 
 const NAMED_KEYS: [vimToken: string, pageKey: string][] = [
   ['<Space>', ' '],
   ['<CR>', 'Enter'],
   ['<Esc>', 'Escape'],
-  ['<Tab>', 'Tab'],
   ['<BS>', 'Backspace'],
   ['<lt>', '<'],
   ['<Bslash>', '\\'],
@@ -23,14 +22,19 @@ describe('pageKeysFor', () => {
     ['<Bar>', '|'],
     ['<cr>', 'Enter'],
     ['<return>', 'Enter'],
+    ['<tab>', '<Tab>'],
+    ['<TAB>', '<Tab>'],
+    ['<s-tab>', '<S-Tab>'],
+    ['<S-tab>', '<S-Tab>'],
   ])('converts the spelling %s to %s', (vimToken, pageKey) => {
     expect(pageKeysFor(vimToken, '<Space>')).toEqual([pageKey]);
   });
 
   it('keeps chords and single characters as written', () => {
-    expect(pageKeysFor('<A-o><D-Enter><A-S-o>gG', '<Space>')).toEqual([
+    expect(pageKeysFor('<A-o><D-Enter><Tab><A-S-o>gG', '<Space>')).toEqual([
       '<A-o>',
       '<D-Enter>',
+      '<Tab>',
       '<A-S-o>',
       'g',
       'G',
@@ -62,5 +66,20 @@ describe('vimTokenForPageKey', () => {
   it('returns a chord or one character unchanged', () => {
     expect(vimTokenForPageKey('<A-o>')).toBe('<A-o>');
     expect(vimTokenForPageKey('k')).toBe('k');
+  });
+});
+
+describe('isChordKeys', () => {
+  it.each([
+    ['<C-n>', true],
+    ['<Tab>', true],
+    ['<tab>', true],
+    ['<s-Tab>', true],
+    ['<Leader>', false],
+    ['g<Tab>', false],
+    ['<Esc>', false],
+    ['k', false],
+  ])('%s is one chord: %s', (keys, expected) => {
+    expect(isChordKeys(keys, '<Space>')).toBe(expected);
   });
 });

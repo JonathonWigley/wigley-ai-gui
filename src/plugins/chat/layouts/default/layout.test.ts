@@ -13,6 +13,7 @@ import type {
   PartView,
   PickerRowKit,
   QueuedMessageInput,
+  SessionFactsInput,
   SignInKit,
   StatusLineKit,
   StepInput,
@@ -810,7 +811,7 @@ function drawWorking(input: WorkingInput): PartView<WorkingInput> {
 }
 
 // The part's root classes, then the header as its pieces, then each box line
-// and the counts as their classes and text.
+// as its classes and text, then the count chips as each name and count.
 function workingLines(view: PartView<WorkingInput>): string[] {
   const block = asFake(view.element);
   return [
@@ -818,6 +819,12 @@ function workingLines(view: PartView<WorkingInput>): string[] {
     ...block.children.flatMap((child) => {
       if (child.className === 'chat-working-head') {
         return [describeChildren(child).join(' ')];
+      }
+      if (child.className === 'chat-working-counts') {
+        const chips = child.children.map((chip) =>
+          chip.children.map((piece) => piece.textContent).join(' '),
+        );
+        return [`counts:${chips.join(' ')}`];
       }
       return child.className === 'chat-working-box'
         ? describeChildren(child)
@@ -882,7 +889,7 @@ describe('default chat layout working', () => {
         'div.chat-working-action:Read c.ts',
         'div.chat-working-action is-failed:Grep todo',
         'div.chat-working-action is-current:Bash npm test',
-        'div.chat-working-counts:Read 3 Bash 2 Edit 1 Grep 1',
+        'counts:Read 3 Bash 2 Edit 1 Grep 1',
       ],
     },
     {
@@ -892,7 +899,7 @@ describe('default chat layout working', () => {
         'chat-working',
         'span.chat-working-time:1:02:05 span.chat-working-state:Waiting…',
         'div.chat-working-action is-current:Read chat-kit.ts',
-        'div.chat-working-counts:Read 1',
+        'counts:Read 1',
       ],
     },
     {
@@ -902,7 +909,7 @@ describe('default chat layout working', () => {
         'chat-working',
         'span.chat-working-time:0:59 span.chat-working-state:Writing…',
         'div.chat-working-action is-current:Bash npm test',
-        'div.chat-working-counts:Bash 1',
+        'counts:Bash 1',
       ],
     },
     {
@@ -928,7 +935,8 @@ describe('default chat layout working', () => {
       ),
       lines: [
         'chat-working is-done',
-        'div.chat-working-done:Done · 65s · $0.57 · Bash 2 · Read 1',
+        'div.chat-working-done:Done · 65s · $0.57',
+        'counts:Bash 2 Read 1',
       ],
     },
     {
@@ -936,7 +944,8 @@ describe('default chat layout working', () => {
       input: doneTurn('max_tokens', [toolStep('Read', 'a.ts')], 0, 4000, null),
       lines: [
         'chat-working is-done',
-        'div.chat-working-done:max_tokens · 4s · Read 1',
+        'div.chat-working-done:max_tokens · 4s',
+        'counts:Read 1',
       ],
     },
     {
@@ -944,7 +953,8 @@ describe('default chat layout working', () => {
       input: doneTurn('success', [toolStep('Bash', 'ls')], 0, 1000, null),
       lines: [
         'chat-working is-done',
-        'div.chat-working-done:Done · 1s · Bash 1',
+        'div.chat-working-done:Done · 1s',
+        'counts:Bash 1',
       ],
     },
     {
@@ -1113,7 +1123,8 @@ describe('default chat layout working', () => {
     expect(view.element).toBe(block);
     expect(workingLines(view)).toEqual([
       'chat-working is-done',
-      'div.chat-working-done:Done · 5s · Bash 1',
+      'div.chat-working-done:Done · 5s',
+      'counts:Bash 1',
     ]);
   });
 });
@@ -1278,6 +1289,13 @@ function fakeSurfaceKit() {
     actions: (parent: HTMLElement) => part(parent, 'div', 'actions'),
     keyHint: (parent: HTMLElement, command: string) =>
       part(parent, 'span', `hint:${command}`),
+    tag(parent: HTMLElement, text: string, tone = 'neutral') {
+      const tag = part(parent, 'span', `tag:${tone}`);
+      tag.textContent = text;
+      return tag;
+    },
+    icon: (parent: HTMLElement, name: string) =>
+      part(parent, 'span', `icon:${name}`),
   };
   const kit = parts as unknown as ComposerKit &
     StatusLineKit &
@@ -1548,52 +1566,101 @@ describe('default chat layout surfaces', () => {
     ]);
   });
 
-  it('sessionFacts_Default_DrawsARowPerFactWithTheWholeValueAsTitle', () => {
-    const { kit } = fakeSurfaceKit();
-
-    const view = drawSurface(
-      'sessionFacts',
-      {
-        facts: [
-          { label: 'Project', value: 'app' },
-          { label: 'Folder', value: '~/dev/app' },
+  it.each<{
+    case: string;
+    input: SessionFactsInput;
+    shown: { title: string[]; folder: string; tags: string[] };
+  }>([
+    {
+      case: 'EveryFact_RepoBranchFolderAndATagEach',
+      input: {
+        repo: 'app',
+        branch: 'main',
+        folder: '~/dev/app',
+        worktrees: ['app-fix'],
+        harness: 'claude',
+        modelEffort: 'Opus 5 · high',
+      },
+      shown: {
+        title: ['span.chat-session-repo:app', 'span.chat-session-branch:'],
+        folder: '~/dev/app',
+        tags: [
+          'tag:accent:app-fix',
+          'tag:neutral:claude',
+          'tag:neutral:Opus 5 · high',
         ],
       },
-      kit,
-    );
+    },
+    {
+      case: 'NoBranchWorktreeOrModel_RepoFolderAndHarnessOnly',
+      input: {
+        repo: 'app',
+        branch: null,
+        folder: '~/dev/app',
+        worktrees: [],
+        harness: 'claude',
+        modelEffort: null,
+      },
+      shown: {
+        title: ['span.chat-session-repo:app'],
+        folder: '~/dev/app',
+        tags: ['tag:neutral:claude'],
+      },
+    },
+  ])('sessionFacts_Default_$case', ({ input, shown }) => {
+    const { kit } = fakeSurfaceKit();
 
-    const rows = asFake(view.element).children.map(
-      ({ children: [label, value] }) => [
-        label.textContent,
-        value.textContent,
-        value.title,
-      ],
-    );
-    expect(rows).toEqual([
-      ['Project', 'app', 'app'],
-      ['Folder', '~/dev/app', '~/dev/app'],
-    ]);
+    const view = drawSurface('sessionFacts', input, kit);
+
+    const [title, folder, tags] = asFake(view.element).children;
+    expect({
+      title: describeChildren(title),
+      folder: folder.textContent,
+      tags: tags.children.map(
+        (tag) => `${tag.dataset.part}:${tag.textContent}`,
+      ),
+    }).toEqual(shown);
   });
 
-  it('sessionFacts_Default_UpdatePatchesRowsByLabel', () => {
+  it('sessionFacts_Default_UpdateRedrawsInTheSameHeader', () => {
     const { kit } = fakeSurfaceKit();
-    const project = { label: 'Project', value: 'app' };
-    const branch = { label: 'Branch', value: 'main' };
-    const folder = { label: 'Folder', value: '~/dev/app' };
-    const view = drawSurface('sessionFacts', { facts: [project, folder] }, kit);
-    const holder = asFake(view.element);
-    const [projectRow, folderRow] = holder.children;
+    const facts: SessionFactsInput = {
+      repo: 'app',
+      branch: 'main',
+      folder: '~/dev/app',
+      worktrees: [],
+      harness: 'claude',
+      modelEffort: null,
+    };
+    const view = drawSurface('sessionFacts', facts, kit);
+    const header = view.element;
 
-    view.update?.({ facts: [project, branch, folder] });
-    const branchRow = holder.children[1];
+    view.update?.({ ...facts, branch: 'feature' });
 
-    expect(holder.children).toEqual([projectRow, branchRow, folderRow]);
-    expect(branchRow.children[1].textContent).toBe('main');
+    expect(view.element).toBe(header);
+    const [title] = asFake(header).children;
+    const [, branchName] = title.children[1].children;
+    expect(branchName.textContent).toBe('feature');
+  });
 
-    view.update?.({ facts: [project, folder] });
+  it('sessionFacts_Default_UnchangedUpdateKeepsEveryChild', () => {
+    const { kit } = fakeSurfaceKit();
+    const facts: SessionFactsInput = {
+      repo: 'app',
+      branch: 'main',
+      folder: '~/dev/app',
+      worktrees: ['app-fix'],
+      harness: 'claude',
+      modelEffort: null,
+    };
+    const view = drawSurface('sessionFacts', facts, kit);
+    const before = [...asFake(view.element).children];
 
-    expect(holder.children).toEqual([projectRow, folderRow]);
-    expect(branchRow.parentNode).toBeNull();
+    view.update?.({ ...facts, worktrees: ['app-fix'] });
+
+    expect(
+      asFake(view.element).children.map((child, i) => child === before[i]),
+    ).toEqual([true, true, true]);
   });
 
   it('imageViewer_Default_UpdateMovesCounterAndHidesItForOneAndTheRemoveHintWhenNotRemovable', () => {

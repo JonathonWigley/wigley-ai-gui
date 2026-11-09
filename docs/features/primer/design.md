@@ -137,7 +137,7 @@ right divider, the card its left one).
 | `C` | card | edit the task's comment (task card; from an item card, its task's card) |
 | `a` | card | add an item (task card; from an item card, its task's card) |
 | `i` | card | edit the card's first box: the Feature card's name, an extra task's name; on any other task card the add-item box (the comment once the task is full), as `a` (`C`); on an item card its comment, as `c` |
-| `<C-n>` / `<C-p>` | card, box | next / previous box |
+| `<Tab>` / `<S-Tab>` | card, box | next / previous box |
 | `<Esc>` | box | leave the box |
 | `<C-j>` / `<C-k>`, `<C-S-j>` / `<C-S-k>` | card, review | scroll a line / half a page |
 | `<Leader><Leader>` | tasks, items, card, box | open the review |

@@ -28,7 +28,7 @@ const DEFAULT_LAYOUT = {
   chip: (parent, _input, kit) => ({ element: kit.el(parent, 'div', 'd') }),
 } as CompleteLayout;
 
-// A draw over the manifest `workflow-light` whose api records the show's options.
+// A draw over the manifest `workflow-small` whose api records the show's options.
 function setUp() {
   const shows: ShowLayoutOptions<Layout>[] = [];
   const api: PagePluginApi = {
@@ -40,9 +40,9 @@ function setUp() {
     },
   };
   const options: WorkflowDrawOptions = {
-    manifest: { id: 'workflow-light', commands: {} },
+    manifest: { id: 'workflow-small', commands: {} },
     defaultLayout: DEFAULT_LAYOUT,
-    defaultStylesheet: 'light.css',
+    defaultStylesheet: 'small.css',
     userLayout: () => 'mine',
     sideTitle: 'List',
   };
@@ -81,7 +81,7 @@ describe('createWorkflowDraw', () => {
     expect(shows).toHaveLength(1);
     expect(shows[0].read).toBe(readWorkflowLayout);
     expect(shows[0].defaultLayout).toBe(DEFAULT_LAYOUT);
-    expect(shows[0].defaultStylesheet).toBe('light.css');
+    expect(shows[0].defaultStylesheet).toBe('small.css');
     expect(shows[0].userLayout()).toBe('mine');
   });
 
@@ -110,7 +110,7 @@ describe('createWorkflowDraw', () => {
 
     const drawn = draw.chip(asHtml(new FakeElement('div')), CHIP_INPUT, 's1');
 
-    expect(asFake(drawn.element).dataset.layoutOwner).toBe('workflow-light');
+    expect(asFake(drawn.element).dataset.layoutOwner).toBe('workflow-small');
   });
 
   it('SideTitle_ComesFromOptions', () => {

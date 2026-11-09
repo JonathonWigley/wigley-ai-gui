@@ -159,7 +159,7 @@ describe('parseUserKeymap', () => {
     expect(() => parse({ binds })).toThrow(/binds\[0\].*<F5>/);
   });
 
-  it.each(['<A-o>', '<', '<lt>', 'ab'])(
+  it.each(['<A-o>', '<', '<lt>', 'ab', '<Tab>', '<tab>'])(
     'parseUserKeymap_LeaderNotOneKey_Throws (%s)',
     (written) => {
       expect(() => parse({ leader: written })).toThrow('"leader"');

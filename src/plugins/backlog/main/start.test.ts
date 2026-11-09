@@ -681,6 +681,29 @@ describe('backlog main part', () => {
     expect(backlog.git.worktrees).toHaveBeenCalledTimes(1);
   });
 
+  it('load_CalledWhileOneRuns_LaterCallsShareOneNextLoad', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    let releaseFirst = (): void => undefined;
+    backlog.git.topLevel.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFirst = () => resolve(CLONE);
+        }),
+    );
+    const first = backlog.invoke<BacklogRead>('load');
+    await vi.waitFor(() => expect(backlog.git.topLevel).toHaveBeenCalled());
+
+    const later = [1, 2, 3].map(() => backlog.invoke<BacklogRead>('load'));
+    releaseFirst();
+    const laterReads = await Promise.all(later);
+    await first;
+
+    expect(backlog.git.topLevel).toHaveBeenCalledTimes(2);
+    expect(new Set(laterReads).size).toBe(1);
+  });
+
   it('load_PlanCopyFails_LoggedAndSkipped', async () => {
     const backlog = startBacklog(
       [entry('plan', PLAN, { feature: 'f', checked: 0, total: 1 })],

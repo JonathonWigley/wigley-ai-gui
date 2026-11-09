@@ -234,10 +234,10 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Row title takes a local command's text** — *agent-ready*: a new session whose first message is a control
   command (`/effort auto`, seen in a live run) names its row after that command, though it starts no conversation.
   The first-message title source should wait for a message that reaches the model.
-- **`<C-n>` in a forms round leaves the focused box off screen** — *agent-ready*: the box takes focus at y900 in a
+- **`<Tab>` in a forms round leaves the focused box off screen** — *agent-ready*: the box takes focus at y900 in a
   700px window and the pane does not scroll, so the user types into a box they cannot see. `focusBoxItem` reads the same
   on the base (`7001a175`), so it looks old, not proved. Steps: open a forms round with the notes box on a finding, size
-  the window to 700px high, press `<C-n>`, then read the box's rect (`.cm-focused`) or take a screenshot; the box lies
+  the window to 700px high, press `<Tab>`, then read the box's rect (`.cm-focused`) or take a screenshot; the box lies
   below the window until the caret moves.
 - **`forms.choose` with an arg through `runCommand` across the Bridge is not proved live** — *agent-ready*:
   `window.wigley.runCommand("forms.choose", 2)` resolved with no `[forms]` line, with the round's row not the one
@@ -378,6 +378,9 @@ What Windows support and installers need.
   privacy setting. The likely cause, not yet confirmed, is that the app is ad hoc signed with no team ID, so macOS
   ties the folder permission to one build and each `npm run install-app` can drop it for every running agent. Confirm
   the cause, then decide which signing identity `install-app` uses.
+- **The app install waits while `main` holds half-finished work** — *agent-ready*: a half-finished state on `main`,
+  such as an in-progress merge, blocks `npm run install-app`: one install rebuilt mid-merge and broke. Make the
+  install wait until `main` is clean of it.
 - **Native window vibrancy** — *needs a feature plan*: macOS `vibrancy` and Windows 11 mica behind a window adapter,
   in place of the CSS backdrop under L1 glass (`docs/features/ui-design/design.md`).
 ## Plugin extension points
@@ -393,8 +396,8 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   lists in `src/plugins/{main,page,manifests}.ts` are what block it. It builds on a host that starts, stops and restarts
   parts live (`PluginHost.start`, `stop`, `restart`, and the enable switch in `src/main/plugins/plugin-switch.ts`) and
   on the closed bridge (`window.wigley.claim()`). It also adds `reload(id, part)` (`src/shared/plugin-host.ts`), a
-  reload with new code: stop the part and its dependents, import the new module, start them again. A reload leaves the
-  dependents' view of the provider's exports stale, as a restart does not (it takes the dependents with it).
+  reload with new code: stop the part and its dependents, import the new module, start them again, so no dependent
+  keeps the old run's exports. Planned in `docs/features/plugin-framework/plan-runtime-loader/`.
 - **Forms item kinds as registrations** — *agent-ready*: forms item kinds register as one unit (`registerKind`, main
   and page, disposable), each declaring its wire keys (`argsKey`, `bodyKey`, `resultKey`,
   `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /
@@ -506,14 +509,16 @@ User-facing features, those other work builds on first.
 - **Usage's cache mark has no preview route** — *needs a feature plan*: `rowCache` draws nothing without a cache expiry,
   and no `Space z l` sample holds usage, so a usage layout author cannot see the mark in the app. Decide between a usage
   preview and seeding chat's preview session (`AGENTS.md`: a view needing agent data has a preview sample).
-- **Judge Heavy's agent count from the run log** — *needs a feature plan*: does Heavy use more agents than its results
+- **Judge Large's agent count from the run log** — *needs a feature plan*: does Large use more agents than its results
   earn? The evidence is `runs.jsonl` in the `workflow` plugin's data folder of the stable app (`plugins/workflow/` in the
   app's user data folder), one JSON object per finished workflow with `at`, `sessionId`, `projectDir`, `workflow`,
-  `movedUpFrom`, `activeMs`, `costUsd` and `fixCycles`: compare Heavy's lines against Medium's. Plan it when the file
-  holds 20 Heavy lines, so that one odd run does not set the answer. The options: keep Heavy's agents as they are;
+  `movedUpFrom`, `activeMs`, `costUsd` and `fixCycles`: compare Large's lines against Medium's. Plan it when the file
+  holds 20 Large lines, so that one odd run does not set the answer. The options: keep Large's agents as they are;
   reduce the plan drafters and cold readers in `wigley:feature`; reduce the review lanes in `wigley:review`. It waited
-  because of `docs/features/workflow-levels/design.md` § Decisions, "Heavy stays exactly as it was": published guidance
+  because of `docs/features/workflow-levels/design.md` § Decisions, "Large stays exactly as it was": published guidance
   against many agents on coding work is vendor evidence, and the log gives the user's own.
+- **An image, video, HTML and artifact viewer** — *needs a feature plan*: a viewer in the app, so a render or page
+  the agent asks the user to look at is visible inside the gui.
 
 ## Code cleanup
 
@@ -625,7 +630,7 @@ because the earlier items rewrite many of these tests anyway.
   have the script open the session it waits on.
 - **A failing worktree list goes unreported** — *agent-ready*: `planCopies` (`src/shared/plan-copies.ts`) falls back to
   the plan's own copy, with no log, when `git.worktrees` rejects, so a list that keeps failing hides every worktree
-  copy from Heavy and Backlog in silence. Log the rejection once per clone.
+  copy from Large and Backlog in silence. Log the rejection once per clone.
 - **Backlog reloads once per worktree edit** — *agent-ready*: each change under a linked worktree's `docs/features`
   sends `changed`, and the Backlog page runs a full, uncoalesced load for each one (`src/plugins/backlog/main/start.ts`
   `watchWorktrees`). Coalesce the page's `changed` reloads if a burst of worktree edits proves slow.

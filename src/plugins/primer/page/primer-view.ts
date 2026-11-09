@@ -781,7 +781,7 @@ function mountTasksColumn(
   const foot = element('footer', 'primer-tasks-foot');
   foot.append(
     textButton('Review', () => run(primerCommand('openReview')), {
-      variant: 'ghost',
+      variant: 'secondary',
       hint: reviewKeys,
     }),
   );

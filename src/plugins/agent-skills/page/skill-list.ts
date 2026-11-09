@@ -61,7 +61,7 @@ function mainAgentSkillNames(roster: Roster): string[] {
 
 // The list is drawn directly into `parent`, leaving it empty with no skills, so
 // the section hides. Every subagent tool call changes the roster, so a change
-// that leaves the list as it was draws nothing, keeping a row's open tooltip.
+// that leaves the list as it was draws nothing, keeping a chip's open tooltip.
 // After a draw it logs `skills in <name>: <skill>, …` when the text differs
 // from the last logged for that session, and `none` when the
 // list empties; a session that has listed no skill logs nothing.

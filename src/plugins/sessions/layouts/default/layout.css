@@ -417,6 +417,12 @@
   margin: 0;
 }
 
+/* A session holding one tab (Chat alone) shows no strip: there is nothing to
+   switch to. A second tab, such as docs-session-tab's, brings it back. */
+.ui-tabs.session-tabs:has(> .ui-tab:only-child) {
+  display: none;
+}
+
 /* A tab draws its icon alone: `fg-secondary` at rest, `fg` on hover or
    while active. */
 .session-tab-icon {

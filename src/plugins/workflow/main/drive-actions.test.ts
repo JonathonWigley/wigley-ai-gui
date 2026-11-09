@@ -51,7 +51,7 @@ async function startEngine() {
 
 describe('workflow drive actions', () => {
   it.each([
-    { name: 'Light', step: 'build', accepted: true, stage: 'build' },
+    { name: 'Small', step: 'build', accepted: true, stage: 'build' },
     { name: 'UnknownStep', step: 'review', accepted: false, stage: 'scope' },
   ])('reportStep_$name', async ({ step, accepted, stage }) => {
     const { engine, drive } = await startEngine();

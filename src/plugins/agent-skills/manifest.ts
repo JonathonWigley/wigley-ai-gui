@@ -1,8 +1,8 @@
 import { definePlugin } from '../../shared/define-plugin';
 
-// The session hub's Skills section: the page draws one row per skill in chat's side part, through the
-// `layout` setting's agent-skills layout, reading each session's roster from agents' `agents.rosters` slot. It names
-// `sessions` for the names in its page log and its self-test's launch.
+// The session hub's Skills section: the page draws a chip per skill, grouped by namespace, in chat's side part,
+// through the `layout` setting's agent-skills layout, reading each session's roster from agents' `agents.rosters` slot.
+// It names `sessions` for the names in its page log and its self-test's launch.
 export const agentSkillsManifest = definePlugin({
   id: 'agent-skills',
   label: 'Agent skills',

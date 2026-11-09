@@ -9,6 +9,7 @@ import {
   globalShortcut,
   ipcMain,
   nativeTheme,
+  session,
   shell,
   type WebContents,
 } from 'electron';
@@ -141,6 +142,7 @@ import { createPluginChannels } from './plugins/plugin-channel';
 import { createPluginSwitch, type PluginSwitch } from './plugins/plugin-switch';
 import { addPluginSwitchActions } from './plugins/plugin-switch-drive';
 import { nativeImageEncoder } from './images/native-image-encoder';
+import { limitRuns } from './processes/limited-processes';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
@@ -368,7 +370,14 @@ const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = platform.os === 'windows' ? windowsPaths : posixPaths;
-const git = createProcessGit({ processes, files, paths });
+// Git runs at most this many at once, so a burst of reads cannot pile up
+// exited children faster than main's event loop reaps them.
+const MAX_GIT_RUNS = 4;
+const git = createProcessGit({
+  processes: limitRuns(processes, MAX_GIT_RUNS),
+  files,
+  paths,
+});
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -1235,6 +1244,13 @@ function startApp() {
       failStart(error);
       return;
     }
+    // The page loads hundreds of modules from the dev server, and Chromium
+    // wrote each one into the profile's HTTP and code caches on every start:
+    // about 2,300 files a run, 1.5 GB kept, and Spotlight indexing the churn.
+    // A run reuses none of it: a dev start's server port and module URLs
+    // change between starts, and a packaged drive run's profile is new. The code cache goes off once the app is ready
+    // (`disableCodeCache`).
+    app.commandLine.appendSwitch('disable-http-cache');
   }
   // A second start (a relay starting the app) shows the window without
   // taking the user's focus.
@@ -1249,6 +1265,9 @@ function startApp() {
       const shellPath = await loginShellPath;
       if (shellPath !== null) {
         process.env.PATH = shellPath;
+      }
+      if (runMode !== 'live') {
+        disableCodeCache();
       }
       const inputs = await readStartInputs();
       const { store, userConfig, applied } = await loadConfig(inputs.homeDir);
@@ -1297,6 +1316,13 @@ function startApp() {
       app.quit();
     }
   });
+}
+
+// Turns the V8 code cache off for the default session: Electron uses no code
+// cache when it cannot create the folder it is given, and no folder can be
+// made under the null device.
+function disableCodeCache() {
+  session.defaultSession.setCodeCachePath(path.join(os.devNull, 'code-cache'));
 }
 
 // The user's app, in the app instance's own user data folder. The

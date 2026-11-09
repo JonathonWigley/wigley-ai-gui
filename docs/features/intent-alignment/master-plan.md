@@ -30,7 +30,9 @@ When an item lands, tick its box here and remove it from `followups.md`, in the 
 
 Plans: Waves 0, 2 and 3 have landed and their plan folders are gone. The settled design is
 `plugin-framework/design.md` § Commands and state. Wave 4 steps 1 and 2 have landed and their plan folder is gone; the
-design is `plugin-framework/design.md` § Hot reload (Wave 4). Step 3, the runtime loader, needs its own plan.
+design is `plugin-framework/design.md` § Hot reload (Wave 4). Wave 1's plan folder is gone too. Step 3, the runtime
+loader, is planned in `plugin-framework/plan-runtime-loader/`; its design is `plugin-framework/design.md` § Runtime
+loader (Wave 4 step 3).
 
 ## Order
 

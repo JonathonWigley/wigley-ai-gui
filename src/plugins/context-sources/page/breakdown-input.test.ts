@@ -28,8 +28,11 @@ const EVENT: ContextBreakdownAgentEvent = {
 
 const READERS = {
   isOpen: (id: string) => id === 'tools',
+  showsAll: false,
   showPath: (path: string) => path.replace('/home/u', '~'),
 };
+
+const NO_TOGGLES = { toggle: () => {}, toggleShowsAll: () => {} };
 
 describe('breakdownSummary', () => {
   it.each([
@@ -42,7 +45,7 @@ describe('breakdownSummary', () => {
 
 describe('breakdownInput', () => {
   it('event_SharesOfContext_PathsShown_OpenRead', () => {
-    const input = breakdownInput(EVENT, READERS, () => {});
+    const input = breakdownInput(EVENT, READERS, NO_TOGGLES);
 
     expect(input.sources).toEqual([
       {
@@ -90,7 +93,7 @@ describe('breakdownInput', () => {
     ],
     ['nothing deferred', { deferredTokens: 0 }, 'deferred', null],
   ] as const)('%s', (_case, change, field, expected) => {
-    const input = breakdownInput({ ...EVENT, ...change }, READERS, () => {});
+    const input = breakdownInput({ ...EVENT, ...change }, READERS, NO_TOGGLES);
 
     expect(input[field]).toEqual(expected);
   });

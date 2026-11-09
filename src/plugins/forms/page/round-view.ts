@@ -442,7 +442,7 @@ function buildRailFoot(
 ) {
   const command = formsCommand('openReview');
   const review = textButton('Review', () => deps.run(command), {
-    variant: 'ghost',
+    variant: 'secondary',
   });
   const reviewKeys = element('span');
   review.append(reviewKeys);

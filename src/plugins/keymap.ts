@@ -55,9 +55,12 @@ const formsPageChoices = DIGITS.map((digit) => ({
 }));
 
 // A text box holds focus only in the form's and the review's views, so its
-// binds fire in both; `<Leader><Leader>` fires on the form's page as well.
+// binds fire in both; `<Leader><Leader>` fires on the form's page as well, and
+// so do the answer keys, which still reach the item after Esc leaves the box.
 function formsBoxBinds(scope: 'forms.forms' | 'forms.review') {
-  return [
+  const answerWhere =
+    scope === 'forms.forms' ? ('both' as const) : ('box' as const);
+  const answerBinds = [
     ...DIGITS.map((digit) => ({
       keys: `<Leader>a${digit}`,
       command: 'forms.choose' as const,
@@ -65,11 +68,16 @@ function formsBoxBinds(scope: 'forms.forms' | 'forms.review') {
     })),
     { keys: '<Leader>ac', command: 'forms.clearChoice' as const },
     { keys: '<Leader>ax', command: 'forms.toggleNotApplicable' as const },
-    ...(scope === 'forms.review'
-      ? [{ keys: '<Leader><Leader>', command: 'forms.openReview' as const }]
-      : []),
-    { keys: '<Esc>', command: 'forms.leaveBox' as const },
-  ].map((bind) => ({ ...bind, scope, where: 'box' as const }));
+  ].map((bind) => ({ ...bind, scope, where: answerWhere }));
+  return [
+    ...answerBinds,
+    ...[
+      ...(scope === 'forms.review'
+        ? [{ keys: '<Leader><Leader>', command: 'forms.openReview' as const }]
+        : []),
+      { keys: '<Esc>', command: 'forms.leaveBox' as const },
+    ].map((bind) => ({ ...bind, scope, where: 'box' as const })),
+  ];
 }
 
 // The primer card and its review each scroll by a line and by half a page.
@@ -225,8 +233,7 @@ export const defaultKeymap = {
   binds: [
     // ── Windows and modes ──────────────────────────────────────────────────
     { keys: '<Leader>ks', scope: 'any', command: 'sessions.showMode' },
-    // Bound per scope, since forms, the primer, the Backlog editor and notes
-    // hold `<C-n>` as next box and a key cannot sit in `any` beside a scope.
+    // Bound per main view, so a dialog, picker or confirm keeps its own keys.
     ...(
       [
         'sessions.idle',
@@ -245,6 +252,15 @@ export const defaultKeymap = {
         'settings.leaderGroups',
         'settings.leaderItems',
         'gallery.gallery',
+        'forms.forms',
+        'forms.review',
+        'primer.tasks',
+        'primer.items',
+        'primer.card',
+        'primer.review',
+        'backlog.editor',
+        'notes.popup',
+        'notes.title',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -301,12 +317,12 @@ export const defaultKeymap = {
     {
       keys: '<Leader>wn',
       scope: 'any',
-      command: 'workflow-heavy.makeInNewSession',
+      command: 'workflow-large.makeInNewSession',
     },
-    { keys: '<Leader>wr', scope: 'any', command: 'workflow-heavy.resumeMake' },
-    { keys: '<Leader>wo', scope: 'any', command: 'workflow-heavy.openPlan' },
-    { keys: '<Leader>wt', scope: 'any', command: 'workflow-heavy.retro' },
-    { keys: '<Leader>wd', scope: 'any', command: 'workflow-heavy.dismiss' },
+    { keys: '<Leader>wr', scope: 'any', command: 'workflow-large.resumeMake' },
+    { keys: '<Leader>wo', scope: 'any', command: 'workflow-large.openPlan' },
+    { keys: '<Leader>wt', scope: 'any', command: 'workflow-large.retro' },
+    { keys: '<Leader>wd', scope: 'any', command: 'workflow-large.dismiss' },
     { keys: '<Leader>ws', scope: 'any', command: 'workflow.toggleSidePane' },
     {
       keys: '<Leader>wf',
@@ -375,8 +391,8 @@ export const defaultKeymap = {
     { keys: '<C-k>', scope: 'forms.forms', command: 'forms.lineUp' },
     { keys: '<C-S-j>', scope: 'forms.forms', command: 'forms.halfPageDown' },
     { keys: '<C-S-k>', scope: 'forms.forms', command: 'forms.halfPageUp' },
-    { keys: '<C-n>', scope: 'forms.forms', command: 'forms.nextBox' },
-    { keys: '<C-p>', scope: 'forms.forms', command: 'forms.prevBox' },
+    { keys: '<Tab>', scope: 'forms.forms', command: 'forms.nextBox' },
+    { keys: '<S-Tab>', scope: 'forms.forms', command: 'forms.prevBox' },
     ...formsPageChoices,
     { keys: 'x', scope: 'forms.forms', command: 'forms.toggleNotApplicable' },
     { keys: 'd', scope: 'forms.forms', command: 'forms.toggleDontAsk' },
@@ -410,8 +426,8 @@ export const defaultKeymap = {
     { keys: '<C-k>', scope: 'forms.review', command: 'forms.lineUp' },
     { keys: '<C-S-j>', scope: 'forms.review', command: 'forms.halfPageDown' },
     { keys: '<C-S-k>', scope: 'forms.review', command: 'forms.halfPageUp' },
-    { keys: '<C-n>', scope: 'forms.review', command: 'forms.nextBox' },
-    { keys: '<C-p>', scope: 'forms.review', command: 'forms.prevBox' },
+    { keys: '<Tab>', scope: 'forms.review', command: 'forms.nextBox' },
+    { keys: '<S-Tab>', scope: 'forms.review', command: 'forms.prevBox' },
     { keys: 'y', scope: 'forms.confirm', command: 'forms.confirmCancel' },
     { keys: 'n', scope: 'forms.confirm', command: 'forms.dismissConfirm' },
     { keys: '<Esc>', scope: 'forms.confirm', command: 'forms.dismissConfirm' },
@@ -435,8 +451,8 @@ export const defaultKeymap = {
     { keys: 'C', scope: 'primer.card', command: 'primer.editTaskComment' },
     { keys: 'a', scope: 'primer.card', command: 'primer.addItem' },
     { keys: 'i', scope: 'primer.card', command: 'primer.editFirstField' },
-    { keys: '<C-n>', scope: 'primer.card', command: 'primer.nextBox' },
-    { keys: '<C-p>', scope: 'primer.card', command: 'primer.prevBox' },
+    { keys: '<Tab>', scope: 'primer.card', command: 'primer.nextBox' },
+    { keys: '<S-Tab>', scope: 'primer.card', command: 'primer.prevBox' },
     ...primerScrollBinds('primer.card'),
     {
       keys: '<Leader><Leader>',
@@ -670,6 +686,7 @@ export const defaultKeymap = {
     { keys: 'o', scope: 'docs.conflict', command: 'docs.conflictOverwrite' },
     { keys: '<Esc>', scope: 'docs.conflict', command: 'docs.conflictCancel' },
     { keys: '<Tab>', scope: 'docs.box', command: 'docs.boxComplete' },
+    { keys: '<S-Tab>', scope: 'docs.box', command: 'docs.boxComplete' },
     { keys: '<CR>', scope: 'docs.box', command: 'docs.boxAccept' },
     { keys: '<Esc>', scope: 'docs.box', command: 'docs.boxCancel' },
     { keys: 'y', scope: 'docs.confirm', command: 'docs.confirmYes' },
@@ -772,9 +789,9 @@ export const defaultKeymap = {
     // A chord fires inside a box as well, so the editor's chords need no
     // `where`.
     { keys: '<D-Enter>', scope: 'backlog.editor', command: 'backlog.save' },
-    { keys: '<C-n>', scope: 'backlog.editor', command: 'backlog.nextField' },
+    { keys: '<Tab>', scope: 'backlog.editor', command: 'backlog.nextField' },
     {
-      keys: '<C-p>',
+      keys: '<S-Tab>',
       scope: 'backlog.editor',
       command: 'backlog.previousField',
     },
@@ -825,8 +842,8 @@ export const defaultKeymap = {
       where: 'box',
     },
     // A chord fires inside the body box as well.
-    { keys: '<C-n>', scope: 'notes.popup', command: 'notes.nextBox' },
-    { keys: '<C-p>', scope: 'notes.popup', command: 'notes.prevBox' },
+    { keys: '<Tab>', scope: 'notes.popup', command: 'notes.nextBox' },
+    { keys: '<S-Tab>', scope: 'notes.popup', command: 'notes.prevBox' },
     { keys: '<D-Enter>', scope: 'notes.popup', command: 'notes.sendFollowup' },
     // Leader binds fire on the page and in the body box in normal mode.
     { keys: '<Leader>nf', scope: 'notes.popup', command: 'notes.sendFollowup' },
@@ -841,8 +858,7 @@ export const defaultKeymap = {
     { keys: '<Esc>', scope: 'notes.title', command: 'notes.leaveBox' },
     { keys: '<CR>', scope: 'notes.title', command: 'notes.nextBox' },
     { keys: '<Tab>', scope: 'notes.title', command: 'notes.nextBox' },
-    { keys: '<C-n>', scope: 'notes.title', command: 'notes.nextBox' },
-    { keys: '<C-p>', scope: 'notes.title', command: 'notes.prevBox' },
+    { keys: '<S-Tab>', scope: 'notes.title', command: 'notes.prevBox' },
     { keys: '<D-Enter>', scope: 'notes.title', command: 'notes.sendFollowup' },
     { keys: 's', scope: 'notes.markup', command: 'notes.toolSelect' },
     { keys: 'p', scope: 'notes.markup', command: 'notes.toolPen' },

@@ -120,10 +120,11 @@ stays in themes.
 | --- | --- | --- |
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the five chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail, review and notices panes |
-| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session rows; the composer and its status line, a `/` completion row's description (`completionDescription`), the attachments, the picker rows and section headings (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time and profile on its side-bar row (`rowClock`, `rowProfile`) |
+| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session header; the composer and its status line, a `/` completion row's description (`completionDescription`), the attachments, the picker rows and section headings (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time and profile on its side-bar row (`rowClock`, `rowProfile`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree, its rows and its Wiki and All pages switch; the rendered doc, its page frame and right column, header, disk banner, section edit control and editor frame; Recent changes and the missing Main page's empty state; the list pages and their rows; the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
+| `practice` | `practice.layout` | the problem list's header and rows in the side bar; the problem pane's tabs (description, submissions, notes, solution), the console's Testcase and Result tabs, a case's result, the interviewer pane's ask box, the import box and the Solution confirm body |
 | `settings` | `settings.layout` | the section list, the setting, plugin, key, leader and advanced rows, the Leader menu's panes, group, item and add rows, the Keybindings section's filter chips, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
 | `sessions` | `sessions.layout` | the side bar's Favorites and Recent sections and every plugin's section (`addSection`), their project groups and the session rows in them, each session's tab strip, the session popup (`popup`) and its hidden bar (`popupBar`), where other plugins' row and bar parts sit, the rename dialog |
@@ -132,12 +133,12 @@ stays in themes.
 | `auto-retro` | `auto-retro.layout` | the Retro section's header part: the count of closes still queued |
 | `unity-pool` | `unity-pool.layout` | the clone badge under each session row that holds a clone or waits for one; the right-bar pool panel |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
-| `agent-skills` | `agent-skills.layout` | the session hub's Skills section: one row per skill |
-| `context-sources` | `context-sources.layout` | the session hub's Context section: the sources' bar, the window's fill and a row per source with its items |
+| `agent-skills` | `agent-skills.layout` | the session hub's Skills section: a chip per skill, grouped by namespace |
+| `context-sources` | `context-sources.layout` | the session hub's Context section: the sources' bar, the window's fill and a row per source with its items, the largest five until the more line shows them all |
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter and cache mark on its row, each session's context line (context bar, cache countdown) above the Chat box and its spend in the Chat status line; its whole usage line in each tab bar, through the optional `usage-tab-line` plugin; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key shelf, the leader search's rows, the title bar's Keys button |
-| `workflow-light`, `workflow-medium`, `workflow-heavy` | `workflow-light.layout`, `workflow-medium.layout`, `workflow-heavy.layout` | each workflow's own: the status chip under each session row (the level's badge and the stage), the strip above the Chat composer (the stepper's trail and the main action), the side pane beside the transcript (Heavy's status, plan checklist by wave and actions; Light's and Medium's status, count and flat checklist) |
+| `workflow-small`, `workflow-medium`, `workflow-large` | `workflow-small.layout`, `workflow-medium.layout`, `workflow-large.layout` | each workflow's own: the status chip under each session row (the level's badge and the stage), the strip above the Chat composer (the stepper's trail and the main action), the side pane beside the transcript (Large's status, plan checklist by wave and actions; Small's and Medium's status, count and flat checklist) |
 | `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its widen and expand controls, and the full-size overlay |
 
 Each owner's `layout.d.ts` names its parts exactly.
@@ -154,7 +155,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l c` | chat: a session of every entry kind, idle after a finished turn, so the activity dock shows that turn's finished line (the preview holds a `result` entry); its result entry as a turn divider; its steps, grouped into finished activity lines, show in the transcript only under a layout that sets `activityInTranscript`; the agent strip above the composer; the session hub's Skills section, one skill by `main` and one by a subagent; and a paused run time on its row |
 | `Space z l s` | sessions: rows in every state |
 | `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
-| `Space z l w` | workflow: Heavy's sample session in every stage, the plan-ready countdown included |
+| `Space z l w` | workflow: Large's sample session in every stage, the plan-ready countdown included |
 
 ## The primer's columns
 

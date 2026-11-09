@@ -319,7 +319,7 @@ function stubWorkflow(fields: Partial<MainWorkflow> = {}): MainWorkflow {
 
 // The part with stub workflows that both take `build` under one stage id and
 // `ship` under their own, only Medium `review`.
-function startLightAndMedium(options: { data?: MemoryFiles } = {}) {
+function startSmallAndMedium(options: { data?: MemoryFiles } = {}) {
   const reported = (id: string, reportedAs = id): MainStage => ({
     id,
     order: 0,
@@ -330,10 +330,10 @@ function startLightAndMedium(options: { data?: MemoryFiles } = {}) {
   const workflow = startWorkflowPart(options);
   workflow.exported().addWorkflow(
     stubWorkflow({
-      id: 'light',
-      claims: (signal) => startsSkill(signal, 'x:light'),
+      id: 'small',
+      claims: (signal) => startsSkill(signal, 'x:small'),
       firstStage: 'build',
-      stages: [reported('build'), reported('ship-light', 'ship')],
+      stages: [reported('build'), reported('ship-small', 'ship')],
     }),
   );
   workflow.exported().addWorkflow(
@@ -490,8 +490,8 @@ describe('workflowMainPart', () => {
     stage: string | undefined;
   }>([
     {
-      name: 'light at build',
-      skill: 'x:light',
+      name: 'small at build',
+      skill: 'x:small',
       opens: true,
       step: 'review',
       text: 'Ignored review: this session is not at a place in the workflow that takes it.',
@@ -532,7 +532,7 @@ describe('workflowMainPart', () => {
   ])(
     'StepTool_ScopedToTheFlowsWorkflow ($name)',
     async ({ skill: skillName, opens, step, text, stage }) => {
-      const workflow = startLightAndMedium();
+      const workflow = startSmallAndMedium();
       if (opens) {
         await workflow.openS1();
       }
@@ -549,7 +549,7 @@ describe('workflowMainPart', () => {
   );
 
   it('StepTool_NotInTheUnion_ListsIt', async () => {
-    const workflow = startLightAndMedium();
+    const workflow = startSmallAndMedium();
     await workflow.openS1();
     await workflow.agentEvent(skill('x:medium', ''));
 
@@ -572,9 +572,9 @@ describe('workflowMainPart', () => {
     checklist: ChecklistItem[] | null;
   }>([
     {
-      name: 'a Light flow',
+      name: 'a Small flow',
       opens: true,
-      skill: 'x:light',
+      skill: 'x:small',
       text: 'Checklist set: 0 of 1 done.',
       pushes: 1,
       checklist: [{ text: 'a', done: false }],
@@ -607,7 +607,7 @@ describe('workflowMainPart', () => {
   ])(
     'ChecklistTool_Flow ($name)',
     async ({ data, opens, skill: skillName, text, pushes, checklist }) => {
-      const workflow = startLightAndMedium({ data: await data?.() });
+      const workflow = startSmallAndMedium({ data: await data?.() });
       if (opens) {
         await workflow.openS1();
       }
@@ -629,9 +629,9 @@ describe('workflowMainPart', () => {
   );
 
   it('ChecklistTool_Report_StampsTheSave', async () => {
-    const workflow = startLightAndMedium();
+    const workflow = startSmallAndMedium();
     await workflow.openS1();
-    await workflow.agentEvent(skill('x:light', ''));
+    await workflow.agentEvent(skill('x:small', ''));
     workflow.time.advance(5);
 
     await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]);
@@ -646,7 +646,7 @@ describe('workflowMainPart', () => {
   });
 
   it('Start_ContributesBothTools', () => {
-    const workflow = startLightAndMedium();
+    const workflow = startSmallAndMedium();
 
     expect(
       workflow.contributions.map(({ tools, options }) => ({
@@ -665,7 +665,7 @@ describe('workflowMainPart', () => {
   });
 
   it('stepTool_StageAddedByAPlugin_JoinsTheToolUntilDisposed', async () => {
-    const workflow = startLightAndMedium();
+    const workflow = startSmallAndMedium();
     const stepsOffered = () => {
       const definition = workflow.contributions
         .flatMap(({ tools }) => tools)
@@ -1110,7 +1110,7 @@ describe('workflowMainPart', () => {
   });
 
   it('RunMeter_BaselineAtClaim', async () => {
-    const workflow = startLightAndMedium();
+    const workflow = startSmallAndMedium();
     workflow.exported().addWorkflow(
       finishingWorkflow({
         order: 30,
@@ -1120,7 +1120,7 @@ describe('workflowMainPart', () => {
     await workflow.openS1();
     workflow.setActiveTime(activeFor(3000));
     await workflow.agentEvent(spent(1));
-    await workflow.agentEvent(skill('x:light', ''));
+    await workflow.agentEvent(skill('x:small', ''));
     workflow.setActiveTime(activeFor(4000));
     await workflow.agentEvent(skill('x:medium-up', ''));
     workflow.setActiveTime(activeFor(5000));
@@ -1129,7 +1129,7 @@ describe('workflowMainPart', () => {
     workflow.exported().signal('s1', FINISH, 'live');
 
     expect(await runLogLines(workflow)).toMatchObject([
-      { activeMs: 2000, costUsd: 1, movedUpFrom: 'light' },
+      { activeMs: 2000, costUsd: 1, movedUpFrom: 'small' },
     ]);
   });
 

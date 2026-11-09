@@ -1,8 +1,9 @@
 // @ts-check
 
 // The built-in context-sources look: a stacked bar of the sources, the window's fill under it with a tick where
-// compaction starts, then one row per source with its tokens and share. A source with items opens on a click into its
-// items, indented under it. Each source's colour comes from its place in the list, through `data-position`.
+// compaction starts, then one row per source with its tokens and share, the largest five until the user shows them
+// all through the more line under them. A source with items opens on a click into its items, indented under it. Each
+// source's colour comes from its place in the list, through `data-position`.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -21,8 +22,22 @@ const layout = {
     if (input.window !== null) {
       drawWindow(element, input.window, kit);
     }
-    for (const source of input.sources) {
+    const shown = input.showsAll
+      ? input.sources
+      : input.sources.slice(0, SHOWN_SOURCES);
+    for (const source of shown) {
       drawSource(element, source, input.toggle, kit);
+    }
+    if (input.sources.length > SHOWN_SOURCES) {
+      const more = kit.el(
+        element,
+        'div',
+        'context-sources-more',
+        input.showsAll
+          ? 'Show fewer'
+          : `+ ${input.sources.length - SHOWN_SOURCES} more`,
+      );
+      more.addEventListener('click', () => input.toggleShowsAll());
     }
     if (input.deferred !== null) {
       kit.el(
@@ -38,6 +53,9 @@ const layout = {
 
 // The ten colours the CSS defines, repeating past the tenth source.
 const COLOURS = 10;
+
+// The sources listed until the user shows them all.
+const SHOWN_SOURCES = 5;
 
 /** @param {number} position */
 function colourOf(position) {

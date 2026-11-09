@@ -41,6 +41,6 @@ describe('vim keys', () => {
   it('pageVimKeys_PrintsVimNotation', () => {
     expect(pageVimKeys(['g', 'g'])).toBe('gg');
     expect(pageVimKeys(['Escape'])).toBe('<Esc>');
-    expect(pageVimKeys(['Tab'])).toBe('<Tab>');
+    expect(pageVimKeys(['<Tab>'])).toBe('<Tab>');
   });
 });

@@ -27,7 +27,8 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   leader bind fires on the page and, as a vim normal-mode map, in a text box in normal mode; in
   insert mode the leader key types itself (Space types a space). Any other bind fires on the page,
   and a chord on the page fires inside a box too. `where` (`page`, `box` or `both`) sets where a
-  bind fires in place of that default, and a chord takes only `page`. A bind with `mode` fires in
+  bind fires in place of that default, and a chord takes only `page`. Tab and Shift+Tab are chords
+  in any spelling (`<tab>`, `<s-tab>`), so neither can be the leader or sit inside a longer sequence. A bind with `mode` fires in
   a box, in that vim mode.
 - `arg` hands the command its argument: a number, a string or a small record of numbers and
   strings. A command that declares an argument needs one on each of its binds, and a command that
@@ -66,15 +67,19 @@ hjkl is the direction in every layer; the modifier picks the verb.
   bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
   the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
   `Ctrl+o`/`Ctrl+i` go back and forward through the docs view's places, as vim's jump list does, while the doc pane has focus.
-- **Ctrl+n / Ctrl+p** move to the next and previous text box, from the page or inside a box in
+- **Tab / Shift+Tab** move to the next and previous text box, from the page or inside a box in
   every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
-  takes them, so the keys that move between boxes are the same on every page. Inside a box they
-  take the key from vim's insert-mode completion. In every other main view (Sessions with nothing
-  shown, the Sessions list, the Chat tab, its session hub and its agent strip, the docs tree, doc and the doc's right column, the Backlog
-  homes, list and detail, the Settings sections, rows and Leader menu panes, the gallery) **Ctrl+n** opens the new-session prompt with only its
-  folder and profile steps, bound per scope since a key cannot sit in `any` beside a scope's bind.
-  A new main view adds its scope to that list in `src/plugins/keymap.ts`. While a box's completion popup is open,
-  both keys move the popup's selection instead, ahead of every bind.
+  takes them, so the keys that move between boxes are the same on every page. Inside such a view's
+  boxes they take the key from vim, so a box there types no tab character. `<Tab>` and `<S-Tab>` are
+  chords in the page's notation for this reason: they fire ahead of a box's vim, as Ctrl chords do.
+- **Ctrl+n** opens the new-session prompt with only its folder and profile steps, from every main
+  view and its boxes in every vim mode: Sessions with nothing shown, the Sessions list, the Chat tab, its
+  session hub and its agent strip, the docs tree, doc and the doc's right column, the Backlog homes,
+  list, detail and editor, the Settings sections, rows and Leader menu panes, the gallery, a form and its review, the
+  primer's columns, card and review, and the note popup. It is bound per main view, so a dialog,
+  picker or confirm keeps its own keys; a new main view adds its scope to that list in
+  `src/plugins/keymap.ts`. While a box's completion popup is open, Ctrl+n and Ctrl+p move the
+  popup's selection instead, and Tab accepts it, ahead of every bind; Shift+Tab still moves to the previous box.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
   between a view's own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog list and
   detail, the primer popup's tasks, items and card columns, and a Chat tab's transcript, box and
@@ -145,7 +150,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wd` dismiss a closed run, `ws` show or hide the side pane, `wf` open or fold finished waves            |
 | `p`                | projects                             | `pf` favorite or unfavorite the focused session's project, `pk` / `pj` move it up or down among the favorites                                                                                                                                                                                 |
 | `c`                | chat controls                        | on the page or in a box: `ci` show the attached images (`x` removes the shown one); in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `cy` copy the sign-in link (sign-in dialog) |
-| `a`                | answer                               | in a box only: `a1`…`a9` pick the numbered choice or action header, `ac` clear, `ax` not applicable                                                                                                                                                                                           |
+| `a`                | answer                               | in a form's box and on the form's page: `a1`…`a9` pick the numbered choice or action header, `ac` clear; `Space x` not applicable                                                                                                                                                             |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                                                                                                                                                               |
 | `zl`               | layout previews                      | `zlo` forms preview, `zlp` primer preview, `zls` sessions preview, `zlc` chat preview, `zla` agents preview, `zlw` workflow preview                                                                                                                                                           |
 
@@ -167,3 +172,7 @@ files).
    under `b`, a mode under `k`, a show-or-hide under `v`. A new group needs at least two actions, a name in the
    keymap file's `groups`, and its row in the table above. Settings mode's Leader menu page edits the user's
    tree in `keymap.json`, and its group names, the same way.
+6. A key that steps 1 to 3 settle is picked without asking and shown as a Decided notice
+   (`~/wigley-agents/decisions.md` § Decided notices), in place of the key question that
+   `decisions.md` § Architecture › Keys leaves open. A key that conflicts with an existing bind or moves one
+   is asked.

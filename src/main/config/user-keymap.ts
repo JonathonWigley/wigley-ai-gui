@@ -20,11 +20,14 @@ import {
   acceleratorProblem,
   canonicalAccelerator,
 } from '../../shared/accelerator';
-import { parseChord } from '../../shared/chord-notation';
 import { checkCommandArg } from '../../shared/command-args';
 import { errorText } from '../../shared/error-text';
 import { vimTokens } from '../../shared/key-hints';
-import { pageKeysFor, vimTokenForPageKey } from '../../shared/key-notation';
+import {
+  isChordKeys,
+  pageKeysFor,
+  vimTokenForPageKey,
+} from '../../shared/key-notation';
 import { expandBind } from '../../shared/plugin-manifests';
 import { jsonKind, parseJsonObject } from './config-json';
 
@@ -54,7 +57,8 @@ const OLD_SECTIONS = ['page', 'editor'];
 const UNBIND_KINDS = ['keys', 'app', 'global', 'intercept'] as const;
 const EDITOR_MODES: readonly EditorMode[] = ['normal', 'insert'];
 const BIND_WHERES: readonly BindWhere[] = ['page', 'box', 'both'];
-const LEADER_PROBLEM = '"leader" must be one key, such as "<Space>" or ",".';
+const LEADER_PROBLEM =
+  '"leader" must be one key that is not a chord or Tab, such as "<Space>" or ",".';
 const MODIFIERS = ['control', 'alt', 'shift', 'meta'] as const;
 
 // The fields one kind of entry holds, and the noun a problem names it by.
@@ -471,7 +475,8 @@ function readList<T>(
   );
 }
 
-// The file's `leader`: one key the page can bind that is not a chord and not
+// The file's `leader`: one key the page can bind that is not a chord, Tab
+// included, and not
 // `<`, since a `<` leader would make `<Leader>a>` read as the named key `<a>`.
 // A key that types one visible character comes back as that character,
 // however it is written (`<Bslash>` is `\`); any other key comes back spelled
@@ -486,7 +491,7 @@ function readLeader(value: unknown): string {
     isPageKey = false;
   }
   const isOneKey = vimTokens(leader, leader).length === 1;
-  const isChord = parseChord(leader) !== null;
+  const isChord = isChordKeys(leader, leader);
   const pageKey = pageKeys[0];
   const isLessThan = pageKey === '<';
   if (!isPageKey || !isOneKey || isChord || isLessThan) {

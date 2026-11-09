@@ -6,7 +6,6 @@ import { CHAT_HARNESS_ID, type ChatSidePart } from '../contract';
 import type {
   ComposerInput,
   PartView,
-  SessionFactInput,
   SessionFactsInput,
 } from '../layouts/layout';
 import {
@@ -29,49 +28,30 @@ interface DrawnFacts {
   view: PartView<SessionFactsInput>;
 }
 
-// The Session section's rows, from chat's own state: the repo, the branch when
-// there is one, the folder with the home folder as `~`, the worktrees the agents
-// wrote in when there are any, the harness, and the model and effort when the
-// session declares a model control.
+// The Session facts, from chat's own state: the repo, the branch when there is
+// one, the folder with the home folder as `~`, the worktrees the agents wrote
+// in, the harness, and the model and effort when the session declares a model
+// control.
 export function sessionFactsOf(
   input: ComposerInput,
   place: { projectDir: string; worktrees: readonly string[] },
   deps: { homeDir: string; paths: Paths },
 ): SessionFactsInput {
-  const branch: SessionFactInput[] =
-    input.branch === null ? [] : [{ label: 'Branch', value: input.branch }];
-  const worktrees: SessionFactInput[] =
-    place.worktrees.length === 0
-      ? []
-      : [
-          {
-            label: place.worktrees.length === 1 ? 'Worktree' : 'Worktrees',
-            value: place.worktrees.join(', '),
-          },
-        ];
-  const model: SessionFactInput[] =
-    input.modelEffort === null
-      ? []
-      : [{ label: 'Model', value: modelEffortText(input.modelEffort) }];
   return {
-    facts: [
-      { label: 'Project', value: input.repo },
-      ...branch,
-      {
-        label: 'Folder',
-        value: displayPath(place.projectDir, deps.homeDir, deps.paths),
-      },
-      ...worktrees,
-      { label: 'Harness', value: CHAT_HARNESS_ID },
-      ...model,
-    ],
+    repo: input.repo,
+    branch: input.branch,
+    folder: displayPath(place.projectDir, deps.homeDir, deps.paths),
+    worktrees: place.worktrees,
+    harness: CHAT_HARNESS_ID,
+    modelEffort:
+      input.modelEffort === null ? null : modelEffortText(input.modelEffort),
   };
 }
 
-// The session hub's Session section: the `sessionFacts` layout part, updated in
-// place on each change of its source, else drawn again; once an `update` throws,
-// the part draws with `default` until the layouts change. A session with no
-// source draws nothing.
+// The session hub's Session part, first in the hub: the `sessionFacts` layout
+// part, updated in place on each change of its source, else drawn again; once an
+// `update` throws, the part draws with `default` until the layouts change. A
+// session with no source draws nothing.
 export function createSessionPart(
   deps: SurfaceKitDeps & {
     layouts: ChatLayouts;
@@ -83,7 +63,7 @@ export function createSessionPart(
   return {
     id: 'chat.session',
     title: 'Session',
-    order: 40,
+    order: 0,
     build(parent, sessionId) {
       const source = deps.sourceOf(sessionId);
       if (source === null) {

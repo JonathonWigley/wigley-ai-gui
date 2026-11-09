@@ -299,6 +299,19 @@ describe('createChordMatcher', () => {
     ).toBeUndefined();
   });
 
+  it('tells a bare Tab chord from Shift+Tab on code Tab', () => {
+    const chords = createChordMatcher([
+      { keys: ['<Tab>'], scope: 'forms.forms', command: 'test.next' },
+      { keys: ['<S-Tab>'], scope: 'forms.forms', command: 'test.prev' },
+    ]);
+    expect(chords.match(press('Tab', {}), 'forms.forms')?.command).toBe(
+      'test.next',
+    );
+    expect(
+      chords.match(press('Tab', { shiftKey: true }), 'forms.forms')?.command,
+    ).toBe('test.prev');
+  });
+
   it('matches a chord holding every modifier', () => {
     const chords = createChordMatcher([
       { keys: ['<C-A-S-D-k>'], scope: 'forms', command: 'test.all' },

@@ -257,10 +257,11 @@ interview on 2026-10-23; this file is the record of both.
     tool and what it acted on, a file path as its file name (`Read chat-kit.ts`, `Bash npm test`). The built-in
     layout shows 3 and lists tool calls only: thinking shows as the state. The part's input carries every step of
     the turn but the subagents' tool calls, so a user layout may list more.
-  - **Tool counts**: every tool the main agent used in the turn with its count, most used first, always numbered:
-    `Read 3 Bash 2 Edit 1`.
-  - **Finished line**: once the session goes idle, the dock shrinks to one dim line: the word, the time, the cost
-    and the tool counts, `Done · 1m 05s · $0.57 · Bash 6 · Read 2`. The finished turn is every entry since the
+  - **Tool counts**: every tool the main agent used in the turn with its count, most used first, always numbered, a
+    chip each in the hub (`Read 3` `Bash 2` `Edit 1`).
+  - **Finished line**: once the session goes idle, the dock shrinks to one dim line, the word, the time and the cost
+    (`Done · 1m 05s · $0.57`), over the tool count chips; the composer's one line adds the counts to it
+    (`Done · 1m 05s · $0.57 · Bash 6 · Read 2`). The finished turn is every entry since the
     user's last message, so a turn Claude ran on its own after it (a `success` result) joins it, and the line
     updates in place when such a result lands before the user sends again. The word is `Done` when the last result's
     stop reason is `end_turn` or `success`, else the stop reason itself (`max_tokens`). The time runs from the

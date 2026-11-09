@@ -212,23 +212,26 @@ export interface RowProfileInput {
   name: string;
 }
 
-// One session hub section's frame: `summary` is the text its part set, null for none; `collapsed` holds while its body
-// is hidden.
+// One session hub section's frame: `partId` is the side part's id (`chat.session`, `chat.mainAgent`), for a layout that
+// frames one part its own way; `summary` is the text its part set, null for none; `collapsed` holds while its body is
+// hidden.
 export interface SideSectionInput {
+  partId: string;
   title: string;
   summary: string | null;
   collapsed: boolean;
 }
 
-// One row of the session hub's Session section.
-export interface SessionFactInput {
-  label: string;
-  value: string;
-}
-
-// The Session section's rows, in the order they show; a fact with nothing to show is left out.
+// The session hub's Session facts: `folder` shows the home folder as `~`; `worktrees` are the names of the worktrees
+// the agents wrote in, empty for none; `branch` is null outside a git repo and `modelEffort` (`Opus 5 · high`) null
+// when the harness declares no model control.
 export interface SessionFactsInput {
-  facts: readonly SessionFactInput[];
+  repo: string;
+  branch: string | null;
+  folder: string;
+  worktrees: readonly string[];
+  harness: string;
+  modelEffort: string | null;
 }
 
 // A `/` completion row's description, never empty.
@@ -629,8 +632,8 @@ export interface ChatLayout {
     input: SideSectionInput,
     kit: SideSectionKit,
   ): PartView<SideSectionInput>;
-  // The session hub's Session section body. The app sends the input again after each status line draw; a part with
-  // no `update` draws again.
+  // The session hub's Session facts, the body of the hub's first part. The app sends the input again after each
+  // status line draw; a part with no `update` draws again.
   sessionFacts?(
     parent: HTMLElement,
     input: SessionFactsInput,
