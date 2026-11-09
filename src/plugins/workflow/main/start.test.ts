@@ -300,6 +300,7 @@ function chatHeld(sessionId: string, profile: string): ChatSessionInfo {
     repo: 'p',
     branch: null,
     worktrees: [],
+    headless: false,
   };
 }
 
