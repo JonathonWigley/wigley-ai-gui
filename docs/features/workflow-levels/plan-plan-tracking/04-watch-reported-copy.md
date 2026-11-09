@@ -1,6 +1,6 @@
 # 04 — The plan watch reads the reported copy
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -59,3 +59,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 92e00206 · proof: diff read; typecheck clean; worker ran workflow-large tests (475) and lint · concerns: all-null read signals planGone only when planDir is gone; a removed reported folder whose remembered main copy also lost plan.md signals planGone though the main folder exists

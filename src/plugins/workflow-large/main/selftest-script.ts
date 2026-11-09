@@ -8,6 +8,7 @@ import {
   FAKE_WORKFLOW_FEATURE_TEXT,
   FAKE_WORKFLOW_PLAN_PATH,
   FAKE_WORKFLOW_STEP_TEXT,
+  fakeWorkflowPlan,
   markRun,
   projectRecords,
   type RunMark,
@@ -34,14 +35,21 @@ const FEATURE_SEND = `/wigley:feature ${FAKE_WORKFLOW_FEATURE_TEXT}`;
 // `set_workflow_step` call this step would come with from a real agent.
 const REPORT_SEND_PREFIX = 'fake: report ';
 const REPORT_FIX_SEND = `${REPORT_SEND_PREFIX}fix`;
+// A send whose turn end writes the session's `plan.py` report file, naming
+// `REPORTED_PLAN_FOLDER`.
+const REPORT_PLAN_SEND = 'fake: plan report';
+// Relative to the self-test's temp home: a plan folder outside the project.
+const REPORTED_PLAN_FOLDER = 'workflow-selftest-reported/plan-reported';
 
 export interface WorkflowLargeSelfTestDeps {
   homeDir: string;
-  files: Pick<Files, 'makeFolder' | 'realPath' | 'trash' | 'write'>;
+  files: Pick<Files, 'append' | 'makeFolder' | 'realPath' | 'trash' | 'write'>;
   chat: Pick<ChatMainExports, 'launch' | 'closeSessionsIn'>;
   sessions: Pick<SessionsMainExports, 'activate'>;
   harnesses: readonly AgentHarness[];
   hooks: WorkflowSelfTestHooks;
+  // The folder the report watch watches.
+  planRunsFolder: string;
 }
 
 // The launched session's id, or the launch's error; `turnEnds` holds the
@@ -166,6 +174,20 @@ const GROUPS: SelfTestGroup[] = [
       },
     ],
   },
+  {
+    name: 'reported plan',
+    why: 'A report file moves the checklist to the reported copy.',
+    steps: [
+      {
+        writeFile: {
+          path: `${REPORTED_PLAN_FOLDER}/plan.md`,
+          text: fakeWorkflowPlan(1, 0),
+        },
+        keys: sendKeys(REPORT_PLAN_SEND),
+        expect: line('progress 1/3 wave 1'),
+      },
+    ],
+  },
 ];
 
 function expectedSends(project: string): string[] {
@@ -182,6 +204,7 @@ function expectedSends(project: string): string[] {
     REPORT_FIX_SEND,
     FAKE_WORKFLOW_STEP_TEXT,
     FEATURE_SEND,
+    REPORT_PLAN_SEND,
   ];
 }
 
@@ -221,13 +244,15 @@ function runProblems(
 // the project, waiting for their rows to go so the new row takes the first
 // label, and the flows of the project's sessions. It then launches one session
 // in the project, counting the main turn ends main hears until the next run
-// opens, and makes the step call a report send asks for at that send's turn end.
+// opens, and makes the step call a report send asks for at that send's turn end,
+// or writes the session's plan report file after a plan report send.
 // The fake writes, ticks and deletes the plan itself; problems reads its records,
 // which the steps keep changing in place, when it runs.
 export function workflowLargeSelfTestScript(
   deps: WorkflowLargeSelfTestDeps,
 ): SelfTestScript {
-  const { homeDir, files, chat, sessions, harnesses, hooks } = deps;
+  const { homeDir, files, chat, sessions, harnesses, hooks, planRunsFolder } =
+    deps;
   let made: Promise<string> | null = null;
   let marks: RunMark[] = [];
   let turnEndListener: Disposable | null = null;
@@ -239,6 +264,20 @@ export function workflowLargeSelfTestScript(
     );
     await files.makeFolder(project);
     return project;
+  }
+
+  // `plan.py`'s report naming the reported plan folder, in a new file. Appended
+  // rather than renamed into place: macOS FSEvents can report a rename under
+  // the temp file's name alone.
+  async function writePlanReport(sessionId: string): Promise<void> {
+    const planDir = path.join(
+      await files.realPath(homeDir),
+      REPORTED_PLAN_FOLDER,
+    );
+    await files.append(
+      path.join(planRunsFolder, `${sessionId}.json`),
+      `${JSON.stringify({ planDir })}\n`,
+    );
   }
 
   async function undoEarlierRun(project: string): Promise<void> {
@@ -270,6 +309,9 @@ export function workflowLargeSelfTestScript(
           sessionId,
           lastSend.slice(REPORT_SEND_PREFIX.length),
         );
+      }
+      if (lastSend === REPORT_PLAN_SEND) {
+        void writePlanReport(sessionId);
       }
     });
     try {

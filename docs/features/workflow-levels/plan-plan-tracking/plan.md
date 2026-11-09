@@ -168,7 +168,7 @@ Shared names (every task uses them as written here):
 - [x] [plan.py reports its folder](03-plan-py-report.md)
 
 ### Wave 2
-- [ ] [The plan watch reads the reported copy](04-watch-reported-copy.md) — after 01, 02
+- [x] [The plan watch reads the reported copy](04-watch-reported-copy.md) — after 01, 02
 
 ### Wave 3
 - [ ] [The report sources: tool and report file](05-report-sources.md) — after 02, 04
@@ -187,11 +187,13 @@ Review base: 12745c21
 - 02 · df8e5262 · diff read; typecheck clean outside task 01's in-progress files; worker ran workflow-large tests (471) and lint · concerns: design.md Signals not updated for planReported — left to task 06
 - 03 · marketplace 7270a1d · diff read; plan tests 32 OK with and without the real env vars, no plan-runs leak; check_manifests passes · concerns: report test lives in a new class for the close row's features-home layout
 - 01 · d27b84e5 · diff read; typecheck clean; worker ran named tests (262) and lint · concerns: plan watch now stats planDir and may signal planGone when every copy's plan.md reads null (old code stayed silent); task 04 rewrites the read
+- 04 · 92e00206 · diff read; typecheck clean; worker ran workflow-large tests (475) and lint · concerns: all-null read signals planGone only when planDir is gone; a removed reported folder whose remembered main copy also lost plan.md signals planGone though the main folder exists
 ### Contract changes
 ### Rulings
 - fileWritten and make args go through followPlanDir (new folder clears the mark, held folder keeps it); the planReported event calls setPlanDir and sets the mark · group 02
 - plan_folder no longer resolves anything; the folder argument goes to report_plan_folder as given and is abspath'd there · group 03
 - readMovedCopy reads copies in parallel, one failed read rejects the call as planCopies does · group 01
 - follow_PlanInTwoCheckouts_SignalsTheMovedCopy gained a step (main rewritten at time 40, same progress) to pin the moved-copy rule over timestamps; backlog's equal-time worktree row now returns the worktree copy · group 01
+- cloneGit test fake's topLevel now answers each checkout's own top folder (/r, /w) as git does, so a followed /w folder is a worktree copy · group 04
 ### Review rounds
 ### Test gate

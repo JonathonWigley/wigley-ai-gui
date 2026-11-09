@@ -265,6 +265,8 @@ function startWorkflowPart(
         timers: time.timers,
         paths: posixPaths,
         selfTest: null,
+        homeDir: '/home',
+        appInstance: { id: 'app', isDev: false },
       },
       dependency: (key: { id: string }) =>
         ({ workflow: exported(), chat, sessions } as Record<string, unknown>)[

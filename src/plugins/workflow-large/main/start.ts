@@ -1,4 +1,5 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
+import { appEndpointDir } from '../../../shared/app-endpoint-dir';
 import { errorText } from '../../../shared/error-text';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
@@ -10,6 +11,7 @@ import {
 import {
   LARGE_WORKFLOW_ID,
   type LargeState,
+  largeSignal,
   largeStateOf,
   type WorkflowLargeChannel,
   withLargeState,
@@ -20,6 +22,12 @@ import { workflowLargeManifest } from '../manifest';
 import { LARGE_MAIN_STAGES } from '../stages';
 import { createWorkflowActions } from './actions';
 import { createCountdown } from './countdown';
+import { createPlanReports, PLAN_RUNS_FOLDER } from './plan-reports';
+import {
+  largePlanReporter,
+  planToolDefinition,
+  startPlanTool,
+} from './plan-tool';
 import { createPlanWatch } from './plan-watch';
 import { workflowLargeSelfTestScript } from './selftest-script';
 
@@ -33,7 +41,8 @@ const autoCommandOf = (stageId: string): string | undefined =>
 
 // Large, the plan-driven workflow: adds its stages and state to the engine, and as
 // one engine observer runs the plan watch of each Large flow and the plan-ready
-// auto-start countdown; the page runs its main-side commands over `runAction`. Every
+// auto-start countdown; `set_workflow_plan` and `plan.py`'s report files move a
+// flow's watch to the copy its run writes; the page runs its main-side commands over `runAction`. Every
 // write goes through `setState`, which keeps the flow's save time, on a fresh flow,
 // since a plan read can signal while an observer call runs.
 export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
@@ -59,6 +68,34 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
       log,
       signal: (sessionId, signal) =>
         workflow.signal(sessionId, signal, 'observed'),
+    });
+    sessions.contributeTools(
+      [planToolDefinition()],
+      startPlanTool({
+        paths: services.paths,
+        files: services.files,
+        reportPlan: largePlanReporter(workflow),
+      }),
+      { mainAgentOnly: true },
+    );
+    const planRunsFolder = services.paths.join(
+      appEndpointDir(services.paths, services.homeDir, services.appInstance.id),
+      PLAN_RUNS_FOLDER,
+    );
+    const planReports = createPlanReports({
+      files: services.files,
+      paths: services.paths,
+      log,
+      folder: planRunsFolder,
+      report: (rowId, planDir) => {
+        if (workflow.flowOf(rowId)?.workflow === LARGE_WORKFLOW_ID) {
+          workflow.signal(
+            rowId,
+            largeSignal({ type: 'planReported', planDir }),
+            'observed',
+          );
+        }
+      },
     });
     const countdown = createCountdown({
       timers: services.timers,
@@ -247,13 +284,17 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
           sessions,
           harnesses: services.agentHarnesses,
           hooks: workflow.selfTestHooks,
+          planRunsFolder,
         }),
       );
     }
 
     return {
       commands: {},
-      dispose: () => planWatch.dispose(),
+      dispose: () => {
+        planReports.dispose();
+        planWatch.dispose();
+      },
     };
   },
 };
