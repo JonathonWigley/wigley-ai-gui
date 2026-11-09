@@ -3,7 +3,10 @@ import type { PluginPartsRequest } from '../contracts/bridge';
 import type { PagePart, PluginManifest } from '../contracts/plugin';
 import type { ServedPlugin } from '../contracts/plugin-catalog';
 import type { AppConfig } from '../contracts/settings';
-import { answerPluginParts } from './plugin-parts-answer';
+import {
+  createPluginPartsAnswers,
+  type PluginPartsAnswerDeps,
+} from './plugin-parts-answer';
 
 // `c` depends on `b` in the page, as the fake host stops them.
 const PAGE_DEPENDENCIES: Record<string, string[]> = { c: ['b'] };
@@ -26,7 +29,11 @@ function part(id: string, label: string): PagePart {
   return { manifest, start: () => ({ commands: {} }) };
 }
 
-function served(ids: readonly string[]): AppConfig {
+// The served config of `ids`, with `disabled` switched off.
+function served(
+  ids: readonly string[],
+  disabled: readonly string[] = [],
+): AppConfig {
   const plugins: ServedPlugin[] = ids.map((id) => ({
     id,
     origin: 'user',
@@ -34,7 +41,10 @@ function served(ids: readonly string[]): AppConfig {
     pageUrl: `wigley-plugin://${id}/~1/page.js`,
     manifest: part(id, 'served').manifest,
   }));
-  return { plugins } as unknown as AppConfig;
+  return {
+    plugins,
+    settings: { plugins: { disabled } },
+  } as unknown as AppConfig;
 }
 
 // A page host holding `heldIds` as `old` parts, whose held parts start and
@@ -333,17 +343,48 @@ const ROWS: Row[] = [
   },
 ];
 
-describe('answerPluginParts', () => {
+// An answer queued while the load's start of `u` awaits its import, and a
+// push that switches `disabledDuringLoad` off before that import finishes.
+const INTERLEAVED_ROWS: {
+  case: string;
+  later(answers: ReturnType<typeof createPluginPartsAnswers>): Promise<unknown>;
+  disabledDuringLoad?: string[];
+  reply: unknown;
+  steps: string[];
+}[] = [
+  {
+    case: 'a stop of the loading id finds it started and stops it',
+    later: (answers) => answers.answer({ kind: 'stop', ids: ['u'] }),
+    disabledDuringLoad: ['u'],
+    reply: { stopped: ['u'] },
+    steps: ['load u', 'add u', 'start u'],
+  },
+  {
+    case: 'a start of the loading id finds it held and imports it once',
+    later: (answers) => answers.answer({ kind: 'start', ids: ['u'] }),
+    reply: { started: [], problems: [] },
+    steps: ['load u', 'add u', 'start u'],
+  },
+  {
+    case: 'the load start of an id switched off meanwhile starts nothing',
+    later: (answers) => answers.startAtLoad('a'),
+    disabledDuringLoad: ['a'],
+    reply: undefined,
+    steps: ['load u', 'add u', 'start u'],
+  },
+];
+
+describe('createPluginPartsAnswers', () => {
   // Breaks if `reload` starts the part, if a failed import drops the old
   // part, if `start` refuses an id it could load, or if a page-side failure
   // leaves the reply with no problem.
-  it.each(ROWS)('answerPluginParts_$case', async (row) => {
+  it.each(ROWS)('answer_$case', async (row) => {
     const logs: string[] = [];
     const steps: string[] = [];
     const heldIds = row.held ?? HELD;
     const host = fakeHost(heldIds, row.started, steps, row.throwsOn);
 
-    const reply = await answerPluginParts(host, row.request, {
+    const answers = createPluginPartsAnswers(host, {
       restores: {
         reopen: () => steps.push('reopen'),
         partsReady: () => steps.push('partsReady'),
@@ -359,6 +400,8 @@ describe('answerPluginParts', () => {
       },
     });
 
+    const reply = await answers.answer(row.request);
+
     expect([reply, logs, steps]).toEqual([row.reply, row.logs, row.steps]);
     if (row.heldAfter !== undefined) {
       expect(
@@ -370,5 +413,44 @@ describe('answerPluginParts', () => {
     if (row.startedAfter !== undefined) {
       expect([...host.started.keys()]).toEqual(row.startedAfter);
     }
+  });
+
+  // Breaks if an answer runs while an earlier one awaits its `page.js`
+  // import, or if the load's start skips no plugin switched off before its
+  // turn.
+  it.each(INTERLEAVED_ROWS)('answers in turn_$case', async (row) => {
+    const steps: string[] = [];
+    const host = fakeHost(HELD, [], steps);
+    let disabled: string[] = [];
+    let loadBegan = () => {};
+    const loading = new Promise<void>((resolve) => {
+      loadBegan = resolve;
+    });
+    let finishLoad = () => {};
+    const loaded = new Promise<void>((resolve) => {
+      finishLoad = resolve;
+    });
+    const answerDeps: PluginPartsAnswerDeps = {
+      restores: { reopen: () => {}, partsReady: () => {} },
+      reapplyPush: () => {},
+      log: () => {},
+      served: () => served(SERVED, disabled),
+      async loadPart(plugin) {
+        steps.push(`load ${plugin.id}`);
+        loadBegan();
+        await loaded;
+        return part(plugin.id, 'new');
+      },
+    };
+    const answers = createPluginPartsAnswers(host, answerDeps);
+
+    const first = answers.startAtLoad('u');
+    await loading;
+    const later = row.later(answers);
+    disabled = row.disabledDuringLoad ?? [];
+    finishLoad();
+    await first;
+
+    expect([await later, steps]).toEqual([row.reply, row.steps]);
   });
 });

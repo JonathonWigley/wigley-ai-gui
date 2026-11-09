@@ -1164,6 +1164,37 @@ describe('createPageApi recording', () => {
     },
   );
 
+  // Breaks if a settled restore's handle stays in the part's registrations
+  // until its stop, so the handles grow over a session.
+  it.each([
+    { settles: 'resolves', restore: () => Promise.resolve() },
+    { settles: 'rejects', restore: () => Promise.reject(new Error('gone')) },
+  ])(
+    'restores.track_RestoreThat$settles_DisposesItsHandleOnce',
+    async ({ restore }) => {
+      let disposes = 0;
+      const registrations = createRegistrations();
+      const api = createPageApi(
+        manifest,
+        deps({
+          registrations,
+          restores: {
+            track: () => ({ dispose: () => (disposes += 1) }),
+            onSettled: () => ({ dispose: () => {} }),
+          },
+        }),
+      );
+      const tracked = restore();
+
+      api.restores.track(tracked);
+      await tracked.catch(() => undefined);
+      const disposesAtSettle = disposes;
+      registrations.dispose();
+
+      expect([disposesAtSettle, disposes]).toEqual([1, 1]);
+    },
+  );
+
   it.each(HEARING_ROWS)(
     "stops $member hearing once the plugin's registrations are disposed",
     ({ listen, speak }) => {

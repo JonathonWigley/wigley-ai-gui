@@ -230,8 +230,11 @@ export function createPageApi(
       savePasted: (file) => deps.drops.savePasted(file),
     },
     restores: {
+      // The handle leaves the part's registrations once its restore settles.
       track: (restore) => {
-        track(deps.restores.track(restore));
+        const handle = track(deps.restores.track(restore));
+        const drop = () => handle.dispose();
+        restore.then(drop, drop);
       },
       onSettled: (listener) => track(deps.restores.onSettled(listener)),
     },

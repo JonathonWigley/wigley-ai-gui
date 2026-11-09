@@ -5,6 +5,7 @@ import type { CatalogProblem, ServedPlugin } from '../contracts/plugin-catalog';
 import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
 import type { PluginHost } from '../shared/plugin-host';
+import { createSerialQueue } from '../shared/serial-queue';
 import {
   loadFailureText,
   loadPageParts,
@@ -32,8 +33,37 @@ type PageHost = Pick<
   'started' | 'startEach' | 'holds' | 'stop' | 'mayStop' | 'add' | 'remove'
 >;
 
-// The page's answer to one of main's plugin parts requests, through the page's
-// host. It never rejects: a throw is logged under `plugin-switch`. A `mayStop`
+// The page's answers to plugin parts requests, one at a time: `answer` takes
+// main's requests and `startAtLoad` the page load's own start of one id, which
+// skips an id the last push lists as off. Each runs once every answer queued
+// before it settled, so a start's `page.js` import never lets a later stop or
+// start of the same id run before that start is done.
+export interface PluginPartsAnswers {
+  answer(request: PluginPartsRequest): Promise<PluginPartsReply>;
+  startAtLoad(id: string): Promise<void>;
+}
+
+export function createPluginPartsAnswers(
+  host: PageHost,
+  deps: PluginPartsAnswerDeps,
+): PluginPartsAnswers {
+  const queue = createSerialQueue();
+  return {
+    answer: (request) =>
+      queue.run(() => answerPluginParts(host, request, deps)),
+    startAtLoad: (id) =>
+      queue.run(async () => {
+        if (deps.served().settings.plugins.disabled.includes(id)) {
+          return;
+        }
+        await answerPluginParts(host, { kind: 'start', ids: [id] }, deps);
+      }),
+  };
+}
+
+// The page's answer to one plugin parts request, through the page's host. It
+// awaits nothing a later answer settles, so the queue above never stalls. It
+// never rejects: a throw is logged under `plugin-switch`. A `mayStop`
 // that throws gives the reason `<id>: mayStop failed: <error>`; a stop that
 // throws goes on to the next id. A start first loads and adds each requested
 // id the host does not hold (`loadPageParts`), then opens a restore window
@@ -46,7 +76,7 @@ type PageHost = Pick<
 // part. A `remove` stops and forgets the part. A stop, `mayStop`, `reload` and
 // `remove` touch no window. The reply holds every id that stopped, started or
 // was swapped.
-export async function answerPluginParts(
+async function answerPluginParts(
   host: PageHost,
   request: PluginPartsRequest,
   deps: PluginPartsAnswerDeps,

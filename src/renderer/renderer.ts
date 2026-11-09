@@ -75,7 +75,7 @@ import {
 } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
 import { registerPickerCommands } from './picker-commands';
-import { answerPluginParts } from './plugin-parts-answer';
+import { createPluginPartsAnswers } from './plugin-parts-answer';
 import {
   createPageApi,
   liveKeysFor,
@@ -145,9 +145,9 @@ async function start() {
     });
   // The host starts with the built-in parts. A user part, and each part
   // depending on one in the page, is loaded, added and started after load,
-  // one start request at a time (`answerPluginParts`), so a throw in one fails
-  // only that part and a plugin that is off has its `page.js` imported only
-  // at its switch-on. Held as `disabled` ids instead, a built-in naming one in
+  // one start request at a time (`createPluginPartsAnswers`), so a throw in
+  // one fails only that part and a plugin that is off has its `page.js`
+  // imported only at its switch-on. Held as `disabled` ids instead, a built-in naming one in
   // `dependsOn.main` would fail the host's disabled check.
   const deferred = deferredPageIds(served.plugins);
   const startsAtLoad = pagePartIds(served.plugins, pageParts).filter(
@@ -476,17 +476,16 @@ async function start() {
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );
   // Main sends plugin parts requests once `started` is set, so the page
-  // listens first: a later throw in this start still answers them.
-  const answerDeps = {
+  // listens first: a later throw in this start still answers them. Main's
+  // requests and the load's own below share one queue.
+  const answers = createPluginPartsAnswers(pageHost, {
     restores,
     reapplyPush: () => applyLivePush(lastPush),
     log,
     served: () => lastPush,
     loadPart,
-  };
-  bridge.onPluginParts((request) =>
-    answerPluginParts(pageHost, request, answerDeps),
-  );
+  });
+  bridge.onPluginParts((request) => answers.answer(request));
   runtimeCatalog.set({
     ...(runtimeCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
     started: true,
@@ -543,25 +542,16 @@ async function start() {
   // A reload that raced a switch still ends running what the last push's list
   // says.
   const loadDisabled = lastPush.settings.plugins.disabled;
-  await answerPluginParts(
-    pageHost,
-    {
-      kind: 'stop',
-      ids: [...pageHost.started.keys()].filter((id) =>
-        loadDisabled.includes(id),
-      ),
-    },
-    answerDeps,
-  );
+  await answers.answer({
+    kind: 'stop',
+    ids: [...pageHost.started.keys()].filter((id) => loadDisabled.includes(id)),
+  });
   // One request per id, in dependency order, so a throw in one part does not
   // stop the next; a failure is logged, and main's own `start` for the id
-  // carries it to the Settings row. A plugin a push switched off while an
-  // earlier part started is skipped.
+  // carries it to the Settings row. A plugin a push switched off before its
+  // turn is skipped.
   for (const id of notStarted()) {
-    if (lastPush.settings.plugins.disabled.includes(id)) {
-      continue;
-    }
-    await answerPluginParts(pageHost, { kind: 'start', ids: [id] }, answerDeps);
+    await answers.startAtLoad(id);
   }
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.
