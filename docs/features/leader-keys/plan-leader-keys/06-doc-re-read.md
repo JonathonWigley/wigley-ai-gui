@@ -1,6 +1,6 @@
 # 06 — Doc re-read against the landed code
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 5 · Depends on: 01, 02, 03, 04, 05
 Plan: [plan.md](plan.md)
@@ -51,3 +51,4 @@ Commit:    one commit, "Re-read the leader keys docs against the landed code", n
 
 ## Proof
 
+Commit 9a340be7 · proof: diff read (5 docs, each line against the landed code per worker); moved-key grep outside plan folders clean · concerns: docs/features/plugin-framework/design.md may hold stale lines on which-key's keys-pending behaviour, left out of scope; the three-Esc claim in leader-keys/design.md unverified against the picker code

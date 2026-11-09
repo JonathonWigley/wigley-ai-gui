@@ -208,7 +208,7 @@ owner's layout (`AGENTS.md` § Intent).
 - [x] [Settings Leader menu](05-settings-leader-menu.md) — after 01, 04
 
 ### Wave 5
-- [ ] [Doc re-read](06-doc-re-read.md) — after 01–05
+- [x] [Doc re-read](06-doc-re-read.md) — after 01–05
 - [ ] [Final verification](07-final-verification.md) — after 01–05
 
 ## Run log
@@ -221,6 +221,7 @@ Review base: a42ed9f9
 - 03 · fcf91837 · diff read (keys.searchLeader, <Leader>/ bind, WhichKeyModel.name present) + typecheck clean; screenshots forms-which-key-shelf.png and forms-leader-search.png read; 98 keys tests pass per worker · concerns: new keys.picker binds not yet through the every-key-placed check (full selftest only); label 'Search leader actions' capitalised against the lower-case keys labels
 - 04 · 484703ff · diff read (withMovedBind, KEYS_SECTION, buildRow scope arg, scopeTitle, openScopePicker, ScopePickRequest, key-recorder exports present) + typecheck clean; settings selftest passes per worker; settings-key-recording.png read · concerns: row-prompt.ts edited outside Files; a box/both bind reassigned onto a chord is refused at write with a toast, not during recording; find scrolls chips and header off the top (visual check for 07); recording row wraps to two lines at selftest width
 - 05 · 66d3cf28 · diff read (defaultGroups, unnamedGroupName, withGroupName, LEADER_SECTION, leader-tree, leader-menu-view present) + typecheck clean; settings selftest all passed per worker; settings-leader-menu.png read · concerns: cosmetic: recording row prompt and command columns wrap narrowly, groups header blank space, long command ids wrap mid-word (left for 07); one npx vitest run on the local dev dependency, nothing installed
+- 06 · 9a340be7 · diff read (5 docs, each line against the landed code per worker); moved-key grep outside plan folders clean · concerns: docs/features/plugin-framework/design.md may hold stale lines on which-key's keys-pending behaviour, left out of scope; the three-Esc claim in leader-keys/design.md unverified against the picker code
 ### Contract changes
 - Leader picker commands and binds: six hand-named commands and hand-written binds → the shared LIST_PICKER_COMMANDS / listPickerCommands / LIST_PICKER_SCOPES pattern keyboard-reach added, gg/G included (ListPicker now has top/bottom) · why: keyboard-reach landed the shared pattern · consumers: 06 (the 'every list picker takes gg/G' doc line now holds) · group 03
 - headerEnd filter hint: planned → dropped · why: the core pluginPicker already anchors a / filter hint for a filter: true list · consumers: none · group 03
@@ -241,5 +242,6 @@ Review base: a42ed9f9
 - withGroupName matches entries through normalVimKeys — <leader>b and <Leader>b are one entry — none · group 05 · group 05
 - groups/items grid minmax(0,1fr) minmax(0,2fr) — max-content squeezed the items pane, rem fails the style lint — visual only · group 05 · group 05
 - sectionList_EndsKeysThenLeaderMenu folded into the existing sections test — one test per rule — none · group 05 · group 05
+- DESIGN.md: which-key entries are not row-list rows; the leader search's rows stay in the row-list group — the task text — one line · group 06 · group 06
 ### Review rounds
 ### Test gate
