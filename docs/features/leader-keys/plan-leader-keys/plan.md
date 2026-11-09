@@ -246,5 +246,6 @@ Review base: a42ed9f9
 - DESIGN.md: which-key entries are not row-list rows; the leader search's rows stay in the row-list group — the task text — one line · group 06 · group 06
 - while recording, the Keybindings prompt replaces the hints — both do not fit at 900 px — visual only · group 07 fix · group 07
 ### Review rounds
+- Round 1 (a42ed9f9..56771239): 6 lanes, NEEDS FIXES — 6 Important, 26 Minor, 2 pre-existing; 9 applied in d7b8cd54; 12 determined dispatched; 13 open to triage. Report /tmp/claude-leader-keys/review-56771239.md
 ### Test gate
 - vitest: page-keys, page-api, key-sequences (01 capture); src/plugins/keys (03); src/plugins/settings (04, 05); keymap.test (02 tree); key-hints, keymap-checks, plugin-manifests (05 unnamedGroupName, 03 manifest); src/shared/layouts (layout contracts of keys and settings); src/main/config and src/contracts (05 defaultGroups) · 40 files, 917 tests pass; lint clean; typecheck clean
