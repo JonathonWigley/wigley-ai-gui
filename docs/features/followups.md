@@ -916,3 +916,10 @@ because the earlier items rewrite many of these tests anyway.
   clicked pane. Fix: a focusin on each Backlog pane records it as `lastMainFocus` (and sets the scope) before
   `focusMain` runs. Pre-existing before keyboard-reach (it ran synchronously then). Source: the keyboard-reach
   re-review.
+- **Self-test `forms: cancelled preview` fails on main** — *agent-ready*: `npm run selftest -- --plugin forms`; after
+  `<D-w>` closes the Layout preview session the app selects `selftest 3` (its right neighbour in main's rows) where the
+  step expects `Codex session`, and the `R` and `<A-o>` steps after it fail on that. Fails the same on a plain `main`
+  checkout (b72c74a3): decide whether the close picks the left neighbour or the step follows main's rows.
+- **Primer `placeRestored` may restore a stale review cursor** — *agent-ready*: since keyboard-reach met hot-reload,
+  `primer-state.ts`'s reducer restores a stored place without resetting the review view's `reviewRow`, so a restored
+  review could hold a row past the list's end. Trace it and pin it with a row in the primer-state tests.
