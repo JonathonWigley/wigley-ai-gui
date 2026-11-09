@@ -1,5 +1,4 @@
 import type { CommandArgShape } from '../../contracts/commands';
-import type { BindWhere, EditorMode } from '../../contracts/keymap';
 import type {
   PluginManifest,
   ProcessName,
@@ -10,6 +9,8 @@ import { pluginIdProblem } from '../define-plugin';
 import { errorText } from '../error-text';
 import { isJsonObject, isStringArray, type JsonObject } from '../json';
 import {
+  BIND_WHERES,
+  EDITOR_MODES,
   pluginOptionalSettings,
   pluginSettingInfo,
   pluginThemeTokens,
@@ -60,16 +61,7 @@ export const ARG_KINDS = membersOf({
   string: true,
 } satisfies Record<Extract<CommandArgShape, string>, true>);
 
-export const BIND_WHERES = membersOf({
-  page: true,
-  box: true,
-  both: true,
-} satisfies Record<BindWhere, true>);
-
-export const EDITOR_MODES = membersOf({
-  normal: true,
-  insert: true,
-} satisfies Record<EditorMode, true>);
+export { BIND_WHERES, EDITOR_MODES };
 
 const MANIFEST_FIELDS = membersOf({
   id: true,

@@ -131,6 +131,11 @@ describe('mergeUserSettings', () => {
     },
     { case: 'object under a plugin id', text: '{"p":{}}', ignored: [] },
     { case: 'object under a core name', text: '{"fonts":{}}', ignored: [] },
+    {
+      case: 'object under an id two edits from a core name',
+      text: '{"wind":{}}',
+      ignored: ['wind'],
+    },
   ])(
     'mergeUserSettings_AbsentPluginSection_Ignored: $case',
     ({ text, ignored }) => {
@@ -141,6 +146,22 @@ describe('mergeUserSettings', () => {
   it.each([
     { case: 'scalar under an unknown key', text: '{"zz":1}' },
     { case: 'object under a key no id can have', text: '{"Gone":{}}' },
+    {
+      case: 'object under a core name missing a letter',
+      text: '{"windw":{}}',
+    },
+    {
+      case: 'object under a core name with a letter more',
+      text: '{"fontss":{}}',
+    },
+    {
+      case: 'object under a core name with a letter changed',
+      text: '{"claudi":{}}',
+    },
+    {
+      case: 'object under a core name with two letters swapped',
+      text: '{"cluade":{}}',
+    },
   ])('mergeUserSettings_UnknownKey_IsAProblem: $case', ({ text }) => {
     expect(() => mergeUserSettings(text, SCHEMA)).toThrow('is not a setting.');
   });

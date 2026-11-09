@@ -70,7 +70,7 @@ export const coreCommands: Record<CommandId, CommandDecl> = {
     arg: 'string',
   },
   [CORE_RELOAD_PLUGIN.id]: {
-    label: 'Reload plugin',
+    label: 'reload a plugin',
     group: 'plugins',
     runsIn: 'main',
     arg: 'string',

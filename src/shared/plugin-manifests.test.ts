@@ -1135,11 +1135,14 @@ describe('pluginSettingInfo', () => {
 
 describe('withoutUndeclaredDefaults', () => {
   const chat = manifest('chat', {
-    commands: { open: { label: 'Open', group: 'Chat', runsIn: 'page' } },
+    commands: {
+      open: { label: 'Open', group: 'Chat', runsIn: 'page' },
+      close: { label: 'Close', group: 'Chat', runsIn: 'main' },
+    },
     scopes: { list: 'In the list' },
   });
   const commands = commandInfos(
-    { 'core.quit': { label: 'Quit', group: 'App', runsIn: 'page' } },
+    { 'core.quit': { label: 'Quit', group: 'App', runsIn: 'main' } },
     [chat],
   );
   const scopes = scopeInfos(
@@ -1181,6 +1184,32 @@ describe('withoutUndeclaredDefaults', () => {
       kept: none,
       dropped: [
         'default bind y of chat.open dropped: its plugin declares no scope chat.gone',
+      ],
+    },
+    {
+      case: 'page bind of a main command',
+      keys: { binds: [{ keys: 'v', scope: 'any', command: 'chat.close' }] },
+      kept: none,
+      dropped: [
+        'default bind v of chat.close dropped: its plugin declares it to run in main',
+      ],
+    },
+    {
+      case: 'app accelerator of a page command',
+      keys: { app: [{ accelerator: 'Alt+O', command: 'chat.open' }] },
+      kept: none,
+      dropped: [
+        'default bind Alt+O of chat.open dropped: its plugin declares it to run in page',
+      ],
+    },
+    {
+      case: 'bind with an arg its command does not take',
+      keys: {
+        intercept: [{ key: 'C', alt: true, command: 'chat.close', arg: 2 }],
+      },
+      kept: none,
+      dropped: [
+        'default bind Alt+C of chat.close dropped: its plugin declares another argument: command "chat.close" takes no argument',
       ],
     },
     {

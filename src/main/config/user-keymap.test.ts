@@ -43,11 +43,28 @@ function parse(keymap: unknown) {
 }
 
 describe('parseUserKeymap', () => {
-  it('rejects an unbind naming a scope no plugin declares', () => {
-    expect(() =>
-      parse({ unbind: [{ keys: 'x', scope: 'test.nowhere' }] }),
-    ).toThrow(/unbind\[0\]\.scope.*test\.nowhere/);
-  });
+  it.each([
+    {
+      case: "unbind in a loaded plugin's undeclared scope",
+      keymap: { unbind: [{ keys: 'x', scope: 'test.nowhere' }] },
+      text: '"unbind[0].scope" names no scope "test.nowhere".',
+    },
+    {
+      case: 'unbind in an undotted scope',
+      keymap: { unbind: [{ keys: 'x', scope: 'ayn' }] },
+      text: '"unbind[0].scope" names no scope "ayn".',
+    },
+    {
+      case: 'bind in an undotted scope',
+      keymap: { binds: [{ keys: 'x', scope: 'ayn', command: 'test.pick' }] },
+      text: '"binds[0].scope" names no scope "ayn".',
+    },
+  ])(
+    'parseUserKeymap_ScopeOfNoAbsentPlugin_Throws: $case',
+    ({ keymap, text }) => {
+      expect(() => parse(keymap)).toThrow(text);
+    },
+  );
 
   it('keeps an unbind in a declared scope, the any scope included', () => {
     const unbind = [
@@ -255,7 +272,7 @@ describe('parseUserKeymap', () => {
     expect(parsed.unbind).toEqual(unbind);
   });
 
-  it('heldBackUserBinds_UnknownWrongProcessBadArg_DropsWithPathInText', () => {
+  it('heldBackUserBinds_UnknownWrongProcessBadArgUndotted_DropsWithPathInText', () => {
     const info = (id: string, runsIn: 'page' | 'main', arg?: 'number') => ({
       id,
       plugin: 'later',
@@ -284,10 +301,20 @@ describe('parseUserKeymap', () => {
     const absentPlugin = { keys: 'f', scope: 'any', command: 'gone.run' };
     const absentScope = { keys: 'g', scope: 'gone.main', command: 'test.pick' };
     const absentUnbind = { keys: 'h', scope: 'gone.main' };
+    const undotted = { keys: 'i', scope: 'any', command: 'save' };
 
-    const { kept, problems, ignored } = heldBackUserBinds(
+    const { kept, retained, problems, ignored } = heldBackUserBinds(
       {
-        binds: [keep, good, gone, wrong, badArg, absentPlugin, absentScope],
+        binds: [
+          keep,
+          good,
+          gone,
+          wrong,
+          badArg,
+          absentPlugin,
+          absentScope,
+          undotted,
+        ],
         app: [goneApp],
         unbind: [absentUnbind],
       },
@@ -296,6 +323,11 @@ describe('parseUserKeymap', () => {
     );
 
     expect(kept).toEqual({ binds: [keep, good], app: [], unbind: [] });
+    expect(retained).toEqual({
+      binds: [keep, good, absentPlugin, absentScope],
+      app: [],
+      unbind: [absentUnbind],
+    });
     expect(ignored).toEqual([
       'keymap.json binds[5] names plugin "gone", which is not loaded; kept and ignored',
       'keymap.json binds[6] names plugin "gone", which is not loaded; kept and ignored',
@@ -305,6 +337,7 @@ describe('parseUserKeymap', () => {
       '"binds[2].command" names no command "later.gone".',
       expect.stringMatching(/^"binds\[3\]\.command" names "later\.main"/),
       '"binds[4].arg": command "later.nth" needs a number.',
+      '"binds[7].command" names no command "save".',
       '"app[0].command" names no command "later.gone".',
     ]);
   });

@@ -1,6 +1,7 @@
 import type { Settings } from '../../contracts/settings';
-import { jsonKind, parseJsonObject } from './config-json';
+import { PLUGIN_ID_PATTERN } from '../../shared/define-plugin';
 import { isJsonObject } from '../../shared/json';
+import { jsonKind, parseJsonObject } from './config-json';
 
 // What a `settings.json` may set: the core settings with their defaults, each
 // plugin's settings under its id, the JSON kind of each setting (core or
@@ -23,7 +24,7 @@ export interface UserSettings {
 }
 
 // A top-level key that may be a section of a plugin that is not loaded.
-const PLUGIN_SECTION_KEY = /^[a-z0-9-]+$/;
+const PLUGIN_SECTION_KEY = new RegExp(PLUGIN_ID_PATTERN);
 
 // The kinds a setting named in `optionalSettings` takes, by name.
 const OPTIONAL_KINDS = {
@@ -154,22 +155,68 @@ export function settingsFileDefaults(
   return { ...pluginDefaults, ...defaults };
 }
 
+// Whether `a` and `b` differ by at most one inserted, deleted or changed
+// character, or one swap of neighbours.
+function isOneEditApart(a: string, b: string): boolean {
+  const lengthGap = Math.abs(a.length - b.length);
+  if (lengthGap > 1) {
+    return false;
+  }
+  let start = 0;
+  while (start < a.length && a[start] === b[start]) {
+    start++;
+  }
+  const rest = (from: string, skip: number) => from.slice(start + skip);
+  const isSwap =
+    a.length === b.length &&
+    a[start] === b[start + 1] &&
+    a[start + 1] === b[start] &&
+    rest(a, 2) === rest(b, 2);
+  return (
+    isSwap ||
+    rest(a, 1) === rest(b, 1) ||
+    rest(a, 1) === rest(b, 0) ||
+    rest(a, 0) === rest(b, 1)
+  );
+}
+
+// Whether the top-level `key` of the file is the section of a plugin that is
+// not loaded: an object under a plugin-id-shaped key that is no core setting,
+// no plugin's id, and no misspelling of a core setting.
+function isAbsentPluginSection(
+  key: string,
+  value: unknown,
+  defaults: Record<string, unknown>,
+  coreNames: readonly string[],
+): boolean {
+  const isKnownKey = Object.hasOwn(defaults, key);
+  const isPluginIdShaped = PLUGIN_SECTION_KEY.test(key);
+  const isMisspeltCoreName = coreNames.some((name) =>
+    isOneEditApart(key, name),
+  );
+  return (
+    !isKnownKey &&
+    isPluginIdShaped &&
+    !isMisspeltCoreName &&
+    isJsonObject(value)
+  );
+}
+
 // The settings `text`, a `settings.json`, deep-merges over the defaults: core
 // settings by name, each plugin's under its id. A top-level object under a
-// plugin-id-shaped key that is no core setting and no plugin's id is a plugin
-// that is not loaded: it is ignored and listed in `ignored`. Throws an Error
-// whose message is the first problem found, as the user reads it.
+// plugin-id-shaped key that is no core setting, no plugin's id and not one edit
+// from a core setting's name is a plugin that is not loaded: it is ignored and
+// listed in `ignored`. Throws an Error whose message is the first problem found,
+// as the user reads it.
 export function mergeUserSettings(
   text: string,
   schema: SettingsSchema,
 ): UserSettings {
   const file = parseJsonObject(text);
   const defaults = settingsFileDefaults(schema.defaults, schema.pluginDefaults);
-  const ignored = Object.keys(file).filter(
-    (key) =>
-      !Object.hasOwn(defaults, key) &&
-      PLUGIN_SECTION_KEY.test(key) &&
-      isJsonObject(file[key]),
+  const coreNames = Object.keys(schema.defaults);
+  const ignored = Object.keys(file).filter((key) =>
+    isAbsentPluginSection(key, file[key], defaults, coreNames),
   );
   const user = Object.fromEntries(
     Object.entries(file).filter(([key]) => !ignored.includes(key)),

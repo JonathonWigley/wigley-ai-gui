@@ -32,7 +32,7 @@ const DEFAULTS: Settings = {
 const DEFAULT_KEYMAP: DefaultKeymap = {
   leader: '<Space>',
   groups: {},
-  binds: [{ keys: '<Leader>q', scope: 'any', command: 'app.quit' }],
+  binds: [{ keys: '<Leader>q', scope: 'any', command: 'app.close' }],
   remaps: [],
   app: [{ accelerator: 'CommandOrControl+Q', command: 'app.quit' }],
   intercept: [],
@@ -107,6 +107,7 @@ const CHECK_DEPS: Omit<
   defaultKeymap: DEFAULT_KEYMAP,
   coreCommands: {
     'app.quit': { label: 'Quit', group: 'App', runsIn: 'main' },
+    'app.close': { label: 'Close', group: 'App', runsIn: 'page' },
     'window.summon': { label: 'Summon', group: 'Window', runsIn: 'main' },
   },
   coreScopes: [{ id: 'any', title: 'Everywhere', plugin: 'core' }],
@@ -687,7 +688,7 @@ describe('createUserConfig', () => {
     const schema = (await create(createMemoryFiles())).schema();
 
     expect(schema.defaultBindLayers).toEqual([
-      [{ keys: '<Leader>q', scope: 'any', command: 'app.quit' }],
+      [{ keys: '<Leader>q', scope: 'any', command: 'app.close' }],
       [{ keys: 'j', scope: 'p.list', command: 'p.down' }],
       [],
     ]);

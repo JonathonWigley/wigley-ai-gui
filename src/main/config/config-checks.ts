@@ -238,13 +238,14 @@ export function keptRuntimeLayer(
 
 // What a keymap check gives. `heldBack` is a problem for each user bind no command
 // can run yet, `kept` the user layer without those binds and those naming a plugin
-// that is not loaded, `layer` the runtime binds in force, and `dropped` a line for
-// each user entry naming a plugin that is not loaded, then each runtime bind left
-// out.
+// that is not loaded, `retained` the user layer without only the held-back binds,
+// `layer` the runtime binds in force, and `dropped` a line for each user entry
+// naming a plugin that is not loaded, then each runtime bind left out.
 export interface CheckedKeymap {
   keymap: Keymap;
   heldBack: string[];
   kept: UserKeymap;
+  retained: UserKeymap;
   layer: DefaultKeyLayer;
   dropped: string[];
 }
@@ -265,7 +266,7 @@ export function checkUserKeymap(
       ...runtime.page.commands,
     ]),
   };
-  const { kept, problems, ignored } = heldBackUserBinds(
+  const { kept, retained, problems, ignored } = heldBackUserBinds(
     user,
     names,
     schema.commands,
@@ -275,6 +276,7 @@ export function checkUserKeymap(
     keymap: mergeKeymap(deps.defaultKeymap, deps.manifests, kept, layer),
     heldBack: problems,
     kept,
+    retained,
     layer,
     dropped: [...ignored, ...dropped],
   };

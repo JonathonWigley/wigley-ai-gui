@@ -109,14 +109,22 @@ export interface ConfigStoreDeps extends BaseCheckDeps {
 
 const THEME_FILE = /^themes\/[^/]+\.json$/;
 
-// The last good value of each slice, which a broken file leaves in place. The
-// keymap's is the user layer that last merged, without the binds held back then. It
-// is checked again over the runtime layers, which keep changing, and always merges:
-// a bind leaving it uncovers only binds on its own keys. While the file is refused
-// only the refusal is reported: this layer's paths are not the file's.
+// The last good value of each slice, which a broken file leaves in place.
+// `settingsText` is the settings text that last merged (null for no file); a
+// broken file serves it checked again over the admitted plugins, and `settings`
+// rebased only when it no longer checks. `keptKeymap` is the user layer that last
+// merged, without the binds held back or ignored then; `retainedKeymap` the same
+// with the ignored binds of plugins not loaded then. A broken file serves the
+// retained layer checked again over the plugins and runtime layers, which keep
+// changing, and the kept one when the retained one does not merge; the kept one
+// always merges, since a bind leaving it uncovers only binds on its own keys.
+// While the file is refused only the refusal is reported: these layers' paths
+// are not the file's.
 interface Slices {
   settings: UserSettings;
+  settingsText: string | null;
   keptKeymap: UserKeymap;
+  retainedKeymap: UserKeymap;
   theme: Theme;
 }
 
@@ -344,7 +352,9 @@ export async function loadConfigStore(
       pluginSettings: admission.schema.pluginDefaults,
       ignored: [],
     },
+    settingsText: null,
     keptKeymap: {},
+    retainedKeymap: {},
     theme: defaultTheme,
   };
   let runtime: RuntimeCatalogs = {
@@ -361,27 +371,46 @@ export async function loadConfigStore(
   const listeners = new Set<(config: AppConfig) => void>();
   let isDisposed = false;
 
-  const settingsSlice = (
-    read: ConfigFileText,
-    problems: ConfigProblem[],
+  // The settings the file `text` merges into, the defaults for a missing file.
+  // Throws as `checkSettingsText` does.
+  const mergedSettings = (
+    text: string | null,
     checks: AdmittedChecks,
   ): UserSettings => {
-    if ('problem' in read) {
-      problems.push(read.problem);
-      return rebasedSettings(slices.settings, checks.schema);
-    }
-    if (read.text === null) {
+    if (text === null) {
       return {
         settings: deps.defaults,
         pluginSettings: checks.schema.pluginDefaults,
         ignored: [],
       };
     }
+    return checkSettingsText(text, checks.deps, checks.schema);
+  };
+
+  // The last good settings over `checks`: the last good text checked again,
+  // or, when it no longer checks, the last good slice rebased.
+  const lastGoodSettings = (checks: AdmittedChecks): UserSettings => {
     try {
-      return checkSettingsText(read.text, checks.deps, checks.schema);
+      return mergedSettings(slices.settingsText, checks);
+    } catch {
+      return rebasedSettings(slices.settings, checks.schema);
+    }
+  };
+
+  const settingsSlice = (
+    read: ConfigFileText,
+    problems: ConfigProblem[],
+    checks: AdmittedChecks,
+  ): { settings: UserSettings; text: string | null } => {
+    if ('problem' in read) {
+      problems.push(read.problem);
+      return { settings: lastGoodSettings(checks), text: slices.settingsText };
+    }
+    try {
+      return { settings: mergedSettings(read.text, checks), text: read.text };
     } catch (error) {
       problems.push({ file: SETTINGS_FILE, message: errorText(error) });
-      return rebasedSettings(slices.settings, checks.schema);
+      return { settings: lastGoodSettings(checks), text: slices.settingsText };
     }
   };
 
@@ -391,13 +420,23 @@ export async function loadConfigStore(
     problems: ConfigProblem[],
     catalogs: RuntimeCatalogs,
     { deps: checkDeps, schema }: AdmittedChecks,
-  ): { kept: UserKeymap; checked: CheckedKeymap } => {
+  ): { kept: UserKeymap; retained: UserKeymap; checked: CheckedKeymap } => {
+    const checkedLastGood = (): CheckedKeymap => {
+      try {
+        return checkUserKeymap(
+          slices.retainedKeymap,
+          checkDeps,
+          schema,
+          catalogs,
+        );
+      } catch {
+        return checkUserKeymap(slices.keptKeymap, checkDeps, schema, catalogs);
+      }
+    };
     const lastGood = () => ({
       kept: slices.keptKeymap,
-      checked: {
-        ...checkUserKeymap(slices.keptKeymap, checkDeps, schema, catalogs),
-        heldBack: [],
-      },
+      retained: slices.retainedKeymap,
+      checked: { ...checkedLastGood(), heldBack: [] },
     });
     if ('problem' in read) {
       problems.push(read.problem);
@@ -406,7 +445,7 @@ export async function loadConfigStore(
     try {
       const user = read.text === null ? {} : parseUserKeymap(read.text, schema);
       const checked = checkUserKeymap(user, checkDeps, schema, catalogs);
-      return { kept: checked.kept, checked };
+      return { kept: checked.kept, retained: checked.retained, checked };
     } catch (error) {
       problems.push({ file: KEYMAP_FILE, message: errorText(error) });
       return lastGood();
@@ -467,12 +506,12 @@ export async function loadConfigStore(
     const problems: ConfigProblem[] = [];
     const readFile = (relative: string) =>
       readConfigFile(deps.files, deps.folder, relative);
-    const settings = settingsSlice(
+    const { settings, text: settingsText } = settingsSlice(
       await readFile(SETTINGS_FILE),
       problems,
       admitted,
     );
-    const { kept, checked } = checkedKeymap(
+    const { kept, retained, checked } = checkedKeymap(
       await readFile(KEYMAP_FILE),
       problems,
       catalogs,
@@ -506,7 +545,13 @@ export async function loadConfigStore(
       problems,
       admitted.deps,
     );
-    slices = { settings, keptKeymap: kept, theme };
+    slices = {
+      settings,
+      settingsText,
+      keptKeymap: kept,
+      retainedKeymap: retained,
+      theme,
+    };
     admission = admitted;
     return {
       settings: settings.settings,

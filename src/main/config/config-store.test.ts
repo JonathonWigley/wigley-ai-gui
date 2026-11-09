@@ -1384,6 +1384,44 @@ describe('plugin admission', () => {
     },
   );
 
+  it.each([
+    { case: 'readable files', whileAway: null },
+    {
+      case: 'files broken while it is away',
+      whileAway: { settings: '{', keymap: '{' },
+    },
+  ])(
+    'setPlugins_PluginLeavesAndReturns_GetsItsSectionAndBindBack: $case',
+    async ({ whileAway }) => {
+      const settings = '{"t":{"n":2}}';
+      const keymap = JSON.stringify({
+        binds: [{ keys: 'y', scope: 'any', command: 't.go' }],
+      });
+      const files = createMemoryFiles();
+      await files.write(`${FOLDER}/settings.json`, settings);
+      await files.write(`${FOLDER}/keymap.json`, keymap);
+      const withT = [builtIn(listPlugin), userEntry(extra)];
+      const store = await load(files, { plugins: withT });
+      await store.setPlugins([builtIn(listPlugin)]);
+      if (whileAway !== null) {
+        await writeAndWait(files, store, 'settings.json', whileAway.settings);
+        await writeAndWait(files, store, 'keymap.json', whileAway.keymap);
+      }
+
+      await store.setPlugins(withT);
+
+      expect(store.current().pluginSettings.t).toEqual({ n: 2 });
+      expect(pageCommands(store.current())).toContainEqual('y t.go');
+      expect([
+        await files.read(`${FOLDER}/settings.json`),
+        await files.read(`${FOLDER}/keymap.json`),
+      ]).toEqual([
+        whileAway?.settings ?? settings,
+        whileAway?.keymap ?? keymap,
+      ]);
+    },
+  );
+
   it('drops_EveryProducer_LoggedOncePerLine', async () => {
     const files = createMemoryFiles();
     await files.write(`${FOLDER}/settings.json`, '{"gone":{"x":1}}');

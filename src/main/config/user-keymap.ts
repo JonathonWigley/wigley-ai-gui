@@ -28,7 +28,11 @@ import {
   pageKeysFor,
   vimTokenForPageKey,
 } from '../../shared/key-notation';
-import { expandBind } from '../../shared/plugin-manifests';
+import {
+  BIND_WHERES,
+  EDITOR_MODES,
+  expandBind,
+} from '../../shared/plugin-manifests';
 import { jsonKind, parseJsonObject } from './config-json';
 
 // The commands and scopes a user bind may name, by qualified id, the ids of
@@ -56,8 +60,6 @@ const SECTIONS = [
 // holding one is refused rather than read half.
 const OLD_SECTIONS = ['page', 'editor'];
 const UNBIND_KINDS = ['keys', 'app', 'global', 'intercept'] as const;
-const EDITOR_MODES: readonly EditorMode[] = ['normal', 'insert'];
-const BIND_WHERES: readonly BindWhere[] = ['page', 'box', 'both'];
 const LEADER_PROBLEM =
   '"leader" must be one key that is not a chord or Tab, such as "<Space>" or ",".';
 const MODIFIERS = ['control', 'alt', 'shift', 'meta'] as const;
@@ -202,8 +204,12 @@ function idPrefix(id: string): string {
 
 // The plugin the command or scope `id` names, the text before its first `.`,
 // when that plugin is not loaded: the prefix is not `core`, no loaded plugin's
-// id, and no known command's or scope's. Null when the prefix is known.
+// id, and no known command's or scope's. Null when the prefix is known, or when
+// `id` holds no `.` and so names no plugin.
 function absentPlugin(id: string, names: KeymapNames): string | null {
+  if (!id.includes('.')) {
+    return null;
+  }
   const prefix = idPrefix(id);
   const isKnown =
     prefix === 'core' ||
@@ -621,24 +627,30 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
 // `arg`. The first give one `ignored` line each, and the file keeps them for when
 // the plugin loads. The others give one problem each, with the text the parse
 // would give and the bind's path in `user`. A part can register the command
-// later, so the caller decides when these are reported.
+// later, so the caller decides when these are reported. `retained` is `user`
+// without the binds held back, the ignored ones included, so a check of it
+// gives a returning plugin its binds back.
 export function heldBackUserBinds(
   user: UserKeymap,
   names: KeymapNames,
   fixedCommands: KeymapNames['commands'],
-): { kept: UserKeymap; problems: string[]; ignored: string[] } {
+): {
+  kept: UserKeymap;
+  retained: UserKeymap;
+  problems: string[];
+  ignored: string[];
+} {
   const problems: string[] = [];
   const ignored: string[] = [];
   // The absent plugin the first unknown name of `bind` belongs to, if any.
   const absentPluginOf = (bind: { command?: CommandId; scope?: string }) => {
+    const { command, scope } = bind;
+    const isCommandUnknown =
+      command !== undefined && commandInfoOf(command, names) === undefined;
+    const isScopeUnknown = scope !== undefined && !isKnownScope(scope, names);
     const unknownNames = [
-      ...(bind.command !== undefined &&
-      commandInfoOf(bind.command, names) === undefined
-        ? [bind.command]
-        : []),
-      ...(bind.scope !== undefined && !isKnownScope(bind.scope, names)
-        ? [bind.scope]
-        : []),
+      ...(isCommandUnknown ? [command] : []),
+      ...(isScopeUnknown ? [scope] : []),
     ];
     return (
       unknownNames
@@ -646,51 +658,83 @@ export function heldBackUserBinds(
         .find((plugin) => plugin !== null) ?? null
     );
   };
-  const keptOf = <
+  // How the bind at `path` stands: ignored, with a line, when it names an absent
+  // plugin; held back, with a problem, when no command can run it yet; else kept.
+  const standing = (
+    path: string,
+    bind: { command: CommandId; arg?: CommandArg; scope?: string },
+    runsIn: ProcessName,
+    noun: string,
+  ): 'kept' | 'ignored' | 'heldBack' => {
+    const absent = absentPluginOf(bind);
+    if (absent !== null) {
+      ignored.push(ignoredLine(path, absent));
+      return 'ignored';
+    }
+    if (Object.hasOwn(fixedCommands, bind.command)) {
+      return 'kept';
+    }
+    const info = commandInfoOf(bind.command, names);
+    const problem =
+      info === undefined
+        ? `"${path}.command" names no command "${bind.command}".`
+        : knownCommandProblem(path, info, bind.arg, runsIn, noun);
+    if (problem !== null) {
+      problems.push(problem);
+      return 'heldBack';
+    }
+    return 'kept';
+  };
+  // `binds` the merge takes now, and those the file keeps for later.
+  const sorted = <
     B extends { command: CommandId; arg?: CommandArg; scope?: string },
   >(
     section: 'binds' | 'app' | 'intercept' | 'global',
     binds: readonly B[],
     runsIn: ProcessName,
     noun: string,
-  ): B[] =>
-    binds.filter((bind, index) => {
-      const path = `${section}[${index}]`;
-      const absent = absentPluginOf(bind);
-      if (absent !== null) {
-        ignored.push(ignoredLine(path, absent));
-        return false;
-      }
-      if (Object.hasOwn(fixedCommands, bind.command)) {
-        return true;
-      }
-      const info = commandInfoOf(bind.command, names);
-      const problem =
-        info === undefined
-          ? `"${path}.command" names no command "${bind.command}".`
-          : knownCommandProblem(path, info, bind.arg, runsIn, noun);
-      if (problem !== null) {
-        problems.push(problem);
-      }
-      return problem === null;
-    });
+  ): { kept: B[]; retained: B[] } => {
+    const standings = binds.map((bind, index) =>
+      standing(`${section}[${index}]`, bind, runsIn, noun),
+    );
+    return {
+      kept: binds.filter((_bind, index) => standings[index] === 'kept'),
+      retained: binds.filter((_bind, index) => standings[index] !== 'heldBack'),
+    };
+  };
   const kept: UserKeymap = { ...user };
+  const retained: UserKeymap = { ...user };
   if (user.binds !== undefined) {
-    kept.binds = keptOf('binds', user.binds, 'page', BIND.noun);
+    ({ kept: kept.binds, retained: retained.binds } = sorted(
+      'binds',
+      user.binds,
+      'page',
+      BIND.noun,
+    ));
   }
   if (user.app !== undefined) {
-    kept.app = keptOf('app', user.app, 'main', 'an app bind');
+    ({ kept: kept.app, retained: retained.app } = sorted(
+      'app',
+      user.app,
+      'main',
+      'an app bind',
+    ));
   }
   if (user.intercept !== undefined) {
-    kept.intercept = keptOf(
+    ({ kept: kept.intercept, retained: retained.intercept } = sorted(
       'intercept',
       user.intercept,
       'main',
       INTERCEPT_BIND.noun,
-    );
+    ));
   }
   if (user.global !== undefined) {
-    kept.global = keptOf('global', user.global, 'main', 'a global bind');
+    ({ kept: kept.global, retained: retained.global } = sorted(
+      'global',
+      user.global,
+      'main',
+      'a global bind',
+    ));
   }
   if (user.unbind !== undefined) {
     kept.unbind = user.unbind.filter((unbind, index) => {
@@ -701,5 +745,5 @@ export function heldBackUserBinds(
       return absent === null;
     });
   }
-  return { kept, problems, ignored };
+  return { kept, retained, problems, ignored };
 }
