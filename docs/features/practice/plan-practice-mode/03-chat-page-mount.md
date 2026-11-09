@@ -1,6 +1,6 @@
 # 03 — Chat page: mountChat
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -130,3 +130,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 626a107b · proof: diff read: ChatMount, ChatPageExports.mountChat, ChatTabs.mount, ChatViewDeps.ownerOf/onRowAdded, TabHost present; npm run typecheck clean; worker ran chat-view + chat-commands tests (208 passed) · concerns: mount before page ready() attaches at once if key present, untested; dispose logs 'chat view unmounted: <name>' (unspecified log line); lint blocked only by 05's in-progress practice files

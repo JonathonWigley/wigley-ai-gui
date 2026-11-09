@@ -14,6 +14,7 @@ import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
 import { notesManifest } from './notes/manifest';
+import { practiceManifest } from './practice/manifest';
 import { primerManifest } from './primer/manifest';
 import { sessionLogManifest } from './session-log/manifest';
 import { sessionStashManifest } from './session-stash/manifest';
@@ -55,6 +56,7 @@ export const builtInManifests = [
   settingsManifest,
   backlogManifest,
   notesManifest,
+  practiceManifest,
   usageManifest,
   usageTabLineManifest,
   workflowManifest,

@@ -149,6 +149,26 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  practice: {
+    // Its contract names the problem types of `./problem`.
+    contract: { layers: ['src/plugins/practice'] },
+    sublayers: {
+      // Compiles and runs generated drivers with the machine's clang++ through the real process and file adapters.
+      'src/plugins/practice/main/judge.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/paths',
+          'src/plugins/practice',
+          'src/plugins/practice/contract.ts',
+          'src/plugins/practice/main',
+          'src/main/processes',
+          'src/main/files',
+        ],
+        packages: ['node:'],
+      },
+    },
+  },
   // Its relay's socket and its MCP adapter's SDK sit in sublayers of main; the
   // relay and its channel path use the shared local channel transport.
   sessions: {

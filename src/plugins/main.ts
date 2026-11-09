@@ -13,6 +13,7 @@ import { formsMainPart } from './forms/main/start';
 import { galleryMainPart } from './gallery/main/start';
 import { keysMainPart } from './keys/main/start';
 import { notesMainPart } from './notes/main/start';
+import { practiceMainPart } from './practice/main/start';
 import { primerMainPart } from './primer/main/start';
 import { sessionLogMainPart } from './session-log/main/start';
 import { sessionStashMainPart } from './session-stash/main/start';
@@ -49,6 +50,7 @@ export const mainParts: readonly MainPart[] = [
   settingsMainPart,
   backlogMainPart,
   notesMainPart,
+  practiceMainPart,
   usageMainPart,
   workflowMainPart,
   workflowLargeMainPart,
