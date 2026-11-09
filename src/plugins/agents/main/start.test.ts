@@ -172,6 +172,7 @@ function startAgentsPart() {
       session: { id: PREVIEW_ROW, info },
       end: () => undefined,
       setHostSessionId: () => undefined,
+      keep: () => undefined,
     }),
     activate: () => undefined,
   };

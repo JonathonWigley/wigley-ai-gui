@@ -158,8 +158,8 @@ const returnedTwo: ReturnedMessage = {
 // null before any write; while `showsInAddTab.value` is set, `addTab` runs the
 // tab's `shown` before it returns, as the sessions plugin may, and
 // `focusAtAddTab` gets the focus as `addTab` returns. `selects` holds the
-// session of each tab handle's `select`; `restoresSettled` answers
-// `restores.settled`.
+// session of each tab handle's `select`; `hasSavedPlace` answers whether
+// `savedPlaces` holds the session.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -186,7 +186,7 @@ function mounted(
   const showsInAddTab = { value: false };
   const focusAtAddTab: (ChatFocus | null)[] = [];
   const selects: string[] = [];
-  const restores = { settled: true };
+  const savedPlaces = new Set<string>();
   let scopeChanged: (scope: string | undefined) => void = () => undefined;
   const sideTabs: SideTab[] = [];
   const sideParts = createPartStore<ChatSidePart>();
@@ -361,7 +361,7 @@ function mounted(
       writeImages: noEvent,
     }),
     writeFocus: (written: ChatFocus | null) => focusWrites.push(written),
-    restoresSettled: () => restores.settled,
+    hasSavedPlace: (sessionId: string) => savedPlaces.has(sessionId),
     toast: (text: string, tone: string) => toasts.push([text, tone]),
     visibleSessionRested: noEvent,
     confirm: {
@@ -392,7 +392,7 @@ function mounted(
     showsInAddTab,
     focusAtAddTab,
     selects,
-    restores,
+    savedPlaces,
     scopeChanged: (scope: string | undefined) => scopeChanged(scope),
     sideTabs,
     beforeClose: (sessionId: string, atOnce: boolean) =>
@@ -455,20 +455,19 @@ describe('mountChatView tab selection', () => {
     vi.unstubAllGlobals();
   });
 
-  // Breaks if a tab chat's restore reopens selects itself over the session's
-  // saved tab, or if a new session stops opening on its Chat tab.
+  // Breaks if a tab added for a session sessions saved a place for selects
+  // itself over the session's saved tab, or if a session with no saved place
+  // (a new one, or any at launch) stops opening on its Chat tab.
   it.each([
-    {
-      row: 'restores settled: a new session',
-      settled: true,
-      selects: ['row-1'],
-    },
-    { row: 'restores pending: a reopened one', settled: false, selects: [] },
+    { row: 'no saved place', saved: [], selects: ['row-1'] },
+    { row: 'a saved place', saved: ['row-1'], selects: [] },
   ])(
-    'tab_Added_SelectsItselfOnlyOnceTheRestoresSettled: $row',
-    ({ settled, selects }) => {
+    'tab_Added_SelectsItselfUnlessSessionsSavedAPlace: $row',
+    ({ saved, selects }) => {
       const view = mounted();
-      view.restores.settled = settled;
+      for (const sessionId of saved) {
+        view.savedPlaces.add(sessionId);
+      }
 
       view.open(stateOf([]));
 

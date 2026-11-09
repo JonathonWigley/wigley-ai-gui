@@ -300,6 +300,9 @@ export interface ChatSessions {
   // leaves the last saved total. Nothing is saved or started after it, and every
   // later process event is ignored.
   detachAll(): Promise<void>;
+  // Keeps every held row's owned session through chat's restart
+  // (`OwnedSession.keep`), so the restarted chat's restore adopts the rows.
+  keepRows(): void;
   // The sessions plugin's `connected` and `hostSessionChanged` events: records
   // the session's current host id as open in the app.
   recordOpenHostId(session: AgentSession): void;
@@ -3396,6 +3399,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
       }
       return lastSave;
+    },
+    keepRows() {
+      for (const session of held.values()) {
+        session.owned.keep();
+      }
     },
     recordOpenHostId(session) {
       if (session.info.sessionId !== null) {

@@ -20,7 +20,11 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../contract';
-import { createSessionList, RESELECT_WINDOW_MS } from './session-list';
+import {
+  createSessionList,
+  KEPT_SESSION_MS,
+  RESELECT_WINDOW_MS,
+} from './session-list';
 
 const MARK: MarkOptions = { text: 'Round from x', action: 'answer' };
 
@@ -98,7 +102,17 @@ function setUp(
     }
   });
   const clock = { time: 0, now: () => clock.time };
+  // Each pending timer by handle, with its delay.
+  const timers = new Map<number, { run(): void; ms: number }>();
+  let timerHandles = 0;
   const list = createSessionList({
+    timers: {
+      set(run, ms) {
+        timers.set(++timerHandles, { run, ms });
+        return timerHandles;
+      },
+      clear: (handle) => timers.delete(handle),
+    },
     randomHex: () => {
       hexCount++;
       return hexCount.toString(16).padStart(8, '0');
@@ -122,7 +136,17 @@ function setUp(
   states.length = 0;
   selections.length = 0;
   calls.length = 0;
-  return { list, clock, emitted, states, logged, activated, calls, selections };
+  return {
+    list,
+    clock,
+    timers,
+    emitted,
+    states,
+    logged,
+    activated,
+    calls,
+    selections,
+  };
 }
 
 // A contribution's start: records each session it starts for, and each tool
@@ -1402,6 +1426,7 @@ describe('createSessionList', () => {
     const list = createSessionList({
       randomHex: () => 'id',
       clock: { now: () => 0 },
+      timers: { set: () => 0, clear: () => undefined },
       log: () => undefined,
       emit: () => undefined,
       rows,
@@ -1529,6 +1554,52 @@ describe('createSessionList', () => {
       list.open(owned('host-2'), { select: false, rowId: 'kept-row' }),
     ).toThrow(/kept-row/);
     expect(list.state().rows.map((row) => row.sessionId)).toEqual(['kept-row']);
+  });
+
+  it('open with a kept row id adopts the session as it is, ending nothing', () => {
+    const { list, timers, emitted, calls } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const first = list.open(owned('host-1'), { select: true });
+    const rowId = first.session.id;
+    emitted.length = 0;
+    calls.length = 0;
+
+    first.keep();
+    first.end();
+    const adopted = list.open(owned('host-2'), { select: false, rowId });
+
+    expect(adopted.session).toBe(first.session);
+    expect(adopted.session.info.sessionId).toBe('host-2');
+    expect(calls.filter((call) => call.startsWith('rows delete'))).toEqual([]);
+    expect(emitted.map(([event]) => event)).toEqual(['hostSessionChanged']);
+    expect(contribution.ends()).toBe(0);
+    expect(list.state().selectedSessionId).toBe(rowId);
+    expect(timers.size).toBe(0);
+  });
+
+  it.each<{ case: string; isAdopted: boolean }>([
+    { case: 'no open adopts it before its timer', isAdopted: false },
+    { case: 'its adopter ends it, then the timer would run', isAdopted: true },
+  ])('a kept session ends once: $case', ({ isAdopted }) => {
+    const { list, timers, emitted } = setUp();
+    const first = list.open(owned('host-1'));
+    const rowId = first.session.id;
+    first.keep();
+    const kept = [...timers.values()];
+
+    if (isAdopted) {
+      list.open(owned('host-1'), { select: false, rowId }).end();
+    }
+    for (const timer of timers.values()) {
+      timer.run();
+    }
+
+    expect(kept.map((timer) => timer.ms)).toEqual([KEPT_SESSION_MS]);
+    expect(emitted.filter(([event]) => event === 'ended')).toEqual([
+      ['ended', { sessionId: rowId }],
+    ]);
+    expect(list.state().rows).toEqual([]);
   });
 
   it('starts the contributed tool sessions when an owned session opens', () => {

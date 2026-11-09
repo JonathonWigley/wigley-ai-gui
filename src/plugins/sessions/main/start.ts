@@ -76,6 +76,7 @@ function createList(api: SessionsApi): SessionList {
   const list = createSessionList({
     randomHex: api.services.randomHex,
     clock: api.services.clock,
+    timers: api.services.timers,
     log: api.services.log,
     emit: (event, data) => api.events.emit(event, data),
     rows: api.state.publish(sessionsRowsSlot),

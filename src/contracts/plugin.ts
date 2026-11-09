@@ -490,8 +490,8 @@ export interface Mode {
 // `sideBarShown` is true while the mode shows and its side bar lies beside or
 // over the content. `dispose` takes the mode's element, side bar and activity
 // item out of the window, without calling its `hidden`, and frees its id; a
-// disposed shown mode gives way to the first remaining mode in add order, as
-// `show` would show it, and `onChanged` listeners hear its id, or `''` when no
+// disposed shown mode gives way to the remaining mode whose id was first added
+// earliest (the activity bar's order), as `show` would show it, and `onChanged` listeners hear its id, or `''` when no
 // mode remains. Once disposed,
 // every member does nothing, and `isShown` and `sideBarShown` return false.
 export interface ModeHandle extends Disposable {
@@ -641,7 +641,8 @@ export interface PageLayoutShow<L> extends LayoutShow {
   // `data-layout-owner`. Throws for a scope the manifest does not declare,
   // drawing nothing, and when `defaultLayout`'s part throws. The show's
   // `dispose` disposes every draw not yet disposed; removing a drawn element
-  // stays with the caller.
+  // stays with the caller. A `draw` after the show's `dispose` throws `Layout
+  // show of "<id>" is disposed`, drawing nothing.
   draw<K extends LayoutPartName<L>>(
     part: K,
     parent: HTMLElement,
@@ -750,7 +751,8 @@ export interface KeyHints {
 // listener once the open window settles, or at once with no window open,
 // until its `dispose`. A part that prunes the saved places of rows main does
 // not hold prunes from `onSettled` in its `start`, so the rows a restore
-// reopens are in the page mirror first.
+// reopens are in the page mirror first. A part's stop stops waiting on the
+// restores it left pending.
 export interface PageRestores {
   track(restore: Promise<unknown>): void;
   onSettled(listener: () => void): Disposable;
@@ -1140,9 +1142,10 @@ export interface MainStart<M extends PluginManifest> {
   // that dependent's view.
   exports?(consumer: Registrations): unknown;
   // Runs when the host stops the part, before the host disposes the part's
-  // registrations, and undoes only what the plugin API cannot see. Quit stops
-  // every main part, and the live app may exit before a returned promise settles.
-  dispose?(): void | Promise<void>;
+  // registrations, and undoes only what the plugin API cannot see. `stop` says
+  // whether the part starts again right after (`PartStop`). Quit stops every
+  // main part, and the live app may exit before a returned promise settles.
+  dispose?(stop: PartStop): void | Promise<void>;
   // Called by the host once every part of this process has started at launch
   // (main) or page load (page), and after a live start, once every part that
   // start brought up has started.
@@ -1152,6 +1155,11 @@ export interface MainStart<M extends PluginManifest> {
   // restart and quit do not ask.
   mayStop?(): string | null;
 }
+
+// How the host stops a part: `restart` when it starts the part again right
+// after, as a restart or a reload of the plugin, or of a plugin it depends on,
+// does (that start may still fail); `end` for a switch-off, a removal and quit.
+export type PartStop = 'restart' | 'end';
 
 // Starts at launch, and again when the host starts or restarts it live.
 export interface MainPart<M extends PluginManifest = PluginManifest> {

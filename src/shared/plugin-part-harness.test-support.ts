@@ -42,6 +42,7 @@ import type {
   PagePart,
   PageServices,
   PageStart,
+  PartStop,
   PluginCommands,
   PluginManifest,
   PluginState,
@@ -293,7 +294,7 @@ interface HostedStart {
   commands: object;
   exports?(consumer: Registrations): unknown;
   ready?(): void;
-  dispose?(): void | Promise<void>;
+  dispose?(stop: PartStop): void | Promise<void>;
 }
 
 interface HostedPart {
@@ -671,7 +672,7 @@ function partLifecycle<Started>(
         commands: started.commands,
         exports: (consumer) => started.exports?.(consumerView(consumer)),
         ready: () => started.ready?.(),
-        dispose: () => started.dispose?.(),
+        dispose: (stop) => started.dispose?.(stop),
       };
     },
   }));

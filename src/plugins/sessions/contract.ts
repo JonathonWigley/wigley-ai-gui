@@ -163,17 +163,23 @@ export interface ConnectedSession extends ToolSession {
 // relay joined under the old id loses its join and has its later calls
 // refused, and a relay saying hello with the old id is refused while the
 // session lasts, unless another owned session holds that id. It throws when
-// another session holds that host id and does nothing after `end`.
+// another session holds that host id and does nothing after `end`. `keep`
+// hands the session to its owner's restart: it ends nothing, and its owner's
+// stop no longer ends it; the next `open` naming its row id adopts it as it
+// is, its row, relay join and tool sessions included, and one that no `open`
+// adopts within 30 seconds ends then. After `keep` the handle does nothing.
 export interface OwnedSession {
   session: AgentSession;
   end(): void;
   setHostSessionId(hostSessionId: string): void;
+  keep(): void;
 }
 
 // `select` false opens a session in the background: its row is added unmarked
 // and the selected row stays as it was. `rowId` is the id the session's row
 // had before a restart of its owner or of sessions, or before a relaunch,
-// which the row takes back; left out, the row gets a new one.
+// which the row takes back, or the row of a session its owner kept, which the
+// open adopts; left out, the row gets a new one.
 export interface OpenOptions {
   select: boolean;
   rowId?: string;
@@ -229,7 +235,9 @@ export interface SessionsMainExports {
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was.
   // Throws when `info.sessionId` is null, any session already holds that
-  // host id, or one already holds `options.rowId`.
+  // host id, or one already holds `options.rowId`, except a session its owner
+  // kept (`OwnedSession.keep`) under that row id, which it adopts: no
+  // `connected` is emitted, and its host id moves to `info.sessionId`.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets

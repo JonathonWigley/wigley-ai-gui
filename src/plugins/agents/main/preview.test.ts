@@ -30,6 +30,7 @@ function setUp() {
           session: { id } as never,
           end: () => ends.push(id),
           setHostSessionId: () => undefined,
+          keep: () => undefined,
         };
       },
       activate,

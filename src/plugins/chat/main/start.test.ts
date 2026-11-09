@@ -6,6 +6,7 @@ import type {
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import type { Files } from '../../../contracts/files';
+import type { PartStop } from '../../../contracts/plugin';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import type { KeyedSlotKey } from '../../../contracts/state';
 import {
@@ -203,7 +204,8 @@ describe('chat drive actions', () => {
 // Chat's main part started on a harness whose sign-ins record their cancel
 // and whose processes record each message sent, with one profile, `work`, and
 // a data folder that cannot be read; sessions open rows `row-1`, `row-2`, …,
-// and an owned session's end emits `sessions.ended`, recorded in `ended`;
+// and an owned session's end emits `sessions.ended`, recorded in `ended`,
+// and its `keep` is recorded in `kept`;
 // each row holds its titles as sessions would, starting with none.
 // `options.profiles` replaces the profiles.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
@@ -300,6 +302,7 @@ function startChatPart(
   let settingsListener: (settings: unknown) => void = () => undefined;
   const listeners = new Map<string, (data: unknown) => void>();
   const ended: string[] = [];
+  const kept: string[] = [];
   let rows = 0;
   const titles = new Map<string, SessionTitles>();
   const contributions: {
@@ -329,6 +332,7 @@ function startChatPart(
           listeners.get('sessions.ended')?.({ sessionId: id });
         },
         setHostSessionId: () => undefined,
+        keep: () => kept.push(id),
       };
     },
     activate: () => undefined,
@@ -439,6 +443,7 @@ function startChatPart(
     processEvents,
     holdProcessEnds,
     ended,
+    kept,
     listeners,
     processDetach,
     processKill,
@@ -854,11 +859,27 @@ describe('chat main part', () => {
     await chat.heldConnects[0];
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
 
-    await chat.part.dispose?.();
+    await chat.part.dispose?.('end');
 
     expect(chat.openOrigins()).toEqual(['restored', 'new']);
     expect(chat.closeReasons()).toEqual([]);
   });
+
+  it.each<{ stop: PartStop; kept: string[] }>([
+    { stop: 'restart', kept: ['row-1', 'row-2'] },
+    { stop: 'end', kept: [] },
+  ])(
+    'dispose_HeldRows_KeepsThemOnlyForARestart: $stop',
+    async ({ stop, kept }) => {
+      const chat = startChatPart({ data: await dataWithSavedRow() });
+      await chat.heldConnects[0];
+      chat.invoke('start', { projectDir: '/p', profile: 'work' });
+
+      await chat.part.dispose?.(stop);
+
+      expect(chat.kept).toEqual(kept);
+    },
+  );
 
   it('exports_CloseSessionsIn_EndsNeverCome_ResolvesAtStop', async () => {
     const chat = startChatPart();
@@ -866,7 +887,7 @@ describe('chat main part', () => {
     chat.holdProcessEnds();
     const closing = chat.exports.closeSessionsIn('/p');
 
-    await chat.part.dispose?.();
+    await chat.part.dispose?.('end');
     await closing;
 
     expect(chat.ended).toEqual([]);
@@ -908,7 +929,7 @@ describe('chat main part', () => {
     });
     let isHeld = true;
 
-    const disposed = Promise.resolve(chat.part.dispose?.()).then(() => {
+    const disposed = Promise.resolve(chat.part.dispose?.('end')).then(() => {
       isHeld = false;
     });
     await settle();
@@ -925,7 +946,7 @@ describe('chat main part', () => {
     chat.invoke('logIn', 1, 'work');
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
 
-    await chat.part.dispose?.();
+    await chat.part.dispose?.('end');
 
     expect(chat.cancelLogIn).toHaveBeenCalledOnce();
     expect(chat.processDetach).toHaveBeenCalledOnce();

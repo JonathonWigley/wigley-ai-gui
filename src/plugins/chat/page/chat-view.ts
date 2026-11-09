@@ -250,8 +250,9 @@ export type ChatTabScope = 'chat' | 'hub';
 // `drops` registers each Chat tab as the target of the
 // files dropped or pasted on it, and saves a pasted file that is not an
 // image. `writeFocus` writes `chat.focus` each time the visible Chat tab's focused
-// stop changes, null at the view's dispose. `restoresSettled` is whether the
-// part's restore window has settled.
+// stop changes, null at the view's dispose. `hasSavedPlace` is whether
+// sessions held a saved place for the session when chat's page part started:
+// a tab added for such a session leaves its selection to sessions.
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   slots: ChatSlotReaders;
@@ -290,7 +291,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   placeOf(sessionId: string): TabPlace;
   writeFocus(focus: ChatFocus | null): void;
-  restoresSettled(): boolean;
+  hasSavedPlace(sessionId: string): boolean;
 }
 
 // Chat's slots as the page reads them.
@@ -1220,7 +1221,7 @@ function createTab(
     take: (files) => void takeChatFiles(files, dropDeps),
   });
   drawActivity(tab, deps);
-  if (deps.restoresSettled()) {
+  if (!deps.hasSavedPlace(tab.sessionId)) {
     tab.handle.select();
   }
   return tab;

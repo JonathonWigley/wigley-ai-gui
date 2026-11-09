@@ -487,6 +487,7 @@ function setUp(
         setHostSessionId: (hostSessionId) => {
           hostIdChanges.push(hostSessionId);
         },
+        keep: () => undefined,
       };
     },
     mark: (sessionId, options) => {

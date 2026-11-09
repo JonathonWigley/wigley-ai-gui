@@ -404,7 +404,8 @@ selects only a row its session still holds (`activateExistingRow`), so a stale c
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
-its rows across a relaunch, re-attaching each one whose process the session host still runs, and after a process
+its rows through its own restart or reload, its stop `keep`ing each one for the restarted part's restore to adopt
+(`OwnedSession.keep`), so the places of the session's tabs survive it, and across a relaunch, re-attaching each one whose process the session host still runs, and after a process
 exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
 guard (`addCloseGuard`) refuses a close while the plugin still has something open there (forms: an open round; primer:
 an open primer), since main, not the page, decides. The user's close key ends the hold first: a tab or popup that
@@ -427,7 +428,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `start(ids)` starts the named parts in dependency order and throws, starting none, when one depends on a part not
   started; `stop(id)` stops the plugin's dependents first, in reverse start order, then awaits the part's `dispose`
   and disposes its registrations; `restart(id)` stops the plugin with its dependents and starts them again, new
-  registrations and the same slots. A part's optional `ready()` runs once every part of its process has started,
+  registrations and the same slots. A main part's `dispose` hears how it stops (`PartStop`): `restart` for a restart
+  or reload that starts it again, `end` for a switch-off, a removal and quit. A part's optional `ready()` runs once every part of its process has started,
   and after a live start once the parts that start brought up have started: put work that needs its siblings
   started there, not in `start`. A part's optional `mayStop()` gives a reason in words the user reads when it must
   not stop now (a round is open); the switch asks it before a switch-off, and a restart and quit do not. Quit

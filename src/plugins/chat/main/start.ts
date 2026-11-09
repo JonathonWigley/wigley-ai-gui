@@ -251,7 +251,8 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // Starts, resumes and runs the Claude Code sessions the page asks for, keeps
 // the open ones saved with their titles and queued messages, and on start
 // restores them, re-attaching each to its process the session host still runs,
-// holding relay connects until the rows are open; stops every process on
+// holding relay connects until the rows are open, and on a restart keeps
+// their rows for the restarted part's restore to adopt; stops every process on
 // request, leaves them running on quit, tells the host how long to keep idle
 // ones, asks every session it starts to name its row, lists and archives
 // the saved ones, answers their permission prompts through the
@@ -563,7 +564,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     return {
       commands: {},
       exports,
-      dispose: () => {
+      dispose: (stop) => {
+        if (stop === 'restart') {
+          chat.keepRows();
+        }
         const lastSave = chat.detachAll();
         toolCallers.stop();
         accounts.cancelRunning();

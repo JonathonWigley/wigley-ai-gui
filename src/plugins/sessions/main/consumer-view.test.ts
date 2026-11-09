@@ -13,6 +13,7 @@ const INFO: SessionInfo = {
 // Exports whose sessions count their ends.
 function fakeExports() {
   let ends = 0;
+  let keeps = 0;
   const session = {
     session: { id: 'row', info: INFO },
     end: () => {
@@ -21,9 +22,15 @@ function fakeExports() {
   };
   const exports = {
     connect: () => ({ ...session, call: () => Promise.reject(new Error()) }),
-    open: () => ({ ...session, setHostSessionId: () => undefined }),
+    open: () => ({
+      ...session,
+      setHostSessionId: () => undefined,
+      keep: () => {
+        keeps++;
+      },
+    }),
   } as unknown as SessionsMainExports;
-  return { exports, ends: () => ends };
+  return { exports, ends: () => ends, keeps: () => keeps };
 }
 
 describe('sessionsMainView', () => {
@@ -71,5 +78,17 @@ describe('sessionsMainView', () => {
     stop(start(sessionsMainView(exports, consumer)), consumer);
 
     expect(ends()).toBe(1);
+  });
+
+  it('a kept owned session ends nothing when the consumer stops', () => {
+    const { exports, ends, keeps } = fakeExports();
+    const consumer = createRegistrations();
+    const owned = sessionsMainView(exports, consumer).open(INFO);
+
+    owned.keep();
+    consumer.dispose();
+    owned.end();
+
+    expect({ ends: ends(), keeps: keeps() }).toEqual({ ends: 0, keeps: 1 });
   });
 });

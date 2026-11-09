@@ -8,6 +8,7 @@ import type { Log } from '../../contracts/log';
 import type {
   MainPart,
   MainStart,
+  PartStop,
   PluginManifest,
   PluginSwitchService,
 } from '../../contracts/plugin';
@@ -25,6 +26,7 @@ import {
   dependentsOf,
   neededBy,
 } from '../../shared/plugin-manifests';
+import { createSerialQueue } from '../../shared/serial-queue';
 import type { AppliedPlugins } from './applied-plugins';
 
 // How often a refused switch-off asks again, until the part lets go or the
@@ -49,7 +51,8 @@ export const PLUGIN_RETRY_MS = 2000;
 // the dependency does. A reload or restart starts on the page the plugin and
 // each dependent it paused that runs, so a page part whose earlier start
 // failed starts again; a page start that starts a part clears the problem an
-// earlier page start recorded for it.
+// earlier page start recorded for it. A reload or restart stops each main part
+// it starts again as a `restart` (`PartStop`); every other stop is an `end`.
 export interface PluginSwitch extends PluginSwitchService {
   // Applies a new disabled list: refuses with the host's `<id>: <reason>` when
   // a part `mayStop` refuses (a config problem, retried every
@@ -226,13 +229,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   let pending: readonly string[] | null = null;
   let retryHandle: number | null = null;
   let isDisposed = false;
-  let tail: Promise<unknown> = Promise.resolve();
-
-  const inQueue = <T>(work: () => Promise<T>): Promise<T> => {
-    const run = tail.then(work);
-    tail = run.catch(() => undefined);
-    return run;
-  };
+  const queue = createSerialQueue();
 
   const logFailure = (error: unknown) =>
     deps.log(SOURCE, `failed: ${errorText(error)}`);
@@ -331,9 +328,12 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     }
   };
 
-  const removeMain = async (id: string): Promise<string[]> => {
+  const removeMain = async (
+    id: string,
+    stop: PartStop = 'end',
+  ): Promise<string[]> => {
     try {
-      return await main.remove(id);
+      return await main.remove(id, stop);
     } catch (error) {
       logFailure(error);
       return [];
@@ -593,7 +593,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         continue;
       }
       try {
-        await main.stop(manifest.id);
+        await main.stop(manifest.id, 'restart');
       } catch (error) {
         logFailure(error);
       }
@@ -754,7 +754,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         return;
       }
       const hadMain = main.started.has(id);
-      const stopped = new Set([...(await removeMain(id)), id]);
+      const stopped = new Set([...(await removeMain(id, 'restart')), id]);
       if (next.main !== null) {
         main.add(next.main);
         if (!hadMain) {
@@ -852,15 +852,17 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   };
 
   const queueCatalogJob = (work: () => Promise<void>) =>
-    inQueue(async () => {
-      if (isDisposed) {
-        return;
-      }
-      await work();
-      if (!isDisposed) {
-        publish();
-      }
-    }).catch(logFailure);
+    queue
+      .run(async () => {
+        if (isDisposed) {
+          return;
+        }
+        await work();
+        if (!isDisposed) {
+          publish();
+        }
+      })
+      .catch(logFailure);
 
   const mayStop = async (ids: readonly string[]) =>
     main.mayStop(ids) ?? reasonOf(await deps.page({ kind: 'mayStop', ids }));
@@ -1007,7 +1009,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
 
   // Queues an apply of the list `listOf` gives when the queued work runs.
   const applyQueued = (listOf: () => readonly string[] | null) =>
-    inQueue(async () => {
+    queue.run(async () => {
       const disabled = listOf();
       if (isDisposed || disabled === null) {
         return null;
@@ -1076,7 +1078,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
       return `${label(id)} cannot switch off now: ${reason}`;
     },
     restart: (pluginId) =>
-      inQueue(async () => {
+      queue.run(async () => {
         if (isDisposed) {
           return;
         }
@@ -1104,7 +1106,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
           let stopFailure: { error: unknown } | null = null;
           try {
             await deps.page({ kind: 'stop', ids: [pluginId] });
-            await main.stop(pluginId);
+            await main.stop(pluginId, 'restart');
           } catch (error) {
             stopFailure = { error };
           }
@@ -1136,13 +1138,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
           publish();
         }
       }),
-    async settled() {
-      let seen: Promise<unknown>;
-      do {
-        seen = tail;
-        await seen;
-      } while (seen !== tail);
-    },
+    settled: () => queue.settled(),
     dispose() {
       isDisposed = true;
       pending = null;

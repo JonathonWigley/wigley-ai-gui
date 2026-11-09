@@ -60,6 +60,7 @@ function fakeSessions() {
         session: { id, info },
         end: () => ended.push(id),
         setHostSessionId: () => undefined,
+        keep: () => undefined,
       };
     },
   };
@@ -355,7 +356,7 @@ describe('sessions main part', () => {
       });
       exports.mark(session.id, { text: 'Round from folder', action: 'answer' });
       if (disposed) {
-        await started.dispose?.();
+        await started.dispose?.('end');
       }
       written.length = 0;
 
@@ -381,7 +382,7 @@ describe('sessions main part', () => {
     });
     expect(state.read(sessionsRowsSlot, 'test').all().size).toBe(1);
 
-    await started.dispose?.();
+    await started.dispose?.('end');
 
     expect(state.read(sessionsRowsSlot, 'test').all().size).toBe(0);
     expect(state.read(sessionsSelectionSlot, 'test').get()).toBeNull();
@@ -486,7 +487,7 @@ describe('sessions main part', () => {
         expect.stringContaining('endpoint files not written'),
       ]);
     } finally {
-      await started.dispose?.();
+      await started.dispose?.('end');
       rmSync(homeDir, { recursive: true });
     }
   });

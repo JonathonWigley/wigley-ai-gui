@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { Clock, RandomHex } from '../../../contracts/ambient';
+import type { Clock, RandomHex, Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { PluginEvents } from '../../../contracts/plugin';
@@ -29,6 +29,7 @@ import { normalizedTitle, titleProblem } from '../session-title';
 export interface SessionListDeps {
   randomHex: RandomHex;
   clock: Clock;
+  timers: Timers;
   log: PluginLog;
   emit: PluginEvents<SessionsMainEvents>['emit'];
   rows: KeyedSlotWriter<SessionRow>;
@@ -99,6 +100,8 @@ interface SessionEntry {
   // null while no relay is joined.
   owned: boolean;
   joinedBy: symbol | null;
+  // Set by its owner's `keep` until an `open` adopts it or the timer ends it.
+  keptTimer: number | null;
   // Host ids an owned session moved away from; a relay saying hello with one
   // is refused.
   retiredHostIds: Set<string>;
@@ -111,6 +114,10 @@ interface SessionEntry {
 // A mark this soon after `release` closed the session's selected row is a
 // back-to-back round, not one arriving after the user moved on.
 export const RESELECT_WINDOW_MS = 30_000;
+
+// How long a session its owner kept for a restart waits for an `open` to adopt
+// it before it ends.
+export const KEPT_SESSION_MS = 30_000;
 
 const NO_FOLDER_LABEL = 'session';
 const CODEX_NO_FOLDER_LABEL = 'Codex session';
@@ -232,7 +239,9 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // with `select` false, is joined by each relay carrying
 // its host id without a row of its own, a newer relay taking the join from an
 // older one, moves to a new host id by its `setHostSessionId()`, which retires
-// the old id and its relay, and ends only by its `end()`. Each session keeps
+// the old id and its relay, and ends only by its `end()`, or once
+// KEPT_SESSION_MS passed after its `keep()` with no `open` naming its row id
+// to adopt it. Each session keeps
 // its label while it lasts; a closed row comes back at the end with the
 // session's next mark or activate. A row `release` closed while selected
 // comes back selected when the session's next mark comes within
@@ -335,6 +344,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const end = (entry: SessionEntry) => {
     if (!entries.delete(entry.session.id)) {
       return;
+    }
+    if (entry.keptTimer !== null) {
+      deps.timers.clear(entry.keptTimer);
+      entry.keptTimer = null;
     }
     if (reselectOnReturn?.sessionId === entry.session.id) {
       reselectOnReturn = null;
@@ -442,6 +455,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       ...startToolSessions(contributions, session, deps.log),
       owned,
       joinedBy: null,
+      keptTimer: null,
       retiredHostIds: new Set(),
       titles: { user: null, agent: null, firstMessage: null },
       profileDir: deps.configFolder(info),
@@ -599,6 +613,62 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
   };
 
+  // The owner's handle on an owned session; after its `keep` it does nothing.
+  const ownedHandle = (entry: SessionEntry): OwnedSession => {
+    let isKept = false;
+    return {
+      session: entry.session,
+      end: () => {
+        if (!isKept) {
+          end(entry);
+        }
+      },
+      setHostSessionId: (newHostId) => {
+        if (!isKept) {
+          setHostSessionId(entry, newHostId);
+        }
+      },
+      keep: () => {
+        if (isKept || !entries.has(entry.session.id)) {
+          return;
+        }
+        isKept = true;
+        const appId = entry.session.id;
+        entry.keptTimer = deps.timers.set(() => {
+          entry.keptTimer = null;
+          deps.log(`kept session ${appId} not adopted; ended`);
+          end(entry);
+        }, KEPT_SESSION_MS);
+      },
+    };
+  };
+
+  // The kept session's new owner takes it as it is: its row, written again
+  // when the user closed it meanwhile, and selected unless `select` is false.
+  const adopt = (
+    entry: SessionEntry,
+    hostId: string,
+    select: boolean,
+  ): OwnedSession => {
+    const appId = entry.session.id;
+    if (entry.keptTimer !== null) {
+      deps.timers.clear(entry.keptTimer);
+      entry.keptTimer = null;
+    }
+    if (entry.session.info.sessionId !== hostId) {
+      setHostSessionId(entry, hostId);
+    }
+    if (rows.get(appId) === undefined) {
+      rows.set(appId, rowOf(entry));
+    }
+    if (select) {
+      writeSelection(appId);
+      reselectOnReturn = null;
+    }
+    deps.log(`kept session ${appId} adopted`);
+    return ownedHandle(entry);
+  };
+
   // The relay's handle on an owned session, taking the join from any older
   // relay still holding it: a harness restarting its MCP connection can say
   // hello on the new socket before the old one closes. The handle's `end`
@@ -726,25 +796,30 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (hostId === null) {
         throw new Error('open needs a host session id');
       }
-      if (entriesHolding(hostId).length > 0) {
+      const rowId = options?.rowId;
+      const held = rowId === undefined ? undefined : entries.get(rowId);
+      const kept = held?.keptTimer === null ? undefined : held;
+      const isHostHeld = entriesHolding(hostId).some(
+        (holder) => holder !== kept,
+      );
+      if (isHostHeld) {
         throw new Error(`Host session ${hostId} is already open`);
       }
-      const rowId = options?.rowId;
-      if (rowId !== undefined && entries.has(rowId)) {
+      if (held !== undefined && kept === undefined) {
         throw new Error(`Session ${rowId} is already open`);
+      }
+      const isSelecting = options?.select !== false;
+      if (kept !== undefined) {
+        return adopt(kept, hostId, isSelecting);
       }
       const entry = addEntry(info, true, rowId);
       rows.set(entry.session.id, rowOf(entry));
-      if (options?.select !== false) {
+      if (isSelecting) {
         writeSelection(entry.session.id);
         reselectOnReturn = null;
       }
       deps.emit('connected', { ...entry.session, owned: true });
-      return {
-        session: entry.session,
-        end: () => end(entry),
-        setHostSessionId: (newHostId) => setHostSessionId(entry, newHostId),
-      };
+      return ownedHandle(entry);
     },
     mark(sessionId, options) {
       const entry = entries.get(sessionId);

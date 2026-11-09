@@ -2,6 +2,7 @@ import type { Files, FileWatch } from '../../contracts/files';
 import type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
 import { errorText } from '../error-text';
+import { createSerialQueue } from '../serial-queue';
 
 // The layouts in an owner's layouts folder, each at the revision the page
 // loads it at, after the owner's `default`. A save of a code, style, data,
@@ -105,7 +106,8 @@ export async function startLayoutRegistry(
   // registry announces and never resets, so a default that goes built in and
   // comes back live takes a revision above every earlier one.
   let defaultRevision = 1;
-  let queue: Promise<unknown> = Promise.resolve();
+  // Two listings never interleave.
+  const listings = createSerialQueue();
 
   const listLayouts = async (): Promise<ListedLayout[]> => {
     const entries = await folder.list(ROOT, { recursive: true });
@@ -176,14 +178,6 @@ export async function startLayoutRegistry(
     changed,
   });
 
-  // Runs `work` after every earlier queued step, so two listings never
-  // interleave.
-  const serially = <T>(work: () => Promise<T>): Promise<T> => {
-    const run = queue.then(work);
-    queue = run.catch(() => undefined);
-    return run;
-  };
-
   // Lists again after a change in the layout folder `name` and announces it
   // when `name` is a layout now or was one before; a folder that never held a
   // layout sends nothing.
@@ -213,9 +207,11 @@ export async function startLayoutRegistry(
   };
 
   const relistInTurn = (name: string) => {
-    serially(() => relist(name)).catch((error: unknown) =>
-      log(logSource, `layout ${name} not reloaded: ${errorText(error)}`),
-    );
+    listings
+      .run(() => relist(name))
+      .catch((error: unknown) =>
+        log(logSource, `layout ${name} not reloaded: ${errorText(error)}`),
+      );
   };
 
   // A path with no slash names a whole entry in the folder, as a watch reports
@@ -255,9 +251,14 @@ export async function startLayoutRegistry(
           if (changed !== DEFAULT_CODE && changed !== DEFAULT_STYLE) {
             return;
           }
-          serially(() => relistDefault(watched)).catch((error: unknown) =>
-            log(logSource, `layout default not reloaded: ${errorText(error)}`),
-          );
+          listings
+            .run(() => relistDefault(watched))
+            .catch((error: unknown) =>
+              log(
+                logSource,
+                `layout default not reloaded: ${errorText(error)}`,
+              ),
+            );
         },
         { recursive: false, onError: logDefaultWatchFailed },
       );

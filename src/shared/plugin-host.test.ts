@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Registrations } from '../contracts/disposable';
-import type { PluginManifest } from '../contracts/plugin';
+import type { PartStop, PluginManifest } from '../contracts/plugin';
 import { type PartContext, type PluginHost, startPlugins } from './plugin-host';
 
 interface TestPart {
@@ -64,7 +64,7 @@ function startLogging(parts: TestPart[], log: string[]) {
 
 interface Hooks {
   exports?(consumer: Registrations): unknown;
-  dispose?(): void | Promise<void>;
+  dispose?(stop: PartStop): void | Promise<void>;
   ready?(): void;
   mayStop?(): string | null;
 }
@@ -267,6 +267,52 @@ describe('startPlugins', () => {
     ]);
     expect([...host.started.keys()]).toEqual(['d']);
   });
+
+  it.each<{
+    case: string;
+    act(host: PluginHost<Hooks, TestPart>): Promise<unknown>;
+    stops: string[];
+  }>([
+    {
+      case: 'stop left out',
+      act: (host) => host.stop('a'),
+      stops: ['b end', 'a end'],
+    },
+    {
+      case: 'stop as a restart',
+      act: (host) => host.stop('a', 'restart'),
+      stops: ['b restart', 'a restart'],
+    },
+    {
+      case: 'remove as a restart',
+      act: (host) => host.remove('a', 'restart'),
+      stops: ['b restart', 'a restart'],
+    },
+    {
+      case: 'restart',
+      act: (host) => host.restart('a'),
+      stops: ['b restart', 'a restart'],
+    },
+    {
+      case: 'stopAll',
+      act: (host) => host.stopAll(),
+      stops: ['b end', 'a end'],
+    },
+  ])(
+    "hands each part's dispose how it stops: $case",
+    async ({ act, stops }) => {
+      const disposed: string[] = [];
+      const host = startHooked([part('a'), part('b', ['a'])], (id) => ({
+        dispose: (stop) => {
+          disposed.push(`${id} ${stop}`);
+        },
+      }));
+
+      await act(host);
+
+      expect(disposed).toEqual(stops);
+    },
+  );
 
   it('stop of a part not started does nothing', async () => {
     const log: string[] = [];

@@ -12,6 +12,7 @@ import { pluginIdProblem } from '../../shared/define-plugin';
 import { errorText } from '../../shared/error-text';
 import { validateManifest } from '../../shared/plugin-catalog/validate-manifest';
 import { pluginUrl } from '../../shared/plugin-url';
+import { createSerialQueue } from '../../shared/serial-queue';
 
 // How long after the last change under a plugin's folder its load runs, so a
 // save that writes several files loads once.
@@ -71,15 +72,8 @@ export function createUserFolderSource(
   const revisions = new Map<string, number>();
   // The ids whose last load was `loaded` or `failed`.
   const held = new Set<string>();
-  let queue: Promise<unknown> = Promise.resolve();
-
-  // Runs `work` after every earlier queued load, so two loads never
-  // interleave.
-  const serially = <T>(work: () => Promise<T>): Promise<T> => {
-    const run = queue.then(work);
-    queue = run.catch(() => undefined);
-    return run;
-  };
+  // Two loads never interleave.
+  const loads = createSerialQueue();
 
   const failed = (id: string, message: string): SourceLoad => {
     log(LOG_SOURCE, `plugin ${id} failed: ${message}`);
@@ -272,12 +266,12 @@ export function createUserFolderSource(
 
   // `trackedLoad` in turn with every other load.
   const loadInTurn = (id: string): Promise<TrackedLoad> =>
-    serially(() => trackedLoad(id));
+    loads.run(() => trackedLoad(id));
 
   // `loadInTurn` when the id's folder has come or gone since the source last
   // loaded it; null when the source's hold of the id already matches it.
   const loadWhenPresenceChanged = (id: string): Promise<TrackedLoad | null> =>
-    serially(async () => {
+    loads.run(async () => {
       let isPresent: boolean;
       try {
         isPresent = (await pluginsFolder.stat(id))?.isFolder === true;

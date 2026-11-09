@@ -21,6 +21,7 @@ function sessionList() {
   const list = createSessionList({
     randomHex: () => `row-${++ids}`,
     clock: { now: () => 0 },
+    timers: { set: () => 0, clear: () => undefined },
     log: () => undefined,
     emit: (event, data) => {
       if (event === 'ended') {

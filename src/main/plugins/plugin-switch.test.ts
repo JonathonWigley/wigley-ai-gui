@@ -8,6 +8,7 @@ import type { PluginStatus } from '../../contracts/core-state';
 import type {
   MainPart,
   MainStart,
+  PartStop,
   PluginManifest,
 } from '../../contracts/plugin';
 import type {
@@ -85,8 +86,14 @@ interface SetupOptions {
   disabled?: readonly string[];
 }
 
+// ` restart` for a main stop or remove handed `restart`, else nothing.
+function restartMark(stop: PartStop | undefined): string {
+  return stop === 'restart' ? ' restart' : '';
+}
+
 // A switch over a fake main host and a fake page, each pushing
-// `<side> <kind> <ids>` to `calls`, with the applied list, `clearOwner`,
+// `<side> <kind> <ids>` to `calls`, a main stop or remove marked by
+// `restartMark`, with the applied list, `clearOwner`,
 // `servedChanged` and the config's `setPlugins` pushing to the same list.
 // `main` and `page` hold what the fakes answer, and a test changes them
 // between calls. A refusal answers only for a request naming its id, and a
@@ -183,8 +190,8 @@ function setup({
         calls.push(`main mayStop ${ids.join(',')}`);
         return refusalFor(main.refusal, ids);
       },
-      async stop(id) {
-        calls.push(`main stop ${id}`);
+      async stop(id, stop) {
+        calls.push(`main stop ${id}${restartMark(stop)}`);
         const stopped = main.stopReply ?? [id];
         for (const each of stopped) {
           started.delete(each);
@@ -212,8 +219,8 @@ function setup({
       add(part) {
         calls.push(`main add ${part.manifest.id}`);
       },
-      async remove(id) {
-        calls.push(`main remove ${id}`);
+      async remove(id, stop) {
+        calls.push(`main remove ${id}${restartMark(stop)}`);
         if (!started.has(id)) {
           return [];
         }
@@ -772,7 +779,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'setPlugins',
         'page stop u',
-        'main remove u',
+        'main remove u restart',
         'main add u',
         'main start u',
         'main start d',
@@ -800,7 +807,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'setPlugins',
         'page stop u',
-        'main remove u',
+        'main remove u restart',
         'main add u',
         'main start u',
         'paused',
@@ -828,7 +835,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'setPlugins',
         'page stop u',
-        'main remove u',
+        'main remove u restart',
         'main add u',
         'main start u',
         'paused',
@@ -850,9 +857,9 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'setPlugins',
         'page stop u',
-        'main remove u',
+        'main remove u restart',
         'main add u',
-        'main stop d',
+        'main stop d restart',
         'main start u',
         'main start d',
         'paused',
@@ -916,7 +923,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'setPlugins',
         'page stop u',
-        'main remove u',
+        'main remove u restart',
         'main add u',
         'main start u',
         'applied u',
@@ -945,7 +952,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'setPlugins',
         'page stop u',
-        'main remove u',
+        'main remove u restart',
         'main add u',
         'main start u',
         'main stop u',
@@ -975,7 +982,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'setPlugins',
         'page stop u',
-        'main remove u',
+        'main remove u restart',
         'main add u',
         'main start u',
         'applied u',
@@ -998,7 +1005,7 @@ describe('createPluginSwitch', () => {
         'servedChanged',
         'setPlugins',
         'page stop u',
-        'main remove u',
+        'main remove u restart',
         'main add u',
         'main start u',
         'main start d',
@@ -1191,7 +1198,7 @@ describe('createPluginSwitch', () => {
       'servedChanged',
       'setPlugins',
       'page stop u',
-      'main remove u',
+      'main remove u restart',
       'main add u',
       'main start u',
       'applied u',
@@ -1618,7 +1625,7 @@ describe('createPluginSwitch', () => {
       'paused a,b',
       'servedChanged',
       'page stop a',
-      'main stop a',
+      'main stop a restart',
       'main start a',
       'main start b',
       'paused',
@@ -1644,7 +1651,7 @@ describe('createPluginSwitch', () => {
         'paused a',
         'servedChanged',
         'page stop a',
-        'main stop a',
+        'main stop a restart',
         'main start a',
         'paused',
         'servedChanged',
@@ -1670,7 +1677,7 @@ describe('createPluginSwitch', () => {
         'paused x,z,y',
         'servedChanged',
         'page stop x',
-        'main stop x',
+        'main stop x restart',
         'main start x',
         'main start z',
         'main start y',
@@ -1691,7 +1698,7 @@ describe('createPluginSwitch', () => {
         'paused a',
         'servedChanged',
         'page stop a',
-        'main stop a',
+        'main stop a restart',
         'main start a',
         'paused',
         'servedChanged',
@@ -1730,7 +1737,7 @@ describe('createPluginSwitch', () => {
       'paused a,b',
       'servedChanged',
       'page stop a',
-      'main stop a',
+      'main stop a restart',
       'main start a',
       'applied a',
       'applied a,b',

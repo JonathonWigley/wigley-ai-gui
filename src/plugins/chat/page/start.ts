@@ -15,6 +15,7 @@ import {
   followRows,
   sessionsActiveSlot,
   sessionsPageKey,
+  sessionsPlaceSlot,
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
@@ -117,6 +118,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     api.restores.track(api.channel.invoke('restored'));
     const sessions = api.dependency(sessionsPageKey);
     const rows = api.state.read(sessionsRowsSlot);
+    // The sessions whose place sessions holds from before this start: their
+    // tabs' selection is sessions' to restore.
+    const savedPlaceIds = new Set(
+      api.state.read(sessionsPlaceSlot).all().keys(),
+    );
     const chatSessions = api.state.read(chatSessionSlot);
     const active = api.state.read(sessionsActiveSlot);
     const placeWriter = api.state.publish(chatPlaceSlot);
@@ -164,11 +170,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     };
     // A session whose row ended while no page ran leaves keys no tab takes;
     // the prune waits for the restore window to settle, so the rows chat's
-    // restore reopens are in the page mirror first. A tab added before then
-    // leaves its session's saved selection in place.
-    let restoresSettled = false;
+    // restore reopens are in the page mirror first.
     api.restores.onSettled(() => {
-      restoresSettled = true;
       const isLive = (sessionId: string) => rows.all().has(sessionId);
       pruneKeys(placeWriter, isLive);
       pruneKeys(imagesWriter, isLive);
@@ -319,7 +322,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       drops: api.drops,
       placeOf,
       writeFocus: (focus) => focusWriter.set(focus),
-      restoresSettled: () => restoresSettled,
+      hasSavedPlace: (sessionId) => savedPlaceIds.has(sessionId),
     });
     sessions.addRowPart(rowClock.part);
     const rowProfile = createRowProfile({

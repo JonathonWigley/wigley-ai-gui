@@ -641,6 +641,7 @@ describe('docs main part lifecycle', () => {
               session: { id, info },
               end: () => ended.push(id),
               setHostSessionId: () => undefined,
+              keep: () => undefined,
             };
           },
         }) as unknown as SessionsMainExports,
