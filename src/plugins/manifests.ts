@@ -20,6 +20,7 @@ import { sessionLogManifest } from './session-log/manifest';
 import { sessionStashManifest } from './session-stash/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
+import { systemStatsManifest } from './system-stats/manifest';
 import { unityPoolManifest } from './unity-pool/manifest';
 import { usageManifest } from './usage/manifest';
 import { usageTabLineManifest } from './usage-tab-line/manifest';
@@ -66,6 +67,7 @@ export const builtInManifests = [
   workflowSmallManifest,
   workflowMediumManifest,
   unityPoolManifest,
+  systemStatsManifest,
   visualManifest,
   windowManifest,
 ] as const;

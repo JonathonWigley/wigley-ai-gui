@@ -3,9 +3,7 @@ import type {
   SystemSample,
   SystemStats,
 } from '../contracts/system-stats';
-
-// The pid of the fake `claude` process a Chat session's process tree hangs from.
-export const FAKE_SESSION_PID = 4242;
+import { FAKE_AGENT_PID } from './fake-agent-harness';
 
 // The fake machine's reading at `step`: fixed processes on a busy machine,
 // every cumulative counter grown by a fixed amount per step, so two samples
@@ -81,7 +79,7 @@ function fakeProcesses(step: number): ProcessSample[] {
       gpuTimeNs: 0,
     },
     {
-      pid: FAKE_SESSION_PID,
+      pid: FAKE_AGENT_PID,
       ppid: 1,
       name: 'claude',
       path: '/Users/fake/.local/bin/claude',
@@ -91,7 +89,7 @@ function fakeProcesses(step: number): ProcessSample[] {
     },
     {
       pid: 4243,
-      ppid: FAKE_SESSION_PID,
+      ppid: FAKE_AGENT_PID,
       name: 'node',
       path: '/usr/local/bin/node',
       cpuTimeMs: 2_000 + 400 * step,

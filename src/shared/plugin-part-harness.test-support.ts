@@ -166,7 +166,9 @@ export interface PartHarness<Started> {
 }
 
 // `invoke` calls the live handler of the part under test and throws when none
-// is live; `sent` holds what that part sent.
+// is live; `sent` holds what that part sent. `pushSettings` replaces what
+// `settings()` reads for the part under test and tells its `onSettingsChanged`
+// listeners.
 export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
   MainStart<M>
 > {
@@ -174,6 +176,7 @@ export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
   readonly processes: FakeProcesses;
   readonly drive: ReturnType<typeof fakeDriveHost> | null;
   invoke(method: string, ...args: unknown[]): unknown;
+  pushSettings(settings: M['settings']): void;
   readonly sent: readonly { message: string; data: unknown }[];
 }
 
@@ -769,10 +772,22 @@ interface MainRecord {
   handlers: Map<string, (...args: never[]) => unknown>;
   sent: { message: string; data: unknown }[];
   layoutsRegistered: boolean;
+  settings: object;
+  settingsListeners: Listeners<object>;
 }
 
-function newMainRecord(counts: PartCounts = zeroCounts()): MainRecord {
-  return { counts, handlers: new Map(), sent: [], layoutsRegistered: false };
+function newMainRecord(
+  settings: object,
+  counts: PartCounts = zeroCounts(),
+): MainRecord {
+  return {
+    counts,
+    handlers: new Map(),
+    sent: [],
+    layoutsRegistered: false,
+    settings,
+    settingsListeners: createListeners(),
+  };
 }
 
 // What every main part of one harness shares.
@@ -869,14 +884,13 @@ function fakeMainApi(
   context: PartContext,
   world: MainWorld,
   record: MainRecord,
-  settings: object,
 ): MainApi<PluginManifest, any, any, any> {
   const common = commonApi(
     manifest,
     context,
     world,
     record.counts,
-    settings,
+    record.settings,
     'main',
   );
   const { register } = common;
@@ -909,8 +923,9 @@ function fakeMainApi(
       },
     },
     events: common.events,
-    settings: common.settings,
-    onSettingsChanged: common.onSettingsChanged,
+    settings: () => record.settings,
+    onSettingsChanged: (listener) =>
+      register(record.settingsListeners.add(listener)),
     dependency: common.dependency as MainApi<
       PluginManifest,
       any,
@@ -988,30 +1003,23 @@ export function startMainPart<M extends PluginManifest>(
     options.state,
     [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
-  const record = newMainRecord();
+  const record = newMainRecord(options.settings ?? part.manifest.settings);
   const beginOn = (
     each: { manifest: PluginManifest; start(api: never): HostedStart },
     partRecord: MainRecord,
-    settings: object,
   ): HostedPart => ({
     manifest: each.manifest,
     begin: (context) =>
       each.start(
-        fakeMainApi(
-          each.manifest,
-          context,
-          world,
-          partRecord,
-          settings,
-        ) as never,
+        fakeMainApi(each.manifest, context, world, partRecord) as never,
       ),
   });
   const lifecycle = partLifecycle<MainStart<M>>(
     'main',
-    beginOn(part, record, options.settings ?? part.manifest.settings),
+    beginOn(part, record),
     dependencies,
     realParts.map((real) =>
-      beginOn(real, newMainRecord(), real.manifest.settings),
+      beginOn(real, newMainRecord(real.manifest.settings)),
     ),
     record.counts,
     world.commands.registry,
@@ -1023,6 +1031,10 @@ export function startMainPart<M extends PluginManifest>(
     processes: world.processes,
     drive: world.drive,
     sent: record.sent,
+    pushSettings(settings) {
+      record.settings = settings;
+      record.settingsListeners.tell(settings);
+    },
     invoke(method, ...args) {
       const handler = record.handlers.get(method) as
         | ((...handlerArgs: unknown[]) => unknown)

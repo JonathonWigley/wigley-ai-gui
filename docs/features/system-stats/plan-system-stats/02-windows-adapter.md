@@ -1,6 +1,6 @@
 # 02 — Windows adapter
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -164,3 +164,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 73e506bd · proof: diff read: createWindowsSystemStats in main.ts systemStatsFor, windowsHide in node-processes; worker's 43 system-stats tests pass, typecheck clean; PowerShell never run (task 08 / user's Windows check) · concerns: rejection names powershell.exe through the runner's own error when the spawn fails; a key present as null throws a TypeError naming no program
