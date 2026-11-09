@@ -62,6 +62,9 @@ notices), kept so the plan is written from them. A decision here stands unless t
   | `Space v i` | any | show or hide the interviewer pane |
   | `⌥h` `⌥j` `⌥k` `⌥l` | core | move between the list, the problem pane, the editor, the console and the interviewer |
 
+  The interviewer's mounted chat view holds chat's own keys, so there `⌘↩` sends the message and Run and Submit wait
+  until the keys leave the view.
+
   Every non-vim key gets its anchor where it acts (`AGENTS.md` § Key hints).
 
 ## Problem files
