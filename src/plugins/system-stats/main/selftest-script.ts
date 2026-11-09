@@ -11,10 +11,10 @@ export interface SystemStatsSelfTestDeps {
 const line = (text: string) => `[system-stats] ${text}`;
 const TOGGLE = [' ', 'v', 'y'];
 const OTHER = 'Other (exited processes, system)';
-const BY_CPU = `Google Chrome, WindowServer, Claude, ${OTHER}, Finder`;
+const BY_CPU = `Google Chrome, WindowServer, Claude Code, ${OTHER}, Finder`;
 const CHROME_OPENED =
   'opened Google Chrome: Google Chrome Helper (Renderer), Google Chrome';
-const CLAUDE_OPENED = 'opened Claude: claude · fix login, claude';
+const CLAUDE_OPENED = 'opened Claude Code: claude · fix login, claude';
 
 // `open` seeds the `busy` fixture, so the panel draws fixed rows; the self-test starts with the panel hidden. The
 // script runs after unity-pool's, so two Alt+l reach the right bar from a Chat tab with its hub.
@@ -60,14 +60,14 @@ export function systemStatsSelfTestScript(
         {
           keys: ['s'],
           expect: line(
-            `sorted by ram: Finder, Google Chrome, Claude, WindowServer, ${OTHER}`,
+            `sorted by ram: Finder, Google Chrome, Claude Code, WindowServer, ${OTHER}`,
           ),
           screenshot: 'sorted-ram',
         },
         {
           keys: ['s'],
           expect: line(
-            `sorted by gpu: WindowServer, Google Chrome, Finder, Claude, ${OTHER}`,
+            `sorted by gpu: WindowServer, Google Chrome, Finder, Claude Code, ${OTHER}`,
           ),
         },
         { keys: ['s'], expect: line(`sorted by cpu: ${BY_CPU}`) },
@@ -75,7 +75,7 @@ export function systemStatsSelfTestScript(
     },
     {
       name: 'groups',
-      why: 'Enter and l open the cursor’s group with its rows sorted under it, h closes it from a child or from the group, the Claude group opens to its Chat session row, which has no group of its own, a lone process and the Other row have no group, and Alt+h gives the keys back.',
+      why: 'Enter and l open the cursor’s group with its rows sorted under it, h closes it from a child or from the group, the Claude Code group opens to its Chat session row, which has no group of its own, a lone process and the Other row have no group, and Alt+h gives the keys back.',
       steps: [
         {
           keys: ['Enter'],
@@ -93,14 +93,14 @@ export function systemStatsSelfTestScript(
         },
         { keys: ['l'], expect: line(CHROME_OPENED) },
         { keys: ['h'], expect: line('closed Google Chrome') },
-        { keys: ['j', 'j'], expect: line('cursor on Claude') },
+        { keys: ['j', 'j'], expect: line('cursor on Claude Code') },
         { keys: ['l'], expect: line(CLAUDE_OPENED) },
         { keys: ['j'], expect: line('cursor on claude · fix login') },
         { keys: ['l'], expect: line('no group: claude · fix login') },
         {
           keys: ['h'],
-          expect: line('closed Claude'),
-          alsoExpect: [/^\[system-stats\] cursor on Claude$/],
+          expect: line('closed Claude Code'),
+          alsoExpect: [/^\[system-stats\] cursor on Claude Code$/],
         },
         { keys: ['G'], expect: line('cursor on Finder') },
         { keys: ['l'], expect: line('no group: Finder') },

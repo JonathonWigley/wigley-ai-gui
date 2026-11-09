@@ -7,7 +7,7 @@ import type { ProcessRate, SessionProcess } from './snapshot';
 const APP_BUNDLE = '.app';
 const OTHER_ROW_NAME = 'Other (exited processes, system)';
 const CLAUDE_APP_ID = 'app:claude';
-const CLAUDE_GROUP_NAME = 'Claude';
+const CLAUDE_GROUP_NAME = 'Claude Code';
 
 // The app a process belongs to: the outermost `.app` bundle in its path, else its own name.
 export function appKeyOf(process: Pick<ProcessSample, 'name' | 'path'>): {

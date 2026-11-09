@@ -127,7 +127,7 @@ describe('groupProcesses', () => {
       expected: [
         {
           id: 'app:claude',
-          name: 'Claude',
+          name: 'Claude Code',
           kind: 'app',
           cpuPercent: 13.25,
           rssBytes: 1400,

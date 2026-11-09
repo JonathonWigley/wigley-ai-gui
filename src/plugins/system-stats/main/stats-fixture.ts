@@ -33,7 +33,7 @@ export function statsFixture(
       ],
     },
     {
-      ...processRow(0, 'Claude', 9, 700, null),
+      ...processRow(0, 'Claude Code', 9, 700, null),
       id: 'app:claude',
       kind: 'app',
       children: [

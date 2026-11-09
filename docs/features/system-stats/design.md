@@ -64,7 +64,7 @@ module, which takes the two samples and the time between them:
   RAM. Memory pressure and swap used are shown on a line under the meter.
 - **Grouping**: a process joins its app's group (its outermost `.app` bundle on macOS, else its
   executable name, on any OS), which shows the summed numbers. Every Chat session's process tree is one row
-  in the Claude group (below). A group opens to show its rows.
+  in the Claude Code group (below). A group opens to show its rows.
 - **History** is a ring of the last 60 seconds per meter, kept in main and published with the
   snapshot, so a page reload keeps it and an app restart starts it again. Each show of the panel
   starts it empty, so a sparkline never joins readings from before a hide.
@@ -85,7 +85,7 @@ as `pid` on the session's `chat.session` entry (null while no process runs). The
 pids with the `sessions.rows` titles and finds each session's whole process tree from the parent
 pids in the sample. The tree becomes one row, titled `claude · <session title>`, summing the
 `claude` process and everything it started (shells, MCP servers, test runs); it never opens. While
-any session holds a process, those rows make up one `Claude` group (`app:claude`), followed by the
+any session holds a process, those rows make up one `Claude Code` group (`app:claude`), named apart from the Claude desktop app's `Claude` group,, followed by the
 `claude` processes no session holds, such as sessions started in a terminal. With no session
 holding a process, `claude` processes group as any other app does.
 

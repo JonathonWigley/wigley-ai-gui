@@ -33,7 +33,7 @@ export function nextSort(sort: StatsSortColumn): StatsSortColumn {
   return NEXT_SORT[sort];
 }
 
-// A group row: an app, or the Claude group of Chat sessions, which opens to show its rows.
+// A group row: an app, or the Claude Code group of Chat sessions, which opens to show its rows.
 export function isGroup(row: StatsProcessRow): boolean {
   return row.kind === 'app';
 }
