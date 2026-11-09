@@ -312,6 +312,7 @@ function chatHeld(sessionId: string, profile: string): ChatSessionInfo {
     background: 0,
     activeTime: { totalMs: 0, since: null },
     running: true,
+    pid: null,
     compaction: null,
     repo: 'p',
     branch: null,

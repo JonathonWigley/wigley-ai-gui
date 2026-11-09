@@ -421,6 +421,7 @@ describe('workflow page part', () => {
       background: 0,
       activeTime: { totalMs: 0, since: null },
       running: true,
+      pid: null,
       compaction: null,
       repo: 'p',
       branch: null,
