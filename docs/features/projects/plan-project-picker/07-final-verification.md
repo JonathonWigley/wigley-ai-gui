@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -73,3 +73,5 @@ the note written; the § 4 checks in the wrap-up's Needs you.
 Commit:    none in the repo (personal files only); the Proof records the edits.
 
 ## Proof
+
+Commit none (personal files only) · proof: §1 drive run pp07: Project step lists the project and Other folder… → Folder step (PASS); folder project → Profile → Session → session in the project folder, grouped 'Scratch Project' (PASS); captures read. §3 note added to ~/.agents/AGENTS.local.md new-games-prototypes pool bullet. §2 install + settings.json and §4 installed-app checks run after landing / go to the wrap-up · concerns: none

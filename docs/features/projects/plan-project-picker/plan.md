@@ -228,7 +228,7 @@ Boundary rules: chat imports no unity-pool file; sessions imports no chat file; 
 - [x] [Doc re-read](06-doc-re-read.md) — after 04, 05
 
 ### Wave 5
-- [ ] [Final verification](07-final-verification.md) — after 06
+- [x] [Final verification](07-final-verification.md) — after 06
 
 ## Run log
 
@@ -242,6 +242,7 @@ Review base: 7ec307f1
 - 01b · 29ab3be6 · diff read (docs and workflow both hear sessions.relocated), typecheck and lint clean after 03, docs and workflow start tests 103 pass · concerns: none
 - 05 · 503785ff · diff read (every Produces present); typecheck 0, lint 0, chat+shared-page vitest 2390 passed · concerns: branch reopen reads picker.cursorIndex() assuming the Branch request is still open; cached branch list may open the step after the refresh failed (ruling); list-picker.test filteredPickerSetup now records filter text
 - 06 · 43746236 · diff read; lint 0, typecheck 0 (worker); AGENTS.md, agent-chat Flow and Resume bullets checked with no change · concerns: none
+- 07 · none (personal files only) · §1 drive run pp07: Project step lists the project and Other folder… → Folder step (PASS); folder project → Profile → Session → session in the project folder, grouped 'Scratch Project' (PASS); captures read. §3 note added to ~/.agents/AGENTS.local.md new-games-prototypes pool bullet. §2 install + settings.json and §4 installed-app checks run after landing / go to the wrap-up · concerns: none
 ### Contract changes
 - runPoolClaim deps: as planned → gains log; releaseCommandArgs and lastLine exported from pool-cli.ts; pool-watch.ts exports STATE_FILE · why: the release after a cancelled claim runs inside runPoolClaim, which alone holds the script path and python command · consumers: 04 only · group 04
 - emitSessionOpened (private): (session, profileName, profileDir, origin) → (row: {sessionId, hostSessionId, projectDir}, profileName, profileDir, origin) · why: openRow emits before the HeldSession exists, and a claim landing emits with the clone · consumers: none outside chat-sessions.ts · group 03
@@ -260,5 +261,6 @@ Review base: 7ec307f1
 - addPoolProvider's registration and its dispose each call namer.changed(), so rows in a pool's clones regroup when a provider comes or goes · group 03 · group 03
 - Workflow overwrites its connected entry on relocated even for a row with none; the docs test pins the move through a Codex session's context run — relocate precedes sessionOpened by design · group 01b
 - 05: the cached branch read still opens the Branch step after the refresh rejected; 'ignore the cached answer' applies only once the step is open — otherwise that order shows nothing and no toast
+- 07: § 1 (drive checks) and § 3 (machine note) run now; § 2 (install-app, user settings.json) needs the branch on main, so it runs after landing, on the user's yes for the app restart, and § 4 goes to the wrap-up's Needs you
 ### Review rounds
 ### Test gate
