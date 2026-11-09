@@ -350,6 +350,14 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   `createModes` has no claim there. Only one listener today sets a flag, so nothing fails. To decide: move the
   `coreModeSlot` write to first, as the registry model does, or release the fake's claim before it tells.
 
+- **Headless off note: chat sends it, not the workflow tools** — *needs a feature plan*: turning a session's
+  headless flag off reaches the agent only as a line on its next `set_workflow_step` or `set_workflow_checklist`
+  result (`src/plugins/workflow/main/headless-line.ts`). Four stacked fixes in the retro-briefs run (track at tool
+  start, re-seed at a host id change, `launchedHeadless` at the first result with `forget`, `launchHeadless`
+  saved in `SavedSession`) still leave two gaps: a workflow main restart loses the line state, and an agent that
+  calls neither workflow tool never hears the flag went off. Chosen direction: chat owns the off note and sends it
+  with the user's next prompt (or on the next tool result of any kind), so the workflow tools carry no line state.
+
 ## Platform and packaging
 
 What Windows support and installers need.
