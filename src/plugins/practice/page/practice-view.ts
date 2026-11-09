@@ -492,7 +492,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     noProblemDraw?.built.element.remove();
     noProblemDraw = null;
     if (!isNoProblemShown) {
-      if (workspace.element.parentElement !== mainPane) {
+      if (workspace.element.parentNode !== mainPane) {
         mainPane.append(workspace.element);
       }
       return;
@@ -602,7 +602,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   const setFocus = (focus: PracticeFocus) => changeFocus(focus, true);
 
   // A click or a box's focus into the list or the column hands it the keys;
-  // the interviewer pane takes them itself.
+  // in the interviewer pane only the ask box takes them, itself.
   for (const [pane, focus] of [
     [listPane, 'list'],
     [mainPane, 'main'],
@@ -627,13 +627,17 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
 
   const applyOpened = (problem: OpenedProblem) => {
     const slug = problem.summary.slug;
+    // The shown problem refreshes in place, dropping a show of another one
+    // that waits on a save.
+    if (slug === shownSlug) {
+      workspaceSlug = slug;
+      noteShown(problem);
+      workspace.refresh(problem);
+      return;
+    }
+    // A read landing while its show waits on a save is dropped: the show
+    // draws what it read.
     if (slug === workspaceSlug) {
-      // A read landing while its show waits on a save is dropped: the show
-      // draws what it read.
-      if (slug === shownSlug) {
-        noteShown(problem);
-        workspace.refresh(problem);
-      }
       return;
     }
     workspaceSlug = slug;

@@ -32,7 +32,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - **Side bar:** one flat list of every problem, sorted by status (attempted, then new, then solved), then difficulty
   (easy, medium, hard), then title. Each row shows the title, the difficulty, a status mark and a due mark when its
   review date has come. A header line counts solved of total for each difficulty. There is no Due section and no
-  grouping by list. A list read that fails shows its error in place of the rows.
+  grouping by list. A first list read that fails shows its error in place of the rows; a later one keeps the rows and
+  toasts.
 - **Opening another problem** saves the shown problem's drafts first. A draft that fails to save keeps the shown
   problem open and selected, logs `kept <slug>: a draft did not save` and toasts
   `<title> not opened: a draft did not save`.
@@ -131,8 +132,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   comes from running `reference.cpp` on it, as LeetCode's Run does.
 - **Submit** runs every case in order, stops at the first that fails, and records a submission.
 - **Verdicts:** Accepted, Wrong Answer, Time Limit Exceeded, Runtime Error (a non-zero exit or a sanitizer report),
-  Compile Error. A sanitizer report is a Runtime Error even when the run also passed the time limit, since writing
-  the report can take that long.
+  Compile Error. A sanitizer report is a Runtime Error even when the run also ran past the time limit, since writing the
+  report can take that long.
 - **A failed case** shows its input, the expected answer, the output and the case's stdout; a Runtime Error also
   shows stderr. **Compile errors** show the compiler's output with each location rewritten to `solution.cpp:<line>`.
 - **Runtime** is the measured wall time of the cases, on the sanitizer build: a number for comparing the user's own
@@ -153,7 +154,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   attempt's first Accepted Submit, with no peek — moves the problem one step up and sets its next review date that many
   days ahead. Opening the Solution tab drops the problem to the first step. A Wrong Answer does not move it.
 - **Opening a problem:** a due problem (its review date reached) opens on a fresh stub in a new attempt; old code that
-  is not the stub is kept as `solution.<previous attempt id>.cpp`, and stays in its submissions. Any other problem opens on its last code in its current attempt.
+  is not the stub is kept as `solution.<previous attempt id>.cpp`, and stays in its submissions. Any other problem opens
+  on its last code in its current attempt.
 - Problem lists (Blind 75, Graphs and the like) come from the agent at import, in `problem.json`'s `lists`.
 
 ## Adding problems

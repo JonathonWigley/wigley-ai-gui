@@ -19,6 +19,7 @@ import {
   type ProblemSummary,
   practicePlaceSlot,
 } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
 import { AUTOSAVE_DELAY_MS } from './problem-workspace';
 import { practicePagePart } from './start';
 
@@ -357,6 +358,40 @@ describe('practicePagePart', () => {
     expect(placeOf(harness)).toMatchObject({ openSlug: EASY.slug });
   });
 
+  it('keeps the edits typed while a switch waits when the shown problem is picked again', async () => {
+    const firstSave = deferred<undefined>();
+    let saves = 0;
+    const { harness, calls, editors, commands } = await startWithProblemOpen(
+      (method) =>
+        method === 'saveCode' && ++saves === 1 ? firstSave.promise : undefined,
+    );
+    const made = editors.made();
+    editors.typeDocument('int solve');
+    commands.listUp({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    editors.typeDocument('int solve();');
+
+    commands.listDown({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    firstSave.resolve(undefined);
+    await settle();
+    harness.advance(AUTOSAVE_DELAY_MS);
+    await settle();
+
+    expect(editors.made()).toBe(made);
+    expect(
+      calls
+        .filter((call) => call.method === 'saveCode')
+        .map((call) => call.args),
+    ).toEqual([
+      [SECOND, 'int solve'],
+      [SECOND, 'int solve();'],
+    ]);
+    expect(placeOf(harness)).toMatchObject({ openSlug: SECOND });
+  });
+
   it('drops a submit landing after another problem opened', async () => {
     const submitted = deferred<JudgeResult>();
     const { harness, editors, commands } = await startWithProblemOpen(
@@ -398,6 +433,27 @@ describe('practicePagePart', () => {
       'practice.problem',
     ]);
     expect(messagesOf(harness)).toContain('main focused');
+  });
+
+  it('keeps the focus in the ask box across a layout change', async () => {
+    const { harness, commands } = await startWithProblemOpen((method) =>
+      method === 'interviewerOf' ? Promise.resolve(null) : undefined,
+    );
+    commands.toggleInterviewer({ arg: undefined });
+    await settle();
+    const askBox = asFake(harness.mode('practice.main').element).querySelector(
+      '.practice-ask-box',
+    );
+    const content = document.createElement('div');
+    askBox!.append(asFake(content));
+    content.focus();
+
+    harness.showLayouts({
+      layouts: new Map([['default', defaultLayout]]),
+      user: 'default',
+    });
+
+    expect(document.activeElement === content).toBe(true);
   });
 
   it('stops with nothing live', async () => {

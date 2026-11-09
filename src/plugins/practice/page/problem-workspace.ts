@@ -221,8 +221,9 @@ export interface ProblemWorkspace {
   // the place's pane and tabs instead. A draft that fails to save keeps the
   // shown problem and its drafts, and resolves `kept`.
   show(problem: OpenedProblem): Promise<ShowResult>;
-  // Takes the shown problem read again, keeping every unsaved draft; another
-  // problem is ignored.
+  // Takes the shown problem read again, keeping every unsaved draft, and drops
+  // a `show` of another problem still waiting on its save, which resolves
+  // `overtaken`; another problem is ignored.
   refresh(problem: OpenedProblem): void;
   pane(): WorkspacePane;
   // Moves the DOM focus to the pane that held the keys last.
@@ -961,7 +962,10 @@ export function createProblemWorkspace(
   };
 
   // ── Opening ────────────────────────────────────────────────────────────
+  // `settledShow` is the last `show` that showed or kept; a later `showCount`
+  // waits on a save.
   let showCount = 0;
+  let settledShow = 0;
 
   const buildEditor = (problem: OpenedProblem) => {
     docEditor?.destroy();
@@ -1193,9 +1197,11 @@ export function createProblemWorkspace(
           return 'overtaken';
         }
         if (!isSaved) {
+          settledShow = count;
           return 'kept';
         }
       }
+      settledShow = count;
       const place = takeSavedPlace(problem.summary.slug);
       if (isOtherProblem) {
         rendered.clear();
@@ -1212,6 +1218,13 @@ export function createProblemWorkspace(
     },
     refresh(problem) {
       const before = store.get();
+      if (before.problem?.summary.slug !== problem.summary.slug) {
+        return;
+      }
+      if (settledShow !== showCount) {
+        showCount += 1;
+        settledShow = showCount;
+      }
       dispatch({ type: 'refreshed', problem });
       const after = store.get();
       if (after.drafts.code.text !== before.drafts.code.text) {

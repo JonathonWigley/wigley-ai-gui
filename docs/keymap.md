@@ -80,19 +80,19 @@ hjkl is the direction in every layer; the modifier picks the verb.
   picker or confirm keeps its own keys; a new main view adds its scope to that list in
   `src/plugins/keymap.ts`. While a box's completion popup is open, Ctrl+n and Ctrl+p move the
   popup's selection instead, and Tab accepts it, ahead of every bind; Shift+Tab still moves to the previous box.
-- **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
-  between a view's own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog list and
-  detail, the primer popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat
-  tab's transcript, box and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode, Practice's
-  interviewer pane beside its column), then, at main's edge, to
-  the shown mode's side bar on the left (the Sessions list, the docs tree, the Backlog homes, the Settings sections)
-  and the right bar on the right (each part of it that has rows, Alt+j/k between them). From the side bar Alt+l, and
-  from the right bar Alt+h, return to main's last pane. A hidden side bar or right bar is no stop: focus stops at the
-  outer edge, and stays put while any scope is pushed over the view (a dialog, a confirm, a picker, a filter box,
-  help). The commands are the core's `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`,
-  bound in every scope; a view takes part through its focus target, a mode's side bar through the mode, and a right
-  bar part through its contribution (AGENTS.md § Architecture), never a bind of its own. Each move takes the
-  keyboard with it: the box or list of the pane left behind keeps no focus.
+- **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first between a view's
+  own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog list and detail, the primer
+  popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat tab's transcript, box
+  and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode,
+  Practice's interviewer pane beside its column), then, at main's edge, to the shown mode's side bar on the left (the
+  Sessions list, the docs tree, the Backlog homes, the Settings sections) and the right bar on the right (each part of
+  it that has rows, Alt+j/k between them). From the side bar Alt+l, and from the right bar Alt+h, return to main's last
+  pane. A hidden side bar or right bar is no stop: focus stops at the outer edge, and stays put while any scope is
+  pushed over the view (a dialog, a confirm, a picker, a filter box, help). The commands are the core's
+  `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`, bound in every scope; a view takes part
+  through its focus target, a mode's side bar through the mode, and a right bar part through its contribution (AGENTS.md
+  § Architecture), never a bind of its own. Each move takes the keyboard with it: the box or list of the pane left
+  behind keeps no focus.
 - **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping
   focus in the list (the docs tree, the Sessions list, the Backlog homes, the Settings sections, the Practice list). `a` on
   the Practice list starts an import. The Sessions

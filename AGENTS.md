@@ -307,12 +307,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
                  layouts/ (the backlog Layout contract and the built-in `default` layout)
   practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge
-                 that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress
-                 and the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import and
-                 interviewer sessions through chat's `launch` and `resume`, a `problems/` watch started at the first list, the self-test's script and its `writeFixture` drive action), page/ (Practice mode: the problem list in
-                 the side bar, the stacked problem pane, editor and console, the interviewer pane through chat's
-                 `mountChat`, the import box), layouts/ (the practice Layout contract and the built-in `default` layout);
-                 `docs/features/practice/design.md`
+                 that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress and
+                 the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import and
+                 interviewer sessions through chat's `launch` and `resume`, a `problems/` watch started at the first
+                 list, the self-test's script and its `writeFixture` drive action), page/ (Practice mode: the problem
+                 list in the side bar, the stacked problem pane, editor and console, the interviewer pane through chat's
+                 `mountChat`, the import box), layouts/ (the practice Layout contract and the built-in `default`
+                 layout); `docs/features/practice/design.md`
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
                  `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
                  permission_prompt and start_session MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the

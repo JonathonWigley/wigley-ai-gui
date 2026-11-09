@@ -9,9 +9,10 @@ import type { PracticeChannel } from '../contract';
 import { createInterviewerPane } from './interviewer-pane';
 import type { PracticeFocus } from './practice-state';
 
-// One box the fake host made: its text, each focus call's options, and
-// whether it was destroyed.
+// One box the fake host made: the element it mounted in, its text, each
+// focus call's options, and whether it was destroyed.
 interface FakeBox {
+  parent: HTMLElement;
   text: string;
   focusOptions: unknown[];
   isDestroyed: boolean;
@@ -29,8 +30,13 @@ interface FakeMount {
 function fakeEditorHost() {
   const boxes: FakeBox[] = [];
   const host = {
-    create(_parent: HTMLElement, doc: string, events: EditorEvents) {
-      const box: FakeBox = { text: doc, focusOptions: [], isDestroyed: false };
+    create(parent: HTMLElement, doc: string, events: EditorEvents) {
+      const box: FakeBox = {
+        parent,
+        text: doc,
+        focusOptions: [],
+        isDestroyed: false,
+      };
       boxes.push(box);
       return {
         text: () => box.text,
@@ -305,6 +311,18 @@ describe('createInterviewerPane', () => {
     });
     expect(setup.logs).toContain(row.line);
     expect(setup.toasts).toEqual(row.toasts);
+  });
+
+  it('keeps the focus in the ask box across a redraw', async () => {
+    const setup = paneSetup();
+    await setup.openTwoSum(null);
+    const content = document.createElement('div');
+    setup.boxes[0]!.parent.append(content);
+    content.focus();
+
+    setup.pane.redraw();
+
+    expect(document.activeElement === content).toBe(true);
   });
 
   it('keeps the keys on the mount that replaces the ask box', async () => {
