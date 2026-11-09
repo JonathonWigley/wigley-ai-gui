@@ -106,6 +106,39 @@ function leaderEdge(head, kit, command, options) {
   return edge;
 }
 
+/**
+ * A Leader menu row and its main part, the one line its key, label and dim
+ * detail keep; the recording and the cursor prompt follow it on that line, or
+ * wrap under it when the column has no room.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').RowKit} kit
+ * @param {import('../layout').RecordingInput | null} recording
+ */
+function leaderRow(parent, kit, recording) {
+  const row = kit.el(parent, 'li', 'settings-row settings-leader-row');
+  row.classList.toggle('settings-row--recording', recording !== null);
+  const head = kit.el(row, 'div', 'settings-row-head');
+  const main = kit.el(head, 'div', 'settings-leader-main');
+  return { row, head, main };
+}
+
+/**
+ * Ends a Leader menu row: the recording and the cursor prompt in `head` after
+ * its main part, the recording's note under it, then the open box.
+ * @param {{ row: HTMLElement, head: HTMLElement }} drawn
+ * @param {import('../layout').RowKit} kit
+ * @param {import('../layout').RecordingInput | null} recording
+ */
+function leaderRowEnd({ row, head }, kit, recording) {
+  if (recording !== null) {
+    recordingSpan(head, kit, recording);
+  }
+  kit.rowActions(head);
+  recordingNote(row, kit, recording);
+  kit.box(row);
+  return row;
+}
+
 /** @type {import('../layout').CompleteSettingsLayout} */
 const layout = {
   sections(parent, kit) {
@@ -122,12 +155,15 @@ const layout = {
     const root = kit.el(parent, 'div', 'settings-pane');
     const head = kit.sectionHeader(root, input.title);
     head.classList.add('settings-head');
-    const edge = kit.edge(head, 'panes.focusLeft', {
-      side: 'start',
-      chevron: '‹ sections',
-    });
-    edge.classList.add('settings-edge', 'settings-edge--start');
-    head.prepend(edge);
+    // The Leader menu's groups column draws its own edge to the sections.
+    if (input.sectionId !== 'leader') {
+      const edge = kit.edge(head, 'panes.focusLeft', {
+        side: 'start',
+        chevron: '‹ sections',
+      });
+      edge.classList.add('settings-edge', 'settings-edge--start');
+      head.prepend(edge);
+    }
     kit.filterHint(head);
     kit.filterBox(root);
     kit.problem(root);
@@ -168,7 +204,7 @@ const layout = {
   },
   keyRow(parent, input, kit) {
     const { recording } = input;
-    return settingsRow(parent, kit, {
+    const row = settingsRow(parent, kit, {
       label: input.label,
       detail: input.group,
       description: '',
@@ -206,8 +242,11 @@ const layout = {
           separated(recordingSpan(binds, kit, recording));
         }
       },
-      drawUnder: (row) => recordingNote(row, kit, recording),
+      drawUnder: (drawnRow) => recordingNote(drawnRow, kit, recording),
     });
+    row.classList.add('settings-key-row');
+    row.classList.toggle('settings-row--recording', recording !== null);
+    return row;
   },
   keyFilters(parent, input, kit) {
     const bar = kit.el(parent, 'div', 'settings-key-filters');
@@ -276,12 +315,8 @@ const layout = {
       (head) => {
         leaderEdge(head, kit.groupsKit, 'panes.focusLeft', {
           side: 'start',
-          chevron: '‹ sections',
         });
-        leaderEdge(head, kit.groupsKit, 'panes.focusRight', {
-          side: 'end',
-          label: 'items',
-        });
+        leaderEdge(head, kit.groupsKit, 'panes.focusRight', { side: 'end' });
       },
       (column) => kit.groupRows(column),
     );
@@ -299,59 +334,43 @@ const layout = {
     return { element: root };
   },
   leaderGroupRow(parent, input, kit) {
-    const row = kit.el(parent, 'li', 'settings-row settings-leader-row');
-    row.style.setProperty('--settings-leader-depth', String(input.depth));
-    const head = kit.el(row, 'div', 'settings-row-head');
+    const drawn = leaderRow(parent, kit, input.recording);
+    drawn.row.style.setProperty('--settings-leader-depth', String(input.depth));
     if (input.key !== '') {
-      kit.kbd(head, input.key);
+      kit.kbd(drawn.main, input.key);
     }
-    const name = kit.el(head, 'span', 'settings-row-label', input.name);
+    const name = kit.el(drawn.main, 'span', 'settings-row-label', input.name);
     name.classList.toggle('is-unnamed', !input.isNamed);
     if (input.isSet) {
-      kit.tag(head, 'Set');
+      kit.tag(drawn.main, 'Set');
     }
-    if (input.recording !== null) {
-      recordingSpan(head, kit, input.recording);
-    }
-    kit.el(head, 'span', 'settings-leader-count', String(input.count));
-    kit.rowActions(head);
-    recordingNote(row, kit, input.recording);
-    kit.box(row);
-    return row;
+    kit.el(drawn.main, 'span', 'settings-leader-count', String(input.count));
+    return leaderRowEnd(drawn, kit, input.recording);
   },
   leaderItemRow(parent, input, kit) {
-    const row = kit.el(parent, 'li', 'settings-row settings-leader-row');
-    const head = kit.el(row, 'div', 'settings-row-head');
-    const key = kit.kbd(head, input.key);
+    const drawn = leaderRow(parent, kit, input.recording);
+    const key = kit.kbd(drawn.main, input.key);
     key.classList.toggle('is-struck', input.recording !== null);
-    if (input.recording !== null) {
-      recordingSpan(head, kit, input.recording);
-    }
     const label = input.kind === 'group' ? `${input.label} ›` : input.label;
-    kit.el(head, 'span', 'settings-row-label', label);
+    kit.el(drawn.main, 'span', 'settings-row-label', label);
     if (input.command !== null) {
-      kit.el(head, 'span', 'settings-leader-command', input.command);
+      kit.el(drawn.main, 'span', 'settings-leader-command', input.command);
     }
     for (const text of input.tags) {
-      kit.tag(head, text);
+      kit.tag(drawn.main, text);
     }
-    kit.rowActions(head);
-    recordingNote(row, kit, input.recording);
-    kit.box(row);
-    return row;
+    return leaderRowEnd(drawn, kit, input.recording);
   },
   leaderAddRow(parent, input, kit) {
-    const row = kit.el(parent, 'li', 'settings-row settings-leader-row');
-    const head = kit.el(row, 'div', 'settings-row-head');
-    kit.el(head, 'span', 'settings-row-label', 'add…');
-    if (input.recording !== null) {
-      recordingSpan(head, kit, input.recording);
-    }
-    kit.el(head, 'span', 'settings-leader-free', input.freeKeys.join(' '));
-    kit.rowActions(head);
-    recordingNote(row, kit, input.recording);
-    kit.box(row);
-    return row;
+    const drawn = leaderRow(parent, kit, input.recording);
+    kit.el(drawn.main, 'span', 'settings-row-label', 'add…');
+    kit.el(
+      drawn.main,
+      'span',
+      'settings-leader-free',
+      input.freeKeys.join(' '),
+    );
+    return leaderRowEnd(drawn, kit, input.recording);
   },
   pickerRow(parent, input, kit) {
     const row = kit.row(parent, {

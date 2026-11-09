@@ -241,7 +241,8 @@ The keyboard is first; the mouse works everywhere.
     (`⌥⇧K ▴ ▾ ⌥⇧J` on a divider between stacked panes) shows only on hover, during a drag and for a moment after a keyboard resize (Split, below).
   - **Cursor prompt:** an action on the selected row, with its label, on the cursor row only
     (`s star  r rename  d trash`): at the row's end in Docs, and in Settings and Backlog, where it
-    wraps when the row has no room; on a line of its own under the label in Primer and in the Sessions list's card; in a column of
+    wraps when the row has no room (a Keybindings row keeps one line: its dim parts give way instead, and
+    a recording's prompt takes the cursor prompt's place); on a line of its own under the label in Primer and in the Sessions list's card; in a column of
     its own in Notes. Out of scope it hides in place, keeping its space.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
     Not applicable x, Notes a).

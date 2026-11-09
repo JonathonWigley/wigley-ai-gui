@@ -591,7 +591,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     );
     const cursorRow = rows.find((row) => row.key === cursorKey);
     placeRowPrompt(cursorRow);
-    if (cursorKey !== null) {
+    // On the first row the sheet scrolls to its top, so the header, filter
+    // chips and the find heading above that row show with it.
+    if (cursorKey !== null && rows[0]?.key === cursorKey) {
+      rowsSheet.scrollTop = 0;
+    } else if (cursorKey !== null) {
       drawnRows.get(cursorKey)?.element.scrollIntoView({ block: 'nearest' });
     }
     deps.placeChanged({

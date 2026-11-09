@@ -148,6 +148,48 @@
   font-size: var(--wg-text-12);
 }
 
+/* A key row is one line. Its keys and the cursor prompt keep their width;
+   the dim group gives way first, then the binds' tags and a recording's
+   prompt, each ending in an ellipsis. The label keeps its width up to half
+   the line. While a recording runs, its prompt takes the cursor prompt's
+   place. */
+.settings-key-row .settings-row-label,
+.settings-key-row .settings-row-detail,
+.settings-key-row .settings-bind > .ui-tag,
+.settings-key-row .settings-recording-prompt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-key-row .settings-row-label {
+  flex: none;
+  max-width: 50%;
+}
+
+.settings-key-row .settings-row-detail {
+  flex: 0 10000 auto;
+}
+
+.settings-key-row .settings-row-end,
+.settings-key-row .settings-binds,
+.settings-key-row .settings-bind,
+.settings-key-row .settings-recording {
+  flex: 0 100 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.settings-key-row .settings-row-actions {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
+.settings-row--recording .settings-row-actions {
+  display: none;
+}
+
 /* The recording's note under its row: what the keys move from, or why a
    press was refused. */
 .settings-row-note {
@@ -188,7 +230,7 @@
 /* The Leader menu: the groups column beside the selected group's items. */
 .settings-leader {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   gap: var(--wg-space-3);
   align-items: start;
   list-style: none;
@@ -200,10 +242,22 @@
   min-width: 0;
 }
 
-/* A narrow column's header wraps its edges rather than its title. */
+/* A column's header is one line: its edges keep their width, and the title
+   ends in an ellipsis. */
 .settings-leader-column > .settings-head {
-  flex-wrap: wrap;
   white-space: nowrap;
+}
+
+.settings-leader-column .ui-section-header-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-leader-column > .settings-head > .settings-edge--end {
+  align-self: auto;
+  margin-left: auto;
+  padding: 0;
 }
 
 .settings-leader-groups,
@@ -212,6 +266,51 @@
   padding: 0;
   list-style: none;
   outline: none;
+}
+
+/* A Leader menu row's main part is one line: its dim id, free keys and tags
+   give way, each ending in an ellipsis, while the label keeps its width up
+   to most of the line. The recording and the cursor prompt follow on that
+   line, and wrap under it at its end when the column has no room. */
+.settings-leader-row > .settings-row-head {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: var(--wg-space-1);
+}
+
+.settings-leader-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--wg-space-3);
+  min-width: 0;
+}
+
+.settings-leader-main > .settings-row-label,
+.settings-leader-main > .ui-tag,
+.settings-leader-command,
+.settings-leader-free,
+.settings-leader-row .settings-recording-prompt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-leader-main > .settings-row-label {
+  flex: none;
+  max-width: 70%;
+}
+
+.settings-leader-main > .ui-tag,
+.settings-leader-command,
+.settings-leader-free {
+  flex: 0 1000 auto;
+}
+
+.settings-leader-row .settings-recording {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 /* A group row, indented one step per nested level. */
