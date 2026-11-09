@@ -23,7 +23,8 @@ so the same hands work in both tools.
 - A pane shows one whole session: its tab bar and its tabs (Chat, and Docs when the `docs-session-tab` plugin is
   on), with the session's popups (a round, the primer) over them. A round's popup opens in its session's pane.
 - A session shows in at most one pane. Each tab hands the session one element, and tmux never
-  shows one process in two panes either.
+  shows one process in two panes either. A session with an `owner` has no pane: its row has no place in the pane tree,
+  and only its owner's `mountChat` shows it.
 - Only Sessions mode splits. Docs, Backlog and Settings keep their own fixed panes.
 - Splitting halves the focused pane, as tmux does. Splits nest in both directions, so the panes are
   a tree. The tree is a shared page module, and Sessions mode is its first owner.

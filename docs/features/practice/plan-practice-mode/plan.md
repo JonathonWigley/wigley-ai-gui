@@ -247,7 +247,7 @@ does not consume.
 - [x] [Practice page: interviewer pane and import box](09-practice-interviewer-import.md) — after 03, 08
 
 ### Wave 7
-- [ ] [Practice self-test and drive action](10-practice-selftest.md) — after 09
+- [x] [Practice self-test and drive action](10-practice-selftest.md) — after 09
 
 ### Wave 8
 - [ ] [Doc re-read](11-doc-re-read.md) — after 10
@@ -269,6 +269,7 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 07 · bf1cce38 · diff read: practice-state exports, PracticeView/createPracticeView/setFocus/openProblemRow, PracticePlace/practicePlaceSlot/practiceOpenProblemRowCommand, layout.d.ts types, PracticeBaseScope/createPracticeKit present; keymap kp, list keys, page registration, layout register reviewed; typecheck clean; worker ran 18 files 224 tests and lint clean · concerns: practice-state.ts duplicates problem.ts's private DIFFICULTIES; layouts design.md lacks a practice adopter row (task 11); view.dispose disposes its draws though backlog's does not, untested; changed-reread test checks via practice.place
 - 08 · 8de85a0e · diff read: Split axis/sizedPane/setEndHidden, createProblemWorkspace/ProblemWorkspace/WorkspacePane, focusColumn/applyOpened, workspace-state and case-text exports, practiceShowTabCommand/practiceOpenSubmissionRowCommand, PracticePlace pane/problemTab/consoleTab present; AGENTS.md and DESIGN.md split prose read; typecheck clean; worker ran 77 files 1952 tests and lint clean · concerns: edits outside Files: DESIGN.md (stale Split entry) and practice-state.ts (placeOf); task doc said 'type' drives the code editor but it reaches the last box, so typeDocument was added; split layout, confirm placement, real editor :w/:wq/:q and focus moves unchecked live (task 12)
 - 09 · dff5247b · diff read: createInterviewerPane/InterviewerPane, createImportBox/ImportBox, six manifest commands, ask and import scopes, askBox/importBox parts, keymap vi/a/ask/import binds present; typecheck clean; worker ran 21 files 275 tests and lint clean · concerns: import-box.ts copies rename-dialog.ts's restoreFocus closure (shared helper would need rename-dialog edit); ask frame's CodeMirror box is moved not remounted on layout redraw, unchecked live; pane holding keys with nothing shown sets practice.ask and focuses the root, untested; keys.anchor takes an options object, not the doc's positional scope
+- 10 · 364c0343 + 430f11f4 · diff read: selftest-fixture (PRACTICE_FIXTURE_SLUGS), selftest-script, start.ts drive action practice.writeFixture and script handover present; selftest isolation shown (selfTest runMode mkdtemp home); typecheck clean; worker ran practice/main tests 91 green and lint clean; npm run selftest -- --plugin practice failed 3 checksFit (08 CSS overflow), fixed in 430f11f4, rerun all passed · concerns: ResizeObserver loop errors from the vite client around interviewer steps, not failing; tab strip keeps default ui-tabs margin inside the bar (sessions zeroes it) — check visually
 ### Contract changes
 - driverSource include of solutionPath: a C string literal with \ and " escaped → the path written verbatim, driverSource throwing on a path holding " or a line break · why: clang reads an #include "…" path literally with no escape processing, so escaping breaks any backslash path · consumers: 05 · group 04
 - 05 main/problem-store.ts ProblemStoreDeps gains log: PluginLog (logs unparsable submission files and 'watch stopped: <reason>'); consumers: 06 builds nothing from it (only start.ts builds the store)
@@ -328,5 +329,9 @@ Review base: aad3781f4f297de5f3763d2bdfe6d3c0916b6ab0
 - 09: logs 'interviewer not read <slug>: <err>' and 'interviewer not mounted <slug>: <err>' with error toasts · group 09
 - 09: import box closes its scope with dispose(), sends trimmed requests, logs 'import failed' even after close · group 09
 - 10's filtered selftest failed only checksFit at the workspace's minimum width (split panes and pane headers overflow 368px), caused by 08's layout CSS: the overflow is fixed in the practice layout CSS by a fix dispatch, never by dropping checksFit — a real overflow stays visible — lead
+- 10: drive action via api.drive?.add and script via services.selfTest?.run, no explicit runMode check · group 10
+- 10: result checks compiler and submission in parallel; exactly-one submission read once the first .json appears · group 10
+- 10: groups are a module constant · group 10
+- 10 fix: header wraps, tabs bar shrinks with ui-tabs--scroll strip; narrow console actions drop under the tabs · group 10
 ### Review rounds
 ### Test gate

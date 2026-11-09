@@ -10,7 +10,7 @@
 - **Adding problems** — the import session and the `add_practice_problem` tool.
 - **The interviewer** — the side pane, its lifetime, its instructions, `read_practice_state`.
 - **Chat and sessions changes** — the embeddable chat view, per-session instructions, rows with an owner, main `resume`.
-- **Seams** — the modules and what each one owns.
+- **Seams** — the modules and what each one owns, and the self-test fixture.
 
 The decisions the user settled in the 2026-11-08 interview (four rounds, the design review and the agent's Decided
 notices), kept so the plan is written from them. A decision here stands unless the user changes it.
@@ -53,14 +53,24 @@ notices), kept so the plan is written from them. A decision here stands unless t
   | Key | Scope | Action |
   |---|---|---|
   | `Space k p` | any | show Practice; again: toggle the side bar |
-  | `j` `k` `gg` `G` `Enter` | list | move, open the problem |
-  | `/` | list | filter |
-  | `a` | list | start an import session from a one-line request |
+  | `j` `k` `gg` `G` | list | move |
+  | `Enter` / `l` | list | open the problem; `l` keeps the focus in the list |
+  | `/` | list | filter; `Enter` accepts, `Esc` cancels (scope `practice.box`, pushed while the filter box is open) |
+  | `a` | list | open the import box (scope `practice.import`, pushed): `Enter` starts the import from a one-line request, `Esc` cancels |
   | `⌘'` | every Practice scope, the editor included | Run |
   | `⌘↩` | every Practice scope, the editor included | Submit |
   | `gt` / `gT` | problem pane, console | next / previous tab of that pane |
-  | `Space v i` | any | show or hide the interviewer pane |
+  | `j` `k` `gg` `G` `Enter` `Esc` | problem pane | move over the Submissions rows, open a submission's code, back to the rows |
+  | `i` / `Esc` | problem pane, console | edit the Notes or Testcase box / leave it |
+  | `Ctrl-j` `Ctrl-k` `Ctrl-Shift-j` `Ctrl-Shift-k` | problem pane, console | scroll a line / half a page |
+  | `y` `n` `Esc` | the Solution confirm (scope `practice.confirm`, pushed) | open the tab / keep solving |
+  | `Space v i` | any | show or hide the interviewer pane; with Practice hidden and the pane shown, it only shows Practice |
+  | `Enter` / `Esc` | the interviewer's ask box (scope `practice.ask`) | send the first message / leave the box |
   | `⌥h` `⌥j` `⌥k` `⌥l` | core | move between the list, the problem pane, the editor, the console and the interviewer |
+
+  `practice.ask` is a base scope the view sets through `setScope`, so it sits in the `<C-n>` list beside the list,
+  problem, editor and console scopes and is never pushed; `practice.box`, `practice.confirm` and `practice.import` are
+  pushed over the base scope while their box or prompt is open.
 
   The interviewer's mounted chat view holds chat's own keys, so there `⌘↩` sends the message and Run and Submit wait
   until the keys leave the view.
@@ -141,12 +151,18 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - `a` on the list opens a one-line box; the request ("add the Blind 75 graph problems") starts an import session
   through chat's `launch` in the practice folder with the default profile, carrying the built-in import
   instructions. It is an ordinary chat session with its own row in the Sessions side bar.
+  A blank request is refused with `Write what to add.`; a launch that fails shows an error toast and logs
+  `import failed`.
 - `add_practice_problem` is an MCP tool every session lists. It takes the problem's `problem.json` fields, the
-  statement, the reference solution and the approach. It refuses a bad schema or an unsupported type, then compiles the
-  reference and runs it on every case; on any case where the reference disagrees with the expected answer it refuses,
-  naming each failing case, and writes nothing. On success it writes the problem's files with a stub `solution.cpp`. A
-  slug already present is refused unless the call sets `replace: true`, which rewrites the import's files and keeps the
-  user's solution, notes, custom cases, progress and submissions.
+  statement, the reference solution and the approach. Every refusal starts `Refused:` and writes nothing: a blank or
+  non-string `slug`, `statement`, `reference` or `approach`; a bad schema or an unsupported type (the message names the
+  field path); a reference that does not compile (with the compiler's output); and a reference that disagrees with the
+  expected answer, which names the count and each failing case as `case <n> (visible|hidden)` with its input, expected
+  and got values. A slug already present is refused unless the call sets `replace: true`, which rewrites the import's
+  files and keeps the user's solution, notes, custom cases, progress and submissions. On success it writes the
+  statement, reference and approach, a stub `solution.cpp` (unless a replace keeps the user's), and `problem.json`
+  last, so a list read on the first change sees every file. It answers `Added <slug>` or `Replaced <slug>` by whether
+  the slug existed, not by the flag.
 
 ## The interviewer
 
@@ -155,14 +171,19 @@ notices), kept so the plan is written from them. A decision here stands unless t
   the user fail.
 - **Lifetime:** one interviewer per attempt. The pane shows a plain ask box until the user's first message, which
   launches the interviewer with that message; the pane then shows the chat view of that session. Reopening the
-  problem brings the same session back (resumed if its row is gone); a new attempt starts a fresh one and closes the
-  old attempt's interviewer, which has no Sessions row the user could close it from.
+  problem brings the same session back (resumed if chat no longer holds it); a new attempt's first message launches a
+  fresh one and closes the latest earlier interviewer that chat still holds, since that one has no Sessions row the
+  user could close. Asks for one problem run one at a time. A launch that gets no host session id from chat within
+  two seconds is closed and fails; a failed read or mount of the interviewer shows an error toast and logs
+  `interviewer not read <slug>` or `interviewer not mounted <slug>`.
 - Talking to the interviewer is not a peek.
 - **Instructions:** built into the plugin; `interviewer.md` in the practice folder replaces them when present. They
   reach the harness as the session's own instructions, not as a message.
 - The interviewer reads the user's screen through `read_practice_state`, a tool every session lists but only
-  interviewer sessions may call: it returns the problem's statement, signature, the current code, the last Run or
-  Submit result and the attempt's state. Any other session gets an error result.
+  interviewer sessions may call: it returns Markdown: the problem's statement, signature, the current code, the last
+  Run or Submit result (`None since the app started.` before any; a failing case as Input, Expected, Output and Stdout
+  lines, with Stderr for a Runtime Error) and the attempt's state. It never returns the reference or the approach. Any
+  other session gets an error result.
 - Interviewer sessions run in the practice folder with the default profile and have no row in the Sessions side bar.
 
 ## Chat and sessions changes
@@ -171,7 +192,7 @@ notices), kept so the plan is written from them. A decision here stands unless t
   session chat holds into the element and returns a handle with `shown`, `hidden` and `dispose`; a session whose
   record or row has not reached the page yet is drawn once both arrive. The Chat tab and the
   mount fill one small host interface (attach, shown, hidden, visible), so the view stays one module with two
-  adapters. A session shows in one place: an session with an owner is never placed in a Sessions pane.
+  adapters. A session shows in one place: a session with an owner is never placed in a Sessions pane.
 - **Per-session instructions:** `LaunchRequest.instructions` (and `ResumeRequest.instructions`) carry text this
   session alone passes to its harness after the global `addInstructions` texts. They are saved with the session, so
   they hold across `/clear`, a relaunch and a resume.
@@ -194,5 +215,9 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - **Pure functions**, each with table tests: driver source from a signature, answer comparison per compare mode, the
   next review step and date from an outcome (with an injected clock), compile-error line mapping, and the list's
   sort and filter reducer.
+- **Self-test:** the plugin hands the self-test a script and offers the `practice.writeFixture` drive action, which
+  writes two problems into the practice folder, replacing every problem there: `two-sum` (a function problem with a
+  correct `solution.cpp`) and `lru-cache` (a design problem whose `get` always returns -1, so Submit gives Wrong
+  Answer), then tells the page to list again.
 - **Tools:** `add_practice_problem` and `read_practice_state`, contributed through sessions' `contributeTools`; the
   second checks the calling session against Practice's interviewer ids at call time, since the tool list is global.

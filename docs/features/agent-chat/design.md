@@ -363,7 +363,7 @@ interview on 2026-10-23; this file is the record of both.
   untitled), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the values the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
-  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), whether it is `headless` (a file without it reads as false), in row order, with the selected
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), whether it is `headless` (a file without it reads as false), its own `instructions` and its `owner` (a file without them reads as none and null), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. A
   close of its row removes its record — the user's, a failed start's, `closeSessionsIn`'s, or chat main's `close`; quit, `install-app`, a process exit and a chat plugin reload keep it.
@@ -400,7 +400,8 @@ interview on 2026-10-23; this file is the record of both.
   registration order, as one `--append-system-prompt` value joined with a blank line; no flag when none are
   registered. On a resume the Claude CLI sends the system prompt it recorded on the conversation's first request until
   compaction (`--system-prompt-snapshot`, on by default), so a resumed conversation keeps the instructions of its
-  first launch.
+  first launch. A `launch` or `resume` request's own `instructions` follow the global ones at every start of that session's
+  process, saved with the session, so they hold across `/clear`, a relaunch and a resume.
   A session whose process exits while the app runs rests the same way, a notice in its chat giving the exit and its
   reason. A restored session whose turn was running when its process was lost (a reboot or a host crash, since quit
   ends none) gets a notice that the app quit during that turn; one whose

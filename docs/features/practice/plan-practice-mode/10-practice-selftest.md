@@ -1,6 +1,6 @@
 # 10 — Practice self-test and drive action
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -178,3 +178,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 364c0343 + 430f11f4 · proof: diff read: selftest-fixture (PRACTICE_FIXTURE_SLUGS), selftest-script, start.ts drive action practice.writeFixture and script handover present; selftest isolation shown (selfTest runMode mkdtemp home); typecheck clean; worker ran practice/main tests 91 green and lint clean; npm run selftest -- --plugin practice failed 3 checksFit (08 CSS overflow), fixed in 430f11f4, rerun all passed · concerns: ResizeObserver loop errors from the vite client around interviewer steps, not failing; tab strip keeps default ui-tabs margin inside the bar (sessions zeroes it) — check visually
