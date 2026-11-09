@@ -196,7 +196,7 @@ owner's layout (`AGENTS.md` § Intent).
 
 ### Wave 1
 - [x] [Key capture](01-key-capture.md)
-- [ ] [The new leader tree](02-leader-tree.md)
+- [x] [The new leader tree](02-leader-tree.md)
 
 ### Wave 2
 - [ ] [Which-key shelf and leader search](03-which-key-shelf.md) — after 02
@@ -217,9 +217,11 @@ Review base: a42ed9f9
 
 ### Groups
 - 01 · 1fbe1a66 · diff read (captureKey, capture hooks, keyCapture, capturedKeys all present) + typecheck clean · concerns: capturedKeys spells Esc as <Esc> if called directly; engine capture() leaves pending keys to createPageApi; an onCancel that re-arms is overwritten
+- 02 · bacb7c95 · diff read (tree matches docs/keymap.md § Leader groups) + typecheck clean; worker's filtered selftest passes every moved-key step · concerns: forms 'cancelled preview' group fails 3 steps (<D-w> never logs activated Codex session) — same 3 fail on base; unit tests building their own binds left as is
 ### Contract changes
 ### Rulings
 - captureKey_PluginStops_DisarmsTheCapture landed as a row in page-api.test.ts RECORDED_ROWS — that table owns part-stop disposal — none · group 01 · group 01
 - chordTokenFor returns null when its token fails parseChord — never spells a chord the matcher rejects — none · group 01 · group 01
+- sweep hits beyond the task list (chat PERMISSION_CARD_STEPS and hub-keys, forms SECOND_SESSION_STEPS, sessions rename why) moved the same way — the task says treat new hits alike — none · group 02 · group 02
 ### Review rounds
 ### Test gate

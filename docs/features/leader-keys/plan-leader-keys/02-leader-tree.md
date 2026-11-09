@@ -1,6 +1,6 @@
 # 02 — The new leader tree
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -108,3 +108,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit bacb7c95 · proof: diff read (tree matches docs/keymap.md § Leader groups) + typecheck clean; worker's filtered selftest passes every moved-key step · concerns: forms 'cancelled preview' group fails 3 steps (<D-w> never logs activated Codex session) — same 3 fail on base; unit tests building their own binds left as is
