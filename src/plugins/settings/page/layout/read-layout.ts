@@ -12,6 +12,7 @@ const LAYOUT_PARTS: Record<keyof SettingsLayout, true> = {
   leaderRow: true,
   advancedRow: true,
   groupHeader: true,
+  keyFilters: true,
   empty: true,
   problem: true,
   pickerRow: true,

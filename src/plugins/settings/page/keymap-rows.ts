@@ -73,6 +73,51 @@ export function firesAnywhere(line: BindLine): boolean {
   return line.page?.state === 'active' || line.editor?.state === 'active';
 }
 
+// The Keybindings section's filter chips, in the order `f` cycles them.
+export type KeyFilter = 'all' | 'bound' | 'unbound' | 'changed';
+
+export const KEY_FILTERS: readonly KeyFilter[] = [
+  'all',
+  'bound',
+  'unbound',
+  'changed',
+];
+
+function isBound(row: CommandRow): boolean {
+  return (
+    row.binds.some(firesAnywhere) ||
+    row.accelerators.some((line) => line.state === 'active')
+  );
+}
+
+// Whether the user layer names one of `row`'s lines: a user bind, a removed
+// default half or a removed accelerator. A default only another command's
+// user bind replaced is not.
+function isChanged(row: CommandRow): boolean {
+  const isRemoved = (line: BindLine) =>
+    line.page?.state === 'removed' || line.editor?.state === 'removed';
+  return (
+    row.binds.some((line) => line.origin === 'user' || isRemoved(line)) ||
+    row.accelerators.some((line) => line.state === 'removed')
+  );
+}
+
+// Whether the chip `filter` shows `row`: `bound` a row with a bind or
+// accelerator in force, `unbound` the rest, `changed` a row the user layer
+// changed.
+export function matchesKeyFilter(row: CommandRow, filter: KeyFilter): boolean {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'bound':
+      return isBound(row);
+    case 'unbound':
+      return !isBound(row);
+    case 'changed':
+      return isChanged(row);
+  }
+}
+
 const HALF_PLACES = { page: 'on the page', editor: 'in the editor' } as const;
 
 // What covers one half, in lower case; null for a half still firing.

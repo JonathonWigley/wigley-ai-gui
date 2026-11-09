@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import type { CommandRow } from './keymap-rows';
-import { matchesCommand, matchesLeader, matchesSetting } from './row-filter';
+import {
+  keyMatch,
+  matchesCommand,
+  matchesLeader,
+  matchesSetting,
+} from './row-filter';
 import type { SettingRow } from './setting-rows';
 
 function settingRow(fields: {
@@ -114,4 +119,46 @@ describe('matchesLeader', () => {
       expect(matchesLeader(['<Space>'], query, fakeFuzzyMatcher)).toBe(isMatch);
     },
   );
+});
+
+describe('keyMatch', () => {
+  // A row whose one bind is `keys`, firing unless `isStruck`.
+  const rowBound = (keys: string, isStruck = false) =>
+    ({
+      binds: [
+        {
+          bind: { keys, scope: 'any', command: 'p.a' },
+          origin: 'default',
+          page: { state: isStruck ? 'removed' : 'active' },
+          editor: null,
+        },
+      ],
+      accelerators: [],
+    }) as unknown as CommandRow;
+
+  it.each([
+    { case: 'j on bind j', keys: 'j', bind: 'j', expected: 'runs' },
+    {
+      case: 'the leader on <Leader>ks',
+      keys: '<Space>',
+      bind: '<Leader>ks',
+      expected: 'starts',
+    },
+    {
+      case: '<Enter> on <CR>',
+      keys: '<Enter>',
+      bind: '<CR>',
+      expected: 'runs',
+    },
+    {
+      case: 'a struck line',
+      keys: 'j',
+      bind: 'j',
+      isStruck: true,
+      expected: null,
+    },
+    { case: 'k on bind j', keys: 'k', bind: 'j', expected: null },
+  ])('keyMatch_$case', ({ keys, bind, isStruck, expected }) => {
+    expect(keyMatch(rowBound(bind, isStruck), keys, '<Space>')).toBe(expected);
+  });
 });

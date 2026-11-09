@@ -688,6 +688,8 @@ export const defaultKeymap = {
     { keys: 'r', scope: 'settings.rows', command: 'settings.reset' },
     { keys: 'a', scope: 'settings.rows', command: 'settings.addBind' },
     { keys: 'd', scope: 'settings.rows', command: 'settings.removeBind' },
+    { keys: 'f', scope: 'settings.rows', command: 'settings.cycleKeyFilter' },
+    { keys: '?', scope: 'settings.rows', command: 'settings.findByKey' },
     {
       keys: 'l',
       scope: 'settings.sections',

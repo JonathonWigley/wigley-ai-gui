@@ -53,6 +53,7 @@ import type {
   AdvancedRowInput,
   CompleteSettingsLayout,
   GroupHeaderInput,
+  KeyFiltersInput,
   KeyRowInput,
   LeaderRowInput,
   PluginRowInput,
@@ -62,7 +63,13 @@ import type {
   SettingsKit,
   SettingsLayout,
 } from '../layouts/layout';
-import { keymapSection } from './keymap-view';
+import {
+  createKeyRecorder,
+  type RecordRequest,
+  type Recording,
+} from './key-recorder';
+import { KEY_FILTERS } from './keymap-rows';
+import { keymapSection, type KeysViewState } from './keymap-view';
 import {
   buildEntry,
   buildPickerRow,
@@ -87,7 +94,15 @@ const FILE_NAMES: Record<ConfigFile, ProblemInput['file']> = {
 };
 
 const PLUGINS_SECTION = { id: 'plugins', title: 'Plugins' };
-const KEYMAP_SECTION = { id: 'keymap', title: 'Keymap' };
+// Its id stays `keymap`: the keys plugin's settings already hold a section
+// `keys`.
+export const KEYS_SECTION = { id: 'keymap', title: 'Keybindings' };
+
+// The key of `?`'s recording, which names no row: every command id holds a
+// dot.
+const FIND_KEY = 'find';
+
+const NO_KEYS_FILTER: KeysViewState = { filter: 'all', findKeys: null };
 
 // A row part's and an entry part's builder, as a layout defines it.
 type RowDraw<I> = (parent: HTMLElement, input: I, kit: RowKit) => HTMLElement;
@@ -135,12 +150,16 @@ export interface SettingsRow {
 
 export type SectionEntry =
   | { type: 'header'; input: GroupHeaderInput }
+  | { type: 'keyFilters'; input: KeyFiltersInput }
   | { type: 'row'; row: SettingsRow };
 
 // A section's drawing: `entries` in order, group headers among the rows.
+// `emptyQuery` is what the empty state names when no row shows, in place of
+// the `/` query.
 export interface SectionDrawing {
   entries: SectionEntry[];
   rows: SettingsRow[];
+  emptyQuery?: string;
 }
 
 // What an edit writes against: the open box, whose expected text it sends and
@@ -156,6 +175,8 @@ export interface PickRequest<T> {
   title: string;
   items: readonly T[];
   label(item: T): string;
+  // The keys a row's item holds, printed for the platform; null for none.
+  keysOf?(item: T): string | null;
   selected?: number;
   // `expectedText` is the file's text when the picker opened.
   chosen(item: T, expectedText: string | null): void;
@@ -188,6 +209,10 @@ export interface RowContext {
   // Logs `refused settings.json: <reason>` and toasts `reason`, as a refused
   // write with no box open shows.
   refuse(reason: string): void;
+  // Records keys on a row, replacing any recording in progress; the rows
+  // redraw on each change to it.
+  recordKey(request: RecordRequest): void;
+  recording(): Recording | null;
 }
 
 // `markdown`, `keys`, `commands` and `state` are what the layout's kits read.
@@ -208,6 +233,8 @@ export interface SettingsViewDeps {
   // scope drops it.
   setFocusTarget(target: FocusTarget): void;
   pushScope(scope: 'box'): PushedScope;
+  // The page's one-shot key capture, as `api.keys.captureKey` arms it.
+  captureKey(onKey: (keys: string) => void, onCancel: () => void): Disposable;
   picker: ListPickerService;
   // Keeps the keys of the settings `command` drawn in `element`, shown while
   // `scope` is in force, followed by `label` (true: the command's label): the
@@ -246,6 +273,8 @@ export type SettingsCommand =
   | 'removeBind'
   | 'filter'
   | 'clearFilter'
+  | 'cycleKeyFilter'
+  | 'findByKey'
   | 'boxAccept'
   | 'boxCancel'
   | ListPickerCommand;
@@ -261,8 +290,13 @@ export type SettingsCommand =
 // focus logs `sections focused` or `rows focused`. The keys show
 // where they act: the cursor row's actions in its layout's `rowActions` slot.
 // `setLayouts` draws everything again in the new layouts, keeping the cursor,
-// the open section, the focus side, an open box or filter and an open picker.
-// Each change to the place reaches `placeChanged`.
+// the open section, the focus side, an open box or filter, an open picker and
+// a key recording. A recording ends on Esc, on opening a section, on `hidden`
+// and when a redraw leaves its row out. In the Keybindings section `f` cycles
+// the filter chips (`key filter <id>`) and `?` records a key to find by
+// (`find by key <keys>`), which Esc clears (`find by key cleared`) before the
+// text filter; opening a section resets both. Each change to the place
+// reaches `placeChanged`.
 export interface SettingsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -294,13 +328,16 @@ export interface SettingsView {
   // The plugin switch wrote a new status list: the rows redraw while the
   // Plugins section is open.
   pluginsChanged(): void;
+  // The mode was hidden: a key recording in progress is cancelled.
+  hidden(): void;
 }
 
 // The cursor prompt's label for each action it shows.
 const PROMPT_LABELS: Record<PromptAction, string> = {
+  open: 'reassign',
   edit: 'edit',
-  addBind: 'add',
-  removeBind: 'remove',
+  addBind: 'add key',
+  removeBind: 'clear',
   reset: 'reset',
 };
 
@@ -347,7 +384,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     parent: HTMLElement,
   ): DrawnPart<BuiltRow> =>
     rowParts.draw(part, parent, (draw, rowParent, rollback) =>
-      buildRow(draw, rowParent, input, services, rollback, part),
+      buildRow(draw, rowParent, input, services, rollback, 'rows', part),
     );
 
   const sections = createSectionsView({
@@ -376,12 +413,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   // cursor row's actions slot and shows the keys of the actions that row has.
   const rowPrompt = element('span', 'settings-row-actions');
   const promptHints: Record<PromptAction, HTMLElement> = {
+    open: anchored('open', 'rows', PROMPT_LABELS.open),
     edit: anchored('edit', 'rows', PROMPT_LABELS.edit),
     addBind: anchored('addBind', 'rows', PROMPT_LABELS.addBind),
     removeBind: anchored('removeBind', 'rows', PROMPT_LABELS.removeBind),
     reset: anchored('reset', 'rows', PROMPT_LABELS.reset),
   };
   rowPrompt.append(
+    promptHints.open,
     promptHints.edit,
     promptHints.addBind,
     promptHints.removeBind,
@@ -414,7 +453,12 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   let hasOpenedSection = false;
   let focus: 'sections' | 'rows' = 'sections';
   let query = '';
-  let drawnQuery = '';
+  // The `/` query and the Keybindings chip and find query the rows were last
+  // drawn under.
+  let drawnFilter: { query: string; keys: KeysViewState } = {
+    query: '',
+    keys: NO_KEYS_FILTER,
+  };
   let filterScope: PushedScope | null = null;
   let rows: SettingsRow[] = [];
   // Each drawn row by its key, and the dispose of every part drawn into the
@@ -424,6 +468,12 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   let cursorKey: string | null = null;
   let openBox: OpenBox | null = null;
   let isPlaceRestored = false;
+  let keysState: KeysViewState = NO_KEYS_FILTER;
+  const recorder = createKeyRecorder({
+    captureKey: deps.captureKey,
+    changed: () => draw(),
+    log,
+  });
 
   const disposeEntries = () => {
     const disposes = entryDisposes;
@@ -459,11 +509,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const sectionList = (): { id: string; title: string }[] => [
     ...(schema?.sections ?? []).map(({ id, title }) => ({ id, title })),
     PLUGINS_SECTION,
-    KEYMAP_SECTION,
+    KEYS_SECTION,
   ];
 
   const sectionFile = (): ConfigFile =>
-    openSectionId === KEYMAP_SECTION.id ? 'keymap' : 'settings';
+    openSectionId === KEYS_SECTION.id ? 'keymap' : 'settings';
 
   const isBroken = (file: ConfigFile) => latest?.[file].state === 'broken';
 
@@ -553,12 +603,13 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
     const drawing = sectionDrawing(schema);
     const cursorIndex = rows.findIndex((row) => row.key === cursorKey);
-    const isSameFilter = query === drawnQuery;
-    drawnQuery = query;
+    const isSameFilter =
+      query === drawnFilter.query && keysState === drawnFilter.keys;
+    drawnFilter = { query, keys: keysState };
     rows = drawing.rows;
     if (!rows.some((row) => row.key === cursorKey)) {
       // A row that left the list hands the cursor to the row now in its place;
-      // a row the filter hid hands it to the best match.
+      // a row a new filter, chip or find query hid hands it to the best match.
       const place = isSameFilter ? Math.max(cursorIndex, 0) : 0;
       setCursor(rows[Math.min(place, rows.length - 1)]?.key ?? null);
     }
@@ -574,23 +625,37 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       entryDisposes.push(drawn.dispose);
     }
     for (const entry of drawing.entries) {
-      if (entry.type === 'header') {
-        const drawn = parts.draw(
-          'groupHeader',
-          rowList,
-          entryBuild(entry.input),
-        );
-        entryDisposes.push(drawn.dispose);
-      } else {
+      if (entry.type === 'row') {
         drawRowEntry(entry.row, rowList);
+        continue;
       }
+      const drawn =
+        entry.type === 'header'
+          ? parts.draw('groupHeader', rowList, entryBuild(entry.input))
+          : parts.draw('keyFilters', rowList, entryBuild(entry.input));
+      entryDisposes.push(drawn.dispose);
     }
-    const isEmpty = query.trim() !== '' && rows.length === 0;
+    const emptyQuery = drawing.emptyQuery ?? query;
+    const isEmpty = emptyQuery.trim() !== '' && rows.length === 0;
     if (isEmpty) {
-      const drawn = parts.draw('empty', rowList, entryBuild({ query }));
+      const input = { query: emptyQuery };
+      const drawn = parts.draw('empty', rowList, entryBuild(input));
       entryDisposes.push(drawn.dispose);
     }
     markCursor();
+  };
+
+  // A row recording keys ends its recording when a redraw leaves it out;
+  // `?`'s recording names no row.
+  const cancelRecordingOfGoneRow = () => {
+    const recording = recorder.current();
+    const isRowGone =
+      recording !== null &&
+      recording.key !== FIND_KEY &&
+      !rows.some((row) => row.key === recording.key);
+    if (isRowGone) {
+      recorder.cancel();
+    }
   };
 
   // Redraws the rows, and first the rows pane when `isPaneRedrawn`; the open
@@ -598,6 +663,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   // whose row is no longer drawn, or whose file is now broken, closes, so it
   // never writes over the broken file.
   const draw = (isPaneRedrawn = false) => {
+    drawKeepingBox(isPaneRedrawn);
+    cancelRecordingOfGoneRow();
+  };
+
+  const drawKeepingBox = (isPaneRedrawn: boolean) => {
     const drawAll = () => {
       if (isPaneRedrawn) {
         redrawRowsPane();
@@ -881,7 +951,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         items: request.items,
         label: request.label,
         selected: request.selected,
-        drawRow(list, _item, { label, trailing }) {
+        drawRow(list, item, { label, trailing }) {
           const drawn = parts.draw(
             'pickerRow',
             list,
@@ -889,7 +959,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
               buildPickerRow(
                 pickerRow,
                 parent,
-                { picker: request.title, label },
+                {
+                  picker: request.title,
+                  label,
+                  keys: request.keysOf?.(item) ?? null,
+                },
                 trailing,
                 services,
                 rollback,
@@ -940,17 +1014,23 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       }
     },
     refuse: (reason) => refuse('settings', reason),
+    recordKey: (request) => recorder.start(request),
+    recording: () => recorder.current(),
   };
 
-  // The open section's drawing: a schema section's setting rows, the Plugins
-  // section's plugin rows, or the Keymap section's rows.
+  // The open section's drawing: the Plugins section's plugin rows, a schema
+  // section's setting rows, or the Keybindings section's rows, which also
+  // draw for a section id the schema does not hold yet.
   const sectionDrawing = (held: UserConfigSchema): SectionDrawing => {
     if (openSectionId === PLUGINS_SECTION.id) {
       return pluginSection(context, query);
     }
-    const section = held.sections.find((each) => each.id === openSectionId);
+    const section =
+      openSectionId === KEYS_SECTION.id
+        ? undefined
+        : held.sections.find((each) => each.id === openSectionId);
     return section === undefined
-      ? keymapSection(context, query)
+      ? keymapSection(context, query, keysState)
       : settingSection(section, context, query);
   };
 
@@ -965,6 +1045,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     if (section === undefined) {
       return;
     }
+    recorder.cancel();
+    keysState = NO_KEYS_FILTER;
     openSectionId = section.id;
     hasOpenedSection = true;
     query = filter;
@@ -1043,7 +1125,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   const runQuietly = (action: RowAction, readsFirst: boolean) => () => {
-    if (openBox !== null || picker.isOpen()) {
+    if (openBox !== null || picker.isOpen() || recorder.current() !== null) {
       return;
     }
     runRowAction(action, readsFirst).catch((error) => {
@@ -1081,6 +1163,45 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     markCursor();
     filterBox.focus();
     filterBox.select();
+  };
+
+  // Whether the Keybindings section's own keys act: its rows hold the keys,
+  // with no box, picker, filter box or recording over them.
+  const isKeysSectionIdle = () =>
+    openSectionId === KEYS_SECTION.id &&
+    focus === 'rows' &&
+    openBox === null &&
+    filterScope === null &&
+    !picker.isOpen() &&
+    recorder.current() === null;
+
+  const findByKey = () => {
+    if (!isKeysSectionIdle()) {
+      return;
+    }
+    recorder.start({
+      key: FIND_KEY,
+      replacing: null,
+      prompt: 'Press a key to find what it runs — Esc cancels',
+      confirm: 'press',
+      judge: () => ({ type: 'free' }),
+      keep(keys) {
+        keysState = { ...keysState, findKeys: keys };
+        log(`find by key ${keys}`);
+        draw();
+      },
+    });
+  };
+
+  const cycleKeyFilter = () => {
+    if (!isKeysSectionIdle()) {
+      return;
+    }
+    const index = KEY_FILTERS.indexOf(keysState.filter);
+    const filter = KEY_FILTERS[(index + 1) % KEY_FILTERS.length];
+    keysState = { ...keysState, filter };
+    log(`key filter ${filter}`);
+    draw();
   };
 
   filterBox.addEventListener('input', () => {
@@ -1128,7 +1249,16 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     addBind: runQuietly('addBind', true),
     removeBind: runQuietly('removeBind', true),
     filter: openFilter,
+    cycleKeyFilter,
+    findByKey,
+    // Clears the find query first, then the text filter.
     clearFilter() {
+      if (keysState.findKeys !== null) {
+        keysState = { ...keysState, findKeys: null };
+        log('find by key cleared');
+        draw();
+        return;
+      }
       if (query.trim() === '') {
         return;
       }
@@ -1236,5 +1366,6 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         draw();
       }
     },
+    hidden: () => recorder.cancel(),
   };
 }

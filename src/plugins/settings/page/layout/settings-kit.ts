@@ -122,14 +122,15 @@ export function buildRowsPane(
   return { element: root, problem, rowList };
 }
 
-// Draws a setting, key, leader or advanced row with `draw`; a slot it leaves
-// out is appended at the end of its root.
+// Draws a setting, key, leader or advanced row with `draw`, in the kit of
+// `scope`; a slot it leaves out is appended at the end of its root.
 export function buildRow<I>(
   draw: (parent: HTMLElement, input: I, kit: RowKit) => HTMLElement,
   parent: HTMLElement,
   input: I,
   services: OwnerKitServices,
   rollback: RollbackDeps,
+  scope: SettingsKitScope,
   partName: string,
 ): BuiltRow {
   const actions = element('span', 'settings-row-actions-slot');
@@ -137,7 +138,7 @@ export function buildRow<I>(
   const actionsSlot = appSlot(actions, 'rowActions', rollback);
   const boxSlot = appSlot(box, 'box', rollback);
   const kit: RowKit = {
-    ...createSettingsKit(services, 'rows', rollback),
+    ...createSettingsKit(services, scope, rollback),
     rowActions: (slotParent) => actionsSlot.place(slotParent),
     box: (slotParent) => boxSlot.place(slotParent),
   };
@@ -147,8 +148,8 @@ export function buildRow<I>(
   return { element: root, actions, box };
 }
 
-// Draws a section row, group header, empty state or problem card with
-// `draw`, in the kit of `scope`.
+// Draws a section row, group header, key filter bar, empty state or problem
+// card with `draw`, in the kit of `scope`.
 export function buildEntry<I>(
   draw: (parent: HTMLElement, input: I, kit: SettingsKit) => HTMLElement,
   parent: HTMLElement,

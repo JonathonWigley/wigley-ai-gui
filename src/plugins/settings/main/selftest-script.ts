@@ -146,7 +146,12 @@ const KEYMAP_STEPS: SelfTestStep[] = [
     keys: ['/', ...'togglehelp', 'Enter'],
     expect: '[settings] filter "togglehelp" first row keys.toggleHelp',
   },
-  { keys: ['a'], expect: '[settings] box open keys.toggleHelp' },
+  { keys: ['a'], expect: '[settings] recording keys.toggleHelp' },
+  {
+    keys: ['Tab'],
+    expect: '[settings] box open keys.toggleHelp',
+    alsoExpect: [/^\[settings\] recording typed keys\.toggleHelp$/],
+  },
   {
     keys: [...ADDED_KEYS, 'Enter'],
     expect: '[settings] picker shown: Scope',
@@ -163,6 +168,50 @@ const KEYMAP_STEPS: SelfTestStep[] = [
     why: 'The user bind is listed last, and removing it writes keymap.json. The step waits for the apply that follows the write, since the page keys it rebuilds drop a pending key sequence.',
   },
   { keys: ['r'], expect: '[settings] unchanged' },
+  { keys: ['Enter'], expect: '[settings] recording keys.toggleHelp' },
+  {
+    keys: ['Escape'],
+    expect: '[settings] recording cancelled keys.toggleHelp',
+  },
+  {
+    keys: ['Enter', ' '],
+    expect: '[settings] record refused <Space>: leader',
+  },
+  {
+    keys: ['<A-o>'],
+    expect: '[settings] record moves <A-o> from sessions.nextTab',
+    checksFit: true,
+    screenshot: 'key-recording',
+    why: 'Next tab holds Alt+o everywhere, so the row says it moves here before the commit.',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[config] applied a new config',
+    alsoExpect: [/^\[settings\] recording kept keys\.toggleHelp <A-o>$/],
+    why: 'Enter keeps the recorded chord, writing the unbind and the bind. The step waits for the apply that follows the write.',
+  },
+  {
+    keys: ['r'],
+    expect: '[config] applied a new config',
+    why: 'r resets the help command, leaving keymap.json empty.',
+  },
+  { keys: ['f'], expect: '[settings] key filter bound' },
+  { keys: ['f'], expect: '[settings] key filter unbound' },
+  { keys: ['f'], expect: '[settings] key filter changed' },
+  {
+    keys: ['f'],
+    expect: '[settings] key filter all',
+    screenshot: 'key-filters',
+  },
+  { keys: ['Escape'], expect: '[settings] filter "" first row leader' },
+  { keys: ['?'], expect: '[settings] recording find' },
+  {
+    keys: ['j'],
+    expect: '[settings] find by key j',
+    checksFit: true,
+    screenshot: 'find-by-key',
+  },
+  { keys: ['Escape'], expect: '[settings] find by key cleared' },
 ];
 
 const TIMEOUT_RESET_STEPS: SelfTestStep[] = [
@@ -173,7 +222,7 @@ const TIMEOUT_RESET_STEPS: SelfTestStep[] = [
   },
 ];
 
-// Plugins sits just above Keymap, the last section.
+// Plugins sits just above Keybindings, the last section.
 const PLUGIN_SWITCH_STEPS: SelfTestStep[] = [
   {
     keys: ['Escape', '<A-h>', 'G', 'k', 'Enter'],
@@ -241,7 +290,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'keymap',
-    why: 'In the Keymap section, a adds a key to the help command under a picked scope and d removes the user bind, each writing keymap.json, and r then finds nothing to reset.',
+    why: 'In the Keybindings section, a records and Tab types a key for the help command under a picked scope, d removes it and r finds nothing to reset; Enter records a new key in place, refusing the leader and naming the bind it moves; f cycles the filter chips and ? finds the commands a key runs.',
     steps: KEYMAP_STEPS,
   },
   {

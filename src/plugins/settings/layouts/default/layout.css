@@ -115,12 +115,70 @@
   font-size: var(--wg-text-12);
 }
 
-/* A command row's binds, one line each: the keys, then their tags. */
+/* A key row's command group, dim after its label. */
+.settings-row-detail {
+  flex: none;
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+/* A command row's binds on one line, separated by a dot: each bind's keys,
+   then its tags. */
 .settings-binds {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--wg-space-1);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--wg-space-2);
+}
+
+.settings-bind-separator {
+  color: var(--wg-fg-tertiary);
+}
+
+/* A key recording on its row: the keys held, then the prompt. */
+.settings-recording {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+}
+
+.settings-recording-prompt {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+/* The recording's note under its row: what the keys move from, or why a
+   press was refused. */
+.settings-row-note {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+  text-align: right;
+}
+
+.settings-row-note.is-refused {
+  color: var(--wg-status-warning);
+}
+
+/* The Keybindings section's filter bar: the f hint and the chips, then the
+   find by key hint or query at the end. */
+.settings-key-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-2) var(--wg-space-2) 0;
+}
+
+.settings-key-filters-end {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  margin-left: auto;
+}
+
+/* The keys a picker row's command already holds. */
+.settings-picker-keys {
+  color: var(--wg-status-warning);
 }
 
 .settings-group-header {

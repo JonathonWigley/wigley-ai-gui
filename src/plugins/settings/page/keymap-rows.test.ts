@@ -10,7 +10,9 @@ import type { UserConfigSchema } from '../../../contracts/user-config';
 import {
   type BindLine,
   coverTexts,
+  KEY_FILTERS,
   keymapRows,
+  matchesKeyFilter,
   replacedBy,
   type CommandRow,
 } from './keymap-rows';
@@ -447,5 +449,86 @@ describe('a command with an argument', () => {
       ['p.pick label: 3'],
     );
     expect(replacedBy(withPick, null, '3', 'p.s', 'p.pick', 3)).toEqual([]);
+  });
+});
+
+describe('matchesKeyFilter', () => {
+  const given = schema(
+    ['p.a', 'p.b', 'p.c', 'p.d', 'p.e', 'p.f']
+      .map((id) => command(id))
+      .concat(command('p.menu', 'main')),
+    [
+      { keys: 'x', scope: 'p.s', command: 'p.a' },
+      { keys: 'z', scope: 'p.s', command: 'p.d' },
+      { keys: 'w', scope: 'p.s', command: 'p.e' },
+    ],
+    [{ accelerator: 'CommandOrControl+,', command: 'p.menu' }],
+  );
+  const layer: UserKeymap = {
+    binds: [
+      { keys: 'y', scope: 'p.s', command: 'p.c' },
+      { keys: 'w', scope: 'p.s', command: 'p.f' },
+    ],
+    unbind: [{ keys: 'z', scope: 'p.s' }, { app: 'CommandOrControl+,' }],
+  };
+  const groups = keymapRows(given, layer);
+
+  // Each case's verdict under bound, unbound and changed; `all` shows every
+  // row.
+  const CASES = [
+    {
+      case: 'a firing default',
+      id: 'p.a',
+      bound: true,
+      unbound: false,
+      changed: false,
+    },
+    {
+      case: 'no lines',
+      id: 'p.b',
+      bound: false,
+      unbound: true,
+      changed: false,
+    },
+    {
+      case: 'a user line',
+      id: 'p.c',
+      bound: true,
+      unbound: false,
+      changed: true,
+    },
+    {
+      case: 'a removed default half',
+      id: 'p.d',
+      bound: false,
+      unbound: true,
+      changed: true,
+    },
+    {
+      case: "a default only another command's user bind replaced",
+      id: 'p.e',
+      bound: false,
+      unbound: true,
+      changed: false,
+    },
+    {
+      case: 'a removed accelerator',
+      id: 'p.menu',
+      bound: false,
+      unbound: true,
+      changed: true,
+    },
+  ];
+
+  it.each(
+    CASES.flatMap((each) =>
+      KEY_FILTERS.map((filter) => ({
+        ...each,
+        filter,
+        expected: filter === 'all' ? true : each[filter],
+      })),
+    ),
+  )('matchesKeyFilter_$filter: $case', ({ id, filter, expected }) => {
+    expect(matchesKeyFilter(row(groups, id), filter)).toBe(expected);
   });
 });

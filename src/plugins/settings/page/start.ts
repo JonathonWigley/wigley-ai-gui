@@ -29,7 +29,8 @@ const TITLE = 'Settings';
 // mode, or toggles its side bar while it shows; main's `show` message
 // (`Cmd+,`) only shows it. Each `changed` message reads the user config again
 // and redraws; each new layout set redraws in the new layouts; each change of
-// `core.plugins` redraws the Plugins section. The cursors,
+// `core.plugins` redraws the Plugins section. Hiding the mode cancels a key
+// recording, so a capture never outlives the mode on screen. The cursors,
 // the open section and the filter go to `settings.place` on each change, and a
 // page load puts the last page's back.
 export const settingsPagePart: PagePart<typeof settingsManifest> = {
@@ -54,6 +55,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       setScope: (scope) => api.keys.setScope(scope),
       setFocusTarget: (target) => api.panes.setFocusTarget(target),
       pushScope: (scope) => api.keys.pushScope(scope),
+      captureKey: (onKey, onCancel) => api.keys.captureKey(onKey, onCancel),
       picker: services.picker,
       anchor: (element, command, scope, label) =>
         api.keys.anchor(element, qualify(settingsManifest.id, command), {
@@ -87,7 +89,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
         view.shown();
         log('shown');
       },
-      hidden: () => undefined,
+      hidden: () => view.hidden(),
       sideBarHidden: () => view.sideBarHidden(),
       sideBarOpenedOver: () => view.sideBarOpenedOver(),
       focusSideBar: () => view.focusSideBar(),

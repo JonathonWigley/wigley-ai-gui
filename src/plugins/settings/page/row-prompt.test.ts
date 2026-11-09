@@ -17,7 +17,7 @@ describe('rowPromptActions', () => {
         removeBind: none,
         reset: none,
       },
-      expected: ['addBind', 'removeBind', 'reset'],
+      expected: ['open', 'addBind', 'removeBind', 'reset'],
     },
     { actions: {}, expected: [] },
     { actions: { open: none, edit: none }, expected: ['edit'] },

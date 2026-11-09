@@ -19,7 +19,8 @@ export interface SettingsPane {
   element: HTMLElement;
 }
 
-// The open section's pane: its id (`core`, a plugin id, or `keymap`) and its title.
+// The open section's pane: its id (`core`, a plugin id, `plugins`, or `keymap` for the Keybindings section) and its
+// title.
 export interface RowsInput {
   sectionId: string;
   title: string;
@@ -57,8 +58,8 @@ export interface PluginRowInput {
   lockedText: string | null;
 }
 // One line of a key row: a bind (`keys` in vim notation printed for the platform) or an accelerator (its chord printed
-// for the platform). `tags` in order: for a bind its scope (`Everywhere` for `any`), `where`, `mode`, `Set` for a user
-// bind, then what covers it (`Removed`, `Replaced by <label>`, `Partly removed — …`); for an accelerator its kind
+// for the platform). `tags` in order: for a bind its scope's title unless it is `any`, `where`, `mode`, `Set` for a
+// user bind, then what covers it (`Removed`, `Replaced by <label>`, `Partly removed — …`); for an accelerator its kind
 // (`App menu`, `Global`, `Intercept`), then `Removed` or `Replaced by <label>`. `isStruck`: it fires nowhere.
 export interface KeyLineInput {
   kind: 'bind' | 'accelerator';
@@ -66,12 +67,39 @@ export interface KeyLineInput {
   tags: readonly string[];
   isStruck: boolean;
 }
-// A command's row: its qualified id, its label (capitalised), where it runs, and its binds then its accelerators.
+// A key recording in progress: `keys` the keys held so far, printed for the platform (null before an accepted press);
+// `prompt` what to press next; `note` the last press's note (what the keys move from, or why a press was refused),
+// `isRefused` while it refuses one.
+export interface RecordingInput {
+  keys: string | null;
+  prompt: string;
+  note: string | null;
+  isRefused: boolean;
+}
+// A command's row in the Keybindings section: its qualified id, its label (capitalised), its manifest `group`, where it
+// runs, its binds then its accelerators, and the recording on it. `recording.line` is the index into `lines` of the
+// bind the recording replaces, null when it adds one; `recording` is null while the row records nothing.
 export interface KeyRowInput {
   command: string;
   label: string;
+  group: string;
   runsIn: 'page' | 'main';
   lines: readonly KeyLineInput[];
+  recording: (RecordingInput & { line: number | null }) | null;
+}
+// One chip of the Keybindings section's filter bar: `count` is the command rows it would show under the `/` filter and
+// the find query.
+export interface KeyFilterChipInput {
+  id: 'all' | 'bound' | 'unbound' | 'changed';
+  label: string;
+  count: number;
+  isOn: boolean;
+}
+// The Keybindings section's filter bar: the chips in `f`'s order, and the find by key query: `keys` printed for the
+// platform (null with none), `isRecording` while `?` waits for its key.
+export interface KeyFiltersInput {
+  chips: readonly KeyFilterChipInput[];
+  find: { keys: string | null; isRecording: boolean };
 }
 // The leader row: the leader in force and the default leader, each printed for the platform.
 export interface LeaderRowInput {
@@ -96,10 +124,12 @@ export interface ProblemInput {
   file: 'settings.json' | 'keymap.json';
   problem: string;
 }
-// A row of the list picker: `picker` is the open picker's title, `label` the row's line.
+// A row of the list picker: `picker` is the open picker's title, `label` the row's line, `keys` the keys its item
+// holds printed for the platform (null for none).
 export interface PickerRowInput {
   picker: string;
   label: string;
+  keys: string | null;
 }
 
 // The kit every settings part draws with: the base kit, naming settings' commands by their short names. `default`
@@ -168,21 +198,27 @@ export interface SettingsLayout {
     input: PluginRowInput,
     kit: RowKit,
   ): HTMLElement;
-  // One per command in the Keymap section.
+  // One per command in the Keybindings section.
   keyRow?(parent: HTMLElement, input: KeyRowInput, kit: RowKit): HTMLElement;
-  // The Keymap section's first row.
+  // The Keybindings section's first entry, into `rowList`, on each draw of its rows.
+  keyFilters?(
+    parent: HTMLElement,
+    input: KeyFiltersInput,
+    kit: SettingsKit,
+  ): HTMLElement;
+  // The Keybindings section's first row.
   leaderRow?(
     parent: HTMLElement,
     input: LeaderRowInput,
     kit: RowKit,
   ): HTMLElement;
-  // The Keymap section's last row, drawn while no filter is kept.
+  // The Keybindings section's last row, drawn while no filter is kept.
   advancedRow?(
     parent: HTMLElement,
     input: AdvancedRowInput,
     kit: RowKit,
   ): HTMLElement;
-  // Over each plugin's command rows in the Keymap section.
+  // Over each plugin's command rows in the Keybindings section, and over a find by key query's rows.
   groupHeader?(
     parent: HTMLElement,
     input: GroupHeaderInput,
