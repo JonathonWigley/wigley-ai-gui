@@ -17,17 +17,31 @@ function countersOf(sample: SystemSample) {
   };
 }
 
+type Counters = ReturnType<typeof countersOf>;
+
+// Each counter's growth per second from `before` to `after`.
+function ratesOf(before: Counters, after: Counters, elapsedMs: number) {
+  return Object.fromEntries(
+    Object.entries(after).map(([counter, value]) => [
+      counter,
+      ((value - before[counter as keyof Counters]) * 1000) / elapsedMs,
+    ]),
+  );
+}
+
 describe('createFakeSystemStats', () => {
-  it('fakeSystemStats_EachSampleAdvancesEveryCounter', async () => {
-    const stats = createFakeSystemStats();
+  it('fakeSystemStats_RatesHoldWhateverTheGap', async () => {
+    const clock = { at: 40_000, now: () => clock.at };
+    const stats = createFakeSystemStats(clock);
 
     const first = countersOf(await stats.sample());
+    clock.at += 1_000;
     const second = countersOf(await stats.sample());
+    clock.at += 3_000;
+    const third = countersOf(await stats.sample());
 
-    for (const [counter, value] of Object.entries(second)) {
-      expect(value, counter).toBeGreaterThan(
-        first[counter as keyof typeof first],
-      );
-    }
+    const overOneSecond = ratesOf(first, second, 1_000);
+    expect(Object.values(overOneSecond).every((rate) => rate > 0)).toBe(true);
+    expect(ratesOf(second, third, 3_000)).toEqual(overOneSecond);
   });
 });

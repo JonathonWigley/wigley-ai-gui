@@ -12,6 +12,9 @@ import { FIRST_GAP_MS } from './poller';
 import { systemStatsMainPart } from './start';
 import { statsFixture } from './stats-fixture';
 
+// The fake machine's time between two steps.
+const STEP_MS = 2000;
+
 // Each `sample` takes the next outcome: `good` is the fake machine's reading at the next step, an Error rejects.
 // Past the queue every sample is good.
 function queuedStats(outcomes: readonly ('good' | Error)[]) {
@@ -23,7 +26,7 @@ function queuedStats(outcomes: readonly ('good' | Error)[]) {
       stats.calls += 1;
       const outcome = queue.shift() ?? 'good';
       return outcome === 'good'
-        ? Promise.resolve(fakeSystemSample(step++))
+        ? Promise.resolve(fakeSystemSample(step++ * STEP_MS))
         : Promise.reject(outcome);
     },
   } satisfies SystemStats & { calls: number };
@@ -167,6 +170,24 @@ describe('systemStatsMainPart', () => {
     await run.advance(1);
 
     expect(run.stats.calls).toBe(calls + 1);
+  });
+
+  it('settingsChange_KeepsTheHistory', async () => {
+    const run = startOnHarness();
+    const refreshMs = systemStatsManifest.settings.refreshSeconds * 1000;
+    await run.show(true);
+    await run.advance(FIRST_GAP_MS);
+    await run.advance(refreshMs);
+    const before = run.slot.get()?.cpu.history ?? [];
+
+    run.harness.pushSettings({
+      ...systemStatsManifest.settings,
+      processRows: 25,
+    });
+    await run.advance(refreshMs);
+
+    expect(run.slot.get()?.cpu.history.slice(0, -1)).toEqual(before);
+    expect(before).toHaveLength(2);
   });
 
   it('setShownTwice_LogsStartedOnce', async () => {

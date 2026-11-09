@@ -360,7 +360,7 @@ function driveHarness(
 // fake's fixed machine, or this machine's readings.
 function driveSystemStats(name: DriveSystemStatsName): SystemStats {
   return name === 'fake'
-    ? createFakeSystemStats()
+    ? createFakeSystemStats(clock)
     : systemStatsFor(platform.os, processes);
 }
 
@@ -372,7 +372,7 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
       return offscreenRunServices(
         'the self-test',
         () => createFakeAgentHarness(clock, files, timers),
-        createFakeSystemStats,
+        () => createFakeSystemStats(clock),
       );
     case 'drive':
       return offscreenRunServices(

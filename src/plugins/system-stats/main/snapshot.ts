@@ -63,11 +63,20 @@ export function emptyHistory(capacity: number): StatsHistory {
   return { capacity, cpu: [], gpu: [], ram: [], networkRate: [], diskRate: [] };
 }
 
+// The tone of the whole percent a label shows, so a label and its tone agree at a threshold.
 export function toneOf(percent: number | null): StatsTone {
-  if (percent === null || percent < 70) {
+  if (percent === null) {
     return 'normal';
   }
-  return percent < 90 ? 'warning' : 'critical';
+  const shown = wholePercent(percent);
+  if (shown < 70) {
+    return 'normal';
+  }
+  return shown < 90 ? 'warning' : 'critical';
+}
+
+function wholePercent(percent: number): number {
+  return Math.round(percent);
 }
 
 // The memory pressure's tone where the OS reports one, since a healthy Mac counts compressed and wired memory as
@@ -94,8 +103,8 @@ export function formatRate(bytesPerSecond: number): string {
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${unit.unit}`;
 }
 
-// Each of `next`'s processes with its CPU and GPU share over `elapsedMs`. A process with no entry in `prev` of the
-// same pid and name, or whose counter went down, reads 0.
+// Each of `next`'s processes with its CPU and GPU share over `elapsedMs`. `prev` lists every process, so one with no
+// entry of the same pid and name started since and grows from zero counters. A counter that went down reads 0.
 export function processRates(
   prev: readonly ProcessSample[],
   next: readonly ProcessSample[],
@@ -105,8 +114,9 @@ export function processRates(
   const prevByPid = new Map(prev.map((process) => [process.pid, process]));
   return next.map((process) => {
     const before = prevByPid.get(process.pid);
-    const match = before?.name === process.name ? before : undefined;
-    const cpuMs = growth(match?.cpuTimeMs, process.cpuTimeMs);
+    const start =
+      before?.name === process.name ? before : startedSincePrev(process);
+    const cpuMs = growth(start.cpuTimeMs, process.cpuTimeMs);
     return {
       pid: process.pid,
       ppid: process.ppid,
@@ -114,7 +124,7 @@ export function processRates(
       path: process.path,
       cpuPercent: clampPercent((cpuMs / (elapsedMs * cores)) * 100),
       rssBytes: process.rssBytes,
-      gpuPercent: gpuShare(match, process, elapsedMs),
+      gpuPercent: gpuShare(start, process, elapsedMs),
     };
   });
 }
@@ -230,7 +240,7 @@ function percentMeter(
     percent,
     tone,
     history,
-    label: percent === null ? NO_READING : `${Math.round(percent)}%`,
+    label: percent === null ? NO_READING : `${wholePercent(percent)}%`,
   };
 }
 
@@ -246,15 +256,21 @@ function rateMeter(rate: number, ring: number[], label: string): StatsMeter {
   };
 }
 
+// The process as it stood when it started: every counter at zero.
+function startedSincePrev(process: ProcessSample): ProcessSample {
+  return { ...process, cpuTimeMs: 0, gpuTimeNs: 0 };
+}
+
+// The GPU share since `start`; 0 when `start` has no GPU reading.
 function gpuShare(
-  match: ProcessSample | undefined,
+  start: ProcessSample,
   process: ProcessSample,
   elapsedMs: number,
 ): number | null {
   if (process.gpuTimeNs === null) {
     return null;
   }
-  const gpuNs = growth(match?.gpuTimeNs ?? undefined, process.gpuTimeNs);
+  const gpuNs = growth(start.gpuTimeNs ?? undefined, process.gpuTimeNs);
   return clampPercent((gpuNs / (elapsedMs * 1_000_000)) * 100);
 }
 

@@ -123,7 +123,6 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
       const fixture = statsFixture(variant, services.clock.now());
       snapshot.set(fixture);
       api.channel.send('seeded', variant);
-      services.log(`seeded ${variant}`);
       return fixture;
     };
     const current = () => snapshot.get() ?? null;

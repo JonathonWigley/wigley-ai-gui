@@ -39,7 +39,7 @@ export const systemStatsManifest = definePlugin({
     processRows: {
       label: 'Process rows',
       description:
-        'How many rows the process list shows with its groups closed.',
+        'How many rows besides Chat sessions the process list shows with its groups closed; every Chat session always shows.',
     },
     layout: {
       label: 'System stats layout',

@@ -94,18 +94,19 @@ describe('processRates', () => {
       gpuPercent: 0,
     },
     {
-      case: 'new pid',
+      // `ps`: ` 75078  7827   0:02.10 …/bin/node`, started since the last sample.
+      case: 'new pid counts its whole time',
       prev: [process({ pid: 77 })],
-      next: process({ cpuTimeMs: 14_000, gpuTimeNs: 9e9 }),
-      cpuPercent: 0,
-      gpuPercent: 0,
+      next: process({ pid: 75078, cpuTimeMs: 2_100, gpuTimeNs: 1e9 }),
+      cpuPercent: 13.125,
+      gpuPercent: 50,
     },
     {
-      case: 'same pid, other name',
+      case: 'same pid, other name counts its whole time',
       prev: [process({ name: 'zsh', cpuTimeMs: 100 })],
-      next: process({ cpuTimeMs: 14_000, gpuTimeNs: 9e9 }),
-      cpuPercent: 0,
-      gpuPercent: 0,
+      next: process({ cpuTimeMs: 1_200, gpuTimeNs: 5e8 }),
+      cpuPercent: 7.5,
+      gpuPercent: 25,
     },
     {
       case: 'CPU time went down',
@@ -189,6 +190,12 @@ describe('buildSnapshot', () => {
       }),
       pick: ({ ram }) => ({ label: ram.label, tone: ram.tone }),
       expected: { label: '21.4 / 32 GB', tone: 'normal' },
+    },
+    {
+      case: 'CPU label and tone agree at 90%',
+      next: next({ cpuBusyMs: 8_184, cpuTotalMs: 12_000 }),
+      pick: ({ cpu }) => ({ label: cpu.label, tone: cpu.tone }),
+      expected: { label: '90%', tone: 'critical' },
     },
     {
       case: 'GPU critical',
@@ -369,10 +376,10 @@ describe('buildSnapshot', () => {
 
 describe('toneOf', () => {
   it.each([
-    { percent: 69.9, tone: 'normal' },
-    { percent: 70, tone: 'warning' },
-    { percent: 89.9, tone: 'warning' },
-    { percent: 90, tone: 'critical' },
+    { percent: 69.4, tone: 'normal' },
+    { percent: 69.5, tone: 'warning' },
+    { percent: 89.4, tone: 'warning' },
+    { percent: 89.5, tone: 'critical' },
     { percent: null, tone: 'normal' },
   ])('toneOf_Thresholds: $percent', ({ percent, tone }) => {
     expect(toneOf(percent)).toBe(tone);
