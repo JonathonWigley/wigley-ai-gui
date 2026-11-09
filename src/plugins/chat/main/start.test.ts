@@ -26,6 +26,7 @@ import { createRegistrations } from '../../../shared/registrations';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentSession,
+  type ContributeToolsOptions,
   type ProjectNamer,
   type SessionsMainExports,
   sessionsMainKey,
@@ -316,6 +317,7 @@ function startChatPart(
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
+    options: ContributeToolsOptions | undefined;
   }[] = [];
   const toolCallGuards: ToolCallGuard[] = [];
   const namers: ProjectNamer[] = [];
@@ -337,8 +339,9 @@ function startChatPart(
     contributeTools: (
       tools: ToolDefinition[],
       start: (session: AgentSession) => ToolSession,
+      options?: ContributeToolsOptions,
     ) => {
-      contributions.push({ tools, start });
+      contributions.push({ tools, start, options });
     },
     open: () => {
       rows += 1;
@@ -730,6 +733,29 @@ describe('chat main part', () => {
       });
     },
   );
+
+  it('setHeadlessTool_CallOnAStartedRow_FlipsItsFlag_AsAMainAgentOnlyContribution', async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    const contribution = chat.contributions.find(({ tools }) =>
+      tools.some((tool) => tool.name === 'set_headless'),
+    );
+
+    const result = await contribution
+      ?.start({
+        id: 'row-1',
+        info: { sessionId: 'host-1', projectDir: '/p', harness: 'claude' },
+      })
+      .call(
+        'set_headless',
+        { headless: true },
+        { toolUseId: null, signal: new AbortController().signal },
+      );
+
+    expect(contribution?.options).toEqual({ mainAgentOnly: true });
+    expect(result?.isError ?? false).toBe(false);
+    expect(chat.exports.isHeadless('row-1')).toBe(true);
+  });
 
   it('exports_AddSendGate_HoldsAnExportedSend', async () => {
     const chat = startChatPart();

@@ -51,6 +51,7 @@ import { createChatPreview } from './preview/chat-preview';
 import { createPoolProviders, projectOf, readProjects } from './projects';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
+import { SET_HEADLESS_TOOL, setHeadlessToolSession } from './set-headless-tool';
 import { callerGuard, createToolCallers } from './tool-callers';
 import {
   START_SESSION_TOOL,
@@ -506,6 +507,17 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         stat: (folder) => services.files.stat(folder),
         log: services.log,
       }),
+    );
+    sessions.contributeTools(
+      [SET_HEADLESS_TOOL],
+      setHeadlessToolSession({
+        owns: (sessionId) =>
+          chat.sessions().some((held) => held.sessionId === sessionId),
+        setHeadless: (sessionId, headless) =>
+          chat.setHeadless(sessionId, headless),
+        log: services.log,
+      }),
+      { mainAgentOnly: true },
     );
     const restored = Promise.all([
       saved.load().catch((error: unknown) => {
