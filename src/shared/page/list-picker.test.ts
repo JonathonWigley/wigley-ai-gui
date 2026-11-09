@@ -607,28 +607,58 @@ describe('list picker', () => {
     },
   );
 
+  // The reopened list holds main at 0, protos/b at 1 and protos/a at 3.
   it.each([
     {
+      case: 'selected shown',
       keepFilter: true,
+      closesFirst: false,
+      selected: 3,
       filter: 'protos',
       visible: ['protos/a', 'protos/b', 'protos/c'],
+      cursor: 3,
     },
     {
-      keepFilter: undefined,
+      case: 'selected hidden, cursor on the best match',
+      keepFilter: true,
+      closesFirst: false,
+      selected: 0,
+      filter: 'protos',
+      visible: ['protos/a', 'protos/b', 'protos/c'],
+      cursor: 1,
+    },
+    {
+      case: 'list closed first',
+      keepFilter: true,
+      closesFirst: true,
+      selected: 3,
       filter: '',
       visible: ['main', 'protos/a', 'protos/b', 'protos/c'],
+      cursor: 3,
+    },
+    {
+      case: 'left out',
+      keepFilter: undefined,
+      closesFirst: false,
+      selected: 3,
+      filter: '',
+      visible: ['main', 'protos/a', 'protos/b', 'protos/c'],
+      cursor: 3,
     },
   ])(
-    'open_KeepFilter_ReopensFilteredWithTheCursorOnSelected: keepFilter $keepFilter',
-    ({ keepFilter, filter, visible }) => {
+    'open_KeepFilter_ReopensFilteredWithTheCursorOnSelected: $case',
+    ({ keepFilter, closesFirst, selected, filter, visible, cursor }) => {
       const { picker, layer, type, filterText } = filteredPickerSetup();
       picker.open(request({ items: ['main', 'protos/a', 'protos/b'] }));
       type('protos');
+      if (closesFirst) {
+        picker.cancel();
+      }
 
       picker.open(
         request({
           items: ['main', 'protos/b', 'protos/c', 'protos/a'],
-          selected: 3,
+          selected,
           keepFilter,
         }),
       );
@@ -639,7 +669,7 @@ describe('list picker', () => {
           .map((row) => row.textContent)
           .sort(),
       ).toEqual(visible);
-      expect(picker.cursorIndex()).toBe(3);
+      expect(picker.cursorIndex()).toBe(cursor);
     },
   );
 

@@ -245,7 +245,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // one arriving later, while the step is still shown, reopens it when it
   // differs, keeping the cursor's branch and the typed filter. The cached
   // list arriving after the fresh one opened the step is ignored. An empty
-  // list counts as a failed read; when both fail, the step does not open.
+  // list counts as a failed read. A failed fresh read beside a shown cached
+  // list toasts a notice; when both fail, the step does not open.
   const openBranchStep = (
     context: PromptContext,
     project: Extract<ChatProject, { kind: 'pool' }>,
@@ -268,12 +269,19 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       });
       shown = { branches, handle };
     };
+    // The fresh read's reason once it has failed; null until then.
+    let refreshFailure: string | null = null;
+    const toastNotRefreshed = (reason: string) =>
+      deps.toast(`Branches not refreshed: ${reason}`, 'info');
     const listed = (branches: string[], refresh: boolean) => {
       if (isStale(context.isCurrent, 'branches')) {
         return;
       }
       if (shown === null) {
         openWith(branches, 0, false);
+        if (refreshFailure !== null) {
+          toastNotRefreshed(refreshFailure);
+        }
         return;
       }
       const before = shown.branches;
@@ -290,9 +298,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         true,
       );
     };
-    // Toasts the fresh read's reason once both reads have failed.
+    // Toasts the fresh read's reason as an error once both reads have failed,
+    // and as a notice when it fails while the cached list's step is shown.
     let cachedFailed = false;
-    let refreshFailure: string | null = null;
     const failed = (reason: string, refresh: boolean) => {
       log(`branches not read: ${reason}`);
       if (refresh) {
@@ -305,6 +313,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       }
       if (cachedFailed && refreshFailure !== null) {
         deps.toast(`Branches not listed: ${refreshFailure}`, 'error');
+      } else if (refresh && shown?.handle.isOpen() === true) {
+        toastNotRefreshed(reason);
       }
     };
     const read = (refresh: boolean) => {

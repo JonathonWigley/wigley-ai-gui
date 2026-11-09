@@ -381,6 +381,34 @@ function branchStepsOf(run: ReturnType<typeof setUp>): Opened[] {
   return run.opened.filter(({ title }) => title === BRANCH_STEP_TITLE);
 }
 
+// One branch read's answer: its list, or the error it rejects with.
+type BranchAnswer = ['cached' | 'fresh', string[] | Error];
+
+// The prompt opened with projects, each branch read held until settled.
+function setUpWithBranchReads() {
+  const reads = { cached: deferred<string[]>(), fresh: deferred<string[]>() };
+  const run = setUpWithProjects({
+    branches: (_project, refresh) =>
+      refresh ? reads.fresh.promise : reads.cached.promise,
+  });
+  return { run, reads };
+}
+
+// Settles each read in turn, letting the prompt settle after each.
+async function settleBranchReads(
+  reads: ReturnType<typeof setUpWithBranchReads>['reads'],
+  ...answers: BranchAnswer[]
+) {
+  for (const [read, answer] of answers) {
+    if (answer instanceof Error) {
+      reads[read].reject(answer);
+    } else {
+      reads[read].resolve(answer);
+    }
+    await flush();
+  }
+}
+
 describe('start prompt', () => {
   it('open_opensTheFolderStepWithRecentThenChoose', async () => {
     const run = setUp();
@@ -1283,65 +1311,137 @@ describe('start prompt', () => {
     expect(branchStepsOf(run)).toHaveLength(1);
   });
 
-  it('branchStep_RefreshAfterBranchPicked_ReopensNothing', async () => {
-    const refreshed = deferred<string[]>();
-    const run = setUpWithProjects({
-      branches: (_project, refresh) =>
-        refresh ? refreshed.promise : Promise.resolve(['main', 'a']),
-    });
-    await flush();
-    await pickInTurn(run, NEW_GAMES_LABEL, 'main');
+  it.each([
+    {
+      name: 'cached after the fresh one opened the step',
+      first: ['fresh', ['main', 'b']] as BranchAnswer,
+      between: (_run: ReturnType<typeof setUp>) => undefined,
+      later: ['cached', ['main', 'a']] as BranchAnswer,
+      labels: ['main', 'b'],
+    },
+    {
+      name: 'fresh after a branch was picked',
+      first: ['cached', ['main', 'a']] as BranchAnswer,
+      between: (run: ReturnType<typeof setUp>) => pickItem(run.last(), 'main'),
+      later: ['fresh', ['main', 'b', 'a']] as BranchAnswer,
+      labels: ['main', 'a'],
+    },
+    {
+      name: 'fresh after another list replaced the step',
+      first: ['cached', ['main', 'a']] as BranchAnswer,
+      between: (run: ReturnType<typeof setUp>) =>
+        run.openOther('Mode', ['default', 'plan']),
+      later: ['fresh', ['main', 'b', 'a']] as BranchAnswer,
+      labels: ['main', 'a'],
+    },
+  ])(
+    'branchStep_LaterList_ReopensNothing: $name',
+    async ({ first, between, later, labels }) => {
+      const { run, reads } = setUpWithBranchReads();
+      await flush();
+      await pickInTurn(run, NEW_GAMES_LABEL);
+      await settleBranchReads(reads, first);
+      between(run);
 
-    refreshed.resolve(['main', 'b', 'a']);
-    await flush();
+      await settleBranchReads(reads, later);
 
-    expect(branchStepsOf(run)).toHaveLength(1);
-  });
+      expect(branchStepsOf(run).map((step) => step.labels)).toEqual([labels]);
+      expect(run.toasts).toEqual([]);
+    },
+  );
 
-  it('branchStep_CachedRejects_OpensOnTheRefresh', async () => {
-    const run = setUpWithProjects({
-      branches: (_project, refresh) =>
-        refresh
-          ? Promise.resolve(['main', 'b'])
-          : Promise.reject(new Error('no refs')),
-    });
-    await flush();
+  // A notice, not an error: the step still lists the clones' last fetch.
+  it.each([
+    {
+      name: 'cached rejects, then fresh lists',
+      answers: [
+        ['cached', new Error('no refs')],
+        ['fresh', ['main', 'b']],
+      ] as BranchAnswer[],
+      labels: ['main', 'b'],
+      toasts: [],
+    },
+    {
+      name: 'fresh rejects, then cached lists',
+      answers: [
+        ['fresh', new Error('offline')],
+        ['cached', ['main', 'a']],
+      ] as BranchAnswer[],
+      labels: ['main', 'a'],
+      toasts: [{ text: 'Branches not refreshed: offline', tone: 'info' }],
+    },
+    {
+      name: 'cached lists, then fresh rejects',
+      answers: [
+        ['cached', ['main', 'a']],
+        ['fresh', new Error('offline')],
+      ] as BranchAnswer[],
+      labels: ['main', 'a'],
+      toasts: [{ text: 'Branches not refreshed: offline', tone: 'info' }],
+    },
+    {
+      name: 'cached lists, then fresh answers none',
+      answers: [
+        ['cached', ['main', 'a']],
+        ['fresh', []],
+      ] as BranchAnswer[],
+      labels: ['main', 'a'],
+      toasts: [
+        {
+          text: 'Branches not refreshed: no branches on origin',
+          tone: 'info',
+        },
+      ],
+    },
+  ])(
+    'branchStep_OneReadFails_OpensOnTheOther: $name',
+    async ({ answers, labels, toasts }) => {
+      const { run, reads } = setUpWithBranchReads();
+      await flush();
+      await pickInTurn(run, NEW_GAMES_LABEL);
 
-    await pickInTurn(run, NEW_GAMES_LABEL);
+      await settleBranchReads(reads, ...answers);
 
-    expect(branchStepsOf(run).map(({ labels }) => labels)).toEqual([
-      ['main', 'b'],
-    ]);
-    expect(run.logs).toContain('branches not read: no refs');
-  });
+      expect(branchStepsOf(run).map((step) => step.labels)).toEqual([labels]);
+      expect(run.toasts).toEqual(toasts);
+    },
+  );
 
   it.each([
     {
-      name: 'both reject',
-      cached: () => Promise.reject(new Error('no refs')),
-      fresh: () => Promise.reject(new Error('offline')),
+      name: 'both reject, cached first',
+      answers: [
+        ['cached', new Error('no refs')],
+        ['fresh', new Error('offline')],
+      ] as BranchAnswer[],
+      toast: 'Branches not listed: offline',
+    },
+    {
+      name: 'both reject, fresh first',
+      answers: [
+        ['fresh', new Error('offline')],
+        ['cached', new Error('no refs')],
+      ] as BranchAnswer[],
       toast: 'Branches not listed: offline',
     },
     {
       name: 'both answer none',
-      cached: () => Promise.resolve([]),
-      fresh: () => Promise.resolve([]),
+      answers: [
+        ['cached', []],
+        ['fresh', []],
+      ] as BranchAnswer[],
       toast: 'Branches not listed: no branches on origin',
     },
-  ])(
-    'branchStep_BothReject_Toasts: $name',
-    async ({ cached, fresh, toast }) => {
-      const run = setUpWithProjects({
-        branches: (_project, refresh) => (refresh ? fresh() : cached()),
-      });
-      await flush();
+  ])('branchStep_BothReject_Toasts: $name', async ({ answers, toast }) => {
+    const { run, reads } = setUpWithBranchReads();
+    await flush();
+    await pickInTurn(run, NEW_GAMES_LABEL);
 
-      await pickInTurn(run, NEW_GAMES_LABEL);
+    await settleBranchReads(reads, ...answers);
 
-      expect(run.toasts).toEqual([{ text: toast, tone: 'error' }]);
-      expect(branchStepsOf(run)).toEqual([]);
-    },
-  );
+    expect(run.toasts).toEqual([{ text: toast, tone: 'error' }]);
+    expect(branchStepsOf(run)).toEqual([]);
+  });
 
   it('startPrompt_ReopenedWhileBranchesRead_OpensNoBranchStep', async () => {
     const cached = deferred<string[]>();

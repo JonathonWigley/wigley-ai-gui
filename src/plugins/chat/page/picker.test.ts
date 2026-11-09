@@ -134,21 +134,29 @@ describe('chat picker', () => {
     ]);
   });
 
-  it('open_KeepFilterWhileOpen_ReachesTheListAndBlursNothing', () => {
-    const doc = installFocusFakeDom((name, value) =>
-      vi.stubGlobal(name, value),
-    );
-    const { picker, listOpens } = pickerSetup();
-    picker.open(choicesRequest(['main', 'a']));
-    const box = new FocusFakeElement('input');
-    box.focus();
+  // A kept focus outside an open list of the same scope would sit in a
+  // filter box the list just cleared.
+  it.each([
+    { case: 'OpenInTheSameScope', firstScope: 'picker' as const, keeps: true },
+    { case: 'Closed', firstScope: null, keeps: false },
+    { case: 'OpenInAnotherScope', firstScope: 'resume' as const, keeps: false },
+  ])(
+    'open_KeepFilterWith$case_ReachesTheListAndKeepsFocus:$keeps',
+    ({ firstScope, keeps }) => {
+      const doc = installFocusFakeDom((name, value) =>
+        vi.stubGlobal(name, value),
+      );
+      const { picker, listOpens } = pickerSetup();
+      if (firstScope !== null) {
+        picker.open({ ...choicesRequest(['main', 'a']), scope: firstScope });
+      }
+      const box = new FocusFakeElement('input');
+      box.focus();
 
-    picker.open(choicesRequest(['main', 'b', 'a'], true));
+      picker.open(choicesRequest(['main', 'b', 'a'], true));
 
-    expect(listOpens.map(({ keepFilter }) => keepFilter)).toEqual([
-      undefined,
-      true,
-    ]);
-    expect(doc.activeElement).toBe(box);
-  });
+      expect(listOpens.at(-1)?.keepFilter).toBe(true);
+      expect(doc.activeElement === box).toBe(keeps);
+    },
+  );
 });

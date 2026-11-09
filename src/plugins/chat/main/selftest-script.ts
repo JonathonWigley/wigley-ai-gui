@@ -806,6 +806,51 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
   { keys: ['y'], expect: '[chat] session closed: chat-selftest' },
 ];
 
+// Relative to the self-test's temp home, as `writeFile` takes it.
+const SETTINGS_FILE = '.config/wigley-ai-gui/settings.json';
+// One folder project on the self-test's folder, with no fixed profile.
+const PROJECT_SETTINGS = JSON.stringify({
+  chat: {
+    projects: [
+      { name: 'Self-test project', folder: `~/${SELFTEST_PROJECT_NAME}` },
+    ],
+  },
+});
+const NO_SETTINGS = '{}';
+
+const PROJECT_STEP_STEPS: SelfTestStep[] = [
+  {
+    writeFile: { path: SETTINGS_FILE, text: PROJECT_SETTINGS },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
+  {
+    keys: [' ', 'b', 'n'],
+    expect: '[chat] picker shown: Project',
+    checksFit: true,
+    why: 'With a project in the settings, the start prompt opens on the Project step.',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[chat] picker shown: Profile',
+    why: 'The cursor opens on the first project, below the section rows; the project fixes no profile, so the Profile step follows.',
+  },
+  { keys: ['Escape'], expect: '[chat] picker closed: Profile' },
+  { keys: [' ', 'b', 'n'], expect: '[chat] picker shown: Project' },
+  {
+    keys: ['/', ...'Other folder', 'Enter'],
+    expect: '[chat] picker shown: Folder',
+    why: 'The Project step lists Other folder…, which opens the Folder step.',
+  },
+  { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
+  {
+    writeFile: { path: SETTINGS_FILE, text: NO_SETTINGS },
+    keys: [],
+    expect: '[config] applied a new config',
+    why: 'No projects again, so the groups after open on the Folder step.',
+  },
+];
+
 const RESUME_LIST_STEPS: SelfTestStep[] = [
   {
     keys: ['<C-n>'],
@@ -1070,6 +1115,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'interrupt and close',
     why: "Ctrl+c in the box ends a held turn with the fake's notice; messages sent during a held turn wait as pending rows; Cmd+Enter on a focused row writes that row into the turn, and Cmd+Enter in the box writes every pending row then the box; Enter on one and Ctrl+c pull them back into the box, the oldest on top, and none reaches the process; a send after fake: cold is held as a pending row for an app compaction, a later send queues behind it, and Ctrl+C skips the compaction and writes both in order; Cmd+W on a working session asks before y ends it.",
     steps: INTERRUPT_AND_CLOSE_STEPS,
+  },
+  {
+    name: 'project step',
+    why: "With a folder project in chat's projects setting, Space b n opens the Project step, which lists the project and Other folder…: the project leads to the Profile step and Other folder… to the Folder step.",
+    steps: PROJECT_STEP_STEPS,
   },
   {
     name: 'resume list',
