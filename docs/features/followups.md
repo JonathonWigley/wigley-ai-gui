@@ -517,6 +517,8 @@ User-facing features, those other work builds on first.
   reduce the plan drafters and cold readers in `wigley:feature`; reduce the review lanes in `wigley:review`. It waited
   because of `docs/features/workflow-levels/design.md` § Decisions, "Large stays exactly as it was": published guidance
   against many agents on coding work is vendor evidence, and the log gives the user's own.
+- **An image, video, HTML and artifact viewer** — *needs a feature plan*: a viewer in the app, so a render or page
+  the agent asks the user to look at is visible inside the gui.
 
 ## Code cleanup
 
