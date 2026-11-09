@@ -112,7 +112,6 @@ export interface PracticeToolsDeps {
   judge: Judge;
   lastResult(slug: string): LastResult | null;
   interviewerSlug(session: AgentSession): Promise<string | null>;
-  log(line: string): void;
 }
 
 interface AddProblemArgs {

@@ -37,7 +37,8 @@ export interface PracticeSessionsDeps {
 // closing the latest earlier attempt's interviewer chat still holds; asks for
 // one slug run one at a time. `interviewerOf` resolves null when the current
 // attempt has no interviewer, and resumes a row chat no longer holds,
-// concurrent calls for one slug sharing one resume. `opened`, `closed` and
+// concurrent calls for one slug sharing one resume; a resume chat refuses
+// clears the stored interviewer, so the next ask launches a fresh one. `opened`, `closed` and
 // `cleared` hear chat's `sessionOpened`, `sessionClosed` and `sessionCleared`.
 // `interviewerSlug` names the problem whose current attempt's interviewer is
 // `session`, null for any other session.
@@ -144,13 +145,21 @@ export function createPracticeSessions(
     });
     const hostSessionId = await hostIdOf(id);
     if (hostSessionId === null) {
+      log(
+        `interviewer ${id} sent no sessionOpened in ${String(HOST_ID_WAIT_MS)} ms`,
+      );
       await closeLogged(id, 'interviewer');
       throw new Error(`Chat sent no sessionOpened for interviewer ${id}.`);
     }
-    await progress.setInterviewer(slug, attempt.id, {
-      sessionId: id,
-      hostSessionId,
-    });
+    try {
+      await progress.setInterviewer(slug, attempt.id, {
+        sessionId: id,
+        hostSessionId,
+      });
+    } catch (error) {
+      await closeLogged(id, 'unstored interviewer');
+      throw error;
+    }
     const old =
       file.attempts
         .slice(0, file.attempts.indexOf(attempt))
@@ -176,14 +185,23 @@ export function createPracticeSessions(
       store.readProblem(slug),
       interviewerInstructions(),
     ]);
-    const id = await chat.resume({
-      projectDir: store.folder(),
-      profile,
-      hostSessionId: interviewer.hostSessionId,
-      title: `Interviewer: ${problem.title}`,
-      instructions: [instructions],
-      owner,
-    });
+    let id: string;
+    try {
+      id = await chat.resume({
+        projectDir: store.folder(),
+        profile,
+        hostSessionId: interviewer.hostSessionId,
+        title: `Interviewer: ${problem.title}`,
+        instructions: [instructions],
+        owner,
+      });
+    } catch (error) {
+      log(
+        `interviewer ${interviewer.sessionId} not resumed, so cleared: ${errorText(error)}`,
+      );
+      await progress.setInterviewer(slug, attempt.id, null);
+      return null;
+    }
     if (id !== interviewer.sessionId) {
       await progress.setInterviewer(slug, attempt.id, {
         sessionId: id,
@@ -272,11 +290,20 @@ export function createPracticeSessions(
           return launchInterviewer(slug, file, attempt, text);
         }
         const id = await interviewerOf(slug);
-        if (id === null) {
+        if (id !== null) {
+          await chat.send(id, { text, images: [] });
+          return id;
+        }
+        // The resume failed and cleared the interviewer, or the attempt
+        // changed under the ask.
+        const now = await progress.read(slug);
+        const current = now.attempts.at(-1);
+        const isClearedAttempt =
+          current?.id === attempt.id && current.interviewer === null;
+        if (current === undefined || !isClearedAttempt) {
           throw new Error(`${slug} has no interviewer; ask again.`);
         }
-        await chat.send(id, { text, images: [] });
-        return id;
+        return launchInterviewer(slug, now, current, text);
       }),
     interviewerOf,
     async interviewerSlug(session) {

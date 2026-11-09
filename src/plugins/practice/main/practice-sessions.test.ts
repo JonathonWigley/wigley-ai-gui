@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { Timers } from '../../../contracts/ambient';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { globalTimers } from '../../../shared/agent-forms/global-timers.test-support';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
@@ -15,7 +15,7 @@ import {
   TWO_SUM,
   writeProblem,
 } from './practice-fixtures.test-support';
-import { createPracticeSessions } from './practice-sessions';
+import { createPracticeSessions, HOST_ID_WAIT_MS } from './practice-sessions';
 import { createProblemStore } from './problem-store';
 import { createProgress } from './progress';
 
@@ -33,36 +33,14 @@ function attempt(
   };
 }
 
-// A `Timers` the test fires by hand; `pending` counts the timers set and not
-// yet fired or cleared.
-function manualTimers() {
-  const pending = new Map<number, () => void>();
-  let lastHandle = 0;
-  const timers: Timers = {
-    set: (run) => {
-      lastHandle += 1;
-      pending.set(lastHandle, run);
-      return lastHandle;
-    },
-    clear: (handle) => {
-      pending.delete(handle);
-    },
-  };
-  const fireAll = () => {
-    for (const [handle, run] of pending) {
-      pending.delete(handle);
-      run();
-    }
-  };
-  return { timers, pending, fireAll };
-}
-
 // A chat whose `launch` and `resume` resolve `row-1`, `row-2`, … and hold the
-// row; `profileOf` answers from `held`. `beforeLaunchResolves` runs with the
-// new id inside `launch`, as chat's `sessionOpened` does.
+// row, `resume` rejecting with `resumeError` when set; `profileOf` answers
+// from `held`. `beforeLaunchResolves` runs with the new id inside `launch`, as
+// chat's `sessionOpened` does.
 function fakeChat(options: {
   defaultProfile?: string | null;
   held?: string[];
+  resumeError?: string;
   beforeLaunchResolves?: (id: string) => void;
 }) {
   const held = new Set(options.held ?? []);
@@ -90,6 +68,9 @@ function fakeChat(options: {
     async resume(request) {
       resumes.push(request);
       await Promise.resolve();
+      if (options.resumeError !== undefined) {
+        throw new Error(options.resumeError);
+      }
       return nextRow();
     },
     defaultProfile: () =>
@@ -153,7 +134,6 @@ async function setUp(
     ...options,
     beforeLaunchResolves: options.beforeLaunchResolves ?? ((id) => opened(id)),
   });
-  const timers = manualTimers();
   const logs: string[] = [];
   sessions = createPracticeSessions({
     chat: fake.chat,
@@ -161,13 +141,21 @@ async function setUp(
     progress,
     files,
     paths: posixPaths,
-    timers: timers.timers,
+    timers: globalTimers,
     log: (line) => logs.push(line),
   });
   const interviewers = async () =>
     (await progress.read('two-sum')).attempts.map((one) => one.interviewer);
-  return { ...fake, sessions, timers, opened, interviewers, files, logs };
+  return { ...fake, sessions, progress, opened, interviewers, files, logs };
 }
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('practice sessions', () => {
   it('startImport launches a visible session with the import instructions', async () => {
@@ -214,7 +202,7 @@ describe('practice sessions', () => {
 
       const asking = part.sessions.askInterviewer('two-sum', 'Where to start?');
       if (openedAfterLaunch) {
-        await vi.waitFor(() => expect(part.timers.pending.size).toBe(1));
+        await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
         part.opened('row-1');
       }
 
@@ -234,15 +222,44 @@ describe('practice sessions', () => {
     },
   );
 
-  it('askInterviewer sends to an existing interviewer', async () => {
-    const part = await setUp({ attempts: [attempt('a1')] });
+  it.each([
+    { case: 'one after another', together: false },
+    { case: 'both at once', together: true },
+  ])(
+    'askInterviewer sends the second ask to the first launch: $case',
+    async ({ together }) => {
+      const part = await setUp({ attempts: [attempt('a1')] });
+      const ask = (text: string) =>
+        part.sessions.askInterviewer('two-sum', text);
 
-    await part.sessions.askInterviewer('two-sum', 'first');
-    const id = await part.sessions.askInterviewer('two-sum', 'second');
+      const ids = together
+        ? await Promise.all([ask('first'), ask('second')])
+        : [await ask('first'), await ask('second')];
+
+      expect(ids).toEqual(['row-1', 'row-1']);
+      expect(part.launches).toHaveLength(1);
+      expect(part.sends).toEqual([{ id: 'row-1', text: 'second' }]);
+    },
+  );
+
+  it('askInterviewer launches afresh when chat refuses the resume', async () => {
+    const part = await setUp({
+      attempts: [
+        attempt('a1', { sessionId: 'row-0', hostSessionId: 'host-0' }),
+      ],
+      resumeError: 'Session host-0 belongs to another owner.',
+    });
+
+    const id = await part.sessions.askInterviewer('two-sum', 'hi');
 
     expect(id).toBe('row-1');
+    expect(part.resumes).toHaveLength(1);
     expect(part.launches).toHaveLength(1);
-    expect(part.sends).toEqual([{ id: 'row-1', text: 'second' }]);
+    expect(part.sends).toEqual([]);
+    expect(await part.interviewers()).toEqual([
+      { sessionId: 'row-1', hostSessionId: 'host-1' },
+    ]);
+    expect(part.logs).toEqual([expect.stringContaining('row-0 not resumed')]);
   });
 
   it.each<{
@@ -250,9 +267,13 @@ describe('practice sessions', () => {
     attempts?: Attempt[];
     defaultProfile?: null;
     noOpened?: boolean;
+    storeFails?: boolean;
+    attemptChanges?: boolean;
     error: string;
     launches: number;
     closes: [string, string][];
+    stored: Attempt['interviewer'][];
+    logs: string[];
   }>([
     {
       case: 'no sessionOpened',
@@ -261,6 +282,18 @@ describe('practice sessions', () => {
       error: 'Chat sent no sessionOpened for interviewer row-1.',
       launches: 1,
       closes: [['row-1', 'finished']],
+      stored: [null],
+      logs: ['row-1 sent no sessionOpened'],
+    },
+    {
+      case: 'interviewer not stored',
+      attempts: [attempt('a1')],
+      storeFails: true,
+      error: 'disk full',
+      launches: 1,
+      closes: [['row-1', 'finished']],
+      stored: [null],
+      logs: [],
     },
     {
       case: 'no profile',
@@ -269,34 +302,81 @@ describe('practice sessions', () => {
       error: 'Chat has no profiles.',
       launches: 0,
       closes: [],
+      stored: [null],
+      logs: [],
     },
     {
       case: 'no attempt',
       error: 'two-sum has no attempt; open it first.',
       launches: 0,
       closes: [],
+      stored: [],
+      logs: [],
+    },
+    {
+      case: 'attempt changed under the ask',
+      attempts: [
+        attempt('a1', { sessionId: 'row-0', hostSessionId: 'host-0' }),
+      ],
+      attemptChanges: true,
+      error: 'two-sum has no interviewer; ask again.',
+      launches: 0,
+      closes: [],
+      stored: [{ sessionId: 'row-0', hostSessionId: 'host-0' }, null],
+      logs: [],
     },
   ])(
-    'askInterviewer refuses without a host id, a profile or an attempt: $case',
-    async ({ attempts, defaultProfile, noOpened, error, launches, closes }) => {
+    'askInterviewer refuses without a stored interviewer, a profile or its attempt: $case',
+    async ({
+      attempts,
+      defaultProfile,
+      noOpened,
+      storeFails,
+      attemptChanges,
+      error,
+      launches,
+      closes,
+      stored,
+      logs,
+    }) => {
       const part = await setUp({
         attempts,
         defaultProfile,
         beforeLaunchResolves: noOpened === true ? () => undefined : undefined,
       });
+      if (storeFails === true) {
+        vi.spyOn(part.progress, 'setInterviewer').mockRejectedValueOnce(
+          new Error('disk full'),
+        );
+      }
+      if (attemptChanges === true) {
+        const read = part.progress.read.bind(part.progress);
+        vi.spyOn(part.progress, 'read').mockImplementationOnce(async (slug) => {
+          const file = await read(slug);
+          await part.files.write(
+            PROGRESS,
+            JSON.stringify({
+              ...file,
+              attempts: [...file.attempts, attempt('a2')],
+            }),
+          );
+          return file;
+        });
+      }
 
       const asking = part.sessions.askInterviewer('two-sum', 'hi');
       if (noOpened === true) {
-        await vi.waitFor(() => expect(part.timers.pending.size).toBe(1));
-        part.timers.fireAll();
+        await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
+        await vi.advanceTimersByTimeAsync(HOST_ID_WAIT_MS);
       }
 
       await expect(asking).rejects.toThrow(error);
       expect(part.launches).toHaveLength(launches);
       expect(part.closes).toEqual(closes);
-      if (attempts !== undefined) {
-        expect(await part.interviewers()).toEqual([null]);
-      }
+      expect(await part.interviewers()).toEqual(stored);
+      expect(part.logs).toEqual(
+        logs.map((line) => expect.stringContaining(line)),
+      );
     },
   );
 
@@ -325,6 +405,7 @@ describe('practice sessions', () => {
     case: string;
     interviewer: Attempt['interviewer'];
     held: string[];
+    resumeError?: string;
     calls: number;
     id: string | null;
     resumes: number;
@@ -358,6 +439,16 @@ describe('practice sessions', () => {
       stored: { sessionId: 'row-1', hostSessionId: 'host-1' },
     },
     {
+      case: 'resume refused',
+      interviewer: { sessionId: 'row-0', hostSessionId: 'host-1' },
+      held: [],
+      resumeError: 'Chat has no session host-1.',
+      calls: 1,
+      id: null,
+      resumes: 1,
+      stored: null,
+    },
+    {
       case: 'row gone, two calls at once',
       interviewer: { sessionId: 'row-0', hostSessionId: 'host-1' },
       held: [],
@@ -368,10 +459,11 @@ describe('practice sessions', () => {
     },
   ])(
     'interviewerOf brings the interviewer back: $case',
-    async ({ interviewer, held, calls, id, resumes, stored }) => {
+    async ({ interviewer, held, resumeError, calls, id, resumes, stored }) => {
       const part = await setUp({
         attempts: [attempt('a1', interviewer)],
         held,
+        resumeError,
       });
 
       const ids = await Promise.all(

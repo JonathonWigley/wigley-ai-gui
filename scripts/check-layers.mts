@@ -167,6 +167,20 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: ['node:'],
       },
+      // Runs its host-id wait on the shared global timers under fake timers.
+      'src/plugins/practice/main/practice-sessions.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/paths',
+          'src/shared/agent-forms',
+          'src/plugins/practice/contract.ts',
+          'src/plugins/practice/main',
+          'src/plugins/chat/contract.ts',
+          'src/plugins/sessions/contract.ts',
+        ],
+        packages: [],
+      },
     },
   },
   // Its relay's socket and its MCP adapter's SDK sit in sublayers of main; the

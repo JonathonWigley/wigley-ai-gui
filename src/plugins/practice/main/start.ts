@@ -44,7 +44,7 @@ type PracticeApi = MainApi<
 // the import and interviewer sessions through chat, hearing chat's session
 // events, and gives every session the `add_practice_problem` and
 // `read_practice_state` tools. Registers the Practice layout contract. Hands
-// the self-test its script, and offers a drive run the `writeFixture` action.
+// the self-test its script, telling it of each submit, and offers a drive run the `writeFixture` action.
 export const practiceMainPart: MainPart<typeof practiceManifest> = {
   manifest: practiceManifest,
   start(api: PracticeApi) {
@@ -108,9 +108,20 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
         judge,
         lastResult: runs.lastResult,
         interviewerSlug: practiceSessions.interviewerSlug,
-        log: services.log,
       }),
     );
+    const reload = () => channel.send('changed', { slug: null });
+    const selfTestScript =
+      services.selfTest === null
+        ? null
+        : practiceSelfTestScript({
+            files: services.files,
+            paths: services.paths,
+            processes: services.processes,
+            folder,
+            compiler: () => api.settings().compiler,
+            reload,
+          });
     channel.handle('list', () => listProblems(store, progress, services.log));
     channel.handle('open', (slug) => openProblem(store, progress, slug));
     channel.handle('saveCode', (slug, text) =>
@@ -123,7 +134,10 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
       store.writeText(slug, 'custom-cases.json', text),
     );
     channel.handle('run', (slug) => runs.run(slug));
-    channel.handle('submit', (slug) => runs.submit(slug));
+    channel.handle('submit', (slug) => {
+      selfTestScript?.submitStarted(slug);
+      return runs.submit(slug);
+    });
     channel.handle('peek', async (slug) => {
       await progress.peek(slug);
       const [approach, reference] = await Promise.all([
@@ -159,17 +173,9 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
       watchedFolder = folder();
       watch = watchProblems();
     });
-    const reload = () => channel.send('changed', { slug: null });
-    services.selfTest?.run(
-      practiceSelfTestScript({
-        files: services.files,
-        paths: services.paths,
-        processes: services.processes,
-        folder,
-        compiler: () => api.settings().compiler,
-        reload,
-      }),
-    );
+    if (selfTestScript !== null) {
+      services.selfTest?.run(selfTestScript);
+    }
     api.drive?.add('writeFixture', {
       description:
         'Writes the Practice fixture into the practice folder (the folder setting, default <home>/leetcode), replacing every problem in its problems folder: Two Sum (a function problem, anyOrder, with a correct solution.cpp) and LRU Cache (a design problem whose solution.cpp get always returns -1, so Submit gives Wrong Answer). Tells the page to list again. Returns { folder, problems }.',

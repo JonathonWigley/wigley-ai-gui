@@ -8,6 +8,7 @@ import type {
 } from '../../../contracts/plugin';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
+import { holdsWithin } from '../../../shared/holds-within';
 import {
   BACKLOG_FEATURES_HOME,
   BACKLOG_FOLLOWUPS,
@@ -47,10 +48,8 @@ const CREATED_BODY = 'Body';
 
 const COMMIT_SUBJECT = 'Follow-ups edited in Backlog: tagged Plain item';
 
-// How long one result check waits for the disk to show a step's write, and
-// how often it looks.
+// How long one result check waits for the disk to show a step's write.
 const CHECK_TIMEOUT_MS = 60_000;
-const POLL_MS = 25;
 
 function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   // A path below the home as the page shows it.
@@ -295,22 +294,6 @@ function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       steps: detailAndTagPicker,
     },
   ];
-}
-
-// Whether `probe` answers true within `timeoutMs`, asking every `POLL_MS`; a
-// probe that rejects counts as false.
-async function holdsWithin(
-  probe: () => Promise<boolean>,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await probe().catch(() => false)) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-  }
-  return false;
 }
 
 // The checks the result runs in order over the git home's follow-ups file,

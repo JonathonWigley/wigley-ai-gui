@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { AgentSession } from '../../sessions/contract';
-import type { CaseResult, JudgeResult, Verdict } from '../contract';
+import type {
+  Attempt,
+  CaseResult,
+  JudgeResult,
+  SubmissionRecord,
+  Verdict,
+} from '../contract';
 import { stubSource } from '../driver';
 import { type FunctionCase, problemJson } from '../problem';
 import type { JudgeCase, JudgeOptions } from './judge';
@@ -106,14 +112,13 @@ function setUp(options: {
     },
     lastResult: () => options.lastResult ?? null,
     interviewerSlug: async () => options.interviewerSlug ?? null,
-    log: () => undefined,
   })(SESSION);
   const call = (name: string, args: unknown) =>
     tools.call(name, args, {
       toolUseId: null,
       signal: new AbortController().signal,
     });
-  return { files, call, judgeCalls };
+  return { files, store, call, judgeCalls };
 }
 
 function addArgs(overrides: Record<string, unknown> = {}) {
@@ -281,20 +286,26 @@ describe('practice tools', () => {
     );
   });
 
-  it('read_practice_state answers only an interviewer', async () => {
-    const notInterviewer = setUp({ interviewerSlug: null });
-    const refused = await notInterviewer.call(
-      READ_PRACTICE_STATE_TOOL.name,
-      {},
-    );
-    expect(refused.isError).toBe(true);
-
-    const failing = caseResult(
-      { ...TWO_SUM.cases[2], source: 'hidden' } as JudgeCase,
-      2,
-      'wrongAnswer',
-    );
-    const interviewer = setUp({
+  const wrongAnswer = caseResult(
+    { ...TWO_SUM.cases[2], source: 'hidden' } as JudgeCase,
+    2,
+    'wrongAnswer',
+  );
+  const STARTED = '2026-11-09T10:00:00.000Z';
+  it.each<{
+    case: string;
+    interviewerSlug: string | null;
+    lastResult?: LastResult;
+    submissionTimes?: string[];
+    contains: string[];
+  }>([
+    {
+      case: 'not an interviewer',
+      interviewerSlug: null,
+      contains: [],
+    },
+    {
+      case: 'a wrong answer run',
       interviewerSlug: 'two-sum',
       lastResult: {
         kind: 'run',
@@ -304,27 +315,88 @@ describe('practice tools', () => {
           total: 3,
           ms: 12,
           compileOutput: null,
-          failing,
-          cases: [failing],
+          failing: wrongAnswer,
+          cases: [wrongAnswer],
         },
       },
-    });
-    await writeProblem(interviewer.files, TWO_SUM);
-    await interviewer.files.write(
-      `${PROBLEM_FOLDER}/problem.md`,
-      'Find two numbers.',
-    );
-    await interviewer.files.write(`${PROBLEM_FOLDER}/solution.cpp`, 'mine');
-    await interviewer.files.write(`${PROBLEM_FOLDER}/reference.cpp`, REFERENCE);
+      contains: ['Find two numbers.', 'mine', 'Wrong Answer', '[[3,3],6]'],
+    },
+    {
+      case: 'a submit that does not compile',
+      interviewerSlug: 'two-sum',
+      lastResult: {
+        kind: 'submit',
+        result: {
+          verdict: 'compileError',
+          passed: 0,
+          total: 3,
+          ms: 40,
+          compileOutput: "solution.cpp:2:9: error: expected ';'",
+          failing: null,
+          cases: [],
+        },
+      },
+      contains: [
+        'Submit: Compile Error',
+        "solution.cpp:2:9: error: expected ';'",
+      ],
+    },
+    {
+      case: 'submissions before and in the attempt',
+      interviewerSlug: 'two-sum',
+      submissionTimes: [
+        '2026-11-08T09:00:00.000Z',
+        '2026-11-09T10:30:00.000Z',
+        '2026-11-09T11:00:00.000Z',
+      ],
+      contains: ['Submissions in this attempt: 2.'],
+    },
+  ])(
+    'read_practice_state shows an interviewer its state: $case',
+    async ({ interviewerSlug, lastResult, submissionTimes, contains }) => {
+      const part = setUp({ interviewerSlug, lastResult });
+      await writeProblem(part.files, TWO_SUM);
+      await part.files.write(
+        `${PROBLEM_FOLDER}/problem.md`,
+        'Find two numbers.',
+      );
+      await part.files.write(`${PROBLEM_FOLDER}/solution.cpp`, 'mine');
+      await part.files.write(`${PROBLEM_FOLDER}/reference.cpp`, REFERENCE);
+      const attempt: Attempt = {
+        id: 'a1',
+        started: STARTED,
+        peeked: false,
+        interviewer: null,
+      };
+      await part.files.write(
+        `${PROBLEM_FOLDER}/progress.json`,
+        JSON.stringify({
+          status: 'attempted',
+          review: { step: null, due: null },
+          attempts: [attempt],
+        }),
+      );
+      for (const time of submissionTimes ?? []) {
+        const record: SubmissionRecord = {
+          time,
+          verdict: 'wrongAnswer',
+          passed: 0,
+          total: 3,
+          ms: 5,
+          failing: null,
+          code: 'mine',
+        };
+        await part.store.writeSubmission('two-sum', record);
+      }
 
-    const state = await interviewer.call(READ_PRACTICE_STATE_TOOL.name, {});
+      const state = await part.call(READ_PRACTICE_STATE_TOOL.name, {});
 
-    const text = state.content[0].text;
-    expect(state.isError).toBeUndefined();
-    expect(text).toContain('Find two numbers.');
-    expect(text).toContain('mine');
-    expect(text).toContain('Wrong Answer');
-    expect(text).toContain('[[3,3],6]');
-    expect(text).not.toContain('REFERENCE_TEXT');
-  });
+      const text = state.content[0].text;
+      expect(state.isError).toBe(interviewerSlug === null ? true : undefined);
+      for (const shown of contains) {
+        expect(text).toContain(shown);
+      }
+      expect(text).not.toContain('REFERENCE_TEXT');
+    },
+  );
 });

@@ -3,6 +3,7 @@ import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
+import { holdsWithin } from '../../../shared/holds-within';
 import { writePracticeFixture } from './selftest-fixture';
 
 export interface PracticeSelfTestDeps {
@@ -17,10 +18,17 @@ export interface PracticeSelfTestDeps {
   reload(): void;
 }
 
-// How long one result check waits for the disk to show a step's write, and
-// how often it looks.
+// How long the result waits, from the submit's start, for the disk to show
+// its record.
 const CHECK_TIMEOUT_MS = 60_000;
-const POLL_MS = 25;
+
+// The problem the steps submit.
+const SUBMITTED_SLUG = 'lru-cache';
+
+// `submitStarted` hears each submit main's channel starts.
+export interface PracticeSelfTestScript extends SelfTestScript {
+  submitStarted(slug: string): void;
+}
 
 const practiceGroups: SelfTestGroup[] = [
   {
@@ -177,22 +185,6 @@ const practiceGroups: SelfTestGroup[] = [
   },
 ];
 
-// Whether `probe` answers true within `timeoutMs`, asking every `POLL_MS`; a
-// probe that rejects counts as false.
-async function holdsWithin(
-  probe: () => Promise<boolean>,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await probe().catch(() => false)) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-  }
-  return false;
-}
-
 // A problem naming the missing compiler when `<compiler> --version` cannot
 // run, so a failed Run step's cause shows in the report; null when it runs.
 async function compilerProblem(
@@ -206,22 +198,25 @@ async function compilerProblem(
   return runs ? null : `no ${compiler} on PATH: Run and Submit need it`;
 }
 
-// Follows the submit's write: LRU Cache's submissions folder holds exactly
-// one record, and its verdict is Wrong Answer.
+// Follows the submit's write once `submitted` settles: LRU Cache's
+// submissions folder holds exactly one record, and its verdict is Wrong
+// Answer.
 async function submissionProblem(
   deps: PracticeSelfTestDeps,
+  submitted: Promise<void>,
 ): Promise<string | null> {
   const { files, paths } = deps;
   const folder = paths.join(
     deps.folder(),
     'problems',
-    'lru-cache',
+    SUBMITTED_SLUG,
     'submissions',
   );
   const records = async () =>
     (await files.list(folder, { recursive: false })).filter(
       (entry) => entry.kind === 'file' && entry.path.endsWith('.json'),
     );
+  await submitted;
   const isWritten = await holdsWithin(
     async () => (await records()).length > 0,
     CHECK_TIMEOUT_MS,
@@ -244,16 +239,21 @@ async function submissionProblem(
 // Each run rewrites the fixture in the practice folder, once the one before
 // it is written, and tells the page to list again. The result lists what was
 // wrong with the compiler, the fixture or the submit's write, empty when
-// nothing was.
+// nothing was; it waits for the run's submit of LRU Cache before it checks the
+// write.
 export function practiceSelfTestScript(
   deps: PracticeSelfTestDeps,
-): SelfTestScript {
+): PracticeSelfTestScript {
   let written: Promise<unknown> = Promise.resolve();
+  let heardSubmit = (): void => undefined;
   return {
     pageBinds: [],
     settings: {},
     scrollsItself: ['.practice-list .ui-row-label'],
     open() {
+      const submitted = new Promise<void>((resolve) => {
+        heardSubmit = resolve;
+      });
       const fixture = written
         .catch(() => undefined)
         .then(() => writePracticeFixture(deps, deps.folder()));
@@ -263,7 +263,7 @@ export function practiceSelfTestScript(
           deps.reload();
           const problems = await Promise.all([
             compilerProblem(deps),
-            submissionProblem(deps),
+            submissionProblem(deps, submitted),
           ]);
           return problems.filter((problem) => problem !== null);
         },
@@ -273,5 +273,10 @@ export function practiceSelfTestScript(
     },
     groups: practiceGroups,
     problems: (result) => result as string[],
+    submitStarted(slug) {
+      if (slug === SUBMITTED_SLUG) {
+        heardSubmit();
+      }
+    },
   };
 }
