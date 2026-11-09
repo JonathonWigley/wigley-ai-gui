@@ -947,7 +947,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   An agent session's relay finds the stable app by default. The dev app gets rounds from the sessions its own Chat tab
   starts, which the app points at its endpoint folder, and from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR`
   set to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`). The self-test's user data is
-  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`; a drive run points its Claude
+  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`, both with Chromium's HTTP and code
+  caches off, since each start serves the page's modules from a fresh dev server URL; a drive run points its Claude
   sessions at `<run home>/.agents/<instance id>`. "Auri" is only the name the app shows (`app.setName` at start,
   for the Mac app menu's items): the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac Dock still says Electron, since Electron cannot rename
   the Dock label of an unbundled app.
@@ -981,8 +982,9 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   suite of shared cases, kept in a `*.test-support.ts` module (the Files contract in
   `src/shared/files-contract.test-support.ts`).
 - `npm run selftest` is the agent's loop, run filtered to what the change touches, which the user allows any time:
-  `--plugin <id>` for each touched plugin, or `--group <name>` for the touched groups. A whole run takes half an hour
-  or more, so it runs only when the user asks for one in the current turn; a merge, a re-check after a fix and a final
+  `--plugin <id>` for each touched plugin, or `--group <name>` for the touched groups. A whole run runs every script, several
+  minutes of a full Electron app against well under one for a plugin, so it runs only when the user asks for one in
+  the current turn; a merge, a re-check after a fix and a final
   pass all run filtered too. `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
   give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
   it or bare for that name in every script (a name several scripts share usually needs its `<plugin>: ` prefix, since a

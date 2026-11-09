@@ -9,6 +9,7 @@ import {
   globalShortcut,
   ipcMain,
   nativeTheme,
+  session,
   shell,
   type WebContents,
 } from 'electron';
@@ -1243,6 +1244,13 @@ function startApp() {
       failStart(error);
       return;
     }
+    // The page loads hundreds of modules from the dev server, and Chromium
+    // wrote each one into the profile's HTTP and code caches on every start:
+    // about 2,300 files a run, 1.5 GB kept, and Spotlight indexing the churn.
+    // A run reuses none of it, since the dev server's port and module URLs
+    // change between starts. The code cache goes off once the app is ready
+    // (`disableCodeCache`).
+    app.commandLine.appendSwitch('disable-http-cache');
   }
   // A second start (a relay starting the app) shows the window without
   // taking the user's focus.
@@ -1257,6 +1265,9 @@ function startApp() {
       const shellPath = await loginShellPath;
       if (shellPath !== null) {
         process.env.PATH = shellPath;
+      }
+      if (runMode !== 'live') {
+        disableCodeCache();
       }
       const inputs = await readStartInputs();
       const { store, userConfig, applied } = await loadConfig(inputs.homeDir);
@@ -1305,6 +1316,13 @@ function startApp() {
       app.quit();
     }
   });
+}
+
+// Turns the V8 code cache off for the default session: Electron uses no code
+// cache when it cannot create the folder it is given, and no folder can be
+// made under the null device.
+function disableCodeCache() {
+  session.defaultSession.setCodeCachePath(path.join(os.devNull, 'code-cache'));
 }
 
 // The user's app, in the app instance's own user data folder. The
