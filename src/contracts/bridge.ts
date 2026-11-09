@@ -2,6 +2,7 @@ import type { CommandId } from './commands';
 import type { Disposable } from './disposable';
 import type { LayoutOwner, LayoutSet } from './layouts';
 import type { Log } from './log';
+import type { CatalogProblem } from './plugin-catalog';
 import type { AppConfig } from './settings';
 import type { SlotChange, StateSnapshot } from './state';
 
@@ -32,11 +33,16 @@ export const BRIDGE_CHANNELS = {
 export type PluginPartsRequest =
   | { kind: 'mayStop'; ids: readonly string[] } // reply: { reason: string | null }
   | { kind: 'stop'; ids: readonly string[] } // reply: { stopped: readonly string[] }
-  | { kind: 'start'; ids: readonly string[] }; // reply: { started: readonly string[] }
+  | { kind: 'start'; ids: readonly string[] } // reply: { started: readonly string[]; problems: readonly CatalogProblem[] }
+  | { kind: 'reload'; id: string } // reply: { reloaded: readonly string[] }
+  | { kind: 'remove'; id: string }; // reply: { stopped: readonly string[] }
+// `problems`: page-side load and start failures, one per id. `problem`: why
+// the page could not load the new `page.js`, null when it loaded.
 export type PluginPartsReply =
   | { reason: string | null }
   | { stopped: readonly string[] }
-  | { started: readonly string[] };
+  | { started: readonly string[]; problems: readonly CatalogProblem[] }
+  | { reloaded: readonly string[]; problem: string | null };
 
 // What the core claims once at start through `window.wigley.claim()`.
 export interface Bridge {

@@ -1,5 +1,5 @@
 import type { Disposable } from '../../contracts/disposable';
-import type { DriveHost, PluginManifest } from '../../contracts/plugin';
+import type { DriveHost } from '../../contracts/plugin';
 import type {
   ConfigWriteResult,
   UserConfig,
@@ -8,21 +8,21 @@ import { createRegistrations } from '../../shared/registrations';
 import type { PluginSwitch } from './plugin-switch';
 
 export interface PluginSwitchActionDeps {
-  pluginSwitch: Pick<PluginSwitch, 'restart'>;
+  pluginSwitch: Pick<PluginSwitch, 'restart' | 'settled'>;
   userConfig: Pick<UserConfig, 'read' | 'writeSettings'>;
-  manifests: readonly PluginManifest[];
+  // The ids of the plugins the config holds now.
+  ids(): readonly string[];
+  // Loads plugin `id` again from its folder; rejects with `No plugin "<id>"`
+  // for an unknown id and with its own text for a built-in.
+  reload(id: string): Promise<void>;
   // The `plugins.disabled` the config serves now.
   disabled(): readonly string[];
 }
 
 const ID_ARGS = '{ id: string }';
 
-// The id `args` carries; throws for args that are not `{ id: string }` or an id no manifest has.
-function pluginIdOf(
-  name: string,
-  args: unknown,
-  manifests: readonly PluginManifest[],
-): string {
+// The id `args` carries; throws for args that are not `{ id: string }`.
+function idArgOf(name: string, args: unknown): string {
   const isIdArgs =
     typeof args === 'object' &&
     args !== null &&
@@ -30,8 +30,17 @@ function pluginIdOf(
   if (!isIdArgs) {
     throw new Error(`${name} takes ${ID_ARGS}`);
   }
-  const { id } = args as { id: string };
-  if (!manifests.some((manifest) => manifest.id === id)) {
+  return (args as { id: string }).id;
+}
+
+// The id `args` carries; throws for args that are not `{ id: string }` or an id `ids` does not hold.
+function pluginIdOf(
+  name: string,
+  args: unknown,
+  ids: readonly string[],
+): string {
+  const id = idArgOf(name, args);
+  if (!ids.includes(id)) {
     throw new Error(`No plugin "${id}"`);
   }
   return id;
@@ -66,7 +75,8 @@ async function writeDisabled(
 }
 
 // The drive actions `stopPlugin` and `startPlugin`, which write `plugins.disabled` in `settings.json` so the
-// config's change reaches the switch, and `restartPlugin`, which restarts through the switch.
+// config's change reaches the switch, `restartPlugin`, which restarts through the switch, and `reloadPlugin`,
+// which loads a user plugin again and waits for the switch to act on it.
 export function addPluginSwitchActions(
   drive: DriveHost,
   deps: PluginSwitchActionDeps,
@@ -78,7 +88,7 @@ export function addPluginSwitchActions(
         'Switches plugin id off: adds it to plugins.disabled in settings.json.',
       args: ID_ARGS,
       run: async (args) => {
-        const id = pluginIdOf('stopPlugin', args, deps.manifests);
+        const id = pluginIdOf('stopPlugin', args, deps.ids());
         return writeDisabled(deps, (disabled) =>
           disabled.includes(id) ? disabled : [...disabled, id],
         );
@@ -91,7 +101,7 @@ export function addPluginSwitchActions(
         'Switches plugin id on: removes it from plugins.disabled in settings.json.',
       args: ID_ARGS,
       run: async (args) => {
-        const id = pluginIdOf('startPlugin', args, deps.manifests);
+        const id = pluginIdOf('startPlugin', args, deps.ids());
         return writeDisabled(deps, (disabled) =>
           disabled.filter((each) => each !== id),
         );
@@ -104,8 +114,21 @@ export function addPluginSwitchActions(
         'Stops plugin id and the plugins that depend on it, then starts them again; their slots are kept.',
       args: ID_ARGS,
       run: async (args) => {
-        const id = pluginIdOf('restartPlugin', args, deps.manifests);
+        const id = pluginIdOf('restartPlugin', args, deps.ids());
         await deps.pluginSwitch.restart(id);
+        return null;
+      },
+    }),
+  );
+  registrations.track(
+    drive.add('reloadPlugin', {
+      description:
+        'Loads user plugin id again from its folder with no file change, stopping and starting its dependents.',
+      args: ID_ARGS,
+      run: async (args) => {
+        const id = idArgOf('reloadPlugin', args);
+        await deps.reload(id);
+        await deps.pluginSwitch.settled();
         return null;
       },
     }),

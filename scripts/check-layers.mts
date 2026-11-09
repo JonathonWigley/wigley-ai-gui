@@ -504,6 +504,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/contracts',
       'src/shared',
       'src/shared/paths',
+      'src/shared/plugin-catalog',
       'src/main/layouts',
     ],
     packages: [],

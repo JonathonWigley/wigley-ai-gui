@@ -663,7 +663,15 @@ describe('createSettingsView', () => {
     on: boolean,
     neededBy: readonly string[] = [],
   ): PluginStatus {
-    return { id, label, description: `Adds ${label}.`, on, neededBy };
+    return {
+      id,
+      label,
+      description: `Adds ${label}.`,
+      on,
+      neededBy,
+      origin: 'built-in',
+      problem: null,
+    };
   }
 
   // Settings open on its Plugins section, the picker open on `pluginId`'s row.

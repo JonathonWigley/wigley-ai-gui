@@ -26,7 +26,11 @@ function emptyReply(request: PluginPartsRequest): PluginPartsReply {
     case 'stop':
       return { stopped: [] };
     case 'start':
-      return { started: [] };
+      return { started: [], problems: [] };
+    case 'reload':
+      return { reloaded: [], problem: null };
+    case 'remove':
+      return { stopped: [] };
   }
 }
 

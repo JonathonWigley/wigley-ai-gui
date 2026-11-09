@@ -1,32 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import type { PluginManifest } from '../../contracts/plugin';
 import type { UserConfigRead } from '../../contracts/user-config';
 import { fakeDriveHost } from '../../shared/fake-drive-host';
 import { addPluginSwitchActions } from './plugin-switch-drive';
 
-function manifest(id: string): PluginManifest {
-  return {
-    id,
-    label: id,
-    description: 'A test plugin.',
-    dependsOn: { main: [], page: [] },
-    reads: { main: [], page: [] },
-    commands: {},
-    scopes: {},
-    settings: {},
-    settingInfo: {},
-    themeTokens: {},
-  };
-}
+const IDS = ['agent-lines', 'gallery'];
 
-const MANIFESTS = [manifest('agent-lines'), manifest('gallery')];
-
-function setup(layer: Record<string, unknown>, disabled: readonly string[]) {
+// `calls` records `reload <id>` and `settled`; `reload` rejects
+// `No plugin "<id>"` for an id `reloadable` does not hold.
+function setup(
+  layer: Record<string, unknown>,
+  disabled: readonly string[],
+  reloadable: readonly string[] = IDS,
+) {
   const drive = fakeDriveHost();
   const writes: [Record<string, unknown>, string | null][] = [];
+  const calls: string[] = [];
   const text = JSON.stringify(layer);
   addPluginSwitchActions(drive.host, {
-    pluginSwitch: { restart: async () => undefined },
+    pluginSwitch: {
+      restart: async () => undefined,
+      settled: async () => {
+        calls.push('settled');
+      },
+    },
     userConfig: {
       read: async (): Promise<UserConfigRead> => ({
         settings: { state: 'ok', layer, text },
@@ -38,10 +34,16 @@ function setup(layer: Record<string, unknown>, disabled: readonly string[]) {
         return { type: 'written' };
       },
     },
-    manifests: MANIFESTS,
+    ids: () => IDS,
+    async reload(id) {
+      calls.push(`reload ${id}`);
+      if (!reloadable.includes(id)) {
+        throw new Error(`No plugin "${id}"`);
+      }
+    },
     disabled: () => disabled,
   });
-  return { drive, writes, text };
+  return { drive, writes, calls, text };
 }
 
 describe('addPluginSwitchActions', () => {
@@ -70,12 +72,38 @@ describe('addPluginSwitchActions', () => {
   });
 
   it.each([
-    { args: {}, expected: 'stopPlugin takes { id: string }' },
-    { args: { id: 'zzz' }, expected: 'No plugin "zzz"' },
-  ])('args_BadOrUnknown_Rejects: $expected', async ({ args, expected }) => {
-    const { drive, writes } = setup({}, []);
+    {
+      action: 'stopPlugin',
+      args: {},
+      expected: 'stopPlugin takes { id: string }',
+    },
+    { action: 'stopPlugin', args: { id: 'zzz' }, expected: 'No plugin "zzz"' },
+    {
+      action: 'reloadPlugin',
+      args: { name: 'u' },
+      expected: 'reloadPlugin takes { id: string }',
+    },
+    { action: 'reloadPlugin', args: { id: 'zz' }, expected: 'No plugin "zz"' },
+  ])(
+    'args_BadOrUnknown_Rejects: $action $expected',
+    async ({ action, args, expected }) => {
+      const { drive, writes, calls } = setup({}, []);
 
-    await expect(drive.run('stopPlugin', args)).rejects.toThrow(expected);
-    expect(writes).toEqual([]);
+      await expect(drive.run(action, args)).rejects.toThrow(expected);
+      expect(writes).toEqual([]);
+      expect(calls).not.toContain('settled');
+    },
+  );
+
+  it.each([
+    { case: 'an id the config holds', id: 'gallery' },
+    { case: 'an id the config does not hold', id: 'u' },
+  ])('reloadPlugin_ReloadsThenWaitsForTheSwitch: $case', async ({ id }) => {
+    const { drive, calls } = setup({}, [], [...IDS, 'u']);
+
+    const result = await drive.run('reloadPlugin', { id });
+
+    expect(result).toBe(null);
+    expect(calls).toEqual([`reload ${id}`, 'settled']);
   });
 });

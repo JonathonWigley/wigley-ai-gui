@@ -90,7 +90,9 @@ describe('createPageParts', () => {
     [
       { kind: 'mayStop' as const, empty: { reason: null } },
       { kind: 'stop' as const, empty: { stopped: [] } },
-      { kind: 'start' as const, empty: { started: [] } },
+      { kind: 'start' as const, empty: { started: [], problems: [] } },
+      { kind: 'reload' as const, empty: { reloaded: [], problem: null } },
+      { kind: 'remove' as const, empty: { stopped: [] } },
     ].flatMap((row) => [
       {
         ...row,
@@ -128,7 +130,11 @@ describe('createPageParts', () => {
   )('request_PageEndsOrNoPage_ResolvesEmpty: $kind, $case', async (row) => {
     const { parts, logs, setStarted } = setup(row.hasPage, row.isStarted);
 
-    const reply = parts.request({ kind: row.kind, ids: ['a'] });
+    const reply = parts.request(
+      row.kind === 'reload' || row.kind === 'remove'
+        ? { kind: row.kind, id: 'a' }
+        : { kind: row.kind, ids: ['a'] },
+    );
     if (row.isGone) {
       parts.pageGone();
     } else {

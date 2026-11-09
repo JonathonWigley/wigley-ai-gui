@@ -1,6 +1,8 @@
 // The applied list: the plugins whose parts do not run, which the served
 // config carries as `plugins.disabled`; and the paused list: the plugins whose
-// parts restart now, which the served config keeps without their binds.
+// parts restart now, which the served config keeps without their binds. The
+// plugin switch adds and removes catalog ids from the applied list as plugins
+// arrive, leave, fail and start.
 export interface AppliedPlugins {
   disabled(): readonly string[];
   // Keeps its own copy of `disabled`; nothing listens.

@@ -16,7 +16,15 @@ function status(
   neededBy: readonly string[] = [],
   description = `Adds ${label}.`,
 ): PluginStatus {
-  return { id, label, description, on, neededBy };
+  return {
+    id,
+    label,
+    description,
+    on,
+    neededBy,
+    origin: 'built-in',
+    problem: null,
+  };
 }
 
 function listLeaf(fallback: readonly string[]): SettingLeaf {

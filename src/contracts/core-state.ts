@@ -5,6 +5,7 @@ import type {
   ViewScope,
 } from './keymap';
 import type { CommandInfo } from './plugin';
+import type { PluginOrigin } from './plugin-catalog';
 import type { SlotKey } from './state';
 
 // The shown mode's qualified id, written at each change of the shown mode, the
@@ -68,11 +69,15 @@ export interface PluginStatus {
   readonly description: string;
   readonly on: boolean;
   readonly neededBy: readonly string[];
+  readonly origin: PluginOrigin;
+  readonly problem: string | null;
 }
 
-// Every built-in plugin, in manifests order: its label, its description,
-// whether it runs now, and the ids of the plugins that run now and depend on
-// it. Main's plugin switch writes it at start and after each change.
+// Every plugin in the catalog, in catalog order, then each plugin that failed
+// its first load: its label, its description, its origin, whether a version of
+// it runs now, the ids of the plugins that run now and depend on it, and its
+// problem or null. Main's plugin switch writes it at start and after each
+// change.
 export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
   {
     id: 'core.plugins',
