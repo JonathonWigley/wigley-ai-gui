@@ -1,6 +1,6 @@
 # 16 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: 15
 Plan: [plan.md](plan.md)
@@ -117,3 +117,5 @@ check passed again.
 Commit:    none for the checks; a fix gets its own commit.
 
 ## Proof
+
+Commit 61a0e287 · proof: gate: typecheck 0, lint 0, 42 changed test files pass after 58096b2d; selftest --plugin sessions/chat/docs/settings/selftest-user all passed. Live (drive): 1,2,3,5,6a-6f,7,8,9,10,11 pass; 6d/6e passed after fix 7927ccec; 4 passes 3 of 4 cases after 22796c7b and 61a0e287 — fails when Chat is selected and chat restarts (comes back on Docs). Reports 16-1.md, 16-2.md · concerns: check 4 Chat-selected + chat restart: chat main stop removes the session row, sessions deletes its saved place, frame dropped — fix is a design choice (open restore window at stop / keep removed row place until prune / main keeps rows through restart), to triage; check 9's spec tsc command fails TS5112 from repo root under TS 6 (ran outside repo / --ignoreConfig); selftest-user step 9 flaked once (zu racing reload unpause); check 11 one unexplained catalog restart on first late-layout write, not reproduced; sessions selftest shutdown logged docs watchDoc handler error (teardown race)

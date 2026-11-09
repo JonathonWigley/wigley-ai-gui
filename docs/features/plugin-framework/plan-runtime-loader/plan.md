@@ -423,7 +423,7 @@ for that task's own files. Tasks in one wave share no file.
 - [x] [Doc re-read](15-doc-re-read.md) — after 14
 
 ### Wave 8
-- [ ] [Final verification](16-final-verification.md) — after 15
+- [x] [Final verification](16-final-verification.md) — after 15
 
 ## Run log
 
@@ -445,6 +445,7 @@ Review base: 71b605ce
 - 13 · 6173d6b5 · diff read: catalog started before loadConfig, catalog.entries() into the store, writePluginTypes, servePluginScheme, userPluginFolder, switch catalog/config/configDisabled, drive ids/reload, core.reloadPlugin registered; typecheck 0 (was 3), lint 0, selftest --plugin settings all passed · concerns: label 'Reload plugin' is sentence case unlike lowercase core labels; reload registration handle kept for window life; runtime claims (user plugin after built-ins, reload rejection, types-folder failure line) left to 16
 - 14 · 3ceee39b · diff read: seed before startCatalog in selfTest mode, script handed over last before closeHandover, SelfTestStep.remove + runner + stepLabel, applySelfTestConfig drop rule; typecheck 0, lint 0, 80 tests in 3 files pass; selftest --plugin selftest-user: 12 steps PASS, result as expected, all passed · concerns: layout.js has @ts-check but no @import (../_types/plugin does not resolve from layouts/default); fixture seeded on every self-test run so other scripts run with selftest-user loaded (<Leader>zu bind, a Plugins row) — whole-run effect untested
 - 15 · 152e2c8f · diff read: Plugins row look in DESIGN.md and settings design, settings-view comments, practice-plan stale line; worker ran step 3 grep (only expected survivors), _types/plugin count 1, lint clean · concerns: layouts/default @import path ../../../_types derived, not used in a fixture; settings/design.md:35 side-bar 'in manifest order' not re-checked against catalog order
+- 16 · 61a0e287 · gate: typecheck 0, lint 0, 42 changed test files pass after 58096b2d; selftest --plugin sessions/chat/docs/settings/selftest-user all passed. Live (drive): 1,2,3,5,6a-6f,7,8,9,10,11 pass; 6d/6e passed after fix 7927ccec; 4 passes 3 of 4 cases after 22796c7b and 61a0e287 — fails when Chat is selected and chat restarts (comes back on Docs). Reports 16-1.md, 16-2.md · concerns: check 4 Chat-selected + chat restart: chat main stop removes the session row, sessions deletes its saved place, frame dropped — fix is a design choice (open restore window at stop / keep removed row place until prune / main keeps rows through restart), to triage; check 9's spec tsc command fails TS5112 from repo root under TS 6 (ran outside repo / --ignoreConfig); selftest-user step 9 flaked once (zu racing reload unpause); check 11 one unexplained catalog restart on first late-layout write, not reproduced; sessions selftest shutdown logged docs watchDoc handler error (teardown race)
 ### Contract changes
 - startPlugins known: default function → optional parameter, left out reads the held parts' manifests · why: a parameter default cannot reach held · consumers: 10, 11, 13 · group 03
 - validate-manifest.ts: as planned → also exports TOKEN_KINDS, PROCESS_NAMES, SETTING_KINDS, ARG_KINDS, BIND_WHERES, EDITOR_MODES (satisfies Record<Union, true>), which manifest-schema reads · why: one member list for checks and schema · consumers: 07 · group 02
@@ -477,5 +478,7 @@ Review base: 71b605ce
 - the catalog is built in a startCatalog(inputs) helper; seeding (14) goes before its call · group 13
 - types folder is path.join(inputs.pluginsFolder, '_types') · group 13
 - problems/result tests live in selftest-user-plugin.test.ts, the module they test · group 14
+- drive has no command call; fixture commands ran from keymap.json binds · group 16
 ### Review rounds
 ### Test gate
+- typecheck 0 · lint 0 · 42 changed test files pass · selftest --plugin sessions, chat, docs, settings, selftest-user all passed (selftest-user flaked once at step 9, re-run passed) · bundle keeps real import( (main.cjs) · forge generateAssets emitted .plugin-types on dev start · live checks 1-3, 5-11 pass; 4 fails 1 of 4 cases (Chat selected + chat restart → Docs), carried to review triage · fixes landed: 58096b2d, 7927ccec, 22796c7b, 61a0e287
