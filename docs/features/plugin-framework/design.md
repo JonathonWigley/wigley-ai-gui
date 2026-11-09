@@ -11,6 +11,7 @@
 - **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
 - **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
 - **Hot reload (Wave 4)** — the closed bridge, core services that stay fixed, live stop, start and restart, the `ready` and `mayStop` hooks, the live enable switch, and quit waiting for every stop.
+- **Runtime loader (Wave 4 step 3)** — user-folder plugins, what reloads them, replacing a built-in, the types and manifest a user plugin writes against, and what a live start restores.
 
 The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
 the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
@@ -134,8 +135,7 @@ command's keys into an element a view names, and the plugin's `showHints` settin
 
 ## Foundation sweeps (Wave 1)
 
-Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignment/master-plan.md`. Plan folder
-`plan-foundation-sweeps/`.
+Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignment/master-plan.md`, and landed.
 
 - **One owner for each registration.** The plugin API records every registration it hands out, and the host
   disposes them when the plugin stops. A plugin's own `dispose` covers only what the API cannot see. Making each
@@ -233,7 +233,7 @@ Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/inten
 ## Hot reload (Wave 4)
 
 Settled in the 2026-11-07 interview for Wave 4 steps 1 and 2 of `docs/features/intent-alignment/master-plan.md`, and
-landed. The runtime plugin loader (step 3) gets its own plan, because its design rests on a reload that has run.
+landed. The runtime plugin loader (step 3) has its own section below.
 
 - **The raw bridge is closed.** The preload exposes `window.wigley` as `{ claim() }` alone. The core calls `claim()`
   once at start and gets the Bridge; a second call throws `the bridge was already claimed`, so no global holds the
@@ -292,3 +292,52 @@ landed. The runtime plugin loader (step 3) gets its own plan, because its design
 - **No reload key yet.** Built-in code does not change while the app runs, so the drive actions `core.stopPlugin`,
   `core.startPlugin` and `core.restartPlugin` stop, start and restart a plugin to prove the host. The loader plan adds
   the reload the user runs.
+
+## Runtime loader (Wave 4 step 3)
+
+Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-alignment/master-plan.md`. Plan folder
+`plan-runtime-loader/`.
+
+- **User-folder plugins only.** A plugin in `~/.config/wigley-ai-gui/plugins/<id>/` (`manifest.json`, an optional
+  `main.js`, an optional `page.js`, plain ES modules) loads at start and reloads with new code. Both the stable and the
+  dev app load the folder, as they share layouts and themes. Built-ins stay compiled: changing one still needs a
+  rebuild. Built-in hot reload would compile TypeScript inside the running app, which needs a compiler shipped with it.
+- **One seam for both kinds.** A `PluginSource` hands the catalog its plugins: the built-in source over the compiled
+  lists, and the user-folder source over the folder. The catalog is the one live list the host, the switch, the config
+  schema and the `core.plugins` slot read, so the fixed lists and `requireListed` are no longer read anywhere else.
+- **Reload on save and by command.** A save under a plugin's folder reloads it once the edits settle, skipping editor
+  swap and lock files, as a layout reloads. The `core.reloadPlugin` command, unbound by default and a drive action,
+  reloads a plugin with no change. A reload stops the plugin's dependents too, as a restart does, so a dependent never
+  holds the old run's exports.
+- **A bad load keeps the last good version.** A manifest that fails its checks, a module that throws on import, or a
+  start that throws keeps the version that ran before, or none on a first load. The error shows as a config problem
+  (title bar badge and toast), and Settings' Plugins row shows the plugin as failed with the reason.
+- **A user plugin can replace a built-in.** A user plugin with a built-in's id takes over the whole plugin: the
+  built-in's main and page parts both stay down, its dependents get the user plugin's exports, and Settings marks the
+  row as replacing a built-in. The built-in's default keys apply only to commands the replacement declares; the rest
+  drop with a log line. Refusing the id was rejected: the Intent asks that anything can be replaced from a user folder.
+- **A built-in never depends on a user plugin.** Its manifest is compiled in and cannot name a plugin that may be
+  missing; it reads one only through `reads`.
+- **An absent plugin's settings and binds are kept and ignored.** Settings and `keymap.json` binds under a plugin
+  that is not loaded (deleted, failed) are not a config problem, so a broken user plugin cannot stick the whole app on
+  its last good config. A loaded plugin's unknown setting is still a problem.
+- **One switch.** `plugins.disabled` and Settings' Plugins switch cover user plugins too. Deleting a plugin's folder
+  stops it and clears its slots, as a switch-off does.
+- **Main imports from a per-revision copy.** Node caches every module by URL, so main copies the plugin folder for each
+  revision and imports `main.js` from the copy; a relative import then reloads with it. Each old revision stays in
+  memory until quit. The page imports `page.js` on the `wigley-plugin:` scheme with the revision in the path, as a
+  layout loads on `wigley-layout:`.
+- **`manifest.json`, not a module.** Main reads what a plugin declares without running its code. The app writes a JSON
+  Schema for it, and `validateManifest` runs at load the checks `definePlugin` makes at compile time for a built-in.
+- **Types for every contract.** The build emits each `src/contracts` module and each built-in's `contract.ts` as
+  `.d.ts`. At start the app writes them, `plugin.d.ts` and `manifest.schema.json` to `plugins/_types/` (`_` cannot
+  begin a plugin id), so a user plugin types its dependencies and slots with `// @ts-check`, as a layout does.
+- **A user plugin draws through its layout kit.** It ships its own `layouts/default/` and draws through
+  `api.layouts.show`. A primitive the kit lacks becomes a kit part every layout gains. Handing out the `ui` builders
+  as a page service was rejected: every primitive's signature would become plugin API.
+- **A user plugin bundles its own packages.** The loader resolves no npm package, so user code is not tied to the
+  app's dependency versions. User code runs with full Node access in main, as built-ins do: the closed bridge keeps
+  calls inside the API, and it is not a sandbox.
+- **A live start gets a restore window.** Every live start (a reload, a restart, a switch-on) opens a restore window,
+  as a page load does, and parts that prune saved places prune on `api.restores.onSettled`. `ready()` keeps its shape.
+  A `ready` context saying load or live was rejected: each part would write its own branch on it.

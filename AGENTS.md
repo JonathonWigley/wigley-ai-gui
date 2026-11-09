@@ -58,8 +58,8 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
 - **Everything hot reloads.** A changed plugin, layout, theme, keymap or setting applies to the running app without
   a restart and without losing the user's work. So every registration a plugin makes can be undone, and state that
   must outlive a reload is kept where the reload does not reach it. Today settings, keymap, themes and layouts hot
-  reload, and plugins start and stop live from the `plugins.disabled` switch; a changed plugin's code still needs a
-  runtime loader, which is the next plan, and new code is written so it can land without reworking it.
+  reload, plugins start and stop live from the `plugins.disabled` switch, and a plugin in the user folder reloads with
+  new code on save (A user plugin, below). A built-in's code still needs a rebuild.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
   processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
   composition root, so adding one is a new adapter and features carry no `process.platform` checks.
@@ -412,7 +412,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   every key names a declared command running in the key's process (page and editor keys a page command; app,
   global and intercept keys a main one). A built-in plugin's manifest joins `src/plugins/manifests.ts`, which main
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
-  `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts at app
+  `src/plugins/page.ts`, which the built-in plugin source hands the plugin catalog (A user plugin, below). A main part starts at app
   launch and a page part on every page load, and either starts or stops live after that. The plugin host's
   `start(ids)` starts the named parts in dependency order and throws, starting none, when one depends on a part not
   started; `stop(id)` stops the plugin's dependents first, in reverse start order, then awaits the part's `dispose`
@@ -444,6 +444,18 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   and drive actions `core.stopPlugin`, `core.startPlugin` and `core.restartPlugin` do the same for a run. A view that
   can be switched off is its own plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional
   plugins).
+- **A user plugin** is a folder in `~/.config/wigley-ai-gui/plugins/<id>/`: `manifest.json`, an optional `main.js`
+  and an optional `page.js`, plain ES modules typed with `// @ts-check` against the `.d.ts` files and
+  `manifest.schema.json` the app writes to `plugins/_types/` at start, and an optional `layouts/default/`. The plugin
+  catalog (`src/main/plugin-catalog/`) is the one live list of plugins: it merges the built-in source and the
+  user-folder source, a user plugin with a built-in's id replacing the whole built-in, and the host, the switch, the
+  config schema and the `core.plugins` slot read it. `validateManifest` runs at load the checks `definePlugin` makes at
+  compile time. Main imports `main.js` from a per-revision copy of the folder; the page imports `page.js` on the
+  `wigley-plugin:` scheme. A save reloads the plugin once the edits settle, and `core.reloadPlugin` reloads it with no
+  change; a reload stops its dependents too. A load that fails keeps the last good version and shows the error as a
+  config problem and on its Settings row. Settings and binds under a plugin that is not loaded are kept and ignored.
+  A user plugin draws only through its layout kit and bundles its own packages
+  (`docs/features/plugin-framework/design.md` § Runtime loader (Wave 4 step 3)).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
   `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose

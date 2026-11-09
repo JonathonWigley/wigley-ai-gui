@@ -396,8 +396,8 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   lists in `src/plugins/{main,page,manifests}.ts` are what block it. It builds on a host that starts, stops and restarts
   parts live (`PluginHost.start`, `stop`, `restart`, and the enable switch in `src/main/plugins/plugin-switch.ts`) and
   on the closed bridge (`window.wigley.claim()`). It also adds `reload(id, part)` (`src/shared/plugin-host.ts`), a
-  reload with new code: stop the part and its dependents, import the new module, start them again. A reload leaves the
-  dependents' view of the provider's exports stale, as a restart does not (it takes the dependents with it).
+  reload with new code: stop the part and its dependents, import the new module, start them again, so no dependent
+  keeps the old run's exports. Planned in `docs/features/plugin-framework/plan-runtime-loader/`.
 - **Forms item kinds as registrations** — *agent-ready*: forms item kinds register as one unit (`registerKind`, main
   and page, disposable), each declaring its wire keys (`argsKey`, `bodyKey`, `resultKey`,
   `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /
