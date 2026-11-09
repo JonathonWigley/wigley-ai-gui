@@ -1,6 +1,6 @@
 # 05 — The report sources: tool and report file
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 02, 04
 Plan: [plan.md](plan.md)
@@ -100,3 +100,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 58a4dc8c · proof: diff read; typecheck clean; worker ran workflow-large tests (486), lint, and selftest --plugin workflow-large 12/12 · concerns: macOS FSEvents can drop the rename target of plan.py's .json.tmp atomic write, so a report is lost until the next write; tool path has no fold-level test (self-test covers the file path); workflow-large-main.test.ts services gained homeDir and appInstance

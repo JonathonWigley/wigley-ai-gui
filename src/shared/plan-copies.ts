@@ -86,7 +86,7 @@ export async function planCopies(
 }
 
 // The copy a run moved, with its progress, among the copies whose `plan.md`
-// reads: with no main tree's copy, the newest copy. Otherwise the newest
+// reads: with no main tree's copy, the latest-changed copy. Otherwise the newest
 // worktree copy whose progress differs from the main tree's and has no fewer
 // ticked boxes, else the main tree's copy: a run only ticks boxes forward, so
 // a copy behind main's is an idle worktree left at an older state. Newest is

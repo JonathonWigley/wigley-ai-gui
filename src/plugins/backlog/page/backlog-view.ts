@@ -851,7 +851,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     );
   };
 
-  // The file the detail reads: a plan's or task's newest copy.
+  // The file the detail reads: a plan's or task's moved copy.
   const docPathOf = (shown: BacklogRow): string => {
     switch (shown.kind) {
       case 'followup':

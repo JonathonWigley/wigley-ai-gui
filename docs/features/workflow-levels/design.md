@@ -58,7 +58,7 @@ stage rules, so two workflows may both have a `build` stage. Each plugin owns it
   The tool accepts the step words of every workflow, and the current workflow's rules answer it, so
   a word outside that workflow's stages is ignored.
 - **The checklist** comes from `set_workflow_checklist`, each call replacing the whole list, so a
-  missed call cannot leave the app out of step. Large never calls it: Large's skills are unchanged.
+  missed call cannot leave the app out of step. Large never calls it: Large's checklist comes from `plan.md`.
 - **Only the main agent** moves the stage and sets the checklist. A subagent's call of either tool succeeds and changes
   nothing, so delegated work never overwrites the session's own step.
 - **Large's checklist** reads the copy of the plan the run reported, through `plan.py` or `set_workflow_plan`, else

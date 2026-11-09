@@ -99,7 +99,8 @@ must learn which copy the run writes. The run reports it two ways, and the lates
 
 - **`plan.py`** — every progress write (`base`, `start`, `land`, `strike`, `log`) in a session the app started writes
   `{"planDir": <absolute folder>}` to `plan-runs/<row id>.json` in the app's endpoint folder, read
-  from `WIGLEY_AI_GUI_ENDPOINT_DIR` and `WIGLEY_SESSION_ROW`. A failed write warns and never fails the command, and
+  from `WIGLEY_AI_GUI_ENDPOINT_DIR` and `WIGLEY_SESSION_ROW`. It writes the file directly, with no temp file and
+  rename, since the macOS watcher can miss a rename's target name. A failed write warns and never fails the command, and
   `close` writes nothing.
 - **`set_workflow_plan`** — the agent's tool, which `workflow-large` contributes. It takes `folder`, refuses one with no
   `plan.md`, and a subagent's call changes nothing. `wigley:make` calls it once it knows the folder it works in.

@@ -43,10 +43,9 @@ function reportedPlanDir(
 }
 
 // Watches `folder` and reports each `<row id>.json` that changes; any other
-// name, `plan.py`'s `.json.tmp` file among them, is ignored. Applies a report
-// only when its file changes: no scan at start, and no file is deleted. A
-// watch that fails is logged and not reopened. A read that settles after the
-// dispose reports nothing.
+// name is ignored. Applies a report only when its file changes: no scan at
+// start, and no file is deleted. A watch that fails is logged and not
+// reopened. A read that settles after the dispose reports nothing.
 export function createPlanReports(deps: PlanReportsDeps): Disposable {
   const { files, paths, log, folder, report } = deps;
   let disposed = false;
