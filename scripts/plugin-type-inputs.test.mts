@@ -34,31 +34,51 @@ function memoryFiles(start: Record<string, string>): DeclarationFiles & {
 
 describe('copyDeclarationInputs', () => {
   // The workflow contract's shape: an emitted contract imports a hand-written
-  // layout.d.ts, which imports the hand-written kit.d.ts.
-  it('copies each hand-written .d.ts the emit imports, and what that imports', () => {
-    const files = memoryFiles({
-      [`${OUT}/plugins/workflow/contract.d.ts`]: [
-        "import type { Chip } from './layouts/layout';",
-        "export type { Plugin } from '../../contracts/plugin';",
-        "import type { App } from 'electron';",
-      ].join('\n'),
-      [`${OUT}/contracts/plugin.d.ts`]: 'export type Plugin = {};',
-      [`${SRC}/plugins/workflow/layouts/layout.d.ts`]:
+  // layout.d.ts, which imports the hand-written kit.d.ts. An earlier run's
+  // copies sit in OUT, since tsc builds into it incrementally.
+  it.each<{ name: string; earlierCopies: Record<string, string> }>([
+    { name: 'no earlier copies', earlierCopies: {} },
+    {
+      name: 'earlier copies overwritten',
+      earlierCopies: {
+        [`${OUT}/plugins/workflow/layouts/layout.d.ts`]:
+          "import type { Old } from './removed';",
+        [`${OUT}/shared/page/layout-host/kit.d.ts`]: 'export type Tag = 0;',
+      },
+    },
+  ])(
+    'copies each hand-written .d.ts the emit imports, and what that imports ($name)',
+    ({ earlierCopies }) => {
+      const files = memoryFiles({
+        ...earlierCopies,
+        [`${OUT}/plugins/workflow/contract.d.ts`]: [
+          "import type { Chip } from './layouts/layout';",
+          "export type { Plugin } from '../../contracts/plugin';",
+          "import type { App } from 'electron';",
+        ].join('\n'),
+        [`${OUT}/contracts/plugin.d.ts`]: 'export type Plugin = {};',
+        [`${SRC}/plugins/workflow/layouts/layout.d.ts`]:
+          "import type { Tag } from '../../../shared/page/layout-host/kit';",
+        [`${SRC}/shared/page/layout-host/kit.d.ts`]: 'export type Tag = 1;',
+        [`${SRC}/plugins/workflow/contract.ts`]: 'unread',
+      });
+
+      const copied = copyDeclarationInputs(SRC, OUT, files);
+
+      expect(copied.sort()).toEqual([
+        'plugins/workflow/layouts/layout.d.ts',
+        'shared/page/layout-host/kit.d.ts',
+      ]);
+      expect(files.texts.get(`${OUT}/shared/page/layout-host/kit.d.ts`)).toBe(
+        'export type Tag = 1;',
+      );
+      expect(
+        files.texts.get(`${OUT}/plugins/workflow/layouts/layout.d.ts`),
+      ).toBe(
         "import type { Tag } from '../../../shared/page/layout-host/kit';",
-      [`${SRC}/shared/page/layout-host/kit.d.ts`]: 'export type Tag = 1;',
-      [`${SRC}/plugins/workflow/contract.ts`]: 'unread',
-    });
-
-    const copied = copyDeclarationInputs(SRC, OUT, files);
-
-    expect(copied.sort()).toEqual([
-      'plugins/workflow/layouts/layout.d.ts',
-      'shared/page/layout-host/kit.d.ts',
-    ]);
-    expect(files.texts.get(`${OUT}/shared/page/layout-host/kit.d.ts`)).toBe(
-      'export type Tag = 1;',
-    );
-  });
+      );
+    },
+  );
 
   it('throws naming the file and specifier of an import with no declaration', () => {
     const files = memoryFiles({

@@ -86,12 +86,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const ready = store.load().catch((error: unknown) => {
       log(`flows.json not read: ${errorText(error)}; starting with no flows`);
     });
-    // Host session id and project folder of each connected session, until
-    // chat opens it.
-    const connected = new Map<
-      string,
-      { hostSessionId: string; projectDir: string }
-    >();
     const turnEndedListeners = new Set<(sessionId: string) => void>();
     const turnWork = createTurnWork();
     const runLog = createRunLog({ files: api.data, log });
@@ -295,26 +289,17 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       };
     };
 
-    events.on('sessions.connected', ({ id, info }) => {
-      const { sessionId: hostSessionId, projectDir } = info;
-      void ready.then(() => {
-        if (hostSessionId !== null && projectDir !== null) {
-          connected.set(id, { hostSessionId, projectDir });
-        }
-      });
-    });
-    events.on('chat.sessionOpened', ({ sessionId }) => {
-      void ready.then(() => {
-        const pair = connected.get(sessionId);
-        if (pair === undefined) {
-          log(`session ${sessionId} opened with no host session`);
-          return;
-        }
-        connected.delete(sessionId);
-        const flow = store.open(sessionId, pair.hostSessionId, pair.projectDir);
-        tellObservers((observer) => observer.opened(flow));
-      });
-    });
+    // Chat's open carries the host id and folder: a session chat adopts across
+    // its own restart fires no `sessions.connected`.
+    events.on(
+      'chat.sessionOpened',
+      ({ sessionId, hostSessionId, projectDir }) => {
+        void ready.then(() => {
+          const flow = store.open(sessionId, hostSessionId, projectDir);
+          tellObservers((observer) => observer.opened(flow));
+        });
+      },
+    );
     events.on('sessions.hostSessionChanged', ({ id, info }) => {
       const hostSessionId = info.sessionId;
       void ready.then(() => {
@@ -328,7 +313,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     });
     events.on('sessions.ended', ({ sessionId }) => {
       void ready.then(() => {
-        connected.delete(sessionId);
         turnWork.forget(sessionId);
         runMeter.forget(sessionId);
         tellObservers((observer) => observer.closed(sessionId));

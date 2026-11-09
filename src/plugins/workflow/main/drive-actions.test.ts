@@ -31,11 +31,14 @@ async function startEngine() {
       },
     ],
   });
-  part.emit('sessions.connected', {
-    id: 's1',
-    info: { sessionId: 'h1', projectDir: '/r' },
+  part.emit('chat.sessionOpened', {
+    sessionId: 's1',
+    profileDir: '~/.c',
+    hostSessionId: 'h1',
+    projectDir: '/r',
+    profile: 'personal',
+    origin: 'new',
   });
-  part.emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
   await settled();
   engine.signal(
     's1',

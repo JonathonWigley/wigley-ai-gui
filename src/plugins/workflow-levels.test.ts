@@ -144,11 +144,14 @@ describe('workflow levels', () => {
         .exports?.(createRegistrations()) as WorkflowMainExports;
       const level = start([dependency, FAKE_SESSIONS, FAKE_CHAT]);
       const claimedBy = async (sessionId: string) => {
-        engine.emit('sessions.connected', {
-          id: sessionId,
-          info: { sessionId: `h-${sessionId}`, projectDir: '/r' },
+        engine.emit('chat.sessionOpened', {
+          sessionId,
+          profileDir: '~/.c',
+          hostSessionId: `h-${sessionId}`,
+          projectDir: '/r',
+          profile: 'personal',
+          origin: 'new',
         });
-        engine.emit('chat.sessionOpened', { sessionId, profileDir: '~/.c' });
         await settled();
         exported.signal(sessionId, skill(claim), 'live');
         return exported.flowOf(sessionId)?.workflow;

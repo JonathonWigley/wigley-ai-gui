@@ -13,6 +13,7 @@ import {
 import { createRegistrations } from '../../../shared/registrations';
 import {
   sessionsActiveSlot,
+  sessionsPlaceSlot,
   type SessionRow,
   sessionsRowsSlot,
   type SessionsPageExports,
@@ -79,7 +80,8 @@ interface FakeBox {
 // with `consumer.track`, as its view does. `destroyEditor` is
 // each editor's `destroy`, `setActivity` the fake's row activity call, and
 // `tabAdded` hears each added tab's element. `boxes` gets each box made, in
-// order, and `invoked` each call to main.
+// order, `invoked` each call to main, and `selected` the session id of each tab
+// selected.
 function startChatPage(
   destroyEditor: () => void = () => undefined,
   isTabVisible: () => boolean = () => false,
@@ -90,11 +92,13 @@ function startChatPage(
     invoked = [],
     restored = Promise.resolve(),
     holdsRestores = false,
+    selected = [],
   }: {
     boxes?: FakeBox[];
     invoked?: unknown[][];
     restored?: Promise<void>;
     holdsRestores?: boolean;
+    selected?: string[];
   } = {},
 ) {
   return startPagePart(chatPagePart, {
@@ -137,11 +141,13 @@ function startChatPage(
         sessionsPageKey,
         (consumer) =>
           ({
-            addTab: (_sessionId: string, tab: { element: HTMLElement }) => {
+            addTab: (sessionId: string, tab: { element: HTMLElement }) => {
               tabAdded(tab.element);
               return consumer.track({
                 dispose() {},
-                select() {},
+                select() {
+                  selected.push(sessionId);
+                },
                 isVisible: isTabVisible,
               });
             },
@@ -241,6 +247,37 @@ describe('chat page part', () => {
       await harness.stop();
 
       expect(harness.counts()).toEqual(noCounts);
+    },
+  );
+
+  // Chat reads which sessions hold a saved place once, at its page start.
+  it.each([
+    { written: 'before chat page start', selects: [] },
+    { written: 'after chat page start', selects: ['s1'] },
+  ])(
+    'newTab_SelectsOnlyWithNoSessionsPlaceAtStart: written $written',
+    async ({ written, selects }) => {
+      const selected: string[] = [];
+      const harness = startChatPage(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { selected },
+      );
+      const sessionsPlace = harness.state.publish(sessionsPlaceSlot);
+      sessionsPlace.set('s1', {
+        selectedTabId: 'chat',
+        selections: 1,
+        hiddenPopupIds: [],
+      });
+      if (written === 'before chat page start') {
+        await harness.restart();
+      }
+
+      loadSessions(harness, [SESSION]);
+
+      expect(selected).toEqual(selects);
     },
   );
 

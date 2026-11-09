@@ -208,16 +208,13 @@ function startWorkflowPart(
     }
     await settled();
   };
+  // Chat's open alone, as for a session chat adopts across its restart.
   const openS1 = async () => {
-    await emit('sessions.connected', {
-      ...session('s1', 'h1'),
-      owned: true,
-    });
     await emit('chat.sessionOpened', {
       sessionId: 's1',
       profileDir: '~/.c',
       hostSessionId: 'h1',
-      projectDir: '/p',
+      projectDir: '/r',
       profile: 'personal',
       origin: 'new',
     });
@@ -431,15 +428,11 @@ describe('workflowMainPart', () => {
     const workflow = startWorkflowPart();
     await workflow.openS1();
     for (const id of ['s2', 's3']) {
-      await workflow.emit('sessions.connected', {
-        ...session(id, `h-${id}`),
-        owned: true,
-      });
       await workflow.emit('chat.sessionOpened', {
         sessionId: id,
         profileDir: '~/.c',
         hostSessionId: `h-${id}`,
-        projectDir: '/p',
+        projectDir: '/r',
         profile: 'personal',
         origin: 'new',
       });
@@ -760,10 +753,6 @@ describe('workflowMainPart', () => {
     {
       state: 'a stub flow open',
       act: async (harness: MainPartHarness<typeof workflowManifest>) => {
-        harness.emit('sessions.connected', {
-          ...session('s1', 'h1'),
-          owned: true,
-        });
         harness.emit('chat.sessionOpened', {
           sessionId: 's1',
           profileDir: '~/.c',
@@ -1028,6 +1017,33 @@ describe('workflowMainPart', () => {
       ['opened', 's1'],
       ['closed', 's1'],
     ]);
+  });
+
+  // A session chat keeps through its own restart gets no `sessions.connected`.
+  it('sessionOpened_WithNoConnected_OpensUnderItsHostAndFolder', async () => {
+    const workflow = startWorkflowPart();
+    const opened: SessionFlow[] = [];
+    workflow.exported().observe({
+      folded: () => undefined,
+      opened: (flow) => opened.push(flow),
+      closed: () => undefined,
+      replaying: () => undefined,
+    });
+
+    await workflow.emit('chat.sessionOpened', {
+      sessionId: 's7',
+      profileDir: '~/.c',
+      hostSessionId: 'h-kept',
+      projectDir: '/kept',
+      profile: 'personal',
+      origin: 'restored',
+    });
+
+    expect(opened).toMatchObject([{ sessionId: 's7', projectDir: '/kept' }]);
+    const saved = JSON.parse(await workflow.data.read(FLOWS_FILE)) as {
+      flows: { hostSessionId: string }[];
+    };
+    expect(saved.flows.map((entry) => entry.hostSessionId)).toEqual(['h-kept']);
   });
 
   it('Observer_Disposed_HearsNothing', async () => {

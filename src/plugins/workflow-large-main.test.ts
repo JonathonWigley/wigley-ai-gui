@@ -301,7 +301,6 @@ function startWorkflowPart(
     await settled();
   };
   const openS1 = async () => {
-    await emit('sessions.connected', { ...session('s1', 'h1'), owned: true });
     await emit('chat.sessionOpened', {
       sessionId: 's1',
       profileDir: '~/.c',
@@ -542,7 +541,6 @@ async function reachPlanReady(
     });
     await settled();
   };
-  engine.emit('sessions.connected', { ...session('s1', 'h1'), owned: true });
   engine.emit('chat.sessionOpened', {
     sessionId: 's1',
     profileDir: '~/.c',

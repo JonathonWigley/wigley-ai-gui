@@ -36,31 +36,36 @@ export const nodeDeclarationFiles: DeclarationFiles = {
 };
 
 // Copies into `outDir` every hand-written `.d.ts` under `srcDir` that the
-// declarations in `outDir` import, directly or through another copy, at its
-// path relative to `srcDir`: tsc emits nothing for a `.d.ts` input. Throws,
-// naming the file and specifier, for a relative import that leads to no
-// `.d.ts` in either folder. Resolves the paths copied, relative to `outDir`.
+// declarations tsc emitted into `outDir` import, directly or through another
+// copy, at its path relative to `srcDir`, over any copy an earlier run left:
+// tsc emits nothing for a `.d.ts` input. Throws, naming the file and
+// specifier, for a relative import that leads to no `.d.ts` in either folder.
+// Resolves the paths copied, relative to `outDir`.
 export function copyDeclarationInputs(
   srcDir: string,
   outDir: string,
   files: DeclarationFiles,
 ): string[] {
   const copied: string[] = [];
-  const pending = files.declarationsIn(outDir);
-  const walked = new Set(pending);
+  const copiedTargets = new Set<string>();
+  const isHandWrittenIn = (target: string) =>
+    files.exists(path.join(srcDir, path.relative(outDir, target)));
+  // An earlier run's copy is read only once this run copies it again.
+  const pending = files
+    .declarationsIn(outDir)
+    .filter((declaration) => !isHandWrittenIn(declaration));
   let file: string | undefined;
   while ((file = pending.pop()) !== undefined) {
     for (const [, specifier] of files.read(file).matchAll(RELATIVE_SPECIFIER)) {
       const target = `${path.resolve(path.dirname(file), specifier)}${DECLARATION_SUFFIX}`;
       const relative = path.relative(outDir, target);
-      const source = path.join(srcDir, relative);
       const isInOutDir =
         !relative.startsWith('..') && !path.isAbsolute(relative);
-      const isHandWritten = isInOutDir && files.exists(source);
-      if (isHandWritten && !walked.has(target)) {
-        files.copy(source, target);
+      const isHandWritten = isInOutDir && isHandWrittenIn(target);
+      if (isHandWritten && !copiedTargets.has(target)) {
+        files.copy(path.join(srcDir, relative), target);
         copied.push(relative);
-        walked.add(target);
+        copiedTargets.add(target);
         pending.push(target);
       } else if (!isHandWritten && !files.exists(target)) {
         throw new Error(
