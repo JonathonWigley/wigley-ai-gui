@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -29,3 +29,4 @@ Commit:    none (the Proof rides in the lead's next commit)
 
 ## Proof
 
+Commit none · proof: 1: selftest --plugin workflow-large,backlog all passed; 2: drive run plancheck, report file written directly moved the strip Make 2/3 -> 0/3 (/tmp/claude-plan-tracking/drive/before-report.png, after-report.png); 3: scratch plan.py log wrote plan-runs/s1.json with the abspath folder · concerns: workflow-large logs no progress line on the drive app log; the strip count settled the check

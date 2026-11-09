@@ -174,10 +174,10 @@ Shared names (every task uses them as written here):
 - [x] [The report sources: tool and report file](05-report-sources.md) — after 02, 04
 
 ### Wave 4
-- [ ] [Doc re-read](06-doc-re-read.md) — after 05, 03
+- [x] [Doc re-read](06-doc-re-read.md) — after 05, 03
 
 ### Wave 5
-- [ ] [Final verification](07-final-verification.md) — after 06
+- [x] [Final verification](07-final-verification.md) — after 06
 
 ## Run log
 
@@ -189,6 +189,8 @@ Review base: 12745c21
 - 01 · d27b84e5 · diff read; typecheck clean; worker ran named tests (262) and lint · concerns: plan watch now stats planDir and may signal planGone when every copy's plan.md reads null (old code stayed silent); task 04 rewrites the read
 - 04 · 92e00206 · diff read; typecheck clean; worker ran workflow-large tests (475) and lint · concerns: all-null read signals planGone only when planDir is gone; a removed reported folder whose remembered main copy also lost plan.md signals planGone though the main folder exists
 - 05 · 58a4dc8c · diff read; typecheck clean; worker ran workflow-large tests (486), lint, and selftest --plugin workflow-large 12/12 · concerns: macOS FSEvents can drop the rename target of plan.py's .json.tmp atomic write, so a report is lost until the next write; tool path has no fold-level test (self-test covers the file path); workflow-large-main.test.ts services gained homeDir and appInstance
+- 06 · cd43c0a4 · diff read; comment and doc lines only; marketplace needed no change; grep for newestPlanCopy and newest copy clean · concerns: plan-reports.test.ts row still titled plan.py's atomic-write temp file
+- 07 · none · 1: selftest --plugin workflow-large,backlog all passed; 2: drive run plancheck, report file written directly moved the strip Make 2/3 -> 0/3 (/tmp/claude-plan-tracking/drive/before-report.png, after-report.png); 3: scratch plan.py log wrote plan-runs/s1.json with the abspath folder · concerns: workflow-large logs no progress line on the drive app log; the strip count settled the check
 ### Contract changes
 ### Rulings
 - fileWritten and make args go through followPlanDir (new folder clears the mark, held folder keeps it); the planReported event calls setPlanDir and sets the mark · group 02
@@ -200,3 +202,4 @@ Review base: 12745c21
 - plan.py writes its report file directly, with no temp file and rename: the app's watcher on macOS can miss the rename's target name (task 05's self-test lost it 1 run in 5), and a direct write reports under the real name; a torn read logs one line and the write's own event reads again — cost if wrong: a rare bad-JSON log line · lead
 ### Review rounds
 ### Test gate
+- picked: src/shared/plan-copies.test.ts, src/shared/plan-progress, src/plugins/backlog, src/plugins/workflow-large, src/plugins/workflow (every module the range touches and the engine that folds its signals) + typecheck + lint; selftest --plugin workflow-large,backlog (reported plan group, Backlog plan rows); marketplace plan tests (32) · 1164 vitest passed, typecheck and lint clean, selftest all passed, plan tests OK

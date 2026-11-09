@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05, 03
 Plan: [plan.md](plan.md)
@@ -29,3 +29,4 @@ Commit:    one commit per repo, only when a line changed
 
 ## Proof
 
+Commit cd43c0a4 · proof: diff read; comment and doc lines only; marketplace needed no change; grep for newestPlanCopy and newest copy clean · concerns: plan-reports.test.ts row still titled plan.py's atomic-write temp file
