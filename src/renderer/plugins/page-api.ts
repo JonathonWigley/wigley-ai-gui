@@ -75,7 +75,8 @@ export type PageApiServices = Omit<
 };
 
 // What the page core shares with every plugin's API. `scopeStack` holds
-// qualified scopes; `pendingKeys` is the page's one pending-key report;
+// qualified scopes; `pendingKeys` is the page's one pending-key report, and
+// `keyCapture` the page key engine's one-shot key capture;
 // `config` is the config main serves now, which the keymap, commands, scopes
 // and settings are read from at each call; `bus` is the page load's event bus;
 // `modes` is the core's mode registry, which takes qualified ids. `areas`
@@ -100,6 +101,9 @@ export interface PageApiDeps {
   bridge: Bridge;
   scopeStack: ScopeStack;
   pendingKeys: Pick<PendingKeysHub, 'onPending' | 'hold' | 'cancel'>;
+  keyCapture: {
+    capture(onKey: (keys: string) => void, onCancel: () => void): Disposable;
+  };
   config: LiveConfig;
   services: PageApiServices;
   uiState: { scoped(prefix: string): UiState };
@@ -182,6 +186,10 @@ export function createPageApi(
         registrations.track(deps.pendingKeys.onPending(listener)),
       holdPending: () => deps.pendingKeys.hold(),
       cancelPending: () => deps.pendingKeys.cancel(),
+      captureKey(onKey, onCancel) {
+        deps.pendingKeys.cancel();
+        return track(deps.keyCapture.capture(onKey, onCancel));
+      },
       keymap: () => config.current().keymap,
       onKeymapChanged: (listener) =>
         registrations.track(

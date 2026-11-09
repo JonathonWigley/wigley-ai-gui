@@ -187,6 +187,10 @@ export interface HarnessAnchor {
 // `services.markdown`. `anchors` holds each anchor named through the fake
 // `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
+// `pressCapture` hands `keys`, in vim notation, to the capture `keys.captureKey`
+// armed, and `cancelCapture` cancels it, as an Esc would; each disarms it before
+// the callback runs, as the page key engine does, and throws when none is armed.
+// `isCapturing` reads whether one is armed.
 // `picked` holds the qualified id of each mode whose handle's `picked` ran, in
 // order. `restores` holds each restore handed to `restores.track`; the harness
 // runs no page load, so `restores.onSettled` calls its listener at once, unless
@@ -213,6 +217,9 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   changeBase(scope: string): void;
   setWhere(where: HintWhere): void;
   hintsShown(): boolean;
+  pressCapture(keys: string): void;
+  cancelCapture(): void;
+  isCapturing(): boolean;
   // The live mode added under qualified id `id`; throws when none is live.
   mode(id: string): Mode;
   // Sets what every mode handle's `sideBarShown` reads; false until set.
@@ -1087,6 +1094,23 @@ interface PageWorld extends HarnessWorld {
   hintsShown: boolean;
   hintsHold: { hold(shown: boolean): Disposable };
   anchorDispose?(): void;
+  // The capture `keys.captureKey` armed, null when none is.
+  capture: HarnessCapture | null;
+}
+
+interface HarnessCapture {
+  onKey(keys: string): void;
+  onCancel(): void;
+}
+
+// Disarms the armed capture and returns it, throwing when none is armed.
+function takeCapture(world: PageWorld): HarnessCapture {
+  const capture = world.capture;
+  if (capture === null) {
+    throw new Error('no key capture is armed');
+  }
+  world.capture = null;
+  return capture;
 }
 
 function createPageWorld(
@@ -1133,6 +1157,7 @@ function createPageWorld(
     hintsHold: createLatestHold<boolean>(true, (shown) => {
       world.hintsShown = shown;
     }),
+    capture: null,
   };
   tellShownMode(world.state, firstMode?.id ?? '');
   return world;
@@ -1362,6 +1387,20 @@ function fakePageApi(
       onPending: liveHandle,
       holdPending() {},
       cancelPending() {},
+      captureKey(onKey, onCancel) {
+        const capture: HarnessCapture = { onKey, onCancel };
+        const replaced = world.capture;
+        world.capture = null;
+        replaced?.onCancel();
+        world.capture = capture;
+        return register<Disposable>({
+          dispose() {
+            if (world.capture === capture) {
+              world.capture = null;
+            }
+          },
+        });
+      },
       keymap: () => world.keymap,
       onKeymapChanged: (listener) =>
         register(world.keymapListeners.add(listener)),
@@ -1693,6 +1732,13 @@ export function startPagePart<M extends PluginManifest>(
       world.whereListeners.tell(where);
     },
     hintsShown: () => world.hintsShown,
+    pressCapture(keys) {
+      takeCapture(world).onKey(keys);
+    },
+    cancelCapture() {
+      takeCapture(world).onCancel();
+    },
+    isCapturing: () => world.capture !== null,
     mode(id) {
       const live = world.liveModes.find((entry) => entry.id === id)?.added;
       if (live === undefined || live === null) {

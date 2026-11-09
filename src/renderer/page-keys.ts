@@ -5,11 +5,13 @@ import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
 import type { PageCommandContext } from '../contracts/plugin';
 import { type KeyCommands, runBound } from '../shared/command-router';
+import { vimTokenForPageKey } from '../shared/key-notation';
 import { createListeners } from '../shared/listeners';
 import type { BoxFocus } from './box-focus';
 import {
   type ChordMatcher,
   type ChordPress,
+  chordTokenFor,
   createChordMatcher,
   createSequenceMatcher,
   type SequenceMatcher,
@@ -23,6 +25,65 @@ function isPageKey(event: KeyboardEvent): boolean {
   const isModifierAlone = MODIFIER_KEYS.has(event.key);
   const isChord = event.ctrlKey || event.altKey || event.metaKey;
   return !isModifierAlone && !isChord;
+}
+
+// The parts of a key event a capture spells a key from.
+export type CapturedPress = Pick<
+  KeyboardEvent,
+  'key' | 'code' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'
+>;
+
+// The key `press` is, in the keymap's vim notation, spelled as a bind that
+// fires on it is written: a press holding Control, Alt or Meta, or Shift+Enter,
+// is the chord on its physical key (`<A-o>`, `<S-Enter>`); any other press is
+// its `KeyboardEvent.key` (`T`, `<Space>`, `<lt>`). Null for a press no bind
+// can take: a bare modifier, or a key the notation has no name for.
+export function capturedKeys(press: CapturedPress): string | null {
+  const isChord = press.ctrlKey || press.altKey || press.metaKey;
+  const isShiftEnter = press.shiftKey && press.key === 'Enter';
+  if (isChord || isShiftEnter) {
+    return chordTokenFor(press);
+  }
+  if (MODIFIER_KEYS.has(press.key)) {
+    return null;
+  }
+  const token = vimTokenForPageKey(press.key);
+  const isNamed = press.key.length === 1 || token !== press.key;
+  return isNamed ? token : null;
+}
+
+// The callbacks of the armed key capture.
+interface KeyCapture {
+  onKey(keys: string): void;
+  onCancel(): void;
+}
+
+// Hands `event` to the armed capture, if any, reporting whether it took the
+// event. Esc cancels it; any other key `capturedKeys` spells goes to `onKey`.
+// The capture disarms before its callback runs, so the callback may arm
+// another. A press no bind can take passes on and leaves it armed.
+function takeCapturedKey(
+  event: KeyboardEvent,
+  armed: KeyCapture | null,
+  disarm: () => void,
+): boolean {
+  if (armed === null) {
+    return false;
+  }
+  const isCancel = event.key === 'Escape';
+  const keys = isCancel ? null : capturedKeys(event);
+  if (!isCancel && keys === null) {
+    return false;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  disarm();
+  if (keys === null) {
+    armed.onCancel();
+  } else {
+    armed.onKey(keys);
+  }
+  return true;
 }
 
 // The page a key is fed to, read afresh before each key.
@@ -168,7 +229,9 @@ export function createPendingTimeout(
 // current ones in force. `onPendingKeys` hears the pending page keys each time
 // they change, `[]` once none are, with the scope in force as it reports. `hold`
 // keeps the pending keys past the timeout until they end, and `cancel` drops
-// them, running nothing.
+// them, running nothing. `capture` arms a one-shot capture that takes the next
+// key ahead of every bind, a pending sequence, an editor and a text box, as
+// `PageApi['keys'].captureKey` says; it leaves the pending keys alone.
 export function installPageKeys(
   timeoutMs: number,
   currentScope: () => ViewScope,
@@ -180,6 +243,7 @@ export function installPageKeys(
 ): {
   hold(): void;
   cancel(): void;
+  capture(onKey: (keys: string) => void, onCancel: () => void): Disposable;
   setBinds(binds: PageBind[], timeoutMs: number): void;
   onPendingKeys(
     listener: (keys: string[], scope: ViewScope) => void,
@@ -191,6 +255,10 @@ export function installPageKeys(
   let chords = createChordMatcher([]);
   let matcher = createSequenceMatcher([], timeoutMs);
   let timeout = createPendingTimeout(matcher, timers, timeoutMs, reportKeys);
+  let armed: KeyCapture | null = null;
+  const disarm = () => {
+    armed = null;
+  };
   const runBind = (bind: PageBind) => {
     const keys = bind.keys.join('');
     runBound(commands, bind, { keys, source: 'page', log, logsRun: true }, {});
@@ -208,6 +276,9 @@ export function installPageKeys(
   document.addEventListener(
     'keydown',
     (event) => {
+      if (takeCapturedKey(event, armed, disarm)) {
+        return;
+      }
       if (editors.takesChordKey(event)) {
         return;
       }
@@ -258,6 +329,20 @@ export function installPageKeys(
       matcher.reset();
       timeout.arm();
       reportKeys([]);
+    },
+    capture(onKey, onCancel) {
+      const replaced = armed;
+      const capture: KeyCapture = { onKey, onCancel };
+      armed = null;
+      replaced?.onCancel();
+      armed = capture;
+      return {
+        dispose() {
+          if (armed === capture) {
+            armed = null;
+          }
+        },
+      };
     },
     setBinds(nextBinds, nextTimeoutMs) {
       const nextChords = createChordMatcher(nextBinds);

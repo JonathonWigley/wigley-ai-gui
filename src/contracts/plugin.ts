@@ -694,7 +694,15 @@ export interface PageRestores {
 // an editor, `null` once none are pending, until its `dispose`;
 // `keys.holdPending` keeps a pending page sequence past its
 // timeout until it ends, and `keys.cancelPending` drops whichever sequence is
-// pending, running nothing. `keys.keymap` reads the merged keymap as the user
+// pending, running nothing. `keys.captureKey` hands the next key or chord
+// pressed to `onKey` in the keymap's vim notation, as a bind's `keys` is written
+// (`T`, `<C-t>`, `<A-S-o>`, `<CR>`), ahead of every bind, a pending sequence
+// (it cancels one first) and a text box; Esc runs `onCancel` and is never
+// captured; a bare modifier or a key no bind can name is waited past. Arming a
+// second capture cancels the first, and the handle's `dispose` disarms with no
+// callback; the handle is filed in the part's registrations. Keys main takes
+// first (app menu accelerators, intercept and global binds) never reach it.
+// `keys.keymap` reads the merged keymap as the user
 // config now sets it, every plugin's binds qualified, and
 // `keys.onKeymapChanged` hears it each time it changes, until its `dispose`;
 // `keys.label` falls back to the id for a command with no label;
@@ -766,6 +774,7 @@ export interface PageApi<
     onPending(listener: (pending: PendingKeys | null) => void): Disposable;
     holdPending(): void;
     cancelPending(): void;
+    captureKey(onKey: (keys: string) => void, onCancel: () => void): Disposable;
     keymap(): Keymap;
     label(id: CommandId): string;
     command(id: CommandId): CommandInfo | undefined;

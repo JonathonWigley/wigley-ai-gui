@@ -213,7 +213,7 @@ owner's layout (`AGENTS.md` § Intent).
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: a42ed9f9
 
 ### Groups
 ### Contract changes

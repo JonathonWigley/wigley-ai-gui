@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
+import { parseChord } from '../shared/chord-notation';
 import { createChordMatcher, createSequenceMatcher } from './key-sequences';
 import {
+  type CapturedPress,
+  capturedKeys,
   createPendingTimeout,
   dropPendingKeys,
   feedChordKey,
@@ -261,10 +264,85 @@ describe('createPendingTimeout', () => {
   });
 });
 
+// A press of `key` on `code`, holding the modifiers `held` sets.
+function press(
+  key: string,
+  code: string,
+  held: Partial<CapturedPress> = {},
+): CapturedPress {
+  return {
+    key,
+    code,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    ...held,
+  };
+}
+
+const ALL_MODIFIERS = {
+  ctrlKey: true,
+  altKey: true,
+  shiftKey: true,
+  metaKey: true,
+};
+
+const CHORD_ROWS: [CapturedPress, string][] = [
+  [press('t', 'KeyT', { ctrlKey: true }), '<C-t>'],
+  [press('ø', 'KeyO', { altKey: true }), '<A-o>'],
+  [press('Ø', 'KeyO', { altKey: true, shiftKey: true }), '<A-S-o>'],
+  [press('w', 'KeyW', { metaKey: true }), '<D-w>'],
+  [press('æ', 'Quote', { altKey: true }), "<A-'>"],
+  [press('1', 'Digit1', { ctrlKey: true }), '<C-1>'],
+  [press(';', 'Semicolon', ALL_MODIFIERS), '<C-A-S-D-;>'],
+  [press('Enter', 'Enter', { shiftKey: true }), '<S-Enter>'],
+  [press('Enter', 'Enter', { ctrlKey: true }), '<C-Enter>'],
+  [press('Dead', 'KeyE', { altKey: true }), '<A-e>'],
+];
+
+describe('capturedKeys', () => {
+  it.each<[CapturedPress, string | null]>([
+    [press('t', 'KeyT'), 't'],
+    [press('T', 'KeyT', { shiftKey: true }), 'T'],
+    [press(':', 'Semicolon', { shiftKey: true }), ':'],
+    [press(';', 'Semicolon'), ';'],
+    [press(' ', 'Space'), '<Space>'],
+    [press('Enter', 'Enter'), '<CR>'],
+    [press('Tab', 'Tab'), '<Tab>'],
+    [press('Tab', 'Tab', { shiftKey: true }), '<Tab>'],
+    [press('Backspace', 'Backspace'), '<BS>'],
+    [press('<', 'Comma', { shiftKey: true }), '<lt>'],
+    [press('\\', 'Backslash'), '<Bslash>'],
+    ...CHORD_ROWS,
+    [press('Shift', 'ShiftLeft', { shiftKey: true }), null],
+    [press('Meta', 'MetaLeft', { metaKey: true }), null],
+    [press('ArrowUp', 'ArrowUp'), null],
+    [press('F5', 'F5'), null],
+    [press('Dead', 'Backquote'), null],
+    [press('[', 'BracketLeft', { ctrlKey: true }), null],
+  ])('capturedKeys_Press_SpellsTheKeyAsABindIsWritten %#', (pressed, keys) => {
+    expect(capturedKeys(pressed)).toBe(keys);
+  });
+
+  it.each(CHORD_ROWS)(
+    'capturedKeys_Chord_MatchesTheChordBindItSpells %#',
+    (pressed, keys) => {
+      const captured = capturedKeys(pressed)!;
+      const bind: PageBind = { keys: [captured], scope: 'any', command: 'p.x' };
+
+      expect(captured).toBe(keys);
+      expect(parseChord(captured)).not.toBeNull();
+      expect(createChordMatcher([bind]).match(pressed, 'any')).toBe(bind);
+    },
+  );
+});
+
 describe('installPageKeys', () => {
   // Installs the engine over stubbed page globals, with no binds; `press` sends a
-  // key.
-  function installed(has = true) {
+  // key, stopping at the listener that stops its propagation, and reports
+  // whether a listener prevented its default.
+  function installed(has = true, editors: Partial<EditorHost> = {}) {
     const keydowns: ((event: unknown) => void)[] = [];
     const target = {
       addEventListener: (type: string, listener: (event: unknown) => void) => {
@@ -284,6 +362,7 @@ describe('installPageKeys', () => {
       {
         contains: () => false,
         takesChordKey: () => false,
+        ...editors,
       } as unknown as EditorHost,
       {
         run: (...args) => {
@@ -297,18 +376,45 @@ describe('installPageKeys', () => {
       fakeTimers().timers,
       { where: () => 'page', onChanged: () => ({ dispose: () => {} }) },
     );
-    const press = (key: string) => {
+    const press = (key: string, pressed: Partial<CapturedPress> = {}) => {
+      let isPrevented = false;
+      let isStopped = false;
+      const event = {
+        key,
+        code: '',
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false,
+        metaKey: false,
+        ...pressed,
+        target: null,
+        timeStamp: 0,
+        preventDefault: () => {
+          isPrevented = true;
+        },
+        stopPropagation: () => {
+          isStopped = true;
+        },
+      };
       for (const keydown of keydowns) {
-        keydown({
-          key,
-          target: null,
-          timeStamp: 0,
-          preventDefault: () => {},
-          stopPropagation: () => {},
-        });
+        if (isStopped) {
+          break;
+        }
+        keydown(event);
       }
+      return isPrevented;
     };
     return { engine, press, runs, logs };
+  }
+
+  // A capture armed on `engine`, recording what it hears.
+  function armed(engine: ReturnType<typeof installed>['engine']) {
+    const heard: string[] = [];
+    const handle = engine.capture(
+      (keys) => heard.push(keys),
+      () => heard.push('cancel'),
+    );
+    return { heard, handle };
   }
 
   it('setBinds_FirstCall_KeysStartFiring', () => {
@@ -353,5 +459,149 @@ describe('installPageKeys', () => {
 
     expect(runs).toEqual([]);
     expect(logs).toEqual(['page: r names no command r.gone']);
+  });
+
+  it.each<[string, string, Partial<CapturedPress>, string]>([
+    ['x', 'KeyX', {}, 'x'],
+    ['x', 'KeyX', { ctrlKey: true }, '<C-x>'],
+  ])(
+    'capture_Armed_TakesTheNextKeyAheadOfBindsAndRunsNothing %s %j',
+    (key, code, held, keys) => {
+      const { engine, press, runs } = installed();
+      engine.setBinds(
+        [
+          { keys: ['x'], scope: 'any', command: 'p.x' },
+          { keys: ['<C-x>'], scope: 'any', command: 'p.cx' },
+        ],
+        TIMEOUT_MS,
+      );
+      const { heard } = armed(engine);
+
+      const isPrevented = press(key, { code, ...held });
+
+      expect(heard).toEqual([keys]);
+      expect(runs).toEqual([]);
+      expect(isPrevented).toBe(true);
+      press(key, { code, ...held });
+      vi.unstubAllGlobals();
+      expect(heard).toEqual([keys]);
+      expect(runs).toHaveLength(1);
+    },
+  );
+
+  it('capture_ArmedOverAPendingSequence_TheKeyJoinsNoSequence', () => {
+    const { engine, press, runs } = installed();
+    engine.setBinds(
+      [{ keys: ['g', 'g'], scope: 'any', command: 'p.top' }],
+      TIMEOUT_MS,
+    );
+    press('g', { code: 'KeyG' });
+    const { heard } = armed(engine);
+
+    press('g', { code: 'KeyG' });
+    expect(heard).toEqual(['g']);
+    expect(runs).toEqual([]);
+
+    press('g', { code: 'KeyG' });
+    press('g', { code: 'KeyG' });
+    vi.unstubAllGlobals();
+
+    expect(runs).toEqual([['p.top', undefined, {}]]);
+  });
+
+  it.each<[string, Partial<CapturedPress>]>([
+    ['Shift', { code: 'ShiftLeft', shiftKey: true }],
+    ['ArrowUp', { code: 'ArrowUp' }],
+    ['[', { code: 'BracketLeft', ctrlKey: true }],
+  ])('capture_NotAKey_WaitsForTheNext %s', (key, pressed) => {
+    const { engine, press } = installed();
+    const { heard } = armed(engine);
+
+    const isPrevented = press(key, pressed);
+    expect(heard).toEqual([]);
+    expect(isPrevented).toBe(false);
+
+    press('t', { code: 'KeyT' });
+    vi.unstubAllGlobals();
+
+    expect(heard).toEqual(['t']);
+  });
+
+  it('capture_Escape_CancelsAndIsNotCaptured', () => {
+    const { engine, press, runs } = installed();
+    engine.setBinds(
+      [{ keys: ['Escape'], scope: 'any', command: 'p.esc' }],
+      TIMEOUT_MS,
+    );
+    const { heard } = armed(engine);
+
+    const isPrevented = press('Escape', { code: 'Escape' });
+    vi.unstubAllGlobals();
+
+    expect(heard).toEqual(['cancel']);
+    expect(runs).toEqual([]);
+    expect(isPrevented).toBe(true);
+  });
+
+  it('capture_ArmedAgain_CancelsTheFirst', () => {
+    const { engine, press } = installed();
+    const first = armed(engine);
+    const second = armed(engine);
+
+    press('t', { code: 'KeyT' });
+    vi.unstubAllGlobals();
+
+    expect(first.heard).toEqual(['cancel']);
+    expect(second.heard).toEqual(['t']);
+  });
+
+  it('capture_Disposed_DisarmsWithNoCallback', () => {
+    const { engine, press, runs } = installed();
+    engine.setBinds(
+      [{ keys: ['x'], scope: 'any', command: 'p.x' }],
+      TIMEOUT_MS,
+    );
+    const { heard, handle } = armed(engine);
+
+    handle.dispose();
+    press('x', { code: 'KeyX' });
+    vi.unstubAllGlobals();
+
+    expect(heard).toEqual([]);
+    expect(runs).toEqual([['p.x', undefined, {}]]);
+  });
+
+  it('capture_CallbackArmsAgain_NextKeyReachesTheNewCapture', () => {
+    const { engine, press } = installed();
+    const heard: string[] = [];
+    engine.capture(
+      (keys) => {
+        heard.push(`first ${keys}`);
+        engine.capture(
+          (next) => heard.push(`second ${next}`),
+          () => heard.push('second cancel'),
+        );
+      },
+      () => heard.push('first cancel'),
+    );
+
+    press('t', { code: 'KeyT' });
+    press('<', { code: 'Comma', shiftKey: true });
+    vi.unstubAllGlobals();
+
+    expect(heard).toEqual(['first t', 'second <lt>']);
+  });
+
+  it('capture_EditorTakesTheChord_CaptureStillTakesIt', () => {
+    const { engine, press } = installed(true, {
+      takesChordKey: () => true,
+      contains: () => true,
+    });
+    const { heard } = armed(engine);
+
+    press('n', { code: 'KeyN', ctrlKey: true });
+    vi.unstubAllGlobals();
+
+    expect(heard).toEqual(['<C-n>']);
   });
 });
