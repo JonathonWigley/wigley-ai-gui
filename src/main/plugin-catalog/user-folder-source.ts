@@ -44,6 +44,9 @@ const LAYOUTS_FOLDER = 'layouts';
 const REVISION_NAME = /^\d+$/;
 // The names editors give swap, backup and temporary files.
 const EDITOR_TEMP_FILE = /(~|\.swp|\.swx|\.tmp)$/;
+// The folder a plugin's packages install into, too large to stamp on every
+// rescan.
+const PACKAGES_FOLDER = 'node_modules';
 
 // Whether `name`, in the plugins folder, can name a plugin: names starting
 // with `_` or `.` hold shared files instead.
@@ -55,6 +58,17 @@ function isPluginName(name: string): boolean {
 // which a load leaves out of its copy.
 function isHidden(path: string): boolean {
   return path.split('/').some((segment) => segment.startsWith('.'));
+}
+
+// Whether a save of `path`, in a plugin folder, reloads the plugin: a path
+// outside its layouts folder, not hidden, and not an editor's temporary file.
+function isReloadingPath(path: string): boolean {
+  const segments = path.split('/');
+  return (
+    segments[0] !== LAYOUTS_FOLDER &&
+    !isHidden(path) &&
+    !EDITOR_TEMP_FILE.test(segments[segments.length - 1])
+  );
 }
 
 // A load and whether the watch sends it: a `gone` goes out only for an id the
@@ -71,8 +85,8 @@ type MainImport = { module: Record<string, unknown> } | { problem: string };
 // copy's `main.js`, so every load, its relative imports included, is a new
 // module. A load never throws: a problem resolves `failed` with its message.
 // When the watch may have dropped changes (`onMissed`), each folder that came,
-// went, or whose files' paths or modified times differ from its last load
-// loads as a reported change would.
+// went, or whose reloading files' paths or modified times differ from its
+// last load settles, and loads if it still differs then.
 export function createUserFolderSource(
   deps: UserFolderSourceDeps,
 ): WatchedPluginSource {
@@ -144,12 +158,17 @@ export function createUserFolderSource(
     return found;
   };
 
-  // The files a load of `id` copies, each with its modified time, as one
-  // string; null when they cannot be listed or read.
+  // The files a load of `id` copies whose save reloads it, each with its
+  // modified time, as one string; `node_modules` is left out. Null when they
+  // cannot be listed or read.
   const fingerprintOf = async (id: string): Promise<string | null> => {
     try {
+      const stamped = (await filesToCopy(id)).filter(
+        (path) =>
+          isReloadingPath(path) && !path.split('/').includes(PACKAGES_FOLDER),
+      );
       const stamps: string[] = [];
-      for (const path of (await filesToCopy(id)).sort()) {
+      for (const path of stamped.sort()) {
         const modified = await pluginsFolder.modified(`${id}/${path}`);
         stamps.push(`${path}\t${modified}`);
       }
@@ -314,32 +333,43 @@ export function createUserFolderSource(
       return isPresent === held.has(id) ? null : trackedLoad(id);
     });
 
+  // `trackedLoad` when the id's folder came or went, or its files differ from
+  // its last load; null when neither. Checked in turn, so a load queued ahead
+  // of it that already took the change leaves nothing to do.
+  const loadWhenChanged = (id: string): Promise<TrackedLoad | null> =>
+    loads.run(async () => {
+      let isPresent: boolean;
+      try {
+        isPresent = (await pluginsFolder.stat(id))?.isFolder === true;
+      } catch {
+        return trackedLoad(id);
+      }
+      const isChanged =
+        isPresent !== held.has(id) ||
+        (isPresent && (await fingerprintOf(id)) !== fingerprints.get(id));
+      return isChanged ? trackedLoad(id) : null;
+    });
+
   const listPluginNames = async (): Promise<string[]> =>
     (await pluginsFolder.list(ROOT))
       .map((entry) => entry.path)
       .filter(isPluginName);
 
-  // The ids whose folder came or went since the source last loaded them
-  // (`isSave` false), and the held ids whose files differ from their last
-  // load (`isSave` true). A folder no load has seen counts as come only once
-  // `loadAll` ran.
-  const changedSinceLoad = async (): Promise<
-    { id: string; isSave: boolean }[]
-  > => {
+  // The ids whose folder came or went since the source last loaded them,
+  // and the held ids whose files differ from their last load. A folder no
+  // load has seen counts as come only once `loadAll` ran.
+  const changedSinceLoad = async (): Promise<string[]> => {
     const names = await listPluginNames();
-    const changed: { id: string; isSave: boolean }[] = [];
+    const changed: string[] = [];
     for (const id of new Set([...names, ...held])) {
       const isPresent = (await pluginsFolder.stat(id))?.isFolder === true;
       const isHeld = held.has(id);
-      if (isPresent !== isHeld) {
-        if (isHeld || hasLoadedAll) {
-          changed.push({ id, isSave: false });
-        }
-      } else if (
-        isPresent &&
-        (await fingerprintOf(id)) !== fingerprints.get(id)
-      ) {
-        changed.push({ id, isSave: true });
+      const isChanged =
+        isPresent !== isHeld
+          ? isHeld || hasLoadedAll
+          : isPresent && (await fingerprintOf(id)) !== fingerprints.get(id);
+      if (isChanged) {
+        changed.push(id);
       }
     }
     return changed;
@@ -349,13 +379,19 @@ export function createUserFolderSource(
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
     // The ids with a save under their folder since their last settle.
     const savedIds = new Set<string>();
+    // The ids a rescan found changed since their last settle.
+    const rescannedIds = new Set<string>();
     let disposed = false;
 
     const loadSettled = (id: string) => {
       timers.delete(id);
-      const loading = savedIds.delete(id)
+      const isSaved = savedIds.delete(id);
+      const isRescanned = rescannedIds.delete(id);
+      const loading = isSaved
         ? loadInTurn(id)
-        : loadWhenPresenceChanged(id);
+        : isRescanned
+          ? loadWhenChanged(id)
+          : loadWhenPresenceChanged(id);
       void loading.then((tracked) => {
         if (!disposed && tracked !== null && tracked.announced) {
           listener(tracked.load);
@@ -372,24 +408,20 @@ export function createUserFolderSource(
       if (!isPluginName(id)) {
         return;
       }
-      const isSave = segments.length > 1;
-      const isLayoutSave = isSave && segments[1] === LAYOUTS_FOLDER;
-      const isSkippedSave =
-        isSave &&
-        (isHidden(changed) ||
-          EDITOR_TEMP_FILE.test(segments[segments.length - 1]));
-      if (isLayoutSave || isSkippedSave) {
-        return;
+      if (segments.length > 1) {
+        if (!isReloadingPath(segments.slice(1).join('/'))) {
+          return;
+        }
+        savedIds.add(id);
       }
-      settleLater(id, isSave);
+      settleLater(id);
     };
 
     // Loads `id` once `PLUGIN_SETTLE_MS` pass with no other change to it: as
-    // a save when `isSave`, else only when its folder came or went.
-    const settleLater = (id: string, isSave: boolean) => {
-      if (isSave) {
-        savedIds.add(id);
-      }
+    // a save when `savedIds` holds it; when `rescannedIds` does, only when it
+    // still differs from its last load; else only when its folder came or
+    // went.
+    const settleLater = (id: string) => {
       clearTimeout(timers.get(id));
       timers.set(
         id,
@@ -398,7 +430,7 @@ export function createUserFolderSource(
     };
 
     // The watch may have dropped changes, so each id that changed since its
-    // last load settles as a change the watch reported would.
+    // last load settles, and loads if it still differs then.
     const rescan = () => {
       void loads
         .run(changedSinceLoad)
@@ -406,8 +438,9 @@ export function createUserFolderSource(
           if (disposed) {
             return;
           }
-          for (const { id, isSave } of changed) {
-            settleLater(id, isSave);
+          for (const id of changed) {
+            rescannedIds.add(id);
+            settleLater(id);
           }
         })
         .catch((error: unknown) =>
@@ -437,6 +470,7 @@ export function createUserFolderSource(
         }
         timers.clear();
         savedIds.clear();
+        rescannedIds.clear();
       },
     };
   };

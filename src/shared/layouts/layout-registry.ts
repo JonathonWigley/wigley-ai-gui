@@ -110,12 +110,17 @@ async function stampOf(files: Files, path: string): Promise<string | null> {
   }
 }
 
-// The default folder's `layout.js` and `layout.css` stamps, as one string.
-async function defaultStampOf(defaultFolder: Files): Promise<string> {
-  const lines = await Promise.all(
-    [DEFAULT_CODE, DEFAULT_STYLE].map((file) => stampOf(defaultFolder, file)),
-  );
-  return lines.join('\n');
+// The default folder's `layout.js` and `layout.css` stamps, as one string;
+// null when either cannot be read, so the next rescan lists it again.
+async function defaultStampOf(defaultFolder: Files): Promise<string | null> {
+  try {
+    const lines = await Promise.all(
+      [DEFAULT_CODE, DEFAULT_STYLE].map((file) => stampOf(defaultFolder, file)),
+    );
+    return lines.join('\n');
+  } catch {
+    return null;
+  }
 }
 
 async function isFolder(files: Files): Promise<boolean> {
@@ -162,9 +167,11 @@ export async function startLayoutRegistry(
   };
 
   // Each layout folder's layout files with their modified times, by folder
-  // name, `default` left out.
+  // name, `default` left out. A folder with a file whose time cannot be read
+  // is left out too, so the next rescan lists it again.
   const readStamps = async (): Promise<Map<string, string>> => {
     const byName = new Map<string, string[]>();
+    const unreadable = new Set<string>();
     for (const entry of await folder.list(ROOT, { recursive: true })) {
       const slash = entry.path.indexOf('/');
       const fileName = entry.path.slice(entry.path.lastIndexOf('/') + 1);
@@ -174,13 +181,22 @@ export async function startLayoutRegistry(
         slash !== -1 &&
         name !== DEFAULT_NAME &&
         isLayoutFileName(fileName);
-      const stamp = isLayoutFile ? await stampOf(folder, entry.path) : null;
-      if (stamp !== null) {
-        byName.set(name, [...(byName.get(name) ?? []), stamp]);
+      if (!isLayoutFile) {
+        continue;
+      }
+      try {
+        const stamp = await stampOf(folder, entry.path);
+        if (stamp !== null) {
+          byName.set(name, [...(byName.get(name) ?? []), stamp]);
+        }
+      } catch {
+        unreadable.add(name);
       }
     }
     return new Map(
-      [...byName].map(([name, lines]) => [name, lines.sort().join('\n')]),
+      [...byName]
+        .filter(([name]) => !unreadable.has(name))
+        .map(([name, lines]) => [name, lines.sort().join('\n')]),
     );
   };
 
@@ -205,20 +221,21 @@ export async function startLayoutRegistry(
       : BUILT_IN_DEFAULT;
 
   await folder.write('layout.d.ts', userLayoutTypes(deps.layoutTypes));
-  let listed = holdListing(await listLayouts());
+  // Read before the listing, so a save during it differs from them.
   const stamps = await readStamps();
+  let listed = holdListing(await listLayouts());
   // `Files.watch` makes a missing folder, so a default folder missing at start
   // stays unwatched until the next start.
   const watchedDefault =
     defaultFolder !== null && (await isFolder(defaultFolder))
       ? defaultFolder
       : null;
+  let defaultStamp =
+    watchedDefault === null ? null : await defaultStampOf(watchedDefault);
   let defaultEntry =
     watchedDefault === null
       ? BUILT_IN_DEFAULT
       : defaultEntryOf(await listDefaultFiles(watchedDefault));
-  let defaultStamp =
-    watchedDefault === null ? '' : await defaultStampOf(watchedDefault);
 
   const entry = (layout: ListedLayout): LayoutEntry => ({
     name: layout.name,

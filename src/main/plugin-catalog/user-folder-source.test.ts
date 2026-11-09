@@ -338,6 +338,30 @@ describe('createUserFolderSource', () => {
       await source.reload('settled-probe');
     }
 
+    // `plugins` whose watch reports nothing itself: `report` and
+    // `reportMissed` call the watch's `onChange` and `onMissed`.
+    function handWatched() {
+      const hand = {
+        report: (_path: string) => {},
+        reportMissed: () => {},
+      };
+      const files: Files = {
+        ...plugins,
+        watch: (_folder, onChange, options) => {
+          hand.report = onChange;
+          hand.reportMissed = options?.onMissed ?? (() => {});
+          return { dispose() {} };
+        },
+      };
+      return { files, hand };
+    }
+
+    function loadedIds(loads: SourceLoad[]): string[] {
+      return loads.map((load) =>
+        load.kind === 'loaded' ? load.entry.manifest.id : load.kind,
+      );
+    }
+
     // `apartMs` between saves; each id's settle timer runs from its own last
     // save.
     it.each<{ written: string[]; apartMs?: number; loadedIds: string[] }>([
@@ -463,38 +487,120 @@ describe('createUserFolderSource', () => {
         arrange: () => plugins.remove('notes'),
         loads: ['gone'],
       },
+      {
+        change: 'a save in notes/layouts',
+        arrange: () =>
+          plugins.write('notes/layouts/default/layout.js', '// saved'),
+        loads: [],
+      },
+      {
+        change: 'an editor swap file and a package in notes',
+        arrange: async () => {
+          await plugins.write('notes/main.js.swp', 'swap');
+          await plugins.write('notes/node_modules/pkg/index.js', '// pkg');
+        },
+        loads: [],
+      },
     ])(
       'loads after a missed change only what changed since its load: $change',
       async ({ arrange, loads: expected }) => {
         plugins = createMemoryFiles({ now: () => Date.now() });
         await writePlugin('notes');
         await writePlugin('tasks');
-        let reportMissed: () => void = () => {};
-        const unreported: Files = {
-          ...plugins,
-          watch: (_folder, _onChange, options) => {
-            reportMissed = options?.onMissed ?? (() => {});
-            return { dispose() {} };
-          },
-        };
-        const source = createSource(unreported);
+        const { files, hand } = handWatched();
+        const source = createSource(files);
         await source.loadAll();
         const loads: SourceLoad[] = [];
         source.watch((load) => loads.push(load));
         await vi.advanceTimersByTimeAsync(1);
         await arrange();
 
-        reportMissed();
+        hand.reportMissed();
         await vi.advanceTimersByTimeAsync(PLUGIN_SETTLE_MS);
         await loadsDone(source);
 
-        expect(
-          loads.map((load) =>
-            load.kind === 'loaded' ? load.entry.manifest.id : load.kind,
-          ),
-        ).toEqual(expected);
+        expect(loadedIds(loads)).toEqual(expected);
       },
     );
+
+    // Breaks if a missed change before `loadAll` loads a folder, which
+    // `loadAll` then loads again.
+    it('loads nothing on a missed change before loadAll', async () => {
+      plugins = createMemoryFiles({ now: () => Date.now() });
+      await writePlugin('notes');
+      const { files, hand } = handWatched();
+      const source = createSource(files);
+      const loads: SourceLoad[] = [];
+      source.watch((load) => loads.push(load));
+
+      hand.reportMissed();
+      await vi.advanceTimersByTimeAsync(PLUGIN_SETTLE_MS);
+      await loadsDone(source);
+
+      expect(loadedIds(loads)).toEqual([]);
+    });
+
+    // Breaks if a load reads its files' times after it copies, so a save
+    // while it imports matches them and a missed change loads nothing.
+    it('loads again after a missed save made while a load imports', async () => {
+      plugins = createMemoryFiles({ now: () => Date.now() });
+      await writePlugin('notes');
+      const { files, hand } = handWatched();
+      const source = createSource(files);
+      let finishImport: (module: Record<string, unknown>) => void = () => {};
+      modules.set(
+        'notes',
+        new Promise((resolve) => {
+          finishImport = resolve;
+        }),
+      );
+      const loads: SourceLoad[] = [];
+      source.watch((load) => loads.push(load));
+
+      const loading = source.reload('notes');
+      await vi.waitUntil(() => imported.length > 0);
+      await plugins.write('notes/main.js', '// saved');
+      finishImport(GOOD_MODULE);
+      await loading;
+      hand.reportMissed();
+      await vi.advanceTimersByTimeAsync(PLUGIN_SETTLE_MS);
+      await loadsDone(source);
+
+      expect(loadedIds(loads)).toEqual(['notes']);
+    });
+
+    // Breaks if a rescan that found a save before that save's own load ran
+    // loads it a second time after.
+    it('loads a save once when a rescan queued ahead of its load finds it', async () => {
+      plugins = createMemoryFiles({ now: () => Date.now() });
+      await writePlugin('notes');
+      await writePlugin('tasks');
+      const { files, hand } = handWatched();
+      const source = createSource(files);
+      await source.loadAll();
+      const loads: SourceLoad[] = [];
+      source.watch((load) => loads.push(load));
+      let finishImport: (module: Record<string, unknown>) => void = () => {};
+      modules.set(
+        'tasks',
+        new Promise((resolve) => {
+          finishImport = resolve;
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(1);
+
+      const slowLoad = source.reload('tasks');
+      await plugins.write('notes/main.js', '// saved');
+      hand.reportMissed();
+      hand.report('notes/main.js');
+      await vi.advanceTimersByTimeAsync(PLUGIN_SETTLE_MS);
+      finishImport(GOOD_MODULE);
+      await slowLoad;
+      await vi.advanceTimersByTimeAsync(PLUGIN_SETTLE_MS);
+      await loadsDone(source);
+
+      expect(loadedIds(loads)).toEqual(['notes']);
+    });
 
     it('reports a deleted folder as gone, once', async () => {
       await writePlugin('notes');

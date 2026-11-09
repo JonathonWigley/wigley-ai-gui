@@ -102,6 +102,20 @@ function withUnreportedWatch(inner: Files, missed: (() => void)[]): Files {
   };
 }
 
+// `inner` whose watch reports changes as `inner`'s does and adds its options'
+// `onMissed` to `missed`.
+function withMissedWatch(inner: Files, missed: (() => void)[]): Files {
+  return {
+    ...inner,
+    watch: (folder, onChange, options) => {
+      if (options?.onMissed !== undefined) {
+        missed.push(options.onMissed);
+      }
+      return inner.watch(folder, onChange, options);
+    },
+  };
+}
+
 // `files` whose watch reports each change as the top entry's name only, as
 // Node's `fs.watch` reports a folder renamed or moved inside the watched one.
 function withFolderNameWatch(inner: Files): Files {
@@ -460,6 +474,47 @@ describe('watch', () => {
       expect(sent.map((set) => set.changed)).toEqual(changed);
     },
   );
+
+  // Breaks if a reported save leaves its layout's stamps stale, so the next
+  // missed change lists it again.
+  it('watch_ReportedSaveThenMissed_SendsOnce', async () => {
+    let now = 1;
+    files = createMemoryFiles({ now: () => now });
+    await writeLayouts('alpha', 'beta');
+    const missed: (() => void)[] = [];
+    await start(withMissedWatch(files, missed));
+    now = 2;
+
+    await files.write('beta/layout.js', '// saved');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    for (const reportMissed of missed) {
+      reportMissed();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sent.map((set) => set.changed)).toEqual(['beta']);
+  });
+
+  // Breaks if a file whose modified time cannot be read fails the start or a
+  // save's listing.
+  it('watch_UnreadableFileTime_StillListsSaves', async () => {
+    await writeLayouts('alpha', 'beta');
+    const unreadable: Files = {
+      ...files,
+      modified: async (path) => {
+        if (path === 'beta/layout.js') {
+          throw Object.assign(new Error('denied'), { code: 'EACCES' });
+        }
+        return files.modified(path);
+      },
+    };
+    await start(unreadable);
+
+    await files.write('alpha/layout.js', '// saved');
+
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].changed).toBe('alpha');
+  });
 
   it('watch_DefaultLayoutCssRemoved_SendsDefaultWithoutCss', async () => {
     await writeDefaultFiles('layout.js', 'layout.css');
