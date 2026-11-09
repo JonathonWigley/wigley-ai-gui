@@ -261,6 +261,10 @@ export const defaultKeymap = {
         'backlog.editor',
         'notes.popup',
         'notes.title',
+        'practice.list',
+        'practice.problem',
+        'practice.editor',
+        'practice.console',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -272,6 +276,7 @@ export const defaultKeymap = {
     { keys: '<Leader>vw', scope: 'any', command: 'docs.toggleWikiView' },
     { keys: '<Leader>k,', scope: 'any', command: 'settings.showMode' },
     { keys: '<Leader>kb', scope: 'any', command: 'backlog.showMode' },
+    { keys: '<Leader>kp', scope: 'any', command: 'practice.showMode' },
     { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },
     {
       keys: '<Leader>va',
@@ -821,6 +826,21 @@ export const defaultKeymap = {
     { keys: 'y', scope: 'backlog.confirm', command: 'backlog.confirmYes' },
     { keys: 'n', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
     { keys: '<Esc>', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
+
+    // ── Practice ───────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'practice.list', command: 'practice.listDown' },
+    { keys: 'k', scope: 'practice.list', command: 'practice.listUp' },
+    { keys: 'gg', scope: 'practice.list', command: 'practice.listTop' },
+    { keys: 'G', scope: 'practice.list', command: 'practice.listBottom' },
+    { keys: '<CR>', scope: 'practice.list', command: 'practice.openProblem' },
+    {
+      keys: 'l',
+      scope: 'practice.list',
+      command: 'practice.openKeepingFocus',
+    },
+    { keys: '/', scope: 'practice.list', command: 'practice.filter' },
+    { keys: '<CR>', scope: 'practice.box', command: 'practice.boxAccept' },
+    { keys: '<Esc>', scope: 'practice.box', command: 'practice.boxCancel' },
 
     // ── Notes ──────────────────────────────────────────────────────────────
     { keys: '<Leader>nn', scope: 'any', command: 'notes.open' },

@@ -1,6 +1,6 @@
 # 06 — Practice: tools, import and interviewer sessions
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 05
 Plan: [plan.md](plan.md)
@@ -279,3 +279,5 @@ Done when: `npm run typecheck` passes, `npm run lint` passes, and the test gate 
 Commit:    one commit for the group
 
 ## Proof
+
+Commit afe8e279 · proof: diff read: INTERVIEWER/IMPORT_INSTRUCTIONS, both tool definitions, PracticeToolsDeps, startPracticeTools, HOST_ID_WAIT_MS, PracticeSessionsDeps/PracticeSessions/createPracticeSessions present, start.ts wires events, tools and channel; typecheck clean; worker ran practice tests 175 green and lint clean · concerns: PracticeToolsDeps.log unused; AGENTS.md ~322 lists only launch/resume/defaultProfile as chat exports practice uses (also profileOf, send, close); tests use a hand-fired Timers double, not fake timers; tests store row-0 where doc says row-1

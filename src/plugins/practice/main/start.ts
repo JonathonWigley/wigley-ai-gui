@@ -13,6 +13,7 @@ import type {
   PracticeChannel,
   ProblemSummary,
 } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { practiceManifest } from '../manifest';
 import { createJudge } from './judge';
 import { createPracticeRuns } from './practice-runs';
@@ -37,11 +38,12 @@ type PracticeApi = MainApi<
 // slug of each change; a change of the `folder` setting moves the watch. Runs
 // the import and interviewer sessions through chat, hearing chat's session
 // events, and gives every session the `add_practice_problem` and
-// `read_practice_state` tools.
+// `read_practice_state` tools. Registers the Practice layout contract.
 export const practiceMainPart: MainPart<typeof practiceManifest> = {
   manifest: practiceManifest,
   start(api: PracticeApi) {
     const { services, channel } = api;
+    api.layouts.register({ layoutTypes });
     const folder = () =>
       services.paths.expandTilde(api.settings().folder, services.homeDir);
     const store = createProblemStore({

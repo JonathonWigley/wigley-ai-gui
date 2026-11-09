@@ -1,9 +1,11 @@
 // The practice plugin's channel between its main and page parts: the problem
 // list, one problem opened with its attempt and submissions, the user's saves,
 // Run and Submit through the judge, the Solution tab's peek, and the import and
-// interviewer sessions.
+// interviewer sessions. Also the page's place and its row-click command.
 
+import type { CommandKey } from '../../contracts/commands';
 import type { ChannelShape } from '../../contracts/plugin';
+import type { SlotKey } from '../../contracts/state';
 import type {
   DesignSignature,
   Difficulty,
@@ -126,3 +128,24 @@ export interface PracticeChannel extends ChannelShape {
     changed: { slug: string | null };
   };
 }
+
+// Where the Practice page was: the selected and open problems' slugs and the
+// list's filter text. A reloaded page puts it back once the list loads.
+export interface PracticePlace {
+  selectedSlug: string | null;
+  openSlug: string | null;
+  filter: string;
+}
+
+export const practicePlaceSlot: SlotKey<PracticePlace, 'page', 'practice'> = {
+  id: 'practice.place',
+  process: 'page',
+  kind: 'value',
+};
+
+// Selects and opens the problem whose slug is `arg` and focuses main, as a
+// click on its list row does.
+export const practiceOpenProblemRowCommand: CommandKey<
+  string,
+  'practice.openProblemRow'
+> = { id: 'practice.openProblemRow' };

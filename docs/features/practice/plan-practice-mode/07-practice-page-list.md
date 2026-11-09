@@ -1,6 +1,6 @@
 # 07 — Practice page: mode, list and layout
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 06
 Plan: [plan.md](plan.md)

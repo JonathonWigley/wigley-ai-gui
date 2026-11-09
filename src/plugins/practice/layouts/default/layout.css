@@ -1,0 +1,66 @@
+/* The default layout's list pane, its counts line and its rows' marks. */
+
+/* The list pane's tracks: its header of counts and keys, the filter, then the
+   rows. */
+.practice-pane[data-layout-owner='practice'] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The counts line, then the keys that act on the list. */
+[data-layout-owner='practice'] .practice-list-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1) var(--wg-space-3);
+  padding: var(--wg-space-2) var(--wg-space-3) 0;
+}
+
+[data-layout-owner='practice'] .practice-list-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+  margin-left: auto;
+}
+
+.practice-counts[data-layout-owner='practice'] {
+  color: var(--wg-fg-secondary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-3);
+}
+
+[data-layout-owner='practice'] .practice-count--easy {
+  color: var(--wg-status-success);
+}
+
+[data-layout-owner='practice'] .practice-count--medium {
+  color: var(--wg-status-warning);
+}
+
+[data-layout-owner='practice'] .practice-count--hard {
+  color: var(--wg-status-error);
+}
+
+[data-layout-owner='practice'] .practice-status--solved {
+  color: var(--wg-status-success);
+}
+
+[data-layout-owner='practice'] .practice-status--attempted {
+  color: var(--wg-status-warning);
+}
+
+[data-layout-owner='practice'] .practice-status--new {
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='practice'] .practice-row-marks {
+  display: inline-flex;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='practice'].is-open .ui-row-label {
+  font-weight: var(--wg-weight-semibold);
+}

@@ -13,6 +13,7 @@ import { formsPagePart } from './forms/page/start';
 import { galleryPagePart } from './gallery/page/start';
 import { keysPagePart } from './keys/page/start';
 import { notesPagePart } from './notes/page/start';
+import { practicePagePart } from './practice/page/start';
 import { primerPagePart } from './primer/page/start';
 import { sessionStashPagePart } from './session-stash/page/start';
 import { sessionsPagePart } from './sessions/page/start';
@@ -52,6 +53,7 @@ export const pageParts: readonly PagePart[] = [
   galleryPagePart,
   settingsPagePart,
   backlogPagePart,
+  practicePagePart,
   notesPagePart,
   usagePagePart,
   usageTabLinePagePart,

@@ -76,7 +76,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   view and its boxes in every vim mode: Sessions with nothing shown, the Sessions list, the Chat tab, its
   session hub and its agent strip, the docs tree, doc and the doc's right column, the Backlog homes,
   list, detail and editor, the Settings sections, rows and Leader menu panes, the gallery, a form and its review, the
-  primer's columns, card and review, and the note popup. It is bound per main view, so a dialog,
+  primer's columns, card and review, the note popup, and the Practice list, problem pane, editor and console. It is bound per main view, so a dialog,
   picker or confirm keeps its own keys; a new main view adds its scope to that list in
   `src/plugins/keymap.ts`. While a box's completion popup is open, Ctrl+n and Ctrl+p move the
   popup's selection instead, and Tab accepts it, ahead of every bind; Shift+Tab still moves to the previous box.
@@ -93,7 +93,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   bar part through its contribution (AGENTS.md § Architecture), never a bind of its own. Each move takes the
   keyboard with it: the box or list of the pane left behind keeps no focus.
 - **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping
-  focus in the list (the docs tree, the Sessions list, the Backlog homes, the Settings sections). The Sessions
+  focus in the list (the docs tree, the Sessions list, the Backlog homes, the Settings sections, the Practice list). The Sessions
   list's cursor row also takes `s` favorite its project, `J`/`K` move its project among the favorites, `r` rename
   and `d` close, as the docs tree's `s`, `r` and `d` do; `Esc` returns to the focused pane.
 - **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
@@ -143,7 +143,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `;`                | none: close                          | close session, the same as `bd`, kept one key from the leader                                                                                                                                                                                                                                                    |
 | `'`                | none: stash                          | stash session, the same as `bs`, kept one key from the leader                                                                                                                                                                                                                                                    |
 | `b`                | session                              | `bn` new session, `br` rename, `bd` close, `bs` stash (a note dialog, then the close; the start prompt lists it under Stashed), `bX` stop every session's process (`chat.stopAll`; the rows stay, resting), `bp` hide or show the session's popup, `bh` hide or show the session hub                             |
-| `k`                | go to                                | `ks` Sessions, `kd` Docs, `kb` Backlog, `k,` Settings                                                                                                                                                                                                                                                            |
+| `k`                | go to                                | `ks` Sessions, `kd` Docs, `kb` Backlog, `kp` Practice, `k,` Settings                                                                                                                                                                                                                                             |
 | `n`                | notes                                | `nn` open or close the note popup; in the popup `nf` new follow-up, `na` append to a follow-up, `ns` new session, `nc` capture the window, `nd` discard                                                                                                                                                          |
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                                                                                                                                                                                                                             |
 | `v`                | view                                 | `vt` hide or show the docs tree, `vw` switch the docs sidebar between the wiki and All pages, `vd` show or hide done follow-ups, `va` show only agent-ready follow-ups (Backlog), `vu` hide or show usage details                                                                                                |
