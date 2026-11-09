@@ -61,8 +61,6 @@ export const ARG_KINDS = membersOf({
   string: true,
 } satisfies Record<Extract<CommandArgShape, string>, true>);
 
-export { BIND_WHERES, EDITOR_MODES };
-
 const MANIFEST_FIELDS = membersOf({
   id: true,
   label: true,

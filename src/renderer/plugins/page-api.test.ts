@@ -653,6 +653,20 @@ const RECORDED_ROWS: RecordedRow[] = [
       api.drops.addTarget({ element: {} as HTMLElement, take: () => {} }),
   },
   {
+    member: 'restores.track',
+    dep: (handle) => ({
+      restores: { track: () => handle, onSettled: () => handle },
+    }),
+    register: (api) => api.restores.track(new Promise(() => {})),
+  },
+  {
+    member: 'restores.onSettled',
+    dep: (handle) => ({
+      restores: { track: () => handle, onSettled: () => handle },
+    }),
+    register: (api) => api.restores.onSettled(() => {}),
+  },
+  {
     member: 'layouts.show',
     dep: (handle) => ({
       layouts: {

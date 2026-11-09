@@ -363,6 +363,22 @@ describe('disposing a mode', () => {
     expect(b.element.hidden).toBe(false);
   });
 
+  // Breaks if the fallback follows the latest add: a mode added again after
+  // its plugin restarted keeps its first add's place in the activity bar.
+  it('dispose_ShownMode_FallsBackInFirstAddOrder', () => {
+    const { modes, add } = setup();
+    const a = add('a', 'A');
+    add('b', 'B');
+    const c = add('c', 'C');
+    a.handle.dispose();
+    add('a', 'A');
+    c.handle.show();
+
+    c.handle.dispose();
+
+    expect(modes.shown()).toBe('a');
+  });
+
   it('disposing a hidden mode unplaces it and keeps the shown mode', () => {
     const { modes, calls, add } = setup();
     add('a', 'A');

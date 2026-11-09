@@ -105,11 +105,15 @@ interface AddedMode {
 
 // The core's mode registry: each mode is placed once, and showing a mode only
 // toggles `hidden`, so a hidden mode keeps its DOM and state. Each mode keeps
-// its own side bar choice and title bar context, applied while it shows. With
-// no mode left, the title bar context and the side bar clear.
+// its own side bar choice and title bar context, applied while it shows. A
+// disposed shown mode gives way to the remaining mode whose id was first added
+// earliest, the activity bar's order. With no mode left, the title bar context
+// and the side bar clear.
 export function createModes(deps: ModesDeps): CoreModes {
   const { log } = deps;
   const added = new Map<string, AddedMode>();
+  // Each mode id ever added, by the order of its first add.
+  const firstAddOrders = new Map<string, number>();
   const listeners = createListeners<string>();
   let shownMode: AddedMode | null = null;
   // The id of the shown mode a `dispose` took away, shown again at its next
@@ -174,7 +178,16 @@ export function createModes(deps: ModesDeps): CoreModes {
   };
 
   const showFirstRemaining = () => {
-    const first = added.values().next().value;
+    let first: AddedMode | undefined;
+    for (const [id, entry] of added) {
+      const isEarlier =
+        first === undefined ||
+        (firstAddOrders.get(id) ?? 0) <
+          (firstAddOrders.get(first.mode.id) ?? 0);
+      if (isEarlier) {
+        first = entry;
+      }
+    }
     if (first === undefined) {
       deps.layOutSideBar('hidden');
       deps.showContext(null);
@@ -192,6 +205,9 @@ export function createModes(deps: ModesDeps): CoreModes {
       }
       const entry: AddedMode = { mode, sideBar: SIDE_BAR_START, context: null };
       added.set(mode.id, entry);
+      if (!firstAddOrders.has(mode.id)) {
+        firstAddOrders.set(mode.id, firstAddOrders.size);
+      }
       const isDisposed = () => added.get(mode.id) !== entry;
       const handle: ModeHandle = {
         show() {

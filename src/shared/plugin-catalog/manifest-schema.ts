@@ -1,8 +1,7 @@
 import { PLUGIN_ID_PATTERN } from '../define-plugin';
+import { BIND_WHERES, EDITOR_MODES } from '../plugin-manifests';
 import {
   ARG_KINDS,
-  BIND_WHERES,
-  EDITOR_MODES,
   PROCESS_NAMES,
   SETTING_KINDS,
   SHORT_ID_PATTERN,

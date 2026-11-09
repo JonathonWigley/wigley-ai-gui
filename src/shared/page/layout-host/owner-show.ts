@@ -48,7 +48,8 @@ type PartBuilder = (
 // that set. Each draw builds a fresh kit for each drawing attempt, so
 // `drawPart`'s rollback and fallback cover what the kit records. The show
 // keeps each draw until its `dispose`; the show's `dispose` disposes the kept
-// draws, then the inner show.
+// draws, then the inner show. A `draw` after the show's `dispose` throws
+// `Layout show of "<id>" is disposed`, drawing nothing.
 export function ownerLayoutShow<L>(deps: OwnerShowDeps<L>): PageLayoutShow<L> {
   // `createLayoutParts` and `drawPart` take `L extends object`, and a show's
   // `L` stays unconstrained, as `PageApi.layouts.show<L>` has it; every layout
@@ -61,6 +62,7 @@ export function ownerLayoutShow<L>(deps: OwnerShowDeps<L>): PageLayoutShow<L> {
     log: deps.log,
   });
   const kept = new Set<DrawnLayoutPart<unknown>>();
+  let isShowDisposed = false;
   const inner = deps.show({
     ...options,
     setLayouts(shown) {
@@ -71,6 +73,9 @@ export function ownerLayoutShow<L>(deps: OwnerShowDeps<L>): PageLayoutShow<L> {
   return {
     refresh: () => inner.refresh(),
     draw(part, parent, input, drawOptions = {}) {
+      if (isShowDisposed) {
+        throw new Error(`Layout show of "${manifest.id}" is disposed`);
+      }
       const scope = drawOptions.scope ?? null;
       if (scope !== null) {
         requireDeclaredScope(manifest, scope);
@@ -104,6 +109,7 @@ export function ownerLayoutShow<L>(deps: OwnerShowDeps<L>): PageLayoutShow<L> {
       return draw;
     },
     dispose() {
+      isShowDisposed = true;
       const draws = [...kept];
       kept.clear();
       try {

@@ -143,31 +143,20 @@ async function start() {
       builtIns: pageParts,
       importModule: (url) => import(/* @vite-ignore */ url),
     });
-  const loads = await Promise.allSettled(served.plugins.map(loadPart));
-  const loadedParts: PagePart[] = [];
-  loads.forEach((load, index) => {
-    if (load.status === 'rejected') {
-      log(
-        'plugin-switch',
-        `page.js of ${served.plugins[index].id} not loaded: ${errorText(load.reason)}`,
-      );
-    } else if (load.value !== null) {
-      loadedParts.push(load.value);
-    }
-  });
-  // A user part, and each part depending on one in the page, starts after
-  // load, one at a time, so a throw in one fails only that part. The host
-  // gets them through `add` after it starts the rest: as `disabled` ids, a
-  // built-in naming one in `dependsOn.main` would fail the disabled check.
+  // The host starts with the built-in parts. A user part, and each part
+  // depending on one in the page, is loaded, added and started after load,
+  // one start request at a time (`answerPluginParts`), so a throw in one fails
+  // only that part and a plugin that is off has its `page.js` imported only
+  // at its switch-on. Held as `disabled` ids instead, a built-in naming one in
+  // `dependsOn.main` would fail the host's disabled check.
   const deferred = deferredPageIds(served.plugins);
-  const startsAtLoad = loadedParts
-    .map((part) => part.manifest.id)
-    .filter((id) => !deferred.includes(id));
+  const startsAtLoad = pagePartIds(served.plugins, pageParts).filter(
+    (id) => !deferred.includes(id),
+  );
   const registry = new CommandRegistry<PageCommandContext<any>>(log);
   const hasHandler = (id: string) => registry.has(id);
-  // Without the binds of the page parts the host does not start with the
-  // rest, so `requireRegistered` below meets no bind of a deferred part or of
-  // a page.js that failed to load.
+  // Without the binds of the page parts the host does not start with, so
+  // `requireRegistered` below meets no bind of a deferred part.
   const config = startedPluginsConfig(
     served,
     pagePartIds(served.plugins, pageParts).filter(
@@ -422,40 +411,46 @@ async function start() {
     },
   });
   const pageHost = startPlugins(
-    loadedParts.filter((part) => startsAtLoad.includes(part.manifest.id)),
+    startsAtLoad.map(
+      (id) => pageParts.find((part) => part.manifest.id === id) as PagePart,
+    ),
     'page',
     (part, context) => {
       const { id } = part.manifest;
       requireServedSettings(lastPush, id);
       const origin =
         lastPush.plugins.find((plugin) => plugin.id === id)?.origin ?? 'user';
-      const started = startCheckedPart(part, origin, (checked) =>
-        checked.start(
-          createPageApi(checked.manifest, {
-            areas,
-            modes,
-            setLayout: (layout) => shell.setLayout(layout),
-            transparency,
-            bridge,
-            scopeStack,
-            pendingKeys,
-            config: live,
-            services,
-            uiState,
-            commands,
-            dependency: context.dependency,
-            registrations: context.registrations,
-            bus,
-            layouts,
-            paneTargets,
-            drops,
-            restores,
-            state,
-            anchors,
-            boxFocus,
-            pickerCommands,
-          }),
-        ),
+      const started = startCheckedPart(
+        part,
+        origin,
+        (checked) =>
+          checked.start(
+            createPageApi(checked.manifest, {
+              areas,
+              modes,
+              setLayout: (layout) => shell.setLayout(layout),
+              transparency,
+              bridge,
+              scopeStack,
+              pendingKeys,
+              config: live,
+              services,
+              uiState,
+              commands,
+              dependency: context.dependency,
+              registrations: context.registrations,
+              bus,
+              layouts,
+              paneTargets,
+              drops,
+              restores,
+              state,
+              anchors,
+              boxFocus,
+              pickerCommands,
+            }),
+          ),
+        log,
       );
       const handlers: Record<
         string,
@@ -476,20 +471,6 @@ async function start() {
     served.settings.plugins.disabled,
     log,
   );
-  // The ids the host holds, in its held order, for the answer below.
-  const held = new Set(startsAtLoad);
-  for (const id of deferred) {
-    const part = loadedParts.find((each) => each.manifest.id === id);
-    if (part === undefined) {
-      continue;
-    }
-    try {
-      pageHost.add(part);
-      held.add(id);
-    } catch (error) {
-      log('plugin-switch', `page start failed: ${errorText(error)}`);
-    }
-  }
   anchors.reveal();
   registry.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
@@ -502,7 +483,6 @@ async function start() {
     log,
     served: () => lastPush,
     loadPart,
-    held,
   };
   bridge.onPluginParts((request) =>
     answerPluginParts(pageHost, request, answerDeps),
@@ -575,9 +555,12 @@ async function start() {
   );
   // One request per id, in dependency order, so a throw in one part does not
   // stop the next; a failure is logged, and main's own `start` for the id
-  // carries it to the Settings row.
-  const toStart = notStarted().filter((id) => !loadDisabled.includes(id));
-  for (const id of toStart) {
+  // carries it to the Settings row. A plugin a push switched off while an
+  // earlier part started is skipped.
+  for (const id of notStarted()) {
+    if (lastPush.settings.plugins.disabled.includes(id)) {
+      continue;
+    }
     await answerPluginParts(pageHost, { kind: 'start', ids: [id] }, answerDeps);
   }
   // The self-test opens its round only once the page listens; each part adds

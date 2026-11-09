@@ -253,4 +253,18 @@ describe('ownerLayoutShow', () => {
       'inner disposed',
     ]);
   });
+
+  // Breaks if a draw after the show's dispose is kept with no dispose ever
+  // reaching it: its anchors outlive the show.
+  it('ownerLayoutShow_DrawAfterDispose_ThrowsAndDrawsNothing', () => {
+    const recording = recordingAnchors();
+    const { show } = setUp({ keys: recording.keys });
+    const parent = new FakeElement('section');
+    show.dispose();
+
+    expect(() => show.draw('view', asHtml(parent), { text: 't' })).toThrow(
+      'Layout show of "u" is disposed',
+    );
+    expect([recording.anchors, parent.children]).toEqual([[], []]);
+  });
 });

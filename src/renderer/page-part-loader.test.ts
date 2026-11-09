@@ -4,6 +4,7 @@ import type { PluginOrigin, ServedPlugin } from '../contracts/plugin-catalog';
 import {
   deferredPageIds,
   loadPagePart,
+  loadPageParts,
   pagePartIds,
   startCheckedPart,
 } from './page-part-loader';
@@ -120,6 +121,92 @@ describe('loadPagePart', () => {
   });
 });
 
+describe('loadPageParts', () => {
+  // Breaks if a held part is loaded again, if a failed load or add stops the
+  // next plugin, or if either failure leaves no problem.
+  it.each([
+    {
+      row: 'an unheld plugin loads and is added',
+      plugins: ['u'],
+      held: [],
+      loads: { u: 'part' },
+      adds: ['u'],
+      loaded: ['u'],
+      problems: [],
+    },
+    {
+      row: 'a held plugin is not loaded',
+      plugins: ['u', 'v'],
+      held: ['u'],
+      loads: { v: 'part' },
+      adds: ['v'],
+      loaded: ['v'],
+      problems: [],
+    },
+    {
+      row: 'a plugin with no page part adds nothing',
+      plugins: ['m', 'v'],
+      held: [],
+      loads: { m: 'none', v: 'part' },
+      adds: ['v'],
+      loaded: ['m', 'v'],
+      problems: [],
+    },
+    {
+      row: 'a load that rejects names its plugin and the next still loads',
+      plugins: ['u', 'v'],
+      held: [],
+      loads: { u: 'rejects', v: 'part' },
+      adds: ['v'],
+      loaded: ['u', 'v'],
+      problems: [{ id: 'u', message: 'page.js of u failed to load: boom' }],
+    },
+    {
+      row: 'an add that throws names its plugin and the next still adds',
+      plugins: ['u', 'v'],
+      held: [],
+      loads: { u: 'add throws', v: 'part' },
+      adds: ['v'],
+      loaded: ['u', 'v'],
+      problems: [{ id: 'u', message: 'Page part did not start: cycle' }],
+    },
+  ] as const)(
+    'loadPageParts_AddsEachUnheldPart: $row',
+    async ({ plugins, held, loads, adds, loaded, problems }) => {
+      const loadedIds: string[] = [];
+      const added: string[] = [];
+      const outcome = (id: string) =>
+        (loads as Partial<Record<string, string>>)[id];
+
+      const reply = await loadPageParts(
+        plugins.map((id) =>
+          served(id, 'user', `wigley-plugin://${id}/~1/page.js`),
+        ),
+        {
+          host: {
+            holds: (id) => (held as readonly string[]).includes(id),
+            add(part) {
+              if (outcome(part.manifest.id) === 'add throws') {
+                throw new Error('cycle');
+              }
+              added.push(part.manifest.id);
+            },
+          },
+          async loadPart(plugin) {
+            loadedIds.push(plugin.id);
+            if (outcome(plugin.id) === 'rejects') {
+              throw new Error('boom');
+            }
+            return outcome(plugin.id) === 'none' ? null : builtIn(plugin.id);
+          },
+        },
+      );
+
+      expect([reply, added, loadedIds]).toEqual([problems, adds, loaded]);
+    },
+  );
+});
+
 describe('pagePartIds', () => {
   // Breaks if a main-only plugin's binds would be stripped, or if the order
   // is served order.
@@ -212,36 +299,56 @@ describe('deferredPageIds', () => {
 });
 
 describe('startCheckedPart', () => {
-  // Breaks if a missing user handler slips through, or if the check runs
-  // after the caller could register.
+  // Breaks if a missing user handler slips through, if the check runs after
+  // the caller could register, or if a refused part is left undisposed.
   it.each([
     {
       row: 'user part with every handler',
       origin: 'user',
       commands: { hello: () => undefined },
+      dispose: 'ok',
       error: null,
+      steps: [],
     },
     {
       row: 'user part missing hello',
       origin: 'user',
       commands: {},
+      dispose: 'ok',
       error: 'u: missing hello',
+      steps: ['disposed'],
     },
     {
       row: 'replaces-built-in part missing a handler',
       origin: 'replaces-built-in',
       commands: {},
+      dispose: 'ok',
       error: 'u: missing hello',
+      steps: ['disposed'],
+    },
+    {
+      row: 'a refused part whose dispose throws',
+      origin: 'user',
+      commands: {},
+      dispose: 'throws',
+      error: 'u: missing hello',
+      steps: [
+        'disposed',
+        'plugin-switch: disposing "u" after its failed handler check failed: gone',
+      ],
     },
     {
       row: 'built-in part missing a handler',
       origin: 'built-in',
       commands: {},
+      dispose: 'ok',
       error: null,
+      steps: [],
     },
   ] as const)(
     'startCheckedPart_ChecksHandlersOfNonBuiltIns: $row',
-    ({ origin, commands, error }) => {
+    ({ origin, commands, dispose, error, steps }) => {
+      const logged: string[] = [];
       const part: PagePart = {
         manifest: manifest(
           'u',
@@ -250,12 +357,23 @@ describe('startCheckedPart', () => {
             hello: { label: 'Hello', group: 'U', runsIn: 'page' },
           },
         ),
-        start: () => ({ commands }),
+        start: () => ({
+          commands,
+          dispose() {
+            logged.push('disposed');
+            if (dispose === 'throws') {
+              throw new Error('gone');
+            }
+          },
+        }),
       };
       const registered: string[] = [];
       const run = () => {
-        const started = startCheckedPart(part, origin, (each) =>
-          each.start({} as Parameters<PagePart['start']>[0]),
+        const started = startCheckedPart(
+          part,
+          origin,
+          (each) => each.start({} as Parameters<PagePart['start']>[0]),
+          (source, message) => logged.push(`${source}: ${message}`),
         );
         registered.push(...Object.keys(started.commands));
         return started;
@@ -267,6 +385,7 @@ describe('startCheckedPart', () => {
         expect(run).toThrow(error);
       }
       expect(registered).toEqual(error === null ? Object.keys(commands) : []);
+      expect(logged).toEqual(steps);
     },
   );
 });
