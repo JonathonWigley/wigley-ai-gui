@@ -7,7 +7,22 @@ import type {
 } from '../contracts/plugin';
 import type { TokenDecl } from '../contracts/theme';
 
-const PLUGIN_ID = /^[a-z0-9-]+$/;
+// A plugin id: lowercase letters, digits and `-`.
+export const PLUGIN_ID_PATTERN = '^[a-z0-9-]+$';
+const PLUGIN_ID = new RegExp(PLUGIN_ID_PATTERN);
+
+// Why `id` cannot be a plugin's id, or null when it can: it holds anything but
+// lowercase letters, digits and `-`, or it is `core`, whose slots and events
+// are the core's.
+export function pluginIdProblem(id: string): string | null {
+  if (!PLUGIN_ID.test(id)) {
+    return `Plugin id "${id}" must be lowercase letters, digits and -`;
+  }
+  if (id === 'core') {
+    return 'Plugin id "core" is reserved for the core';
+  }
+  return null;
+}
 
 // The names of `T`'s settings whose default may be null.
 type NullDefaultSettings<T> = {
@@ -32,8 +47,7 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // `settingInfo` missing a leaf setting's path or naming a path that is no
 // leaf; a dependency key for a plugin missing from that process's list fails to
 // compile, and so does a slot key read from a plugin in neither its `dependsOn`
-// nor its `reads` there. Throws when the id holds anything but lowercase letters,
-// digits and `-`, and for the id `core`, whose slots and events are the core's.
+// nor its `reads` there. Throws on an id `pluginIdProblem` refuses.
 // `label` and `description` name the plugin in Settings' Plugins section.
 export function definePlugin<
   const Id extends string,
@@ -64,13 +78,9 @@ export function definePlugin<
     themeTokens: Readonly<Record<string, TokenDecl>>;
   } & NullKindsDeclared<NoInfer<T>>,
 ): typeof manifest {
-  if (!PLUGIN_ID.test(manifest.id)) {
-    throw new Error(
-      `Plugin id "${manifest.id}" must be lowercase letters, digits and -`,
-    );
-  }
-  if (manifest.id === 'core') {
-    throw new Error('Plugin id "core" is reserved for the core');
+  const idProblem = pluginIdProblem(manifest.id);
+  if (idProblem !== null) {
+    throw new Error(idProblem);
   }
   return manifest;
 }

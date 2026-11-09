@@ -3,6 +3,7 @@ import type { Files } from '../../contracts/files';
 import type { LayoutOwner, LayoutSet } from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
+import { PLUGIN_ID_PATTERN } from '../../shared/define-plugin';
 import { errorText } from '../../shared/error-text';
 import {
   type LayoutRegistry,
@@ -52,7 +53,7 @@ export interface LayoutService {
 
 // Lowercase letters, digits and `-`, as a plugin id is: the `wigley-layout:`
 // URL host carries the owner, and Chromium lowercases a URL's host.
-const OWNER = /^[a-z0-9-]+$/;
+const OWNER = new RegExp(PLUGIN_ID_PATTERN);
 const DEFAULT_NAME = 'default';
 // The log source of the service's own lines.
 const LOG_SOURCE = 'layouts';
