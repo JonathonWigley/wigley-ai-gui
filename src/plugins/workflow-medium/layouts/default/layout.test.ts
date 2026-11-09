@@ -45,6 +45,7 @@ const stripInput: StripInput = {
   ],
   actions: [],
   hasChecklist: true,
+  headless: false,
 };
 
 const paneInput = (fields: Partial<SidePaneInput>): SidePaneInput => ({
@@ -117,6 +118,25 @@ describe('Medium default layout', () => {
     ).toEqual(['Interview', 'Build 1/3']);
     expect(findAll(strip, 'workflow-countdown')).toEqual([]);
     expect(findAll(strip, 'ui-button')).toEqual([]);
+  });
+
+  it.each([
+    { headless: true, state: 'on' },
+    { headless: false, state: 'off' },
+  ])('strip_DrawsTheHeadlessChipLast $state', ({ headless, state }) => {
+    const { kit } = testWorkflowKit(KIT_MANIFEST);
+
+    const strip = asFake(
+      layout.strip(
+        asHtml(new FakeElement('div')),
+        { ...stripInput, headless },
+        kit,
+      ).element,
+    );
+
+    const last = strip.children.at(-1);
+    expect(last?.classList.contains('workflow-headless')).toBe(true);
+    expect(last?.dataset.state).toBe(state);
   });
 
   it('sidePane_DrawsTheGroups', () => {

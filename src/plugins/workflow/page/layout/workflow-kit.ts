@@ -5,7 +5,7 @@ import {
   ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
-import { appended, element } from '../../../../shared/page/dom';
+import { appended, button, element } from '../../../../shared/page/dom';
 import { qualify } from '../../../../shared/plugin-manifests';
 import { tag, type TagTone } from '../../../../shared/page/ui/tag';
 import type { PluginManifest } from '../../../../contracts/plugin';
@@ -19,6 +19,10 @@ export const MAIN_ACTION = 'mainAction';
 // The action the fold sends `workflow.stageAction`, which only changes what the
 // side pane shows.
 export const TOGGLE_FINISHED_WAVES = 'toggleFinishedWaves';
+// The action the Headless chip sends `workflow.stageAction`, which turns the
+// session's headless flag on or off.
+export const TOGGLE_HEADLESS = 'toggleHeadless';
+const HEADLESS_LABEL = 'Headless';
 // The class of the list whose scroll the view keeps across a draw.
 export const SIDE_LIST_CLASS = 'workflow-side-list';
 
@@ -65,10 +69,11 @@ export function stageTagElement(
 // The kit one part draw builds with: the base kit with no key scope, naming the
 // commands of the drawing plugin of `manifest` by their short names, plus the action
 // button, the stepper, the countdown, the badge, the stage tag, the status mark,
-// the finished groups' fold and the side pane's list. `sessionId` is the session
-// each button runs `workflow.stageAction` for; the main action's button sends
-// `mainAction`, as `<Leader>ww` does. The main action's and the fold's key hints
-// name the engine's commands, every other action's its plugin's. Each anchor it
+// the finished groups' fold, the Headless chip and the side pane's list.
+// `sessionId` is the session each button runs `workflow.stageAction` for; the
+// main action's button sends `mainAction`, as `<Leader>ww` does. The main
+// action's, the fold's and the Headless chip's key hints name the engine's
+// commands, every other action's its plugin's. Each anchor it
 // names is recorded in `rollback`. Each status mark, stage tag and running step
 // carries `clock`'s time, which places its pulse.
 export function createWorkflowKit(
@@ -160,6 +165,25 @@ export function createWorkflowKit(
       fold.setAttribute('aria-expanded', String(open));
       base.keyHint(fold, qualify(workflowManifest.id, TOGGLE_FINISHED_WAVES));
       return fold;
+    },
+    headlessChip(parent, headless) {
+      const run = base.command(workflowStageActionCommand.id, {
+        sessionId,
+        action: TOGGLE_HEADLESS,
+      });
+      const chip = appended(
+        parent,
+        button(
+          `ui-tag ui-tag--${headless ? 'accent' : 'neutral'} workflow-headless`,
+          HEADLESS_LABEL,
+          run,
+        ),
+      );
+      chip.addEventListener('click', (event) => event.stopPropagation());
+      chip.dataset.state = headless ? 'on' : 'off';
+      chip.setAttribute('aria-pressed', String(headless));
+      base.keyHint(chip, qualify(workflowManifest.id, TOGGLE_HEADLESS));
+      return chip;
     },
     sideList: (parent) => appended(parent, element('div', SIDE_LIST_CLASS)),
   };

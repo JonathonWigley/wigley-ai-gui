@@ -27,6 +27,7 @@ function info(
     repo: 'wigley-agents',
     branch: 'main',
     worktrees: [],
+    headless: false,
   };
 }
 

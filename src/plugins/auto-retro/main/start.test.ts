@@ -74,6 +74,7 @@ function sessionInfo(
     repo: 'wigley-agents',
     branch: 'main',
     worktrees: [],
+    headless: false,
   };
 }
 

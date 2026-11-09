@@ -139,11 +139,19 @@ export interface ChatSessions {
   hostSessionIdOf(sessionId: string): string | null;
   // The held session's active-time clock; null for a row chat does not hold.
   activeTimeOf(sessionId: string): ActiveTime | null;
+  // Whether the held session is headless; false for a row chat does not hold.
+  isHeadless(sessionId: string): boolean;
+  // Sets the held session's headless flag, publishes it in `chat.session` and
+  // saves; the value it already holds changes nothing. Logs and does nothing
+  // for a row chat does not hold.
+  setHeadless(sessionId: string, headless: boolean): void;
+  // Opens a row selected; a request with `headless` true opens it headless.
   start(request: StartRequest): string;
   // Starts a session with its row unselected and sends `message` as its first
   // message; returns the row's sessionId. A request with `unattended` true
-  // makes the row deny each permission prompt at once. Throws before opening
-  // anything on an image chat would refuse to attach.
+  // makes the row deny each permission prompt at once, and one with `headless`
+  // true opens it headless. Throws before opening anything on an image chat
+  // would refuse to attach.
   launch(request: LaunchRequest): string;
   // Opens a row for each saved session in order, unselected, under its saved
   // row id, with its saved titles, queued messages and returned messages, then
@@ -441,6 +449,9 @@ interface HeldSession {
   // Nobody answers this row: each permission prompt is denied at once, and a
   // finished turn raises no alert. Saved with the row, kept across a clear.
   unattended: boolean;
+  // The row is headless; mirrored in `chat.session`. Saved with the row, kept
+  // across a clear.
+  headless: boolean;
 }
 
 // What one guard step on an unheld process leaves its caller to do: whether a
@@ -605,6 +616,7 @@ function savedSessionOf(
     activeMs: activeMsAt(activeTime, now),
     rowId: session.sessionId,
     unattended: session.unattended,
+    headless: session.headless,
   };
 }
 
@@ -1428,6 +1440,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       activeMs: number;
       origin: SessionOrigin;
       unattended: boolean;
+      headless: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1482,6 +1495,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         repo: path.basename(projectDir),
         branch: null,
         worktrees: [],
+        headless: opening.headless,
       }),
       owned,
       hostId,
@@ -1520,6 +1534,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       unheldProcessId: null,
       unheldSettling: null,
       unattended: opening.unattended,
+      headless: opening.headless,
     };
     held.set(sessionId, session);
     takeOverSkipped(session);
@@ -2074,6 +2089,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       titles: SessionTitles;
       origin: SessionOrigin;
       unattended: boolean;
+      headless: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -2097,6 +2113,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         activeMs: 0,
         origin: opening.origin,
         unattended: opening.unattended,
+        headless: opening.headless,
       },
       options,
     );
@@ -2153,6 +2170,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         activeMs: 0,
         origin: 'resumed',
         unattended: false,
+        headless: false,
       },
       { select: true },
     );
@@ -2166,7 +2184,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     request: StartRequest,
     origin: SessionOrigin,
     options: OpenOptions,
-    unattended: boolean,
+    flags: { unattended: boolean; headless: boolean },
   ): HeldSession {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
@@ -2180,7 +2198,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         entries: [],
         titles: NO_TITLES,
         origin,
-        unattended,
+        unattended: flags.unattended,
+        headless: flags.headless,
       },
       options,
     );
@@ -2532,7 +2551,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       request,
       'launched',
       { select: false },
-      request.unattended === true,
+      {
+        unattended: request.unattended === true,
+        headless: request.headless === true,
+      },
     );
     deliverWritten(session, request.message);
     const { sessionId } = session;
@@ -2607,6 +2629,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           activeMs: record.activeMs,
           origin: 'restored',
           unattended: record.unattended,
+          headless: record.headless,
         },
         options,
       );
@@ -3005,6 +3028,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         titles,
         origin: 'resumed',
         unattended: false,
+        headless: false,
       },
       { select: true },
     );
@@ -3221,8 +3245,27 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     hostSessionIdOf: (sessionId) => held.get(sessionId)?.hostId ?? null,
     activeTimeOf: (sessionId) =>
       held.get(sessionId)?.slots.info().activeTime ?? null,
+    isHeadless: (sessionId) => held.get(sessionId)?.headless ?? false,
+    setHeadless(sessionId, headless) {
+      const session = held.get(sessionId);
+      if (session === undefined) {
+        log(`setHeadless for unknown session ${sessionId} ignored`);
+        return;
+      }
+      if (session.headless === headless) {
+        return;
+      }
+      session.headless = headless;
+      session.slots.setInfo({ headless });
+      save();
+    },
     start: (request) =>
-      startNew(request, 'new', { select: true }, false).sessionId,
+      startNew(
+        request,
+        'new',
+        { select: true },
+        { unattended: false, headless: request.headless === true },
+      ).sessionId,
     launch,
     restore,
     loadHistory,

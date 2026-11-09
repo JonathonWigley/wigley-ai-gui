@@ -40,6 +40,7 @@ import {
   SIDE_LIST_CLASS,
   stageTagElement,
   TOGGLE_FINISHED_WAVES,
+  TOGGLE_HEADLESS,
 } from './layout/workflow-kit';
 
 // `workflows` holds each workflow's page half, its stages in stage order. `flowOf`
@@ -48,7 +49,8 @@ import {
 // whether the session shows the preview, which runs nothing. `setRowActivity` sets
 // what the session's row says for its stage, null for nothing. `isWorking` is
 // whether the session's row holds a running activity, which the row's title line
-// leaves to the chip's `Working` tag.
+// leaves to the chip's `Working` tag. `isHeadless` is whether the session is
+// headless, and `setHeadless` turns that on or off.
 export interface WorkflowViewDeps {
   log: PluginLog;
   clock: Clock;
@@ -60,6 +62,8 @@ export interface WorkflowViewDeps {
   isPreview(sessionId: string): boolean;
   setRowActivity(sessionId: string, activity: RowActivity | null): void;
   isWorking(sessionId: string): boolean;
+  isHeadless(sessionId: string): boolean;
+  setHeadless(sessionId: string, headless: boolean): Promise<void>;
 }
 
 // `chipPart` draws a session's chip under its row, `stripPart` its strip above
@@ -69,8 +73,13 @@ export interface WorkflowViewDeps {
 // stage to draw draws nothing, but for the chip's `No workflow` tag after a
 // missed level; a workflow or stage with no page half does the same and logs its
 // name once. While the session `isWorking`, the chip ends on a running `Working`
-// tag unless its stage is running, which its stage tag already says.
-// `activityChanged` draws the session's chip again. Every held part draws again on `setFlow` for its session and on `redraw`,
+// tag unless its stage is running, which its stage tag already says. While the
+// session `isHeadless`, the chip ends on an accent `Headless` tag in every
+// stage, and the strip input says so.
+// `activityChanged` draws the session's chip again. `headlessChanged` draws the
+// session's parts again when its headless value differs from the last one it
+// saw (an unseen session counts as not headless); `undefined`, a closed
+// session, drops what it saw and draws nothing. Every held part draws again on `setFlow` for its session and on `redraw`,
 // and each second while it shows a countdown, the side pane aside. `setFlow`, and
 // `redraw` for each session with a chip, also set the session's row activity. Each
 // side pane draw sets the section's summary: `<checked>/<total>` while it draws a
@@ -84,14 +93,17 @@ export interface WorkflowViewDeps {
 // `nothing to run` and changing nothing while the input holds no finished group.
 // `mainAction` is the spec the main action runs, and `runFor` the one path that
 // runs a stage action for a session, which `workflow.stageAction` runs, through the
-// flow's `runAction`; only `toggleFinishedWaves` runs in the preview. Each part's
-// buttons run `workflow.stageAction` for the session the part draws.
+// flow's `runAction`; only `toggleFinishedWaves` runs in the preview.
+// `toggleHeadless` runs in any stage, with or without a workflow, and sets the
+// session's headless flag to the opposite of `isHeadless`. Each part's buttons
+// run `workflow.stageAction` for the session the part draws.
 export interface WorkflowView {
   chipPart: SessionPart;
   stripPart: ChatComposerPart;
   sidePartFor(workflow: PageWorkflow): ChatSidePart;
   setFlow(flow: SessionFlow): void;
   activityChanged(sessionId: string): void;
+  headlessChanged(sessionId: string, headless: boolean | undefined): void;
   forget(sessionId: string): void;
   redraw(): void;
   setSidePaneHidden(hidden: boolean): void;
@@ -122,6 +134,8 @@ const TICK_MS = 1000;
 const SIDE_PART_ORDER = 20;
 const NO_WORKFLOW_TEXT = 'No workflow';
 const WORKING_TEXT = 'Working';
+const HEADLESS_TEXT = 'Headless';
+const ROW_HEADLESS_CLASS = 'workflow-row-headless';
 const PENDING: MarkState = 'pending';
 
 // Each wrapper outlives none of its builds: a row redraw or a composer draw
@@ -141,6 +155,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const missingWorkflowsLogged = new Set<string>();
   const missingStagesLogged = new Set<string>();
   const finishedOpen = new Set<string>();
+  const seenHeadless = new Map<string, boolean>();
   let isSidePaneHidden = false;
   let pendingTick: number | null = null;
 
@@ -267,6 +282,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       actions: actionInputs(flow),
       hasChecklist:
         workflow.hasPlan?.(flow) ?? checklistOf(workflow, flow) !== null,
+      headless: deps.isHeadless(flow.sessionId),
     };
   };
 
@@ -312,6 +328,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     switch (part.kind) {
       case 'chip': {
         const isWorking = deps.isWorking(part.sessionId);
+        const isHeadless = deps.isHeadless(part.sessionId);
         if (!drawsStage) {
           if (flow.workflow === null && flow.missedLevel) {
             part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
@@ -319,12 +336,18 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
           if (isWorking) {
             part.wrapper.append(workingTag(clock));
           }
+          if (isHeadless) {
+            part.wrapper.append(headlessTag());
+          }
           return false;
         }
         const input = chipInput(workflow, stage, flow);
         part.drawn = workflow.draw.chip(part.wrapper, input, sessionId);
         if (isWorking && input.status !== 'running') {
           part.wrapper.append(workingTag(clock));
+        }
+        if (isHeadless) {
+          part.wrapper.append(headlessTag());
         }
         return input.countdown !== null;
       }
@@ -512,6 +535,24 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     }
   };
 
+  // Sets the session's headless flag to the opposite of what it holds.
+  const toggleHeadless = async (sessionId: string) => {
+    if (deps.isPreview(sessionId)) {
+      log(`preview runs nothing for ${TOGGLE_HEADLESS}`);
+      return;
+    }
+    const name = deps.nameOf(sessionId);
+    const headless = !deps.isHeadless(sessionId);
+    try {
+      await deps.setHeadless(sessionId, headless);
+    } catch (error) {
+      log(`${TOGGLE_HEADLESS} not run in ${name}: ${errorText(error)}`);
+      deps.toast(`Workflow: ${errorText(error)}`, 'error');
+      return;
+    }
+    log(`${name} headless ${headless ? 'on' : 'off'}`);
+  };
+
   const view: WorkflowView = {
     chipPart: {
       id: 'workflow.chip',
@@ -545,6 +586,17 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
           (part) => part.kind === 'chip' && part.sessionId === sessionId,
         ),
       );
+    },
+    headlessChanged(sessionId, headless) {
+      if (headless === undefined) {
+        seenHeadless.delete(sessionId);
+        return;
+      }
+      if ((seenHeadless.get(sessionId) ?? false) === headless) {
+        return;
+      }
+      seenHeadless.set(sessionId, headless);
+      drawSession(sessionId);
     },
     forget(sessionId) {
       loggedLevels.delete(sessionId);
@@ -591,6 +643,10 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         view.toggleFinishedWaves(sessionId);
         return;
       }
+      if (command === TOGGLE_HEADLESS) {
+        await toggleHeadless(sessionId);
+        return;
+      }
       if (deps.isPreview(sessionId)) {
         log(`preview runs nothing for ${command}`);
         return;
@@ -622,6 +678,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
 
 function workingTag(clock: Clock): HTMLElement {
   return stageTagElement(WORKING_TEXT, 'running', clock);
+}
+
+function headlessTag(): HTMLElement {
+  const headless = tag(HEADLESS_TEXT, 'accent');
+  headless.classList.add(ROW_HEADLESS_CLASS);
+  return headless;
 }
 
 // The stepper's stages, in order, one per step slot: the slot member that is

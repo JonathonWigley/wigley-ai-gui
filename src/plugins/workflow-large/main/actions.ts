@@ -9,7 +9,10 @@ import {
 import { largeSignal, largeStateOf } from '../contract';
 
 export interface WorkflowActionsDeps {
-  chat: Pick<ChatMainExports, 'send' | 'clear' | 'launch' | 'profileOf'>;
+  chat: Pick<
+    ChatMainExports,
+    'send' | 'clear' | 'launch' | 'profileOf' | 'isHeadless'
+  >;
   log: PluginLog;
   flowOf(sessionId: string): SessionFlow | null;
   signal(sessionId: string, signal: WorkflowSignal): void;
@@ -51,6 +54,7 @@ export function createWorkflowActions(deps: WorkflowActionsDeps): {
         projectDir: flow.projectDir,
         profile,
         message: message(makeText(planDir)),
+        headless: chat.isHeadless(sessionId),
       });
       deps.signal(sessionId, largeSignal({ type: 'handedOff' }));
     },

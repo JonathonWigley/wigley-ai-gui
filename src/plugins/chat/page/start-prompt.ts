@@ -260,7 +260,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       if (context.offersSavedSessions) {
         listSessions(context, projectDir, profile);
       } else {
-        startSession(context, projectDir, profile);
+        startSession(context, projectDir, profile, false);
       }
     });
   };
@@ -334,7 +334,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           return;
         }
         if (rows.length === 0) {
-          startSession(context, projectDir, profile);
+          startSession(context, projectDir, profile, false);
           return;
         }
         openWith(rows);
@@ -380,7 +380,12 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       picked: (item) => {
         step = null;
         if (item.kind === 'new') {
-          startSession(opened.context, opened.projectDir, opened.profile);
+          startSession(
+            opened.context,
+            opened.projectDir,
+            opened.profile,
+            item.headless,
+          );
         } else {
           resumeSession(
             opened.context,
@@ -418,7 +423,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     }
     const item = shown.items[cursor];
     if (item.kind === 'new') {
-      log('New session cannot be archived');
+      log(`${item.label} cannot be archived`);
       return;
     }
     if (shown.isWriting) {
@@ -504,16 +509,19 @@ function startSession(
   context: PromptContext,
   projectDir: string,
   profile: ChatProfile,
+  headless: boolean,
 ) {
   const { deps } = context;
   deps.log(
     `starting a session in ${displayPath(projectDir, deps.homeDir, deps.paths)} with ${profile.name}`,
   );
-  void deps.channel.invoke('start', { projectDir, profile: profile.name }).then(
-    (sessionId) => deps.reveal(sessionId),
-    (error: unknown) => {
-      deps.log(`session not started: ${errorText(error)}`);
-      deps.toast(`Session not started: ${errorText(error)}`, 'error');
-    },
-  );
+  void deps.channel
+    .invoke('start', { projectDir, profile: profile.name, headless })
+    .then(
+      (sessionId) => deps.reveal(sessionId),
+      (error: unknown) => {
+        deps.log(`session not started: ${errorText(error)}`);
+        deps.toast(`Session not started: ${errorText(error)}`, 'error');
+      },
+    );
 }

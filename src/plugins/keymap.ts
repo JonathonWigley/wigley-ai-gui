@@ -329,6 +329,7 @@ export const defaultKeymap = {
       scope: 'any',
       command: 'workflow.toggleFinishedWaves',
     },
+    { keys: '<Leader>wh', scope: 'any', command: 'workflow.toggleHeadless' },
 
     // ── Panes ──────────────────────────────────────────────────────────────
     { keys: '<A-h>', scope: 'any', command: 'panes.focusLeft' },

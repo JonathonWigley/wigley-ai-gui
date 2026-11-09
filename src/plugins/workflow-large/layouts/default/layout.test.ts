@@ -65,6 +65,8 @@ function fakeKit(): WorkflowKit {
     sideList: (parent) => part(parent, 'list'),
     finishedFold: (parent, text, open) =>
       part(parent, `fold:${text}:${open}`) as HTMLButtonElement,
+    headlessChip: (parent, headless) =>
+      part(parent, `headless:${headless}`) as HTMLButtonElement,
   };
   return kit as WorkflowKit;
 }
@@ -104,6 +106,7 @@ function stripInput(hasChecklist: boolean): StripInput {
     steps: [],
     actions: [MAIN_ACTION, OTHER_ACTION],
     hasChecklist,
+    headless: false,
   };
 }
 
@@ -218,7 +221,11 @@ describe('default layout strip', () => {
 
     const drawnParts = drawn(layout.strip(asHtml(parent), input, fakeKit()));
 
-    expect(drawnParts).toEqual([...parts, 'action:Resume make']);
+    expect(drawnParts).toEqual([
+      ...parts,
+      'action:Resume make',
+      'headless:false',
+    ]);
   });
 
   it('strip_Countdown_DrawsBeforeTheMainAction', () => {
@@ -232,8 +239,25 @@ describe('default layout strip', () => {
       ),
     );
 
-    expect(parts.slice(-2)).toEqual(['countdown:9s', 'action:Resume make']);
+    expect(parts.slice(-3, -1)).toEqual(['countdown:9s', 'action:Resume make']);
   });
+
+  it.each([{ headless: true }, { headless: false }])(
+    'strip_DrawsTheHeadlessChipLast $headless',
+    ({ headless }) => {
+      const parent = new FakeElement('parent');
+
+      const parts = drawn(
+        layout.strip(
+          asHtml(parent),
+          { ...stripInput(true), headless },
+          fakeKit(),
+        ),
+      );
+
+      expect(parts.at(-1)).toBe(`headless:${headless}`);
+    },
+  );
 });
 
 describe('default layout sidePane', () => {

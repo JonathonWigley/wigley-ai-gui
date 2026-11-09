@@ -42,6 +42,8 @@ export interface RecentFolder {
 export interface StartRequest {
   projectDir: string;
   profile: string;
+  // True opens the row headless.
+  headless?: boolean;
 }
 
 export interface LaunchRequest {
@@ -51,6 +53,9 @@ export interface LaunchRequest {
   // True for a session nobody answers: chat denies each permission prompt at
   // once. Kept with the row across a relaunch.
   unattended?: boolean;
+  // True opens the row headless; a caller launching from a session passes
+  // that session's flag.
+  headless?: boolean;
 }
 
 // `hostSessionId` is the harness's id for the saved session.
@@ -185,6 +190,9 @@ export interface ChatSessionInfo {
   // (`worktreeNameOf` and `worktreesInCommand` in main). Kept after the
   // worktree is removed; [] until one is touched.
   worktrees: string[];
+  // The row is headless. Saved with the row, kept across `/clear` and a
+  // relaunch; a resumed saved session starts with it off.
+  headless: boolean;
 }
 
 // What the slots add up to for one session.
@@ -340,6 +348,9 @@ export interface ChatChannel extends ChannelShape {
     // goes into `chat.returned`. Rejects when the fresh process cannot start,
     // leaving the row resting.
     clear(sessionId: string): void;
+    // Writes the row's headless flag into `chat.session` and saves it; a
+    // session chat does not hold is logged and left alone.
+    setHeadless(sessionId: string, headless: boolean): void;
     // Takes the queued message out of the queue, into `chat.returned`; does
     // nothing for one already written to the agent or sent now. On the held row
     // the compaction goes on, and the rows behind wait for its end.
@@ -518,6 +529,8 @@ export interface ChatMainExports {
   profileOf(sessionId: string): string | null;
   // The clock of a session chat owns; null for any other session id.
   activeTime(sessionId: string): ActiveTime | null;
+  // Whether a session chat owns is headless; false for any other session id.
+  isHeadless(sessionId: string): boolean;
   // The profile a launch takes when its caller names none: the profile of a
   // session chat owns, else chat's first; null when chat has no profiles.
   // `sessionId` is null when the launch comes from no session.
@@ -716,6 +729,8 @@ export type CompletionRowDraw = (
 // slot; null in the same cases and on a stop with no blocks.
 // `activeTime` is the session's clock in `chat.session`, null for a session with
 // no key there; read the total at a moment with `activeMsAt`.
+// `setHeadless` turns the session's headless flag on or off through the
+// channel's `setHeadless`; the flag shows in `chat.session`.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   addCompletionRow(draw: CompletionRowDraw): Disposable;
@@ -726,6 +741,7 @@ export interface ChatPageExports {
   focusedEntry(): HTMLElement | null;
   focusedBlock(): HTMLElement | null;
   activeTime(sessionId: string): ActiveTime | null;
+  setHeadless(sessionId: string, headless: boolean): Promise<void>;
 }
 
 export const chatPageKey: DependencyKey<ChatPageExports, 'page', 'chat'> = {

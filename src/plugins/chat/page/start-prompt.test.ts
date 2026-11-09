@@ -18,6 +18,7 @@ import type {
 } from '../contract';
 import type { Picker, PickerRequest } from './picker';
 import {
+  NEW_HEADLESS_SESSION_LABEL,
   NEW_SESSION_LABEL,
   SESSION_STEP_TITLE,
   SESSIONS_HEADING,
@@ -368,7 +369,7 @@ describe('start prompt', () => {
     const run = await atSessionStep();
 
     expect(sectionsOf(run.opened[0])).toEqual([null, null]);
-    expect(sectionsOf(run.last())).toEqual([null, null, null]);
+    expect(sectionsOf(run.last())).toEqual([null, null, null, null]);
   });
 
   it('openForNewSession_AsksForNoSections', async () => {
@@ -454,10 +455,12 @@ describe('start prompt', () => {
     expect(run.last().labels).toEqual([
       label,
       NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(beta),
     ]);
     expect(sectionsOf(run.last())).toEqual([
       'Recently closed',
+      SESSIONS_HEADING,
       SESSIONS_HEADING,
       SESSIONS_HEADING,
     ]);
@@ -487,9 +490,13 @@ describe('start prompt', () => {
     await flush();
 
     expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
-    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
+      rowLabel(beta),
+    ]);
     expect(run.last().selected).toBe(0);
-    expect(sectionsOf(run.last())).toEqual([null, null]);
+    expect(sectionsOf(run.last())).toEqual([null, null, null]);
     expect(run.logs).toContain('archived Fix login');
   });
 
@@ -514,7 +521,7 @@ describe('start prompt', () => {
     pickItem(run.opened[1], 'work · ~/.claude');
     await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
     ]);
     expect(run.revealed).toEqual(['row-1']);
     expect(run.logs).toEqual([expect.stringContaining('work')]);
@@ -527,7 +534,7 @@ describe('start prompt', () => {
     await flush();
     expect(run.opened.map((opened) => opened.title)).toEqual(['Folder']);
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
     ]);
     expect(run.revealed).toEqual(['row-1']);
   });
@@ -545,7 +552,7 @@ describe('start prompt', () => {
     pickItem(run.opened[1], 'personal · ~/.claude-personal');
     await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/new', profile: 'personal' },
+      { projectDir: '/Users/u/dev/new', profile: 'personal', headless: false },
     ]);
   });
 
@@ -628,7 +635,7 @@ describe('start prompt', () => {
     expect(run.opened.map(({ title }) => title)).toEqual(['Folder', 'Profile']);
     expect(run.invoked).not.toContain('pastSessions');
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
     ]);
   });
 
@@ -637,6 +644,7 @@ describe('start prompt', () => {
     expect(run.last().title).toBe('Session');
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(alpha),
       rowLabel(beta),
     ]);
@@ -649,7 +657,10 @@ describe('start prompt', () => {
       pastSessions: () => Promise.reject(new Error('no folder')),
     });
     expect(run.last().title).toBe('Session');
-    expect(run.last().labels).toEqual([NEW_SESSION_LABEL]);
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
+    ]);
     expect(run.logs).toEqual([expect.stringContaining('no folder')]);
     expect(run.toasts).toEqual([
       { text: expect.stringContaining('no folder'), tone: 'error' },
@@ -661,7 +672,7 @@ describe('start prompt', () => {
     pickItem(run.last(), NEW_SESSION_LABEL);
     await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
     ]);
     expect(run.resumed).toEqual([]);
   });
@@ -697,19 +708,23 @@ describe('start prompt', () => {
 
   it('toggleArchive_shownRow_archivesItAndMovesCursorToTheNextRow', async () => {
     const run = await atSessionStep();
-    run.moveCursor(1);
+    run.moveCursor(2);
     run.prompt.toggleArchive();
     await flush();
     expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
-    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
-    expect(run.last().selected).toBe(1);
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
+      rowLabel(beta),
+    ]);
+    expect(run.last().selected).toBe(2);
     expect(run.logs).toEqual([expect.stringContaining('Alpha')]);
   });
 
   it('toggleArchive_archivedRow_restoresItAndKeepsTheCursorOnIt', async () => {
     const run = await atSessionStep();
     run.prompt.showArchived();
-    run.moveCursor(3);
+    run.moveCursor(4);
     run.prompt.toggleArchive();
     await flush();
     expect(run.archiveWrites).toEqual([
@@ -717,11 +732,12 @@ describe('start prompt', () => {
     ]);
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(alpha),
       rowLabel(beta),
       rowLabel(gamma, false),
     ]);
-    expect(run.last().selected).toBe(3);
+    expect(run.last().selected).toBe(4);
     expect(run.logs).toContainEqual(expect.stringContaining('Gamma'));
   });
 
@@ -733,12 +749,43 @@ describe('start prompt', () => {
     expect(run.logs).toHaveLength(1);
   });
 
+  it('toggleArchive_newHeadlessSessionLine_writesNothing', async () => {
+    const run = await atSessionStep();
+    run.moveCursor(1);
+    run.prompt.toggleArchive();
+    await flush();
+    expect(run.archiveWrites).toEqual([]);
+    expect(run.logs).toEqual(['New headless session cannot be archived']);
+  });
+
+  it.each([
+    { line: NEW_SESSION_LABEL, headless: false },
+    { line: NEW_HEADLESS_SESSION_LABEL, headless: true },
+  ])(
+    'sessionStep_NewHeadlessSession_StartsWithHeadless: $line → $headless',
+    async ({ line, headless }) => {
+      const run = await atSessionStep();
+      expect(run.last().labels.slice(0, 2)).toEqual([
+        NEW_SESSION_LABEL,
+        NEW_HEADLESS_SESSION_LABEL,
+      ]);
+      expect(run.last().selected).toBe(0);
+
+      pickItem(run.last(), line);
+      await flush();
+
+      expect(run.started).toEqual([
+        { projectDir: '/Users/u/dev/app', profile: 'work', headless },
+      ]);
+    },
+  );
+
   it('setArchivedRejects_leavesTheListAsItWas', async () => {
     const run = await atSessionStep({
       setArchived: () => Promise.reject(new Error('read-only')),
     });
     const shownBefore = run.opened.length;
-    run.moveCursor(1);
+    run.moveCursor(2);
     run.prompt.toggleArchive();
     await flush();
     expect(run.opened.length).toBe(shownBefore);
@@ -756,7 +803,7 @@ describe('start prompt', () => {
           ? Promise.reject(new Error('read-only'))
           : Promise.resolve(),
     });
-    run.moveCursor(1);
+    run.moveCursor(2);
     run.prompt.toggleArchive();
     await flush();
     run.prompt.toggleArchive();
@@ -776,6 +823,7 @@ describe('start prompt', () => {
     run.prompt.showArchived();
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(alpha),
       rowLabel(beta),
       rowLabel(gamma),
@@ -783,6 +831,7 @@ describe('start prompt', () => {
     run.prompt.showArchived();
     expect(run.last().labels).toEqual([
       NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
       rowLabel(alpha),
       rowLabel(beta),
     ]);
@@ -815,7 +864,7 @@ describe('start prompt', () => {
   it('setArchivedAnswersAfterTheStepClosed_reopensNothing', async () => {
     const write = deferred<void>();
     const run = await atSessionStep({ setArchived: () => write.promise });
-    run.moveCursor(1);
+    run.moveCursor(2);
     run.prompt.toggleArchive();
     run.close();
     const shownBefore = run.opened.length;
@@ -828,13 +877,17 @@ describe('start prompt', () => {
   it('toggleArchive_writeInFlight_isIgnored', async () => {
     const write = deferred<void>();
     const run = await atSessionStep({ setArchived: () => write.promise });
-    run.moveCursor(1);
+    run.moveCursor(2);
     run.prompt.toggleArchive();
     run.prompt.toggleArchive();
     expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
     write.resolve();
     await flush();
-    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      NEW_HEADLESS_SESSION_LABEL,
+      rowLabel(beta),
+    ]);
     expect(run.logs).toEqual([
       expect.any(String),
       expect.stringContaining('Alpha'),
@@ -910,7 +963,7 @@ describe('start prompt', () => {
       expect.stringContaining('claude not found'),
     );
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', profile: 'work', headless: false },
     ]);
   });
 

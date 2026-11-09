@@ -17,8 +17,10 @@ import {
 import {
   type ChatComposerPart,
   type ChatPageExports,
+  type ChatSessionInfo,
   type ChatSidePart,
   chatPageKey,
+  chatSessionSlot,
 } from '../../chat/contract';
 import {
   type SessionPart,
@@ -392,7 +394,7 @@ describe('workflow page part', () => {
     }
   });
 
-  it.each(['mainAction', 'toggleFinishedWaves'] as const)(
+  it.each(['mainAction', 'toggleFinishedWaves', 'toggleHeadless'] as const)(
     'engineKeys_RunStageActionOnTheSelectedSession %s',
     async (command) => {
       const { harness, runs } = startWorkflow();
@@ -406,6 +408,59 @@ describe('workflow page part', () => {
       ).toEqual([
         [workflowStageActionCommand.id, { sessionId: 's1', action: command }],
       ]);
+    },
+  );
+
+  // Chat's `chat.session` value for s1, as chat writes it.
+  function chatInfo(fields: Partial<ChatSessionInfo> = {}): ChatSessionInfo {
+    return {
+      sessionId: 's1',
+      projectDir: '/p',
+      profile: 'work',
+      activity: 'idle',
+      background: 0,
+      activeTime: { totalMs: 0, since: null },
+      running: true,
+      compaction: null,
+      repo: 'p',
+      branch: null,
+      worktrees: [],
+      headless: false,
+      ...fields,
+    };
+  }
+
+  it.each([
+    {
+      given: 'a notice that flips headless',
+      next: chatInfo({ headless: true }),
+      draws: 1,
+      headless: true,
+    },
+    {
+      given: 'a notice that changes only activity',
+      next: chatInfo({ activity: 'working' }),
+      draws: 0,
+      headless: false,
+    },
+  ])(
+    'ready_ChatSessionNotice_PassesHeadlessToTheView $given',
+    ({ next, draws, headless }) => {
+      const { harness, exportsFor, composerParts } = startWorkflow();
+      const { workflow, strips } = stubSmall();
+      exportsFor(createRegistrations()).addWorkflow(workflow);
+      harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
+      harness.state.publish(workflowFlowsSlot).set('s1', flowOfSmall('build'));
+      const sessions = harness.state.publish(chatSessionSlot);
+      sessions.set('s1', chatInfo());
+      harness.ready();
+      [...composerParts][0].build(asHtml(new FakeElement('div')), 's1');
+      const drawsBefore = strips.length;
+
+      sessions.set('s1', next);
+
+      expect(strips.length - drawsBefore).toBe(draws);
+      expect(strips.at(-1)?.headless).toBe(headless);
     },
   );
 });

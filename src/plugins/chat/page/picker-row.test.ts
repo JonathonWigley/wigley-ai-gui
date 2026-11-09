@@ -106,7 +106,11 @@ describe('picker row inputs', () => {
     },
     {
       row: 'the new-session line',
-      input: sessionRowInput({ kind: 'new', label: 'New session' }),
+      input: sessionRowInput({
+        kind: 'new',
+        label: 'New session',
+        headless: false,
+      }),
       expected: { list: 'session', kind: 'new' },
     },
     {

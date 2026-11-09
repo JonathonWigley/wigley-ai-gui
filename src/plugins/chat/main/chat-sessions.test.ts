@@ -306,6 +306,7 @@ function record(
     activeMs: 0,
     rowId: null,
     unattended: false,
+    headless: false,
     ...fields,
   };
 }
@@ -324,6 +325,7 @@ function keptSessionInfo(rowId: string): ChatSessionInfo {
     repo: 'app',
     branch: null,
     worktrees: [],
+    headless: false,
   };
 }
 
@@ -828,6 +830,7 @@ describe('createChatSessions', () => {
         repo: 'app',
         branch: null,
         worktrees: [],
+        headless: false,
       },
     ]);
     expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -3554,6 +3557,7 @@ describe('createChatSessions saved sessions', () => {
         activeMs: 0,
         rowId: ROW_ID,
         unattended: false,
+        headless: false,
       },
     ]);
   });
@@ -3581,6 +3585,102 @@ describe('createChatSessions saved sessions', () => {
     expect(
       test.saved.last()?.sessions.map((saved) => saved.unattended),
     ).toEqual([true, false]);
+  });
+
+  it.each([{ headless: true }, { headless: false }])(
+    'setHeadless_HeldRow_PublishesAndSaves: $headless',
+    async ({ headless }) => {
+      const test = await started();
+      test.chat.restore(NOTHING_SAVED, []);
+      test.chat.setHeadless(ROW_ID, !headless);
+
+      test.chat.setHeadless(ROW_ID, headless);
+
+      expect(test.chat.isHeadless(ROW_ID)).toBe(headless);
+      expect(test.chat.sessions()[0].headless).toBe(headless);
+      expect(test.saved.last()?.sessions[0].headless).toBe(headless);
+    },
+  );
+
+  it('setHeadless_UnknownRow_LogsAndChangesNothing', async () => {
+    const test = await started();
+    test.chat.restore(NOTHING_SAVED, []);
+    const savesBefore = test.saved.saves();
+
+    test.chat.setHeadless('row-unknown', true);
+
+    expect(test.logged).toContain(
+      'setHeadless for unknown session row-unknown ignored',
+    );
+    expect(test.saved.saves()).toBe(savesBefore);
+    expect(test.chat.isHeadless('row-unknown')).toBe(false);
+  });
+
+  it('clear_HeadlessRow_KeepsHeadless', async () => {
+    const test = await started();
+    test.chat.setHeadless(ROW_ID, true);
+
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    expect(test.chat.isHeadless(ROW_ID)).toBe(true);
+    expect(test.chat.sessions()[0].headless).toBe(true);
+  });
+
+  it.each([
+    { given: 'headless: true', flag: { headless: true }, expected: true },
+    { given: 'headless absent', flag: {}, expected: false },
+  ])(
+    'start_HeadlessRequest_OpensTheRowHeadless: $given → $expected',
+    async ({ flag, expected }) => {
+      const test = setUp();
+
+      const sessionId = test.chat.start({
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        ...flag,
+      });
+      await flush();
+
+      expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.sessions()[0].headless).toBe(expected);
+    },
+  );
+
+  it.each([
+    { given: 'headless: true', flag: { headless: true }, expected: true },
+    { given: 'headless absent', flag: {}, expected: false },
+  ])(
+    'launch_HeadlessRequest_OpensTheRowHeadless: $given → $expected',
+    async ({ flag, expected }) => {
+      const test = setUp();
+
+      const sessionId = test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        message: { text: 'go', images: [] },
+        ...flag,
+      });
+      await flush();
+
+      expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.sessions()[0].headless).toBe(expected);
+    },
+  );
+
+  it('restore_SavedHeadless_OpensTheRowHeadless', () => {
+    const test = setUp();
+
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { headless: true })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    expect(test.chat.isHeadless(ROW_ID)).toBe(true);
+    expect(test.chat.sessions()[0].headless).toBe(true);
   });
 
   it('restore_UnattendedRecord_DeniesPermissionAtOnce', async () => {
@@ -4441,6 +4541,7 @@ describe('createChatSessions clear', () => {
           activeMs: 0,
           rowId: ROW_ID,
           unattended: false,
+          headless: false,
         },
       ],
       selectedHostSessionId: 'uuid-2',

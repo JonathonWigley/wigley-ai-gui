@@ -49,6 +49,9 @@ export interface SavedSession {
   // The row was launched unattended: each permission prompt is denied at once.
   // A file written without it reads as false.
   unattended: boolean;
+  // The row is headless, as the user or its launching session set it. A file
+  // written without it reads as false.
+  headless: boolean;
 }
 
 // The titles of a session that has none.
@@ -72,7 +75,8 @@ type LaterSavedField =
   | 'returnedDrops'
   | 'activeMs'
   | 'rowId'
-  | 'unattended';
+  | 'unattended'
+  | 'headless';
 
 type StoredSession = Omit<SavedSession, LaterSavedField> &
   Partial<Pick<SavedSession, LaterSavedField>>;
@@ -195,7 +199,8 @@ function isStoredSession(value: unknown): value is StoredSession {
     isOptionalStrings(value.returnedDrops) &&
     isOptionalActiveMs(value.activeMs) &&
     isOptionalId(value.rowId) &&
-    (value.unattended === undefined || typeof value.unattended === 'boolean')
+    (value.unattended === undefined || typeof value.unattended === 'boolean') &&
+    (value.headless === undefined || typeof value.headless === 'boolean')
   );
 }
 
@@ -239,6 +244,7 @@ function parseSavedSessions(text: string): SavedSessions {
       activeMs: stored.activeMs ?? 0,
       rowId: stored.rowId ?? null,
       unattended: stored.unattended ?? false,
+      headless: stored.headless ?? false,
     })),
     selectedHostSessionId,
   };

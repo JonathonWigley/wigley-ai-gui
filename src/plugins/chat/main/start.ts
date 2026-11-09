@@ -392,6 +392,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         chat.clear(sessionId);
       }
     });
+    api.channel.handle('setHeadless', (sessionId, headless) => {
+      if (!ignoredInPreview('setHeadless', sessionId)) {
+        chat.setHeadless(sessionId, headless);
+      }
+    });
     api.channel.handle('pullBack', (sessionId, queuedId) => {
       if (!ignoredInPreview('pullBack', sessionId)) {
         chat.pullBack(sessionId, queuedId);
@@ -464,6 +469,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       [START_SESSION_TOOL],
       startSessionToolSession({
         launch: (request) => chat.launch(request),
+        isHeadless: (sessionId) => chat.isHeadless(sessionId),
         defaultProfile,
         profileNames,
         isAbsolute: (folder) => services.paths.isAbsolute(folder),
@@ -517,6 +523,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       profiles,
       profileOf,
       activeTime: (sessionId) => chat.activeTimeOf(sessionId),
+      isHeadless: (sessionId) => chat.isHeadless(sessionId),
       defaultProfile,
       send: async (sessionId, message) => {
         requireHeld(sessionId);

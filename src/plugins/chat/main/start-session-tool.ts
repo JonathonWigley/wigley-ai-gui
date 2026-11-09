@@ -39,6 +39,8 @@ export const START_SESSION_TOOL: ToolDefinition = {
 
 export interface StartSessionToolDeps {
   launch(request: LaunchRequest): string;
+  // Whether the calling session is headless; its launch copies the flag.
+  isHeadless(sessionId: string): boolean;
   defaultProfile(sessionId: string | null): string | null;
   profileNames(): string[];
   isAbsolute(path: string): boolean;
@@ -136,6 +138,7 @@ async function startSession(
       projectDir: folder.value,
       profile: profile.value,
       message: { text: named.prompt, images: [] },
+      headless: deps.isHeadless(session.id),
     });
   } catch (error) {
     deps.log(`session not started: ${errorText(error)}`);

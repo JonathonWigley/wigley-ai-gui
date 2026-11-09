@@ -2,11 +2,12 @@
 // workflow with, `<owner>` being the plugin that holds the workflow. The app draws three parts for a session:
 // - `chip`, under the session's row in the side bar, in the row part's wrapper: the workflow's badge, the stage's label
 //   and status as one tag, and the countdown. Its input also carries the detail and the main action. An idle session
-//   draws no chip.
+//   draws no chip. While the session is headless the app ends the row part on a `Headless` tag of its own, after the
+//   chip, in every stage.
 // - `strip`, above the Chat tab's composer, in the composer part's wrapper: the stepper's trail while it shows the
 //   stage; for a stage outside it, the status mark and status line, with the trail until the session has a checklist.
-//   Then the countdown and the main action. Its input also carries the detail and every action. An idle session draws
-//   no strip.
+//   Then the countdown and the main action, and last the Headless chip (`kit.headlessChip`). Its input also carries the
+//   detail, every action and whether the session is headless. An idle session draws no strip.
 // - `sidePane`, beside the Chat tab's transcript, in the side part's wrapper: the status mark and line, the detail, a
 //   progress bar, the checklist (a layout picks how its groups read: a fold of the finished ones, a flat list) and every
 //   action of the stage. An idle session, a session with no checklist, and a hidden pane draw no pane. The app does not
@@ -73,8 +74,8 @@ export interface ChipInput {
 }
 
 // The stage's fields as ChipInput, with `statusLine` the status text and the stage's progress (`Build · running 3/9`),
-// every step of the stepper, every action of the stage, the main action first, and `hasChecklist`, whether the session
-// has a checklist.
+// every step of the stepper, every action of the stage, the main action first, `hasChecklist`, whether the session
+// has a checklist, and `headless`, whether the session is headless.
 export interface StripInput {
   stage: string;
   label: string;
@@ -86,6 +87,7 @@ export interface StripInput {
   steps: readonly StepInput[];
   actions: readonly ActionInput[];
   hasChecklist: boolean;
+  headless: boolean;
 }
 
 // One item of the checklist in the side pane: its text and its mark. A done item is `done`; an open item in the current
@@ -164,6 +166,11 @@ export interface WorkflowKit extends BaseKit {
   // rows or its own height when it holds less. The app keeps its scroll across each draw, and while the pane has no
   // layout box.
   sideList(parent: HTMLElement): HTMLElement;
+  // `button.ui-tag.workflow-headless` reading `Headless`, carrying `data-state` `on` or `off` and `aria-pressed`: in the
+  // accent tone while on, a muted neutral tag while off, with the key of `workflow.toggleHeadless`. A click runs
+  // `workflow.stageAction` with the session the part draws and `toggleHeadless`, which turns that session's headless
+  // flag on or off, and goes no further.
+  headlessChip(parent: HTMLElement, headless: boolean): HTMLButtonElement;
 }
 
 // What a part returns: its root, appended to `parent`.

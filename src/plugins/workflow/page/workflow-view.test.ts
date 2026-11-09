@@ -127,7 +127,9 @@ function flowOf(
 // with the main action `go`, `review`, and `idle` out of the stepper. Its timers
 // record each `set` (its handle the set's count), and its `nameOf` reads every session
 // as `proj`. `workflows` is what the view reads; `sidePart` is `stub`'s. Every session in
-// `previews` shows the preview, and every session in `working` reads as working.
+// `previews` shows the preview, and every session in `working` reads as working
+// and in `headless` as headless. `setHeadless` records each call, and rejects
+// with `headlessRefusal` while it is set.
 function setUp(previews: readonly string[] = []) {
   const now = NOW;
   const sets: { run: () => void; handle: number }[] = [];
@@ -136,6 +138,9 @@ function setUp(previews: readonly string[] = []) {
   const flows = new Map<string, SessionFlow>();
   const rowActivities = new Map<string, RowActivity | null>();
   const working = new Set<string>();
+  const headless = new Set<string>();
+  const headlessSets: [string, boolean][] = [];
+  const refusal: { headless: string | null } = { headless: null };
   let isFlowOfBroken = false;
   const stages = createStageList<PageStage>();
   stages.add(stageOf('idle', 'Idle', 0, { inStepper: false }));
@@ -166,6 +171,13 @@ function setUp(previews: readonly string[] = []) {
     setRowActivity: (sessionId, activity) =>
       rowActivities.set(sessionId, activity),
     isWorking: (sessionId) => working.has(sessionId),
+    isHeadless: (sessionId) => headless.has(sessionId),
+    async setHeadless(sessionId, value) {
+      headlessSets.push([sessionId, value]);
+      if (refusal.headless !== null) {
+        throw new Error(refusal.headless);
+      }
+    },
   });
   const held = stubWorkflow('stub', undefined, { stages: stages.all() });
   workflows.push(held.workflow);
@@ -189,6 +201,9 @@ function setUp(previews: readonly string[] = []) {
     logged,
     rowActivities,
     working,
+    headless,
+    headlessSets,
+    refusal,
   };
 }
 
@@ -900,4 +915,156 @@ describe('workflow kit', () => {
       'workflow.toggleFinishedWaves',
     ]);
   });
+});
+
+describe('workflow view headless', () => {
+  it.each([{ headless: true }, { headless: false }])(
+    'StripInput_CarriesHeadless $headless',
+    ({ headless }) => {
+      const run = setUp();
+      if (headless) {
+        run.headless.add('a');
+      }
+      run.view.stripPart.build(asHtml(new FakeElement('div')), 'a');
+
+      run.put(flowOf('stub'));
+
+      expect(run.held.strips.at(-1)?.headless).toBe(headless);
+    },
+  );
+
+  it.each<{ given: string; flow: SessionFlow; status?: StageStatus }>([
+    {
+      given: 'no workflow',
+      flow: { ...newFlow('a', '/p'), missedLevel: true },
+    },
+    { given: 'idle', flow: flowOf('w', {}, 'idle') },
+    { given: 'running', flow: flowOf('w'), status: 'running' },
+    { given: 'done', flow: flowOf('w'), status: 'done' },
+  ])('Chip_Headless_EndsOnTheHeadlessTag $given', ({ flow, status }) => {
+    const run = setUp();
+    const shown = stubWorkflow(
+      'w',
+      stageOf('build', 'Build', 10, { status: () => status ?? 'running' }),
+      {
+        stages: [
+          stageOf('idle', 'Idle', 0, { inStepper: false }),
+          stageOf('build', 'Build', 10, { status: () => status ?? 'running' }),
+        ],
+      },
+    );
+    run.workflows.push(shown.workflow);
+    run.working.add('a');
+    const chip = new FakeElement('div');
+    run.view.chipPart.build(asHtml(chip), 'a');
+    run.put(flow);
+    const plainTags = findAll(chip, 'workflow-row-headless');
+
+    run.headless.add('a');
+    run.view.redraw();
+
+    expect(plainTags).toHaveLength(0);
+    expect(
+      chip.children.at(-1)?.classList.contains('workflow-row-headless'),
+    ).toBe(true);
+    expect(chip.children.at(-1)?.textContent).toBe('Headless');
+  });
+
+  it.each<{
+    given: string;
+    previews?: string[];
+    flow: SessionFlow;
+    isHeadless: boolean;
+    refusal?: string;
+    sets: [string, boolean][];
+    line: string;
+    toasts: string[];
+  }>([
+    {
+      given: 'off',
+      flow: flowOf('stub'),
+      isHeadless: false,
+      sets: [['a', true]],
+      line: 'proj headless on',
+      toasts: [],
+    },
+    {
+      given: 'on',
+      flow: flowOf('stub'),
+      isHeadless: true,
+      sets: [['a', false]],
+      line: 'proj headless off',
+      toasts: [],
+    },
+    {
+      given: 'the preview session',
+      previews: ['a'],
+      flow: flowOf('stub'),
+      isHeadless: false,
+      sets: [],
+      line: 'preview runs nothing for toggleHeadless',
+      toasts: [],
+    },
+    {
+      given: 'a session with no workflow',
+      flow: newFlow('a', '/p'),
+      isHeadless: false,
+      sets: [['a', true]],
+      line: 'proj headless on',
+      toasts: [],
+    },
+    {
+      given: 'a refused set',
+      flow: flowOf('stub'),
+      isHeadless: false,
+      refusal: 'chat is gone',
+      sets: [['a', true]],
+      line: 'toggleHeadless not run in proj: chat is gone',
+      toasts: ['Workflow: chat is gone'],
+    },
+  ])(
+    'RunFor_ToggleHeadless_SetsTheOppositeAndLogs $given',
+    async ({ previews, flow, isHeadless, refusal, sets, line, toasts }) => {
+      const run = setUp(previews);
+      run.put(flow);
+      if (isHeadless) {
+        run.headless.add('a');
+      }
+      run.refusal.headless = refusal ?? null;
+
+      await run.view.runFor('a', 'toggleHeadless');
+
+      expect(run.headlessSets).toEqual(sets);
+      expect(run.logged.at(-1)).toBe(line);
+      expect(run.toasts).toEqual(toasts);
+    },
+  );
+
+  it.each<{ given: string; calls: (boolean | undefined)[]; draws: number }>([
+    { given: 'unseen and true', calls: [true], draws: 1 },
+    { given: 'the same value again', calls: [true, true], draws: 1 },
+    { given: 'false after true', calls: [true, false], draws: 2 },
+    { given: 'unseen and false', calls: [false], draws: 0 },
+    { given: 'undefined', calls: [undefined], draws: 0 },
+    { given: 'true after undefined', calls: [true, undefined, true], draws: 2 },
+  ])(
+    'HeadlessChanged_OnlyAChangedValueDrawsAgain $given',
+    ({ calls, draws }) => {
+      const run = setUp();
+      for (const sessionId of ['a', 'b']) {
+        run.view.chipPart.build(asHtml(new FakeElement('div')), sessionId);
+        run.view.stripPart.build(asHtml(new FakeElement('div')), sessionId);
+        run.put({ ...flowOf('stub'), sessionId });
+      }
+      const drawsBefore = run.held.chips.length + run.held.strips.length;
+
+      for (const headless of calls) {
+        run.view.headlessChanged('a', headless);
+      }
+
+      expect(run.held.chips.length + run.held.strips.length - drawsBefore).toBe(
+        draws * 2,
+      );
+    },
+  );
 });

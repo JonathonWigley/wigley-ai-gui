@@ -6,7 +6,11 @@ import type {
   PagePart,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { CHAT_PREVIEW_HOST_ID, chatPageKey } from '../../chat/contract';
+import {
+  CHAT_PREVIEW_HOST_ID,
+  chatPageKey,
+  chatSessionSlot,
+} from '../../chat/contract';
 import {
   followRows,
   sessionsActiveSlot,
@@ -38,7 +42,7 @@ import {
 type WorkflowApi = PageApi<typeof workflowManifest, ChannelShape>;
 
 // The engine's commands a key runs on the selected session.
-type SessionCommand = 'mainAction' | 'toggleFinishedWaves';
+type SessionCommand = 'mainAction' | 'toggleFinishedWaves' | 'toggleHeadless';
 
 const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 
@@ -50,7 +54,8 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // page half of each workflow, which `addWorkflow` extends; each workflow takes one
 // side part. `stageAction` runs the view's gate for the session and action its arg
 // names; each engine key runs it on the selected session, each button on the
-// session it draws. `toggleSidePane` shows or hides the pane in every session, kept
+// session it draws. A `chat.session` change that flips a session's headless
+// flag draws its parts again. `toggleSidePane` shows or hides the pane in every session, kept
 // in `uiState`. `openPreview` steps chat's preview session through every workflow's
 // samples (`createPreview`).
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
@@ -63,6 +68,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const rows = api.state.read(sessionsRowsSlot);
     const activities = api.state.read(sessionsActivitySlot);
     const flows = api.state.read(workflowFlowsSlot);
+    const chatSessions = api.state.read(chatSessionSlot);
     const workflows = new Map<WorkflowId, PageWorkflow>();
 
     const nameOf = (sessionId: string) =>
@@ -88,6 +94,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         (activities.get(sessionId) ?? []).some(
           ({ activity }) => activity.tone === 'running',
         ),
+      isHeadless: (sessionId) => chatSessions.get(sessionId)?.headless === true,
+      setHeadless: (sessionId, headless) =>
+        chat.setHeadless(sessionId, headless),
     });
     view.setSidePaneHidden(services.uiState.get(SIDE_PANE_HIDDEN_KEY) === true);
 
@@ -188,6 +197,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         mainAction: runOnSelected('mainAction'),
         toggleSidePane,
         toggleFinishedWaves: runOnSelected('toggleFinishedWaves'),
+        toggleHeadless: runOnSelected('toggleHeadless'),
         stageAction: ({ arg }) => view.runFor(arg.sessionId, arg.action),
         openPreview: () => preview.press(),
       },
@@ -211,6 +221,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
           }
         });
         activities.on((sessionId) => view.activityChanged(sessionId));
+        chatSessions.on((sessionId, info) =>
+          view.headlessChanged(sessionId, info?.headless),
+        );
         for (const flow of flows.all().values()) {
           drawFlow(flow);
         }

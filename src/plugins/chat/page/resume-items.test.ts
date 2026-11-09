@@ -8,6 +8,7 @@ import type {
 } from '../contract';
 import {
   archiveStateOf,
+  newSessionIndex,
   type SessionItem,
   SESSIONS_HEADING,
   selectedAfterChange,
@@ -31,7 +32,21 @@ const a = row('a', 'alpha', false);
 const b = row('b', 'beta', true);
 const c = row('c', 'gamma', false);
 
-const newItem: SessionItem = { kind: 'new', label: 'New session' };
+const newItem: SessionItem = {
+  kind: 'new',
+  label: 'New session',
+  headless: false,
+};
+const newHeadlessItem: SessionItem = {
+  kind: 'new',
+  label: 'New headless session',
+  headless: true,
+};
+
+// A line's kind, a new line named by whether it is headless.
+function newLineId(item: { headless: boolean }): string {
+  return item.headless ? 'new-headless' : 'new';
+}
 
 function past(pastRow: PastSessionRow): SessionItem {
   return { kind: 'past', row: pastRow, label: pastRow.title };
@@ -73,10 +88,10 @@ describe('resume items', () => {
   it('sessionItems_NewFirstArchivedOnlyWhenShown', () => {
     const ids = (showArchived: boolean) =>
       sessionItems([a, b], [], STEP, posixPaths, showArchived).map((item) =>
-        item.kind === 'past' ? item.row.hostSessionId : item.kind,
+        item.kind === 'new' ? newLineId(item) : item.row.hostSessionId,
       );
-    expect(ids(false)).toEqual(['new', 'a']);
-    expect(ids(true)).toEqual(['new', 'a', 'b']);
+    expect(ids(false)).toEqual(['new', 'new-headless', 'a']);
+    expect(ids(true)).toEqual(['new', 'new-headless', 'a', 'b']);
   });
 
   it.each<{
@@ -95,7 +110,7 @@ describe('resume items', () => {
           rows: [closedRow('c'), closedRow('a')],
         },
       ],
-      lines: ['Recently closed:c', 'Recently closed:a', 'new'],
+      lines: ['Recently closed:c', 'Recently closed:a', 'new', 'new-headless'],
     },
     {
       given: 'the step folder spelled another way',
@@ -107,7 +122,7 @@ describe('resume items', () => {
       ],
       step: { projectDir: 'c:\\dev\\app\\', profile: 'work' },
       paths: windowsPaths,
-      lines: ['Recently closed:a', 'new', 'c'],
+      lines: ['Recently closed:a', 'new', 'new-headless', 'c'],
     },
     {
       given: 'a row of another folder',
@@ -117,7 +132,7 @@ describe('resume items', () => {
           rows: [closedRow('a', { projectDir: '/Users/u/dev/other' })],
         },
       ],
-      lines: ['new', 'a', 'c'],
+      lines: ['new', 'new-headless', 'a', 'c'],
     },
     {
       given: 'a row of another profile',
@@ -127,18 +142,18 @@ describe('resume items', () => {
           rows: [closedRow('a', { profile: 'personal' })],
         },
       ],
-      lines: ['new', 'a', 'c'],
+      lines: ['new', 'new-headless', 'a', 'c'],
     },
     {
       given: 'a row with no saved session',
       sections: [{ title: 'Recently closed', rows: [closedRow('z')] }],
-      lines: ['new', 'a', 'c'],
+      lines: ['new', 'new-headless', 'a', 'c'],
     },
     {
       given: 'an archived session, archived rows shown',
       sections: [{ title: 'Recently closed', rows: [closedRow('b')] }],
       showArchived: true,
-      lines: ['new', 'a', 'b', 'c'],
+      lines: ['new', 'new-headless', 'a', 'b', 'c'],
     },
     {
       given: 'two sections holding one session',
@@ -146,7 +161,7 @@ describe('resume items', () => {
         { title: 'Recently closed', rows: [closedRow('a')] },
         { title: 'Pinned', rows: [closedRow('a'), closedRow('c')] },
       ],
-      lines: ['Recently closed:a', 'Pinned:c', 'new'],
+      lines: ['Recently closed:a', 'Pinned:c', 'new', 'new-headless'],
     },
   ])(
     'sessionItems_SectionRows_ShowOnlyMatchingAndOnce given $given',
@@ -162,7 +177,7 @@ describe('resume items', () => {
       expect(
         items.map((item) => {
           if (item.kind === 'new') {
-            return 'new';
+            return newLineId(item);
           }
           return item.kind === 'section'
             ? `${item.section}:${item.row.hostSessionId}`
@@ -235,6 +250,20 @@ describe('resume items', () => {
     expect(rows).toEqual([row('a', 'alpha', false), row('b', 'beta', true)]);
   });
 
+  it('newSessionIndex_TwoNewLines_PicksNewSession', () => {
+    const items = sessionItems([a], [], STEP, posixPaths, false);
+
+    expect(items[newSessionIndex(items)]).toEqual(newItem);
+  });
+
+  it('selectedAfterChange_OnNewHeadlessLine_StaysOnIt', () => {
+    const before = [past(a), newItem, newHeadlessItem, past(c)];
+    const after = [newItem, newHeadlessItem, past(c)];
+
+    expect(selectedAfterChange(before, 2, after)).toBe(1);
+    expect(selectedAfterChange(before, 1, after)).toBe(0);
+  });
+
   it('selectedAfterChange_SameItemNextOrLast', () => {
     const before = [newItem, past(a), past(b), past(c)];
     expect(selectedAfterChange(before, 1, [newItem, past(b), past(c)])).toBe(1);
@@ -269,6 +298,11 @@ describe('resume items', () => {
 
   it.each([
     { given: 'the new session line', item: newItem, expected: null },
+    {
+      given: 'the new headless session line',
+      item: newHeadlessItem,
+      expected: null,
+    },
     { given: 'a section row', item: inSection(a), expected: 'live' },
     { given: 'a live row', item: past(a), expected: 'live' },
     { given: 'an archived row', item: past(b), expected: 'archived' },

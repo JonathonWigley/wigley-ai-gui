@@ -377,6 +377,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       focusedEntry: () => view.focusedEntry(),
       focusedBlock: () => view.focusedBlock(),
       activeTime: (sessionId) => view.activeTime(sessionId),
+      setHeadless: (sessionId, headless) =>
+        api.channel.invoke('setHeadless', sessionId, headless),
     });
     return {
       commands: {

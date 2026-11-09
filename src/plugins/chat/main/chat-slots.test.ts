@@ -56,6 +56,7 @@ const STATE: ChatSessionState = {
   repo: 'p',
   branch: null,
   worktrees: [],
+  headless: false,
 };
 
 function writersOf(store: SlotStore): ChatSlotWriters {

@@ -120,6 +120,7 @@ function stateOf(
     repo: 'app',
     branch: 'main',
     worktrees: [],
+    headless: false,
     compaction: null,
     ...overrides,
   };

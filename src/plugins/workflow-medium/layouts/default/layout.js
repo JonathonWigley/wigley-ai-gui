@@ -2,8 +2,9 @@
 
 // The built-in Medium look: a one-line chip under the session row (the level's
 // badge, then the stage's tag, coloured and pulsing by its status), the stepper's
-// trail above the composer, and the side pane beside the transcript (the status mark and line,
-// the count, the progress bar and the checklist as one flat list).
+// trail above the composer, ending on the Headless chip, and the side pane
+// beside the transcript (the status mark and line, the count, the progress bar
+// and the checklist as one flat list).
 
 /** @typedef {import('../../../workflow/layouts/layout').SideGroupInput} SideGroupInput */
 /** @typedef {import('../../../workflow/layouts/layout').SidePaneInput} SidePaneInput */
@@ -66,6 +67,7 @@ const layout = {
   strip(parent, input, kit) {
     const strip = kit.el(parent, 'div', 'workflow-strip');
     kit.stepper(strip, input.steps);
+    kit.headlessChip(strip, input.headless);
     return { element: strip };
   },
 

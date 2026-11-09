@@ -35,6 +35,7 @@ const TWO_SESSIONS: SavedSessions = {
       activeMs: 42000,
       rowId: 'row-alpha',
       unattended: true,
+      headless: true,
     },
     {
       hostSessionId: 's-beta',
@@ -54,6 +55,7 @@ const TWO_SESSIONS: SavedSessions = {
       activeMs: 0,
       rowId: 'row-beta',
       unattended: false,
+      headless: false,
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -79,6 +81,7 @@ const ONE_SESSION: SavedSessions = {
       activeMs: 1500,
       rowId: null,
       unattended: false,
+      headless: false,
     },
   ],
   selectedHostSessionId: null,
@@ -141,6 +144,7 @@ describe('createOpenSessions', () => {
             activeMs: 0,
             rowId: null,
             unattended: false,
+            headless: false,
           },
         ],
         selectedHostSessionId: null,
@@ -171,6 +175,16 @@ describe('createOpenSessions', () => {
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], rowId: undefined }]),
       expected: {
         sessions: [{ ...TWO_SESSIONS.sessions[0], rowId: null }],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a session without headless',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], headless: undefined },
+      ]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[0], headless: false }],
         selectedHostSessionId: null,
       },
     },
@@ -300,6 +314,10 @@ describe('createOpenSessions', () => {
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], unattended: 'yes' }]),
     },
     {
+      file: 'headless a string',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], headless: 'yes' }]),
+    },
+    {
       file: 'selectedHostSessionId a number',
       text: JSON.stringify({ ...TWO_SESSIONS, selectedHostSessionId: 7 }),
     },
@@ -318,6 +336,18 @@ describe('createOpenSessions', () => {
     await expect(test.open.load()).rejects.toThrow(UNREADABLE);
     await expect(test.open.save(TWO_SESSIONS)).rejects.toThrow(UNREADABLE);
     expect(await test.data.read(OPEN_SESSIONS_FILE)).toBe(text);
+  });
+
+  it('save_HeadlessRow_RoundTrips', async () => {
+    const test = setUp();
+
+    await test.open.save(TWO_SESSIONS);
+
+    const loaded = await test.open.load();
+    expect(loaded.sessions.map((session) => session.headless)).toEqual([
+      true,
+      false,
+    ]);
   });
 
   it('save_TwoCallsInARow_FileHoldsTheSecond', async () => {

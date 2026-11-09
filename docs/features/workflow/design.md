@@ -277,8 +277,10 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   level skill started, and nothing before. While the session's row holds a running activity (chat's
   working, which counts background tasks too), the chip ends on a running `Working` tag, pulsing, unless its stage tag
   is already running: so a busy session with no stage, or at a done or ready stage, still says it works.
-- **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the trail, the countdown and the main
-  action. A stage outside the stepper keeps the status mark and line, since the trail does not show it. Once a plan is
+- **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the trail, the countdown, the main
+  action and last the Headless chip, a toggle Tag reading `Headless` (accent while on, muted while off) that runs
+  `workflow.toggleHeadless` (`Space w h`) on its session. While the session is headless its row's chip ends on an accent
+  `Headless` tag in every stage, idle and no workflow included. A stage outside the stepper keeps the status mark and line, since the trail does not show it. Once a plan is
   read the side pane holds the detail and the other actions, so a hidden pane leaves the trail, the main action and the
   `Space w` keys. Idle draws nothing.
 - **Side pane** — one section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
