@@ -6,10 +6,18 @@ import type {
   ContextWindowFill,
 } from '../layouts/layout';
 
-// `isOpen` says whether the user has a source open; `showPath` shows a full path as the view does (home as `~`).
+// `isOpen` says whether the user has a source open; `showsAll` whether the user asked for every source; `showPath`
+// shows a full path as the view does (home as `~`).
 export interface BreakdownReaders {
   isOpen(sourceId: string): boolean;
+  showsAll: boolean;
   showPath(path: string): string;
+}
+
+// What a click on the breakdown changes: one source's opening, or whether every source shows.
+export interface BreakdownToggles {
+  toggle(sourceId: string): void;
+  toggleShowsAll(): void;
 }
 
 const percentText = (share: number) => `${Math.round(share * 100)}%`;
@@ -49,7 +57,7 @@ function windowFill(
 export function breakdownInput(
   event: ContextBreakdownAgentEvent,
   readers: BreakdownReaders,
-  toggle: (sourceId: string) => void,
+  toggles: BreakdownToggles,
 ): BreakdownInput {
   const sources: ContextSourceRow[] = event.sources.map((source, index) => {
     const share = shareOf(source.tokens, event.totalTokens);
@@ -72,6 +80,8 @@ export function breakdownInput(
     window: windowFill(event),
     deferred:
       event.deferredTokens > 0 ? formatTokens(event.deferredTokens) : null,
-    toggle,
+    toggle: toggles.toggle,
+    showsAll: readers.showsAll,
+    toggleShowsAll: toggles.toggleShowsAll,
   };
 }

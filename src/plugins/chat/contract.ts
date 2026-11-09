@@ -644,7 +644,9 @@ export interface ChatSideSection {
 // by `order`, equal orders keeping add order. The body adds its own padding, so
 // the part adds none. A part that draws nothing, by drawing no child element in
 // `parent` or by setting `hidden` on each, hides its section. It takes no stop
-// and no key scope.
+// and no key scope. The chat layout's `sideSection` gets the part's id, so a
+// layout may frame one part its own way: the default draws `chat.session` as the
+// hub's header, with no head, which the hub's cursor then passes over.
 export interface ChatSidePart {
   id: string;
   title: string;

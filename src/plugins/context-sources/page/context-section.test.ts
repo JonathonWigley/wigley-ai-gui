@@ -131,6 +131,45 @@ describe('createContextSection', () => {
     expect(closed).toEqual([false, false]);
   });
 
+  it('toggleShowsAll_FlipsShowsAllForTheSession', () => {
+    const { build, lastInput } = setUp();
+    build();
+
+    const before = lastInput()?.showsAll;
+    lastInput()?.toggleShowsAll();
+    const after = lastInput()?.showsAll;
+
+    expect([before, after]).toEqual([false, true]);
+  });
+
+  it('defaultLayout_SevenSources_ListsFiveUntilTheMoreLineShowsAll', () => {
+    const seven: ContextBreakdownAgentEvent = {
+      ...BREAKDOWN,
+      sources: [1, 2, 3, 4, 5, 6, 7].map((n) => ({
+        id: `source-${n}`,
+        label: `Source ${n}`,
+        tokens: 1000,
+        items: [],
+      })),
+    };
+    const { section, parent, build } = setUp(seven);
+    section.setLayouts(withUser<Layout>(defaultLayout, {}));
+    build();
+    const shown = () => ({
+      rows: findAll(parent, 'context-sources-row').length,
+      more: findAll(parent, 'context-sources-more')[0]?.textContent,
+    });
+
+    const first = shown();
+    findAll(parent, 'context-sources-more')[0]?.click();
+    const all = shown();
+
+    expect([first, all]).toEqual([
+      { rows: 5, more: '+ 2 more' },
+      { rows: 7, more: 'Show fewer' },
+    ]);
+  });
+
   it('toggle_ThenANewBreakdown_KeepsTheSourceOpen', () => {
     const { build, change, lastInput } = setUp();
     build();

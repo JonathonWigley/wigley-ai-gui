@@ -661,12 +661,8 @@ describe('mountChatView session facts source', () => {
     });
     mount.open(stateOf([]));
     const source = mount.view.sessionFactsSource('row-1');
-    const branchesHeard: (string | undefined)[] = [];
-    source?.onChanged(() =>
-      branchesHeard.push(
-        source.input().facts.find((fact) => fact.label === 'Branch')?.value,
-      ),
-    );
+    const branchesHeard: (string | null)[] = [];
+    source?.onChanged(() => branchesHeard.push(source.input().branch));
 
     mount.setInfo('row-1', { branch: 'feature' });
 
@@ -676,20 +672,16 @@ describe('mountChatView session facts source', () => {
     ).toBe(composerRedrawn);
   });
 
-  it('worktreesWrite_ListenerHearsWorktreeRow', () => {
+  it('worktreesWrite_ListenerHearsWorktrees', () => {
     const mount = mounted();
     mount.open(stateOf([]));
     const source = mount.view.sessionFactsSource('row-1');
-    const worktreesHeard: (string | undefined)[] = [];
-    source?.onChanged(() =>
-      worktreesHeard.push(
-        source.input().facts.find((fact) => fact.label === 'Worktree')?.value,
-      ),
-    );
+    const worktreesHeard: (readonly string[])[] = [];
+    source?.onChanged(() => worktreesHeard.push(source.input().worktrees));
 
     mount.setInfo('row-1', { worktrees: ['app-fix'] });
 
-    expect(worktreesHeard).toEqual(['app-fix']);
+    expect(worktreesHeard).toEqual([['app-fix']]);
   });
 
   it('source_SubscriptionDisposedOrSessionUnheld_HearsNothingAndIsNull', () => {

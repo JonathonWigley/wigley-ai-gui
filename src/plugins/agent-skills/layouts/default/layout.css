@@ -1,18 +1,38 @@
-/* The default layout's Skills section: one row per skill, its name in mono, which ellipsizes at the row's width. */
+/* The default layout's Skills section: a group per namespace, its name dim over
+   its chips, which wrap; each chip holds the skill's name in mono, ellipsized at
+   the section's width. */
 
 [data-layout-owner='agent-skills'][data-layout='default'].agent-skills-list {
   display: flex;
   flex-direction: column;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+[data-layout-owner='agent-skills'][data-layout='default']
+  .agent-skills-namespace {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-11);
+  margin-bottom: var(--wg-space-1);
+}
+
+[data-layout-owner='agent-skills'][data-layout='default'] .agent-skills-chips {
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--wg-space-1);
   min-width: 0;
 }
 
 [data-layout-owner='agent-skills'][data-layout='default'] .agent-skills-name {
-  min-width: 0;
-  overflow: hidden;
-  font-family: var(--wg-font-mono);
-  font-size: var(--wg-text-mono);
+  background: var(--wg-card-background);
+  border: 1px solid var(--wg-border-subtle);
+  border-radius: var(--wg-radius-sm);
   color: var(--wg-fg-secondary);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-11);
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 var(--wg-space-1);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

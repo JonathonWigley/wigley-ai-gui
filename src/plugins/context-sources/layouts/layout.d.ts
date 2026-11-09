@@ -9,6 +9,7 @@
 // - the section's frame, its title, its summary (the total and its share of the window) and its collapse, which are
 //   chat's;
 // - which sources are open, per session: `toggle` opens or closes one and draws the breakdown again;
+// - whether every source shows, per session: `toggleShowsAll` flips it and draws the breakdown again;
 // - no keys and no focus: the breakdown takes neither.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
@@ -43,12 +44,15 @@ export interface ContextWindowFill {
 }
 
 // `window` is null when the harness reports no window; `deferred` reads `23k` for what the harness can load and has
-// not, null when nothing is deferred. `toggle(id)` opens or closes the source with that id.
+// not, null when nothing is deferred. `toggle(id)` opens or closes the source with that id. `showsAll` is false until
+// the user asks for every source, for a layout that lists only the largest few; `toggleShowsAll()` flips it.
 export interface BreakdownInput {
   sources: readonly ContextSourceRow[];
   window: ContextWindowFill | null;
   deferred: string | null;
   toggle(id: string): void;
+  showsAll: boolean;
+  toggleShowsAll(): void;
 }
 
 // What a part returns: its root, appended to `parent`.

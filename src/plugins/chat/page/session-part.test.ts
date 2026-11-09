@@ -17,8 +17,6 @@ import { createChatLayouts } from './chat-layouts';
 import { createSessionPart, sessionFactsOf } from './session-part';
 
 const HOME = '/Users/u';
-const FOLDER = { label: 'Folder', value: '~/dev/app' };
-const HARNESS = { label: 'Harness', value: 'claude' };
 
 function control(id: string, value: string) {
   return { id, label: id, value, enabled: true };
@@ -51,10 +49,12 @@ const WITH_EFFORT: ModelEffortInput = {
 
 function factsWithBranch(branch: string): SessionFactsInput {
   return {
-    facts: [
-      { label: 'Project', value: 'app-repo' },
-      { label: 'Branch', value: branch },
-    ],
+    repo: 'app-repo',
+    branch,
+    folder: '~/dev/app',
+    worktrees: [],
+    harness: 'claude',
+    modelEffort: null,
   };
 }
 
@@ -103,75 +103,30 @@ describe('sessionFactsOf', () => {
     case: string;
     input: ComposerInput;
     worktrees?: string[];
-    facts: SessionFactsInput['facts'];
+    expected: Partial<SessionFactsInput>;
   }>([
     {
-      case: 'BranchNull_NoBranchRow',
+      case: 'BranchNull_BranchNull',
       input: composerInput(null, WITH_EFFORT),
-      facts: [
-        { label: 'Project', value: 'app-repo' },
-        FOLDER,
-        HARNESS,
-        { label: 'Model', value: 'Opus 5 · high' },
-      ],
+      expected: { branch: null, modelEffort: 'Opus 5 · high' },
     },
     {
-      case: 'ModelEffortNull_NoModelRow',
+      case: 'ModelEffortNull_ModelEffortNull',
       input: composerInput('main', null),
-      facts: [
-        { label: 'Project', value: 'app-repo' },
-        { label: 'Branch', value: 'main' },
-        FOLDER,
-        HARNESS,
-      ],
+      expected: { branch: 'main', modelEffort: null },
     },
     {
       case: 'EffortNull_ModelAlone',
       input: composerInput('main', NO_EFFORT),
-      facts: [
-        { label: 'Project', value: 'app-repo' },
-        { label: 'Branch', value: 'main' },
-        FOLDER,
-        HARNESS,
-        { label: 'Model', value: 'Opus 5' },
-      ],
+      expected: { modelEffort: 'Opus 5' },
     },
     {
-      case: 'ModelAndEffort_EveryRowInOrder',
-      input: composerInput('main', WITH_EFFORT),
-      facts: [
-        { label: 'Project', value: 'app-repo' },
-        { label: 'Branch', value: 'main' },
-        FOLDER,
-        HARNESS,
-        { label: 'Model', value: 'Opus 5 · high' },
-      ],
-    },
-    {
-      case: 'OneWorktree_WorktreeRowAfterFolder',
-      input: composerInput('main', null),
-      worktrees: ['app-fix'],
-      facts: [
-        { label: 'Project', value: 'app-repo' },
-        { label: 'Branch', value: 'main' },
-        FOLDER,
-        { label: 'Worktree', value: 'app-fix' },
-        HARNESS,
-      ],
-    },
-    {
-      case: 'TwoWorktrees_PluralRowListsBoth',
+      case: 'TwoWorktrees_BothInOrder',
       input: composerInput('main', null),
       worktrees: ['app-fix', 'docs-fix'],
-      facts: [
-        { label: 'Project', value: 'app-repo' },
-        { label: 'Branch', value: 'main' },
-        FOLDER,
-        { label: 'Worktrees', value: 'app-fix, docs-fix' },
-        HARNESS,
-      ],
+      expected: { worktrees: ['app-fix', 'docs-fix'] },
     },
-  ])('sessionFactsOf_$case', ({ input, worktrees = [], facts }) => {
+  ])('sessionFactsOf_$case', ({ input, worktrees = [], expected }) => {
     expect(
       sessionFactsOf(
         input,
@@ -181,7 +136,15 @@ describe('sessionFactsOf', () => {
           paths: posixPaths,
         },
       ),
-    ).toEqual({ facts });
+    ).toEqual({
+      repo: 'app-repo',
+      branch: 'main',
+      folder: '~/dev/app',
+      worktrees: [],
+      harness: 'claude',
+      modelEffort: null,
+      ...expected,
+    });
   });
 });
 
@@ -191,16 +154,16 @@ describe('Session part', () => {
     vi.unstubAllGlobals();
   });
 
-  it('build_BranchChanges_ValueUpdatesInTheSameElement', () => {
+  it('build_BranchChanges_BranchUpdatesInTheSameHeader', () => {
     const { source, change, listeners } = fakeSource(factsWithBranch('main'));
     const { parent, part } = partOver(source);
 
     const built = part.build(asHtml(parent), 'row-1', NO_SECTION);
-    const rowBefore = findAll(parent, 'chat-session-fact')[1];
+    const headerBefore = findAll(parent, 'chat-session-header')[0];
     change(factsWithBranch('feature'));
 
-    expect(findAll(parent, 'chat-session-fact')[1]).toBe(rowBefore);
-    expect(findAll(parent, 'chat-session-fact-value')[1].textContent).toBe(
+    expect(findAll(parent, 'chat-session-header')[0]).toBe(headerBefore);
+    expect(findAll(parent, 'chat-session-branch-name')[0].textContent).toBe(
       'feature',
     );
 
@@ -251,7 +214,7 @@ describe('Session part', () => {
     expect(parent.children).toHaveLength(1);
     expect(parent.children[0]).not.toBe(drawnFirst);
     expect(parent.children[0].dataset.layout).toBe(drawnBy);
-    expect(findAll(parent, 'chat-session-fact-value')[1].textContent).toBe(
+    expect(findAll(parent, 'chat-session-branch-name')[0].textContent).toBe(
       'feature',
     );
   });

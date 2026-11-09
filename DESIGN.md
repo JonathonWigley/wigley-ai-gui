@@ -435,17 +435,22 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
   under `640px` and by `Space b h`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
   chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
-  `border-subtle` line parts the sections. Main agent holds the dock, Plan the workflow side pane, Skills one row per
-  skill and agent (the name in mono, a Tag for `main` or the subagent), and Session one row per fact (a dim label, its
-  value ellipsized). While the hub is not visible, the composer's **activity line** shows the dock's header on one line,
+  `border-subtle` line parts the sections. The hub opens on the Session header, which has no title or chevron: the
+  repo in `text-14` semibold with the branch beside it (a `git-branch` icon, the name in `text-11` mono, `fg-secondary`),
+  the folder under them in `text-11` mono `fg-tertiary`, then Tags for each worktree (`accent`), the harness and the
+  model · effort (neutral), each ellipsized at the hub's width. Main agent holds the dock, Plan the workflow side pane,
+  Skills a chip per skill (the name in `text-11` mono on `card-background` under a `border-subtle` hairline, `radius-sm`)
+  grouped under each namespace in `text-11` `fg-tertiary`, and Context the breakdown, its rows the largest five until
+  its `fg-link` `+ 3 more` line shows them all. While the hub is not visible, the composer's **activity line** shows the dock's header on one line,
   or its finished line; while the hub is visible and the turn runs, the transcript's **turn line** shows that header
   under the last entry in `fg-tertiary`. While the session
   works on a turn, the dock shows a header (the turn's time as `m:ss` in tabular numerals and a state word,
   `1:05 Working…`), a `radius-md` card listing the main agent's latest three tool calls in mono (the newest in `fg`,
-  the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts, dim
-  (`Read 3 Bash 2 Edit 1`). When the turn ends, the dock shrinks to one dim `fg-tertiary` line, such as
-  `Done · 1m 05s · $0.57 · Bash 6 · Read 2`, its time compact in tabular numerals, and keeps it until the user sends
-  the next message; with no finished turn to show it takes no space. While the session compacts, the dock's header
+  the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts as chips, each
+  the tool's name in `fg-secondary` and its count in semibold `fg` tabular numerals on `card-background`, `radius-sm`,
+  `text-11`. When the turn ends, the dock shrinks to one dim `fg-tertiary` line, such as `Done · 1m 05s · $0.57`, its
+  time compact in tabular numerals, over the same chips, and keeps them until the user sends the next message; the
+  composer's activity line adds the counts to its line instead (`Done · 1m 05s · $0.57 · Bash 6 · Read 2`); with no finished turn to show it takes no space. While the session compacts, the dock's header
   reads `0:06 Compacting…` with the trigger after it in `fg-secondary`, ellipsized when narrow (`auto · cache cold · 182k`, `/compact`,
   `autocompact`), over a thin indeterminate bar in `status-running`, and no tool card. A message held for a compaction is
   a pending row reading `sends after compaction · ⌃C skips`. A finished compaction leaves a divider in the

@@ -46,7 +46,8 @@ interface HeldParent {
 }
 
 // The breakdown is drawn directly into `parent`, leaving it empty before the session's first breakdown, so the section
-// hides. A click on a source with items opens or closes it in that session, which redraws. After a draw it logs
+// hides. A click on a source with items opens or closes it in that session, and one on the more line shows every
+// source or the largest few again, each of which redraws. After a draw it logs
 // `context in <name>: <summary>` when the summary differs from the last logged for that session.
 export function createContextSection(deps: ContextSectionDeps): ContextSection {
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
@@ -56,6 +57,7 @@ export function createContextSection(deps: ContextSectionDeps): ContextSection {
   });
   const held = new Map<string, HeldParent>();
   const openSources = new Map<string, Set<string>>();
+  const showingAll = new Set<string>();
   const loggedSummaries = new Map<string, string>();
 
   const disposeDrawn = (holder: HeldParent) => {
@@ -70,6 +72,17 @@ export function createContextSection(deps: ContextSectionDeps): ContextSection {
       open.add(sourceId);
     }
     openSources.set(sessionId, open);
+    redraw(sessionId);
+  };
+
+  const toggleShowsAll = (sessionId: string) => {
+    if (!showingAll.delete(sessionId)) {
+      showingAll.add(sessionId);
+    }
+    redraw(sessionId);
+  };
+
+  const redraw = (sessionId: string) => {
     const holder = held.get(sessionId);
     if (holder !== undefined) {
       draw(sessionId, holder);
@@ -86,9 +99,13 @@ export function createContextSection(deps: ContextSectionDeps): ContextSection {
       {
         isOpen: (sourceId) =>
           openSources.get(sessionId)?.has(sourceId) ?? false,
+        showsAll: showingAll.has(sessionId),
         showPath: deps.showPath,
       },
-      (sourceId) => toggleSource(sessionId, sourceId),
+      {
+        toggle: (sourceId) => toggleSource(sessionId, sourceId),
+        toggleShowsAll: () => toggleShowsAll(sessionId),
+      },
     );
     return layoutParts.draw(
       'breakdown',
@@ -149,10 +166,7 @@ export function createContextSection(deps: ContextSectionDeps): ContextSection {
       },
     },
     breakdownUpdated(sessionId) {
-      const holder = held.get(sessionId);
-      if (holder !== undefined) {
-        draw(sessionId, holder);
-      }
+      redraw(sessionId);
     },
     setLayouts(shown) {
       layoutParts.setLayouts(shown);
@@ -160,6 +174,7 @@ export function createContextSection(deps: ContextSectionDeps): ContextSection {
     },
     forget(sessionId) {
       openSources.delete(sessionId);
+      showingAll.delete(sessionId);
       loggedSummaries.delete(sessionId);
     },
   };

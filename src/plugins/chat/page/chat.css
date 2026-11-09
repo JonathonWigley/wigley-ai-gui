@@ -16,8 +16,8 @@
   position: relative;
 }
 
-/* The session hub keeps the tab's height. Main agent keeps its own height, which
-   the dock bounds. Each other section takes its content's height, and when the
+/* The session hub keeps the tab's height. The Session header and Main agent keep
+   their own heights, the dock bounding Main agent's. Each other section takes its content's height, and when the
    column is too short gives up height by its content's share, scrolling in its
    own body and keeping its whole head.
    A section whose part draws nothing takes no space, and the hub with none left
@@ -71,6 +71,7 @@
   overflow: hidden;
 }
 
+.chat-side-part[data-part='chat.session'],
 .chat-side-part[data-part='chat.mainAgent'] {
   flex: none;
 }

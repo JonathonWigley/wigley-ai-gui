@@ -81,8 +81,9 @@ function setUp(skills: RosterSkill[] = []) {
   return { list, parent, summaries, logged, build, changeSkills };
 }
 
+// Each skill's full name, which its chip holds as its tooltip.
 function namesIn(parent: FakeElement): string[] {
-  return findAll(parent, 'agent-skills-name').map((name) => name.textContent);
+  return findAll(parent, 'agent-skills-name').map((name) => name.title);
 }
 
 beforeEach(() => {
@@ -142,6 +143,27 @@ describe('skill list', () => {
     build();
 
     expect(namesIn(parent)).toEqual([shown]);
+  });
+
+  it('build_Default_GroupsChipsByNamespaceInStartOrder', () => {
+    const { parent, build } = setUp(
+      ['wigley:feature', 'tiny', 'other:run', 'wigley:make'].map((skill) => ({
+        ...MAIN_FOO,
+        skill,
+      })),
+    );
+
+    build();
+
+    const groups = findAll(parent, 'agent-skills-group').map((group) => [
+      findAll(group, 'agent-skills-namespace')[0]?.textContent ?? '',
+      ...findAll(group, 'agent-skills-name').map((chip) => chip.textContent),
+    ]);
+    expect(groups).toEqual([
+      ['', 'tiny'],
+      ['wigley', 'feature', 'make'],
+      ['other', 'run'],
+    ]);
   });
 
   it('build_SameSkillBareAndScoped_DrawsOneRow', () => {

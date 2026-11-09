@@ -841,7 +841,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
   `docs/features/agent-chat/design.md` § Activity line), `working` (the activity dock in the session hub's Main agent
-  section: the running turn, then its finished line, § Activity dock), `workingLine` (its one line in the composer's `working` slot), `sideSection` and `sessionFacts` (the hub's section frame and Session rows),
+  section: the running turn, then its finished line, § Activity dock), `workingLine` (its one line in the composer's `working` slot), `sideSection` and `sessionFacts` (the hub's section frame and Session header),
   `queuedMessage` (one pending message's row, § Pending messages), `completionDescription` (a `/` completion row's description), `composer`, `statusLine`, `attachments`, `pickerRow`, `pickerHeading`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage`, `pickerHeading` and `imageViewer`
   take the base kit itself). Beside the parts, the boolean `activityInTranscript` says whether the entry list draws

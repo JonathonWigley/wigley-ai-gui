@@ -80,20 +80,22 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 .chat-tab  (inline-size container)
 ├── .chat-main        entries + floating composer
 └── .chat-side-parts  264 px wide until the user drags it
+      repo ⎇ branch           chat: the Session header — folder, then worktree, harness and model · effort tags
       ▾ Main agent   2:05     chat: the activity dock
       ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws); Checklist for Small and Medium
       ▾ Skills       4        agent-skills: each skill the main agent started
       ▾ Context  128k · 13%   context-sources: where the main agent's context comes from
-      ▾ Session               chat: project, branch, folder, harness, model · effort
 ```
 
 - **A side part** declares a `title` and an `order`. Chat sorts the sections by `order` and draws each one's frame
-  through the chat layout's `sideSection` part. The orders: Main agent 10, Plan 20, Skills 30, Context 35, Session 40.
+  through the chat layout's `sideSection` part, which gets the part's id. The orders: Session 0, Main agent 10, Plan 20,
+  Skills 30, Context 35. The default layout frames Session as the hub's header: its body alone, with no head, so it
+  never collapses and the hub's cursor passes over it.
 - **A section's frame:** its title, the summary its part sets (the turn's time, `5/7`, the skill count), and a chevron
   that collapses it. A click on the title toggles the section. Collapsed sections are kept in `uiState` by part id and
   apply to every session. A section takes no key and no focus.
-- **Height:** Main agent always shows whole at its own height, which the dock bounds: about 60 px idle, about 155 px
-  running. Plan, Skills and Session each take their content's height. When the column is too short they share what is
+- **Height:** the Session header and Main agent always show whole at their own heights, Main agent's bounded by the
+  dock: about 60 px idle, about 155 px running. Plan, Skills and Context each take their content's height. When the column is too short they share what is
   left by their content's height, and each scrolls in its own body and keeps its whole head, down to the head alone.
   Plan's action buttons stick to the section's bottom over a task list of at least two rows, or its own height when it
   holds less, so a short list leaves no blank. With a long plan and three
@@ -111,22 +113,26 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   Dismiss or a new plan, and `Checklist` for Small and Medium, which draw it once the agent has set a checklist
   (`workflow/design.md` § Where it draws). The section hides at every other time.
 - **Skills:** the skills the main agent started in this row's session, by a Skill call or a typed slash command (the
-  `skillStarted` agent event): one row per skill, in start order, showing only its name, a project-scoped skill's without
-  its folder path; the summary counts skills. A subagent's skills stay in the roster and are not listed. A skill's row
+  `skillStarted` agent event): a chip per skill, in start order, grouped under its namespace (`wigley` for
+  `wigley:feature`) with the namespace dim above its chips and skills with none first, each chip holding the rest of
+  the name in mono and the full name as its tooltip; a project-scoped skill shows without its folder path. The summary
+  counts skills. A subagent's skills stay in the roster and are not listed. A skill's row
   stays through a compaction, the agent's end and a `/clear`, until the session's row ends. After an app relaunch a re-attached process's
   log brings its skills back, and a resumed session's list starts empty, because the roster is not saved. It does not say the skill's text is still in the agent's context.
 - **Context:** where the main agent's context comes from, as the harness last reported it (the `contextBreakdown`
   agent event; Claude's `get_context_usage`, asked at start, after each turn and after a compaction). A stacked bar of
   the sources, each coloured by its place in the list; under it the context's fill of the window, with a tick where
   compaction starts and `128k of 1M` / `compacts at 967k` beneath; then one row per source, largest first, with its
-  tokens and its share of the context. Claude's Messages category is split into attachments, tool results, tool calls,
+  tokens and its share of the context: the largest five, then a `+ 3 more` line that shows them all and turns into
+  `Show fewer`, kept per session for the page's life. Claude's Messages category is split into attachments, tool results, tool calls,
   agent replies and user messages, each its own source. A click on a source with items (memory files by path with the
   home as `~`, skills, MCP servers, agents, tools, attachment types) opens or closes them under it, per session, for
   the page's life. Deferred tools, which are not in context until loaded, are one dim line under the rows. The summary
   is the total and its share of the window (`128k · 13%`). The section hides until the session's first breakdown; a
   subagent's context has none.
-- **Session:** the repo name, the branch (left out when none), the session folder with the home folder as `~`, the
-  harness id and the model · effort. These read chat's own state, so chat names no other plugin. The spend stays in the
+- **Session:** the hub's header, first and with no head: the repo name in semibold with the branch beside it in mono
+  (left out when none), the session folder with the home folder as `~` dim in mono under them, then a Tag per worktree
+  the agents wrote in (accent), the harness id and the model · effort (neutral). These read chat's own state, so chat names no other plugin. The spend stays in the
   status line.
 
 ## The agent strip
@@ -160,15 +166,15 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 ## The activity dock
 
 - **While a turn runs:** the turn's time `m:ss` and its state word (`1:05 Working…`), the main agent's latest 3 tool
-  calls (the newest in `fg`, older ones dim, a failed one in the error colour), and the main agent's tool counts. It
+  calls (the newest in `fg`, older ones dim, a failed one in the error colour), and a chip per tool with its count. It
   replaces the working block that sat under the transcript's last entry.
-- **When the turn ends:** one dim line, `Done · 1m 05s · $0.57 · Bash 6 · Read 2`, kept until the user sends the next
-  message; the next turn's live dock then takes its place. Idle with no finished turn, the dock takes no space.
+- **When the turn ends:** one dim line, `Done · 1m 05s · $0.57`, over the tool count chips, kept until the user sends
+  the next message; the next turn's live dock then takes its place. Idle with no finished turn, the dock takes no space.
 - **Main agent only:** a subagent's tool calls show in its strip box, not in the dock.
 - **Display only:** the dock is not a stop and has no keys.
 - **Where it shows:** in the hub's Main agent section, whose summary is the turn's time while the turn runs. While the
   hub is not visible, the composer's activity line shows the same time and state (`1:05 Working…`), or the finished line
-  once the turn ends. While the hub is visible, the transcript's turn line shows that time and state under the last
+  with its counts once the turn ends (`Done · 1m 05s · $0.57 · Bash 6 · Read 2`). While the hub is visible, the transcript's turn line shows that time and state under the last
   entry, ahead of any pending rows, and hides once the turn ends. All of them read one dock, so they cannot disagree.
   CSS alone picks which line shows, so no code measures the Chat tab.
 - **The transcript shows messages and turn dividers:** the default chat layout sets `activityInTranscript` to `false`,

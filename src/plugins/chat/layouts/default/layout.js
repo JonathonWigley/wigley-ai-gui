@@ -4,13 +4,16 @@
 // line, live or finished), the activity dock, its one line and that line's place
 // just above the composer's box, the pending messages' rows, the composer, the
 // list rows and headings, a / completion row's description, the dialogs' bodies, the image viewer, the run time under a session's
-// row, and the session hub's section frames and Session rows. Every collapsible
+// row, and the session hub's section frames and Session header. Every collapsible
 // row's body is built on its first open and kept, so an update refills it in
 // place whether it is open or closed.
 
 // The tool calls the activity dock's box lists; a user layout sets its own
 // box's length.
 const WORKING_ACTION_LINES = 3;
+
+// The side part the hub frames as its header, with no head.
+const SESSION_PART_ID = 'chat.session';
 
 // The input field holding the file a tool acts on, by tool name.
 /** @type {Record<string, string | undefined>} */
@@ -340,13 +343,13 @@ function workingBox(tools) {
   return box;
 }
 
-// The finished turn's one line: the word, the time, the cost when known, then
-// each tool's count, all joined with ` · `.
+// The finished turn's word, its time and its cost when known.
 /**
  * @param {import('../layout').DoneWorkingInput} input
  * @param {import('../layout').BaseKit} kit
+ * @returns {string[]}
  */
-function doneLine(input, kit) {
+function doneParts(input, kit) {
   const parts = [
     isFinishedStop(input.stopReason) ? 'Done' : input.stopReason,
     kit.duration(input.endedAt - input.startedAt),
@@ -354,10 +357,35 @@ function doneLine(input, kit) {
   if (input.costUsd !== null) {
     parts.push(`$${input.costUsd.toFixed(2)}`);
   }
-  for (const [name, count] of toolCounts(input.steps)) {
-    parts.push(`${name} ${count}`);
+  return parts;
+}
+
+// The finished turn's one line: the word, the time, the cost when known, then
+// each tool's count, all joined with ` · `.
+/**
+ * @param {import('../layout').DoneWorkingInput} input
+ * @param {import('../layout').BaseKit} kit
+ */
+function doneLine(input, kit) {
+  const counts = toolCounts(input.steps).map(
+    ([name, count]) => `${name} ${count}`,
+  );
+  return [...doneParts(input, kit), ...counts].join(' · ');
+}
+
+// A chip per tool with its count, most used first.
+/** @param {import('../layout').StepInput[]} steps */
+function toolCountChips(steps) {
+  const chips = el('div', 'chat-working-counts');
+  for (const [name, count] of toolCounts(steps)) {
+    const chip = el('span', 'chat-working-count');
+    chip.append(
+      el('span', 'chat-working-count-name', name),
+      el('span', 'chat-working-count-number', String(count)),
+    );
+    chips.append(chip);
   }
-  return parts.join(' · ');
+  return chips;
 }
 
 // The running turn's or compaction's header: its time, its state, and what
@@ -391,9 +419,9 @@ function fillCompacting(block, input, bar) {
   block.replaceChildren(workingHead(input), bar);
 }
 
-// A finished turn's one line; a compaction's header over `bar`; a running
-// turn's header, then, once the turn has a tool call, the box and the tool
-// counts.
+// A finished turn's word, time and cost over its tool count chips; a
+// compaction's header over `bar`; a running turn's header, then, once the turn
+// has a tool call, the box and the tool count chips.
 /**
  * @param {HTMLElement} block
  * @param {import('../layout').WorkingInput} input
@@ -408,7 +436,12 @@ function fillWorking(block, input, kit, bar) {
   }
   block.replaceChildren();
   if (input.state === 'done') {
-    block.append(el('div', 'chat-working-done', doneLine(input, kit)));
+    block.append(
+      el('div', 'chat-working-done', doneParts(input, kit).join(' · ')),
+    );
+    if (input.steps.some((step) => step.kind === 'tool')) {
+      block.append(toolCountChips(input.steps));
+    }
     return;
   }
   block.append(workingHead(input));
@@ -422,16 +455,7 @@ function fillWorking(block, input, kit, bar) {
   if (tools.length === 0) {
     return;
   }
-  block.append(
-    workingBox(tools),
-    el(
-      'div',
-      'chat-working-counts',
-      toolCounts(tools)
-        .map(([name, count]) => `${name} ${count}`)
-        .join(' '),
-    ),
-  );
+  block.append(workingBox(tools), toolCountChips(tools));
 }
 
 // A finished turn's one line, else the running turn's or compaction's header.
@@ -510,41 +534,34 @@ function showSideSection(chevron, summary, section, input, kit) {
 }
 
 /**
- * @param {string} label
- */
-function sessionFactRow(label) {
-  const element = el('div', 'chat-session-fact');
-  const value = el('span', 'chat-session-fact-value');
-  element.append(el('span', 'chat-session-fact-label', label), value);
-  return { element, value };
-}
-
-/**
- * Patches `rows`, by label, to `input`'s facts in their order: an unchanged row
- * keeps its elements.
- *
- * @param {HTMLElement} holder
- * @param {Map<string, { element: HTMLElement, value: HTMLElement }>} rows
+ * @param {HTMLElement} header
  * @param {import('../layout').SessionFactsInput} input
+ * @param {import('../layout').BaseKit} kit
  */
-function showSessionFacts(holder, rows, input) {
-  const labels = new Set(input.facts.map((fact) => fact.label));
-  for (const [label, row] of rows) {
-    if (!labels.has(label)) {
-      row.element.remove();
-      rows.delete(label);
-    }
+function fillSessionHeader(header, input, kit) {
+  header.replaceChildren();
+  const title = el('div', 'chat-session-title');
+  const repo = el('span', 'chat-session-repo', input.repo);
+  repo.title = input.repo;
+  title.append(repo);
+  if (input.branch !== null) {
+    const branch = el('span', 'chat-session-branch');
+    kit.icon(branch, 'git-branch');
+    branch.append(el('span', 'chat-session-branch-name', input.branch));
+    branch.title = input.branch;
+    title.append(branch);
   }
-  input.facts.forEach((fact, index) => {
-    const row = rows.get(fact.label) ?? sessionFactRow(fact.label);
-    rows.set(fact.label, row);
-    row.value.textContent = fact.value;
-    row.value.title = fact.value;
-    const placed = holder.children[index] ?? null;
-    if (placed !== row.element) {
-      holder.insertBefore(row.element, placed);
-    }
-  });
+  const folder = el('div', 'chat-session-folder', input.folder);
+  folder.title = input.folder;
+  const tags = el('div', 'chat-session-tags');
+  for (const worktree of input.worktrees) {
+    kit.tag(tags, worktree, 'accent').title = `Worktree ${worktree}`;
+  }
+  kit.tag(tags, input.harness);
+  if (input.modelEffort !== null) {
+    kit.tag(tags, input.modelEffort);
+  }
+  header.append(title, folder, tags);
 }
 
 const WAITING_TEXT = 'Waiting for the sign-in link…';
@@ -829,8 +846,16 @@ const layout = {
     tag.classList.add('chat-row-profile');
     return { element: tag };
   },
-  // A session hub section: the head (chevron, title, summary), then the body.
+  // A session hub section: the head (chevron, title, summary), then the body;
+  // the Session part's frame is the hub's header, its body alone, which never
+  // collapses.
   sideSection(parent, input, kit) {
+    if (input.partId === SESSION_PART_ID) {
+      const header = el('section', 'chat-side-section chat-side-header');
+      parent.append(header);
+      kit.body(header);
+      return { element: header, update() {} };
+    }
     const section = el('section', 'chat-side-section');
     parent.append(section);
     const head = kit.head(section);
@@ -850,16 +875,16 @@ const layout = {
       },
     };
   },
-  // The session hub's Session section: a label and a value per fact.
-  sessionFacts(parent, input) {
-    const facts = el('div', 'chat-session-facts');
-    parent.append(facts);
-    const rows = new Map();
-    showSessionFacts(facts, rows, input);
+  // The session hub's header: the repo with its branch, the folder, then a tag
+  // per worktree, the harness and the model · effort.
+  sessionFacts(parent, input, kit) {
+    const header = el('div', 'chat-session-header');
+    parent.append(header);
+    fillSessionHeader(header, input, kit);
     return {
-      element: facts,
+      element: header,
       update(next) {
-        showSessionFacts(facts, rows, next);
+        fillSessionHeader(header, next, kit);
       },
     };
   },

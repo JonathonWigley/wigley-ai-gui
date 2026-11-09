@@ -141,6 +141,14 @@
   color: var(--wg-fg-tertiary);
 }
 
+/* The line under the listed sources that shows every source, or the largest five again. */
+[data-layout-owner='context-sources'][data-layout='default']
+  .context-sources-more {
+  cursor: pointer;
+  font-size: var(--wg-text-11);
+  color: var(--wg-fg-link);
+}
+
 [data-layout-owner='context-sources'][data-layout='default']
   [data-position='1'] {
   background: var(--wg-status-error);

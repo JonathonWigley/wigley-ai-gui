@@ -113,11 +113,12 @@
 }
 
 /* The activity dock: while the turn runs, its time and state, a card of its
-   latest tool calls (the newest in fg), then its tool counts, dim; while a
-   compaction runs, its time, state and trigger over a sliding bar; once the
-   turn ends, one dim line. The activity line is the composer's one line of it:
-   the time and state, or the finished line. The turn line is the same part
-   under the last entry, live only and dim. */
+   latest tool calls (the newest in fg), then a chip per tool with its count;
+   while a compaction runs, its time, state and trigger over a sliding bar; once
+   the turn ends, one dim line of its word, time and cost over the same chips.
+   The activity line is the composer's one line of it: the time and state, or
+   the finished line with its counts. The turn line is the same part under the
+   last entry, live only and dim. */
 .chat-working,
 .chat-working-line {
   font-family: var(--wg-font-ui);
@@ -221,7 +222,25 @@
 }
 
 .chat-working-counts {
-  color: var(--wg-fg-tertiary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1);
+}
+
+.chat-working-count {
+  background: var(--wg-card-background);
+  border-radius: var(--wg-radius-sm);
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-11);
+  padding: 0 var(--wg-space-1);
+  white-space: nowrap;
+}
+
+.chat-working-count-number {
+  color: var(--wg-fg);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--wg-weight-semibold);
+  margin-left: var(--wg-space-1);
 }
 
 .chat-working.is-done,
@@ -413,29 +432,67 @@
   margin-left: auto;
 }
 
-/* The hub's Session rows: the labels share one column, each value ellipsized. */
-.chat-session-facts {
-  display: grid;
-  font-size: var(--wg-text-12);
-  gap: var(--wg-space-1) var(--wg-space-2);
-  grid-template-columns: max-content minmax(0, 1fr);
+/* The hub's header: the repo in semibold with its branch beside it in mono,
+   the folder dim in mono, then the tags, each ellipsized at the hub's width. */
+.chat-session-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  min-width: 0;
 }
 
-.chat-session-fact {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
+.chat-session-title {
+  align-items: baseline;
+  display: flex;
+  gap: var(--wg-space-2);
+  min-width: 0;
 }
 
-.chat-session-fact-label {
-  color: var(--wg-fg-tertiary);
-}
-
-.chat-session-fact-value {
+.chat-session-repo {
+  flex: 0 1 auto;
+  font-size: var(--wg-text-14);
+  font-weight: var(--wg-weight-semibold);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chat-session-branch {
+  align-items: center;
+  color: var(--wg-fg-secondary);
+  display: inline-flex;
+  flex: 0 10 auto;
+  gap: var(--wg-space-0_5);
+  min-width: 0;
+}
+
+.chat-session-branch-name,
+.chat-session-folder {
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-11);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-session-folder {
+  color: var(--wg-fg-tertiary);
+}
+
+.chat-session-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1);
+  min-width: 0;
+  padding-top: var(--wg-space-0_5);
+}
+
+.chat-session-tags .ui-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* A picker section row's title fills the row, its details at the row's end, and

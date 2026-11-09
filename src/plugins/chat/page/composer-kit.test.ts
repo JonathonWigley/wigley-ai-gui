@@ -790,6 +790,7 @@ describe('composer surface activity dock', () => {
     const hidden = read();
 
     const doneLine = 'Done · 1m 05s · Read 1';
+    const dockDoneLine = 'Done · 1m 05s';
     expect([live, done, hidden]).toEqual([
       {
         hidden: false,
@@ -805,7 +806,7 @@ describe('composer surface activity dock', () => {
         classes: ['chat-working is-done'],
         lineClasses: ['chat-working-line is-done'],
         action: null,
-        done: [doneLine, doneLine],
+        done: [dockDoneLine, doneLine],
       },
       {
         hidden: true,
