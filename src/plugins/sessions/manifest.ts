@@ -8,10 +8,14 @@ import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 // the leftmost pane), its cursor walking the session rows and its row keys
 // acting on the cursor's row, `picker` is pushed while the list picker asks
 // which session a new pane shows, and `rename` while the rename dialog shows.
-// `layout` names the layout the side bar, the panes and the tab bars draw
-// with.
+// `layout` names the layout the side bar, the panes, the tab bars and the
+// session popups draw with; `popup-top` places a session popup's top edge down
+// its frame's body.
 export const sessionsManifest = definePlugin({
   id: 'sessions',
+  label: 'Sessions',
+  description:
+    'Adds Sessions mode, with a sidebar row for each agent session beside its panes and tabs.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
@@ -33,8 +37,25 @@ export const sessionsManifest = definePlugin({
       group: 'sessions',
       runsIn: 'page',
     },
+    selectRow: {
+      label: 'open the session',
+      group: 'sessions',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    selectTab: {
+      label: 'show the tab',
+      group: 'sessions',
+      runsIn: 'page',
+      arg: { sessionId: 'string', tab: 'string' },
+    },
     renameSession: {
       label: 'rename the session',
+      group: 'sessions',
+      runsIn: 'page',
+    },
+    togglePopup: {
+      label: "hide or show the session's popup",
       group: 'sessions',
       runsIn: 'page',
     },
@@ -42,6 +63,12 @@ export const sessionsManifest = definePlugin({
       label: 'favorite or unfavorite the project',
       group: 'projects',
       runsIn: 'page',
+    },
+    favoriteProjectAt: {
+      label: 'favorite or unfavorite the named project',
+      group: 'projects',
+      runsIn: 'page',
+      arg: 'string',
     },
     moveProjectUp: {
       label: 'move the project up',
@@ -148,7 +175,7 @@ export const sessionsManifest = definePlugin({
     layout: {
       label: 'Layout',
       description:
-        "The sessions layout Sessions mode's side bar, panes and tab bars draw in: a folder name in sessions' layouts folder, or default.",
+        "The sessions layout Sessions mode's side bar, panes, tab bars, session popups and their hidden bar draw in: a folder name in sessions' layouts folder, or default.",
     },
     titleMaxLength: {
       label: 'Title length',
@@ -156,5 +183,7 @@ export const sessionsManifest = definePlugin({
         'The most characters a session title may hold; longer titles from the agent or the rename dialog are refused, and a first-message title is cut.',
     },
   },
-  themeTokens: {},
+  themeTokens: {
+    'popup-top': { kind: 'raw', default: '15%' },
+  },
 });

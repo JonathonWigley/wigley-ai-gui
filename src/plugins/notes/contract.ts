@@ -1,6 +1,7 @@
 // The notes plugin's records and its channel between its main and page parts.
 
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
+import type { SlotKey } from '../../contracts/state';
 import type { Harness } from '../sessions/contract';
 
 // The session a note names. `sessionId` is the sessions plugin's row id;
@@ -111,3 +112,30 @@ export interface NotesChannel extends ChannelShape {
   };
   messages: Record<never, never>;
 }
+
+// The popup's rows, top to bottom, as the field cursor walks them.
+export const NOTE_FIELDS = [
+  'target',
+  'title',
+  'body',
+  'tags',
+  'images',
+  'session',
+] as const;
+
+export type NoteField = (typeof NOTE_FIELDS)[number];
+
+// Where the user was in the note popup, so a page reload puts them back: the
+// popup open, the field cursor, and the image cursor (-1 with no image). The
+// fields and images themselves are main's kept draft.
+export interface NotesPlace {
+  isOpen: boolean;
+  field: NoteField;
+  imageIndex: number;
+}
+
+export const notesPlaceSlot: SlotKey<NotesPlace, 'page', 'notes'> = {
+  id: 'notes.place',
+  process: 'page',
+  kind: 'value',
+};

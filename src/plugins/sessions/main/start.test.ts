@@ -21,6 +21,7 @@ import {
 } from '../../../shared/state/slot-store';
 import {
   type ConnectedSession,
+  type GuardedToolCall,
   type OwnedSession,
   RELAY_PROTOCOL,
   type RelayHello,
@@ -91,7 +92,6 @@ describe('sessions drive actions', () => {
         sessionId: 'drive-session-1',
         projectDir: 'drive',
         harness: 'claude',
-        deadlineSeconds: null,
       },
     ]);
   });
@@ -112,7 +112,6 @@ describe('sessions drive actions', () => {
         sessionId: 's',
         projectDir: 'drive',
         harness: 'claude',
-        deadlineSeconds: null,
       },
     ]);
     expect(sessions.connectedInfo).toEqual([]);
@@ -179,7 +178,6 @@ function hostInfo(sessionId: string): SessionInfo {
   return {
     sessionId,
     projectDir: null,
-    deadlineSeconds: null,
     harness: 'claude',
   };
 }
@@ -324,12 +322,11 @@ describe('sessions main part', () => {
       const { session } = exports.connect({
         sessionId,
         projectDir,
-        deadlineSeconds: null,
         harness,
         profileDir: '/home/.claude-work',
       });
 
-      exports.mark(session.id);
+      exports.mark(session.id, { text: 'Round from folder', action: 'answer' });
       await new Promise((settle) => setImmediate(settle));
 
       expect(sessionName.mock.calls).toEqual(asked);
@@ -354,10 +351,9 @@ describe('sessions main part', () => {
       const { session } = exports.connect({
         sessionId: 'host-1',
         projectDir: '/work/folder',
-        deadlineSeconds: null,
         harness: 'claude',
       });
-      exports.mark(session.id);
+      exports.mark(session.id, { text: 'Round from folder', action: 'answer' });
       if (disposed) {
         await started.dispose?.();
       }
@@ -377,10 +373,12 @@ describe('sessions main part', () => {
     const { session } = viewOf(started).connect({
       sessionId: 'host-1',
       projectDir: null,
-      deadlineSeconds: null,
       harness: 'claude',
     });
-    viewOf(started).mark(session.id);
+    viewOf(started).mark(session.id, {
+      text: 'Round from folder',
+      action: 'answer',
+    });
     expect(state.read(sessionsRowsSlot, 'test').all().size).toBe(1);
 
     await started.dispose?.();
@@ -395,10 +393,14 @@ describe('sessions main part', () => {
     const connected = exports.connect({
       sessionId: 'host-1',
       projectDir: null,
-      deadlineSeconds: null,
       harness: 'claude',
     });
     const context = { toolUseId: null, signal: new AbortController().signal };
+    const guarded: GuardedToolCall[] = [];
+    exports.addToolCallGuard(async (call) => {
+      guarded.push(call);
+      return { kind: 'run' };
+    });
 
     const overLimit = await connected.call(
       SET_SESSION_TITLE_TOOL.name,
@@ -414,6 +416,10 @@ describe('sessions main part', () => {
     expect(overLimit.content[0]?.text).toContain('the limit is 10');
     expect(stored.isError ?? false).toBe(false);
     expect(exports.titles(connected.session.id)?.agent).toBe('Titles');
+    expect(guarded.map((call) => [call.tool, call.mainAgentOnly])).toEqual([
+      [SET_SESSION_TITLE_TOOL.name, true],
+      [SET_SESSION_TITLE_TOOL.name, true],
+    ]);
     expect(() =>
       exports.contributeTools(
         [SET_SESSION_TITLE_TOOL],
@@ -436,9 +442,17 @@ describe('sessions main part', () => {
     dependentView.contributeTools([ASK_TOOL], ask.start);
     const ownedId = dependentView.open(hostInfo('host-owned')).session.id;
     const connectedId = dependentView.connect(hostInfo('host-dep')).session.id;
+    const guard = vi.fn(async () => ({ kind: 'run' }) as const);
+    dependentView.addToolCallGuard(guard);
 
     dependent.dispose();
+    await hostOne.call(
+      SET_SESSION_TITLE_TOOL.name,
+      { title: 'Titles' },
+      CONTEXT,
+    );
 
+    expect(guard).not.toHaveBeenCalled();
     expect(ask.ends()).toBe(3);
     await expect(hostOne.call('ask', {}, CONTEXT)).rejects.toThrow(
       'Unknown tool: ask. Valid tools are set_session_title.',

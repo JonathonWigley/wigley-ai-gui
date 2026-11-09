@@ -74,45 +74,61 @@ describe('roundLayoutNames', () => {
       layout: 'r',
       findings: [finding('F1', { layout: 'r' })],
       questions: [question('Q1', { layout: 'q' }), question('Q2')],
+      notices: [{ ...notice('N1'), layout: 'n' }],
     });
 
-    expect(roundLayoutNames(named)).toEqual(['r', 'q']);
+    expect(roundLayoutNames(named)).toEqual(['r', 'q', 'n']);
   });
 });
 
 describe('pickRoundLayouts', () => {
-  it('pickRoundLayouts_CardsInRailOrder_PanesWithoutItem', () => {
+  it('pickRoundLayouts_CardsPerStop_NoticeCardsByNotice_PanesWithoutItem', () => {
     const f = allCards();
-    const u: Layout = { ...allCards(), head: () => undefined };
+    const n: Layout = { cards: { notice: card } };
+    const u: Layout = {
+      ...allCards(),
+      head: () => undefined,
+      notices: pane,
+    };
     const loaded = new Map([
       ['f', f],
+      ['n', n],
       ['u', u],
       ['default', allCards()],
     ]);
     const named = round({
-      notices: [notice('N1')],
+      notices: [notice('N1'), { ...notice('N2'), layout: 'n' }],
       findings: [finding('F1', { layout: 'f' })],
       questions: [question('Q1')],
     });
 
     const picks = pickRoundLayouts(named, 'u', loaded);
 
-    expect(picks.cards.map((pick) => pick.name)).toEqual(['u', 'f', 'u']);
-    expect(picks.cards[1].layout).toBe(f);
+    expect(picks.cards.map((pick) => pick.name)).toEqual(['f', 'u']);
+    expect(picks.cards[0].layout).toBe(f);
+    expect(picks.noticeCards.map((pick) => pick.name)).toEqual(['u', 'n']);
+    expect(picks.noticeCards[1].layout).toBe(n);
     expect(picks.panes.head).toEqual({ name: 'u', layout: u });
+    expect(picks.panes.notices).toEqual({ name: 'u', layout: u });
   });
 
   it('pickRoundLayouts_PanesSkipTheItemLayout', () => {
     const loaded = new Map<string, Layout>([
       ['f', { ...allCards(), review: pane }],
+      ['n', { ...allCards(), notices: pane }],
       ['default', allCards()],
     ]);
-    const named = round({ findings: [finding('F1', { layout: 'f' })] });
+    const named = round({
+      findings: [finding('F1', { layout: 'f' })],
+      notices: [{ ...notice('N1'), layout: 'n' }],
+    });
 
     const picks = pickRoundLayouts(named, 'default', loaded);
 
     expect(picks.cards[0].name).toBe('f');
     expect(picks.panes.review.name).toBe('default');
+    expect(picks.panes.notices.name).toBe('default');
+    expect(picks.noticeCards[0].name).toBe('n');
   });
 });
 
@@ -121,16 +137,28 @@ describe('picksEqual', () => {
     const named = round({
       findings: [finding('F1', { layout: 'f' })],
       questions: [question('Q1')],
+      notices: [{ ...notice('N1'), layout: 'n' }],
     });
     const fallback = allCards();
+    const f = allCards();
+    const n = allCards();
     const loaded = new Map([
-      ['f', allCards()],
+      ['f', f],
+      ['n', n],
       ['default', fallback],
     ]);
-    const reloaded = new Map([
+    const reloadedCard = new Map([
       ['f', allCards()],
+      ['n', n],
       ['default', fallback],
     ]);
+    const reloadedNoticeCard = new Map([
+      ['f', f],
+      ['n', allCards()],
+      ['default', fallback],
+    ]);
+    const withNotices: Layout = { notices: pane };
+    const withNoticesAgain: Layout = { notices: pane };
 
     const first = pickRoundLayouts(named, 'default', loaded);
 
@@ -138,7 +166,23 @@ describe('picksEqual', () => {
       true,
     );
     expect(
-      picksEqual(first, pickRoundLayouts(named, 'default', reloaded)),
+      picksEqual(first, pickRoundLayouts(named, 'default', reloadedCard)),
     ).toBe(false);
+    expect(
+      picksEqual(first, pickRoundLayouts(named, 'default', reloadedNoticeCard)),
+    ).toBe(false);
+    // Only the notices pane's layout object is new.
+    const panesFirst = pickRoundLayouts(
+      named,
+      'u',
+      new Map([...loaded, ['u', withNotices]]),
+    );
+    const panesReloaded = pickRoundLayouts(
+      named,
+      'u',
+      new Map([...loaded, ['u', withNoticesAgain]]),
+    );
+    expect(panesReloaded.panes.notices.layout).toBe(withNoticesAgain);
+    expect(picksEqual(panesFirst, panesReloaded)).toBe(false);
   });
 });

@@ -7,7 +7,7 @@ import type { LayoutState } from '../../../../contracts/state';
 import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
 import type { FormsContributions } from '../contributions';
-import type { FormsAction, RoundState, TextTarget } from '../form-state';
+import type { RoundState, TextTarget } from '../form-state';
 import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
 import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
 
@@ -17,20 +17,18 @@ export interface ItemCard {
   update(round: RoundState): void;
 }
 
-// What a card reaches outside itself: the round's boxes, its actions, the
-// Don't-ask command, which also focuses the reason box, the keys bound in a
+// What a card reaches outside itself: the round's boxes, the keys bound in a
 // scope and the anchors that show them (a card reads and anchors in the forms
 // view's), the platform key hints are drawn for, the log, the registered
-// commands `kit.command` checks and runs, the card parts other plugins
-// added, the slots `kit.state` reads, where each anchor the kit names and each
-// slot subscription the card makes is recorded, and where each markdown mount
-// it makes is recorded for disposal.
+// commands `kit.command` checks and runs, which every control of the card
+// runs through, the card parts other plugins added, the slots `kit.state`
+// reads, where each anchor the kit names and each slot subscription the card
+// makes is recorded, and where each markdown mount it makes is recorded for
+// disposal.
 export interface CardDeps {
   markdown: MarkdownRenderer;
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
-  dispatch(action: FormsAction): void;
-  toggleDontAsk(): void;
   keys: Pick<KeyHints, 'keysFor' | 'anchor'>;
   platform: OsName;
   log: PluginLog;

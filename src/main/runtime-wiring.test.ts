@@ -80,6 +80,10 @@ function setup() {
     logs,
     wiring,
     writePage,
+    // Changes what `served()` returns without a store change.
+    setServed(next: Keymap) {
+      keymap = next;
+    },
     serve(next: Keymap) {
       keymap = next;
       for (const run of changed) {
@@ -183,6 +187,18 @@ describe('wireRuntime', () => {
 
     expect(logs).toEqual(['config: keys not applied: boom']);
     expect(applyKeys).toHaveBeenCalledTimes(2);
+  });
+
+  it('servedChanged_NewServedKeymap_AppliesKeysOnce', () => {
+    const { wiring, setServed, applyKeys } = setup();
+    const next = { ...keymapWithApp('p.live'), groups: { a: 'A' } };
+
+    wiring.servedChanged();
+    setServed(next);
+    wiring.servedChanged();
+    wiring.servedChanged();
+
+    expect(applyKeys.mock.calls).toEqual([[next]]);
   });
 
   it('handledKeymap_NoHandler_LeavesOutTheBind', () => {

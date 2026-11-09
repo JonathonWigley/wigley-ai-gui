@@ -1,5 +1,5 @@
-/* The default layout's sessions parts: the pane, the side bar with its sections, groups and row cards, the tab bar and
-   the empty text. */
+/* The default layout's sessions parts: the pane, the side bar with its sections, groups and row cards, its plugin
+   sections and their claimed rows, the tab bar, the empty text, the session popup and its hidden bar. */
 
 /* A pane fills its slot; its body shows the session's frame or the empty
    text in one cell, and its focus edges sit on its sides. */
@@ -19,7 +19,8 @@
   min-height: 0;
 }
 
-/* The inset the up and down edge prompts leave free in their pane's sheet. */
+/* The inset the edge prompts leave free: the up one in their pane's sheet, the
+   down one under its frame. */
 .session-pane {
   --session-edge-inset: var(--wg-space-6);
 }
@@ -100,8 +101,17 @@
 }
 
 .has-favorites > .session-section > .session-section-label,
-.is-reordering > .session-section > .session-section-label {
+.is-reordering > .session-section > .session-section-label,
+.session-section--plugin > .session-section-label {
   display: flex;
+}
+
+/* A plugin section's header part sits after the hairline, at the line's end. */
+.session-section-part {
+  display: flex;
+  flex: none;
+  align-items: center;
+  order: 1;
 }
 
 .session-section-drop-hint {
@@ -171,8 +181,8 @@
 /* Each row is a compact card, so its title and parts read as one session:
    `card-background` under a `card-border` hairline with `radius-md`, the title
    and activity's label on the first line and the parts on a second line under
-   them, `space-1` above and below and `space-1_5` at the
-   sides. Hover strengthens the border; the selected card keeps the row
+   them and the end group on a third, `space-1` above and below and `space-1_5`
+   at the sides. Hover strengthens the border; the selected card keeps the row
    primitive's accent fill, and the list cursor's card draws the focus ring
    over its border. */
 .ui-row.session-row {
@@ -184,9 +194,10 @@
   overflow: hidden;
 }
 
-/* An activity with an emphasis draws an edge on the card's start in its tone. A
-   pseudo-element, so the edge survives the cursor's and on-screen's box
-   shadows. */
+/* An activity with an emphasis draws an edge in its tone at the start of the
+   card's padding box: on the card's start, or just inside a claimed row's
+   dashed start border. A pseudo-element, so the edge survives the cursor's and
+   on-screen's box shadows. */
 .ui-row.session-row[class*='session-row-edge--'] {
   position: relative;
 }
@@ -235,14 +246,18 @@
   vertical-align: text-bottom;
 }
 
-/* The footer is the card's second line: other plugins' row parts, on one line
-   that never wraps. A footer with nothing in it takes no
-   space. */
+/* The footer holds other plugins' row parts on the card's second and third
+   lines: the parts ordered below 2 (the profile and the workflow chip) on the
+   second, and the end group, the parts ordered 2 and later (the context bar,
+   the run time and the cache mark), always on the third, so every card keeps
+   the same lines whatever its parts' widths. The break is a full-width item
+   ordered ahead of the end group. It always forms a flex line, empty on a row
+   with no part ahead of it, so the gap is each part's top margin, which the
+   holder takes back once: an empty line then adds no height, and the lines sit
+   one gap apart. A footer with nothing in it takes no space. */
 .session-row-foot {
   display: flex;
-  flex-wrap: nowrap;
   align-items: center;
-  column-gap: var(--wg-space-1_5);
   grid-column: 1 / -1;
   min-width: 0;
   margin-top: var(--wg-space-0_5);
@@ -251,6 +266,23 @@
 
 .session-row-foot:not(:has(.session-row-part:not(:empty))) {
   display: none;
+}
+
+.session-row-foot > .session-row-parts {
+  flex-wrap: wrap;
+  row-gap: 0;
+  margin-block-start: calc(-1 * var(--wg-space-0_5));
+}
+
+.session-row-foot > .session-row-parts > .session-row-part {
+  margin-block-start: var(--wg-space-0_5);
+}
+
+.session-row-foot > .session-row-parts::before {
+  content: '';
+  flex-basis: 100%;
+  order: 2;
+  height: 0;
 }
 
 .ui-row.session-row:not(.is-selected) {
@@ -298,11 +330,32 @@
   font-size: var(--wg-text-11);
 }
 
+/* A row a plugin section claimed is muted: no card fill at rest, a
+   `fg-secondary` title unless selected, and a dashed accent edge on its start.
+   Selection, hover and on-screen keep their rules; the edge stays accent: the
+   class twice outranks the selected and on-screen `border-color`, and ties the
+   hover rules' and wins by coming after them. */
+.ui-row.session-row.session-row--claimed {
+  border-inline-start: var(--wg-indicator-width) dashed var(--wg-accent);
+}
+
+.ui-row.session-row.session-row--claimed.session-row--claimed {
+  border-inline-start-color: var(--wg-accent);
+}
+
+.ui-row.session-row.session-row--claimed:not(.is-selected, .is-hover, :hover) {
+  background: transparent;
+}
+
+.session-row.session-row--claimed:not(.is-selected) > .ui-row-label {
+  color: var(--wg-fg-secondary);
+}
+
 /* A row's first line never wraps: the title (`New Chat` for a row with no
    title), then the trailing cell at the line's end, holding the activity's
    label. The trailing cell keeps its full width and never
    shrinks. The title ellipsizes in the rest and never goes under one character
-   and its ellipsis. The footer takes the whole second line. Each part has its
+   and its ellipsis. The footer takes the lines under it. Each part has its
    own column, so a row missing its trailing cell keeps the title in place. The
    trailing column's least width is the trailing cell's own, so the footer,
    which spans every column, stays inside the row rather than widens it. Two
@@ -381,6 +434,79 @@
 .sessions-empty {
   display: grid;
   place-content: center;
+}
+
+/* A session popup: an L2 sheet raised over the session's tabs, its top edge at
+   `sessions.popup-top` down the popup layer, `radius-lg` on its top corners,
+   no shadow. It slides up from below while open (`is-open`) and down out of
+   sight when hidden, then takes no paint. On add it starts below and slides up
+   once (`is-entering`). Its body fills it, so the plugin's element fills the
+   sheet. */
+.session-popup {
+  position: absolute;
+  inset: var(--wg-sessions-popup-top) 0 0;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  border-radius: var(--wg-radius-lg) var(--wg-radius-lg) 0 0;
+  background: var(--wg-sheet-background);
+  transform: translateY(100%);
+  visibility: hidden;
+  transition:
+    transform var(--wg-duration-slow) var(--wg-ease-in),
+    visibility 0s linear var(--wg-duration-slow);
+}
+
+.session-popup.is-open {
+  transform: translateY(0);
+  visibility: visible;
+  transition:
+    transform var(--wg-duration-slow) var(--wg-ease-out),
+    visibility 0s;
+}
+
+@starting-style {
+  .session-popup.is-open.is-entering {
+    transform: translateY(100%);
+  }
+}
+
+.session-popup-body {
+  height: 100%;
+  min-height: 0;
+}
+
+/* The hidden popups' bar: a slim row at the frame's bottom, one entry per
+   hidden popup (its icon and status), then the toggle key at its end. */
+.session-popup-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  margin: 0 var(--wg-sheet-gutter) var(--wg-sheet-gutter);
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+}
+
+.session-popup-bar-entry {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--wg-space-1);
+  min-width: 0;
+  padding: var(--wg-space-0_5) var(--wg-space-1_5);
+  border-radius: var(--wg-radius-md);
+}
+
+.session-popup-bar-entry:hover {
+  background: var(--wg-button-ghost-hover);
+  color: var(--wg-fg);
+}
+
+.session-popup-bar-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The rename dialog: why a title was refused under its box, then the hint. */

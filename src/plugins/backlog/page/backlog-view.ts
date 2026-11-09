@@ -1,5 +1,5 @@
 import type { Timers } from '../../../contracts/ambient';
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandId, CommandKey } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
@@ -62,7 +62,15 @@ import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { createSplit } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { BacklogChannel, BacklogEdit, BacklogHome } from '../contract';
+import {
+  type BacklogChannel,
+  type BacklogEdit,
+  type BacklogFocus,
+  type BacklogHome,
+  type BacklogPlace,
+  backlogOpenHomeRowCommand,
+  backlogSelectRowCommand,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   BacklogLayout,
@@ -79,7 +87,6 @@ import {
   type BacklogAction,
   type BacklogConfirm,
   type BacklogEditor,
-  type BacklogFocus,
   type BacklogRow,
   type BacklogState,
   backlogReducer,
@@ -94,6 +101,7 @@ import {
   isDraftChanged,
   openHome,
   orderedHomes,
+  placeOf,
   rowTitle,
   selectedRow,
   tagsOf,
@@ -122,10 +130,11 @@ type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
 
 type BacklogPushedScope = 'box' | 'confirm';
 
-// Every page command but `showMode`, which the page part runs itself.
+// Every page command but `showMode`, which the page part runs itself, and
+// the row clicks, which take an arg.
 export type BacklogCommand = Exclude<
   CommandsRunIn<typeof backlogManifest, 'page'>,
-  'showMode'
+  'showMode' | 'openHomeRow' | 'selectRow'
 >;
 
 // The list split's limits in CSS pixels: the list's opening and least widths,
@@ -177,8 +186,15 @@ export interface BacklogViewDeps {
   // Hears each home the user picks from the side bar, by click or Enter, and
   // main taking the keys; `l` opens one without picking it.
   homePicked(): void;
+  // Runs the command `key` with `arg`, as a click does: a home row's click
+  // runs `backlog.openHomeRow` and an item row's `backlog.selectRow`.
+  runKey<A>(key: CommandKey<A>, arg: A): void;
   // The open home, for the title bar; null with none open.
   homeShown(home: BacklogHome | null): void;
+  // The last page's place, put back once the first homes load; null for none.
+  savedPlace: BacklogPlace | null;
+  // Hears the place after each change, from the first load on.
+  placeChanged(place: BacklogPlace): void;
 }
 
 // Backlog mode's view: the homes for the side bar, the open home's rows and
@@ -187,10 +203,10 @@ export interface BacklogViewDeps {
 // in `backlogReducer`; the view draws its state after each change, every pane,
 // row, picker row and prompt body through the layout picked for that part.
 // It draws with `default` until the first `setLayouts`. `load` reads the
-// homes; `reload` reads them again (the channel's `changed`); `shown` sets the
-// scope and focus where the keys were left. Each change of the pane holding
-// the keys logs `homes focused`, `list focused`, `detail focused` or `editor
-// focused`.
+// homes, and the first read to land puts `savedPlace` back; `reload` reads them
+// again (the channel's `changed`); `shown` sets the scope and focus where the
+// keys were left. Each change of the pane holding the keys logs `homes
+// focused`, `list focused`, `detail focused` or `editor focused`.
 export interface BacklogView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -211,9 +227,18 @@ export interface BacklogView {
   // again with `shown`, keeping an open editor's draft and focused box, an
   // open filter, the scroll, the selection and the focus.
   setLayouts(shown: ShownLayouts<BacklogLayout>): void;
+  // A refusal while an open editor's draft differs from what it opened with,
+  // else null.
+  mayStop(): string | null;
   // Ends the list split's observer and `window` listeners.
   dispose(): void;
   commands: Record<BacklogCommand, () => void>;
+  // Opens the home at `root`, then tells `homePicked`; a root no home holds
+  // logs `no home <root>` and changes nothing.
+  openHomeRow(root: string): void;
+  // Selects the row `key` keys and focuses the items; a key no shown row holds
+  // logs `no row <key>` and changes nothing.
+  selectRow(key: string): void;
 }
 
 export function createBacklogView(deps: BacklogViewDeps): BacklogView {
@@ -593,10 +618,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       );
       homeRowDraws.push(drawn);
       const root = drawn.built.element;
-      rowAction(root, () => {
-        dispatch({ type: 'openHome', root: home.root });
-        deps.homePicked();
-      });
+      rowAction(root, () => deps.runKey(backlogOpenHomeRowCommand, home.root));
       root.classList.toggle('is-selected', home.root === state.openRoot);
       root.classList.toggle(
         'is-cursor',
@@ -731,10 +753,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       const drawn = drawRow(shown, actions);
       rowDraws.push(drawn);
       const root = drawn.built.element;
-      rowAction(root, () => {
-        dispatch({ type: 'select', key: shown.key });
-        dispatch({ type: 'focus', focus: 'items' });
-      });
+      rowAction(root, () => deps.runKey(backlogSelectRowCommand, shown.key));
       const isSelected = shown.key === state.selectedKey;
       const isCursor =
         isSelected && state.focus === 'items' && filterScope === null;
@@ -831,16 +850,17 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     );
   };
 
+  // The file the detail reads: a plan's or task's newest copy.
   const docPathOf = (shown: BacklogRow): string => {
     switch (shown.kind) {
       case 'followup':
         return shown.path;
       case 'plan':
-        return shown.plan.path;
+        return shown.plan.copyPath;
       case 'feature':
         return shown.feature.path;
       case 'task':
-        return shown.task.path;
+        return shown.task.copyPath;
     }
   };
 
@@ -980,6 +1000,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
   drawPanes();
   store.subscribe(() => render());
+  store.subscribe(() => {
+    const state = store.get();
+    if (state.isLoaded) {
+      deps.placeChanged(placeOf(state));
+    }
+  });
 
   // Main's last pane takes the keys, the list when the detail refuses them
   // with no row selected; an open editor takes the DOM focus again. The scope
@@ -1007,6 +1033,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     loadedCount += 1;
     dispatch({ type: 'loaded', read: result });
+    if (loadedCount === 1 && deps.savedPlace !== null) {
+      dispatch({ type: 'placeRestored', place: deps.savedPlace });
+    }
     deps.log(`loaded ${String(result.homes.length)} homes`);
   };
 
@@ -1236,6 +1265,20 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     deps.log(edgeText('the detail', edge));
   };
 
+  // Docs opens only indexed files, and the index skips linked worktrees.
+  const indexPathOf = (
+    shown: Exclude<BacklogRow, { kind: 'followup' }>,
+  ): string => {
+    switch (shown.kind) {
+      case 'plan':
+        return shown.plan.path;
+      case 'feature':
+        return shown.feature.path;
+      case 'task':
+        return shown.task.path;
+    }
+  };
+
   const openInDocs = () => {
     const shown = actedRow(store.get(), matcher);
     if (shown === null) {
@@ -1244,7 +1287,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     if (shown.kind === 'followup') {
       deps.openDoc(shown.path, shown.item.line);
     } else {
-      deps.openDoc(docPathOf(shown));
+      deps.openDoc(indexPathOf(shown));
     }
   };
 
@@ -1358,6 +1401,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   return {
     sideBar: homesPane,
     sheet: contentSheet,
+    mayStop() {
+      const { editor } = store.get();
+      return editor !== null && isDraftChanged(editor)
+        ? 'Save or close the follow-up you are editing first'
+        : null;
+    },
     load: () => readQuietly('load'),
     reload: () => readQuietly('load'),
     shown() {
@@ -1401,6 +1450,22 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       split.dispose();
     },
     commands,
+    openHomeRow(root) {
+      if (!orderedHomes(store.get()).some((home) => home.root === root)) {
+        deps.log(`no home ${root}`);
+        return;
+      }
+      dispatch({ type: 'openHome', root });
+      deps.homePicked();
+    },
+    selectRow(key) {
+      if (!visibleRows(store.get(), matcher).some((row) => row.key === key)) {
+        deps.log(`no row ${key}`);
+        return;
+      }
+      dispatch({ type: 'select', key });
+      dispatch({ type: 'focus', focus: 'items' });
+    },
   };
 }
 

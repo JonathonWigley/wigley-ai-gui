@@ -1,8 +1,4 @@
 /* The default primer layout: the task and item lists, the card, and the review. */
-.primer-tab .primer-review {
-  max-width: var(--wg-prose-measure);
-}
-
 .primer-tasks-list,
 .primer-items-list {
   padding: var(--wg-space-2);

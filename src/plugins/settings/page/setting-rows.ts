@@ -22,7 +22,7 @@ export type BoxValue =
 
 // The user's value at a dotted `path` of `layer`; `isSet` false when a key on
 // the path is missing or a step is not an object.
-function userValue(
+export function userValue(
   layer: Record<string, unknown> | null,
   path: string,
 ): { isSet: boolean; value: unknown } {

@@ -23,8 +23,7 @@ import {
   closeFormFromMain,
   finishActiveForm,
   formById,
-  guardSessionClose,
-  type SessionCloseAnswers,
+  mayCloseSessionForm,
   type SessionFormWords,
 } from '../../../shared/page/session-forms';
 import {
@@ -32,6 +31,7 @@ import {
   MAX_PRIMER_ITEMS,
   type PrimerBody,
   type PrimerNeed,
+  type PrimerPane,
   type PrimerView,
 } from '../contract';
 import type { primerManifest } from '../manifest';
@@ -41,13 +41,13 @@ import {
   cardRow,
   type OpenPrimer,
   type PrimerAction,
-  type PrimerPane,
   type PrimerState,
   rowName,
   selectedEntry,
   selectedItem,
   submitProblems,
   type TextTarget,
+  taskRows,
 } from './primer-state';
 import type { PrimerStore } from './primer-store';
 
@@ -105,6 +105,16 @@ export function primerCommandHandlers(
     addExtraTask: handler(() => addExtraTask(deps)),
     removeExtraTask: handler(() => removeExtraTask(deps)),
     toggleInclude: handler(() => toggleInclude(deps)),
+    // A click names its row, so these act with no box's row shown first.
+    selectTask: ({ arg }) => selectTaskRow(deps, arg),
+    selectItem: ({ arg }) => {
+      selectItemRow(deps, arg);
+    },
+    toggleIncludeAt: ({ arg }) => {
+      if (selectItemRow(deps, arg)) {
+        toggleInclude(deps);
+      }
+    },
     addItem: handler(() => focusAddItem(deps)),
     editItemComment: handler(() => focusItemComment(deps)),
     editTaskComment: handler(() => focusTaskComment(deps)),
@@ -368,6 +378,36 @@ function toggleInclude(deps: PrimerCommandDeps) {
   );
 }
 
+// Selects tasks column row `row`, a position in taskRows; nothing with no
+// shown primer, and the miss logged for a row the column lacks, as a click
+// drawn before the primer changed sends.
+function selectTaskRow(deps: PrimerCommandDeps, row: number) {
+  const primer = shownPrimer(deps.store.get());
+  if (primer === null) {
+    return;
+  }
+  if (taskRows(primer)[row] === undefined) {
+    deps.log(`no task row ${row}`);
+    return;
+  }
+  deps.store.dispatch({ type: 'selectTask', row });
+}
+
+// Selects the selected task's item `item`, 1-based; false with no shown
+// primer, and false with the miss logged for an item the task lacks.
+function selectItemRow(deps: PrimerCommandDeps, item: number): boolean {
+  const primer = shownPrimer(deps.store.get());
+  if (primer === null) {
+    return false;
+  }
+  if (selectedEntry(primer)?.items[item - 1] === undefined) {
+    deps.log(`no item ${item}`);
+    return false;
+  }
+  deps.store.dispatch({ type: 'selectItem', item });
+  return true;
+}
+
 function focusItemComment(deps: PrimerCommandDeps) {
   const state = deps.store.get();
   if (shownPrimer(state) === null) {
@@ -537,28 +577,12 @@ function submit(deps: PrimerCommandDeps) {
   finishActivePrimer(deps, 'review', 'submitted');
 }
 
-// `showPrimer` selects the session's Primer tab; `activate` selects the
-// session.
-export interface GuardCloseDeps extends Pick<
-  PrimerCommandDeps,
-  'store' | 'toast' | 'log'
-> {
-  showPrimer(sessionId: string): void;
-  activate(sessionId: string): void;
-  // Holds the cancel prompt's answer to the close.
-  closeAnswers: Pick<SessionCloseAnswers, 'wait'>;
-}
-
-// A session closes only once its primer is gone, as guardSessionClose keeps
-// it.
-export function guardClose(
-  deps: GuardCloseDeps,
+// Whether the session's popup lets it close, as mayCloseSessionForm decides.
+export function mayClosePrimer(
+  deps: Pick<PrimerCommandDeps, 'store' | 'toast' | 'log'>,
   sessionId: string,
-): boolean | Promise<boolean> {
-  return guardSessionClose(
-    { ...deps, showForm: deps.showPrimer, words: PRIMER_WORDS },
-    sessionId,
-  );
+): boolean {
+  return mayCloseSessionForm({ ...deps, words: PRIMER_WORDS }, sessionId);
 }
 
 // Hands main the active primer's finish, as finishActiveForm sends it.
@@ -574,12 +598,10 @@ function finishActivePrimer(
   );
 }
 
-export interface ClosePrimerFromMainDeps extends Pick<
+export type ClosePrimerFromMainDeps = Pick<
   PrimerCommandDeps,
   'store' | 'toast' | 'log'
-> {
-  closeAnswers: Pick<SessionCloseAnswers, 'closing'>;
-}
+>;
 
 // Closes a primer main closed, as closeFormFromMain closes it.
 export function closePrimerFromMain(

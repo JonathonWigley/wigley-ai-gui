@@ -231,7 +231,6 @@ describe('docs main part', () => {
     const info: SessionInfo = {
       sessionId: 'abc',
       projectDir: '/p',
-      deadlineSeconds: null,
       harness: 'claude',
     };
     docs.emit('sessions.connected', { id: 'row-1', info, owned: false });
@@ -263,7 +262,6 @@ describe('docs main part', () => {
     const info: SessionInfo = {
       sessionId: 'old-host',
       projectDir: '/p',
-      deadlineSeconds: null,
       harness: 'claude',
     };
     docs.emit('sessions.connected', { id: 'row-1', info, owned: true });
@@ -321,7 +319,6 @@ describe('docs main part', () => {
     const info: SessionInfo = {
       sessionId: 'old-host',
       projectDir: '/p',
-      deadlineSeconds: null,
       harness: 'claude',
     };
     docs.emit('sessions.connected', { id: 'row-1', info, owned: true });
@@ -735,7 +732,6 @@ describe('docs main part lifecycle', () => {
       info: {
         sessionId: 'abc',
         projectDir: '/p',
-        deadlineSeconds: null,
         harness: 'claude',
       },
       owned: false,

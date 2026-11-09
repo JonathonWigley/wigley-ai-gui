@@ -2,7 +2,7 @@
 
 **Contents**
 
-- **Intent** — what every change is judged by: everything a plugin, everything drawn through a layout, everything hot reloads, macOS and Windows now,
+- **Intent** — what every change is judged by: everything a plugin, every action a command, everything drawn through a layout, everything hot reloads, macOS and Windows now,
   any agent harness or model later, one user and no backwards compatibility.
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
   layers, the relay and agent sessions, and where a new plugin, registration, shell area, mode, session tab, key, event, setting,
@@ -46,6 +46,11 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   is something a plugin can hook into, extend or replace, and a built-in plugin has no more reach than one loaded
   from a user folder would. A closed list, switch or union that a new plugin would have to edit is an extension
   point waiting to become a registration.
+- **Every action is a command, shared state is published.** Every user action runs as a command, and every state
+  change another plugin reads or a page reload keeps is published as an event or slot typed in its `contract.ts`, or
+  held by its own main part behind its channel (forms' and primer's rounds, notes' drafts), so a plugin can hook, bind
+  or read what the app itself does. A view's private draw state stays in the view. Drags and
+  focus guards stay plain listeners, and a layout wanting something else writes its own listener knowingly.
 - **Everything draws through a layout.** Every surface — each plugin's views, the overlays and dialogs, the shell
   chrome — draws through a user-editable layout, so any part of the app's look changes by editing a layout file,
   without a rebuild. A new view or surface ships with its layout contract and its `default` layout
@@ -53,8 +58,8 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
 - **Everything hot reloads.** A changed plugin, layout, theme, keymap or setting applies to the running app without
   a restart and without losing the user's work. So every registration a plugin makes can be undone, and state that
   must outlive a reload is kept where the reload does not reach it. Today settings, keymap, themes and layouts hot
-  reload and plugins are compiled in with no runtime loader; new code is written so the rest can land without
-  reworking it.
+  reload, and plugins start and stop live from the `plugins.disabled` switch; a changed plugin's code still needs a
+  runtime loader, which is the next plan, and new code is written so it can land without reworking it.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
   processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
   composition root, so adding one is a new adapter and features carry no `process.platform` checks.
@@ -80,7 +85,7 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 ```
 src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
                  record of a clock that counts only while something runs; `state.ts`: the `SlotKey` records, writers and
-                 readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots and `CoreEvents`;
+                 readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots;
                  `list-picker.ts`: the shared list picker's contract behind `services.picker`); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
@@ -134,11 +139,16 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  frames fake plugin tests open visuals through), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
-                 reader skeleton) and `test-layouts.ts` (the test helpers owners share) and
-                 `fake-layout-state.test-support.ts` (`noLayoutState`, the `kit.state` of a kit under test that reads no slot)), the reducer store, autosave,
-                 editor boxes, the confirm prompt, the session form popup helper, the session form status line, and the
+                 reader skeleton), `test-layouts.ts` (the test helpers owners share),
+                 `fake-layout-state.test-support.ts` (`noLayoutState`, the `kit.state` of a kit under test that reads no slot) and
+                 `fake-kit-commands.test-support.ts` (`fakeKitCommandsOf`, the commands of a kit under test, each run going to a fake)), the reducer store, autosave,
+                 editor boxes, the confirm prompt, the session form popup helper, the session form status line, the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
-                 events queue)
+                 events queue), and the page place slots' helpers (`place-slot.ts`: `placeWrites`, which drops a write
+                 equal to the last, and `pruneKeys`, which deletes the keys of rows or forms that ended while no page
+                 ran (on a live restart it can also drop the places of rows chat's restore has not reopened yet);
+                 `page-hide.ts`: `onPageHide`, which hears the page's teardown; `session-form-places.ts`: the
+                 place follow, restore and prune that forms and the primer share)
                  → imported only by src/renderer and plugins' page/ parts
     pane-tree/   the pane tree: panes as leaves of nested splits, kept as proportions (`pane-tree.ts`: split, close,
                  the pane toward a direction, focus, swap and nudge → pure), and its view (`pane-tree-view.ts`: a slot
@@ -147,7 +157,11 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
     ui/          the design primitives `DESIGN.md` lists, each a builder with its CSS beside it; `icon.ts` is the only
                  module naming the Codicons font
 src/main/        core main process; main.ts is its composition root
-  plugins/       the main-side plugin API: per-plugin channel routing and services
+  plugins/       the main-side plugin API: per-plugin channel routing and services; `plugin-switch.ts`: the live
+                 switch over `plugins.disabled`; `applied-plugins.ts`: the applied disabled list, the plugins whose
+                 parts do not run, which the served config carries as `plugins.disabled`
+  page-parts.ts  asks the page's plugin host to stop, start or check its parts, over `bridge:plugin-parts`
+  quit-wait.ts   the quit's hold in every mode and its `quit is waiting on …` log
   state/         the slot holder (`slot-holder.ts`): every slot's value, page-owned ones included, in main's memory, each
                  change numbered for the page mirror; `window-focus-slot.ts` writes `core.windowFocused`
   runtime-wiring.ts the runtime commands' wiring: each process's catalog slot merged into the served config, the
@@ -174,7 +188,7 @@ src/main/        core main process; main.ts is its composition root
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, a clone's worktrees, a log over named paths, and a commit of named paths
+                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
@@ -188,7 +202,8 @@ src/main/        core main process; main.ts is its composition root
 src/session-host/ the session host process, its own composition root and build entry: owns every agent process,
                  logs their pipes, ends idle ones while no app is connected → imports only src/contracts,
                  and src/shared; no electron import
-src/preload/     the Bridge, exposed as window.wigley
+src/preload/     exposes only a one-time claim (`bridge-claim.ts`, as `window.wigley.claim()`) that hands the Bridge to the
+                 page's first caller
 src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes; `shell-chrome.ts` draws the
                  title bar's context, dev tag and config problems and the activity bar's items through the shell's
@@ -196,6 +211,7 @@ src/renderer/    core page; renderer.ts is its composition root
   plugins/       the page-side plugin API
   state/         the page mirror (`page-state.ts`: main's snapshot, then each push, and the page's own writes sent back)
                  and `core-slots.ts`, which writes `core.mode`, `core.scope` and `core.theme`
+  page-restores.ts the page load's restores behind `api.restores`: the tracked ones, and when they settle (§ A slot)
   key-anchors.ts the anchors: draws a command's keys into an element a view names (§ Key hints); `anchor-wiring.ts`
                  redraws and shows or hides them on a keymap or scope change, and `box-focus.ts` tells whether focus is in
                  a text box
@@ -214,11 +230,13 @@ src/renderer/    core page; renderer.ts is its composition root
                  flattened to a PNG                         → the only fabric import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
-  sessions/      manifest.ts, contract.ts (also the `sessions.rows`, `sessions.selection`, `sessions.active` and
-                 `sessions.activity` slots and `followRows`), session-title.ts (the title rules main and page share), main/ (the
+  sessions/      manifest.ts, contract.ts (also the `sessions.rows`, `sessions.selection`, `sessions.active`,
+                 `sessions.activity` and `sessions.place` slots, the last holding each session's selected tab, selection
+                 count and hidden popups, and `followRows`), session-title.ts (the title rules main and page share), main/ (the
                  session list — rows, their titles and origin-repo project names, the selected session, written to the `rows` and `selection` slots, tool routing — the
                  `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
-                 page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections —
+                 page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections, then
+                 the sections other plugins register through `addSection`, each claiming its own rows —
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
                  sidebar-order.ts, the drawing in sidebar-view.ts — the pane tree of whole sessions with its split, swap and close commands and the
                  shared list picker's `picker` scope, each session's tabs and popups (`addTab`, `addPopup`, the hidden bar), the row and bar parts other plugins add,
@@ -243,6 +261,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `sessions.ended`, hands its self-test script), page/ (the session hub's Context section through chat's
                  `addSidePart`: the sources' bar, the window's fill, a row per source that opens into its items),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
+  auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed`, queues a user close in `queue.json` in its
+                 plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
+                 closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section
+                 through sessions' `addSection`, its header's queued count), layouts/ (its Layout contract and `default`
+                 layout); `docs/features/auto-retro/design.md`
   auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
                  registers the send gate that compacts a cold-cache session before a message when its context is above
                  the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction; reads
@@ -288,7 +311,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-heavy, `activeTime` (a session's clock) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness)
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -298,7 +321,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  a transparency switch, and a swap of the shell to a test layout), layouts/ (the gallery Layout
                  contract and the built-in `default` layout)
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
-                 a form over every setting and every command's binds, `docs/features/settings/design.md`), layouts/
+                 a form over every setting, every command's binds and the leader tree, `docs/features/settings/design.md`), layouts/
                  (the settings Layout contract and the built-in `default` layout)
   notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures through `services.window.capture`, sending a note
                  to a follow-up through backlog's exports or to a new session through chat's), page/ (the note
@@ -325,8 +348,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the chip's `No workflow` and `Working` tags are the exception to
                  the layout rule: the engine draws them with no layout, since no workflow owns such a flow; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`
-  workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches plan
-                 folders, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
+  workflow-heavy/ manifest.ts, contract.ts, heavy-workflow.ts, stages/<stage>/ (one stage each: main.ts its entry rule, page.ts its look), main/ (watches every copy of a plan
+                 folder across a clone's worktrees and git's shared folder, runs Clear & make and the auto-start countdown, its self-test script), page/ (the plan checklist,
                  the countdown, the preview samples), layouts/ (the built-in `default` layout); Heavy's workflow: the
                  `wigley:feature` run, make, review, fix and close
   workflow-light/ manifest.ts, contract.ts, stages/<stage>/ (scope, build, check, land, done), main/ (its self-test
@@ -364,8 +387,10 @@ host session id joins that row instead of adding one (a newer relay takes the jo
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
 its rows across a relaunch, re-attaching each one whose process the session host still runs, and after a process
 exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
-guard (`addCloseGuard`) refuses the user's close while the plugin still has something open there (forms: an open
-round; primer: an open primer), since main, not the page, decides.
+guard (`addCloseGuard`) refuses a close while the plugin still has something open there (forms: an open round; primer:
+an open primer), since main, not the page, decides. The user's close key ends the hold first: a tab or popup that
+`closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through with no prompt. The review's
+Cancel prompt is a different act: it cancels the round and leaves the session open.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes (each with the title help shows over its keys), settings
@@ -378,21 +403,38 @@ round; primer: an open primer), since main, not the page, decides.
   every key names a declared command running in the key's process (page and editor keys a page command; app,
   global and intercept keys a main one). A built-in plugin's manifest joins `src/plugins/manifests.ts`, which main
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
-  `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
-  a page part starts on every page load. The plugin host's `stop(id)` stops the plugin's dependents first, in
-  reverse start order, then awaits the part's `dispose` and disposes its registrations. Quit stops every main
-  part this way, and from its first task on main sends the page no plugin message: those stops end rows the next
-  start restores, and a page told of it would save them as gone (panes, recency).
+  `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts at app
+  launch and a page part on every page load, and either starts or stops live after that. The plugin host's
+  `start(ids)` starts the named parts in dependency order and throws, starting none, when one depends on a part not
+  started; `stop(id)` stops the plugin's dependents first, in reverse start order, then awaits the part's `dispose`
+  and disposes its registrations; `restart(id)` stops the plugin with its dependents and starts them again, new
+  registrations and the same slots. A part's optional `ready()` runs once every part of its process has started,
+  and after a live start once the parts that start brought up have started: put work that needs its siblings
+  started there, not in `start`. A part's optional `mayStop()` gives a reason in words the user reads when it must
+  not stop now (a round is open); the switch asks it before a switch-off, and a restart and quit do not. Quit
+  stops every main part this way, waits for every stop in every mode, and logs `quit is waiting on <ids>` after 5
+  seconds; from its first task on main sends the page no plugin message: those stops end rows the next start
+  restores, and a page told of it would save them as gone (panes, recency).
 - **A registration** — a listener, a handler, a contribution, a scope, a mode, a timer, a watch, a command —
   returns a `Disposable` (`src/contracts/disposable.ts`), so a plugin can stop and start again. The plugin API
   records each registration a plugin makes through `api`, its per-plugin service views included (timers,
   `files.watch`, `processes.run`, editors, alert counts), and the host disposes them when the plugin stops. A
   registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
   DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
-- **A disabled plugin** is one named in the core setting `plugins.disabled`: the plugin host starts none of its parts.
-  A page part follows the list on each page load, a main part on each app start. Naming a plugin that a started
-  plugin depends on is a config problem, so the last good config stays. A view that can be switched off is its own
-  plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional plugins).
+- **A disabled plugin** is one named in the core setting `plugins.disabled`: none of its parts run, and the list applies
+  live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list. A switch-off sets the applied
+  list and pushes the served config before it stops any part, so a disabled plugin's binds leave while their handlers
+  still exist; it then stops the page parts (the page answers over `bridge:plugin-parts`), then the main parts, and
+  clears the owners' slots. A switch-on starts the main parts, sets the applied list, then starts the page parts. The
+  served config drops a disabled plugin's commands, binds and key scopes (`appliedCommands`, `appliedScopes` and
+  `withAppliedList` in `src/shared/plugin-manifests.ts`), so help, which-key and Settings' keymap section list none. A
+  plugin that a running plugin depends on is locked (`neededBy` names the dependents), and naming it is a config
+  problem, so the last good config stays. A part's `mayStop` refusal is also held as a `settings.json` config problem,
+  and the switch asks again every 2 seconds until the part lets go or the list changes. Settings' Plugins section
+  (`src/plugins/settings/page/plugin-rows*.ts`) switches plugins from the `core.plugins` slot, shows what locks a row,
+  and drive actions `core.stopPlugin`, `core.startPlugin` and `core.restartPlugin` do the same for a run. A view that
+  can be switched off is its own plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional
+  plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
   `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose
@@ -401,27 +443,37 @@ round; primer: an open primer), since main, not the page, decides.
   compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on or
   reads, which types that plugin's exports, keys and events.
-- **A slot** is a value a late reader wants, typed by a `SlotKey` in the owner's `contract.ts`: one value, keyed
-  values, or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only
-  writer, and `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through
-  `kit.state.read(id)`. The core holds every slot in main's memory and mirrors it to the page, page-owned slots
-  included, so the value outlives an owner's stop and a page reload, not an app restart. `sessions.activity` clears
-  itself at each page start, since its sources set their activities again, and `sessions.active` goes back to null until
-  the first panes are placed. A new start publishes the
-  same key and reads the last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only
-  reads a slot or hears an event lists its owner in the manifest's `reads`, which carries no start order. A value
-  belongs in a slot and a moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`,
-  `core.windowFocused` and the two runtime command catalogs (`src/contracts/core-state.ts`)
-  (`docs/features/plugin-framework/design.md` § Commands and state).
+- **A slot** is a value a late reader wants, typed by a `SlotKey` in the owner's `contract.ts`: one value, keyed values,
+  or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only writer, and
+  `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through `kit.state.read(id)`. The
+  core holds every slot in main's memory and mirrors it to the page, page-owned slots included, so the value outlives an
+  owner's restart and a page reload, not an app restart. A plugin the switch turns off has its slots cleared
+  (`clearOwner`); a restart keeps them. A page plugin keeps what a reload restores — a draft, a selected row, a view —
+  in a `<id>.place` slot it writes as the state changes and reads at start (`chat.place` with `chat.draftImages`,
+  `forms.place`, `primer.place`, `docs.place`, `sessions.place`, among others). A restore that settles after the part's
+  start returns and can move the key base goes to `api.restores.track` (docs' reopened doc once its view shows, forms'
+  and primer's open forms read, sessions' first placing of the panes), and `api.restores.onSettled` hears the page
+  load's restores settle: every part's `ready()` ran and no tracked restore pending (`PageRestores` in
+  `src/contracts/plugin.ts`). The restores belong to a page load: the page calls
+  `pageHost.ready(); restores.partsReady()` once the page's parts started at load, and a part started live later gets no
+  new restore window. A key base change before then is a restore's, so notes' restored popup stays open through it.
+  `sessions.activity` clears itself at each page start, since its sources set their activities again, and
+  `sessions.active` goes back to null until the first panes are placed. A new start publishes the same key and reads the
+  last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only reads a slot or hears
+  an event lists its owner in the manifest's `reads`, which carries no start order. A value belongs in a slot and a
+  moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`, `core.windowFocused`,
+  `core.plugins` (each built-in plugin's label, whether it runs and what depends on it) and the two runtime command
+  catalogs (`src/contracts/core-state.ts`) (`docs/features/plugin-framework/design.md` § Commands and state).
 - **A command** takes at most one argument, declared in the manifest as a number, a string or a small record;
   a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
   process the command runs in. `commands.register` and `keys.bind` add commands and binds at runtime as a layer under
   the user's `keymap.json`; `commands.intercept` wraps a command and `commands.onDidRun` hears it. A bind carries the
-  argument as `arg`, checked at load.
+  argument as `arg`, checked at load. A click runs a command too: a layout's `kit.button(parent, label, command, { arg })`
+  and `kit.command(qualifiedId, arg)` name one by id, and a view's own click handler runs the command a key would.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`closed` in plugin
   `sessions` is `sessions.closed`) and heard with `api.events.on` by any plugin; its payload type lives in
-  the publisher's `contract.ts`, and the core's own (`core.pageReady`, `CoreEvents`) in
-  `src/contracts/core-state.ts`, which any part hears with no `dependsOn` entry. A state change a late reader wants is
+  the publisher's `contract.ts`, and the core has no events of its own: a part that needs
+  its siblings started uses `ready()`. A state change a late reader wants is
   a slot, and an event is the moment: a note filed, a doc saved, a turn started or finished, a message sent, a help
   overlay opened. Each process has its own bus, and nothing crosses processes on it: a plugin's own
   channel does that.
@@ -448,8 +500,9 @@ round; primer: an open primer), since main, not the page, decides.
   narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
   focuses its list, and every mode gives `focusMain`, which gives main's last pane back its scope and focus; the
   core's focus keys reach the side bar and the right bar only through these (A focus target, below). A hidden mode keeps its state,
-  so leaving one never loses work in it, but it keeps no keys: each mode and each session tab is told when it becomes
-  the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
+  so leaving one never loses work in it, but it keeps no keys: each mode, each session tab and each session popup is told when it becomes
+  the visible one (`shown`), a session tab also when it stops (`hidden`), and its plugin sets its key scope there.
+  Sessions emits `tabShown` for each tab told it shows. A new full-window feature is a new mode, with no
   core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
   chat adds a Chat tab to each session it starts, and the `docs-session-tab` plugin (disabled by default) a Docs tab to each
@@ -460,14 +513,15 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session popup** is a surface that slides up over a session's tabs while a plugin has something for the user,
   added through the `sessions` page export `addPopup` (`SessionPopupView` in, `SessionPopupHandle` out; one per id per
   session). Forms adds one for a session's rounds and primer for its primer, through the shared
-  `src/shared/page/session-form-popups.ts`, and disposes it when the last form leaves. `<Leader>vf`
+  `src/shared/page/session-form-popups.ts`, and disposes it when the last form leaves. `<Leader>bp`
   (`sessions.togglePopup`, scope `any`) hides and shows it; hidden, it leaves a bar at the bottom of the session's frame.
   An open popup is the visible surface and holds the key scope, and its `beforeClose` joins the tabs' close guards.
+  A page reload brings back the popup of a round or primer the last page showed, hidden when that page had hidden it.
   The sessions layout draws it through the `popup` and `popupBar` parts (`docs/features/session-popups/design.md`).
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage tag, and the `No workflow` and `Working` tags), chat's run time and profile and usage's context meter and cache mark are six. A **bar part** draws in every session's tab
+  `addRowPart`; the agent-lines plugin's working line, workflow's chip (the level badge, the stage tag, and the `No workflow` and `Working` tags), chat's run time and profile, usage's context meter and cache mark, unity-pool's clone badge, and the round status that forms and primer draw (`forms.status`, `primer.status`) are among them. A row part's optional `tooltip` joins the row's tooltip. A **bar part** draws in every session's tab
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.
@@ -496,8 +550,8 @@ round; primer: an open primer), since main, not the page, decides.
   (`docs/features/auto-compact/design.md`).
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
-  the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the
-  focused pane's selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
+  the focused pane, and the visible surface, whose `shown` sets the key scope and whose `isVisible` reads true, is the
+  focused pane's top open popup, else its selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
@@ -573,7 +627,7 @@ round; primer: an open primer), since main, not the page, decides.
   none (a screenshot) is saved through `savePasted` first. What each surface makes of a file is
   `docs/features/file-drop/design.md`.
 - **Key hints** read the merged keymap. The core draws every hint in place. The `keys` plugin keeps which-key after a
-  pending prefix, help on `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), the `showHints` setting and
+  pending prefix, the leader search on `Space /`, help on `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), the `showHints` setting and
   the placement check. The app has no bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves
   (`docs/features/key-hints/design.md`).
   - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through
@@ -636,8 +690,8 @@ round; primer: an open primer), since main, not the page, decides.
   `form-state.ts`, then its card input and kit parts in the Layout contract (`layouts/layout.d.ts`), the page's
   layout tables (`KIT_BUILDERS` in `page/layout/card-kit.ts`, `CARD_KINDS` in `read-layout.ts`, `LayoutPart` in
   `layout-resolver.ts`) and its card in the `default` layout. The order lists are plain arrays the compiler cannot
-  check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `RAIL_ORDER` in
-  `form-state.ts` is added to by hand.
+  check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `ANSWERABLE_ORDER` in
+  `form-state.ts` is added to by hand for an answerable kind.
 - **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is an entry in
   `src/plugins/forms/finding-origins.ts`: the card it draws as (Defect, Decision, Nit), the fields it requires and
   forbids, its choice bounds, and the actions it offers with the card's word for each. Main's parser (which rejects a
@@ -696,8 +750,8 @@ round; primer: an open primer), since main, not the page, decides.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool. Before it runs a call, sessions asks each **tool-call guard** (`addToolCallGuard`, beside
-  `addCloseGuard`), so a rule over calls is one registration. A contribution may mark its tools main-agent-only (the
-  workflow tools and `set_session_title`); chat's guard answers a subagent's call of such a tool with a success that
+  `addCloseGuard`), so a rule over calls is one registration. A contribution marks its tools main-agent-only with `{ mainAgentOnly: true }` (the
+  workflow tools and `set_session_title`); chat's guard, which it registers through `addToolCallGuard`, answers a subagent's call of such a tool with a success that
   changes nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
@@ -710,7 +764,8 @@ round; primer: an open primer), since main, not the page, decides.
   wired to the plugin's scope, log and overlay), `chooseFolder` (the native folder dialog, null when dismissed) and
   `openExternal` (an http or https link in the default app; main refuses any other). The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
-  `services.homeDir`.
+  `services.homeDir`. A plugin cannot replace a core service: each is built at one place in its composition root, and
+  plugins extend it through its seams.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
   with a POSIX and a Windows adapter in `src/shared/paths/`, each composition root picking one: main by the OS it
   runs on, the page by the served `platform.os`. Page and shared code that joins, splits or shows a full path calls it,
@@ -759,13 +814,15 @@ round; primer: an open primer), since main, not the page, decides.
   types) and `layouts/<owner>/layout.d.ts` at start. The page's layout host (`src/shared/page/layout-host/`) picks the
   layout (the owner's setting — `<plugin>.layout`, or the core `shell.layout` — and `default` when unset), checks it
   with the owner's reader, draws each part, rolls back a part that throws and draws it with `default`, redraws on a
-  reload, and refreshes every show on each config change. A layout draws every pane and every repeated row, card or
-  entry; the app keeps selection, keys, scrolling, split widths, text boxes and editors. The root of every part a layout
-  draws carries `data-layout="<name>"` and `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet
-  link, so a layout's CSS selects under its own name and restyles nothing another layout drew; the default's CSS is one
-  link of its own, ahead of them. A loaded layout stays available while its revision is current, so a round naming one
-  another round loaded draws with it at once. A view that needs agent data to show anything has a preview sample under
-  `Space z l` for iterating its layout in place. `docs/features/layouts/design.md` lists every owner and its surfaces.
+  reload, and refreshes every show on each config change. The page claims the Bridge once at start, so a layout reaches
+  the app only through its kit, and no `window.wigley` holds the Bridge; this is no sandbox, since a layout shares the
+  page's DOM. A layout draws every pane and every repeated row, card or entry; the app keeps selection, keys, scrolling,
+  split widths, text boxes and editors. The root of every part a layout draws carries `data-layout="<name>"` and
+  `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet link, so a layout's CSS selects under
+  its own name and restyles nothing another layout drew; the default's CSS is one link of its own, ahead of them. A
+  loaded layout stays available while its revision is current, so a round naming one another round loaded draws with it
+  at once. A view that needs agent data to show anything has a preview sample under `Space z l` for iterating its layout
+  in place. `docs/features/layouts/design.md` lists every owner and its surfaces.
   - **A part a layout leaves out** (not defined, or set to `undefined`) draws with `default`. A part may add only its
     root to its parent: one that leaves another node beside it falls back like one that throws.
   - **A list picker draws a layout's rows** (`drawRow`): the picker owns a drawn row's click, its `ui-row--action`
@@ -791,14 +848,16 @@ round; primer: an open primer), since main, not the page, decides.
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
   drew it: `default`, or a bare line when `default` throws too.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
-  `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
-  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,
+  `rail`, `review` and `notices` panes. The `notices` pane is the round's one notices page, after every finding and
+  question: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
+  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, notice line, review row,
   round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
-  `kbd`, `button` — variant and `keys` — and `sectionHeader`, and `command(qualifiedId)` and `keysFor(qualifiedId)`
+  `kbd`, `button` — a command id with its `arg`, variant and `keys` — and `sectionHeader`, and
+  `command(qualifiedId, arg?)` and `keysFor(qualifiedId)`
   for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
   scrolling, the split width, the rail header's open count and saved state, and the cancel dialog. The built-in `default` layout is
   `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and
-  the rail and review panes, and draws the forms look. The user's forms layouts are folders in
+  the rail, review and notices panes, and draws the forms look. The user's forms layouts are folders in
   `~/.config/wigley-ai-gui/layouts/forms/`; a user layout defines only the cards and panes it changes.
   - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
     the round's `layout`, the `forms.layout` setting and `default`; a pane the same way without the item. One page
@@ -827,7 +886,9 @@ round; primer: an open primer), since main, not the page, decides.
   folders) in every `page/`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
   `PLUGIN_EXTRAS` table in `check-layers.mts`. The script also fails when `src/plugins/main.ts`, `page.ts` or
   `manifests.ts` misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a
-  `CORE_LAYERS` entry in `check-layers.mts`, and the composition root's entry lists it. A plugin's test follows its
+  `CORE_LAYERS` entry in `check-layers.mts`, and the composition root's entry lists it. A plugin contract's
+  `contract.test-support.ts`, the fixtures of its records (sessions' `sessionRow`), belongs to that contract's layer,
+  so any file that may import the contract may import it. A plugin's test follows its
   folder's rules, faking a provider with `fakeDependency`; a test that must start a real provider part has a whole-file
   `sublayers` entry under its plugin in `PLUGIN_EXTRAS`.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an

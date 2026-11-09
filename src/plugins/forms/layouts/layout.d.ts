@@ -15,14 +15,20 @@ export interface RoundInfo {
 export interface QuestionCard {
   label: string;
   title: string;
-  question: string;
+  summary: string;
   context: string;
   choices: string[];
   recommend: number;
   rationale: string;
   round: RoundInfo;
 }
+// The body of the notice's line on the notices pane. It draws under the line's head, so it need not draw the badge or
+// the title. `index` is the notice's 1-based place among the notices, the `arg` of `forms.focusNoticeAt`, which moves
+// the line cursor onto it, and `forms.toggleNoticeAt`. A click acts on this notice through
+// `kit.command('forms.focusNoticeAt', input.index)`, obtained while the card builds, or
+// `kit.button(parent, label, 'forms.focusNoticeAt', { arg: input.index })`.
 export interface NoticeCard {
+  index: number;
   label: string;
   title: string;
   context: string;
@@ -33,8 +39,8 @@ export type FindingAction = 'fix_now' | 'follow_up' | 'leave_it';
 // One numbered pick down a finding card: a choice with the action it sits under, or the header of an action with no
 // choices, whose `choice` is 0. `choice` is otherwise the choice's 1-based position in `choices`; `number` is the
 // entry's 1-based position down the card, which its key picks through `forms.choose` with that number: draw the key
-// with `kit.keyHint(parent, 'choose', { arg: number })` or read it with `kit.keys('choose', number)`. `kit.command`
-// passes no argument, so it throws on `forms.choose`; a card's click runs `kit.run({ type: 'choose', number })`.
+// with `kit.keyHint(parent, 'choose', { arg: number })` or read it with `kit.keys('choose', number)`. A card's click
+// picks it with `kit.command('forms.chooseAt', { item: kit.position, number })`, obtained while the card builds.
 export interface FindingCardEntry {
   number: number;
   action: FindingAction;
@@ -76,15 +82,6 @@ export interface CardAnswer {
   action: FindingAction | null;
 }
 
-export type LayoutAction =
-  // `number` is 1-based: a question's choice, or a finding's entry (`FindingCardEntry.number`), which sets its choice
-  // and action together. Picking the held number again clears the pick.
-  | { type: 'choose'; number: number }
-  | { type: 'toggleNotApplicable' }
-  | { type: 'toggleDontAsk' }
-  | { type: 'accept' }
-  | { type: 'focus' };
-
 // The base kit every forms card and pane, and the head, draws with.
 export interface FormsBaseKit extends BaseKit {
   // As the base kit's `keyHint`; a string `options` is the span's `className`.
@@ -96,6 +93,13 @@ export interface FormsBaseKit extends BaseKit {
 }
 
 export interface Kit extends FormsBaseKit {
+  // This card's item's rail position, the `arg` of `forms.focusItem`, `forms.clearChoiceAt`,
+  // `forms.acceptRecommendationAt`, `forms.toggleNotApplicableAt` and `forms.toggleDontAskAt`, and the `item` of
+  // `forms.chooseAt`. A click acts on this item through them, whatever box holds focus: `kit.command(id, arg)` checks
+  // its command while the card builds, so obtain each runner then. `forms.chooseAt`'s `number` is 1-based, a
+  // question's choice or a finding's entry (`FindingCardEntry.number`); picking the held number again clears the pick.
+  // The notice commands, `forms.focusNoticeAt` and `forms.toggleNoticeAt`, take the notice's `NoticeCard.index`.
+  readonly position: number;
   // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
   itemHead(parent: HTMLElement, kind: string): HTMLElement;
@@ -105,8 +109,6 @@ export interface Kit extends FormsBaseKit {
     parent: HTMLElement,
     field: 'notes' | 'dontAskReason' | 'comment',
   ): HTMLElement;
-  // Focuses this card's item, then runs the action. Call it from event handlers, not while the card builds.
-  run(action: LayoutAction): void;
   // `div.card-parts`, holding one `div.card-part` (`data-part="<id>"`) per part other plugins added for this card's
   // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
   // leaves it out gets the parts appended at the end of its element, after the boxes it left unmounted. A part that
@@ -120,9 +122,9 @@ export interface AnswerKit extends Kit {
   answerControls(parent: HTMLElement): HTMLElement;
 }
 export interface QuestionKit extends AnswerKit {
-  // `div.answer` with its 'Your answer' label and `ol.choices`; returns the `div.answer`, which `answerControls` may be
-  // appended to. 'recommended' and 'all': the rationale as 'Why recommended' under the recommended choice; 'none': no
-  // reason. A blank rationale draws nothing.
+  // `div.answer` holding the Clear button row and `ol.choices`, with no label; returns the `div.answer`, which
+  // `answerControls` may be appended to. 'recommended' and 'all': the rationale under the recommended choice, with no
+  // label; 'none': no reason. A blank rationale draws nothing.
   choiceList(
     parent: HTMLElement,
     reasons: 'recommended' | 'all' | 'none',
@@ -162,14 +164,16 @@ export interface LayoutCards {
     kit: QuestionKit,
   ): LayoutCard;
   finding(parent: HTMLElement, input: FindingCard, kit: FindingKit): LayoutCard;
+  // The body of the notice's line on the notices pane, drawn under the line's head, so it need not draw the badge or
+  // the title.
   notice(parent: HTMLElement, input: NoticeCard, kit: Kit): LayoutCard;
 }
 
-// One item as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `label` is
-// its rail number, as `F1` or `2`.
+// One stop as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `label` is
+// its rail number, as `F1`, `2`, or `N` for the notices stop, the last entry when the round has notices.
 export interface RailEntryInput {
   position: number;
-  kind: 'question' | 'finding' | 'notice';
+  kind: 'question' | 'finding' | 'notices';
   label: string;
   title: string;
 }
@@ -188,6 +192,19 @@ export interface ReviewRowInput {
 export interface ReviewInput {
   round: RoundInfo;
   rows: ReviewRowInput[];
+}
+
+// One notice as the notices pane lists it. `index` is its 1-based place among the notices, which `NoticesKit.line`
+// takes; `label` is the notice's own number, as `N1` (the rail shows only the `N` stop).
+export interface NoticeLineInput {
+  index: number;
+  label: string;
+  title: string;
+  badge: string;
+}
+export interface NoticesInput {
+  round: RoundInfo;
+  notices: NoticeLineInput[];
 }
 
 // `element` is the pane's own node, appended to `parent` before the pane mounts any text box. The app shows and hides
@@ -223,8 +240,20 @@ export interface ReviewKit extends Omit<FormsBaseKit, 'row'> {
   roundNote(parent: HTMLElement): HTMLElement;
   // `Send answers`, the primary button, with its keys; a click sends the round.
   sendButton(parent: HTMLElement): HTMLButtonElement;
-  // `Cancel round`, with its keys; a click asks to cancel the round.
+  // `Cancel round`, with its keys; a click opens the round's cancel prompt.
   cancelButton(parent: HTMLElement): HTMLButtonElement;
+}
+
+// The notices pane's parts.
+export interface NoticesKit extends FormsBaseKit {
+  // Draws the line for notice `index` (its chevron, its open state, its hidden body holding the notice's
+  // `cards.notice`, and the cursor mark), appends it to `parent`, and returns the line's head for the layout to draw
+  // into. Call it on an attached `parent`. Each line draws once; a line the pane leaves out is appended at the end of
+  // the pane. The app owns the click, the open state and the cursor; a click runs `forms.toggleNoticeAt` with `index`.
+  // The head sits inside the line's toggle button, so a click on it toggles the line: draw nothing interactive there.
+  // On each update the app appends the toggle key's prompt (`span.notice-line-prompt`) to the end of the cursor line's
+  // head.
+  line(parent: HTMLElement, index: number): HTMLElement;
 }
 
 // A layout defines only the cards and panes it changes. Each card comes from the first layout defining its kind among
@@ -239,6 +268,13 @@ export interface Layout {
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.
   review?(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
+  // The round's one notices page, the last stop after every finding and question, shown in place of the cards while
+  // its stop is focused, built once per round.
+  notices?(
+    parent: HTMLElement,
+    input: NoticesInput,
+    kit: NoticesKit,
+  ): LayoutPane;
 }
 
 // The built-in `default` layout, which defines every card and pane but the head.
@@ -246,4 +282,9 @@ export interface CompleteLayout extends Layout {
   cards: LayoutCards;
   rail(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   review(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
+  notices(
+    parent: HTMLElement,
+    input: NoticesInput,
+    kit: NoticesKit,
+  ): LayoutPane;
 }

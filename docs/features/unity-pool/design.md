@@ -45,10 +45,12 @@ none. A claim records the row beside the session id, so the pool can hand a clai
 `/clear` starts in the same row: `/clear` gives the row a new host session id and keeps its row id
 (`setHostSessionId`, `src/plugins/sessions/contract.ts`).
 
-A row's id lasts one app run: a relaunch reopens each saved row with a new id. A process the session host kept
-running across the relaunch keeps the variable of its first start. The app still finds that session's claim by its
-host session id, but its first `/clear` after the relaunch starts the new process under the new row id, so the pool
-does not take the handoff and the claim follows the pool's expiry rules.
+A row's id survives an app relaunch. Chat saves it as `rowId` in `open-sessions.json`, and the restore reopens each
+saved row under it (`OpenOptions.rowId`, `src/plugins/sessions/contract.ts`). A process the session host kept running
+across the relaunch keeps the variable of its first start, and the row still holds that id, so its first `/clear`
+hands the claim off as before. When the saved id is already held by another row, the restore opens the row under a
+fresh id: that row's kept process carries the old id, so its first `/clear` starts the new process under the new id,
+the pool does not take the handoff, and the claim follows the pool's expiry rules.
 
 ## Reading the state
 
@@ -120,7 +122,10 @@ error message. The CLI's `ok` decides, not its exit code. A script missing from 
 with no JSON answer gives `cli-failed` carrying the last stderr line. The panel offers no release of an
 agent's claim or a stranded mark: those take `release --force`, which runs only on the user's word in a terminal.
 
-The panel takes no keys: the buttons and holders are clicks.
+The panel is a right-bar stop: `Alt+l` past main's right edge gives it the keys (scope `unity-pool.panel`), and
+`Alt+h` hands them back. `j`/`k`/`gg`/`G` walk a cursor over its session holders, in clone order then queue order,
+entering on the shown session's clone holder, and Enter shows the cursor's session as a click on the holder does. The
+cursor's holder draws the focus ring only while the panel holds the keys. The Hold and Release buttons stay clicks.
 
 ## Drawing
 
@@ -141,11 +146,11 @@ pending runs and every redraw. The default look is in `DESIGN.md` § Surfaces (U
   panel then names what blocks it.
 - **Pool membership by clone path, then by origin name**: a session started inside a clone is in its pool; one
   started in a worktree or a subfolder elsewhere still matches through the repo name the side bar already groups by.
-- **No keys yet**: the right bar has no focus model; a key route comes with one.
+- **Keys walk the session holders alone**: the cursor stops only where Enter has a session to show; Hold and
+  Release stay clicks.
 
 ## Out of scope
 
 - Releasing an agent's claim or a stranded mark from the app (`release --force`).
 - Claiming a clone from the app: an agent claims for itself.
 - Codex sessions: they read the pool but do not claim.
-- Keeping a row's id across an app relaunch.

@@ -1,14 +1,9 @@
-/* A session's Primer tab holds its primer views and the idle state. */
+/* A session's primer popup holds its primer views. */
 .primer-tab {
   height: 100%;
 }
 
-.primer-tab > .ui-empty {
-  height: 100%;
-  align-content: center;
-}
-
-/* A primer fills its tab with two nested splits, tasks | (items | card): the
+/* A primer fills its popup with two nested splits, tasks | (items | card): the
    columns in the start panes, on the sheet colour, and in the inner split's
    end pane the card edge strip over the card and the review, each scrolling
    on its own. The inner split fills the outer split's end pane. */
@@ -48,8 +43,10 @@
   padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-8);
 }
 
-.primer-tab .primer-card > * {
-  max-width: var(--wg-prose-measure);
+/* The card and the review take the pane's whole width, their markdown
+   included, so a visual in them is never squeezed to the prose measure. */
+.primer-tab .md {
+  max-width: none;
 }
 
 @media (max-width: 800px) {

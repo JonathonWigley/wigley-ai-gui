@@ -2,12 +2,14 @@
 // marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
 // and the docs plugin's channel between its main and page parts.
 
+import type { CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 
 // The kinds and sources the app knows; an index entry may name others, which
 // still load (`isKnownKind`, `isKnownSource`).
@@ -163,10 +165,20 @@ export interface IndexLoad {
 // shows it.
 export const MACHINE_SOURCE_ID = 'machine';
 
+const SESSION_SOURCE_PREFIX = 'session:';
+
 // The id the docs main part registers a session's index under, by the
-// session row's id; that session's Docs tab shows it.
+// session row's id; the `docs-session-tab` plugin's Docs tab shows it.
 export function sessionSourceId(sessionId: string): string {
-  return `session:${sessionId}`;
+  return `${SESSION_SOURCE_PREFIX}${sessionId}`;
+}
+
+// The session row id `sessionSourceId` built `sourceId` from; null for any
+// other source id.
+export function sessionIdOfSource(sourceId: string): string | null {
+  return sourceId.startsWith(SESSION_SOURCE_PREFIX)
+    ? sourceId.slice(SESSION_SOURCE_PREFIX.length)
+    : null;
 }
 
 // A docs index the page shows a view over, registered by `id` in the docs main
@@ -246,12 +258,19 @@ export interface DocsPageEvents extends EventShape {
 // One docs view `addView` handed out: `element` holds its tree and doc in a
 // split. `shown` runs each time the caller shows the element (the view's
 // first show reads its index); `hasUnsavedEdits` is the caller's close guard;
-// `dispose` takes the view out of the docs plugin.
+// `sourceReplaced` tells the view its source was registered again, rebuilding
+// its index once it has shown and doing nothing before; `dispose` takes the
+// view out of the docs plugin.
 export interface DocsViewHandle extends Disposable {
   element: HTMLElement;
   shown(): void;
   hasUnsavedEdits(): boolean;
+  sourceReplaced(): void;
 }
+
+// The toast a docs view, or a caller's close guard over one, shows when
+// unsaved edits refuse a change.
+export const UNSAVED_TEXT = 'Unsaved changes — :w to save, :q! to discard';
 
 // The docs page part's exports. `addView` builds a docs view over the index
 // source registered as `sourceId`, its keys active while `isVisible`, filed
@@ -265,6 +284,64 @@ export interface DocsPageExports {
   addView(sourceId: string, options: { isVisible(): boolean }): DocsViewHandle;
   openDoc(path: string, line?: number): void;
 }
+
+// Opens the section whose heading carries `anchor`, in the docs view `viewId`,
+// as a section's `edit` control does.
+export const docsEditSectionAtCommand: CommandKey<
+  { viewId: string; anchor: string },
+  'docs.editSectionAt'
+> = { id: 'docs.editSectionAt' };
+
+// A click in the docs view `viewId`, each acting in that view.
+export const docsOpenNodeCommand: CommandKey<
+  { viewId: string; nodeId: string },
+  'docs.openNode'
+> = { id: 'docs.openNode' };
+
+// A rendered link's `href` and its text.
+export type DocsLinkClick = { viewId: string; href: string; title: string };
+
+export const docsFollowLinkCommand: CommandKey<
+  DocsLinkClick,
+  'docs.followLink'
+> = { id: 'docs.followLink' };
+
+// A place in a doc a section link or an On this page or Linked from row names:
+// `path` at the 1-based `line`, 0 for its top.
+export type DocsDocAtClick = { viewId: string; path: string; line: number };
+
+export const docsOpenDocAtCommand: CommandKey<
+  DocsDocAtClick,
+  'docs.openDocAt'
+> = { id: 'docs.openDocAt' };
+
+// A Recent changes page's click: the doc at `path`, read again when shown.
+export const docsOpenRecentPageCommand: CommandKey<
+  { viewId: string; path: string },
+  'docs.openRecentPage'
+> = { id: 'docs.openRecentPage' };
+
+export const docsSwitchTreeViewCommand: CommandKey<
+  { viewId: string },
+  'docs.switchTreeView'
+> = { id: 'docs.switchTreeView' };
+
+export const docsOpenListRowCommand: CommandKey<
+  { viewId: string; entryId: string },
+  'docs.openListRow'
+> = { id: 'docs.openListRow' };
+
+export const docsCreateMainCommand: CommandKey<
+  { viewId: string },
+  'docs.createMain'
+> = { id: 'docs.createMain' };
+
+// A Trash button's click: the prompt of the docs view `viewId` takes `answer`,
+// `yes` or `no`.
+export const docsAnswerConfirmCommand: CommandKey<
+  { viewId: string; answer: string },
+  'docs.answerConfirm'
+> = { id: 'docs.answerConfirm' };
 
 export const docsPageKey: DependencyKey<DocsPageExports, 'page', 'docs'> = {
   id: 'docs',
@@ -388,3 +465,31 @@ export interface DocsChannel extends ChannelShape {
     openDoc: { path: string; line: number | null };
   };
 }
+
+// An open editor's unsaved edits: the whole file's text as the editor holds it,
+// and `baseText`, the file's text the edits were made over.
+export interface DocsEdits {
+  path: string;
+  text: string;
+  baseText: string;
+}
+
+// Where the user was in one docs view, so a page reload puts them back: the
+// open doc, the tree's expanded group ids, selected row and filter, and the
+// open editor's unsaved edits, null with none.
+export interface DocsPlace {
+  openPath: string | null;
+  expanded: string[];
+  selectedId: string | null;
+  filter: string;
+  edits: DocsEdits | null;
+}
+
+// Each docs view's place, by the source id the view shows: `MACHINE_SOURCE_ID`
+// for Docs mode's, `sessionSourceId(sessionId)` for the `docs-session-tab`
+// plugin's Docs tab in that session.
+export const docsPlaceSlot: KeyedSlotKey<DocsPlace, 'page', 'docs'> = {
+  id: 'docs.place',
+  process: 'page',
+  kind: 'keyed',
+};

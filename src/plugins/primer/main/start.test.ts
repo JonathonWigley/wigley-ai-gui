@@ -33,7 +33,6 @@ describe('primer drive actions', () => {
         sessionId: 'drive-primer-1',
         projectDir: 'drive',
         harness: 'claude',
-        deadlineSeconds: null,
       },
     ]);
     expect(sessions.calls).toEqual([['open_primer', SAMPLE_PRIMER_ARGS]]);
@@ -135,6 +134,33 @@ describe('primer main part', () => {
     await expect(answers?.run({ sessionId: 'b' })).rejects.toThrow(
       /open_primer/,
     );
+    rmSync(homeDir, { recursive: true, force: true });
+  });
+
+  it('mayStop names the open primer until it resolves', async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-primer-may-stop-'));
+    const harness = startMainPart(primerMainPart, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat],
+      drive: true,
+      services: {
+        homeDir,
+        alerts: { announce() {}, setOpenCount() {} },
+        git: { originRepoName: () => Promise.resolve(null) } as never,
+      },
+    });
+    await harness.drive?.run('openPrimer', { sessionId: 'a' });
+    const [shown] = harness.sent
+      .filter((sent) => sent.message === 'formShown')
+      .map((sent) => sent.data as { formId: string; label: string });
+
+    expect(harness.started().mayStop?.()).toBe(
+      `Finish or cancel ${shown.label}'s primer first`,
+    );
+    harness.invoke('finish', shown.formId, { kind: 'cancelled', body: {} });
+    expect(harness.started().mayStop?.()).toBeNull();
+
+    await harness.stop();
     rmSync(homeDir, { recursive: true, force: true });
   });
 

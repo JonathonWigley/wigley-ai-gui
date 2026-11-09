@@ -21,7 +21,6 @@ const DEFAULT_DEADLINE_SECONDS = 240;
 const SESSION: AgentFormOwnerInfo = {
   sessionId: 'session-1',
   projectDir: '/work/wigley',
-  deadlineSeconds: null,
 };
 
 // A second primer for another feature, with entries of its own.

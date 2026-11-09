@@ -17,7 +17,7 @@ import type {
   TreeWikiLink,
 } from '../tree';
 import { fakeDocsParts, fakePushedScope, noAnchor } from './docs-page-fakes';
-import { createTreeView } from './tree-view';
+import { createTreeView, type TreeView, type TreeViewDeps } from './tree-view';
 
 // A tree pane marked `marker` that places every app part.
 function paneLayout(marker: string): Layout {
@@ -44,11 +44,13 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     openHeading: () => undefined,
     openWikiLink: () => undefined,
     switchView: () => undefined,
+    rowClicked: () => undefined,
     pushBoxScope: fakePushedScope,
     filterClosed: () => undefined,
     anchor: noAnchor,
     rowStatus: () => ({ mark: null, detail: null }),
     leafMarks: () => ({ time: null, isStarred: false }),
+    placeChanged: () => undefined,
   };
 }
 
@@ -93,7 +95,7 @@ const WIKI_LABEL: TreeWikiLabel = {
 // A wiki-capable tree whose rows draw `li.test-row` holding only the title and
 // the prompt, its last input per row id in `inputs`, and the command each
 // prompt element anchors in `commands`.
-function wikiSetUp(overrides: { hasWiki?: boolean } = {}) {
+function wikiSetUp(overrides: Partial<TreeViewDeps> = {}) {
   const inputs = new Map<string, TreeRowInput>();
   const commands = new Map<unknown, string>();
   const rowLayout: Layout = {
@@ -115,6 +117,8 @@ function wikiSetUp(overrides: { hasWiki?: boolean } = {}) {
     openWikiLink,
     switchView,
     filterClosed,
+    // A click runs `docs.openNode`, whose handler reaches `openNode`.
+    rowClicked: (nodeId) => tree.openNode(nodeId),
     anchor: (element, command) => {
       commands.set(element, command);
       return { dispose: () => undefined };
@@ -406,6 +410,40 @@ describe('createTreeView', () => {
     expect(selected()).toEqual(['Label']);
   });
 
+  it('openNode_Row_SelectsFocusesThenOpens', () => {
+    const openLeaf = vi.fn();
+    const { tree, selected } = wikiSetUp({ openLeaf });
+    tree.setWikiTree([shelf('One', [page('a'), page('b')])], [], true);
+
+    tree.openNode('entry:e:b');
+
+    expect({
+      selected: selected(),
+      isFocused: document.activeElement === tree.element,
+      opened: openLeaf.mock.calls.map(([leaf]) => (leaf as TreeLeaf).title),
+    }).toEqual({ selected: ['b'], isFocused: true, opened: ['b'] });
+  });
+
+  it('openNode_NoRow_LogsAndKeepsTheSelection', () => {
+    const logs: string[] = [];
+    const openLeaf = vi.fn();
+    const { tree, selected } = wikiSetUp({
+      openLeaf,
+      log: (line) => logs.push(line),
+    });
+    tree.setWikiTree([shelf('One', [page('a')])], [], true);
+
+    tree.openNode('entry:e:gone');
+
+    expect({ selected: selected(), logs, opened: openLeaf.mock.calls }).toEqual(
+      {
+        selected: ['One'],
+        logs: ['no row entry:e:gone'],
+        opened: [],
+      },
+    );
+  });
+
   it.each<{
     name: string;
     node: TreeNode;
@@ -517,6 +555,59 @@ describe('createTreeView', () => {
     expect(selected()).toEqual(['One']);
     expect(tree.selectedIn('all')).toEqual(page('both'));
   });
+
+  const views = [
+    {
+      name: 'wiki',
+      hasWiki: true,
+      setTree: (tree: TreeView, nodes: TreeNode[]) =>
+        tree.setWikiTree(nodes, [], true),
+    },
+    {
+      name: 'all pages',
+      hasWiki: false,
+      setTree: (tree: TreeView, nodes: TreeNode[]) =>
+        tree.setTree(nodes, NOTHING, NO_HEADINGS, true),
+    },
+  ];
+
+  // A saved selection naming no row of the first tree falls back to its first
+  // row.
+  it.each(
+    views.flatMap((view) => [
+      {
+        ...view,
+        selectedId: 'entry:e:b',
+        selected: ['b'],
+        selectedAfter: 'entry:e:b',
+      },
+      {
+        ...view,
+        selectedId: 'entry:e:gone',
+        selected: ['One'],
+        selectedAfter: 'shelf:One',
+      },
+    ]),
+  )(
+    'restored_place_holds_until_and_through_the_first_tree: $name $selectedId',
+    ({ hasWiki, setTree, selectedId, selected: selects, selectedAfter }) => {
+      const { tree, titles, selected } = wikiSetUp({ hasWiki });
+      const restored = { expanded: ['shelf:Two'], selectedId, filter: '' };
+      tree.restorePlace(restored);
+      // A tree with no rows draws, and reports its place, before the rows come.
+      setTree(tree, []);
+      const placeBeforeRows = tree.place();
+
+      setTree(tree, [shelf('One', [page('a')]), shelf('Two', [page('b')])]);
+
+      expect(titles()).toEqual(['One', 'Two', 'b']);
+      expect(selected()).toEqual(selects);
+      expect({ placeBeforeRows, placeAfter: tree.place() }).toEqual({
+        placeBeforeRows: restored,
+        placeAfter: { ...restored, selectedId: selectedAfter },
+      });
+    },
+  );
 
   it('sessionTree_NoWiki_DrawsNoSwitchAndShowsItsTree', () => {
     const { tree, root, titles } = wikiSetUp({ hasWiki: false });

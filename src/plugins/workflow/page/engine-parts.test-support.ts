@@ -1,7 +1,12 @@
 import { vi } from 'vitest';
+import type { CommandId } from '../../../contracts/commands';
 import type { PluginManifest } from '../../../contracts/plugin';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
-import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
+import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
+import {
+  type RecordedAnchor,
+  recordingAnchors,
+} from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
@@ -13,7 +18,12 @@ import {
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
-import { type WorkflowPageExports, workflowPageKey } from '../contract';
+import {
+  type WorkflowKit,
+  type WorkflowPageExports,
+  workflowPageKey,
+} from '../contract';
+import { workflowManifest } from '../manifest';
 import { createWorkflowKit } from './layout/workflow-kit';
 import { workflowPagePart } from './start';
 
@@ -49,13 +59,20 @@ export function startEnginePagePart() {
   return { engine, dependency };
 }
 
-// The engine's real kit under `manifest`, with no-op services, at the clock `now`;
-// `anchors` holds each key anchor it names.
+// The engine's real kit under `manifest`, with no-op services, at the clock `now`,
+// for the part of `sessionId`; `anchors` holds each key anchor it names, and `runs`
+// each command a click ran.
 export function testWorkflowKit(
   manifest: Pick<PluginManifest, 'id' | 'commands'>,
   now = 0,
-) {
+  sessionId = 's1',
+): {
+  kit: WorkflowKit;
+  anchors: RecordedAnchor[];
+  runs: { id: CommandId; arg: unknown }[];
+} {
   const { anchors, keys } = recordingAnchors();
+  const runs: { id: CommandId; arg: unknown }[] = [];
   const kit = createWorkflowKit(
     {
       markdown: {
@@ -65,18 +82,16 @@ export function testWorkflowKit(
         ...NO_FENCES,
       },
       keys,
-      commands: {
-        exists: () => true,
-        argShape: () => undefined,
-        run: () => undefined,
-      },
+      commands: fakeKitCommandsOf(workflowManifest, (id, arg) => {
+        runs.push({ id, arg });
+      }),
       platform: 'macos',
       state: noLayoutState,
     },
     { recordBox: () => undefined, recordAnchor: () => undefined },
-    () => undefined,
+    sessionId,
     { now: () => now },
     manifest,
   );
-  return { kit, anchors };
+  return { kit, anchors, runs };
 }

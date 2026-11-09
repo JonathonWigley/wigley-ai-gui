@@ -8,6 +8,7 @@ import type {
   PresentedRound,
   Question,
   Round,
+  RoundPlace,
 } from '../contract';
 import { saveState } from '../../../shared/page/autosave';
 import {
@@ -18,6 +19,8 @@ import {
   initialState,
   progress,
   railItems,
+  railPosition,
+  roundPlace,
   type FormsAction,
   type FormsState,
   type RoundState,
@@ -28,8 +31,8 @@ import { finding, nit } from './test-rounds';
 function question(title: string, choiceCount = 3): Question {
   return {
     title,
+    summary: `${title}?`,
     context: `${title} context`,
-    question: `${title}?`,
     choices: Array.from(
       { length: choiceCount },
       (_, i) => `${title} choice ${i + 1}`,
@@ -112,7 +115,7 @@ function active(state: FormsState): RoundState {
   return round;
 }
 
-// Rail positions: 0 = notice N1, 1 = question Q1, 2 = question Q2.
+// Rail positions: 0 = question Q1, 1 = question Q2, 2 = the notices stop.
 function mixedRound(body: FormBody | null = null): FormsState {
   return initialState(
     [presented('r1', { notices: [notice('N1')] }, body)],
@@ -120,7 +123,8 @@ function mixedRound(body: FormBody | null = null): FormsState {
   );
 }
 
-// Rail positions: 0 = notice N1, 1 = finding F1, 2 = question Q1, 3 = question Q2.
+// Rail positions: 0 = finding F1, 1 = question Q1, 2 = question Q2, 3 = the
+// notices stop.
 function findingRound(body: FormBody | null = null): FormsState {
   return initialState(
     [
@@ -151,9 +155,10 @@ function twoFixRound(): FormsState {
   );
 }
 
-// Focuses rail position 0, the round's first notice.
-function onNotice(state: FormsState): FormsState {
-  return apply(state, { type: 'focusItem', item: 0 });
+// Focuses the round's notices stop.
+function onNotices(state: FormsState): FormsState {
+  const item = railPosition(active(state).round, { kind: 'notices' });
+  return apply(state, { type: 'focusItem', item });
 }
 
 const untouched = {
@@ -187,42 +192,68 @@ describe('initialState', () => {
     expect(state.view).toBe('idle');
   });
 
-  it('focuses the first finding or question, past the notices', () => {
-    expect(focusedItem(active(mixedRound()))).toEqual({
-      kind: 'question',
-      index: 1,
-    });
-    expect(focusedItem(active(findingRound()))).toEqual({
-      kind: 'finding',
-      index: 1,
-    });
-  });
-
-  it('focuses the first notice when the round has nothing to answer', () => {
-    const state = initialState(
-      [presented('r1', { notices: [notice('N1')], questions: [] })],
-      'r1-session',
-    );
-    expect(focusedItem(active(state))).toEqual({ kind: 'notice', index: 1 });
+  it.each([
+    {
+      case: 'mixed round',
+      state: () => mixedRound(),
+      expected: { kind: 'question', index: 1 },
+    },
+    {
+      case: 'finding round',
+      state: () => findingRound(),
+      expected: { kind: 'finding', index: 1 },
+    },
+    {
+      case: 'notices only',
+      state: () =>
+        initialState(
+          [presented('r1', { notices: [notice('N1')], questions: [] })],
+          'r1-session',
+        ),
+      expected: { kind: 'notices' },
+    },
+    {
+      case: 'no items',
+      state: () =>
+        initialState([presented('r1', { questions: [] })], 'r1-session'),
+      expected: null,
+    },
+  ])('opens on the first rail stop: $case', ({ state, expected }) => {
+    expect(focusedItem(active(state()))).toEqual(expected);
   });
 });
 
 describe('railItems', () => {
-  it('lists notices, then findings, then questions, each numbered from 1 in its kind', () => {
+  it.each([
+    {
+      case: 'the findings, then the questions, then the notices stop',
+      notices: [notice('N1'), notice('N2')],
+      expected: [
+        { kind: 'finding', index: 1 },
+        { kind: 'finding', index: 2 },
+        { kind: 'question', index: 1 },
+        { kind: 'notices' },
+      ],
+    },
+    {
+      case: 'no notices stop for a round without notices',
+      notices: [],
+      expected: [
+        { kind: 'finding', index: 1 },
+        { kind: 'finding', index: 2 },
+        { kind: 'question', index: 1 },
+      ],
+    },
+  ])('lists $case', ({ notices, expected }) => {
     const round: Round = {
       heading: 'h',
       overview: '',
       layout: null,
       questions: [question('Q1')],
-      notices: [notice('N1')],
+      notices,
       findings: [finding('F1'), finding('F2')],
     };
-    expect(railItems(round)).toEqual([
-      { kind: 'notice', index: 1 },
-      { kind: 'finding', index: 1 },
-      { kind: 'finding', index: 2 },
-      { kind: 'question', index: 1 },
-    ]);
+    expect(railItems(round)).toEqual(expected);
   });
 });
 
@@ -255,6 +286,33 @@ describe('restoring a draft', () => {
     expect(round.noticeComments).toEqual(['look again']);
     expect(round.note).toBe('overall');
   });
+
+  it.each([
+    { case: 'no notices', notices: [], comments: [], open: [], line: 0 },
+    {
+      case: 'three notices, the second with a comment',
+      notices: [notice('N1'), notice('N2'), notice('N3')],
+      comments: [
+        { index: 1, comment: '' },
+        { index: 2, comment: 'see 2' },
+        { index: 3, comment: '' },
+      ],
+      open: [false, true, false],
+      line: 1,
+    },
+  ])(
+    'opens each notice with a restored comment, the cursor on line 1: $case',
+    ({ notices, comments, open, line }) => {
+      const state = initialState(
+        [presented('r1', { notices }, draft({ notice_comments: comments }))],
+        'r1-session',
+      );
+      expect(active(state)).toMatchObject({
+        openNotices: open,
+        noticeLine: line,
+      });
+    },
+  );
 
   it('keeps the choice of an answer marked not applicable', () => {
     const round = active(
@@ -396,7 +454,7 @@ describe('restoring a draft', () => {
 });
 
 describe('choose', () => {
-  const onQ1 = apply(mixedRound(), { type: 'focusItem', item: 1 });
+  const onQ1 = apply(mixedRound(), { type: 'focusItem', item: 0 });
 
   it('picks the numbered choice on the focused question', () => {
     const state = apply(onQ1, { type: 'choose', number: 2 });
@@ -460,8 +518,8 @@ describe('choose', () => {
     expect(active(state).answers[0].choice).toBe(3);
   });
 
-  it('does nothing on a notice', () => {
-    const state = onNotice(mixedRound());
+  it('does nothing on the notices stop', () => {
+    const state = onNotices(mixedRound());
     expect(apply(state, { type: 'choose', number: 1 })).toBe(state);
   });
 
@@ -479,7 +537,7 @@ describe('choose', () => {
 describe('clearChoice', () => {
   const chosen = run(
     mixedRound(),
-    { type: 'focusItem', item: 1 },
+    { type: 'focusItem', item: 0 },
     { type: 'choose', number: 2 },
   );
 
@@ -562,7 +620,7 @@ describe('acceptRecommendation', () => {
 
 describe('answerStatus', () => {
   const f1 = { kind: 'finding', index: 1 } as const;
-  const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
+  const onF1 = apply(findingRound(), { type: 'focusItem', item: 0 });
 
   it('a finding with no pick and no notes is untouched', () => {
     expect(answerStatus(active(onF1), f1)).toBe('untouched');
@@ -598,7 +656,7 @@ describe('toggleNotApplicable', () => {
   it('marks the focused question and keeps its choice for toggling back', () => {
     const marked = run(
       mixedRound(),
-      { type: 'focusItem', item: 1 },
+      { type: 'focusItem', item: 0 },
       { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
     );
@@ -615,7 +673,7 @@ describe('toggleNotApplicable', () => {
   it('marks the focused finding and keeps its choice', () => {
     const state = run(
       findingRound(),
-      { type: 'focusItem', item: 1 },
+      { type: 'focusItem', item: 0 },
       { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
     );
@@ -625,8 +683,8 @@ describe('toggleNotApplicable', () => {
     });
   });
 
-  it('does nothing on a notice', () => {
-    const state = onNotice(mixedRound());
+  it('does nothing on the notices stop', () => {
+    const state = onNotices(mixedRound());
     expect(apply(state, { type: 'toggleNotApplicable' })).toBe(state);
   });
 });
@@ -635,7 +693,7 @@ describe('toggleDontAsk', () => {
   it('flips dont ask and keeps the reason text', () => {
     const state = run(
       mixedRound(),
-      { type: 'focusItem', item: 2 },
+      { type: 'focusItem', item: 1 },
       { type: 'toggleDontAsk' },
       {
         type: 'setText',
@@ -660,15 +718,15 @@ describe('toggleDontAsk', () => {
   it('stays live on a question marked not applicable', () => {
     const state = run(
       mixedRound(),
-      { type: 'focusItem', item: 1 },
+      { type: 'focusItem', item: 0 },
       { type: 'toggleNotApplicable' },
       { type: 'toggleDontAsk' },
     );
     expect(active(state).answers[0].dontAsk).toBe(true);
   });
 
-  it('does nothing on a notice', () => {
-    const state = onNotice(mixedRound());
+  it('does nothing on the notices stop', () => {
+    const state = onNotices(mixedRound());
     expect(apply(state, { type: 'toggleDontAsk' })).toBe(state);
   });
 });
@@ -756,7 +814,7 @@ describe('setText', () => {
 
 describe('item navigation', () => {
   it('moves one rail item at a time and stops at both ends', () => {
-    const start = onNotice(mixedRound());
+    const start = mixedRound();
     expect(apply(start, { type: 'prevItem' })).toBe(start);
 
     const end = run(
@@ -765,15 +823,14 @@ describe('item navigation', () => {
       { type: 'nextItem' },
       { type: 'nextItem' },
     );
-    expect(focusedItem(active(end))).toEqual({ kind: 'question', index: 2 });
+    expect(focusedItem(active(end))).toEqual({ kind: 'notices' });
 
     const back = apply(end, { type: 'prevItem' });
-    expect(focusedItem(active(back))).toEqual({ kind: 'question', index: 1 });
+    expect(focusedItem(active(back))).toEqual({ kind: 'question', index: 2 });
   });
 
   it('firstItem and lastItem focus the rail ends', () => {
-    const start = onNotice(mixedRound());
-    const middle = apply(start, { type: 'nextItem' });
+    const middle = apply(mixedRound(), { type: 'nextItem' });
 
     const last = apply(middle, { type: 'lastItem' });
     const first = apply(last, { type: 'firstItem' });
@@ -783,8 +840,8 @@ describe('item navigation', () => {
       first: focusedItem(active(first)),
       firstAgain: apply(first, { type: 'firstItem' }) === first,
     }).toEqual({
-      last: { kind: 'question', index: 2 },
-      first: focusedItem(active(start)),
+      last: { kind: 'notices' },
+      first: { kind: 'question', index: 1 },
       firstAgain: true,
     });
   });
@@ -793,6 +850,123 @@ describe('item navigation', () => {
     const state = mixedRound();
     expect(apply(state, { type: 'focusItem', item: 3 })).toBe(state);
     expect(apply(state, { type: 'focusItem', item: -1 })).toBe(state);
+  });
+});
+
+describe('notice lines', () => {
+  // Rail positions: 0 = question Q1, 1 = the notices stop.
+  const threeNotices = (...actions: FormsAction[]) =>
+    run(
+      initialState(
+        [
+          presented('r1', {
+            questions: [question('Q1')],
+            notices: [notice('N1'), notice('N2'), notice('N3')],
+          }),
+        ],
+        'r1-session',
+      ),
+      ...actions,
+    );
+  const onStop: FormsAction = { type: 'focusItem', item: 1 };
+  const down: FormsAction = { type: 'moveNoticeLine', delta: 1 };
+
+  it.each<{
+    action: string;
+    case: string;
+    before: FormsAction[];
+    act: FormsAction;
+    expected: Partial<RoundState> | 'unchanged';
+  }>([
+    {
+      action: 'toggleNotice 2',
+      case: 'opens a closed line',
+      before: [],
+      act: { type: 'toggleNotice', notice: 2 },
+      expected: { openNotices: [false, true, false] },
+    },
+    {
+      action: 'toggleNotice 2',
+      case: 'closes an open line',
+      before: [{ type: 'toggleNotice', notice: 2 }],
+      act: { type: 'toggleNotice', notice: 2 },
+      expected: { openNotices: [false, false, false] },
+    },
+    {
+      action: 'toggleNotice 0',
+      case: 'changes nothing',
+      before: [],
+      act: { type: 'toggleNotice', notice: 0 },
+      expected: 'unchanged',
+    },
+    {
+      action: 'toggleNotice 4',
+      case: 'changes nothing',
+      before: [],
+      act: { type: 'toggleNotice', notice: 4 },
+      expected: 'unchanged',
+    },
+    {
+      action: 'moveNoticeLine 1',
+      case: 'moves from line 1 to line 2',
+      before: [onStop],
+      act: down,
+      expected: { noticeLine: 2 },
+    },
+    {
+      action: 'moveNoticeLine -1',
+      case: 'changes nothing on line 1',
+      before: [onStop],
+      act: { type: 'moveNoticeLine', delta: -1 },
+      expected: 'unchanged',
+    },
+    {
+      action: 'moveNoticeLine 1',
+      case: 'changes nothing on line 3',
+      before: [onStop, down, down],
+      act: down,
+      expected: 'unchanged',
+    },
+    {
+      action: 'moveNoticeLine 1',
+      case: 'changes nothing with the question focused',
+      before: [],
+      act: down,
+      expected: 'unchanged',
+    },
+    {
+      action: 'focusNotice 3',
+      case: 'focuses the stop with the cursor on line 3',
+      before: [{ type: 'toggleNotice', notice: 2 }],
+      act: { type: 'focusNotice', notice: 3 },
+      expected: {
+        focus: 1,
+        noticeLine: 3,
+        openNotices: [false, true, false],
+      },
+    },
+    {
+      action: 'focusNotice 4',
+      case: 'changes nothing',
+      before: [],
+      act: { type: 'focusNotice', notice: 4 },
+      expected: 'unchanged',
+    },
+    {
+      action: 'toggleNotice 1',
+      case: 'changes nothing in the review view',
+      before: [{ type: 'openReview' }],
+      act: { type: 'toggleNotice', notice: 1 },
+      expected: 'unchanged',
+    },
+  ])('$action $case', ({ before, act, expected }) => {
+    const state = threeNotices(...before);
+    const next = apply(state, act);
+    if (expected === 'unchanged') {
+      expect(next).toBe(state);
+    } else {
+      expect(active(next)).toMatchObject(expected);
+    }
   });
 });
 
@@ -817,12 +991,12 @@ describe('sessionActivated', () => {
   it('dismisses a pending cancel prompt', () => {
     const state = run(
       two,
-      { type: 'askClose', sessionId: 'r1-session' },
+      { type: 'openReview' },
+      { type: 'askCancel' },
       { type: 'sessionActivated', sessionId: 'r2-session' },
     );
     expect(state.view).toBe('forms');
     expect(state.activeFormId).toBe('r2');
-    expect(state.confirmClosesSession).toBe(false);
   });
 
   it('changes nothing for the session already active', () => {
@@ -844,35 +1018,6 @@ describe('sessionActivated', () => {
       sessionId: 'r1-session',
     });
     expect(active(back).answers[0].choice).toBe(2);
-  });
-});
-
-describe('askClose', () => {
-  const two = initialState([presented('r1'), presented('r2')], 'r1-session');
-  const askClose: FormsAction = { type: 'askClose', sessionId: 'r1-session' };
-
-  it('opens the prompt from the form and keeping returns to the form', () => {
-    const asked = apply(two, askClose);
-    expect(asked.view).toBe('confirm');
-    expect(asked.confirmClosesSession).toBe(true);
-    const kept = apply(asked, { type: 'dismissConfirm' });
-    expect(kept.view).toBe('forms');
-    expect(kept.confirmClosesSession).toBe(false);
-  });
-
-  it('returns to the review when asked from the review', () => {
-    const asked = run(two, { type: 'openReview' }, askClose);
-    expect(asked.view).toBe('confirm');
-    expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('review');
-  });
-
-  it('does nothing for another session', () => {
-    expect(apply(two, { type: 'askClose', sessionId: 'r2-session' })).toBe(two);
-  });
-
-  it('does nothing while the prompt is open', () => {
-    const asked = apply(two, askClose);
-    expect(apply(asked, askClose)).toBe(asked);
   });
 });
 
@@ -917,7 +1062,7 @@ describe('review', () => {
     expect(apply(forms, { type: 'reviewTop' })).toBe(forms);
   });
 
-  // Rail positions: 0 notice N1, 1 finding F1, 2 question Q1.
+  // Rail positions: 0 finding F1, 1 question Q1, 2 the notices stop.
   function noticeFindingQuestion(): FormsState {
     return initialState(
       [
@@ -935,25 +1080,25 @@ describe('review', () => {
     const opened = apply(noticeFindingQuestion(), { type: 'openReview' });
     const onFinding = apply(opened, { type: 'reviewJump', row: 0 });
     expect(onFinding.view).toBe('forms');
-    expect(active(onFinding).focus).toBe(1);
-    expect(active(apply(opened, { type: 'reviewJump', row: 1 })).focus).toBe(2);
+    expect(active(onFinding).focus).toBe(0);
+    expect(active(apply(opened, { type: 'reviewJump', row: 1 })).focus).toBe(1);
   });
 
-  it('jumps from a notice in the rail to its card, keeping the review cursor', () => {
+  it('jumps from the notices stop in the rail to the notices page, keeping the review cursor', () => {
     const state = run(
       noticeFindingQuestion(),
       { type: 'openReview' },
       { type: 'reviewNext' },
-      { type: 'reviewJumpItem', item: 0 },
+      { type: 'reviewJumpItem', item: 2 },
     );
     expect(state.view).toBe('forms');
-    expect(active(state).focus).toBe(0);
+    expect(focusedItem(active(state))).toEqual({ kind: 'notices' });
     expect(active(state).reviewRow).toBe(1);
   });
 
   it('ignores a rail jump outside the review', () => {
     const state = noticeFindingQuestion();
-    expect(apply(state, { type: 'reviewJumpItem', item: 0 })).toBe(state);
+    expect(apply(state, { type: 'reviewJumpItem', item: 2 })).toBe(state);
   });
 
   it('ignores a rail jump to a position outside the rail', () => {
@@ -1009,7 +1154,6 @@ describe('cancel', () => {
   it('asks from the review, and dismissing returns to the review', () => {
     const asked = run(two, { type: 'openReview' }, { type: 'askCancel' });
     expect(asked.view).toBe('confirm');
-    expect(asked.confirmClosesSession).toBe(false);
     expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('review');
   });
 
@@ -1033,19 +1177,7 @@ describe('sending', () => {
   const sendingReview = run(two, { type: 'openReview' }, submitting);
 
   it('marks the active round sending with its kind', () => {
-    expect(active(sendingReview).sending).toEqual({
-      kind: 'submitted',
-      closesSession: false,
-    });
-  });
-
-  it('marks a cancel the close prompt asked as closing its session', () => {
-    const state = run(
-      two,
-      { type: 'askClose', sessionId: 'r1-session' },
-      cancelling,
-    );
-    expect(active(state).sending?.closesSession).toBe(true);
+    expect(active(sendingReview).sending).toEqual({ kind: 'submitted' });
   });
 
   it("ignores the round's keys while it is sending", () => {
@@ -1054,7 +1186,6 @@ describe('sending', () => {
       { type: 'closeReview' },
       { type: 'askCancel' },
       { type: 'reviewJump' },
-      { type: 'askClose', sessionId: 'r1-session' },
     ];
     for (const key of keys) {
       expect(apply(sendingReview, key)).toBe(sendingReview);
@@ -1295,9 +1426,9 @@ describe('unansweredItem', () => {
     });
   });
 
-  it('runs from the first or last question with a notice focused', () => {
+  it('runs from the first or last question with the notices stop focused', () => {
     const round = active(
-      onNotice(
+      onNotices(
         initialState(
           [
             presented('r1', {
@@ -1337,7 +1468,7 @@ describe('unansweredItem', () => {
 
   it('searches findings before questions', () => {
     const round = active(
-      onNotice(
+      onNotices(
         initialState(
           [
             presented('r1', {
@@ -1371,7 +1502,7 @@ describe('item actions outside the forms view', () => {
   // answer if they applied.
   const inReview = run(
     mixedRound(),
-    { type: 'focusItem', item: 1 },
+    { type: 'focusItem', item: 0 },
     { type: 'openReview' },
   );
 
@@ -1457,7 +1588,7 @@ describe('progress', () => {
 describe('saveState', () => {
   const edited = run(
     mixedRound(),
-    { type: 'focusItem', item: 1 },
+    { type: 'focusItem', item: 0 },
     { type: 'choose', number: 1 },
   );
   const revision = active(edited).revision;
@@ -1495,8 +1626,14 @@ describe('saveState', () => {
 
   it('navigation and views are not edits', () => {
     const state = run(
-      mixedRound(),
+      initialState(
+        [presented('r1', { notices: [notice('N1'), notice('N2')] })],
+        'r1-session',
+      ),
       { type: 'nextItem' },
+      { type: 'focusNotice', notice: 1 },
+      { type: 'toggleNotice', notice: 1 },
+      { type: 'moveNoticeLine', delta: 1 },
       { type: 'openReview' },
     );
     expect(saveState(active(state))).toBe('saved');
@@ -1507,7 +1644,7 @@ describe('buildBody', () => {
   it('writes every question and notice with its 1-based index', () => {
     const state = run(
       mixedRound(),
-      { type: 'focusItem', item: 2 },
+      { type: 'focusItem', item: 1 },
       { type: 'choose', number: 3 },
       {
         type: 'setText',
@@ -1548,7 +1685,7 @@ describe('buildBody', () => {
   it('sends a not-applicable answer with the choice it kept', () => {
     const state = run(
       mixedRound(),
-      { type: 'focusItem', item: 1 },
+      { type: 'focusItem', item: 0 },
       { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
     );
@@ -1560,10 +1697,10 @@ describe('buildBody', () => {
   it('a body restored as a draft rebuilds the same body', () => {
     const state = run(
       findingRound(),
-      { type: 'focusItem', item: 1 },
+      { type: 'focusItem', item: 0 },
       // Entry 4 is follow_up's header: F1's three choices sit under fix_now.
       { type: 'choose', number: 4 },
-      { type: 'focusItem', item: 2 },
+      { type: 'focusItem', item: 1 },
       { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
       { type: 'toggleDontAsk' },
@@ -1589,11 +1726,97 @@ describe('buildBody', () => {
 
 describe('apply', () => {
   it('leaves the state it was given unchanged', () => {
-    const state = apply(mixedRound(), { type: 'focusItem', item: 1 });
+    const state = apply(mixedRound(), { type: 'focusItem', item: 0 });
     const before = structuredClone(state);
     apply(state, { type: 'choose', number: 1 });
     apply(state, { type: 'nextItem' });
     apply(state, { type: 'formClosed', formId: 'r1' });
     expect(state).toEqual(before);
+  });
+});
+
+describe('placeRestored', () => {
+  const REVIEW_ROW_TWO: RoundPlace = {
+    focus: 1,
+    reviewRow: 1,
+    noticeLine: 0,
+    view: 'review',
+    confirmReturnView: 'review',
+  };
+
+  it.each([
+    { case: 'the active round', formId: 'r1', view: 'review' },
+    { case: 'a background round', formId: 'r2', view: 'forms' },
+  ])(
+    'restores focus and review row, and the view only on $case',
+    ({ formId, view }) => {
+      const state = initialState(
+        [presented('r1'), presented('r2')],
+        'r1-session',
+      );
+
+      const restored = apply(state, {
+        type: 'placeRestored',
+        formId,
+        place: REVIEW_ROW_TWO,
+      });
+
+      const round = restored.forms.find((form) => form.formId === formId)!;
+      expect({ focus: round.focus, reviewRow: round.reviewRow }).toEqual({
+        focus: 1,
+        reviewRow: 1,
+      });
+      expect(restored.view).toBe(view);
+    },
+  );
+
+  it.each([
+    { case: 'a line inside the notices', notices: 3, saved: 2, line: 2 },
+    { case: 'a line past the last notice', notices: 2, saved: 5, line: 2 },
+    { case: 'line 0 on a round with notices', notices: 2, saved: 0, line: 1 },
+    {
+      case: 'a line on a round without notices',
+      notices: 0,
+      saved: 2,
+      line: 0,
+    },
+  ])(
+    'restores the notice line held to the notices: $case',
+    ({ notices, saved, line }) => {
+      const state = initialState(
+        [
+          presented('r1', {
+            notices: Array.from({ length: notices }, (_, i) =>
+              notice(`N${i + 1}`),
+            ),
+          }),
+        ],
+        'r1-session',
+      );
+
+      const restored = apply(state, {
+        type: 'placeRestored',
+        formId: 'r1',
+        place: { ...REVIEW_ROW_TWO, noticeLine: saved },
+      });
+
+      expect(active(restored).noticeLine).toBe(line);
+    },
+  );
+
+  it("writes the forms view in a background round's place", () => {
+    const state = apply(
+      initialState([presented('r1'), presented('r2')], 'r1-session'),
+      { type: 'openReview' },
+    );
+    const background = state.forms[1];
+
+    expect(roundPlace(state, background)).toEqual({
+      focus: background.focus,
+      reviewRow: background.reviewRow,
+      noticeLine: background.noticeLine,
+      view: 'forms',
+      confirmReturnView: 'review',
+    });
   });
 });

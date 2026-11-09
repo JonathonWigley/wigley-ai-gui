@@ -12,7 +12,10 @@ import {
   type TextTarget,
 } from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
-import { finding, presentedRound } from '../test-rounds';
+import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
+import { formsManifest } from '../../manifest';
+import defaultLayout from '../../layouts/default/layout.js';
+import { finding, notice, presentedRound } from '../test-rounds';
 import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
 import { buildLayoutCard, recordingDeps } from './layout-cards';
 import {
@@ -46,8 +49,6 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
     },
     mountBox: vi.fn(),
     destroyBox: vi.fn(),
-    dispatch: vi.fn(),
-    toggleDontAsk: vi.fn(),
     keys: {
       keysFor: () => null,
       anchor: () => ({ dispose: () => undefined }),
@@ -55,7 +56,7 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
     platform: 'macos',
     state: noLayoutState,
     log: vi.fn(),
-    commands: { exists: () => false, argShape: () => undefined, run: vi.fn() },
+    commands: fakeKitCommandsOf(formsManifest),
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},
@@ -160,6 +161,42 @@ describe('buildLayoutCard', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('buildLayoutCard_WithRollback_RecordsItsDispose', () => {
+    const presented = presentedRound('r1', {
+      questions: [],
+      notices: [notice('Heads up')],
+    });
+    const round = apply(initialState([], presented.sessionId), {
+      type: 'formShown',
+      form: presented,
+    }).forms[0];
+    const deps = fakeCardDeps(createFormsContributions());
+    const destroys: (() => void)[] = [];
+
+    buildLayoutCard(
+      { name: 'default', layout: defaultLayout },
+      asHtml(new FakeElement('div')),
+      round,
+      { kind: 'notice', index: 1 },
+      0,
+      deps,
+      {
+        recordBox: (destroy) => destroys.push(destroy),
+        recordAnchor: () => {},
+      },
+    );
+    for (const destroy of [...destroys, ...destroys]) {
+      destroy();
+    }
+
+    expect(destroys).toHaveLength(1);
+    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
+    expect(deps.destroyBox).toHaveBeenCalledWith({
+      field: 'comment',
+      notice: 1,
+    });
   });
 
   it('buildLayoutCard_CardThrowsAfterMountingABox_DestroysItAndDrawsDefault', () => {

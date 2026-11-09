@@ -15,8 +15,8 @@
 ## Intent
 
 The user starts Claude Code sessions from the app, chats with them, and never switches to a terminal: when a
-session's agent sends a forms round, the session's tab swaps to the form in place, and submitting (or cancelling)
-swaps back to the chat. Settled in a four-round interview on 2026-10-19/20 and extended by plan C's two-round
+session's agent sends a forms round, the form slides up over the session's tabs in a popup, and submitting (or
+cancelling) closes it onto the chat again. Settled in a four-round interview on 2026-10-19/20 and extended by plan C's two-round
 interview on 2026-10-23; this file is the record of both.
 
 ## Vocabulary
@@ -52,7 +52,6 @@ interview on 2026-10-23; this file is the record of both.
   (its process still running in the session host) and after its process ends on its own, resting until the next message starts the process again, until the user
   closes the row (§ Saved sessions). A
   **connected session** is one a relay connection brought (a terminal session), as today.
-- **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
 - **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
   agent. Any plugin registers one through chat's page exports. Chat registers `/login`, `/logout` and `/status`, the
   terminal-only commands print mode refuses (`claude-stream.md` § Terminal-only commands), and `/clear` with Claude's
@@ -67,7 +66,7 @@ interview on 2026-10-23; this file is the record of both.
 ## Flow
 
 ```
- Space k n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
+ Space b n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
                  │                     newest first, or the folder dialog), then profile (skipped with one profile),
                  │                     then sign-in when that profile is signed out, then a new session or one of the
                  │                     folder's saved sessions to resume; a registered resume section sits at the top of
@@ -355,17 +354,18 @@ interview on 2026-10-23; this file is the record of both.
   - App slash commands run at once, working or not, and never queue; the agent's slash commands queue like any
     message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
-  `open-sessions.json` in chat's plugin data: its host session id, folder and profile, its `titles` (the user, agent
-  and first-message titles; a file without them reads as untitled), its last process's
+  `open-sessions.json` in chat's plugin data: its host session id, its row id (`rowId`; the restore reopens the row
+  under it), folder and profile, its `titles` (the user, agent and first-message titles; a file without them reads as
+  untitled), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the values the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
-  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
-  new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
-  the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
+  new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. A
+  close of its row removes its record — the user's, a failed start's, `closeSessionsIn`'s, or chat main's `close`; quit, `install-app`, a process exit and a chat plugin reload keep it.
   Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list.
   Quit and `install-app` end no process: the session host keeps each one running, and quitting only disconnects the
-  app from it (`docs/features/session-host/design.md`): chat's main part's stop saves once, detaches each held process, kills only a running process no row holds, and ends its rows, which removes no record. `chat.stopAll` (`<Leader>:`) ends the process of every owned session chat holds
+  app from it (`docs/features/session-host/design.md`): chat's main part's stop saves once, detaches each held process, kills only a running process no row holds, and ends its rows, which removes no record. `chat.stopAll` (`<Leader>bX`) ends the process of every owned session chat holds
   and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
   selects the saved row. A row whose process the host still holds is **re-attached**: the harness replays its pipe
   log, the row shows the transcript up to that process's start and then the process's own entries, and it carries on
@@ -411,7 +411,7 @@ interview on 2026-10-23; this file is the record of both.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
-- **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
+- **Start prompt**: `Space b n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
   the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
   starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt and starts a new session straight after the
   profile and any sign-in, passing the session step over. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
@@ -483,11 +483,13 @@ interview on 2026-10-23; this file is the record of both.
 - **Permissions**: a session runs in the `mode` its row holds, `auto` when it holds none; anything that mode would
   still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
   and shows as a permission entry. `y` allows (with no range open), `n` denies and opens a box for an optional reason Claude reads, each
-  answering the oldest pending permission of the session on screen.
-- **Status**: a row's tab status reads what the chat is doing — working, waiting for a permission — and is empty
-  while idle.
+  answering the oldest pending permission of the session on screen. A row launched `unattended` answers each
+  prompt itself with a deny at once, naming the unattended run as the reason, and shows the denied entry.
+- **Status**: a row's activity reads what the chat is doing — `working`, or a needs-you word while it waits for a
+  permission — and shows `done` or `error` for a finished turn the user has not viewed; it is empty while idle and
+  seen.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
-  the row is marked.
+  the row is marked. A row launched `unattended` raises no alert and is not marked: nobody waits on it.
 - **Slash completion**: typing `/` at the start of the box offers the app slash commands and the session's commands
   and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name
   and aliases through the app's fuzzy matcher (fzf), best match first; with text typed, the completion hands the

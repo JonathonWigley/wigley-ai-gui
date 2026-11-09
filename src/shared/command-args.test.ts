@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandArgShape } from '../contracts/commands';
-import { checkCommandArg, commandTarget } from './command-args';
+import type { CommandArg, CommandArgShape } from '../contracts/commands';
+import {
+  checkCommandArg,
+  commandArgLabel,
+  commandTarget,
+} from './command-args';
 
 describe('checkCommandArg', () => {
   const shape: CommandArgShape = { n: 'number', s: 'string' };
@@ -110,5 +114,16 @@ describe('commandTarget', () => {
   it('commandTarget_RecordFieldsInAnyOrder_GivesOneTarget', () => {
     expect(commandTarget('p.c', { b: 2, a: 1 })).toBe('p.c {"a":1,"b":2}');
     expect(commandTarget('p.c', { a: 1, b: 2 })).toBe('p.c {"a":1,"b":2}');
+  });
+});
+
+describe('commandArgLabel', () => {
+  it.each<{ arg: CommandArg; label: string }>([
+    { arg: 3, label: '3' },
+    { arg: 'chat', label: 'chat' },
+    { arg: { pool: 'p', clone: 2 }, label: 'clone 2, pool p' },
+    { arg: { clone: 2, pool: 'p' }, label: 'clone 2, pool p' },
+  ])('commandArgLabel_EachShape_PrintsPinnedText: $label', ({ arg, label }) => {
+    expect(commandArgLabel(arg)).toBe(label);
   });
 });

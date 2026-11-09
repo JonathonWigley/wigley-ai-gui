@@ -13,19 +13,21 @@ function endedWith<Session extends { end(): void }>(
   return session;
 }
 
-// One dependent's view of sessions' main exports: every tool contribution and
-// close guard it adds, and every session it connects or opens, is filed under
-// its registrations.
+// One dependent's view of sessions' main exports: every tool contribution,
+// close guard and tool-call guard it adds, and every session it connects or
+// opens, is filed under its registrations.
 export function sessionsMainView(
   exports: SessionsMainExports,
   consumer: Registrations,
 ): SessionsMainExports {
   return {
     ...exports,
-    contributeTools: (tools, start) =>
-      consumer.track(exports.contributeTools(tools, start)),
-    addCloseGuard: (mayClose) =>
-      consumer.track(exports.addCloseGuard(mayClose)),
+    contributeTools: (tools, start, options) =>
+      consumer.track(exports.contributeTools(tools, start, options)),
+    addCloseGuard: (mayClose, cancelHold) =>
+      consumer.track(exports.addCloseGuard(mayClose, cancelHold)),
+    addToolCallGuard: (guard) =>
+      consumer.track(exports.addToolCallGuard(guard)),
     connect: (info) => endedWith(consumer, exports.connect(info)),
     open: (info, options) => endedWith(consumer, exports.open(info, options)),
   };

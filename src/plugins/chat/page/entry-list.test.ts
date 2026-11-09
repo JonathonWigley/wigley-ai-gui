@@ -29,6 +29,7 @@ import { createChatLayouts } from './chat-layouts';
 import {
   createEntryList,
   type EntryList,
+  type EntryListPlace,
   type EntryListStop,
   sourceOfLines,
 } from './entry-list';
@@ -105,10 +106,11 @@ const notice = (id: string): ChatEntry => ({
   tone: 'info',
   raw: [],
 });
-const assistant = (text: string): ChatEntry => ({
+const assistant = (text: string, agentId = MAIN_AGENT_ID): ChatEntry => ({
   kind: 'assistant',
   id: 'a1',
   at: 1000,
+  agentId,
   text,
   streaming: false,
   raw: [],
@@ -246,10 +248,11 @@ const user = (id: string): Extract<ChatEntry, { kind: 'user' }> => ({
   delivery: null,
   raw: [],
 });
-const thinking = (id: string): ChatEntry => ({
+const thinking = (id: string, agentId = MAIN_AGENT_ID): ChatEntry => ({
   kind: 'thinking',
   id,
   at: 1000,
+  agentId,
   text: 'hmm',
   streaming: false,
   raw: [],
@@ -335,8 +338,8 @@ function fakeTimers() {
 }
 
 // A list over `shown`, its layouts, logs, toasts, disposed anchors, timers, a
-// clock whose `time` the test sets, and the ids each pending row click pulled
-// back.
+// clock whose `time` the test sets, the ids each pending row click pulled back,
+// and the count of `placeChanged` calls.
 // `put` puts an entry into the session's list, replacing the one holding its
 // id.
 const TURN_LINE_CLASS = 'chat-turn-line-slot';
@@ -351,6 +354,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
   layouts.set(shown);
   const { timers, armed, fireAll } = fakeTimers();
   const clock = { time: 1000, now: () => clock.time };
+  const placeChanges = { count: 0 };
   const list = createEntryList({
     layouts,
     toastedKinds: new Set(),
@@ -378,13 +382,20 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
       allow: () => undefined,
       deny: () => undefined,
       openImages: () => undefined,
+      expanderClicked: (entryId, place) => list.toggleExpander(entryId, place),
     },
     log,
     toast: (text) => toasts.push(text),
     timers,
     clock,
     pullBack: (queuedId) => pulled.push(queuedId),
+    // As the click's commands do in the app.
+    runClicked: (runId) => list.toggleRun(runId),
+    stopClicked: (stopId) => list.moveFocusTo(stopId),
     turnLine: element('li', TURN_LINE_CLASS),
+    placeChanged: () => {
+      placeChanges.count++;
+    },
   });
   const held = new Map<string, ChatEntry>();
   const put = (entry: ChatEntry) => {
@@ -402,6 +413,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     fireAll,
     clock,
     layouts,
+    placeChanges,
     put,
     entries,
   };
@@ -535,6 +547,231 @@ describe('entry list', () => {
     expect(logs).toEqual(row.logs);
     expect(toasts).toEqual(row.toasts);
     expect(disposed).toEqual(row.disposedAnchors);
+  });
+
+  it('moveFocusTo_StopNotInOrder_LeavesTheFocus', () => {
+    const { list, put } = setUpList(defaultShown());
+    [user('u1'), notice('n1')].forEach(put);
+    list.move(-1);
+    const before = list.focused();
+
+    const moved = list.moveFocusTo('no-such-stop');
+
+    expect(moved).toBe(false);
+    expect(list.focused()).toEqual(before);
+    expect(list.moveFocusTo('n1')).toBe(true);
+    expect(list.focused()).toEqual({ kind: 'entry', entry: notice('n1') });
+  });
+
+  const notices = [notice('n1'), notice('n2'), notice('n3')];
+  const withRun = [user('u1'), tool('t1'), tool('t2'), assistant('done')];
+
+  // Draws one marked block per top, each a 10px box there, which a scroll into
+  // view moves to 80px, inside the list's 100px band.
+  const blocksAt =
+    (...tops: number[]): AnyBuilder =>
+    (parent, _input, kit) => {
+      const root = kit.el(parent, 'div', 'marked');
+      tops.forEach((top, index) => {
+        const block = asFake(kit.el(root, 'div')) as FocusFakeElement;
+        block.dataset.mdLines = `${index},${index + 1}`;
+        block.rectTop = top;
+        block.rectHeight = 10;
+        block.scrollIntoView = () => {
+          block.rectTop = 80;
+        };
+      });
+      return { element: root };
+    };
+
+  // `thenActivity`: the restore lands on the default layout, and a layout with
+  // activity in the transcript shows after it; `assistantDraws`: the assistant
+  // builders of the two layouts, `default`'s when left out; `movesFirst`: what
+  // the user does before that layout shows; `isScrolledAfter`: a scroll event
+  // after it, as the restore's own scroll event fires a frame late. `block` is
+  // the cursor's block, none when left out.
+  it.each<{
+    name: string;
+    held: ChatEntry[];
+    stopId: string;
+    openRuns?: string[];
+    isRestoredFirst?: boolean;
+    thenActivity?: boolean;
+    assistantDraws?: [first: AnyBuilder, withActivity: AnyBuilder];
+    movesFirst?: (list: EntryList, scroller: FakeElement) => void;
+    isScrolledAfter?: boolean;
+    focused: EntryListStop;
+    block?: number;
+  }>([
+    {
+      name: 'a held stop',
+      held: notices,
+      stopId: 'n2',
+      focused: { kind: 'entry', entry: notice('n2') },
+    },
+    {
+      name: 'a held stop restored before the entries arrive',
+      held: notices,
+      stopId: 'n2',
+      isRestoredFirst: true,
+      focused: { kind: 'entry', entry: notice('n2') },
+    },
+    {
+      name: 'a stop no entry holds',
+      held: notices,
+      stopId: 'gone',
+      focused: { kind: 'entry', entry: notice('n3') },
+    },
+    {
+      name: 'a run stop the first layout does not draw',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+    },
+    {
+      name: 'a step stop the first layout does not draw',
+      held: withRun,
+      stopId: 't2',
+      openRuns: ['activity:t1'],
+      thenActivity: true,
+      focused: { kind: 'entry', entry: tool('t2') },
+    },
+    {
+      name: 'a run stop the first layout does not draw, the user moving first',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      movesFirst: (list) => list.move(-1),
+      focused: { kind: 'entry', entry: user('u1') },
+    },
+    {
+      name: 'a run stop the first layout does not draw, a scroll leaving the cursor in view',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      movesFirst: (_list, scroller) => {
+        scroller.scrollTop = 250;
+        scroller.fire('scroll');
+      },
+      focused: { kind: 'entry', entry: assistant('done') },
+    },
+    {
+      name: 'a run stop the first layout does not draw, a toggle of no expander first',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      movesFirst: (list) => list.toggleExpander('gone', 0),
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+    },
+    {
+      name: 'a run stop the first layout does not draw, a cancel of no range first',
+      held: withRun,
+      stopId: 'activity:t1',
+      thenActivity: true,
+      movesFirst: (list) => list.cancelRange(),
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+    },
+    {
+      name: 'a block stop the layout with activity draws lower, past the band',
+      held: withRun,
+      stopId: 'a1#1',
+      thenActivity: true,
+      assistantDraws: [blocksAt(10, 30), blocksAt(50, 150)],
+      isScrolledAfter: true,
+      focused: { kind: 'entry', entry: assistant('done') },
+      block: 1,
+    },
+  ])(
+    'restored_stop_that_no_entry_holds_falls_back ($name)',
+    ({
+      held,
+      stopId,
+      openRuns = [],
+      isRestoredFirst = false,
+      thenActivity = false,
+      assistantDraws,
+      movesFirst,
+      isScrolledAfter = false,
+      focused,
+      block = null,
+    }) => {
+      installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+      vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
+      const [firstAssistant, activityAssistant] = assistantDraws ?? [];
+      const { list, layouts } = setUpList(
+        firstAssistant === undefined
+          ? defaultShown()
+          : withUser<ChatLayout>(
+              defaultLayout,
+              { entries: { assistant: firstAssistant } },
+              'blocks',
+            ),
+      );
+      const scroller = asFake(list.element) as FocusFakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.rectHeight = 100;
+      scroller.scrollHeight = 400;
+      scroller.clientHeight = 100;
+      const place = {
+        focus: { stopId, following: false, anchorId: null },
+        openRuns,
+        openExpanders: {},
+      };
+      if (isRestoredFirst) {
+        list.restorePlace(place);
+        list.rebuild(held);
+      } else {
+        list.rebuild(held);
+        list.restorePlace(place);
+      }
+      movesFirst?.(list, scroller);
+      if (thenActivity) {
+        layouts.set(
+          activityShown(
+            activityAssistant === undefined
+              ? {}
+              : { entries: { assistant: activityAssistant } },
+          ),
+        );
+        list.rebuild(held);
+      }
+      if (isScrolledAfter) {
+        scroller.scrollTop = 250;
+        scroller.fire('scroll');
+      }
+
+      const cursorBlock = list.focusedBlock();
+      expect(list.focused()).toEqual(focused);
+      expect(
+        cursorBlock === null
+          ? null
+          : asFake(cursorBlock).parentNode!.children.indexOf(
+              asFake(cursorBlock),
+            ),
+      ).toBe(block);
+    },
+  );
+
+  it('toggleExpander_EntryWithNoSlot_GivesNothing', () => {
+    const { list, put } = setUpList(defaultShown());
+    put(user('u1'));
+
+    expect(list.toggleExpander('gone', 0)).toBe('nothing');
   });
 });
 
@@ -994,6 +1231,18 @@ describe('activity hidden', () => {
     everyKind.forEach(put);
     list.rebuild(entries());
   };
+  const subagentText = [
+    { ...assistant('found it', 'b1'), id: 'sa1' },
+    thinking('sk1', 'b1'),
+  ];
+  const putAllAndSubagentTextThenRebuild = ({
+    list,
+    put,
+    entries,
+  }: ListSetUp) => {
+    [...everyKind, ...subagentText].forEach(put);
+    list.rebuild(entries());
+  };
 
   // The focused stop's id: an entry's, a run's, or a pending row's message's.
   const stopId = (stop: EntryListStop) => {
@@ -1039,6 +1288,58 @@ describe('activity hidden', () => {
       case: 'activity in the transcript, rebuilt',
       shown: () => activityShown(),
       act: putAllThenRebuild,
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot chat-activity-slot',
+        'chat-entry-slot chat-step-slot hidden',
+        'chat-entry-slot chat-step-slot hidden',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot is-cursor',
+      ],
+      kinds: [
+        'chat-user',
+        'chat-activity',
+        'chat-tool',
+        'chat-thinking',
+        'chat-assistant',
+        'chat-permission',
+        'chat-result',
+        'chat-compaction',
+        'chat-notice',
+      ],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'n1'],
+      focused: 'n1',
+    },
+    {
+      case: 'subagent text and thinking, default layout, rebuilt',
+      shown: defaultShown,
+      act: putAllAndSubagentTextThenRebuild,
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot is-cursor',
+      ],
+      kinds: [
+        'chat-user',
+        'chat-assistant',
+        'chat-permission',
+        'chat-result',
+        'chat-compaction',
+        'chat-notice',
+      ],
+      stops: ['u1', 'a1', 'p1', 'n1'],
+      focused: 'n1',
+    },
+    {
+      case: 'subagent text and thinking, activity in the transcript, rebuilt',
+      shown: () => activityShown(),
+      act: putAllAndSubagentTextThenRebuild,
       slots: [
         'chat-entry-slot',
         'chat-entry-slot chat-activity-slot',
@@ -1253,6 +1554,162 @@ describe('slots and focus', () => {
     },
   );
 
+  // Each move that redraws only the marks, the scroll left as it is.
+  it.each<{
+    name: string;
+    isRangeOpen?: boolean;
+    move: (list: EntryList, scroller: FakeElement) => void;
+  }>([
+    { name: 'a click on a stop', move: (list) => list.moveFocusTo('n1') },
+    { name: 'opening a range', move: (list) => list.toggleRange() },
+    {
+      name: 'cancelling a range',
+      isRangeOpen: true,
+      move: (list) => list.cancelRange(),
+    },
+    {
+      name: 'a wheel scroll up',
+      move: (_list, scroller) => {
+        scroller.scrollTop = 250;
+        scroller.fire('scroll');
+      },
+    },
+  ])(
+    'placeChanged_MarksOnlyMove_TellsTheOwner ($name)',
+    ({ isRangeOpen = false, move }) => {
+      const { list, put, placeChanges } = setUpList(defaultShown());
+      const scroller = asFake(list.element) as FakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.scrollHeight = 400;
+      scroller.clientHeight = 100;
+      [notice('n1'), notice('n2'), notice('n3')].forEach(put);
+      if (isRangeOpen) {
+        list.toggleRange();
+      }
+      placeChanges.count = 0;
+
+      move(list, scroller);
+
+      expect(placeChanges.count).toBeGreaterThan(0);
+    },
+  );
+
+  // As a streamed entry's redraw does: the cursor, runs and expanders stay.
+  it('placeChanged_PutLeavingThePlace_TellsNothingAndBuildsNoPlace', () => {
+    const { list, put, placeChanges } = setUpList(defaultShown());
+    [notice('n1'), notice('n2'), notice('n3')].forEach(put);
+    const place = list.place();
+    placeChanges.count = 0;
+
+    put({
+      kind: 'notice',
+      id: 'n2',
+      at: 1000,
+      text: 'streamed on',
+      tone: 'info',
+      raw: [],
+    });
+
+    expect(placeChanges.count).toBe(0);
+    expect(list.place()).toBe(place);
+  });
+
+  // The list holds the user entry, a run of two tools (each drawing one
+  // expander) and the answer, unless `isHeldLater`: then `change` brings them.
+  // `before` runs before the read that `change` follows.
+  it.each<{
+    name: string;
+    isHeldLater?: boolean;
+    before?: (list: EntryList) => void;
+    change: (list: EntryList, held: ChatEntry[]) => void;
+    place: EntryListPlace;
+  }>([
+    {
+      name: 'a move',
+      change: (list) => list.move(-1),
+      place: {
+        focus: { stopId: 'activity:t1', following: false, anchorId: null },
+        openRuns: [],
+        openExpanders: {},
+      },
+    },
+    {
+      name: 'a run opened',
+      change: (list) => list.toggleRun('activity:t1'),
+      place: {
+        focus: { stopId: 'a1', following: true, anchorId: null },
+        openRuns: ['activity:t1'],
+        openExpanders: {},
+      },
+    },
+    {
+      name: 'a run closed',
+      before: (list) => list.toggleRun('activity:t1'),
+      change: (list) => list.toggleRun('activity:t1'),
+      place: {
+        focus: { stopId: 'a1', following: true, anchorId: null },
+        openRuns: [],
+        openExpanders: {},
+      },
+    },
+    {
+      name: 'an expander toggled',
+      change: (list) => list.toggleExpander('t2', 0),
+      place: {
+        focus: { stopId: 'a1', following: true, anchorId: null },
+        openRuns: [],
+        openExpanders: { t2: [true] },
+      },
+    },
+    {
+      name: 'the focused entry toggled',
+      before: (list) => {
+        list.toggleRun('activity:t1');
+        list.moveFocusTo('t1');
+      },
+      change: (list) => list.toggleFocused(),
+      place: {
+        focus: { stopId: 't1', following: false, anchorId: null },
+        openRuns: ['activity:t1'],
+        openExpanders: { t1: [true] },
+      },
+    },
+    {
+      name: 'a rebuild restoring the saved expanders',
+      isHeldLater: true,
+      before: (list) =>
+        list.restorePlace({
+          focus: { stopId: 't2', following: false, anchorId: null },
+          openRuns: ['activity:t1'],
+          openExpanders: { t2: [true] },
+        }),
+      change: (list, held) => list.rebuild(held),
+      place: {
+        focus: { stopId: 't2', following: false, anchorId: null },
+        openRuns: ['activity:t1'],
+        openExpanders: { t2: [true] },
+      },
+    },
+  ])(
+    'place_AfterChange_ReflectsIt ($name)',
+    ({ isHeldLater = false, before, change, place }) => {
+      const { list } = setUpList(activityShown());
+      const held = [user('u1'), tool('t1'), tool('t2'), assistant('done')];
+      if (!isHeldLater) {
+        list.rebuild(held);
+      }
+      before?.(list);
+      const read = list.place();
+
+      change(list, held);
+
+      expect(list.place()).not.toBe(read);
+      expect(list.place()).toEqual(place);
+    },
+  );
+
   it.each<{
     case: string;
     deliveries: (UserDelivery | null)[];
@@ -1433,8 +1890,12 @@ const userText = (id: string, text: string): ChatEntry => ({
   delivery: null,
   raw: [],
 });
-const assistantText = (id: string, text: string): ChatEntry => ({
-  ...assistant(text),
+const assistantText = (
+  id: string,
+  text: string,
+  agentId = MAIN_AGENT_ID,
+): ChatEntry => ({
+  ...assistant(text, agentId),
   id,
 });
 

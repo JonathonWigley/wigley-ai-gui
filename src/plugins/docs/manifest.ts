@@ -2,14 +2,19 @@ import { definePlugin } from '../../shared/define-plugin';
 import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 
 // Browses and edits every agent doc on the machine through the docs index:
-// Docs mode over the machine's index and a Docs tab in each session over that
-// session's. `scriptPath` names the `docs_index.py` to run; empty, the script
-// is found through the wigley plugin's install in each Claude config folder.
+// Docs mode over the machine's index, and an index source per session that
+// an `addView` caller shows (the `docs-session-tab` plugin). `scriptPath`
+// names the `docs_index.py` to run; empty, the script is found through the
+// wigley plugin's install in each Claude config folder. The page reads the
+// session rows so a session source's place leaves with its row.
 // `recentChangesLimit` caps the commits the Main page's Recent changes lists.
 export const docsManifest = definePlugin({
   id: 'docs',
-  dependsOn: { main: ['sessions'], page: ['sessions'] },
-  reads: { main: [], page: [] },
+  label: 'Docs',
+  description:
+    'Adds Docs mode, to browse and edit every agent doc on the machine.',
+  dependsOn: { main: ['sessions'], page: [] },
+  reads: { main: [], page: ['sessions'] },
   commands: {
     showMode: {
       label: 'docs (again: toggle the tree)',
@@ -61,6 +66,51 @@ export const docsManifest = definePlugin({
       group: 'view',
       runsIn: 'page',
     },
+    // The commands below with a `viewId` are the clicks of one docs view: a
+    // click acts in the view that drew what it clicked, the active one or not.
+    switchTreeView: {
+      label: 'switch this tree between the wiki and All pages',
+      group: 'view',
+      runsIn: 'page',
+      arg: { viewId: 'string' },
+    },
+    openNode: {
+      label: 'open this row',
+      group: 'tree',
+      runsIn: 'page',
+      arg: { viewId: 'string', nodeId: 'string' },
+    },
+    followLink: {
+      label: 'follow this link',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string', href: 'string', title: 'string' },
+    },
+    // `line` is 1-based, 0 for the doc's top.
+    openDocAt: {
+      label: 'go to this place',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string', path: 'string', line: 'number' },
+    },
+    openRecentPage: {
+      label: 'open this recent page',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string', path: 'string' },
+    },
+    openListRow: {
+      label: 'open this list row',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string', entryId: 'string' },
+    },
+    createMain: {
+      label: 'create the Main page',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string' },
+    },
     backToTree: { label: 'back to the tree', group: 'focus', runsIn: 'page' },
     scrollDown: { label: 'scroll down', group: 'doc', runsIn: 'page' },
     scrollUp: { label: 'scroll up', group: 'doc', runsIn: 'page' },
@@ -80,6 +130,12 @@ export const docsManifest = definePlugin({
     scrollEnd: { label: 'scroll to the end', group: 'doc', runsIn: 'page' },
     edit: { label: 'edit the doc', group: 'doc', runsIn: 'page' },
     editSection: { label: 'edit this section', group: 'doc', runsIn: 'page' },
+    editSectionAt: {
+      label: 'edit the section under its heading',
+      group: 'doc',
+      runsIn: 'page',
+      arg: { viewId: 'string', anchor: 'string' },
+    },
     prevSection: { label: 'previous section', group: 'doc', runsIn: 'page' },
     nextSection: { label: 'next section', group: 'doc', runsIn: 'page' },
     historyBack: { label: 'go back', group: 'doc', runsIn: 'page' },
@@ -130,6 +186,14 @@ export const docsManifest = definePlugin({
       runsIn: 'page',
     },
     backToDoc: { label: 'back to the doc', group: 'focus', runsIn: 'page' },
+    // A Trash button's click: the prompt of the view that drew it takes
+    // `answer`, `yes` or `no`; the keys answer the active view's.
+    answerConfirm: {
+      label: 'answer this Trash prompt',
+      group: 'confirm',
+      runsIn: 'page',
+      arg: { viewId: 'string', answer: 'string' },
+    },
   },
   scopes: {
     tree: 'In the docs tree',

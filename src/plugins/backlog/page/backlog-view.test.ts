@@ -53,7 +53,11 @@ function item(title: string): FollowupItem {
   };
 }
 
-// One repo with one home holding two follow-ups and one plan.
+// The plan's newest copy, in a linked worktree, and its task's.
+const PLAN_COPY = '/wt/docs/features/feature/plan-p/plan.md';
+const TASK_COPY = '/wt/docs/features/feature/plan-p/01-t.md';
+
+// One repo with one home holding two follow-ups and one plan of one task.
 const READ: BacklogRead = {
   homes: [
     {
@@ -71,13 +75,21 @@ const READ: BacklogRead = {
       plans: [
         {
           path: `${ROOT}/feature/plan-p/plan.md`,
+          copyPath: PLAN_COPY,
           feature: 'feature',
           title: 'Plan',
           checked: 0,
           total: 0,
           target: null,
           written: null,
-          tasks: [],
+          tasks: [
+            {
+              path: `${ROOT}/feature/plan-p/01-t.md`,
+              copyPath: TASK_COPY,
+              title: 'Task',
+              status: null,
+            },
+          ],
         },
       ],
       features: [],
@@ -135,12 +147,17 @@ type ScopeCall =
 // open and its first follow-up selected. `calls` logs every `setScope`,
 // `setResizeTarget` and `setFocusTarget` call, in call order; `move` presses
 // the core's focus key toward `direction` on the last focus target set.
-// `targets` holds every drop target the view registered, `logged` every line
-// logged, and `homePicked` counts the homes picked.
+// `targets` holds every drop target the view registered; `readDocs` each
+// path the view read through the channel; `openedDocs` each path it asked
+// Docs to open. `runs` holds each command a click ran with its arg, `logs`
+// each line logged and `picked` the count of `homePicked` calls.
 async function backlogSetup() {
   const calls: ScopeCall[] = [];
-  const logged: string[] = [];
-  const homePicked = vi.fn();
+  const readDocs: string[] = [];
+  const openedDocs: string[] = [];
+  const runs: [string, unknown][] = [];
+  const logs: string[] = [];
+  const picked = { count: 0 };
   const targets: DropTarget[] = [];
   let focusTarget: FocusTarget | null = null;
   const { host, created } = fakeEditorHost();
@@ -149,7 +166,12 @@ async function backlogSetup() {
   const anchors = recorded.anchors;
   const { keys } = recorded;
   const channel = {
-    invoke: async (method: string) => (method === 'load' ? READ : ''),
+    invoke: async (method: string, ...args: unknown[]) => {
+      if (method === 'readDoc') {
+        readDocs.push(String(args[0]));
+      }
+      return method === 'load' ? READ : '';
+    },
   } as unknown as PageChannel<BacklogChannel>;
   const view = createBacklogView({
     channel,
@@ -165,7 +187,7 @@ async function backlogSetup() {
     homeDir: '/home',
     uiState: { get: () => undefined, set: () => undefined },
     timers: { set: () => 0, clear: () => undefined },
-    log: (line) => logged.push(line),
+    log: (line) => logs.push(line),
     toast: () => undefined,
     drops: {
       addTarget: (target) => {
@@ -183,7 +205,7 @@ async function backlogSetup() {
       run: () => undefined,
     },
     tags: () => ['agent-ready', 'later'],
-    openDoc: () => undefined,
+    openDoc: (path) => openedDocs.push(path),
     setScope: (scope) => calls.push(['setScope', scope]),
     setResizeTarget: (target) =>
       calls.push(['setResizeTarget', target === null ? null : 'target']),
@@ -208,8 +230,13 @@ async function backlogSetup() {
     run: () => undefined,
     isShown: () => true,
     revealSideBar: () => undefined,
-    homePicked,
+    homePicked: () => {
+      picked.count += 1;
+    },
+    savedPlace: null,
+    placeChanged: () => undefined,
     homeShown: () => undefined,
+    runKey: (key, arg) => runs.push([key.id, arg]),
   });
   const sheet = asFake(view.sheet);
   sheet.isPageRoot = true;
@@ -217,7 +244,7 @@ async function backlogSetup() {
   await settle();
   view.commands.toggle();
   await settle();
-  homePicked.mockClear();
+  picked.count = 0;
   const move = (direction: PaneDirection) =>
     focusTarget?.move(direction) ?? false;
   return {
@@ -227,11 +254,30 @@ async function backlogSetup() {
     overlays,
     sheet,
     calls,
-    logged,
-    homePicked,
     move,
     targets,
+    readDocs,
+    openedDocs,
+    runs,
+    logs,
+    picked,
   };
+}
+
+// The side bar's home rows and the list's rows, as drawn now.
+function drawnRows(setup: Awaited<ReturnType<typeof backlogSetup>>) {
+  const [list] = findAll(setup.sheet, 'backlog-rows');
+  return {
+    homes: findAll(asFake(setup.view.sideBar), 'ui-row'),
+    items: list.children.filter((row) => row.classList.contains('ui-row')),
+  };
+}
+
+// The key the second list row's click runs `backlog.selectRow` with.
+function secondRowKey(setup: Awaited<ReturnType<typeof backlogSetup>>) {
+  drawnRows(setup).items[1].click();
+  const [, key] = setup.runs.splice(0).at(-1) ?? [];
+  return key as string;
 }
 
 function withUser(layout: BacklogLayout) {
@@ -359,19 +405,48 @@ describe('backlog view layouts', () => {
   );
 
   it('scrollEnd_DetailShown_ScrollsItToTheEndAndLogs', async () => {
-    const { view, sheet, logged } = await backlogSetup();
+    const { view, sheet, logs } = await backlogSetup();
     const [detail] = findAll(sheet, 'backlog-detail');
     Object.assign(detail, { scrollHeight: 900 });
     detail.scrollTop = 40;
-    logged.length = 0;
+    logs.length = 0;
 
     view.commands.scrollEnd();
 
-    expect({ scrollTop: detail.scrollTop, logged }).toEqual({
+    expect({ scrollTop: detail.scrollTop, logs }).toEqual({
       scrollTop: 900,
-      logged: ['scrolled the detail to the end'],
+      logs: ['scrolled the detail to the end'],
     });
   });
+
+  it("a plan's detail reads its newest copy", async () => {
+    const { view, readDocs } = await backlogSetup();
+
+    view.commands.listBottom();
+    await settle();
+
+    expect(readDocs).toEqual([PLAN_COPY]);
+  });
+
+  // `expand` opens the plan's task rows, the task row then being the bottom.
+  it.each([
+    { case: 'a plan', expand: false, opened: `${ROOT}/feature/plan-p/plan.md` },
+    { case: 'a task', expand: true, opened: `${ROOT}/feature/plan-p/01-t.md` },
+  ])(
+    'Open in Docs on $case opens the index copy, not the newest',
+    async ({ expand, opened }) => {
+      const { view, openedDocs } = await backlogSetup();
+      view.commands.listBottom();
+      if (expand) {
+        view.commands.open();
+        view.commands.listBottom();
+      }
+
+      view.commands.openInDocs();
+
+      expect(openedDocs).toEqual([opened]);
+    },
+  );
 
   it('a reload keeps the open filter text and focus', async () => {
     const { view, sheet } = await backlogSetup();
@@ -542,14 +617,14 @@ describe('backlog pane targets', () => {
     const setup = await backlogSetup();
     setup.view.commands.create();
     const before = setup.calls.length;
-    const loggedBefore = setup.logged.length;
+    const logsBefore = setup.logs.length;
     const directions: PaneDirection[] = ['left', 'right', 'up', 'down'];
 
     const results = directions.map((direction) => setup.move(direction));
 
     expect(results).toEqual([true, true, true, true]);
     expect(setup.calls.slice(before)).toEqual([]);
-    expect(setup.logged.slice(loggedBefore)).toEqual(
+    expect(setup.logs.slice(logsBefore)).toEqual(
       directions.map(() => 'pane keys ignored: the editor is open'),
     );
   });
@@ -602,7 +677,7 @@ describe('backlog pane targets', () => {
         ['setResizeTarget', 'target'],
         ['setFocusTarget', 'target'],
       ]);
-      expect(setup.homePicked).toHaveBeenCalledTimes(1);
+      expect(setup.picked.count).toBe(1);
     },
   );
 
@@ -617,7 +692,7 @@ describe('backlog pane targets', () => {
 
       setup.view.commands[command]();
 
-      expect(setup.homePicked).toHaveBeenCalledTimes(picked);
+      expect(setup.picked.count).toBe(picked);
     },
   );
 });
@@ -672,4 +747,95 @@ describe('backlog follow-up editor drop target', () => {
     expect(remountedBody.inserted).toEqual([insertionText(['/d/a.md'], 'x')]);
     expect(remountedTitle.inserted).toEqual([]);
   });
+});
+
+describe('backlog row commands', () => {
+  beforeEach(() => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('rowClick_RunsItsCommandWithItsKey: home row', async () => {
+    const setup = await backlogSetup();
+
+    drawnRows(setup).homes[0].click();
+
+    expect(setup.runs).toEqual([['backlog.openHomeRow', ROOT]]);
+  });
+
+  it('rowClick_RunsItsCommandWithItsKey: item row', async () => {
+    const setup = await backlogSetup();
+
+    drawnRows(setup).items[1].click();
+
+    const [[id, key]] = setup.runs;
+    expect(id).toBe('backlog.selectRow');
+    setup.view.selectRow(key as string);
+    const selected = drawnRows(setup).items.map((row) =>
+      row.classList.contains('is-selected'),
+    );
+    expect(selected.slice(0, 2)).toEqual([false, true]);
+  });
+
+  it('openHomeRow_DispatchesThenCallsHomePicked', async () => {
+    const setup = await backlogSetup();
+    const pickedBefore = setup.picked.count;
+
+    setup.view.openHomeRow(ROOT);
+
+    expect(setup.picked.count).toBe(pickedBefore + 1);
+    expect(drawnRows(setup).homes[0].classList.contains('is-selected')).toBe(
+      true,
+    );
+  });
+
+  it('selectRow_SelectsTheRowAndFocusesTheItems', async () => {
+    const setup = await backlogSetup();
+    const key = secondRowKey(setup);
+    setup.view.sideBarOpenedOver();
+
+    setup.view.selectRow(key);
+
+    const cursor = drawnRows(setup).items.map((row) =>
+      row.classList.contains('is-cursor'),
+    );
+    expect(cursor.slice(0, 2)).toEqual([false, true]);
+  });
+
+  it.each<{
+    name: string;
+    run(view: Awaited<ReturnType<typeof backlogSetup>>['view']): void;
+    logged: string;
+  }>([
+    {
+      name: 'unknown root',
+      run: (view) => view.openHomeRow('/gone'),
+      logged: 'no home /gone',
+    },
+    {
+      name: 'unknown key',
+      run: (view) => view.selectRow('followup:gone'),
+      logged: 'no row followup:gone',
+    },
+  ])(
+    'rowCommand_TargetGone_LogsAndChangesNothing: $name',
+    async ({ run, logged }) => {
+      const setup = await backlogSetup();
+      setup.view.sideBarOpenedOver();
+      const logsBefore = setup.logs.length;
+      const pickedBefore = setup.picked.count;
+
+      run(setup.view);
+
+      const { homes, items } = drawnRows(setup);
+      expect(setup.logs.slice(logsBefore)).toEqual([logged]);
+      expect(setup.picked.count).toBe(pickedBefore);
+      expect(homes[0].classList.contains('is-cursor')).toBe(true);
+      expect(items.some((row) => row.classList.contains('is-cursor'))).toBe(
+        false,
+      );
+    },
+  );
 });

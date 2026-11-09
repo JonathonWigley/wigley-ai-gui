@@ -1,45 +1,48 @@
 import '../../../shared/page/markdown.css';
 import './docs.css';
 import type { CommandId } from '../../../contracts/commands';
-import { type CoreEvents, coreModeSlot } from '../../../contracts/core-state';
+import { coreModeSlot } from '../../../contracts/core-state';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type {
   PageApi,
   PagePart,
-  QualifiedEvents,
   ShownLayouts,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   createBaseKit,
+  keyRunner,
+  kitCommandsOf,
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
+import {
+  type PlaceWrites,
+  placeWrites,
+  pruneKeys,
+} from '../../../shared/page/place-slot';
 import { sheet } from '../../../shared/page/ui/sheet';
 import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
-import {
-  followRows,
-  type SessionRow,
-  type SessionTabHandle,
-  sessionsPageKey,
-  sessionsRowsSlot,
-} from '../../sessions/contract';
+import { followRows, sessionsRowsSlot } from '../../sessions/contract';
 import {
   type DocsChannel,
   type DocsPageEvents,
   type DocsPageExports,
+  type DocsPlace,
+  docsPlaceSlot,
   type DocsViewHandle,
   MACHINE_SOURCE_ID,
+  sessionIdOfSource,
   sessionSourceId,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
-import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
+import type { DocChangeRecord } from './docs-state';
 import {
   createDocsView,
   type DocsView,
@@ -51,28 +54,17 @@ import type { DocsScope } from './layout/docs-parts';
 import { readDocsLayout } from './layout/read-layout';
 import { createStarredDocs } from './starred-docs';
 
-type DocsApi = PageApi<
-  typeof docsManifest,
-  DocsChannel,
-  DocsPageEvents,
-  QualifiedEvents<'core', CoreEvents>
->;
+type DocsApi = PageApi<typeof docsManifest, DocsChannel, DocsPageEvents>;
 
 // A view `addView` handed out.
 interface AddedView {
   view: DocsView;
+  // The source the view shows, as `addView` was handed it.
+  sourceId: string;
   split: Split;
   // Per view and never stored: each view starts with the tree shown.
   isTreeHidden: boolean;
   isVisible(): boolean;
-}
-
-interface SessionDocs {
-  view: DocsViewHandle;
-  // The docs view behind `view`.
-  docsView: DocsView;
-  // Null until `addTab` returns.
-  tab: SessionTabHandle | null;
 }
 
 // The tree commands that need the tree in sight. While a docs view's tree is
@@ -109,22 +101,29 @@ const TREE_COMMAND_IDS: ReadonlySet<CommandId> = new Set(
 // stored width.
 const SESSION_TREE_SPLIT = { initial: 288, min: 160, endMin: 240 };
 
+// The machine view's id; each view `addView` hands out is `view:<n>`.
+const machineViewId = 'machine';
+
 // Docs mode over the machine's index, its tree in the side bar and its doc in
 // the sheet, and the views `addView` hands out, each its tree and doc side by
-// side in a split: a Docs tab in every session over that session's index among
-// them, rebuilt once shown when the session's host id changes. Each command
-// acts on the active view: the machine view while Docs mode shows, else the
-// added view that is visible. A change made in one view reaches every other and
-// the star set every view shares, and a view showing closes the others'
-// overlays, since two views' pane scopes may be equal. `toggleTree` hides or
-// shows the active view's tree. `openDoc` opens a doc in Docs mode, and
-// `openMain` the Main page there, from any docs view.
+// side in a split: the `docs-session-tab` plugin's Docs tab in each session
+// among them. Each command acts on the active view: the machine view while
+// Docs mode shows, else the added view that is visible. A change made in one
+// view reaches every other and the star set every view shares, and a view
+// showing closes the others' overlays, since two views' pane scopes may be
+// equal. `toggleTree` hides or shows the active view's tree. `openDoc` opens a
+// doc in Docs mode, and `openMain` the Main page there, from any docs view.
+// Each view's place goes to `docs.place` under its source id on each change,
+// and a page load puts the last page's back as the view is made; a session
+// source's place leaves with its session's row.
+// A view's unsaved edits refuse a switch-off, naming the file and the view.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
     const { services } = api;
     const { log } = services;
-    const sessions = api.dependency(sessionsPageKey);
+    const rows = api.state.read(sessionsRowsSlot);
+    const placeWriter = api.state.publish(docsPlaceSlot);
     // A page reload leaves main's watches for the old page's views.
     api.channel
       .invoke('unwatchAll')
@@ -134,7 +133,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // View id → the added view.
     const addedViews = new Map<string, AddedView>();
     let addedCount = 0;
-    const sessionDocs = new Map<string, SessionDocs>();
     // One star set, shared by every view.
     const starred = createStarredDocs(services.uiState, services.paths);
     // The layouts every view draws with, read as a view's parts are made and
@@ -146,11 +144,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
     };
@@ -191,9 +185,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // Each scope the view sets is followed by `resizeTarget`, the divider the
     // resize keys move while the view has the keys (null moves the side bar),
     // and by the view's focus target, which moves between its tree and doc.
+    // The view's place goes through `place` under `sourceId`, and the last
+    // page's place there is put back.
     const createView = (
       viewId: string,
       sourceId: string,
+      place: PlaceWrites<DocsPlace>,
       isActive: () => boolean,
       openChanged: (path: string | null) => void,
       revealTree: () => void,
@@ -212,6 +209,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         paths: services.paths,
         toast: services.toast,
         openExternal: services.openExternal,
+        runKey: keyRunner(api.commands, log),
         drops: api.drops,
         starred,
         now: () => services.clock.now(),
@@ -228,6 +226,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         },
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
+        trackRestore: (restore) => api.restores.track(restore),
         openChanged,
         docOpened: (path) => api.events.emit('docOpened', { path }),
         revealTree,
@@ -241,17 +240,27 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           allViews()
             .map((each) => each.unsavedPath())
             .filter((path) => path !== null),
+        placeChanged: (value) => place.write(value),
       });
+      const savedPlace = placeWriter.get(sourceId);
+      if (savedPlace !== undefined) {
+        view.restorePlace(savedPlace);
+      }
       return view;
     };
+
+    // The writes of the place of the view over `sourceId`.
+    const placeOf = (sourceId: string): PlaceWrites<DocsPlace> =>
+      placeWrites((value) => placeWriter.set(sourceId, value));
 
     // The title bar shows the machine view's open doc while Docs mode shows.
     // `openChanged`, `revealTree` and `leafOpened` read `mode` once a doc
     // opens or a key runs, after `add`. A doc opened from the tree closes the
     // side bar's overlay.
     const machineView = createView(
-      'machine',
+      machineViewId,
       MACHINE_SOURCE_ID,
+      placeOf(MACHINE_SOURCE_ID),
       () => isDocsModeShown,
       (path) =>
         mode.setContext(
@@ -386,8 +395,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const addView = (
       sourceId: string,
       options: { isVisible(): boolean },
-    ): { handle: DocsViewHandle; view: DocsView } => {
+    ): DocsViewHandle => {
       addedCount += 1;
+      const place = placeOf(sourceId);
       const viewId = `view:${String(addedCount)}`;
       const split = createSplit({
         ...SESSION_TREE_SPLIT,
@@ -400,6 +410,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         view: createView(
           viewId,
           sourceId,
+          place,
           () => options.isVisible(),
           () => undefined,
           () => {
@@ -410,6 +421,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           () => undefined,
           split,
         ),
+        sourceId,
         split,
         isTreeHidden: false,
         isVisible: () => options.isVisible(),
@@ -418,7 +430,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       split.start.append(added.view.tree);
       split.end.append(added.view.doc);
       addedViews.set(viewId, added);
-      const handle: DocsViewHandle = {
+      return {
         element: split.element,
         shown() {
           // Another view's drag may have stored a new width since this one
@@ -433,65 +445,42 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           added.view.showFirstTime();
         },
         hasUnsavedEdits: () => added.view.hasUnsavedEdits(),
+        sourceReplaced: () => added.view.sourceReplaced(),
         dispose() {
           addedViews.delete(viewId);
           callEach([added.view, split], (part) => part.dispose());
         },
       };
-      return { handle, view: added.view };
     };
-
-    const addSessionDocs = ({ sessionId, projectDir }: SessionRow) => {
-      const added = addView(sessionSourceId(sessionId), {
-        isVisible: () => held.tab?.isVisible() === true,
-      });
-      const held: SessionDocs = {
-        view: added.handle,
-        docsView: added.view,
-        tab: null,
-      };
-      sessionDocs.set(sessionId, held);
-      log(`Docs tab added for ${projectDir ?? 'a session with no folder'}`);
-      held.tab = sessions.addTab(sessionId, {
-        id: 'docs',
-        title: 'Docs',
-        icon: 'book',
-        element: held.view.element,
-        order: 1,
-        beforeClose() {
-          if (held.view.hasUnsavedEdits()) {
-            services.toast(UNSAVED_TEXT, 'error');
-            return false;
-          }
-          return true;
-        },
-        shown: () => held.view.shown(),
-      });
-    };
-    // The tab goes first, so it never holds a disposed view.
-    const disposeSessionDocs = (held: SessionDocs) => {
-      callEach([held.tab, held.view], (part) => part?.dispose());
-    };
-    const removeSessionDocs = (sessionId: string) => {
-      const held = sessionDocs.get(sessionId);
-      if (held === undefined) {
-        return;
-      }
-      sessionDocs.delete(sessionId);
-      disposeSessionDocs(held);
-    };
-    api.events.on('core.pageReady', () => {
-      followRows(api.state.read(sessionsRowsSlot), {
-        added: addSessionDocs,
-        removed: removeSessionDocs,
-        // Main replaces a session's index source when its host id changes.
-        hostChanged: ({ sessionId }) =>
-          sessionDocs.get(sessionId)?.docsView.sourceReplaced(),
-      });
-    });
 
     const addedViewOf = (view: DocsView): AddedView | undefined =>
       [...addedViews.values()].find((added) => added.view === view);
+
+    // Where the user finds `view`, as a refusal names it: Docs mode, a
+    // session's Docs tab by the row's label, or any other added view.
+    const placeNameOf = (view: DocsView): string => {
+      if (view === machineView) {
+        return 'Docs mode';
+      }
+      const sourceId = addedViewOf(view)?.sourceId;
+      const sessionId =
+        sourceId === undefined ? null : sessionIdOfSource(sourceId);
+      return sessionId === null
+        ? 'a Docs view'
+        : `${rows.get(sessionId)?.label ?? sessionId}'s Docs tab`;
+    };
+
+    // The refusal for the first view, in `allViews` order, holding unsaved
+    // edits, or null when none does.
+    const mayStop = (): string | null => {
+      for (const view of allViews()) {
+        const path = view.unsavedPath();
+        if (path !== null) {
+          return `Save or discard the edits to ${services.paths.base(path)} in ${placeNameOf(view)} first`;
+        }
+      }
+      return null;
+    };
 
     const isTreeHiddenIn = (view: DocsView): boolean =>
       view === machineView
@@ -571,6 +560,18 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       view.commands[command]();
     };
 
+    // The view a click's command names, which acts whether or not it is the
+    // active one; null, logged, for a view that is gone.
+    const viewNamed = (viewId: string, short: string): DocsView | null => {
+      const view =
+        viewId === machineViewId ? machineView : addedViews.get(viewId)?.view;
+      if (view === undefined) {
+        log(`${short} for unknown view ${viewId} ignored`);
+        return null;
+      }
+      return view;
+    };
+
     // The core logs the side bar's hiding and showing.
     const showMode = () => {
       if (!mode.isShown()) {
@@ -624,6 +625,24 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         scrollEnd: onActiveView('scrollEnd'),
         edit: onActiveView('edit'),
         editSection: onActiveView('editSection'),
+        editSectionAt: ({ arg }) =>
+          viewNamed(arg.viewId, 'editSectionAt')?.editSectionAt(arg.anchor),
+        switchTreeView: ({ arg }) =>
+          viewNamed(arg.viewId, 'switchTreeView')?.switchTreeView(),
+        openNode: ({ arg }) =>
+          viewNamed(arg.viewId, 'openNode')?.openNode(arg.nodeId),
+        followLink: ({ arg: { viewId, ...link } }) =>
+          viewNamed(viewId, 'followLink')?.followLink(link),
+        openDocAt: ({ arg: { viewId, ...at } }) =>
+          viewNamed(viewId, 'openDocAt')?.openDocAt(at),
+        openRecentPage: ({ arg }) =>
+          viewNamed(arg.viewId, 'openRecentPage')?.openRecentPage(arg.path),
+        openListRow: ({ arg }) =>
+          viewNamed(arg.viewId, 'openListRow')?.openListRow(arg.entryId),
+        createMain: ({ arg }) =>
+          viewNamed(arg.viewId, 'createMain')?.createMain(),
+        answerConfirm: ({ arg }) =>
+          viewNamed(arg.viewId, 'answerConfirm')?.answerConfirm(arg.answer),
         prevSection: onActiveView('prevSection'),
         nextSection: onActiveView('nextSection'),
         historyBack: onActiveView('historyBack'),
@@ -663,12 +682,25 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       },
       exports: (consumer): DocsPageExports => ({
         addView: (sourceId, options) =>
-          consumer.track(addView(sourceId, options).handle),
+          consumer.track(addView(sourceId, options)),
         openDoc: (path, line) => openDoc(path, line ?? null),
       }),
+      mayStop,
+      ready() {
+        // A session source's place leaves with its row, and one whose row ended
+        // while no page ran is pruned; the prune waits for the page mirror to
+        // hold the rows. On a live restart it can also drop the places of rows
+        // chat's restore has not reopened yet.
+        pruneKeys(placeWriter, (sourceId) => {
+          const sessionId = sessionIdOfSource(sourceId);
+          return sessionId === null || rows.all().has(sessionId);
+        });
+        followRows(rows, {
+          removed: (sessionId) =>
+            placeWriter.delete(sessionSourceId(sessionId)),
+        });
+      },
       dispose() {
-        const held = [...sessionDocs.values()];
-        sessionDocs.clear();
         callEach<() => void>(
           [
             () => window.removeEventListener('resize', onWindowResize),
@@ -677,7 +709,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
                 cancelAnimationFrame(pendingResizeFrame);
               }
             },
-            ...held.map((each) => () => disposeSessionDocs(each)),
             () => machineView.dispose(),
           ],
           (step) => step(),

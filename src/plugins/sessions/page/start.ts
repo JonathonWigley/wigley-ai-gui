@@ -1,10 +1,9 @@
 import './sessions.css';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type { PaneDirection } from '../../../contracts/panes';
 import type {
   PageApi,
+  PageCommandContext,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -13,6 +12,7 @@ import {
 } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, holdsTextEntry } from '../../../shared/page/dom';
 import { listPickerCommands } from '../../../shared/page/list-picker';
+import { pruneKeys } from '../../../shared/page/place-slot';
 import {
   leafIds,
   type PaneTree,
@@ -27,15 +27,20 @@ import {
   type SessionsChannel,
   sessionsActiveSlot,
   sessionsActivitySlot,
+  sessionsPlaceSlot,
+  sessionsFavoriteProjectAtCommand,
   type SessionsPageEvents,
   type SessionsPageExports,
   sessionsRowsSlot,
   sessionsSelectionSlot,
+  sessionsSelectRowCommand,
+  sessionsSelectTabCommand,
   type SessionsState,
+  type SidebarSection,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
-import type { Layout } from '../layouts/layout';
+import type { Layout, SectionInput } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
 import { cutTitle, titleLimit } from '../session-title';
 import { sessionsPageView } from './consumer-view';
@@ -65,22 +70,23 @@ import { createSessionRecency } from './session-recency';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import type { CursorMove } from './sidebar-order';
 import {
-  isRoundToast,
+  closesAtOnce,
+  isMarkToast,
   isSameVisibleTab,
+  markToastText,
   mayClose,
-  roundToastText,
   rowChanges,
   stepSession,
   stepTab,
   type VisibleTab,
   visibleTab,
 } from './tabs';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type SessionsApi = PageApi<
   typeof sessionsManifest,
   SessionsChannel,
-  SessionsPageEvents,
-  QualifiedEvents<'core', CoreEvents>
+  SessionsPageEvents
 >;
 
 // The uiState key holding the chat panes: the pane tree and each pane's
@@ -128,45 +134,87 @@ const NO_MID_OPERATION: MidOperation = {
   hasClosedPane: false,
 };
 
+// The line a popup opened or hidden logs, by `togglePopup` or its bar entry.
+function popupToggledLine(
+  title: string,
+  isOpen: boolean,
+  sessionLabel: string,
+): string {
+  return `${isOpen ? 'opened' : 'hid'} ${title} popup in ${sessionLabel}`;
+}
+
+// The ids of the side bar's own sections, which no registered section may take.
+const RESERVED_SECTION_IDS: readonly string[] = [
+  'favorites',
+  'recent',
+] satisfies Exclude<SectionInput['kind'], 'plugin'>[];
+
 // A choice in the split picker: a session no pane shows, or a new session.
 type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
+
+// Asks the session's tabs in order, then its popups, then main, to close it,
+// resolving to whether the row closed; `atOnce` says the close key found a tab
+// or popup asking for an instant close, so main cancels what its guards hold
+// first. Main's refusal is logged and toasted, and a failed ask logged.
+async function closeSession(
+  api: SessionsApi,
+  view: SessionsView,
+  labelOf: (sessionId: string) => string,
+  sessionId: string,
+  atOnce: boolean,
+): Promise<boolean> {
+  const { log } = api.services;
+  const viewsNow = () => [
+    ...view.tabs.tabsOf(sessionId),
+    ...view.tabs.popupsOf(sessionId),
+  ];
+  if (!(await mayClose(viewsNow, atOnce))) {
+    return false;
+  }
+  try {
+    const refusal = await api.channel.invoke('closeSession', sessionId, atOnce);
+    if (refusal !== null) {
+      log(`session close kept by main: ${labelOf(sessionId)}`);
+      api.services.toast(refusal, 'info');
+    }
+    return refusal === null;
+  } catch (error) {
+    log(`session not closed: ${errorText(error)}`);
+    return false;
+  }
+}
 
 function createExports(
   api: SessionsApi,
   view: SessionsView,
   rowParts: PartStore<SessionPart>,
   barParts: PartStore<SessionPart>,
+  sections: PartStore<SidebarSection>,
   activate: (sessionId: string) => void,
   labelOf: (sessionId: string) => string,
   shownSessionId: () => string | null,
 ): SessionsPageExports {
-  const { log } = api.services;
   return {
     addTab(sessionId, tab) {
       const handle = view.tabs.add(sessionId, tab);
       api.events.emit('tabAdded', { sessionId, tabId: tab.id });
       return handle;
     },
+    addPopup: (sessionId, popup, options) =>
+      view.tabs.addPopup(sessionId, popup, options),
     cutToTitleLimit: (text) =>
       cutTitle(text, titleLimit(api.settings().titleMaxLength)),
     addRowPart: (part) => rowParts.add(part),
     addBarPart: (part) => barParts.add(part),
-    activate,
-    async closeSession(sessionId) {
-      if (!(await mayClose(() => view.tabs.tabsOf(sessionId)))) {
-        return false;
+    addSection(section) {
+      if (RESERVED_SECTION_IDS.includes(section.id)) {
+        throw new Error(`section id ${section.id} is reserved`);
       }
-      try {
-        const closed = await api.channel.invoke('closeSession', sessionId);
-        if (!closed) {
-          log(`session close kept by main: ${labelOf(sessionId)}`);
-        }
-        return closed;
-      } catch (error) {
-        log(`session not closed: ${errorText(error)}`);
-        return false;
-      }
+      return sections.add(section);
     },
+    activate,
+    closeSession: (sessionId) =>
+      closeSession(api, view, labelOf, sessionId, false),
     shownSessionId,
     setActivity: (sessionId, sourceId, activity) =>
       view.setActivity(sessionId, sourceId, activity),
@@ -178,39 +226,46 @@ function createExports(
 // plugins add. The side bar's selected row, the title bar and `sessions.active`
 // follow the focused pane's session; main owns the rows and keeps a
 // selection of its own, which the page keeps in step through `activate`, its
-// own echoes changing nothing when they come back. The first state is read on
-// `core.pageReady`, and each notice of the rows or the selection applies after
+// own echoes changing nothing when they come back. The first state is read at
+// `ready`, and each notice of the rows or the selection applies after
 // it. A selection naming no row is mid-operation: main deleted that row and its
 // selection write follows, so the state that settles it places the panes, and
 // the focus and the visible tab follow in a microtask, after every reader heard
-// the notice. Activating a session
+// the notice. Each session's place (`sessionsPlaceSlot`) outlives a reload:
+// a row leaving deletes it, and `ready` first deletes the places of rows
+// main does not hold: rows that ended while no page ran, and on a live
+// restart rows that chat's restore has not reopened yet. Activating a session
 // focuses the pane showing it, or loads it into the focused pane; closing one
 // asks main, and a pane whose session leaves closes, the last pane staying.
-// The visible tab, the focused pane's session's selected tab while the mode
-// shows, sets the base key scope through its `shown`; with none visible the
-// scope is `idle`. A round selected while the mode is hidden toasts instead
-// of showing it. The pane keys split, close and swap panes, a split asking
-// which session the new pane shows; a split or pane close does nothing while
-// that picker is open. The pane tree and each pane's session persist in
-// uiState `panes`; a restored pane whose session main does not hold yet waits
-// for it until the first pane key that changes the panes. The side bar, panes
-// and tab bars draw with the layout the `layout` setting names. `openPreview`
-// swaps the side bar's rows for a sample of every row state and back,
-// page-only: it sends nothing to main. `renameSession` opens the rename dialog
-// over the focused pane's session; the rows draw titles cut to the
+// The visible surface, the focused pane's session's top open popup, else its
+// selected tab, while the mode shows, sets the base key scope through its
+// `shown`; with none visible the scope is `idle`; the tab that stops being
+// visible hears `hidden`, and `tabShown` fires for each tab told it shows.
+// `togglePopup` hides and shows the focused pane's session's popup. A row a
+// mark selected while the mode is hidden toasts the mark instead of showing
+// it. The pane keys split, close and swap panes, a split asking which session
+// the new pane shows; a split or pane close does nothing while that picker is
+// open. The pane tree and each pane's session persist in uiState `panes`; a
+// restored pane whose session main does not hold yet waits for it until the
+// first pane key that changes the panes. The side bar, panes, tab bars, popups
+// and the popup bar draw with the layout the `layout` setting names.
+// `openPreview` swaps the side bar's rows for a sample of every row state and
+// back, page-only: it sends nothing to main. `renameSession` opens the rename
+// dialog over the focused pane's session; the rows draw titles cut to the
 // `titleMaxLength` setting, drawn again when it changes. The rows group by
 // project under Favorites and Recent, from the favorites and recency stamps in
-// uiState; the session step keys follow that drawn order, and the project keys
-// change the focused pane's session's project's favorite. The side bar's rows
-// are the Sessions list, reached by Alt+h past the leftmost pane
-// (`focusSideBar`) or by opening the side bar over a narrow window: it holds
-// the `sidebar` scope while its cursor walks the rows, and while it does no
-// visible tab takes the scope. Its row keys act on the cursor's row; Enter,
-// Esc and Alt+l (`focusMain`) end its turn, as do the side bar hiding, the
-// mode hiding and a press or a focus in the chat panes, each setting main's
-// scope again. A pane key move, like a key leaving the list, hands the keys
-// to the focused pane's transcript in normal mode; a release into a pane
-// focuses its Chat box.
+// uiState, less the rows a section another plugin registers (`addSection`)
+// claims, which draw in that section after Recent; the session step keys follow
+// that drawn order, and the project keys change the focused pane's session's
+// project's favorite. The side bar's rows are the Sessions list, reached by
+// Alt+h past the leftmost pane (`focusSideBar`) or by opening the side bar over
+// a narrow window: it holds the `sidebar` scope while its cursor walks the rows,
+// and while it does no visible tab takes the scope. Its row keys act on the
+// cursor's row; Enter, Esc and Alt+l (`focusMain`) end its turn, as do the side
+// bar hiding, the mode hiding and a press or a focus in the chat panes, each
+// setting main's scope again. A pane key move, like a key leaving the list,
+// hands the keys to the focused pane's transcript in normal mode; a release
+// into a pane focuses its Chat box.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -221,10 +276,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const active = api.state.publish(sessionsActiveSlot);
     active.set(null);
     const activities = api.state.publish(sessionsActivitySlot);
-    // The old page's sources are gone with it, and the new page's set theirs again.
+    // The old page's sources are gone with it, and the new page's set theirs
+    // again.
     for (const sessionId of activities.all().keys()) {
       activities.delete(sessionId);
     }
+    // Each session's place outlives a reload, not its row.
+    const places = api.state.publish(sessionsPlaceSlot);
     let state: SessionsState = { rows: [], selectedSessionId: null };
     // False until the first state's focus is written to `active`.
     let hasPublished = false;
@@ -236,6 +294,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // Read once; the first state places it.
     const saved = readSavedPanes(uiState.get(PANES_KEY));
     let hasRestored = false;
+    // The one restore tracked from the first apply, a throwing one included,
+    // until the first apply that is not mid-operation shows the restored
+    // panes' visible tab, setting the key base, in its microtask.
+    let restoreFollowed: PromiseWithResolvers<void> | null = null;
     // The restored panes still waiting for their sessions (`restorePlan`),
     // until the first pane key closes them.
     let waiting = new Map<string, string>();
@@ -253,17 +315,29 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
     rows.on(applyNotice);
     selection.on(applyNotice);
-    api.events.on('core.pageReady', () => apply(currentState()));
+    // After `applyNotice`, so the row's frame is dropped before its place goes.
+    followRows(rows, { removed: (sessionId) => places.delete(sessionId) });
 
     const rowOf = (sessionId: string) =>
       state.rows.find((row) => row.sessionId === sessionId);
     const labelOf = (sessionId: string) => rowOf(sessionId)?.label ?? sessionId;
 
-    // Tells the visible tab, when it changed, that it shows; with none
-    // visible while the mode shows, sets the `idle` scope. `isShownAgain`
-    // tells an unchanged visible tab again, after a pane move or a layout
-    // redraw took keyboard focus from its element. Does nothing while the
-    // Sessions list holds the keys, so no tab takes the scope from it.
+    // The tab `visible` names, while its session still holds it; undefined
+    // for a popup.
+    const tabOfVisible = (visible: VisibleTab) =>
+      typeof visible === 'object' && visible?.kind === 'tab'
+        ? view.tabs
+            .tabsOf(visible.sessionId)
+            .find((tab) => tab.id === visible.tabId)
+        : undefined;
+
+    // Tells the tab that was visible, when the visible surface changed, that it
+    // is hidden, then tells the visible surface, a popup or a tab, that it
+    // shows; with none visible while the mode shows, sets the `idle` scope.
+    // `isShownAgain` tells an unchanged visible surface again, after a pane
+    // move or a layout redraw took keyboard focus from its element. Does
+    // nothing while the Sessions list holds the keys, so no surface takes the
+    // scope from it.
     const checkVisible = (isShownAgain = false) => {
       if (view.list.holdsKeys()) {
         return;
@@ -271,13 +345,23 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       const sessionId = view.panes.focusedSessionId();
       const tab =
         sessionId === null ? null : view.tabs.selectedTabOf(sessionId);
-      const next = visibleTab(isModeShown, sessionId, tab?.id ?? null);
-      const isTabShown = typeof next === 'object' && next !== null;
+      const popup =
+        sessionId === null ? null : view.tabs.openPopupOf(sessionId);
+      const next = visibleTab(
+        isModeShown,
+        sessionId,
+        tab?.id ?? null,
+        popup?.id ?? null,
+      );
+      const isSurfaceShown = typeof next === 'object' && next !== null;
       if (
         isSameVisibleTab(lastVisible, next) &&
-        !(isShownAgain && isTabShown)
+        !(isShownAgain && isSurfaceShown)
       ) {
         return;
+      }
+      if (!isSameVisibleTab(lastVisible, next)) {
+        tabOfVisible(lastVisible)?.hidden?.();
       }
       lastVisible = next;
       if (next === 'none') {
@@ -287,13 +371,19 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
             ? 'nothing shown'
             : `nothing shown in ${labelOf(sessionId)}`,
         );
-      } else if (next !== null) {
-        tab?.shown();
+      } else if (next?.kind === 'popup') {
+        popup?.shown();
+      } else if (next !== null && tab !== null) {
+        tab.shown();
+        api.events.emit('tabShown', {
+          sessionId: next.sessionId,
+          tabId: tab.id,
+        });
       }
     };
 
     // Sets the title bar to the focused pane's session, and publishes it when
-    // it changed; a round selected while the mode is hidden toasts.
+    // it changed; a row a mark selected while the mode is hidden toasts.
     const publishFocused = () => {
       const sessionId = view.panes.focusedSessionId();
       const focused = sessionId === null ? undefined : rowOf(sessionId);
@@ -320,13 +410,14 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         log(`activated ${focused.label}`);
       }
       active.set(sessionId);
+      const markToast = focused?.markToast ?? null;
       if (
-        sessionId !== null &&
-        isRoundToast(lastPublished, sessionId, isModeShown)
+        markToast !== null &&
+        isMarkToast(lastPublished, sessionId, isModeShown)
       ) {
         api.services.toast(
-          roundToastText(
-            labelOf(sessionId),
+          markToastText(
+            markToast,
             api.keys.keysFor(qualify(sessionsManifest.id, 'showMode')),
           ),
           'info',
@@ -425,18 +516,23 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const rowParts = createPartStore<SessionPart>();
     const barParts = createPartStore<SessionPart>();
-    // A row click closes the side bar's overlay; `activate` reads `mode` only
-    // on a click, after `add`.
+    const sections = createPartStore<SidebarSection>();
+    // A row click, a star's click and a tab's click each run their command.
     const view = mountSessionsView({
-      activate: (sessionId) => {
-        exports.activate(sessionId);
-        mode.picked();
-      },
+      activate: (sessionId) =>
+        void api.commands.run(sessionsSelectRowCommand, sessionId),
+      runFavorite: (project) =>
+        void api.commands.run(sessionsFavoriteProjectAtCommand, project),
+      selectTab: (sessionId, tab) =>
+        void api.commands.run(sessionsSelectTabCommand, { sessionId, tab }),
       isModeShown: () => isModeShown,
       tabsChanged() {
         if (!isApplying) {
           checkVisible();
         }
+      },
+      popupOpenedFromBar(sessionId, popup) {
+        log(popupToggledLine(popup.title, true, labelOf(sessionId)));
       },
       keys: api.keys,
       timers: api.services.timers,
@@ -472,13 +568,17 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           isChatTabShown:
             sessionId !== null &&
             view.tabs.selectedTabOf(sessionId)?.id === 'chat',
+          isPopupOpen:
+            sessionId !== null && view.tabs.openPopupOf(sessionId) !== null,
         });
         if (action === 'keep') {
           return;
         }
         blurFocusedElement();
         const canFocusBox =
-          sessionId !== null && api.keys.command('chat.focusBox') !== undefined;
+          action === 'toBox' &&
+          sessionId !== null &&
+          api.keys.command('chat.focusBox') !== undefined;
         if (canFocusBox) {
           api.commands.run('chat.focusBox');
         }
@@ -486,18 +586,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       markdown: api.services.markdown,
       platform: api.platform.os,
       state: api.state.forLayouts,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       log,
       rowParts,
       barParts,
+      sections,
       titleMaxLength: () => api.settings().titleMaxLength,
       recency: createSessionRecency(api.services.clock, uiState),
       favorites: createProjectFavorites(uiState),
       activities,
+      places,
     });
     let titleMaxLength = api.settings().titleMaxLength;
     api.onSettingsChanged((settings) => {
@@ -511,6 +609,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       view,
       rowParts,
       barParts,
+      sections,
       activate,
       labelOf,
       () => (isModeShown ? view.panes.focusedSessionId() : null),
@@ -682,6 +781,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const apply = (next: SessionsState) => {
       const before = state;
+      if (!hasRestored && restoreFollowed === null) {
+        restoreFollowed = Promise.withResolvers<void>();
+        api.restores.track(restoreFollowed.promise);
+      }
       state = next;
       isApplying = true;
       const changes = rowChanges(before.rows, next.rows);
@@ -722,9 +825,15 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       midOperation = NO_MID_OPERATION;
+      const followed = restoreFollowed;
+      restoreFollowed = null;
       queueMicrotask(() => {
-        publishFocused();
-        checkVisible(seen.hasClosedPane);
+        try {
+          publishFocused();
+          checkVisible(seen.hasClosedPane);
+        } finally {
+          followed?.resolve();
+        }
       });
     };
 
@@ -783,6 +892,29 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       view.tabs.select(sessionId, tab.id);
       log(`showed ${tab.title} tab in ${labelOf(sessionId)}`);
+    };
+
+    // Hides the focused pane's session's open popup, else opens the one it hid
+    // last, showing the mode first.
+    const togglePopup = () => {
+      mode.show();
+      const sessionId = view.panes.focusedSessionId();
+      if (sessionId === null) {
+        log('no popup: no session shown');
+        return;
+      }
+      const toggled = view.tabs.togglePopup(sessionId);
+      if (toggled === null) {
+        log(`no popup in ${labelOf(sessionId)}`);
+        return;
+      }
+      log(
+        popupToggledLine(
+          toggled.popup.title,
+          toggled.isOpen,
+          labelOf(sessionId),
+        ),
+      );
     };
 
     const renameDialog = createRenameDialog({
@@ -971,6 +1103,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         prevSession: () => stepToSession(-1),
         nextTab: () => stepToTab(1),
         prevTab: () => stepToTab(-1),
+        togglePopup,
         // Acts on the focused pane's session, whichever box the key fired in;
         // never on a row the user cannot see.
         closeSession: () => {
@@ -980,7 +1113,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           }
           const sessionId = view.panes.focusedSessionId();
           if (sessionId !== null) {
-            void exports.closeSession(sessionId);
+            const atOnce = closesAtOnce([
+              ...view.tabs.tabsOf(sessionId),
+              ...view.tabs.popupsOf(sessionId),
+            ]);
+            void closeSession(api, view, labelOf, sessionId, atOnce);
           }
         },
         splitDown: paneKey(unlessPicking(() => split('column'))),
@@ -991,10 +1128,22 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         swapPaneUp: paneKey(() => swapPane('up')),
         swapPaneDown: paneKey(() => swapPane('down')),
         ...listPickerCommands(picker),
+        // Closes the side bar's overlay, as a row click picks in it.
+        selectRow: ({ arg }: PageCommandContext<string>) => {
+          exports.activate(arg);
+          mode.picked();
+        },
+        // Logs no `showed` line: the tab keys log that.
+        selectTab: ({
+          arg,
+        }: PageCommandContext<{ sessionId: string; tab: string }>) =>
+          view.tabs.select(arg.sessionId, arg.tab),
         renameSession,
         renameAccept: () => renameDialog.accept(),
         renameCancel: () => renameDialog.cancel(),
         favoriteProject: projectKey((project) => view.toggleFavorite(project)),
+        favoriteProjectAt: ({ arg }: PageCommandContext<string>) =>
+          view.toggleFavorite(arg),
         moveProjectUp: projectKey((project) => view.moveFavorite(project, -1)),
         moveProjectDown: projectKey((project) => view.moveFavorite(project, 1)),
         listDown: moveListCursor(1),
@@ -1021,6 +1170,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         sessionsPageView(exports, consumer, (listener) =>
           followRows(rows, { removed: listener }),
         ),
+      ready() {
+        pruneKeys(places, (sessionId) => rows.all().has(sessionId));
+        apply(currentState());
+      },
       dispose: () => view.dispose(),
     };
   },

@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
@@ -10,6 +11,28 @@ import type {
   SlotKey,
 } from '../../contracts/state';
 import { callEach } from '../../shared/call-each';
+
+// Activates the session whose id is the arg and closes the side bar's overlay,
+// as a click on its row does.
+export const sessionsSelectRowCommand: CommandKey<
+  string,
+  'sessions.selectRow'
+> = {
+  id: 'sessions.selectRow',
+};
+
+// Shows tab `tab` of session `sessionId`, as a click on the tab does.
+export const sessionsSelectTabCommand: CommandKey<
+  { sessionId: string; tab: string },
+  'sessions.selectTab'
+> = { id: 'sessions.selectTab' };
+
+// Favorites or unfavorites the project whose key is the arg, as a click on its
+// group's star does.
+export const sessionsFavoriteProjectAtCommand: CommandKey<
+  string,
+  'sessions.favoriteProjectAt'
+> = { id: 'sessions.favoriteProjectAt' };
 
 // Every agent harness a session can run in; the relay hello's parse reads a
 // harness missing from this list as none.
@@ -24,12 +47,10 @@ export const DRIVE_SESSION_DEFAULTS = {
   harnesses: HARNESSES,
   projectDir: 'drive',
   harness: 'claude',
-  deadlineSeconds: null,
 } as const satisfies {
   harnesses: readonly Harness[];
   projectDir: string;
   harness: Harness;
-  deadlineSeconds: null;
 };
 
 // Every source a session title comes from, in the order the row prefers them:
@@ -47,17 +68,20 @@ export function editableTitle(titles: SessionTitles): string {
   return titles.user ?? titles.agent ?? titles.firstMessage ?? '';
 }
 
-// What a form source knows about the session it serves.
+// What a session's host and its starter say of it.
 export interface SessionInfo {
   sessionId: string | null;
   projectDir: string | null;
-  // The host's soft deadline; null means the default.
-  deadlineSeconds: number | null;
   // Null when the relay did not say, or named a harness the app does not know.
   harness: Harness | null;
   // The session's harness config folder, as `AgentStart` holds one, which a form
   // source has no use for; absent for the harness default.
   profileDir?: string;
+  // Every relay hello field sessions does not read, as the host sent it, for
+  // the plugins that know the host; absent when there are none.
+  host?: Readonly<Record<string, unknown>>;
+  // The row's label in place of the folder's name, numbered as that would be.
+  label?: string;
 }
 
 // A tool a form source exposes, as MCP `tools/list` describes it.
@@ -69,16 +93,17 @@ export interface ToolDefinition {
 
 export const RELAY_PROTOCOL = 1;
 
-// The first line the relay sends, before any MCP message.
+// The first line the relay sends, before any MCP message. Every other field
+// is the host's own, and lands in `SessionInfo.host`.
 export interface RelayHello {
   protocol: number;
   session_id: string | null;
   project_dir: string | null;
-  deadline_seconds: number | null;
   // Absent reads as null, as does a harness the app does not know.
   harness?: string | null;
   // Absent reads as null.
   config_dir?: string | null;
+  [field: string]: unknown;
 }
 
 // The app's one-line answer to a hello; MCP follows only after `ok: true`.
@@ -146,9 +171,37 @@ export interface OwnedSession {
 }
 
 // `select` false opens a session in the background: its row is added unmarked
-// and the selected row stays as it was.
+// and the selected row stays as it was. `rowId` is the id the session's row
+// had before a restart of its owner or of sessions, or before a relaunch,
+// which the row takes back; left out, the row gets a new one.
 export interface OpenOptions {
   select: boolean;
+  rowId?: string;
+}
+
+// What a mark asks the user: the page's toast reads `<text>`, or
+// `<text> — <keys> to <action>` when keys show Sessions mode.
+export interface MarkOptions {
+  text: string;
+  action: string;
+}
+
+// One tool call, as a tool-call guard sees it. `sessionId` is the app's own id (AgentSession.id).
+export interface GuardedToolCall {
+  readonly sessionId: string;
+  readonly tool: string;
+  readonly toolUseId: string | null;
+  readonly mainAgentOnly: boolean;
+}
+
+export type ToolCallVerdict =
+  | { readonly kind: 'run' }
+  | { readonly kind: 'skip'; readonly text: string };
+
+export type ToolCallGuard = (call: GuardedToolCall) => Promise<ToolCallVerdict>;
+
+export interface ContributeToolsOptions {
+  readonly mainAgentOnly?: boolean;
 }
 
 export interface SessionsMainExports {
@@ -157,10 +210,14 @@ export interface SessionsMainExports {
   // sessions and frees the tool names; a second `dispose` does nothing. Throws
   // on a tool name another contribution already holds, or one this contribution
   // lists twice. A `start` that throws for a live session ends the tool sessions
-  // already started, leaves no contribution, and rethrows.
+  // already started, leaves no contribution, and rethrows. `mainAgentOnly` true
+  // marks each of the contribution's tools main-agent-only, which every
+  // tool-call guard reads from the call; absent or false marks none. The marks
+  // go with the tool names when the handle disposes.
   contributeTools(
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
+    options?: ContributeToolsOptions,
   ): Disposable;
   // Connects the session with no row, writing none, or joins the owned
   // session whose host id the info carries; `mark` or `activate` adds a
@@ -171,8 +228,8 @@ export interface SessionsMainExports {
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was.
-  // Throws when `info.sessionId` is null or any session already holds that
-  // host id.
+  // Throws when `info.sessionId` is null, any session already holds that
+  // host id, or one already holds `options.rowId`.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets
@@ -180,8 +237,10 @@ export interface SessionsMainExports {
   // selected when this mark comes within 30 seconds of the release, unless in
   // between came an `activate` or `activateExistingRow`, a selecting `open`,
   // a mark that selected another session from none, or a `release` of another
-  // selected row; the session's end drops it too.
-  mark(sessionId: string): void;
+  // selected row; the session's end drops it too. A mark that finds the row
+  // unmarked stores its `options` as the row's `markToast`, and one that finds
+  // it still marked keeps the toast there; an activate clears it.
+  mark(sessionId: string, options: MarkOptions): void;
   // The user's pick: selects the session's row and clears its mark; a
   // connected session with no row, or a row the user closed, gets its row at
   // the end first.
@@ -197,11 +256,35 @@ export interface SessionsMainExports {
   // null for a session not connected.
   label(sessionId: string): string | null;
   // The user closing a session's row, or `release`, asks every guard first,
-  // and the row stays while any answers false; once every guard allows, the
-  // row goes and `closed` is emitted. A session that ends loses its row
-  // regardless. Each call is its own registration, which its handle removes,
-  // so one function added twice keeps guarding until both handles are disposed.
-  addCloseGuard(mayClose: (sessionId: string) => boolean): Disposable;
+  // and the row stays while any answers a reason, the first of which the page
+  // toasts; once every guard answers null, the row goes and `closed` is
+  // emitted. The user's close key on a tab that closes at once first runs every
+  // guard's `cancelHold`, which ends what the guard holds there. A session that
+  // ends loses its row regardless. Each call is its own registration, which its
+  // handle removes, so one function added twice keeps guarding until both
+  // handles are disposed.
+  addCloseGuard(
+    mayClose: (sessionId: string) => string | null,
+    cancelHold?: (sessionId: string) => void,
+  ): Disposable;
+  // Every call of a contributed tool, from a connected session, an owned one or
+  // its joined relay, asks each guard in registration order, one at a time,
+  // awaiting each answer before asking the next; every guard sees every call,
+  // whether or not its tool is main-agent-only. A call of a tool no
+  // contribution holds rejects without asking any. The first `skip` resolves
+  // the call with its text as a success, the handler not run and no later guard
+  // asked; a guard that rejects makes the call reject with its error, the same
+  // way. When every guard answers `run`, the handler runs, unless while the
+  // guards answered the tool's contribution was disposed (rejects `Unknown
+  // tool:`), the session ended (rejects `Session ended`), the session moved off
+  // the host id a joined relay's call came under (rejects `moved from host`) or
+  // the call's signal aborted (rejects with its reason). A guard disposed
+  // while a call awaits it still decides that call; a guard disposed before
+  // its turn in a call is not asked, and no later call asks it. Each call is
+  // its own
+  // registration, so one function added twice is asked twice until both
+  // handles are disposed; a second `dispose` does nothing.
+  addToolCallGuard(guard: ToolCallGuard): Disposable;
   // Stores the source's title, normalized, or clears it for null or a string
   // that normalizes to empty; checks no limit, which callers own. A changed
   // value writes the session's row when it has one and emits `titleChanged`
@@ -243,8 +326,10 @@ export interface SessionsMainEvents extends EventShape {
 }
 
 // One session's sidebar row; a connected session's row exists only while
-// marked, activated or holding a form. `marked` is a form not yet opened or a
-// turn that finished while the user was elsewhere, cleared when selected;
+// marked, activated or kept by a close guard. `marked` is attention a plugin
+// asked for with `mark` and the user has not answered, cleared when selected;
+// `markToast` is the toast of the last mark that found the row unmarked, kept
+// until an activate clears it;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed
 // when the session connects, `hostSessionId` also changed by the owner through
 // `setHostSessionId`. `titles` are the session's titles, kept across a host id
@@ -258,6 +343,7 @@ export interface SessionRow {
   project: string;
   harness: Harness | null;
   marked: boolean;
+  markToast: MarkOptions | null;
   projectDir: string | null;
   hostSessionId: string | null;
   titles: SessionTitles;
@@ -271,9 +357,10 @@ export interface SessionsState {
   selectedSessionId: string | null;
 }
 
-// `closeSession` returns whether the session's row is closed: true when it
-// closed or was already closed, false when a close guard kept it or main knows
-// no such session; the session stays connected either way.
+// `closeSession` returns the first close guard's reason for keeping the row,
+// or null when the row closed, was already closed, or main knows no such
+// session; the session stays connected either way. `atOnce` first runs every
+// guard's `cancelHold`.
 // `activate` returns whether it wrote the rows or the selection, which may reach
 // the page after that reply. `activated` arrives before the writes the activation
 // causes.
@@ -282,7 +369,7 @@ export interface SessionsState {
 export interface SessionsChannel extends ChannelShape {
   invoke: {
     activate(sessionId: string): boolean;
-    closeSession(sessionId: string): boolean;
+    closeSession(sessionId: string, atOnce: boolean): string | null;
     setUserTitle(sessionId: string, title: string | null): void;
   };
   messages: { activated: { sessionId: string } };
@@ -291,38 +378,80 @@ export interface SessionsChannel extends ChannelShape {
 // The page part's exports and events.
 
 // A tab a plugin adds to a session. The tab bar draws its `icon`, a Codicon
-// name, with `title` as its tooltip and accessible name. `beforeClose` answers
-// whether the session may close now, false keeping it; a promise answers once
-// the tab has asked the user (chat's end-session confirm, forms' and primer's
-// cancel prompt). `shown` runs each time
-// this tab becomes the visible tab: the selected tab of the focused chat pane's
-// session while Sessions mode shows. Its plugin sets its base key scope there.
-// `shown` may run inside `addTab`, before its handle returns, so it must not
-// read that handle. `order` places the tab in the strip, as `addTab` says.
+// name, with `title` as its tooltip and accessible name. `closesAtOnce` true
+// means the user's close key ends what this tab holds with no prompt; left
+// out, it is false. `beforeClose` answers whether the session may close now,
+// false keeping it, for what only the page knows or must ask; a promise
+// answers once the tab has asked the user (chat's end-session confirm).
+// `atOnce` is true when the user's close key runs while any of the session's
+// tabs or popups closes at once. `shown` runs each time this tab becomes the
+// visible tab: the selected tab of the focused chat pane's session while
+// Sessions mode shows and that session has no open popup. Its plugin sets its
+// base key scope there. `hidden` runs when it stops being the visible tab, the
+// mode hiding or a popup opening over it included, before the next surface's
+// `shown`; a tab removed first gets none. `shown` may run inside `addTab`,
+// before its handle returns, so it must not read that handle. `order` places
+// the tab in the strip, as `addTab` says.
 export interface SessionTabView {
   id: string;
   title: string;
   icon: string;
   element: HTMLElement;
   order?: number;
-  beforeClose(): boolean | Promise<boolean>;
+  closesAtOnce?(): boolean;
+  beforeClose(atOnce: boolean): boolean | Promise<boolean>;
+  shown(): void;
+  hidden?(): void;
+}
+
+// `select` selects the tab inside its session, never changing the selected
+// session. `isVisible` reads, at the moment of the call, whether this tab is
+// the visible tab. `dispose` removes the tab. Each call on a tab already
+// dropped does nothing.
+export interface SessionTabHandle extends Disposable {
+  select(): void;
+  isVisible(): boolean;
+}
+
+// A popup a plugin opens over a session's tabs while it has something for the
+// user. The layout's `popup` part frames `element`; `title` and `icon`, a
+// Codicon name, name it in the session's hidden bar. `beforeClose` answers
+// whether the session may close now, false keeping it, asked after the tabs';
+// `closesAtOnce` and `atOnce` are a tab's.
+// `shown` runs each time this popup becomes the visible surface: the top open
+// popup of the focused chat pane's session while Sessions mode shows. Its
+// plugin sets its base key scope there and may move focus into the popup;
+// sessions focuses nothing. `shown` may run inside `addPopup`, before its
+// handle returns, so it must not read that handle.
+export interface SessionPopupView {
+  id: string;
+  title: string;
+  icon: string;
+  element: HTMLElement;
+  closesAtOnce?(): boolean;
+  beforeClose(atOnce: boolean): boolean | Promise<boolean>;
   shown(): void;
 }
 
-// `setStatus` sets the tab's line in its session's sidebar row. `select`
-// selects the tab inside its session, never changing the selected session.
-// `takeOver` selects the tab inside its session and returns a release; the
-// first release selects the tab selected before the take over, unless a tab
-// was selected since (by the user or `select`, even back to this one), another
-// tab's take over holds the session, or that tab is gone. `isVisible` reads,
-// at the moment of the call, whether this tab is the visible tab. `dispose`
-// releases the latest take over this handle gave out, then removes the tab.
-// Each call on a tab already dropped does nothing.
-export interface SessionTabHandle extends Disposable {
+// `setStatus` sets its entry's text in the session's hidden bar. `open` makes
+// it the session's top open popup, and does nothing while it already is; `hide`
+// hides it, the bar listing it. `isVisible` reads, at the moment of the call,
+// whether this popup is the visible surface. `dispose` removes it. Each call
+// on a popup already dropped does nothing.
+export interface SessionPopupHandle extends Disposable {
   setStatus(status: string): void;
-  select(): void;
-  takeOver(): { release(): void };
+  open(): void;
+  hide(): void;
   isVisible(): boolean;
+}
+
+// A session's place, as a page reload finds it: the selected tab, how many
+// times the user's picks changed the selection, and the ids of its hidden
+// popups.
+export interface SessionsPlace {
+  selectedTabId: string | null;
+  selections: number;
+  hiddenPopupIds: string[];
 }
 
 // A part another plugin draws for every session on a sessions surface: under
@@ -332,10 +461,30 @@ export interface SessionTabHandle extends Disposable {
 // draws nothing; the surface still draws. Sessions builds a part only when its
 // surface draws: a row on each side-bar draw, a tab bar once per session, per
 // sessions layout set and per bar part added or removed. A part whose content
-// changes between those draws redraws into its wrapper itself.
+// changes between those draws redraws into its wrapper itself. A row part's
+// `tooltip` joins the row's tooltip, null adding nothing; it is read at each
+// row draw and each time the pointer enters the row, so a change needs no
+// redraw.
 export interface SessionPart {
   id: string;
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
+  tooltip?(sessionId: string): string | null;
+}
+
+// A side bar section another plugin registers, drawn after Favorites and
+// Recent: its label over the rows it claims, with no project groups.
+export interface SidebarSection {
+  id: string; // unique among registered sections
+  label: string; // the section header's text
+  order: number; // sections sort by order after Favorites and Recent
+  claims(row: SessionRow): boolean;
+  header?: SectionPart; // drawn at the header's end
+}
+
+// What a section draws at its header's end: `build` draws into `parent`, its
+// own wrapper; the returned `dispose` runs before the side bar draws again.
+export interface SectionPart {
+  build(parent: HTMLElement): { dispose?(): void };
 }
 
 // The tones a row's activity shows in, the members of the page kit's
@@ -362,8 +511,7 @@ export interface RowActivity {
 
 export type RowEmphasis = 'raised' | 'urgent';
 
-// A round or primer waiting on the user: the one copy chat, forms and primer
-// set.
+// Something waiting on the user: the one copy every source sets.
 export const NEEDS_YOU_ACTIVITY: RowActivity = {
   word: 'needs you',
   tone: 'attention',
@@ -377,12 +525,20 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // with none; a tie keeps add order. A tab added before its session's row waits
 // for the row. A session's tabs drop when its row leaves, and
 // `sessionsRowsSlot`'s notice says so.
+// `addPopup` attaches the popup's element before returning and opens it: it
+// becomes the session's top open popup, over whichever popups were open or
+// hidden. A `restored` popup, one whose content the last page showed, comes
+// back hidden instead when the last page's place (`sessionsPlaceSlot`) had it
+// hidden. It throws on a popup id the session already holds. A popup added
+// before its session's row waits for the row, and a session's popups drop with
+// its row, as its tabs do.
 // `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`
 // each redraw that surface: the rows or the tab bars. A row part shares one
-// line that never wraps: its wrapper keeps its content's width, an empty
-// wrapper takes no room, and a part may set its own wrapper's `order`. A part
+// line: its wrapper keeps its content's width, an empty wrapper takes no room,
+// and a part may set its own wrapper's `order`; the default layout puts the
+// parts ordered 2 and later on a line of their own. A part
 // whose content can be long sets `flex: 0 1 auto; min-width: 0` on its wrapper,
 // `.session-row-part[data-part='<id>']`. `setActivity` sets the
 // activity `sourceId` (one per plugin or tab) holds for the session, null
@@ -390,18 +546,37 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // tie, and redraws only when that changed. An activity set before the
 // session's row arrives shows once it does; a row leaving drops its
 // activities, and every page load starts with none.
+// `addSection` registers a side bar section; it throws `section id <id> is
+// reserved` for `favorites` or `recent`, and `part <id> is already added` on
+// an id another registered section holds. On each side bar draw every
+// section's `claims` is asked of every row: a claimed row leaves its project
+// group and draws in the section, newest first; a row two sections claim goes
+// to the lower `order`, a tie to the section registered first, and a `claims`
+// that throws counts as false and is logged. The sections that claim a row draw after Recent, by `order`,
+// a tie in registration order; one that claims none draws nothing. Adding a
+// section and disposing its `Disposable` each redraw the side bar. `header`
+// builds on each side bar draw, so a header whose content changes between
+// draws redraws into its own wrapper itself.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
+  addPopup(
+    sessionId: string,
+    popup: SessionPopupView,
+    options?: { restored?: boolean },
+  ): SessionPopupHandle;
   // The text cut to `sessions.titleMaxLength` with an ellipsis when longer, for
   // another plugin's short title.
   cutToTitleLimit(text: string): string;
   addRowPart(part: SessionPart): Disposable;
   addBarPart(part: SessionPart): Disposable;
+  addSection(section: SidebarSection): Disposable;
   activate(sessionId: string): void;
-  // Asks each of the session's tabs `beforeClose` in turn, waiting on a
-  // promise's answer and asking too a tab added meanwhile, then asks main to
-  // close it. Resolves to true once the row closed; false when a tab or main
-  // kept it, or the ask to main failed (logged).
+  // Asks each of the session's tabs `beforeClose(false)` in turn, then its
+  // popups, waiting on a promise's answer and asking too a tab or popup added
+  // meanwhile, then asks main to close it, which a close guard refuses with the
+  // reason the page toasts; never cancels what a guard holds, as the user's
+  // close key does. Resolves to true once the row closed; false when a tab, a
+  // popup or main kept it, or the ask to main failed (logged).
   closeSession(sessionId: string): Promise<boolean>;
   // The focused pane's session while Sessions mode shows, the session the
   // close and rename keys act on; null while the mode is hidden or the pane is
@@ -421,8 +596,10 @@ export const sessionsPageKey: DependencyKey<
 > = { id: 'sessions', process: 'page' };
 
 // `tabAdded`: a plugin's tab added to the session through `addTab`.
+// `tabShown`: a tab became the visible tab, after its `shown`.
 export interface SessionsPageEvents extends EventShape {
   tabAdded: { sessionId: string; tabId: string };
+  tabShown: { sessionId: string; tabId: string };
 }
 
 // One source's activity for a session.
@@ -440,6 +617,17 @@ export const sessionsActivitySlot: KeyedSlotKey<
   'page',
   'sessions'
 > = { id: 'sessions.activity', process: 'page', kind: 'keyed' };
+
+// Each session's place, by the session id, written on each change to its tabs,
+// their selection or which of its popups are hidden; a row leaving deletes its
+// key, and the sessions page part's `ready()` deletes the keys of rows main
+// does not hold: rows that ended while no page ran, and on a live restart rows
+// that chat's restore has not reopened yet.
+export const sessionsPlaceSlot: KeyedSlotKey<
+  SessionsPlace,
+  'page',
+  'sessions'
+> = { id: 'sessions.place', process: 'page', kind: 'keyed' };
 
 // Main's rows, keyed by each row's `sessionId`, in the order main added them. In
 // one list operation main writes every row, then the selection, then emits its

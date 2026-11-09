@@ -46,7 +46,7 @@ import {
   heavyStateOf,
 } from './workflow-heavy/contract';
 import { workflowHeavyMainPart } from './workflow-heavy/main/start';
-import { readPlanProgress } from './workflow-heavy/plan-reader';
+import { readPlanProgress } from '../shared/plan-progress';
 
 const START = 1_000_000;
 const PLAN_DIR = '/r/docs/features/x/plan-a';
@@ -69,6 +69,8 @@ interface HeavyTestSettings {
 const FLOWS_PATH = `/data/workflow/${FLOWS_FILE}`;
 
 const settled = () => new Promise((settle) => setImmediate(settle));
+// Git that finds every folder outside a clone, so each plan has one copy.
+const NO_CLONE_GIT = { topLevel: async () => null };
 
 // Project files whose reads, from `holdReads` on, wait for `release`.
 function holdableReads() {
@@ -128,7 +130,6 @@ function session(id: string, hostSessionId: string): AgentSession {
     info: {
       sessionId: hostSessionId,
       projectDir: '/r',
-      deadlineSeconds: null,
       harness: null,
     },
   };
@@ -244,6 +245,7 @@ function startWorkflowPart(
         return { dispose: () => undefined };
       },
       services: {
+        git: NO_CLONE_GIT,
         files: projectFiles,
         log: (line: string) => logs.push(line),
         clock: time.clock,
@@ -520,7 +522,7 @@ function startPartsInHarnesses(
   const heavy = startMainPart(workflowHeavyMainPart, {
     dependencies: [dependency, FAKE_SESSIONS, FAKE_CHAT],
     settings,
-    services,
+    services: { git: NO_CLONE_GIT as never, ...services },
   });
   return { engine, heavy };
 }
@@ -580,7 +582,7 @@ describe('workflowHeavyMainPart', () => {
       expect(workflow.lastHeavy()).toMatchObject({
         stage: 'planReady',
         planDir: PLAN_DIR,
-        progress: readPlanProgress(PLAN),
+        progress: readPlanProgress(PLAN, new Map()),
         countdownEndsAt: START + 10_000,
       });
       await settled();
@@ -629,7 +631,7 @@ describe('workflowHeavyMainPart', () => {
     expect(workflow.lastHeavy()).toMatchObject({
       stage: 'planReady',
       planDir: PLAN_DIR,
-      progress: readPlanProgress(PLAN),
+      progress: readPlanProgress(PLAN, new Map()),
       countdownEndsAt: null,
     });
     workflow.time.advance(10_000);
@@ -649,13 +651,13 @@ describe('workflowHeavyMainPart', () => {
       saved: {
         stage: 'planReady',
         planDir: PLAN_DIR,
-        progress: readPlanProgress(PLAN),
+        progress: readPlanProgress(PLAN, new Map()),
       },
       replay: featureTurnEvents(BEFORE_SAVE),
       expected: {
         stage: 'planReady',
         planDir: PLAN_DIR,
-        progress: readPlanProgress(PLAN),
+        progress: readPlanProgress(PLAN, new Map()),
       },
     },
     {
@@ -697,7 +699,7 @@ describe('workflowHeavyMainPart', () => {
       expected: {
         stage: 'planReady',
         planDir: PLAN_DIR,
-        progress: readPlanProgress(PLAN),
+        progress: readPlanProgress(PLAN, new Map()),
       },
     },
     {
@@ -718,10 +720,13 @@ describe('workflowHeavyMainPart', () => {
       saved: {
         stage: 'make',
         planDir: PLAN_DIR,
-        progress: readPlanProgress(PLAN_TICKED),
+        progress: readPlanProgress(PLAN_TICKED, new Map()),
       },
       replay: [{ ...skill('wigley:review', ''), at: AFTER_SAVE }],
-      expected: { stage: 'review', progress: readPlanProgress(PLAN) },
+      expected: {
+        stage: 'review',
+        progress: readPlanProgress(PLAN, new Map()),
+      },
     },
   ])(
     'replayOverASavedFlow_FoldsOnlyPastItsSave_StartsNoCountdown ($name)',
@@ -857,7 +862,7 @@ describe('workflowHeavyMainPart', () => {
     });
 
     expect(workflow.lastHeavy()?.progress).toEqual(
-      readPlanProgress(PLAN_TICKED),
+      readPlanProgress(PLAN_TICKED, new Map()),
     );
   });
 
@@ -1046,7 +1051,7 @@ describe('workflowHeavyMainPart', () => {
     await settled();
 
     expect(workflow.lastHeavy()).toMatchObject({
-      progress: readPlanProgress(PLAN),
+      progress: readPlanProgress(PLAN, new Map()),
       countdownEndsAt: null,
     });
     expect(workflow.time.liveTimers()).toBe(0);
@@ -1067,7 +1072,7 @@ describe('workflowHeavyMainPart', () => {
 
     expect(workflow.lastHeavy()).toMatchObject({
       planDir: '/r/docs/plan-a',
-      progress: readPlanProgress(PLAN),
+      progress: readPlanProgress(PLAN, new Map()),
     });
   });
 

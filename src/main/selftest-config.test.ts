@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AcceleratorBind, PageBind } from '../contracts/keymap';
+import type { PageBind } from '../contracts/keymap';
 import type {
   SelfTestGroup,
   SelfTestScript,
@@ -11,13 +11,11 @@ import {
   applySelfTestConfig,
   checkGroups,
   type HandedScript,
-  mainStartList,
   mergeSelfTestConfigs,
   SELFTEST_FILTER_ENV,
   screenshotFiles,
   selectScripts,
   selfTestFilterOf,
-  withMainStartList,
 } from './selftest-config';
 
 function handed(
@@ -147,78 +145,6 @@ describe('applySelfTestConfig', () => {
 
     expect(served.keymap.page).toEqual([userBind, scriptBind]);
     expect(served.pluginSettings).toEqual({ p: { size: 1, speed: 9 } });
-    expect(served.settings.plugins.disabled).toEqual([]);
-  });
-});
-
-describe('mainStartList', () => {
-  it.each([
-    { case: 'SelfTest_StartsEvery', isSelfTest: true, expected: [] },
-    { case: 'NotSelfTest_KeepsTheList', isSelfTest: false, expected: ['a'] },
-  ])('mainStartList_$case', ({ isSelfTest, expected }) => {
-    expect(mainStartList(isSelfTest, ['a'])).toEqual(expected);
-  });
-});
-
-describe('withMainStartList', () => {
-  const pBind: AcceleratorBind = { accelerator: 'Ctrl+P', command: 'p.go' };
-  const qBind: AcceleratorBind = { accelerator: 'Ctrl+Q', command: 'q.go' };
-  const command = (id: string, plugin: string) => ({
-    id,
-    label: id,
-    group: 'Test',
-    runsIn: 'main',
-    plugin,
-  });
-
-  // A config whose keymap holds one app bind of plugin `p` and one of `q`,
-  // with `disabled` as its `plugins.disabled`; nothing here reads the rest.
-  const configDisabling = (disabled: string[]) =>
-    ({
-      settings: { keySequenceTimeoutMs: 900, plugins: { disabled } },
-      keymap: {
-        editor: { leader: ' ', remaps: [], binds: [] },
-        page: [],
-        app: [pBind, qBind],
-        intercept: [],
-        global: [],
-        groups: {},
-      },
-      commands: { 'p.go': command('p.go', 'p'), 'q.go': command('q.go', 'q') },
-    }) as unknown as AppConfig;
-
-  it.each([
-    {
-      case: 'DisabledOnly_KeepsTheListAndEveryBind',
-      disabled: ['p'],
-      startList: [],
-      expected: { disabled: ['p'], app: [pBind, qBind] },
-    },
-    {
-      case: 'StartListOnly_DisablesItAndDropsItsBinds',
-      disabled: [],
-      startList: ['q'],
-      expected: { disabled: ['q'], app: [pBind] },
-    },
-    {
-      case: 'Both_JoinsThemOnceAndDropsTheStartListBinds',
-      disabled: ['p', 'r'],
-      startList: ['r', 'q'],
-      expected: { disabled: ['p', 'r', 'q'], app: [pBind] },
-    },
-    {
-      case: 'Neither_ChangesNothing',
-      disabled: [],
-      startList: [],
-      expected: { disabled: [], app: [pBind, qBind] },
-    },
-  ])('withMainStartList_$case', ({ disabled, startList, expected }) => {
-    const served = withMainStartList(configDisabling(disabled), startList);
-
-    expect({
-      disabled: served.settings.plugins.disabled,
-      app: served.keymap.app,
-    }).toEqual(expected);
   });
 });
 

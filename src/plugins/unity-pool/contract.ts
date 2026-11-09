@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../contracts/commands';
 import type { ChannelShape } from '../../contracts/plugin';
 import type { SlotKey } from '../../contracts/state';
 
@@ -86,6 +87,22 @@ export const unityPoolSnapshotSlot: SlotKey<
 > = { id: 'unity-pool.snapshot', process: 'main', kind: 'value' };
 
 export type PoolAction = 'hold' | 'release';
+
+// The clone a Hold or Release acts on.
+export interface PoolCloneArg {
+  pool: string;
+  clone: number;
+}
+
+// Holds the clone for the user, as the panel's Hold button does.
+export const unityPoolHoldCommand: CommandKey<PoolCloneArg, 'unity-pool.hold'> =
+  { id: 'unity-pool.hold' };
+
+// Releases the user's hold of the clone, as the panel's Release button does.
+export const unityPoolReleaseCommand: CommandKey<
+  PoolCloneArg,
+  'unity-pool.release'
+> = { id: 'unity-pool.release' };
 
 // The CLI's own JSON answer, or `no-cli` and `cli-failed` when it gave none.
 export type PoolActionResult =

@@ -53,7 +53,9 @@ export const workflowHeavyMainPart: MainPart<typeof workflowHeavyManifest> = {
     const replayedTurnEnds = new Set<string>();
 
     const planWatch = createPlanWatch({
+      git: services.git,
       files: services.files,
+      paths: services.paths,
       log,
       signal: (sessionId, signal) =>
         workflow.signal(sessionId, signal, 'observed'),

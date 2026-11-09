@@ -3,6 +3,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // The primer's scopes are its view's places, each titled for the key help.
 export const primerManifest = definePlugin({
   id: 'primer',
+  label: 'Primer',
+  description:
+    'Shows each feature primer an agent opens in a Primer tab, to answer it.',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {
@@ -10,6 +13,19 @@ export const primerManifest = definePlugin({
     prevRow: { label: 'previous row', group: 'rows', runsIn: 'page' },
     firstRow: { label: 'first row', group: 'rows', runsIn: 'page' },
     lastRow: { label: 'last row', group: 'rows', runsIn: 'page' },
+    // A column's click names its row, as the row keys move to one.
+    selectTask: {
+      label: 'select the task row',
+      group: 'rows',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    selectItem: {
+      label: 'select the item row',
+      group: 'rows',
+      runsIn: 'page',
+      arg: 'number',
+    },
     needYes: { label: 'needed', group: 'need', runsIn: 'page' },
     needNo: { label: 'not needed', group: 'need', runsIn: 'page' },
     needUnclear: { label: 'unclear', group: 'need', runsIn: 'page' },
@@ -27,6 +43,12 @@ export const primerManifest = definePlugin({
       label: 'include the item',
       group: 'items',
       runsIn: 'page',
+    },
+    toggleIncludeAt: {
+      label: 'include the item row',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
     },
     addItem: { label: 'add an item', group: 'items', runsIn: 'page' },
     editItemComment: {
@@ -111,7 +133,7 @@ export const primerManifest = definePlugin({
     layout: {
       label: 'Layout',
       description:
-        "The primer layout that draws the Primer tab: a folder name in the primer's layouts folder, or default.",
+        "The primer layout that draws the primer popup: a folder name in the primer's layouts folder, or default.",
     },
   },
   themeTokens: {},

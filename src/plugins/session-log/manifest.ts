@@ -5,6 +5,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // Main only: it has no surface and no layout.
 export const sessionLogManifest = definePlugin({
   id: 'session-log',
+  label: 'Session log',
+  description:
+    "Records each session's start and end, and offers closed sessions again in the start prompt.",
   dependsOn: { main: ['chat', 'sessions'], page: [] },
   reads: { main: [], page: [] },
   commands: {},

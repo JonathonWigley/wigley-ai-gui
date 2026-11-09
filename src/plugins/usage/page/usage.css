@@ -35,13 +35,12 @@
 /* A session's context under its side-bar row, after the row's other parts, and
    its cache mark at the line's end. Each plugin orders its own wrapper; chat's
    `chat.rowClock` takes the order between these two. The context's
-   `margin-left: auto` takes the free room, so it and the parts after it sit at
-   the line's end. The cache mark's slot keeps its width while it draws nothing,
-   so the bars line up from row to row. Under the default layout the wrapper
-   gives up width ahead of any other part when the parts outgrow the line, which
-   the line passes on to its meter's bar (`layout.css`); a user layout's wrapper
-   stays at least its content's width, as only the default layout's content
-   shrinks. */
+   `margin-left: auto` puts it and the parts after it at the line's end. The
+   cache mark's slot keeps its width while it draws nothing, so the bars line up
+   from row to row. Under the default layout the context starts from its least
+   width and takes its line's free room, which it passes on to its meter's bar
+   (`layout.css`); a user layout's wrapper stays at least its content's width,
+   as only the default layout's content shrinks. */
 .session-row-part[data-part='usage.rowLine'] {
   margin-left: auto;
   order: 2;
@@ -51,7 +50,7 @@
     > [data-layout-owner='usage'][data-layout='default'].usage-row-line
   ) {
   /* Large enough that another part's share of the shrink rounds to nothing. */
-  flex: 0 1000000 auto;
+  flex: 1 1000000 0;
   min-width: calc(var(--wg-space-8) + var(--wg-space-1_5));
 }
 

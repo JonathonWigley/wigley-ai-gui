@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  asFake,
   asHtml,
   FakeElement,
   findAll,
@@ -7,6 +8,7 @@ import {
 } from '../../../shared/page/test-dom';
 import type { RowActivity } from '../../sessions/contract';
 import type {
+  ChecklistItem,
   ChipInput,
   MarkState,
   PageStage,
@@ -17,6 +19,7 @@ import type {
   StageStatus,
   StripInput,
   WorkflowDraw,
+  WorkflowKit,
 } from '../contract';
 import { newFlow } from '../flow';
 import { createStageList } from '../stage-list';
@@ -630,6 +633,81 @@ describe('workflow view over several workflows', () => {
     },
   );
 
+  const RUNNING_STAGE: Partial<PageStage> = {
+    runsTasks: true,
+    status: () => 'running',
+  };
+
+  it.each<{
+    name: string;
+    item: ChecklistItem;
+    stage: Partial<PageStage>;
+    state: MarkState;
+  }>([
+    {
+      name: 'a running item runs while the stage runs',
+      item: { text: 'a', done: false, running: true },
+      stage: RUNNING_STAGE,
+      state: 'running',
+    },
+    {
+      name: 'a running item pauses while the stage pauses',
+      item: { text: 'a', done: false, running: true },
+      stage: { runsTasks: true, status: () => 'paused' },
+      state: 'paused',
+    },
+    {
+      name: 'a running item waits in a stage that runs no tasks',
+      item: { text: 'a', done: false, running: true },
+      stage: { runsTasks: false, status: () => 'running' },
+      state: 'pending',
+    },
+    {
+      name: 'an item not running waits',
+      item: { text: 'a', done: false, running: false },
+      stage: RUNNING_STAGE,
+      state: 'pending',
+    },
+    {
+      name: 'an item with no flag shows the stage',
+      item: { text: 'a', done: false },
+      stage: RUNNING_STAGE,
+      state: 'running',
+    },
+    {
+      name: 'a done item is done though running',
+      item: { text: 'a', done: true, running: true },
+      stage: RUNNING_STAGE,
+      state: 'done',
+    },
+  ])('SidePane_ItemRunning_PicksTheMark ($name)', ({ item, stage, state }) => {
+    const { view, workflows, put } = setUp();
+    const heavy = stubWorkflow('heavy', stageOf('build', 'Build', 10, stage), {
+      checklist: () => ({
+        title: 'Plan',
+        checked: 0,
+        total: 2,
+        groups: [
+          {
+            title: 'Wave 1',
+            items: [item, { text: 'b', done: false, running: false }],
+          },
+        ],
+      }),
+    });
+    workflows.push(heavy.workflow);
+    view
+      .sidePartFor(heavy.workflow)
+      .build(asHtml(new FakeElement('div')), 'a', NO_SECTION);
+
+    put(flowOf('heavy'));
+
+    expect(heavy.sidePanes.at(-1)?.currentGroup?.items).toEqual([
+      { text: 'a', state },
+      { text: 'b', state: 'pending' },
+    ]);
+  });
+
   it('HasChecklist_ReadsHasPlan', () => {
     const { view, workflows, put } = setUp();
     const light = stubWorkflow('light', undefined, { hasPlan: () => false });
@@ -714,8 +792,56 @@ describe('workflow view over several workflows', () => {
 describe('workflow kit', () => {
   const LIGHT = { id: 'workflow-light', commands: {} };
 
-  // The kit under the manifest `workflow-light`, and the anchors it names.
-  const lightKit = () => testWorkflowKit(LIGHT, NOW);
+  // The kit under the manifest `workflow-light` for session `b`, the anchors it
+  // names and the commands its clicks run.
+  const lightKit = () => testWorkflowKit(LIGHT, NOW, 'b');
+
+  it.each<{
+    case: string;
+    draw: (kit: WorkflowKit, parent: HTMLElement) => HTMLElement;
+    action: string;
+  }>([
+    {
+      case: 'main action',
+      draw: (kit, parent) =>
+        kit.actionButton(parent, {
+          command: 'go',
+          label: 'Go',
+          enabled: true,
+          main: true,
+        }),
+      action: 'mainAction',
+    },
+    {
+      case: 'other action',
+      draw: (kit, parent) =>
+        kit.actionButton(parent, {
+          command: 'go',
+          label: 'Go',
+          enabled: true,
+          main: false,
+        }),
+      action: 'go',
+    },
+    {
+      case: 'fold',
+      draw: (kit, parent) => kit.finishedFold(parent, 'x', false),
+      action: 'toggleFinishedWaves',
+    },
+  ])(
+    'button_Click_RunsStageActionForTheKitsSession $case',
+    ({ draw, action }) => {
+      const { kit, runs } = lightKit();
+
+      asFake(draw(kit, asHtml(new FakeElement('div')))).fire('click', {
+        stopPropagation: () => undefined,
+      });
+
+      expect(runs).toEqual([
+        { id: 'workflow.stageAction', arg: { sessionId: 'b', action } },
+      ]);
+    },
+  );
 
   it.each<{ state: MarkState; icon: string }>([
     { state: 'pending', icon: 'codicon-circle-large' },

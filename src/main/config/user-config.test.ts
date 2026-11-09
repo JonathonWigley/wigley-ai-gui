@@ -9,7 +9,7 @@ import { fakePlatform } from '../../shared/platform.test-support';
 import { resolveTheme } from '../themes/theme-loader';
 import type { ConfigCheckDeps } from './config-checks';
 import { type ConfigStore, loadConfigStore } from './config-store';
-import { createUserConfig } from './user-config';
+import { createUserConfig, type UserConfigDeps } from './user-config';
 
 const HOME = '/home';
 const FOLDER = `${HOME}/.config/wigley-ai-gui`;
@@ -37,6 +37,8 @@ const DEFAULT_KEYMAP: DefaultKeymap = {
 
 const listPlugin = definePlugin({
   id: 'p',
+  label: 'p',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
@@ -58,6 +60,8 @@ const listPlugin = definePlugin({
 
 const quietPlugin = definePlugin({
   id: 'quiet',
+  label: 'quiet',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {},
@@ -69,6 +73,8 @@ const quietPlugin = definePlugin({
 
 const dependentPlugin = definePlugin({
   id: 'q',
+  label: 'q',
+  description: 'A test plugin.',
   dependsOn: { main: ['p'], page: [] },
   reads: { main: [], page: [] },
   commands: {},
@@ -105,6 +111,9 @@ const CORE_INFO = {
   'fonts.ui': { label: 'UI font', description: 'A font.' },
 };
 
+// An applied list that switches no plugin off.
+const NONE_APPLIED: UserConfigDeps['applied'] = { disabled: () => [] };
+
 // A store over `files` for `createUserConfig`.
 function storeOver(files: MemoryFiles, manifests = CHECK_DEPS.manifests) {
   return loadConfigStore({
@@ -128,6 +137,7 @@ async function create(
   files: MemoryFiles,
   manifests = CHECK_DEPS.manifests,
   store?: ConfigStore,
+  applied = NONE_APPLIED,
 ): Promise<UserConfig> {
   const served = store ?? (await storeOver(files, manifests));
   return createUserConfig({
@@ -137,6 +147,7 @@ async function create(
     folder: FOLDER,
     store: served,
     settingInfo: CORE_INFO,
+    applied,
   });
 }
 
@@ -608,6 +619,8 @@ describe('createUserConfig', () => {
   it('gives a boolean control to a boolean default and a boolean kind', async () => {
     const flagPlugin = definePlugin({
       id: 'f',
+      label: 'f',
+      description: 'A test plugin.',
       dependsOn: { main: [], page: [] },
       reads: { main: [], page: [] },
       commands: {},
@@ -644,6 +657,7 @@ describe('createUserConfig', () => {
       folder: FOLDER,
       store,
       settingInfo: {},
+      applied: NONE_APPLIED,
     }).schema();
 
     const controls = schema.sections
@@ -680,6 +694,8 @@ describe('createUserConfig', () => {
   it("serves a plugin's accelerator in place of the default on its chord", async () => {
     const overPlugin = definePlugin({
       id: 'over',
+      label: 'over',
+      description: 'A test plugin.',
       dependsOn: { main: [], page: [] },
       reads: { main: [], page: [] },
       commands: { quit: { label: 'Quit', group: 'App', runsIn: 'main' } },
@@ -713,6 +729,7 @@ describe('createUserConfig', () => {
       folder: FOLDER,
       store,
       settingInfo: {},
+      applied: NONE_APPLIED,
     }).schema();
 
     expect(schema.defaultAccelerators.app).toEqual([
@@ -748,6 +765,7 @@ describe('createUserConfig', () => {
         folder: FOLDER,
         store,
         settingInfo: CORE_INFO,
+        applied: NONE_APPLIED,
       }),
     ).toThrow(/"p".*"list"/);
   });
@@ -825,6 +843,35 @@ describe('createUserConfig', () => {
         ...DEFAULT_KEYMAP.app,
         main.binds.app[0],
       ]);
+    });
+
+    it('schema_AppliedPluginCommandsAndScopes_AreNotListed', async () => {
+      const otherPlugin = definePlugin({
+        id: 'q',
+        label: 'q',
+        description: 'A test plugin.',
+        dependsOn: { main: [], page: [] },
+        reads: { main: [], page: [] },
+        commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
+        scopes: { view: 'In q' },
+        settings: {},
+        settingInfo: {},
+        themeTokens: {},
+      });
+      const manifests = [listPlugin, otherPlugin];
+      const files = createMemoryFiles();
+
+      const userConfig = await create(files, manifests, undefined, {
+        disabled: () => ['p'],
+      });
+
+      const schema = userConfig.schema();
+      const ids = Object.keys(schema.commands);
+      expect(ids.filter((id) => id.startsWith('p.'))).toEqual([]);
+      expect(ids).toContain('q.go');
+      const scopePlugins = schema.scopes.map((info) => info.plugin);
+      expect(scopePlugins).not.toContain('p');
+      expect(scopePlugins).toContain('q');
     });
 
     it('writeKeymap_UnknownCommandBothStarted_WritesAndTheStoreHoldsItBack', async () => {

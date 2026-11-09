@@ -9,13 +9,12 @@ import { errorText } from '../../../shared/error-text';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import {
   argsObject,
-  nullableNumberOr,
   nullableStringOr,
   optionalOneOf,
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
-import type { JsonObject } from '../../../shared/json';
+import { isJsonObject, type JsonObject } from '../../../shared/json';
 import { channelPath } from '../../../shared/local-channel/channel-path';
 import {
   DRIVE_SESSION_DEFAULTS,
@@ -87,8 +86,8 @@ function createList(api: SessionsApi): SessionList {
     configFolder: (info) => configFolder(api, info),
   });
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
-  api.channel.handle('closeSession', (sessionId) =>
-    list.closeSession(sessionId),
+  api.channel.handle('closeSession', (sessionId, atOnce) =>
+    list.closeSession(sessionId, atOnce),
   );
   api.channel.handle('setUserTitle', (sessionId, title) =>
     list.setUserTitle(
@@ -130,24 +129,28 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
 }
 
 // A drive action's session info: the args' fields, each the fixture default
-// when left out, under `sessionId`.
+// when left out, under `sessionId`; `host` is the relay hello's host fields,
+// absent when left out.
 function driveSessionInfo(args: JsonObject, sessionId: string): SessionInfo {
-  return {
+  const info: SessionInfo = {
     sessionId,
     projectDir: nullableStringOr(
       args,
       'projectDir',
       DRIVE_SESSION_DEFAULTS.projectDir,
     ),
-    deadlineSeconds: nullableNumberOr(
-      args,
-      'deadlineSeconds',
-      DRIVE_SESSION_DEFAULTS.deadlineSeconds,
-    ),
     harness:
       optionalOneOf(args, 'harness', DRIVE_SESSION_DEFAULTS.harnesses) ??
       DRIVE_SESSION_DEFAULTS.harness,
   };
+  const { host } = args;
+  if (host === undefined) {
+    return info;
+  }
+  if (!isJsonObject(host)) {
+    throw new Error('host must be an object');
+  }
+  return { ...info, host };
 }
 
 // What the drive keeps of a session it connected or opened.
@@ -176,7 +179,7 @@ export function addDriveActions(
     }
   });
   const sessionArgs =
-    '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", deadlineSeconds?: number | null }';
+    '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", host?: object }';
   // Reads the args, then starts the session `start` makes from them.
   const startSession = (
     rawArgs: unknown,
@@ -259,8 +262,8 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       api.services.appInstance.id,
     );
     const exports: SessionsMainExports = {
-      contributeTools(tools, start) {
-        const contribution = list.contributeTools(tools, start);
+      contributeTools(tools, start, options) {
+        const contribution = list.contributeTools(tools, start, options);
         if (opened !== null) {
           try {
             writeEndpointFiles(endpointDir, opened.endpoint, list.tools());
@@ -272,12 +275,14 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       },
       connect: (info) => list.connect(info),
       open: (info, options) => list.open(info, options),
-      mark: (sessionId) => list.mark(sessionId),
+      mark: (sessionId, options) => list.mark(sessionId, options),
       activate: (sessionId) => list.activate(sessionId),
       activateExistingRow: (sessionId) => list.activateExistingRow(sessionId),
       release: (sessionId) => list.release(sessionId),
       label: (sessionId) => list.label(sessionId),
-      addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
+      addCloseGuard: (mayClose, cancelHold) =>
+        list.addCloseGuard(mayClose, cancelHold),
+      addToolCallGuard: (guard) => list.addToolCallGuard(guard),
       setTitle: (sessionId, source, title) =>
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),
@@ -290,6 +295,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         titles: exports.titles,
         maxLength: () => titleLimit(api.settings().titleMaxLength),
       }),
+      { mainAgentOnly: true },
     );
     if (api.drive !== null) {
       addDriveActions(api.drive, exports, (listener) =>

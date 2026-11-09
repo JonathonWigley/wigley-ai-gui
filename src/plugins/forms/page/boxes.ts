@@ -9,7 +9,6 @@ import {
   type FormsAction,
   type FormsState,
   itemAnswer,
-  type RailItem,
   railPosition,
   type RoundState,
   type TextTarget,
@@ -74,8 +73,8 @@ export function roundViewBoxes(state: FormsState, roundId: string): BoxRef[] {
     : boxesInView(round, sessionPaneView(state, round.sessionId, 'forms'));
 }
 
-// The forms view shows the focused item's boxes, the review only the round
-// note.
+// The forms view shows the focused item's boxes, or on the notices stop the
+// open lines' comment boxes; the review only the round note.
 function boxesInView(round: RoundState, view: FormsState['view']): BoxRef[] {
   switch (view) {
     case 'forms':
@@ -93,8 +92,10 @@ function itemBoxes(round: RoundState): BoxRef[] {
   if (item === null) {
     return [];
   }
-  if (item.kind === 'notice') {
-    return [{ roundId, target: { field: 'comment', notice: item.index } }];
+  if (item.kind === 'notices') {
+    return round.openNotices.flatMap((isOpen, i): BoxRef[] =>
+      isOpen ? [{ roundId, target: { field: 'comment', notice: i + 1 } }] : [],
+    );
   }
   const answerable = { kind: item.kind, index: item.index };
   const notes: BoxRef = {
@@ -129,8 +130,9 @@ export function shownBox(state: FormsState, fields: BoxField[]): BoxRef | null {
   );
 }
 
-// Focuses the box's item in the active round; null for the round note or a
-// box of another round.
+// Focuses the box's item in the active round, or for a comment box puts the
+// notices stop's line cursor on its notice; null for the round note, a box of
+// another round, or an item the round lacks.
 export function focusActionFor(
   state: FormsState,
   box: BoxRef,
@@ -143,10 +145,11 @@ export function focusActionFor(
   if (target.field === 'note') {
     return null;
   }
-  const wanted: RailItem =
-    target.field === 'comment'
-      ? { kind: 'notice', index: target.notice }
-      : target.item;
-  const item = railPosition(round.round, wanted);
+  if (target.field === 'comment') {
+    const isNotice =
+      target.notice >= 1 && target.notice <= round.round.notices.length;
+    return isNotice ? { type: 'focusNotice', notice: target.notice } : null;
+  }
+  const item = railPosition(round.round, target.item);
   return item < 0 ? null : { type: 'focusItem', item };
 }

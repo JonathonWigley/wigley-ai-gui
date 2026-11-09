@@ -1,4 +1,4 @@
-/* The default Form layout: the rail's list, the round head, an item's status, and the review. */
+/* The default Form layout: the rail's list, the round head, an item's status, the review, and the notices lines. */
 
 /* Rail */
 :where(.form-tab) .rail-list {
@@ -27,7 +27,17 @@
   color: var(--wg-fg-secondary);
 }
 
-:where(.form-tab) .item[data-status='not_applicable'] .context {
+:where(.form-tab) .item-summary {
+  display: block;
+  font-size: var(--wg-text-16);
+  font-weight: var(--wg-weight-semibold);
+  line-height: var(--wg-leading-prose);
+  margin-bottom: var(--wg-space-2);
+}
+
+:where(.form-tab) .item[data-status='not_applicable'] .context,
+:where(.form-tab) .item[data-status='not_applicable'] > .context-body,
+:where(.form-tab) .item[data-status='not_applicable'] .item-summary {
   opacity: 0.6;
 }
 
@@ -35,7 +45,8 @@
   color: var(--wg-fg-secondary);
 }
 
-:where(.form-tab) .round-overview code {
+:where(.form-tab) .round-overview code,
+:where(.form-tab) .item-summary code {
   background: var(--wg-block-background);
   border-radius: var(--wg-radius-sm);
   font-family: var(--wg-font-mono);
@@ -70,4 +81,11 @@
   flex-wrap: wrap;
   gap: var(--wg-space-2);
   margin-top: var(--wg-space-4);
+}
+
+/* Notices */
+:where(.form-tab) .notice-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-0_5);
 }

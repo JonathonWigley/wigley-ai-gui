@@ -1,11 +1,9 @@
 import './workflow.css';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { CHAT_PREVIEW_HOST_ID, chatPageKey } from '../../chat/contract';
@@ -22,6 +20,7 @@ import {
   workflowFlowsSlot,
   type WorkflowId,
   type WorkflowPageExports,
+  workflowStageActionCommand,
 } from '../contract';
 import { newFlow } from '../flow';
 import { workflowManifest } from '../manifest';
@@ -31,13 +30,12 @@ import {
 } from './layout/workflow-draw';
 import { createPreview } from './preview-steps';
 import { createWorkflowView } from './workflow-view';
+import {
+  keyRunner,
+  kitCommandsOf,
+} from '../../../shared/page/layout-host/base-kit';
 
-type WorkflowApi = PageApi<
-  typeof workflowManifest,
-  ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type WorkflowApi = PageApi<typeof workflowManifest, ChannelShape>;
 
 // The engine's commands a key runs on the selected session.
 type SessionCommand = 'mainAction' | 'toggleFinishedWaves';
@@ -50,7 +48,8 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // `workflow.flows`, drawing the one flow each notice names, leaving a deleted flow
 // drawn until its row leaves and drawing no flow whose row has left, and holds the
 // page half of each workflow, which `addWorkflow` extends; each workflow takes one
-// side part. Each engine command runs on the selected session; each button on the
+// side part. `stageAction` runs the view's gate for the session and action its arg
+// names; each engine key runs it on the selected session, each button on the
 // session it draws. `toggleSidePane` shows or hides the pane in every session, kept
 // in `uiState`. `openPreview` steps chat's preview session through every workflow's
 // samples (`createPreview`).
@@ -112,11 +111,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },
@@ -172,33 +167,14 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       }
     };
 
-    api.events.on('core.pageReady', () => {
-      followRows(rows, {
-        added: ({ sessionId, hostSessionId }) =>
-          preview.sessionAdded(sessionId, hostSessionId),
-        removed(sessionId) {
-          preview.sessionRemoved(sessionId);
-          view.forget(sessionId);
-        },
-      });
-      flows.on((_sessionId, flow) => {
-        if (flow !== undefined) {
-          drawFlow(flow);
-        }
-      });
-      activities.on((sessionId) => view.activityChanged(sessionId));
-      for (const flow of flows.all().values()) {
-        drawFlow(flow);
-      }
-    });
-
+    const runKey = keyRunner(api.commands, log);
     const runOnSelected = (command: SessionCommand) => () => {
       const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
       if (sessionId === null) {
         log(`no selected session for ${command}`);
         return;
       }
-      void view.runFor(sessionId, command);
+      runKey(workflowStageActionCommand, { sessionId, action: command });
     };
     const toggleSidePane = () => {
       const isHidden = services.uiState.get(SIDE_PANE_HIDDEN_KEY) !== true;
@@ -212,14 +188,33 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         mainAction: runOnSelected('mainAction'),
         toggleSidePane,
         toggleFinishedWaves: runOnSelected('toggleFinishedWaves'),
+        stageAction: ({ arg }) => view.runFor(arg.sessionId, arg.action),
         openPreview: () => preview.press(),
       },
       exports: (consumer): WorkflowPageExports => ({
         addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
         createWorkflowDraw: (pluginApi, options) =>
           createWorkflowDraw(drawDeps, pluginApi, options),
-        runCommand: view.runFor,
       }),
+      ready() {
+        followRows(rows, {
+          added: ({ sessionId, hostSessionId }) =>
+            preview.sessionAdded(sessionId, hostSessionId),
+          removed(sessionId) {
+            preview.sessionRemoved(sessionId);
+            view.forget(sessionId);
+          },
+        });
+        flows.on((_sessionId, flow) => {
+          if (flow !== undefined) {
+            drawFlow(flow);
+          }
+        });
+        activities.on((sessionId) => view.activityChanged(sessionId));
+        for (const flow of flows.all().values()) {
+          drawFlow(flow);
+        }
+      },
     };
   },
 };

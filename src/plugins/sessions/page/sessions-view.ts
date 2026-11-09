@@ -4,9 +4,11 @@ import {
   type OuterPanes,
   type PaneDirection,
 } from '../../../contracts/panes';
+import type { PluginLog } from '../../../contracts/log';
 import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 import type { KeyedSlotWriter } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
+import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { element } from '../../../shared/page/dom';
 import {
@@ -20,8 +22,11 @@ import {
   type RowActivity,
   type RowActivitySource,
   type SessionPart,
+  type SessionPopupView,
   type SessionRow,
+  type SessionsPlace,
   type SessionsState,
+  type SidebarSection,
 } from '../contract';
 import type { Layout } from '../layouts/layout';
 import { shownTitle, titleLimit } from '../session-title';
@@ -48,11 +53,14 @@ import {
   sidebarSections,
 } from './sidebar-order';
 import { mountSidebarView, type RowState } from './sidebar-view';
-import { rowChanges, rowStatus, stepSession } from './tabs';
+import { rowChanges, stepSession } from './tabs';
 
-// `activate` runs on a row click; `isModeShown` reads whether Sessions mode
-// shows; `tabsChanged` runs after any change to a session's tabs, their
-// selection or their statuses; `keys` draws the session, tab and pane
+// `activate` runs on a row click and `runFavorite` on a star's click, neither
+// while the preview shows; `selectTab` runs on a tab's click; `isModeShown`
+// reads whether Sessions mode shows; `tabsChanged` runs after any change to a
+// session's tabs or their selection, or to its popups; `popupOpenedFromBar`
+// runs after a click on a hidden popup's bar entry opened it; `keys` draws the
+// session, tab and pane
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
 // focus moved to another pane, a press's release or outer pane key included,
@@ -63,7 +71,9 @@ import { rowChanges, rowStatus, stepSession } from './tabs';
 // moved it while the list holds the keys;
 // `rowParts` are the parts each row draws, and adding or removing one draws
 // the rows again; `barParts` are the parts each tab bar draws, and adding or
-// removing one draws the tab bars again; `titleMaxLength` reads the setting
+// removing one draws the tab bars again; `sections` are the side bar sections
+// other plugins registered, and adding or removing one draws the side bar
+// again; `titleMaxLength` reads the setting
 // each row draw cuts a first-message title to; `recency` and `favorites` order
 // the side bar's rows; the rest is what the sessions layout's kits read.
 export interface SessionsViewDeps extends Omit<
@@ -71,8 +81,11 @@ export interface SessionsViewDeps extends Omit<
   'keys' | 'rowParts' | 'barParts'
 > {
   activate(sessionId: string): void;
+  runFavorite(project: string): void;
+  selectTab(sessionId: string, tabId: string): void;
   isModeShown(): boolean;
   tabsChanged(): void;
+  popupOpenedFromBar(sessionId: string, popup: SessionPopupView): void;
   keys: Pick<KeyHints, 'anchor' | 'keysFor'>;
   timers: Timers;
   panesChanged(): void;
@@ -82,11 +95,14 @@ export interface SessionsViewDeps extends Omit<
   cursorMoved(row: SessionRow | null): void;
   rowParts: PartStore<SessionPart>;
   barParts: PartStore<SessionPart>;
+  sections: PartStore<SidebarSection>;
   titleMaxLength(): number;
   recency: SessionRecency;
   favorites: ProjectFavorites;
   // Writes `sessionsActivitySlot`, which holds the rows' activities.
   activities: KeyedSlotWriter<RowActivitySource[]>;
+  // Holds `sessionsPlaceSlot`, each session's place.
+  places: KeyedSlotWriter<SessionsPlace>;
 }
 
 // The Sessions list: the side bar's rows as a keyboard pane, its cursor a
@@ -153,7 +169,8 @@ export interface SessionPanes {
 // bar's rows again, for a changed title length. `orderedRows` lists main's rows
 // in the order the side bar draws them, the preview's sample never among them.
 // `toggleFavorite` and `moveFavorite` change the user's favorites, draw the
-// side bar again and log the outcome; a star's click and a drop do the same.
+// side bar again and log the outcome; a drop does the same, and a star's click
+// runs `runFavorite`.
 // The preview never changes the favorites: while it shows, a star and a drop do
 // nothing, and the two methods log `projects ignored` and do nothing. `parts`
 // draws through the sessions layout the view's `setLayouts` sets, for the
@@ -185,7 +202,7 @@ export interface SessionsView {
 
 // Sessions mode's two parts: the side bar of session rows, which the shell
 // draws in its side bar, and the root holding the chat panes. Each row's
-// second line follows its tabs' statuses, and the list cursor's row ends in
+// tooltip ends with its row parts' tooltips, and the list cursor's row ends in
 // the cursor prompt. Both draw with `default` until the first `setLayouts`.
 export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const root = element('div', 'sessions');
@@ -226,7 +243,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       },
       toggleFavorite(project) {
         if (preview === null) {
-          toggleFavorite(project);
+          deps.runFavorite(project);
         }
       },
       dropped({ key: project, zone, index }, shownFavorites) {
@@ -261,6 +278,8 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const assigned = new Map<string, string | null>();
   let paneCount = 1;
 
+  // The real rows' order, each section's `claims` guarded so one that throws
+  // claims nothing and logs once per call.
   const realSections = () => {
     const rows = state?.rows ?? [];
     return sidebarSections(
@@ -268,14 +287,27 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       favorites.list(),
       recency.stampsOf(rows),
       recency.projectStamps(),
+      guardedSections(deps.sections.parts(), deps.log),
     );
   };
+
+  // Each row part's tooltip for the session, in part order; a part that
+  // throws is logged and adds nothing.
+  const partTooltips = (sessionId: string): string[] =>
+    deps.rowParts.parts().flatMap((part) => {
+      try {
+        return part.tooltip?.(sessionId) ?? [];
+      } catch (error) {
+        deps.log(`row part ${part.id} tooltip failed: ${errorText(error)}`);
+        return [];
+      }
+    });
 
   // What the side bar draws now: the preview's sample while it shows, else
   // main's rows with the focused pane's session selected.
   const sidebarDraw = (): {
     state: SessionsState | null;
-    sections: SidebarSections<SessionRow>;
+    sections: SidebarSections<SessionRow, SidebarSection>;
     rowStateOf: (row: SessionRow) => RowState;
     skip: ReadonlySet<string>;
   } => {
@@ -302,7 +334,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       rowStateOf: (row) => ({
         title: shownTitle(row.titles, titleMax),
         activity: activities.top(row.sessionId),
-        status: rowStatus(tabs.statusesOf(row.sessionId)),
+        partTooltips: () => partTooltips(row.sessionId),
         onScreen: elsewhere.has(row.sessionId),
       }),
       skip: elsewhere,
@@ -400,10 +432,13 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     isModeShown: deps.isModeShown,
     keys: deps.keys,
     parts,
+    selectTab: deps.selectTab,
+    places: deps.places,
     changed() {
       drawSidebar();
       deps.tabsChanged();
     },
+    popupOpenedFromBar: deps.popupOpenedFromBar,
   });
   const treeView = createPaneTreeView({
     initialId: 'pane-1',
@@ -473,6 +508,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   };
   drawPanes();
   deps.rowParts.onChanged(() => drawSidebar());
+  deps.sections.onChanged(() => drawSidebar());
   deps.barParts.onChanged(() => tabs.redrawBars());
 
   return {
@@ -558,4 +594,29 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       deps.log(`moved ${project} ${direction}`);
     },
   };
+}
+
+// `sections` with each `claims` wrapped: a throw counts as false for that row,
+// and the first throw of each section is logged.
+function guardedSections(
+  sections: readonly SidebarSection[],
+  log: PluginLog,
+): SidebarSection[] {
+  return sections.map((section) => {
+    let hasLogged = false;
+    return {
+      ...section,
+      claims(row) {
+        try {
+          return section.claims(row);
+        } catch (error) {
+          if (!hasLogged) {
+            hasLogged = true;
+            log(`section ${section.id} claims failed: ${errorText(error)}`);
+          }
+          return false;
+        }
+      },
+    };
+  });
 }

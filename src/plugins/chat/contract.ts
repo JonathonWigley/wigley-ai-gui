@@ -4,12 +4,14 @@ import type {
   AgentCommand,
   AgentEvent,
   ChatEntry,
+  ChatImage,
   CompactionTrigger,
   PlanRowUpdate,
   ProcessActivity,
   SessionControl,
   UserMessage,
 } from '../../contracts/agent';
+import type { CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
@@ -46,6 +48,9 @@ export interface LaunchRequest {
   projectDir: string;
   profile: string;
   message: UserMessage;
+  // True for a session nobody answers: chat denies each permission prompt at
+  // once. Kept with the row across a relaunch.
+  unattended?: boolean;
 }
 
 // `hostSessionId` is the harness's id for the saved session.
@@ -175,9 +180,10 @@ export interface ChatSessionInfo {
   // The clone's checked-out branch, or its short commit on a detached HEAD;
   // null outside a clone, and until the first read.
   branch: string | null;
-  // The git worktrees the session's agents wrote files in, by name, in the
-  // order of their first write (`worktreeNameOf` in main). Kept after the
-  // worktree is removed; [] until a write lands in one.
+  // The git worktrees the session's agents wrote files in or named the root of
+  // in a Bash command, by name, in the order of their first touch
+  // (`worktreeNameOf` and `worktreesInCommand` in main). Kept after the
+  // worktree is removed; [] until one is touched.
   worktrees: string[];
 }
 
@@ -224,6 +230,41 @@ export const chatQueuedSlot: KeyedSlotKey<QueuedMessage[], 'main', 'chat'> = {
 };
 export const chatReturnedSlot: KeyedSlotKey<ReturnedMessage[], 'main', 'chat'> =
   { id: 'chat.returned', process: 'main', kind: 'keyed' };
+
+// Which stop of a session's list the entry keys act on, and the range open from
+// an anchor. A stop is a row, or one block of an entry with blocks. A following
+// focus stays on the latest stop as entries arrive.
+export interface EntryFocus {
+  stopId: string | null;
+  following: boolean;
+  anchorId: string | null;
+}
+
+// A Chat tab's place: the box's text, the entry cursor, the open runs' ids, and
+// each entry's expanders' open states, by entry id.
+export interface ChatPlace {
+  draft: string;
+  focus: EntryFocus;
+  openRuns: string[];
+  openExpanders: Record<string, boolean[]>;
+}
+
+// Each Chat tab's place, by session id; the page puts the last page's back as
+// the tab is made, and a session's key leaves with its row.
+export const chatPlaceSlot: KeyedSlotKey<ChatPlace, 'page', 'chat'> = {
+  id: 'chat.place',
+  process: 'page',
+  kind: 'keyed',
+};
+
+// The images attached to each Chat tab's next message, by session id; a tab
+// with none holds no key. Apart from `chat.place`, so a keystroke resends no
+// image.
+export const chatDraftImagesSlot: KeyedSlotKey<
+  readonly ChatImage[],
+  'page',
+  'chat'
+> = { id: 'chat.draftImages', process: 'page', kind: 'keyed' };
 
 export interface PermissionAnswer {
   allowed: boolean;
@@ -364,7 +405,28 @@ export interface ChatAgentEvent {
 }
 
 export type SessionOrigin = 'new' | 'resumed' | 'launched' | 'restored';
-export type SessionCloseReason = 'user' | 'start-failed' | 'project-closed';
+// Why chat closed a row: `user` the sessions plugin's close, `start-failed` a
+// start that threw, `project-closed` a close of the rows in a project folder
+// (`closeSessionsIn`, and the self-test's cleanup of earlier runs), `finished`
+// a plugin's `close` for a session whose work ended.
+export type SessionCloseReason =
+  | 'user'
+  | 'start-failed'
+  | 'project-closed'
+  | 'finished';
+
+const USER_CLOSES: Record<SessionCloseReason, boolean> = {
+  user: true,
+  'start-failed': false,
+  'project-closed': false,
+  finished: false,
+};
+
+// True only for the user's own close, the one Recently closed and the stash
+// take.
+export function isUserClose(reason: SessionCloseReason): boolean {
+  return USER_CLOSES[reason];
+}
 export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 
 // `agentEvent`: one agent event of a session chat owns, still sent after the
@@ -443,9 +505,10 @@ export interface ChatMainEvents extends EventShape {
 // The main part's exports.
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
-  // selected row as it was. Resolves to the new row's sessionId; rejects,
-  // opening nothing, on an image chat refuses (with the refusal text), an
-  // unknown profile, or no chat harness.
+  // selected row as it was. With `unattended` true the row denies each
+  // permission prompt at once and raises no `Turn finished` alert. Resolves
+  // to the new row's sessionId; rejects, opening nothing, on an image chat
+  // refuses (with the refusal text), an unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
   // Chat's profiles, in settings order, read at each call. The first profile
   // is the one a drive `chat.start` takes when it names none, and the only
@@ -473,6 +536,10 @@ export interface ChatMainExports {
   // Each fires `sessionClosed` with reason `project-closed`. Resolves once
   // each one's owned session has ended and its row is gone, or chat stops.
   closeSessionsIn(projectDir: string): Promise<void>;
+  // Ends one session chat owns, as a sessions.closed would, without asking the
+  // close guards; fires sessionClosed with `reason`. Resolves once its row is
+  // gone or chat stops; rejects for a session chat does not hold.
+  close(sessionId: string, reason: SessionCloseReason): Promise<void>;
   // Text every session chat starts from now on carries to its harness, after
   // the texts registered before it; a running session keeps what it started
   // with. Disposing it leaves later starts without it.
@@ -663,3 +730,61 @@ export const chatPageKey: DependencyKey<ChatPageExports, 'page', 'chat'> = {
   id: 'chat',
   process: 'page',
 };
+
+// The commands a click runs on what it landed on, each naming the session whose
+// Chat tab holds it. A key on the focused item runs its own command instead.
+
+// Allows the pending permission entry `entryId`, as its Allow once does.
+export const chatAllowEntryCommand: CommandKey<
+  { sessionId: string; entryId: string },
+  'chat.allowEntry'
+> = { id: 'chat.allowEntry' };
+
+// Opens the reason box for the pending permission entry `entryId`.
+export const chatDenyEntryCommand: CommandKey<
+  { sessionId: string; entryId: string },
+  'chat.denyEntry'
+> = { id: 'chat.denyEntry' };
+
+// Removes the attached image at `index`.
+export const chatRemoveImageAtCommand: CommandKey<
+  { sessionId: string; index: number },
+  'chat.removeImageAt'
+> = { id: 'chat.removeImageAt' };
+
+// Opens or closes the activity line of run `runId`.
+export const chatToggleRunCommand: CommandKey<
+  { sessionId: string; runId: string },
+  'chat.toggleRun'
+> = { id: 'chat.toggleRun' };
+
+// Opens or closes entry `entryId`'s expander at creation-order `place`.
+export const chatToggleExpanderCommand: CommandKey<
+  { sessionId: string; entryId: string; place: number },
+  'chat.toggleExpander'
+> = { id: 'chat.toggleExpander' };
+
+// Pulls the pending message `queuedId` back into the box.
+export const chatPullBackMessageCommand: CommandKey<
+  { sessionId: string; queuedId: string },
+  'chat.pullBackMessage'
+> = { id: 'chat.pullBackMessage' };
+
+// Collapses or expands the session hub section of the side part with this id,
+// in every tab.
+export const chatToggleSectionCommand: CommandKey<
+  string,
+  'chat.toggleSection'
+> = { id: 'chat.toggleSection' };
+
+// Opens the image viewer on user entry `entryId`'s images at `index`.
+export const chatOpenImageCommand: CommandKey<
+  { sessionId: string; entryId: string; index: number },
+  'chat.openImage'
+> = { id: 'chat.openImage' };
+
+// Moves the entry cursor to stop `stopId`.
+export const chatMoveFocusCommand: CommandKey<
+  { sessionId: string; stopId: string },
+  'chat.moveFocus'
+> = { id: 'chat.moveFocus' };

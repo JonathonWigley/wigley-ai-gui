@@ -262,6 +262,7 @@ export const defaultKeymap = {
     },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
     { keys: '<Leader>vs', scope: 'any', command: 'chat.toggleSideParts' },
+    { keys: '<Leader>vf', scope: 'any', command: 'sessions.togglePopup' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },
@@ -358,9 +359,9 @@ export const defaultKeymap = {
     { keys: 'G', scope: 'keys.help', command: 'keys.scrollEnd' },
 
     // ── Forms ──────────────────────────────────────────────────────────────
-    { keys: 'j', scope: 'forms.forms', command: 'forms.nextItem' },
+    { keys: 'j', scope: 'forms.forms', command: 'forms.nextLine' },
     { keys: '<C-l>', scope: 'forms.forms', command: 'forms.nextItem' },
-    { keys: 'k', scope: 'forms.forms', command: 'forms.prevItem' },
+    { keys: 'k', scope: 'forms.forms', command: 'forms.prevLine' },
     { keys: '<C-h>', scope: 'forms.forms', command: 'forms.prevItem' },
     { keys: 'gg', scope: 'forms.forms', command: 'forms.firstItem' },
     { keys: 'G', scope: 'forms.forms', command: 'forms.lastItem' },
@@ -374,6 +375,8 @@ export const defaultKeymap = {
     { keys: 'x', scope: 'forms.forms', command: 'forms.toggleNotApplicable' },
     { keys: 'd', scope: 'forms.forms', command: 'forms.toggleDontAsk' },
     { keys: 'a', scope: 'forms.forms', command: 'forms.editNotes' },
+    { keys: 'o', scope: 'forms.forms', command: 'forms.editNotes' },
+    { keys: 'za', scope: 'forms.forms', command: 'forms.toggleNotice' },
     {
       keys: '<CR>',
       scope: 'forms.forms',
@@ -554,8 +557,8 @@ export const defaultKeymap = {
     { keys: 'k', scope: 'chat.hub', command: 'chat.prevSection' },
     { keys: 'gg', scope: 'chat.hub', command: 'chat.firstSection' },
     { keys: 'G', scope: 'chat.hub', command: 'chat.lastSection' },
-    { keys: '<CR>', scope: 'chat.hub', command: 'chat.toggleSection' },
-    { keys: 'l', scope: 'chat.hub', command: 'chat.toggleSection' },
+    { keys: '<CR>', scope: 'chat.hub', command: 'chat.toggleCursorSection' },
+    { keys: 'l', scope: 'chat.hub', command: 'chat.toggleCursorSection' },
     { keys: '<Esc>', scope: 'chat.hub', command: 'chat.leaveHub' },
     { keys: '<C-j>', scope: 'chat.hub', command: 'chat.hubLineDown' },
     { keys: '<C-k>', scope: 'chat.hub', command: 'chat.hubLineUp' },

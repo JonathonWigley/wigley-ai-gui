@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../shared/page/session-forms';
-import type { PrimerEntry } from '../contract';
+import type {
+  PrimerColumn,
+  PrimerEntry,
+  PrimerPane,
+  PrimerPlace,
+  TaskRow,
+} from '../contract';
 import {
   apply,
   cardRow,
   initialState,
   type OpenPrimer,
   type PrimerAction,
-  type PrimerColumn,
-  type PrimerPane,
   type PrimerRow,
   type PrimerState,
   type RowPrompt,
@@ -17,7 +21,6 @@ import {
   selectedEntry,
   sessionTitle,
   submitProblems,
-  type TaskRow,
   taskRows,
   type TextTarget,
 } from './primer-state';
@@ -739,7 +742,6 @@ describe('primer state', () => {
       { type: 'closeReview' },
       { type: 'askCancel' },
       { type: 'addItem', formId: 'p1', entryId: '1' },
-      { type: 'askClose', sessionId: 'p1-session' },
     ];
 
     for (const action of blocked) {
@@ -757,19 +759,6 @@ describe('primer state', () => {
     ).toBeNull();
   });
 
-  it('returns to the primer when the cancel prompt closing the session asked is kept', () => {
-    const asked = apply(stateWith(), {
-      type: 'askClose',
-      sessionId: 'p1-session',
-    });
-    expect(asked.view).toBe('confirm');
-
-    const kept = apply(asked, { type: 'dismissConfirm' });
-
-    expect(kept.view).toBe('primer');
-    expect(kept.confirmClosesSession).toBe(false);
-  });
-
   it("drops an open cancel prompt and shows the newly active session's primer", () => {
     const two = initialState(
       [presentedPrimer('p1'), presentedPrimer('p2')],
@@ -777,13 +766,13 @@ describe('primer state', () => {
     );
 
     const state = applyAll(two, [
-      { type: 'askClose', sessionId: 'p1-session' },
+      { type: 'openReview' },
+      { type: 'askCancel' },
       { type: 'sessionActivated', sessionId: 'p2-session' },
     ]);
 
     expect(state.view).toBe('primer');
     expect(state.activeFormId).toBe('p2');
-    expect(state.confirmClosesSession).toBe(false);
   });
 
   it('shows the idle view once the active primer closes', () => {
@@ -797,7 +786,6 @@ describe('primer state', () => {
     expect(state.forms).toEqual([]);
     expect(state.activeFormId).toBeNull();
     expect(state.view).toBe('idle');
-    expect(state.confirmClosesSession).toBe(false);
   });
 
   it('applies row actions only in view primer', () => {
@@ -922,6 +910,118 @@ describe('primer state', () => {
 
       expect(scopeOf(state)).toBe(pane);
       expect(scopeOf(apply(state, { type: 'openReview' }))).toBe('review');
+    },
+  );
+});
+
+describe('placeRestored', () => {
+  type Place = Pick<
+    PrimerPlace,
+    'selectedTask' | 'selectedItem' | 'pane' | 'cardColumn'
+  >;
+  it.each<{ case: string; place: Place; expected: Place }>([
+    {
+      case: 'a held task and item',
+      place: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+    },
+    {
+      case: 'a gone task',
+      place: {
+        selectedTask: { kind: 'task', entryId: 'gone' },
+        selectedItem: 1,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
+      expected: {
+        selectedTask: { kind: 'feature' },
+        selectedItem: null,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
+    },
+    {
+      case: "an item past the task's items",
+      place: {
+        selectedTask: TASK_1,
+        selectedItem: 3,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+    },
+    {
+      case: 'no saved item on a task with items',
+      place: {
+        selectedTask: TASK_1,
+        selectedItem: null,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 1,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+    },
+    {
+      case: 'a saved item on a task with no items',
+      place: {
+        selectedTask: { kind: 'task', entryId: 's1' },
+        selectedItem: 2,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
+      expected: {
+        selectedTask: { kind: 'task', entryId: 's1' },
+        selectedItem: null,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
+    },
+    {
+      case: "the card showing the items column's item",
+      place: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'card',
+        cardColumn: 'items',
+      },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'card',
+        cardColumn: 'items',
+      },
+    },
+  ])(
+    'restores the selection and focus, falling back for $case',
+    ({ place, expected }) => {
+      const restored = apply(stateWith(), {
+        type: 'placeRestored',
+        formId: 'p1',
+        place: { ...place, view: 'review', confirmReturnView: 'review' },
+      });
+
+      const { pane, cardColumn } = primerOf(restored);
+      expect({ ...selectionOf(restored), pane, cardColumn }).toEqual(expected);
+      expect(restored.view).toBe('review');
     },
   );
 });

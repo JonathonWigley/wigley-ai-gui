@@ -18,6 +18,8 @@ export const BRIDGE_CHANNELS = {
   openExternal: 'bridge:open-external',
   pluginInvoke: 'plugin:invoke',
   pluginMessage: 'plugin:message',
+  pluginParts: 'bridge:plugin-parts',
+  pluginPartsDone: 'bridge:plugin-parts-done',
   savePasted: 'bridge:save-pasted',
   serveVisual: 'bridge:serve-visual',
   stateChanged: 'bridge:state-changed',
@@ -27,7 +29,16 @@ export const BRIDGE_CHANNELS = {
   uiStateWrite: 'bridge:ui-state-write',
 } as const;
 
-// What the preload exposes to the renderer as `window.wigley`.
+export type PluginPartsRequest =
+  | { kind: 'mayStop'; ids: readonly string[] } // reply: { reason: string | null }
+  | { kind: 'stop'; ids: readonly string[] } // reply: { stopped: readonly string[] }
+  | { kind: 'start'; ids: readonly string[] }; // reply: { started: readonly string[] }
+export type PluginPartsReply =
+  | { reason: string | null }
+  | { stopped: readonly string[] }
+  | { started: readonly string[] };
+
+// What the core claims once at start through `window.wigley.claim()`.
 export interface Bridge {
   config(): Promise<AppConfig>;
   // Calls `listener` with each new config main serves after a config file
@@ -88,4 +99,8 @@ export interface Bridge {
   // Opens an http or https URL in the user's default app; rejects with main's
   // own error text for any other URL.
   openExternal(url: string): Promise<void>;
+  // The page answers main's requests through its host.
+  onPluginParts(
+    answer: (request: PluginPartsRequest) => Promise<PluginPartsReply>,
+  ): void;
 }

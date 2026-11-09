@@ -3,10 +3,11 @@ import type { Clock, Timers } from '../../../contracts/ambient';
 import type {
   AgentCommand,
   ChatEntry,
+  ChatImage,
   ProcessActivity,
   SessionControl,
 } from '../../../contracts/agent';
-import type { CommandId } from '../../../contracts/commands';
+import type { CommandId, CommandKey } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type {
@@ -36,19 +37,29 @@ import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type {
   RowActivity,
+  SessionRow,
   SessionsPageExports,
   SessionTabHandle,
 } from '../../sessions/contract';
-import type {
-  AppSlashCommand,
-  ChatChannel,
-  ChatComposerPart,
-  ChatSessionInfo,
-  ChatSessionState,
-  ChatSidePart,
-  ChatStatusPart,
-  QueuedMessage,
-  ReturnedMessage,
+import {
+  type AppSlashCommand,
+  chatAllowEntryCommand,
+  type ChatChannel,
+  type ChatComposerPart,
+  chatDenyEntryCommand,
+  type ChatPlace,
+  chatMoveFocusCommand,
+  chatOpenImageCommand,
+  chatPullBackMessageCommand,
+  chatRemoveImageAtCommand,
+  type ChatSessionInfo,
+  type ChatSessionState,
+  type ChatSidePart,
+  type ChatStatusPart,
+  chatToggleExpanderCommand,
+  chatToggleRunCommand,
+  type QueuedMessage,
+  type ReturnedMessage,
 } from '../contract';
 import {
   type AttachReport,
@@ -57,7 +68,7 @@ import {
   createAttachments,
   takeChatFiles,
 } from './attachments';
-import { placeReturned, pullBackQueued } from './chat-commands';
+import { placeReturned } from './chat-commands';
 import type { CloseConfirm } from './chat-dialogs';
 import type { ChatLayouts, SurfaceKitDeps } from './chat-layouts';
 import {
@@ -81,7 +92,6 @@ import {
   createComposerStopHolder,
 } from './composer-stop-holder';
 import { createEntryList, type EntryList } from './entry-list';
-import type { ImageViewer } from './image-viewer';
 import { sessionFactsOf, type SessionFactsSource } from './session-part';
 import type { SideSections, SideTab } from './side-sections';
 import { completionCommands } from './slash-commands';
@@ -119,7 +129,8 @@ export interface SessionRef {
 // attached to its next message and its entries. `enterStop` offers the entry
 // cursor to the composer parts' stops, in part order: the id of the part that
 // took it, null when none did. `isBoxFocused` says whether the box holds
-// focus now.
+// focus now. `boxChanged` tells the tab's place that a `setText`, which reports
+// no `changed`, replaced the box's text.
 export interface ChatSession extends SessionRef {
   readonly state: ChatSessionState;
   readonly running: boolean;
@@ -140,9 +151,23 @@ export interface ChatSession extends SessionRef {
     | 'focused'
     | 'toggleFocused'
     | 'toggleFocusedBlock'
+    | 'toggleRun'
+    | 'toggleExpander'
+    | 'moveFocusTo'
     | 'scrollBy'
   >;
   enterStop(): string | null;
+  boxChanged(): void;
+}
+
+// The last page's place of one session's Chat tab, and the writes of its place
+// now. `writeImages` writes the attached images; an empty list deletes their
+// key.
+export interface TabPlace {
+  saved: ChatPlace | undefined;
+  savedImages: readonly ChatImage[];
+  write(place: ChatPlace): void;
+  writeImages(images: readonly ChatImage[]): void;
 }
 
 // The session hub's keys, each acting on the visible Chat tab's hub while it
@@ -174,10 +199,16 @@ export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
+  ready(): void;
   // Ends every held tab; no tab starts after it.
   dispose(): void;
   composerOf(sessionId: string): ComposerSurface | null;
   sessionFactsSource(sessionId: string): SessionFactsSource | null;
+  // A refusal naming the first of `rows` whose live box holds more than
+  // whitespace or whose tab holds an attached image; null when none does.
+  mayStop(
+    rows: Iterable<Pick<SessionRow, 'sessionId' | 'label'>>,
+  ): string | null;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -201,19 +232,23 @@ export type ChatTabScope = 'chat' | 'hub';
 // `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
 // the scope keys fire in, with that scope; `sessions` also takes each
 // row's activity, and `activeSessionId` names the focused pane's session.
-// `slots` holds chat's slots, and `onPageReady` hears that every page part has
-// started: the view reads the sessions already held and follows the slots from
+// `slots` holds chat's slots, and `ready`, which the host calls once every page
+// part has started, reads the sessions already held and follows the slots from
 // then. `activeTimeListeners`
 // run when a session arrives and on each change of a held session's `activeTime`
 // in `chat.session`, a throw skipping none of them. `run` runs
-// a command, as the composer's chips and send button do; `keys` also anchors
+// a command, as the composer's chips and send button do, and `runKey` the
+// command a click in a tab runs on what it landed on: a permission's Allow once
+// or Deny, a thumbnail, an expander's head, an activity line, a stop, a pending
+// row or an attached image's remove, each naming the tab's session; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with; `paths` names each tab by its project folder, and with
-// `homeDir` shows that folder in the hub's Session section.
+// `homeDir` shows that folder in the hub's Session section. `placeOf` hands
+// each tab made its session's place: the tab puts the saved draft, images and
+// entry place back, and writes its place on each change.
 // `slashCommands` reads the app slash commands registered now, which the `/`
 // completion offers ahead of the agent's, and `completionRows` draws that
-// completion's rows. `viewer` opens a sent message's
-// images full size. `timers` and `clock` tick a live activity line's time and
+// completion's rows. `timers` and `clock` tick a live activity line's time and
 // the activity dock's. `composerParts` holds the parts other plugins draw
 // above every composer, `statusParts` those they draw in every status line;
 // `sideParts` tells when a part beside every `.chat-main` comes or goes, and
@@ -224,7 +259,6 @@ export type ChatTabScope = 'chat' | 'hub';
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   slots: ChatSlotReaders;
-  onPageReady(listener: () => void): void;
   paths: Paths;
   homeDir: string;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'setActivity'>;
@@ -239,14 +273,13 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   ) => void)[];
   editor: EditorHost;
   run(command: CommandId): void;
+  runKey<A>(key: CommandKey<A>, arg: A): void;
   layouts: ChatLayouts;
   composerParts: Pick<PartStore<ChatComposerPart>, 'parts' | 'onChanged'>;
   statusParts: Pick<PartStore<ChatStatusPart>, 'parts' | 'onChanged'>;
   sideParts: Pick<PartStore<ChatSidePart>, 'onChanged'>;
   sideSections: Pick<SideSections, 'openTab'>;
-  permissions: PermissionActions;
   confirm: CloseConfirm;
-  viewer: Pick<ImageViewer, 'open'>;
   slashCommands(): AppSlashCommand[];
   completionRows: CompletionRows;
   setScope(scope: ChatTabScope): void;
@@ -259,6 +292,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   timers: Timers;
   clock: Clock;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
+  placeOf(sessionId: string): TabPlace;
 }
 
 // Chat's slots as the page reads them.
@@ -284,7 +318,7 @@ export interface ChatSlotReaders {
 // focus keys between the tab's panes. `factsListeners` hear each status line draw.
 // `placedReturned` holds each returned message's id once it is handed to the box:
 // `chat.returned` is the whole list, which still names them until main hears
-// `returnedPlaced`.
+// `returnedPlaced`. `place` takes the tab's place on each change.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -309,6 +343,7 @@ interface HeldTab {
   stop: ComposerStopHolder;
   factsListeners: Set<() => void>;
   placedReturned: Set<string>;
+  place: TabPlace;
 }
 
 // The session's state in the slots now, from `info`, the value of its key in
@@ -444,7 +479,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
       },
-      beforeClose: (closing) => mayClose(closing, deps),
+      beforeClose: (closing, atOnce) => mayClose(closing, deps, atOnce),
       resized: leaveUnreachableHub,
     });
     tabs.set(state.sessionId, tab);
@@ -499,51 +534,6 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
     });
 
-  // Reads the sessions already held, then follows the slots.
-  deps.onPageReady(() => {
-    try {
-      callEach([...slots.session.all().values()], add);
-    } catch (error) {
-      log(`chat session arrival failed: ${errorText(error)}`);
-    }
-    slots.session.on((sessionId, info) => {
-      if (info === undefined) {
-        return;
-      }
-      const tab = tabs.get(sessionId);
-      if (tab === undefined) {
-        add(info);
-      } else {
-        applyInfo(tab, info);
-      }
-    });
-    slots.entries.on((sessionId, change) => {
-      const tab = tabs.get(sessionId);
-      if (tab === undefined || change.kind === 'delete') {
-        return;
-      }
-      if (change.kind === 'put') {
-        putEntry(tab, change.item, log);
-      } else {
-        replaceEntries(tab, change.items, log);
-      }
-    });
-    followKeyed(slots.controls, (tab, controls) =>
-      setControls(tab, controls, log),
-    );
-    followKeyed(slots.commands, (tab, commands) => {
-      tab.state = { ...tab.state, commands };
-    });
-    followKeyed(slots.queued, (tab, queued) => {
-      tab.state = { ...tab.state, queued };
-      tab.entries.setQueued(queued);
-      log(`${queued.length} pending message(s) in ${tab.name}`);
-    });
-    followKeyed(slots.returned, (tab, returned) => {
-      tab.state = { ...tab.state, returned };
-      placeNewReturned(tab, returned);
-    });
-  });
   // `running: false` reached `chat.session` first, with its draws.
   channel.on('sessionRested', ({ sessionId, error }) => {
     const tab = tabs.get(sessionId);
@@ -692,6 +682,51 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
     markSent: clearUnseen,
+    // Reads the sessions already held, then follows the slots.
+    ready() {
+      try {
+        callEach([...slots.session.all().values()], add);
+      } catch (error) {
+        log(`chat session arrival failed: ${errorText(error)}`);
+      }
+      slots.session.on((sessionId, info) => {
+        if (info === undefined) {
+          return;
+        }
+        const tab = tabs.get(sessionId);
+        if (tab === undefined) {
+          add(info);
+        } else {
+          applyInfo(tab, info);
+        }
+      });
+      slots.entries.on((sessionId, change) => {
+        const tab = tabs.get(sessionId);
+        if (tab === undefined || change.kind === 'delete') {
+          return;
+        }
+        if (change.kind === 'put') {
+          putEntry(tab, change.item, log);
+        } else {
+          replaceEntries(tab, change.items, log);
+        }
+      });
+      followKeyed(slots.controls, (tab, controls) =>
+        setControls(tab, controls, log),
+      );
+      followKeyed(slots.commands, (tab, commands) => {
+        tab.state = { ...tab.state, commands };
+      });
+      followKeyed(slots.queued, (tab, queued) => {
+        tab.state = { ...tab.state, queued };
+        tab.entries.setQueued(queued);
+        log(`${queued.length} pending message(s) in ${tab.name}`);
+      });
+      followKeyed(slots.returned, (tab, returned) => {
+        tab.state = { ...tab.state, returned };
+        placeNewReturned(tab, returned);
+      });
+    },
     dispose() {
       isDisposed = true;
       const held = [...tabs.values()];
@@ -703,8 +738,25 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       const tab = tabs.get(sessionId);
       return tab === undefined ? null : sessionFactsSourceOf(tab, deps);
     },
+    mayStop(rows) {
+      for (const { sessionId, label } of rows) {
+        const tab = tabs.get(sessionId);
+        if (tab !== undefined && holdsDraft(tab)) {
+          return `Send or clear the draft in ${label}'s chat first`;
+        }
+      }
+      return null;
+    },
   };
   return view;
+}
+
+// Whether the tab's live box holds text beyond whitespace or the tab holds an
+// attached image.
+function holdsDraft(tab: HeldTab): boolean {
+  const hasText = (tab.box?.text().trim() ?? '') !== '';
+  const hasImage = tab.attachments.images().length > 0;
+  return hasText || hasImage;
 }
 
 // Ends what the tab holds that outlives its element.
@@ -931,7 +983,17 @@ function sessionOf(
     isBoxFocused: () => tab.isBoxFocused,
     attachments: tab.attachments,
     entries: tab.entries,
+    boxChanged: () => writeTabPlace(tab),
   };
+}
+
+// Writes the tab's draft and entry place; none before the box mounts, so the
+// first draws leave the last page's place for the tab to put back.
+function writeTabPlace(tab: HeldTab) {
+  if (tab.box === null) {
+    return;
+  }
+  tab.place.write({ draft: tab.box.text(), ...tab.entries.place() });
 }
 
 // The tab element (`div.chat-tab`: `div.chat-main`, then the session hub's
@@ -956,12 +1018,12 @@ function createTab(
   view: {
     isHeld(tab: HeldTab): boolean;
     shown(tab: HeldTab): void;
-    beforeClose(tab: HeldTab): boolean | Promise<boolean>;
+    beforeClose(tab: HeldTab, atOnce: boolean): boolean | Promise<boolean>;
     resized(tab: HeldTab): void;
   },
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
-  const ref: SessionRef = { sessionId: state.sessionId, name };
+  const { sessionId } = state;
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
   const attachments = createAttachments();
@@ -981,9 +1043,10 @@ function createTab(
       timers: deps.timers,
     },
     {
-      sessionId: state.sessionId,
+      sessionId,
       box: boxElement,
-      removeImage: (index) => attachments.removeAt(index),
+      removeImage: (index) =>
+        deps.runKey(chatRemoveImageAtCommand, { sessionId, index }),
     },
   );
   const entries = createEntryList({
@@ -995,18 +1058,33 @@ function createTab(
       commands: deps.commands,
       platform: deps.platform,
       state: deps.state,
-      allow: (entry) => deps.permissions.allow(ref, entry),
-      deny: (entry) => deps.permissions.deny(ref, entry),
-      openImages: (images, index) => deps.viewer.open(images, index),
+      allow: (entry) =>
+        deps.runKey(chatAllowEntryCommand, { sessionId, entryId: entry.id }),
+      deny: (entry) =>
+        deps.runKey(chatDenyEntryCommand, { sessionId, entryId: entry.id }),
+      openImages: (entryId, index) =>
+        deps.runKey(chatOpenImageCommand, { sessionId, entryId, index }),
+      expanderClicked: (entryId, place) =>
+        deps.runKey(chatToggleExpanderCommand, { sessionId, entryId, place }),
     },
     log: deps.log,
     toast: deps.toast,
     timers: deps.timers,
     clock: deps.clock,
-    pullBack: (queuedId) => pullBackQueued(deps, ref, queuedId),
+    pullBack: (queuedId) =>
+      deps.runKey(chatPullBackMessageCommand, { sessionId, queuedId }),
+    runClicked: (runId) =>
+      deps.runKey(chatToggleRunCommand, { sessionId, runId }),
+    stopClicked: (stopId) =>
+      deps.runKey(chatMoveFocusCommand, { sessionId, stopId }),
     turnLine: composer.turnLineSlot,
+    placeChanged: () => writeTabPlace(tab),
   });
-  attachments.onChange((images) => composer.drawAttachments(images));
+  const place = deps.placeOf(sessionId);
+  attachments.onChange((images) => {
+    composer.drawAttachments(images);
+    place.writeImages(images);
+  });
   const root = element('div', 'chat-tab');
   const main = element('div', 'chat-main');
   main.append(entries.element);
@@ -1054,6 +1132,7 @@ function createTab(
     }),
     factsListeners: new Set(),
     placedReturned: new Set(),
+    place,
   };
   tab.rootSize.observe(root);
   entries.element.addEventListener('pointerdown', () => {
@@ -1072,14 +1151,14 @@ function createTab(
     icon: 'comment',
     element: root,
     order: 2,
-    beforeClose: () => view.beforeClose(tab),
+    beforeClose: (atOnce) => view.beforeClose(tab, atOnce),
     shown: () => view.shown(tab),
   });
   tab.box = deps.editor.create(
     boxElement,
     '',
     {
-      changed: () => undefined,
+      changed: () => writeTabPlace(tab),
       focused: () => {
         tab.stop.boxFocused();
         if (tab.isAtHub) {
@@ -1102,6 +1181,7 @@ function createTab(
       hidesModeLine: true,
     },
   );
+  restoreTabPlace(tab, tab.box);
   const dropDeps = chatDropDepsOf(tab, tab.box, () => view.isHeld(tab), deps);
   tab.dropTarget = deps.drops.addTarget({
     element: root,
@@ -1110,6 +1190,19 @@ function createTab(
   drawActivity(tab, deps);
   tab.handle.select();
   return tab;
+}
+
+// Puts the last page's draft into `box`, its images back on the tab and its
+// entry place on the list.
+function restoreTabPlace(tab: HeldTab, box: TextEditor) {
+  const { saved, savedImages } = tab.place;
+  for (const image of savedImages) {
+    tab.attachments.add(image);
+  }
+  if (saved !== undefined) {
+    box.setText(saved.draft);
+    tab.entries.restorePlace(saved);
+  }
 }
 
 // The `/` completion of the tab's box. The commands are read on each call:
@@ -1288,11 +1381,16 @@ function drawActivity(
 }
 
 // A session closes at once unless Claude is still working on it: then the
-// Chat tab shows and the end-session confirmation answers.
+// Chat tab shows and the end-session confirmation answers. A close another
+// tab asked to make at once asks nothing.
 function mayClose(
   tab: HeldTab,
   deps: ChatViewDeps,
+  atOnce: boolean,
 ): boolean | Promise<boolean> {
+  if (atOnce) {
+    return true;
+  }
   const isBusy = tab.state.running && tab.state.activity !== 'idle';
   if (!isBusy) {
     return true;

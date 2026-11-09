@@ -9,7 +9,7 @@ import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
 import { textBoxInput } from '../../../shared/page/text-box';
-import type { IndexHeading } from '../contract';
+import type { DocsPlace, IndexHeading } from '../contract';
 import type { TreeRowInput } from '../layouts/layout';
 import type {
   TreeHeadingMatch,
@@ -61,6 +61,8 @@ export interface TreeViewDeps {
   openWikiLink(link: TreeWikiLink, focusDoc: boolean): void;
   // A click on the `sidebarSwitch`.
   switchView(): void;
+  // A click on the row of the node `nodeId`.
+  rowClicked(nodeId: string): void;
   // Pushes `docs.box` while the filter box is open.
   pushBoxScope(): PushedScope;
   // Runs once an accepted or cancelled filter box, or one holding focus through
@@ -71,6 +73,8 @@ export interface TreeViewDeps {
   rowStatus(node: TreeNode): TreeRowStatus;
   // The leaf's last-loaded time and star, read at each draw.
   leafMarks(leaf: TreeLeaf): LeafMarks;
+  // Hears each draw, after which `place` may read differently.
+  placeChanged(): void;
 }
 
 // A leaf's last-loaded time, short with the full date and time as its
@@ -94,7 +98,7 @@ export interface LeafMarks {
 // wiki view holds a second tree, the user's whole own list, which its rows read
 // while a filter is on. A new tree keeps the expanded ids, the selection and the
 // filter; the first tree with rows expands `defaultExpandedIds` and selects its
-// first row. A later All pages tree that first shows the Starred group expands
+// first row, unless a reloaded page's place was put back, which it takes instead. A later All pages tree that first shows the Starred group expands
 // it, and a later wiki tree expands each new group. In the wiki view with no
 // filter, a selection that names no row moves to the first row.
 //
@@ -146,6 +150,9 @@ export interface TreeView {
   // empty tree.
   top(): void;
   bottom(): void;
+  // A row's click: selects the row of `nodeId`, focuses the pane, then opens
+  // the row as `l` does; logs and selects nothing when no row shows the node.
+  openNode(nodeId: string): void;
   // The shown view's selected row's node, or null when no row is selected.
   selected(): TreeNode | null;
   // The selected row's node in `view`, shown or not, or null when no row is
@@ -170,9 +177,20 @@ export interface TreeView {
   // Draws the pane, the line and the rows again when a layout pick changed
   // for one of them, keeping the rows' scroll, the filter's text and focus.
   redraw(): void;
+  // The place a page reload puts back: the expanded ids, selection and filter
+  // of the view a new tree shows first, the wiki with `hasWiki`, else All
+  // pages; while a put-back place waits for that view's first tree with rows,
+  // that place. The other view's start over on a reload.
+  place(): TreePlace;
+  // Puts back a reloaded page's place, before the first `setTree`: the first
+  // tree with rows in that view takes it in place of its default expansion and
+  // first row. The filter applies with its box closed.
+  restorePlace(place: TreePlace): void;
   // Disposes the tree's anchors and drawn parts.
   dispose(): void;
 }
+
+export type TreePlace = Pick<DocsPlace, 'expanded' | 'selectedId' | 'filter'>;
 
 function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
   if (a === null || b === null) {
@@ -224,6 +242,8 @@ interface ViewSlot {
   hasTree: boolean;
   // Every group id a tree of this view has held.
   seenGroups: ReadonlySet<string>;
+  // A reloaded page's state, which the first tree with rows takes.
+  restored: TreeState | null;
 }
 
 function emptySlot(): ViewSlot {
@@ -234,6 +254,7 @@ function emptySlot(): ViewSlot {
     hasRows: false,
     hasTree: false,
     seenGroups: new Set(),
+    restored: null,
   };
 }
 
@@ -300,6 +321,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   };
   let shownView: SidebarView = deps.hasWiki ? 'wiki' : 'all';
   const shownSlot = () => slots[shownView];
+  const placeSlot = slots[shownView];
   let pathOf: (entryId: string) => string = () => '';
   let headingsOf: (entryId: string) => readonly IndexHeading[] = () => [];
   let rows: TreeRow[] = [];
@@ -387,6 +409,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     drawnRows = rows.map(drawRow);
     list.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
     showLine();
+    deps.placeChanged();
   };
 
   // Replaces the line only when it changed, so a selection move leaves it; a
@@ -452,12 +475,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     for (const part of placing) {
       part.placeIfLeftOut(item);
     }
-    rowAction(item, () => {
-      const slot = shownSlot();
-      slot.state = { ...slot.state, selectedId: row.node.id };
-      pane.focus();
-      view.open();
-    });
+    rowAction(item, () => deps.rowClicked(row.node.id));
     const isSelected = row.node.id === shownSlot().state.selectedId;
     item.classList.toggle('is-selected', isSelected);
     item.classList.toggle('is-cursor', isSelected && hasFocus);
@@ -536,15 +554,24 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     deps.log(`selected ${selectedRow()?.node.title}`);
   };
 
-  // The first tree with rows in `slot`: expands its default groups and selects
-  // its first row.
+  // The first tree with rows in `slot`: takes a reloaded page's state, else
+  // expands its default groups; selects its first row unless the reloaded
+  // state's selection names one.
   const openFirstTree = (slot: ViewSlot) => {
     slot.hasRows = true;
-    slot.state = { ...slot.state, expanded: defaultExpandedIds(slot.tree) };
-    slot.state = {
+    const { restored } = slot;
+    slot.restored = null;
+    slot.state = restored ?? {
       ...slot.state,
-      selectedId: rowsOf(slot)[0]?.node.id ?? null,
+      expanded: defaultExpandedIds(slot.tree),
     };
+    const shownRows = rowsOf(slot);
+    const selectsARow =
+      restored !== null &&
+      shownRows.some((row) => row.node.id === restored.selectedId);
+    if (!selectsARow) {
+      slot.state = { ...slot.state, selectedId: shownRows[0]?.node.id ?? null };
+    }
   };
 
   // Pops the box's scope; `refocus` returns focus to the tree.
@@ -621,6 +648,16 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     open: () => actOnSelected('open'),
     close: () => actOnSelected('close'),
     toggle: () => actOnSelected('toggle'),
+    openNode(nodeId) {
+      if (!rows.some((row) => row.node.id === nodeId)) {
+        deps.log(`no row ${nodeId}`);
+        return;
+      }
+      const slot = shownSlot();
+      slot.state = { ...slot.state, selectedId: nodeId };
+      pane.focus();
+      view.open();
+    },
     selected: () => selectedRow()?.node ?? null,
     selectedIn(shown) {
       const slot = slots[shown];
@@ -706,6 +743,15 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
           isRedrawing = false;
         }
       });
+    },
+    place() {
+      const { expanded, selectedId, filter } =
+        placeSlot.restored ?? placeSlot.state;
+      return { expanded: [...expanded], selectedId, filter };
+    },
+    restorePlace({ expanded, selectedId, filter }) {
+      placeSlot.restored = { expanded: new Set(expanded), selectedId, filter };
+      placeSlot.state = { ...placeSlot.state, filter };
     },
     dispose() {
       isDisposed = true;

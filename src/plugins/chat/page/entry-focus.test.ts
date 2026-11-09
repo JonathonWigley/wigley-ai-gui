@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { EntryFocus } from '../contract';
 import {
   blockStopId,
   clearAnchor,
-  type EntryFocus,
   entryIdOfStop,
   focusAfterChange,
   focusAfterClose,

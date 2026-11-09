@@ -458,7 +458,25 @@ const PERMISSION_CARD_STEPS: SelfTestStep[] = [
     alsoExpect: [rowActivityPattern('chat-selftest', 'none')],
     why: 'The row showed needs you from the start; the answered permission leaves the focused session idle.',
   },
-  { keys: [' ', ' '], expect: '[forms] review opened' },
+  {
+    keys: [' ', 'v', 'f'],
+    expect: '[sessions] hid Form popup in chat-selftest',
+    alsoExpect: [/^\[chat\] Chat tab shown in chat-selftest$/],
+  },
+  {
+    keys: ['G'],
+    expect: '[chat] following the latest entry',
+    why: 'The chat scope holds the keys while the popup is hidden.',
+  },
+  {
+    keys: [' ', 'v', 'f'],
+    expect: '[sessions] opened Form popup in chat-selftest',
+  },
+  {
+    keys: [' ', ' '],
+    expect: '[forms] review opened',
+    screenshot: 'form-popup-over-chat',
+  },
   {
     keys: ['<D-Enter>'],
     expect: '[chat] Chat tab shown in chat-selftest',
@@ -1006,7 +1024,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'permission card',
-    why: "y allows the fixture's permission, whose answer asks a round that takes the Chat tab over until Cmd+Enter submits it from its review.",
+    why: "y allows the fixture's permission, whose answer asks a round that opens a popup over the Chat tab, hides for a chat key and opens again, until Cmd+Enter submits it from its review.",
     steps: PERMISSION_CARD_STEPS,
   },
   {
@@ -1181,13 +1199,13 @@ const EXPECTED_RESUMED_CALLS: FakeAgentCall[] = [
 function chatRound(run: number) {
   return {
     heading: ROUND_HEADING,
-    overview: 'Takes over the Chat tab until submitted.',
+    overview: 'Opens over the Chat tab until submitted.',
     notices: [],
     questions: [
       {
         title: 'Back to chat',
         context: `Run ${run}: submitted untouched.`,
-        question: 'Pick one.',
+        summary: 'Pick one.',
         choices: ['Yes', 'No'],
         recommend: 1,
         rationale: 'Yes is the default.',
@@ -1459,7 +1477,6 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       const relay = sessions.connect({
         sessionId: process.request.sessionId,
         projectDir: selftest,
-        deadlineSeconds: null,
         harness: 'claude',
       });
       previousRelay = relay;

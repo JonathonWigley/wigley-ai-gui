@@ -178,7 +178,8 @@ export interface ConfirmDialogInput {
 export interface ConfirmKit extends DocsKit {
   // The dialog's actions row. The app empties it before each draw.
   actions(): HTMLElement;
-  // A button whose click answers `pick` and which holds `pick`'s key anchor (`confirmYes` / `confirmNo`).
+  // A button whose click runs `docs.answerConfirm` with `pick` for this view, and which holds `pick`'s key anchor
+  // (`confirmYes` / `confirmNo`).
   answer(
     parent: HTMLElement,
     pick: 'yes' | 'no',
@@ -231,14 +232,13 @@ export interface AsideLinkInput {
   title: string;
   depth: number;
 }
-// sectionEditControl, scope docs.doc: drawn inside a rendered heading.
+// sectionEditControl, scope docs.doc: drawn inside a rendered heading. `kit.button(parent, label, command, { arg })`
+// runs `command` with `arg`, which opens this section in the editor.
 export interface SectionEditControlInput {
   // The section's heading text.
   title: string;
-}
-export interface SectionEditControlKit extends DocsKit {
-  // Opens this section in the editor.
-  openSection(): void;
+  command: string;
+  arg: { viewId: string; anchor: string };
 }
 // recentChanges, scope docs.doc.
 export interface RecentChangesInput {
@@ -380,7 +380,7 @@ export interface Layout {
   sectionEditControl?(
     parent: HTMLElement,
     input: SectionEditControlInput,
-    kit: SectionEditControlKit,
+    kit: DocsKit,
   ): LayoutPart;
   recentChanges?(
     parent: HTMLElement,

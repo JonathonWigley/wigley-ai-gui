@@ -10,6 +10,9 @@ const CHOICE_LABEL = 'pick the numbered choice or action (again clears)';
 // Forms' scopes are its view names, each titled for the key help.
 export const formsManifest = definePlugin({
   id: 'forms',
+  label: 'Forms',
+  description:
+    'Shows each review round an agent asks in a Form tab, to answer it.',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {
@@ -17,6 +20,21 @@ export const formsManifest = definePlugin({
     prevItem: { label: 'previous item', group: 'items', runsIn: 'page' },
     firstItem: { label: 'first item', group: 'items', runsIn: 'page' },
     lastItem: { label: 'last item', group: 'items', runsIn: 'page' },
+    nextLine: {
+      label: 'next notice line or item',
+      group: 'items',
+      runsIn: 'page',
+    },
+    prevLine: {
+      label: 'previous notice line or item',
+      group: 'items',
+      runsIn: 'page',
+    },
+    toggleNotice: {
+      label: 'open or close the notice line',
+      group: 'items',
+      runsIn: 'page',
+    },
     nextUnanswered: {
       label: 'next unanswered item',
       group: 'items',
@@ -39,7 +57,7 @@ export const formsManifest = definePlugin({
       runsIn: 'page',
     },
     acceptRecommendation: {
-      label: 'accept the recommendation',
+      label: 'accept the recommendation, or open or close the notice line',
       group: 'choices',
       runsIn: 'page',
     },
@@ -52,6 +70,68 @@ export const formsManifest = definePlugin({
       label: "don't ask me this",
       group: 'answer',
       runsIn: 'page',
+    },
+    // A card's click names its item by rail position, so a click never acts on
+    // the item the focused box sits on; each `At` command is its key's twin.
+    chooseAt: {
+      label: 'pick the numbered choice on the item',
+      group: 'choices',
+      runsIn: 'page',
+      arg: { item: 'number', number: 'number' },
+    },
+    clearChoiceAt: {
+      label: 'clear the choice on the item',
+      group: 'choices',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    acceptRecommendationAt: {
+      label: 'accept the recommendation on the item',
+      group: 'choices',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    toggleNotApplicableAt: {
+      label: 'not applicable on the item',
+      group: 'answer',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    toggleDontAskAt: {
+      label: "don't ask me this on the item",
+      group: 'answer',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    toggleNoticeAt: {
+      label: 'open or close the numbered notice line',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    focusNoticeAt: {
+      label: 'focus the numbered notice line',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    focusItem: {
+      label: 'focus the item',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    pickRailItem: {
+      label: 'pick the rail item',
+      group: 'items',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    reviewJumpAt: {
+      label: 'jump to the review row',
+      group: 'review',
+      runsIn: 'page',
+      arg: 'number',
     },
     editNotes: { label: 'notes box', group: 'boxes', runsIn: 'page' },
     editNote: { label: 'round note', group: 'boxes', runsIn: 'page' },

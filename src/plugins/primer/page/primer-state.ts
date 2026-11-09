@@ -17,14 +17,14 @@ import {
   type PrimerFeature,
   type PrimerGroup,
   type PrimerItem,
+  type PrimerColumn,
   type PrimerNeed,
+  type PrimerPane,
+  type PrimerPlace,
   PRIMER_SLUG_PATTERN,
+  type TaskRow,
 } from '../contract';
 import type { PrimerScopeName } from '../ids';
-
-// The pane the keys act on; a column is a pane that lists rows.
-export type PrimerPane = 'tasks' | 'items' | 'card';
-export type PrimerColumn = 'tasks' | 'items';
 
 export type FeatureField = 'name' | 'slug' | 'spec' | 'summary' | 'notes';
 
@@ -35,9 +35,6 @@ export type TextTarget =
   | { field: 'itemComment'; entryId: string; item: number }
   | { field: 'newItem'; entryId: string }
   | { field: 'taskComment'; entryId: string };
-
-// A row of the tasks column.
-export type TaskRow = { kind: 'feature' } | { kind: 'task'; entryId: string };
 
 // The row a card shows. `item` is 1-based within the task's items, as in
 // TextTarget.
@@ -103,7 +100,10 @@ type PrimerOwnAction =
   | { type: 'reviewBottom' }
   // Closes the review on the cursor's task, selected in the focused tasks
   // column.
-  | { type: 'reviewJump' };
+  | { type: 'reviewJump' }
+  // Puts primer `formId` back where the last page left it; the view applies
+  // only while the primer is active.
+  | { type: 'placeRestored'; formId: string; place: PrimerPlace };
 
 export type PrimerAction =
   | SessionFormsAction<PresentedPrimer>
@@ -262,6 +262,8 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
       );
     case 'reviewJump':
       return reviewJump(state);
+    case 'placeRestored':
+      return restorePlace(state, action.formId, action.place);
   }
 }
 
@@ -271,6 +273,80 @@ export function reviewEntries(primer: OpenPrimer): PrimerEntry[] {
     const entry = row.kind === 'task' ? entryOf(primer, row.entryId) : null;
     return entry === null ? [] : [entry];
   });
+}
+
+// The primer's place: its view and the view its Cancel prompt returns to are
+// the state's while it is active, else 'primer', the view activating its
+// session opens.
+export function primerPlace(
+  state: PrimerState,
+  primer: OpenPrimer,
+): PrimerPlace {
+  const { selectedTask, selectedItem: item, pane, cardColumn } = primer;
+  if (primer.formId === state.activeFormId && state.view !== 'idle') {
+    return {
+      selectedTask,
+      selectedItem: item,
+      pane,
+      cardColumn,
+      view: state.view,
+      confirmReturnView: state.confirmReturnView,
+    };
+  }
+  return {
+    selectedTask,
+    selectedItem: item,
+    pane,
+    cardColumn,
+    view: 'primer',
+    confirmReturnView: 'review',
+  };
+}
+
+// A saved task row the primer no longer holds falls back to the Feature row,
+// and a saved item outside the task's items to the nearest it holds.
+function restorePlace(
+  state: PrimerState,
+  formId: string,
+  place: PrimerPlace,
+): PrimerState {
+  const placed = updateForm(state, formId, (primer) => {
+    const row = place.selectedTask;
+    const entry = row.kind === 'feature' ? null : entryOf(primer, row.entryId);
+    const isRowHeld = row.kind === 'feature' || entry !== null;
+    const count = entry?.items.length ?? 0;
+    const item = Math.min(Math.max(place.selectedItem ?? 1, 1), count);
+    const restored = withFocus(
+      {
+        ...primer,
+        selectedTask: isRowHeld ? row : FEATURE_ROW,
+        selectedItem: count === 0 ? null : item,
+        cardColumn: place.cardColumn,
+      },
+      place.pane,
+    );
+    return isSamePlace(restored, primer) ? primer : restored;
+  });
+  const isViewUnchanged =
+    placed.view === place.view &&
+    placed.confirmReturnView === place.confirmReturnView;
+  if (formId !== placed.activeFormId || isViewUnchanged) {
+    return placed;
+  }
+  return {
+    ...placed,
+    view: place.view,
+    confirmReturnView: place.confirmReturnView,
+  };
+}
+
+function isSamePlace(a: OpenPrimer, b: OpenPrimer): boolean {
+  return (
+    isSameTask(a.selectedTask, b.selectedTask) &&
+    a.selectedItem === b.selectedItem &&
+    a.pane === b.pane &&
+    a.cardColumn === b.cardColumn
+  );
 }
 
 // The Feature row, then the tasks of each group in TASK_GROUPS order, each
@@ -372,7 +448,7 @@ export function submitProblems(primer: OpenPrimer): string[] {
   return [...slugProblem, ...nameProblems];
 }
 
-// The session row's status for the Primer tab: the feature's name and how
+// The session row's status for the primer popup: the feature's name and how
 // many tasks have a need other than unclear.
 export function sessionTitle(primer: OpenPrimer): string {
   const decided = primer.entries.filter(
@@ -381,7 +457,7 @@ export function sessionTitle(primer: OpenPrimer): string {
   return `${primer.feature.name} ${decided}/${primer.entries.length}`;
 }
 
-// The scope the Primer tab's keys fire in for this state.
+// The scope the primer popup's keys fire in for this state.
 export function scopeOf(state: PrimerState): PrimerScopeName {
   if (state.view === 'primer') {
     return activeForm(state)?.pane ?? 'idle';

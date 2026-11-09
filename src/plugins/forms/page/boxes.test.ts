@@ -17,7 +17,8 @@ import {
 } from './form-state';
 import { finding, notice, presentedRound, question } from './test-rounds';
 
-// A notice, a finding, then questions Alpha and Beta: rail positions 0 to 3.
+// A finding, questions Alpha and Beta, then the notices stop: rail positions
+// 0 to 3.
 function stateAfter(...actions: FormsAction[]): FormsState {
   const start = initialState(
     [
@@ -32,14 +33,34 @@ function stateAfter(...actions: FormsAction[]): FormsState {
   return actions.reduce(apply, start);
 }
 
-const onNotice: FormsAction = { type: 'focusItem', item: 0 };
-const onAlpha: FormsAction = { type: 'focusItem', item: 2 };
+// Three notices and one question: rail positions 0 = the question, 1 = the
+// notices stop.
+function threeNoticesAfter(...actions: FormsAction[]): FormsState {
+  const start = initialState(
+    [
+      presentedRound('r1', {
+        notices: [notice('One'), notice('Two'), notice('Three')],
+        questions: [question('Alpha')],
+      }),
+    ],
+    'r1-session',
+  );
+  return actions.reduce(apply, start);
+}
+
+const onNotices: FormsAction = { type: 'focusItem', item: 3 };
+const onAlpha: FormsAction = { type: 'focusItem', item: 1 };
+const openLine = (notice: number): FormsAction => ({
+  type: 'toggleNotice',
+  notice,
+});
 
 const note: BoxRef = { roundId: 'r1', target: { field: 'note' } };
-const comment: BoxRef = {
+const commentOn = (notice: number): BoxRef => ({
   roundId: 'r1',
-  target: { field: 'comment', notice: 1 },
-};
+  target: { field: 'comment', notice },
+});
+const comment = commentOn(1);
 const notes1: BoxRef = {
   roundId: 'r1',
   target: { field: 'notes', item: { kind: 'question', index: 1 } },
@@ -54,8 +75,16 @@ const findingNotes: BoxRef = {
 };
 
 describe('shownBoxes', () => {
-  it('shows the focused notice comment and no note', () => {
-    expect(shownBoxes(stateAfter(onNotice))).toEqual([comment]);
+  it.each([
+    { case: 'no box with no line open', actions: [], boxes: [] },
+    {
+      case: 'the comment boxes of lines 1 and 3, open',
+      actions: [openLine(3), openLine(1)],
+      boxes: [commentOn(1), commentOn(3)],
+    },
+  ])('on the notices stop shows $case', ({ actions, boxes }) => {
+    const state = threeNoticesAfter({ type: 'focusItem', item: 1 }, ...actions);
+    expect(shownBoxes(state)).toEqual(boxes);
   });
 
   it("shows a question's notes box and no note", () => {
@@ -68,7 +97,7 @@ describe('shownBoxes', () => {
   });
 
   it("shows a finding's notes box", () => {
-    expect(shownBoxes(stateAfter({ type: 'focusItem', item: 1 }))).toEqual([
+    expect(shownBoxes(stateAfter({ type: 'focusItem', item: 0 }))).toEqual([
       findingNotes,
     ]);
   });
@@ -84,12 +113,13 @@ describe('shownBoxes', () => {
 
 describe('roundViewBoxes', () => {
   // Rounds r1 and r2, each with questions Alpha and Beta at rail positions 0
-  // and 1, and r1's session focused.
+  // and 1 and the notices stop at 2, and r1's session focused.
   function twoRoundsAfter(...actions: FormsAction[]): FormsState {
     const start = initialState(
       ['r1', 'r2'].map((roundId) =>
         presentedRound(roundId, {
           questions: [question('Alpha'), question('Beta')],
+          notices: [notice('Heads up')],
         }),
       ),
       'r1-session',
@@ -136,8 +166,14 @@ describe('roundViewBoxes', () => {
       boxes: [notesOn('r2', 2)],
     },
     {
+      name: 'the open line of the focused notices stop',
+      actions: [openLine(1), { type: 'focusItem', item: 2 }],
+      roundId: 'r1',
+      boxes: [comment],
+    },
+    {
       name: 'no box for the focused round under the cancel prompt',
-      actions: [onBeta, { type: 'askClose', sessionId: 'r1-session' }],
+      actions: [onBeta, { type: 'openReview' }, { type: 'askCancel' }],
       roundId: 'r1',
       boxes: [],
     },
@@ -182,31 +218,31 @@ describe('stepBox', () => {
 describe('shownBox', () => {
   it('finds the first shown box editing one of the fields', () => {
     const dontAskOn = stateAfter(onAlpha, { type: 'toggleDontAsk' });
-    expect(shownBox(stateAfter(onNotice), ['notes', 'comment'])).toEqual(
-      comment,
-    );
+    expect(
+      shownBox(stateAfter(onNotices, openLine(1)), ['notes', 'comment']),
+    ).toEqual(comment);
     expect(shownBox(dontAskOn, ['dontAskReason'])).toEqual(reason1);
     expect(shownBox(stateAfter(), ['note'])).toBeNull();
   });
 });
 
 describe('focusActionFor', () => {
-  it("focuses the rail position of the box's item", () => {
+  it("focuses the box's item: a notes box's rail position, a comment box's line", () => {
     const notes2: BoxRef = {
       roundId: 'r1',
       target: { field: 'notes', item: { kind: 'question', index: 2 } },
     };
     expect(focusActionFor(stateAfter(), notes2)).toEqual({
       type: 'focusItem',
-      item: 3,
+      item: 2,
     });
     expect(focusActionFor(stateAfter(), findingNotes)).toEqual({
       type: 'focusItem',
-      item: 1,
+      item: 0,
     });
     expect(focusActionFor(stateAfter(), comment)).toEqual({
-      type: 'focusItem',
-      item: 0,
+      type: 'focusNotice',
+      notice: 1,
     });
   });
 

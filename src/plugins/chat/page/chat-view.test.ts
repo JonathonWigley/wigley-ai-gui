@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
+import type { CommandKey } from '../../../contracts/commands';
 import type {
   BlurOptions,
   EditorEvents,
@@ -47,15 +48,24 @@ import {
   type ChatViewDeps,
   mountChatView,
 } from './chat-view';
+import type { PermissionEntry } from './chat-state';
+import type { ComposerPieces } from './composer-kit';
+import type { EntryListDeps } from './entry-list';
 import { createSideSections, type SideTab } from './side-sections';
 
 // Each call the view makes to a tab's entry list that draws it, by method name.
 const listCalls = vi.hoisted(() => [] as string[]);
+// What the last tab's `createEntryList` and `createComposerSurface` received.
+const built = vi.hoisted(() => ({
+  entryList: null as EntryListDeps | null,
+  composer: null as ComposerPieces | null,
+}));
 vi.mock('./entry-list', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./entry-list')>();
   return {
     ...actual,
     createEntryList(...args: Parameters<typeof actual.createEntryList>) {
+      built.entryList = args[0];
       const list = actual.createEntryList(...args);
       return {
         ...list,
@@ -72,6 +82,18 @@ vi.mock('./entry-list', async (importOriginal) => {
           list.rebuild(...call);
         },
       };
+    },
+  };
+});
+vi.mock('./composer-kit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./composer-kit')>();
+  return {
+    ...actual,
+    createComposerSurface(
+      ...args: Parameters<typeof actual.createComposerSurface>
+    ) {
+      built.composer = args[1];
+      return actual.createComposerSurface(...args);
     },
   };
 });
@@ -140,6 +162,7 @@ function mounted(
   const listeners = new Map<string, (data: unknown) => void>();
   const invoked: unknown[][] = [];
   const logs: string[] = [];
+  const keyRuns: [string, unknown][] = [];
   const toasts: [string, string][] = [];
   const activities: (string | undefined)[] = [];
   const box = { text: null as string | null };
@@ -183,7 +206,6 @@ function mounted(
     writers.returned.set(state.sessionId, returned);
     writers.session.set(state.sessionId, info);
   };
-  let pageReady: () => void = noEvent;
   const layouts = createChatLayouts(log);
   const kit = {
     markdown: {},
@@ -198,7 +220,10 @@ function mounted(
   let removeSession: (sessionId: string) => void = noEvent;
   // Each tab's close guard, and each session the end-session confirm opened
   // for; the confirm answers `confirmAnswer.ended`.
-  const beforeCloses = new Map<string, () => boolean | Promise<boolean>>();
+  const beforeCloses = new Map<
+    string,
+    (atOnce: boolean) => boolean | Promise<boolean>
+  >();
   const confirmed: string[] = [];
   const confirmAnswer = { ended: false };
   let activeSessionId: string | null = null;
@@ -212,9 +237,6 @@ function mounted(
       queued: store.read(chatQueuedSlot, 'chat'),
       returned: store.read(chatReturnedSlot, 'chat'),
     },
-    onPageReady: (listener: () => void) => {
-      pageReady = listener;
-    },
     paths: posixPaths,
     homeDir: '/w',
     sessions: {
@@ -222,7 +244,7 @@ function mounted(
         sessionId: string,
         added: {
           element: HTMLElement;
-          beforeClose: () => boolean | Promise<boolean>;
+          beforeClose(atOnce: boolean): boolean | Promise<boolean>;
           shown: () => void;
         },
       ) => {
@@ -232,9 +254,7 @@ function mounted(
         tab.element = asFake(added.element);
         tabElements.set(sessionId, tab.element);
         return {
-          setStatus: noEvent,
           select: noEvent,
-          takeOver: () => ({ release: noEvent }),
           remove: noEvent,
           isVisible: () => visible.value,
         };
@@ -301,15 +321,24 @@ function mounted(
         parts: sideParts,
         uiState: { get: () => undefined, set: noEvent },
         timers: { set: () => 0, clear: noEvent },
+        toggleClicked: noEvent,
         log,
       }),
       sideTabs,
     ),
     ...kit,
     run: noEvent,
+    runKey: (key: CommandKey<unknown>, arg: unknown) =>
+      keyRuns.push([key.id, arg]),
     clock: { now: () => 5000 },
     timers: { set: () => 0, clear: noEvent },
     drops: { addTarget: () => ({ dispose: noEvent }) },
+    placeOf: () => ({
+      saved: undefined,
+      savedImages: [],
+      write: noEvent,
+      writeImages: noEvent,
+    }),
     toast: (text: string, tone: string) => toasts.push([text, tone]),
     visibleSessionRested: noEvent,
     confirm: {
@@ -321,9 +350,13 @@ function mounted(
       keep: noEvent,
     },
   } as unknown as ChatViewDeps);
+  // The page is ready once, however many sessions `open` writes after it.
+  let isReady = false;
   const ready = () => {
-    pageReady();
-    pageReady = noEvent;
+    if (!isReady) {
+      isReady = true;
+      view.ready();
+    }
   };
   return {
     view,
@@ -333,7 +366,8 @@ function mounted(
     show: (sessionId: string) => shownBy.get(sessionId)?.(),
     scopeChanged: (scope: string | undefined) => scopeChanged(scope),
     sideTabs,
-    beforeClose: (sessionId: string) => beforeCloses.get(sessionId)?.(),
+    beforeClose: (sessionId: string, atOnce: boolean) =>
+      beforeCloses.get(sessionId)?.(atOnce),
     confirmed,
     confirmAnswer,
     activeTimeCalls,
@@ -349,6 +383,7 @@ function mounted(
     sideParts,
     composerParts,
     invoked,
+    keyRuns,
     logs,
     toasts,
     activities,
@@ -751,6 +786,46 @@ describe('mountChatView active time', () => {
   });
 });
 
+describe('mountChatView mayStop', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const REASON = "Send or clear the draft in gamma 2's chat first";
+
+  it.each([
+    { case: 'nothing typed', text: '', hasImage: false, expected: null },
+    { case: 'whitespace only', text: ' \n\t', hasImage: false, expected: null },
+    {
+      case: 'typed and not sent',
+      text: 'hi',
+      hasImage: false,
+      expected: REASON,
+    },
+    {
+      case: 'an image with no text',
+      text: '',
+      hasImage: true,
+      expected: REASON,
+    },
+  ])('mayStop_$case', ({ text, hasImage, expected }) => {
+    const view = mounted();
+    view.pageLoad([stateOf([], { sessionId: 's1' })]);
+
+    view.box.text = text;
+    if (hasImage) {
+      view.view
+        .session('s1')
+        ?.attachments.add({ mediaType: 'image/png', data: 'AAAA' });
+    }
+
+    expect(view.view.mayStop([{ sessionId: 's1', label: 'gamma 2' }])).toBe(
+      expected,
+    );
+  });
+});
+
 describe('mountChatView compaction', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -1065,6 +1140,80 @@ describe('mountChatView slots', () => {
   });
 });
 
+describe('mountChatView click sites', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const PERMISSION: PermissionEntry = {
+    kind: 'permission',
+    id: 'p1',
+    at: 1000,
+    toolName: 'Bash',
+    input: {},
+    answer: null,
+    raw: [],
+  };
+
+  it.each<{
+    site: string;
+    click(list: EntryListDeps, composer: ComposerPieces): void;
+    run: [string, unknown];
+  }>([
+    {
+      site: 'Allow once',
+      click: (list) => list.kit.allow(PERMISSION),
+      run: ['chat.allowEntry', { sessionId: 'row-2', entryId: 'p1' }],
+    },
+    {
+      site: 'Deny',
+      click: (list) => list.kit.deny(PERMISSION),
+      run: ['chat.denyEntry', { sessionId: 'row-2', entryId: 'p1' }],
+    },
+    {
+      site: 'thumbnail',
+      click: (list) => list.kit.openImages('u1', 2),
+      run: ['chat.openImage', { sessionId: 'row-2', entryId: 'u1', index: 2 }],
+    },
+    {
+      site: 'expander head',
+      click: (list) => list.kit.expanderClicked('a1', 1),
+      run: [
+        'chat.toggleExpander',
+        { sessionId: 'row-2', entryId: 'a1', place: 1 },
+      ],
+    },
+    {
+      site: 'activity line',
+      click: (list) => list.runClicked('activity:t1'),
+      run: ['chat.toggleRun', { sessionId: 'row-2', runId: 'activity:t1' }],
+    },
+    {
+      site: 'list click',
+      click: (list) => list.stopClicked('n1'),
+      run: ['chat.moveFocus', { sessionId: 'row-2', stopId: 'n1' }],
+    },
+    {
+      site: 'pending row',
+      click: (list) => list.pullBack('q1'),
+      run: ['chat.pullBackMessage', { sessionId: 'row-2', queuedId: 'q1' }],
+    },
+    {
+      site: 'image remove',
+      click: (_list, composer) => composer.removeImage(3),
+      run: ['chat.removeImageAt', { sessionId: 'row-2', index: 3 }],
+    },
+  ])('clickSites_RunTheirCommandWithTheirArg: $site', ({ click, run }) => {
+    const view = mounted();
+    view.open(stateOf([], { sessionId: 'row-2' }));
+
+    click(built.entryList!, built.composer!);
+
+    expect(view.keyRuns).toEqual([run]);
+  });
+});
+
 describe('mountChatView close guard', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -1072,10 +1221,18 @@ describe('mountChatView close guard', () => {
   });
 
   it.each([
-    { case: 'idle', running: false, ended: false, closes: true, asked: 0 },
+    {
+      case: 'idle',
+      running: false,
+      atOnce: false,
+      ended: false,
+      closes: true,
+      asked: 0,
+    },
     {
       case: 'working, user ends it',
       running: true,
+      atOnce: false,
       ended: true,
       closes: true,
       asked: 1,
@@ -1083,9 +1240,18 @@ describe('mountChatView close guard', () => {
     {
       case: 'working, user keeps it',
       running: true,
+      atOnce: false,
       ended: false,
       closes: false,
       asked: 1,
+    },
+    {
+      case: 'working, closed at once',
+      running: true,
+      atOnce: true,
+      ended: false,
+      closes: true,
+      asked: 0,
     },
   ])('beforeClose_EachState_AnswersTheConfirmsAnswer ($case)', async (test) => {
     const view = mounted();
@@ -1094,7 +1260,7 @@ describe('mountChatView close guard', () => {
     ]);
     view.confirmAnswer.ended = test.ended;
 
-    const closes = await view.beforeClose('row-1');
+    const closes = await view.beforeClose('row-1', test.atOnce);
 
     expect(closes).toBe(test.closes);
     expect(view.confirmed).toHaveLength(test.asked);

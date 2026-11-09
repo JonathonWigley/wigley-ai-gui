@@ -4,6 +4,7 @@ import type { FollowupItem } from '../../../shared/followups/followup-file';
 import type {
   BacklogFeature,
   BacklogHome,
+  BacklogPlace,
   BacklogPlan,
   BacklogRead,
 } from '../contract';
@@ -16,6 +17,7 @@ import {
   editorEdit,
   emptyReason,
   initialBacklogState,
+  placeOf,
   rowTitle,
   visibleRows,
   withTagToggled,
@@ -42,6 +44,7 @@ function plan(title: string, taskTitles: string[]): BacklogPlan {
   const folder = `${ROOT}/feature/plan-${title}`;
   return {
     path: `${folder}/plan.md`,
+    copyPath: `${folder}/plan.md`,
     feature: 'feature',
     title,
     checked: 0,
@@ -50,6 +53,23 @@ function plan(title: string, taskTitles: string[]): BacklogPlan {
     written: null,
     tasks: taskTitles.map((task) => ({
       path: `${folder}/${task}.md`,
+      copyPath: `${folder}/${task}.md`,
+      title: task,
+      status: null,
+    })),
+  };
+}
+
+function feature(slug: string, taskTitles: string[]): BacklogFeature {
+  const folder = `${ROOT}/${slug}`;
+  return {
+    path: `${folder}/feature.md`,
+    slug,
+    checked: 0,
+    total: taskTitles.length,
+    tasks: taskTitles.map((task) => ({
+      path: `${folder}/${task}.md`,
+      copyPath: `${folder}/${task}.md`,
       title: task,
       status: null,
     })),
@@ -553,6 +573,37 @@ describe('backlogReducer', () => {
 
     expect(selectedTitle(state)).toBe('02-next');
   });
+
+  it.each([
+    {
+      kind: 'plan',
+      shown: home(
+        ROOT,
+        [item('One')],
+        [plan('The plan', ['01-first', '02-next'])],
+      ),
+    },
+    {
+      kind: 'feature',
+      shown: {
+        ...home(ROOT, [item('One')]),
+        features: [feature('clusters', ['01-first', '02-next'])],
+      },
+    },
+  ])(
+    'backlogReducer_OpenOnExpandedRow_SelectsItsFirstTask: $kind',
+    ({ shown }) => {
+      const state = run(
+        opened(shown),
+        { type: 'move', to: 'down' },
+        { type: 'open' },
+        { type: 'open' },
+      );
+
+      expect(state.focus).toBe('items');
+      expect(selectedTitle(state)).toBe('01-first');
+    },
+  );
 });
 
 describe('emptyReason', () => {
@@ -636,5 +687,73 @@ describe('withTagToggled', () => {
 
   it('withTagToggled_Absent_AppendsIt', () => {
     expect(withTagToggled(['a'], 'agent-ready')).toEqual(['a', 'agent-ready']);
+  });
+});
+
+describe('placeRestored', () => {
+  const OTHER = '/home/other/docs/features';
+  const homes = read(
+    home(ROOT, [item('First')]),
+    home(OTHER, [item('Alpha'), item('Beta')], [plan('The plan', ['01-task'])]),
+  );
+  const planPath = `${ROOT}/feature/plan-The plan/plan.md`;
+  const saved = (place: Partial<BacklogPlace>): BacklogPlace => ({
+    focus: 'items',
+    homeCursor: 1,
+    openRoot: OTHER,
+    selectedKey: `followup:${OTHER}/followups.md#Beta`,
+    expanded: [],
+    filter: '',
+    ...place,
+  });
+
+  it.each([
+    {
+      name: 'a held home and row',
+      place: saved({}),
+      expected: saved({}),
+      selected: 'Beta',
+    },
+    {
+      name: 'a filter applied',
+      place: saved({ filter: 'Alp', selectedKey: null }),
+      expected: saved({
+        filter: 'Alp',
+        selectedKey: `followup:${OTHER}/followups.md#Alpha`,
+      }),
+      selected: 'Alpha',
+    },
+    {
+      name: 'expanded paths and the detail focus',
+      place: saved({ focus: 'detail', expanded: [planPath] }),
+      expected: saved({ focus: 'detail', expanded: [planPath] }),
+      selected: 'Beta',
+    },
+    {
+      name: 'a gone row selects the first',
+      place: saved({ selectedKey: 'followup:gone#Gone' }),
+      expected: saved({ selectedKey: `followup:${OTHER}/followups.md#Alpha` }),
+      selected: 'Alpha',
+    },
+    {
+      name: 'a gone home opens none, focus on the homes',
+      place: saved({ openRoot: '/gone', homeCursor: 7, focus: 'detail' }),
+      expected: saved({
+        openRoot: null,
+        homeCursor: 1,
+        focus: 'homes',
+        selectedKey: null,
+      }),
+      selected: undefined,
+    },
+  ])('placeRestored: $name', ({ place, expected, selected }) => {
+    const state = run(
+      initialBacklogState(),
+      { type: 'loaded', read: homes },
+      { type: 'placeRestored', place },
+    );
+
+    expect(placeOf(state)).toEqual(expected);
+    expect(selectedTitle(state)).toBe(selected);
   });
 });

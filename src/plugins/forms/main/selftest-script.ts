@@ -1,3 +1,4 @@
+import { HOST_DEADLINE_FIELD } from '../../../contracts/agent-forms';
 import type { PageBind } from '../../../contracts/keymap';
 import type { OsName } from '../../../contracts/platform';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
@@ -95,7 +96,7 @@ const SELFTEST_LAYOUT = {
     question(parent, input, kit) {
       const article = kit.el(parent, 'article', 'item question');
       kit.itemHead(article, 'Question');
-      kit.section(article, 'Question', input.question);
+      kit.section(article, 'Question', input.summary);
       kit.section(article, 'Context', input.context);
       kit.answerControls(kit.choiceList(article, 'recommended'));
       return {
@@ -208,23 +209,38 @@ const PREVIEW_ROUND_STEPS: SelfTestStep[] = [
     why: 'A round opens on its first finding, the Defect.',
   },
   {
-    keys: ['k'],
-    expect: '[page] k ran forms.prevItem',
-    checksFit: true,
-    screenshot: 'preview-notice',
-  },
-  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
-  {
     keys: ['j'],
-    expect: '[page] j ran forms.nextItem',
+    expect: '[page] j ran forms.nextLine',
     checksFit: true,
     screenshot: 'preview-decision',
   },
   {
     keys: ['j'],
-    expect: '[page] j ran forms.nextItem',
+    expect: '[page] j ran forms.nextLine',
     checksFit: true,
     screenshot: 'preview-nit',
+  },
+  {
+    keys: ['j'],
+    expect: '[page] j ran forms.nextLine',
+    checksFit: true,
+    screenshot: 'preview-question',
+    why: 'The question card draws its summary as the headline, then the context, then the choices with the rationale under the recommended one, and no section label.',
+  },
+  { keys: ['j'], expect: '[page] j ran forms.nextLine' },
+  {
+    keys: ['j'],
+    expect: '[page] j ran forms.nextLine',
+    checksFit: true,
+    screenshot: 'preview-notices',
+    why: 'The notices stop is last: one line per notice, badged Applied, Dispatched and Decided, each closed.',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[page] Enter ran forms.acceptRecommendation',
+    checksFit: true,
+    screenshot: 'preview-notice',
+    why: 'Enter on the notices stop opens the line under the cursor, the Applied notice, to its context and comment box.',
   },
 ];
 
@@ -311,13 +327,18 @@ const GALLERY_STEPS: SelfTestStep[] = [
 const FINDING_PICKS_STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'k', 'k'],
-    expect: '[page] k ran forms.prevItem',
+    expect: '[page] k ran forms.prevLine',
     checksFit: true,
-    why: 'Space k then k breaks Space k s, so the first k replays to the notice and the second finds no item before it.',
+    why: 'Space k then k breaks Space k s, so the first k replays; the round opens on finding 1, its first stop, so neither k finds an item before it.',
   },
   {
     keys: ['j'],
-    expect: '[page] j ran forms.nextItem',
+    expect: '[page] j ran forms.nextLine',
+    why: 'j moves to finding 2, so the next k has an item to return to.',
+  },
+  {
+    keys: ['k'],
+    expect: '[page] k ran forms.prevLine',
     checksFit: true,
     screenshot: 'round',
     why: 'Fix now holds choices 1 and 2, then Follow-up and Leave it sit as bare headers drawn as choice rows, numbered 3 and 4 in their span.choice-number.',
@@ -348,7 +369,7 @@ const FINDING_PICKS_STEPS: SelfTestStep[] = [
     expect: '[forms] left the box',
     why: "Every Esc out of a box in NORMAL runs forms' editor bind there.",
   },
-  { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  { keys: ['j'], expect: '[page] j ran forms.nextLine', checksFit: true },
   {
     keys: ['2'],
     expect: '[forms] chose 2 on finding 2',
@@ -357,7 +378,7 @@ const FINDING_PICKS_STEPS: SelfTestStep[] = [
   { keys: ['1'], expect: '[forms] chose 1 on finding 2' },
   {
     keys: ['j'],
-    expect: '[page] j ran forms.nextItem',
+    expect: '[page] j ran forms.nextLine',
     checksFit: true,
     screenshot: 'finding-reason',
     why: 'Plan it holds the recommended choice 2, with its reason under the header.',
@@ -410,7 +431,7 @@ function fileChipsSteps(chips: ChipPaths): SelfTestStep[] {
 }
 
 const QUESTION_BOXES_STEPS: SelfTestStep[] = [
-  { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  { keys: ['j'], expect: '[page] j ran forms.nextLine', checksFit: true },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   {
@@ -634,7 +655,7 @@ const CHOICES_STEPS: SelfTestStep[] = [
     keys: ['Enter'],
     expect: '[forms] accepted the recommendation on question 1',
   },
-  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
+  { keys: ['j'], expect: '[page] j ran forms.nextLine' },
   { keys: ['<A-n>'], expect: '[forms] no unanswered item' },
   { keys: [' '], expect: '[keys] which-key shows Space', checksFit: true },
   { keys: ['z'], expect: '[keys] which-key shows Space z' },
@@ -649,18 +670,22 @@ const PANE_RESIZE_STEPS: SelfTestStep[] = [
 const SECOND_SESSION_STEPS: SelfTestStep[] = [
   { ...stepToRow('<A-S-o>', 'selftest 2'), checksFit: true },
   {
-    keys: ['<A-o>'],
-    expect: '[sessions] showed Docs tab in selftest 2',
+    keys: [' ', 'v', 'f'],
+    expect: '[sessions] hid Form popup in selftest 2',
+    alsoExpect: [/^\[docs\] Docs tab shown$/],
     checksFit: true,
   },
-  { keys: ['<A-o>'], expect: '[sessions] showed Form tab in selftest 2' },
   {
-    keys: ['<D-w>'],
-    expect:
-      '[forms] closing the session asks to cancel selftest · Second self-test round',
+    keys: ['<A-o>'],
+    expect: '[sessions] no other tab in selftest 2',
+    screenshot: 'popup-hidden',
+    why: 'The sessions scope, not the hidden round, holds the keys.',
   },
-  { keys: ['Escape'], expect: '[page] Escape ran forms.dismissConfirm' },
-  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
+  {
+    keys: [' ', 'v', 'f'],
+    expect: '[sessions] opened Form popup in selftest 2',
+  },
+  { keys: ['j'], expect: '[page] j ran forms.nextLine' },
   { keys: ['<A-p>'], expect: '[forms] jumped to question 1' },
   stepToRow('<A-S-i>', 'selftest'),
 ];
@@ -691,14 +716,10 @@ const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
   stepToRow('<A-S-i>', 'Layout preview'),
   {
     keys: ['<D-w>'],
-    expect:
-      '[forms] closing the session asks to cancel Layout preview · Layout preview',
-  },
-  {
-    keys: ['y'],
     expect: '[sessions] activated Codex session',
+    alsoExpect: [/^\[forms\] closing the session cancels Layout preview$/],
     checksFit: true,
-    why: "Cancelling closes the session and selects its left neighbour in main's rows, the Codex session with no folder.",
+    why: "The close key cancels the open round and closes the session at once, which selects its left neighbour in main's rows, the Codex session with no folder.",
   },
   {
     keys: ['R'],
@@ -719,18 +740,32 @@ const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [
     checksFit: true,
     why: 'The round opens on its first finding, the Nit.',
   },
+  { keys: ['j'], expect: '[page] j ran forms.nextLine' },
   {
-    keys: ['k'],
-    expect: '[page] k ran forms.prevItem',
-    checksFit: true,
-    screenshot: 'round-layout-notice',
-    why: "The round's selftest notice card mounts a box a notice lacks, so the notice draws in default.",
+    keys: ['j'],
+    expect: '[page] j ran forms.nextLine',
+    alsoExpect: [
+      /layout selftest question card update failed: selftest update throw/,
+    ],
+    why: "j shows question 2 first here. It names no layout, so the round's selftest draws it, and its update throws, logged once per card.",
   },
   {
-    keys: ['j', 'j', 'j', '1'],
-    expect:
-      '[forms] layout selftest question card update failed: selftest update throw',
-    why: "Question 2 names no layout, so the round's selftest draws it, and its update throws.",
+    keys: ['j'],
+    expect: '[page] j ran forms.nextLine',
+    checksFit: true,
+    why: 'Question 2 is the last question, so the third j reaches the notices stop.',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[page] Enter ran forms.acceptRecommendation',
+    checksFit: true,
+    screenshot: 'round-layout-notice',
+    why: "The round's selftest notice card mounts a box a notice lacks, so the open line's body draws in default.",
+  },
+  {
+    keys: ['k', '1'],
+    expect: '[forms] chose 1 on question 2',
+    why: 'k on the first notice line moves focus to question 2, the item before the stop, and 1 picks its first choice.',
   },
   {
     keys: ['1'],
@@ -793,8 +828,40 @@ const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [
   },
   {
     keys: ['j'],
-    expect: '[page] j ran forms.nextItem',
-    why: 'Leaves the focus where the review group starts.',
+    expect: '[page] j ran forms.nextLine',
+    why: 'Leaves the focus where the notice comments group starts.',
+  },
+];
+
+const NOTICE_COMMENT_STEPS: SelfTestStep[] = [
+  {
+    keys: ['j'],
+    expect: '[page] j ran forms.nextLine',
+    checksFit: true,
+    screenshot: 'round-notices',
+    why: 'Question 2 is the last question, so j reaches the notices stop.',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[page] Enter ran forms.acceptRecommendation',
+    why: 'Enter on the notices stop opens notice 1, the line under the cursor.',
+  },
+  {
+    keys: ['a'],
+    expect: '[forms] focused comment on notice 1',
+    why: "a focuses the open line's comment box in INSERT, so the next step types at once.",
+  },
+  {
+    keys: [...'reconsider', 'Escape', 'Escape'],
+    expect: '[forms] left the box',
+    checksFit: true,
+    screenshot: 'round-notice-comment',
+    why: 'The first Esc goes to NORMAL, the second leaves the box; the comment is checked in the result once the round is sent.',
+  },
+  {
+    keys: ['k'],
+    expect: '[page] k ran forms.prevLine',
+    why: 'k on the first notice line moves focus to question 2, where the review group starts.',
   },
 ];
 
@@ -808,7 +875,7 @@ const REVIEW_STEPS: SelfTestStep[] = [
   {
     keys: ['<C-k>'],
     expect: '[forms] the form did not scroll up',
-    why: "Ctrl+k reaches the review's round: the round layouts group left the main column at the top (its last redraw of this round, the nosuch settings write, and its last j both scroll it there), and opening the review puts its cursor on the first row, finding 1's, which sits in view there, so the column stays at the top.",
+    why: "Ctrl+k reaches the review's round: the notice comments group left the main column at the top (its last k moves the focus, which scrolls it there), and opening the review puts its cursor on the first row, finding 1's, which sits in view there, so the column stays at the top.",
   },
   {
     keys: ['<C-S-k>'],
@@ -849,13 +916,7 @@ const REVIEW_STEPS: SelfTestStep[] = [
   { keys: ['C'], expect: '[page] C ran forms.askCancel' },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   { keys: [' ', '?'], expect: '[page]  ? ran keys.toggleHelp' },
-  {
-    keys: ['<D-w>'],
-    expect:
-      '[forms] closing the session asks to cancel selftest · Self-test round',
-    why: 'The cancel prompt closes help.',
-  },
-  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   {
     keys: ['o', 'n', 'o', 't', 'e', 'Escape', 'Escape'],
     expect: '[forms] left the box',
@@ -873,17 +934,17 @@ const SAMPLE_ROUND_AGAIN_STEPS: SelfTestStep[] = [
   { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
   { keys: ['G'], expect: '[page] G ran forms.lastItem' },
   { keys: ['g', 'g'], expect: '[page] gg ran forms.firstItem' },
-  {
-    keys: ['<D-w>'],
-    expect:
-      '[forms] closing the session asks to cancel Layout preview · Layout preview',
-  },
-  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
 ];
 
 // Code and tables scroll in their own box; a Docs tab's paths and status line
-// end in an ellipsis, their full text in the tooltip.
-const SCROLLS_ITSELF = ['.md pre', '.md table', '.docs-path', '.docs-status'];
+// and a notice line's title end in an ellipsis, their full text in the tooltip.
+const SCROLLS_ITSELF = [
+  '.md pre',
+  '.md table',
+  '.docs-path',
+  '.docs-status',
+  '.notice-line-title',
+];
 
 // Each run's fixture differs in one context line, so a later run never opens
 // pre-filled from an earlier run's saved draft.
@@ -961,7 +1022,7 @@ function fixtureRound(run: number) {
           `code ${LONG_WORD}`,
           '```',
         ].join('\n'),
-        question: `Pick one of ${LONG_WORD}.`,
+        summary: `Pick one of ${LONG_WORD}.`,
         choices: ['One', `Two ${LONG_WORD}`, 'Three'],
         recommend: 1,
         rationale: 'The first is simplest.',
@@ -969,7 +1030,7 @@ function fixtureRound(run: number) {
       {
         title: 'Second question',
         context: '- another fact',
-        question: 'Pick one.',
+        summary: 'Pick one.',
         choices: ['Yes', 'No'],
         recommend: 1,
         rationale: 'Yes is the default.',
@@ -983,7 +1044,7 @@ function fixtureRound(run: number) {
 function secondRound(run: number) {
   const waiting = {
     context: `Run ${run}: waits here.`,
-    question: 'Pick one.',
+    summary: 'Pick one.',
     choices: ['Yes', 'No'],
     recommend: 1,
     rationale: 'Yes is the default.',
@@ -1020,7 +1081,7 @@ function secondRound(run: number) {
 function layoutsRound(run: number) {
   const question = {
     context: `Run ${run}: another fact.`,
-    question: 'Pick one.',
+    summary: 'Pick one.',
     choices: ['Yes', 'No'],
     recommend: 1,
     rationale: 'Yes is the default.',
@@ -1202,6 +1263,12 @@ function payloadProblems(payload: AnswersPayload, chips: ChipPaths): string[] {
     // "note" proves o entered INSERT at once, keys typed straight after it.
     [payload.note === 'note', `note ${JSON.stringify(payload.note)}`],
     [payload.notices.length === 1, `${payload.notices.length} notices`],
+    // "reconsider" proves a comment typed on the notices page reaches the
+    // result as the notice's comment.
+    [
+      payload.notices[0]?.comment === 'reconsider',
+      `notice 1 comment ${JSON.stringify(payload.notices[0]?.comment)}`,
+    ],
   ];
   return checks.filter(([passed]) => !passed).map(([, problem]) => problem);
 }
@@ -1239,7 +1306,7 @@ export function formsSelfTestScript(
       sessionId,
       projectDir,
       harness,
-      deadlineSeconds: 120,
+      host: { [HOST_DEADLINE_FIELD]: 120 },
     });
   return {
     pageBinds: PAGE_BINDS,
@@ -1274,8 +1341,8 @@ export function formsSelfTestScript(
           {
             sessionId: idleSessionId,
             projectDir: null,
-            deadlineSeconds: 120,
             harness: 'codex',
+            host: { [HOST_DEADLINE_FIELD]: 120 },
           },
           { select: false },
         );
@@ -1297,7 +1364,7 @@ export function formsSelfTestScript(
     groups: [
       {
         name: 'preview round',
-        why: "The preview's sample round opens in a session of its own after the other four and selects its row; its Defect card groups a deferral choice under Follow-up, its Decision card shows its follow-up reason, and its Nit recommends a bare Leave it header with its reason.",
+        why: "The preview's sample round opens in a session of its own after the other four and selects its row; its Defect card groups a deferral choice under Follow-up, its Decision card shows its follow-up reason, its Nit recommends a bare Leave it header with its reason, its question card draws no section labels, and its notices page, the last stop, opens a line with Enter.",
         steps: PREVIEW_ROUND_STEPS,
       },
       {
@@ -1337,12 +1404,12 @@ export function formsSelfTestScript(
       },
       {
         name: 'pane resize',
-        why: "The core's resize commands run from their default binds Option+Shift+l and Option+Shift+h on the Form tab.",
+        why: "The core's resize commands run from their default binds Option+Shift+l and Option+Shift+h in the round's popup.",
         steps: PANE_RESIZE_STEPS,
       },
       {
         name: 'second session',
-        why: 'The second session cycles its Form and Docs tabs, keeps its round when its cancel prompt is dismissed, and Option+p finds its untouched question.',
+        why: "The second session hides and shows its round's popup over its Docs tab, and Option+p finds its untouched question.",
         steps: SECOND_SESSION_STEPS,
       },
       {
@@ -1352,7 +1419,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'cancelled preview',
-        why: "Cancelling the preview round closes its session and selects a Codex session with no folder, where no form keeps its scope; stepping back gives the first session's form its scope again.",
+        why: "The close key cancels the preview round and closes its session with no prompt, selecting a Codex session with no folder, where no form keeps its scope; stepping back gives the first session's form its scope again.",
         steps: CANCELLED_PREVIEW_STEPS,
       },
       {
@@ -1361,13 +1428,18 @@ export function formsSelfTestScript(
         steps: ROUND_LAYOUTS_STEPS,
       },
       {
+        name: 'notice comments',
+        why: "On the round's last stop, the notices page, Enter opens the line under the cursor, a focuses its comment box, the text typed there reaches the result as the notice's comment, and k on the first line returns to the last question.",
+        steps: NOTICE_COMMENT_STEPS,
+      },
+      {
         name: 'review',
         why: "The review opens in forms' scope, where help scrolls on its j, k, gg, G and Ctrl keys, help and the cancel prompt open and close without leaving it, the Round note takes text, Enter jumps back to an item, and Cmd+Enter sends the round.",
         steps: REVIEW_STEPS,
       },
       {
         name: 'sample round again',
-        why: 'Reopening the sample round selects its new preview session, where G and gg focus its last and first items, and which then shows the cancel prompt that n dismisses.',
+        why: 'Reopening the sample round selects its new preview session, where G and gg focus its last and first items.',
         steps: SAMPLE_ROUND_AGAIN_STEPS,
       },
     ],

@@ -1,7 +1,11 @@
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { docsPageKey } from '../../docs/contract';
 import { sessionsActiveSlot } from '../../sessions/contract';
-import { workflowPageKey } from '../../workflow/contract';
+import { keyRunner } from '../../../shared/page/layout-host/base-kit';
+import {
+  workflowPageKey,
+  workflowStageActionCommand,
+} from '../../workflow/contract';
 import {
   HEAVY_WORKFLOW_ID,
   heavyStateOf,
@@ -10,7 +14,7 @@ import {
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowHeavyManifest } from '../manifest';
-import type { PlanProgress } from '../plan-reader';
+import type { PlanProgress } from '../../../shared/plan-progress';
 import { HEAVY_COMMANDS, HEAVY_PAGE_STAGES } from '../stages';
 import { heavyChecklist } from './checklist';
 import { countdownText } from './countdown';
@@ -34,7 +38,7 @@ function progressText(progress: PlanProgress): string {
 
 // Heavy's page half on the engine: its stages, its layouts, its checklist from the
 // read plan, and what its actions, countdown, progress and preview read from its
-// state. Each command runs on the selected session, through the engine.
+// state. Each command runs `workflow.stageAction` on the selected session.
 export const workflowHeavyPagePart: PagePart<typeof workflowHeavyManifest> = {
   manifest: workflowHeavyManifest,
   start(api: WorkflowHeavyApi) {
@@ -84,13 +88,14 @@ export const workflowHeavyPagePart: PagePart<typeof workflowHeavyManifest> = {
         ),
     });
 
+    const runKey = keyRunner(api.commands, log);
     const runOnSelected = (command: keyof typeof HEAVY_COMMANDS) => () => {
       const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
       if (sessionId === null) {
         log(`no selected session for ${command}`);
         return;
       }
-      void workflow.runCommand(sessionId, command);
+      runKey(workflowStageActionCommand, { sessionId, action: command });
     };
 
     return {

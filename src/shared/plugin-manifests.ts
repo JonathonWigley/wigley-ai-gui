@@ -22,7 +22,7 @@ import type {
   SettingInfo,
   SettingKind,
 } from '../contracts/plugin';
-import type { Settings } from '../contracts/settings';
+import type { AppConfig, Settings } from '../contracts/settings';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
 import type { Log } from '../contracts/log';
 import { canonicalAccelerator } from './accelerator';
@@ -95,24 +95,35 @@ export function dependencyOrder(
   return ordered;
 }
 
-// The problem with a `plugins.disabled` list: the first plugin it names that
-// a plugin it leaves started depends on in either `dependsOn` list, walking
-// `manifests` in list order and each one's lists in order, `main` then `page`.
-// Null when no started plugin depends on a disabled one; an id no manifest has
-// disables nothing.
+// The ids of the plugins in `manifests`, in list order, that `disabled` does not
+// name and whose `dependsOn.main` or `dependsOn.page` names `pluginId`; a
+// plugin naming it only in `reads` needs nothing.
+export function neededBy(
+  pluginId: string,
+  disabled: readonly string[],
+  manifests: readonly PluginManifest[],
+): string[] {
+  return manifests
+    .filter(
+      (manifest) =>
+        !disabled.includes(manifest.id) &&
+        dependencyIds(manifest).includes(pluginId),
+    )
+    .map((manifest) => manifest.id);
+}
+
+// The problem with a `plugins.disabled` list: the first id it names, walking
+// `disabled` in list order, that a plugin it leaves started depends on
+// (`neededBy`), naming the first such plugin. Null when no started plugin
+// depends on a disabled one; an id no manifest has disables nothing.
 export function disabledDependencyProblem(
   disabled: readonly string[],
   manifests: readonly PluginManifest[],
 ): string | null {
-  for (const manifest of manifests) {
-    if (disabled.includes(manifest.id)) {
-      continue;
-    }
-    const dependency = dependencyIds(manifest).find((id) =>
-      disabled.includes(id),
-    );
-    if (dependency !== undefined) {
-      return `"plugins.disabled" names "${dependency}", which "${manifest.id}" depends on.`;
+  for (const id of disabled) {
+    const [dependent] = neededBy(id, disabled, manifests);
+    if (dependent !== undefined) {
+      return `"plugins.disabled" names "${id}", which "${dependent}" depends on.`;
     }
   }
   return null;
@@ -147,6 +158,48 @@ export function withoutPluginBinds(
     editor: { ...keymap.editor, binds: keymap.editor.binds.filter(isKept) },
     page: keymap.page.filter(isKept),
   };
+}
+
+// `config` as main serves it: `disabled` as its `plugins.disabled`, in place
+// of the user's list, and without the binds, commands and scopes of the
+// plugins in it, every other field as it was.
+export function withAppliedList(
+  config: AppConfig,
+  disabled: readonly string[],
+): AppConfig {
+  const mainKept = withoutPluginBinds(
+    config.keymap,
+    config.commands,
+    disabled,
+    'main',
+  );
+  return {
+    ...config,
+    settings: { ...config.settings, plugins: { disabled: [...disabled] } },
+    keymap: withoutPluginBinds(mainKept, config.commands, disabled, 'page'),
+    commands: appliedCommands(config.commands, disabled),
+    scopes: appliedScopes(config.scopes, disabled),
+  };
+}
+
+// `commands` without the commands of the plugins in `disabled`.
+export function appliedCommands(
+  commands: Readonly<Record<CommandId, CommandInfo>>,
+  disabled: readonly string[],
+): Record<CommandId, CommandInfo> {
+  return Object.fromEntries(
+    Object.entries(commands).filter(
+      ([, info]) => !disabled.includes(info.plugin),
+    ),
+  );
+}
+
+// `scopes` without the scopes of the plugins in `disabled`.
+export function appliedScopes(
+  scopes: readonly ScopeInfo[],
+  disabled: readonly string[],
+): ScopeInfo[] {
+  return scopes.filter((info) => !disabled.includes(info.plugin));
 }
 
 // `keymap` without the binds of `side`'s process that name a runtime command of

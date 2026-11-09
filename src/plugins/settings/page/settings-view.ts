@@ -1,3 +1,5 @@
+import type { CommandKey } from '../../../contracts/commands';
+import type { PluginStatus } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
@@ -40,7 +42,12 @@ import { listPickerCommands } from '../../../shared/page/list-picker';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
-import type { SettingsChannel } from '../contract';
+import {
+  type SettingsChannel,
+  type SettingsPlace,
+  settingsMoveToRowCommand,
+  settingsOpenSectionAtCommand,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   AdvancedRowInput,
@@ -48,6 +55,7 @@ import type {
   GroupHeaderInput,
   KeyRowInput,
   LeaderRowInput,
+  PluginRowInput,
   ProblemInput,
   RowKit,
   SettingRowInput,
@@ -64,6 +72,7 @@ import {
   type BuiltRow,
   type BuiltRowsPane,
 } from './layout/settings-kit';
+import { pluginSection } from './plugin-rows-view';
 import { type BoxRequest, createRowBox, type RowBox } from './row-box';
 import { type PromptAction, rowPromptActions } from './row-prompt';
 import { createSectionsView } from './sections-view';
@@ -77,6 +86,7 @@ const FILE_NAMES: Record<ConfigFile, ProblemInput['file']> = {
   keymap: 'keymap.json',
 };
 
+const PLUGINS_SECTION = { id: 'plugins', title: 'Plugins' };
 const KEYMAP_SECTION = { id: 'keymap', title: 'Keymap' };
 
 // A row part's and an entry part's builder, as a layout defines it.
@@ -102,6 +112,7 @@ export type RowAction = keyof RowActions;
 // Each row part's input, by part name.
 interface RowInputs {
   settingRow: SettingRowInput;
+  pluginRow: PluginRowInput;
   keyRow: KeyRowInput;
   leaderRow: LeaderRowInput;
   advancedRow: AdvancedRowInput;
@@ -113,8 +124,8 @@ type RowPartOf<P extends keyof RowInputs> = { part: P; input: RowInputs[P] };
 export type RowPart = { [P in keyof RowInputs]: RowPartOf<P> }[keyof RowInputs];
 
 // One row: `key` names it in the cursor and log lines (a setting's path,
-// `commandTarget(id, arg)`, `leader` or `advanced`); `draw` is the part that
-// draws it.
+// `plugin:<id>`, `commandTarget(id, arg)`, `leader` or `advanced`); `draw` is
+// the part that draws it.
 export interface SettingsRow {
   key: string;
   file: ConfigFile;
@@ -169,6 +180,14 @@ export interface RowContext {
   commitSettings(layer: Record<string, unknown>, via: CommitVia): void;
   commitKeymap(layer: UserKeymap, via: CommitVia): void;
   toast(text: string, tone: ToastTone): void;
+  // Every built-in plugin as the plugin switch last wrote it.
+  plugins(): readonly PluginStatus[];
+  // The reason turning `pluginId` off would be refused now, or null. A
+  // rejection is logged and toasted before it rejects.
+  mayDisable(pluginId: string): Promise<string | null>;
+  // Logs `refused settings.json: <reason>` and toasts `reason`, as a refused
+  // write with no box open shows.
+  refuse(reason: string): void;
 }
 
 // `markdown`, `keys`, `commands` and `state` are what the layout's kits read.
@@ -204,6 +223,14 @@ export interface SettingsViewDeps {
   // Hears each section the user picks from the side bar, by click or Enter,
   // and main taking the keys; `l` opens one without picking it.
   sectionPicked(): void;
+  // Runs the command `key` with `arg`, as a click does: a row's click runs
+  // `settings.moveToRow` and a section's `settings.openSectionAt`.
+  runKey<A>(key: CommandKey<A>, arg: A): void;
+  // Hears the place after each change to the cursors, the open section or the
+  // filter.
+  placeChanged(place: SettingsPlace): void;
+  // Every built-in plugin as the plugin switch last wrote it.
+  plugins(): readonly PluginStatus[];
 }
 
 export type SettingsCommand =
@@ -235,6 +262,7 @@ export type SettingsCommand =
 // where they act: the cursor row's actions in its layout's `rowActions` slot.
 // `setLayouts` draws everything again in the new layouts, keeping the cursor,
 // the open section, the focus side, an open box or filter and an open picker.
+// Each change to the place reaches `placeChanged`.
 export interface SettingsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -251,6 +279,21 @@ export interface SettingsView {
   // Main takes the keys back: focus moves to the rows.
   focusMain(): void;
   commands: Record<SettingsCommand, () => void>;
+  // The cursor moves to the row `key` keys and the rows take focus, unless a
+  // box is open; a key no row holds logs `no row <key>`.
+  moveToRow(key: string): void;
+  // Opens the section at `index` with the side bar's cursor and focus on it,
+  // then tells `sectionPicked`; an index no section holds logs
+  // `no section <index>`.
+  openSectionAt(index: number): void;
+  // Puts back a reloaded page's place, before `load`: the first show opens the
+  // saved section with its filter applied, its box closed. A saved section the
+  // schema no longer holds opens the first, and a saved cursor key no row
+  // holds leaves the cursor where the first draw sets it.
+  restorePlace(place: SettingsPlace): void;
+  // The plugin switch wrote a new status list: the rows redraw while the
+  // Plugins section is open.
+  pluginsChanged(): void;
 }
 
 // The cursor prompt's label for each action it shows.
@@ -323,12 +366,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
           rollback,
         ),
       ),
-    clicked: (index) => {
-      sectionsCursor = index;
-      focusSections();
-      openSection(index);
-      deps.sectionPicked();
-    },
+    clicked: (index) => deps.runKey(settingsOpenSectionAtCommand, index),
   });
   const rowsSheet = sheet();
   rowsSheet.classList.add('settings-sheet');
@@ -385,6 +423,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   let entryDisposes: (() => void)[] = [];
   let cursorKey: string | null = null;
   let openBox: OpenBox | null = null;
+  let isPlaceRestored = false;
 
   const disposeEntries = () => {
     const disposes = entryDisposes;
@@ -419,6 +458,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
 
   const sectionList = (): { id: string; title: string }[] => [
     ...(schema?.sections ?? []).map(({ id, title }) => ({ id, title })),
+    PLUGINS_SECTION,
     KEYMAP_SECTION,
   ];
 
@@ -477,6 +517,12 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     if (cursorKey !== null) {
       drawnRows.get(cursorKey)?.element.scrollIntoView({ block: 'nearest' });
     }
+    deps.placeChanged({
+      sectionsCursor,
+      openSectionId,
+      cursorKey,
+      filter: query,
+    });
   };
 
   // The build of a group header, empty state or problem card for `input`.
@@ -485,8 +531,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     (draw: EntryDraw<I>, parent: HTMLElement, rollback: RollbackDeps) =>
       buildEntry(draw, parent, input, 'rows', services, rollback);
 
-  // Draws `row` into `parent`; a click on it outside its box moves the
-  // cursor to it.
+  // Draws `row` into `parent`; a click on it outside its box runs
+  // `settings.moveToRow` with its key.
   const drawRowEntry = (row: SettingsRow, parent: HTMLElement) => {
     const drawn = drawSettingsRow(row.draw, parent);
     entryDisposes.push(drawn.dispose);
@@ -495,9 +541,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       const isInBox =
         event.target instanceof Element &&
         event.target.closest('.settings-box') !== null;
-      if (!isInBox && openBox === null) {
-        setCursor(row.key);
-        focusRows();
+      if (!isInBox) {
+        deps.runKey(settingsMoveToRowCommand, row.key);
       }
     });
   };
@@ -506,11 +551,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     if (schema === null || latest === null) {
       return;
     }
-    const section = schema.sections.find((each) => each.id === openSectionId);
-    const drawing =
-      section === undefined
-        ? keymapSection(context, query)
-        : settingSection(section, context, query);
+    const drawing = sectionDrawing(schema);
     const cursorIndex = rows.findIndex((row) => row.key === cursorKey);
     const isSameFilter = query === drawnQuery;
     drawnQuery = query;
@@ -738,6 +779,12 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     log(`box open ${request.key}`);
   };
 
+  // A write refused with no box open to show it under.
+  const refuse = (file: ConfigFile, problem: string) => {
+    log(`refused ${FILE_NAMES[file]}: ${problem}`);
+    deps.toast(problem, 'error');
+  };
+
   const commit = async (
     file: ConfigFile,
     write: (expectedText: string | null) => Promise<ConfigWriteResult>,
@@ -770,11 +817,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         await refresh(true);
         return;
       case 'refused':
-        log(`refused ${name}: ${result.problem}`);
         if (box !== null && isBoxOpen()) {
+          log(`refused ${name}: ${result.problem}`);
           showUnderBox(box, result.problem);
         } else {
-          deps.toast(result.problem, 'error');
+          refuse(file, result.problem);
         }
         return;
       case 'changedOnDisk': {
@@ -882,30 +929,72 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       );
     },
     toast: deps.toast,
+    plugins: deps.plugins,
+    async mayDisable(pluginId) {
+      try {
+        return await channel.invoke('mayDisable', pluginId);
+      } catch (error) {
+        log(`write failed: ${errorText(error)}`);
+        deps.toast(errorText(error), 'error');
+        throw error;
+      }
+    },
+    refuse: (reason) => refuse('settings', reason),
   };
 
-  const openSection = (index: number) => {
+  // The open section's drawing: a schema section's setting rows, the Plugins
+  // section's plugin rows, or the Keymap section's rows.
+  const sectionDrawing = (held: UserConfigSchema): SectionDrawing => {
+    if (openSectionId === PLUGINS_SECTION.id) {
+      return pluginSection(context, query);
+    }
+    const section = held.sections.find((each) => each.id === openSectionId);
+    return section === undefined
+      ? keymapSection(context, query)
+      : settingSection(section, context, query);
+  };
+
+  // Opens the section at `index` with `filter` and the cursor on `cursorKey`:
+  // a fresh open clears both.
+  const openSection = (
+    index: number,
+    filter = '',
+    openCursorKey: string | null = null,
+  ) => {
     const section = sectionList()[index];
     if (section === undefined) {
       return;
     }
     openSectionId = section.id;
     hasOpenedSection = true;
-    query = '';
-    filterBox.value = '';
-    filterFrame.hidden = true;
+    query = filter;
+    filterBox.value = filter;
+    filterFrame.hidden = filter.trim() === '';
     openSectionTitle = section.title;
     log(`section ${section.id}`);
     deps.sectionShown(section.title);
-    cursorKey = null;
+    cursorKey = openCursorKey;
     draw(true);
   };
 
-  // The first show opens the first section, once the schema names it.
+  // The first show opens the first section, once the schema names it, with
+  // the sections cursor on it; or the restored place's section with its
+  // filter and cursor, the sections cursor clamped to the sections there are.
   const openFirstSection = () => {
-    if (hasShown && !hasOpenedSection && schema !== null) {
-      openSection(0);
+    if (!hasShown || hasOpenedSection || schema === null) {
+      return;
     }
+    const list = sectionList();
+    const restoredIndex = list.findIndex(
+      (section) => section.id === openSectionId,
+    );
+    if (isPlaceRestored && restoredIndex !== -1) {
+      sectionsCursor = Math.max(0, Math.min(list.length - 1, sectionsCursor));
+      openSection(restoredIndex, query, cursorKey);
+      return;
+    }
+    sectionsCursor = 0;
+    openSection(0);
   };
 
   const moveSections = (to: (count: number) => number) => {
@@ -1112,5 +1201,40 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     focusSideBar: focusSections,
     focusMain,
     commands,
+    moveToRow(key) {
+      if (openBox !== null) {
+        return;
+      }
+      if (!rows.some((row) => row.key === key)) {
+        log(`no row ${key}`);
+        return;
+      }
+      setCursor(key);
+      focusRows();
+    },
+    openSectionAt(index) {
+      if (sectionList()[index] === undefined) {
+        log(`no section ${index}`);
+        return;
+      }
+      sectionsCursor = index;
+      focusSections();
+      openSection(index);
+      deps.sectionPicked();
+    },
+    restorePlace(place) {
+      isPlaceRestored = true;
+      sectionsCursor = place.sectionsCursor;
+      openSectionId = place.openSectionId;
+      cursorKey = place.cursorKey;
+      query = place.filter;
+      filterBox.value = place.filter;
+      filterFrame.hidden = place.filter.trim() === '';
+    },
+    pluginsChanged() {
+      if (openSectionId === PLUGINS_SECTION.id) {
+        draw();
+      }
+    },
   };
 }

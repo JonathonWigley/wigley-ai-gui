@@ -8,7 +8,6 @@ import type {
   Drawn,
   Layout,
   PagePluginApi,
-  RunCommand,
   WorkflowDraw,
   WorkflowDrawOptions,
 } from '../../contract';
@@ -48,27 +47,33 @@ export function createWorkflowDraw(
     },
   });
 
-  const kitFor = (rollback: RollbackDeps, run: RunCommand) =>
-    createWorkflowKit(deps.kit, rollback, run, deps.clock, options.manifest);
+  const kitFor = (rollback: RollbackDeps, sessionId: string) =>
+    createWorkflowKit(
+      deps.kit,
+      rollback,
+      sessionId,
+      deps.clock,
+      options.manifest,
+    );
 
   return {
     sideTitle: options.sideTitle,
-    chip: (parent, input, run) =>
+    chip: (parent, input, sessionId) =>
       toDrawn(
         layoutParts.draw('chip', parent, (chip, slot, rollback) =>
-          chip(slot, input, kitFor(rollback, run)),
+          chip(slot, input, kitFor(rollback, sessionId)),
         ),
       ),
-    strip: (parent, input, run) =>
+    strip: (parent, input, sessionId) =>
       toDrawn(
         layoutParts.draw('strip', parent, (strip, slot, rollback) =>
-          strip(slot, input, kitFor(rollback, run)),
+          strip(slot, input, kitFor(rollback, sessionId)),
         ),
       ),
-    sidePane: (parent, input, run) =>
+    sidePane: (parent, input, sessionId) =>
       toDrawn(
         layoutParts.draw('sidePane', parent, (sidePane, slot, rollback) =>
-          sidePane(slot, input, kitFor(rollback, run)),
+          sidePane(slot, input, kitFor(rollback, sessionId)),
         ),
       ),
   };

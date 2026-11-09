@@ -8,6 +8,17 @@ export interface GitCommit {
   paths: string[];
 }
 
+// One checkout of a clone: the main tree or a linked worktree.
+export interface GitWorktree {
+  // The checkout's top folder.
+  readonly path: string;
+  // The branch checked out, without `refs/heads/`; null on a detached HEAD or
+  // a bare clone.
+  readonly branch: string | null;
+  // True for the main tree only.
+  readonly isMain: boolean;
+}
+
 // A clone's git state and the one write the app makes to it. `root` is a
 // clone's top folder, as `topLevel` returns it; paths in and out are relative
 // to it, `/`-separated. Every method but `topLevel`, `originRepoName`,
@@ -27,6 +38,11 @@ export interface Git {
   // True when the clone at `root` is a linked worktree (`git worktree add`),
   // whose git folder sits inside another clone's.
   isLinkedWorktree(root: string): Promise<boolean>;
+  // Every checkout of the clone at `root`, the main tree first, then each
+  // linked worktree in `git worktree list` order.
+  worktrees(root: string): Promise<GitWorktree[]>;
+  // The git folder every checkout of the clone at `root` shares, a full path.
+  commonDir(root: string): Promise<string>;
   hasUpstream(root: string): Promise<boolean>;
   // Files changed from HEAD or untracked, under `pathspec`; a rename names
   // both its paths.

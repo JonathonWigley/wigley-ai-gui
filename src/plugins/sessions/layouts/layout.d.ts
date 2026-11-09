@@ -1,16 +1,18 @@
 import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 
 // The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar,
-// its chat panes and each session's tab bar with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
+// its chat panes, each session's tab bar and each session's popups with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
 // returns no element appended to `parent`, or appends any other node to `parent`, is drawn by `default` instead. The
 // app sets `data-layout-owner="sessions"` and `data-layout="<name>"` on the element each part returns, `<name>` being
 // the layout that drew it, so `[data-layout-owner="sessions"][data-layout="<name>"] …` in a layout's CSS selects only
 // its own parts.
 //
 // Panes. `sideBar` draws once per layout set, and `tabBar` once per session per layout set and again whenever another
-// plugin adds or removes a bar part. The app fills the side bar's `rows` with the two `section`s, Favorites then Recent,
-// a `section`'s `groups` with one `group` per project, a `group`'s `rows` with that project's `row`s, and each tab bar's
-// `strip` with one `tab` per tab of its session, replacing their children on each draw. A `row` places other plugins'
+// plugin adds or removes a bar part. The app fills the side bar's `rows` with the `section`s: Favorites, Recent, then
+// each section another plugin registers that claims a row, by its order. Favorites and Recent always draw. The app fills
+// a Favorites or Recent `section`'s `groups` with one `group` per project and a `group`'s `rows` with that project's
+// `row`s; a plugin section's `groups` holds its `row`s directly, with no `group`, and is no drop zone. It fills each tab
+// bar's `strip` with one `tab` per tab of its session, replacing their children on each draw. A `row` places other plugins'
 // row parts and a `tabBar` their bar parts, each through its kit's `contributedParts`. The side bar's rows are the
 // Sessions list, which holds the keys in scope `sessions.sidebar` once Alt+h moves past the leftmost pane; the row
 // under its cursor ends in the cursor prompt, through its kit's `cursorPrompt`. A part whose `rows`, `groups`,
@@ -26,7 +28,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 //   `ui-row--action` and a mousedown that takes no focus, and dropped while that element is `is-disabled`;
 // - `is-selected` and `aria-current="true"` on the selected row, `is-active` and `aria-current` on the active tab;
 // - `is-cursor` on the list cursor's row while the Sessions list holds the keys (scope `sessions.sidebar`);
-// - the `title` tooltip on each row (`title · label · status`, each part only when present) and each tab (`title`),
+// - the `title` tooltip on each row (`title · label · activity · each row part's tooltip`, each only when present) and
+//   each tab (`title`),
 //   and each tab's `aria-label` (`title`), so a tab that draws only its icon keeps its accessible name;
 // - `is-no-target` on the elements `sessionEdge`, `prevTabEdge`, `nextTabEdge` and `closeHint` return, which hides
 //   each while it has nothing to act on, and on the key inside each of `splitRightHint`, `splitDownHint` and
@@ -36,22 +39,37 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - the click on the star `favoriteToggle` places, which favorites or unfavorites the group's project;
 // - the `title` tooltip (`project`) on each group's `header` and the drag on it, the whole header being the drag source;
 // - `is-empty` on the element of a `section` with no groups;
+// - the plugin's own content in the header part `headerPart` places, which its plugin draws;
 // - `has-favorites` on the side bar's `rows` while Favorites holds a group, and `is-reordering` there while a group is
-//   dragged.
-// The tab bodies, the sheet that holds them and the tab elements other plugins add stay the app's.
+//   dragged;
+// - `is-open` on the root of the popup that shows, the top open popup of its session, and `inert` on every other
+//   popup's root; `is-entering` on a popup's root from its add until its first transition on that root ends or the
+//   popup hides, so a slide up on add keyed on it runs once; the click on each `popupBar` entry, which opens its popup,
+//   set as on a tab, and the entry's `aria-label` (its popup's `title`).
+// The tab bodies, the sheet that holds them, the popup layer over them and the elements other plugins add stay the
+// app's.
 // Every key prompt here has no scope, so it shows in every scope, except the row's cursor prompt, whose keys fire in
 // `sessions.sidebar`; a layout that leaves a kit prompt out leaves that key unprompted.
+//
+// Popups. A session's popup slides up over its tabs while a plugin has something for the user. `popup` draws each
+// popup's frame once when the popup is added and again on each layout set; the app fills its `body` with the plugin's
+// element. `popupBar` draws the bar at the bottom of a session's frame while the session holds a hidden popup, again on
+// each change to its popups, with one entry per hidden popup, newest hidden first. A `popup` whose `body`, or a
+// `popupBar` whose entries, are not children of its `element` are drawn by `default` instead, and so is a `popupBar`
+// returning another count of entries than its input holds.
 //
 // Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
 // `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input or the layouts
 // change.
 
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
-// message cut to the title length), null for none, which `default` draws as `New Chat`; `label` is the session's folder label (`gamma 2`); `harness` is
-// the harness's name, '' for none; `marked` is true while a round waits unopened or a turn that finished elsewhere waits unviewed, and never on the selected row; `activity` is what the session is
+// message cut to the title length), null for none, which `default` draws as `New Chat`; `section` is the id of the
+// plugin section that claimed the row, null for a row in a project group, and `default` draws a claimed row muted with a
+// dashed accent edge; `label` is the session's folder label (`gamma 2`); `harness` is
+// the harness's name, '' for none; `marked` is true while something marked the row waits unviewed, and never on the selected row; `activity` is what the session is
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
-// and draws a needs you label for `marked` only while no activity is set; `status` is the row's status text, null for none, which `default` shows only in the tooltip, and the contributed parts fill the row's second line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
+// and draws a needs you label for `marked` only while no activity is set; the contributed parts fill the row's second line, where `default` puts the parts ordered 2 and later on a third line of their own; `onScreen` is true while the session shows in a pane other than
 // the focused one; `isPrompted` is true on the list cursor's row while the list holds the keys, which ends in the cursor
 // prompt; no row is prompted while the list does not hold the keys.
 export interface SessionRowInput {
@@ -65,16 +83,19 @@ export interface SessionRowInput {
     tone: DotStatus;
     emphasis: 'raised' | 'urgent' | null;
   } | null;
-  status: string | null;
   onScreen: boolean;
+  section: string | null;
   isPrompted: boolean;
 }
 
-// One side bar section. Both sections always draw. `label` is its name (`Favorites`, `Recent`); `dropHint` says what
-// dropping a group into it does, shown while it is empty and a group is dragged; `isEmpty` is true while it holds no
-// groups.
+// One side bar section: Favorites and Recent always draw, then each plugin section that claims a row. `kind` is
+// `plugin` for a section another plugin registered; `id` is the kind for Favorites and Recent, the registration's id for
+// a plugin section; `label` is its name (`Favorites`, `Recent`, the registration's label); `dropHint` says what dropping
+// a group into it does, shown while it is empty and a group is dragged, '' for a plugin section; `isEmpty` is true
+// while it holds no groups, and never for a plugin section.
 export interface SectionInput {
-  kind: 'favorites' | 'recent';
+  kind: 'favorites' | 'recent' | 'plugin';
+  id: string;
   label: string;
   dropHint: string;
   isEmpty: boolean;
@@ -111,6 +132,18 @@ export interface EmptyTextInput {
   hasHint: boolean;
 }
 
+// One session popup. `title` is what the popup is (a form's round, the primer); `icon` is a Codicon name.
+export interface PopupInput {
+  title: string;
+  icon: string;
+}
+
+// The bar listing a session's hidden popups, newest hidden first. Each entry's `status` is the popup's status, '' for
+// none, which `default` draws as its `title` instead.
+export interface PopupBarInput {
+  entries: { title: string; icon: string; status: string }[];
+}
+
 // The rename dialog's body, scope `sessions.rename`. `problem` is why the typed title was refused, null for none;
 // `hint` says what an empty box does.
 export interface RenameDialogInput {
@@ -123,13 +156,14 @@ export interface SessionsPart {
   element: HTMLElement;
 }
 
-// `rows` is the box the app fills with the two `section`s, Favorites then Recent; a child of `element`.
+// `rows` is the box the app fills with the `section`s: Favorites, Recent, then each plugin section that claims a row, by
+// its order; a child of `element`.
 export interface SideBarPane extends SessionsPart {
   rows: HTMLElement;
 }
 
-// `groups` is the box the app fills with one `group` per project, and a drop zone while a group is dragged; a child of
-// `element`.
+// `groups` is the box the app fills with one `group` per project, and a drop zone while a group is dragged; a plugin
+// section's `groups` holds its `row`s directly, with no `group`, and is no drop zone. A child of `element`.
 export interface SectionPane extends SessionsPart {
   groups: HTMLElement;
 }
@@ -156,6 +190,16 @@ export interface PanePart extends SessionsPart {
   update?(input: PaneInput): void;
 }
 
+// `body` is the box the app fills with the plugin's element, which takes `height: 100%`; a child of `element`.
+export interface PopupPart extends SessionsPart {
+  body: HTMLElement;
+}
+
+// `entries` holds one element per input entry, in order, each a child of `element`; the app sets each one's click.
+export interface PopupBarPart extends SessionsPart {
+  entries: HTMLElement[];
+}
+
 export interface SessionsKit extends BaseKit {}
 
 export interface PaneKit extends SessionsKit {
@@ -169,7 +213,7 @@ export interface RowKit extends SessionsKit {
   // for every row, in the order they were added; returns the `div.session-row-parts`. Call it once, where the parts
   // go: a row that leaves it out gets the parts appended at the end of its element. A part that throws is logged and
   // draws nothing. A second call throws `row placed contributed parts twice`, so the row draws with `default`. The
-  // holder keeps its parts on one line under every layout, and each part keeps its content's width.
+  // holder lays its parts on one line, each part keeping its content's width.
   contributedParts(parent: HTMLElement): HTMLElement;
   // On a prompted row: places the app's cursor prompt `span.session-row-actions` (`s favorite  r rename  d close`, with
   // `K up  J down` after the favorite key on a favorite project's row, the favorite key then reading `unfavorite`)
@@ -177,6 +221,14 @@ export interface RowKit extends SessionsKit {
   // other row: places nothing and returns null. A prompted row that leaves it out gets it appended at its element's
   // end. A second call on a prompted row throws `cursorPrompt placed twice`, so the row draws with `default`.
   cursorPrompt(parent: HTMLElement): HTMLElement | null;
+}
+
+export interface SectionKit extends SessionsKit {
+  // `div.session-section-part` (`data-part="<section id>"`) at the end of `parent`, holding the plugin section's header
+  // part; returns the div, empty for a section with no header part and for Favorites and Recent. A section that leaves
+  // it out draws no header part. A part that throws is logged, and the div returned is empty and outside the tree. A
+  // second call throws `headerPart placed twice`, so the section draws with `default`.
+  headerPart(parent: HTMLElement): HTMLElement;
 }
 
 export interface SideBarKit extends SessionsKit {
@@ -215,6 +267,11 @@ export interface TabBarKit extends SessionsKit {
   closePaneHint(parent: HTMLElement): HTMLElement;
 }
 
+export interface PopupBarKit extends SessionsKit {
+  // The keys of `sessions.togglePopup`, which hides and shows the session's popup. A layout may call it more than once.
+  toggleHint(parent: HTMLElement): void;
+}
+
 export interface EmptyTextKit extends SessionsKit {
   // The key that picks the next session, `span.sessions-pick-hint`; the app makes it once, so each draw moves it. A
   // second call throws `pickHint placed twice`, so the part draws with `default`.
@@ -230,11 +287,12 @@ export interface RenameDialogKit extends SessionsKit {
 export interface Layout {
   // The side bar: a header over the sections.
   sideBar?(parent: HTMLElement, kit: SideBarKit): SideBarPane;
-  // One section: its label and drop hint over the box of its groups.
+  // One section: its label and drop hint over the box of its groups, or a plugin section's label and header part over
+  // the box of its rows.
   section?(
     parent: HTMLElement,
     input: SectionInput,
-    kit: SessionsKit,
+    kit: SectionKit,
   ): SectionPane;
   // One project's group: its header over the box of its rows.
   group?(parent: HTMLElement, input: GroupInput, kit: GroupKit): GroupPane;
@@ -255,6 +313,14 @@ export interface Layout {
     input: EmptyTextInput,
     kit: EmptyTextKit,
   ): SessionsPart;
+  // One session popup's frame around its body.
+  popup?(parent: HTMLElement, input: PopupInput, kit: SessionsKit): PopupPart;
+  // The bar at a session frame's bottom naming its hidden popups.
+  popupBar?(
+    parent: HTMLElement,
+    input: PopupBarInput,
+    kit: PopupBarKit,
+  ): PopupBarPart;
   // The rename dialog's body: the title box, why a title was refused, then the hint.
   renameDialog?(
     parent: HTMLElement,

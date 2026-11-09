@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
-import type {
-  CloneStatus,
-  FileStatus,
-  IndexContext,
-  IndexDocument,
-  IndexEntry,
-  IndexHeading,
+import {
+  type CloneStatus,
+  type FileStatus,
+  type IndexContext,
+  type IndexDocument,
+  type IndexEntry,
+  type IndexHeading,
+  UNSAVED_TEXT,
 } from '../contract';
 import type {
   GroupRole,
@@ -58,7 +59,6 @@ import {
   type TreeRowKey,
   treeRowAction,
   treeRowStatus,
-  UNSAVED_TEXT,
   visibleRows,
 } from './docs-state';
 

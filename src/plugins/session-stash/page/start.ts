@@ -1,6 +1,7 @@
 import './session-stash.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 import {
   editableTitle,
   sessionsPageKey,
@@ -37,11 +38,7 @@ export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
     const parts = createSessionStashParts({
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
       log,

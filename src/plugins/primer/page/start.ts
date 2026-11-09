@@ -4,14 +4,18 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { startAutosave } from '../../../shared/page/autosave';
+import { onPageHide } from '../../../shared/page/page-hide';
+import {
+  followSessionFormPlaces,
+  type SessionFormPlaces,
+} from '../../../shared/page/session-form-places';
 import {
   createEditorBoxes,
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
 import {
   activeForm,
-  createSessionCloseAnswers,
-  type SessionCloseAnswers,
+  formClosesAtOnce,
 } from '../../../shared/page/session-forms';
 import {
   followRows,
@@ -19,10 +23,12 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type {
-  PrimerChannel,
-  PrimerPageEvents,
-  PrimerPageExports,
+import {
+  type PrimerChannel,
+  type PrimerPageEvents,
+  type PrimerPageExports,
+  type PrimerPlace,
+  primerPlaceSlot,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -32,7 +38,7 @@ import { focusActionFor, PRIMER_BOX_IDENTITY, type PrimerBox } from './boxes';
 import { readPrimerLayout } from './layout/read-primer-layout';
 import {
   closePrimerFromMain,
-  guardClose,
+  mayClosePrimer,
   primerCommandHandlers,
 } from './primer-commands';
 import {
@@ -40,9 +46,10 @@ import {
   presentedOf,
   startPrimerEvents,
 } from './primer-events';
-import { buildBody, initialState } from './primer-state';
+import { buildBody, initialState, primerPlace } from './primer-state';
 import { createPrimerStore, type PrimerStore } from './primer-store';
-import { mountPrimerTab } from './primer-view';
+import { mountPrimerPopups } from './primer-view';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type PrimerApi = PageApi<
   typeof primerManifest,
@@ -81,19 +88,28 @@ function createBoxes(
 // Listeners first: a primer shown while openForms is in flight arrives in
 // both, and showing an open primer again changes nothing. The active primer
 // follows the session the sessions plugin focuses, and a primer leaves only
-// when main closes it. The `Disposable` stops an `openForms` read still in
-// flight from showing its primers.
+// when main closes it, and the read's primers go back to the places the last
+// page saved, the read tracked as a page restore (`api.restores`). The
+// `Disposable` stops an `openForms` read still in flight from
+// showing its primers.
 function listenForPrimers(
   api: PrimerApi,
   store: PrimerStore,
-  closeAnswers: SessionCloseAnswers,
+  places: SessionFormPlaces<PrimerPlace>,
 ): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (primer) =>
     store.dispatch({ type: 'formShown', form: primer }),
   );
   api.channel.on('formClosed', (closed) =>
-    closePrimerFromMain({ store, closeAnswers, toast, log }, closed),
+    closePrimerFromMain(
+      {
+        store,
+        toast,
+        log,
+      },
+      closed,
+    ),
   );
   api.state.read(sessionsActiveSlot).on((sessionId) =>
     store.dispatch({
@@ -102,7 +118,8 @@ function listenForPrimers(
     }),
   );
   let isStopped = false;
-  void api.channel
+  // A restored primer's popup can move the key base.
+  const openFormsRead = api.channel
     .invoke('openForms')
     .then((primers) => {
       if (isStopped) {
@@ -111,8 +128,10 @@ function listenForPrimers(
       for (const primer of primers) {
         store.dispatch({ type: 'formShown', form: primer });
       }
+      places.formsRead(primers.map((primer) => primer.formId));
     })
     .catch((error) => log(`open primers not read: ${errorText(error)}`));
+  api.restores.track(openFormsRead);
   return {
     dispose() {
       isStopped = true;
@@ -120,15 +139,17 @@ function listenForPrimers(
   };
 }
 
-// Shows each agent primer in its session's Primer tab and sends the user's
+// Shows each agent primer in its session's primer popup and sends the user's
 // edits back to main: drafts as the edits pause, the finish on send or cancel.
-// While a Primer tab is the visible tab, the key scope, the resize keys'
-// split and the focus keys' panes follow the primer view.
-// A session with an open primer closes only through the cancel prompt. Every
-// store change emits the primer page events it makes, each logged as it goes;
-// other plugins read the active primer through the exports. The tab draws
+// While a primer popup is the visible surface, the key scope, the resize keys'
+// split and the focus keys' panes follow the primer view. The close key on a
+// session with an open primer cancels the primer and closes the session at
+// once; a primer being sent keeps its session. Every store change emits the
+// primer page events it makes, each logged as it goes; other plugins read the
+// active primer through the exports. The popup draws
 // through the primer layout `primer.layout` names, redrawing as it or the
-// layout changes.
+// layout changes. Each open primer's place (`primerPlaceSlot`) and its unsaved
+// edits, saved at once on page hide, outlive a page reload.
 export const primerPagePart: PagePart<typeof primerManifest> = {
   manifest: primerManifest,
   start(api: PrimerApi) {
@@ -137,21 +158,21 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     const store = createPrimerStore(
       initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
     );
-    const closeAnswers = createSessionCloseAnswers(store);
     const boxes = createBoxes(api, store);
-    const view = mountPrimerTab({
+    const places = followSessionFormPlaces({
+      writer: api.state.publish(primerPlaceSlot),
+      store,
+      placeOf: primerPlace,
+      restore: (formId, place) =>
+        store.dispatch({ type: 'placeRestored', formId, place }),
+    });
+    const view = mountPrimerPopups({
       areas: api.areas,
       sessions,
+      closesAtOnce: (sessionId) => formClosesAtOnce(store, sessionId),
       beforeClose: (sessionId) =>
-        guardClose(
-          {
-            store,
-            toast: services.toast,
-            log: services.log,
-            showPrimer: (primerSessionId) => view.showPrimer(primerSessionId),
-            activate: (activeSessionId) => sessions.activate(activeSessionId),
-            closeAnswers,
-          },
+        mayClosePrimer(
+          { store, toast: services.toast, log: services.log },
           sessionId,
         ),
       setScope: (scope) => api.keys.setScope(scope),
@@ -163,11 +184,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       markdown: services.markdown,
       keys: api.keys,
       run: (command) => api.commands.run(command),
-      commands: {
-        exists: (command) => api.keys.command(command) !== undefined,
-        argShape: (command) => api.keys.command(command)?.arg,
-        run: (command) => api.commands.run(command),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
       uiState: services.uiState,
@@ -175,6 +192,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       drops: api.drops,
       toast: services.toast,
       log: services.log,
+      savedPlaces: places.saved,
     });
     followRows(api.state.read(sessionsRowsSlot), {
       removed: (sessionId) => view.forgetSession(sessionId),
@@ -202,6 +220,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         }),
       save: (primerId, body) => api.channel.invoke('draft', primerId, body),
       delayMs: () => api.settings().autosaveDelayMs,
+      onPageHide,
       timers: services.timers,
       log: services.log,
     });
@@ -210,7 +229,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    const primersRead = listenForPrimers(api, store, closeAnswers);
+    const primersRead = listenForPrimers(api, store, places);
     const exports: PrimerPageExports = {
       activePrimer() {
         const primer = activeForm(store.get());
@@ -221,7 +240,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       exports: () => exports,
       dispose() {
         primersRead.dispose();
-        closeAnswers.dispose();
+        places.dispose();
         autosave.dispose();
         view.dispose();
       },

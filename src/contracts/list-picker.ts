@@ -24,7 +24,8 @@ export interface ListPickerRequest<T> {
   // its built-in row when left out. The picker sets `is-cursor` on the
   // returned row, and a layout styles the cursor row through that class. It
   // appends `trailing` to the row when the row does not hold it, and makes the
-  // row clickable as a `.ui-row` with `onClick` is. The picker owns a row
+  // row clickable as a `.ui-row` with `onClick` is, the click running
+  // `picker.chooseRow`. The picker owns a row
   // draw's lifetime: it runs the row's dispose, which may remove the row,
   // before it draws that row again (every row on a filter change or
   // `redraw()`, the old and new cursor rows on a cursor move) and when it
@@ -57,8 +58,10 @@ export interface DrawnPickerRow {
 
 // One floating list, holding one request at a time: `open` replaces the open
 // request, if any, without hearing its cancel. Its scope is pushed while it
-// shows, and the base scope changing under it, or a click on the layer
-// outside the panel, cancels it. `choose` with nothing visible does nothing;
+// shows, and the base scope changing under it cancels it; a click on the layer
+// outside the panel runs `picker.cancel` with the owner's id. A row's click
+// runs `picker.chooseRow` with the owner's id and the row's item index, which
+// reaches `chooseAt`. `choose` with nothing visible does nothing;
 // `close` hides it without hearing a cancel. A filter shows the rows it keeps
 // best match first, the cursor on the first.
 // A request's `headerEnd` sits at the end of the title line while it is open,
@@ -67,8 +70,9 @@ export interface DrawnPickerRow {
 // With a filter editor, `focusFilter` types into the filter box above the
 // list and logs `picker filter: <title>`, and `leaveFilter` leaves it with the
 // filter kept, logging `picker list: <title>` when the box held focus; without
-// one both do nothing. A request's `drawRow` draws each row; the picker sets the row's
-// title, `is-selected` and `is-cursor`, and the click that chooses its item.
+// one both do nothing. A request's `drawRow` draws each row; the picker sets the
+// row's title, `is-selected` and `is-cursor`, and the click that runs
+// `picker.chooseRow` for its item.
 // A cursor move draws only the row the cursor left and the row it reached;
 // `top` and `bottom` move it to the first and last visible row, in the shown
 // order, and do nothing while closed or with no row visible.
@@ -88,6 +92,9 @@ export interface ListPicker {
   top(): void;
   bottom(): void;
   choose(): void;
+  // Moves the cursor to item `index` and chooses it; an index no visible row
+  // shows does nothing and logs `picker row <index> is not shown`.
+  chooseAt(index: number): void;
   cancel(): void;
   close(): void;
   focusFilter(): void;
@@ -110,8 +117,11 @@ export interface ListPickerOptions {
 }
 
 // `create` builds one list, placed where `parent` says, under the plugin's own
-// scope, log and editor; the part's stop closes it with no cancel. Call it once
-// per part start: its overlay entry lasts until the part stops. A scope the
+// scope, log and editor, its clicks running `picker.chooseRow` and
+// `picker.cancel` with the plugin's id as owner; the part's stop closes it with
+// no cancel and frees the owner. Call it once per part start: its overlay entry
+// lasts until the part stops, and a second call in one part start throws
+// `picker owner <id> is taken`. A scope the
 // manifest does not declare throws `Plugin "<id>" declares no scope "<name>"`,
 // at the call for a string or a function's first value, and at the push for a
 // function's later value.

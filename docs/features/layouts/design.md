@@ -119,16 +119,17 @@ stays in themes.
 | Owner | Setting | Surfaces |
 | --- | --- | --- |
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the five chrome frames take the layout's CSS |
-| `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
+| `forms` | `forms.layout` | question, finding and notice cards; head, rail, review and notices panes |
 | `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session rows; the composer and its status line, a `/` completion row's description (`completionDescription`), the attachments, the picker rows and section headings (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time and profile on its side-bar row (`rowClock`, `rowProfile`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree, its rows and its Wiki and All pages switch; the rendered doc, its page frame and right column, header, disk banner, section edit control and editor frame; Recent changes and the missing Main page's empty state; the list pages and their rows; the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
-| `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
+| `settings` | `settings.layout` | the section list, the setting, plugin, key, leader and advanced rows, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
-| `sessions` | `sessions.layout` | the side bar's Favorites and Recent sections, their project groups and the session rows in them, each session's tab strip, the session popup (`popup`) and its hidden bar (`popupBar`), where other plugins' row and bar parts sit, the rename dialog |
+| `sessions` | `sessions.layout` | the side bar's Favorites and Recent sections and every plugin's section (`addSection`), their project groups and the session rows in them, each session's tab strip, the session popup (`popup`) and its hidden bar (`popupBar`), where other plugins' row and bar parts sit, the rename dialog |
 | `agent-lines` | `agent-lines.layout` | the working line under each session row while it runs a subagent or task |
 | `session-stash` | `session-stash.layout` | the stash dialog's body: the session's name, the note box and the hint |
+| `auto-retro` | `auto-retro.layout` | the Retro section's header part: the count of closes still queued |
 | `unity-pool` | `unity-pool.layout` | the clone badge under each session row that holds a clone or waits for one; the right-bar pool panel |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
 | `agent-skills` | `agent-skills.layout` | the session hub's Skills section: one row per skill |
@@ -172,6 +173,9 @@ can be iterated in place. The sample sends nothing and raises no notification or
 
 ## Decisions
 
+- **A reload keeps the user's chat draft either way.** A layout reload moves chat's box into the redrawn composer; a
+  page reload restores the draft and the attached images from chat's page slots (`chatPlaceSlot`,
+  `chatDraftImagesSlot`).
 - **Core, not per plugin.** The layouts folder is core-owned and the shell is an owner with no plugin data folder, so
   layouts load on their own `wigley-layout:` scheme, not as a host on `wigley-data:`. A plugin never reaches the folder
   through `api.data`.

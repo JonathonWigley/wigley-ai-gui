@@ -103,13 +103,14 @@ export interface ImagesKit extends NotesKit {
   image(parent: HTMLElement, position: number): HTMLElement;
 }
 export interface ImageKit extends NotesKit {
-  // `button.notes-image-remove`: removes this image on click.
+  // `button.notes-image-remove`: runs `notes.removeImageAt` with this image's index on click.
   removeButton(parent: HTMLElement): HTMLButtonElement;
 }
 export interface SessionKit extends NotesKit {
   // `button.ui-chip.notes-session` reading `text`: picks another session on click.
   sessionChip(parent: HTMLElement, text: string): HTMLElement;
-  // An icon button that removes the session on click.
+  // An icon button that runs `notes.removeSession` with the session's id on click; with no session id it runs
+  // nothing.
   removeButton(parent: HTMLElement): HTMLButtonElement;
 }
 export interface ActionsKit extends NotesKit {

@@ -99,6 +99,18 @@ describe('createPageState', () => {
     expect(store.read(slot, 'q').get()).toBe(1);
   });
 
+  it('push_Cleared_EmptiesMirrorSlotAndTellsListener', async () => {
+    const { bridge, push } = fakeBridge(Promise.resolve(snapshotAt(2, 5)));
+    const store = await createPageState(bridge, () => {});
+    const heard: unknown[] = [];
+    store.read(slot, 'q').on((value) => heard.push(value));
+
+    push(3, { id: 'p.v', kind: 'cleared' });
+
+    expect(store.read(slot, 'q').get()).toBeUndefined();
+    expect(heard).toEqual([undefined]);
+  });
+
   it('write_AppliesLocallyThenSendsOnce', async () => {
     const { bridge, written } = fakeBridge(Promise.resolve(snapshotAt(0)));
     const store = await createPageState(bridge, () => {});

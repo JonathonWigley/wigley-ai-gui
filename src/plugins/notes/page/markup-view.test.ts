@@ -32,6 +32,37 @@ const markup: MarkupEditor = {
     } as unknown as MarkupSession),
 } as unknown as MarkupEditor;
 
+// A markup view over `parts`, opened on image 1 once `settle` runs, each line
+// it logs in `logged` and each colour its session took in `colours`.
+function openedView() {
+  const logged: string[] = [];
+  const colours: string[] = [];
+  const view = createMarkupView({
+    channel: {
+      invoke: () => Promise.resolve(null),
+    } as unknown as PageChannel<NotesChannel>,
+    markup: {
+      open: async (...args: Parameters<MarkupEditor['open']>) => ({
+        ...(await markup.open(...args)),
+        setColour: (colour: string) => colours.push(colour),
+      }),
+    } as unknown as MarkupEditor,
+    parts: createNotesParts(notesPartsDeps().deps),
+    pushScope: () =>
+      ({
+        pop: () => undefined,
+        onBaseChanged: () => undefined,
+      }) as unknown as PushedScope,
+    imageBytes: () => Promise.resolve(new Uint8Array()),
+    closed: () => undefined,
+    saved: () => undefined,
+    log: (line) => logged.push(line),
+    toast: () => undefined,
+  });
+  view.open(1, 1);
+  return { view, logged, colours };
+}
+
 describe('markup view', () => {
   beforeEach(() => {
     installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
@@ -84,5 +115,31 @@ describe('markup view', () => {
       .filter((button) => button.classList.contains('is-active'))
       .map((button) => button.textContent);
     expect(active).toEqual(['Arrow']);
+  });
+
+  it('pickColourByName_UnknownName_ChangesNothing', async () => {
+    const { view, logged, colours } = openedView();
+    await settle();
+    const coloursBefore = colours.length;
+
+    view.pickColourByName('purple');
+
+    expect(colours.length).toBe(coloursBefore);
+    expect(logged.at(-1)).toBe('no markup colour purple');
+  });
+
+  it('pickColourByName_KnownName_SetsThePenAndLogsColour', async () => {
+    const { view, logged, colours } = openedView();
+    await settle();
+    const activeColour = () =>
+      findAll(asFake(view.element), 'notes-colour')
+        .filter((button) => button.classList.contains('is-active'))
+        .map((button) => button.textContent);
+
+    view.pickColourByName('green');
+
+    expect(colours.length).toBeGreaterThan(1);
+    expect(logged.at(-1)).toBe('colour green');
+    expect(activeColour()).toEqual(['Green']);
   });
 });

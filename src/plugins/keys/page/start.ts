@@ -27,6 +27,7 @@ import { startUnplacedLog } from './unplaced-log';
 import { whichKeyModel } from './which-key';
 import { startWhichKey } from './which-key-controller';
 import { mountWhichKeyView } from './which-key-view';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 // The keys plugin's main part only registers its layouts, so its channel
 // carries nothing.
@@ -59,11 +60,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
         markdown: services.markdown,
         keys,
         state: api.state.forLayouts,
-        commands: {
-          exists: (id) => keys.command(id) !== undefined,
-          argShape: (id) => keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform,
       },
       log: services.log,

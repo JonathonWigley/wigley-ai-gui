@@ -6,16 +6,16 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
-import { NEEDS_YOU_ACTIVITY, type SessionRow } from '../contract';
+import {
+  NEEDS_YOU_ACTIVITY,
+  type SessionRow,
+  type SidebarSection,
+} from '../contract';
+import { sessionRow } from '../contract.test-support';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { fakeUiState } from './session-fakes';
-import {
-  drawnRows,
-  rowNamed,
-  sessionRow,
-  sessionsViewSetup,
-} from './sessions-view-fakes';
+import { drawnRows, rowNamed, sessionsViewSetup } from './sessions-view-fakes';
 
 // A row `id`, in `project`, under host session id `hostSessionId`.
 function rowIn(
@@ -23,7 +23,7 @@ function rowIn(
   project: string,
   hostSessionId: string | null = null,
 ): SessionRow {
-  return { ...sessionRow(id), project, hostSessionId };
+  return sessionRow(id, { project, hostSessionId });
 }
 
 function stateWith(rows: SessionRow[]) {
@@ -296,6 +296,65 @@ describe('sessions view side bar', () => {
 
   it.each<{
     case: string;
+    click: (setup: Setup) => void;
+    runs: [string, unknown][];
+  }>([
+    {
+      case: 'sidebarRow_Click_RunsSelectRow',
+      click: (setup) => rowNamed(drawnRows(setup.sideBar), 'label g1').click(),
+      runs: [['sessions.selectRow', 'g1']],
+    },
+    {
+      case: 'favoriteToggle_Click_RunsFavoriteProjectAt',
+      click: (setup) => clickStar(setup, 'gamma'),
+      runs: [['sessions.favoriteProjectAt', 'gamma']],
+    },
+  ])('sidebarClick_RunsItsCommand ($case)', ({ click, runs }) => {
+    const setup = sessionsViewSetup();
+    setup.view.render(stateWith([rowIn('a1', 'alpha'), rowIn('g1', 'gamma')]));
+
+    click(setup);
+
+    expect(setup.runs).toEqual(runs);
+  });
+
+  // The preview's sample selects `preview-1` and holds project `wigley-agents`.
+  it.each<{ case: string; click: (setup: Setup) => void; selected: string }>([
+    {
+      case: 'a row click',
+      click: (setup) =>
+        rowNamed(drawnRows(setup.sideBar), 'new-games-prototypes').click(),
+      selected: 'new-games-prototypes',
+    },
+    {
+      case: 'a star click',
+      click: (setup) => clickStar(setup, 'wigley-agents'),
+      selected: 'wigley-ai-gui',
+    },
+  ])(
+    'sidebarClick_PreviewShown_RunsNoCommand ($case)',
+    ({ click, selected }) => {
+      const uiState = fakeUiState([['favorites', []]]);
+      const setup = sessionsViewSetup(undefined, undefined, undefined, {
+        uiState,
+      });
+      setup.view.render(stateWith([rowIn('a1', 'alpha')]));
+      setup.view.showPreview(true);
+
+      click(setup);
+
+      expect(setup.runs).toEqual([]);
+      expect(setup.activated).toEqual([]);
+      expect(uiState.get('favorites')).toEqual([]);
+      const marked = drawnRows(setup.sideBar).filter((row) =>
+        row.classList.contains('is-selected'),
+      );
+      expect(marked.map((row) => row.title.includes(selected))).toEqual([true]);
+    },
+  );
+
+  it.each<{
+    case: string;
     stamps: Record<string, number>;
     // Each state main sends the fresh view, in turn.
     states: SessionRow[][];
@@ -537,6 +596,92 @@ describe('sessions view side bar', () => {
       expect(findAll(sideBar, 'session-section')).toHaveLength(2);
     },
   );
+
+  it('sessionsView_SectionAddedThenDisposed_RedrawsTheSideBar', () => {
+    const setup = sessionsViewSetup();
+    const { view, sideBar, sections } = setup;
+    let headerDisposes = 0;
+    const retro: SidebarSection = {
+      id: 'retro',
+      label: 'Retro',
+      order: 0,
+      claims: (row) => row.sessionId === 'r1',
+      header: {
+        build(parent) {
+          const span = document.createElement('span');
+          span.textContent = '2 queued';
+          parent.append(span);
+          return {
+            dispose: () => {
+              headerDisposes++;
+            },
+          };
+        },
+      },
+    };
+    const state = stateWith([rowIn('r1', 'alpha'), rowIn('a1', 'alpha')]);
+    view.render(state);
+    const orderedIds = () => view.orderedRows().map((row) => row.sessionId);
+
+    const added = sections.add(retro);
+
+    const [section] = findAll(sideBar, 'session-section--plugin');
+    expect(findAll(section, 'session-section-label')[0].textContent).toContain(
+      'Retro',
+    );
+    expect(findAll(section, 'session-section-part')[0].textContent).toBe(
+      '2 queued',
+    );
+    const claimed = drawnRows(sideBar).filter((row) =>
+      row.classList.contains('session-row--claimed'),
+    );
+    expect(claimed).toEqual([rowNamed(drawnRows(sideBar), 'label r1')]);
+    expect(findAll(section, 'session-row--claimed')).toEqual(claimed);
+    expect(orderedIds()).toEqual(['a1', 'r1']);
+    view.render(state);
+    expect(headerDisposes).toBe(1);
+
+    added.dispose();
+
+    expect(findAll(sideBar, 'session-section--plugin')).toEqual([]);
+    expect(orderedIds()).toEqual(['r1', 'a1']);
+    expect(
+      rowNamed(
+        findAll(groupNamed(setup, 'alpha'), 'ui-row'),
+        'label r1',
+      ).classList.contains('session-row--claimed'),
+    ).toBe(false);
+    expect(headerDisposes).toBe(2);
+  });
+
+  it('sessionsView_ClaimsThrows_RowStaysInItsGroupAndLogs', () => {
+    const setup = sessionsViewSetup();
+    setup.sections.add({
+      id: 'retro',
+      label: 'Retro',
+      order: 0,
+      claims(row) {
+        if (row.sessionId === 'r1') {
+          throw new Error('boom');
+        }
+        return false;
+      },
+    });
+
+    setup.view.render(stateWith([rowIn('a1', 'alpha'), rowIn('r1', 'alpha')]));
+
+    expect(
+      setup.logged.filter(
+        (line) => line === 'section retro claims failed: boom',
+      ),
+    ).toHaveLength(1);
+    const r1 = rowNamed(
+      findAll(groupNamed(setup, 'alpha'), 'ui-row'),
+      'label r1',
+    );
+    expect(r1.classList.contains('session-row--claimed')).toBe(false);
+    expect(findAll(setup.sideBar, 'session-section--plugin')).toEqual([]);
+  });
 });
 
 describe('the sessions list', () => {

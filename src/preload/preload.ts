@@ -1,10 +1,15 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
+import {
+  type Bridge,
+  BRIDGE_CHANNELS,
+  type PluginPartsRequest,
+} from '../contracts/bridge';
 import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
 import { errorText } from '../shared/error-text';
 import { createListeners } from '../shared/listeners';
+import { bridgeClaim } from './bridge-claim';
 import { createPluginMessageSubscribe } from './plugin-message-subscribe';
 
 // Electron prefixes a handler's error with the channel and the error's name.
@@ -80,6 +85,21 @@ const bridge: Bridge = {
       },
     );
   },
+  // A rejecting answer sends no reply: the page's answer logs its own failure.
+  onPluginParts: (answer) => {
+    ipcRenderer.on(
+      BRIDGE_CHANNELS.pluginParts,
+      (_event, request: number, parts: PluginPartsRequest) => {
+        void Promise.resolve()
+          .then(() => answer(parts))
+          .then(
+            (reply) =>
+              ipcRenderer.send(BRIDGE_CHANNELS.pluginPartsDone, request, reply),
+            () => undefined,
+          );
+      },
+    );
+  },
   invoke: (pluginId, method, args) =>
     invokeMain(BRIDGE_CHANNELS.pluginInvoke, pluginId, method, args),
   onMessage: createPluginMessageSubscribe((deliver) => {
@@ -98,4 +118,4 @@ const bridge: Bridge = {
   },
 };
 
-contextBridge.exposeInMainWorld('wigley', bridge);
+contextBridge.exposeInMainWorld('wigley', bridgeClaim(bridge));

@@ -21,8 +21,9 @@
    divider's resize prompt sits centred on its handle, so the side prompts sit
    below the pane's vertical centre and the up and down prompts at the right
    corner, each clear of the resize prompt. The up and down prompts sit in an
-   inset their pane's sheet leaves free, the up one between the tab bar and
-   the sheet, so no content draws under them. */
+   inset their pane leaves free, the up one between the tab bar and the sheet,
+   the down one under the frame, its hidden popups' bar included, so no
+   content draws under them. */
 .session-pane-edge {
   position: absolute;
   z-index: 2;
@@ -37,7 +38,13 @@
 
 .session-pane:has(> .session-pane-edge.is-down)
   > .session-pane-body
-  .session-bodies {
+  > .session-area {
+  padding-bottom: var(--session-edge-inset);
+}
+
+.session-pane:has(> .session-pane-edge.is-down)
+  > .session-pane-body
+  > .session-bodies {
   margin-bottom: var(--session-edge-inset);
 }
 
@@ -69,8 +76,10 @@
   font-weight: var(--wg-weight-regular);
 }
 
-/* Other plugins' row parts share the footer's line and stay on it; each part
-   styles its own content and may set its own wrapper's `order`. */
+/* Other plugins' row parts share the footer's line; each part styles its own
+   content and may set its own wrapper's `order`. A part ordered 2 or later sits
+   in the row's end group, which the default layout puts on a line of its own
+   (`layout.css`). */
 .session-row-parts {
   display: flex;
   flex: 1 1 auto;
@@ -93,11 +102,12 @@
 }
 
 /* A session's frame: the bar holding its tab strip over the sheet of its
-   tabs. */
+   tabs, then the bar of its hidden popups, in flow so it never covers a
+   popup. */
 .session-area {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
 }
@@ -146,6 +156,7 @@
 /* A session's tab body and the text saying why no tab shows share one
    cell; an empty pane's sheet holds the text alone. */
 .session-bodies {
+  position: relative;
   display: grid;
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
 }
@@ -154,7 +165,38 @@
   grid-area: 1 / 1;
 }
 
+/* The popup layer fills the sheet over the tab body, above the pane edges,
+   and takes no pointer but on the popup that shows and on the band of the tab
+   body above it, which the frame-local scrim dims while a popup shows and
+   which absorbs a click. */
+.session-bodies > .session-popups {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.session-popup-scrim {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background: var(--wg-scrim);
+  pointer-events: auto;
+}
+
+.session-popups.has-open > .session-popup-scrim {
+  display: block;
+}
+
+.session-popups > .is-open {
+  pointer-events: auto;
+}
+
+/* The tab body is a stacking context, so no z-index a tab draws reaches
+   past it over the popup layer or the pane edges. */
 .session-body {
+  isolation: isolate;
   min-height: 0;
 }
 

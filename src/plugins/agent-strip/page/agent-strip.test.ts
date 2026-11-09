@@ -149,6 +149,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
   const logged: string[] = [];
   const exitCalls: string[] = [];
   const anchorDisposals: number[] = [];
+  const runs: { sessionId: string; key: string }[] = [];
   let scopeSets = 0;
   const scrollers = fakeScrollers();
   const strip = createAgentStrip({
@@ -196,6 +197,10 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
     },
     nameOf: () => 'proj',
     createScroller: scrollers.create,
+    run(arg) {
+      runs.push(arg);
+      strip.toggleBoxAt(arg.sessionId, arg.key);
+    },
   });
   const exits: ComposerStopExits = {
     toEntries: () => exitCalls.push('toEntries'),
@@ -214,6 +219,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
   return {
     strip,
     wrapper,
+    runs,
     sets,
     clears,
     logged,
@@ -962,6 +968,31 @@ describe('agent strip', () => {
     expect(scrollers.reveals.slice(revealsBefore)).toEqual(
       row.revealedCards.map((index) => boxes()[index]),
     );
+    scrolled.mockRestore();
+  });
+
+  it('click_OnBox_RunsToggleBoxAtWithSessionAndKey', () => {
+    const { build, boxes, runs } = setUp(MIXED);
+    build();
+
+    boxes()[2].click();
+
+    expect(runs).toEqual([{ sessionId: SESSION, key: 't1' }]);
+  });
+
+  // Box 2 of MIXED is a row: it opens and is scrolled into view, from a strip
+  // with no selection.
+  it('toggleBoxAt_OpensAndReveals', () => {
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    const { strip, build, boxes, opened, logged } = setUp(MIXED);
+    build();
+    scrolled.mockClear();
+
+    strip.toggleBoxAt(SESSION, 't1');
+
+    expect(opened()).toEqual([2]);
+    expect(scrolled.mock.contexts).toEqual([boxes()[2]]);
+    expect(logged).toContain('opened box 3 in proj');
     scrolled.mockRestore();
   });
 

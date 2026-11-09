@@ -1,8 +1,18 @@
 import './settings.css';
+import { corePluginsSlot } from '../../../contracts/core-state';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import {
+  keyRunner,
+  kitCommandsOf,
+} from '../../../shared/page/layout-host/base-kit';
+import { placeWrites } from '../../../shared/page/place-slot';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { SettingsChannel } from '../contract';
+import {
+  type SettingsChannel,
+  type SettingsPlace,
+  settingsPlaceSlot,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { SettingsLayout } from '../layouts/layout';
@@ -18,12 +28,18 @@ const TITLE = 'Settings';
 // sheet, drawn through the `settings.layout` layout. `showMode` shows the
 // mode, or toggles its side bar while it shows; main's `show` message
 // (`Cmd+,`) only shows it. Each `changed` message reads the user config again
-// and redraws; each new layout set redraws in the new layouts.
+// and redraws; each new layout set redraws in the new layouts; each change of
+// `core.plugins` redraws the Plugins section. The cursors,
+// the open section and the filter go to `settings.place` on each change, and a
+// page load puts the last page's back.
 export const settingsPagePart: PagePart<typeof settingsManifest> = {
   manifest: settingsManifest,
   start(api: SettingsApi) {
     const { services } = api;
     const { log } = services;
+    const placeWriter = api.state.publish(settingsPlaceSlot);
+    const place = placeWrites<SettingsPlace>((value) => placeWriter.set(value));
+    const plugins = api.state.read(corePluginsSlot);
     const view = createSettingsView({
       channel: api.channel,
       editor: services.editor,
@@ -32,11 +48,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       state: api.state.forLayouts,
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       log,
       toast: services.toast,
       setScope: (scope) => api.keys.setScope(scope),
@@ -52,7 +64,14 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       // A section picked from the side bar, or main taking the keys, closes
       // its overlay.
       sectionPicked: () => mode.picked(),
+      runKey: keyRunner(api.commands, log),
+      placeChanged: (value) => place.write(value),
+      plugins: () => plugins.get() ?? [],
     });
+    const savedPlace = placeWriter.get();
+    if (savedPlace !== undefined) {
+      view.restorePlace(savedPlace);
+    }
 
     // `sectionShown` and `sectionPicked` read `mode` only
     // once the mode shows, after `add`: Settings mode is never the first mode
@@ -83,6 +102,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       setLayouts: (shown) => view.setLayouts(shown),
     });
     api.channel.on('changed', () => view.reread());
+    plugins.on(() => view.pluginsChanged());
     api.channel.on('show', () => mode.show());
     view.load().catch((error) => {
       log(`not loaded: ${errorText(error)}`);
@@ -99,7 +119,12 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
     };
 
     return {
-      commands: { showMode, ...view.commands },
+      commands: {
+        showMode,
+        ...view.commands,
+        moveToRow: ({ arg }) => view.moveToRow(arg),
+        openSectionAt: ({ arg }) => view.openSectionAt(arg),
+      },
     };
   },
 };

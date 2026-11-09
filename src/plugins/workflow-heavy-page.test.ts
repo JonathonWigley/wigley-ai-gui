@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Registrations } from '../contracts/disposable';
-import type { ShownLayouts } from '../contracts/plugin';
+import type {
+  PagePart,
+  PluginCommands,
+  ShownLayouts,
+} from '../contracts/plugin';
 import { withUser } from '../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../shared/page/markdown-mount.test-support';
 import {
@@ -11,9 +14,10 @@ import {
 } from '../shared/page/test-dom';
 import {
   fakeDependency,
+  probePart,
+  providerManifest,
   startPagePart,
 } from '../shared/plugin-part-harness.test-support';
-import { createRegistrations } from '../shared/registrations';
 import {
   type ChatComposerPart,
   type ChatPageExports,
@@ -30,11 +34,11 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from './sessions/contract';
+import { sessionRow } from './sessions/contract.test-support';
 import {
   type SessionFlow,
   workflowFlowsSlot,
-  type WorkflowPageExports,
-  workflowPageKey,
+  workflowStageActionCommand,
 } from './workflow/contract';
 import { newFlow } from './workflow/flow';
 import type {
@@ -51,7 +55,7 @@ import {
 } from './workflow-heavy/contract';
 import defaultLayout from './workflow-heavy/layouts/default/layout.js';
 import { workflowHeavyPagePart } from './workflow-heavy/page/start';
-import type { PlanProgress } from './workflow-heavy/plan-reader';
+import type { PlanProgress, TaskStatus } from '../shared/plan-progress';
 
 const NO_SECTION = { setSummary: () => undefined };
 
@@ -80,6 +84,8 @@ function progressOf(
       wave: index + 1,
       text: `task ${index + 1}.${at + 1}`,
       done: false,
+      file: null,
+      status: null,
     })),
   );
   tasks.forEach((task, index) => {
@@ -132,14 +138,22 @@ const BUSY: Record<string, FlowFields> = {
   subagent: { runningSubagents: ['agent-1'] },
 };
 
-// A plan of `tasks`, `[wave, done]` each, its tasks named by position
+// A plan of `tasks`, `[wave, done, status?]` each, its tasks named by position
 // (`w3.2` is wave 3's second task; `t.1` the first under no wave heading).
-function planOf(tasks: [wave: number | null, done: boolean][]): PlanProgress {
+function planOf(
+  tasks: [wave: number | null, done: boolean, status?: TaskStatus][],
+): PlanProgress {
   const seen = new Map<number | null, number>();
-  const lines = tasks.map(([wave, done]) => {
+  const lines = tasks.map(([wave, done, status = null]) => {
     const at = (seen.get(wave) ?? 0) + 1;
     seen.set(wave, at);
-    return { wave, done, text: `${wave === null ? 't' : `w${wave}`}.${at}` };
+    return {
+      wave,
+      done,
+      text: `${wave === null ? 't' : `w${wave}`}.${at}`,
+      file: null,
+      status,
+    };
   });
   return {
     checked: lines.filter((line) => line.done).length,
@@ -159,25 +173,61 @@ const MARKDOWN = {
 };
 
 function rowOf(sessionId: string): SessionRow {
-  return {
-    sessionId,
+  return sessionRow(sessionId, {
     label: 'proj',
     project: 'proj',
-    harness: 'claude',
-    marked: false,
     projectDir: '/p/proj',
-    hostSessionId: null,
-    titles: { user: null, agent: null, firstMessage: null },
-    profileDir: null,
+  });
+}
+
+// A page part of `id` that hands each dependent `exports`, as a provider's part
+// does.
+function providerPart(id: string, exports: unknown): PagePart {
+  return {
+    manifest: providerManifest(id),
+    start: () => ({ commands: {}, exports: () => exports }),
   };
 }
 
-// The real engine page part and the real Heavy page part on its exports, each in
-// its own harness, over fakes of sessions, chat and docs. `view` drives the engine
-// as its parts' hosts, commands and slots do: `put` writes a flow, `timers` counts the engine's live timers and `advance` moves its clock, `setLayouts` shows
-// Heavy's layouts. `invoked` records Heavy's `runAction` calls; `logged` reads the
-// engine's lines; `heavyLogged` Heavy's; every session named `a`, `b` or `s1` reads
-// as `proj`. `selected` sets the session the commands run on.
+// The real engine page part, its live timers' handles held in `live`.
+function countingEngineTimers(live: Set<number>): PagePart {
+  return {
+    manifest: workflowPagePart.manifest,
+    start(api: Parameters<typeof workflowPagePart.start>[0]) {
+      const { timers } = api.services;
+      return workflowPagePart.start({
+        ...api,
+        services: {
+          ...api.services,
+          timers: {
+            set(run, ms) {
+              const handle = timers.set(() => {
+                live.delete(handle);
+                run();
+              }, ms);
+              live.add(handle);
+              return handle;
+            },
+            clear(handle) {
+              live.delete(handle);
+              timers.clear(handle);
+            },
+          },
+        },
+      });
+    },
+  } as unknown as PagePart;
+}
+
+// The real Heavy page part over the real engine page part, in one command world,
+// over fakes of sessions, chat and docs. `view` drives the engine as its parts'
+// hosts, commands and slots do, running `workflow.stageAction` and
+// `workflow.toggleSidePane`: `put` writes a flow, `timers` counts the engine's
+// live timers and `advance` moves its clock, `setLayouts` shows Heavy's layouts.
+// `invoked` records Heavy's `runAction` calls; `logged` reads the engine's lines;
+// `heavyLogged` Heavy's; every session named `a`, `b` or `s1` reads as `proj`.
+// `selected` sets the session the commands run on; `stageActions` reads the arg
+// of each `workflow.stageAction` run heard; `commands` is another plugin's.
 function setUp() {
   const invoked: HeavyActionRequest[] = [];
   const openedDocs: string[] = [];
@@ -185,53 +235,40 @@ function setUp() {
   const rowParts: SessionPart[] = [];
   const composerParts: ChatComposerPart[] = [];
   const sideParts: ChatSidePart[] = [];
+  const engineTimers = new Set<number>();
+  const probe: { commands: PluginCommands | null } = { commands: null };
+  const runs: [string, unknown][] = [];
   const untracked = () => ({ dispose: () => undefined });
-  const engine = startPagePart(workflowPagePart, {
-    dependencies: [
-      fakeDependency(
-        sessionsPageKey,
-        () =>
-          ({
-            addRowPart: (part: SessionPart) => {
-              rowParts.push(part);
-              return untracked();
-            },
-            addTab: untracked,
-            setActivity: (
-              sessionId: string,
-              _owner: string,
-              activity: RowActivity | null,
-            ) => rowActivities.set(sessionId, activity),
-          }) as unknown as SessionsPageExports,
-      ),
-      fakeDependency(
-        chatPageKey,
-        () =>
-          ({
-            addComposerPart: (part: ChatComposerPart) => {
-              composerParts.push(part);
-              return untracked();
-            },
-            addSidePart: (part: ChatSidePart) => {
-              sideParts.push(part);
-              return untracked();
-            },
-          }) as unknown as ChatPageExports,
-      ),
-    ],
-    services: { markdown: MARKDOWN },
-  });
-  const engineExports = (consumer: Registrations = createRegistrations()) =>
-    engine.started().exports?.(consumer) as WorkflowPageExports;
-  const runCommand = vi.fn((sessionId: string, command: string) =>
-    engineExports().runCommand(sessionId, command),
-  );
+  const sessions = {
+    addRowPart: (part: SessionPart) => {
+      rowParts.push(part);
+      return untracked();
+    },
+    addTab: untracked,
+    setActivity: (
+      sessionId: string,
+      _owner: string,
+      activity: RowActivity | null,
+    ) => rowActivities.set(sessionId, activity),
+  } as unknown as SessionsPageExports;
+  const chat = {
+    addComposerPart: (part: ChatComposerPart) => {
+      composerParts.push(part);
+      return untracked();
+    },
+    addSidePart: (part: ChatSidePart) => {
+      sideParts.push(part);
+      return untracked();
+    },
+  } as unknown as ChatPageExports;
   const heavy = startPagePart(workflowHeavyPagePart, {
+    parts: [
+      providerPart(sessionsPageKey.id, sessions),
+      providerPart(chatPageKey.id, chat),
+      countingEngineTimers(engineTimers),
+      probePart(runs, probe),
+    ],
     dependencies: [
-      fakeDependency(workflowPageKey, (consumer) => ({
-        ...engineExports(consumer),
-        runCommand,
-      })),
       fakeDependency(
         docsPageKey,
         () =>
@@ -240,20 +277,23 @@ function setUp() {
           }) as unknown as DocsPageExports,
       ),
     ],
+    services: { markdown: MARKDOWN },
     invoke: async (_method, ...args) => {
       invoked.push(args[0] as HeavyActionRequest);
     },
   });
-  const rows = engine.state.publish(sessionsRowsSlot);
-  const flows = engine.state.publish(workflowFlowsSlot);
+  const commands = () => probe.commands!;
+  const rows = heavy.state.publish(sessionsRowsSlot);
+  const flows = heavy.state.publish(workflowFlowsSlot);
   const active = heavy.state.publish(sessionsActiveSlot);
   for (const sessionId of ['a', 'b', 's1']) {
     rows.set(sessionId, rowOf(sessionId));
   }
-  engine.emit('core.pageReady', null);
-  engine.advance(NOW);
+  heavy.ready();
+  heavy.advance(NOW);
   const put = (flow: SessionFlow) => flows.set(flow.sessionId, flow);
-  const engineCommands = () => engine.started().commands;
+  const stageAction = (sessionId: string, action: string) =>
+    commands().run(workflowStageActionCommand, { sessionId, action });
   let isPaneHidden = false;
   const view = {
     get chipPart() {
@@ -262,14 +302,13 @@ function setUp() {
     get stripPart() {
       return composerParts[0];
     },
-    runFor: (sessionId: string, command: string) =>
-      engineExports().runCommand(sessionId, command),
+    runFor: stageAction,
     toggleFinishedWaves: (sessionId: string) =>
-      engineExports().runCommand(sessionId, 'toggleFinishedWaves'),
+      stageAction(sessionId, 'toggleFinishedWaves'),
     setSidePaneHidden(hidden: boolean) {
       if (hidden !== isPaneHidden) {
         isPaneHidden = hidden;
-        engineCommands().toggleSidePane({ arg: undefined });
+        void commands().run('workflow.toggleSidePane');
       }
     },
     // A session leaving and coming back: the engine forgets what it kept for it.
@@ -280,12 +319,11 @@ function setUp() {
     },
     redraw: () => undefined,
   };
-  const linesOf = (harness: typeof engine | typeof heavy, source: string) =>
-    harness.logs
+  const linesOf = (source: string) =>
+    heavy.logs
       .filter((entry) => entry.source === source)
       .map((entry) => entry.message);
   return {
-    engine,
     heavy,
     view,
     sidePart: sideParts[0],
@@ -293,19 +331,34 @@ function setUp() {
     setLayouts: (shown: ShownLayouts<Layout>) =>
       heavy.showLayouts(shown as ShownLayouts<unknown>),
     put,
-    advance: engine.advance,
-    timers: () => engine.counts().timers,
-    logged: () => linesOf(engine, 'workflow'),
-    heavyLogged: () => linesOf(heavy, 'workflow-heavy'),
+    advance: heavy.advance,
+    timers: () => engineTimers.size,
+    logged: () => linesOf('workflow'),
+    heavyLogged: () => linesOf('workflow-heavy'),
     invoked,
     openedDocs,
-    runCommand,
     rowActivities,
     selected: (sessionId: string | null) => active.set(sessionId),
+    stageActions: () =>
+      runs
+        .filter(([id]) => id === workflowStageActionCommand.id)
+        .map(([, arg]) => arg),
+    commands,
   };
 }
 
 type HeavyView = ReturnType<typeof setUp>['view'];
+
+// A user layout whose chip draws only its main action's button, with no key hint.
+const chipWithMainButton: Layout = {
+  chip(parent, input, kit) {
+    const chip = kit.el(parent, 'div', 'button-chip');
+    if (input.mainAction !== null) {
+      kit.actionButton(chip, input.mainAction, { anchor: false });
+    }
+    return { element: chip };
+  },
+};
 
 // A user layout whose strip and side pane record each input they draw.
 function recordingLayout() {
@@ -570,16 +623,7 @@ describe('Heavy over the engine page part', () => {
 
   it('button_ChipOfUnselectedSession_RunsForItsOwnSession', async () => {
     const { view, put, invoked, setLayouts } = setUp();
-    const withButton: Layout = {
-      chip(parent, input, kit) {
-        const chip = kit.el(parent, 'div', 'button-chip');
-        if (input.mainAction !== null) {
-          kit.actionButton(chip, input.mainAction, { anchor: false });
-        }
-        return { element: chip };
-      },
-    };
-    setLayouts(withUser<Layout>(defaultLayout, withButton));
+    setLayouts(withUser<Layout>(defaultLayout, chipWithMainButton));
     const chips = { a: new FakeElement('div'), b: new FakeElement('div') };
     put(flowIn('planReady', {}, 'a'));
     put(flowIn('planReady', {}, 'b'));
@@ -787,7 +831,7 @@ describe('Heavy over the engine page part', () => {
         title: 'Wave 3',
         items: [
           { text: 'w3.1', state: 'done' },
-          { text: 'w3.2', state: 'running' },
+          { text: 'w3.2', state: 'pending' },
         ],
       },
       laterGroups: [
@@ -796,11 +840,32 @@ describe('Heavy over the engine page part', () => {
       ],
     },
     {
-      name: 'make not busy',
+      name: 'make busy, w3.1 and w4.1 in progress',
+      stage: 'make',
+      busy: 'turn',
+      plan: planOf([
+        [3, false, 'in progress'],
+        [3, false],
+        [4, false, 'in progress'],
+      ]),
+      finishedGroups: [],
+      currentGroup: {
+        title: 'Wave 3',
+        items: [
+          { text: 'w3.1', state: 'running' },
+          { text: 'w3.2', state: 'pending' },
+        ],
+      },
+      laterGroups: [
+        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
+      ],
+    },
+    {
+      name: 'make not busy, w3.1 in progress',
       stage: 'make',
       busy: 'none',
       plan: planOf([
-        [3, false],
+        [3, false, 'in progress'],
         [4, false],
       ]),
       finishedGroups: [],
@@ -816,7 +881,7 @@ describe('Heavy over the engine page part', () => {
       name: 'review busy runs no tasks',
       stage: 'review',
       busy: 'turn',
-      plan: planOf([[3, false]]),
+      plan: planOf([[3, false, 'in progress']]),
       finishedGroups: [],
       currentGroup: {
         title: 'Wave 3',
@@ -839,7 +904,7 @@ describe('Heavy over the engine page part', () => {
       ],
       currentGroup: {
         title: 'Wave 1',
-        items: [{ text: 'w1.1', state: 'paused' }],
+        items: [{ text: 'w1.1', state: 'pending' }],
       },
       laterGroups: [
         {
@@ -864,7 +929,7 @@ describe('Heavy over the engine page part', () => {
         title: 'Tasks',
         items: [
           { text: 't.1', state: 'done' },
-          { text: 't.2', state: 'running' },
+          { text: 't.2', state: 'pending' },
         ],
       },
       laterGroups: [],
@@ -882,7 +947,7 @@ describe('Heavy over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Tasks',
-        items: [{ text: 't.1', state: 'paused' }],
+        items: [{ text: 't.1', state: 'pending' }],
       },
       laterGroups: [
         {
@@ -1270,13 +1335,13 @@ describe('Heavy over the engine page part', () => {
   });
 
   it('commandWithNoSelectedSession_LogsAndRunsNothing', async () => {
-    const { heavy, heavyLogged, invoked, runCommand } = setUp();
+    const { heavy, heavyLogged, invoked, stageActions } = setUp();
 
     heavy.started().commands.dismiss({ arg: undefined });
     await settle();
 
     expect(heavyLogged()).toEqual(['no selected session for dismiss']);
-    expect(runCommand).not.toHaveBeenCalled();
+    expect(stageActions()).toEqual([]);
     expect(invoked).toEqual([]);
   });
 
@@ -1290,13 +1355,14 @@ describe('Heavy over the engine page part', () => {
     'dismiss',
   ] as const)(
     'commands_WithASelectedSession_RunThroughTheEngine %s',
-    (command) => {
-      const { heavy, runCommand, selected } = setUp();
+    async (command) => {
+      const { heavy, selected, stageActions } = setUp();
       selected('s1');
 
       heavy.started().commands[command]({ arg: undefined });
+      await settle();
 
-      expect(runCommand.mock.calls).toEqual([['s1', command]]);
+      expect(stageActions()).toEqual([{ sessionId: 's1', action: command }]);
     },
   );
 
@@ -1310,5 +1376,46 @@ describe('Heavy over the engine page part', () => {
 
     expect(openedDocs).toEqual([`${PLAN_DIR}/plan.md`]);
     expect(invoked).toEqual([]);
+  });
+
+  it.each<{
+    case: string;
+    run(scene: ReturnType<typeof setUp>): void;
+    heard: { sessionId: string; action: string };
+  }>([
+    {
+      case: 'Heavy key',
+      run: ({ heavy, selected }) => {
+        selected('s1');
+        heavy.started().commands.clearAndMake({ arg: undefined });
+      },
+      heard: { sessionId: 's1', action: 'clearAndMake' },
+    },
+    {
+      case: 'button',
+      run: ({ view, setLayouts }) => {
+        setLayouts(withUser<Layout>(defaultLayout, chipWithMainButton));
+        const chip = new FakeElement('div');
+        view.chipPart.build(asHtml(chip), 'b');
+        findAll(chip, 'ui-button')[0].fire('click', {
+          stopPropagation: () => undefined,
+        });
+      },
+      heard: { sessionId: 'b', action: 'mainAction' },
+    },
+  ])('intercept_OnStageAction_WrapsKeysAndButtons $case', async (row) => {
+    const scene = setUp();
+    const intercepted: unknown[] = [];
+    scene.commands().intercept(workflowStageActionCommand.id, (_next, run) => {
+      intercepted.push(run.arg);
+    });
+    scene.put(flowIn('planReady', {}, 's1'));
+    scene.put(flowIn('planReady', {}, 'b'));
+
+    row.run(scene);
+    await settle();
+
+    expect(intercepted).toEqual([row.heard]);
+    expect(scene.invoked).toEqual([]);
   });
 });

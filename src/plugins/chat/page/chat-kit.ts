@@ -16,17 +16,22 @@ import { imageUrl } from './attachments';
 import { type SurfaceKitDeps, surfaceBaseKit } from './chat-layouts';
 import type { PermissionEntry } from './chat-state';
 
-// `allow` answers the permission entry allowed; `deny` opens the reason box
-// for it. `keys` also anchors the permission actions' key hints.
-// `openImages` opens the image viewer on a user entry's images at `index`.
+// What a click on Allow once, Deny, a thumbnail or an expander's head calls:
+// `allow` and `deny` with the permission entry, `openImages` with the user
+// entry's id and the thumbnail's index, `expanderClicked` with the entry's id
+// and the expander's creation-order place. `keys` also anchors the permission
+// actions' key hints.
 export interface KitDeps extends SurfaceKitDeps {
   allow(entry: PermissionEntry): void;
   deny(entry: PermissionEntry): void;
-  openImages(images: readonly ChatImage[], index: number): void;
+  openImages(entryId: string, index: number): void;
+  expanderClicked(entryId: string, place: number): void;
 }
 
 // One of a kit's expanders: a collapsible card or row, or an expander.
 export type Expander = Pick<CollapsibleCard, 'element' | 'isOpen' | 'setOpen'>;
+
+export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
 
 // The expanders one kit made (its expanders, collapsible cards and rows), in
 // creation order.
@@ -34,6 +39,9 @@ export interface Expanders {
   count(): number;
   isAnyClosed(): boolean;
   setAllOpen(open: boolean): void;
+  // Opens the expander at creation-order `place` when closed, else closes it;
+  // `nothing` when no expander holds that place.
+  toggle(place: number): ToggleResult;
   openStates(): boolean[];
   // Opens each expander whose creation-order place is open in `states`.
   restore(states: readonly boolean[]): void;
@@ -59,12 +67,17 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
   const expanders: Expander[] = [];
   const permissionParts: PermissionPart[] = [];
   const anchors: Disposable[] = [];
-  // Builds a collapsible into `parent`, one of the kit's expanders.
+  // Builds a collapsible into `parent`, one of the kit's expanders; its head's
+  // click goes to `expanderClicked` with its place.
   const addCollapsible = (
     parent: HTMLElement,
     options: CollapsibleCardOptions,
   ): CollapsibleCard => {
-    const built = createCollapsibleCard(options);
+    const place = expanders.length;
+    const built = createCollapsibleCard({
+      ...options,
+      onToggle: () => deps.expanderClicked(current.id, place),
+    });
     expanders.push(built);
     parent.append(built.element);
     return built;
@@ -97,7 +110,10 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       if (current.kind !== 'user') {
         throw new Error('images is only for a user entry');
       }
-      return appended(parent, imageThumbnails(current.images, deps));
+      return appended(
+        parent,
+        imageThumbnails(current.id, current.images, deps),
+      );
     },
     tokens: (count) => formatTokens(count),
   };
@@ -124,6 +140,15 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
         for (const expander of expanders) {
           expander.setOpen(open);
         }
+      },
+      toggle(place) {
+        const expander = expanders.at(place);
+        if (expander === undefined || place < 0) {
+          return 'nothing';
+        }
+        const opens = !expander.isOpen();
+        expander.setOpen(opens);
+        return opens ? 'expanded' : 'collapsed';
       },
       openStates: () => expanders.map((expander) => expander.isOpen()),
       restore(states) {
@@ -195,8 +220,10 @@ function createPermissionPart(
   return { element: part, draw, dispose: () => disposeAnchors(anchors) };
 }
 
-// One thumbnail per image, each opening the viewer at its own index.
+// One thumbnail per image of entry `entryId`, a click on each calling
+// `openImages` with its own index.
 function imageThumbnails(
+  entryId: string,
   images: readonly ChatImage[],
   deps: Pick<KitDeps, 'openImages'>,
 ): HTMLElement {
@@ -206,7 +233,9 @@ function imageThumbnails(
       const thumbnail = element('img', 'chat-image-thumbnail');
       thumbnail.src = imageUrl(image);
       thumbnail.alt = `Image ${index + 1} of ${images.length}`;
-      thumbnail.addEventListener('click', () => deps.openImages(images, index));
+      thumbnail.addEventListener('click', () =>
+        deps.openImages(entryId, index),
+      );
       return thumbnail;
     }),
   );

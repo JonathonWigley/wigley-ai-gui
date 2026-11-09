@@ -9,7 +9,12 @@ import {
 } from '../../../shared/page/ui/drag-reorder';
 import { rowAction } from '../../../shared/page/ui/row';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { RowActivity, SessionRow, SessionsState } from '../contract';
+import type {
+  RowActivity,
+  SessionRow,
+  SessionsState,
+  SidebarSection,
+} from '../contract';
 import type {
   SectionInput,
   SectionPane,
@@ -22,19 +27,21 @@ import type {
   SessionsParts,
 } from './layout/sessions-parts';
 import {
+  type ClaimedSection,
   drawnRows,
   type SidebarGroup,
   type SidebarSections,
 } from './sidebar-order';
 import { harnessText, hasOtherSession } from './tabs';
 
-// What a row draws beside its session: its shown title, its activity and its
-// second line, each null for none, and whether its session shows in a pane
-// other than the focused one.
+// What a row draws beside its session: its shown title and its activity, each
+// null for none, its row parts' tooltips, read at each draw and each time the
+// pointer enters the row, and whether its session shows in a pane other than
+// the focused one.
 export interface RowState {
   title: string | null;
   activity: RowActivity | null;
-  status: string | null;
+  partTooltips(): string[];
   onScreen: boolean;
 }
 
@@ -72,7 +79,7 @@ export interface SidebarView {
   // drag runs the last call waits, and draws once the drag ends.
   render(
     state: SessionsState | null,
-    sections: SidebarSections<SessionRow>,
+    sections: SidebarSections<SessionRow, SidebarSection>,
     rowStateOf: (row: SessionRow) => RowState,
     skip: ReadonlySet<string>,
     cursor: SidebarCursor,
@@ -118,7 +125,8 @@ function rowActionsElement(
   return actions;
 }
 
-type SectionKind = SectionInput['kind'];
+// The kinds of the two sections that always draw.
+type SectionKind = Exclude<SectionInput['kind'], 'plugin'>;
 
 const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
   favorites: {
@@ -132,13 +140,15 @@ const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
 // pane (a "Sessions" header holding the previous and next session prompts,
 // hidden while no session a step reaches is there to move to) over the
 // Favorites and Recent `section`s, each holding a `group` per project over its
-// `row`s. The rows box carries `has-favorites` while Favorites holds a group,
-// and `is-reordering` while a group header drags; it takes focus by script
-// alone (`tabIndex` -1) while the list holds the keys, drawing no outline of
-// its own. The view keeps each row's click, which activates its session, its
-// tooltip, the selected row's mark, the cursor's ring and prompt
-// (`s favorite  r rename  d close`, with `K up  J down` on a favorite's row,
-// named with `anchor`), each star's click and each header's tooltip and drag.
+// `row`s, then a `section` per registered section that claimed a row, holding
+// its `row`s directly, with its header part. The rows box carries
+// `has-favorites` while Favorites holds a group, and `is-reordering` while a
+// group header drags; it takes focus by script alone (`tabIndex` -1) while the
+// list holds the keys, drawing no outline of its own. The view keeps each row's
+// click, which activates its session, its tooltip, the selected row's mark, the
+// cursor's ring and prompt (`s favorite  r rename  d close`, with `K up  J down`
+// on a favorite project's row, named with `anchor`), each star's click and each
+// header's tooltip and drag.
 export function mountSidebarView(
   events: SidebarEvents,
   parts: SessionsParts,
@@ -160,6 +170,17 @@ export function mountSidebarView(
     anchor,
   );
   // The prompt stays hidden until `render` hands it a state.
+
+  // Whether `session`'s row is the cursor's while the list holds the keys, and
+  // the prompt it ends in then: the favorite prompt on a favorite project's row.
+  const promptOf = (
+    cursor: SidebarCursor,
+    session: SessionRow,
+    isFavorite: boolean,
+  ) => ({
+    isPrompted: cursor.hasKeys && session.sessionId === cursor.sessionId,
+    prompt: isFavorite ? favoritePrompt : otherPrompt,
+  });
   const drawPane = (): DrawnPart<DrawnSideBar> => {
     host.replaceChildren();
     const drawn = parts.sideBar(host);
@@ -234,21 +255,18 @@ export function mountSidebarView(
     );
     dragReorder.item(drawn.built.element, drawn.built.header, project, kind);
     for (const session of group.rows) {
-      const isCursor = cursor.hasKeys && session.sessionId === cursor.sessionId;
-      const row = drawRow(
-        parts,
-        drawn.built.rows,
-        session,
-        session.sessionId === selectedSessionId,
-        rowStateOf(session),
-        events.activate,
-        {
-          isPrompted: isCursor,
-          prompt: isFavorite ? favoritePrompt : otherPrompt,
-        },
+      rows.push(
+        drawRow(
+          parts,
+          drawn.built.rows,
+          session,
+          session.sessionId === selectedSessionId,
+          rowStateOf(session),
+          null,
+          events.activate,
+          promptOf(cursor, session, isFavorite),
+        ),
       );
-      row.built.element.classList.toggle('is-cursor', isCursor);
-      rows.push(row);
     }
   };
 
@@ -259,11 +277,16 @@ export function mountSidebarView(
     rowStateOf: (row: SessionRow) => RowState,
     cursor: SidebarCursor,
   ) => {
-    const drawn = parts.section(pane.built.rows, {
-      kind,
-      ...SECTION_TEXT[kind],
-      isEmpty: sectionGroups.length === 0,
-    });
+    const drawn = parts.section(
+      pane.built.rows,
+      {
+        kind,
+        id: kind,
+        ...SECTION_TEXT[kind],
+        isEmpty: sectionGroups.length === 0,
+      },
+      null,
+    );
     sections.push(drawn);
     dragReorder.zone(drawn.built.groups, kind, {
       ordered: kind === 'favorites',
@@ -276,6 +299,41 @@ export function mountSidebarView(
         selectedSessionId,
         rowStateOf,
         cursor,
+      );
+    }
+  };
+
+  // A registered section: no drop zone, its rows straight in its box.
+  const drawPluginSection = (
+    { section, rows: sectionRows }: ClaimedSection<SessionRow, SidebarSection>,
+    selectedSessionId: string | null,
+    rowStateOf: (row: SessionRow) => RowState,
+    cursor: SidebarCursor,
+  ) => {
+    const drawn = parts.section(
+      pane.built.rows,
+      {
+        kind: 'plugin',
+        id: section.id,
+        label: section.label,
+        dropHint: '',
+        isEmpty: false,
+      },
+      section.header ?? null,
+    );
+    sections.push(drawn);
+    for (const session of sectionRows) {
+      rows.push(
+        drawRow(
+          parts,
+          drawn.built.groups,
+          session,
+          session.sessionId === selectedSessionId,
+          rowStateOf(session),
+          section.id,
+          events.activate,
+          promptOf(cursor, session, shownFavorites.includes(session.project)),
+        ),
       );
     }
   };
@@ -328,6 +386,9 @@ export function mountSidebarView(
           rowStateOf,
           cursor,
         );
+        for (const claimed of nextSections.plugins) {
+          drawPluginSection(claimed, selectedSessionId, rowStateOf, cursor);
+        }
         if (cursor.hasKeys && cursor.sessionId !== scrolledTo) {
           rows
             .find((row) => row.built.element.classList.contains('is-cursor'))
@@ -349,7 +410,8 @@ function drawRow(
   list: HTMLElement,
   session: SessionRow,
   isSelected: boolean,
-  { title, activity, status, onScreen }: RowState,
+  { title, activity, partTooltips, onScreen }: RowState,
+  section: string | null,
   activate: (sessionId: string) => void,
   { isPrompted, prompt }: { isPrompted: boolean; prompt: HTMLElement },
 ): DrawnPart<SessionsPart> {
@@ -369,17 +431,27 @@ function drawRow(
               tone: activity.tone,
               emphasis: activity.emphasis ?? null,
             },
-      status,
       onScreen,
+      section,
       isPrompted,
     },
     prompt,
   );
+  drawn.built.element.classList.toggle('is-cursor', isPrompted);
   const entry = drawn.built.element;
   rowAction(entry, () => activate(session.sessionId));
-  entry.title = [title, session.label, activity?.word ?? null, status]
-    .filter((part) => part !== null)
-    .join(' · ');
+  const setTooltip = () => {
+    entry.title = [
+      title,
+      session.label,
+      activity?.word ?? null,
+      ...partTooltips(),
+    ]
+      .filter((part) => part !== null)
+      .join(' · ');
+  };
+  setTooltip();
+  entry.addEventListener('pointerenter', setTooltip);
   entry.classList.toggle('is-selected', isSelected);
   if (isSelected) {
     entry.setAttribute('aria-current', 'true');

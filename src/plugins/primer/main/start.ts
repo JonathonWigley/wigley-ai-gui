@@ -71,7 +71,8 @@ export function addDriveActions(
 // chat session when the primer finishes with no call waiting, registers the
 // primer layouts, and opens the layout preview on the page's ask over a
 // service of its own whose store is in memory and whose primers go through the
-// presenter's quiet view; in the self-test it hands the driver its script, and
+// presenter's quiet view; refuses a switch-off while an agent's primer is
+// open; in the self-test it hands the driver its script, and
 // in a drive run it adds the drive actions.
 export const primerMainPart: MainPart<typeof primerManifest> = {
   manifest: primerManifest,
@@ -92,6 +93,9 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       alerts: services.alerts,
       source: 'primer',
       announceTitle: 'Feature primer ready',
+      noun: primerType.noun,
+      markText: (label) => `Primer from ${label}`,
+      markAction: 'answer',
       window: services.window,
       log: services.log,
       sessions,
@@ -135,6 +139,7 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
     }
     return {
       commands: {},
+      mayStop: () => presenter.mayStop(),
       dispose: () => preview.dispose(),
     };
   },

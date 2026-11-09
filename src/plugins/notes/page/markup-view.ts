@@ -53,6 +53,9 @@ export interface MarkupView {
   savesSettled(): Promise<void>;
   setTool(tool: MarkupTool): void;
   stepColour(step: 1 | -1): void;
+  // Sets the pen to the markup colour `colour` names; a name outside
+  // `MARKUP_COLOURS` logs `no markup colour <colour>` and changes nothing.
+  pickColourByName(colour: string): void;
   undo(): void;
   redo(): void;
   // Draws the toolbar again with the parts' shown layouts; an open markup
@@ -94,9 +97,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
     colours: [],
   };
   const drawToolbar = () => {
-    buttons = parts.markupToolbar(toolbar, (colour) =>
-      pickColour(MARKUP_COLOURS.indexOf(colour)),
-    );
+    buttons = parts.markupToolbar(toolbar);
     markActive();
   };
 
@@ -237,6 +238,14 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       pickColour(
         (colourIndex + step + MARKUP_COLOURS.length) % MARKUP_COLOURS.length,
       );
+    },
+    pickColourByName(colour) {
+      const index = MARKUP_COLOURS.indexOf(colour as MarkupColour);
+      if (index === -1) {
+        deps.log(`no markup colour ${colour}`);
+        return;
+      }
+      pickColour(index);
     },
     undo() {
       const session = sessionNow();

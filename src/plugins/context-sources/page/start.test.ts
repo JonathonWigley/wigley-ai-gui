@@ -59,6 +59,8 @@ function startOnHarness() {
   return { harness, sectionSummaries };
 }
 
+type Harness = ReturnType<typeof startOnHarness>['harness'];
+
 describe('contextSourcesPagePart', () => {
   beforeEach(() => {
     installFakeDom(vi.stubGlobal);
@@ -80,6 +82,7 @@ describe('contextSourcesPagePart', () => {
 
   it('stopThenStart_StartsAgain', async () => {
     const { harness } = startOnHarness();
+    harness.ready();
     const before = harness.counts();
 
     await harness.restart();
@@ -87,13 +90,31 @@ describe('contextSourcesPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('pageReady_BreakdownWrittenBefore_DrawsIt', () => {
-    const { harness, sectionSummaries } = startOnHarness();
-    harness.state.publish(contextBreakdownsSlot).set(SESSION, BREAKDOWN);
-    expect(sectionSummaries).toEqual([null]);
+  it.each<{ name: string; load: (harness: Harness) => Promise<void> }>([
+    { name: 'page load', load: async (harness) => harness.ready() },
+    {
+      name: 'live restart',
+      load: async (harness) => {
+        harness.ready();
+        await harness.restart();
+      },
+    },
+  ])(
+    'ready_BreakdownWrittenBefore_DrawsItAndHearsTheNext: $name',
+    async ({ load }) => {
+      const { harness, sectionSummaries } = startOnHarness();
+      const breakdowns = harness.state.publish(contextBreakdownsSlot);
+      breakdowns.set(SESSION, BREAKDOWN);
+      expect(sectionSummaries).toEqual([null]);
 
-    harness.emit('core.pageReady', null);
+      await load(harness);
+      const drawnAtLoad = sectionSummaries.at(-1);
+      breakdowns.set(SESSION, { ...BREAKDOWN, totalTokens: 20_000 });
 
-    expect(sectionSummaries).toEqual([null, '10k · 10%']);
-  });
+      expect([drawnAtLoad, sectionSummaries.at(-1)]).toEqual([
+        '10k · 10%',
+        '20k · 20%',
+      ]);
+    },
+  );
 });

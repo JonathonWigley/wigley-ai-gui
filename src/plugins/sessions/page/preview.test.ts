@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  asHtml,
   FakeElement,
   findAll,
   installFakeDom,
@@ -12,16 +11,16 @@ import {
   type SessionRow,
   type SessionsState,
 } from '../contract';
+import { sessionRow } from '../contract.test-support';
 import {
   PREVIEW_STATE,
-  PREVIEW_STATUSES,
   previewRowState,
+  previewSections,
   previewToggle,
 } from './preview';
 import {
   drawnRows,
   rowNamed,
-  sessionRow,
   sessionsViewSetup,
   stateOf,
 } from './sessions-view-fakes';
@@ -72,7 +71,6 @@ afterEach(() => {
 describe('sessions preview', () => {
   it('preview_SampleRows_CoverEveryRowState', () => {
     const { rows, selectedSessionId } = PREVIEW_STATE;
-    const statusOf = (sessionId: string) => PREVIEW_STATUSES[sessionId] ?? null;
 
     expect(rows.map((row) => row.sessionId)).toContain(selectedSessionId);
     expect(rows.some((row) => row.marked)).toBe(true);
@@ -80,15 +78,18 @@ describe('sessions preview', () => {
     expect(new Set(rows.map((row) => row.harness))).toEqual(
       new Set([...HARNESSES, null]),
     );
-    expect(rows.some((row) => statusOf(row.sessionId) !== null)).toBe(true);
-    expect(rows.some((row) => statusOf(row.sessionId) === null)).toBe(true);
+    expect(
+      previewSections(PREVIEW_STATE).plugins.map((claimed) =>
+        claimed.rows.map((row) => row.sessionId),
+      ),
+    ).toEqual([['preview-6']]);
   });
 
   it('previewRowState_SampleRows_AreNeverOnScreen', () => {
     for (const row of PREVIEW_STATE.rows) {
       const state = previewRowState(row, 40);
       expect(state.onScreen).toBe(false);
-      expect(state.status).toBe(PREVIEW_STATUSES[row.sessionId] ?? null);
+      expect(state.partTooltips()).toEqual([]);
     }
   });
 
@@ -106,6 +107,11 @@ describe('sessions preview', () => {
     },
     { label: 'new-games-prototypes', title: null, activity: 'error' },
     { label: 'wigley-ai-gui', title: null, activity: null },
+    {
+      label: 'wigley-agents 2',
+      title: 'Retro of Scratchpad',
+      activity: 'working',
+    },
   ])(
     'previewRowState_PinnedSample_ShowsItsTitleAndActivity ($label)',
     ({ label, title, activity }) => {
@@ -137,7 +143,7 @@ describe('sessions preview', () => {
 
   it.each([
     { by: 1 as const, selected: 'wigley-ai-marketplace' },
-    { by: -1 as const, selected: 'a-session-label-long-enough' },
+    { by: -1 as const, selected: 'wigley-agents 2' },
   ])(
     'sessionsView_StepPreview_MovesSampleSelectionOnly (by $by)',
     ({ by, selected }) => {
@@ -342,38 +348,69 @@ describe('session rows', () => {
     );
   });
 
+  const throwsNoRound = (): string | null => {
+    throw new Error('no round');
+  };
+
   it.each([
     {
       case: 'with an activity',
       activity: WORKING,
-      tooltip: 'Fix the build · label s1 · working · Round 2/5',
+      notesTooltip: (): string | null => null,
+      tooltip: 'Fix the build · label s1 · working · Round 2/5 · Primer open',
+      logged: [],
     },
     {
       case: 'with no activity',
       activity: null,
-      tooltip: 'Fix the build · label s1 · Round 2/5',
+      notesTooltip: (): string | null => null,
+      tooltip: 'Fix the build · label s1 · Round 2/5 · Primer open',
+      logged: [],
+    },
+    {
+      case: 'with a part whose tooltip throws',
+      activity: WORKING,
+      notesTooltip: throwsNoRound,
+      tooltip: 'Fix the build · label s1 · working · Round 2/5 · Primer open',
+      logged: ['row part notes.status tooltip failed: no round'],
     },
   ])(
-    'sessionsView_RowTooltip_JoinsTitleLabelActivityAndStatus ($case)',
-    ({ activity, tooltip }) => {
-      const { view, sideBar } = sessionsViewSetup();
+    'sessionsView_RowTooltip_JoinsTitleLabelActivityAndPartTooltips ($case)',
+    ({ activity, notesTooltip, tooltip, logged: expectedLogged }) => {
+      const { view, sideBar, rowParts, logged } = sessionsViewSetup();
+      const tooltipPart = (id: string, text: () => string | null) => ({
+        id,
+        build: () => ({}),
+        tooltip: text,
+      });
+      rowParts.add(tooltipPart('forms.status', () => 'Round 2/5'));
+      rowParts.add(tooltipPart('notes.status', notesTooltip));
+      rowParts.add(tooltipPart('primer.status', () => 'Primer open'));
       view.render(titledState('Fix the build'));
       view.setActivity('s1', 'chat', activity);
 
-      view.tabs
-        .add('s1', {
-          id: 'chat',
-          title: 'Chat',
-          icon: 'comment',
-          element: asHtml(new FakeElement('div')),
-          beforeClose: () => true,
-          shown: () => undefined,
-        })
-        .setStatus('Round 2/5');
-
       expect(drawnRows(sideBar)[0].title).toBe(tooltip);
+      // Each draw of the row logs once; the count is draw timing.
+      expect(new Set(logged)).toEqual(new Set(expectedLogged));
     },
   );
+
+  it('sessionsView_PartTooltipChanged_RefreshesOnPointerEnter', () => {
+    const { view, sideBar, rowParts } = sessionsViewSetup();
+    let status = 'Round 1/5';
+    rowParts.add({
+      id: 'forms.status',
+      build: () => ({}),
+      tooltip: () => status,
+    });
+    view.render(titledState('Fix the build'));
+    const [row] = drawnRows(sideBar);
+
+    status = 'Round 2/5';
+    row.fire('pointerenter');
+
+    expect(row.title).toBe('Fix the build · label s1 · Round 2/5');
+  });
 
   it('sessionsView_SetActivityTopUnchanged_DrawsNothing', () => {
     const { view, sideBar } = sessionsViewSetup();

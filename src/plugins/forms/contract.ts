@@ -12,6 +12,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 import { NUMBER_KEY_COUNT } from './manifest';
 
 export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
@@ -22,8 +23,9 @@ export type AnswerableKind = Exclude<ItemKind, 'notice'>;
 
 export interface Question {
   title: string;
+  // The card's headline: what the user is asked to decide, and why now.
+  summary: string;
   context: string;
-  question: string;
   choices: string[];
   // 1-based.
   recommend: number;
@@ -66,6 +68,74 @@ export const MAX_ENTRIES = NUMBER_KEY_COUNT;
 export const formsChooseCommand: CommandKey<number, 'forms.choose'> = {
   id: 'forms.choose',
 };
+
+// The arg of `forms.chooseAt`: the item's 0-based rail position, and the
+// 1-based number `forms.choose` takes.
+export interface FormsChooseAtArg {
+  item: number;
+  number: number;
+}
+
+// Picks numbered choice `number` on the item at rail position `item`, as a
+// card's click does; picking the held number again clears it.
+export const formsChooseAtCommand: CommandKey<
+  FormsChooseAtArg,
+  'forms.chooseAt'
+> = { id: 'forms.chooseAt' };
+
+// Each command below takes the item's 0-based rail position and acts on that
+// item, as a card's control does, whatever box holds focus.
+export const formsClearChoiceAtCommand: CommandKey<
+  number,
+  'forms.clearChoiceAt'
+> = { id: 'forms.clearChoiceAt' };
+
+export const formsAcceptRecommendationAtCommand: CommandKey<
+  number,
+  'forms.acceptRecommendationAt'
+> = { id: 'forms.acceptRecommendationAt' };
+
+export const formsToggleNotApplicableAtCommand: CommandKey<
+  number,
+  'forms.toggleNotApplicableAt'
+> = { id: 'forms.toggleNotApplicableAt' };
+
+export const formsToggleDontAskAtCommand: CommandKey<
+  number,
+  'forms.toggleDontAskAt'
+> = { id: 'forms.toggleDontAskAt' };
+
+// Moves the line cursor onto the 1-based notice, which focuses the notices
+// stop, then opens or closes that line, as a click on the line's head does.
+export const formsToggleNoticeAtCommand: CommandKey<
+  number,
+  'forms.toggleNoticeAt'
+> = { id: 'forms.toggleNoticeAt' };
+
+// Moves the line cursor onto the 1-based notice, which focuses the notices
+// stop, and nothing more.
+export const formsFocusNoticeAtCommand: CommandKey<
+  number,
+  'forms.focusNoticeAt'
+> = { id: 'forms.focusNoticeAt' };
+
+// Focuses the item at the rail position, and nothing more.
+export const formsFocusItemCommand: CommandKey<number, 'forms.focusItem'> = {
+  id: 'forms.focusItem',
+};
+
+// What a click on the rail entry at the position does in the view shown:
+// focus it in the form, jump to it in the review.
+export const formsPickRailItemCommand: CommandKey<
+  number,
+  'forms.pickRailItem'
+> = { id: 'forms.pickRailItem' };
+
+// Jumps to the item of the 0-based review row, as a click on the row does.
+export const formsReviewJumpAtCommand: CommandKey<
+  number,
+  'forms.reviewJumpAt'
+> = { id: 'forms.reviewJumpAt' };
 
 // Where a finding comes from; it sets the card the finding draws as and the
 // fields it takes.
@@ -334,4 +404,26 @@ export interface FormsPageExports {
 export const formsPageKey: DependencyKey<FormsPageExports, 'page', 'forms'> = {
   id: 'forms',
   process: 'page',
+};
+
+// Where an open round's page left it: the focused rail position, the review
+// cursor's row, the notices stop's line cursor (1-based, 0 with no notices),
+// and the view with the view its Cancel prompt returns to, both kept from the
+// round the page last showed as active. `confirm` is the review's Cancel
+// prompt, which leaves the session open.
+export interface RoundPlace {
+  focus: number;
+  reviewRow: number;
+  noticeLine: number;
+  view: 'forms' | 'review' | 'confirm';
+  confirmReturnView: 'forms' | 'review';
+}
+
+// Each open round's place, by the round id, written on each change while the
+// round is open; the round closing deletes its key, and the page's open rounds
+// read deletes the keys of rounds that closed while no page ran.
+export const formsPlaceSlot: KeyedSlotKey<RoundPlace, 'page', 'forms'> = {
+  id: 'forms.place',
+  process: 'page',
+  kind: 'keyed',
 };

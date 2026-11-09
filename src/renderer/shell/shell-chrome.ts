@@ -1,4 +1,5 @@
 import type { AppInstance } from '../../contracts/app-instance';
+import { MODES_SHOW } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type { Log, PluginLog } from '../../contracts/log';
 import type {
@@ -31,13 +32,16 @@ export interface ShellChromeDeps {
 
 // The chrome the core draws through the shell layout. `showContext` and
 // `showProblems` draw the title bar's context and config problems again for
-// a new value; `addMode` adds the mode's activity item, which shows the mode
-// on a click, until the returned handle's `dispose`; `markMode` marks the shown mode's item, logging only when the
+// a new value; `addMode` adds the mode's activity item, whose click runs
+// `modes.show` with the mode's id, until the returned handle's `dispose`;
+// `showMode` shows an added mode by id, and does nothing for an unknown one;
+// `markMode` marks the shown mode's item, logging only when the
 // marked mode changed; `setLayouts` draws every part again with new layouts.
 export interface ShellChrome {
   showContext(context: ModeContext | null): void;
   showProblems(problems: readonly ConfigProblem[]): void;
   addMode(mode: Mode, handle: ModeHandle): Disposable;
+  showMode(modeId: string): void;
   markMode(modeId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
@@ -176,7 +180,9 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
     const root = drawSlot(item.slot, 'activityItem', (builder, parent, kit) =>
       builder(parent, input, kit),
     );
-    root.addEventListener('click', () => item.handle.show());
+    root.addEventListener('click', () =>
+      services.commands.run(MODES_SHOW.id, mode.id),
+    );
     item.root = root;
     applyMark(item);
   };
@@ -217,6 +223,9 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
           items.delete(mode.id);
         },
       };
+    },
+    showMode(modeId) {
+      items.get(modeId)?.handle.show();
     },
     markMode(modeId) {
       const isChanged = markedId !== modeId;

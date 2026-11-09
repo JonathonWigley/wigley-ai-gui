@@ -1,6 +1,7 @@
 import type { ShownLayouts } from '../../../contracts/plugin';
 import {
   createBaseKit,
+  type KitCommands,
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
@@ -10,11 +11,15 @@ import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
 import { createDocsParts } from './layout/docs-parts';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
+import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 
 // A part drawer over the layouts `layouts` returns, its base kits built as
-// the page builds them. `anchors` holds each anchor a draw named and `logs`
-// each line logged.
-export function fakeDocsParts(layouts: () => ShownLayouts<Layout>) {
+// the page builds them, each kit command run going to `run`. `anchors` holds
+// each anchor a draw named and `logs` each line logged.
+export function fakeDocsParts(
+  layouts: () => ShownLayouts<Layout>,
+  run: KitCommands['run'] = () => undefined,
+) {
   const { anchors, keys } = recordingAnchors();
   const logs: string[] = [];
   const parts = createDocsParts({
@@ -32,11 +37,7 @@ export function fakeDocsParts(layouts: () => ShownLayouts<Layout>) {
               ...NO_FENCES,
             },
             keys,
-            commands: {
-              exists: () => true,
-              argShape: () => undefined,
-              run: () => undefined,
-            },
+            commands: fakeKitCommandsOf(docsManifest, run),
             platform: 'macos',
             state: noLayoutState,
           },

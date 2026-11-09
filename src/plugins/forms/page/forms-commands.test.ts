@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  activeForm,
-  createSessionCloseAnswers,
-} from '../../../shared/page/session-forms';
+import { activeForm } from '../../../shared/page/session-forms';
 import type {
   ContentScroll,
   FocusOptions,
@@ -15,13 +12,26 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { createReducerStore } from '../../../shared/page/reducer-store';
-import type { Finding, Question, RoundEnd } from '../contract';
+import type {
+  Finding,
+  FormsView,
+  Notice,
+  Question,
+  RoundEnd,
+} from '../contract';
 import type { BoxRef } from './boxes';
-import { apply, buildBody, focusedItem, initialState } from './form-state';
+import {
+  apply,
+  buildBody,
+  focusedItem,
+  type FormsAction,
+  initialState,
+  type ItemAnswer,
+} from './form-state';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
-  guardClose,
+  mayCloseRound,
 } from './forms-commands';
 import { type FormsPageEvent, startFormsEvents } from './forms-events';
 import { finding, notice, presentedRound, question } from './test-rounds';
@@ -48,17 +58,18 @@ function editorOf(box: BoxRef): TextEditor {
   return editor;
 }
 
-// Rail: notice 1 (position 0), then `findings`, then `questions`, by default
-// Alpha and Beta (1 and 2 with no findings).
+// Rail: `findings`, then `questions`, by default Alpha and Beta (0 and 1
+// with no findings), then the notices stop (2 by default).
 function setup(
   findings: Finding[] = [],
   questions: Question[] = [question('Alpha'), question('Beta')],
+  notices: Notice[] = [notice('Heads up')],
 ) {
   const store = createReducerStore(
     initialState(
       [
         presentedRound('r1', {
-          notices: [notice('Heads up')],
+          notices,
           findings,
           questions,
         }),
@@ -81,11 +92,6 @@ function setup(
   // returns.
   const scrolls: [ScrollStep, 1 | -1][] = [];
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
-  // Each session close the guard's answer let through, with the rounds the
-  // store held as it answered, and every answer the guard's prompt gave.
-  const closedSessions: { sessionId: string; roundCount: number }[] = [];
-  const answers: boolean[] = [];
-  const closeAnswers = createSessionCloseAnswers(store);
   const log = (message: string) => logs.push(message);
   const toast = (text: string, tone: ToastTone) => {
     toasts.push(text);
@@ -125,13 +131,6 @@ function setup(
     toast,
     log,
   });
-  // Each Form tab the guard selected, with the store's view at that moment.
-  const shownForms: { sessionId: string; view: string }[] = [];
-  const showForm = (sessionId: string) =>
-    shownForms.push({ sessionId, view: store.get().view });
-  // Each session the guard selected.
-  const activated: string[] = [];
-  const activate = (sessionId: string) => activated.push(sessionId);
   const run = (
     command: FormsCommand,
     context: Partial<PageCommandContext<any>> = {},
@@ -170,34 +169,9 @@ function setup(
     // Main's formClosed for `roundId` reaching the page; `byFinish` false is
     // main closing it on its own.
     closeFromMain: (roundId: string, byFinish = true) =>
-      closeRoundFromMain(
-        { store, closeAnswers, toast, log },
-        { formId: roundId, byFinish },
-      ),
-    closedSessions,
-    shownForms,
-    activated,
-    answers,
-    // The guard's answer; a prompt's later answer lands in `answers`, and in
-    // `closedSessions` when it lets the close through.
-    guardClose: (sessionId: string) => {
-      const answer = guardClose(
-        { store, toast, log, showForm, activate, closeAnswers },
-        sessionId,
-      );
-      if (answer instanceof Promise) {
-        void answer.then((closes) => {
-          answers.push(closes);
-          if (closes) {
-            closedSessions.push({
-              sessionId,
-              roundCount: store.get().forms.length,
-            });
-          }
-        });
-      }
-      return answer;
-    },
+      closeRoundFromMain({ store, toast, log }, { formId: roundId, byFinish }),
+    mayClose: (sessionId: string) =>
+      mayCloseRound({ store, toast, log }, sessionId),
     leaves: () => leaves,
     // Focuses a box as the user clicking into it would, outside any command.
     setActive: (box: BoxRef) => {
@@ -205,9 +179,6 @@ function setup(
     },
   };
 }
-
-// Lets a settled promise's `then` run.
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const notes1: BoxRef = {
   roundId: 'r1',
@@ -221,6 +192,25 @@ const reason1: BoxRef = {
   roundId: 'r1',
   target: { field: 'dontAskReason', item: { kind: 'question', index: 1 } },
 };
+const reason2: BoxRef = {
+  roundId: 'r1',
+  target: { field: 'dontAskReason', item: { kind: 'question', index: 2 } },
+};
+const commentOn = (notice: number): BoxRef => ({
+  roundId: 'r1',
+  target: { field: 'comment', notice },
+});
+
+const twoNotices = [notice('Heads up'), notice('Also')];
+
+// Runs a table row's command, with its argument when it takes one.
+function runRow(run: ReturnType<typeof setup>['run'], row: TableRun) {
+  if (typeof row === 'string') {
+    run(row);
+  } else {
+    run(row.command, { arg: row.arg });
+  }
+}
 
 describe('formsCommandHandlers', () => {
   // Entries: 1 fix_now/1, 2 fix_now/2, 3 follow_up/0, 4 leave_it/0.
@@ -280,8 +270,8 @@ describe('formsCommandHandlers', () => {
       logs: [],
     },
     {
-      name: 'a pick on a notice, which changes nothing',
-      before: ['prevItem'],
+      name: 'a pick on the notices stop, which changes nothing',
+      before: ['nextItem', 'nextItem'],
       command: { command: 'choose', arg: 1 },
       logs: [],
     },
@@ -295,14 +285,12 @@ describe('formsCommandHandlers', () => {
     'logs an answer command only when it changes state: $name',
     ({ findings, questions, before, command, logs: expected }) => {
       const { run, logs } = setup(findings, questions);
-      const runRow = (row: TableRun) =>
-        typeof row === 'string' ? run(row) : run(row.command, { arg: row.arg });
       for (const each of before) {
-        runRow(each);
+        runRow(run, each);
       }
       logs.length = 0;
 
-      runRow(command);
+      runRow(run, command);
 
       expect(logs).toEqual(expected);
     },
@@ -313,7 +301,7 @@ describe('formsCommandHandlers', () => {
 
     run('choose', { arg: 1, editor: editorOf(notes2) });
 
-    expect(round().focus).toBe(2);
+    expect(round().focus).toBe(1);
     expect(round().answers[1].choice).toBe(1);
   });
 
@@ -332,17 +320,6 @@ describe('formsCommandHandlers', () => {
     run('toggleDontAsk');
 
     expect(focused).toHaveLength(1);
-  });
-
-  it("focuses a notice's comment box for the notes key", () => {
-    const { run, focused } = setup();
-    run('prevItem');
-
-    run('editNotes');
-
-    expect(focused).toEqual([
-      { roundId: 'r1', target: { field: 'comment', notice: 1 } },
-    ]);
   });
 
   it('starts the notes and note boxes typing at the end, as vim A', () => {
@@ -377,16 +354,344 @@ describe('formsCommandHandlers', () => {
   it("focuses the next item's notes box when moving items from a box", () => {
     const { run, round, focused } = setup();
 
-    run('nextItem', {
-      editor: editorOf({
-        roundId: 'r1',
-        target: { field: 'comment', notice: 1 },
-      }),
-    });
+    run('nextItem', { editor: editorOf(notes1) });
 
     expect(round().focus).toBe(1);
-    expect(focused).toEqual([notes1]);
+    expect(focused).toEqual([notes2]);
   });
+
+  it.each([
+    {
+      case: 'leaves the box with the cursor line closed',
+      open: [1],
+      focused: [],
+      leaves: 1,
+    },
+    {
+      case: "focuses the cursor line's comment box with it open",
+      open: [1, 2],
+      focused: [commentOn(2)],
+      leaves: 0,
+    },
+  ])(
+    'moving by item from a box onto the notices stop $case',
+    ({ open, focused: expectedFocused, leaves: expectedLeaves }) => {
+      const { run, store, round, focused, leaves } = setup(
+        [],
+        undefined,
+        twoNotices,
+      );
+      // The cursor on line 2, then back on Beta.
+      store.dispatch({ type: 'focusNotice', notice: 2 });
+      store.dispatch({ type: 'focusItem', item: 1 });
+      for (const notice of open) {
+        store.dispatch({ type: 'toggleNotice', notice });
+      }
+
+      run('nextItem', { editor: editorOf(notes2) });
+
+      expect(round().focus).toBe(2);
+      expect(focused).toEqual(expectedFocused);
+      expect(leaves()).toBe(expectedLeaves);
+    },
+  );
+
+  it.each<{
+    name: string;
+    before: TableRun[];
+    command: TableRun;
+    noticeLine: number;
+    openNotices: boolean[];
+    focus: number;
+    focused?: BoxRef[];
+    logs: string[];
+  }>([
+    {
+      name: 'nextLine on line 1 moves the cursor to line 2',
+      before: [],
+      command: 'nextLine',
+      noticeLine: 2,
+      openNotices: [false, false],
+      focus: 2,
+      logs: ['line cursor on notice 2'],
+    },
+    {
+      name: 'nextLine on line 2 changes nothing',
+      before: ['nextLine'],
+      command: 'nextLine',
+      noticeLine: 2,
+      openNotices: [false, false],
+      focus: 2,
+      logs: [],
+    },
+    {
+      name: 'prevLine on line 2 moves the cursor to line 1',
+      before: ['nextLine'],
+      command: 'prevLine',
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: 2,
+      logs: ['line cursor on notice 1'],
+    },
+    {
+      name: 'prevLine on line 1 moves to Beta',
+      before: [],
+      command: 'prevLine',
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: 1,
+      logs: [],
+    },
+    {
+      name: 'toggleNotice opens the cursor line',
+      before: [],
+      command: 'toggleNotice',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      logs: ['opened notice 1'],
+    },
+    {
+      name: 'toggleNotice again closes it',
+      before: ['toggleNotice'],
+      command: 'toggleNotice',
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: 2,
+      logs: ['closed notice 1'],
+    },
+    {
+      name: 'toggleNotice on line 2 opens line 2',
+      before: ['nextLine'],
+      command: 'toggleNotice',
+      noticeLine: 2,
+      openNotices: [false, true],
+      focus: 2,
+      logs: ['opened notice 2'],
+    },
+    {
+      name: 'acceptRecommendation opens the cursor line',
+      before: [],
+      command: 'acceptRecommendation',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      logs: ['opened notice 1'],
+    },
+    {
+      name: 'acceptRecommendation on line 2 opens line 2',
+      before: ['nextLine'],
+      command: 'acceptRecommendation',
+      noticeLine: 2,
+      openNotices: [false, true],
+      focus: 2,
+      logs: ['opened notice 2'],
+    },
+    {
+      name: 'editNotes with line 1 closed opens it and focuses its box',
+      before: [],
+      command: 'editNotes',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      focused: [commentOn(1)],
+      logs: ['opened notice 1'],
+    },
+    {
+      name: 'editNotes with line 1 open focuses its box',
+      before: ['toggleNotice'],
+      command: 'editNotes',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      focused: [commentOn(1)],
+      logs: [],
+    },
+    {
+      name: 'editNotes with lines 1 and 2 open and the cursor on 2 focuses box 2',
+      before: ['toggleNotice', 'nextLine', 'toggleNotice'],
+      command: 'editNotes',
+      noticeLine: 2,
+      openNotices: [true, true],
+      focus: 2,
+      focused: [commentOn(2)],
+      logs: [],
+    },
+    {
+      name: 'editNotes under the review with line 1 open focuses no box',
+      before: ['toggleNotice', 'openReview'],
+      command: 'editNotes',
+      noticeLine: 1,
+      openNotices: [true, false],
+      focus: 2,
+      logs: [],
+    },
+    {
+      name: 'choose 1 changes nothing',
+      before: [],
+      command: { command: 'choose', arg: 1 },
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: 2,
+      logs: [],
+    },
+  ])(
+    'on the notices stop: $name',
+    ({
+      before,
+      command,
+      noticeLine,
+      openNotices,
+      focus,
+      focused: expectedFocused = [],
+      logs: expectedLogs,
+    }) => {
+      const { run, store, round, focused, focusOptions, logs } = setup(
+        [],
+        undefined,
+        twoNotices,
+      );
+      store.dispatch({ type: 'focusItem', item: 2 });
+      for (const each of before) {
+        runRow(run, each);
+      }
+      logs.length = 0;
+
+      runRow(run, command);
+
+      expect(round()).toMatchObject({ noticeLine, openNotices, focus });
+      expect(focused).toEqual(expectedFocused);
+      expect(focusOptions).toEqual(
+        expectedFocused.map(() => ({ insertAtEnd: true })),
+      );
+      expect(logs).toEqual(expectedLogs);
+    },
+  );
+
+  it.each<{ name: string; from: number; command: FormsCommand; focus: number }>(
+    [
+      {
+        name: 'nextLine on Alpha moves to Beta',
+        from: 0,
+        command: 'nextLine',
+        focus: 1,
+      },
+      {
+        name: 'prevLine on Beta moves to Alpha',
+        from: 1,
+        command: 'prevLine',
+        focus: 0,
+      },
+      {
+        name: 'toggleNotice on Alpha changes nothing',
+        from: 0,
+        command: 'toggleNotice',
+        focus: 0,
+      },
+    ],
+  )(
+    'nextLine and prevLine off the notices stop act as nextItem and prevItem: $name',
+    ({ from, command, focus }) => {
+      const { run, store, round, logs } = setup();
+      store.dispatch({ type: 'focusItem', item: from });
+
+      run(command);
+
+      expect(round()).toMatchObject({ focus, openNotices: [false] });
+      expect(logs).toEqual([]);
+    },
+  );
+
+  // From Alpha, rail position 0; a null `focus` is focus left where it was.
+  it.each<{
+    name: string;
+    command: 'toggleNoticeAt' | 'focusNoticeAt';
+    view: 'forms' | 'review';
+    notice: number;
+    noticeLine: number;
+    openNotices: boolean[];
+    focus: number | null;
+    logs: string[];
+  }>([
+    {
+      name: 'toggleNoticeAt notice 2 moves the cursor onto it and opens it',
+      command: 'toggleNoticeAt',
+      view: 'forms',
+      notice: 2,
+      noticeLine: 2,
+      openNotices: [false, true],
+      focus: 2,
+      logs: ['opened notice 2'],
+    },
+    {
+      name: 'toggleNoticeAt under the review changes nothing',
+      command: 'toggleNoticeAt',
+      view: 'review',
+      notice: 2,
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: null,
+      logs: [],
+    },
+    {
+      name: 'toggleNoticeAt logs a notice the round lacks',
+      command: 'toggleNoticeAt',
+      view: 'forms',
+      notice: 3,
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: null,
+      logs: ['no notice 3'],
+    },
+    {
+      name: 'focusNoticeAt notice 2 moves the cursor onto it and leaves it closed',
+      command: 'focusNoticeAt',
+      view: 'forms',
+      notice: 2,
+      noticeLine: 2,
+      openNotices: [false, false],
+      focus: 2,
+      logs: [],
+    },
+    {
+      name: 'focusNoticeAt logs a notice the round lacks',
+      command: 'focusNoticeAt',
+      view: 'forms',
+      notice: 3,
+      noticeLine: 1,
+      openNotices: [false, false],
+      focus: null,
+      logs: ['no notice 3'],
+    },
+  ])(
+    'notice At commands: $name',
+    ({
+      command,
+      view,
+      notice,
+      noticeLine,
+      openNotices,
+      focus,
+      logs: expectedLogs,
+    }) => {
+      const { run, store, round, logs } = setup([], undefined, twoNotices);
+      store.dispatch({ type: 'focusItem', item: 0 });
+      if (view === 'review') {
+        run('openReview');
+      }
+      const focusBefore = round().focus;
+      logs.length = 0;
+
+      run(command, { arg: notice });
+
+      expect(round()).toMatchObject({
+        noticeLine,
+        openNotices,
+        focus: focus ?? focusBefore,
+      });
+      expect(logs).toEqual(expectedLogs);
+    },
+  );
 
   it('moves items without focusing a box from the page', () => {
     const { run, focused } = setup();
@@ -415,9 +720,9 @@ describe('formsCommandHandlers', () => {
 
   it('stays on the focused item when it is the only unanswered one', () => {
     const { run, store, round, logs } = setup();
-    store.dispatch({ type: 'focusItem', item: 1 });
+    store.dispatch({ type: 'focusItem', item: 0 });
     run('choose', { arg: 1 });
-    store.dispatch({ type: 'focusItem', item: 2 });
+    store.dispatch({ type: 'focusItem', item: 1 });
     logs.length = 0;
 
     run('nextUnanswered');
@@ -433,7 +738,7 @@ describe('formsCommandHandlers', () => {
 
   it('jumps to the previous unanswered question', () => {
     const { run, store, round } = setup();
-    store.dispatch({ type: 'focusItem', item: 2 });
+    store.dispatch({ type: 'focusItem', item: 1 });
 
     run('prevUnanswered');
 
@@ -533,10 +838,7 @@ describe('formsCommandHandlers', () => {
     expect(finished).toEqual([
       { roundId: 'r1', end: { kind: 'submitted', body } },
     ]);
-    expect(round().sending).toEqual({
-      kind: 'submitted',
-      closesSession: false,
-    });
+    expect(round().sending).toEqual({ kind: 'submitted' });
     expect(store.get().view).toBe('review');
     expect(toasts).toEqual([]);
   });
@@ -616,8 +918,8 @@ describe('formsCommandHandlers', () => {
     expect(toastTones).toEqual(['info']);
   });
 
-  it('keeps the round when the confirmation is dismissed', async () => {
-    const { run, store, finished, closedSessions, closeFromMain } = setup();
+  it("dismissing the review's cancel prompt keeps the round", () => {
+    const { run, store, finished } = setup();
     run('openReview');
     run('askCancel');
 
@@ -625,178 +927,37 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get().view).toBe('review');
     expect(finished).toEqual([]);
-    expect(closedSessions).toEqual([]);
-    run('askCancel');
-    run('confirmCancel');
-    closeFromMain('r1');
-    await settle();
-    expect(closedSessions).toEqual([]);
-  });
-
-  it('the close guard lets a session with no round close', () => {
-    const { store, logs, shownForms, toasts, activated, guardClose } = setup();
-    const before = store.get();
-
-    expect(guardClose('other')).toBe(true);
-
-    expect(store.get()).toBe(before);
-    expect(logs).toEqual([]);
-    expect(shownForms).toEqual([]);
-    expect(toasts).toEqual([]);
-    expect(activated).toEqual([]);
-  });
-
-  it("the close guard selects the session's Form tab before the prompt shows", () => {
-    const { store, shownForms, guardClose } = setup();
-
-    guardClose('r1-session');
-
-    expect(shownForms).toEqual([{ sessionId: 'r1-session', view: 'forms' }]);
-    expect(store.get().view).toBe('confirm');
-  });
-
-  it('the close guard opens the prompt and waits on it, a second close waiting on the same answer', () => {
-    const { store, logs, toasts, activated, guardClose } = setup();
-
-    const first = guardClose('r1-session');
-    expect(first).toBeInstanceOf(Promise);
-    expect(store.get().view).toBe('confirm');
-    expect(logs).toEqual([expect.stringContaining('project · r1')]);
-    expect(guardClose('r1-session')).toBe(first);
-
-    expect(logs).toHaveLength(1);
-    expect(toasts).toEqual([]);
-    expect(activated).toEqual([]);
-  });
-
-  it("the close guard keeps a background round's session, says why and selects it", () => {
-    const {
-      store,
-      logs,
-      shownForms,
-      toasts,
-      toastTones,
-      activated,
-      guardClose,
-    } = setup();
-    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
-    const before = store.get();
-
-    expect(guardClose('r2-session')).toBe(false);
-
-    expect(store.get()).toBe(before);
-    expect(shownForms).toEqual([]);
-    expect(logs).toEqual([expect.stringContaining('project · r2')]);
-    expect(toasts).toEqual([expect.stringContaining('project · r2')]);
-    expect(toastTones).toEqual(['info']);
-    expect(activated).toEqual(['r2-session']);
-  });
-
-  it('confirming a close prompt cancels the round, then answers the close true', async () => {
-    const { run, finished, closedSessions, guardClose, closeFromMain } =
-      setup();
-    guardClose('r1-session');
-
-    run('confirmCancel');
-
-    expect(finished.map((entry) => [entry.roundId, entry.end.kind])).toEqual([
-      ['r1', 'cancelled'],
-    ]);
-    await settle();
-    expect(closedSessions).toEqual([]);
-    closeFromMain('r1');
-    await settle();
-    expect(closedSessions).toEqual([
-      { sessionId: 'r1-session', roundCount: 0 },
-    ]);
   });
 
   it.each([
-    {
-      case: 'the user keeps the round',
-      end: (test: ReturnType<typeof setup>) => test.run('dismissConfirm'),
-    },
-    {
-      case: 'another session is focused',
-      end: (test: ReturnType<typeof setup>) =>
-        test.store.dispatch({ type: 'sessionActivated', sessionId: 'other' }),
-    },
-    {
-      case: 'main closes the round on its own',
-      end: (test: ReturnType<typeof setup>) => test.closeFromMain('r1', false),
-    },
+    { name: 'no round', sessionId: 'other', background: false },
+    { name: 'its active round', sessionId: 'r1-session', background: false },
+    { name: 'a background round', sessionId: 'r2-session', background: true },
   ])(
-    'guardClose_PromptEndsWithoutTheCancel_AnswersFalse ($case)',
-    async ({ end }) => {
-      const test = setup();
-      const answer = test.guardClose('r1-session');
+    'the close check lets a session with $name close, with no prompt or toast',
+    ({ sessionId, background }) => {
+      const { store, logs, toasts, mayClose } = setup();
+      if (background) {
+        store.dispatch({ type: 'formShown', form: presentedRound('r2') });
+      }
+      const before = store.get();
 
-      end(test);
+      expect(mayClose(sessionId)).toBe(true);
 
-      expect(await answer).toBe(false);
-      expect(test.closedSessions).toEqual([]);
+      expect(store.get()).toBe(before);
+      expect(logs).toEqual([]);
+      expect(toasts).toEqual([]);
     },
   );
 
-  it('a close prompt whose cancel fails keeps the session and the prompt', async () => {
-    const {
-      run,
-      round,
-      store,
-      toasts,
-      closedSessions,
-      answers,
-      guardClose,
-      failFinish,
-    } = setup();
-    guardClose('r1-session');
-    failFinish(new Error('disk full'));
-
-    run('confirmCancel');
-
-    await vi.waitFor(() =>
-      expect(toasts).toEqual([expect.stringContaining('disk full')]),
-    );
-    expect(closedSessions).toEqual([]);
-    expect(answers).toEqual([]);
-    expect(store.get().view).toBe('confirm');
-    expect(round().sending).toBeNull();
-  });
-
-  it('closing a round main closed on its own shows no toast and closes no session', () => {
-    const { store, toasts, logs, closedSessions, closeFromMain } = setup();
+  it('closing a round main closed on its own shows no toast', () => {
+    const { store, toasts, logs, closeFromMain } = setup();
 
     closeFromMain('r1', false);
 
     expect(store.get().forms).toEqual([]);
     expect(toasts).toEqual([]);
     expect(logs).toEqual([]);
-    expect(closedSessions).toEqual([]);
-  });
-
-  it('main closing a round on its own while its close-prompt cancel sends shows no toast but closes the session', async () => {
-    const {
-      run,
-      store,
-      toasts,
-      logs,
-      closedSessions,
-      guardClose,
-      closeFromMain,
-    } = setup();
-    guardClose('r1-session');
-    run('confirmCancel');
-    logs.length = 0;
-
-    closeFromMain('r1', false);
-    await settle();
-
-    expect(store.get().forms).toEqual([]);
-    expect(toasts).toEqual([]);
-    expect(logs).toEqual([]);
-    expect(closedSessions).toEqual([
-      { sessionId: 'r1-session', roundCount: 0 },
-    ]);
   });
 
   it.each([
@@ -820,36 +981,272 @@ describe('formsCommandHandlers', () => {
     },
   );
 
-  it('the close guard keeps the session of the active round while it sends, and says so', () => {
-    const { run, store, logs, shownForms, toasts, toastTones, guardClose } =
-      setup();
-    run('openReview');
-    run('submit');
-    logs.length = 0;
-    const before = store.get();
+  it.each([
+    { name: 'active', roundId: 'r1', background: false },
+    { name: 'background', roundId: 'r2', background: true },
+  ])(
+    'the close check keeps the session of a sending $name round, and says so',
+    ({ roundId, background }) => {
+      const { run, store, logs, toasts, toastTones, mayClose } = setup();
+      if (background) {
+        store.dispatch({ type: 'formShown', form: presentedRound('r2') });
+        store.dispatch({
+          type: 'sendStarted',
+          formId: 'r2',
+          kind: 'submitted',
+        });
+      } else {
+        run('openReview');
+        run('submit');
+      }
+      logs.length = 0;
+      const before = store.get();
 
-    expect(guardClose('r1-session')).toBe(false);
+      expect(mayClose(`${roundId}-session`)).toBe(false);
 
-    expect(store.get()).toBe(before);
-    expect(shownForms).toEqual([]);
-    expect(logs).toEqual([expect.stringContaining('project · r1')]);
-    expect(toasts).toEqual([expect.stringContaining('project · r1')]);
-    expect(toastTones).toEqual(['info']);
+      expect(store.get()).toBe(before);
+      expect(logs).toEqual([expect.stringContaining(`project · ${roundId}`)]);
+      expect(toasts).toEqual([expect.stringContaining(`project · ${roundId}`)]);
+      expect(toastTones).toEqual(['info']);
+    },
+  );
+
+  // Rail: question 1 (0), question 2 (1), the notices stop (2); the box
+  // focused sits on question 1, and each command names question 2.
+  it.each<{
+    command: FormsCommand;
+    arg: unknown;
+    before: FormsAction[];
+    answer: Partial<ItemAnswer>;
+    logs: string[];
+  }>([
+    {
+      command: 'chooseAt',
+      arg: { item: 1, number: 3 },
+      before: [],
+      answer: { choice: 3 },
+      logs: ['chose 3 on question 2'],
+    },
+    {
+      command: 'clearChoiceAt',
+      arg: 1,
+      before: [
+        { type: 'focusItem', item: 1 },
+        { type: 'choose', number: 1 },
+      ],
+      answer: { choice: 0 },
+      logs: ['cleared the choice on question 2'],
+    },
+    {
+      command: 'acceptRecommendationAt',
+      arg: 1,
+      before: [],
+      answer: { choice: 2 },
+      logs: ['accepted the recommendation on question 2'],
+    },
+    {
+      command: 'toggleNotApplicableAt',
+      arg: 1,
+      before: [],
+      answer: { notApplicable: true },
+      logs: ['not applicable on question 2'],
+    },
+    {
+      command: 'toggleDontAskAt',
+      arg: 1,
+      before: [],
+      answer: { dontAsk: true },
+      logs: ["don't ask on question 2"],
+    },
+    {
+      command: 'focusItem',
+      arg: 1,
+      before: [],
+      answer: { choice: 0, notApplicable: false, dontAsk: false },
+      logs: [],
+    },
+  ])(
+    'atCommands_BoxFocusedOnOtherItem_ActOnTheNamedItem: $command',
+    ({ command, arg, before, answer, logs: expected }) => {
+      const { run, store, round, logs, setActive } = setup();
+      for (const action of before) {
+        store.dispatch(action);
+      }
+      store.dispatch({ type: 'focusItem', item: 0 });
+      const untouched = round().answers[0];
+      setActive(notes1);
+      logs.length = 0;
+
+      run(command, { arg });
+
+      expect(round().focus).toBe(1);
+      expect(round().answers[1]).toMatchObject(answer);
+      expect(round().answers[0]).toBe(untouched);
+      expect(logs).toEqual(expected);
+    },
+  );
+
+  // The commands whose arg is a rail position alone.
+  const POSITION_COMMANDS: FormsCommand[] = [
+    'clearChoiceAt',
+    'acceptRecommendationAt',
+    'toggleNotApplicableAt',
+    'toggleDontAskAt',
+    'focusItem',
+    'pickRailItem',
+  ];
+
+  it.each<{
+    name: string;
+    command: FormsCommand;
+    arg: unknown;
+    before: FormsCommand[];
+    hasRound: boolean;
+    logs: string[];
+  }>([
+    ...POSITION_COMMANDS.map((command) => ({
+      name: `${command} past the rail`,
+      command,
+      arg: 7,
+      before: [],
+      hasRound: true,
+      logs: ['no rail item at 7'],
+    })),
+    {
+      name: 'chooseAt past the rail',
+      command: 'chooseAt',
+      arg: { item: 7, number: 1 },
+      before: [],
+      hasRound: true,
+      logs: ['no rail item at 7'],
+    },
+    {
+      name: 'reviewJumpAt past the rows',
+      command: 'reviewJumpAt',
+      arg: 5,
+      before: ['openReview'],
+      hasRound: true,
+      logs: ['no review row 5'],
+    },
+    {
+      name: 'chooseAt with no round',
+      command: 'chooseAt',
+      arg: { item: 1, number: 1 },
+      before: [],
+      hasRound: false,
+      logs: [],
+    },
+  ])(
+    'argCommands_StaleArg_LogAndChangeNothing: $name',
+    ({ command, arg, before, hasRound, logs: expected }) => {
+      const { run, store, logs, setActive, closeFromMain } = setup();
+      store.dispatch({ type: 'focusItem', item: 1 });
+      for (const each of before) {
+        run(each);
+      }
+      if (!hasRound) {
+        closeFromMain('r1', false);
+      }
+      setActive(notes2);
+      const state = store.get();
+      logs.length = 0;
+
+      run(command, { arg });
+
+      expect(store.get()).toBe(state);
+      expect(logs).toEqual(expected);
+    },
+  );
+
+  it('chooseAt_HeldNumber_ClearsAndLogsAsChooseDoes', () => {
+    const byKey = setup();
+    const byClick = setup();
+    byKey.store.dispatch({ type: 'focusItem', item: 1 });
+
+    for (let press = 0; press < 2; press++) {
+      byKey.run('choose', { arg: 3 });
+      byClick.run('chooseAt', { arg: { item: 1, number: 3 } });
+    }
+
+    expect(byClick.logs).toEqual([
+      'chose 3 on question 2',
+      'cleared the choice on question 2',
+    ]);
+    expect(byClick.logs).toEqual(byKey.logs);
+    expect(byClick.round().answers).toEqual(byKey.round().answers);
   });
 
-  it('the close guard keeps the session of a background round while it sends, and says so', () => {
-    const { store, logs, toasts, activated, guardClose } = setup();
-    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
-    store.dispatch({ type: 'sendStarted', formId: 'r2', kind: 'submitted' });
-    const before = store.get();
+  it('toggleDontAskAt_TurnsOn_FocusesReasonBox', () => {
+    const { run, focused, setActive } = setup();
+    setActive(notes1);
 
-    expect(guardClose('r2-session')).toBe(false);
+    run('toggleDontAskAt', { arg: 1 });
 
-    expect(store.get()).toBe(before);
-    expect(logs).toEqual([expect.stringContaining('project · r2')]);
-    expect(toasts).toEqual([expect.stringContaining('project · r2')]);
-    expect(activated).toEqual([]);
+    expect(focused).toEqual([reason2]);
   });
+
+  // Rail: question 1 (0), question 2 (1), the notices stop (2); question 2 is
+  // review row 1.
+  it.each<{
+    name: string;
+    before: (FormsCommand | FormsAction)[];
+    position: number;
+    view: FormsView;
+    focus: number;
+    logs: string[];
+  }>([
+    {
+      name: 'the form focuses the item',
+      before: [],
+      position: 1,
+      view: 'forms',
+      focus: 1,
+      logs: ['jumped to question 2'],
+    },
+    {
+      name: "the review jumps to the item's row",
+      before: ['openReview'],
+      position: 1,
+      view: 'forms',
+      focus: 1,
+      logs: ['jumped to question 2'],
+    },
+    {
+      name: 'the review shows the notices page',
+      before: [{ type: 'focusItem', item: 1 }, 'openReview'],
+      position: 2,
+      view: 'forms',
+      focus: 2,
+      logs: ['jumped to notices'],
+    },
+    {
+      name: 'the confirm does nothing',
+      before: [{ type: 'focusItem', item: 0 }, 'openReview', 'askCancel'],
+      position: 1,
+      view: 'confirm',
+      focus: 0,
+      logs: [],
+    },
+  ])(
+    'pickRailItem_EachView_FollowsRailPickAction: $name',
+    ({ before, position, view, focus, logs: expected }) => {
+      const { run, store, round, logs } = setup();
+      for (const each of before) {
+        if (typeof each === 'string') {
+          run(each);
+        } else {
+          store.dispatch(each);
+        }
+      }
+      logs.length = 0;
+
+      run('pickRailItem', { arg: position });
+
+      expect(store.get().view).toBe(view);
+      expect(round().focus).toBe(focus);
+      expect(logs).toEqual(expected);
+    },
+  );
 
   it('openPreview_Rejects_ToastsError', async () => {
     const { run, failLayouts, toasts, toastTones, logs } = setup();

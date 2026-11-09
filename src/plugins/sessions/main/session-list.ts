@@ -7,20 +7,22 @@ import type { KeyedSlotWriter, SlotWriter } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { createListeners } from '../../../shared/listeners';
-import type {
-  AgentSession,
-  ConnectedSession,
-  OwnedSession,
-  SessionInfo,
-  SessionsMainEvents,
-  SessionsMainExports,
-  SessionRow,
-  SessionsState,
-  SessionTitles,
-  ToolCallContext,
-  ToolDefinition,
-  ToolResult,
-  ToolSession,
+import {
+  type AgentSession,
+  type ConnectedSession,
+  type OwnedSession,
+  type SessionInfo,
+  type SessionsMainEvents,
+  type SessionsMainExports,
+  type SessionRow,
+  type SessionsState,
+  type SessionTitles,
+  type ToolCallContext,
+  type ToolCallGuard,
+  type ToolDefinition,
+  type ToolResult,
+  type ToolSession,
+  textResult,
 } from '../contract';
 import { normalizedTitle, titleProblem } from '../session-title';
 
@@ -54,10 +56,12 @@ export interface SessionList extends Omit<
   tools(): ToolDefinition[];
   onToolsChanged(listener: () => void): Disposable;
   state(): SessionsState;
-  // The user's close, which every close guard must allow; returns whether the
-  // row is closed, true for a row already closed, emitting `closed` only for a
-  // row it closes. The session stays connected.
-  closeSession(sessionId: string): boolean;
+  // The user's close, which every close guard must allow; with `atOnce` it
+  // first runs every guard's `cancelHold`. Returns the first guard's reason
+  // for keeping the row, or null for a row it closes, a row already closed
+  // (a cancel's `release` may have closed it) and an unknown session, emitting
+  // `closed` only for a row it closes. The session stays connected.
+  closeSession(sessionId: string, atOnce: boolean): string | null;
   // The user's rename at `maxLength`: a title that normalizes to empty, or
   // null, clears the user title; one with a `titleProblem` throws its text.
   setUserTitle(
@@ -112,6 +116,9 @@ const NO_FOLDER_LABEL = 'session';
 const CODEX_NO_FOLDER_LABEL = 'Codex session';
 
 function groupOf(info: SessionInfo): string {
+  if (info.label !== undefined) {
+    return info.label;
+  }
   const noFolderLabel =
     info.harness === 'codex' ? CODEX_NO_FOLDER_LABEL : NO_FOLDER_LABEL;
   return info.projectDir === null
@@ -146,6 +153,7 @@ function rowOf(entry: SessionEntry): SessionRow {
     project: entry.project,
     harness: info.harness,
     marked: false,
+    markToast: null,
     projectDir: info.projectDir,
     hostSessionId: info.sessionId,
     titles: { ...entry.titles },
@@ -210,43 +218,39 @@ function startToolSessions(
   return { toolSessions, toolRoutes };
 }
 
-function routeCall(
-  entry: SessionEntry,
-  name: string,
-  args: unknown,
-  context: ToolCallContext,
-): Promise<ToolResult> {
-  const toolSession = entry.toolRoutes.get(name);
-  if (toolSession === undefined) {
-    const names = [...entry.toolRoutes.keys()];
-    return Promise.reject(
-      new Error(`Unknown tool: ${name}. Valid tools are ${names.join(', ')}.`),
-    );
-  }
-  return toolSession.call(name, args, context);
+function unknownToolError(entry: SessionEntry, name: string): Error {
+  const names = [...entry.toolRoutes.keys()];
+  return new Error(
+    `Unknown tool: ${name}. Valid tools are ${names.join(', ')}.`,
+  );
 }
 
 // Connected and owned sessions and the sidebar rows main holds for them. A
 // connected session has no row until `mark` or `activate` adds it at the end,
 // and `release` closes that row again; an owned session gets its row at open,
-// selected unless opened with `select` false, is joined by each relay carrying
+// under the `rowId` it was opened with, else a new id, selected unless opened
+// with `select` false, is joined by each relay carrying
 // its host id without a row of its own, a newer relay taking the join from an
 // older one, moves to a new host id by its `setHostSessionId()`, which retires
 // the old id and its relay, and ends only by its `end()`. Each session keeps
 // its label while it lasts; a closed row comes back at the end with the
 // session's next mark or activate. A row `release` closed while selected
 // comes back selected when the session's next mark comes within
-// RESELECT_WINDOW_MS of the release, unless in between the user activated a
-// row, a row was opened selected, a mark selected another session from none,
-// or `release` closed another selected row. `activateExistingRow` selects
+// RESELECT_WINDOW_MS of the release, unless the release came from a guard's
+// `cancelHold` inside an at-once `closeSession`, or in between the user
+// activated a row, a row was opened selected, a mark selected another session
+// from none, or `release` closed another selected row. A mark that reaches a
+// row not selected stores its options as the row's `markToast` unless the row
+// is still marked, so a toast left on a row a mark selected never outlives the
+// next mark; an activate clears it. `activateExistingRow` selects
 // only a row the session holds and logs and ignores one with none. `mark`,
 // `activate`, `activateExistingRow`, `release` and `closeSession` write only what
 // changed; `mark`, `activate`, `activateExistingRow`
 // and `closeSession` log and ignore an unknown session, `release` silently
 // ignores a session it cannot act on. `release` and `closeSession` log and
 // keep a row a close guard refuses, and emit `closed` for a row they close;
-// `closeSession` returns true for a row it closes and for a known session
-// whose row is already closed, false otherwise. Each session's
+// `closeSession` returns the refusing guard's reason, else null. A guard's
+// `cancelHold` that throws is logged, and its `mayClose` then decides. Each session's
 // titles live on its entry, copied onto its row while it has one, and last
 // while the session does; so does its project, which starts as the group and
 // writes the row when its lookup changes the project of a session with a row,
@@ -259,8 +263,14 @@ function routeCall(
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   // Each registration its own object, so one function added twice is two.
-  const closeGuards = new Set<{ mayClose(sessionId: string): boolean }>();
-  const toolNames = new Set<string>();
+  const closeGuards = new Set<{
+    mayClose(sessionId: string): string | null;
+    cancelHold?(sessionId: string): void;
+  }>();
+  // Each contributed tool name, mapped to its main-agent-only mark.
+  const mainAgentOnlyByTool = new Map<string, boolean>();
+  // Each registration its own object, so one function added twice is two.
+  const toolCallGuards = new Set<{ guard: ToolCallGuard }>();
   const toolsChanged = createListeners<void>();
   const entries = new Map<string, SessionEntry>();
   const { rows, selection } = deps;
@@ -297,7 +307,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
 
   // Writes `row` unmarked unless it is already held so, then selects it.
   const selectRow = (row: SessionRow) => {
-    if (row.marked || rows.get(row.sessionId) === undefined) {
+    if (row.marked || rows.get(row.sessionId) !== row) {
       rows.set(row.sessionId, { ...row, marked: false });
     }
     writeSelection(row.sessionId);
@@ -343,22 +353,45 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
   };
 
-  const everyGuardAllows = (sessionId: string) =>
-    [...closeGuards].every((guard) => guard.mayClose(sessionId));
+  // The first guard's reason for keeping the row, null when every one allows.
+  const firstRefusal = (sessionId: string): string | null => {
+    for (const guard of closeGuards) {
+      const reason = guard.mayClose(sessionId);
+      if (reason !== null) {
+        return reason;
+      }
+    }
+    return null;
+  };
 
   // The user's pick of the entry's row, adding it at the end when it has none:
-  // reports `activated`, then selects it and clears its mark. True when that
-  // wrote anything.
+  // reports `activated`, then selects it and clears its mark and mark toast.
+  // True when that wrote anything.
   const activateRow = (entry: SessionEntry) => {
     const sessionId = entry.session.id;
     deps.activated(sessionId);
     reselectOnReturn = null;
     const row = rows.get(sessionId) ?? rowOf(entry);
-    if (sessionId === selectedSessionId() && !row.marked) {
+    const isAnswered = !row.marked && row.markToast === null;
+    if (sessionId === selectedSessionId() && isAnswered) {
       return false;
     }
-    selectRow(row);
+    selectRow(row.markToast === null ? row : { ...row, markToast: null });
     return true;
+  };
+
+  // Runs every guard's `cancelHold`, a throw not skipping the rest; each throw
+  // is logged, and that guard's `mayClose` then decides.
+  const cancelHolds = (sessionId: string) => {
+    for (const guard of closeGuards) {
+      try {
+        guard.cancelHold?.(sessionId);
+      } catch (error) {
+        deps.log(
+          `cancelling what holds session ${sessionId} failed: ${errorText(error)}`,
+        );
+      }
+    }
   };
 
   // Removes the row, then emits `closed`.
@@ -391,10 +424,15 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
   };
 
-  // Builds and holds the session's entry and starts its project lookup, adding
-  // no row; a throwing contribution start leaves no entry.
-  const addEntry = (info: SessionInfo, owned: boolean): SessionEntry => {
-    const session: AgentSession = { id: deps.randomHex(), info };
+  // Builds and holds the session's entry under `id`, else a new id, and starts
+  // its project lookup, adding no row; a throwing contribution start leaves no
+  // entry.
+  const addEntry = (
+    info: SessionInfo,
+    owned: boolean,
+    id: string = deps.randomHex(),
+  ): SessionEntry => {
+    const session: AgentSession = { id, info };
     const group = groupOf(info);
     const entry: SessionEntry = {
       session,
@@ -425,7 +463,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const withdrawContribution = (contribution: Contribution) => {
     contributions.splice(contributions.indexOf(contribution), 1);
     for (const tool of contribution.tools) {
-      toolNames.delete(tool.name);
+      mainAgentOnlyByTool.delete(tool.name);
     }
     callEach([...entries.values()], (entry) => {
       const toolSession = entry.toolSessions.get(contribution);
@@ -435,6 +473,59 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       toolSession?.end();
     });
+  };
+
+  // Asks each guard registered when the call came, in order, then calls the
+  // tool's handler; `SessionsMainExports.addToolCallGuard` states the rules.
+  // `callerRefusal` returns the error refusing the caller, or null; it is asked
+  // before the guards and again after a guard wait. The ended, refusal and
+  // abort checks follow only a guard wait: with no guard the handler is called
+  // in the same tick.
+  const routeCall = async (
+    entry: SessionEntry,
+    name: string,
+    args: unknown,
+    context: ToolCallContext,
+    callerRefusal: () => Error | null = () => null,
+  ): Promise<ToolResult> => {
+    const refusalBeforeGuards = callerRefusal();
+    if (refusalBeforeGuards !== null) {
+      throw refusalBeforeGuards;
+    }
+    if (!entry.toolRoutes.has(name)) {
+      throw unknownToolError(entry, name);
+    }
+    const call = {
+      sessionId: entry.session.id,
+      tool: name,
+      toolUseId: context.toolUseId,
+      mainAgentOnly: mainAgentOnlyByTool.get(name) ?? false,
+    };
+    const registrations = [...toolCallGuards];
+    for (const registration of registrations) {
+      if (!toolCallGuards.has(registration)) {
+        continue;
+      }
+      const verdict = await registration.guard(call);
+      if (verdict.kind === 'skip') {
+        return textResult(verdict.text);
+      }
+    }
+    if (registrations.length > 0) {
+      if (!entries.has(entry.session.id)) {
+        throw new Error('Session ended');
+      }
+      const refusalAfterGuards = callerRefusal();
+      if (refusalAfterGuards !== null) {
+        throw refusalAfterGuards;
+      }
+      context.signal.throwIfAborted();
+    }
+    const toolSession = entry.toolRoutes.get(name);
+    if (toolSession === undefined) {
+      throw unknownToolError(entry, name);
+    }
+    return toolSession.call(name, args, context);
   };
 
   // Changes `sessionId` inside the session's one info object, so every holder
@@ -512,7 +603,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // relay still holding it: a harness restarting its MCP connection can say
   // hello on the new socket before the old one closes. The handle's `end`
   // only clears the join, and only while this handle still holds it; its
-  // calls are refused once the session moves off the host id it joined under.
+  // calls are refused once the session moves off the host id it joined under,
+  // a move during a call's guard wait included.
   const join = (entry: SessionEntry): ConnectedSession => {
     const appId = entry.session.id;
     const joinedHostId = entry.session.info.sessionId;
@@ -526,20 +618,19 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
     return {
       session: entry.session,
-      call: (name, args, context) => {
-        const hostId = entry.session.info.sessionId;
-        if (hostId !== joinedHostId) {
+      call: (name, args, context) =>
+        routeCall(entry, name, args, context, () => {
+          const hostId = entry.session.info.sessionId;
+          if (hostId === joinedHostId) {
+            return null;
+          }
           deps.log(
             `call ${name} from relay of retired host ${String(joinedHostId)} on session ${appId} refused`,
           );
-          return Promise.reject(
-            new Error(
-              `Session ${appId} moved from host ${String(joinedHostId)} to ${String(hostId)}`,
-            ),
+          return new Error(
+            `Session ${appId} moved from host ${String(joinedHostId)} to ${String(hostId)}`,
           );
-        }
-        return routeCall(entry, name, args, context);
-      },
+        }),
       end: () => {
         if (entry.joinedBy !== handle || !entries.has(appId)) {
           return;
@@ -551,10 +642,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   };
 
   return {
-    contributeTools(tools, start) {
+    contributeTools(tools, start, options) {
       const namesInThisContribution = new Set<string>();
       for (const tool of tools) {
-        if (toolNames.has(tool.name)) {
+        if (mainAgentOnlyByTool.has(tool.name)) {
           throw new Error(
             `Two tool contributions both name the tool "${tool.name}"`,
           );
@@ -573,7 +664,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log,
       );
       for (const tool of tools) {
-        toolNames.add(tool.name);
+        mainAgentOnlyByTool.set(tool.name, options?.mainAgentOnly === true);
       }
       contributions.push(contribution);
       for (const [entry, toolSession] of started) {
@@ -638,7 +729,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (entriesHolding(hostId).length > 0) {
         throw new Error(`Host session ${hostId} is already open`);
       }
-      const entry = addEntry(info, true);
+      const rowId = options?.rowId;
+      if (rowId !== undefined && entries.has(rowId)) {
+        throw new Error(`Session ${rowId} is already open`);
+      }
+      const entry = addEntry(info, true, rowId);
       rows.set(entry.session.id, rowOf(entry));
       if (options?.select !== false) {
         writeSelection(entry.session.id);
@@ -651,7 +746,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         setHostSessionId: (newHostId) => setHostSessionId(entry, newHostId),
       };
     },
-    mark(sessionId) {
+    mark(sessionId, options) {
       const entry = entries.get(sessionId);
       if (entry === undefined) {
         deps.log(`mark for unknown session ${sessionId} ignored`);
@@ -671,13 +766,14 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       // A connected session with no row, or a row the user closed, gets its
       // row at the end, then is selected or marked like any other.
-      const row = rows.get(sessionId) ?? rowOf(entry);
+      const held = rows.get(sessionId) ?? rowOf(entry);
+      const row = held.marked ? held : { ...held, markToast: options };
       if (selectedSessionId() === null || isReturningToSelection) {
         reselectOnReturn = null;
         selectRow(row);
         return;
       }
-      if (!row.marked) {
+      if (!row.marked || row !== held) {
         rows.set(sessionId, { ...row, marked: true });
       }
     },
@@ -715,7 +811,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (!isReleasable) {
         return;
       }
-      if (!everyGuardAllows(sessionId)) {
+      if (firstRefusal(sessionId) !== null) {
         deps.log(`release for session ${sessionId} kept by a close guard`);
         return;
       }
@@ -724,8 +820,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       closeRow(sessionId);
     },
-    addCloseGuard(mayClose) {
-      const guard = { mayClose };
+    addCloseGuard(mayClose, cancelHold) {
+      const guard = { mayClose, cancelHold };
       closeGuards.add(guard);
       return {
         dispose: () => {
@@ -733,20 +829,40 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         },
       };
     },
-    closeSession(sessionId) {
+    addToolCallGuard(guard) {
+      const registration = { guard };
+      toolCallGuards.add(registration);
+      return {
+        dispose: () => {
+          toolCallGuards.delete(registration);
+        },
+      };
+    },
+    closeSession(sessionId, atOnce) {
       if (!entries.has(sessionId)) {
         deps.log(`closeSession for unknown session ${sessionId} ignored`);
-        return false;
+        return null;
       }
       if (rows.get(sessionId) === undefined) {
-        return true;
+        return null;
       }
-      if (!everyGuardAllows(sessionId)) {
+      if (atOnce) {
+        cancelHolds(sessionId);
+        // A hold's cancel may `release` the row, which is the user's close here.
+        if (reselectOnReturn?.sessionId === sessionId) {
+          reselectOnReturn = null;
+        }
+      }
+      if (rows.get(sessionId) === undefined) {
+        return null;
+      }
+      const refusal = firstRefusal(sessionId);
+      if (refusal !== null) {
         deps.log(`closeSession for session ${sessionId} kept by a close guard`);
-        return false;
+        return refusal;
       }
       closeRow(sessionId);
-      return true;
+      return null;
     },
     label(sessionId) {
       const entry = entries.get(sessionId);

@@ -214,6 +214,12 @@ export interface PluginManifest<
   // Lowercase letters, digits and `-`: the `wigley-data:` and `wigley-layout:`
   // URL hosts carry the id, and Chromium lowercases a URL's host.
   id: string;
+  // The plugin's name as Settings' Plugins section shows it, in sentence case
+  // (`Agent lines`).
+  label: string;
+  // One sentence on what the plugin adds for the user, as Settings' Plugins
+  // section shows it.
+  description: string;
   dependsOn: {
     readonly main: readonly string[];
     readonly page: readonly string[];
@@ -655,6 +661,26 @@ export interface KeyHints {
   onKeymapChanged(listener: (keymap: Keymap) => void): Disposable;
 }
 
+// A page load's restores: what the parts put back from their place slots. A
+// part hands `track` each restore that settles after its `start` returns (a doc
+// reopened through main), and a restore started inside a tracked one is tracked
+// before that one settles. The restores have settled once every part's
+// `ready()` ran and no tracked restore is pending: a restore nobody tracked is
+// not waited on, nor one tracked after they settled. A tracked restore can wait
+// on main: docs' restored open waits on its view's index read, and on a rebuild
+// when that index does not list the doc, so the restores can settle seconds
+// after every part's `ready()` ran. A restore main never answers, or one no
+// later step ever ends, is waited on only until a time cap after that, when
+// the restores settle with the count still pending logged. Until they settle,
+// a part cannot tell a restore's key base change from the user's: the user's
+// moves before then leave notes' restored popup open. `onSettled` calls its
+// listener once they settle, or at once when they already have, until its
+// `dispose`.
+export interface PageRestores {
+  track(restore: Promise<unknown>): void;
+  onSettled(listener: () => void): Disposable;
+}
+
 // `keys.setScope` sets the scope page keys fire in, under any pushed scope;
 // `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
 // `keys.scope` is the qualified scope keys fire in now, and a part hears each
@@ -672,7 +698,9 @@ export interface KeyHints {
 // config now sets it, every plugin's binds qualified, and
 // `keys.onKeymapChanged` hears it each time it changes, until its `dispose`;
 // `keys.label` falls back to the id for a command with no label;
-// `keys.command` reads a command by its qualified id; `keys.scopes` lists
+// `keys.command` reads a command by its qualified id, from the freshest catalog
+// the page has, so a command a part registered counts before main serves it
+// again; `keys.scopes` lists
 // every scope as main serves them. `keysFor`, `anchor` and `onKeymapChanged` are as
 // `KeyHints` says, each handle filed in the part's registrations.
 // `keys.where` reads whether focus is in a text box now, and `keys.onWhereChanged`
@@ -708,6 +736,8 @@ export interface KeyHints {
 // `drops.addTarget` registers an element and what takes the files dropped or
 // pasted on it, returning the `Disposable` that removes it; `drops.savePasted`
 // saves a file with no path and returns its path.
+// `restores` is the page load's restores, as `PageRestores` says; its
+// `onSettled` handles are filed in the part's registrations.
 // `dependency` takes the page key from a provider's contract, for a plugin the
 // manifest lists in `dependsOn.page`, and returns this part's view of that
 // plugin's exports. `Ev` is the
@@ -755,6 +785,7 @@ export interface PageApi<
     setOuterPanes(panes: OuterPanes | null): void;
   };
   drops: PageDrops;
+  restores: PageRestores;
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;
@@ -779,9 +810,18 @@ export interface PageStart<M extends PluginManifest> {
   exports?(consumer: Registrations): unknown;
   // Runs when the host stops the part.
   dispose?(): void | Promise<void>;
+  // Called by the host once every part of this process has started at launch
+  // (main) or page load (page), and after a live start, once every part that
+  // start brought up has started.
+  ready?(): void;
+  // A reason the part must not stop now, in words the user reads (a round is
+  // open in <session>), or null. The switch asks it before a switch-off; a
+  // restart and quit do not ask.
+  mayStop?(): string | null;
 }
 
-// Starts on every page load.
+// Starts on every page load, and again when the host starts or restarts it
+// live.
 export interface PagePart<M extends PluginManifest = PluginManifest> {
   manifest: M;
   // `any`: one parts list holds parts with different channels and events.
@@ -918,6 +958,7 @@ export interface DriveHost {
 // the stable or the dev one. `images` re-encodes an image smaller, as PNG or
 // JPEG only, for `shrinkToFit`. `sessionHost` owns every agent process, so a
 // process outlives the app (`docs/features/session-host/design.md`).
+// `pluginSwitch` tells whether a plugin may switch off now.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -947,6 +988,13 @@ export interface MainServices {
   runMode: RunMode;
   appInstance: AppInstance;
   selfTest: SelfTestHost | null;
+  pluginSwitch: PluginSwitchService;
+}
+
+// The part of main's plugin switch a main part reaches: the reason turning
+// `pluginId` off would be refused now, or null.
+export interface PluginSwitchService {
+  mayDisable(pluginId: string): Promise<string | null>;
 }
 
 // `dependency` takes the main key from a provider's contract, for a plugin the
@@ -1012,9 +1060,17 @@ export interface MainStart<M extends PluginManifest> {
   // registrations, and undoes only what the plugin API cannot see. Quit stops
   // every main part, and the live app may exit before a returned promise settles.
   dispose?(): void | Promise<void>;
+  // Called by the host once every part of this process has started at launch
+  // (main) or page load (page), and after a live start, once every part that
+  // start brought up has started.
+  ready?(): void;
+  // A reason the part must not stop now, in words the user reads (a round is
+  // open in <session>), or null. The switch asks it before a switch-off; a
+  // restart and quit do not ask.
+  mayStop?(): string | null;
 }
 
-// Starts once, at launch.
+// Starts at launch, and again when the host starts or restarts it live.
 export interface MainPart<M extends PluginManifest = PluginManifest> {
   manifest: M;
   // `any`: one parts list holds parts with different channels and events.

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { coreScopeSlot } from '../../../contracts/core-state';
-import type { EditorHost } from '../../../contracts/editor';
+import type { ChatEntry, ChatImage } from '../../../contracts/agent';
+import type { EditorEvents, EditorHost } from '../../../contracts/editor';
 import type { KeyedSlotWriter } from '../../../contracts/state';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
 import {
   fakeDependency,
   noCounts,
@@ -17,10 +18,14 @@ import {
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   chatCommandsSlot,
   chatControlsSlot,
+  chatDraftImagesSlot,
   chatEntriesSlot,
+  type ChatPlace,
+  chatPlaceSlot,
   type ChatPageExports,
   chatQueuedSlot,
   chatReturnedSlot,
@@ -31,17 +36,7 @@ import {
 import { chatPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
-const ROW: SessionRow = {
-  sessionId: 's1',
-  label: 'row',
-  project: 'project',
-  harness: 'claude',
-  marked: false,
-  projectDir: null,
-  hostSessionId: 'host-1',
-  titles: { user: null, agent: null, firstMessage: null },
-  profileDir: null,
-};
+const ROW = sessionRow('s1', { label: 'row', hostSessionId: 'host-1' });
 
 const SESSION: ChatSessionState = {
   sessionId: 's1',
@@ -62,20 +57,64 @@ const SESSION: ChatSessionState = {
   worktrees: [],
 };
 
+const notice = (id: string): ChatEntry => ({
+  kind: 'notice',
+  id,
+  at: 1000,
+  text: 'hi',
+  tone: 'info',
+  raw: [],
+});
+
+const PNG: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
+
+// One box an editor made: `type` changes its text as the user does.
+interface FakeBox {
+  text: string;
+  type(text: string): void;
+}
+
 // Chat's page part on the part harness, over a sessions fake that files each tab
 // with `consumer.track`, as its view does. `destroyEditor` is
-// each editor's `destroy`, and `setActivity` the fake's row activity call.
+// each editor's `destroy`, `setActivity` the fake's row activity call, and
+// `tabAdded` hears each added tab's element. `boxes` gets each box made, in
+// order, and `invoked` each call to main.
 function startChatPage(
   destroyEditor: () => void = () => undefined,
   isTabVisible: () => boolean = () => false,
   setActivity: SessionsPageExports['setActivity'] = () => undefined,
+  tabAdded: (element: HTMLElement) => void = () => undefined,
+  {
+    boxes = [],
+    invoked = [],
+  }: { boxes?: FakeBox[]; invoked?: unknown[][] } = {},
 ) {
   return startPagePart(chatPagePart, {
-    invoke: () => Promise.resolve(),
+    invoke: (...args: unknown[]) => {
+      invoked.push(args);
+      return Promise.resolve();
+    },
     services: {
       picker: fakeListPickerService(),
       editor: {
-        create: () => ({ destroy: destroyEditor, focus() {} }),
+        create: (_parent: HTMLElement, text: string, events: EditorEvents) => {
+          const box: FakeBox = {
+            text,
+            type(next) {
+              box.text = next;
+              events.changed(next);
+            },
+          };
+          boxes.push(box);
+          return {
+            text: () => box.text,
+            setText(next: string) {
+              box.text = next;
+            },
+            destroy: destroyEditor,
+            focus() {},
+          };
+        },
       } as unknown as EditorHost,
       markdown: {
         block: (text: string) => text,
@@ -89,12 +128,14 @@ function startChatPage(
         sessionsPageKey,
         (consumer) =>
           ({
-            addTab: () =>
-              consumer.track({
+            addTab: (_sessionId: string, tab: { element: HTMLElement }) => {
+              tabAdded(tab.element);
+              return consumer.track({
                 dispose() {},
                 select() {},
                 isVisible: isTabVisible,
-              }),
+              });
+            },
             addRowPart: () => consumer.track({ dispose() {} }),
             activate() {},
             setActivity,
@@ -125,8 +166,49 @@ function loadSessions(
     returnedSlot.set(state.sessionId, returned);
     session.set(state.sessionId, info);
   }
-  harness.emit('core.pageReady', null);
+  harness.ready();
   return session;
+}
+
+// Stops the page, leaves `places` and `images` in chat's place slots as the last
+// page's, and starts it again.
+async function reloadWith(
+  harness: ReturnType<typeof startChatPage>,
+  places: Record<string, ChatPlace>,
+  images: Record<string, readonly ChatImage[]>,
+) {
+  await harness.stop();
+  const placeSeed = harness.state.publish(chatPlaceSlot);
+  for (const [sessionId, place] of Object.entries(places)) {
+    placeSeed.set(sessionId, place);
+  }
+  placeSeed.dispose();
+  const imagesSeed = harness.state.publish(chatDraftImagesSlot);
+  for (const [sessionId, held] of Object.entries(images)) {
+    imagesSeed.set(sessionId, held);
+  }
+  imagesSeed.dispose();
+  await harness.restart();
+}
+
+const placeWith = (draft: string): ChatPlace => ({
+  draft,
+  focus: { stopId: null, following: true, anchorId: null },
+  openRuns: [],
+  openExpanders: {},
+});
+
+// The session ids each place slot holds keys for.
+const placeKeys = (harness: ReturnType<typeof startChatPage>) => ({
+  places: [...harness.state.read(chatPlaceSlot, 'test').all().keys()],
+  images: [...harness.state.read(chatDraftImagesSlot, 'test').all().keys()],
+});
+
+// Lets a command run's settling handlers go.
+async function flushRuns() {
+  for (let turn = 0; turn < 5; turn++) {
+    await Promise.resolve();
+  }
 }
 
 beforeEach(() => {
@@ -242,6 +324,112 @@ describe('chat page part', () => {
     isTabVisible = false;
     scope.set('another.view');
     expect(leave).toHaveBeenCalledOnce();
+    await harness.stop();
+  });
+
+  it('sectionHead_Click_RunsToggleSectionAndCollapsesThePart', async () => {
+    const tabs: HTMLElement[] = [];
+    const harness = startChatPage(
+      () => undefined,
+      () => false,
+      () => undefined,
+      (element) => tabs.push(element),
+    );
+    loadSessions(harness, [SESSION]);
+    const [head] = findAll(asFake(tabs[0]), 'chat-side-section-head');
+
+    head.click();
+    await flushRuns();
+
+    expect(harness.logs).toContainEqual({
+      source: 'chat',
+      message: 'section Main agent collapsed',
+    });
+    await harness.stop();
+  });
+
+  it('reload_restores_draft_images_and_place', async () => {
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
+    const boxes: FakeBox[] = [];
+    const invoked: unknown[][] = [];
+    const harness = startChatPage(
+      () => undefined,
+      () => true,
+      () => undefined,
+      () => undefined,
+      { boxes, invoked },
+    );
+    harness.state.publish(sessionsRowsSlot).set('s1', ROW);
+    const session = loadSessions(harness, [
+      { ...SESSION, entries: [notice('n1'), notice('n2')] },
+    ]);
+    // The tab's box is the last made: the dialogs make theirs at start.
+    boxes.at(-1)?.type('typed before the reload');
+    harness.started().commands.prevEntry({ arg: undefined });
+
+    await reloadWith(harness, {}, { s1: [PNG] });
+    const info = session.get('s1') as ChatSessionInfo;
+    session.set('s1', { ...info, running: true });
+
+    expect(
+      harness.state.read(chatPlaceSlot, 'test').get('s1')?.focus.stopId,
+    ).toBe('n1');
+    invoked.length = 0;
+    harness.started().commands.send({ arg: undefined });
+    expect(invoked).toContainEqual([
+      'send',
+      's1',
+      { text: 'typed before the reload', images: [PNG] },
+    ]);
+    await harness.stop();
+  });
+
+  it('row_removed_clears_the_place', async () => {
+    const harness = startChatPage();
+    const rows = harness.state.publish(sessionsRowsSlot);
+    rows.set('s1', ROW);
+    loadSessions(harness, [SESSION]);
+    await reloadWith(harness, { s1: placeWith('draft') }, { s1: [PNG] });
+    expect(placeKeys(harness)).toEqual({ places: ['s1'], images: ['s1'] });
+
+    rows.delete('s1');
+
+    expect(placeKeys(harness)).toEqual({ places: [], images: [] });
+    await harness.stop();
+  });
+
+  it('row_gone_during_reload_is_pruned', async () => {
+    const harness = startChatPage();
+    harness.state.publish(sessionsRowsSlot).set('s1', ROW);
+
+    await reloadWith(
+      harness,
+      { s1: placeWith('kept'), gone: placeWith('gone') },
+      { s1: [PNG], gone: [PNG] },
+    );
+
+    expect(placeKeys(harness)).toEqual({ places: ['s1'], images: ['s1'] });
+    await harness.stop();
+  });
+
+  // The view owns the rule; this proves the part hands it the rows.
+  it('mayStop_TypedDraft_NamesTheRowsChat', async () => {
+    const boxes: FakeBox[] = [];
+    const harness = startChatPage(
+      () => undefined,
+      () => false,
+      () => undefined,
+      () => undefined,
+      { boxes },
+    );
+    harness.state.publish(sessionsRowsSlot).set('s1', ROW);
+    loadSessions(harness, [SESSION]);
+    // The tab's box is the last made: the dialogs make theirs at start.
+    boxes.at(-1)?.type('not sent yet');
+
+    expect(harness.started().mayStop?.()).toBe(
+      "Send or clear the draft in row's chat first",
+    );
     await harness.stop();
   });
 

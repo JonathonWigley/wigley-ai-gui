@@ -1,14 +1,16 @@
 import '../../../shared/page/markdown.css';
 import './chat.css';
-import { type CoreEvents, coreScopeSlot } from '../../../contracts/core-state';
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import type { ChatImage } from '../../../contracts/agent';
 import { createPartStore } from '../../../shared/page/contributed-parts';
+import {
+  type PlaceWrites,
+  placeWrites,
+  pruneKeys,
+} from '../../../shared/page/place-slot';
 import {
   followRows,
   sessionsActiveSlot,
@@ -20,13 +22,17 @@ import {
   chatCommandsSlot,
   type ChatComposerPart,
   chatControlsSlot,
+  chatDraftImagesSlot,
   chatEntriesSlot,
+  type ChatPlace,
+  chatPlaceSlot,
   type ChatPageExports,
   chatQueuedSlot,
   chatReturnedSlot,
   chatSessionSlot,
   type ChatSidePart,
   type ChatStatusPart,
+  chatToggleSectionCommand,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -43,7 +49,7 @@ import { createChatLayouts } from './chat-layouts';
 import { addClearCommands } from './clear-commands';
 import { clipboardWriter } from './clipboard';
 import { createCompletionRows, descriptionDraw } from './completion-rows';
-import { mountChatView } from './chat-view';
+import { mountChatView, type TabPlace } from './chat-view';
 import { createImageViewer } from './image-viewer';
 import { createMainAgentPart } from './main-agent-part';
 import { createPicker } from './picker';
@@ -55,13 +61,12 @@ import { createSideSections } from './side-sections';
 import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
+import {
+  keyRunner,
+  kitCommandsOf,
+} from '../../../shared/page/layout-host/base-kit';
 
-type ChatApi = PageApi<
-  typeof chatManifest,
-  ChatChannel,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type ChatApi = PageApi<typeof chatManifest, ChatChannel>;
 
 // Shows each chat session main holds in its session's Chat tab: the entries
 // under a floating composer holding the message box, the controls as chips
@@ -92,7 +97,11 @@ type ChatApi = PageApi<
 // start prompt open. A resting session's Chat tab keys as a running one's
 // does; its control chips are disabled until a message starts its process.
 // Each session's row shows its run time, and the exports and the `chat.session`
-// slot offer its clock to other plugins.
+// slot offer its clock to other plugins. Each tab's draft, cursor, open runs and
+// expanders go to `chat.place`, and its attached images to `chat.draftImages`,
+// on each change; a page load puts the last page's back as the tab is made, and
+// a session's keys leave with its row. A draft or an attached image not yet
+// sent refuses a switch-off.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -106,18 +115,64 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const rows = api.state.read(sessionsRowsSlot);
     const chatSessions = api.state.read(chatSessionSlot);
     const active = api.state.read(sessionsActiveSlot);
+    const placeWriter = api.state.publish(chatPlaceSlot);
+    const imagesWriter = api.state.publish(chatDraftImagesSlot);
+    // Each held tab's writes, by session id.
+    const tabPlaces = new Map<
+      string,
+      {
+        place: PlaceWrites<ChatPlace>;
+        images: PlaceWrites<readonly ChatImage[]>;
+      }
+    >();
+    const placeOf = (sessionId: string): TabPlace => {
+      const place = placeWrites<ChatPlace>((value) =>
+        placeWriter.set(sessionId, value),
+      );
+      const images = placeWrites<readonly ChatImage[]>((value) =>
+        imagesWriter.set(sessionId, value),
+      );
+      tabPlaces.set(sessionId, { place, images });
+      return {
+        saved: placeWriter.get(sessionId),
+        savedImages: imagesWriter.get(sessionId) ?? [],
+        write: (value) => place.write(value),
+        writeImages(value) {
+          if (value.length > 0) {
+            images.write(value);
+            return;
+          }
+          imagesWriter.delete(sessionId);
+          images.reset();
+        },
+      };
+    };
+    // The row's keys leave with it, after its tab, which writes no more.
+    const forgetPlace = (sessionId: string) => {
+      placeWriter.delete(sessionId);
+      imagesWriter.delete(sessionId);
+      const held = tabPlaces.get(sessionId);
+      tabPlaces.delete(sessionId);
+      held?.place.reset();
+      held?.images.reset();
+    };
+    // A session whose row ended while no page ran leaves keys no tab takes;
+    // the prune waits for the page mirror to hold the rows. On a live restart
+    // it can also drop the keys of rows chat's restore has not reopened yet.
+    const pruneEndedPlaces = () => {
+      const isLive = (sessionId: string) => rows.all().has(sessionId);
+      pruneKeys(placeWriter, isLive);
+      pruneKeys(imagesWriter, isLive);
+    };
     const run = (command: string) => api.commands.run(command);
+    const runKey = keyRunner(api.commands, services.log);
     const layouts = createChatLayouts(services.log);
     // What every surface's layout kit reads.
     const partDeps = {
       layouts,
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id: string) => api.keys.command(id) !== undefined,
-        argShape: (id: string) => api.keys.command(id)?.arg,
-        run: (id: string) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
       log: services.log,
@@ -183,6 +238,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       parts: sideParts,
       uiState: services.uiState,
       timers: services.timers,
+      toggleClicked: (partId) => runKey(chatToggleSectionCommand, partId),
       log: services.log,
     });
     const rowClock = createRowClock({
@@ -203,13 +259,17 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         queued: api.state.read(chatQueuedSlot),
         returned: api.state.read(chatReturnedSlot),
       },
-      onPageReady: (listener) =>
-        void api.events.on('core.pageReady', () => listener()),
       paths: services.paths,
       homeDir: services.homeDir,
       sessions,
       activeSessionId: () => active.get() ?? null,
-      onSessionRemoved: (listener) => followRows(rows, { removed: listener }),
+      onSessionRemoved: (listener) =>
+        followRows(rows, {
+          removed: (sessionId) => {
+            listener(sessionId);
+            forgetPlace(sessionId);
+          },
+        }),
       onActiveChanged: (listener) =>
         active.on((sessionId) => listener(sessionId ?? null)),
       onSessionHostChanged: (listener) =>
@@ -223,6 +283,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       markdown: services.markdown,
       keys: api.keys,
       run,
+      runKey,
       commands: partDeps.commands,
       platform: api.platform.os,
       state: api.state.forLayouts,
@@ -231,9 +292,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       statusParts,
       sideParts,
       sideSections,
-      permissions,
       confirm,
-      viewer,
       slashCommands: () => slashCommands.list(),
       completionRows,
       setScope: (scope) => api.keys.setScope(scope),
@@ -249,6 +308,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       timers: services.timers,
       clock: services.clock,
       drops: api.drops,
+      placeOf,
     });
     sessions.addRowPart(rowClock.part);
     const rowProfile = createRowProfile({
@@ -342,11 +402,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           sideSections.toggleHidden();
           view.hub.hiddenChanged();
         },
+        toggleSection: ({ arg }) => sideSections.toggleSection(arg),
         nextSection: () => view.hub.move(1),
         prevSection: () => view.hub.move(-1),
         firstSection: () => view.hub.toEdge('first'),
         lastSection: () => view.hub.toEdge('last'),
-        toggleSection: () => view.hub.toggle(),
+        toggleCursorSection: () => view.hub.toggle(),
         leaveHub: () => view.hub.leave(),
         hubLineDown: () => view.hub.scroll('line', 1),
         hubLineUp: () => view.hub.scroll('line', -1),
@@ -354,6 +415,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         hubHalfPageUp: () => view.hub.scroll('halfPage', -1),
       },
       exports,
+      ready() {
+        pruneEndedPlaces();
+        view.ready();
+      },
+      mayStop: () => view.mayStop(rows.all().values()),
       dispose: () => view.dispose(),
     };
   },

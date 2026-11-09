@@ -14,6 +14,7 @@ import type {
 import type { Alerts } from '../../../contracts/alerts';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
+import type { Files } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
 import type { PluginLog } from '../../../contracts/log';
 import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
@@ -81,9 +82,17 @@ import {
   type PermissionRequest,
   permissionReplyText,
   readPermissionRequest,
+  UNATTENDED_REASON,
 } from './permission-tool';
 import type { RecentFolders } from './recent-folders';
-import { worktreeNameOf } from './worktree-name';
+import type { ToolCallers } from './tool-callers';
+import {
+  type ResolvedFolder,
+  rootSpellings,
+  runsGitWorktree,
+  worktreeNameOf,
+  worktreesInCommand,
+} from './worktree-name';
 
 export const TURN_FINISHED_TITLE = 'Turn finished';
 
@@ -91,7 +100,7 @@ export interface ChatSessionsDeps {
   harnesses: readonly AgentHarness[];
   sessions: Pick<
     SessionsMainExports,
-    'open' | 'mark' | 'activate' | 'setTitle' | 'titles'
+    'open' | 'mark' | 'activate' | 'setTitle' | 'titles' | 'label'
   >;
   selectedSessionId(): string | null;
   // Read at each session start.
@@ -105,8 +114,15 @@ export interface ChatSessionsDeps {
   emit: PluginEvents<ChatMainEvents>['emit'];
   alerts: Pick<Alerts, 'announce'>;
   window: { show(): void; isFocused(): boolean };
-  // Reads each row's repo and branch at its open and after each turn.
-  git: Pick<Git, 'topLevel' | 'currentBranch'>;
+  // Reads each row's repo, branch and linked worktrees at its open and after
+  // each turn, and the worktrees again after a Bash call runs `git worktree`.
+  git: Pick<Git, 'topLevel' | 'currentBranch' | 'worktrees'>;
+  // Resolves the row's folder and every folder above it at each worktree
+  // read, so a root git lists resolved also matches under the folder's own
+  // spelling.
+  files: Pick<Files, 'realPath'>;
+  // Told the agent of each `toolStarted`, before chat emits it.
+  toolCallers: Pick<ToolCallers, 'noteToolStarted'>;
   log: PluginLog;
   // Stamps the `at` of the notices and permission entries chat makes itself,
   // and times each session's active time.
@@ -125,11 +141,13 @@ export interface ChatSessions {
   activeTimeOf(sessionId: string): ActiveTime | null;
   start(request: StartRequest): string;
   // Starts a session with its row unselected and sends `message` as its first
-  // message; returns the row's sessionId. Throws before opening anything on
-  // an image chat would refuse to attach.
+  // message; returns the row's sessionId. A request with `unattended` true
+  // makes the row deny each permission prompt at once. Throws before opening
+  // anything on an image chat would refuse to attach.
   launch(request: LaunchRequest): string;
-  // Opens a row for each saved session in order, unselected, with its saved
-  // titles, queued messages and returned messages, then activates the saved selection. A row whose
+  // Opens a row for each saved session in order, unselected, under its saved
+  // row id, with its saved titles, queued messages and returned messages, then
+  // activates the saved selection. A row whose
   // process `hosted` lists running in the current host re-attaches to it; any
   // other row rests, unheld when the host may still run its process (`hosted`
   // null: the host list is unknown). With the list unknown a saved busy turn may
@@ -388,6 +406,13 @@ interface HeldSession {
   exit: { code: number | null; error: string | null } | null;
   // Branch reads started in this row, numbering them; only the latest applies.
   branchReads: number;
+  // The clone's linked worktree roots, from the latest worktree read, each
+  // under git's spelling and under the row folder's.
+  worktreeRoots: readonly string[];
+  // Worktree reads started in this row, numbering them; only the latest applies.
+  worktreeReads: number;
+  // The command of each Bash call the row has seen, each text once.
+  bashCommands: Set<string>;
   // The id of the row's last process start or attach; never cleared, so after
   // an exit it still names the ended process.
   processId: string | null;
@@ -413,6 +438,9 @@ interface HeldSession {
   unheldProcessId: string | null;
   // The running guard step for `unheldProcessId`.
   unheldSettling: Promise<void> | null;
+  // Nobody answers this row: each permission prompt is denied at once, and a
+  // finished turn raises no alert. Saved with the row, kept across a clear.
+  unattended: boolean;
 }
 
 // What one guard step on an unheld process leaves its caller to do: whether a
@@ -432,6 +460,15 @@ const OLDER_HOST_REFUSAL_TEXT =
   'This session is still finishing in another app version. Send again once it ends.';
 
 const STOPPED_TEXT = 'Session stopped. Your next message resumes this session.';
+
+// A Bash call input's `command`, when it holds a string.
+function commandOf(input: unknown): string | null {
+  const command =
+    typeof input === 'object' && input !== null && 'command' in input
+      ? input.command
+      : null;
+  return typeof command === 'string' ? command : null;
+}
 
 function missingProfileText(name: string): string {
   return `Profile ${name} is not in chat's profiles setting; add it back to resume this session.`;
@@ -566,6 +603,8 @@ function savedSessionOf(
     confirmedPicks: Object.fromEntries(session.confirmedPicks),
     returnedDrops: [...session.returnedDrops],
     activeMs: activeMsAt(activeTime, now),
+    rowId: session.sessionId,
+    unattended: session.unattended,
   };
 }
 
@@ -578,6 +617,14 @@ function firstMessageTitleOf(text: string): string {
   return [...text.trimStart()].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
 }
 
+// The error sessions' `open` throws when another session holds `rowId`.
+function isRowIdHeldError(error: unknown, rowId: string): boolean {
+  return (
+    error instanceof Error &&
+    error.message === `Session ${rowId} is already open`
+  );
+}
+
 // Chat's owned sessions: each one's agent process while it runs, its chat
 // entries, controls and commands, the activity it shows, the permission
 // calls waiting on the user, the messages queued behind its running turn or its
@@ -586,7 +633,8 @@ function firstMessageTitleOf(text: string): string {
 // the folder's saved sessions it can resume; and
 // the open sessions it saves across a relaunch, re-attaching to each process
 // the session host still runs. A session's state lives in the slots
-// (`session.slots`), and `send` carries only the moment a row rests.
+// (`session.slots`), which creation clears of the rows an earlier run left,
+// and `send` carries only the moment a row rests.
 export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const { sessions, send, log } = deps;
   // Insertion order is open order, the sidebar's order for chat's rows.
@@ -601,9 +649,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // before they are read; it stops for good at `detachAll`.
   let isRestored = false;
   let isDetached = false;
-  // Records the restore skipped that hold queued or returned messages, saved unchanged so
-  // the next app start tries them again.
+  // Records the restore skipped that hold queued or returned messages, saved
+  // unchanged so the next app start tries them again.
   let skippedRecords: SavedSession[] = [];
+  // A restart keeps a plugin's slots: a row the restore does not open again
+  // would stay in them.
+  deps.slots.dropKept();
   // One object per `addInstructions` call, in registration order.
   const instructionRegistrations = new Set<{ text: string }>();
   // One object per `addSendGate` call, in registration order.
@@ -716,7 +767,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       sessions.activate(sessionId);
       deps.window.show();
     });
-    sessions.mark(sessionId);
+    const label = sessions.label(sessionId) ?? path.basename(projectDir);
+    sessions.mark(sessionId, {
+      text: `Turn finished in ${label}`,
+      action: 'read it',
+    });
   }
 
   // Keeps the ids of the subagents and background tasks still running, so a
@@ -779,8 +834,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // A replayed turn's end announces nothing, since it ended while the app was
   // closed, and neither does one `stopAll` caused, an idle with a hold up, whose
-  // row is still to go out, or the end of a stretch that ran only an app
-  // compaction.
+  // row is still to go out, the end of a stretch that ran only an app
+  // compaction, or any turn of an unattended row.
   function updateActivity(session: HeldSession, isReplayed = false) {
     const previous = session.slots.info().activity;
     const activity = shownActivity(session);
@@ -813,7 +868,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       userIsElsewhere &&
       workIsOver &&
       isTheTurnsOwnEnd &&
-      ranATurn
+      ranATurn &&
+      !session.unattended
     ) {
       announceTurnFinished(session);
     }
@@ -1188,6 +1244,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         if (isLive(session, processStart)) {
           session.slots.putEntry(rowEntryOf(entry, processStart));
           takeIn(session, entry.id);
+          noteBashCommand(session, entry, replay.isReplaying);
         }
       },
       controls(controls) {
@@ -1243,13 +1300,23 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         // its `sessionEnded`.
         const endsTheSession = event.type === 'sessionEnded' && !isDetached;
         const isLiveEvent = isLive(session, processStart);
+        // A replayed call too, so a subagent's call from while the app was
+        // closed still reads as that subagent's.
+        if (isLiveEvent && event.type === 'toolStarted') {
+          deps.toolCallers.noteToolStarted(
+            sessionId,
+            event.toolUseId,
+            event.agentId,
+          );
+        }
         if (isLiveEvent || endsTheSession) {
           deps.emit('agentEvent', {
             sessionId,
             profileDir,
             hostSessionId,
             event,
-            // The replay's fold emits no `sessionEnded`, so one here is a real exit.
+            // The replay's fold emits no `sessionEnded`, so one here is a real
+            // exit.
             replayed: replay.isReplaying && event.type !== 'sessionEnded',
           });
         }
@@ -1262,6 +1329,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         const endsALiveTurn = isLiveEvent && event.type === 'turnEnded';
         if (endsALiveTurn && !replay.isReplaying) {
           readBranch(session);
+          readWorktreeRoots(session);
         }
         if (isLiveEvent && event.type === 'compactionStarted') {
           compactionStarted(session, event);
@@ -1359,6 +1427,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       returnedDrops: readonly string[];
       activeMs: number;
       origin: SessionOrigin;
+      unattended: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1367,7 +1436,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       {
         sessionId: hostId,
         projectDir,
-        deadlineSeconds: null,
         harness: CHAT_HARNESS_ID,
         ...(profileDir === null ? {} : { profileDir }),
       },
@@ -1438,6 +1506,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       compactionReason: null,
       exit: null,
       branchReads: 0,
+      worktreeRoots: [],
+      worktreeReads: 0,
+      bashCommands: new Set(),
       processId: opening.processId,
       launchControls: opening.launchControls,
       launchResume: opening.launchResume,
@@ -1448,10 +1519,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       isStopRequested: false,
       unheldProcessId: null,
       unheldSettling: null,
+      unattended: opening.unattended,
     };
     held.set(sessionId, session);
     takeOverSkipped(session);
     readBranch(session);
+    readWorktreeRoots(session);
     return session;
   }
 
@@ -1504,13 +1577,124 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Adds the worktree holding `filePath` to the row's worktrees, when it is in
-  // one the row does not list yet.
+  // one.
   function noteWorktree(session: HeldSession, filePath: string) {
     const name = worktreeNameOf(filePath);
+    if (name !== null) {
+      addWorktree(session, name);
+    }
+  }
+
+  // Adds `name` to the row's worktrees when the row does not list it yet.
+  function addWorktree(session: HeldSession, name: string) {
     const { worktrees } = session.slots.info();
-    if (name !== null && !worktrees.includes(name)) {
+    if (!worktrees.includes(name)) {
       session.slots.setInfo({ worktrees: [...worktrees, name] });
     }
+  }
+
+  // Lists each worktree a Bash call's command names. A call that ran
+  // `git worktree` reads the roots again, so a worktree it made lists in the
+  // same turn.
+  function noteBashCommand(
+    session: HeldSession,
+    entry: ChatEntry,
+    isReplaying: boolean,
+  ) {
+    if (entry.kind !== 'tool' || entry.name !== 'Bash') {
+      return;
+    }
+    const command = commandOf(entry.input);
+    if (command === null) {
+      return;
+    }
+    session.bashCommands.add(command);
+    for (const name of worktreesInCommand(command, session.worktreeRoots)) {
+      addWorktree(session, name);
+    }
+    const ranAWorktreeCommand =
+      entry.result !== null && runsGitWorktree(command);
+    if (ranAWorktreeCommand && !isReplaying) {
+      readWorktreeRoots(session);
+    }
+  }
+
+  // Reads the clone's linked worktree roots, and lists each worktree not yet
+  // listed that a seen Bash command names under them. A read that a later one
+  // started after, or that settles after the row closed or `detachAll`,
+  // changes nothing; a failed read keeps the roots the row had.
+  function readWorktreeRoots(session: HeldSession) {
+    session.worktreeReads += 1;
+    const read = session.worktreeReads;
+    const { projectDir } = session.slots.info();
+    linkedWorktreeRootsOf(projectDir).then(
+      (roots) => {
+        const isLatestRead =
+          held.get(session.sessionId) === session &&
+          session.worktreeReads === read;
+        if (isDetached || !isLatestRead) {
+          return;
+        }
+        session.worktreeRoots = roots;
+        const { worktrees } = session.slots.info();
+        let unlisted = roots.filter(
+          (root) => !worktrees.includes(path.basename(root)),
+        );
+        for (const command of session.bashCommands) {
+          if (unlisted.length === 0) {
+            break;
+          }
+          const names = worktreesInCommand(command, unlisted);
+          for (const name of names) {
+            addWorktree(session, name);
+          }
+          unlisted = unlisted.filter(
+            (root) => !names.includes(path.basename(root)),
+          );
+        }
+      },
+      (error: unknown) =>
+        log(
+          `worktrees not read in ${path.basename(projectDir)}: ${errorText(error)}`,
+        ),
+    );
+  }
+
+  // The top folder of each linked worktree of the clone holding `projectDir`,
+  // under git's spelling and `projectDir`'s (`rootSpellings`, from the resolved
+  // path of `projectDir` and each folder above it); [] outside a clone.
+  async function linkedWorktreeRootsOf(projectDir: string): Promise<string[]> {
+    const top = await deps.git.topLevel(projectDir);
+    if (top === null) {
+      return [];
+    }
+    const [worktrees, folders] = await Promise.all([
+      deps.git.worktrees(top),
+      resolvedFoldersUp(projectDir),
+    ]);
+    const roots = worktrees
+      .filter((worktree) => !worktree.isMain)
+      .map((worktree) => worktree.path);
+    return rootSpellings(roots, folders);
+  }
+
+  // `folder` and each folder above it, deepest first, each with its resolved
+  // path.
+  function resolvedFoldersUp(folder: string): Promise<ResolvedFolder[]> {
+    const folders: string[] = [];
+    for (
+      let each = folder;
+      !folders.includes(each);
+      each = path.dirname(each)
+    ) {
+      folders.push(each);
+    }
+    return Promise.all(
+      folders.map(async (each) => ({
+        folder: each,
+        realFolder: await deps.files.realPath(each),
+      })),
+    );
   }
 
   // Reads the row's repo and branch, and writes them when either changed.
@@ -1889,6 +2073,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       entries: ChatEntry[];
       titles: SessionTitles;
       origin: SessionOrigin;
+      unattended: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1911,6 +2096,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         returnedDrops: [],
         activeMs: 0,
         origin: opening.origin,
+        unattended: opening.unattended,
       },
       options,
     );
@@ -1966,6 +2152,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         returnedDrops: [],
         activeMs: 0,
         origin: 'resumed',
+        unattended: false,
       },
       { select: true },
     );
@@ -1979,6 +2166,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     request: StartRequest,
     origin: SessionOrigin,
     options: OpenOptions,
+    unattended: boolean,
   ): HeldSession {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
@@ -1992,6 +2180,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         entries: [],
         titles: NO_TITLES,
         origin,
+        unattended,
       },
       options,
     );
@@ -2339,7 +2528,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         throw new Error(refusal);
       }
     }
-    const session = startNew(request, 'launched', { select: false });
+    const session = startNew(
+      request,
+      'launched',
+      { select: false },
+      request.unattended === true,
+    );
     deliverWritten(session, request.message);
     const { sessionId } = session;
     log(`launched session ${sessionId} in ${request.projectDir}`);
@@ -2387,6 +2581,52 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
+  // Opens the record's row under its saved row id, or under a new one when
+  // another session holds that id.
+  function openRestoredRow(
+    record: SavedSession,
+    profileDir: string | null,
+  ): HeldSession {
+    const open = (options: OpenOptions) =>
+      openRow(
+        record.projectDir,
+        record.profile,
+        profileDir,
+        {
+          hostId: record.hostSessionId,
+          entries: [],
+          sent: record.sent,
+          historyPending: record.sent,
+          titles: record.titles,
+          processId: record.processId,
+          launchControls: record.launchControls,
+          launchResume: record.launchResume,
+          controls: record.controls,
+          confirmedPicks: record.confirmedPicks,
+          returnedDrops: record.returnedDrops,
+          activeMs: record.activeMs,
+          origin: 'restored',
+          unattended: record.unattended,
+        },
+        options,
+      );
+    const { rowId } = record;
+    if (rowId === null) {
+      return open({ select: false });
+    }
+    try {
+      return open({ select: false, rowId });
+    } catch (error) {
+      if (!isRowIdHeldError(error, rowId)) {
+        throw error;
+      }
+      log(
+        `session ${record.hostSessionId} restored on a new row: row ${rowId} is held`,
+      );
+      return open({ select: false });
+    }
+  }
+
   function restoreRecord(
     record: SavedSession,
     hosted: readonly HostedProcessInfo[] | null,
@@ -2409,26 +2649,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       .find((candidate) => candidate.name === record.profile);
     let session: HeldSession;
     try {
-      session = openRow(
-        record.projectDir,
-        record.profile,
+      session = openRestoredRow(
+        record,
         profile === undefined ? null : profileDirOf(profile),
-        {
-          hostId: hostSessionId,
-          entries: [],
-          sent: record.sent,
-          historyPending: record.sent,
-          titles: record.titles,
-          processId: record.processId,
-          launchControls: record.launchControls,
-          launchResume: record.launchResume,
-          controls: record.controls,
-          confirmedPicks: record.confirmedPicks,
-          returnedDrops: record.returnedDrops,
-          activeMs: record.activeMs,
-          origin: 'restored',
-        },
-        { select: false },
       );
     } catch (error) {
       log(`session ${hostSessionId} not restored: ${errorText(error)}`);
@@ -2781,6 +3004,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         entries,
         titles,
         origin: 'resumed',
+        unattended: false,
       },
       { select: true },
     );
@@ -2806,6 +3030,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       answer: null,
       raw: [args],
     };
+    if (session.unattended) {
+      const denied: PermissionAnswer = {
+        allowed: false,
+        reason: UNATTENDED_REASON,
+      };
+      session.slots.putEntry({ ...entry, answer: denied });
+      return Promise.resolve(
+        textResult(permissionReplyText(denied, request.input)),
+      );
+    }
     return new Promise<ToolResult>((resolve) => {
       const pending: PendingPermission = {
         entry,
@@ -2987,7 +3221,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     hostSessionIdOf: (sessionId) => held.get(sessionId)?.hostId ?? null,
     activeTimeOf: (sessionId) =>
       held.get(sessionId)?.slots.info().activeTime ?? null,
-    start: (request) => startNew(request, 'new', { select: true }).sessionId,
+    start: (request) =>
+      startNew(request, 'new', { select: true }, false).sessionId,
     launch,
     restore,
     loadHistory,

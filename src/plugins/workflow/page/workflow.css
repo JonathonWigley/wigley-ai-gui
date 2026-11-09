@@ -139,11 +139,23 @@
   color: var(--workflow-badge-color);
 }
 
-/* Once usage's bar has shrunk away, the stage's tag ellipsizes, so the parts
-   after it stay on the row's card. A chip without the `workflow-chip` class and the
-   `No workflow` and `Working` tags keep their width. */
+/* The chip and the `Working` tag after it share one line. */
+.session-row-part[data-part='workflow.chip']:not(:empty) {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+}
+
+/* A chip takes no room of its own on the row's line, so it never wraps the line,
+   then grows into the free room, its stage's tag ellipsizing in what is left. A
+   chip without the `workflow-chip` class and the `No workflow` and `Working`
+   tags keep their width. */
 .session-row-part[data-part='workflow.chip']:has(> .workflow-chip) {
-  flex: 0 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.session-row-part[data-part='workflow.chip'] > .workflow-chip {
   min-width: 0;
 }
 

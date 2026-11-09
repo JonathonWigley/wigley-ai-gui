@@ -5,13 +5,24 @@ import { questionFormat } from './question-format';
 function question(overrides: Record<string, unknown> = {}) {
   return {
     title: 'Naming',
+    summary: 'Which name should win?',
     context: 'Two modules do the same thing under different names.',
-    question: 'Which name should win?',
     choices: ['module_a', 'module_b'],
     recommend: 1,
     rationale: 'module_a is older and already referenced elsewhere.',
     ...overrides,
   };
+}
+
+// A question with these fields set, and each one given as undefined deleted.
+function withFields(fields: Record<string, unknown>) {
+  const item: Record<string, unknown> = question(fields);
+  for (const [field, value] of Object.entries(fields)) {
+    if (value === undefined) {
+      delete item[field];
+    }
+  }
+  return item;
 }
 
 // The message of the RoundError the question format throws for this item.
@@ -28,17 +39,56 @@ function parseError(raw: unknown): string {
 }
 
 describe('questionFormat.parse', () => {
-  it('names every missing question field and the six required names', () => {
-    const partial: Record<string, unknown> = question();
-    delete partial.context;
-    delete partial.rationale;
+  it.each([
+    { deleted: ['context', 'rationale'], names: 'context, rationale' },
+    { deleted: ['summary'], names: 'summary.' },
+  ])(
+    'names every missing question field and the six required names: $deleted',
+    ({ deleted, names }) => {
+      const partial: Record<string, unknown> = question();
+      for (const field of deleted) {
+        delete partial[field];
+      }
 
-    const message = parseError(partial);
+      const message = parseError(partial);
 
-    expect(message).toMatch(/^Question 1: .*context, rationale/);
-    expect(message).toContain(
-      'title, context, question, choices, recommend, rationale',
+      expect(message.startsWith(`Question 1: missing ${names}`)).toBe(true);
+      expect(message).toContain(
+        'title, summary, context, choices, recommend, rationale',
+      );
+    },
+  );
+
+  it.each([
+    { fields: { summary: 'S' }, summary: 'S' },
+    { fields: { summary: undefined, question: 'Q' }, summary: 'Q' },
+  ])(
+    "reads the summary from summary, or from a saved round's question: $summary",
+    ({ fields, summary }) => {
+      expect(
+        questionFormat.parse(withFields(fields), 'Question 1: ').summary,
+      ).toBe(summary);
+    },
+  );
+
+  it.each([
+    { fields: { summary: '  ' } },
+    { fields: { summary: undefined, question: '  ' } },
+  ])(
+    'refuses a blank summary or a blank legacy question, naming summary: $fields',
+    ({ fields }) => {
+      expect(parseError(withFields(fields))).toMatch(
+        /^Question 1: summary must be a non-empty string/,
+      );
+    },
+  );
+
+  it('refuses a question with both summary and question, naming both', () => {
+    const message = parseError(
+      question({ question: 'Which name should win?' }),
     );
+
+    expect(message).toMatch(/^Question 1: .*summary.*question/);
   });
 
   it('refuses an extra question field, naming it', () => {

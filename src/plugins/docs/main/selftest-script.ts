@@ -1259,8 +1259,9 @@ const SCROLLS_ITSELF = [
 
 // Rewrites the fixture under `homeDir` with `options` and opens a session in
 // the background with host id `sessionId` in the fixture's repo, then
-// activates its row, which shows its only tab, the Docs tab. A failed
-// activation ends the session it opened.
+// activates its row, which shows its only tab, the Docs tab, with
+// `docs-session-tab` on (disabled by default; the self-test starts it). A
+// failed activation ends the session it opened.
 export async function openDocsFixtureSession(
   files: Files,
   homeDir: string,
@@ -1275,7 +1276,6 @@ export async function openDocsFixtureSession(
     {
       sessionId,
       projectDir: paths.join(home, 'dev', 'selftest-repo'),
-      deadlineSeconds: null,
       harness: 'claude',
     },
     { select: false },

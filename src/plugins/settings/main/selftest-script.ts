@@ -29,6 +29,12 @@ const ADDED_KEYS = '<Leader>zh';
 // settings.json until the timeout reset group resets it.
 const STALE_TIMEOUT_MS = 900;
 
+// The labels of plugins the Plugins section groups use, as their manifests
+// declare them: settings may not import another plugin's manifest.
+const GALLERY_LABEL = 'Gallery';
+const USAGE_LABEL = 'Usage';
+const USAGE_TAB_LINE_LABEL = 'Usage tab line';
+
 // Settings mode opens on the first section, Core, with focus on the side bar.
 const SIDE_BAR_STEPS: SelfTestStep[] = [
   { keys: [' ', 'k', ','], expect: '[page] side bar hidden' },
@@ -167,10 +173,38 @@ const TIMEOUT_RESET_STEPS: SelfTestStep[] = [
   },
 ];
 
-const DISABLED_PLUGINS_STEPS: SelfTestStep[] = [
+// Plugins sits just above Keymap, the last section.
+const PLUGIN_SWITCH_STEPS: SelfTestStep[] = [
   {
-    keys: ['/', ...'disabled', 'Enter'],
-    expect: '[settings] filter "disabled" first row plugins.disabled',
+    keys: ['Escape', '<A-h>', 'G', 'k', 'Enter'],
+    expect: '[settings] section plugins',
+    checksFit: true,
+    screenshot: 'plugins',
+  },
+  {
+    keys: ['/', ...'gallery', 'Enter'],
+    expect: '[settings] filter "gallery" first row plugin:gallery',
+  },
+  { keys: ['Enter'], expect: `[settings] picker shown: ${GALLERY_LABEL}` },
+  {
+    keys: ['j', 'Enter'],
+    expect: '[plugin-switch] off gallery',
+    screenshot: 'plugin-off',
+  },
+  { keys: ['Enter'], expect: `[settings] picker shown: ${GALLERY_LABEL}` },
+  { keys: ['k', 'Enter'], expect: '[plugin-switch] on gallery' },
+];
+
+const LOCKED_PLUGIN_STEPS: SelfTestStep[] = [
+  {
+    keys: ['/', ...'usage', 'Enter'],
+    expect: '[settings] filter "usage" first row plugin:usage',
+    screenshot: 'plugin-locked',
+  },
+  { keys: ['Enter'], expect: `[settings] picker shown: ${USAGE_LABEL}` },
+  {
+    keys: ['j', 'Enter'],
+    expect: `[settings] refused settings.json: ${USAGE_LABEL} is needed by ${USAGE_TAB_LINE_LABEL}`,
   },
 ];
 
@@ -196,6 +230,16 @@ const GROUPS: SelfTestGroup[] = [
     steps: THEME_PICKER_STEPS,
   },
   {
+    name: 'plugin switch',
+    why: "In the Plugins section, the gallery row's picker switches gallery off and on again, and the switch stops and starts it.",
+    steps: PLUGIN_SWITCH_STEPS,
+  },
+  {
+    name: 'locked plugin',
+    why: 'The usage row is locked while usage-tab-line runs: picking false shows why and writes nothing.',
+    steps: LOCKED_PLUGIN_STEPS,
+  },
+  {
     name: 'keymap',
     why: 'In the Keymap section, a adds a key to the help command under a picked scope and d removes the user bind, each writing keymap.json, and r then finds nothing to reset.',
     steps: KEYMAP_STEPS,
@@ -204,11 +248,6 @@ const GROUPS: SelfTestGroup[] = [
     name: 'timeout reset',
     why: 'Back in Core, r on the key sequence timeout clears the stale timeout from settings.json.',
     steps: TIMEOUT_RESET_STEPS,
-  },
-  {
-    name: 'disabled plugins',
-    why: 'Filtering Core on disabled finds the plugins.disabled row.',
-    steps: DISABLED_PLUGINS_STEPS,
   },
 ];
 

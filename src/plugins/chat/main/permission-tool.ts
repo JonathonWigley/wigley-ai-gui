@@ -6,6 +6,8 @@ export { PERMISSION_TOOL_NAME };
 export const DEFAULT_DENY_MESSAGE = 'The user denied this tool call.';
 export const CANCELLED_REASON =
   'The tool call was cancelled before the user answered.';
+export const UNATTENDED_REASON =
+  'This session runs unattended: nobody answers its permission prompts, so the app denied this tool call. Work without it, and report what it would have done.';
 export const NOT_OWNED_TEXT =
   'permission_prompt answers only for sessions the wigley-ai-gui app started.';
 

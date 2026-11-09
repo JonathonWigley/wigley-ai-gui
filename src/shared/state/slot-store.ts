@@ -39,6 +39,15 @@ import { createListeners, type Listeners } from '../listeners';
 // value slot is a change, also with an equal value. `publish` and `applyRemote` throw
 // for an id held as another kind. Listeners are held by id apart from the slots, so
 // one added before the slot exists hears the first write.
+// `clearOwner` empties every slot whose id starts with `<pluginId>.`, in the
+// order the slots were created, and each keeps its kind. It throws
+// `Slot "<id>" is held by a live part` for the first one a live writer holds,
+// and clears nothing. Every slot empties first; then `onWrite` runs once with
+// `{ id, kind: 'cleared' }` for each one that held a value or an entry; then
+// their listeners hear one delete per entry, slot by slot in first-set order:
+// `(undefined)`, `(key, undefined)` or `(key, { kind: 'delete' })`. An empty
+// slot is no change. `applyRemote` of a `cleared` change empties its slot the
+// same way without `onWrite`, and does nothing for an absent slot.
 // `isHeld` is whether a live writer holds the id. `readById` follows the rule on
 // `LayoutSlotReader`.
 export interface SlotStore {
@@ -55,6 +64,7 @@ export interface SlotStore {
   ): ListSlotReader<V>;
   readById(id: string, listenerOwner: string): LayoutSlotReader;
   isHeld(id: string): boolean;
+  clearOwner(pluginId: string): void;
   applyRemote(change: SlotChange): void;
   load(slots: Record<string, SlotSnapshot>): void;
   snapshot(): Record<string, SlotSnapshot>;
@@ -74,6 +84,9 @@ type Slot =
   | { kind: 'list'; entries: Map<string, readonly ListItem[]> };
 
 type SlotKind = Slot['kind'];
+
+// A change to one entry of a slot: every change but `cleared`.
+type EntryChange = Exclude<SlotChange, { kind: 'cleared' }>;
 
 function emptySlot(kind: SlotKind): Slot {
   return kind === 'value'
@@ -127,7 +140,7 @@ function listWithChange(
 
 // Applies `change` to `slot`, which is of the change's kind; false when it changed
 // nothing.
-function applyChange(slot: Slot, change: SlotChange): boolean {
+function applyChange(slot: Slot, change: EntryChange): boolean {
   if (slot.kind === 'value' && change.kind === 'value') {
     slot.value = change.value;
     return true;
@@ -153,7 +166,32 @@ function applyChange(slot: Slot, change: SlotChange): boolean {
   );
 }
 
-function listenerArguments(change: SlotChange): readonly unknown[] {
+// Empties `slot` and returns the deletes that emptied it, one per entry in
+// first-set order, and none for an empty slot.
+function clearSlot(id: string, slot: Slot): EntryChange[] {
+  let deletes: EntryChange[];
+  if (slot.kind === 'value') {
+    deletes =
+      slot.value === undefined ? [] : [{ id, kind: 'value', value: undefined }];
+  } else {
+    const keys = [...slot.entries.keys()];
+    deletes =
+      slot.kind === 'keyed'
+        ? keys.map((key) => ({ id, kind: 'keyed', key, value: undefined }))
+        : keys.map((key) => ({
+            id,
+            kind: 'list',
+            key,
+            change: { kind: 'delete' },
+          }));
+  }
+  for (const change of deletes) {
+    applyChange(slot, change);
+  }
+  return deletes;
+}
+
+function listenerArguments(change: EntryChange): readonly unknown[] {
   if (change.kind === 'value') {
     return [change.value];
   }
@@ -187,11 +225,11 @@ export function createSlotStore(log: Log): SlotStore {
   };
 
   // Changes whose listeners have not run, oldest first.
-  const untold: SlotChange[] = [];
+  const untold: EntryChange[] = [];
   let isTelling = false;
 
-  const tellListeners = (change: SlotChange) => {
-    untold.push(change);
+  const tellListeners = (...changes: EntryChange[]) => {
+    untold.push(...changes);
     if (isTelling) {
       return;
     }
@@ -250,7 +288,7 @@ export function createSlotStore(log: Log): SlotStore {
     claims.add(id);
     let isLive = true;
     return {
-      write(change: SlotChange) {
+      write(change: EntryChange) {
         if (!isLive) {
           log(ownerOf(id), `${id} written after stop`);
           return;
@@ -348,7 +386,28 @@ export function createSlotStore(log: Log): SlotStore {
       on: (listener) => on(id, listenerOwner, listener),
     }),
     isHeld: (id) => claims.has(id),
+    clearOwner(pluginId) {
+      const owned = [...slots].filter(([id]) => id.startsWith(`${pluginId}.`));
+      const held = owned.find(([id]) => claims.has(id));
+      if (held !== undefined) {
+        throw new Error(`Slot "${held[0]}" is held by a live part`);
+      }
+      const cleared = owned
+        .map(([id, slot]) => ({ id, deletes: clearSlot(id, slot) }))
+        .filter(({ deletes }) => deletes.length > 0);
+      for (const { id } of cleared) {
+        writes.tell({ id, kind: 'cleared' });
+      }
+      tellListeners(...cleared.flatMap(({ deletes }) => deletes));
+    },
     applyRemote(change) {
+      if (change.kind === 'cleared') {
+        const slot = slots.get(change.id);
+        if (slot !== undefined) {
+          tellListeners(...clearSlot(change.id, slot));
+        }
+        return;
+      }
       if (applyChange(slotFor(change.id, change.kind), change)) {
         tellListeners(change);
       }

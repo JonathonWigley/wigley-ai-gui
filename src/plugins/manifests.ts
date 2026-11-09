@@ -5,9 +5,11 @@ import { contextSourcesManifest } from './context-sources/manifest';
 import { agentStripManifest } from './agent-strip/manifest';
 import { agentsManifest } from './agents/manifest';
 import { autoCompactManifest } from './auto-compact/manifest';
+import { autoRetroManifest } from './auto-retro/manifest';
 import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
 import { docsManifest } from './docs/manifest';
+import { docsSessionTabManifest } from './docs-session-tab/manifest';
 import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
@@ -40,6 +42,7 @@ export const builtInManifests = [
   autoCompactManifest,
   sessionStashManifest,
   sessionLogManifest,
+  autoRetroManifest,
   agentsManifest,
   agentLinesManifest,
   agentStripManifest,
@@ -47,6 +50,7 @@ export const builtInManifests = [
   contextSourcesManifest,
   keysManifest,
   docsManifest,
+  docsSessionTabManifest,
   galleryManifest,
   settingsManifest,
   backlogManifest,

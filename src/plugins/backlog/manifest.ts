@@ -4,9 +4,14 @@ import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 // Backlog mode: every features home's follow-ups (create, edit, delete, tags),
 // plans and primed features (read-only), grouped by repo. `tags` is the list
 // the tag picker offers; a tag a file holds that the list lacks still shows.
-// `layout` names the layout Backlog draws with.
+// `layout` names the layout Backlog draws with. `openHomeRow` and `selectRow`
+// are the clicks on a home row and an item row, each naming its row, so
+// neither has a key.
 export const backlogManifest = definePlugin({
   id: 'backlog',
+  label: 'Backlog',
+  description:
+    'Adds Backlog mode, with the follow-ups, plans and primed features of every features home.',
   dependsOn: { main: ['docs'], page: ['docs'] },
   reads: { main: [], page: [] },
   commands: {
@@ -85,6 +90,18 @@ export const backlogManifest = definePlugin({
       runsIn: 'page',
     },
     confirmNo: { label: 'keep it', group: 'confirm', runsIn: 'page' },
+    openHomeRow: {
+      label: 'open this home',
+      group: 'list',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    selectRow: {
+      label: 'select this row',
+      group: 'list',
+      runsIn: 'page',
+      arg: 'string',
+    },
   },
   scopes: {
     homes: 'In the backlog homes',

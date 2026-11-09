@@ -56,12 +56,15 @@ const SIDE_PARTS: ContributedPartsPlace = {
   wrapperClass: 'chat-side-part',
 };
 
+// `toggleClicked` is what a click on a section's head calls, with its part's
+// id.
 export interface SideSectionsDeps {
   layouts: ChatLayouts;
   kit: SurfaceKitDeps;
   parts: Pick<PartStore<ChatSidePart>, 'parts'>;
   uiState: UiState;
   timers: Timers;
+  toggleClicked(partId: string): void;
   log: PluginLog;
 }
 
@@ -118,6 +121,9 @@ export interface SideSections {
   // hub is hidden. Builds no part: the caller runs `sync`.
   openTab(root: HTMLElement, sessionId: string): SideTab;
   toggleHidden(): void;
+  // Collapses or expands the section of the held part `partId` in every tab; a
+  // part no longer held is logged and changes nothing.
+  toggleSection(partId: string): void;
 }
 
 interface BuiltFrame {
@@ -210,7 +216,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
           head: (parent) => {
             const head = appended(
               parent,
-              sectionHead(() => toggleCollapsed(frame.part)),
+              sectionHead(() => deps.toggleClicked(frame.part.id)),
             );
             head.classList.toggle(
               'is-cursor',
@@ -392,6 +398,14 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         tab.root.classList.toggle('is-side-hidden', isHidden);
       }
       log(`session hub ${isHidden ? 'hidden' : 'shown'}`);
+    },
+    toggleSection(partId) {
+      const part = deps.parts.parts().find((held) => held.id === partId);
+      if (part === undefined) {
+        log(`no section ${partId}`);
+        return;
+      }
+      toggleCollapsed(part);
     },
   };
 }

@@ -5,12 +5,16 @@ import type { ChannelShape } from './plugin';
 // The owner and sessions types are structural, so the sessions plugin's
 // `AgentSession` and main exports satisfy them.
 
-// What a form source knows about the session it serves.
+// The host record's field naming the host's soft deadline in seconds; any
+// value but a positive number means the default.
+export const HOST_DEADLINE_FIELD = 'deadline_seconds';
+
+// What a form source knows about the session it serves. `host` holds what the
+// host said of itself that the sessions plugin does not read, as it said it.
 export interface AgentFormOwnerInfo {
   sessionId: string | null;
   projectDir: string | null;
-  // The host's soft deadline; null means the default.
-  deadlineSeconds: number | null;
+  host?: Readonly<Record<string, unknown>>;
 }
 
 // `id` is the app's own id for the session; `info.sessionId` is the host's.
@@ -44,6 +48,10 @@ export interface AgentFormListener<Body> {
   // Throws an Error with the reason when the answers cannot be read; the form
   // then stays open.
   finish(end: AgentFormEnd<Body>): void;
+  // The closing session's cancel: ends the form cancelled with the answers
+  // saved last, as the user's cancel would, but sends the session no wake; a
+  // form already finished or closed ignores it.
+  cancel(): void;
 }
 
 // Where open forms are shown and answered: the window, or a script in tests.
@@ -144,15 +152,28 @@ export interface AgentFormType<Form, Body, Payload> {
   notShownPayload(form: Form, blockingHeading: string | null): Payload;
 }
 
+// The sessions plugin's `MarkOptions`: the toast's text and what its keys do.
+export interface AgentFormMarkOptions {
+  text: string;
+  action: string;
+}
+
 // The parts of the sessions plugin's main exports a presenter uses.
 export interface AgentFormSessions {
-  mark(sessionId: string): void;
+  mark(sessionId: string, options: AgentFormMarkOptions): void;
   // Selects the session's row only when it holds one.
   activateExistingRow(sessionId: string): void;
-  addCloseGuard(mayClose: (sessionId: string) => boolean): Disposable;
+  // `mayClose` refuses with a reason; `cancelHold` ends what it holds when
+  // the user's close key asks.
+  addCloseGuard(
+    mayClose: (sessionId: string) => string | null,
+    cancelHold?: (sessionId: string) => void,
+  ): Disposable;
   // Closes a connected session's row once every close guard allows; any other
   // session is left alone.
   release(sessionId: string): void;
+  // The session's side-bar label; null for a session not connected.
+  label(sessionId: string): string | null;
 }
 
 // The sessions contract's ToolResult and ToolSession, restated: the contracts layer imports no plugin.

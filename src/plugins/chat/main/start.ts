@@ -49,6 +49,7 @@ import { PERMISSION_TOOLS } from './permission-tool';
 import { createChatPreview } from './preview/chat-preview';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
+import { callerGuard, createToolCallers } from './tool-callers';
 import {
   START_SESSION_TOOL,
   startSessionToolSession,
@@ -261,7 +262,8 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // chat layouts, opens the layout preview's sample session (held apart from
 // chat's sessions, with no process), offers a drive run its fixtures, and
 // exports to other plugins a background launch, a send, clear and active time
-// read on the sessions it holds, a close of every session in a folder, a registration of
+// read on the sessions it holds, a close of every session in a folder or of one
+// session, a registration of
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, and one of the resume
 // sections the start prompt lists.
@@ -304,6 +306,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       queued: api.state.publish(chatQueuedSlot),
       returned: api.state.publish(chatReturnedSlot),
     });
+    const toolCallers = createToolCallers(services.timers);
     const chat = createChatSessions({
       harnesses: services.agentHarnesses,
       sessions,
@@ -319,10 +322,18 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       alerts: services.alerts,
       window: services.window,
       git: services.git,
+      files: services.files,
+      toolCallers,
       log: services.log,
       clock: services.clock,
       sessionHost: services.sessionHost,
     });
+    sessions.addToolCallGuard(
+      callerGuard({
+        callers: toolCallers,
+        owns: (sessionId) => chat.hostSessionIdOf(sessionId) !== null,
+      }),
+    );
     const preview = createChatPreview({
       sessions,
       slots,
@@ -424,11 +435,12 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.events.on('sessions.hostSessionChanged', (session) =>
       chat.recordOpenHostId(session),
     );
-    // closeSessionsIn's waits, by session id: each resolves when its session
-    // ends or chat stops.
+    // closeSessionsIn's and close's waits, by session id: each resolves when its
+    // session ends or chat stops.
     const endWaits = new Map<string, () => void>();
     api.events.on('sessions.ended', ({ sessionId }) => {
       chat.sessionEnded(sessionId);
+      toolCallers.forget(sessionId);
       endWaits.get(sessionId)?.();
       endWaits.delete(sessionId);
     });
@@ -530,6 +542,14 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         }
         await Promise.all(ended);
       },
+      close: async (sessionId, reason) => {
+        requireHeld(sessionId);
+        const ended = new Promise<void>((resolve) =>
+          endWaits.set(sessionId, resolve),
+        );
+        chat.closed(sessionId, reason);
+        await ended;
+      },
       addInstructions: (text) => consumer.track(chat.addInstructions(text)),
       addSendGate: (gate) => consumer.track(chat.addSendGate(gate)),
       addIdleCompactThreshold: (read) =>
@@ -543,6 +563,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       exports,
       dispose: () => {
         const lastSave = chat.detachAll();
+        toolCallers.stop();
         accounts.cancelRunning();
         for (const resolveWait of endWaits.values()) {
           resolveWait();

@@ -4,9 +4,12 @@ import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 // Settings mode: every setting and key bind the user config holds, browsed by
 // section and edited in place, each edit written to the user's
 // `settings.json` or `keymap.json` layer. `show` runs in main so the app menu
-// accelerator `Cmd+,` reaches it.
+// accelerator `Cmd+,` reaches it. `moveToRow` and `openSectionAt` are the
+// clicks on a row and a section, each naming its target, so neither has a key.
 export const settingsManifest = definePlugin({
   id: 'settings',
+  label: 'Settings',
+  description: 'Adds Settings mode, to change every setting and key bind.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
@@ -43,6 +46,18 @@ export const settingsManifest = definePlugin({
     boxAccept: { label: 'save the value', group: 'box', runsIn: 'page' },
     boxCancel: { label: 'cancel the edit', group: 'box', runsIn: 'page' },
     ...LIST_PICKER_COMMANDS,
+    moveToRow: {
+      label: 'move the cursor to this row',
+      group: 'settings',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    openSectionAt: {
+      label: 'open this section',
+      group: 'settings',
+      runsIn: 'page',
+      arg: 'number',
+    },
   },
   scopes: {
     sections: 'In settings sections',

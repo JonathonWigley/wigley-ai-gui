@@ -5,6 +5,7 @@ import {
   type SessionRow,
   type SessionsState,
   type SessionTitles,
+  type SidebarSection,
 } from '../contract';
 import { shownTitle } from '../session-title';
 import { type SidebarSections, sidebarSections } from './sidebar-order';
@@ -25,6 +26,7 @@ export const PREVIEW_TITLES: Readonly<Record<string, SessionTitles>> = {
     firstMessage:
       'Look into why the docs index skips symlinked folders on Windows',
   },
+  'preview-6': { ...NO_TITLES, user: 'Retro of Scratchpad' },
 };
 
 // Each sample row's activity, null for none.
@@ -35,6 +37,7 @@ export const PREVIEW_ACTIVITIES: Readonly<Record<string, RowActivity | null>> =
     'preview-3': { word: 'error', tone: 'error', rank: 30 },
     'preview-4': NEEDS_YOU_ACTIVITY,
     'preview-5': { word: 'done', tone: 'success', rank: 10 },
+    'preview-6': { word: 'working', tone: 'running', rank: 20 },
   };
 
 function sampleRow(
@@ -50,6 +53,7 @@ function sampleRow(
     project,
     harness,
     marked,
+    markToast: null,
     projectDir: null,
     hostSessionId: null,
     titles: PREVIEW_TITLES[sessionId] ?? NO_TITLES,
@@ -60,8 +64,9 @@ function sampleRow(
 // The side bar rows `Space z l s` shows in place of the real ones, with no
 // agent: a selected row, marked and unmarked rows, each harness and none, a
 // label long enough to end in an ellipsis, user, agent and first-message
-// titles and rows with none, an activity of each tone the rows use, and three
-// projects, two of them holding two rows from different folders.
+// titles and rows with none, an activity of each tone the rows use, three
+// projects, two of them holding two rows from different folders, and a row the
+// sample plugin section claims.
 export const PREVIEW_STATE: SessionsState = {
   rows: [
     sampleRow('preview-1', 'wigley-ai-gui', 'wigley-ai-gui', 'claude', false),
@@ -87,6 +92,7 @@ export const PREVIEW_STATE: SessionsState = {
       'claude',
       false,
     ),
+    sampleRow('preview-6', 'wigley-agents 2', 'wigley-agents', 'claude', false),
   ],
   selectedSessionId: 'preview-1',
 };
@@ -94,30 +100,35 @@ export const PREVIEW_STATE: SessionsState = {
 // The sample's own favorites, never the user's.
 const PREVIEW_FAVORITES: readonly string[] = ['wigley-ai-gui'];
 
+// The sample's own plugin section, claiming one sample row.
+const PREVIEW_SECTION: SidebarSection = {
+  id: 'preview-section',
+  label: 'Plugin',
+  order: 0,
+  claims: (row) => row.sessionId === 'preview-6',
+};
+
 // The sample rows in the order the side bar draws them.
 export function previewSections(
   preview: SessionsState,
-): SidebarSections<SessionRow> {
-  return sidebarSections(preview.rows, PREVIEW_FAVORITES, new Map(), new Map());
+): SidebarSections<SessionRow, SidebarSection> {
+  return sidebarSections(
+    preview.rows,
+    PREVIEW_FAVORITES,
+    new Map(),
+    new Map(),
+    [PREVIEW_SECTION],
+  );
 }
 
-// Each sample row's second line, null for none.
-export const PREVIEW_STATUSES: Readonly<Record<string, string | null>> = {
-  'preview-1': 'working',
-  'preview-2': 'waiting for permission',
-  'preview-3': null,
-  'preview-4': null,
-  'preview-5': null,
-};
-
-// Each sample row's state at the title length `titleMax`: its shown title,
-// its activity and its second line, and never on screen, since no pane shows
-// a sample session.
+// Each sample row's state at the title length `titleMax`: its shown title and
+// its activity, no part tooltips, and never on screen, since no pane shows a
+// sample session.
 export function previewRowState(row: SessionRow, titleMax: number): RowState {
   return {
     title: shownTitle(row.titles, titleMax),
     activity: PREVIEW_ACTIVITIES[row.sessionId] ?? null,
-    status: PREVIEW_STATUSES[row.sessionId] ?? null,
+    partTooltips: () => [],
     onScreen: false,
   };
 }

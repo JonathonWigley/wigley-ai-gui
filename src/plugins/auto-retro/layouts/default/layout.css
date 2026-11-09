@@ -1,0 +1,7 @@
+/* The default auto-retro look: the Retro section header's queued count. */
+
+[data-layout-owner='auto-retro'][data-layout='default'].auto-retro-queued {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+  white-space: nowrap;
+}

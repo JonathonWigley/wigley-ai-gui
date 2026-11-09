@@ -1,8 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CommandArg } from '../../../contracts/commands';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+} from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
+import type {
+  CommandInfo,
+  PageCommandContext,
+  PluginCommands,
+} from '../../../contracts/plugin';
 import type { KeyedSlotKey, SlotKey } from '../../../contracts/state';
 import { commandTarget } from '../../command-args';
+import { CommandRegistry } from '../../command-registry';
+import { createRuntimeCommands } from '../../runtime-commands';
 import { createSlotStore, layoutState } from '../../state/slot-store';
 import { asFake, asHtml, FakeElement, installFakeDom } from '../test-dom';
 import {
@@ -10,6 +22,8 @@ import {
   commandRunner,
   createBaseKit,
   type KitCommands,
+  keyRunner,
+  kitCommandsOf,
   ownerBaseKitDeps,
 } from './base-kit';
 import { noLayoutState } from './fake-layout-state.test-support';
@@ -82,6 +96,20 @@ function kitOver(scope: ViewScope | null) {
   return { kit: createBaseKit(deps), deps, anchors, reads };
 }
 
+// Commands `docs.open`, with no arg, and `docs.pick`, which takes a number,
+// recording each run as its id and arg.
+function recordingCommands() {
+  const ran: unknown[][] = [];
+  const commands: KitCommands = {
+    exists: (id) => id === 'docs.open' || id === 'docs.pick',
+    argShape: (id) => (id === 'docs.pick' ? 'number' : undefined),
+    run: (id, arg) => {
+      ran.push([id, arg]);
+    },
+  };
+  return { commands, ran };
+}
+
 describe('createBaseKit', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -103,23 +131,135 @@ describe('createBaseKit', () => {
     expect(kitOver(null).kit.duration(ms)).toBe(text);
   });
 
-  it('commandRunner_UnknownIdOrArgNeeded_ThrowsAtCreationAndRunsOnlyOnCall', () => {
-    const ran: string[] = [];
-    const commands: KitCommands = {
-      exists: (id) => id === 'docs.open' || id === 'docs.pick',
-      argShape: (id) => (id === 'docs.pick' ? 'number' : undefined),
-      run: (id) => ran.push(id),
-    };
+  it.each<{ row: string; id: string; arg?: CommandArg; throws: string }>([
+    { row: 'an unknown id', id: 'docs.nope', throws: 'no command docs.nope' },
+    {
+      row: 'a missing declared arg',
+      id: 'docs.pick',
+      throws: 'command "docs.pick" needs a number',
+    },
+    {
+      row: 'a bad arg',
+      id: 'docs.pick',
+      arg: 'two',
+      throws: 'command "docs.pick" needs a number',
+    },
+    {
+      row: 'an arg on a command with none',
+      id: 'docs.open',
+      arg: 2,
+      throws: 'command "docs.open" takes no argument',
+    },
+  ])(
+    'commandRunner_UnknownIdOrArgNeeded_ThrowsAtCreationAndRunsOnlyOnCall: $row',
+    ({ id, arg, throws }) => {
+      const { commands } = recordingCommands();
 
-    expect(() => commandRunner('docs.nope', commands)).toThrow(
-      'no command docs.nope',
-    );
-    expect(() => commandRunner('docs.pick', commands)).toThrow('docs.pick');
-    const run = commandRunner('docs.open', commands);
+      expect(() => commandRunner(id, commands, arg)).toThrow(throws);
+    },
+  );
+
+  it.each<{ id: string; arg?: CommandArg }>([
+    { id: 'docs.open' },
+    { id: 'docs.pick', arg: 3 },
+  ])('commandRunner_Valid_RunsOnlyOnEachCall: $id', ({ id, arg }) => {
+    const { commands, ran } = recordingCommands();
+
+    const run = commandRunner(id, commands, arg);
     expect(ran).toEqual([]);
     run();
     run();
-    expect(ran).toEqual(['docs.open', 'docs.open']);
+
+    expect(ran).toEqual([
+      [id, arg],
+      [id, arg],
+    ]);
+  });
+
+  it('button_Click_RunsCommandWithItsArg', () => {
+    const { commands, ran } = recordingCommands();
+    const kit = createBaseKit({ ...kitOver(null).deps, commands });
+    const parent = new FakeElement('div');
+
+    const button = asFake(
+      kit.button(asHtml(parent), 'Pick', 'docs.pick', { arg: 2 }),
+    );
+    expect(ran).toEqual([]);
+    button.click();
+
+    expect(ran).toEqual([['docs.pick', 2]]);
+  });
+
+  it.each<{ row: string; arg?: CommandArg; runs: unknown[][] }>([
+    { row: 'no arg', runs: [['docs.open']] },
+    { row: 'an arg', arg: 2, runs: [[{ id: 'docs.open' }, 2]] },
+  ])('kitCommandsOf_ArgGiven_RunsThroughCommandKey: $row', ({ arg, runs }) => {
+    const calls: unknown[][] = [];
+    const commands = kitCommandsOf({
+      keys: { command: () => undefined },
+      commands: {
+        run: (...args: unknown[]) => {
+          calls.push(args);
+          return Promise.resolve();
+        },
+      } as Pick<PluginCommands, 'run'>,
+      services: { log: () => undefined },
+    });
+
+    commands.run('docs.open', arg);
+
+    expect(calls).toEqual(runs);
+  });
+
+  it('kitCommandsOf_ServedCommandWithNoHandler_LogsAndRunsNothing', () => {
+    const served: Record<string, CommandInfo> = {
+      'docs.open': {
+        id: 'docs.open',
+        plugin: 'docs',
+        label: 'Open',
+        group: 'docs',
+        runsIn: 'page',
+      },
+    };
+    const store = createSlotStore(() => undefined);
+    const runtime = createRuntimeCommands<PageCommandContext<any>>({
+      process: 'page',
+      registry: new CommandRegistry(() => undefined),
+      writer: store.publish(coreRuntimePageSlot),
+      other: store.read(coreRuntimeMainSlot, 'core'),
+      served: () => served,
+      leader: () => ' ',
+      remote: () => Promise.resolve(),
+    });
+    const logged: string[] = [];
+    const commands = kitCommandsOf({
+      keys: { command: (id) => runtime.infoOf(id) },
+      commands: runtime.forPlugin('docs', (handle) => handle).commands,
+      services: { log: (message) => logged.push(message) },
+    });
+
+    const run = commandRunner('docs.open', commands);
+    expect(() => run()).not.toThrow();
+
+    expect(logged).toEqual([
+      'command docs.open failed: No command is registered as "docs.open"',
+    ]);
+  });
+
+  it('keyRunner_RunThrows_LogsAndDoesNotThrow', () => {
+    const logged: string[] = [];
+    const run = keyRunner(
+      {
+        run: () => {
+          throw new Error('stale arg');
+        },
+      },
+      (message) => logged.push(message),
+    );
+
+    expect(() => run({ id: 'docs.pick' }, 2)).not.toThrow();
+
+    expect(logged).toEqual(['command docs.pick failed: stale arg']);
   });
 
   it.each([

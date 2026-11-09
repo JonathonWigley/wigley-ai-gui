@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
 import type { ImageEncoder } from '../../../contracts/images';
@@ -9,6 +10,7 @@ import type {
   PageChannel,
   PageServices,
   PluginAreas,
+  PageStart,
   PushedScope,
   ShownLayouts,
 } from '../../../contracts/plugin';
@@ -27,6 +29,7 @@ import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { boxHint } from '../../../shared/page/ui/key-anchors';
 import { pngDataUrl } from '../../../shared/png-data-url';
+import { NOTE_FIELDS, type NoteField, type NotesPlace } from '../contract';
 import type {
   FollowupRequest,
   NoteDraft,
@@ -55,8 +58,6 @@ import {
   initialPopupState,
   launchFolders,
   moveField,
-  NOTE_FIELDS,
-  type NoteField,
   openFields,
   type PopupAction,
   type PopupState,
@@ -111,16 +112,32 @@ export interface NotePopupDeps {
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   // Re-encodes an image over the cap smaller as it joins the Images field.
   encoder: ImageEncoder;
+  // Hears the page tearing down, when autosave saves an unsaved edit at once.
+  onPageHide(listener: () => void): Disposable;
+  // Whether the page load's restores have settled (`PageRestores`).
+  restoresSettled(): boolean;
+  // Hears the place after each change to the popup's open state or cursors.
+  placeChanged(place: NotesPlace): void;
 }
 
 export interface NotePopup {
-  commands: Record<NotesPageCommand, () => void>;
+  commands: PageStart<typeof notesManifest>['commands'];
   // Draws every part again with `shown`, keeping the boxes, their text and
   // focus, an open picker and an open markup session.
   setLayouts(shown: ShownLayouts<Layout>): void;
+  // Puts back a reloaded page's place: an open popup opens through `open`,
+  // its cursors applied once the draft loads, on its fields with no box
+  // focused. It stays open through the key base changes made before the page
+  // load's restores settle.
+  restorePlace(place: NotesPlace): void;
+  // A refusal while the draft is not saved: unsaved, saving, held back while
+  // the popup is locked, or after a failed save, which names the save's error;
+  // null once it is saved.
+  mayStop(): string | null;
   // Closes an open markup session, starting its save, and ends autosave: an
   // edit it has not saved yet is dropped. A send still in flight then closes
-  // nothing, since its scopes end with the plugin.
+  // nothing, since its scopes end with the plugin, and no later change redraws
+  // the popup or writes its place.
   dispose(): void;
 }
 
@@ -362,7 +379,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
             isSelected: position - 1 === state.imageIndex,
           };
         },
-        removeImageAt: (index) => void removeImageAt(index),
       },
     );
   };
@@ -374,7 +390,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         text:
           session === null ? null : sessionChipText(session, paths, homeDir),
       },
-      () => removeSession(),
+      session?.sessionId ?? null,
     );
   };
 
@@ -422,7 +438,14 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     removeHint.classList.toggle('is-no-target', !holdsImage && !holdsSession);
     rows.get(field)?.append(cursorPrompt);
   };
-  store.subscribe(render);
+  const rendering = store.subscribe(render);
+
+  // The popup counts as open from the start of its load.
+  const writePlace = () => {
+    const { field, imageIndex } = store.get();
+    deps.placeChanged({ isOpen: phase !== 'closed', field, imageIndex });
+  };
+  const writingPlace = store.subscribe(writePlace);
 
   parts.actions(dialog.actions);
 
@@ -443,6 +466,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     save: (_id, fields) => saveFields(fields),
     delayMs: deps.autosaveDelayMs,
     timers: services.timers,
+    onPageHide: deps.onPageHide,
     log,
   });
 
@@ -699,6 +723,17 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Whether the user may change the draft now.
   const mayEdit = () => fieldsShown() && !isLocked();
 
+  // Whether `what` must not change the draft now; logs why when it must not.
+  const editRefused = (what: string): boolean => {
+    if (mayEdit()) {
+      return false;
+    }
+    const reason =
+      inFlight === null ? 'popup not editable' : `${inFlight} in flight`;
+    log(`${what} skipped: ${reason}`);
+    return true;
+  };
+
   // Puts a draft main answered into the open popup: a fresh one takes the
   // selected session and its default target, saved at once.
   const showDraft = (draft: NoteDraft) => {
@@ -711,8 +746,12 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
 
   // ── Opening and closing ───────────────────────────────────────────────────
-  const open = async () => {
+  // `restored` is a reloaded page's place: its cursors replace the body's, no
+  // box takes focus, and a base change closes the popup only once the page
+  // load's restores have settled.
+  const open = async (restored?: NotesPlace) => {
     phase = 'loading';
+    writePlace();
     const isStillLoading = () => phase === 'loading';
     try {
       const [draft, found] = await Promise.all([
@@ -730,13 +769,16 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         return;
       }
       phase = 'closed';
+      writePlace();
       toast(`Note not opened: ${errorText(error)}`, 'error');
       log(`note not opened: ${errorText(error)}`);
       return;
     }
     const scope = deps.pushScope('popup');
     scope.onBaseChanged(() => {
-      if (popupScope === scope) {
+      const isRestoresBaseChange =
+        restored !== undefined && !deps.restoresSettled();
+      if (popupScope === scope && !isRestoresBaseChange) {
         close();
       }
     });
@@ -744,11 +786,18 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     phase = 'open';
     showFields(true);
     dialog.show();
-    dispatch({ type: 'fieldMoved', field: 'body' });
-    render();
-    if (isLocked()) {
-      focusBodyWhenFree = true;
+    if (restored === undefined) {
+      dispatch({ type: 'fieldMoved', field: 'body' });
     } else {
+      const { field, imageIndex } = restored;
+      dispatch({ type: 'placeRestored', field, imageIndex });
+    }
+    render();
+    writePlace();
+    const isBodyFocused = restored === undefined;
+    if (isBodyFocused && isLocked()) {
+      focusBodyWhenFree = true;
+    } else if (isBodyFocused) {
       body.focus({ insertAtEnd: true });
     }
     const { fields, images: held } = store.get();
@@ -771,6 +820,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     );
     blurBoxes();
     phase = 'closed';
+    writePlace();
     focusBodyWhenFree = false;
     popupScope?.pop();
     popupScope = null;
@@ -1047,9 +1097,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
 
   const removeSession = () => {
-    if (isLocked()) {
-      return;
-    }
     dispatch({ type: 'edited', fields: detachSession(store.get().fields) });
     log('session none');
   };
@@ -1174,8 +1221,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Images join the Images field; every other file goes into the Body as its
   // path.
   const take = (files: readonly DroppedFile[]) => {
-    if (!mayEdit()) {
-      log(`files skipped: ${inFlight ?? 'popup not editable'}`);
+    if (editRefused('files')) {
       return;
     }
     const imageFiles = files.filter((file) =>
@@ -1224,7 +1270,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     }
   };
 
-  const commands: Record<NotesPageCommand, () => void> = {
+  const commands: PageStart<typeof notesManifest>['commands'] = {
     open() {
       if (phase === 'open') {
         close();
@@ -1284,14 +1330,46 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     ...listPickerCommands(picker),
     confirmYes: () => void confirmDiscard(),
     confirmNo: keepDraft,
+    pickColour: ({ arg }) => markupView.pickColourByName(arg),
+    removeImageAt: ({ arg }) => {
+      if (!editRefused(`image ${arg + 1} removal`)) {
+        void removeImageAt(arg);
+      }
+    },
+    removeSession: ({ arg }) => {
+      if (editRefused(`session ${arg} removal`)) {
+        return;
+      }
+      if (store.get().fields.session?.sessionId === arg) {
+        removeSession();
+      } else {
+        log(`session ${arg} not attached`);
+      }
+    },
   };
   return {
     commands,
     setLayouts,
+    restorePlace(place) {
+      if (place.isOpen && phase === 'closed') {
+        void open(place);
+      }
+    },
+    mayStop() {
+      const state = store.get();
+      if (saveState(state) === 'saved') {
+        return null;
+      }
+      return state.saveError === null
+        ? 'Wait for the note to finish saving'
+        : `The note did not save: ${state.saveError}; edit or close it to save again`;
+    },
     dispose() {
       markupView.close();
       blurBoxes();
       phase = 'closed';
+      rendering.dispose();
+      writingPlace.dispose();
       autosave.dispose();
     },
   };

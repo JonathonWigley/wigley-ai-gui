@@ -43,6 +43,19 @@ export interface SettingRowInput {
   defaultText: string | null;
   control: 'number' | 'string' | 'boolean' | 'choice' | 'theme' | 'json';
 }
+// One plugin's row in the Plugins section.
+export interface PluginRowInput {
+  id: string;
+  label: string;
+  description: string;
+  // `true` while it runs, `false` while it is off, as the boolean picker
+  // shows them.
+  value: 'true' | 'false';
+  // `Needed by <label>, <label>` while plugins that run depend on it, and
+  // `Edit settings.json to turn off` on Settings' own row while it runs; else
+  // null.
+  lockedText: string | null;
+}
 // One line of a key row: a bind (`keys` in vim notation printed for the platform) or an accelerator (its chord printed
 // for the platform). `tags` in order: for a bind its scope (`Everywhere` for `any`), `where`, `mode`, `Set` for a user
 // bind, then what covers it (`Removed`, `Replaced by <label>`, `Partly removed — …`); for an accelerator its kind
@@ -147,6 +160,12 @@ export interface SettingsLayout {
   settingRow?(
     parent: HTMLElement,
     input: SettingRowInput,
+    kit: RowKit,
+  ): HTMLElement;
+  // One per plugin, into rowList, in the Plugins section.
+  pluginRow?(
+    parent: HTMLElement,
+    input: PluginRowInput,
     kit: RowKit,
   ): HTMLElement;
   // One per command in the Keymap section.

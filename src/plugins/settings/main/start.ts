@@ -6,8 +6,9 @@ import { settingsSelfTestScript } from './selftest-script';
 
 type SettingsApi = MainApi<typeof settingsManifest, SettingsChannel>;
 
-// Serves the page the user config through `services.userConfig`, tells it
-// each time the config changes, and on `settings.show` brings the window
+// Serves the page the user config through `services.userConfig` and the
+// switch-off ask through `services.pluginSwitch`, tells it each time the
+// config changes, and on `settings.show` brings the window
 // forward and tells the page to show Settings mode. Registers the settings
 // layout contract. Hands the self-test its script, which shows the mode the
 // same way.
@@ -23,6 +24,9 @@ export const settingsMainPart: MainPart<typeof settingsManifest> = {
     );
     channel.handle('writeKeymap', (layer, expectedText) =>
       userConfig.writeKeymap(layer, expectedText),
+    );
+    channel.handle('mayDisable', (pluginId) =>
+      services.pluginSwitch.mayDisable(pluginId),
     );
     api.layouts.register({ layoutTypes });
     userConfig.onChanged(() => channel.send('changed', null));

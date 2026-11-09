@@ -264,6 +264,12 @@
   overflow-wrap: anywhere;
 }
 
+/* An entry's markdown takes the pane's whole width, so a visual, table or
+   code block is never squeezed to the prose measure. */
+.chat-entries .md {
+  max-width: none;
+}
+
 .chat-json {
   background: var(--wg-block-background);
   border-radius: var(--wg-radius-md);

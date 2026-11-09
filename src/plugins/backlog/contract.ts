@@ -2,11 +2,13 @@
 // features home's follow-ups, plans and features, read through the docs
 // index, and the follow-up writes and commit the main part makes.
 
+import type { CommandKey } from '../../contracts/commands';
 import type {
   ChannelShape,
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { SlotKey } from '../../contracts/state';
 import type {
   FollowupDraft,
   FollowupEdit,
@@ -14,18 +16,27 @@ import type {
   FollowupItem,
 } from '../../shared/followups/followup-file';
 
-// A numbered task document; `status` is its `Status:` line, null when absent.
+// A numbered task document; `path` is the index's copy of it. `copyPath` is
+// the copy `status` was read from and the detail shows: in a plan's newer
+// worktree copy when that copy's `plan.md` links the task, else `path`.
+// `status` is its `Status:` line, null when absent; a worktree copy's line
+// whose value is not a task status reads as null.
 export interface BacklogTask {
   path: string;
+  copyPath: string;
   title: string;
   status: string | null;
 }
 
-// `path` is the plan's `plan.md`; `title` its first `# ` heading less a
-// trailing ` — plan`, else the plan folder's name; `target` and `written`
-// from its `Target: … · Written: …` line, each null when absent.
+// `path` is the index's copy of the plan's `plan.md`, `copyPath` the copy
+// `checked` and `total` were read from and the detail shows: the newest copy
+// across the clone's checkouts. `title` is the index copy's first `# `
+// heading less a trailing ` — plan`, else the plan folder's name; `target`
+// and `written` from its `Target: … · Written: …` line, each null when
+// absent.
 export interface BacklogPlan {
   path: string;
+  copyPath: string;
   feature: string;
   title: string;
   checked: number;
@@ -117,6 +128,17 @@ export interface BacklogMainExports {
   ): Promise<BacklogWriteResult>;
 }
 
+// Opens the home whose root is `arg`, as a click on its side bar row does.
+export const backlogOpenHomeRowCommand: CommandKey<
+  string,
+  'backlog.openHomeRow'
+> = { id: 'backlog.openHomeRow' };
+
+// Selects the list row whose key is `arg` and focuses the items, as a click on
+// the row does.
+export const backlogSelectRowCommand: CommandKey<string, 'backlog.selectRow'> =
+  { id: 'backlog.selectRow' };
+
 export const backlogMainKey: DependencyKey<
   BacklogMainExports,
   'main',
@@ -151,8 +173,31 @@ export interface BacklogChannel extends ChannelShape {
     commit(homeRoot: string): Promise<string>;
   };
   messages: {
-    // A listed follow-up file changed (`homeRoot` its home), or the machine
-    // index reloaded (`homeRoot` null).
+    // A listed follow-up file changed, or a linked worktree's `docs/features`
+    // or the worktree list of an in-git home's clone changed (`homeRoot` its
+    // home), or the machine index reloaded (`homeRoot` null).
     changed: { homeRoot: string | null };
   };
 }
+
+// Where the list keys act: the side bar's homes, the open home's rows, or the
+// detail pane.
+export type BacklogFocus = 'homes' | 'items' | 'detail';
+
+// Where the user was in Backlog mode, so a page reload puts them back:
+// `homeCursor` indexes the side bar's homes in order, `selectedKey` is a row's
+// key, and `expanded` the plan and feature paths whose task rows show.
+export interface BacklogPlace {
+  focus: BacklogFocus;
+  homeCursor: number;
+  openRoot: string | null;
+  selectedKey: string | null;
+  expanded: string[];
+  filter: string;
+}
+
+export const backlogPlaceSlot: SlotKey<BacklogPlace, 'page', 'backlog'> = {
+  id: 'backlog.place',
+  process: 'page',
+  kind: 'value',
+};

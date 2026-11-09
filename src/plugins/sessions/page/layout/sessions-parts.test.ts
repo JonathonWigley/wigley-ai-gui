@@ -8,13 +8,14 @@ import {
   findAll,
   installFakeDom,
 } from '../../../../shared/page/test-dom';
-import type { SessionPart, SessionTabView } from '../../contract';
+import type { SectionPart, SessionPart, SessionTabView } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
   GroupInput,
   GroupKit,
   GroupPane,
   Layout,
+  PopupBarInput,
   SectionInput,
 } from '../../layouts/layout';
 import {
@@ -34,8 +35,16 @@ const NON_FAVORITE: GroupInput = {
   count: 3,
   isFavorite: false,
 };
+// Two hidden popups, one with a status and one without.
+const POPUP_BAR_INPUT: PopupBarInput = {
+  entries: [
+    { title: 'Round', icon: 'bell', status: 'R1' },
+    { title: 'Primer', icon: 'book', status: '' },
+  ],
+};
 const RECENT: SectionInput = {
   kind: 'recent',
+  id: 'recent',
   label: 'Recent',
   dropHint: 'Drop here',
   isEmpty: false,
@@ -61,8 +70,32 @@ function shownBy(children: FakeElement[]): string[] {
   return children.map((child) => child.textContent || codiconOf(child));
 }
 
-function sectionShape(parts: SessionsParts, input: SectionInput): DrawnShape {
-  const drawn = parts.section(document.createElement('div'), input);
+const RETRO: SectionInput = {
+  kind: 'plugin',
+  id: 'retro',
+  label: 'Retro',
+  dropHint: '',
+  isEmpty: false,
+};
+
+// A header part that draws `text`.
+function textHeader(text: string): SectionPart {
+  return {
+    build(parent) {
+      const span = document.createElement('span');
+      span.textContent = text;
+      parent.append(span);
+      return {};
+    },
+  };
+}
+
+function sectionShape(
+  parts: SessionsParts,
+  input: SectionInput,
+  header: SectionPart | null = null,
+): DrawnShape {
+  const drawn = parts.section(document.createElement('div'), input, header);
   const element = asFake(drawn.built.element);
   return {
     drawnBy: drawn.layoutName,
@@ -201,6 +234,50 @@ function partIds(surface: Surface, root: FakeElement): string[] {
   return findAll(root, surface.wrapperClass).map(
     (wrapper) => wrapper.dataset.part,
   );
+}
+
+// What a drawn popup holds: `body` for the box the part returned as its body,
+// each other child by its text.
+function popupShape(parts: SessionsParts) {
+  const drawn = parts.popup(document.createElement('div'), {
+    title: 'Round',
+    icon: 'bell',
+  });
+  const body = asFake(drawn.built.body);
+  return {
+    drawnBy: drawn.layoutName,
+    holds: asFake(drawn.built.element).children.map((child) =>
+      child === body ? 'body' : child.textContent,
+    ),
+  };
+}
+
+// What a drawn popup bar's entries show, by their text, each checked to sit in
+// the bar.
+function popupBarShape(parts: SessionsParts) {
+  const drawn = parts.popupBar(document.createElement('div'), POPUP_BAR_INPUT);
+  const element = asFake(drawn.built.element);
+  return {
+    drawnBy: drawn.layoutName,
+    holds: drawn.built.entries.map((entry) =>
+      element.contains(asFake(entry)) ? asFake(entry).textContent : 'outside',
+    ),
+  };
+}
+
+// A user layout's `popupBar` drawing each entry's title, returning the entries
+// `pick` keeps.
+function userPopupBar(
+  pick: (entries: HTMLElement[]) => HTMLElement[],
+): Layout['popupBar'] {
+  return (parent, input, kit) => {
+    const element = kit.el(parent, 'div', 'mine-bar');
+    const entries = input.entries.map((entry) =>
+      kit.el(element, 'div', 'mine-entry', entry.title),
+    );
+    kit.toggleHint(element);
+    return { element, entries: pick(entries) };
+  };
 }
 
 function fail(): never {
@@ -384,6 +461,12 @@ describe('sessions parts', () => {
     boxesInside: true,
     isMarkedEmpty: false,
   };
+  const DEFAULT_PLUGIN_SECTION: DrawnShape = {
+    drawnBy: 'default',
+    holds: ['Retro1 queued'],
+    boxesInside: true,
+    isMarkedEmpty: false,
+  };
 
   it.each<{
     case: string;
@@ -417,6 +500,35 @@ describe('sessions parts', () => {
       draw: (parts) => sectionShape(parts, RECENT),
       expected: DEFAULT_SECTION,
       failure: null,
+    },
+    {
+      case: 'default plugin section',
+      layout: {},
+      draw: (parts) => sectionShape(parts, RETRO, textHeader('1 queued')),
+      expected: DEFAULT_PLUGIN_SECTION,
+      failure: null,
+    },
+    {
+      case: 'user section places its header part twice',
+      layout: {
+        section: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-section');
+          const label = kit.el(element, 'p', 'mine-label', input.label);
+          kit.headerPart(label);
+          kit.headerPart(label);
+          return { element, groups: kit.el(element, 'div', 'mine-groups') };
+        },
+      },
+      draw: (parts) => sectionShape(parts, RETRO, textHeader('1 queued')),
+      expected: DEFAULT_PLUGIN_SECTION,
+      failure: 'headerPart placed twice',
+    },
+    {
+      case: 'header part build throws',
+      layout: {},
+      draw: (parts) => sectionShape(parts, RETRO, { build: fail }),
+      expected: { ...DEFAULT_PLUGIN_SECTION, holds: ['Retro'] },
+      failure: 'section part retro failed',
     },
     {
       case: 'user group returns rows outside its element',
@@ -592,8 +704,8 @@ describe('sessions parts', () => {
           harness: '',
           marked: false,
           activity: null,
-          status: null,
           onScreen: false,
+          section: null,
           isPrompted,
         },
         prompt,
@@ -609,6 +721,91 @@ describe('sessions parts', () => {
       expect({ drawnBy: drawn.layoutName, promptAt }).toEqual(expected);
     },
   );
+
+  it.each<{
+    case: string;
+    layout: Layout;
+    draw: (parts: SessionsParts) => { drawnBy: string; holds: string[] };
+    expected: { drawnBy: string; holds: string[] };
+    failure: string | null;
+  }>([
+    {
+      case: 'default popup',
+      layout: {},
+      draw: (parts) => popupShape(parts),
+      expected: { drawnBy: 'default', holds: ['body'] },
+      failure: null,
+    },
+    {
+      case: 'user popup returns a body outside its element',
+      layout: {
+        popup: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'mine-popup'),
+          body: document.createElement('div'),
+        }),
+      },
+      draw: (parts) => popupShape(parts),
+      expected: { drawnBy: 'default', holds: ['body'] },
+      failure: 'popup body',
+    },
+    {
+      case: 'default bar',
+      layout: {},
+      draw: (parts) => popupBarShape(parts),
+      expected: { drawnBy: 'default', holds: ['R1', 'Primer'] },
+      failure: null,
+    },
+    {
+      case: 'user bar draws each entry',
+      layout: { popupBar: userPopupBar((entries) => entries) },
+      draw: (parts) => popupBarShape(parts),
+      expected: { drawnBy: 'mine', holds: ['Round', 'Primer'] },
+      failure: null,
+    },
+    {
+      case: 'user bar leaves an entry out',
+      layout: { popupBar: userPopupBar((entries) => entries.slice(1)) },
+      draw: (parts) => popupBarShape(parts),
+      expected: { drawnBy: 'default', holds: ['R1', 'Primer'] },
+      failure: 'popupBar drew 1 entries for 2 popups',
+    },
+    {
+      case: 'user bar returns an entry outside its element',
+      layout: {
+        popupBar: userPopupBar((entries) => [
+          entries[0],
+          document.createElement('div'),
+        ]),
+      },
+      draw: (parts) => popupBarShape(parts),
+      expected: { drawnBy: 'default', holds: ['R1', 'Primer'] },
+      failure: 'popupBar entry',
+    },
+  ])(
+    'popupParts_Draw_KeepsTheContract ($case)',
+    ({ layout, draw, expected, failure }) => {
+      const { parts, logged } = sessionsPartsSetup();
+      parts.setLayouts(withUser<Layout>(defaultLayout, layout));
+
+      expect(draw(parts)).toEqual(expected);
+
+      expect(logged).toEqual(
+        failure === null ? [] : [expect.stringContaining(failure)],
+      );
+    },
+  );
+
+  it('popupBar_DefaultLayout_AnchorsTheToggleOnce', () => {
+    const { parts, anchors } = sessionsPartsSetup();
+
+    parts.popupBar(document.createElement('div'), POPUP_BAR_INPUT);
+
+    expect(
+      anchors
+        .filter((anchor) => !anchor.isDisposed)
+        .map((anchor) => anchor.command),
+    ).toEqual(['sessions.togglePopup']);
+  });
 
   it('sessionsParts_RowDrawnByUserLayout_KeepsClickAndSelection', () => {
     const { view, sideBar, activated } = sessionsViewSetup();

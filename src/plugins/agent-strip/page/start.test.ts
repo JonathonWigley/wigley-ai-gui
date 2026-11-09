@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PagePart, PluginCommands } from '../../../contracts/plugin';
 import {
   asHtml,
   FakeElement,
@@ -7,11 +8,13 @@ import {
 import {
   fakeDependency,
   noCounts,
+  probePart,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { agentsRostersSlot, type Roster } from '../../agents/contract';
 import { sessionsPageKey } from '../../sessions/contract';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
+import { agentStripToggleBoxAtCommand } from '../contract';
 import { agentStripPagePart } from './start';
 
 const SESSION = 's1';
@@ -49,9 +52,11 @@ const RUNNING: Roster = {
 
 // The part on the harness, over fakes that file each handle with
 // `consumer.track` as the real views do; chat's builds the composer part into a
-// wrapper at once, and disposes it with its handle.
-function startOnHarness() {
+// wrapper at once, and disposes it with its handle. `parts` are real parts
+// started beside it.
+function startOnHarness(parts: readonly PagePart[] = []) {
   return startPagePart(agentStripPagePart, {
+    parts,
     dependencies: [
       fakeDependency(
         chatPageKey,
@@ -72,6 +77,8 @@ function startOnHarness() {
   });
 }
 
+type Harness = ReturnType<typeof startOnHarness>;
+
 describe('agentStripPagePart', () => {
   beforeEach(() => {
     installFakeDom(vi.stubGlobal);
@@ -84,7 +91,7 @@ describe('agentStripPagePart', () => {
   it('stop_LeavesNoLiveRegistration', async () => {
     const harness = startOnHarness();
     harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     expect(harness.counts().registrations).toBeGreaterThan(0);
     expect(harness.counts().observers).toBe(1);
     expect(harness.counts().timers).toBe(1);
@@ -96,6 +103,7 @@ describe('agentStripPagePart', () => {
 
   it('stopThenStart_StartsAgain', async () => {
     const harness = startOnHarness();
+    harness.ready();
     const before = harness.counts();
 
     await harness.restart();
@@ -103,13 +111,44 @@ describe('agentStripPagePart', () => {
     expect(harness.counts()).toEqual(before);
   });
 
-  it('pageReady_RosterWrittenBefore_DrawsIt', () => {
-    const harness = startOnHarness();
+  it.each<{ name: string; load: (harness: Harness) => Promise<void> }>([
+    { name: 'page load', load: async (harness) => harness.ready() },
+    {
+      name: 'live restart',
+      load: async (harness) => {
+        harness.ready();
+        await harness.restart();
+      },
+    },
+  ])(
+    'ready_RosterWrittenBefore_DrawsItAndHearsTheNext: $name',
+    async ({ load }) => {
+      const harness = startOnHarness();
+      const rosters = harness.state.publish(agentsRostersSlot);
+      rosters.set(SESSION, RUNNING);
+      expect(harness.counts().observers).toBe(0);
+
+      await load(harness);
+      const observersAtLoad = harness.counts().observers;
+      rosters.delete(SESSION);
+
+      expect([observersAtLoad, harness.counts().observers]).toEqual([1, 0]);
+    },
+  );
+
+  it('toggleBoxAt_RunByAnotherPart_OpensThatBox', async () => {
+    const held: { commands: PluginCommands | null } = { commands: null };
+    const harness = startOnHarness([probePart([], held)]);
     harness.state.publish(agentsRostersSlot).set(SESSION, RUNNING);
-    expect(harness.counts().observers).toBe(0);
+    harness.ready();
 
-    harness.emit('core.pageReady', null);
+    await held.commands!.run(agentStripToggleBoxAtCommand, {
+      sessionId: SESSION,
+      key: 't1',
+    });
 
-    expect(harness.counts().observers).toBe(1);
+    expect(harness.logs.map(({ message }) => message)).toContain(
+      `opened box 2 in ${SESSION}`,
+    );
   });
 });

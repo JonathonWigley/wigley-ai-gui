@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { UiState } from '../../../contracts/ui-state';
 import type { SessionRow } from '../contract';
+import { sessionRow } from '../contract.test-support';
 import { createProjectFavorites } from './project-favorites';
-import { fakeUiState, sessionRow } from './session-fakes';
+import { fakeUiState } from './session-fakes';
 import { createSessionRecency } from './session-recency';
 
 function rowUnderHost(sessionId: string, hostSessionId: string): SessionRow {
-  return { ...sessionRow(sessionId), hostSessionId };
+  return sessionRow(sessionId, { hostSessionId });
 }
 
 describe('createSessionRecency', () => {
@@ -135,10 +136,8 @@ describe('createSessionRecency', () => {
     const clock = { time: 1, now: () => clock.time };
     const state = fakeUiState();
     const recency = createSessionRecency(clock, state);
-    const inProject = (sessionId: string, project: string): SessionRow => ({
-      ...sessionRow(sessionId),
-      project,
-    });
+    const inProject = (sessionId: string, project: string): SessionRow =>
+      sessionRow(sessionId, { project });
     const a1 = inProject('a1', 'alpha');
     const a2 = inProject('a2', 'alpha');
     const b1 = inProject('b1', 'beta');
@@ -173,8 +172,8 @@ describe('createSessionRecency', () => {
     const recency = createSessionRecency({ now: () => 100 }, state);
 
     recency.rowsChanged(null, [
-      { ...sessionRow('a1'), project: 'alpha' },
-      { ...sessionRow('a2'), project: 'alpha' },
+      sessionRow('a1', { project: 'alpha' }),
+      sessionRow('a2', { project: 'alpha' }),
     ]);
 
     expect(Object.fromEntries(recency.projectStamps())).toEqual({ alpha: 7 });

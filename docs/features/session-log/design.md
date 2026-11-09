@@ -22,7 +22,7 @@ can hear the same events.
 | Log event | Source | When |
 |---|---|---|
 | `opened` | `chat.sessionOpened` | a session started, was resumed, was launched by a plugin, or was restored at app start (`origin`) |
-| `closed` | `chat.sessionClosed` | a row ended, with `reason`: the user, a failed start, or `closeSessionsIn` |
+| `closed` | `chat.sessionClosed` | a row ended, with `reason`: the user, a failed start, `closeSessionsIn`, or a plugin's `close` (`finished`) |
 | `cleared` | `chat.sessionCleared` | `/clear` moved a row to a new host id |
 | `processEnded` | `chat.processEnded` | a live process exited: stopped, clean or crash (a closed or cleared row's process logs none) |
 | `archived` | `chat.sessionArchived` | a saved session was archived or restored from the archive |
@@ -52,7 +52,7 @@ can fail with the resume toast.
 
 - **Its own plugin.** The log and the section can be swapped or disabled alone, and chat knows no log exists. Writing
   both in chat was smaller, and ties them to chat for good.
-- **The cursor keeps its place.** `Space k n` then Enter still picks the most recent folder, and Enter on the Session
+- **The cursor keeps its place.** `Space b n` then Enter still picks the most recent folder, and Enter on the Session
   step still starts a new session; Recently closed sits above the cursor, one `k` away.
 - **The title from the side bar.** The session list's own titles are first messages, and recognising the session is
   the point of this list.

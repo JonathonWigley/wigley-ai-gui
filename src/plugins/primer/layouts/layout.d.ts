@@ -1,6 +1,6 @@
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
-// The primer layout contract: what a layout in `layouts/primer/<name>/layout.js` draws the Primer tab with. A layout
+// The primer layout contract: what a layout in `layouts/primer/<name>/layout.js` draws the primer popup with. A layout
 // defines only the parts it changes; every part it leaves out, and every part that throws or returns no element
 // appended to `parent`, is drawn by `default` instead. The app sets `data-layout-owner="primer"` and
 // `data-layout="<name>"` on the element each part returns, `<name>` being the layout that drew it, so

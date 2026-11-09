@@ -1,9 +1,7 @@
-import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
@@ -15,13 +13,9 @@ import type { Layout } from '../layouts/layout';
 import { agentSkillsManifest } from '../manifest';
 import { readAgentSkillsLayout } from './layout/read-agent-skills-layout';
 import { createSkillList } from './skill-list';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
-type AgentSkillsApi = PageApi<
-  typeof agentSkillsManifest,
-  ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type AgentSkillsApi = PageApi<typeof agentSkillsManifest, ChannelShape>;
 
 // Draws the session hub's Skills section through chat's side parts and the
 // `agent-skills.layout` layout. Reads `agents.rosters`, redrawing a session's
@@ -38,11 +32,7 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },
@@ -53,12 +43,6 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
     chat.addSidePart(list.part);
 
     followRows(rows, { removed: (sessionId) => list.forget(sessionId) });
-    api.events.on('core.pageReady', () => {
-      rosters.on((sessionId) => list.rosterUpdated(sessionId));
-      callEach([...rosters.all().keys()], (sessionId) =>
-        list.rosterUpdated(sessionId),
-      );
-    });
 
     api.layouts.show<Layout>({
       defaultLayout,
@@ -68,6 +52,14 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
       setLayouts: (shown) => list.setLayouts(shown),
     });
 
-    return { commands: {} };
+    return {
+      commands: {},
+      ready() {
+        rosters.on((sessionId) => list.rosterUpdated(sessionId));
+        callEach([...rosters.all().keys()], (sessionId) =>
+          list.rosterUpdated(sessionId),
+        );
+      },
+    };
   },
 };

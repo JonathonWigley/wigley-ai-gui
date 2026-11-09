@@ -7,6 +7,7 @@ import './index.css';
 import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
+import { MODES_SHOW } from '../contracts/commands';
 import {
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
@@ -59,12 +60,15 @@ import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
+import { createPageRestores } from './page-restores';
 import {
   createPaneTargets,
   listenToRightBarFocus,
   listenToScopes,
 } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
+import { registerPickerCommands } from './picker-commands';
+import { answerPluginParts } from './plugin-parts-answer';
 import {
   createPageApi,
   liveKeysFor,
@@ -76,6 +80,7 @@ import type { Layout as ChromeLayout } from './shell/layouts/layout';
 import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
 import { readShellLayout } from './shell/read-shell-layout';
 import { mountShell } from './shell/shell';
+import { shellCommands } from './shell/shell-commands';
 import { mountShellChrome } from './shell/shell-chrome';
 import { defaultShellLayout } from './shell/shell-layout';
 import { startedPluginsConfig } from './started-config';
@@ -108,7 +113,7 @@ function requireServedSettings(config: AppConfig, pluginId: string) {
 }
 
 async function start() {
-  const bridge = window.wigley;
+  const bridge = window.wigley.claim();
   const log = createLogView(document.getElementById('log') as HTMLOListElement);
   bridge.onLog(log);
   // A push before start finishes is held, the newest replacing any older, and
@@ -122,13 +127,10 @@ async function start() {
       applyPush(next);
     }
   });
-  // Read once at page load: a changed list reaches the page parts on the next
-  // load.
   const served = await bridge.config();
-  const pageLoadList = served.settings.plugins.disabled;
   const registry = new CommandRegistry<PageCommandContext<any>>(log);
   const hasHandler = (id: string) => registry.has(id);
-  const config = startedPluginsConfig(served, pageLoadList, hasHandler);
+  const config = startedPluginsConfig(served, [], hasHandler);
   // Read before the plugins start, so each reads its state as it starts.
   const uiState = createPageUiState(await bridge.uiState(), (key, value) =>
     bridge.setUiState(key, value),
@@ -211,11 +213,7 @@ async function start() {
       markdown,
       keys: keyHints,
       platform: config.platform.os,
-      commands: {
-        exists: (id) => live.current().commands[id] !== undefined,
-        argShape: (id) => live.current().commands[id]?.arg,
-        run: (id) => commands.router.run(id, undefined),
-      },
+      commands: shellCommands(commands, log),
       state: layoutState(state, 'shell', (handle) => handle),
     },
     instance: config.appInstance,
@@ -293,6 +291,12 @@ async function start() {
       'core',
     );
   }
+  registry.register(
+    MODES_SHOW.id,
+    ({ arg }: PageCommandContext<string>) => chrome.showMode(arg),
+    'core',
+  );
+  const pickerCommands = registerPickerCommands(registry);
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
   const paths = config.platform.os === 'windows' ? windowsPaths : posixPaths;
@@ -351,6 +355,11 @@ async function start() {
     scope: () => scopeStack.current(),
   });
   const bus = createEventBus();
+  const restores = createPageRestores({
+    timers,
+    log: (message) => log('page', message),
+  });
+  restores.onSettled(() => log('page', 'restores settled'));
   const layouts = createPageLayouts({
     bridge,
     importModule: (url) => import(/* @vite-ignore */ url),
@@ -369,7 +378,7 @@ async function start() {
       shell.setChromeLayout(shown.user);
     },
   });
-  startPlugins(
+  const pageHost = startPlugins(
     pageParts,
     'page',
     (part, context) => {
@@ -394,9 +403,11 @@ async function start() {
           layouts,
           paneTargets,
           drops,
+          restores,
           state,
           anchors,
           boxFocus,
+          pickerCommands,
         }),
       );
       const handlers: Record<
@@ -411,12 +422,20 @@ async function start() {
       return started;
     },
     manifests,
-    pageLoadList,
+    // Main serves the applied list in `plugins.disabled`, and no command, bind
+    // or scope of those plugins.
+    served.settings.plugins.disabled,
     log,
   );
   anchors.reveal();
   registry.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
+  );
+  // Main sends plugin parts requests once `started` is set, so the page
+  // listens first: a later throw in this start still answers them.
+  const answerDeps = { reapplyPush: () => applyLivePush(lastPush), log };
+  bridge.onPluginParts((request) =>
+    answerPluginParts(pageHost, request, answerDeps),
   );
   runtimeCatalog.set({
     ...(runtimeCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
@@ -451,13 +470,46 @@ async function start() {
       log,
     },
   );
-  applyPush = (next) =>
-    applyStartedPush(startedPluginsConfig(next, pageLoadList, hasHandler));
+  // The page binds rule: main has stripped the plugins that are off, and the
+  // page strips the page parts its host has not started yet, so
+  // `requireRegistered` meets no bind of a part still to start.
+  const notStarted = () =>
+    pageParts
+      .map((part) => part.manifest.id)
+      .filter((id) => !pageHost.started.has(id));
+  let lastPush = served;
+  const applyLivePush = (next: AppConfig) => {
+    lastPush = next;
+    applyStartedPush(startedPluginsConfig(next, notStarted(), hasHandler));
+  };
+  applyPush = applyLivePush;
   if (heldPush !== null) {
     applyPush(heldPush);
     heldPush = null;
   }
-  bus.emit(qualify('core', 'pageReady'), null);
+  pageHost.ready();
+  restores.partsReady();
+  // A reload that raced a switch still ends running what the last push's list
+  // says.
+  const loadDisabled = lastPush.settings.plugins.disabled;
+  await answerPluginParts(
+    pageHost,
+    {
+      kind: 'stop',
+      ids: [...pageHost.started.keys()].filter((id) =>
+        loadDisabled.includes(id),
+      ),
+    },
+    answerDeps,
+  );
+  const toStart = notStarted().filter((id) => !loadDisabled.includes(id));
+  if (toStart.length > 0) {
+    await answerPluginParts(
+      pageHost,
+      { kind: 'start', ids: toStart },
+      answerDeps,
+    );
+  }
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.
   document.body.dataset.ready = 'true';

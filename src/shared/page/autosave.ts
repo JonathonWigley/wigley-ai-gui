@@ -79,6 +79,8 @@ export interface AutosaveDeps<Draft extends DraftRevisions, Body> {
   save(id: string, body: Body): Promise<void>;
   // Read each time a save is scheduled.
   delayMs(): number;
+  // `onPageHide` from `page-hide.ts` fits; a dep so the tests need no window.
+  onPageHide(listener: () => void): Disposable;
   timers: Timers;
   log: PluginLog;
 }
@@ -91,8 +93,10 @@ interface PendingSave {
 
 // Saves a draft once its edits pause for `delayMs`. A save is in flight until
 // `save` settles; a failed one leaves the draft unsaved with its message, and
-// the next edit schedules a save again. Its `Disposable` clears every scheduled
-// save and the subscription; a save still in flight then only logs a failure.
+// the next edit schedules a save again. On page hide every unsaved draft saves at
+// once, `save` called inside the listener. Its `Disposable` clears every scheduled
+// save, the subscription and the page hide listener; a save still in flight then
+// only logs a failure.
 export function startAutosave<Draft extends DraftRevisions, Body>(
   deps: AutosaveDeps<Draft, Body>,
 ): Disposable {
@@ -124,6 +128,19 @@ export function startAutosave<Draft extends DraftRevisions, Body>(
       pending.set(id, { revision: draft.revision, handle });
     }
   });
+  const pageHide = deps.onPageHide(() => {
+    for (const draft of deps.drafts()) {
+      if (saveState(draft) !== 'unsaved') {
+        continue;
+      }
+      const id = deps.idOf(draft);
+      const entry = pending.get(id);
+      if (entry !== undefined) {
+        cancel(deps.timers, entry);
+      }
+      void saveDraft(deps, pending, id, () => isDisposed);
+    }
+  });
   return {
     dispose() {
       if (isDisposed) {
@@ -135,6 +152,7 @@ export function startAutosave<Draft extends DraftRevisions, Body>(
       }
       pending.clear();
       subscription.dispose();
+      pageHide.dispose();
     },
   };
 }

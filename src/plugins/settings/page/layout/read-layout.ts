@@ -7,6 +7,7 @@ const LAYOUT_PARTS: Record<keyof SettingsLayout, true> = {
   rows: true,
   sectionRow: true,
   settingRow: true,
+  pluginRow: true,
   keyRow: true,
   leaderRow: true,
   advancedRow: true,

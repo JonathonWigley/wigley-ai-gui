@@ -6,7 +6,10 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
-import { createAgentFormChannelPresenter } from '../../../shared/agent-forms/channel-presenter';
+import {
+  type AgentFormChannelPresenter,
+  createAgentFormChannelPresenter,
+} from '../../../shared/agent-forms/channel-presenter';
 import {
   createChatFormWake,
   NO_FORM_WAKE,
@@ -25,7 +28,7 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
 } from '../../sessions/contract';
-import type { FormsChannel, FormsService } from '../contract';
+import type { FormBody, FormsChannel, FormsService, Round } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { createLayoutPreview } from './preview/layout-preview';
@@ -49,12 +52,12 @@ type FormsApi = MainApi<
 const PREVIEW_SAVED_ROUNDS = 20;
 
 // The agents' FormsService over the saved-round folder, and the layout
-// preview over a FormsService of its own whose store is in memory. Both share
-// one presenter, which owns the channel's `finish` and `draft` handlers; the
-// preview's rounds go through its quiet view. The agents' service wakes the
-// round's chat session when a round finishes with no call waiting; the
-// preview's wakes nothing. Both services and the preview read `layoutNames`
-// for the layouts a round may name.
+// preview over a FormsService of its own whose store is in memory, with the
+// presenter they share, which owns the channel's `finish` and `draft`
+// handlers; the preview's rounds go through its quiet view. The agents'
+// service wakes the round's chat session when a round finishes with no call
+// waiting; the preview's wakes nothing. Both services and the preview read
+// `layoutNames` for the layouts a round may name.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -63,6 +66,7 @@ function createForms(
 ): {
   forms: FormsService;
   preview: { open(): void } & Disposable;
+  presenter: AgentFormChannelPresenter<Round, FormBody>;
 } {
   const { services } = api;
   const store = createFolderFormStore({
@@ -78,6 +82,9 @@ function createForms(
     alerts: services.alerts,
     source: 'forms',
     announceTitle: 'New review round',
+    noun: roundType.noun,
+    markText: (label) => `Round from ${label}`,
+    markAction: 'answer',
     window: services.window,
     log: services.log,
     sessions,
@@ -113,6 +120,7 @@ function createForms(
   return {
     forms: withKnownLayouts(agentsService, layoutNames),
     preview,
+    presenter,
   };
 }
 
@@ -183,15 +191,21 @@ export function addDriveActions(
 // Serves its two tools to every agent session, shows each session's rounds on
 // the page, wakes a round's chat session when the round finishes with no call
 // waiting, registers its layouts and opens the layout preview on the page's
-// ask; in the self-test it writes the fixture layouts and hands the
-// driver its script, and in a drive run it adds the drive actions.
+// ask, and refuses a switch-off while an agent's round is open; in the
+// self-test it writes the fixture layouts and hands the driver its script, and
+// in a drive run it adds the drive actions.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const layoutNames = () => api.layouts.names();
-    const { forms, preview } = createForms(api, sessions, chat, layoutNames);
+    const { forms, preview, presenter } = createForms(
+      api,
+      sessions,
+      chat,
+      layoutNames,
+    );
     api.channel.handle('openPreview', () => preview.open());
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createAgentFormToolSession(forms.startSession(session), roundType),
@@ -222,6 +236,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     }
     return {
       commands: {},
+      mayStop: () => presenter.mayStop(),
       dispose: () => {
         preview.dispose();
         return layouts.dispose();

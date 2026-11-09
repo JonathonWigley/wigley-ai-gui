@@ -23,7 +23,6 @@ export interface AgentFormDriveSessions<Harness extends string> {
   connect(info: {
     sessionId: string;
     projectDir: string | null;
-    deadlineSeconds: number | null;
     harness: Harness;
   }): AgentFormDriveSession;
 }
@@ -49,7 +48,6 @@ export interface AgentFormDriveSessionDefaults<Harness extends string> {
   harnesses: readonly Harness[];
   projectDir: string;
   harness: Harness;
-  deadlineSeconds: number | null;
 }
 
 // A session the drive actions connected, whether it has since ended, and
@@ -117,10 +115,7 @@ export function addAgentFormDriveActions<Harness extends string>(deps: {
       return known;
     }
     const session: DriveFormSession = {
-      connected: sessions.connect({
-        ...spec,
-        deadlineSeconds: sessionDefaults.deadlineSeconds,
-      }),
+      connected: sessions.connect(spec),
       ended: false,
       latest: { state: 'pending' },
     };

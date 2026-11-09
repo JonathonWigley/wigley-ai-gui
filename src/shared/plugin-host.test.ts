@@ -17,6 +17,8 @@ function part(
   return {
     manifest: {
       id,
+      label: id,
+      description: 'A test plugin.',
       dependsOn: { main: dependsOn, page: otherProcess },
       reads: { main: [], page: [] },
       commands: {},
@@ -58,6 +60,41 @@ function startLogging(parts: TestPart[], log: string[]) {
       },
     };
   });
+}
+
+interface Hooks {
+  exports?(consumer: Registrations): unknown;
+  dispose?(): void | Promise<void>;
+  ready?(): void;
+  mayStop?(): string | null;
+}
+
+// Starts `parts` that `disabled` does not name, each returning what `hooks`
+// gives for it, with the host's lines kept in `logged` as
+// `<source>: <message>`.
+function startHooked(
+  parts: TestPart[],
+  hooks: (id: string, context: PartContext) => Hooks,
+  disabled: string[] = [],
+  logged: string[] = [],
+) {
+  return startPlugins(
+    parts,
+    'main',
+    (started, context) => hooks(started.manifest.id, context),
+    parts.map((each) => each.manifest),
+    disabled,
+    (source, message) => logged.push(`${source}: ${message}`),
+  );
+}
+
+// Hooks that push `start <id>` as each part starts and `ready <id>` from its
+// `ready`.
+function recordingHooks(events: string[]) {
+  return (id: string): Hooks => {
+    events.push(`start ${id}`);
+    return { ready: () => events.push(`ready ${id}`) };
+  };
 }
 
 describe('startPlugins', () => {
@@ -218,7 +255,7 @@ describe('startPlugins', () => {
       log,
     );
 
-    await host.stop('a');
+    await expect(host.stop('a')).resolves.toEqual(['c', 'b', 'a']);
 
     expect(log).toEqual([
       'dispose c',
@@ -235,7 +272,7 @@ describe('startPlugins', () => {
     const log: string[] = [];
     const host = startLogging([part('a'), part('b')], log);
 
-    await host.stop('zzz');
+    await expect(host.stop('zzz')).resolves.toEqual([]);
 
     expect(log).toEqual([]);
     expect([...host.started.keys()]).toEqual(['a', 'b']);
@@ -317,11 +354,13 @@ describe('startPlugins', () => {
       void secondStop.catch(() => settled.push('second'));
       await new Promise((resolve) => setImmediate(resolve));
       expect(settled).toEqual([]);
+      expect(host.stopping()).toEqual(['a']);
 
       failDispose(new Error('a dispose failed'));
 
       await expect(firstStop).rejects.toThrow('a dispose failed');
       await expect(secondStop).rejects.toThrow('a dispose failed');
+      expect(host.stopping()).toEqual([]);
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(regsDispose).toHaveBeenCalledTimes(1);
       expect(host.started.size).toBe(0);
@@ -387,4 +426,230 @@ describe('startPlugins', () => {
 
     expect(disposeCount).toBe(1);
   });
+
+  it.each([
+    {
+      parts: [part('b', ['a']), part('a'), part('c')],
+      disabled: ['a', 'b'],
+      ids: ['b', 'a'],
+      events: ['start a', 'start b', 'ready a', 'ready b'],
+    },
+    {
+      parts: [part('a'), part('b')],
+      disabled: ['b'],
+      ids: ['a', 'b', 'zzz'],
+      events: ['start b', 'ready b'],
+    },
+  ])(
+    'start starts each named part not started, in dependency order, then calls ready on each',
+    ({ parts, disabled, ids, events }) => {
+      const recorded: string[] = [];
+      const host = startHooked(parts, recordingHooks(recorded), disabled);
+      recorded.length = 0;
+
+      host.start(ids);
+
+      expect(recorded).toEqual(events);
+    },
+  );
+
+  it.each([
+    { dependency: 'not started', disabled: ['a', 'b'], stopsA: false },
+    { dependency: 'whose stop is in flight', disabled: ['b'], stopsA: true },
+  ])(
+    'start throws, starting nothing, when a named part depends on a part $dependency and not named',
+    async ({ disabled, stopsA }) => {
+      const recorded: string[] = [];
+      let finishDispose = () => {};
+      const host = startHooked(
+        [part('a'), part('b', ['a'])],
+        (id) => {
+          recorded.push(`start ${id}`);
+          return {
+            dispose: () =>
+              new Promise<void>((resolve) => {
+                finishDispose = resolve;
+              }),
+          };
+        },
+        disabled,
+      );
+      recorded.length = 0;
+      const stopping = stopsA ? host.stop('a') : Promise.resolve([]);
+
+      expect(() => host.start(['b'])).toThrow(
+        'Plugin "b" depends on plugin "a", which is not started',
+      );
+
+      expect(recorded).toEqual([]);
+      expect(host.started.has('b')).toBe(false);
+      finishDispose();
+      await stopping;
+    },
+  );
+
+  it("ready calls each started part's ready in start order, and logs a throw and goes on", () => {
+    const readied: string[] = [];
+    const logged: string[] = [];
+    const host = startHooked(
+      [part('b', ['a']), part('a'), part('c')],
+      (id) => ({
+        ready: () => {
+          readied.push(id);
+          if (id === 'b') {
+            throw new Error('b ready failed');
+          }
+        },
+      }),
+      [],
+      logged,
+    );
+
+    expect(() => host.ready()).not.toThrow();
+
+    expect(readied).toEqual(['a', 'b', 'c']);
+    expect(logged).toContain('plugin-host: ready of b failed: b ready failed');
+  });
+
+  it('restart stops the part and its dependents, then starts them again with new registrations and views', async () => {
+    let aStarts = 0;
+    const bViews: unknown[] = [];
+    const bRegistrations: Registrations[] = [];
+    const host = startHooked(
+      [part('a'), part('b', ['a']), part('d')],
+      (id, context) => {
+        if (id === 'a') {
+          aStarts += 1;
+          const run = aStarts;
+          return { exports: () => ({ run }) };
+        }
+        if (id === 'b') {
+          bViews.push(context.dependency('a'));
+          bRegistrations.push(context.registrations);
+        }
+        return {};
+      },
+    );
+
+    await expect(host.restart('a')).resolves.toEqual(['b', 'a']);
+
+    expect(bViews).toEqual([{ run: 1 }, { run: 2 }]);
+    expect(bRegistrations[1]).not.toBe(bRegistrations[0]);
+    expect([...host.started.keys()]).toEqual(['d', 'a', 'b']);
+  });
+
+  it('restart starts in parts order, not the previous start order', async () => {
+    const host = startHooked(
+      [part('a'), part('b', ['a']), part('c', ['a'])],
+      () => ({}),
+    );
+
+    await host.restart('b');
+    await host.restart('a');
+
+    expect([...host.started.keys()]).toEqual(['a', 'b', 'c']);
+  });
+
+  it('restart rejects and starts nothing when its stop rejects', async () => {
+    const host = startHooked([part('a'), part('b', ['a'])], (id) => ({
+      dispose: () => {
+        if (id === 'b') {
+          throw new Error('b dispose failed');
+        }
+      },
+    }));
+
+    await expect(host.restart('b')).rejects.toThrow('b dispose failed');
+
+    expect(host.started.has('b')).toBe(false);
+  });
+
+  // `y` depends on `x` and its start number `throwingStart` throws, so `z`,
+  // listed after it, never starts.
+  it.each([
+    {
+      name: 'start',
+      disabled: ['x', 'y', 'z'],
+      throwingStart: 1,
+      run: async (host: PluginHost<unknown>) => host.start(['x', 'y', 'z']),
+    },
+    {
+      name: 'restart',
+      disabled: [],
+      throwingStart: 2,
+      run: (host: PluginHost<unknown>) => host.restart('x'),
+    },
+  ])(
+    '$name whose start throws partway readies the parts started before it and rethrows',
+    async ({ disabled, throwingStart, run }) => {
+      const readied: string[] = [];
+      let yStarts = 0;
+      const host = startHooked(
+        [part('x'), part('y', ['x']), part('z', ['x'])],
+        (id) => {
+          if (id === 'y') {
+            yStarts += 1;
+            if (yStarts === throwingStart) {
+              throw new Error('y start failed');
+            }
+          }
+          return { ready: () => readied.push(id) };
+        },
+        disabled,
+      );
+
+      await expect(run(host)).rejects.toThrow('y start failed');
+
+      expect([...host.started.keys()]).toEqual(['x']);
+      expect(readied).toEqual(['x']);
+    },
+  );
+
+  it('a ready that throws inside start(ids) is logged and not rethrown', () => {
+    const logged: string[] = [];
+    const host = startHooked(
+      [part('x')],
+      () => ({
+        ready: () => {
+          throw new Error('x ready failed');
+        },
+      }),
+      ['x'],
+      logged,
+    );
+
+    expect(() => host.start(['x'])).not.toThrow();
+
+    expect(logged).toContain('plugin-host: ready of x failed: x ready failed');
+  });
+
+  it('start after stopAll began throws', async () => {
+    const host = startHooked([part('a'), part('x')], () => ({}), ['x']);
+
+    const stopped = host.stopAll();
+
+    expect(() => host.start(['x'])).toThrow('Plugin host is stopping');
+    expect(host.started.has('x')).toBe(false);
+    await stopped;
+  });
+
+  it.each([
+    { ids: ['b', 'a'], reason: 'a: a is busy' },
+    { ids: ['b', 'c'], reason: 'b: a round is open' },
+    { ids: ['c', 'zzz'], reason: null },
+  ])(
+    'mayStop returns the first reason a named started part gives, in start order',
+    ({ ids, reason }) => {
+      const reasons = new Map([
+        ['a', 'a is busy'],
+        ['b', 'a round is open'],
+      ]);
+      const host = startHooked([part('a'), part('b'), part('c')], (id) => {
+        const given = reasons.get(id);
+        return given === undefined ? {} : { mayStop: () => given };
+      });
+
+      expect(host.mayStop(ids)).toBe(reason);
+    },
+  );
 });

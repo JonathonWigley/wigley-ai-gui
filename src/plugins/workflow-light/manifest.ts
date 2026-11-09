@@ -6,6 +6,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // no actions. `chat` and `sessions` serve only its self-test.
 export const workflowLightManifest = definePlugin({
   id: 'workflow-light',
+  label: 'Light workflow',
+  description: 'Tracks a small change through scope, build, check and land.',
   dependsOn: {
     main: ['workflow', 'chat', 'sessions'],
     page: ['workflow'],

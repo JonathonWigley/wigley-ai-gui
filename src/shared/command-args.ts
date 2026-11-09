@@ -1,4 +1,8 @@
-import type { CommandArgShape, CommandId } from '../contracts/commands';
+import type {
+  CommandArg,
+  CommandArgShape,
+  CommandId,
+} from '../contracts/commands';
 import { isJsonObject } from './json';
 
 function isKind(value: unknown, kind: 'number' | 'string'): boolean {
@@ -33,6 +37,18 @@ export function checkCommandArg(
   return extra === undefined
     ? null
     : `command "${id}" takes no field "${extra}"`;
+}
+
+// `arg` as a row label ends with it: a number or string as itself, a record as
+// `<field> <value>` pairs sorted by field and joined with `, `.
+export function commandArgLabel(arg: CommandArg): string {
+  if (typeof arg !== 'object') {
+    return String(arg);
+  }
+  return Object.entries(arg)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([field, value]) => `${field} ${value}`)
+    .join(', ');
 }
 
 // `id` with no arg, else `id` + one space + the arg as JSON: `forms.choose 3`. A

@@ -34,15 +34,21 @@ import type {
   NoteSendResult,
   NoteSession,
   NotesChannel,
+  NotesPlace,
 } from '../contract';
 import { emptyDraft } from '../draft';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
+import { notesManifest } from '../manifest';
 import { createNotePopup, type NotePopup } from './popup';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
+import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+// The context of a run of a command that takes no arg.
+const NO_ARG = { arg: undefined };
 
 const SESSIONS: NoteSession[] = [
   {
@@ -103,6 +109,8 @@ interface Harness {
   markups: FakeMarkup[];
   logged: string[];
   toasts: [string, ToastTone][];
+  // Each command a click ran, with its arg, in order; each ran on the popup.
+  ran: [string, unknown][];
   // The bytes of each `addImage` call, in order.
   added: number[][];
   // The text of each body `insert` call, in order.
@@ -127,6 +135,13 @@ interface Harness {
   take(files: readonly DroppedFile[]): void;
   // Sets the picker filter's text as typing it would.
   typeFilter(text: string): void;
+  // Each place the popup reported, in order.
+  places: NotesPlace[];
+  // Moves the key base under every pushed scope, as a view setting its scope
+  // does.
+  changeBase(): void;
+  // Settles the page load's restores.
+  settleRestores(): void;
 }
 
 interface Fakes {
@@ -279,8 +294,12 @@ function fakeChannel(
   } as unknown as PageChannel<NotesChannel>;
 }
 
-// The popup over fakes, opened on `draft`, its body focused.
-async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
+// The popup over fakes, opened on `draft`, its body focused; or, given
+// `restored`, opened as a reloaded page puts it back.
+async function openPopup(
+  draft: NoteDraft = DRAFT,
+  restored?: NotesPlace,
+): Promise<Harness> {
   const doc = installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
   Object.assign(doc, { addEventListener: () => undefined });
   vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: () => 'red' }));
@@ -288,10 +307,12 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   const markups: FakeMarkup[] = [];
   const logged: string[] = [];
   const toasts: [string, ToastTone][] = [];
+  const ran: [string, unknown][] = [];
   const added: number[][] = [];
   const inserts: string[] = [];
   const saved: NoteFields[] = [];
   const savedMarkups: [number, string][] = [];
+  const places: NotesPlace[] = [];
   const markupChangeListeners: (() => void)[] = [];
   const time = handTimers();
   let images = draft.images;
@@ -312,6 +333,8 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   let filterEvents: EditorEvents | null = null;
   let pushes = 0;
   let pops = 0;
+  const baseListeners: (() => void)[] = [];
+  let restoresSettled = false;
   const pushed = (): PushedScope => {
     pushes += 1;
     return {
@@ -319,7 +342,10 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
         pops += 1;
       },
       dispose: () => undefined,
-      onBaseChanged: () => ({ dispose: () => undefined }),
+      onBaseChanged(listener) {
+        baseListeners.push(() => listener('other.view'));
+        return { dispose: () => undefined };
+      },
     };
   };
   const services = {
@@ -364,11 +390,13 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
         return { dispose: () => undefined };
       },
     },
-    commands: {
-      exists: () => true,
-      argShape: () => undefined,
-      run: () => undefined,
-    },
+    commands: fakeKitCommandsOf(notesManifest, (id, arg) => {
+      ran.push([id, arg]);
+      const handler = (
+        popup.commands as Record<string, (context: { arg: unknown }) => void>
+      )[id.slice('notes.'.length)];
+      handler({ arg });
+    }),
     platform: 'macos',
     state: noLayoutState,
     pushScope: pushed,
@@ -383,8 +411,15 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
       savePasted: (file) => fakes.savePasted(file),
     },
     encoder: { encode: (...args) => fakes.encode(...args) },
+    onPageHide: () => ({ dispose: () => undefined }),
+    restoresSettled: () => restoresSettled,
+    placeChanged: (place) => places.push(place),
   });
-  popup.commands.open();
+  if (restored === undefined) {
+    popup.commands.open(NO_ARG);
+  } else {
+    popup.restorePlace(restored);
+  }
   await settle();
   const root = asFake(roots[0]);
   const [title] = findAll(root, 'notes-title');
@@ -399,6 +434,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     markups,
     logged,
     toasts,
+    ran,
     added,
     inserts,
     saved,
@@ -415,6 +451,15 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     fakes,
     take: (files) => targets[0].take(files),
     typeFilter: (text) => filterEvents?.changed(text),
+    places,
+    changeBase() {
+      for (const listener of baseListeners) {
+        listener();
+      }
+    },
+    settleRestores() {
+      restoresSettled = true;
+    },
   };
 }
 
@@ -456,10 +501,10 @@ describe('note popup', () => {
         message: null,
       });
 
-    harness.popup.commands.pickTarget();
+    harness.popup.commands.pickTarget(NO_ARG);
     await settle();
     harness.typeFilter('gui');
-    harness.popup.commands.pickerChoose();
+    harness.popup.commands.pickerChoose(NO_ARG);
 
     expect(harness.logged).toContain('target wigley-gui');
   });
@@ -483,7 +528,7 @@ describe('note popup', () => {
     {
       case: 'session picker',
       open(harness: Harness) {
-        harness.popup.commands.pickSession();
+        harness.popup.commands.pickSession(NO_ARG);
       },
       layout: {
         pickerRow(parent, input, kit) {
@@ -497,17 +542,17 @@ describe('note popup', () => {
           USER_LAYOUT,
           USER_LAYOUT,
         ]);
-        harness.popup.commands.pickerDown();
-        harness.popup.commands.pickerChoose();
+        harness.popup.commands.pickerDown(NO_ARG);
+        harness.popup.commands.pickerChoose(NO_ARG);
         expect(harness.logged).toContain('session host-b');
       },
     },
     {
       case: 'markup view',
       open(harness: Harness) {
-        harness.popup.commands.nextField();
-        harness.popup.commands.nextField();
-        harness.popup.commands.act();
+        harness.popup.commands.nextField(NO_ARG);
+        harness.popup.commands.nextField(NO_ARG);
+        harness.popup.commands.act(NO_ARG);
       },
       layout: {
         markupToolbar(parent, kit) {
@@ -518,7 +563,7 @@ describe('note popup', () => {
       } satisfies Layout,
       check(harness: Harness) {
         expect(findAll(harness.root, 'mine-toolbar')).toHaveLength(1);
-        harness.popup.commands.toolArrow();
+        harness.popup.commands.toolArrow(NO_ARG);
         expect(harness.markups).toEqual([
           { tools: ['pen', 'arrow'], isDisposed: false },
         ]);
@@ -583,7 +628,7 @@ describe('note popup', () => {
 
     harness.take([droppedFile('a b.md', 'text/markdown', '/d/a b.md')]);
     await settle();
-    harness.popup.commands.close();
+    harness.popup.commands.close(NO_ARG);
     await settle();
 
     expect(harness.saved.at(-1)?.body).toBe(insertionText(['/d/a b.md'], ''));
@@ -607,22 +652,22 @@ describe('note popup', () => {
     {
       change: 'popup closed',
       act: (harness: Harness) => {
-        harness.popup.commands.close();
+        harness.popup.commands.close(NO_ARG);
         return Promise.resolve();
       },
     },
     {
       change: 'send started',
       act: (harness: Harness) => {
-        harness.popup.commands.sendFollowup();
+        harness.popup.commands.sendFollowup(NO_ARG);
         return Promise.resolve();
       },
     },
     {
       change: 'popup reopened on its draft',
       act: async (harness: Harness) => {
-        harness.popup.commands.close();
-        harness.popup.commands.open();
+        harness.popup.commands.close(NO_ARG);
+        harness.popup.commands.open(NO_ARG);
         await settle();
       },
     },
@@ -710,11 +755,11 @@ describe('note popup', () => {
   it.each([
     {
       state: 'popup closed',
-      setUp: (harness: Harness) => harness.popup.commands.close(),
+      setUp: (harness: Harness) => harness.popup.commands.close(NO_ARG),
     },
     {
       state: 'discard confirmation showing',
-      setUp: (harness: Harness) => harness.popup.commands.discard(),
+      setUp: (harness: Harness) => harness.popup.commands.discard(NO_ARG),
     },
     {
       state: 'addImage of an earlier take pending',
@@ -767,11 +812,11 @@ describe('note popup', () => {
     'dispose_OpenInFlight_StaysClosedAndPushesNoScope ($answer)',
     async ({ settleLoad }) => {
       const harness = await openPopup();
-      harness.popup.commands.close();
+      harness.popup.commands.close(NO_ARG);
       await settle();
       const load = Promise.withResolvers<NoteDraft>();
       harness.fakes.loadDraft = () => load.promise;
-      harness.popup.commands.open();
+      harness.popup.commands.open(NO_ARG);
       const pushesAtDispose = harness.pushes();
 
       harness.popup.dispose();
@@ -788,9 +833,9 @@ describe('note popup', () => {
 
   it('dispose_MarkupOpen_SavesAndHidesIt', async () => {
     const harness = await openPopup();
-    harness.popup.commands.nextField();
-    harness.popup.commands.nextField();
-    harness.popup.commands.act();
+    harness.popup.commands.nextField(NO_ARG);
+    harness.popup.commands.nextField(NO_ARG);
+    harness.popup.commands.act(NO_ARG);
     await settle();
     harness.changeMarkup();
 
@@ -814,7 +859,7 @@ describe('note popup', () => {
     expect(harness.saved).toHaveLength(savedBefore);
   });
 
-  it('dispose_SendInFlight_LateSentPopsNoScope', async () => {
+  it('dispose_SendInFlight_LateSentPopsNoScopeAndWritesNoPlace', async () => {
     const harness = await openPopup({
       ...DRAFT,
       target: '/home/me/a',
@@ -825,15 +870,228 @@ describe('note popup', () => {
       new Promise((resolve) => {
         answerSend = resolve;
       });
-    harness.popup.commands.sendFollowup();
+    harness.popup.commands.sendFollowup(NO_ARG);
     await settle();
 
     harness.popup.dispose();
     const popsAtDispose = harness.pops();
+    const placesAtDispose = harness.places.length;
     answerSend({ type: 'sent', draft: DRAFT, toast: 'Follow-up added' });
     await settle();
 
     expect(harness.pops()).toBe(popsAtDispose);
+    expect(harness.places).toHaveLength(placesAtDispose);
     expect(harness.toasts).toEqual([['Follow-up added', 'success']]);
+  });
+
+  it.each([
+    {
+      target: 'the second image',
+      draft: DRAFT,
+      button: 'Remove the image',
+      index: 1,
+      ran: [['notes.removeImageAt', 1]],
+    },
+    {
+      target: 'the session',
+      draft: { ...DRAFT, session: SESSIONS[0] },
+      button: 'Remove the session',
+      index: 0,
+      ran: [['notes.removeSession', 'a']],
+    },
+  ])(
+    'removeClick_RunsItsCommandWithItsTarget ($target)',
+    async ({ draft, button, index, ran }) => {
+      const harness = await openPopup(draft);
+      const buttons = findAll(harness.root, 'ui-icon-button').filter(
+        (each) => each.title === button,
+      );
+
+      buttons[index].click();
+
+      expect(harness.ran).toEqual(ran);
+    },
+  );
+
+  it('colourClick_RunsPickColourWithItsName', async () => {
+    const harness = await openPopup();
+    harness.popup.commands.nextField(NO_ARG);
+    harness.popup.commands.nextField(NO_ARG);
+    harness.popup.commands.act(NO_ARG);
+    await settle();
+    const blue = findAll(harness.root, 'notes-colour').find((button) =>
+      button.textContent.includes('Blue'),
+    );
+
+    blue?.click();
+
+    expect(harness.ran).toEqual([['notes.pickColour', 'blue']]);
+    expect(harness.logged.at(-1)).toBe('colour blue');
+  });
+
+  it.each([
+    { name: 'its attached id', arg: 'a', logged: 'session none' },
+    { name: 'another id', arg: 'b', logged: 'session b not attached' },
+  ])(
+    'removeSession_RemovesOnlyTheAttachedUnlockedSession ($name)',
+    async ({ arg, logged }) => {
+      const harness = await openPopup({ ...DRAFT, session: SESSIONS[0] });
+      const loggedBefore = harness.logged.length;
+
+      harness.popup.commands.removeSession({ arg });
+
+      expect(harness.logged.slice(loggedBefore)).toEqual([logged]);
+    },
+  );
+
+  // Each state crossed with each click command; the refusal is the only line.
+  it.each(
+    [
+      {
+        state: 'popup closed',
+        reason: 'popup not editable',
+        setUp: (harness: Harness) => harness.popup.commands.close(NO_ARG),
+      },
+      {
+        state: 'discard confirmation showing',
+        reason: 'popup not editable',
+        setUp: (harness: Harness) => harness.popup.commands.discard(NO_ARG),
+      },
+      {
+        state: 'markup open',
+        reason: 'popup not editable',
+        setUp(harness: Harness) {
+          harness.popup.commands.nextField(NO_ARG);
+          harness.popup.commands.nextField(NO_ARG);
+          harness.popup.commands.act(NO_ARG);
+        },
+      },
+      {
+        state: 'send in flight',
+        reason: 'send in flight',
+        setUp(harness: Harness) {
+          harness.fakes.sendToFollowup = () => new Promise(() => undefined);
+          harness.popup.commands.sendFollowup(NO_ARG);
+        },
+      },
+    ].flatMap((row) => [
+      {
+        ...row,
+        command: 'removeImageAt',
+        run: (harness: Harness) =>
+          harness.popup.commands.removeImageAt({ arg: 1 }),
+        logged: `image 2 removal skipped: ${row.reason}`,
+      },
+      {
+        ...row,
+        command: 'removeSession',
+        run: (harness: Harness) =>
+          harness.popup.commands.removeSession({ arg: 'a' }),
+        logged: `session a removal skipped: ${row.reason}`,
+      },
+    ]),
+  )(
+    'removeCommand_WhileNotEditable_RemovesNothing ($command, $state)',
+    async ({ setUp, run, logged }) => {
+      const harness = await openPopup({
+        ...DRAFT,
+        target: '/home/me/a',
+        title: 'A note',
+        session: SESSIONS[0],
+      });
+      setUp(harness);
+      await settle();
+      const loggedBefore = harness.logged.length;
+
+      run(harness);
+      await settle();
+
+      expect(harness.logged.slice(loggedBefore)).toEqual([logged]);
+    },
+  );
+
+  it.each([
+    {
+      name: 'held cursors',
+      saved: { isOpen: true, field: 'images', imageIndex: 1 },
+      expected: { isOpen: true, field: 'images', imageIndex: 1 },
+    },
+    {
+      name: 'an image cursor past the strip',
+      saved: { isOpen: true, field: 'tags', imageIndex: 5 },
+      expected: { isOpen: true, field: 'tags', imageIndex: 1 },
+    },
+  ] as const)(
+    'reload_reopens_with_cursors: $name',
+    async ({ saved, expected }) => {
+      const harness = await openPopup(DRAFT, saved);
+
+      expect(harness.logged).toContainEqual(
+        expect.stringMatching(/^popup shown/),
+      );
+      expect(harness.places.at(-1)).toEqual(expected);
+      expect(harness.doc.activeElement).not.toBe(harness.bodyFrame);
+    },
+  );
+
+  it.each([
+    {
+      name: 'opened by its command, before restores settle',
+      restored: false,
+      key: false,
+      settled: false,
+      closes: true,
+    },
+    {
+      name: 'restored, before restores settle',
+      restored: true,
+      key: false,
+      settled: false,
+      closes: false,
+    },
+    {
+      name: 'restored, a key pressed before restores settle',
+      restored: true,
+      key: true,
+      settled: false,
+      closes: false,
+    },
+    {
+      name: 'restored, after restores settle with no key pressed',
+      restored: true,
+      key: false,
+      settled: true,
+      closes: true,
+    },
+  ] as const)(
+    'baseChanged_ClosesThePopupUnlessBeforeRestoresSettleOnARestoredOne: $name',
+    async ({ restored, key, settled, closes }) => {
+      const harness = await openPopup(
+        DRAFT,
+        restored ? { isOpen: true, field: 'title', imageIndex: 0 } : undefined,
+      );
+      if (key) {
+        harness.popup.commands.nextField(NO_ARG);
+      }
+      if (settled) {
+        harness.settleRestores();
+      }
+
+      harness.changeBase();
+
+      expect(harness.places.at(-1)?.isOpen).toBe(!closes);
+    },
+  );
+
+  it('reload_closed_popup_stays_closed', async () => {
+    const harness = await openPopup(DRAFT, {
+      isOpen: false,
+      field: 'images',
+      imageIndex: 1,
+    });
+
+    expect(harness.logged).not.toContainEqual(
+      expect.stringMatching(/^popup shown/),
+    );
   });
 });

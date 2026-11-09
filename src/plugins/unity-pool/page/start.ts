@@ -1,15 +1,11 @@
-import type { CoreEvents } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import {
   createBaseKit,
+  kitCommandsOf,
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
@@ -54,12 +50,7 @@ import {
   sessionHolders,
 } from './pool-view-model';
 
-type UnityPoolApi = PageApi<
-  typeof unityPoolManifest,
-  UnityPoolChannel,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type UnityPoolApi = PageApi<typeof unityPoolManifest, UnityPoolChannel>;
 
 const REDRAW_MS = 60_000;
 // After usage's details, which take the default order 0.
@@ -84,15 +75,15 @@ interface HeldWrapper {
 // `unity-pool.layout` layout. Reads the pools from `unity-pool.snapshot`, each
 // row's match keys from `sessions.rows` and the shown session from
 // `sessions.active`; asks main for the shown
-// session's folder's origin name once per folder while any pool exists. Hold
-// and Release run through main, one at a time per clone, each clone's last
-// result kept until the page reloads. Redraws all at `core.pageReady`, on each of
-// those, on each layouts set and once a minute for the times. The panel is a
-// right-bar stop: given the keys, it walks a cursor over its session holders
-// and Enter shows the cursor's session, until the core ends its turn. Logs each
-// row's badges and the panel's showing, hiding, counts and keys when they
-// change, and a Hold or Release whose call to main fails; main logs every run
-// it answers.
+// session's folder's origin name once per folder while any pool exists. A
+// holder's click selects its row through `sessions.activate`. Hold and Release
+// run through main, one at a time per clone, each clone's last result kept
+// until the page reloads. Redraws all at `ready`, on each of those, on each
+// layouts set and once a minute for the times. The panel is a right-bar stop:
+// given the keys, it walks a cursor over its session holders and Enter shows
+// the cursor's session, until the core ends its turn. Logs each row's badges
+// and the panel's showing, hiding, counts and keys when they change, and a Hold
+// or Release whose call to main fails; main logs every run it answers.
 export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
   manifest: unityPoolManifest,
   start(api: UnityPoolApi) {
@@ -102,11 +93,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
       keys: api.keys,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
     };
@@ -270,19 +257,12 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     };
 
     const drawPanel = (pool: PoolState, now: number) => {
-      const actions = {
-        run: (action: PoolAction, clone: number) =>
-          runAction(pool.pool, action, clone),
-        select: (sessionId: string) => sessions.activate(sessionId),
-      };
-      const poolRows = [...rows.all().values()];
       const input = withShownPaths(
         panelInput(
           pool,
-          poolRows,
+          [...rows.all().values()],
           now,
           pendingOf(pool.pool),
-          actions,
           hasKeys ? cursor : null,
         ),
       );
@@ -384,11 +364,11 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
 
     const showHolder = () => {
       const holder = cursorHolders[cursor];
-      if (holder === undefined) {
+      if (holder === undefined || holder.sessionId === null) {
         log('no session holder');
         return;
       }
-      holder.select?.();
+      sessions.activate(holder.sessionId);
       log(`showed ${holder.label}`);
     };
 
@@ -452,10 +432,6 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       },
     });
 
-    api.events.on('core.pageReady', () => {
-      poolSnapshot.on(() => redraw());
-      redraw();
-    });
     followRows(rows, {
       removed: (sessionId) => loggedBadges.delete(sessionId),
     });
@@ -485,6 +461,13 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         cursorTop: () => moveCursor('top'),
         cursorBottom: () => moveCursor('bottom'),
         showHolder,
+        hold: ({ arg }) => runAction(arg.pool, 'hold', arg.clone),
+        release: ({ arg }) => runAction(arg.pool, 'release', arg.clone),
+        selectHolder: ({ arg }) => sessions.activate(arg),
+      },
+      ready() {
+        poolSnapshot.on(() => redraw());
+        redraw();
       },
       dispose() {
         isDisposed = true;

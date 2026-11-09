@@ -43,10 +43,14 @@ import type { UserSettings } from './user-settings';
 // `setRuntime` hands over both processes' runtime commands and binds, re-serving
 // as a file change does, once for a burst in one tick. `runtime` reads those
 // catalogs and the runtime binds in force.
+// `setPluginsProblem` holds one message about the plugin list, or none: while
+// it holds one, the served `problems` carry it under `settings.json`, after the
+// watch problem and before the file problems. A changed message re-serves.
 export interface ConfigStore extends Disposable {
   current(): AppConfig;
   onChanged(listener: (config: AppConfig) => void): Disposable;
   setRuntime(runtime: RuntimeCatalogs): void;
+  setPluginsProblem(message: string | null): void;
   runtime(): { catalogs: RuntimeCatalogs; layer: DefaultKeyLayer };
 }
 
@@ -121,6 +125,7 @@ export async function loadConfigStore(
   let runtimeLayer: DefaultKeyLayer = {};
   let loggedDrops: ReadonlySet<string> = new Set();
   let watchProblem: ConfigProblem | null = null;
+  let pluginsProblem: string | null = null;
   let current: AppConfig | null = null;
   const listeners = new Set<(config: AppConfig) => void>();
   let isDisposed = false;
@@ -251,6 +256,9 @@ export async function loadConfigStore(
       runMode: deps.runMode,
       problems: [
         ...(watchProblem === null ? [] : [watchProblem]),
+        ...(pluginsProblem === null
+          ? []
+          : [{ file: SETTINGS_FILE, message: pluginsProblem }]),
         ...inServedOrder(problems),
       ],
     };
@@ -352,6 +360,15 @@ export async function loadConfigStore(
       });
     },
     runtime: () => ({ catalogs: runtime, layer: runtimeLayer }),
+    setPluginsProblem(message) {
+      if (message === pluginsProblem) {
+        return;
+      }
+      pluginsProblem = message;
+      if (!isDisposed) {
+        requestRebuild();
+      }
+    },
     onChanged(listener) {
       const registration = (config: AppConfig) => listener(config);
       listeners.add(registration);

@@ -57,16 +57,20 @@ export function buildItemHead(
   return { header, status };
 }
 
-// The labelled reason under a choice: why one would pick it, or why it is
-// recommended, its text drawn through `deps.mount`.
+// The reason under a choice: why one would pick it, or why it is recommended,
+// its text drawn through `deps.mount`. A null `label` draws no label element,
+// only the body.
 export function buildChoiceReason(
-  label: string,
+  label: string | null,
   text: string,
   deps: { markdown: MarkdownRenderer; mount: MarkdownMount },
 ): HTMLElement {
   const reason = element('div', 'choice-reason');
   const body = element('div', 'choice-reason-body md');
-  reason.append(element('div', 'choice-reason-label', label), body);
+  if (label !== null) {
+    reason.append(element('div', 'choice-reason-label', label));
+  }
+  reason.append(body);
   deps.mount.draw(body, deps.markdown.block(text));
   return reason;
 }

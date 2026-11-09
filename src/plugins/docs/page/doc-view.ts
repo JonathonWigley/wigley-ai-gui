@@ -30,7 +30,16 @@ import { createMarkdownMount } from '../../../shared/page/markdown-mount';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
-import type { DocsChannel, IndexEntry, IndexLink } from '../contract';
+import {
+  type DocsChannel,
+  type DocsDocAtClick,
+  type DocsEdits,
+  docsEditSectionAtCommand,
+  type DocsLinkClick,
+  type IndexEntry,
+  type IndexLink,
+  UNSAVED_TEXT,
+} from '../contract';
 import { splitFrontmatter } from '../frontmatter';
 import type { DocHeaderInput, RecentChangesInput } from '../layouts/layout';
 import { linkedFrom } from '../linked-from';
@@ -52,7 +61,6 @@ import {
   type ReadOnlyReason,
   readOnlyText,
   topVisibleLine,
-  UNSAVED_TEXT,
 } from './docs-state';
 import {
   hiddenBlockFlags,
@@ -110,6 +118,12 @@ export interface DocTarget {
   fragment: string | null;
 }
 
+// A link a click follows, by `docs.followLink`'s fields but its view.
+export type DocLink = Omit<DocsLinkClick, 'viewId'>;
+
+// A place a click goes to, by `docs.openDocAt`'s fields but its view.
+export type DocAt = Omit<DocsDocAtClick, 'viewId'>;
+
 export interface DocViewDeps {
   viewId: string;
   channel: PageChannel<DocsChannel>;
@@ -147,6 +161,16 @@ export interface DocViewDeps {
   openListEntry(entryId: string): void;
   // Creates the Main page the empty Main page offers.
   createMain(): void;
+  // A click on a rendered link in the body.
+  linkClicked(link: DocLink): void;
+  // A click on a section link or an On this page or Linked from row.
+  docAtClicked(at: DocAt): void;
+  // A click on a Recent changes page.
+  recentPageClicked(path: string): void;
+  // A click on a list page's row, by its entry id.
+  listRowClicked(entryId: string): void;
+  // A click on the empty Main page's `create it` offer.
+  mainOfferClicked(): void;
   // Acts on a `wiki:` or `wigley:` link in the rendered body with the link's
   // text; false when it is no link this view acts on.
   followWikiLink(href: string, title: string): boolean;
@@ -155,6 +179,9 @@ export interface DocViewDeps {
   asideSightLost(): void;
   // A right column section row moved the doc to its section.
   asideSectionOpened(): void;
+  // Hears each change `edits` may read differently after: a keystroke in the
+  // editor, a write, a reload from disk, the editor closing.
+  editsChanged(): void;
 }
 
 // The doc pane, drawn by the layout's `docPane` around the app's scroller:
@@ -194,8 +221,8 @@ export interface DocViewDeps {
 // body under the whole-file editor.
 export interface DocView {
   element: HTMLElement;
-  // The right column; a section row's action moves the doc to its line and
-  // tells `asideSectionOpened`.
+  // The right column; a section row's action opens the doc at its line through
+  // `docAtClicked` and tells `asideSectionOpened`.
   aside: DocAside;
   // `isHistoryMove` records no place, for an open the history itself asked for.
   open(
@@ -240,6 +267,25 @@ export interface DocView {
   // Opens the section at the top of sight in the editor, or the whole file
   // when no section holds that line; only focuses an editor already open.
   editSection(): void;
+  // Opens the section whose heading carries `anchor`, as its `edit` control's
+  // click asks: refused while the open editor holds unsaved edits, and a clean
+  // editor closes first.
+  editSectionAt(anchor: string): void;
+  // Follows `link` from the shown doc as its click asks: an external link
+  // opens in the browser, a heading or a place in the shown file moves within
+  // it, another file opens, and a `wiki:` or `wigley:` link goes to
+  // `followWikiLink`; logs and does nothing while no doc shows.
+  followLink(link: DocLink): void;
+  // Goes to `at` as a section link or an On this page or Linked from row asks:
+  // a place in the shown file moves within it, another file opens; logs and
+  // does nothing while no doc shows or for a line that is no whole number.
+  openDocAt(at: DocAt): void;
+  // Opens the doc at `path` from its top, as a Recent changes page's click
+  // asks, reading the shown doc again too.
+  openRecentPage(path: string): void;
+  // Moves the shown list page's cursor to the row of `entryId` and opens it, as
+  // the row's click asks; logs and does nothing when no shown row holds it.
+  openListRow(entryId: string): void;
   // Scrolls to the next or previous heading in the file's order, logging where
   // it landed or why it stayed.
   moveSection(direction: 1 | -1): void;
@@ -264,6 +310,14 @@ export interface DocView {
   // Focuses the open editor, else the pane.
   focus(): void;
   hasUnsavedEdits(): boolean;
+  // The open editor's unsaved edits over the whole file; null with no editor
+  // or none unsaved.
+  edits(): DocsEdits | null;
+  // Opens the whole-file editor on the shown doc holding a reloaded page's
+  // `edits`, which then read as unsaved. When the file on disk is no longer
+  // `edits.baseText`, the changed-on-disk prompt opens. Logs and does nothing
+  // while an editor is open or the shown file is not `edits.path`.
+  restoreEdits(edits: DocsEdits): void;
   // Toasts and logs the refusal when the editor holds unsaved edits.
   refuseWithUnsavedEdits(): boolean;
   conflictReload(): void;
@@ -472,7 +526,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   anchors.push(
     deps.anchor(mainHint, 'edit', { scope: 'doc', label: 'create it' }),
   );
-  rowAction(mainHint, () => deps.createMain());
+  rowAction(mainHint, () => deps.mainOfferClicked());
   const emptySlot = partSlot();
   const frameSlot = partSlot();
   const headerSlot = partSlot();
@@ -499,20 +553,21 @@ export function createDocView(deps: DocViewDeps): DocView {
     homeDir: deps.homeDir,
     log: deps.log,
     moveToLine: (line) => {
-      moveWithinDoc(line, null);
+      deps.docAtClicked({ path: shown?.target.path ?? '', line });
       deps.asideSectionOpened();
     },
-    followLink: (path, line) => deps.followFile(path, line, null),
+    followLink: (path, line) => deps.docAtClicked({ path, line }),
     sightLost: () => deps.asideSightLost(),
   });
   const body = element('div', 'md docs-body');
   const bodyMount = createMarkdownMount(deps.markdown, deps.log);
-  body.addEventListener('click', followLink);
+  body.addEventListener('click', linkClicked);
   const editorBox = element('div', 'docs-editor');
   const listPane = createListPane({
     slot: pageSlot,
     parts,
     openEntry: (entryId) => deps.openListEntry(entryId),
+    rowClicked: (entryId) => deps.listRowClicked(entryId),
   });
   pane.addEventListener('focusin', () => listPane.setFocused(true));
   pane.addEventListener('focusout', (event) => {
@@ -797,7 +852,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     drawnMainEmpty = null;
   };
 
-  // A recent page's link: outside the body, so `followLink` does not hear it.
+  // A recent page's link: outside the body, so `linkClicked` does not hear it.
   const recentPageLink = (
     parent: HTMLElement,
     title: string,
@@ -808,7 +863,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     link.title = deps.paths.tilde(path, deps.homeDir);
     link.addEventListener('click', (event) => {
       event.preventDefault();
-      deps.followFile(path, null, null);
+      deps.recentPageClicked(path);
     });
     parent.append(link);
     return link;
@@ -875,8 +930,12 @@ export function createDocView(deps: DocViewDeps): DocView {
       const part = parts.draw(
         'sectionEditControl',
         slot,
-        { title: section.title },
-        (kit) => ({ ...kit, openSection: () => clickSection(anchor) }),
+        {
+          title: section.title,
+          command: docsEditSectionAtCommand.id,
+          arg: { viewId: deps.viewId, anchor },
+        },
+        (kit) => kit,
       );
       sectionControls.push({ part, slot });
     }
@@ -1059,27 +1118,57 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
   };
 
-  // Where `anchor` leads: a section link holds its target, any other its href.
-  const linkTargetOf = (anchor: HTMLElement, fromFile: string): LinkTarget => {
-    const { docPath, docLine, href } = anchor.dataset;
-    return docPath === undefined
-      ? resolveLink(href ?? '', fromFile, deps.homeDir, deps.paths)
-      : {
-          type: 'file',
-          path: docPath,
-          line: docLine === undefined ? null : Number(docLine),
-          fragment: null,
-        };
-  };
-
-  function followLink(event: MouseEvent) {
+  // A section link holds its target in `data-doc-path` and `data-doc-line`,
+  // any other link its `data-href`.
+  function linkClicked(event: MouseEvent) {
     const anchor = (event.target as Element).closest<HTMLElement>('a.md-link');
     if (anchor === null || shown === null) {
       return;
     }
     event.preventDefault();
+    const { docPath, docLine, href } = anchor.dataset;
+    if (docPath === undefined) {
+      deps.linkClicked({ href: href ?? '', title: anchor.textContent ?? '' });
+    } else {
+      const line = docLine === undefined ? 0 : Number(docLine);
+      deps.docAtClicked({ path: docPath, line });
+    }
+  }
+
+  // A file target moves within the shown doc, else opens its file.
+  const followFileTarget = (
+    target: Extract<LinkTarget, { type: 'file' }>,
+    fromFile: string,
+  ) => {
+    if (deps.paths.samePath(target.path, fromFile)) {
+      moveWithinDoc(target.line, target.fragment);
+    } else {
+      deps.followFile(target.path, target.line, target.fragment);
+    }
+  };
+
+  function openDocAt({ path, line }: DocAt) {
+    if (shown === null) {
+      deps.log(`no doc open for link ${path}`);
+      return;
+    }
+    if (!Number.isInteger(line) || line < 0) {
+      deps.log(`no line ${line} for link ${path}`);
+      return;
+    }
+    followFileTarget(
+      { type: 'file', path, line: line === 0 ? null : line, fragment: null },
+      shown.target.path,
+    );
+  }
+
+  function followLink(link: DocLink) {
+    if (shown === null) {
+      deps.log(`no doc open for link ${link.href}`);
+      return;
+    }
     const fromFile = shown.target.path;
-    const target = linkTargetOf(anchor, fromFile);
+    const target = resolveLink(link.href, fromFile, deps.homeDir, deps.paths);
     switch (target.type) {
       case 'external':
         deps
@@ -1091,14 +1180,10 @@ export function createDocView(deps: DocViewDeps): DocView {
         moveWithinDoc(null, target.fragment);
         break;
       case 'file':
-        if (deps.paths.samePath(target.path, fromFile)) {
-          moveWithinDoc(target.line, target.fragment);
-        } else {
-          deps.followFile(target.path, target.line, target.fragment);
-        }
+        followFileTarget(target, fromFile);
         break;
       case 'unsupported':
-        if (!deps.followWikiLink(target.href, anchor.textContent ?? '')) {
+        if (!deps.followWikiLink(target.href, link.title)) {
           deps.toast(`This link does not open here: ${target.href}`, 'info');
         }
         break;
@@ -1215,6 +1300,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       isBodyRedrawDeferred = false;
       drawBodyPart();
     }
+    deps.editsChanged();
   };
 
   // Draws `rendered` as `doc`'s body, then puts the pane back at `scrollTop`.
@@ -1267,6 +1353,17 @@ export function createDocView(deps: DocViewDeps): DocView {
       .catch((error) => deps.log(`not rendered: ${errorText(error)}`));
   };
 
+  // The whole file's text with the editor's `edited` text in place: a
+  // section's spliced into the file as the section editor opened it.
+  const fileTextOf = (edited: string) =>
+    editingSection === null
+      ? edited
+      : spliceSection(
+          editingSection.openedText,
+          editingSection.section,
+          edited,
+        );
+
   const writeEditor = (overwrite: boolean, after: AfterWrite) => {
     const doc = shown;
     const writing = editor;
@@ -1275,10 +1372,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
     const edited = writing.text();
     const editing = editingSection;
-    const text =
-      editing === null
-        ? edited
-        : spliceSection(editing.openedText, editing.section, edited);
+    const text = fileTextOf(edited);
     writingText = text;
     deps.channel
       .invoke('writeDoc', doc.filePath, text, overwrite ? null : doc.text)
@@ -1295,6 +1389,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         if (editing !== null) {
           editing.savedText = edited;
         }
+        deps.editsChanged();
         showBanner(false);
         deps.toast(`Wrote ${doc.name}`, 'success');
         deps.log(`wrote ${doc.name}`);
@@ -1342,6 +1437,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (editingSection !== null) {
         showSectionRows(text);
       }
+      deps.editsChanged();
     },
     write: () => writeEditor(false, 'stay'),
     quit: quitEditor,
@@ -1574,8 +1670,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     openSectionEditor(doc, section, 1);
   };
 
-  // A section's `edit` control. An open editor with edits stays; a clean one
-  // closes first, so the section is read from a body drawn from the file's text.
+  // A section's `edit` control, through `docs.editSectionAt`. An open editor
+  // with edits stays; a clean one closes first, so the section is read from a
+  // body drawn from the file's text.
   function clickSection(anchor: string) {
     const doc = shown;
     if (doc === null || view.refuseWithUnsavedEdits()) {
@@ -1962,6 +2059,15 @@ export function createDocView(deps: DocViewDeps): DocView {
           ),
       );
     },
+    editSectionAt: (anchor) => clickSection(anchor),
+    followLink,
+    openDocAt,
+    openRecentPage: (path) => deps.followFile(path, null, null),
+    openListRow(entryId) {
+      if (!listPane.openRow(entryId)) {
+        deps.log(`no list row ${entryId}`);
+      }
+    },
     editSection() {
       const doc = shown;
       if (doc === null || refuseReadOnly(doc)) {
@@ -2071,6 +2177,36 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
     },
     hasUnsavedEdits: hasUnsaved,
+    edits() {
+      if (shown === null || editor === null || !hasUnsaved()) {
+        return null;
+      }
+      return {
+        path: shown.filePath,
+        text: fileTextOf(editor.text()),
+        baseText: shown.text,
+      };
+    },
+    restoreEdits(edits) {
+      const doc = shown;
+      const isEditable =
+        doc !== null &&
+        editor === null &&
+        doc.target.detail === null &&
+        deps.paths.samePath(doc.filePath, edits.path);
+      if (!isEditable) {
+        deps.log(`edits on ${edits.path} not restored`);
+        return;
+      }
+      openEditor(doc, 1);
+      editor?.setText(edits.text);
+      deps.log(`restored edits on ${doc.name}`);
+      if (doc.text !== edits.baseText) {
+        showConflict(doc.text, 'stay');
+        deps.log(`changed on disk: ${doc.name}`);
+      }
+      deps.editsChanged();
+    },
     refuseWithUnsavedEdits() {
       if (!view.hasUnsavedEdits()) {
         return false;
@@ -2093,6 +2229,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       shown.text = held.diskText;
       showBanner(false);
       deps.log(`reloaded ${shown.name}`);
+      deps.editsChanged();
     },
     conflictOverwrite() {
       const held = conflict;

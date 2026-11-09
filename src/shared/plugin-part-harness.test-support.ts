@@ -42,6 +42,7 @@ import type {
   PagePart,
   PageServices,
   PageStart,
+  PluginCommands,
   PluginManifest,
   PluginState,
   ProcessName,
@@ -133,20 +134,24 @@ export interface HarnessCommandRun {
   arg: unknown;
 }
 
-// `started` throws while the part is stopped. `restart` stops a started part and
-// starts it again on a new host with the same fakes and the same counts, so what
-// a leaky `dispose` left stays counted. `advance` runs the due timers in due
+// `started` throws while the part is stopped. `ready` calls every started
+// part's `ready`, the real parts' and the part under test's, in start order, as
+// a page load does once its parts start. `restart` stops a started part and
+// starts it again on a new host with the same fakes and the same counts, so
+// what a leaky `dispose` left stays counted, then calls every started part's
+// `ready`, as the host's own restart does. `advance` runs the due timers in due
 // order, the clock reading each one's due time, and ends `ms` later. `emitted`
 // holds what any started part emitted, in order, under its qualified name; it
 // outlives the stop, so a test reads there what a late read emitted. `state` is
-// the store every part of the harness shares, across stops and restarts. A test
-// writes a slot through `state.publish(key).set(value)`: that claim is held until
-// the writer's `dispose` and `counts` does not hold it, so a test publishes each
-// key once and disposes the writer of a key the part under test publishes before
-// that part starts. `commandRuns` holds each run sent to the other process, in
-// order, under its qualified id.
+// the store every part of the harness shares, across stops and restarts. A
+// test writes a slot through `state.publish(key).set(value)`: that claim is
+// held until the writer's `dispose` and `counts` does not hold it, so a test
+// publishes each key once and disposes the writer of a key the part under test
+// publishes before that part starts. `commandRuns` holds each run sent to the
+// other process, in order, under its qualified id.
 export interface PartHarness<Started> {
   started(): Started;
+  ready(): void;
   counts(): PartCounts;
   advance(ms: number): void;
   emit(qualifiedEvent: string, data: unknown): void;
@@ -182,6 +187,13 @@ export interface HarnessAnchor {
 // `services.markdown`. `anchors` holds each anchor named through the fake
 // `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
+// `picked` holds the qualified id of each mode whose handle's `picked` ran, in
+// order. `restores` holds each restore handed to `restores.track`; the harness
+// runs no page load, so `restores.onSettled` calls its listener at once, unless
+// the options hold the restores: then each page load's restores settle at
+// `settleRestores`. `changeBase` moves the base scope and tells each pushed
+// scope's `onBaseChanged`, as a scope change another view made would; a part's
+// own `keys.setScope` tells none.
 // `pushSettings` replaces what `settings()` reads for the part under test and tells
 // its `onSettingsChanged` listeners. The fake `modes` writes `coreModeSlot` on each
 // change of the shown mode, unless a test holds that slot's claim.
@@ -195,12 +207,14 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   pushSettings(settings: M['settings']): void;
   readonly fences: readonly FenceContribution[];
   readonly anchors: readonly HarnessAnchor[];
+  readonly picked: readonly string[];
+  readonly restores: readonly Promise<unknown>[];
+  settleRestores(): void;
+  changeBase(scope: string): void;
   setWhere(where: HintWhere): void;
   hintsShown(): boolean;
   // The live mode added under qualified id `id`; throws when none is live.
   mode(id: string): Mode;
-  // The qualified id of each mode whose handle's `picked` ran, in order.
-  readonly picks: readonly string[];
   // Sets what every mode handle's `sideBarShown` reads; false until set.
   setSideBarShown(isShown: boolean): void;
   // The base scope `keys.setScope` set last, qualified; `idle` at the start.
@@ -227,7 +241,8 @@ export interface MainPartHarnessOptions<M extends PluginManifest> {
 // never settles. A replaced `editor` or `markdown` still runs through its
 // per-plugin view, as `createPageApi` does. `firstModeTaken` holds the first mode
 // the app's own first part would add, so no mode the part adds shows as it is
-// added. `parts` and `state` are as on main.
+// added. `holdsRestores` keeps each page load's restores unsettled until the
+// harness's `settleRestores`. `parts` and `state` are as on main.
 export interface PagePartHarnessOptions<M extends PluginManifest> {
   // Runs at each fake anchor's `dispose`, to make one throw.
   anchorDispose?(): void;
@@ -236,6 +251,7 @@ export interface PagePartHarnessOptions<M extends PluginManifest> {
   services?: Partial<Omit<PageServices, 'timers' | 'log'>>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
   firstModeTaken?: boolean;
+  holdsRestores?: boolean;
   parts?: readonly PagePart[];
   state?: SlotStore;
 }
@@ -259,6 +275,8 @@ interface HarnessWorld {
   state: SlotStore;
   commandRuns: HarnessCommandRun[];
   commands: RuntimeCommands<any>;
+  // Every command the harness's manifests declare, as the served config holds.
+  declared: Readonly<Record<CommandId, CommandInfo>>;
 }
 
 interface Scheduler {
@@ -273,6 +291,7 @@ interface Scheduler {
 interface HostedStart {
   commands: object;
   exports?(consumer: Registrations): unknown;
+  ready?(): void;
   dispose?(): void | Promise<void>;
 }
 
@@ -284,6 +303,7 @@ interface HostedPart {
 interface PartLifecycle<Started> {
   start(): void;
   started(): Started;
+  ready(): void;
   stop(): Promise<void>;
   restart(): Promise<void>;
 }
@@ -433,6 +453,7 @@ function createWorld(
     emitted: [],
     state: store,
     commandRuns,
+    declared,
     commands: createRuntimeCommands<any>({
       process,
       registry,
@@ -575,9 +596,13 @@ function requireNoFakeIsReal(
   }
 }
 
-function providerManifest(id: string): PluginManifest {
+// The manifest of a plugin `id` that declares nothing, as a provider part or a
+// stub stands under.
+export function providerManifest(id: string): PluginManifest {
   return {
     id,
+    label: id,
+    description: 'A test plugin.',
     dependsOn: { main: [], page: [] },
     reads: { main: [], page: [] },
     commands: {},
@@ -585,6 +610,23 @@ function providerManifest(id: string): PluginManifest {
     settings: {},
     settingInfo: {},
     themeTokens: {},
+  };
+}
+
+// A page part of plugin `probe` that records each command run its process
+// hears, with its arg, in `runs`, and hands `held` its `commands`, as another
+// plugin holds them.
+export function probePart(
+  runs: [string, unknown][],
+  held: { commands: PluginCommands | null } = { commands: null },
+): PagePart {
+  return {
+    manifest: providerManifest('probe'),
+    start(api) {
+      held.commands = api.commands;
+      api.commands.onDidRun((id, arg) => runs.push([id, arg]));
+      return { commands: {} };
+    },
   };
 }
 
@@ -627,6 +669,7 @@ function partLifecycle<Started>(
       return {
         commands: started.commands,
         exports: (consumer) => started.exports?.(consumerView(consumer)),
+        ready: () => started.ready?.(),
         dispose: () => started.dispose?.(),
       };
     },
@@ -642,6 +685,12 @@ function partLifecycle<Started>(
   const hosted = [...fakes, ...stubs, ...reals, underTest];
   let host: PluginHost<HostedStart> | null = null;
 
+  const runningHost = () => {
+    if (host === null) {
+      throw new Error(`part harness: ${underTest.manifest.id} is stopped`);
+    }
+    return host;
+  };
   const lifecycle: PartLifecycle<Started> = {
     start() {
       host = startPlugins(hosted, process, (part, context) => {
@@ -664,10 +713,10 @@ function partLifecycle<Started>(
       });
     },
     started() {
-      if (host === null) {
-        throw new Error(`part harness: ${underTest.manifest.id} is stopped`);
-      }
-      return host.started.get(underTest.manifest.id) as Started;
+      return runningHost().started.get(underTest.manifest.id) as Started;
+    },
+    ready() {
+      runningHost().ready();
     },
     async stop() {
       const stopping = host;
@@ -677,6 +726,7 @@ function partLifecycle<Started>(
     async restart() {
       await lifecycle.stop();
       lifecycle.start();
+      lifecycle.ready();
     },
   };
   return lifecycle;
@@ -689,6 +739,7 @@ function baseHarness<Started>(
 ): PartHarness<Started> {
   return {
     started: lifecycle.started,
+    ready: lifecycle.ready,
     counts: () => ({ ...counts }),
     advance: world.scheduler.advance,
     emit: world.bus.emit,
@@ -887,6 +938,8 @@ function fakeMainApi(
       git: notFaked<Git>('git'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
+      // Refuses no switch-off.
+      pluginSwitch: { mayDisable: async () => null },
       ...replaced,
       files:
         replaced.files === undefined
@@ -1016,9 +1069,14 @@ interface PageWorld extends HarnessWorld {
   // The live modes in add order, and the shown one.
   liveModes: FakeLiveMode[];
   shownMode: FakeLiveMode | null;
-  // The qualified id of each mode whose handle's `picked` ran, in order, and
-  // what every handle's `sideBarShown` reads.
-  picks: string[];
+  picked: string[];
+  restores: Promise<unknown>[];
+  // False from each page load's start until `settleRestores` while the
+  // options hold the restores.
+  areRestoresSettled: boolean;
+  settledListeners: Listeners<null>;
+  baseListeners: Listeners<string>;
+  // What every mode handle's `sideBarShown` reads.
   isSideBarShown: boolean;
   // The outer panes `panes.setOuterPanes` set last.
   outerPanes: OuterPanes | null;
@@ -1060,7 +1118,11 @@ function createPageWorld(
     transparency: null,
     liveModes: firstMode === null ? [] : [firstMode],
     shownMode: firstMode,
-    picks: [],
+    picked: [],
+    restores: [],
+    areRestoresSettled: true,
+    settledListeners: createListeners(),
+    baseListeners: createListeners(),
     isSideBarShown: false,
     outerPanes: null,
     fences: [],
@@ -1078,9 +1140,11 @@ function createPageWorld(
 
 function fakePushedScope(
   scope: string,
-  common: Pick<CommonApi, 'register' | 'liveHandle'>,
+  common: Pick<CommonApi, 'register'>,
+  baseListeners: Listeners<string>,
 ): PushedScope {
   let isPopped = false;
+  const heard: Disposable[] = [];
   const pushed: PushedScope = {
     pop() {
       if (isPopped) {
@@ -1088,9 +1152,16 @@ function fakePushedScope(
       }
       pushed.dispose();
     },
-    onBaseChanged: common.liveHandle,
+    onBaseChanged(listener) {
+      const handle = baseListeners.add(listener);
+      heard.push(handle);
+      return common.register(handle);
+    },
     dispose() {
       isPopped = true;
+      for (const handle of heard.splice(0)) {
+        handle.dispose();
+      }
     },
   };
   return common.register(pushed);
@@ -1146,7 +1217,7 @@ function fakeModes(
           }
         },
         picked() {
-          world.picks.push(id);
+          world.picked.push(id);
         },
         sideBarShown: () => world.isSideBarShown,
         dispose() {
@@ -1236,19 +1307,6 @@ function fakePageChannelOn(
   return register(listeners.add(listener as (data: unknown) => void));
 }
 
-// A command `manifest` declares, by its qualified id: a part's kit checks its own
-// commands exist as it starts.
-function ownCommand(
-  manifest: PluginManifest,
-  id: string,
-): CommandInfo | undefined {
-  const prefix = `${manifest.id}.`;
-  const declared = id.startsWith(prefix)
-    ? manifest.commands[id.slice(prefix.length)]
-    : undefined;
-  return declared && { ...declared, id, plugin: manifest.id };
-}
-
 function fakePageApi(
   manifest: PluginManifest,
   context: PartContext,
@@ -1295,7 +1353,11 @@ function fakePageApi(
         world.scope = qualify(manifest.id, scope);
       },
       pushScope: (scope) =>
-        fakePushedScope(qualify(manifest.id, scope), common),
+        fakePushedScope(
+          qualify(manifest.id, scope),
+          common,
+          world.baseListeners,
+        ),
       scope: () => world.scope,
       onPending: liveHandle,
       holdPending() {},
@@ -1304,7 +1366,10 @@ function fakePageApi(
       onKeymapChanged: (listener) =>
         register(world.keymapListeners.add(listener)),
       label: (id) => id,
-      command: (id) => ownCommand(manifest, id),
+      // Any command the harness's manifests declare, as the served config
+      // holds; a fake dependency's commands stay absent.
+      command: (id) =>
+        Object.hasOwn(world.declared, id) ? world.declared[id] : undefined,
       scopes: [],
       bind: pluginCommands.bind,
       keysFor: (command, scope, where, arg) =>
@@ -1342,6 +1407,18 @@ function fakePageApi(
       },
     },
     drops: { addTarget: liveHandle, savePasted: () => neverSettles() },
+    restores: {
+      track(restore) {
+        world.restores.push(restore);
+      },
+      onSettled(listener) {
+        if (world.areRestoresSettled) {
+          listener();
+          return liveHandle();
+        }
+        return register(world.settledListeners.add(() => listener()));
+      },
+    },
     settings: () => record.settings,
     onSettingsChanged: (listener) =>
       register(record.settingsListeners.add(listener)),
@@ -1508,11 +1585,12 @@ function countingFrames(counts: PartCounts) {
   };
 }
 
-// A copy, so `vi.unstubAllGlobals` restores the existing `document` untouched. A
-// test reads `document` after `startPagePart`, never the object
-// `installFocusFakeDom` returned.
-function copyOfDocument(): object {
-  const existing = (globalThis as { document?: object }).document;
+// A copy of the global `name` as a test stubbed it, its prototype's members
+// included, so `vi.unstubAllGlobals` restores the existing one untouched. A
+// test reads `document` and `window` after `startPagePart`, never the objects
+// `installFocusFakeDom` stubbed.
+function copyOfGlobal(name: 'document' | 'window'): object {
+  const existing = (globalThis as { document?: object; window?: object })[name];
   return existing === undefined
     ? {}
     : Object.create(
@@ -1528,10 +1606,13 @@ function stubPageGlobals(counts: PartCounts) {
   const documentTarget = countingEventTarget(counts);
   const frames = countingFrames(counts);
   const Observer = countingObserverClass(counts);
-  vi.stubGlobal('window', { ...windowTarget.members, ...frames });
+  vi.stubGlobal(
+    'window',
+    Object.assign(copyOfGlobal('window'), windowTarget.members, frames),
+  );
   vi.stubGlobal(
     'document',
-    Object.assign(copyOfDocument(), documentTarget.members),
+    Object.assign(copyOfGlobal('document'), documentTarget.members),
   );
   vi.stubGlobal('ResizeObserver', Observer);
   vi.stubGlobal('MutationObserver', Observer);
@@ -1556,6 +1637,8 @@ export function startPagePart<M extends PluginManifest>(
     [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
   world.anchorDispose = options.anchorDispose;
+  const holdsRestores = options.holdsRestores === true;
+  world.areRestoresSettled = !holdsRestores;
   const record = newPageRecord(
     options.settings ?? part.manifest.settings,
     zeroCounts(),
@@ -1585,8 +1668,26 @@ export function startPagePart<M extends PluginManifest>(
   lifecycle.start();
   return {
     ...baseHarness(lifecycle, world, record.counts),
+    // A new page load's restores are held again.
+    restart() {
+      world.areRestoresSettled = !holdsRestores;
+      return lifecycle.restart();
+    },
     fences: world.fences,
     anchors: world.anchors,
+    picked: world.picked,
+    restores: world.restores,
+    settleRestores() {
+      if (world.areRestoresSettled) {
+        return;
+      }
+      world.areRestoresSettled = true;
+      world.settledListeners.tell(null);
+    },
+    changeBase(scope) {
+      world.scope = scope;
+      world.baseListeners.tell(scope);
+    },
     setWhere(where) {
       world.where = where;
       world.whereListeners.tell(where);
@@ -1599,7 +1700,6 @@ export function startPagePart<M extends PluginManifest>(
       }
       return live;
     },
-    picks: world.picks,
     setSideBarShown(isShown) {
       world.isSideBarShown = isShown;
     },

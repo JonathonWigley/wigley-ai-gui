@@ -33,6 +33,24 @@ describe('manifests', () => {
     ).toBeNull();
   });
 
+  it('manifests_LabelsAndDescriptions_FilledAndLabelsUnique', () => {
+    const problems: string[] = [];
+    const owners = new Map<string, string>();
+    for (const { id, label, description } of manifests) {
+      if (label.trim() === '') problems.push(`${id} has a blank label`);
+      if (description.trim() === '') {
+        problems.push(`${id} has a blank description`);
+      }
+      const other = owners.get(label);
+      if (other !== undefined) {
+        problems.push(`${other} and ${id} share the label "${label}"`);
+      }
+      owners.set(label, id);
+    }
+
+    expect(problems).toEqual([]);
+  });
+
   it('manifests_WorkflowHeavy_ListsItsCommandsAndSettings', () => {
     const heavy = manifests.find(({ id }) => id === 'workflow-heavy');
 

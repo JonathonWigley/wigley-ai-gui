@@ -1,11 +1,4 @@
-// Which stop of a session's list the entry keys act on, and the range open from
-// an anchor. A stop is a row, or one block of an entry with blocks. A following
-// focus stays on the latest stop as entries arrive.
-export interface EntryFocus {
-  stopId: string | null;
-  following: boolean;
-  anchorId: string | null;
-}
+import type { EntryFocus } from '../contract';
 
 export const START_FOCUS: EntryFocus = {
   stopId: null,

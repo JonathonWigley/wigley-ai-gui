@@ -5,22 +5,70 @@ import { errorText } from './error-text';
 import { disabledDependencyProblem } from './plugin-manifests';
 import { createRegistrations } from './registrations';
 
-// What the host hands each part's start: `dependency` returns the provider's view for this part
-// (`exports(registrations)`, called once per consumer and kept), `registrations` is this part's store.
+// What the host hands each part's start: `dependency` returns the provider's
+// view for this part (`exports(registrations)`, called once per consumer and
+// kept), `registrations` is this part's store.
 export interface PartContext {
   dependency(pluginId: string): unknown;
   registrations: Registrations;
 }
 
+// A host keeps every part it was handed, the disabled ones included, so a later
+// `start` can bring any of them up. "Start order" below is the order of
+// `started`: a part started again goes to its end.
 export interface PluginHost<Started> {
+  // What each start returned, by plugin id, in start order, until the part
+  // stops.
   readonly started: ReadonlyMap<string, Started>;
-  // Stops the started dependents of `pluginId` in this process, in reverse start order, then awaits the part's
-  // `dispose`, then disposes its registrations, then forgets it. Does nothing for a part not started. Every step
-  // runs even when one throws; the returned promise rejects with the first error. A part already stopping is not
-  // stopped twice: this call waits on the stop in flight and shares its errors, so a part's own `dispose` must not
-  // call it on that part.
-  stop(pluginId: string): Promise<void>;
-  // Stops every started part in reverse start order, with the same error and overlap rules.
+  // Calls `ready()` on every started part, in start order. The composition
+  // root calls it once, after the start. A `ready` that throws is logged as
+  // `ready of <id> failed: <error>` and the next part's `ready` still runs; it
+  // does not throw.
+  ready(): void;
+  // Starts each part of `parts` that `pluginIds` names and that is not
+  // started, in dependency order, then calls `ready()` on each one it started.
+  // The order is `parts` list order, each part's dependencies first, never an
+  // earlier start order. An id with no part in this process is ignored, a
+  // started id (one whose stop is in flight included) is skipped, and a
+  // dependency with no part here is allowed.
+  // Throws, starting nothing, when a named part depends on a part that is not
+  // started, or whose stop is in flight, and is not named: `Plugin "<id>"
+  // depends on plugin "<dependency>", which is not started`, for the first
+  // such pair in that order. A start that throws has its registrations
+  // disposed; the parts this call started before it stay started and get
+  // their `ready`, the parts after it are not started, and the start's error
+  // is rethrown. A `ready` that throws is logged, as `ready()` logs it, and not
+  // rethrown. Once `stopAll` began, it throws `Plugin host is stopping` and
+  // starts nothing.
+  start(pluginIds: readonly string[]): void;
+  // Stops the started dependents of `pluginId` in this process, newest first,
+  // then the part, and resolves to the ids it stopped, in that stop order.
+  // Logs `stopping <id>` before each part. Each stop awaits the part's
+  // `dispose`, then disposes its registrations, then forgets it. Resolves to
+  // `[]` for a part not started. Every step runs even when one throws; the
+  // returned promise then rejects with the first error and without the ids, so
+  // a caller reads `started` for what is left. A part already stopping is not
+  // stopped twice: this call waits on the stop in flight and shares its
+  // errors, so a part's own `dispose` must not call it on that part.
+  stop(pluginId: string): Promise<string[]>;
+  // stop(pluginId), then start(the ids it stopped), resolving to the ids in
+  // stop order. Each part gets new registrations and new views, so a
+  // dependent's `dependency` gives the new provider's exports; slots are
+  // untouched. When the stop rejects, it rejects with that error and starts
+  // nothing. When a start throws, it rejects with that error, as `start`
+  // leaves it: the parts started before it run and got their `ready`, the
+  // rest stay stopped.
+  restart(pluginId: string): Promise<string[]>;
+  // The first reason a started part in `pluginIds` gives through `mayStop`, as
+  // `"<id>: <reason>"`, or null. The parts are asked in start order; a part
+  // with no `mayStop`, or a named id not started, gives no reason. A `mayStop`
+  // that throws reaches the caller, and the parts after it are not asked.
+  mayStop(pluginIds: readonly string[]): string | null;
+  // The ids whose stop is in flight now, in the order their stops began.
+  stopping(): readonly string[];
+  // Stops every started part in reverse start order, logging `stopping <id>`
+  // before each, with the same error and overlap rules as `stop`. From its
+  // first call on, `start` throws.
   stopAll(): Promise<void>;
 }
 
@@ -203,28 +251,113 @@ function throwFirst(errors: readonly unknown[]) {
   }
 }
 
+// Starts each of `candidates` through `start` in dependency order
+// (`nextToStart`), each with a new record, and adds it to `started`, `records`
+// and `startedNow` as it comes up, so after a start that throws `startedNow`
+// holds the ones started before it.
+function startInOrder<
+  Part extends { manifest: PluginManifest },
+  Started extends Provider,
+>(
+  candidates: readonly Part[],
+  process: ProcessName,
+  start: (part: Part, context: PartContext) => Started,
+  started: Map<string, Started>,
+  records: Map<string, PartRecord>,
+  log: Log | undefined,
+  startedNow: string[] = [],
+) {
+  let pending = [...candidates];
+  while (pending.length > 0) {
+    const next = nextToStart(pending, process);
+    const record: PartRecord = {
+      manifest: next.manifest,
+      registrations: createRegistrations(),
+      views: new Map(),
+    };
+    const context: PartContext = {
+      dependency: dependencyFor(record, process, started),
+      registrations: record.registrations,
+    };
+    started.set(
+      next.manifest.id,
+      startWithCleanup(() => start(next, context), record, log),
+    );
+    records.set(next.manifest.id, record);
+    startedNow.push(next.manifest.id);
+    pending = pending.filter((part) => part !== next);
+  }
+}
+
+// Throws on the first candidate, in `candidates` order, with a dependency in
+// `process` that has a part in `partIds` but is not a candidate and is not
+// started or is stopping: a stop in flight ends without stopping a dependent
+// started after it began.
+function requireDependenciesStarting(
+  candidates: readonly { manifest: PluginManifest }[],
+  process: ProcessName,
+  partIds: ReadonlySet<string>,
+  started: ReadonlyMap<string, unknown>,
+  inFlight: ReadonlyMap<string, unknown>,
+) {
+  const candidateIds = new Set(candidates.map((part) => part.manifest.id));
+  const isRunning = (id: string) => started.has(id) && !inFlight.has(id);
+  for (const { manifest } of candidates) {
+    const missing = manifest.dependsOn[process].find(
+      (id) => partIds.has(id) && !isRunning(id) && !candidateIds.has(id),
+    );
+    if (missing !== undefined) {
+      throw new Error(
+        `Plugin "${manifest.id}" depends on plugin "${missing}", which is not started`,
+      );
+    }
+  }
+}
+
+// Calls `ready` on each of `pluginIds` in order; a throw is logged and the
+// next part's `ready` still runs.
+function readyEach(
+  pluginIds: readonly string[],
+  started: ReadonlyMap<string, { ready?(): void }>,
+  log: Log | undefined,
+) {
+  for (const id of pluginIds) {
+    try {
+      started.get(id)?.ready?.();
+    } catch (error) {
+      log?.('plugin-host', `ready of ${id} failed: ${errorText(error)}`);
+    }
+  }
+}
+
 // Starts every part whose id `disabled` does not name, in list order, each
 // part's dependencies in this process started just before it when the list
 // holds them later, so a part listed earlier than another starts before it
 // unless it depends on it in this process; hands each part its own store of
 // registrations and its own view of each of its dependencies in this process.
 // Plugins that add parts to one surface (chat's composer parts) add them in
-// this order. `known` is every plugin's manifest, those with no part in this
-// process included; a dependency in `known` with no part here, such as a
-// page-only plugin in main, starts nowhere in this process. `log` takes the
-// host's own lines: `stopAll` logs `stopping <id>` before each part, so a hang
-// names the plugin, and a failed start logs a failed cleanup; the caller picks
+// this order. The host keeps every part, the disabled ones included, so its
+// `start` can bring one up later; it calls no `ready` here, and the caller
+// calls `host.ready()` once. `known` is every plugin's manifest, those with no
+// part in this process included; a dependency in `known` with no part here,
+// such as a page-only plugin in main, starts nowhere in this process. `log`
+// takes the host's own lines: `stop` and `stopAll` log `stopping <id>` before
+// each part, so a hang names the plugin, a failed `ready` logs `ready of <id>
+// failed: <error>`, and a failed start logs a failed cleanup; the caller picks
 // who reads them. Returns the host, whose `started` holds what each start
 // returned, by plugin id, in start order, until the part stops. Throws on a
-// duplicate id, a dependency in this process not in `known`, a kept part
-// depending on a disabled plugin, or a dependency cycle in this process. A
-// `start` that throws has its registrations disposed and its error rethrown;
-// no host is returned, so the parts started before it stay started.
+// duplicate id or a dependency in this process not in `known`, each checked
+// over every part, disabled ones included; on a kept part depending on a
+// disabled plugin; or on a dependency cycle in this process. A `start` that
+// throws has its registrations disposed and its error rethrown; no host is
+// returned, so the parts started before it stay started.
 export function startPlugins<
   Part extends { manifest: PluginManifest },
   Started extends {
     exports?(consumer: Registrations): unknown;
     dispose?(): void | Promise<void>;
+    ready?(): void;
+    mayStop?(): string | null;
   },
 >(
   parts: readonly Part[],
@@ -234,46 +367,96 @@ export function startPlugins<
   disabled: readonly string[] = [],
   log?: Log,
 ): PluginHost<Started> {
-  const kept = parts.filter((part) => !disabled.includes(part.manifest.id));
-  const manifests = kept.map((part) => part.manifest);
+  const manifests = parts.map((part) => part.manifest);
   requireUniqueIds(manifests);
   requireDependenciesListed(manifests, process, known);
-  const problem = disabledDependencyProblem(disabled, manifests);
+  const kept = parts.filter((part) => !disabled.includes(part.manifest.id));
+  const problem = disabledDependencyProblem(
+    disabled,
+    kept.map((part) => part.manifest),
+  );
   if (problem !== null) {
     throw new Error(problem);
   }
+  const partIds = new Set(manifests.map((manifest) => manifest.id));
   const started = new Map<string, Started>();
   const records = new Map<string, PartRecord>();
   const inFlight = new Map<string, Promise<unknown[]>>();
-  let pending = [...kept];
-  while (pending.length > 0) {
-    const ready = nextToStart(pending, process);
-    const record: PartRecord = {
-      manifest: ready.manifest,
-      registrations: createRegistrations(),
-      views: new Map(),
-    };
-    const context: PartContext = {
-      dependency: dependencyFor(record, process, started),
-      registrations: record.registrations,
-    };
-    started.set(
-      ready.manifest.id,
-      startWithCleanup(() => start(ready, context), record, log),
+  let stopAllBegan = false;
+  startInOrder(kept, process, start, started, records, log);
+
+  function startNamed(pluginIds: readonly string[]) {
+    if (stopAllBegan) {
+      throw new Error('Plugin host is stopping');
+    }
+    const candidates = parts.filter(
+      (part) =>
+        pluginIds.includes(part.manifest.id) && !started.has(part.manifest.id),
     );
-    records.set(ready.manifest.id, record);
-    pending = pending.filter((part) => part !== ready);
+    requireDependenciesStarting(
+      candidates,
+      process,
+      partIds,
+      started,
+      inFlight,
+    );
+    const startedNow: string[] = [];
+    try {
+      startInOrder(
+        candidates,
+        process,
+        start,
+        started,
+        records,
+        log,
+        startedNow,
+      );
+    } finally {
+      // A start that threw leaves the parts before it started, so they get
+      // their `ready` too.
+      readyEach(startedNow, started, log);
+    }
   }
+
+  async function stop(pluginId: string) {
+    const ids = stopOrder(pluginId, process, records);
+    const errors: unknown[] = [];
+    for (const id of ids) {
+      log?.('plugin-host', `stopping ${id}`);
+      errors.push(...(await stopPart(id, started, records, inFlight)));
+    }
+    throwFirst(errors);
+    return ids;
+  }
+
   return {
     started,
-    async stop(pluginId) {
-      const errors: unknown[] = [];
-      for (const id of stopOrder(pluginId, process, records)) {
-        errors.push(...(await stopPart(id, started, records, inFlight)));
+    ready() {
+      readyEach([...started.keys()], started, log);
+    },
+    start: startNamed,
+    stop,
+    async restart(pluginId) {
+      const ids = await stop(pluginId);
+      startNamed(ids);
+      return ids;
+    },
+    mayStop(pluginIds) {
+      for (const [id, part] of started) {
+        const reason = pluginIds.includes(id)
+          ? (part.mayStop?.() ?? null)
+          : null;
+        if (reason !== null) {
+          return `${id}: ${reason}`;
+        }
       }
-      throwFirst(errors);
+      return null;
+    },
+    stopping() {
+      return [...inFlight.keys()];
     },
     async stopAll() {
+      stopAllBegan = true;
       const errors: unknown[] = [];
       for (const id of [...started.keys()].reverse()) {
         log?.('plugin-host', `stopping ${id}`);

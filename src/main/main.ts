@@ -38,6 +38,7 @@ import type {
 } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import {
+  corePluginsSlot,
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
 } from '../contracts/core-state';
@@ -64,6 +65,7 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
+import { isSameJson } from '../shared/json';
 import { osPlatform } from '../shared/os-platform';
 import { platformFor } from '../shared/platform';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
@@ -72,6 +74,7 @@ import {
   pluginThemeTokens,
   qualify,
   requireListed,
+  withAppliedList,
 } from '../shared/plugin-manifests';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
@@ -127,18 +130,21 @@ import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi, type MainApiServices } from './plugins/main-api';
 import { createPageCommands } from './page-commands';
 import { createPageLog } from './page-log';
+import { createPageParts } from './page-parts';
 import { createPastedFiles } from './pasted-files';
+import { logSlowQuit, quitStep } from './quit-wait';
+import {
+  type AppliedPlugins,
+  createAppliedPlugins,
+} from './plugins/applied-plugins';
 import { createPluginChannels } from './plugins/plugin-channel';
+import { createPluginSwitch, type PluginSwitch } from './plugins/plugin-switch';
+import { addPluginSwitchActions } from './plugins/plugin-switch-drive';
 import { nativeImageEncoder } from './images/native-image-encoder';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
-import {
-  applySelfTestConfig,
-  mainStartList,
-  selfTestFilterOf,
-  withMainStartList,
-} from './selftest-config';
+import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
@@ -374,6 +380,14 @@ let layoutService: LayoutService | null = null;
 const quitTasks: (() => unknown)[] = [];
 let quitWork: Promise<unknown> | null = null;
 let hasQuitStarted = false;
+// The ids whose stop is in flight in the main host, which a slow quit logs;
+// at quit the page has gone, so only the main host is still stopping parts.
+let stoppingParts: () => readonly string[] = () => [];
+// At will-quit every window has closed, so the quit's lines go to stderr in
+// every run mode.
+const quitLog: Log = (source, message) => {
+  process.stderr.write(`wigley-ai-gui ${source}: ${message}\n`);
+};
 
 function onQuit(task: () => unknown) {
   quitTasks.push(task);
@@ -400,22 +414,25 @@ function startQuitWork() {
   return quitWork;
 }
 
-// Starts the quit work on the first will-quit. A drive run holds the quit
-// until every task settles, so a drive `restart` finds the ui-state it left
-// and a recording finishes encoding; a second will-quit during the hold
-// (another quit, or the SIGTERM Electron turns into a quit) exits at once.
-// The user's app quits without waiting, so a task still running when it exits
-// is cut short.
+// Starts the quit work on the first will-quit and holds the quit until every
+// task settles, with no cap, so each part's stop keeps its save, a drive
+// `restart` finds the ui-state it left and a recording finishes encoding. A
+// second will-quit during the hold exits a drive run at once (another quit, or
+// the SIGTERM Electron turns into a quit); the live app keeps holding. A quit
+// still running after QUIT_WAIT_LOG_MS logs the parts still stopping to stderr.
 function runQuitTasks(event: Event) {
-  if (runMode === 'drive' && quitWork !== null) {
+  const step = quitStep(runMode, quitWork !== null);
+  if (step === 'exit') {
     app.exit(0);
     return;
   }
-  const work = startQuitWork();
-  if (runMode === 'drive') {
-    void work.then(() => app.exit(0));
-    event.preventDefault();
+  event.preventDefault();
+  if (step === 'hold') {
+    return;
   }
+  const work = startQuitWork();
+  logSlowQuit(work, stoppingParts, timers, quitLog);
+  void work.then(() => app.exit(0));
 }
 
 // The self-test gives plugins a fresh temp folder as the home folder. Its
@@ -601,6 +618,16 @@ function layoutsFolder(homeDir: string): string {
   return path.join(configFolder(homeDir), 'layouts');
 }
 
+// The core settings' defaults. Under the self-test, which starts every plugin,
+// the default `plugins.disabled` is empty, so the store's list and the applied
+// list agree and the plugin switch stops nothing at the first config change.
+function defaultSettings() {
+  const defaults = defaultSettingsFor(platform.programs);
+  return runMode === 'selfTest'
+    ? { ...defaults, plugins: { disabled: [] } }
+    : defaults;
+}
+
 // What the ConfigStore over the user config folder in `homeDir` reads,
 // logging to the page and serving the real path of `homeDir`, since index
 // entries and session folders are real paths.
@@ -608,7 +635,7 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
   return {
     files,
     folder: configFolder(homeDir),
-    defaults: defaultSettingsFor(platform.programs),
+    defaults: defaultSettings(),
     optionalSettings,
     settingChoices,
     defaultKeymap,
@@ -630,16 +657,27 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
   };
 }
 
-// The ConfigStore over the user config folder in `homeDir`, and the
-// `userConfig` service writing that folder through the store's checks.
-async function loadConfig(
-  homeDir: string,
-): Promise<{ store: ConfigStore; userConfig: UserConfig }> {
+// The ConfigStore over the user config folder in `homeDir`, the `userConfig`
+// service writing that folder through the store's checks, and the applied list
+// the store's `plugins.disabled` starts it on, without the ids no manifest has.
+async function loadConfig(homeDir: string): Promise<{
+  store: ConfigStore;
+  userConfig: UserConfig;
+  applied: AppliedPlugins;
+}> {
   const deps = await configStoreDeps(homeDir);
   const store = await loadConfigStore(deps);
+  const applied = createAppliedPlugins(
+    store
+      .current()
+      .settings.plugins.disabled.filter((id) =>
+        manifests.some((manifest) => manifest.id === id),
+      ),
+  );
   return {
     store,
-    userConfig: createUserConfig({ ...deps, store, settingInfo }),
+    userConfig: createUserConfig({ ...deps, store, settingInfo, applied }),
+    applied,
   };
 }
 
@@ -736,13 +774,15 @@ function serveLayouts(
 // Starts every plugin's main part `disabled` does not name, each with its own
 // API over one plugin channel router to the window's page, the settings
 // `store` serves with no self-test layer, one event bus, the shared
-// `services`, its own host from `selfTest` (null outside the self-test), its
-// own host from `driveRun` (null outside a drive run), its data folder under
-// `dataRoot`, and its layouts in `layouts`. Each part's commands join `commands`
-// as it starts, tracked in its registrations, so stopping the part unregisters
-// them, and each part's API reaches `commands` under its id. Outside the user's
-// app, the host's lines also go to stderr, which the drive CLI keeps in the run's
-// `app.log`, as the page has gone by the time a quit stops the parts.
+// `services`, its own host from `selfTest` (null outside the self-test, and
+// for a part started once `isLaunchStartDone` is true, since the handover has
+// closed), its own host from `driveRun` (null outside a drive run), its data
+// folder under `dataRoot`, and its layouts in `layouts`. Each part's commands
+// join `commands` as it starts, tracked in its registrations, so stopping the
+// part unregisters them, and each part's API reaches `commands` under its id.
+// Outside the user's app, the host's lines also go to stderr, which the drive
+// CLI keeps in the run's `app.log`, as the page has gone by the time a quit
+// stops the parts.
 function startMainParts(
   window: BrowserWindow,
   store: ConfigStore,
@@ -750,6 +790,7 @@ function startMainParts(
   layouts: LayoutService,
   services: MainApiServices,
   selfTest: SelfTestDriver | null,
+  isLaunchStartDone: () => boolean,
   driveRun: DriveRun | null,
   disabled: readonly string[],
   commands: RuntimeCommands<MainCommandContext<any>>,
@@ -772,7 +813,8 @@ function startMainParts(
           onPluginSettingsChanged: (listener) =>
             store.onChanged((config) => listener(config.pluginSettings)),
           services,
-          selfTestFor: (pluginId) => selfTest?.hostFor(pluginId) ?? null,
+          selfTestFor: (pluginId) =>
+            isLaunchStartDone() ? null : (selfTest?.hostFor(pluginId) ?? null),
           driveFor: (pluginId) => driveRun?.driveFor(pluginId) ?? null,
           dependency: context.dependency,
           registrations: context.registrations,
@@ -814,6 +856,7 @@ function createWindow(
   inputs: StartInputs,
   store: ConfigStore,
   userConfig: UserConfig,
+  applied: AppliedPlugins,
   sessionHost: SessionHost,
 ) {
   const startConfig = store.current();
@@ -870,6 +913,7 @@ function createWindow(
   // has detached and sees no `closed`, unless its `quit` command kept them for a
   // `restart`.
   let mainHost: PluginHost<MainStart<PluginManifest>> | null = null;
+  stoppingParts = () => mainHost?.stopping() ?? [];
   let stopsSessionsOnQuit = runMode === 'drive';
   // Added ahead of the parts: as on a quit, the page has gone before they stop,
   // so no stop reaches a page that would invoke a part already stopped.
@@ -914,11 +958,6 @@ function createWindow(
     shellLayoutTypes,
     'src/renderer/shell/layouts/default',
   );
-  // Read once: a changed list reaches main's parts on the next app start.
-  const startList = mainStartList(
-    runMode === 'selfTest',
-    store.current().settings.plugins.disabled,
-  );
   const pageCatalog = slots.read(coreRuntimePageSlot, 'core');
   const pageCommands = createPageCommands({
     page: () => (hasQuitStarted ? null : livePage(window)),
@@ -948,7 +987,10 @@ function createWindow(
     log,
     sessionHost,
   });
-  mainHost = startMainParts(
+  // Main parts reach the switch through this forwarder, made before they start.
+  let pluginSwitch: PluginSwitch | null = null;
+  let isLaunchStartDone = false;
+  const host = startMainParts(
     window,
     store,
     inputs.dataRoot,
@@ -971,18 +1013,28 @@ function createWindow(
       runMode,
       appInstance,
       sessionHost,
+      pluginSwitch: {
+        mayDisable: (id) =>
+          pluginSwitch === null
+            ? Promise.reject(new Error('The plugin switch is not ready'))
+            : pluginSwitch.mayDisable(id),
+      },
       ...windowServices,
     },
     selfTest,
+    () => isLaunchStartDone,
     driveRun,
-    startList,
+    applied.disabled(),
     commands,
     slots,
   );
+  isLaunchStartDone = true;
+  mainHost = host;
   mainCatalog.set({
     ...(mainCatalog.get() ?? EMPTY_RUNTIME_CATALOG),
     started: true,
   });
+  host.ready();
   // The layouts service closes after every part's registrations, even when a
   // part's stop rejects.
   onQuit(async () => {
@@ -1006,9 +1058,9 @@ function createWindow(
   // Read at each request, so a page reload after a config edit starts on the
   // current config.
   const served = () =>
-    withMainStartList(
+    withAppliedList(
       applySelfTestConfig(store.current(), selfTestConfig),
-      startList,
+      applied.disabled(),
     );
   const startServed = served();
   ipcMain.handle(BRIDGE_CHANNELS.config, () => served());
@@ -1051,6 +1103,58 @@ function createWindow(
     log,
   });
   window.webContents.on('render-process-gone', () => runtime.pageProcessGone());
+  const pageParts = createPageParts({
+    page: () => (hasQuitStarted ? null : livePage(window)),
+    catalog: pageCatalog,
+    ipc: ipcMain,
+    log,
+  });
+  const liveSwitch = createPluginSwitch({
+    main: host,
+    page: pageParts.request,
+    applied,
+    slots: holder,
+    status: slots.publish(corePluginsSlot),
+    manifests,
+    problem: (message) => store.setPluginsProblem(message),
+    servedChanged() {
+      livePage(window)?.send(BRIDGE_CHANNELS.configChanged, served());
+      runtime.servedChanged();
+    },
+    timers,
+    log,
+  });
+  pluginSwitch = liveSwitch;
+  // At quit, or with the window or its page destroyed, the page never comes
+  // back, so a request it holds resolves empty rather than holding the
+  // switch's queue. A crashed page that reloads is not gone: its requests wait.
+  onQuit(() => pageParts.pageGone());
+  window.webContents.once('destroyed', () => pageParts.pageGone());
+  onQuit(() => liveSwitch.dispose());
+  // A change that leaves the list as it was, such as the switch's own problem
+  // write, applies nothing.
+  let handedList = store.current().settings.plugins.disabled;
+  store.onChanged((config) => {
+    const { disabled } = config.settings.plugins;
+    if (isSameJson(disabled, handedList)) {
+      return;
+    }
+    handedList = disabled;
+    liveSwitch
+      .apply(disabled)
+      .catch((error: unknown) =>
+        log('plugin-switch', `failed: ${errorText(error)}`),
+      );
+  });
+  if (driveRun !== null) {
+    // The actions live as long as the drive run.
+    addPluginSwitchActions(driveRun.driveFor('core'), {
+      pluginSwitch: liveSwitch,
+      userConfig,
+      manifests,
+      disabled: () => store.current().settings.plugins.disabled,
+    });
+  }
   const keybindings = installWindowKeybindings(
     window,
     runtime.handledKeymap(startServed.keymap),
@@ -1060,6 +1164,7 @@ function createWindow(
   );
   window.on('closed', () => {
     globalShortcut.unregisterAll();
+    pageParts.pageGone();
   });
 
   if (runMode !== 'live') {
@@ -1146,7 +1251,7 @@ function startApp() {
         process.env.PATH = shellPath;
       }
       const inputs = await readStartInputs();
-      const { store, userConfig } = await loadConfig(inputs.homeDir);
+      const { store, userConfig, applied } = await loadConfig(inputs.homeDir);
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
       serveLayoutScheme(
@@ -1174,7 +1279,7 @@ function startApp() {
         timers,
         log: pageLog.log,
       });
-      createWindow(inputs, store, userConfig, sessionHost);
+      createWindow(inputs, store, userConfig, applied, sessionHost);
       // Starts with createWindow's quit tasks, ahead of every part but the first
       // to stop; `current` still answers after it, for the parts still stopping.
       onQuit(() => store.dispose());

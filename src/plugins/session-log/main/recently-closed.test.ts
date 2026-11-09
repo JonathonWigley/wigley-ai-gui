@@ -83,6 +83,10 @@ describe('recentlyClosed', () => {
       name: 'a project closing',
       entry: closed('a', 10, { reason: 'project-closed' }),
     },
+    {
+      name: 'a finished close',
+      entry: closed('a', 10, { reason: 'finished' }),
+    },
     { name: 'a close never sent to', entry: closed('a', 10, { sent: false }) },
     { name: 'a clear never sent to', entry: cleared('a', 10, false) },
     {

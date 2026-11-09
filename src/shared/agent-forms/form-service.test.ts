@@ -32,7 +32,6 @@ const DEFAULT_DEADLINE_SECONDS = 240;
 const SESSION: AgentFormOwnerInfo = {
   sessionId: 'session-1',
   projectDir: '/work/wigley',
-  deadlineSeconds: null,
 };
 
 const NAMING_ARGS = {
@@ -247,6 +246,28 @@ describe('open', () => {
     expect((await pending).outcome).toBe('cancelled');
     expect(presenter.closed).toEqual([shown.formId]);
   });
+
+  it.each([
+    { typed: 'half', note: 'half' },
+    { typed: null, note: '' },
+  ])(
+    'cancel returns cancelled to the waiting call with the latest body: $typed',
+    async ({ typed, note }) => {
+      const pending = startSession().open(NAMING_ARGS, null, live());
+      const shown = presenter.latest();
+      if (typed !== null) {
+        presenter.draft(shown.formId, body(typed));
+      }
+
+      presenter.cancelHold(shown.formId);
+      presenter.cancelHold(shown.formId);
+      const payload = await pending;
+
+      expect(payload.outcome).toBe('cancelled');
+      expect(payload.note).toBe(note);
+      expect(presenter.closed).toEqual([shown.formId]);
+    },
+  );
 });
 
 describe('the soft deadline', () => {
@@ -263,8 +284,8 @@ describe('the soft deadline', () => {
     expect(presenter.closed).toEqual([]);
   });
 
-  it("waits as long as the hello's deadline says", async () => {
-    const pending = startSession({ deadlineSeconds: 300 }).open(
+  it("waits as long as the host record's deadline says", async () => {
+    const pending = startSession({ host: { deadline_seconds: 300 } }).open(
       NAMING_ARGS,
       null,
       live(),
@@ -278,14 +299,12 @@ describe('the soft deadline', () => {
     expect((await pending).outcome).toBe('draft');
   });
 
-  it.each([0, -5])(
-    'uses the default for a deadline of %d',
+  it.each([0, -5, '300', null, Number.NaN])(
+    'uses the default for a host deadline of %s',
     async (deadlineSeconds) => {
-      const pending = startSession({ deadlineSeconds }).open(
-        NAMING_ARGS,
-        null,
-        live(),
-      );
+      const pending = startSession({
+        host: { deadline_seconds: deadlineSeconds },
+      }).open(NAMING_ARGS, null, live());
       const call = watch(pending);
 
       await vi.advanceTimersByTimeAsync(DEFAULT_DEADLINE_SECONDS * 1000 - 1);
@@ -299,11 +318,9 @@ describe('the soft deadline', () => {
 
   it('waits the longest timer delay for a host deadline past the 32-bit limit', async () => {
     const longestDelayMs = 2147483647;
-    const pending = startSession({ deadlineSeconds: 2_147_484 }).open(
-      NAMING_ARGS,
-      null,
-      live(),
-    );
+    const pending = startSession({
+      host: { deadline_seconds: 2_147_484 },
+    }).open(NAMING_ARGS, null, live());
     const call = watch(pending);
 
     await expireDeadline();
@@ -813,6 +830,14 @@ describe('the wake', () => {
         presenter.cancel(formId, body('stop here'));
       },
       expected: [['app-1', CANCELLED_TEXT]],
+    },
+    {
+      case: "cancelled by its session's close after its only call returned a draft",
+      finishWithCallsAround: async (session) => {
+        const formId = await openPastDraft(session);
+        presenter.cancelHold(formId);
+      },
+      expected: [],
     },
   ])(
     'wakes the session only when no call will return the form: $case',

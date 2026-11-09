@@ -127,11 +127,10 @@ export interface NotesPartsDeps extends OwnerKitServices {
   log: PluginLog;
 }
 
-// The image entries the `images` part draws, by position from 1, and the
-// removal of one by its index from 0.
+// The image entries the `images` part draws, by position from 1. An image's
+// remove button runs `notes.removeImageAt` with its index from 0.
 export interface ImageEntries {
   imageAt(position: number): NoteImageInput | undefined;
-  removeImageAt(index: number): void;
 }
 
 // A drawn row and the value slot the app fills.
@@ -171,17 +170,17 @@ export interface NotesParts {
     input: ImagesInput,
     entries: ImageEntries,
   ): HTMLElement;
+  // `sessionId` is the attached session's, which the remove button runs
+  // `notes.removeSession` with; null, the button runs nothing.
   session(
     slot: HTMLElement,
     input: SessionInput,
-    removeSession: () => void,
+    sessionId: string | null,
   ): HTMLElement;
   actions(parent: HTMLElement): HTMLElement;
   confirm(parent: HTMLElement): HTMLElement;
-  markupToolbar(
-    parent: HTMLElement,
-    pickColour: (colour: MarkupColour) => void,
-  ): DrawnToolbar;
+  // A colour button runs `notes.pickColour` with its colour.
+  markupToolbar(parent: HTMLElement): DrawnToolbar;
   // `trailing` is the picker's element for the cursor row, else null.
   pickerRow(
     list: HTMLElement,
@@ -262,17 +261,24 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
           const drawn = parts.draw(
             'image',
             parent,
-            (imageBuilder, imageInto, imageRollback) =>
-              imageBuilder(imageInto, held, {
-                ...kitFor(deps, 'popup', imageRollback),
+            (imageBuilder, imageInto, imageRollback) => {
+              const imageKit = kitFor(deps, 'popup', imageRollback);
+              return imageBuilder(imageInto, held, {
+                ...imageKit,
                 removeButton: (buttonParent) =>
                   appended(
                     buttonParent,
-                    removeButton('Remove the image', 'notes-image-remove', () =>
-                      entries.removeImageAt(position - 1),
+                    removeButton(
+                      'Remove the image',
+                      'notes-image-remove',
+                      imageKit.command(
+                        qualify(PLUGIN_ID, 'removeImageAt'),
+                        position - 1,
+                      ),
                     ),
                   ),
-              }),
+              });
+            },
           );
           rollback.recordBox(drawn.dispose);
           drawnPositions.add(position);
@@ -290,7 +296,7 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
         }
         return { element: root };
       }),
-    session: (slot, input, removeSession) =>
+    session: (slot, input, sessionId) =>
       valuePart('session', slot, (session, into, kit) =>
         session(into, input, {
           ...kit,
@@ -305,7 +311,13 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
           removeButton: (parent) =>
             appended(
               parent,
-              removeButton('Remove the session', '', removeSession),
+              removeButton(
+                'Remove the session',
+                '',
+                sessionId === null
+                  ? NOTHING
+                  : kit.command(qualify(PLUGIN_ID, 'removeSession'), sessionId),
+              ),
             ),
         }),
       ),
@@ -333,11 +345,9 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
           (kit, button) => confirm(into, { ...kit, actionButton: button }),
         ),
       ).built.element,
-    markupToolbar: (parent, pickColour) =>
+    markupToolbar: (parent) =>
       parts.redraw('markupToolbar', parent, (toolbar, into, rollback) =>
-        drawToolbar(deps, rollback, into, pickColour, (kit) =>
-          toolbar(into, kit),
-        ),
+        drawToolbar(deps, rollback, into, (kit) => toolbar(into, kit)),
       ).built,
     pickerRow(list, input, trailing) {
       const drawn = parts.draw('pickerRow', list, (pickerRow, into, rollback) =>
@@ -391,6 +401,8 @@ function partRoot(
     partName,
   );
 }
+
+const NOTHING = () => undefined;
 
 function removeButton(
   label: string,
@@ -471,7 +483,6 @@ function drawToolbar(
   deps: NotesPartsDeps,
   rollback: RollbackDeps,
   parent: HTMLElement,
-  pickColour: (colour: MarkupColour) => void,
   draw: (kit: MarkupKit) => NotesPart,
 ): DrawnToolbar {
   const base = kitFor(deps, 'markup', rollback);
@@ -499,9 +510,11 @@ function drawToolbar(
       if (!Object.hasOwn(COLOUR_LABELS, colour)) {
         throw new Error(`no markup colour ${colour}`);
       }
-      const node = textButton(COLOUR_LABELS[colour], () => pickColour(colour), {
-        variant: 'ghost',
-      });
+      const node = textButton(
+        COLOUR_LABELS[colour],
+        base.command(qualify(PLUGIN_ID, 'pickColour'), colour),
+        { variant: 'ghost' },
+      );
       node.classList.add('notes-colour');
       node.prepend(element('span', `notes-swatch notes-swatch--${colour}`));
       colours.push({ colour, node });

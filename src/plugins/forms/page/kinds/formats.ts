@@ -1,4 +1,4 @@
-import type { RailItem } from '../form-state';
+import type { RoundItem } from '../form-state';
 import { labelFor } from './card-parts';
 import { findingFormat } from './finding/finding-card';
 import type { PageFormats } from './item-format';
@@ -12,7 +12,8 @@ export const FORMATS: PageFormats = {
   question: questionFormat,
 };
 
-// The item's number as the rail, its card head and the review show it.
-export function itemLabel(item: RailItem): string {
+// The item's number as its card head shows it; the rail and the review show a
+// question's or finding's too.
+export function itemLabel(item: RoundItem): string {
   return labelFor(FORMATS[item.kind].railPrefix, item.index);
 }

@@ -31,9 +31,9 @@ export function signalOf(
     case 'turnEnded':
       return [{ type: 'turnEnded' }];
     case 'agentSpawned':
-      return event.parentAgentId === MAIN_AGENT_ID
-        ? [{ type: 'subagentStarted', agentId: event.agentId }]
-        : [];
+      // Any agent's, a subagent's own included: the flow is busy while a
+      // subagent at any depth runs.
+      return [{ type: 'subagentStarted', agentId: event.agentId }];
     case 'agentFinished':
       return flow.runningSubagents.includes(event.agentId)
         ? [{ type: 'subagentFinished', agentId: event.agentId }]

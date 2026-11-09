@@ -5,6 +5,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // `sessions` for the names in its page log and its self-test's launch.
 export const agentSkillsManifest = definePlugin({
   id: 'agent-skills',
+  label: 'Agent skills',
+  description:
+    "Lists the skills each session's agents started, in the Skills section of the session hub.",
   dependsOn: {
     main: ['chat', 'sessions'],
     page: ['chat'],

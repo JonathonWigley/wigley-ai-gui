@@ -33,6 +33,8 @@ const TWO_SESSIONS: SavedSessions = {
       confirmedPicks: { effort: 'high' },
       returnedDrops: [],
       activeMs: 42000,
+      rowId: 'row-alpha',
+      unattended: true,
     },
     {
       hostSessionId: 's-beta',
@@ -50,6 +52,8 @@ const TWO_SESSIONS: SavedSessions = {
       confirmedPicks: {},
       returnedDrops: [],
       activeMs: 0,
+      rowId: 'row-beta',
+      unattended: false,
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -73,6 +77,8 @@ const ONE_SESSION: SavedSessions = {
       confirmedPicks: {},
       returnedDrops: [],
       activeMs: 1500,
+      rowId: null,
+      unattended: false,
     },
   ],
   selectedHostSessionId: null,
@@ -133,6 +139,8 @@ describe('createOpenSessions', () => {
             confirmedPicks: {},
             returnedDrops: [],
             activeMs: 0,
+            rowId: null,
+            unattended: false,
           },
         ],
         selectedHostSessionId: null,
@@ -155,6 +163,14 @@ describe('createOpenSessions', () => {
       ]),
       expected: {
         sessions: [{ ...TWO_SESSIONS.sessions[0], activeMs: 0 }],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a session without rowId',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], rowId: undefined }]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[0], rowId: null }],
         selectedHostSessionId: null,
       },
     },
@@ -270,10 +286,18 @@ describe('createOpenSessions', () => {
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], activeMs: '42000' }]),
     },
     {
+      file: 'rowId a number',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], rowId: 7 }]),
+    },
+    {
       file: 'launchResume a string',
       text: withSessions([
         { ...TWO_SESSIONS.sessions[0], launchResume: 'yes' },
       ]),
+    },
+    {
+      file: 'unattended a string',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], unattended: 'yes' }]),
     },
     {
       file: 'selectedHostSessionId a number',

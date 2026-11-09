@@ -7,15 +7,17 @@ import {
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
 import { appended, element } from '../../../../shared/page/dom';
 import { qualify } from '../../../../shared/plugin-manifests';
-import { textButton } from '../../../../shared/page/ui/button';
 import { tag, type TagTone } from '../../../../shared/page/ui/tag';
 import type { PluginManifest } from '../../../../contracts/plugin';
+import { workflowStageActionCommand } from '../../contract';
 import type { MarkState, StageStatus, WorkflowKit } from '../../layouts/layout';
 import { workflowManifest } from '../../manifest';
 
-// The command the main action's button runs.
+// The action the main action's button sends `workflow.stageAction`, as
+// `<Leader>ww` does.
 export const MAIN_ACTION = 'mainAction';
-// The command the fold runs, which only changes what the side pane shows.
+// The action the fold sends `workflow.stageAction`, which only changes what the
+// side pane shows.
 export const TOGGLE_FINISHED_WAVES = 'toggleFinishedWaves';
 // The class of the list whose scroll the view keeps across a draw.
 export const SIDE_LIST_CLASS = 'workflow-side-list';
@@ -62,16 +64,17 @@ export function stageTagElement(
 
 // The kit one part draw builds with: the base kit with no key scope, naming the
 // commands of the drawing plugin of `manifest` by their short names, plus the action
-// button, the stepper, the countdown, the badge, the stage tag, the status mark, the finished
-// groups' fold and the side pane's list. `run` runs a command for the session the
-// part draws; the main action's button runs `mainAction`, as `<Leader>ww` does. The
-// main action's and the fold's key hints name the engine's commands, every other
-// action's its plugin's. Each anchor it names is recorded in `rollback`. Each status
-// mark, stage tag and running step carries `clock`'s time, which places its pulse.
+// button, the stepper, the countdown, the badge, the stage tag, the status mark,
+// the finished groups' fold and the side pane's list. `sessionId` is the session
+// each button runs `workflow.stageAction` for; the main action's button sends
+// `mainAction`, as `<Leader>ww` does. The main action's and the fold's key hints
+// name the engine's commands, every other action's its plugin's. Each anchor it
+// names is recorded in `rollback`. Each status mark, stage tag and running step
+// carries `clock`'s time, which places its pulse.
 export function createWorkflowKit(
   services: OwnerKitServices,
   rollback: RollbackDeps,
-  run: (command: string) => void,
+  sessionId: string,
   clock: Clock,
   manifest: Pick<PluginManifest, 'id' | 'commands'>,
 ): WorkflowKit {
@@ -82,11 +85,14 @@ export function createWorkflowKit(
     ...base,
     actionButton(parent, action, options = {}) {
       const command = action.main ? MAIN_ACTION : action.command;
-      const button = appended(
+      const button = base.button(
         parent,
-        textButton(action.label, () => run(command), {
+        action.label,
+        workflowStageActionCommand.id,
+        {
+          arg: { sessionId, action: command },
           variant: options.variant ?? (action.main ? 'primary' : 'secondary'),
-        }),
+        },
       );
       button.addEventListener('click', (event) => event.stopPropagation());
       button.disabled = !action.enabled;
@@ -141,13 +147,14 @@ export function createWorkflowKit(
       return mark;
     },
     finishedFold(parent, text, open) {
-      const fold = appended(
+      const fold = base.button(
         parent,
-        textButton(
-          `${open ? '▾' : '▸'} ${text}`,
-          () => run(TOGGLE_FINISHED_WAVES),
-          { variant: 'ghost' },
-        ),
+        `${open ? '▾' : '▸'} ${text}`,
+        workflowStageActionCommand.id,
+        {
+          arg: { sessionId, action: TOGGLE_FINISHED_WAVES },
+          variant: 'ghost',
+        },
       );
       fold.classList.add('workflow-finished-fold');
       fold.setAttribute('aria-expanded', String(open));

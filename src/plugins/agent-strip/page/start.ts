@@ -1,10 +1,9 @@
 import './agent-strip.css';
-import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
+  PageCommandContext,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { createHScroller } from '../../../shared/page/ui/h-scroller';
@@ -18,16 +17,13 @@ import {
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
+import { agentStripToggleBoxAtCommand } from '../contract';
 import { agentStripManifest } from '../manifest';
 import { createAgentStrip } from './agent-strip';
 import { readAgentStripLayout } from './layout/read-agent-strip-layout';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
-type AgentStripApi = PageApi<
-  typeof agentStripManifest,
-  ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type AgentStripApi = PageApi<typeof agentStripManifest, ChannelShape>;
 
 // Draws each Chat tab's agent strip above its composer box through chat's
 // composer parts and the `agent-strip.layout` layout, reading `agents.rosters`,
@@ -44,11 +40,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },
@@ -60,16 +52,11 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       setScope: () => api.keys.setScope('strip'),
       nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
       createScroller: createHScroller,
+      run: (arg) => void api.commands.run(agentStripToggleBoxAtCommand, arg),
     });
     chat.addComposerPart(strip.part);
 
     followRows(rows, { removed: (sessionId) => strip.forget(sessionId) });
-    api.events.on('core.pageReady', () => {
-      rosters.on((sessionId) => strip.rosterUpdated(sessionId));
-      callEach([...rosters.all().keys()], (sessionId) =>
-        strip.rosterUpdated(sessionId),
-      );
-    });
 
     api.layouts.show<Layout>({
       defaultLayout,
@@ -91,6 +78,16 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
         lineUp: () => strip.scrollToolList('line', -1),
         halfPageDown: () => strip.scrollToolList('halfPage', 1),
         halfPageUp: () => strip.scrollToolList('halfPage', -1),
+        toggleBoxAt: ({
+          arg,
+        }: PageCommandContext<{ sessionId: string; key: string }>) =>
+          strip.toggleBoxAt(arg.sessionId, arg.key),
+      },
+      ready() {
+        rosters.on((sessionId) => strip.rosterUpdated(sessionId));
+        callEach([...rosters.all().keys()], (sessionId) =>
+          strip.rosterUpdated(sessionId),
+        );
       },
     };
   },

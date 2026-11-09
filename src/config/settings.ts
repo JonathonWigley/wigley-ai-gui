@@ -11,7 +11,9 @@ export function defaultSettingsFor(programs: PlatformPrograms): Settings {
     keySequenceTimeoutMs: 1000,
     claude: { command: programs.claude },
     shell: { layout: 'default' },
-    plugins: { disabled: ['agent-lines', 'usage-tab-line'] },
+    plugins: {
+      disabled: ['agent-lines', 'usage-tab-line', 'docs-session-tab'],
+    },
   };
 }
 
@@ -102,6 +104,6 @@ export const settingInfo: SettingInfos<Settings> = {
   'plugins.disabled': {
     label: 'Disabled plugins',
     description:
-      'Plugin ids the app does not start. Turning one off takes effect for its page part on the next page load and for its main part on the next app start; turning one on takes effect on the next app start.',
+      'Plugin ids the app does not run. A change applies at once: the app stops each plugin the list adds and starts each one it drops. Settings mode switches them in its Plugins section.',
   },
 };

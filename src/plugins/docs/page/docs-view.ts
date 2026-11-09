@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost } from '../../../contracts/editor';
@@ -20,6 +21,14 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import { listPickerCommands } from '../../../shared/page/list-picker';
 import {
   type DocsChannel,
+  docsCreateMainCommand,
+  docsFollowLinkCommand,
+  docsOpenDocAtCommand,
+  docsOpenListRowCommand,
+  docsOpenNodeCommand,
+  docsOpenRecentPageCommand,
+  docsSwitchTreeViewCommand,
+  type DocsPlace,
   type IndexContext,
   type IndexDocument,
   type IndexEntry,
@@ -45,7 +54,9 @@ import {
 } from '../tree';
 import { parseWikiTarget } from '../wiki-main';
 import {
+  type DocAt,
   type DocDetail,
+  type DocLink,
   type DocTarget,
   type DocView,
   createDocView,
@@ -186,10 +197,35 @@ export interface DocsView {
   // rebuild to settle, resolved or rejected, and checks again; toasts when
   // the index still does not list it.
   openDoc(path: string, line: number | null): void;
+  // Puts back a reloaded page's place: the tree's at once, before its first
+  // tree, and the open doc through `openDoc`'s path, its unsaved edits back in
+  // its editor once it opens. Until that open settles no place is written, so
+  // a place not restored yet stays in the slot, and its edits count as unsaved
+  // (`unsavedPath`); a doc the index no longer lists toasts as `openDoc` does,
+  // and an open that fails toasts that its edits were not restored. The open
+  // goes to `trackRestore` once the view has shown: an open waits on the
+  // view's first index read, which its first show starts.
+  restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
   // unless a newer open was asked, the empty Main page taking focus; nothing in a
   // view with no wiki.
   openMain(): void;
+  // Opens the section whose heading carries `anchor` in the doc pane, as its
+  // `edit` control's click asks.
+  editSectionAt(anchor: string): void;
+  // The view's clicks, each run by a command that names this view: a tree row
+  // opens, a link is followed, a place in a doc or a Recent changes page opens,
+  // a list page's row opens, the tree's switch switches, and the empty Main
+  // page's offer creates it. `answerConfirm` gives
+  // the open Trash prompt `yes` or `no`, and logs any other answer.
+  openNode(nodeId: string): void;
+  followLink(link: DocLink): void;
+  openDocAt(at: DocAt): void;
+  openRecentPage(path: string): void;
+  openListRow(entryId: string): void;
+  switchTreeView(): void;
+  createMain(): void;
+  answerConfirm(answer: string): void;
   // Closes the filter box, the dialogs and the changed-on-disk prompt, each
   // scope they pushed popped, without moving focus: another docs view is
   // about to show, and its pane scope may equal this one's.
@@ -221,8 +257,10 @@ export interface DocsView {
   // `paneFocusedBy`, with the pane's scope; its caller hands it over with each
   // pane scope it sets.
   focusTarget: FocusTarget;
+  // Whether `unsavedPath` names a doc.
   hasUnsavedEdits(): boolean;
-  // The open doc's path while its editor holds unsaved edits, else null.
+  // The open doc's path while its editor holds unsaved edits, else the path of
+  // a reloaded page's unsaved edits while their restore waits, else null.
   unsavedPath(): string | null;
   // A new set of layouts is shown: each part whose pick changed draws again,
   // keeping the open doc, the editor, scroll, selection, filter and focus. A
@@ -253,6 +291,8 @@ export interface DocsViewDeps {
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
   openExternal(url: string): Promise<void>;
+  // Runs a command by its key, logging a run that throws: each click runs one.
+  runKey<A>(key: CommandKey<A>, arg: A): void;
   // Where the doc pane's editor registers its drop target.
   drops: Pick<PageDrops, 'addTarget'>;
   // The star set every docs view shares; each view redraws on its toggles.
@@ -265,6 +305,8 @@ export interface DocsViewDeps {
   setScope(scope: DocsPaneScope): void;
   pushScope(scope: DocsPushedScope): PushedScope;
   isActive(): boolean;
+  // Hands the page load a restore that settles later (`PageRestores.track`).
+  trackRestore(restore: Promise<unknown>): void;
   // This view made `change`: every other view hears it.
   changed(change: DocChangeRecord): void;
   // Every docs view's `unsavedPath`, this one's included.
@@ -291,6 +333,9 @@ export interface DocsViewDeps {
   // The base kit for one part draw whose keys fire in `scope`, its anchors
   // recorded by `rollback`.
   baseKit(scope: DocsScope, rollback: RollbackDeps): BaseKit;
+  // Hears the place after each change to the tree, the open doc or its
+  // unsaved edits.
+  placeChanged(place: DocsPlace): void;
 }
 
 const SESSION_CONTEXT_TEXT =
@@ -407,6 +452,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let isCreatingMain = false;
   // Whether the doc pane's last emptying was `Main.md` trashed from under it.
   let wasMainTrashedFromPane = false;
+  // A reloaded page's place, and its open, while that open has not settled.
+  let restoring: DocsPlace | null = null;
+  let restoringOpen: Promise<void> | null = null;
 
   // Each pane and the dialogs track their own drawn parts.
   const newParts = () =>
@@ -575,7 +623,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     openWikiLink: (link: TreeWikiLink, focusesDoc: boolean) =>
       openWikiLink(link, focusesDoc),
-    switchView: () => toggleWikiView(),
+    switchView: () =>
+      deps.runKey(docsSwitchTreeViewCommand, { viewId: deps.viewId }),
+    rowClicked: (nodeId) =>
+      deps.runKey(docsOpenNodeCommand, { viewId: deps.viewId, nodeId }),
     pushBoxScope: () => deps.pushScope('box'),
     filterClosed: () => {
       focused = 'tree';
@@ -598,6 +649,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         isStarred: deps.starred.has(leaf.entryId),
       };
     },
+    placeChanged: () => writePlace(),
   });
 
   const isMainPath = (path: string | null): boolean => {
@@ -611,6 +663,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     viewId: deps.viewId,
     openChanged: (path) => {
       deps.openChanged(path);
+      writePlace();
       if (wikiMain === null) {
         return;
       }
@@ -652,12 +705,23 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     openListEntry: (entryId) => void openListEntry(entryId),
     createMain: () => void createMain(),
+    linkClicked: (link) =>
+      deps.runKey(docsFollowLinkCommand, { viewId: deps.viewId, ...link }),
+    docAtClicked: (at) =>
+      deps.runKey(docsOpenDocAtCommand, { viewId: deps.viewId, ...at }),
+    recentPageClicked: (path) =>
+      deps.runKey(docsOpenRecentPageCommand, { viewId: deps.viewId, path }),
+    listRowClicked: (entryId) =>
+      deps.runKey(docsOpenListRowCommand, { viewId: deps.viewId, entryId }),
+    mainOfferClicked: () =>
+      deps.runKey(docsCreateMainCommand, { viewId: deps.viewId }),
     followWikiLink: (href, title) => followWikiLink(href, title),
     asideSightLost: () => asideSightLost(),
     asideSectionOpened: () => focusDocAndLog(),
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
     parts: newParts(),
+    editsChanged: () => writePlace(),
   });
 
   const recent = createRecentReader({
@@ -668,6 +732,17 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     log,
     show: (input) => doc.setRecentChanges(input),
   });
+
+  const writePlace = () => {
+    if (restoring !== null) {
+      return;
+    }
+    deps.placeChanged({
+      openPath: doc.openPath(),
+      ...tree.place(),
+      edits: doc.edits(),
+    });
+  };
 
   const refreshRecentOnMain = () => {
     if (isMainPath(doc.openPath())) {
@@ -686,6 +761,25 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       deps.docOpened(target.path);
     }
     return opened;
+  };
+
+  // Waits for the first index read and, when it does not list `path`, for a
+  // rebuild coming or running, then opens `path` unless the open asked as
+  // `number` is no longer the newest; resolves to whether it opened.
+  const openOnceRead = async (
+    path: string,
+    line: number | null,
+    number: number,
+  ): Promise<boolean> => {
+    await firstRead.promise;
+    const awaitedRebuild = firstShowRuns ?? runningRebuild;
+    if (!isListed(path) && awaitedRebuild !== null) {
+      await awaitedRebuild;
+      if (number !== askedOpens) {
+        return false;
+      }
+    }
+    return openListed(path, line, null);
   };
 
   const isListed = (path: string): boolean =>
@@ -843,6 +937,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const dialogs = createDocsDialogs({
+    viewId: deps.viewId,
     channel: deps.channel,
     homeDir: deps.homeDir,
     paths: deps.paths,
@@ -1575,6 +1670,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return;
       }
       hasRun = true;
+      if (restoringOpen !== null) {
+        deps.trackRestore(restoringOpen);
+      }
       void wikiMain?.start();
       const runs = runIndex('loadIndex').then((result) => {
         readStatuses(true);
@@ -1607,17 +1705,58 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     openDoc(path, line) {
       const number = ++askedOpens;
       isDocAsked = true;
-      void (async () => {
-        await firstRead.promise;
-        const awaitedRebuild = firstShowRuns ?? runningRebuild;
-        if (!isListed(path) && awaitedRebuild !== null) {
-          await awaitedRebuild;
-          if (number !== askedOpens) {
-            return;
-          }
+      void openOnceRead(path, line, number);
+    },
+    restorePlace(place) {
+      tree.restorePlace(place);
+      const { openPath, edits } = place;
+      if (openPath === null) {
+        return;
+      }
+      const number = ++askedOpens;
+      isDocAsked = true;
+      restoring = place;
+      const toastEditsDropped = () => {
+        if (edits !== null) {
+          toast(`Unsaved edits not restored: ${edits.path}`, 'error');
         }
-        await openListed(path, line, null);
-      })();
+      };
+      restoringOpen = openOnceRead(openPath, null, number)
+        .then((opened) => {
+          if (!opened) {
+            toastEditsDropped();
+          } else if (edits !== null) {
+            doc.restoreEdits(edits);
+          }
+        })
+        .catch((error) => {
+          log(`place not restored: ${errorText(error)}`);
+          toastEditsDropped();
+        })
+        .finally(() => {
+          restoring = null;
+          restoringOpen = null;
+        });
+      if (hasRun) {
+        deps.trackRestore(restoringOpen);
+      }
+    },
+    editSectionAt: (anchor) => doc.editSectionAt(anchor),
+    openNode: (nodeId) => tree.openNode(nodeId),
+    followLink: (link) => doc.followLink(link),
+    openDocAt: (at) => doc.openDocAt(at),
+    openRecentPage: (path) => doc.openRecentPage(path),
+    openListRow: (entryId) => doc.openListRow(entryId),
+    switchTreeView: () => toggleWikiView(),
+    createMain: () => void createMain(),
+    answerConfirm(answer) {
+      if (answer === 'yes') {
+        dialogs.confirmYes();
+      } else if (answer === 'no') {
+        dialogs.confirmNo();
+      } else {
+        log(`no trash answer ${answer}`);
+      }
     },
     openMain() {
       if (wikiMain === null) {
@@ -1669,8 +1808,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         isRedrawing = false;
       }
     },
-    hasUnsavedEdits: () => doc.hasUnsavedEdits(),
-    unsavedPath: () => (doc.hasUnsavedEdits() ? doc.openPath() : null),
+    hasUnsavedEdits: () => view.unsavedPath() !== null,
+    unsavedPath: () =>
+      doc.hasUnsavedEdits() ? doc.openPath() : (restoring?.edits?.path ?? null),
     dispose() {
       callEach<() => void>(
         [

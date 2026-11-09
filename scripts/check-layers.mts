@@ -2,10 +2,11 @@
 // rules do not allow. The rules are CORE_LAYERS, written here, and each plugin's
 // entries, derived in `layer-rules.mts` from the plugin folders and each
 // manifest's `dependsOn` and `reads`, with PLUGIN_EXTRAS added. A file belongs to
-// the layer with the longest matching path; imports inside a file's own layer are
-// always allowed, and a test file (`.test.ts`, a `.test-d.ts` type test or a
-// `.test-support.ts` module of shared test cases) may also import the test
-// packages. An import is allowed when the imported file's own layer is listed
+// the layer with the longest matching path, except that a plugin contract's
+// `contract.test-support.ts` (fixtures of its records) belongs to that
+// contract's layer; imports inside a file's own layer are always allowed, and a
+// test file (`.test.ts`, a `.test-d.ts` type test or a `.test-support.ts` module
+// of shared test cases) may also import the test packages. An import is allowed when the imported file's own layer is listed
 // exactly: allowing `src/shared` does not admit `src/shared/page`. It also fails
 // when `src/plugins/main.ts`, `page.ts` or `manifests.ts` misses a plugin
 // folder's part or manifest, lists one twice, or lists anything else.
@@ -24,10 +25,7 @@ import {
 
 const NODE_ONLY: Partial<LayerRule> = { packages: ['node:'] };
 
-const HEAVY_SUBLAYERS = [
-  'src/plugins/workflow-heavy/plan-reader.ts',
-  'src/plugins/workflow-heavy/stages',
-];
+const HEAVY_SUBLAYERS = ['src/plugins/workflow-heavy/stages'];
 
 // Heavy's tests that run a stage rule through the engine's real fold.
 const HEAVY_FOLD_TEST_RULE: LayerRule = {
@@ -38,7 +36,6 @@ const HEAVY_FOLD_TEST_RULE: LayerRule = {
     'src/plugins/workflow/contract.ts',
     'src/plugins/workflow-heavy',
     'src/plugins/workflow-heavy/contract.ts',
-    'src/plugins/workflow-heavy/plan-reader.ts',
     'src/plugins/workflow-heavy/stages',
     'src/plugins/chat/contract.ts',
     'src/plugins/workflow-heavy/main',
@@ -64,8 +61,24 @@ const HEAVY_FOLD_TESTS = [
 const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its contract's records hold the follow-up file module's types.
   backlog: { contract: { layers: ['src/shared/followups'] } },
-  // Its main joins paths with `node:path`.
-  chat: { main: NODE_ONLY },
+  chat: {
+    // Its main joins paths with `node:path`.
+    main: NODE_ONLY,
+    sublayers: {
+      // Checks that no default bind names a click's command.
+      'src/plugins/chat/page/chat-commands.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/chat',
+          'src/plugins/chat/contract.ts',
+          'src/plugins/chat/page',
+          'src/plugins/keymap.ts',
+        ],
+        packages: [],
+      },
+    },
+  },
   // Its plugin status hashes files with `node:crypto`.
   docs: { main: NODE_ONLY },
   forms: {
@@ -173,25 +186,19 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     contract: { layers: ['src/plugins/workflow/layouts'] },
     main: { packages: ['node:'] },
   },
-  // Its root and parts share the plan reader and stages; main uses `node:path`.
+  // Its root and parts share the stages; main uses `node:path`.
   'workflow-heavy': {
     root: { layers: HEAVY_SUBLAYERS },
-    contract: {
-      layers: ['src/plugins/workflow-heavy/plan-reader.ts', 'src/shared'],
-    },
+    contract: { layers: ['src/shared'] },
     main: { layers: HEAVY_SUBLAYERS, packages: ['node:'] },
     page: { layers: HEAVY_SUBLAYERS },
     sublayers: {
-      'src/plugins/workflow-heavy/plan-reader.ts': {
-        layers: ['src/shared'],
-        packages: [],
-      },
       'src/plugins/workflow-heavy/stages': {
         layers: [
           'src/contracts',
+          'src/shared',
           'src/plugins/workflow-heavy',
           'src/plugins/workflow-heavy/contract.ts',
-          'src/plugins/workflow-heavy/plan-reader.ts',
           'src/plugins/workflow/contract.ts',
         ],
         packages: [],
@@ -213,7 +220,6 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/workflow/contract.ts',
           'src/plugins/workflow/page',
           'src/plugins/workflow-heavy/contract.ts',
-          'src/plugins/workflow-heavy/plan-reader.ts',
           'src/plugins/workflow-heavy/page',
         ],
         packages: [],
@@ -610,7 +616,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow-heavy/contract.ts',
       'src/plugins/workflow-heavy/main',
       'src/plugins/workflow-heavy',
-      'src/plugins/workflow-heavy/plan-reader.ts',
     ],
     packages: [],
   },
@@ -632,7 +637,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/workflow-heavy/contract.ts',
       'src/plugins/workflow-heavy/layouts',
       'src/plugins/workflow-heavy/page',
-      'src/plugins/workflow-heavy/plan-reader.ts',
     ],
     packages: [],
   },
@@ -739,7 +743,13 @@ const TEST_FILE_SUFFIXES = ['.test.ts', '.test-d.ts', '.test-support.ts'];
 
 type Layers = Record<string, LayerRule>;
 
+const CONTRACT_SUPPORT = /\/contract\.test-support(\.ts)?$/;
+
 function layerOf(file: string, layers: Layers): string | undefined {
+  const contract = file.replace(CONTRACT_SUPPORT, '/contract.ts');
+  if (contract !== file && contract in layers) {
+    return contract;
+  }
   return Object.keys(layers)
     .filter((layer) => file === layer || file.startsWith(`${layer}/`))
     .sort((a, b) => b.length - a.length)[0];

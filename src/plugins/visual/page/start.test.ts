@@ -10,6 +10,7 @@ import {
 import {
   fakeDependency,
   noCounts,
+  probePart,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
@@ -17,12 +18,14 @@ import { visualPagePart } from './start';
 
 // The part on the harness, over fake frames and a chat whose focused entry is
 // `entry`, with the harness's own markdown, which records the fence as the page
-// API does.
+// API does. `runs` holds each page command run, with its arg.
 function startOnHarness() {
   const { frames, opened } = fakeVisualFrames();
   const entry = new FakeElement('li');
+  const runs: [string, unknown][] = [];
   const harness = startPagePart(visualPagePart, {
     services: { visualFrames: frames },
+    parts: [probePart(runs)],
     dependencies: [
       fakeDependency(
         chatPageKey,
@@ -34,15 +37,16 @@ function startOnHarness() {
       ),
     ],
   });
-  return { harness, opened, entry };
+  return { harness, opened, entry, runs };
 }
 
 type Started = ReturnType<typeof startOnHarness>;
 
-// Mounts a closed visual in the focused entry.
-function mountVisual({ harness, entry }: Started) {
-  const view = harness.fences[0].mount('<p>one</p>', true);
+// Mounts a closed visual in the focused entry, and returns its element.
+function mountVisual({ harness, entry }: Started, source = '<p>one</p>') {
+  const view = harness.fences[0].mount(source, true);
   entry.append(asFake(view.element));
+  return asFake(view.element);
 }
 
 describe('visualPagePart', () => {
@@ -88,6 +92,23 @@ describe('visualPagePart', () => {
     expect(started.harness.counts()).toEqual(noCounts);
     expect(started.harness.fences).toEqual([]);
     expect(started.opened.map((frame) => frame.disposed)).toEqual(opened);
+  });
+
+  it('expandClick_RunsVisualExpandAndOpensOverlayOnSource', async () => {
+    const started = startOnHarness();
+    mountVisual(started, '<p>one</p>');
+    const second = mountVisual(started, '<p>two</p>');
+
+    second.querySelector('.ui-icon-button')?.click();
+
+    await vi.waitFor(() =>
+      expect(started.runs).toEqual([['visual.expand', '<p>two</p>']]),
+    );
+    expect(started.harness.emitted).toContainEqual({
+      event: 'visual.visualOpened',
+      data: { count: 1, index: 0 },
+    });
+    expect(started.opened.at(-1)?.source).toBe('<p>two</p>');
   });
 
   it('stopThenStart_StartsAgain', async () => {

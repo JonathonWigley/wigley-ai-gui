@@ -1,5 +1,5 @@
-// Heavy's stages, each half in stage order, and the commands their actions and
-// keys run.
+// Heavy's stages, each half in stage order, and the commands their keys run. A
+// stage action's button runs `workflow.stageAction` with the same short id.
 
 import type { CommandDecl } from '../../../contracts/plugin';
 import type { PageStage } from '../../workflow/contract';

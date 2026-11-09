@@ -1,3 +1,4 @@
+import type { CommandKey } from '../../contracts/commands';
 import type {
   AgentFormInvoke,
   AgentFormMessages,
@@ -8,6 +9,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 
 // The feature primer's shapes: the open_primer call, the body the page sends
 // back, the payload both tools return, and the page part's events and exports.
@@ -105,9 +107,57 @@ export interface PrimerPageEvents extends EventShape {
   primerFinished: { primerId: string; outcome: PrimerFinishOutcome };
 }
 
+// Selects the tasks column row at the 0-based position in the task rows, as a
+// click on the row does.
+export const primerSelectTaskCommand: CommandKey<number, 'primer.selectTask'> =
+  { id: 'primer.selectTask' };
+
+// Selects the selected task's item of the 1-based number, as a click on its
+// row does.
+export const primerSelectItemCommand: CommandKey<number, 'primer.selectItem'> =
+  { id: 'primer.selectItem' };
+
+// Selects the selected task's item of the 1-based number and flips its
+// include, as a click on its row's mark does.
+export const primerToggleIncludeAtCommand: CommandKey<
+  number,
+  'primer.toggleIncludeAt'
+> = { id: 'primer.toggleIncludeAt' };
+
 export interface PrimerPageExports {
   activePrimer(): PresentedPrimer | null;
 }
 
 export const primerPageKey: DependencyKey<PrimerPageExports, 'page', 'primer'> =
   { id: 'primer', process: 'page' };
+
+// The pane the keys act on; a column is a pane that lists rows.
+export type PrimerPane = 'tasks' | 'items' | 'card';
+
+export type PrimerColumn = Exclude<PrimerPane, 'card'>;
+
+// A row of the tasks column.
+export type TaskRow = { kind: 'feature' } | { kind: 'task'; entryId: string };
+
+// Where an open primer's page left it: the selected task row and item, the
+// focused pane, the column whose selection the card shows, and the view with
+// the view its Cancel prompt returns to, both kept from the primer the page
+// last showed as active. `confirm` is the review's Cancel prompt, which leaves
+// the session open.
+export interface PrimerPlace {
+  selectedTask: TaskRow;
+  selectedItem: number | null;
+  pane: PrimerPane;
+  cardColumn: PrimerColumn;
+  view: 'primer' | 'review' | 'confirm';
+  confirmReturnView: 'primer' | 'review';
+}
+
+// Each open primer's place, by the primer's form id, written on each change
+// while the primer is open; the primer closing deletes its key, and the page's
+// open primers read deletes the keys of primers that closed while no page ran.
+export const primerPlaceSlot: KeyedSlotKey<PrimerPlace, 'page', 'primer'> = {
+  id: 'primer.place',
+  process: 'page',
+  kind: 'keyed',
+};

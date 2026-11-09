@@ -1,9 +1,14 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
-import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
+import {
+  type ChatEntry,
+  type ChatEntryKind,
+  MAIN_AGENT_ID,
+} from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { isSameJson } from '../../../shared/json';
 import { element } from '../../../shared/page/dom';
 import {
   type DrawnPart,
@@ -11,7 +16,7 @@ import {
 } from '../../../shared/page/layout-host/draw-part';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
-import type { QueuedMessage } from '../contract';
+import type { ChatPlace, EntryFocus, QueuedMessage } from '../contract';
 import { chatCommand, chatScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -41,6 +46,7 @@ import {
   type Expander,
   type Expanders,
   type KitDeps,
+  type ToggleResult,
 } from './chat-kit';
 import {
   type ChatLayouts,
@@ -54,7 +60,6 @@ import {
 import {
   blockStopId,
   clearAnchor,
-  type EntryFocus,
   entryIdOfStop,
   focusAfterChange,
   focusAfterClose,
@@ -77,9 +82,13 @@ import { resultStepCount } from './working-turn';
 // rows are built with, and say whether runs, steps and results show at all;
 // `toastedKinds` the kinds whose failed draw has toasted since they were
 // shown, shared by every session's list. `timers` and `clock` tick a live
-// activity line's time. `pullBack` is what a click on a pending row calls
-// with its message's id. `turnLine` is the element the list keeps as its row after
-// the last entry; its owner draws and hides it.
+// activity line's time. A click calls `pullBack` on a pending row with its
+// message's id, `runClicked` on an activity line with its run's id, and
+// `stopClicked` with the stop it lands on, unless it is one the cursor leaves
+// (see `EntryList`). `turnLine` is the element the list keeps as its row after
+// the last entry; its owner draws and hides it. `placeChanged` hears each change
+// of `place()` once: the cursor, a run, or an expander as the list reads it at
+// its entry's draw or toggle.
 export interface EntryListDeps {
   layouts: ChatLayouts;
   toastedKinds: Set<ChatEntryKind>;
@@ -89,10 +98,17 @@ export interface EntryListDeps {
   timers: Timers;
   clock: Clock;
   pullBack(queuedId: string): void;
+  runClicked(runId: string): void;
+  stopClicked(stopId: string): void;
   turnLine: HTMLElement;
+  placeChanged(): void;
 }
 
-export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
+// The part of a Chat tab's place the list holds.
+export type EntryListPlace = Pick<
+  ChatPlace,
+  'focus' | 'openRuns' | 'openExpanders'
+>;
 
 // What the entry cursor is on: an entry (for a block stop, the entry holding the
 // block), a run's activity line, or a pending row.
@@ -131,9 +147,9 @@ export interface TranscriptScroll extends ContentScroll {
 // too tall to fit, and with no such stop to the nearest that overlaps the band.
 // So a run that overflows moves a following cursor off its line. `latest` makes
 // the same move, since a list already at its bottom fires no scroll. A plain click
-// moves the cursor to the block or slot under it without scrolling; a click
-// ending a text selection, on a link, control or pending row, or on what has no
-// stop leaves it.
+// hands `stopClicked` the block or slot under it, which `moveFocusTo` moves the
+// cursor to without scrolling; a click ending a text selection, on a link,
+// control or pending row, or on what has no slot hands it nothing.
 // While the session works on its turn, the live run's line time ticks once a
 // second.
 export interface EntryList {
@@ -145,7 +161,8 @@ export interface EntryList {
   // Reads whether the shown layouts put activity in the transcript, and builds
   // every entry that shows and every pending row again with the shown layouts,
   // keeping the focus, each entry's open expanders by id and each run's open
-  // state.
+  // state. The new draw moves the slots, so it scrolls as `scrollToFocus` does,
+  // or puts a held `restorePlace` value back.
   rebuild(entries: readonly ChatEntry[]): void;
   // Draws one pending row per message after the last entry, in order,
   // updating a row whose message it already holds and removing the rest.
@@ -214,10 +231,32 @@ export interface EntryList {
     entry: ChatEntry;
     result: 'expanded' | 'collapsed';
   } | null;
+  // Opens run `runId`'s activity line when closed, else closes it, moving a
+  // focus on one of its steps to its line; `nothing` for a run the list does
+  // not hold.
+  toggleRun(runId: string): ToggleResult;
+  // Toggles entry `entryId`'s expander at creation-order `place`; `nothing`
+  // for an entry with no slot or a place no expander holds.
+  toggleExpander(entryId: string, place: number): ToggleResult;
+  // Moves the cursor to `stopId` without scrolling; false, the focus left as
+  // it was, when `stopId` is no stop now, as a slot whose blocks are its stops.
+  moveFocusTo(stopId: string): boolean;
   // Stops following the list's size, scrolls, clicks and the tick, disposes every
   // entry's kit, every activity line and every pending row, and forgets the open
   // runs; the list's owner calls it when it drops the list.
   dispose(): void;
+  // The cursor, the open runs and each entry's open expanders, by entry id
+  // (entries with none open left out); a held `restorePlace` value until it
+  // applies. Built once per change of it, so reads between changes cost nothing.
+  place(): EntryListPlace;
+  // Puts the last page's place back once the list holds entries: now, or at
+  // the rebuild that brings them. A saved stop the list does not hold leaves
+  // the cursor at its start, on the latest stop, and the place stays held: each
+  // rebuild tries it again, as one whose layouts draw runs and steps, until a
+  // stop holds it or the user changes the place: moves the cursor, opens or
+  // closes a range, stops or starts following (by a scroll too), or toggles a
+  // run or an expander.
+  restorePlace(place: EntryListPlace): void;
 }
 
 // One entry as drawn into its slot: the view the layout returned (null for
@@ -256,6 +295,10 @@ interface BuiltEntry {
 }
 
 type AnyBuilder = EntryBuilder<EntryKind>;
+
+// Who changed the list's place: the user, or the list itself (following the
+// latest stop, drawing an entry, putting the last page's place back).
+type PlaceChange = 'user' | 'list';
 
 type RunRow = Extract<ListRow, { kind: 'run' }>;
 
@@ -341,6 +384,16 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   let rows: ListRow[] = [];
   let order: string[] = [];
   let focus: EntryFocus = START_FOCUS;
+  // The last page's place, held until a stop of the list holds its cursor or the
+  // user changes the place.
+  let savedPlace: EntryListPlace | null = null;
+  // Each entry's expander states as last read, by entry id; entries with none
+  // open left out.
+  const openExpanders = new Map<string, boolean[]>();
+  // `place()`'s value since the last change of it; null until the next read.
+  let livePlace: EntryListPlace | null = null;
+  // Whether the place changed since the owner last heard.
+  let isPlaceUntold = false;
   let tick: number | null = null;
   // The elements carrying `is-cursor` or `is-range`.
   const markedElements: HTMLElement[] = [];
@@ -369,10 +422,56 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const stopElement = (stopId: string) =>
     blockOfStop(stopId) ?? slotOfStop(stopId);
 
-  // Reads a built or redrawn slot's blocks.
-  const holdBlocks = (slot: Slot) => {
+  // Every change of the cursor, the open runs or an expander comes here:
+  // `place()` builds its value again at its next read, the owner hears at the
+  // next `tellPlace`, and a change by the user wins over a saved place still
+  // waiting for its stop.
+  const placeMoved = (by: PlaceChange) => {
+    livePlace = null;
+    isPlaceUntold = true;
+    if (by === 'user') {
+      savedPlace = null;
+    }
+  };
+
+  // Tells the owner of a change of the place since it last heard.
+  const tellPlace = () => {
+    if (isPlaceUntold) {
+      isPlaceUntold = false;
+      deps.placeChanged();
+    }
+  };
+
+  // The one writer of the focus: a stop, range or following that differs is a
+  // change of the place.
+  const setFocus = (next: EntryFocus, by: PlaceChange) => {
+    if (!isSameJson(next, focus)) {
+      focus = next;
+      placeMoved(by);
+    }
+  };
+
+  // Reads `slot`'s expander states into the place.
+  const readExpanders = (slot: Slot, by: PlaceChange) => {
+    const states = slot.kit.expanders.openStates();
+    const next = states.includes(true) ? states : undefined;
+    const { id } = slot.entry;
+    if (isSameJson(next, openExpanders.get(id))) {
+      return;
+    }
+    if (next === undefined) {
+      openExpanders.delete(id);
+    } else {
+      openExpanders.set(id, next);
+    }
+    placeMoved(by);
+  };
+
+  // Reads a built or redrawn slot's blocks and expanders.
+  const readSlot = (slot: Slot) => {
     slot.blocks = readBlocks(slot.element, slot.entry);
     blockCounts.set(slot.entry.id, slot.blocks.length);
+    readExpanders(slot, 'list');
   };
 
   // Redraws each user entry of `next` whose slot's input holds another delivery
@@ -386,7 +485,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const input = entryInput(entry, next);
       if (isDeliveryChanged(slot.input, input)) {
         redrawSlot(slot, entry, input, deps);
-        holdBlocks(slot);
+        readSlot(slot);
       }
     }
   };
@@ -428,28 +527,38 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     !focus.following ||
     isTallerThanBand(stop.getBoundingClientRect(), visibleBand(list));
 
-  // `marks` draws the marks alone and leaves the scroll.
-  const drawFocus = (
-    scroll: 'follow' | 'slot' | 'bottom' | 'top' | 'marks',
-  ) => {
-    drawMarks();
-    if (scroll === 'marks') {
-      return;
-    }
+  const scrollFocus = (scroll: 'follow' | 'slot' | 'bottom' | 'top') => {
     const stop = focus.stopId === null ? undefined : stopElement(focus.stopId);
     if (scroll === 'top') {
       list.scrollTop = 0;
     } else if (scroll === 'slot' && stop !== undefined && scrollsToStop(stop)) {
       stop.scrollIntoView({ block: 'nearest' });
       // `nearest` leaves a stop filling the view where it is, and fires no scroll.
-      focus = focusAfterScrollEvent(
-        focus,
-        focus.following && isScrolledToEnd(list, 1),
+      setFocus(
+        focusAfterScrollEvent(
+          focus,
+          focus.following && isScrolledToEnd(list, 1),
+        ),
+        'list',
       );
     } else if (scroll === 'bottom' || focus.following) {
       scrollToBottom();
     }
   };
+
+  // Draws the marks, scrolls by `scroll` (`marks` leaves the scroll), and tells
+  // the owner of a change of the place.
+  const drawFocus = (
+    scroll: 'follow' | 'slot' | 'bottom' | 'top' | 'marks',
+  ) => {
+    drawMarks();
+    if (scroll !== 'marks') {
+      scrollFocus(scroll);
+    }
+    tellPlace();
+  };
+
+  const scrollToFocus = () => drawFocus(focus.following ? 'bottom' : 'slot');
 
   // Runs the live run's part update with the time now, and arms the next tick.
   const runTick = () => {
@@ -483,9 +592,46 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       ...cursorStops(rows, openRuns, blockCounts),
       ...queuedSlots.keys(),
     ];
-    focus = focusAfterChange(focus, order, lastStopId());
+    setFocus(focusAfterChange(focus, order, lastStopId()), 'list');
     drawFocus('follow');
     followWorking();
+  };
+
+  // Opens the saved runs and expanders, then puts the cursor on the saved stop
+  // and lets the saved place go when a stop holds it, else puts the cursor at
+  // its start and keeps the place for the next rebuild, whose layouts may draw
+  // the stop; nothing while no entry is held.
+  const applySavedPlace = () => {
+    if (savedPlace === null || entries.length === 0) {
+      return;
+    }
+    const saved = savedPlace;
+    for (const runId of saved.openRuns) {
+      openRuns.add(runId);
+    }
+    for (const [entryId, states] of Object.entries(saved.openExpanders)) {
+      const slot = slots.get(entryId);
+      slot?.kit.expanders.restore(states);
+      if (slot !== undefined) {
+        readExpanders(slot, 'list');
+      }
+    }
+    placeMoved('list');
+    changed();
+    const { stopId } = saved.focus;
+    const isStopHeld = stopId === null || order.includes(stopId);
+    if (isStopHeld) {
+      savedPlace = null;
+    }
+    setFocus(
+      focusAfterChange(
+        isStopHeld ? saved.focus : START_FOCUS,
+        order,
+        lastStopId(),
+      ),
+      'list',
+    );
+    scrollToFocus();
   };
 
   // Draws `messages` as the pending rows, in order, after the entries.
@@ -529,7 +675,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     const held = runSlots.get(row.runId);
     if (held === undefined) {
       const created = buildRunSlot(row, input, activity, () =>
-        toggleRun(row.runId),
+        deps.runClicked(row.runId),
       );
       runSlots.set(row.runId, created);
       observeSlot(created.element);
@@ -559,8 +705,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       openRuns.delete(runId);
       const run = runSlots.get(runId);
       const stepIds = run?.row.steps.map((step) => step.id) ?? [];
-      focus = focusAfterClose(focus, runId, stepIds);
+      setFocus(focusAfterClose(focus, runId, stepIds), 'user');
     }
+    placeMoved('user');
     changed();
     return opens ? 'expanded' : 'collapsed';
   };
@@ -618,9 +765,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const settleInBand = (direction: 1 | -1, isAtBottom: boolean) => {
     const nearest = nearestStopInBand(direction);
     if (nearest !== null) {
-      focus = focusStop(focus, order, nearest);
+      setFocus(focusStop(focus, order, nearest), 'user');
     }
-    focus = focusAfterScrollEvent(focus, isAtBottom);
+    setFocus(focusAfterScrollEvent(focus, isAtBottom), 'user');
     drawFocus('marks');
   };
 
@@ -645,7 +792,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   list.addEventListener('scroll', onListScroll);
 
   // The stop a click on `target` lands on: its block, else its slot; a slot with
-  // blocks has no stop of its own, so `order` refuses its padding.
+  // blocks has no stop of its own, so `moveFocusTo` refuses its padding.
   const stopIdOfTarget = (target: Element) => {
     const hit = target.closest('.chat-entry-slot');
     const slotId = [...slots, ...runSlots].find(
@@ -668,9 +815,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return;
     }
     const stopId = stopIdOfTarget(target);
-    if (stopId !== null && order.includes(stopId)) {
-      focus = focusStop(focus, order, stopId);
-      drawFocus('marks');
+    if (stopId !== null) {
+      deps.stopClicked(stopId);
     }
   };
   list.addEventListener('click', onListClick);
@@ -691,13 +837,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         slot === undefined && isInTranscript(entry, activityInTranscript);
       if (isNewSlot) {
         const created = buildSlot(entry, entryInput(entry, next), deps);
-        holdBlocks(created);
+        readSlot(created);
         slots.set(entry.id, created);
         observeSlot(created.element);
         list.insertBefore(created.element, deps.turnLine);
       } else if (slot !== undefined) {
         redrawSlot(slot, entry, entryInput(entry, next), deps);
-        holdBlocks(slot);
+        readSlot(slot);
       }
       if (entry.kind === 'user') {
         redrawChangedUserEntries(next);
@@ -714,6 +860,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       disposeSlots(slots);
       slots.clear();
       blockCounts.clear();
+      openExpanders.clear();
+      placeMoved('list');
       disposePartSlots(runSlots);
       runSlots.clear();
       disposePartSlots(queuedSlots);
@@ -723,7 +871,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       for (const entry of entries) {
         const created = buildSlot(entry, entryInput(entry, next), deps);
         created.kit.expanders.restore(openStates.get(entry.id) ?? []);
-        holdBlocks(created);
+        readSlot(created);
         slots.set(entry.id, created);
         observeSlot(created.element);
         list.append(created.element);
@@ -732,6 +880,11 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       observeSlot(deps.turnLine);
       putQueued(queued);
       changed();
+      if (savedPlace === null) {
+        scrollToFocus();
+      } else {
+        applySavedPlace();
+      }
     },
     setQueued(queued) {
       putQueued(queued);
@@ -742,37 +895,37 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       changed();
     },
     move(step) {
-      focus = moveFocus(focus, order, step);
+      setFocus(moveFocus(focus, order, step), 'user');
       drawFocus('slot');
       return focusedStop();
     },
     moveToMessage(step) {
-      focus = moveToMessage(focus, order, messageIds(rows), step);
+      setFocus(moveToMessage(focus, order, messageIds(rows), step), 'user');
       drawFocus('slot');
       return focusedStop();
     },
     isAtLastStop: () => isAtLastStop(focus, order),
     latest() {
-      focus = focusLatest(lastStopId(), focus.anchorId);
+      setFocus(focusLatest(lastStopId(), focus.anchorId), 'user');
       drawFocus('bottom');
       if (!isListHidden()) {
         settleInBand(1, true);
       }
     },
     first() {
-      focus = focusFirst(order, focus.anchorId);
+      setFocus(focusFirst(order, focus.anchorId), 'user');
       drawFocus('top');
       return focusedStop();
     },
     toggleRange() {
-      focus = toggleAnchor(focus);
+      setFocus(toggleAnchor(focus), 'user');
       drawFocus('marks');
       return focus.stopId !== null;
     },
     isRangeOpen: () => focus.anchorId !== null,
     cancelRange() {
       const wasOpen = focus.anchorId !== null;
-      focus = clearAnchor(focus);
+      setFocus(clearAnchor(focus), 'user');
       drawFocus('marks');
       return wasOpen;
     },
@@ -803,9 +956,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         : { text: kept.join('\n\n'), blockCount: kept.length };
     },
     followBottom,
-    scrollToFocus() {
-      drawFocus(focus.following ? 'bottom' : 'slot');
-    },
+    scrollToFocus,
     scrollBy(step, direction) {
       const scroll = scrollContent(
         list,
@@ -813,7 +964,10 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         direction,
         textLineHeightPx(list),
       );
-      focus = focusAfterScroll(focus, direction, isScrolledToEnd(list, 1));
+      setFocus(
+        focusAfterScroll(focus, direction, isScrolledToEnd(list, 1)),
+        'user',
+      );
       drawFocus('follow');
       return { ...scroll, following: focus.following };
     },
@@ -830,12 +984,15 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       if (stop.kind === 'activity') {
         return { stop, result: toggleRun(stop.runId) };
       }
-      const { expanders } = slots.get(stop.entry.id)!.kit;
+      const slot = slots.get(stop.entry.id)!;
+      const { expanders } = slot.kit;
       if (expanders.count() === 0) {
         return { stop, result: 'nothing' };
       }
       const opens = expanders.isAnyClosed();
       expanders.setAllOpen(opens);
+      readExpanders(slot, 'user');
+      tellPlace();
       return { stop, result: opens ? 'expanded' : 'collapsed' };
     },
     toggleFocusedBlock() {
@@ -851,7 +1008,32 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       }
       const opens = !target.isOpen();
       target.setOpen(opens);
+      readExpanders(slot, 'user');
+      tellPlace();
       return { entry: slot.entry, result: opens ? 'expanded' : 'collapsed' };
+    },
+    toggleRun(runId) {
+      if (!runSlots.has(runId)) {
+        return 'nothing';
+      }
+      return toggleRun(runId);
+    },
+    toggleExpander(entryId, place) {
+      const slot = slots.get(entryId);
+      const result = slot?.kit.expanders.toggle(place) ?? 'nothing';
+      if (slot !== undefined) {
+        readExpanders(slot, 'user');
+        tellPlace();
+      }
+      return result;
+    },
+    moveFocusTo(stopId) {
+      if (!order.includes(stopId)) {
+        return false;
+      }
+      setFocus(focusStop(focus, order, stopId), 'user');
+      drawFocus('marks');
+      return true;
     },
     dispose() {
       list.removeEventListener('scroll', onListScroll);
@@ -866,6 +1048,22 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       disposePartSlots(runSlots);
       disposePartSlots(queuedSlots);
       openRuns.clear();
+    },
+    place() {
+      if (savedPlace !== null) {
+        return savedPlace;
+      }
+      livePlace ??= {
+        focus,
+        openRuns: [...openRuns],
+        openExpanders: Object.fromEntries(openExpanders),
+      };
+      return livePlace;
+    },
+    restorePlace({ focus: savedFocus, openRuns: runs, openExpanders: states }) {
+      savedPlace = { focus: savedFocus, openRuns: runs, openExpanders: states };
+      placeMoved('list');
+      applySavedPlace();
     },
   };
 }
@@ -898,21 +1096,23 @@ function disposePartSlots(partSlots: Map<string, PartSlot<SlotPartName>>) {
   }
 }
 
-// Whether `entry` gets a slot: steps only while activity shows in the transcript.
+// Whether `entry` gets a slot: steps only while activity shows in the
+// transcript, and a subagent's text and thinking never.
 function isInTranscript(
   entry: ChatEntry,
   activityInTranscript: boolean,
 ): boolean {
-  return activityInTranscript || !isStep(entry);
+  const isSubagentText =
+    (entry.kind === 'assistant' || entry.kind === 'thinking') &&
+    entry.agentId !== MAIN_AGENT_ID;
+  return !isSubagentText && (activityInTranscript || !isStep(entry));
 }
 
 function transcriptEntries(
   entries: readonly ChatEntry[],
   activityInTranscript: boolean,
 ): readonly ChatEntry[] {
-  return activityInTranscript
-    ? entries
-    : entries.filter((entry) => isInTranscript(entry, activityInTranscript));
+  return entries.filter((entry) => isInTranscript(entry, activityInTranscript));
 }
 
 // What a layout draws `entry` from: the entry; a result with its turn's step

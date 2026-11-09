@@ -13,10 +13,13 @@ import {
 import { FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
 import { apply, type FormsAction, initialState } from './form-state';
+import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
+import { formsManifest } from '../manifest';
 import { mountFormsView } from './forms-view';
 import { presentedRound } from './test-rounds';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
+import type { RoundPlace } from '../contract';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
 // One `insert` call on an editor the host made.
@@ -66,14 +69,23 @@ interface RegisteredTarget {
 // `'target'` when one was set, else null.
 type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
 
-// Round r1 open and active in its session's Form tab, the visible tab, and
-// each of `others` open in its own session's tab; `tab` is r1's tab element,
-// `tabs` every tab element by session, and `calls` logs every `setScope` and
-// `setResizeTarget` call, in call order. `targets` holds every drop target the
-// view registered, `inserted` every insert into a box's editor, and
-// `activities` every row activity the view set.
-function formTabSetup(others: string[] = []) {
+// Round r1 open and active in its session's form popup, the visible surface,
+// and each of `others` open in its own session's popup; `popup` is r1's popup
+// element, `popups` every popup element by session, `added` each popup's
+// session and id in add order, and `calls` logs every `setScope` and
+// `setResizeTarget` call, in call order. The fake `addPopup` runs the popup's
+// `shown` inside the call and reports it visible for r1's session alone, as
+// sessions does for the focused session; `hidePopup` hides r1's popup.
+// `targets` holds every drop target the view registered, `inserted` every
+// insert into a box's editor, and `activities` every row activity the view
+// set. `savedPlaces` stands for the places the last page saved; `restoredAdds`
+// holds each added popup's session and whether it was added restored.
+function formPopupSetup(
+  others: string[] = [],
+  savedPlaces: ReadonlyMap<string, RoundPlace> = new Map(),
+) {
   const calls: ScopeCall[] = [];
+  const restoredAdds: [string, boolean][] = [];
   const activities: [string, string, RowActivity | null][] = [];
   const targets: RegisteredTarget[] = [];
   const inserted: Inserted[] = [];
@@ -91,25 +103,35 @@ function formTabSetup(others: string[] = []) {
     () => undefined,
     FORMS_BOX_IDENTITY,
   );
-  const tabs = new Map<string, FakeElement>();
+  const popups = new Map<string, FakeElement>();
+  const added: [string, string][] = [];
+  let isPopupHidden = false;
   mountFormsView({
     areas: {
       overlay: { contribute: () => ({ dispose: () => undefined }) },
     },
     sessions: {
-      addTab: (sessionId, view) => {
-        tabs.set(sessionId, asFake(view.element));
+      addPopup: (sessionId, view, options) => {
+        popups.set(sessionId, asFake(view.element));
+        added.push([sessionId, view.id]);
+        restoredAdds.push([sessionId, options?.restored === true]);
+        const isPresented = sessionId === presented.sessionId;
+        if (isPresented) {
+          view.shown();
+        }
         return {
           setStatus: () => undefined,
-          select: () => undefined,
-          takeOver: () => ({ release: () => undefined }),
-          isVisible: () => true,
+          open: () => undefined,
+          hide: () => undefined,
+          isVisible: () => isPresented && !isPopupHidden,
           dispose: () => undefined,
         };
       },
       setActivity: (sessionId, sourceId, activity) =>
         activities.push([sessionId, sourceId, activity]),
+      addRowPart: () => ({ dispose: () => undefined }),
     },
+    closesAtOnce: () => false,
     beforeClose: () => true,
     setScope: (view) => calls.push(['setScope', view]),
     setResizeTarget: (target) =>
@@ -133,7 +155,7 @@ function formTabSetup(others: string[] = []) {
       anchor: () => ({ dispose: () => undefined }),
     },
     run: () => undefined,
-    commands: { exists: () => false, argShape: () => undefined, run: vi.fn() },
+    commands: fakeKitCommandsOf(formsManifest),
     contributions: createFormsContributions(),
     platform: 'macos',
     state: noLayoutState,
@@ -153,78 +175,75 @@ function formTabSetup(others: string[] = []) {
     },
     toast: () => undefined,
     log: () => undefined,
+    savedPlaces,
   });
-  const tab = tabs.get(presented.sessionId);
-  if (tab === undefined) {
-    throw new Error('forms mounted no tab for r1');
+  const popup = popups.get(presented.sessionId);
+  if (popup === undefined) {
+    throw new Error('forms mounted no popup for r1');
   }
   return {
     store,
     boxes,
     sessionId: presented.sessionId,
-    tab,
-    tabs,
+    popup,
+    popups,
+    added,
     calls,
     targets,
     inserted,
     activities,
+    hidePopup: () => {
+      isPopupHidden = true;
+    },
+    restoredAdds,
   };
 }
 
 // The round's items pane, which holds its cards.
-function itemsPane(tab: FakeElement): FakeElement {
-  const [items] = findAll(tab, 'items');
+function itemsPane(popup: FakeElement): FakeElement {
+  const [items] = findAll(popup, 'items');
   return items;
 }
 
-// Whether the tab draws its round.
-function roundShown(tab: FakeElement): boolean {
-  const [round] = findAll(tab, 'round');
+// Whether the popup draws its round.
+function roundShown(popup: FakeElement): boolean {
+  const [round] = findAll(popup, 'round');
   return round.hidden !== true;
 }
 
 // The round's review pane.
-function reviewPane(tab: FakeElement): FakeElement {
-  const [review] = findAll(tab, 'review-pane');
+function reviewPane(popup: FakeElement): FakeElement {
+  const [review] = findAll(popup, 'review-pane');
   return review;
 }
 
-describe('form tab under the cancel prompt', () => {
+describe('form popup under the cancel prompt', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('shows the round behind a close prompt asked from the form', () => {
-    const { store, sessionId, tab } = formTabSetup();
-
-    store.dispatch({ type: 'askClose', sessionId });
-
-    expect(store.get().view).toBe('confirm');
-    expect(itemsPane(tab).hidden).toBe(false);
-  });
-
   it('shows the review behind a cancel prompt asked from the review', () => {
-    const { store, tab } = formTabSetup();
+    const { store, popup } = formPopupSetup();
     store.dispatch({ type: 'openReview' });
 
     store.dispatch({ type: 'askCancel' });
 
     expect(store.get().view).toBe('confirm');
-    expect(itemsPane(tab).hidden).toBe(true);
-    expect(reviewPane(tab).hidden).toBe(false);
+    expect(itemsPane(popup).hidden).toBe(true);
+    expect(reviewPane(popup).hidden).toBe(false);
   });
 });
 
-describe('form tabs of several sessions', () => {
+describe('form popups of several sessions', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("draws an unfocused session's round in its tab while the focused round takes the keys", () => {
-    const { store, tabs, calls } = formTabSetup(['r2']);
-    const unfocused = tabs.get('r2-session') as FakeElement;
+  it("draws an unfocused session's round in its popup while the focused round takes the keys", () => {
+    const { store, popups, calls } = formPopupSetup(['r2']);
+    const unfocused = popups.get('r2-session') as FakeElement;
 
     store.dispatch({ type: 'openReview' });
 
@@ -234,25 +253,61 @@ describe('form tabs of several sessions', () => {
     expect(store.get().activeFormId).toBe('r1');
   });
 
+  it('restoredRound_AddsItsPopupRestored_NewRoundDoesNot', () => {
+    const saved: RoundPlace = {
+      focus: 0,
+      reviewRow: 0,
+      noticeLine: 0,
+      view: 'forms',
+      confirmReturnView: 'review',
+    };
+    const { store, restoredAdds } = formPopupSetup(
+      ['r2'],
+      new Map([['r1', saved]]),
+    );
+
+    store.dispatch({ type: 'formShown', form: presentedRound('r3') });
+
+    expect(restoredAdds).toEqual([
+      ['r1-session', true],
+      ['r2-session', false],
+      ['r3-session', false],
+    ]);
+  });
+
   it('draws a round that arrives for an unfocused session', () => {
-    const { store, tabs } = formTabSetup();
+    const { store, popups } = formPopupSetup();
 
     store.dispatch({ type: 'formShown', form: presentedRound('r2') });
 
-    const unfocused = tabs.get('r2-session') as FakeElement;
+    const unfocused = popups.get('r2-session') as FakeElement;
     expect(roundShown(unfocused)).toBe(true);
     expect(itemsPane(unfocused).hidden).toBe(false);
   });
 });
 
-describe('form tab row activity', () => {
+describe('form popup opening', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("a session's first round opens its popup, and the resize target is that round's split", () => {
+    const { added, calls } = formPopupSetup();
+
+    expect(added).toEqual([['r1-session', 'form']]);
+    expect(calls.at(-1)).toEqual(['setResizeTarget', 'target']);
+  });
+});
+
+describe('form popup row activity', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it("sets the session's row to needs you while its round shows, and clears it when the round closes", () => {
-    const { store, sessionId, activities } = formTabSetup();
+    const { store, sessionId, activities } = formPopupSetup();
 
     store.dispatch({ type: 'formClosed', formId: 'r1' });
 
@@ -263,15 +318,21 @@ describe('form tab row activity', () => {
   });
 });
 
-describe('form tab resize target', () => {
+describe('form popup resize target', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it.each<{ action: string; actions: FormsAction[]; last: ScopeCall[] }>([
+  it.each<{
+    action: string;
+    isHidden: boolean;
+    actions: FormsAction[];
+    last: ScopeCall[];
+  }>([
     {
       action: 'none, the round shows',
+      isHidden: false,
       actions: [],
       last: [
         ['setScope', 'forms'],
@@ -281,6 +342,7 @@ describe('form tab resize target', () => {
     {
       // The cancel prompt is asked from the review.
       action: 'askCancel',
+      isHidden: false,
       actions: [{ type: 'openReview' }, { type: 'askCancel' }],
       last: [
         ['setScope', 'confirm'],
@@ -288,25 +350,43 @@ describe('form tab resize target', () => {
       ],
     },
     {
-      action: 'formClosed for the round',
-      actions: [{ type: 'formClosed', formId: 'r1' }],
+      // A hidden popup sets no scope, so the round's from its first show stays
+      // last.
+      action: 'openReview with the popup hidden',
+      isHidden: true,
+      actions: [{ type: 'openReview' }],
       last: [
-        ['setScope', 'idle'],
-        ['setResizeTarget', null],
+        ['setScope', 'forms'],
+        ['setResizeTarget', 'target'],
       ],
     },
-  ])('$action sets the scope, then the resize target', ({ actions, last }) => {
-    const { store, calls } = formTabSetup();
+  ])(
+    '$action sets the scope, then the resize target',
+    ({ isHidden, actions, last }) => {
+      const { store, calls, hidePopup } = formPopupSetup();
+      if (isHidden) {
+        hidePopup();
+      }
 
-    for (const action of actions) {
-      store.dispatch(action);
-    }
+      for (const action of actions) {
+        store.dispatch(action);
+      }
 
-    expect(calls.slice(-2)).toEqual(last);
+      expect(calls.slice(-2)).toEqual(last);
+    },
+  );
+
+  it('a closed last round leaves the scope to the surface under its popup', () => {
+    const { store, calls } = formPopupSetup();
+    const before = calls.length;
+
+    store.dispatch({ type: 'formClosed', formId: 'r1' });
+
+    expect(calls.slice(before)).toEqual([]);
   });
 });
 
-describe('form tab drop target', () => {
+describe('form popup drop target', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -326,11 +406,11 @@ describe('form tab drop target', () => {
       actions: [{ type: 'sessionActivated', sessionId: 'chat-session' }],
     },
   ])('roundView_DropTarget_FollowsTheRound with $name', async ({ actions }) => {
-    const { store, boxes, tab, targets, inserted } = formTabSetup(['r2']);
+    const { store, boxes, popup, targets, inserted } = formPopupSetup(['r2']);
     for (const action of actions) {
       store.dispatch(action);
     }
-    const [roundRoot] = findAll(tab, 'round');
+    const [roundRoot] = findAll(popup, 'round');
     const r1Targets = targets.filter(
       ({ target }) => asFake(target.element) === roundRoot,
     );

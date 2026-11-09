@@ -157,8 +157,9 @@ means something.
 - **Sentence case everywhere.** A section header is `text-12`, semibold, `fg-secondary`. Capitals
   shout, and a calm tool does not shout.
 - **Prose** (rendered markdown wherever it renders: chat, docs, forms cards): `text-prose`,
-  `leading-prose`, at most `prose-measure` wide. A markdown `h3` is `text-prose` too. No surface
-  overrides it.
+  `leading-prose`. A markdown `h3` is `text-prose` too. Docs keeps it at most `prose-measure`
+  wide; chat, forms and the primer let it take the pane's whole width, so a visual, table or code
+  block in them is never squeezed to the measure.
 - **Numbers that change** (counts, timers, costs, line numbers) use tabular numerals, so they do
   not jitter.
 - The user's `fonts` settings, when set, override the theme's font families and base sizes:
@@ -353,14 +354,14 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   narrow for it), and while a config file is broken an error-tone Tag badge naming it; in the dev
   app, a neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
-- **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections. Rows are `row-tree` or `row-list`; hover fills with
+- **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections, then flat under each section a plugin registers (Retro), whose rows draw muted with a dashed accent edge. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
   tree, the primer popup's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
   `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `fg-tertiary` text for Done, and nothing for Working, which the workflow chip's tag says; an activity with an emphasis takes a Tag and a status edge at `indicator-width` on the card's start: `urgent`, Needs you, fills its Tag with the status colour over `fg-on-accent`, the one solid status fill, `raised`, Ready to make and Closed, keeps the tint, and a success Tag opens on a check), and a second line holding other
-  plugins' row parts on one line that never wraps, the context bar, the run time and the cache mark at its end in slots of fixed least width, so the bars line up from row to row, gone while empty. Hover
+  plugins' row parts ordered below 2 (the profile, then the workflow chip with its `Working` tag beside it, the chip's stage tag ellipsizing in the line's room), and a third, `space-0_5` under it, always holding the end group, the parts ordered 2 and later: the context bar filling the free room, then the run time and the cache mark in slots of fixed least width, so the bars line up from row to row. Every card keeps these lines whatever its parts' widths; a line with no parts takes no height. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
@@ -431,7 +432,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
   (tool calls, thinking, raw events) show in the **session hub**'s **activity dock**. The hub is
   a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
-  under `640px` and by `Space v s`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
+  under `640px` and by `Space b h`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
   chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
   `border-subtle` line parts the sections. Main agent holds the dock, Plan the workflow side pane, Skills one row per
   skill and agent (the name in mono, a Tag for `main` or the subagent), and Session one row per fact (a dim label, its
@@ -483,17 +484,18 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border. The page draws through a frame of article and right column; the column holds On this
   page and Linked from and sticks while the article scrolls.
-- **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows,
-  each a label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the
-  user set carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame,
-  its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
-  top.
+- **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows, each a
+  label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the user set
+  carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame, its check
+  message under it in `status-error`. A Plugins row ends in the plugin's state, and a plugin that running plugins need,
+  or Settings itself, carries a neutral Tag with the reason before it, ellipsized when the row is too narrow and whole
+  in its tooltip. A file that fails its check shows an error Card at the section's top.
 - **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Light's, Medium's or Heavy's
   own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter (L, M
   or H) in the plugin token `--wg-workflow-light-badge` (default `status-info`), `--wg-workflow-medium-badge` (`accent`)
   or `--wg-workflow-heavy-badge` (`status-warning`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
   `duration-pulse`, while running; `success`, opening on a check, when done; neutral while paused or ready), unless the
-  row's label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes; a session that finished a turn with no
+  row's label says it, and Heavy's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
   workflow started draws one error Tag, `No workflow`, in `status-error`, and while the session's row holds a running
   activity (chat's working: a turn, subagent or background task running) the chip ends on a running `Working` Tag,
   pulsing, unless its stage tag is already running. The strip sits above the Chat composer: the stepper, the countdown and the main action as a button. The stepper is a

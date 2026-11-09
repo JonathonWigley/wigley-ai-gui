@@ -11,7 +11,7 @@
 - **The context line** — context and cache, above the box.
 - **The status line** — repo, branch, controls, spend, the running indicator.
 - **Subagent facts** — name, model, effort and cost, and where each comes from.
-- **Optional plugins** — `plugins.disabled`, and the views that start switched off.
+- **Optional plugins** — `plugins.disabled`, the live switch, and the views that start switched off.
 - **Decisions** — what the user settled, with the reason for each.
 - **Rejected** — the alternatives weighed and why each lost.
 
@@ -101,7 +101,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   that the section's scroll reaches them, while it has any body left: during a running turn at the 360 px minimum height
   it has none. A section whose part draws nothing hides.
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
-  it. `Space v s` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
+  it. `Space b h` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the workflow's side pane.
 - **Width:** a drag on the hub's start edge sets it, at least 200 px and always leaving the transcript 320 px, in every
   session, kept in `uiState` as `hub-width` across a relaunch. While the hub has the keys `Alt+Shift+h`/`l` move it 24 px; from the
@@ -146,8 +146,10 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   past four rows.
 - **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
   when the session's process exits. A background subagent ends at its `task_notification` only once every task it owns
-  has ended, since a subagent waiting on its own shell can be notified before it finishes. A line from a subagent
-  already ended brings its box back, and the box leaves again at the subagent's next end. Nothing stays to be closed, so the strip has no close control.
+  has ended, since a subagent waiting on its own shell can be notified before it finishes. A line from a background
+  subagent that ended done brings its box back, and the box leaves again at the subagent's next end, or at the next
+  turn's end that finds it in no tool call; after a stop or a foreground end, a late line brings none back, since that
+  line is output still in flight. Nothing stays to be closed, so the strip has no close control.
 - **Scrolling:** the cards scroll sideways; `‹` and `›` buttons at their ends scroll by one card and hide when there
   is nothing further that way. The trackpad scrolls it too. An open box's tool list keeps its scroll as the box redraws while the strip shows; a redraw in a hidden tab, or a rebuilt composer, starts the list at the top.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending
@@ -209,12 +211,14 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 
 ## Optional plugins
 
-- The core setting `plugins.disabled` lists plugin ids the plugin host does not start. Its default lists
-  `agent-lines`, `usage-tab-line` and `docs-session-tab`. Settings mode shows it.
-- Turning a plugin off takes effect for its page part on the next page load and for its main part on the next app
-  start; turning one on takes effect on the next app start, since a page part never starts without its main part (the
-  page reads the union of the setting and main's start list). A plugin that another started plugin depends on cannot
-  be disabled: the config check reports it as a config problem and keeps the last good config.
+- The core setting `plugins.disabled` lists plugin ids the plugin host does not run. Its default lists
+  `agent-lines`, `usage-tab-line` and `docs-session-tab`. Settings mode shows it as the Plugins section, one switch per plugin.
+- Turning a plugin off or on takes effect at once, for both its parts, through the switch in main
+  (`docs/features/plugin-framework/design.md` § Hot reload (Wave 4)). Main serves the applied list as
+  `plugins.disabled`, without a disabled plugin's commands, binds and key scopes, and the page runs the parts that applied list
+  leaves on. A plugin that another running plugin depends on cannot be disabled: the config check reports it as a config
+  problem and keeps the last good config, and Settings locks its switch. A plugin holding open work refuses the
+  switch-off the same way, as a config problem the switch retries.
 - `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar's working line;
   `agent-strip` draws the strip; `agent-skills` draws the hub's Skills section. All three read the agents roster.
 - `context-sources` keeps each session's last context breakdown in its own slot and draws the hub's Context section.

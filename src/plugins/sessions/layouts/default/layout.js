@@ -1,22 +1,27 @@
 // @ts-check
 
-// The built-in Sessions look: the side bar's "Sessions" header over its two
+// The built-in Sessions look: the side bar's "Sessions" header over its
 // sections, Favorites then Recent, each a label beside a hairline and a drop
 // hint over its groups, each group a project's header (name, count, star and
-// grip) over its rows,
-// each row a compact card of two lines: its title (`New Chat` for a row with no
+// grip) over its rows, then each plugin section, its label always shown with
+// its header part at the hairline's end, over its claimed rows,
+// each row a compact card of three lines: its title (`New Chat` for a row with no
 // title; no harness name) with its activity's label or, with no
 // activity, a needs you label while `marked` (a running activity draws no
 // label: the workflow chip's tag in the footer says it), a status edge for an
-// activity with an emphasis, and its on-screen mark,
-// over a footer line that never wraps, holding other plugins' row parts
-// (`contributedParts`), then, on the list cursor's row, the cursor prompt on a
-// line of its own (`cursorPrompt`); its status shows only in the row's tooltip,
+// activity with an emphasis, its on-screen mark, and for a row a plugin section
+// claimed, a muted title and card with a dashed accent edge,
+// over a footer holding other plugins' row parts (`contributedParts`): the parts
+// ordered below 2 on the second line, and those ordered 2 and later always on
+// a third, then, on the list cursor's row, the cursor prompt on a line of its
+// own (`cursorPrompt`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
-// close prompt and pane controls, each tab's icon with no label, and the
-// rename dialog's title box over why a title was refused and the hint, in the
-// class names its `layout.css` styles.
+// close prompt and pane controls, each tab's icon with no label, each session
+// popup's sheet around its body, the hidden popups' bar (each entry's icon and
+// status, or its title with no status, then the toggle key), and the rename
+// dialog's title box over why a title was refused and the hint, in the class
+// names its `layout.css` styles.
 
 const UNTITLED_ROW_TEXT = 'New Chat';
 
@@ -71,8 +76,14 @@ const layout = {
 
   section(parent, input, kit) {
     const element = kit.el(parent, 'div', 'session-section');
-    kit.el(element, 'div', 'session-section-label', input.label);
-    kit.el(element, 'div', 'session-section-drop-hint', input.dropHint);
+    element.dataset.section = input.id;
+    const label = kit.el(element, 'div', 'session-section-label', input.label);
+    if (input.kind === 'plugin') {
+      element.classList.add('session-section--plugin');
+      kit.headerPart(label);
+    } else {
+      kit.el(element, 'div', 'session-section-drop-hint', input.dropHint);
+    }
     const groups = kit.el(element, 'div', 'session-section-groups');
     return { element, groups };
   },
@@ -95,6 +106,7 @@ const layout = {
     });
     element.classList.add('session-row');
     element.classList.toggle('is-on-screen', input.onScreen);
+    element.classList.toggle('session-row--claimed', input.section !== null);
     const activity =
       input.activity ?? (input.marked ? MARKED_ROW_ACTIVITY : null);
     if (activity !== null && activity.tone !== 'running') {
@@ -169,6 +181,31 @@ const layout = {
       kit.pickHint(text);
     }
     return { element };
+  },
+
+  popup(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-popup');
+    element.setAttribute('aria-label', input.title);
+    const body = kit.el(element, 'div', 'session-popup-body');
+    return { element, body };
+  },
+
+  popupBar(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-popup-bar');
+    const entries = input.entries.map((entry) => {
+      const drawn = kit.el(element, 'div', 'session-popup-bar-entry');
+      drawn.title = entry.title;
+      kit.icon(drawn, entry.icon, 'session-popup-bar-icon');
+      kit.el(
+        drawn,
+        'span',
+        'session-popup-bar-text',
+        entry.status === '' ? entry.title : entry.status,
+      );
+      return drawn;
+    });
+    kit.toggleHint(element);
+    return { element, entries };
   },
 
   renameDialog(parent, input, kit) {

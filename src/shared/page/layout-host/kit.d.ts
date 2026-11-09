@@ -12,6 +12,7 @@ export type TagTone =
   | 'error';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export interface KitButtonOptions {
+  arg?: KitCommandArg;
   variant?: ButtonVariant;
   keys?: string | null;
 }
@@ -123,11 +124,10 @@ export interface BaseKit {
     command: string,
     options?: KeyHintOptions,
   ): HTMLElement;
-  // A runner for any plugin's command by its qualified id (as `docs.openDoc`): each call runs the command, and getting
-  // it runs nothing. It checks the id when called, so call it while the part builds: an id the app does not serve throws
-  // `no command <id>`, a command that needs an argument throws too, as a runner passes none, and the part falls back to
-  // `default` like any that throws.
-  command(qualifiedId: string): () => void;
+  // A runner for any plugin's command by its qualified id (as `docs.openDoc`), with `arg` when the command declares one:
+  // each call runs the command, and getting it runs nothing. It checks the id and `arg` when called, so call it while the
+  // part builds: a bad id or `arg` throws, and the part falls back to `default` like any that throws.
+  command(qualifiedId: string, arg?: KitCommandArg): () => void;
   // The keys bound to any plugin's command by its qualified id, in the scope of the part drawing; null when unbound.
   // `keys` and `keyHint` read the same scope, and `arg` reads as it does in `keys`. It reads the keymap once, when
   // called, as `keys` does.
@@ -138,11 +138,13 @@ export interface BaseKit {
   tag(parent: HTMLElement, text: string, tone?: TagTone): HTMLElement;
   // A key hint for `keys` as `keys(command)` returns it, drawn for the platform.
   kbd(parent: HTMLElement, keys: string): HTMLElement;
-  // `button.ui-button`, variant `secondary` when left out; never takes focus. `keys` draws its hint after the label.
+  // `button.ui-button`, variant `secondary` when left out; never takes focus. `keys` draws its hint after the label. A
+  // click runs `command`, a qualified id, with `options.arg`. An id the app does not know, or an `arg` the command does not
+  // declare, throws while the part builds, and the part falls back to `default`.
   button(
     parent: HTMLElement,
     label: string,
-    onClick: () => void,
+    command: string,
     options?: KitButtonOptions,
   ): HTMLButtonElement;
   // `h3.ui-section-header`: a sentence-case label over a part of the view.

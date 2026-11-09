@@ -47,6 +47,11 @@ export class ScriptedFormPresenter<Form, Body> implements AgentFormPresenter<
     this.listenerFor(formId).finish({ kind: 'cancelled', body });
   }
 
+  // The closing session's cancel, which ends the form with its saved answers.
+  cancelHold(formId: string) {
+    this.listenerFor(formId).cancel();
+  }
+
   private listenerFor(formId: string): AgentFormListener<Body> {
     const listener = this.listeners.get(formId);
     if (listener === undefined) {

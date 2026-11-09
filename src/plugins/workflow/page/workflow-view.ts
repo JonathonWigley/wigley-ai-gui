@@ -14,6 +14,7 @@ import type { RowActivity, SessionPart } from '../../sessions/contract';
 import {
   type ActionInput,
   type ChecklistGroup,
+  type ChecklistItem,
   type ChecklistView,
   type ChipInput,
   defaultChecklist,
@@ -22,7 +23,6 @@ import {
   type MarkState,
   type PageStage,
   type PageWorkflow,
-  type RunCommand,
   type SessionFlow,
   type SideGroupInput,
   type SidePaneInput,
@@ -83,8 +83,9 @@ export interface WorkflowViewDeps {
 // `toggleFinishedWaves` opens or folds one session's finished groups, logging
 // `nothing to run` and changing nothing while the input holds no finished group.
 // `mainAction` is the spec the main action runs, and `runFor` the one path that
-// runs a workflow command for a session, through the flow's `runAction`; only
-// `toggleFinishedWaves` runs in the preview.
+// runs a stage action for a session, which `workflow.stageAction` runs, through the
+// flow's `runAction`; only `toggleFinishedWaves` runs in the preview. Each part's
+// buttons run `workflow.stageAction` for the session the part draws.
 export interface WorkflowView {
   chipPart: SessionPart;
   stripPart: ChatComposerPart;
@@ -299,18 +300,13 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     };
   };
 
-  const runCommand =
-    (sessionId: string): RunCommand =>
-    (command) =>
-      void view.runFor(sessionId, command);
-
   // Draws `part` with its session's flow into its emptied wrapper, and
   // returns whether a countdown shows there.
   const drawPart = (part: HeldPart): boolean => {
     const flow = deps.flowOf(part.sessionId);
     const workflow = pageWorkflowOf(flow);
     const stage = pageStageOf(flow);
-    const run = runCommand(part.sessionId);
+    const { sessionId } = part;
     const drawsStage =
       workflow !== null && stage !== null && stage.id !== IDLE_STAGE;
     switch (part.kind) {
@@ -326,7 +322,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
           return false;
         }
         const input = chipInput(workflow, stage, flow);
-        part.drawn = workflow.draw.chip(part.wrapper, input, run);
+        part.drawn = workflow.draw.chip(part.wrapper, input, sessionId);
         if (isWorking && input.status !== 'running') {
           part.wrapper.append(workingTag(clock));
         }
@@ -337,7 +333,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
           return false;
         }
         const input = stripInput(workflow, stage, flow);
-        part.drawn = workflow.draw.strip(part.wrapper, input, run);
+        part.drawn = workflow.draw.strip(part.wrapper, input, sessionId);
         return input.countdown !== null;
       }
       case 'sidePane': {
@@ -347,7 +343,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         if (workflow === null || input === null) {
           return false;
         }
-        part.drawn = workflow.draw.sidePane(part.wrapper, input, run);
+        part.drawn = workflow.draw.sidePane(part.wrapper, input, sessionId);
         // The default pane draws no countdown, so the tick leaves it.
         return false;
       }
@@ -699,8 +695,8 @@ function checklistOf(
 }
 
 // The checklist's groups in order: each with every item done is finished, the
-// first other is the current group, whose open items show `openItemState`, and
-// the rest are later.
+// first other is the current group, whose open items show `openItemState`
+// unless an item says it is not running, and the rest are later.
 function partitionedGroups(
   groups: readonly ChecklistGroup[],
   openItemState: MarkState,
@@ -726,9 +722,16 @@ function sideGroup(
     title: group.title,
     items: group.items.map((item) => ({
       text: item.text,
-      state: item.done ? 'done' : openItemState,
+      state: itemState(item, openItemState),
     })),
   };
+}
+
+function itemState(item: ChecklistItem, openItemState: MarkState): MarkState {
+  if (item.done) {
+    return 'done';
+  }
+  return item.running === false ? PENDING : openItemState;
 }
 
 function logOnce(

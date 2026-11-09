@@ -28,11 +28,9 @@ item per feature session.
 
 When an item lands, tick its box here and remove it from `followups.md`, in the same commit.
 
-Plans: Waves 0 and 2 have landed and their plan folder is gone.
-`docs/features/plugin-framework/plan-command-consumers/` holds Wave 3. The settled design is `plugin-framework/design.md` § Commands and
-state. `docs/features/plugin-framework/plan-hot-reload/` holds Wave 4 steps 1 and 2, to run after Wave 3 closes; its
-settled design is `plugin-framework/design.md` § Hot reload (Wave 4). Step 3, the runtime loader, gets its own plan
-after it.
+Plans: Waves 0, 2 and 3 have landed and their plan folders are gone. The settled design is
+`plugin-framework/design.md` § Commands and state. Wave 4 steps 1 and 2 have landed and their plan folder is gone; the
+design is `plugin-framework/design.md` § Hot reload (Wave 4). Step 3, the runtime loader, needs its own plan.
 
 ## Order
 
@@ -89,25 +87,25 @@ Gate: every registration returns a handle, and every dependency is typed.
 
 ## Wave 3: consumers
 
-All ∥:
+All landed (∥):
 
-- [ ] Every click runs a command [plan]
-- [ ] Workflow stage actions as commands [ready]
-- [ ] Sessions queries and row decorations [plan], then [ ] Sessions stops knowing forms [ready]: the same files,
+- [x] Every click runs a command [plan]
+- [x] Workflow stage actions as commands [ready]
+- [x] Sessions queries and row decorations [plan], then [x] Sessions stops knowing forms [ready]: the same files,
   so run them in sequence or in one plan.
-- [ ] Page state survives a page reload [plan]: reuse the registry's core-held slot.
+- [x] Page state survives a page reload [plan]: reuse the registry's core-held slot.
 
 Checkpoint, after the items above:
 
-- [ ] Add the standing rule to the AGENTS.md Intent: every user action runs as a command, and every state change a
+- [x] Add the standing rule to the AGENTS.md Intent: every user action runs as a command, and every state change a
   plugin owns is published as an event or slot typed in its `contract.ts`.
 
 ## Wave 4: plugin hot reload
 
 1. Decide both before plugins load from a user folder (∥):
-   - [ ] Layout access to the raw bridge [plan]
-   - [ ] Replaceable core services decision [plan]
-2. [ ] PluginHost stop and reload, with a live enable switch [plan]
+   - [x] Layout access to the raw bridge [plan]
+   - [x] Replaceable core services decision [plan]
+2. [x] PluginHost stop and reload, with a live enable switch [plan]
 3. [ ] Runtime plugin loader [plan]
 
 ## Lane H: harness seams
@@ -139,9 +137,8 @@ record (Wave 0) because they read it:
 
 ## Lane L: layouts everywhere
 
-All ∥, any time. Keep this lane apart from Forms item kinds (Lane E) and Every click runs a command (Wave 3): they
-rewrite the same forms files. Wave 3 also changes `kit.button`, so a layout item running beside it draws no new
-closure button.
+All ∥, any time. Keep this lane apart from Forms item kinds (Lane E): they rewrite the same forms files. A layout
+item draws a button through `kit.button`, which runs a command, and no closure button.
 
 - [ ] Toasts through the shell layout, with Shell layout swap failure tests (the same contract)
 - [ ] Dialog frames and confirms through the opener's layout, then [ ] Forms and primer column chrome through their

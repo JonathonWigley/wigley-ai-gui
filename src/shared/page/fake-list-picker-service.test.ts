@@ -8,6 +8,8 @@ import { installFakeDom } from './test-dom';
 
 const manifest = definePlugin({
   id: 'sample',
+  label: 'sample',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {},

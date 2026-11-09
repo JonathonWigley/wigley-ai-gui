@@ -6,6 +6,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // and its self-test's launch.
 export const contextSourcesManifest = definePlugin({
   id: 'context-sources',
+  label: 'Context sources',
+  description:
+    "Shows what fills each session's context, in the Context section of the session hub.",
   dependsOn: {
     main: ['chat', 'sessions'],
     page: ['chat'],

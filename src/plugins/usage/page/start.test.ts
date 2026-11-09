@@ -44,6 +44,21 @@ const SNAPSHOT: UsageSnapshot = {
 
 const EMPTY_SNAPSHOT: UsageSnapshot = { plans: [], sessions: [] };
 
+const PLAN_SNAPSHOT: UsageSnapshot = {
+  plans: [
+    {
+      name: 'work',
+      profileDir: null,
+      isDefault: true,
+      usage: null,
+      lastGoodAt: null,
+      error: null,
+      stale: false,
+    },
+  ],
+  sessions: [],
+};
+
 // The part on the harness, over fakes that file each handle with
 // `consumer.track`, as the real views do.
 function startOnHarness() {
@@ -94,7 +109,7 @@ describe('usagePagePart', () => {
   it('stop_RemovesTheDrawnLineAndDetails', async () => {
     const harness = startOnHarness();
     harness.started().commands.toggleDetails({ arg: undefined });
-    harness.emit('core.pageReady', null);
+    harness.ready();
     harness.state.publish(usageSnapshotSlot).set(SNAPSHOT);
     const remove = vi.spyOn(FakeElement.prototype, 'remove');
 
@@ -109,6 +124,7 @@ describe('usagePagePart', () => {
 
   it('stopThenStart_StartsAgain', async () => {
     const harness = startOnHarness();
+    harness.ready();
     const before = harness.counts();
 
     await harness.restart();
@@ -134,27 +150,54 @@ describe('usagePagePart', () => {
       .build(wrapper(), 's1');
 
     consumerA.dispose();
-    harness.emit('core.pageReady', null);
+    harness.ready();
     harness.state.publish(usageSnapshotSlot).set(SNAPSHOT);
 
     expect(loggedByA).toEqual([]);
     expect(loggedByB).toHaveLength(1);
   });
 
-  it.each<{ name: string; written: UsageSnapshot | null; draws: boolean }>([
-    { name: 'no snapshot', written: null, draws: false },
-    { name: 'the empty snapshot', written: EMPTY_SNAPSHOT, draws: true },
-  ])('pageReady_DrawsTheZeroLine: $name', ({ written, draws }) => {
-    const harness = startOnHarness();
-    if (written !== null) {
-      harness.state.publish(usageSnapshotSlot).set(written);
-    }
-    const statusLines = () =>
-      harness.logs.filter(({ message }) => message.startsWith('status line'));
-    expect(statusLines()).toEqual([]);
+  // `drawn` counts the status lines drawn by the load, a live restart drawing
+  // once for the ready before it and once for its own.
+  it.each<{
+    name: string;
+    written: UsageSnapshot | null;
+    restarts: boolean;
+    drawn: number;
+  }>([
+    { name: 'no snapshot', written: null, restarts: false, drawn: 0 },
+    {
+      name: 'the empty snapshot',
+      written: EMPTY_SNAPSHOT,
+      restarts: false,
+      drawn: 1,
+    },
+    {
+      name: 'the empty snapshot, on a live restart',
+      written: EMPTY_SNAPSHOT,
+      restarts: true,
+      drawn: 2,
+    },
+  ])(
+    'ready_DrawsTheZeroLineAndHearsTheNext: $name',
+    async ({ written, restarts, drawn }) => {
+      const harness = startOnHarness();
+      const snapshots = harness.state.publish(usageSnapshotSlot);
+      if (written !== null) {
+        snapshots.set(written);
+      }
+      const statusLines = () =>
+        harness.logs.filter(({ message }) => message.startsWith('status line'));
+      expect(statusLines()).toEqual([]);
 
-    harness.emit('core.pageReady', null);
+      harness.ready();
+      if (restarts) {
+        await harness.restart();
+      }
+      const drawnAtLoad = statusLines().length;
+      snapshots.set(PLAN_SNAPSHOT);
 
-    expect(statusLines()).toHaveLength(draws ? 1 : 0);
-  });
+      expect([drawnAtLoad, statusLines().length]).toEqual([drawn, drawn + 1]);
+    },
+  );
 });

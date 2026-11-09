@@ -15,9 +15,13 @@ import {
   sessionsRowsSlot,
   sessionsSelectionSlot,
 } from '../../sessions/contract';
-import { sessionRow } from '../../sessions/page/session-fakes';
+import { sessionRow } from '../../sessions/contract.test-support';
 import { sessionsPagePart } from '../../sessions/page/start';
-import type { FormsPageExports } from '../contract';
+import {
+  type FormsPageExports,
+  formsPlaceSlot,
+  type RoundPlace,
+} from '../contract';
 import { formsPagePart } from './start';
 import { presentedRound, question } from './test-rounds';
 
@@ -37,6 +41,100 @@ function openForm() {
 }
 
 const PROBE_ID = 'probe';
+
+// Round `roundId` as main presents it, with three questions.
+function threeQuestionForm(roundId = 'r1') {
+  const round = presentedRound(roundId, {
+    questions: [question('One'), question('Two'), question('Three')],
+  });
+  return {
+    formId: round.roundId,
+    sessionId: round.sessionId,
+    label: round.label,
+    form: round.round,
+    draft: round.draft,
+  };
+}
+
+type OpenForm = ReturnType<typeof openForm>;
+
+// The forms part over sessions, main holding `open` rounds, a row for each
+// round's session, the first round's selected and the page ready, so it is the
+// active round. `reload` starts a new page over the same slots and readies it,
+// its open rounds read landing after the page is ready, as main's answer does;
+// `duringRead` runs once the new page is ready and before the read lands, handed
+// the restores the new page tracked as it started and readied. `place` reads a
+// round's place, r1's by default; `select` selects a round's session and lets
+// the selection settle.
+async function startOverOpenRounds(open: { forms: OpenForm[] }) {
+  let readHeld: Promise<void> = Promise.resolve();
+  const harness = startPagePart(formsPagePart, {
+    parts: [sessionsPagePart],
+    invoke: async (method) => {
+      if (method !== 'openForms') {
+        return new Promise(() => undefined);
+      }
+      await readHeld;
+      return open.forms;
+    },
+    services: {
+      editor: countingEditors().host,
+      markdown: PLAIN_MARKDOWN,
+      picker: fakeListPickerService(),
+    },
+  });
+  const rows = harness.state.publish(sessionsRowsSlot);
+  for (const { sessionId } of open.forms) {
+    rows.set(sessionId, sessionRow(sessionId));
+  }
+  const selection = harness.state.publish(sessionsSelectionSlot);
+  const select = async (formId: string) => {
+    selection.set(`${formId}-session`);
+    await settle();
+  };
+  selection.set(open.forms[0].sessionId);
+  harness.ready();
+  await settle();
+  const reload = async (
+    duringRead: (
+      tracked: readonly Promise<unknown>[],
+    ) => void | Promise<void> = () => undefined,
+  ) => {
+    const read = deferred<void>();
+    readHeld = read.promise;
+    const trackedBefore = harness.restores.length;
+    await harness.restart();
+    const tracked = harness.restores.slice(trackedBefore);
+    await settle();
+    await duringRead(tracked);
+    read.resolve();
+    await settle();
+  };
+  const place = (formId = 'r1') =>
+    harness.state.read(formsPlaceSlot, 'test').get(formId);
+  return { harness, reload, place, select };
+}
+
+const NO_CONTEXT = {} as PageCommandContext;
+
+// Moves r1 to item 2, then to the review's row 3.
+function moveToReviewRowThree(
+  harness: Awaited<ReturnType<typeof startOverOpenRounds>>['harness'],
+) {
+  const { commands } = harness.started();
+  commands.nextItem(NO_CONTEXT);
+  commands.openReview(NO_CONTEXT);
+  commands.reviewNext(NO_CONTEXT);
+  commands.reviewNext(NO_CONTEXT);
+}
+
+const REVIEW_ROW_THREE: RoundPlace = {
+  focus: 1,
+  reviewRow: 2,
+  noticeLine: 0,
+  view: 'review',
+  confirmReturnView: 'review',
+};
 
 describe('forms page part', () => {
   beforeEach(() => {
@@ -158,7 +256,7 @@ describe('forms page part', () => {
       .publish(sessionsRowsSlot)
       .set(sessionId, sessionRow(sessionId));
     harness.state.publish(sessionsSelectionSlot).set(sessionId);
-    harness.emit('core.pageReady', null);
+    harness.ready();
     await settle();
     const { commands } = harness.started();
     commands.openReview({} as PageCommandContext);
@@ -175,6 +273,128 @@ describe('forms page part', () => {
     );
     expect(editors.made()).toBe(made);
   });
+
+  it('reload_restores_focus_review_row_and_view', async () => {
+    const { harness, reload, place } = await startOverOpenRounds({
+      forms: [threeQuestionForm()],
+    });
+    moveToReviewRowThree(harness);
+    expect(place()).toEqual(REVIEW_ROW_THREE);
+
+    await reload();
+
+    expect(place()).toEqual(REVIEW_ROW_THREE);
+    expect(dataEmitted(harness, 'forms.viewChanged').at(-1)).toEqual({
+      view: 'review',
+      roundId: 'r1',
+    });
+    await harness.stop();
+  });
+
+  it('saved_place_survives_the_first_form_shown_write', async () => {
+    const { harness, reload, place } = await startOverOpenRounds({
+      forms: [threeQuestionForm()],
+    });
+    moveToReviewRowThree(harness);
+
+    await reload(() => harness.send('formShown', threeQuestionForm()));
+
+    expect(place()).toEqual(REVIEW_ROW_THREE);
+    await harness.stop();
+  });
+
+  it('form_closed_deletes_its_place', async () => {
+    const { harness, place } = await startOverOpenRounds({
+      forms: [threeQuestionForm()],
+    });
+    expect(place()).toBeDefined();
+
+    harness.send('formClosed', { formId: 'r1', byFinish: false });
+
+    expect(place()).toBeUndefined();
+    await harness.stop();
+  });
+
+  it('the open rounds read is tracked as a restore until its rounds are back in place', async () => {
+    const { harness, reload } = await startOverOpenRounds({
+      forms: [threeQuestionForm()],
+    });
+    moveToReviewRowThree(harness);
+    const emittedBefore = harness.emitted.length;
+    const viewAfterReload = () =>
+      dataEmitted(
+        { emitted: harness.emitted.slice(emittedBefore) },
+        'forms.viewChanged',
+      ).at(-1);
+    const settledViews: unknown[] = [];
+    let tracked = 0;
+    let settledDuringRead = 0;
+
+    await reload(async (restores) => {
+      tracked = restores.length;
+      for (const restore of restores) {
+        void restore.then(() => settledViews.push(viewAfterReload()));
+      }
+      await settle();
+      settledDuringRead = settledViews.length;
+    });
+
+    // Sessions' own restore settles before the read lands.
+    expect([
+      tracked - settledDuringRead,
+      settledViews.slice(settledDuringRead),
+    ]).toEqual([1, [{ view: 'review', roundId: 'r1' }]]);
+    await harness.stop();
+  });
+
+  it('a round the read finds in the background shows its saved view on its first activation', async () => {
+    const { harness, reload, place, select } = await startOverOpenRounds({
+      forms: [threeQuestionForm('r1'), threeQuestionForm('r2')],
+    });
+    moveToReviewRowThree(harness);
+
+    await reload(() => select('r2'));
+    await select('r1');
+
+    expect(place('r1')).toEqual(REVIEW_ROW_THREE);
+    expect(dataEmitted(harness, 'forms.viewChanged').at(-1)).toEqual({
+      view: 'review',
+      roundId: 'r1',
+    });
+    await harness.stop();
+  });
+
+  it.each([
+    {
+      case: 'a round closed while no page ran',
+      shownDuringRead: [] as string[],
+      kept: false,
+    },
+    {
+      case: 'a round shown during the read',
+      shownDuringRead: ['r2'],
+      kept: true,
+    },
+  ])(
+    'the open rounds read keeps a place only for a round it or the store holds: $case',
+    async ({ shownDuringRead, kept }) => {
+      const open = {
+        forms: [threeQuestionForm('r1'), threeQuestionForm('r2')],
+      };
+      const { harness, reload, place } = await startOverOpenRounds(open);
+      expect(place('r2')).toBeDefined();
+
+      open.forms = [threeQuestionForm('r1')];
+      await reload(() => {
+        for (const formId of shownDuringRead) {
+          harness.send('formShown', threeQuestionForm(formId));
+        }
+      });
+
+      expect(place('r2') !== undefined).toBe(kept);
+      await harness.stop();
+    },
+  );
 
   it.each<{
     member: string;

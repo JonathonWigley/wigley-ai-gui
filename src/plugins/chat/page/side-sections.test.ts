@@ -70,6 +70,8 @@ function setUp(uiState = fakeUiState()) {
     parts,
     uiState,
     timers: { set: () => 0, clear: () => undefined },
+    // As the head's command does in the app.
+    toggleClicked: (partId) => sections.toggleSection(partId),
     log,
   });
   const tabs: { root: FakeElement; side: SideTab }[] = [];
@@ -232,6 +234,20 @@ describe('createSideSections', () => {
     }
     expect(uiState.get(COLLAPSED)).toEqual(['nobody-registers-this']);
     expect(logs).toContain('section Title part expanded');
+  });
+
+  it('toggleSection_PartNoSectionHolds_LogsAndKeepsCollapsedSections', () => {
+    const { parts, uiState, sections, openTab, logs } = setUp(
+      fakeUiState({ [COLLAPSED]: ['other'] }),
+    );
+    parts.add(recordingPart('part').part);
+    const { root } = openTab();
+
+    sections.toggleSection('gone');
+
+    expect(logs).toContain('no section gone');
+    expect(uiState.get(COLLAPSED)).toEqual(['other']);
+    expect(frameOf(root).classList.contains('is-collapsed')).toBe(false);
   });
 
   it('a head keeps the focus where it was and takes no key', () => {

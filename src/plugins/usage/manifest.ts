@@ -10,6 +10,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // `pollIntervalSeconds` is how often each profile is polled, at least 60.
 export const usageManifest = definePlugin({
   id: 'usage',
+  label: 'Usage',
+  description:
+    "Shows plan usage in the status bar, and each session's context and spend.",
   dependsOn: { main: ['chat', 'sessions'], page: ['chat', 'sessions'] },
   reads: { main: [], page: [] },
   commands: {

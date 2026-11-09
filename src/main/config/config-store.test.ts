@@ -46,6 +46,8 @@ const DEFAULT_KEYMAP: DefaultKeymap = {
 
 const listPlugin = definePlugin({
   id: 'p',
+  label: 'p',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {
@@ -123,6 +125,8 @@ function resolveTheme(
 // A plugin named as a core setting is, declaring no settings.
 const coreNamedPlugin = definePlugin({
   id: 'window',
+  label: 'window',
+  description: 'A test plugin.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {},
@@ -385,6 +389,8 @@ describe('loadConfigStore', () => {
   it('keeps the last good settings when the list disables a needed plugin', async () => {
     const dependent = definePlugin({
       id: 'q',
+      label: 'q',
+      description: 'A test plugin.',
       dependsOn: { main: ['p'], page: [] },
       reads: { main: [], page: [] },
       commands: {},
@@ -845,6 +851,41 @@ describe('loadConfigStore', () => {
     await expect(
       load(createMemoryFiles(), { manifests: [badArg] }),
     ).rejects.toThrow('command "p.pick" needs a number');
+  });
+
+  it('setPluginsProblem_HeldMessage_IsServedAfterTheWatchProblem', async () => {
+    const memory = createMemoryFiles();
+    await memory.write(`${FOLDER}/keymap.json`, '{');
+    const held = heldReads({
+      ...memory,
+      watch: () => {
+        throw new Error('no watcher');
+      },
+    } as MemoryFiles);
+    const store = await load(held.files);
+    const settingsReads = () =>
+      held.reads.filter((path) => path.endsWith('/settings.json')).length;
+    const files = () => store.current().problems.map((each) => each.file);
+
+    store.setPluginsProblem('x');
+    await nextChange(store);
+    const withProblem = files();
+    const heldMessage = store
+      .current()
+      .problems.filter((each) => each.message === 'x');
+    store.setPluginsProblem(null);
+    await nextChange(store);
+    const cleared = store.current().problems.map((each) => each.message);
+    store.setPluginsProblem('x');
+    await nextChange(store);
+    const readsBefore = settingsReads();
+    store.setPluginsProblem('x');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(withProblem).toEqual([FOLDER, 'settings.json', 'keymap.json']);
+    expect(heldMessage).toEqual([{ file: 'settings.json', message: 'x' }]);
+    expect(cleared).not.toContain('x');
+    expect(settingsReads()).toBe(readsBefore);
   });
 
   describe('setRuntime', () => {

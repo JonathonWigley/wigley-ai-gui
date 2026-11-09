@@ -8,7 +8,11 @@ import type {
   SessionFlow,
   WorkflowSignal,
 } from '../workflow/contract';
-import type { PlanProgress, PlanTaskLine } from './plan-reader';
+import {
+  type PlanProgress,
+  type PlanTaskLine,
+  TASK_STATUSES,
+} from '../../shared/plan-progress';
 
 export const HEAVY_WORKFLOW_ID = 'workflow-heavy';
 
@@ -134,7 +138,10 @@ function isPlanTaskLine(value: unknown): value is PlanTaskLine {
     isJsonObject(value) &&
     isNumberOrNull(value.wave) &&
     typeof value.text === 'string' &&
-    typeof value.done === 'boolean'
+    typeof value.done === 'boolean' &&
+    (value.file === null || typeof value.file === 'string') &&
+    (value.status === null ||
+      (TASK_STATUSES as readonly unknown[]).includes(value.status))
   );
 }
 

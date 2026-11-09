@@ -4,27 +4,17 @@ import {
   finishSave,
   startSave,
 } from '../../../shared/page/autosave';
-import type {
-  NoteDraft,
-  NoteFields,
-  NoteHome,
-  NoteImage,
-  NoteSession,
+import {
+  NOTE_FIELDS,
+  type NoteDraft,
+  type NoteField,
+  type NoteFields,
+  type NoteHome,
+  type NoteImage,
+  type NoteSession,
 } from '../contract';
 import { fieldsOf } from '../draft';
 import { defaultTarget } from '../note-targets';
-
-// The popup's rows, top to bottom, as the field cursor walks them.
-export const NOTE_FIELDS = [
-  'target',
-  'title',
-  'body',
-  'tags',
-  'images',
-  'session',
-] as const;
-
-export type NoteField = (typeof NOTE_FIELDS)[number];
 
 // The field `step` rows from `field`, clamped at the first and the last.
 export function moveField(field: NoteField, step: 1 | -1): NoteField {
@@ -132,6 +122,8 @@ export type PopupAction =
       imageIndex: number;
     }
   | { type: 'fieldMoved'; field: NoteField }
+  // A reloaded page's cursors, the image cursor clamped to the images held.
+  | { type: 'placeRestored'; field: NoteField; imageIndex: number }
   | { type: 'imageMoved'; step: 1 | -1 }
   | { type: 'saveStarted'; revision: number }
   | { type: 'saveFinished'; revision: number; error: string | null };
@@ -183,6 +175,12 @@ export function applyPopupAction(
       return action.field === state.field
         ? state
         : { ...state, field: action.field };
+    case 'placeRestored':
+      return {
+        ...state,
+        field: action.field,
+        imageIndex: clampImage(action.imageIndex, state.images.length),
+      };
     case 'imageMoved': {
       const imageIndex = clampImage(
         state.imageIndex + action.step,

@@ -247,6 +247,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     sessions.contributeTools(
       [checklistToolDefinition()],
       startChecklistToolSession,
+      { mainAgentOnly: true },
     );
     if (api.drive !== null) {
       addDriveActions(api.drive, { reportStep, reportChecklist });
@@ -264,6 +265,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           : sessions.contributeTools(
               [stepToolDefinition(workflows.all())],
               startStepToolSession,
+              { mainAgentOnly: true },
             );
     };
     const addWorkflow = (workflow: MainWorkflow): Disposable => {

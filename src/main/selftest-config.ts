@@ -1,10 +1,7 @@
 import type { SelfTestScript, SelfTestStep } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
-import {
-  overrideSettings,
-  withoutPluginBinds,
-} from '../shared/plugin-manifests';
+import { overrideSettings } from '../shared/plugin-manifests';
 import { SCREENSHOT_NAME } from './drive/page-driver';
 
 // A script as the self-test received it, with the id of the plugin that handed
@@ -162,52 +159,19 @@ function checkStep(where: string, step: SelfTestStep): void {
 }
 
 // `config` as the self-test serves it: the scripts' page binds after every
-// bind, their settings laid over the plugin settings, and `plugins.disabled`
-// empty, so the page starts every plugin. Throws on a setting no plugin holds.
+// bind, and their settings laid over the plugin settings. Throws on a setting
+// no plugin holds.
 export function applySelfTestConfig(
   config: AppConfig,
   selfTest: SelfTestConfig,
 ): AppConfig {
   return {
     ...config,
-    settings: { ...config.settings, plugins: { disabled: [] } },
     keymap: {
       ...config.keymap,
       page: [...config.keymap.page, ...selfTest.pageBinds],
     },
     pluginSettings: overrideSettings(config.pluginSettings, selfTest.settings),
-  };
-}
-
-// The plugin ids main does not start: none under the self-test, which starts
-// every plugin, else `disabled`. `applySelfTestConfig` is the page's half of
-// the same rule.
-export function mainStartList(
-  isSelfTest: boolean,
-  disabled: readonly string[],
-): readonly string[] {
-  return isSelfTest ? [] : disabled;
-}
-
-// `config` with the plugins main did not start, `startList`, added to its
-// `plugins.disabled`, so the page starts no page part whose main part did not
-// start, and without those plugins' main binds. `mainStartList` gives the list.
-export function withMainStartList(
-  config: AppConfig,
-  startList: readonly string[],
-): AppConfig {
-  const disabled = [
-    ...new Set([...config.settings.plugins.disabled, ...startList]),
-  ];
-  return {
-    ...config,
-    settings: { ...config.settings, plugins: { disabled } },
-    keymap: withoutPluginBinds(
-      config.keymap,
-      config.commands,
-      startList,
-      'main',
-    ),
   };
 }
 

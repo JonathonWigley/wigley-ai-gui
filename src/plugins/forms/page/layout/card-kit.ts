@@ -27,16 +27,14 @@ import type {
   FindingKit,
   FormsBaseKit,
   Kit,
-  LayoutAction,
   QuestionKit,
 } from '../../layouts/layout';
 import {
   type AnswerableItem,
   answerStatus,
-  type FormsAction,
   itemAnswer,
   pickNumber,
-  type RailItem,
+  type RoundItem,
   type RoundState,
   type TextTarget,
 } from '../form-state';
@@ -68,7 +66,7 @@ interface ItemTextBox {
 // placed, null before.
 interface CardContext {
   roundId: string;
-  item: RailItem;
+  item: RoundItem;
   position: number;
   deps: CardDeps;
   kitDeps: BaseKitDeps;
@@ -230,32 +228,8 @@ function actionReasonOf(
   return text === undefined || text.trim() === '' ? null : text;
 }
 
-// The FormsActions a layout action dispatches: focusing the card's item at
-// rail `position`, then the action itself. Don't ask has none of its own: the
-// kit runs its command, which also focuses the reason box. Null for an action
-// type the contract does not name, as an older layout may still send.
-function layoutActions(
-  action: LayoutAction,
-  position: number,
-): FormsAction[] | null {
-  const focus: FormsAction = { type: 'focusItem', item: position };
-  switch (action.type) {
-    case 'choose':
-      return [focus, { type: 'choose', number: action.number }];
-    case 'toggleNotApplicable':
-      return [focus, { type: 'toggleNotApplicable' }];
-    case 'accept':
-      return [focus, { type: 'acceptRecommendation' }];
-    case 'toggleDontAsk':
-    case 'focus':
-      return [focus];
-    default:
-      return null;
-  }
-}
-
 // The item as an answerable one; null for a notice, which takes no answer.
-export function answerableOf(item: RailItem): AnswerableItem | null {
+export function answerableOf(item: RoundItem): AnswerableItem | null {
   return item.kind === 'notice' ? null : { kind: item.kind, index: item.index };
 }
 
@@ -428,7 +402,7 @@ function updateContributedPart(part: PlacedPart, deps: CardDeps) {
 // The item's text boxes in their default order, each with its current text.
 function itemTextBoxes(
   round: RoundState,
-  item: RailItem,
+  item: RoundItem,
 ): Map<TextBoxField, ItemTextBox> {
   const answerable = answerableOf(item);
   if (answerable === null) {
@@ -506,20 +480,36 @@ function appendCardKeys(
   card.anchor(keys, command);
 }
 
-// Dispatches the action's FormsActions, then Don't ask's command for it; an
-// action type the contract does not name is logged and runs nothing.
-function runLayoutAction(card: CardContext, action: LayoutAction) {
-  const formsActions = layoutActions(action, card.position);
-  if (formsActions === null) {
-    card.deps.log(`layout action ${action.type} is not known`);
-    return;
-  }
-  for (const formsAction of formsActions) {
-    card.deps.dispatch(formsAction);
-  }
-  if (action.type === 'toggleDontAsk') {
-    card.deps.toggleDontAsk();
-  }
+// The runner of the forms command `short` on the card's item, its arg the
+// item's rail position; obtained while the card builds, so a click checks
+// nothing.
+function itemRunner(
+  card: CardContext,
+  kit: Kit,
+  short: FormsCommandName,
+): () => void {
+  return kit.command(formsCommand(short), card.position);
+}
+
+// A pick that runs `forms.chooseAt` on the card's item with the clicked
+// number, from one runner per drawn number obtained now.
+function choosePick(
+  card: CardContext,
+  kit: Kit,
+  numbers: number[],
+): (number: number) => void {
+  const runners = new Map(
+    numbers.map((number) => [number, chooseRunner(card, kit, number)]),
+  );
+  return (number) => runners.get(number)?.();
+}
+
+// The runner of `forms.chooseAt` picking `number` on the card's item.
+function chooseRunner(card: CardContext, kit: Kit, number: number) {
+  return kit.command(formsCommand('chooseAt'), {
+    item: card.position,
+    number,
+  });
 }
 
 function buildBaseKit(card: CardContext): Kit {
@@ -537,8 +527,8 @@ function buildBaseKit(card: CardContext): Kit {
       }
       return header;
     },
+    position: card.position,
     textBox: (parent, field) => mountTextBox(card, parent, field),
-    run: (action) => runLayoutAction(card, action),
     contributedParts: (parent) => placeContributedParts(card, parent),
   };
 }
@@ -556,12 +546,12 @@ function buildAnswerKit(
       const toggles = element('div', 'toggles');
       const notApplicable = textButton(
         'Not applicable',
-        () => kit.run({ type: 'toggleNotApplicable' }),
+        itemRunner(card, kit, 'toggleNotApplicableAt'),
         { variant: 'ghost' },
       );
       const dontAsk = textButton(
         "Don't ask me this",
-        () => kit.run({ type: 'toggleDontAsk' }),
+        itemRunner(card, kit, 'toggleDontAskAt'),
         { variant: 'ghost' },
       );
       appendCardKeys(card, notApplicable, formsCommand('toggleNotApplicable'));
@@ -589,7 +579,7 @@ function buildQuestionKit(
   return {
     ...kit,
     choiceList(parent, reasons) {
-      const answerArea = appendAnswerArea(parent, card);
+      const answerArea = appendAnswerArea(parent, card, kit, null);
       const list = element('ol', 'choices');
       answerArea.append(list);
       const choices = input.choices.map((text, i) => ({ text, number: i + 1 }));
@@ -597,7 +587,11 @@ function buildQuestionKit(
         list,
         choices,
         input.recommend,
-        (number) => kit.run({ type: 'choose', number }),
+        choosePick(
+          card,
+          kit,
+          choices.map((choice) => choice.number),
+        ),
         {
           markdown: card.deps.markdown,
           mount: card.mount,
@@ -606,12 +600,7 @@ function buildQuestionKit(
       );
       const recommended = entries[input.recommend - 1];
       if (reasons !== 'none' && recommended !== undefined) {
-        appendChoiceReason(
-          recommended,
-          'Why recommended',
-          input.rationale,
-          card,
-        );
+        appendChoiceReason(recommended, null, input.rationale, card);
       }
       card.updaters.push((current) => {
         const picked = pickNumber(current, item);
@@ -644,29 +633,37 @@ function buildFindingKit(
   };
 }
 
-// Appends `div.answer` to `parent`, under its 'Your answer' header, which
-// ends with the Clear button: a click focuses the card's item, then clears its
-// choice.
-function appendAnswerArea(parent: HTMLElement, card: CardContext): HTMLElement {
-  const clear = textButton(
-    'Clear',
-    () => {
-      runLayoutAction(card, { type: 'focus' });
-      card.deps.dispatch({ type: 'clearChoice' });
-    },
-    { variant: 'ghost' },
-  );
+// Appends `div.answer` to `parent`, opening on the row that holds the Clear
+// button: a click clears the choice on the card's item. The row is a section
+// header holding `label` when one is given; with null it is
+// `div.answer-head`, holding the Clear button alone.
+function appendAnswerArea(
+  parent: HTMLElement,
+  card: CardContext,
+  kit: Kit,
+  label: string | null,
+): HTMLElement {
+  const clear = textButton('Clear', itemRunner(card, kit, 'clearChoiceAt'), {
+    variant: 'ghost',
+  });
   appendCardKeys(card, clear, formsCommand('clearChoice'));
   const answerArea = element('div', 'answer');
-  answerArea.append(sectionHeader('Your answer', clear));
+  if (label === null) {
+    const head = element('div', 'answer-head');
+    head.append(clear);
+    answerArea.append(head);
+  } else {
+    answerArea.append(sectionHeader(label, clear));
+  }
   parent.append(answerArea);
   return answerArea;
 }
 
-// Appends the labelled reason to a choice's row; blank text draws nothing.
+// Appends the reason to a choice's row, under `label` when one is given; blank
+// text draws nothing.
 function appendChoiceReason(
   entry: HTMLElement,
-  label: string,
+  label: string | null,
   text: string,
   card: CardContext,
 ) {
@@ -692,7 +689,7 @@ function buildChoiceGroups(
   kit: Kit,
   card: CardContext,
 ): HTMLElement {
-  const answerArea = appendAnswerArea(parent, card);
+  const answerArea = appendAnswerArea(parent, card, kit, 'Your answer');
   const sections: HTMLElement[] = [];
   const picks: DrawnPick[] = [];
   for (const group of choiceGroupsOf(input)) {
@@ -738,7 +735,11 @@ function appendGroupChoices(
     list,
     group.choices,
     recommended?.number ?? null,
-    (number) => kit.run({ type: 'choose', number }),
+    choosePick(
+      card,
+      kit,
+      group.choices.map((choice) => choice.number),
+    ),
     { markdown: card.deps.markdown, mount: card.mount, anchor: card.anchor },
   );
   return group.choices.map((choice, i) => {
@@ -763,8 +764,10 @@ function appendGroupPick(
   card: CardContext,
 ): DrawnPick {
   const head = element('div', 'choice choice-group-head');
-  const pick = button('choice-pick choice-group-pick', '', () =>
-    kit.run({ type: 'choose', number }),
+  const pick = button(
+    'choice-pick choice-group-pick',
+    '',
+    chooseRunner(card, kit, number),
   );
   pick.append(
     element('span', 'choice-number', String(number)),
@@ -802,8 +805,8 @@ function showPressed(control: HTMLElement, isPressed: boolean) {
 }
 
 // The verdict under the finding and proof: its origin and severity tags, the
-// impact, and the Accept button, which focuses the finding and picks the
-// recommended entry, the one the choice groups tag.
+// impact, and the Accept button, which picks the recommended entry on the
+// finding, the one the choice groups tag.
 function buildVerdict(
   parent: HTMLElement,
   input: CardInputs['finding'],
@@ -823,9 +826,11 @@ function buildVerdict(
     severity.dataset.severity = input.severity;
     chips.append(severity);
   }
-  const accept = textButton('Accept', () => kit.run({ type: 'accept' }), {
-    variant: 'primary',
-  });
+  const accept = textButton(
+    'Accept',
+    itemRunner(card, kit, 'acceptRecommendationAt'),
+    { variant: 'primary' },
+  );
   appendCardKeys(card, accept, formsCommand('acceptRecommendation'));
   const buttons = element('div', 'verdict-buttons');
   buttons.append(accept);

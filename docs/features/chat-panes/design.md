@@ -20,8 +20,8 @@ so the same hands work in both tools.
 
 ## What a pane is
 
-- A pane shows one whole session: its tab bar and its tabs (Chat, Form, Docs, Primer). A round
-  still takes over its session's pane, as it takes over the session today.
+- A pane shows one whole session: its tab bar and its tabs (Chat, and Docs when the `docs-session-tab` plugin is
+  on), with the session's popups (a round, the primer) over them. A round's popup opens in its session's pane.
 - A session shows in at most one pane. Each tab hands the session one element, and tmux never
   shows one process in two panes either.
 - Only Sessions mode splits. Docs, Backlog and Settings keep their own fixed panes.
@@ -42,14 +42,14 @@ so the same hands work in both tools.
 - `Alt+Shift+o` / `Alt+Shift+i` step the focused pane through the sessions that no other pane
   shows. A session on screen in another pane is skipped, so stepping never rearranges the other
   panes.
-- Tab keys (`Alt+o` / `Alt+i`), `Cmd+w` and `Space k n` act on the focused pane's session. A new
-  session from `Space k n` loads into the focused pane.
+- Tab keys (`Alt+o` / `Alt+i`), `Cmd+w` and `Space b n` act on the focused pane's session. A new
+  session from `Space b n` loads into the focused pane.
 - A click inside a pane focuses it when the press ends, so nothing moves under a press: the focused pane's edge insets
   change its layout. A press and release in different panes focuses the pane the press began in; a cancelled press
   focuses none. At the release the keys stay on a text box the press focused in that pane, or a selection it began
   there; the Chat box takes them in insert mode at its caret. Any other focus lets go, and a visible Chat tab's box takes
   them.
-- A round for a session in an unfocused pane takes over that pane and leaves focus where it is.
+- A round for a session in an unfocused pane opens its popup in that pane and leaves focus where it is.
   The row keeps its Needs you label until the user focuses that pane. Focus moving on its own would
   send the user's typing to the wrong session.
 
@@ -97,8 +97,8 @@ does not wrap, as the user's tmux binds stop at `pane_at_left` and the other edg
 - The focused pane draws an accent border, and unfocused panes are not dimmed, as the user's tmux
   theme draws them (active border coloured, `window-style` dimming off).
 - Tabs draw as icons, with the tab's title as its tooltip, so tab bars stay short in narrow panes.
-  Each tab plugin names its Codicon: Chat `comment`, Form `checklist`, Docs `book`, Primer
-  `lightbulb`. A user layout can bring the titles back.
+  Each tab plugin names its Codicon: Chat `comment`, Docs `book`; the popups name theirs for the hidden bar, forms
+  `checklist` and the primer `lightbulb`. A user layout can bring the titles back.
 - The focused pane shows a key prompt on each side that has a pane that way (`‹ ⌥H ⌃⌥H swap`),
   so the user sees where focus and swap would go. None shares a divider's centre, where the
   divider's resize prompt shows: the up prompt sits at the pane's right corner under the tab bar,

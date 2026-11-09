@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
+import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import type { IndexEntry } from '../contract';
 import { posixPaths } from '../../../shared/paths/posix-paths';
@@ -51,9 +52,16 @@ const settled = () => new Promise((resolve) => setTimeout(resolve));
 
 // The docs dialogs over a channel listing no folder and `TRASHED_ENTRY`'s path as
 // the one trash target, drawing with the layouts `layouts` returns.
-function dialogsOver(layouts: () => ShownLayouts<Layout>) {
-  const { parts } = fakeDocsParts(layouts);
+// Each kit command a button runs is recorded in `runs`.
+function dialogsOver(
+  layouts: () => ShownLayouts<Layout>,
+  runs: [CommandId, CommandArg | undefined][] = [],
+) {
+  const { parts } = fakeDocsParts(layouts, (id, arg) => {
+    runs.push([id, arg]);
+  });
   const deps = {
+    viewId: 'view:2',
     channel: {
       invoke: async (name: string) =>
         name === 'trashTargets' ? [TRASHED_ENTRY.path] : [],
@@ -154,6 +162,32 @@ describe('createDocsDialogs', () => {
       afterClose: false,
     });
   });
+
+  it.each([
+    { label: 'Move to the Trash', answer: 'yes' },
+    { label: 'Keep it', answer: 'no' },
+  ])(
+    'confirmDialog_AnswerClick_RunsItsCommand $answer',
+    async ({ label, answer }) => {
+      const runs: [CommandId, CommandArg | undefined][] = [];
+      const dialogs = dialogsOver(
+        () => withUser(defaultLayout, markedLayout('dialog')),
+        runs,
+      );
+      dialogs.trash(TRASHED_ENTRY);
+      await settled();
+      const button = findAll(asFake(dialogs.elements[1]), 'ui-button').find(
+        (each) => each.textContent?.startsWith(label),
+      );
+
+      button?.click();
+
+      expect({ runs, isOpen: dialogs.isAnyOpen() }).toEqual({
+        runs: [['docs.answerConfirm', { viewId: 'view:2', answer }]],
+        isOpen: true,
+      });
+    },
+  );
 
   it('redraw_BoxOpenWithText_KeepsTheInputItsTextAndFocus', () => {
     let shown = withUser(defaultLayout, markedLayout('box-1'));

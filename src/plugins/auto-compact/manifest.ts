@@ -7,6 +7,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // only: it has no surface and no layout.
 export const autoCompactManifest = definePlugin({
   id: 'auto-compact',
+  label: 'Auto compact',
+  description:
+    'Compacts an idle session whose prompt cache is cold before the next message, when its context is large.',
   dependsOn: { main: ['chat'], page: [] },
   reads: { main: ['workflow'], page: [] },
   commands: {},

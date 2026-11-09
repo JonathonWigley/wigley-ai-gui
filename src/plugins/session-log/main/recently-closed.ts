@@ -1,4 +1,4 @@
-import type { ResumeSectionRow } from '../../chat/contract';
+import { isUserClose, type ResumeSectionRow } from '../../chat/contract';
 import { editableTitle, type SessionTitles } from '../../sessions/contract';
 import type { SessionLogEntry } from './session-event-log';
 
@@ -11,7 +11,7 @@ interface Candidate {
 }
 
 function candidateOf(entry: SessionLogEntry): Candidate | null {
-  if (entry.event === 'closed' && entry.reason === 'user' && entry.sent) {
+  if (entry.event === 'closed' && isUserClose(entry.reason) && entry.sent) {
     return entry;
   }
   if (entry.event === 'cleared' && entry.sent) {

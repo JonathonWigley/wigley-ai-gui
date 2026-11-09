@@ -7,8 +7,9 @@
 //
 // The app keeps:
 // - the row part and the right-bar slot, contributed while the shown session has a pool and removed when it has none;
-// - the clicks: a holder's `select` selects its row, and an action's `run` runs `unity-pool hold|release` through
-//   main, the clone's `action.running` true until the result lands in its `result`;
+// - the clicks: a holder's click runs `unity-pool.selectHolder` with its `sessionId`, which selects its row, and an
+//   action's button runs the action's `command` with its `arg`, which runs `unity-pool hold|release` through main, the
+//   clone's `action.running` true until the result lands in its `result`;
 // - the keys and the focus: Alt+l past main's right edge gives the panel the keys, `j`/`k`/`gg`/`G` walk a cursor
 //   over the session holders and Enter shows the cursor's session, as the holder's click does; the buttons and
 //   links never take focus;
@@ -24,23 +25,25 @@ export interface RowBadgeInput {
   queued: boolean;
 }
 
-// Who holds a clone. `kind` 'session' is a session with a side-bar row, whose click `select` selects that row;
-// 'user' is a hold the user made; 'agent' is a session the app has no row for. `idleMs` is the time since the
-// claim's last renewal, null for a hold, a handoff or a stranded mark. `isCursor` is true on the one session holder
-// the keyboard cursor is on while the panel holds the keys; the layout adds `is-cursor` to that holder's element,
-// and the app scrolls the first `.is-cursor` in the panel into view.
+// Who holds a clone. `kind` 'session' is a session with a side-bar row, whose id `sessionId` holds:
+// `kit.command('unity-pool.selectHolder', sessionId)` selects that row. 'user' is a hold the user made and 'agent' a
+// session the app has no row for, each with a null `sessionId`. `idleMs` is the time since the claim's last renewal,
+// null for a hold, a handoff or a stranded mark. `isCursor` is true on the one session holder the keyboard cursor is
+// on while the panel holds the keys; the layout adds `is-cursor` to that holder's element, and the app scrolls the
+// first `.is-cursor` in the panel into view.
 export interface HolderInput {
   kind: 'session' | 'user' | 'agent';
   label: string;
   idleMs: number | null;
-  select: (() => void) | null;
+  sessionId: string | null;
   isCursor: boolean;
 }
 
 // One clone of the pool. `branch` reads `detached` on a detached HEAD and `unknown` for a clone never probed;
 // `editor` is the editor's state in words (`editor ready`, `in Play Mode`). `blocking` is true only while the queue
 // has a long wait, on each clone that keeps the queue waiting: held, handed off, stranded or dirty. `action` is Hold
-// on a free clone and Release on the user's hold, null otherwise; `result` is the last Hold or Release's outcome.
+// on a free clone and Release on the user's hold, null otherwise: `kit.button(parent, label, command, { arg })` runs it.
+// `result` is the last Hold or Release's outcome.
 export interface PanelCloneInput {
   title: string;
   path: string;
@@ -54,7 +57,8 @@ export interface PanelCloneInput {
   blocking: boolean;
   action: {
     label: 'Hold' | 'Release';
-    run: () => void;
+    command: string;
+    arg: { pool: string; clone: number };
     running: boolean;
   } | null;
   result: { ok: boolean; text: string } | null;

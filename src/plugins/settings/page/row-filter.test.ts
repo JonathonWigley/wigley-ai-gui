@@ -51,6 +51,7 @@ describe('matchesCommand', () => {
       group: 'g',
       runsIn: 'page',
     },
+    label: 'Show sessions',
     binds: [{ bind: { keys: '<Leader>ks' } }],
     accelerators: [
       { kind: 'app', bind: { accelerator: 'Cmd+P' } },
@@ -69,6 +70,33 @@ describe('matchesCommand', () => {
   ])(
     'matchesCommand_FuzzyKeys_Matches through $given → $isMatch',
     ({ query, isMatch }) => {
+      expect(matchesCommand(row, query, fakeFuzzyMatcher)).toBe(isMatch);
+    },
+  );
+});
+
+describe('matchesCommand on an arg row', () => {
+  it.each([
+    { given: "the arg's label", query: 'ch 3', isMatch: true },
+    { given: 'another arg', query: 'ch 5', isMatch: false },
+  ])(
+    'matchesCommand_ArgRow_MatchesItsLabel through $given → $isMatch',
+    ({ query, isMatch }) => {
+      const row = {
+        command: {
+          id: 'forms.choose',
+          plugin: 'forms',
+          label: 'pick the choice',
+          group: 'g',
+          runsIn: 'page',
+          arg: 'number',
+        },
+        label: 'pick the choice: 3',
+        arg: 3,
+        binds: [],
+        accelerators: [],
+      } as unknown as CommandRow;
+
       expect(matchesCommand(row, query, fakeFuzzyMatcher)).toBe(isMatch);
     },
   );

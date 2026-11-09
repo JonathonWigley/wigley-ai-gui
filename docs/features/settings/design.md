@@ -5,7 +5,8 @@
 - **Scope** — what this feature covers and what stays a follow-up.
 - **The mode** — the plugin, its keys, the side bar sections.
 - **Setting rows** — declarations, controls by kind, commit and reset.
-- **Keymap section** — command rows, adding and removing binds, the leader, the advanced box.
+- **Plugins section** — one switch per plugin, the lock, a refused pick, the filter.
+- **Keybindings and Leader menu sections** — the action list with its keys, the leader tree, recording a key, the advanced box.
 - **The userConfig service** — the seam that reads and writes the user's layers through the ConfigStore's checks.
 - **Disk changes and broken files** — hot reload, stale writes, a file that fails its check.
 
@@ -18,8 +19,10 @@ plan is written from them. A decision here stands unless the user changes it.
   Themes stay hand-edited; a theme editor is a follow-up.
 - The key-hints setting and moving `claude.command` to the Claude harness plugin are separate follow-ups. Each one
   shows in Settings mode when it lands, through its own setting declaration, with no change to the mode.
-- A bind is added by typing vim notation; recording key presses is not planned (a press cannot tell when a sequence
-  ends, and synthetic keys never reach a global shortcut).
+- A key is recorded as the user presses it when it is one key or one chord; a sequence (`gg`, `Space b r`) is typed in
+  vim notation, since a press cannot tell when a sequence ends. Accelerators are never recorded: synthetic keys never
+  reach a global shortcut, so they stay in the advanced box (2026-11-08 leader keys interview,
+  `docs/features/leader-keys/design.md`).
 
 ## The mode
 
@@ -29,14 +32,16 @@ plan is written from them. A decision here stands unless the user changes it.
   `<Leader>ks` and `<Leader>kd` do. `Cmd+,` on macOS and `Ctrl+,` on Windows is an app menu accelerator
   (`CommandOrControl+,`) on main command `settings.show`, which asks the page part over the plugin's channel to show
   the mode. A page chord cannot hold `,`, so the accelerator is the route.
-- The side bar lists sections: Core, then one per plugin that declares settings, in manifest order, then Keymap.
+- The side bar lists sections: Core, then one per plugin that declares settings, in manifest order, then Plugins,
+  then Keybindings, then Leader menu.
   `j`/`k` move the cursor and Enter opens the section in the content sheet. In a window too narrow for the side bar it
   opens over the content, and opening a section by click or Enter closes it. `Alt+l` / `Alt+h` (the core's
   `panes.focusRight` / `panes.focusLeft`) move focus between the side bar and the form, as in Docs mode.
 - `/` filters the open section's rows, keeping their order: setting rows by label and dotted path (fuzzy, through
   the `FuzzyMatcher` page service) and by description (plain substring, since a fuzzy match over a sentence matches
-  almost any query), command rows by label, qualified id, keys and accelerators, and the Leader row by "leader" and
-  its keys, all fuzzy. Esc on the rows clears a kept filter; opening a section clears it too.
+  almost any query), plugin rows by label and id, fuzzy, command rows by label, qualified id, keys and accelerators,
+  and the Leader row by "leader" and its keys, all fuzzy. Esc on the rows clears a kept filter; opening a section
+  clears it too.
 
 ## Setting rows
 
@@ -58,36 +63,94 @@ plan is written from them. A decision here stands unless the user changes it.
 - A setting read only when something is created (window size, the claude command) says so in its description; the row
   shows the new value at once and the app applies it to the next one.
 
-## Keymap section
+## Plugins section
+
+- One row per plugin, in manifest order: its label, its one-line description (both declared in the plugin's manifest),
+  and at the end its state, `true` or `false`, with the shared list picker as the control (Enter or `i`). The
+  `default` layout draws it as the `pluginRow` part.
+- The state comes from the `core.plugins` slot, which says what runs now, and not from `settings.json`, which says what
+  the user asked for. The row redraws when the slot changes, so a refused switch-off keeps showing `true`.
+- A plugin that running plugins depend on carries a `Needed by <label>, <label>` Tag before its state and cannot be
+  switched off; the user switches those plugins off first. Settings' own row carries `Edit settings.json to turn off`,
+  since switched off from its own section it could come back only by a hand edit.
+- A pick writes the `plugins.disabled` list in `settings.json`, through the same checks as every setting; the switch
+  applies the change at once. A pick of `false` on a running plugin asks the switch first (`mayDisable`): a reason
+  (a dependency, or open work the plugin's `mayStop` guards) logs `refused settings.json: <reason>`, shows as a toast,
+  and writes nothing. A pick of `true` writes without asking.
+- Core shows no `plugins.disabled` row: its JSON box would write the list without that ask. A hand edit of
+  `settings.json` still works, and a switch-off it names that cannot happen yet shows as a config problem.
+- `/` filters the rows by label and id, fuzzy. While `settings.json` fails its check the section shows the same problem
+  card as Core and refuses each pick.
+
+## Keybindings and Leader menu sections
+
+Both sections edit `keymap.json`'s user layer through the `userConfig` service, as the setting rows do, and show the
+merged keymap: defaults, each manifest's `keys`, then the user's layer.
+
+### Keybindings
 
 - The Leader row comes first ("The key every <Leader> bind starts with"): a one-line box, where an empty box or the
   default leader leaves the leader unset.
 - One row per command, every command included so an unbound one can get a key, grouped by plugin under a section
-  header (core first), each with its label. A row lists each bind in force as Kbd with its scope as a Tag, and `where`
-  or `mode` as a further Tag when set. A bind the user added shows "Set"; a default the user removed shows struck
-  through with "Removed", and one a user bind on the same keys displaced shows "Replaced by <label>", each judged per
-  half (page and editor) as the merge judges it. A default with one half still firing is not struck and shows "Partly
-  removed — still fires in the editor" or "Partly replaced by <label> — still fires on the page". A default a plugin's
-  default on the same keys replaces, as the merge lays the default layers, never fires: it is not listed, and a half
-  of one so replaced counts as a half it does not have. A command with no keys shows "Not bound".
-- A main command's row (`settings.show`, `window.summon`) lists its app menu, global or intercepted accelerators
-  read-only; they are edited in the advanced box. A default accelerator shows "Removed" when unbound and "Replaced by
-  <label>" when a user accelerator of the same kind takes its keys.
-- On a command row (Enter or `i` opens the add-bind box, as `a` does; on a main command's row they toast
-  "Accelerators are edited in the advanced box", as `a`, `d` and `r` do):
-  - `a` adds a bind: a box takes vim notation and shows a live Kbd preview and, when firing binds on the same keys and
-    scope exist, "Replaces <label>" naming every command the add displaces ("Replaces A and B", "Replaces A, B and
-    C"): each whose default still fires on a half the new bind shares, and each whose user bind the add drops. Enter
-    then opens the list picker of scopes (`any` and every scope), preselecting the scope of the command's first
-    default bind, else `any`. A bind added here carries no `where` or `mode`.
-  - `d` removes a bind (the list picker chooses which when the row has several): a default becomes an `unbind`
-    entry, a user bind leaves `binds`.
-  - `r` resets the row: every user `binds` entry naming that command, every other command's user bind sharing a half
+  header (core first). A row is one line: the action's label, its manifest `group` as a dim detail, then each bind in
+  force at the row's end as Kbd, separated by `·`. A bind carries a Tag only when it says something: its scope's title
+  when it is not `any`, `box` or `page` when `where` is set, its `mode`, and `Set` for a user bind. A default the user
+  removed shows struck through with "Removed", and one a user bind on the same keys displaced shows "Replaced by
+  <label>", each judged per half (page and editor) as the merge judges it; a default with one half still firing
+  shows "Partly removed — still fires in the editor" or "Partly replaced by <label> — still fires on the page". A
+  default a plugin's default on the same keys replaces, as the merge lays the default layers, never fires: it is not
+  listed. A command with no keys shows `—` in `fg-tertiary`.
+- The cursor row shows its keys as a cursor prompt: `↩ reassign`, `a add key`, `d clear`, `r reset`.
+  Where an edit names the binds it displaces, it names each by its row's label, so an arg row names its argument
+  (`B: arg`).
+  - **Reassign** (Enter or `i`) works on the row: the row's first bind in force is struck, and the next key or chord
+    the user presses is recorded in its place, shown live; Enter keeps it, Esc cancels, and Tab turns the row into a
+    one-line box for vim notation with the live Kbd preview. When the keys are taken in that scope the row shows
+    "<keys> runs "<label>" in <scope>: it moves here" under it before the commit. Reassign keeps the bind's scope,
+    `where` and `mode`; a row with several binds reassigns the one the list picker chooses.
+  - **Add key** (`a`) records the same way, then opens the list picker of scopes (`any` and every scope),
+    preselecting the scope of the command's first default bind, else `any`, each scope's line naming what the bind
+    would replace there. A bind added here carries no `where` or `mode`.
+  - **Clear** (`d`) removes a bind (the list picker chooses which when the row has several): a default becomes an
+    `unbind` entry, a user bind leaves `binds`.
+  - **Reset** (`r`): every user `binds` entry naming that command, every other command's user bind sharing a half
     with one of its default binds, and every `unbind` entry removing a half of one is removed.
-  - Adding a bind that another user bind already holds in that scope replaces that one in the user layer too.
-- An `Advanced` row at the bottom opens a JSON document box that edits `groups`, `remaps`, `app`, `intercept`, `global` and the
+  - Adding or reassigning onto keys another user bind holds in that scope replaces that one in the user layer too.
+- `f` cycles the filter over the rows: All, Bound, Unbound, Changed (a row with any user bind or unbind entry), each
+  shown as a chip with its count above the rows. `/` filters by label, qualified id, keys and accelerators, fuzzy,
+  inside the chip's rows.
+- `?` finds by key: the next key or chord the user presses becomes the query, and the rows show every command whose
+  bind is that key or starts with it, in every scope, under "<keys> runs" and "Starts with <keys>". Esc clears it.
+- A main command's row (`settings.show`, `window.summon`) lists its app menu, global or intercepted accelerators
+  read-only, and every edit key on it toasts "Accelerators are edited in the advanced box". A default accelerator shows
+  "Removed" when unbound and "Replaced by <label>" when a user accelerator of the same kind takes its keys.
+- An `Advanced` row at the bottom opens a JSON document box that edits `remaps`, `app`, `intercept`, `global` and the
   accelerator `unbind` entries (`app`, `global`, `intercept`); the command rows own `binds`, `leader` and the `keys`
-  `unbind` entries. `:w`, `:wq` and `:x` commit.
+  `unbind` entries, and the Leader menu owns `groups`. `:w`, `:wq` and `:x` commit.
+
+### Leader menu
+
+The leader tree as which-key shows it, edited in place, in two panes moved between with `Alt+h` / `Alt+l`:
+
+- **Groups**, on the left: Top level first, then every group prefix (a key sequence after the leader that some bind
+  runs past) in key order, a nested group (`z l`) indented under its parent. Each row shows the group's key, its name
+  from `groups` (or, unnamed, its commands' manifest groups, as which-key labels it) and its item count. `R` renames the
+  group (a one-line box writing its `groups` entry; an empty name removes the entry), `a` adds a group (record its key,
+  then name it), and `d` on a group removes its name; a group with items refuses with "Move or clear its items first".
+- **Items**, on the right: every bind directly under the selected group, in key order, a nested group's row opening it
+  on Enter. A row shows its key, the action's label (always the command's label: leader items take no label of their
+  own), its qualified id dim, and a Tag when it fires only in one scope (the scope's title) or only in a box (`in a
+  box`). The cursor row's prompt: `↩ change action`, `c change key`, `d clear`, `m move to group`, `r reset`.
+  - **Add** (`a`, also the `add…` row at the end, which lists the group's free keys) records one key, refusing one the
+    group already holds in an overlapping scope, then opens the list picker over every page command by label. A
+    command already bound under the leader shows that key in `status-warning`; picking it moves that bind instead of
+    adding a second. The scope picker then opens as Add key's does.
+  - **Change action** opens the same command picker and keeps the key and scope. A picked command that already has a
+    leader bind elsewhere moves that bind here and the item's old bind goes, as Add does: one leader path per command; **change key** records a new key in
+    the same group; **move to group** picks a group, then records the key there. Each is one user-layer edit: a user
+    bind's entry is rewritten, a default's becomes an `unbind` entry beside the new `binds` entry.
+  - **Clear** works as on the Keybindings section, on the one bind; **reset** works on the item's command, as on the
+    Keybindings section.
 
 ## The userConfig service
 

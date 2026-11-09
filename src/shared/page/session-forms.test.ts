@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createSessionCloseAnswers,
   type SessionForm,
   type SessionFormsState,
   sessionPaneView,
@@ -31,7 +30,6 @@ function state(
     activeSessionId,
     view,
     confirmReturnView: 'review',
-    confirmClosesSession: false,
   };
 }
 
@@ -74,58 +72,5 @@ describe('sessionPaneView', () => {
     },
   ])('draws $name', ({ given, sessionId, drawn }) => {
     expect(sessionPaneView(given, sessionId, 'edit')).toBe(drawn);
-  });
-});
-
-describe('createSessionCloseAnswers', () => {
-  // A store holding `held` until `set` changes it, telling each listener.
-  function heldStore(held: SessionFormsState<SessionForm, 'edit'>) {
-    const listeners: (() => void)[] = [];
-    return {
-      get: () => held,
-      subscribe(listener: () => void) {
-        listeners.push(listener);
-        return { dispose: () => undefined };
-      },
-      set(next: SessionFormsState<SessionForm, 'edit'>) {
-        held = next;
-        listeners.forEach((listener) => listener());
-      },
-    };
-  }
-  const asking = { ...state('confirm'), confirmClosesSession: true };
-
-  it.each([
-    {
-      case: 'the cancel closes the form',
-      end: (answers: ReturnType<typeof createSessionCloseAnswers>) =>
-        answers.closing('a'),
-      closes: true,
-    },
-    {
-      case: 'the plugin stops',
-      end: (answers: ReturnType<typeof createSessionCloseAnswers>) =>
-        answers.dispose(),
-      closes: false,
-    },
-  ])('wait_PromptEnds_Answers ($case)', async ({ end, closes }) => {
-    const answers = createSessionCloseAnswers(heldStore(asking));
-    const answer = answers.wait('a');
-
-    end(answers);
-
-    expect(await answer).toBe(closes);
-  });
-
-  it('wait_StateLeavesThePrompt_AnswersFalseOnce', async () => {
-    const store = heldStore(asking);
-    const answers = createSessionCloseAnswers(store);
-    const answer = answers.wait('a');
-    expect(answers.wait('a')).toBe(answer);
-
-    store.set(state('review'));
-    answers.closing('a');
-
-    expect(await answer).toBe(false);
   });
 });

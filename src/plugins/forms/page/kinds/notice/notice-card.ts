@@ -9,6 +9,7 @@ export const noticeFormat: ItemFormat<CardInputs['notice']> = {
   cardInput(round, index) {
     const notice = round.notices[index - 1];
     return {
+      index,
       label: labelFor(RAIL_PREFIX, index),
       title: notice.title,
       context: notice.context,

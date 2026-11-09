@@ -20,8 +20,7 @@ import {
   activeForm,
   closeFormFromMain,
   finishActiveForm,
-  guardSessionClose,
-  type SessionCloseAnswers,
+  mayCloseSessionForm,
   type SessionFormWords,
 } from '../../../shared/page/session-forms';
 import type { FormsView, RoundEnd } from '../contract';
@@ -43,11 +42,23 @@ import {
   type FormsStore,
   type ItemAnswer,
   itemAnswer,
+  answerableItems,
   pickNumber,
+  type RailItem,
+  railItems,
   railPosition,
+  type RoundState,
   unansweredItem,
 } from './form-state';
-import { itemName, jumpedToLine, jumpMoved } from './view-model';
+import {
+  itemName,
+  jumpedToLine,
+  jumpMoved,
+  lineCursorLine,
+  pickRailItem,
+  reviewRowsByRailPosition,
+  toggleNoticeLine,
+} from './view-model';
 
 export interface FormsCommandDeps {
   store: FormsStore;
@@ -84,8 +95,25 @@ const ANSWER_FIELDS: BoxField[] = ['notes', 'comment'];
 
 const APPEND: FocusOptions = { insertAtEnd: true };
 
+const DESCRIBE_CLEAR: DescribeChange = (_answer, item) =>
+  `cleared the choice on ${itemName(item)}`;
+
+const DESCRIBE_ACCEPT: DescribeChange = (_answer, item) =>
+  `accepted the recommendation on ${itemName(item)}`;
+
+const DESCRIBE_NOT_APPLICABLE: DescribeChange = (answer, item) =>
+  answer.notApplicable
+    ? `not applicable on ${itemName(item)}`
+    : `applicable again on ${itemName(item)}`;
+
+const DESCRIBE_DONT_ASK: DescribeChange = (answer, item) =>
+  answer.dontAsk
+    ? `don't ask on ${itemName(item)}`
+    : `ask again on ${itemName(item)}`;
+
 // Every forms command's handler, by short id. A command fired in a box first
-// focuses that box's item, so it acts where the user is typing.
+// focuses that box's item, so it acts where the user is typing; an `At`
+// command acts on the item its arg names instead, as a card's click does.
 export function formsCommandHandlers(
   deps: FormsCommandDeps,
 ): PageStart<typeof formsManifest>['commands'] {
@@ -120,26 +148,29 @@ export function formsCommandHandlers(
     // same number was held.
     choose: (context) => {
       const number = context.arg;
-      changeAnswer(deps, context, { type: 'choose', number }, (_, item) =>
-        activePickNumber(store.get(), item) === number
-          ? `chose ${number} on ${itemName(item)}`
-          : `cleared the choice on ${itemName(item)}`,
-      );
-    },
-    clearChoice: (context) => {
       changeAnswer(
         deps,
         context,
-        { type: 'clearChoice' },
-        (_answer, item) => `cleared the choice on ${itemName(item)}`,
+        { type: 'choose', number },
+        describeChoice(store, number),
       );
     },
+    clearChoice: (context) => {
+      changeAnswer(deps, context, { type: 'clearChoice' }, DESCRIBE_CLEAR);
+    },
+    // On the notices stop, opens or closes the line under the cursor.
     acceptRecommendation: (context) => {
+      focusBoxItem(store, boxIn(deps, context));
+      const stop = noticesStop(store.get());
+      if (stop !== null) {
+        toggleCursorLine(deps, stop);
+        return;
+      }
       changeAnswer(
         deps,
         context,
         { type: 'acceptRecommendation' },
-        (_answer, item) => `accepted the recommendation on ${itemName(item)}`,
+        DESCRIBE_ACCEPT,
       );
     },
     toggleNotApplicable: (context) => {
@@ -147,28 +178,78 @@ export function formsCommandHandlers(
         deps,
         context,
         { type: 'toggleNotApplicable' },
-        (answer, item) =>
-          answer.notApplicable
-            ? `not applicable on ${itemName(item)}`
-            : `applicable again on ${itemName(item)}`,
+        DESCRIBE_NOT_APPLICABLE,
       );
     },
     toggleDontAsk: (context) => {
-      const answer = changeAnswer(
+      focusReasonBoxWhenOn(
         deps,
-        context,
-        { type: 'toggleDontAsk' },
-        (changed, item) =>
-          changed.dontAsk
-            ? `don't ask on ${itemName(item)}`
-            : `ask again on ${itemName(item)}`,
+        changeAnswer(
+          deps,
+          context,
+          { type: 'toggleDontAsk' },
+          DESCRIBE_DONT_ASK,
+        ),
       );
-      if (answer?.dontAsk) {
-        focusShownBox(deps, ['dontAskReason']);
+    },
+    chooseAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg.item)) {
+        applyAnswer(
+          deps,
+          { type: 'choose', number: arg.number },
+          describeChoice(store, arg.number),
+        );
       }
     },
-    // As vim's `A`: `a` and `o` start typing after the box's text.
-    editNotes: () => focusShownBox(deps, ANSWER_FIELDS, APPEND),
+    clearChoiceAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg)) {
+        applyAnswer(deps, { type: 'clearChoice' }, DESCRIBE_CLEAR);
+      }
+    },
+    acceptRecommendationAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg)) {
+        applyAnswer(deps, { type: 'acceptRecommendation' }, DESCRIBE_ACCEPT);
+      }
+    },
+    toggleNotApplicableAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg)) {
+        applyAnswer(
+          deps,
+          { type: 'toggleNotApplicable' },
+          DESCRIBE_NOT_APPLICABLE,
+        );
+      }
+    },
+    toggleDontAskAt: ({ arg }) => {
+      if (focusNamedItem(deps, arg)) {
+        focusReasonBoxWhenOn(
+          deps,
+          applyAnswer(deps, { type: 'toggleDontAsk' }, DESCRIBE_DONT_ASK),
+        );
+      }
+    },
+    toggleNoticeAt: ({ arg }) => toggleNamedNotice(deps, arg),
+    focusNoticeAt: ({ arg }) => {
+      focusNamedNotice(deps, arg);
+    },
+    focusItem: ({ arg }) => {
+      focusNamedItem(deps, arg);
+    },
+    pickRailItem: ({ arg }) => pickNamedRailItem(deps, arg),
+    reviewJumpAt: ({ arg }) => jumpToReviewRow(deps, arg),
+    // As vim's `A`: `a` and `o` start typing after the box's text. On the
+    // notices stop, opens the line under the cursor first.
+    editNotes: () => {
+      const stop = noticesStop(store.get());
+      if (stop === null) {
+        focusShownBox(deps, ANSWER_FIELDS, APPEND);
+        return;
+      }
+      if (!stop.openNotices[stop.noticeLine - 1]) {
+        toggleCursorLine(deps, stop);
+      }
+      focusCursorLineBox(deps, APPEND);
+    },
     editNote: () => focusShownBox(deps, ['note'], APPEND),
     nextBox: (context) => stepFocus(deps, context, 1),
     prevBox: (context) => stepFocus(deps, context, -1),
@@ -184,6 +265,15 @@ export function formsCommandHandlers(
     prevItem: (context) => moveItem(deps, context, { type: 'prevItem' }),
     firstItem: (context) => moveItem(deps, context, { type: 'firstItem' }),
     lastItem: (context) => moveItem(deps, context, { type: 'lastItem' }),
+    nextLine: (context) => moveLine(deps, context, 1),
+    prevLine: (context) => moveLine(deps, context, -1),
+    toggleNotice: (context) => {
+      focusBoxItem(store, boxIn(deps, context));
+      const stop = noticesStop(store.get());
+      if (stop !== null) {
+        toggleCursorLine(deps, stop);
+      }
+    },
     nextUnanswered: (context) => jumpToUnanswered(deps, context, 1),
     prevUnanswered: (context) => jumpToUnanswered(deps, context, -1),
     openReview: (context) => {
@@ -233,15 +323,24 @@ function focusedAnswer(
 ): { item: AnswerableItem; answer: ItemAnswer } | null {
   const round = activeForm(state);
   const focused = round === null ? null : focusedItem(round);
-  if (round === null || focused === null || focused.kind === 'notice') {
+  if (round === null || focused === null || focused.kind === 'notices') {
     return null;
   }
   const item = { kind: focused.kind, index: focused.index };
   return { item, answer: itemAnswer(round, item) };
 }
 
-// Applies an answer action to the focused question or finding and logs the
-// change; returns the changed answer, or null when nothing changed.
+// The log line of a pick of `number`: the number the item now holds, or the
+// clear when the same number was held.
+function describeChoice(store: FormsStore, number: number): DescribeChange {
+  return (_answer, item) =>
+    activePickNumber(store.get(), item) === number
+      ? `chose ${number} on ${itemName(item)}`
+      : `cleared the choice on ${itemName(item)}`;
+}
+
+// Focuses the item of the command's box, then applies the answer action as
+// applyAnswer does.
 function changeAnswer(
   deps: FormsCommandDeps,
   context: EditorContext,
@@ -249,6 +348,16 @@ function changeAnswer(
   describe: DescribeChange,
 ): ItemAnswer | null {
   focusBoxItem(deps.store, boxIn(deps, context));
+  return applyAnswer(deps, action, describe);
+}
+
+// Applies an answer action to the focused question or finding and logs the
+// change; returns the changed answer, or null when nothing changed.
+function applyAnswer(
+  deps: FormsCommandDeps,
+  action: FormsAction,
+  describe: DescribeChange,
+): ItemAnswer | null {
   const before = focusedAnswer(deps.store.get());
   deps.store.dispatch(action);
   const after = focusedAnswer(deps.store.get());
@@ -257,6 +366,114 @@ function changeAnswer(
   }
   deps.log(describe(after.answer, after.item));
   return after.answer;
+}
+
+// Focuses Don't ask's reason box when `answer`, the toggled one, turned it on.
+function focusReasonBoxWhenOn(
+  deps: FormsCommandDeps,
+  answer: ItemAnswer | null,
+) {
+  if (answer?.dontAsk) {
+    focusShownBox(deps, ['dontAskReason']);
+  }
+}
+
+// The active round and its rail item at `position`; null with no round, and
+// null with the miss logged for a position the rail lacks, as a click drawn
+// before the round changed sends.
+function railItemAt(
+  deps: FormsCommandDeps,
+  position: number,
+): { round: RoundState; item: RailItem } | null {
+  const round = activeForm(deps.store.get());
+  if (round === null) {
+    return null;
+  }
+  const item = railItems(round.round)[position];
+  if (item === undefined) {
+    deps.log(`no rail item at ${position}`);
+    return null;
+  }
+  return { round, item };
+}
+
+// Focuses the item at rail `position` whatever box holds focus, so a click's
+// answer lands on its own card; false when railItemAt found none.
+function focusNamedItem(deps: FormsCommandDeps, position: number): boolean {
+  if (railItemAt(deps, position) === null) {
+    return false;
+  }
+  deps.store.dispatch({ type: 'focusItem', item: position });
+  return true;
+}
+
+// The rail entry at `position` picked in the view the store shows now, with
+// the review row the item has there.
+function pickNamedRailItem(deps: FormsCommandDeps, position: number) {
+  const found = railItemAt(deps, position);
+  if (found === null) {
+    return;
+  }
+  const { store, log } = deps;
+  pickRailItem(
+    {
+      dispatch: (action) => store.dispatch(action),
+      getState: () => store.get(),
+      log,
+    },
+    store.get().view,
+    found.item,
+    position,
+    reviewRowsByRailPosition(found.round)[position],
+  );
+}
+
+// Moves the active round's line cursor onto notice `notice`, 1-based, which
+// focuses the notices stop; returns the round, or null with no round, and null
+// with the miss logged for a notice the round lacks.
+function focusNamedNotice(
+  deps: FormsCommandDeps,
+  notice: number,
+): RoundState | null {
+  const round = activeForm(deps.store.get());
+  if (round === null) {
+    return null;
+  }
+  if (round.openNotices[notice - 1] === undefined) {
+    deps.log(`no notice ${notice}`);
+    return null;
+  }
+  deps.store.dispatch({ type: 'focusNotice', notice });
+  return round;
+}
+
+// Focuses notice `notice` as focusNamedNotice does, then opens or closes its
+// line, as a click on its head does.
+function toggleNamedNotice(deps: FormsCommandDeps, notice: number) {
+  const { store, log } = deps;
+  const round = focusNamedNotice(deps, notice);
+  if (round === null) {
+    return;
+  }
+  toggleNoticeLine(
+    { dispatch: store.dispatch, getState: store.get, log },
+    round.formId,
+    notice,
+  );
+}
+
+// Moves the review cursor to `row` and shows its item, as Enter on the row
+// does; a row the review lacks is logged.
+function jumpToReviewRow(deps: FormsCommandDeps, row: number) {
+  const round = activeForm(deps.store.get());
+  if (round === null) {
+    return;
+  }
+  if (answerableItems(round.round)[row] === undefined) {
+    deps.log(`no review row ${row}`);
+    return;
+  }
+  deps.store.dispatch({ type: 'reviewJump', row });
 }
 
 function focusShownBox(
@@ -296,8 +513,9 @@ function scrollForm(
   );
 }
 
-// From inside a box the user stays typing: the new item's notes or comment
-// box takes focus. From the page, focus stays on the page.
+// From inside a box the user stays typing: the new item's notes box takes
+// focus, or on the notices stop the cursor line's comment box, focus leaving
+// the box when that line is closed. From the page, focus stays on the page.
 function moveItem(
   deps: FormsCommandDeps,
   context: EditorContext,
@@ -308,9 +526,77 @@ function moveItem(
   const before = activeForm(deps.store.get())?.focus;
   deps.store.dispatch(action);
   const after = activeForm(deps.store.get())?.focus;
-  if (box !== undefined && after !== before) {
-    focusShownBox(deps, ANSWER_FIELDS);
+  if (box === undefined || after === before) {
+    return;
   }
+  if (noticesStop(deps.store.get()) === null) {
+    focusShownBox(deps, ANSWER_FIELDS);
+  } else if (!focusCursorLineBox(deps)) {
+    deps.boxes.leave();
+  }
+}
+
+// On the notices stop, moves the line cursor and logs it; past either end of
+// the lines, and on any other stop, moves by item as nextItem and prevItem do.
+function moveLine(
+  deps: FormsCommandDeps,
+  context: EditorContext,
+  delta: 1 | -1,
+) {
+  focusBoxItem(deps.store, boxIn(deps, context));
+  const stop = noticesStop(deps.store.get());
+  if (stop !== null) {
+    deps.store.dispatch({ type: 'moveNoticeLine', delta });
+    const line = activeForm(deps.store.get())?.noticeLine;
+    if (line !== undefined && line !== stop.noticeLine) {
+      deps.log(lineCursorLine(line));
+      return;
+    }
+  }
+  moveItem(deps, context, { type: delta === 1 ? 'nextItem' : 'prevItem' });
+}
+
+// The active round while the forms view shows its notices stop, else null.
+function noticesStop(state: FormsState): RoundState | null {
+  const round = activeForm(state);
+  const isOnNoticesStop =
+    state.view === 'forms' &&
+    round !== null &&
+    focusedItem(round)?.kind === 'notices';
+  return isOnNoticesStop ? round : null;
+}
+
+// Opens or closes the notices stop's cursor line, and logs it.
+function toggleCursorLine(deps: FormsCommandDeps, stop: RoundState) {
+  toggleNoticeLine(
+    {
+      dispatch: deps.store.dispatch,
+      getState: deps.store.get,
+      log: deps.log,
+    },
+    stop.formId,
+    stop.noticeLine,
+  );
+}
+
+// Focuses the comment box of the notices stop's cursor line while that line is
+// open; false when it is closed or the notices stop is not shown.
+function focusCursorLineBox(
+  deps: FormsCommandDeps,
+  options?: FocusOptions,
+): boolean {
+  const stop = noticesStop(deps.store.get());
+  if (stop === null || !stop.openNotices[stop.noticeLine - 1]) {
+    return false;
+  }
+  deps.boxes.focus(
+    {
+      roundId: stop.formId,
+      target: { field: 'comment', notice: stop.noticeLine },
+    },
+    options,
+  );
+  return true;
 }
 
 function jumpToUnanswered(
@@ -329,9 +615,7 @@ function jumpToUnanswered(
     deps.log('no unanswered item');
     return;
   }
-  const focused = focusedItem(round);
-  const isFocusedItem =
-    focused?.kind === item.kind && focused.index === item.index;
+  const isFocusedItem = railPosition(round.round, item) === round.focus;
   if (isFocusedItem) {
     deps.log('no other unanswered item');
     return;
@@ -345,24 +629,12 @@ function jumpToUnanswered(
   }
 }
 
-// `showForm` selects the session's Form tab; `activate` selects the session;
-// `closeAnswers` holds the cancel prompt's answer to the close.
-export interface GuardCloseDeps extends Pick<
-  FormsCommandDeps,
-  'store' | 'toast' | 'log'
-> {
-  showForm(sessionId: string): void;
-  activate(sessionId: string): void;
-  closeAnswers: Pick<SessionCloseAnswers, 'wait'>;
-}
-
-// A session closes only once its round is gone, as guardSessionClose keeps
-// it.
-export function guardClose(
-  deps: GuardCloseDeps,
+// Whether the session's popup lets it close, as mayCloseSessionForm decides.
+export function mayCloseRound(
+  deps: Pick<FormsCommandDeps, 'store' | 'toast' | 'log'>,
   sessionId: string,
-): boolean | Promise<boolean> {
-  return guardSessionClose({ ...deps, words: ROUND_WORDS }, sessionId);
+): boolean {
+  return mayCloseSessionForm({ ...deps, words: ROUND_WORDS }, sessionId);
 }
 
 // Hands main the active round's finish, as finishActiveForm sends it.
@@ -378,12 +650,10 @@ function finishActiveRound(
   );
 }
 
-export interface CloseRoundFromMainDeps extends Pick<
+export type CloseRoundFromMainDeps = Pick<
   FormsCommandDeps,
   'store' | 'toast' | 'log'
-> {
-  closeAnswers: Pick<SessionCloseAnswers, 'closing'>;
-}
+>;
 
 // Closes a round main closed, as closeFormFromMain closes it.
 export function closeRoundFromMain(

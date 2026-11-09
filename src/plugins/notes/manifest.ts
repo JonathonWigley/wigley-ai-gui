@@ -4,8 +4,14 @@ import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 // A popup over any mode that keeps one note draft — target repo, title, body,
 // tags, a session and marked-up images — and sends it to a new or existing
 // follow-up through Backlog, or to a new background session through chat.
+// `pickColour`, `removeImageAt` and `removeSession` are the clicks on a colour,
+// an image's remove and the session's remove, each naming its target, so none
+// has a key.
 export const notesManifest = definePlugin({
   id: 'notes',
+  label: 'Notes',
+  description:
+    'Adds a note popup, over every mode, that sends a note to a follow-up or to a new session.',
   dependsOn: {
     main: ['sessions', 'chat', 'backlog'],
     page: [],
@@ -81,6 +87,24 @@ export const notesManifest = definePlugin({
       runsIn: 'page',
     },
     confirmNo: { label: 'keep the draft', group: 'confirm', runsIn: 'page' },
+    pickColour: {
+      label: 'pick this colour',
+      group: 'markup',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    removeImageAt: {
+      label: 'remove this image',
+      group: 'images',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    removeSession: {
+      label: 'remove this session',
+      group: 'fields',
+      runsIn: 'page',
+      arg: 'string',
+    },
   },
   scopes: {
     popup: 'In the note popup',

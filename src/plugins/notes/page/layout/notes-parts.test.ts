@@ -37,7 +37,6 @@ const imageEntries = {
     position <= 2
       ? { ...IMAGE, position, alt: `Image ${position}` }
       : undefined,
-  removeImageAt: () => undefined,
 };
 
 // The alt text of each thumbnail under `root`, in order.
@@ -202,7 +201,7 @@ describe('notes parts', () => {
         },
       } satisfies Layout,
       draw: (parts: NotesParts, parent: HTMLElement) =>
-        parts.markupToolbar(parent, () => undefined).element,
+        parts.markupToolbar(parent).element,
       read: (root: HTMLElement) =>
         findAll(asFake(root), 'notes-colour').map((button) =>
           buttonLabels(asHtml(button)).join(),

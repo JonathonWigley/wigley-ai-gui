@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type {
@@ -75,7 +75,8 @@ const ROW: PoolRow = {
 };
 
 const NO_PENDING: ReadonlyMap<number, PendingAction> = new Map();
-const NO_ACTIONS = { run: () => {}, select: () => {} };
+
+const CLONE_1 = { pool: 'p', clone: 1 };
 
 describe('ordinal', () => {
   it.each([
@@ -310,7 +311,7 @@ describe('poolOfRow', () => {
   );
 });
 
-// A clone's input with its functions replaced by what the layout reads from them.
+// A clone's input with its holder's `sessionId` replaced by whether it selects.
 function plainClone(input: PanelCloneInput) {
   const { holder, action, ...rest } = input;
   return {
@@ -322,10 +323,9 @@ function plainClone(input: PanelCloneInput) {
             kind: holder.kind,
             label: holder.label,
             idleMs: holder.idleMs,
-            selects: holder.select !== null,
+            selects: holder.sessionId !== null,
           },
-    action:
-      action === null ? null : { label: action.label, running: action.running },
+    action,
   };
 }
 
@@ -356,7 +356,15 @@ describe('panelInput', () => {
     {
       name: 'free',
       clone: clone(1),
-      expected: { ...BASE_EXPECTED, action: { label: 'Hold', running: false } },
+      expected: {
+        ...BASE_EXPECTED,
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: false,
+        },
+      },
     },
     {
       name: 'user hold',
@@ -369,7 +377,12 @@ describe('panelInput', () => {
           idleMs: null,
           selects: false,
         },
-        action: { label: 'Release', running: false },
+        action: {
+          label: 'Release',
+          command: 'unity-pool.release',
+          arg: CLONE_1,
+          running: false,
+        },
       },
     },
     {
@@ -475,7 +488,15 @@ describe('panelInput', () => {
           error: null,
         },
       }),
-      expected: { ...BASE_EXPECTED, action: { label: 'Hold', running: false } },
+      expected: {
+        ...BASE_EXPECTED,
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: false,
+        },
+      },
     },
     {
       name: 'warm-up failed',
@@ -492,14 +513,27 @@ describe('panelInput', () => {
         ...BASE_EXPECTED,
         editor: 'editor busy',
         warmup: { state: 'failed', error: 'license' },
-        action: { label: 'Hold', running: false },
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: false,
+        },
       },
     },
     {
       name: 'pending running hold',
       clone: clone(1),
       pending: new Map([[1, { action: 'hold', running: true, result: null }]]),
-      expected: { ...BASE_EXPECTED, action: { label: 'Hold', running: true } },
+      expected: {
+        ...BASE_EXPECTED,
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: true,
+        },
+      },
     },
     {
       name: 'finished release with its result',
@@ -516,7 +550,12 @@ describe('panelInput', () => {
       ]),
       expected: {
         ...BASE_EXPECTED,
-        action: { label: 'Hold', running: false },
+        action: {
+          label: 'Hold',
+          command: 'unity-pool.hold',
+          arg: CLONE_1,
+          running: false,
+        },
         result: { ok: true, text: 'Released Unity 1' },
       },
     },
@@ -548,7 +587,6 @@ describe('panelInput', () => {
       rows,
       NOW,
       pending ?? NO_PENDING,
-      NO_ACTIONS,
       null,
     );
     expect(plainClone(input.clones[0])).toEqual(expected);
@@ -596,7 +634,6 @@ describe('panelInput', () => {
         rows,
         NOW,
         NO_PENDING,
-        NO_ACTIONS,
         null,
       );
       expect(input.clones.map((each) => each.blocking)).toEqual(blocking);
@@ -633,7 +670,6 @@ describe('panelInput', () => {
       rows,
       NOW,
       NO_PENDING,
-      NO_ACTIONS,
       null,
     );
     expect(input.counts).toEqual(counts);
@@ -670,7 +706,6 @@ describe('panelInput', () => {
       rows,
       NOW,
       NO_PENDING,
-      NO_ACTIONS,
       null,
     );
     expect(input.clones[0]).toMatchObject({ branch, dirty, blocking: false });
@@ -706,7 +741,6 @@ describe('panelInput', () => {
       rows,
       NOW,
       NO_PENDING,
-      NO_ACTIONS,
       null,
     );
     expect(
@@ -743,8 +777,7 @@ describe('panelInput', () => {
     ]);
   });
 
-  it('panelInput_Select_CallsActionWithRowId', () => {
-    const actions = { run: vi.fn(), select: vi.fn() };
+  it('panelInput_HolderAndAction_CarrySessionIdAndClone', () => {
     const input = panelInput(
       pool('p', [
         clone(3, { claim: claim('agent', 'host-7', null) }),
@@ -753,13 +786,13 @@ describe('panelInput', () => {
       rows,
       NOW,
       NO_PENDING,
-      actions,
       null,
     );
-    input.clones[0].holder?.select?.();
-    input.clones[1].action?.run();
-    expect(actions.select.mock.calls).toEqual([['row-7']]);
-    expect(actions.run.mock.calls).toEqual([['hold', 4]]);
+    expect(input.clones[0].holder?.sessionId).toBe('row-7');
+    expect(input.clones[1].action).toMatchObject({
+      command: 'unity-pool.hold',
+      arg: { pool: 'p', clone: 4 },
+    });
   });
 
   // Clone 1 held by the user, clone 2 claimed by row A, clone 3 handed off to row B, then a ticket queued by row C
@@ -791,14 +824,7 @@ describe('panelInput', () => {
     { case: 'none', cursor: null, marked: [] },
     { case: 'past the last', cursor: 9, marked: ['ticket 1'] },
   ])("marks the cursor's session holder only: $case", ({ cursor, marked }) => {
-    const input = panelInput(
-      cursorPool,
-      cursorRows,
-      NOW,
-      NO_PENDING,
-      NO_ACTIONS,
-      cursor,
-    );
+    const input = panelInput(cursorPool, cursorRows, NOW, NO_PENDING, cursor);
     const holders = [
       ...input.clones.map((each, index) => ({
         name: `clone ${index + 1}`,
@@ -817,14 +843,7 @@ describe('panelInput', () => {
   });
 
   it('sessionHolders walks the clones, then the queue, sessions only', () => {
-    const input = panelInput(
-      cursorPool,
-      cursorRows,
-      NOW,
-      NO_PENDING,
-      NO_ACTIONS,
-      null,
-    );
+    const input = panelInput(cursorPool, cursorRows, NOW, NO_PENDING, null);
     expect(sessionHolders(input).map((holder) => holder.label)).toEqual([
       'A',
       'B',

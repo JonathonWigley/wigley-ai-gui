@@ -1,6 +1,10 @@
 import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
-import type { ChatMainEvents, ResumeSectionRow } from '../../chat/contract';
+import {
+  type ChatMainEvents,
+  isUserClose,
+  type ResumeSectionRow,
+} from '../../chat/contract';
 import { editableTitle } from '../../sessions/contract';
 import type { StashRequest } from '../contract';
 import type { StashRecord, StashStore } from './stash-store';
@@ -89,7 +93,7 @@ export function createSessionStash(deps: SessionStashDeps): SessionStash {
         return;
       }
       pending.delete(closed.sessionId);
-      if (closed.reason !== 'user') {
+      if (!isUserClose(closed.reason)) {
         return;
       }
       const record = recordOf(closed, note);

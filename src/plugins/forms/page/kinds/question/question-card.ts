@@ -13,7 +13,7 @@ export const questionFormat: AnswerableFormat<CardInputs['question']> = {
     return {
       label: labelFor(RAIL_PREFIX, index),
       title: question.title,
-      question: question.question,
+      summary: question.summary,
       context: question.context,
       choices: [...question.choices],
       recommend: question.recommend,

@@ -8,6 +8,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // resume section.
 export const sessionStashManifest = definePlugin({
   id: 'session-stash',
+  label: 'Session stash',
+  description:
+    'Stashes a session with a note, and offers it again in the start prompt.',
   dependsOn: { main: ['chat', 'sessions'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

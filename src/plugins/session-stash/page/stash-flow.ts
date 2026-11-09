@@ -17,9 +17,9 @@ export const REFUSED_TOAST = 'Only sessions the app started can be stashed';
 
 // Stashes the session `name` names: main keeps the note first, so the close's
 // event finds it, then the session closes the normal way. A close a tab, a
-// guard or main keeps (chat's end-session confirm or forms' cancel prompt
-// answered no) drops the note again; a session main refuses toasts and stays
-// open. Resolves once settled; a failed ask or drop is logged.
+// guard or main keeps (chat's end-session confirm answered no, or main's guard
+// refusing a session with an open round) drops the note again; a session main
+// refuses toasts and stays open. Resolves once settled; a failed ask or drop is logged.
 export async function stashSession(
   deps: StashFlowDeps,
   request: StashRequest,

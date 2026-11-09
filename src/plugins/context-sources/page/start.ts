@@ -1,11 +1,10 @@
-import type { CoreEvents } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   PageApi,
   PagePart,
-  QualifiedEvents,
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 import { chatPageKey } from '../../chat/contract';
 import { followRows, sessionsRowsSlot } from '../../sessions/contract';
 import { contextBreakdownsSlot } from '../contract';
@@ -19,8 +18,7 @@ import { createContextSection } from './context-section';
 type ContextSourcesApi = PageApi<
   typeof contextSourcesManifest,
   ChannelShape,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
+  Record<never, never>
 >;
 
 // Draws the session hub's Context section through chat's side parts and the `context-sources.layout` layout. Reads
@@ -37,11 +35,7 @@ export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
       kit: {
         markdown: services.markdown,
         keys: api.keys,
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          argShape: (id) => api.keys.command(id)?.arg,
-          run: (id) => api.commands.run(id),
-        },
+        commands: kitCommandsOf(api),
         platform: api.platform.os,
         state: api.state.forLayouts,
       },
@@ -53,12 +47,6 @@ export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
     chat.addSidePart(section.part);
 
     followRows(rows, { removed: (sessionId) => section.forget(sessionId) });
-    api.events.on('core.pageReady', () => {
-      breakdowns.on((sessionId) => section.breakdownUpdated(sessionId));
-      callEach([...breakdowns.all().keys()], (sessionId) =>
-        section.breakdownUpdated(sessionId),
-      );
-    });
 
     api.layouts.show<Layout>({
       defaultLayout,
@@ -68,6 +56,14 @@ export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
       setLayouts: (shown) => section.setLayouts(shown),
     });
 
-    return { commands: {} };
+    return {
+      commands: {},
+      ready() {
+        breakdowns.on((sessionId) => section.breakdownUpdated(sessionId));
+        callEach([...breakdowns.all().keys()], (sessionId) =>
+          section.breakdownUpdated(sessionId),
+        );
+      },
+    };
   },
 };

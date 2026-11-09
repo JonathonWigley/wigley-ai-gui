@@ -36,8 +36,6 @@ import { createSplit, type Split } from '../../../shared/page/ui/split';
 import type { FormsContributions } from './contributions';
 import type { BoxRef } from './boxes';
 import {
-  type FormsAction,
-  type FormsState,
   progress,
   railItems,
   type RoundState,
@@ -48,6 +46,7 @@ import type { CardDeps, ItemCard } from './kinds/item-format';
 import { baseKitDepsFor, createFormsBaseKit } from './layout/card-kit';
 import { buildLayoutCard } from './layout/layout-cards';
 import {
+  buildNoticesPane,
   buildRailPane,
   buildReviewPane,
   type PaneDeps,
@@ -68,10 +67,10 @@ import {
   roundSaveState,
 } from './view-model';
 
-// `getState` reads the forms state, so a rail click logs only a jump that
-// moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
-// rail's dragged width; `timers` runs the split's resize prompt linger.
-// `commands` is what every kit's `command` checks and runs; `contributions`
+// `platform` is the OS key hints are drawn for; `uiState` keeps the rail's
+// dragged width; `timers` runs the split's resize prompt linger. `commands`
+// is what every kit's `command` checks and runs, and every click of a card
+// and pane runs through; `contributions`
 // holds the card parts and review columns other plugins added; `state` is
 // what every kit's `state` reads.
 export interface RoundViewDeps {
@@ -88,8 +87,6 @@ export interface RoundViewDeps {
     | 'formIdOf'
   >;
   keys: Pick<KeyHints, 'keysFor' | 'onKeymapChanged' | 'anchor'>;
-  dispatch(action: FormsAction): void;
-  getState(): FormsState;
   run(command: CommandId): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
@@ -154,9 +151,10 @@ interface ItemPager {
 
 // One open round's DOM, built with its editors: a split with the rail header,
 // the rail pane and the Review button in its start pane, and the layout's
-// head, the item pager, every item's card and the review pane, which holds the
-// round note, in its end pane, each card and pane drawn by the layout
-// `pickRoundLayouts` picks for it from `shown`. A render only updates it, the
+// head, the item pager, every finding's and question's card, the notices
+// pane and the review pane, which holds the round note, in its end pane, each
+// card and pane drawn by the layout `pickRoundLayouts` picks for it from
+// `shown`. A render only updates it, the
 // rail taking the latest dragged width of any round; new layouts that change a
 // pick rebuild both panes, as `rebuild` does, keeping the rail's dragged
 // width, the focused box and the main column's scroll. Every key hint is an
@@ -282,9 +280,9 @@ function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
 
 // Builds the split's start pane, the rail header, the rail pane and the rail
 // foot, and the round's main column in its end pane: the layout's head, the
-// item pager, the items pane of cards, and the review pane, each card and pane
-// drawn by its pick in `picks`. A rail click acts on the forms view the state
-// holds as it lands, the cancel prompt included. Every part anchors its keys
+// item pager, the items pane of cards and the notices pane at the notices
+// stop's rail position, and the review pane, each card and pane drawn by its
+// pick in `picks`. Every part anchors its keys
 // through one recording `keys` and records its markdown mounts beside those
 // anchors, the head into its own, so `dispose` reaches them all.
 function buildRoundParts(
@@ -306,12 +304,9 @@ function buildRoundParts(
     platform: deps.platform,
     log: deps.log,
     keys,
-    dispatch: deps.dispatch,
-    getState: deps.getState,
     run: deps.run,
     mountBox,
     destroyBox,
-    shownView: () => deps.getState().view,
     commands: deps.commands,
     contributions: deps.contributions,
     state: deps.state,
@@ -350,8 +345,6 @@ function buildRoundParts(
     markdown: deps.markdown,
     mountBox,
     destroyBox,
-    dispatch: deps.dispatch,
-    toggleDontAsk: () => deps.run(formsCommand('toggleDontAsk')),
     keys,
     platform: deps.platform,
     log: deps.log,
@@ -362,14 +355,24 @@ function buildRoundParts(
     recordMount: (mount) => anchors.push(mount),
   };
   const itemCards = items.map((item, position) =>
-    buildLayoutCard(
-      picks.cards[position],
-      itemsPane,
-      round,
-      item,
-      position,
-      cardDeps,
-    ),
+    item.kind === 'notices'
+      ? buildNoticesPane(
+          picks.panes.notices,
+          picks.noticeCards,
+          itemsPane,
+          round,
+          position,
+          paneDeps,
+          cardDeps,
+        )
+      : buildLayoutCard(
+          picks.cards[position],
+          itemsPane,
+          round,
+          item,
+          position,
+          cardDeps,
+        ),
   );
   const review = buildReviewPane(picks.panes.review, main, round, paneDeps);
   return {

@@ -1,11 +1,8 @@
 import './notes.css';
-import type {
-  PageApi,
-  PagePart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
-import type { CoreEvents } from '../../../contracts/core-state';
+import { onPageHide } from '../../../shared/page/page-hide';
+import { placeWrites } from '../../../shared/page/place-slot';
 import type { KeyedSlotReader, SlotReader } from '../../../contracts/state';
 import {
   followRows,
@@ -13,20 +10,21 @@ import {
   type SessionRow,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type { NoteSession, NotesChannel } from '../contract';
+import {
+  type NoteSession,
+  type NotesChannel,
+  type NotesPlace,
+  notesPlaceSlot,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { notesManifest } from '../manifest';
 import { readNotesLayout } from './layout/read-notes-layout';
 import { createNotePopup, type NotePopupDeps } from './popup';
+import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
-type NotesApi = PageApi<
-  typeof notesManifest,
-  NotesChannel,
-  Record<never, never>,
-  QualifiedEvents<'core', CoreEvents>
->;
+type NotesApi = PageApi<typeof notesManifest, NotesChannel>;
 
 // A row with no host session id can be neither attached nor named.
 function noteSessionOf(row: SessionRow | undefined): NoteSession | null {
@@ -56,21 +54,22 @@ export function noteSessions(
 
 // The note popup over any mode, on `Space n n`, drawn with the layout the
 // `layout` setting names. It offers the popup the open session rows that carry
-// a host session id, so the popup can attach one.
+// a host session id, so the popup can attach one. The popup's open state and
+// cursors go to `notes.place` on each change, and a page load opens the popup
+// again where the last page left it, open through the base changes made
+// before the page load's restores settle. A draft not yet saved refuses a
+// switch-off.
 export const notesPagePart: PagePart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
     const { services } = api;
     const rows = api.state.read(sessionsRowsSlot);
     const active = api.state.read(sessionsActiveSlot);
-
-    api.events.on('core.pageReady', () => {
-      followRows(rows, {
-        added: ({ hostSessionId }) =>
-          services.log(`session ${hostSessionId ?? 'none'} listed`),
-        hostChanged: ({ hostSessionId }) =>
-          services.log(`session moved to ${hostSessionId ?? 'none'}`),
-      });
+    const placeWriter = api.state.publish(notesPlaceSlot);
+    const place = placeWrites<NotesPlace>((value) => placeWriter.set(value));
+    let restoresSettled = false;
+    api.restores.onSettled(() => {
+      restoresSettled = true;
     });
 
     const popup = createNotePopup({
@@ -78,11 +77,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       services,
       keys: api.keys,
       overlay: api.areas.overlay,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        argShape: (id) => api.keys.command(id)?.arg,
-        run: (id) => api.commands.run(id),
-      },
+      commands: kitCommandsOf(api),
       platform: api.platform.os,
       state: api.state.forLayouts,
       pushScope: (scope) => api.keys.pushScope(scope),
@@ -90,7 +85,14 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       ...noteSessions(rows, active),
       drops: api.drops,
       encoder: canvasEncoder,
+      onPageHide,
+      restoresSettled: () => restoresSettled,
+      placeChanged: (value) => place.write(value),
     });
+    const savedPlace = placeWriter.get();
+    if (savedPlace !== undefined) {
+      popup.restorePlace(savedPlace);
+    }
     api.layouts.show<Layout>({
       defaultLayout,
       defaultStylesheet,
@@ -98,6 +100,18 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => popup.setLayouts(shown),
     });
-    return { commands: popup.commands, dispose: () => popup.dispose() };
+    return {
+      commands: popup.commands,
+      mayStop: () => popup.mayStop(),
+      ready() {
+        followRows(rows, {
+          added: ({ hostSessionId }) =>
+            services.log(`session ${hostSessionId ?? 'none'} listed`),
+          hostChanged: ({ hostSessionId }) =>
+            services.log(`session moved to ${hostSessionId ?? 'none'}`),
+        });
+      },
+      dispose: () => popup.dispose(),
+    };
   },
 };

@@ -17,6 +17,7 @@ import { createSlotStore } from '../../../shared/state/slot-store';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
 import {
   type AgentSession,
+  type ContributeToolsOptions,
   type SessionsMainEvents,
   type SessionsMainExports,
   type ToolCallContext,
@@ -92,7 +93,6 @@ function session(id: string, hostSessionId: string): AgentSession {
     info: {
       sessionId: hostSessionId,
       projectDir: '/r',
-      deadlineSeconds: null,
       harness: null,
     },
   };
@@ -133,10 +133,11 @@ function startWorkflowPart(
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
+    options: ContributeToolsOptions | undefined;
   }[] = [];
   const sessions: Pick<SessionsMainExports, 'contributeTools'> = {
-    contributeTools: (tools, start) => {
-      const contribution = { tools, start };
+    contributeTools: (tools, start, options) => {
+      const contribution = { tools, start, options };
       contributions.push(contribution);
       return {
         dispose: () => {
@@ -648,11 +649,17 @@ describe('workflowMainPart', () => {
     const workflow = startLightAndMedium();
 
     expect(
-      workflow.contributions.flatMap(({ tools }) => tools.map((t) => t.name)),
+      workflow.contributions.map(({ tools, options }) => ({
+        tools: tools.map((t) => t.name),
+        options,
+      })),
     ).toEqual(
       expect.arrayContaining([
-        SET_WORKFLOW_STEP_TOOL,
-        SET_WORKFLOW_CHECKLIST_TOOL,
+        { tools: [SET_WORKFLOW_STEP_TOOL], options: { mainAgentOnly: true } },
+        {
+          tools: [SET_WORKFLOW_CHECKLIST_TOOL],
+          options: { mainAgentOnly: true },
+        },
       ]),
     );
   });
@@ -690,6 +697,13 @@ describe('workflowMainPart', () => {
 
     expect(workflow.contributions).toHaveLength(contributionsAtStart);
     expect(stepsOffered()).toContain('extra');
+    expect(
+      workflow.contributions
+        .filter(({ tools }) =>
+          tools.some((tool) => tool.name === SET_WORKFLOW_STEP_TOOL),
+        )
+        .map(({ options }) => options),
+    ).toEqual([{ mainAgentOnly: true }]);
     await workflow.openS1();
     await workflow.agentEvent(skill('x:stub', ''));
     await workflow.callStepTool('s1', 'extra');

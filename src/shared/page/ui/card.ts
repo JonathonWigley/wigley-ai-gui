@@ -22,6 +22,10 @@ export interface CollapsibleCardOptions {
   plain?: boolean;
   leading?: HTMLElement | null;
   open?: boolean;
+  // Build the body once, at creation, and hide it while closed.
+  keepBody?: boolean;
+  // A head click calls this in place of toggling; the caller calls `setOpen`.
+  onToggle?(): void;
   body(): HTMLElement;
 }
 
@@ -31,8 +35,10 @@ export interface CollapsibleCard {
   setOpen(open: boolean): void;
 }
 
-// A card, or a plain row, whose head toggles its body. Each opening builds the
-// body afresh from `body()`; closing drops it.
+// A card, or a plain row, whose head toggles its body. By default each opening
+// builds the body afresh from `body()` and closing drops it; with `keepBody` the
+// body is built once and hidden while closed; with `onToggle` the head click
+// goes to the caller.
 export function createCollapsibleCard(
   options: CollapsibleCardOptions,
 ): CollapsibleCard {
@@ -43,9 +49,13 @@ export function createCollapsibleCard(
   if (options.plain === true) {
     root.classList.add('ui-collapsible--plain');
   }
-  const head = button('ui-collapsible-head', '', () =>
-    collapsible.setOpen(!open),
-  );
+  const head = button('ui-collapsible-head', '', () => {
+    if (options.onToggle) {
+      options.onToggle();
+    } else {
+      collapsible.setOpen(!open);
+    }
+  });
   let chevron = icon('chevron-right');
   head.append(chevron);
   if (options.leading) {
@@ -58,6 +68,13 @@ export function createCollapsibleCard(
   }
   head.append(summary);
   root.append(head);
+  const keptBody =
+    options.keepBody === true ? element('div', 'ui-collapsible-body') : null;
+  if (keptBody) {
+    keptBody.append(options.body());
+    keptBody.hidden = true;
+    root.append(keptBody);
+  }
   const collapsible: CollapsibleCard = {
     element: root,
     isOpen: () => open,
@@ -70,6 +87,10 @@ export function createCollapsibleCard(
       const nextChevron = icon(open ? 'chevron-down' : 'chevron-right');
       chevron.replaceWith(nextChevron);
       chevron = nextChevron;
+      if (keptBody) {
+        keptBody.hidden = !open;
+        return;
+      }
       shownBody?.remove();
       shownBody = null;
       if (open) {

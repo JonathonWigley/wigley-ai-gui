@@ -1,11 +1,13 @@
 import type { Paths } from '../../../contracts/paths';
-import type {
-  CloneStranded,
-  EditorState,
-  PoolAction,
-  PoolClone,
-  PoolHolder,
-  PoolState,
+import {
+  type CloneStranded,
+  type EditorState,
+  type PoolAction,
+  type PoolClone,
+  type PoolHolder,
+  type PoolState,
+  unityPoolHoldCommand,
+  unityPoolReleaseCommand,
 } from '../contract';
 import type {
   HolderInput,
@@ -99,35 +101,31 @@ export function poolOfRow(
 }
 
 // The panel of `pool` at `now`: each clone in number order with its holder matched to `rows`, the queue in order,
-// and the counts. `pending` holds this pool's Hold and Release runs by clone number; an action's `run` calls
-// `actions.run` with its clone, and a session holder's `select` calls `actions.select` with its row id. `cursor` is
-// the keyboard cursor's index in `sessionHolders` order, clamped to the last holder, its holder alone marked
-// `isCursor`; null marks none.
+// and the counts. `pending` holds this pool's Hold and Release runs by clone number; an action names the
+// `unity-pool.hold` or `unity-pool.release` command with its pool and clone, and a session holder carries its row id.
+// `cursor` is the keyboard cursor's index in `sessionHolders` order, clamped to the last holder, its holder alone
+// marked `isCursor`; null marks none.
 export function panelInput(
   pool: PoolState,
   rows: readonly PoolRow[],
   now: number,
   pending: ReadonlyMap<number, PendingAction>,
-  actions: {
-    run(action: PoolAction, clone: number): void;
-    select(sessionId: string): void;
-  },
   cursor: number | null,
 ): PanelInput {
   const longWait = pool.queue.some((ticket) => ticket.longWait);
   const clones = pool.clones.map((clone) =>
     cloneInput(
+      pool.pool,
       clone,
       rows,
       now,
       pending.get(clone.number) ?? null,
       longWait,
-      actions,
     ),
   );
   const queue = pool.queue.map((ticket, index) => ({
     position: ordinal(index + 1),
-    holder: holderInput(ticket, rows, null, actions.select),
+    holder: holderInput(ticket, rows, null),
     branch: ticket.branch,
     waitedMs: now - ticket.enqueuedAt,
     longWait: ticket.longWait,
@@ -254,15 +252,12 @@ function isUnheld(clone: PoolClone): boolean {
 }
 
 function cloneInput(
+  pool: string,
   clone: PoolClone,
   rows: readonly PoolRow[],
   now: number,
   pending: PendingAction | null,
   longWait: boolean,
-  actions: {
-    run(action: PoolAction, clone: number): void;
-    select(sessionId: string): void;
-  },
 ): PanelCloneInput {
   const { facts, handoff, stranded, warmup } = clone;
   const isDirty = facts.dirty === true;
@@ -273,7 +268,7 @@ function cloneInput(
     branch: facts.branch ?? (facts.probedAt === null ? 'unknown' : 'detached'),
     dirty: isDirty,
     editor: EDITOR_WORDS[facts.editor],
-    holder: cloneHolder(clone, rows, now, actions.select),
+    holder: cloneHolder(clone, rows, now),
     handoffMs: handoff === null ? null : Math.max(0, handoff.until - now),
     stranded:
       stranded === null
@@ -287,25 +282,27 @@ function cloneInput(
         ? null
         : { state: warmup.state, error: warmup.error },
     blocking: longWait && (!unheld || isDirty),
-    action: cloneAction(clone, unheld, pending, actions.run),
+    action: cloneAction(pool, clone, unheld, pending),
     result: pending?.result ?? null,
   };
 }
 
 function cloneAction(
+  pool: string,
   clone: PoolClone,
   unheld: boolean,
   pending: PendingAction | null,
-  run: (action: PoolAction, clone: number) => void,
 ): PanelCloneInput['action'] {
   const running = pending?.running ?? false;
+  const arg = { pool, clone: clone.number };
   if (unheld) {
-    return { label: 'Hold', run: () => run('hold', clone.number), running };
+    return { label: 'Hold', command: unityPoolHoldCommand.id, arg, running };
   }
   if (clone.claim?.kind === 'hold') {
     return {
       label: 'Release',
-      run: () => run('release', clone.number),
+      command: unityPoolReleaseCommand.id,
+      arg,
       running,
     };
   }
@@ -317,7 +314,6 @@ function cloneHolder(
   clone: PoolClone,
   rows: readonly PoolRow[],
   now: number,
-  select: (sessionId: string) => void,
 ): HolderInput | null {
   const { claim } = clone;
   if (claim?.kind === 'hold') {
@@ -325,13 +321,13 @@ function cloneHolder(
       kind: 'user',
       label: 'Held by you',
       idleMs: null,
-      select: null,
+      sessionId: null,
       isCursor: false,
     };
   }
   const holder = cloneSessionHolder(clone);
   const idleMs = claim === null ? null : now - claim.renewedAt;
-  return holder === null ? null : holderInput(holder, rows, idleMs, select);
+  return holder === null ? null : holderInput(holder, rows, idleMs);
 }
 
 // The session behind the clone's holder: its agent claim, else its handoff, else its stranded mark; null for the
@@ -348,7 +344,6 @@ function holderInput(
   holder: PoolHolder,
   rows: readonly PoolRow[],
   idleMs: number | null,
-  select: (sessionId: string) => void,
 ): HolderInput {
   const row = holderRow(holder, rows);
   if (row !== undefined) {
@@ -356,7 +351,7 @@ function holderInput(
       kind: 'session',
       label: row.label,
       idleMs,
-      select: () => select(row.sessionId),
+      sessionId: row.sessionId,
       isCursor: false,
     };
   }
@@ -364,5 +359,5 @@ function holderInput(
     holder.session === null
       ? 'unknown session'
       : `session ${holder.session.slice(0, 8)}`;
-  return { kind: 'agent', label, idleMs, select: null, isCursor: false };
+  return { kind: 'agent', label, idleMs, sessionId: null, isCursor: false };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionFlow, WorkflowSignal } from '../../workflow/contract';
 import { foldFlow, newFlow } from '../../workflow/flow';
-import type { PlanProgress } from '../plan-reader';
+import type { PlanProgress } from '../../../shared/plan-progress';
 import { HEAVY_WORKFLOW_ID, heavyStateOf, withHeavyState } from '../contract';
 import { heavyMainWorkflow } from '../heavy-workflow';
 

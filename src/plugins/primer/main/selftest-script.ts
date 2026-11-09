@@ -1,3 +1,4 @@
+import { HOST_DEADLINE_FIELD } from '../../../contracts/agent-forms';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type {
   ConnectedSession,
@@ -115,9 +116,9 @@ const EXTRA_TASK_STEPS: SelfTestStep[] = [
 ];
 
 // The review opens, its cursor moves and Enter jumps to its task, it opens
-// again, closes and opens again; the cancel prompt opens from the
-// review's cancel key and from closing the session, and is dismissed each
-// time; the review submits, which closes the session's row.
+// again, closes and opens again; the cancel prompt opens from the review's
+// cancel key and is dismissed; the review submits, which closes the session's
+// row.
 const REVIEW_STEPS: SelfTestStep[] = [
   {
     keys: [' ', ' '],
@@ -143,18 +144,7 @@ const REVIEW_STEPS: SelfTestStep[] = [
   { keys: [' ', ' '], expect: '[primer] review opened' },
   { keys: ['C'], expect: '[page] C ran primer.askCancel', checksFit: true },
   { keys: ['n'], expect: '[page] n ran primer.dismissConfirm' },
-  {
-    keys: ['<D-w>'],
-    expect:
-      '[primer] closing the session asks to cancel primer-selftest · Self-test primer',
-  },
-  { keys: ['Escape'], expect: '[page] Escape ran primer.dismissConfirm' },
-  {
-    keys: ['<D-Enter>'],
-    expect: '[primer] submitted',
-    alsoExpect: [/^\[sessions\] activated Layout preview$/],
-    why: "Sending closes the session's row, which selects its left neighbour, the Layout preview session forms' script reopened last.",
-  },
+  { keys: ['<D-Enter>'], expect: '[primer] submitted' },
 ];
 
 // The sample primer opens in a session of its own and its row is selected;
@@ -226,8 +216,8 @@ function payloadProblems(payload: PrimerPayload, run: number): string[] {
 
 // Each run ends the session the run before connected, connects
 // `primer-selftest-<run>` in project `primer-selftest`, activates its row so
-// the steps start on its Primer tab whatever session the earlier scripts left
-// selected, and opens the self-test primer there; the script checks the
+// the steps start in its Primer popup whatever session the earlier scripts
+// left selected, and opens the self-test primer there; the script checks the
 // payload that call returns once the steps submit it.
 export function primerSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
@@ -243,7 +233,7 @@ export function primerSelfTestScript(
         sessionId: `primer-selftest-${run}`,
         projectDir: 'primer-selftest',
         harness: 'claude',
-        deadlineSeconds: 120,
+        host: { [HOST_DEADLINE_FIELD]: 120 },
       });
       connected = session;
       sessions.activate(session.session.id);
@@ -259,7 +249,7 @@ export function primerSelfTestScript(
     groups: [
       {
         name: 'primer',
-        why: "The Primer tab's tasks column selects a task and its items column lists that task's items; needs are set and items toggled from both columns and the item card, ⌃H on the card steps the column it came from, ⌥H and ⌥L move focus between the columns and the card, and the task's boxes are reached from an item card; the agent gets every change back once the review submits.",
+        why: "The Primer popup's tasks column selects a task and its items column lists that task's items; needs are set and items toggled from both columns and the item card, ⌃H on the card steps the column it came from, ⌥H and ⌥L move focus between the columns and the card, and the task's boxes are reached from an item card; the agent gets every change back once the review submits.",
         steps: PRIMER_STEPS,
       },
       {
@@ -269,7 +259,7 @@ export function primerSelfTestScript(
       },
       {
         name: 'review and cancel',
-        why: "j, G and gg move the review's cursor and Enter jumps to its task. Esc closes the review; C in the review and closing the session each ask to cancel the primer, and n or Esc keeps it; sending the primer closes its row with no prompt.",
+        why: "j, G and gg move the review's cursor and Enter jumps to its task. Esc closes the review; C in the review opens the cancel prompt for the primer, and n keeps it; ⌘↩ sends the primer with no prompt.",
         steps: REVIEW_STEPS,
       },
       {

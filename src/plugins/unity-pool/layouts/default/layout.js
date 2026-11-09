@@ -72,8 +72,10 @@ function drawClone(parent, clone, kit) {
   kit.statusDot(head, cloneDot(clone));
   kit.el(head, 'span', 'unity-pool-clone-title', clone.title);
   if (clone.action !== null) {
-    const button = kit.button(head, clone.action.label, clone.action.run, {
-      variant: clone.action.label === 'Hold' ? 'ghost' : 'secondary',
+    const { label, command, arg } = clone.action;
+    const button = kit.button(head, label, command, {
+      arg,
+      variant: label === 'Hold' ? 'ghost' : 'secondary',
     });
     button.disabled = clone.action.running;
   }
@@ -215,7 +217,8 @@ function drawTicket(parent, ticket, kit) {
 
 // A session holder with a row is a link-styled click that selects the row and
 // takes no focus, ringed while the keyboard cursor is on it; any other holder
-// is plain text.
+// is plain text. The runner is made here, as the part builds, so a bad command
+// throws then.
 /**
  * @param {HTMLElement} parent
  * @param {import('../layout').HolderInput} holder
@@ -224,13 +227,13 @@ function drawTicket(parent, ticket, kit) {
 function drawHolder(parent, holder, kit) {
   const element = kit.el(parent, 'span', 'unity-pool-holder', holder.label);
   element.classList.toggle('is-cursor', holder.isCursor);
-  const select = holder.select;
-  if (select === null) {
+  if (holder.sessionId === null) {
     return;
   }
+  const showSession = kit.command('unity-pool.selectHolder', holder.sessionId);
   element.classList.add('is-link');
   element.addEventListener('mousedown', (event) => event.preventDefault());
-  element.addEventListener('click', () => select());
+  element.addEventListener('click', () => showSession());
 }
 
 export default layout;

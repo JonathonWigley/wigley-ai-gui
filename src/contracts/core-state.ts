@@ -62,9 +62,20 @@ export const coreRuntimePageSlot: SlotKey<RuntimeCatalog, 'page', 'core'> = {
   kind: 'value',
 };
 
-// `pageReady` is emitted once per page load on the page bus, after each page part
-// has started and heard the current config. A part hears it by naming
-// `QualifiedEvents<'core', CoreEvents>` in its `Heard`, with no `dependsOn` entry.
-export interface CoreEvents {
-  pageReady: null;
+export interface PluginStatus {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly on: boolean;
+  readonly neededBy: readonly string[];
 }
+
+// Every built-in plugin, in manifests order: its label, its description,
+// whether it runs now, and the ids of the plugins that run now and depend on
+// it. Main's plugin switch writes it at start and after each change.
+export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
+  {
+    id: 'core.plugins',
+    process: 'main',
+    kind: 'value',
+  };

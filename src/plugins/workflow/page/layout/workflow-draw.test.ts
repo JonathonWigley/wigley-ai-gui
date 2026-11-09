@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShowLayoutOptions } from '../../../../contracts/plugin';
 import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
+import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
 import {
@@ -17,6 +18,7 @@ import type {
   PagePluginApi,
   WorkflowDrawOptions,
 } from '../../contract';
+import { workflowManifest } from '../../manifest';
 import { readWorkflowLayout } from './read-workflow-layout';
 import { createWorkflowDraw } from './workflow-draw';
 
@@ -55,11 +57,7 @@ function setUp() {
           ...NO_FENCES,
         },
         keys: recordingAnchors().keys,
-        commands: {
-          exists: () => true,
-          argShape: () => undefined,
-          run: () => undefined,
-        },
+        commands: fakeKitCommandsOf(workflowManifest),
         platform: 'macos',
         state: noLayoutState,
       },
@@ -101,7 +99,7 @@ describe('createWorkflowDraw', () => {
       ]),
       user: 'mine',
     });
-    draw.chip(asHtml(parent), CHIP_INPUT, () => undefined);
+    draw.chip(asHtml(parent), CHIP_INPUT, 's1');
 
     expect(redraw).toHaveBeenCalledTimes(1);
     expect(findAll(parent, 'x')).toHaveLength(1);
@@ -110,11 +108,7 @@ describe('createWorkflowDraw', () => {
   it('Draw_Root_CarriesOwner', () => {
     const { draw } = setUp();
 
-    const drawn = draw.chip(
-      asHtml(new FakeElement('div')),
-      CHIP_INPUT,
-      () => undefined,
-    );
+    const drawn = draw.chip(asHtml(new FakeElement('div')), CHIP_INPUT, 's1');
 
     expect(asFake(drawn.element).dataset.layoutOwner).toBe('workflow-light');
   });
@@ -127,7 +121,7 @@ describe('createWorkflowDraw', () => {
     const { draw } = setUp();
     const parent = new FakeElement('div');
 
-    draw.chip(asHtml(parent), CHIP_INPUT, () => undefined).dispose();
+    draw.chip(asHtml(parent), CHIP_INPUT, 's1').dispose();
 
     expect(parent.children).toEqual([]);
   });

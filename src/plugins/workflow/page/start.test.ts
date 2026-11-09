@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Registrations } from '../../../contracts/disposable';
+import type { PluginCommands } from '../../../contracts/plugin';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   fakeDependency,
   noCounts,
+  probePart,
   startPagePart,
   type PartCounts,
 } from '../../../shared/plugin-part-harness.test-support';
@@ -21,18 +23,22 @@ import {
 import {
   type SessionPart,
   type SessionRow,
+  sessionsActiveSlot,
   type SessionsPageExports,
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   type PageStage,
   type PageWorkflow,
   type SessionFlow,
+  type StageActionArg,
   type StripInput,
   type WorkflowDraw,
   workflowFlowsSlot,
   type WorkflowPageExports,
+  workflowStageActionCommand,
 } from '../contract';
 import { newFlow } from '../flow';
 import { workflowPagePart } from './start';
@@ -70,13 +76,17 @@ function holdsPart<T>(consumer: Registrations, parts: Set<T>, part: T) {
 }
 
 // Workflow's page part over fakes that file each part they take under it, as
-// sessions' and chat's views do.
+// sessions' and chat's views do. `commands` is another plugin's, and `runs` holds
+// each run its process heard.
 function startWorkflow() {
   installFakeDom((name, value) => vi.stubGlobal(name, value));
   const rowParts = new Set<SessionPart>();
   const composerParts = new Set<ChatComposerPart>();
   const sideParts = new Set<ChatSidePart>();
+  const probe: { commands: PluginCommands | null } = { commands: null };
+  const runs: [string, unknown][] = [];
   const harness = startPagePart(workflowPagePart, {
+    parts: [probePart(runs, probe)],
     dependencies: [
       fakeDependency(
         sessionsPageKey,
@@ -103,7 +113,17 @@ function startWorkflow() {
   const exportsFor = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as WorkflowPageExports;
   const ids = () => [...sideParts].map((part) => part.id);
-  return { harness, exportsFor, rowParts, composerParts, sideParts, ids };
+  const commands = () => probe.commands!;
+  return {
+    harness,
+    exportsFor,
+    rowParts,
+    composerParts,
+    sideParts,
+    ids,
+    commands,
+    runs,
+  };
 }
 
 function stageOf(id: string, order: number): PageStage {
@@ -199,20 +219,14 @@ describe('workflow page part', () => {
   });
 
   function row(sessionId: string): SessionRow {
-    return {
-      sessionId,
+    return sessionRow(sessionId, {
       label: sessionId,
-      project: 'project',
-      harness: 'claude',
-      marked: false,
       projectDir: '/r',
       hostSessionId: `h-${sessionId}`,
-      titles: { user: null, agent: null, firstMessage: null },
-      profileDir: null,
-    };
+    });
   }
 
-  // A harness past `core.pageReady` whose slots held rows and flows of s1, s2 and
+  // A harness past `ready` whose slots held rows and flows of s1, s2 and
   // s3 before it, and the flow of `gone`, which has no row.
   function startWithThreeFlows() {
     const harness = startWorkflow().harness;
@@ -223,24 +237,32 @@ describe('workflow page part', () => {
       flows.set(sessionId, newFlow(sessionId, '/r'));
     }
     flows.set('gone', newFlow('gone', '/r'));
-    harness.emit('core.pageReady', null);
+    harness.ready();
     return { harness, rows, flows };
   }
 
-  it('pageReady_DrawsEachFlowTheSlotHolds', () => {
-    startWithThreeFlows();
+  it.each([
+    { name: 'page load', restarts: false },
+    { name: 'live restart', restarts: true },
+  ])(
+    'ready_DrawsEachFlowTheSlotHoldsAndOneFlowNoticeDrawsOne: $name',
+    async ({ restarts }) => {
+      const { harness, flows } = startWithThreeFlows();
+      if (restarts) {
+        drawn.setFlow = [];
+        await harness.restart();
+      }
+      const drawnAtLoad = drawn.setFlow;
+      drawn.setFlow = [];
 
-    expect(drawn.setFlow).toEqual(['s1', 's2', 's3']);
-  });
+      flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
 
-  it('oneFlowNotice_DrawsOneFlow', () => {
-    const { flows } = startWithThreeFlows();
-    drawn.setFlow = [];
-
-    flows.set('s2', { ...newFlow('s2', '/r'), stage: 'make' });
-
-    expect(drawn.setFlow).toEqual(['s2']);
-  });
+      expect([drawnAtLoad, drawn.setFlow]).toEqual([
+        ['s1', 's2', 's3'],
+        ['s2'],
+      ]);
+    },
+  );
 
   it('flowNotice_RowHasLeft_DrawsNothing', () => {
     const { rows, flows } = startWithThreeFlows();
@@ -275,7 +297,7 @@ describe('workflow page part', () => {
   it('AddWorkflow_Sorts', () => {
     const { harness, exportsFor, composerParts } = startWorkflow();
     harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
-    harness.emit('core.pageReady', null);
+    harness.ready();
     const { workflow, strips } = stubLight([
       stageOf('later', 20),
       stageOf('first', 10),
@@ -306,4 +328,84 @@ describe('workflow page part', () => {
       ]),
     );
   });
+
+  // The engine past `ready` holding the workflow `light`, whose stage
+  // `build` holds the action `go`, with rows `a` and `b`, `a` selected and `b`'s
+  // flow in `build`. `ran` holds each `runAction` call.
+  function startWithLightAction() {
+    const started = startWorkflow();
+    const { harness, exportsFor } = started;
+    const ran: [string, string, SessionFlow][] = [];
+    const go = {
+      command: 'go',
+      label: 'Go',
+      available: () => true,
+      enabled: () => true,
+    };
+    const { workflow } = stubLight([
+      { ...stageOf('build', 10), actions: [go] },
+    ]);
+    exportsFor(createRegistrations()).addWorkflow({
+      ...workflow,
+      runAction: async (sessionId, command, flow) => {
+        ran.push([sessionId, command, flow]);
+      },
+    });
+    const rows = harness.state.publish(sessionsRowsSlot);
+    rows.set('a', row('a'));
+    rows.set('b', row('b'));
+    harness.state.publish(sessionsActiveSlot).set('a');
+    const flowOfB = {
+      ...newFlow('b', '/r'),
+      workflow: 'light',
+      stage: 'build',
+    };
+    harness.state.publish(workflowFlowsSlot).set('b', flowOfB);
+    harness.ready();
+    return { ...started, ran, flowOfB };
+  }
+
+  it.each<{ case: string; arg: StageActionArg; ran: boolean; line?: string }>([
+    { case: 'named session', arg: { sessionId: 'b', action: 'go' }, ran: true },
+    {
+      case: 'main action',
+      arg: { sessionId: 'b', action: 'mainAction' },
+      ran: true,
+    },
+    {
+      case: 'unknown action',
+      arg: { sessionId: 'b', action: 'nope' },
+      ran: false,
+      line: 'nothing to run for nope in b',
+    },
+  ])('stageAction_RunsTheGateForTheArgsSession $case', async (row) => {
+    const { harness, commands, ran, flowOfB } = startWithLightAction();
+
+    await commands().run(workflowStageActionCommand, row.arg);
+
+    expect(ran).toEqual(row.ran ? [['b', 'go', flowOfB]] : []);
+    if (row.line !== undefined) {
+      expect(harness.logs.at(-1)).toEqual({
+        source: 'workflow',
+        message: row.line,
+      });
+    }
+  });
+
+  it.each(['mainAction', 'toggleFinishedWaves'] as const)(
+    'engineKeys_RunStageActionOnTheSelectedSession %s',
+    async (command) => {
+      const { harness, runs } = startWorkflow();
+      harness.state.publish(sessionsActiveSlot).set('s1');
+
+      harness.started().commands[command]({ arg: undefined });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(
+        runs.filter(([id]) => id === workflowStageActionCommand.id),
+      ).toEqual([
+        [workflowStageActionCommand.id, { sessionId: 's1', action: command }],
+      ]);
+    },
+  );
 });

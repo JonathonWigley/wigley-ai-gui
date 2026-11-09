@@ -32,9 +32,10 @@ Built.
 ## Across relaunch
 
 - Chat saves each session's total at the moment of the save, the open span included, with the session
-  (`SavedSession.activeMs`). It saves at each start and stop of the clock, at every other save chat makes, and tries once
-  more when the app quits. The app does not wait for that last write, so a quit that cuts it short leaves the last
-  saved total, which can lack the whole open span. A restored session's clock starts paused at that total.
+  (`SavedSession.activeMs`). It saves at each start and stop of the clock, at every other save chat makes, and tries
+  once more when chat stops, at quit or when chat is switched off. A quit waits for that write to settle
+  (`src/main/quit-wait.ts`), so a quit that ends the app early, such as a second quit in a drive run, can still leave
+  the last saved total, which can lack the whole open span. A restored session's clock starts paused at that total.
 - A kept run's work while the app is closed is not counted. A run still working restarts its clock at relaunch, and a
   turn that ended meanwhile adds nothing, so the row's time can run below the run's own.
 - A session opened from Claude's saved history (the resume picker) starts at zero, unless a saved record the restore
@@ -65,16 +66,16 @@ mark at the line's end:
   background events, and could not save the total with the session.
 - **The cache mark is its own usage row part**: the run time sits between the meter and the cache mark, and parts
   from two plugins order only as whole parts.
-- **The second line never wraps**: the parts stay whole and the row stays two lines. When the line is too narrow the
-  meter's bar shrinks to nothing, the used tokens
-  staying whole (under the default layout `usage.rowLine` shrinks, its bar the only part of it that can). No container query is used on
-  `div.session-row-parts`: `container-type: inline-size` gives the holder no intrinsic width. Below that the other
-  parts clip at the card edge with no ellipsis: measured at 12m 05s clocks, a plain row (meter, clock, cache) needs
-  about 113px of line and clips below a side bar of about 136px, under `SIDE_BAR_MIN` (160). A row with five
-  parts (workflow chip, working line, meter, clock, cache) is an estimate: about 258px of line, a side bar of about
-  282px, so it would clip at the default 256 and below. It assumes an injected 62px `Reviewing` chip, which is not
-  a built-in label (the labels are Idle, Primer, Feature, Plan, Make, Review, Closed), and the working line comes from
-  `agent-lines`, which is off by default.
+- **The end group always takes a line of its own**: the parts stay whole, and every card keeps the same lines.
+  The default layout puts the end group — the parts ordered 2 and later: meter, clock, cache — on a third line
+  under the rest, its bar filling that line's free room. A wrap that came only when the parts overflowed one line
+  (measured by sessions as `is-crowded`) moved parts between lines as a clock or tag changed width, and wrapped
+  some rows and not others, so the cards resized and their parts moved. The break before the group is a full-width
+  flex item, so it forms a line even on a row with no part ahead of it; the gap between the lines is each part's top
+  margin, which the holder takes back once, rather than `row-gap`, so that empty line adds no height and two lines
+  sit one gap apart. CSS cannot read a part's `order`, so a `:has()` guard on the break would have to name the end
+  group's part ids in sessions' layout. On the second line the workflow chip takes no room of its own and grows into
+  what is free, so its stage tag ellipsizes rather than wrapping the line.
 - **The cache mark turns cold at usage's next redraw**: usage redraws its lines once a minute, so the mark can lag
   the expiry by up to a minute.
 
