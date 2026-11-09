@@ -41,7 +41,7 @@ plan is written from them. A decision here stands unless the user changes it.
   the `FuzzyMatcher` page service) and by description (plain substring, since a fuzzy match over a sentence matches
   almost any query), plugin rows by label and id, fuzzy, command rows by label, qualified id, keys and accelerators,
   and the Leader row by "leader" and its keys, all fuzzy. Esc on the rows clears a kept filter; opening a section
-  clears it too.
+  clears it too. The Leader menu's two panes take no `/` filter.
 
 ## Setting rows
 

@@ -512,8 +512,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   one row each under `Up next`, all on the pane's left edge. Light's and Medium's pane, titled `Checklist`, draws the status
   mark and line, a `<checked>/<total>` line, the progress meter and one flat list with a mark per item, and no actions. An idle session, a session with no plan or checklist and a hidden pane draw no pane. A
   disabled action draws disabled.
-- **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
-  and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual
+- **Floating:** pickers (the leader search's rows included), help and dialogs use the floating material with `row-list` rows
+  and key hints right-aligned in `fg-tertiary`; which-key is a full-width glass shelf on the window's bottom edge, its
+  entries not `row-list` rows; dialogs, chat's full-size image viewer and the full-size visual
   overlay sit over the `scrim`. A `/` completion row's description is `fg-tertiary`, one line, in the UI font inside
   the mono list.
 - **Empty states:** one line saying what to do, and the key or action that does it. No

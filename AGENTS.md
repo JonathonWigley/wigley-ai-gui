@@ -315,13 +315,14 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock); its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
-                 the title bar's Keys button, and the placement check over the core's anchors), layouts/
+                 the leader search (`leader-search.ts`), the title bar's Keys button, and the placement check over the core's anchors), layouts/
                  (the keys Layout contract and the built-in `default` layout)
   gallery/       manifest.ts, main/ (registers the layouts only), page/ (Gallery mode: every primitive in every state,
                  a transparency switch, and a swap of the shell to a test layout), layouts/ (the gallery Layout
                  contract and the built-in `default` layout)
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
-                 a form over every setting, every command's binds and the leader tree, `docs/features/settings/design.md`), layouts/
+                 a form over every setting, every command's binds with its key recorder (`key-recorder.ts`) and the leader tree
+                 (`leader-tree.ts`, `leader-menu-view.ts`), `docs/features/settings/design.md`), layouts/
                  (the settings Layout contract and the built-in `default` layout)
   notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures through `services.window.capture`, sending a note
                  to a follow-up through backlog's exports or to a new session through chat's), page/ (the note

@@ -108,11 +108,11 @@ command's keys into an element a view names, and the plugin's `showHints` settin
 `settings.json`) tells the core to turn the hints off; with the plugin stopped or disabled, hints show. The title bar's Keys button, which opens help, is the plugin's too
 (`docs/features/key-hints/design.md`).
 
-- Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a panel docked full width just above
-  the status bar, listing what can follow in columns; it redraws at once on a deeper prefix and closes when the
+- Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a full-width glass shelf on the
+  window's bottom edge, listing what can follow in up to four columns; it redraws at once on a deeper prefix and closes when the
   sequence ends or on Esc. `whichKeyTimeoutMs` (default `null`,
-  wait for the next key or Esc) ends a sequence the panel has shown that long. Commands draw in the theme's green and
-  prefixes in its mauve, from theme tokens (the user's IdeaVim which-key colours).
+  wait for the next key or Esc) ends a sequence the panel has shown that long. A group's label and `›` draw in the `accent` colour and an action's label in `fg-secondary`, from the
+  `which-key-prefix` and `which-key-command` theme tokens.
 - It also opens inside a box in vim normal mode: `@replit/codemirror-vim` 6.4.0 keeps the typed keys in
   `getCM(view).state.vim.inputState.keyBuffer` and fires `vim-keypress` per key and `vim-command-done` when the
   pending input clears; the editor adapter reports them through `EditorHost.onPendingKeys` and `cancelPendingKeys`,

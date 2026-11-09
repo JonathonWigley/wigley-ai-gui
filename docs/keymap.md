@@ -35,7 +35,7 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   entries do not. `{ "keys": "1", "scope": "forms.forms", "command": "forms.choose", "arg": 1 }`
   picks the first choice. `arg` does not tell binds apart: two binds on one key in one scope are a
   key bound twice, whatever their arguments.
-- `groups` names each leader prefix for which-key (`<Leader>k` windows); a later layer's name for
+- `groups` names each leader prefix for which-key (`<Leader>k` go to); a later layer's name for
   a prefix replaces an earlier one's.
 
 ## Layers
