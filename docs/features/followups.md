@@ -919,8 +919,12 @@ because the earlier items rewrite many of these tests anyway.
   scope, so a click into the detail pane while a right-bar stop holds the keys ends the stop's turn, and the deferred
   `focusMain` (`src/plugins/backlog/page/backlog-view.ts:986-998`) focuses `lastMainFocus`, often the list, off the
   clicked pane. Fix: a focusin on each Backlog pane records it as `lastMainFocus` (and sets the scope) before
-  `focusMain` runs. Pre-existing before keyboard-reach (it ran synchronously then). Source: the keyboard-reach
-  re-review.
+  `focusMain` runs. A click into the detail with no right-bar stop in play also leaves the keys with the list, so j/k
+  act on a hidden cursor; the same handler fixes both (Practice's `focusin` loop over `listPane` and `mainPane` in
+  `src/plugins/practice/page/practice-view.ts` and Docs' `focusin` handoff in `src/plugins/docs/page/docs-view.ts` are
+  the model). Pre-existing before keyboard-reach (it ran synchronously then). Source: the keyboard-reach
+  re-review. Source session: Claude Code f1855e19-7de7-4e8f-a22a-ca873386605d in
+  /Users/jonathonwigley/Documents/ai-dev.
 - **Self-test `forms: cancelled preview` fails on main** — *agent-ready*: `npm run selftest -- --plugin forms`; after
   `<D-w>` closes the Layout preview session the app selects `selftest 3` (its right neighbour in main's rows) where the
   step expects `Codex session`, and the `R` and `<A-o>` steps after it fail on that. Fails the same on a plain `main`
@@ -928,3 +932,13 @@ because the earlier items rewrite many of these tests anyway.
 - **Primer `placeRestored` may restore a stale review cursor** — *agent-ready*: since keyboard-reach met hot-reload,
   `primer-state.ts`'s reducer restores a stored place without resetting the review view's `reviewRow`, so a restored
   review could hold a row past the list's end. Trace it and pin it with a row in the primer-state tests.
+- **A re-picked problem's open read can overwrite a just-saved draft** — *agent-ready*: while a switch from problem A
+  to B waits on A's save, picking A again reads A from disk (`applyOpened`,
+  `src/plugins/practice/page/practice-view.ts`). When that read started before A's in-flight save landed, `refresh`
+  (`src/plugins/practice/page/problem-workspace.ts`) dispatches `refreshed`, and the reducer (`refreshed`,
+  `src/plugins/practice/page/workspace-state.ts`) takes the stale disk text for a draft the save has just marked saved
+  (`savedRevision === revision`). The general path, `refreshOpen` after a `changed`, has the same race. Fix:
+  `refreshed` keeps a draft whose saved revision is newer than the read, or the open read is ordered after the pending
+  saves. Pin it with a row in the workspace-state tests: GIVEN a draft saved after a read began WHEN `refreshed`
+  carries that read THEN the draft keeps its text. Source session: Claude Code f1855e19-7de7-4e8f-a22a-ca873386605d in
+  /Users/jonathonwigley/Documents/ai-dev.
