@@ -4,6 +4,7 @@ import { settingsManifest } from '../manifest';
 import {
   lockedText,
   matchesPlugin,
+  originText,
   PLUGIN_LIST_PATH,
   withPluginSwitched,
 } from './plugin-rows';
@@ -102,6 +103,8 @@ function pluginRow(
         description: status.description,
         value: status.on ? 'true' : 'false',
         lockedText: lockedText(status, statuses),
+        originText: originText(status.origin),
+        problem: status.problem,
       },
     },
     actions: { open: edit, edit },

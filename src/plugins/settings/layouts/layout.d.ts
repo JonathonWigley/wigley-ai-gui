@@ -48,13 +48,17 @@ export interface PluginRowInput {
   id: string;
   label: string;
   description: string;
-  // `true` while it runs, `false` while it is off, as the boolean picker
-  // shows them.
+  // `true` while a version of it runs, `false` while none does, as the
+  // boolean picker shows them.
   value: 'true' | 'false';
   // `Needed by <label>, <label>` while plugins that run depend on it, and
   // `Edit settings.json to turn off` on Settings' own row while it runs; else
   // null.
   lockedText: string | null;
+  // `user` or `replaces built-in`; null for a built-in.
+  originText: string | null;
+  // Why the plugin failed to load or start; null when it did not fail.
+  problem: string | null;
 }
 // One line of a key row: a bind (`keys` in vim notation printed for the platform) or an accelerator (its chord printed
 // for the platform). `tags` in order: for a bind its scope (`Everywhere` for `any`), `where`, `mode`, `Set` for a user

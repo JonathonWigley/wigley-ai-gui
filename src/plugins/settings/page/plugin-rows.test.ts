@@ -5,6 +5,7 @@ import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-suppor
 import {
   lockedText,
   matchesPlugin,
+  originText,
   PLUGIN_LIST_PATH,
   withPluginSwitched,
 } from './plugin-rows';
@@ -138,5 +139,13 @@ describe('plugin rows', () => {
     },
   ])('matchesPlugin_: $name', ({ query, plugin, matches }) => {
     expect(matchesPlugin(plugin, query, fakeFuzzyMatcher)).toBe(matches);
+  });
+
+  it.each([
+    { origin: 'built-in', text: null },
+    { origin: 'user', text: 'user' },
+    { origin: 'replaces-built-in', text: 'replaces built-in' },
+  ] as const)('originText_EachOrigin: $origin', ({ origin, text }) => {
+    expect(originText(origin)).toBe(text);
   });
 });

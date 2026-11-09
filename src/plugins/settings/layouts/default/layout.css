@@ -81,8 +81,8 @@
   text-align: right;
 }
 
-/* A locked Plugins row keeps its lock Tag and value on one line: the Tag
-   ellipsizes before it pushes the value down or runs under the label. */
+/* A locked Plugins row keeps its Tags and value on one line: only the lock
+   Tag ellipsizes, before it pushes the value down or runs under the label. */
 .settings-row-end--locked {
   flex-wrap: nowrap;
 }
@@ -93,7 +93,9 @@
   text-overflow: ellipsis;
 }
 
-.settings-row-end--locked > .settings-row-value {
+.settings-row-end--locked > .settings-row-value,
+.settings-row-failed,
+.settings-row-origin {
   flex: none;
 }
 
@@ -113,6 +115,13 @@
 .settings-row-description {
   color: var(--wg-fg-secondary);
   font-size: var(--wg-text-12);
+}
+
+/* Why a Plugins row's plugin failed to load or start, wrapped whole. */
+.settings-row-problem {
+  color: var(--wg-status-error);
+  font-size: var(--wg-text-12);
+  overflow-wrap: anywhere;
 }
 
 /* A command row's binds, one line each: the keys, then their tags. */

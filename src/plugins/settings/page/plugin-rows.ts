@@ -1,5 +1,6 @@
 import type { PluginStatus } from '../../../contracts/core-state';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
+import type { PluginOrigin } from '../../../contracts/plugin-catalog';
 import type { SettingLeaf } from '../../../contracts/user-config';
 import { settingsManifest } from '../manifest';
 import { withSetting } from './setting-edits';
@@ -32,6 +33,20 @@ export function lockedText(
     (id) => statuses.find((each) => each.id === id)?.label ?? id,
   );
   return `Needed by ${labels.join(', ')}`;
+}
+
+// The origin Tag's text: `user` for a plugin from the user's folder,
+// `replaces built-in` for one that replaces a built-in plugin, null for a
+// built-in plugin, which draws no origin Tag.
+export function originText(origin: PluginOrigin): string | null {
+  switch (origin) {
+    case 'user':
+      return 'user';
+    case 'replaces-built-in':
+      return 'replaces built-in';
+    case 'built-in':
+      return null;
+  }
 }
 
 // `layer` with `pluginId` switched on or off in the `plugins.disabled` list.

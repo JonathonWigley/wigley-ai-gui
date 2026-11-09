@@ -839,4 +839,95 @@ describe('createSettingsView', () => {
     expect(lock.title).toBe('Needed by Bee');
     expect(only(sheet, 'settings-row-end--locked')).toBe(lock.parentNode);
   });
+
+  // `end` lists the row end's children by class or text: `failed`, the origin
+  // Tag's text, `lock`, then the value.
+  it.each([
+    {
+      name: 'built-in with no problem',
+      origin: 'built-in',
+      on: true,
+      problem: null,
+      neededBy: [],
+      end: ['true'],
+    },
+    {
+      name: 'user',
+      origin: 'user',
+      on: true,
+      problem: null,
+      neededBy: [],
+      end: ['user', 'true'],
+    },
+    {
+      name: 'replaced built-in with a problem',
+      origin: 'replaces-built-in',
+      on: false,
+      problem: 'Did not start: boom',
+      neededBy: [],
+      end: ['failed', 'replaces built-in', 'false'],
+    },
+    {
+      name: 'locked replaced built-in with a problem',
+      origin: 'replaces-built-in',
+      on: true,
+      problem: 'Did not start: boom',
+      neededBy: ['b'],
+      end: ['failed', 'replaces built-in', 'lock', 'true'],
+    },
+    {
+      name: 'user whose last good version runs',
+      origin: 'user',
+      on: true,
+      problem: 'Did not start: boom',
+      neededBy: [],
+      end: ['failed', 'user', 'true'],
+    },
+    {
+      name: 'built-in with a held-back problem',
+      origin: 'built-in',
+      on: true,
+      problem: 'needs plugin "z", which is not loaded',
+      neededBy: [],
+      end: ['failed', 'true'],
+    },
+  ] as const)(
+    'pluginRow_OriginAndProblem_DrawsTagsAndLine: $name',
+    async ({ origin, on, problem, neededBy, end }) => {
+      const { view, sheet } = await shownView({
+        schema: pluginsSchema([]),
+        plugins: () => [
+          { ...status('gallery', 'Gallery', on, neededBy), origin, problem },
+          status('b', 'Bee', true),
+        ],
+      });
+
+      view.openSectionAt(PLUGINS_INDEX);
+
+      const [row] = findAll(sheet, 'settings-row');
+      const [rowEnd] = findAll(row, 'settings-row-end');
+      expect(
+        rowEnd.children.map((child) => {
+          if (child.classList.contains('settings-row-failed')) {
+            expect(child.classList.contains('ui-tag--error')).toBe(true);
+            return child.textContent;
+          }
+          if (child.classList.contains('settings-row-origin')) {
+            expect(child.classList.contains('ui-tag--neutral')).toBe(true);
+            return child.textContent;
+          }
+          if (child.classList.contains('settings-row-lock')) {
+            return 'lock';
+          }
+          if (child.classList.contains('settings-row-value')) {
+            return child.textContent;
+          }
+          return `unexpected ${child.className}`;
+        }),
+      ).toEqual(end);
+      expect(
+        findAll(row, 'settings-row-problem').map((line) => line.textContent),
+      ).toEqual(problem === null ? [] : [problem]);
+    },
+  );
 });

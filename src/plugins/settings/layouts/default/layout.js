@@ -7,11 +7,11 @@
 
 /**
  * A setting, plugin, key, leader or advanced row: the label and its end on the first
- * line, with the cursor prompt after them; the description under them; then
- * the open box.
+ * line, with the cursor prompt after them; the description under them; a
+ * plugin's problem under that; then the open box.
  * @param {HTMLElement} parent
  * @param {import('../layout').RowKit} kit
- * @param {{ label: string, description: string, isSet: boolean, defaultText: string | null, drawEnd(end: HTMLElement): void }} lines
+ * @param {{ label: string, description: string, isSet: boolean, defaultText: string | null, problem?: string | null, drawEnd(end: HTMLElement): void }} lines
  */
 function settingsRow(parent, kit, lines) {
   const row = kit.el(parent, 'li', 'settings-row');
@@ -33,6 +33,9 @@ function settingsRow(parent, kit, lines) {
   kit.rowActions(head);
   if (lines.description.trim() !== '') {
     kit.el(row, 'div', 'settings-row-description', lines.description);
+  }
+  if (typeof lines.problem === 'string' && lines.problem !== '') {
+    kit.el(row, 'div', 'settings-row-problem', lines.problem);
   }
   kit.box(row);
   return row;
@@ -87,7 +90,16 @@ const layout = {
       description: input.description,
       isSet: false,
       defaultText: null,
+      problem: input.problem,
       drawEnd(end) {
+        if (input.problem !== null) {
+          const failed = kit.tag(end, 'failed', 'error');
+          failed.classList.add('settings-row-failed');
+        }
+        if (input.originText !== null) {
+          const origin = kit.tag(end, input.originText);
+          origin.classList.add('settings-row-origin');
+        }
         if (input.lockedText !== null) {
           end.classList.add('settings-row-end--locked');
           const lock = kit.tag(end, input.lockedText);
