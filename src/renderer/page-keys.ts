@@ -34,14 +34,15 @@ export type CapturedPress = Pick<
 >;
 
 // The key `press` is, in the keymap's vim notation, spelled as a bind that
-// fires on it is written: a press holding Control, Alt or Meta, or Shift+Enter,
-// is the chord on its physical key (`<A-o>`, `<S-Enter>`); any other press is
+// fires on it is written: a press holding Control, Alt or Meta, Shift+Enter,
+// or Tab is the chord on its physical key (`<A-o>`, `<S-Enter>`, `<S-Tab>`); any other press is
 // its `KeyboardEvent.key` (`T`, `<Space>`, `<lt>`). Null for a press no bind
 // can take: a bare modifier, or a key the notation has no name for.
 export function capturedKeys(press: CapturedPress): string | null {
   const isChord = press.ctrlKey || press.altKey || press.metaKey;
   const isShiftEnter = press.shiftKey && press.key === 'Enter';
-  if (isChord || isShiftEnter) {
+  const isTab = press.key === 'Tab';
+  if (isChord || isShiftEnter || isTab) {
     return chordTokenFor(press);
   }
   if (MODIFIER_KEYS.has(press.key)) {

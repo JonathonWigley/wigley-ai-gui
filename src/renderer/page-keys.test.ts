@@ -310,7 +310,7 @@ describe('capturedKeys', () => {
     [press(' ', 'Space'), '<Space>'],
     [press('Enter', 'Enter'), '<CR>'],
     [press('Tab', 'Tab'), '<Tab>'],
-    [press('Tab', 'Tab', { shiftKey: true }), '<Tab>'],
+    [press('Tab', 'Tab', { shiftKey: true }), '<S-Tab>'],
     [press('Backspace', 'Backspace'), '<BS>'],
     [press('<', 'Comma', { shiftKey: true }), '<lt>'],
     [press('\\', 'Backslash'), '<Bslash>'],

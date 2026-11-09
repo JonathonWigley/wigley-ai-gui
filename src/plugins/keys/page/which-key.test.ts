@@ -76,7 +76,7 @@ describe('whichKeyModel', () => {
       map: keymap(
         [
           { keys: [' ', '|'], scope: 'any', command: 'splitRight' },
-          { keys: [' ', 'Tab'], scope: 'any', command: 'closeTab' },
+          { keys: [' ', 'Backspace'], scope: 'any', command: 'closeTab' },
           { keys: [' ', 'Enter'], scope: 'any', command: 'submit' },
           { keys: [' ', ';'], scope: 'any', command: 'openReview' },
           { keys: [' ', 'a'], scope: 'any', command: 'nextUnanswered' },
@@ -91,7 +91,7 @@ describe('whichKeyModel', () => {
         [],
         [
           { keys: '<Leader><Bar>', scope: 'any', command: 'splitRight' },
-          { keys: '<Leader><Tab>', scope: 'any', command: 'closeTab' },
+          { keys: '<Leader><BS>', scope: 'any', command: 'closeTab' },
           { keys: '<Leader><CR>', scope: 'any', command: 'submit' },
           { keys: '<Leader>;', scope: 'any', command: 'openReview' },
           { keys: '<Leader>a', scope: 'any', command: 'nextUnanswered' },
@@ -113,8 +113,8 @@ describe('whichKeyModel', () => {
       expect(model?.entries.map((entry) => entry.keys)).toEqual([
         'a',
         ';',
+        '⌫',
         '↩',
-        '⇥',
         '|',
       ]);
     },
