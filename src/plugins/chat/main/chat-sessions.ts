@@ -437,11 +437,11 @@ interface HeldSession {
   // an exit it still names the ended process.
   processId: string | null;
   // What the row's last process start passed as `controls` and `resume`, which
-  // an attach passes again: no pipe line reports them.
+  // an attach passes again, and whether it carried the headless note: no pipe
+  // line reports them. `launchHeadless` is the opening's flag before the
+  // row's first start.
   launchControls: Record<string, string>;
   launchResume: boolean;
-  // Whether the row's last process start carried the headless note; the
-  // opening's flag until the row's first start in this app run.
   launchHeadless: boolean;
   // Entry ids of the messages the row's last process start dropped that went
   // back to the page: a re-attach replays those drops.
@@ -631,6 +631,7 @@ function savedSessionOf(
     returned: session.slots.returned().map(userMessageOf),
     launchControls: session.launchControls,
     launchResume: session.launchResume,
+    launchHeadless: session.launchHeadless,
     controls: session.slots.controls(),
     confirmedPicks: Object.fromEntries(session.confirmedPicks),
     returnedDrops: [...session.returnedDrops],
@@ -1464,6 +1465,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       processId: string | null;
       launchControls: Record<string, string>;
       launchResume: boolean;
+      launchHeadless: boolean;
       controls: SessionControl[];
       confirmedPicks: Record<string, string>;
       returnedDrops: readonly string[];
@@ -1567,7 +1569,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       unheldSettling: null,
       unattended: opening.unattended,
       headless: opening.headless,
-      launchHeadless: opening.headless,
+      launchHeadless: opening.launchHeadless,
       instructions: opening.instructions,
       owner,
     };
@@ -2149,6 +2151,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         processId: null,
         launchControls: {},
         launchResume: false,
+        launchHeadless: opening.headless,
         controls: [],
         confirmedPicks: {},
         returnedDrops: [],
@@ -2183,7 +2186,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Opens the row, selected when `select` says, for the session of the process
   // the host lists as `hosted` and attaches to it. The closed row's launch
-  // values went with its record, so the attach passes none.
+  // values went with its record, so the attach passes none and takes the
+  // opening's headless flag as the launch's.
   function openAndAttach(
     harness: AgentHarness,
     profile: ChatProfile,
@@ -2212,6 +2216,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         processId: opening.hosted.id,
         launchControls: {},
         launchResume: true,
+        launchHeadless: opening.headless,
         controls: [],
         confirmedPicks: {},
         returnedDrops: [],
@@ -2696,6 +2701,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           processId: record.processId,
           launchControls: record.launchControls,
           launchResume: record.launchResume,
+          launchHeadless: record.launchHeadless,
           controls: record.controls,
           confirmedPicks: record.confirmedPicks,
           returnedDrops: record.returnedDrops,

@@ -109,9 +109,9 @@ export function branchRowInput(branch: string): PickerItemInput;
   `preselectedProfile(profiles, recent, expandTilde(folder), paths)`; a pool project pre-selects row 0, since the
   page holds no clone paths to match recent folders against.
 - **Session step for a project**: lists `projectPastSessions(name, profile)` after New session and New headless
-  session; with none, the step holds those two lines alone, as the folder step does. Every row resumes in its own `projectDir`. Folder rows from `pastSessions` are
-  mapped to `ProjectPastSessionRow` with the step's folder, so the step holds one row type and resume always reads
-  `row.projectDir`.
+  session; with none, the step holds those two lines alone, as the folder step does. Every row resumes in its own
+  `projectDir`. Folder rows from `pastSessions` are mapped to `ProjectPastSessionRow` with the step's folder, so the
+  step holds one row type and resume always reads `row.projectDir`.
 - **Section rows on a project's session step**: `sessionItems` matches a section row to the step by folder;
   a project covers many folders, so its `step.projectDir` is null, meaning a section row is in the step when its
   profile matches and its session is among `rows` (already only the project's sessions).

@@ -29,6 +29,9 @@ export interface SavedSession {
   // The `AgentStart.resume` the row's last process start passed; false when
   // the row never started one.
   launchResume: boolean;
+  // Whether the row's last process start carried the headless note; the
+  // row's `headless` when the row never started one.
+  launchHeadless: boolean;
   // The controls the row held, as its process last reported them; [] when no
   // process reported any.
   controls: SessionControl[];
@@ -76,6 +79,7 @@ type LaterSavedField =
   | 'returned'
   | 'launchControls'
   | 'launchResume'
+  | 'launchHeadless'
   | 'controls'
   | 'confirmedPicks'
   | 'returnedDrops'
@@ -202,6 +206,8 @@ function isStoredSession(value: unknown): value is StoredSession {
     isOptionalStringRecord(value.launchControls) &&
     (value.launchResume === undefined ||
       typeof value.launchResume === 'boolean') &&
+    (value.launchHeadless === undefined ||
+      typeof value.launchHeadless === 'boolean') &&
     isOptionalControlList(value.controls) &&
     isOptionalStringRecord(value.confirmedPicks) &&
     isOptionalStrings(value.returnedDrops) &&
@@ -248,6 +254,7 @@ function parseSavedSessions(text: string): SavedSessions {
       returned: stored.returned ?? [],
       launchControls: stored.launchControls ?? {},
       launchResume: stored.launchResume ?? false,
+      launchHeadless: stored.launchHeadless ?? stored.headless ?? false,
       controls: stored.controls ?? [],
       confirmedPicks: stored.confirmedPicks ?? {},
       returnedDrops: stored.returnedDrops ?? [],

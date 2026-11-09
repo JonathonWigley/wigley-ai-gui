@@ -299,6 +299,7 @@ function record(
     processId: null,
     launchControls: {},
     launchResume: false,
+    launchHeadless: false,
     queued: [],
     returned: [],
     controls: [],
@@ -3708,6 +3709,7 @@ describe('createChatSessions saved sessions', () => {
         returned: [],
         launchControls: {},
         launchResume: false,
+        launchHeadless: false,
         controls: test.chat.sessions()[0].controls,
         confirmedPicks: {},
         returnedDrops: [],
@@ -3797,6 +3799,7 @@ describe('createChatSessions saved sessions', () => {
     'launchedHeadless_FlagSetAfterTheStart_KeepsTheStartsFlag: $given → $expected',
     async ({ clears, expected }) => {
       const test = await started();
+      test.chat.restore(NOTHING_SAVED, []);
       test.chat.setHeadless(ROW_ID, true);
 
       if (clears) {
@@ -3805,6 +3808,7 @@ describe('createChatSessions saved sessions', () => {
       }
 
       expect(test.chat.launchedHeadless(ROW_ID)).toBe(expected);
+      expect(test.saved.last()?.sessions[0].launchHeadless).toBe(expected);
     },
   );
 
@@ -3904,21 +3908,37 @@ describe('createChatSessions saved sessions', () => {
     },
   );
 
-  it('restore_SavedHeadless_OpensTheRowHeadless', () => {
-    const test = setUp();
+  it.each([
+    {
+      given: 'saved headless',
+      saved: hostedRecord({ headless: true, launchHeadless: true }),
+      hosted: [],
+      expected: { headless: true, launched: true },
+    },
+    {
+      given: 'turned off after a headless start, its process attached',
+      saved: hostedRecord({ headless: false, launchHeadless: true }),
+      hosted: [hostedP1()],
+      expected: { headless: false, launched: true },
+    },
+  ])(
+    'restore_SavedHeadless_RestoresTheFlagAndTheLaunchFlag: $given',
+    async ({ saved, hosted, expected }) => {
+      const test = setUp();
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
 
-    test.chat.restore(
-      {
-        sessions: [record('host-a', { headless: true })],
-        selectedHostSessionId: null,
-      },
-      [],
-    );
+      restoreOne(test, saved, hosted);
+      await flush();
 
-    expect(test.chat.isHeadless(ROW_ID)).toBe(true);
-    expect(test.chat.launchedHeadless(ROW_ID)).toBe(true);
-    expect(test.chat.sessions()[0].headless).toBe(true);
-  });
+      expect(test.chat.isHeadless(ROW_ID)).toBe(expected.headless);
+      expect(test.chat.launchedHeadless(ROW_ID)).toBe(expected.launched);
+      expect(test.chat.sessions()[0].headless).toBe(expected.headless);
+    },
+  );
 
   it.each([
     {
@@ -4886,6 +4906,7 @@ describe('createChatSessions clear', () => {
           returned: [],
           launchControls: { mode: 'auto', model: 'fake-large' },
           launchResume: false,
+          launchHeadless: false,
           controls: test.chat.sessions()[0].controls,
           confirmedPicks: { model: 'fake-large' },
           returnedDrops: [],

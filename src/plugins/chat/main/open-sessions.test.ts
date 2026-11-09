@@ -22,6 +22,7 @@ const TWO_SESSIONS: SavedSessions = {
       returned: [],
       launchControls: { effort: 'high' },
       launchResume: true,
+      launchHeadless: false,
       controls: [
         {
           id: 'effort',
@@ -51,6 +52,7 @@ const TWO_SESSIONS: SavedSessions = {
       returned: [{ text: 'returned', images: [] }],
       launchControls: {},
       launchResume: false,
+      launchHeadless: true,
       controls: [],
       confirmedPicks: {},
       returnedDrops: [],
@@ -79,6 +81,7 @@ const ONE_SESSION: SavedSessions = {
       returned: [],
       launchControls: {},
       launchResume: false,
+      launchHeadless: false,
       controls: [],
       confirmedPicks: {},
       returnedDrops: [],
@@ -142,6 +145,7 @@ describe('createOpenSessions', () => {
             processId: null,
             launchControls: {},
             launchResume: false,
+            launchHeadless: false,
             queued: [],
             returned: [],
             controls: [],
@@ -193,6 +197,16 @@ describe('createOpenSessions', () => {
       ]),
       expected: {
         sessions: [{ ...TWO_SESSIONS.sessions[0], headless: false }],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a session without launchHeadless',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], launchHeadless: undefined },
+      ]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[0], launchHeadless: true }],
         selectedHostSessionId: null,
       },
     },
@@ -333,6 +347,12 @@ describe('createOpenSessions', () => {
       file: 'launchResume a string',
       text: withSessions([
         { ...TWO_SESSIONS.sessions[0], launchResume: 'yes' },
+      ]),
+    },
+    {
+      file: 'launchHeadless a string',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], launchHeadless: 'yes' },
       ]),
     },
     {
