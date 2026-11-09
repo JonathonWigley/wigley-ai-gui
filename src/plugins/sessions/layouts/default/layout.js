@@ -5,7 +5,7 @@
 // hint over its groups, each group a project's header (name, count, star and
 // grip) over its rows, then each plugin section, its label always shown with
 // its header part at the hairline's end, over its claimed rows,
-// each row a compact card of two lines: its title (`New Chat` for a row with no
+// each row a compact card of three lines: its title (`New Chat` for a row with no
 // title; no harness name) with its activity's label or, with no
 // activity, a needs you label while `marked` (a running activity draws no
 // label: the workflow chip's tag in the footer says it), a status edge for an
