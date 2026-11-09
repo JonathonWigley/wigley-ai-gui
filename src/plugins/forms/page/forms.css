@@ -316,8 +316,8 @@
   color: var(--wg-forms-severity-minor);
 }
 
-/* A finding's verdict: its tags, the impact and the Accept button, under the
-   finding's sections. */
+/* A finding's verdict: its tags, the impact and the Accept button, where the
+   layout places it (the default: under the card's head). */
 :where(.form-tab) .verdict {
   margin-bottom: var(--wg-space-4);
 }

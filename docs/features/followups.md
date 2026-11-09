@@ -413,6 +413,11 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   per-origin types; each saved round carries its origin action words so retro reads data rather than keeping
   `ORIGIN_ACTION_LABELS`. `origin` / `card` / `FindingAction` in forms' `layout.d.ts` become strings, so a new
   finding origin, card or action does not break a user forms layout typed against the closed unions.
+- **A finding's proof becomes optional off a Nit** — *agent-ready*: the default forms layout draws a finding's `proof`
+  only on a Nit card (as Why it's safe), yet `finding-format.ts` still requires it on every origin, so agents send a
+  filler line nobody sees. Make `proof` required on `nit` alone in the finding origins table and the tool schema, and
+  update the forms README (marketplace), `~/wigley-agents/forms.md` § Findings and the review skill's `triage.md` to
+  match, in the same piece of work.
 - **Markdown block contributions** — *agent-ready*: `MarkdownRenderer.addBlock({ opener, render })` in the contract's
   own terms, beside the fence registry `addFence` (`docs/features/visuals/design.md`); the wigley `:::changes` /
   `:::tree` / `:::details` blocks move out of the core adapter (`markdown-it-renderer.ts`) into a contribution.
