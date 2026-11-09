@@ -58,7 +58,9 @@ module, which takes the two samples and the time between them:
   of its own (below). A group opens to show its processes.
 - **History** is a ring of the last 60 seconds per meter, kept in main and published with the
   snapshot, so a page reload keeps it and an app restart starts it again.
-- **Tones**: a meter takes `warning` from 70% and `critical` from 90%, matching the context bar.
+- **Tones**: the CPU and GPU meters take `warning` from 70% and `critical` from 90%, matching the context bar.
+  RAM takes the memory pressure's tone where the OS reports one (macOS), since a healthy Mac counts compressed
+  and wired memory as used and reads 75–90%; elsewhere it takes the same percent thresholds.
 
 The snapshot goes to the `system-stats.snapshot` slot. Main samples only while a page shows the
 panel: the page tells main over the plugin's channel when the panel shows or hides, so a hidden

@@ -424,7 +424,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   row per ticket: its position, the waiting session, its branch in mono and `waited <time>`; no queue draws no header.
 - **System stats:** the right bar holds the system stats panel while it is shown (`Space v y`): a section header,
   then five meter rows (CPU, GPU, RAM, Network, Disk), each its label, a Meter, its value in tabular numerals and a
-  Sparkline of the last 60 seconds in the meter's tone (`warning` from 70 %, `critical` from 90 %); RAM's pressure and
+  Sparkline of the last 60 seconds in the meter's tone (`warning` from 70 %, `critical` from 90 %; RAM by memory
+  pressure where the OS reports it); RAM's pressure and
   swap sit on a `text-12` `fg-tertiary` line under its row. The process list follows: one row per group or process,
   its name, then CPU, RAM and GPU columns in tabular numerals, sorted by one of them; the keyboard cursor's row takes
   `is-cursor`. A group row (an app, or `claude · <session title>`) opens to show its processes under it. A process
