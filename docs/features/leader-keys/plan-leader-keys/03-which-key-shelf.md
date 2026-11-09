@@ -1,6 +1,6 @@
 # 03 — Which-key shelf (A3) and leader search
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -184,3 +184,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit fcf91837 · proof: diff read (keys.searchLeader, <Leader>/ bind, WhichKeyModel.name present) + typecheck clean; screenshots forms-which-key-shelf.png and forms-leader-search.png read; 98 keys tests pass per worker · concerns: new keys.picker binds not yet through the every-key-placed check (full selftest only); label 'Search leader actions' capitalised against the lower-case keys labels
