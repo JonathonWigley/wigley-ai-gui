@@ -5,7 +5,7 @@ import type { CommandInfo } from '../../../contracts/plugin';
 import { pageKeysFor, vimTokenForPageKey } from '../../../shared/key-notation';
 import {
   type CommandLabel,
-  compareKeys,
+  compareKeysUnder,
   formatKeys,
   formatVimToken,
   joinKeys,
@@ -35,8 +35,8 @@ interface Candidate {
   command: CommandId;
 }
 
-// The keys that continue `pending`, in key order (`compareKeys`, a page key
-// by its vim token): those firing in the pending scope (or `any`), on the
+// The keys that continue `pending`, in key order (`compareKeysUnder`, a page
+// key by its vim token): those firing in the pending scope (or `any`), on the
 // page or in a box. A prefix the keymap's `groups` names is labelled with
 // that name, matched in the pending keys' own spelling: page keys on the
 // page, vim tokens in a box; the model's `name` is the pending keys' own
@@ -61,7 +61,7 @@ export function whichKeyModel(
     pending.where === 'page' ? vimTokenForPageKey : (token: string) => token;
   const groups = groupPrefixes(pending.where, keymap);
   const nextKeys = byNextKey(candidates, pending.keys.length).sort(([a], [b]) =>
-    compareKeys(sortToken(a), sortToken(b)),
+    compareKeysUnder(sortToken(a), sortToken(b), keymap.editor.leader),
   );
   const entries = nextKeys.map(([key, binds]) =>
     entry(

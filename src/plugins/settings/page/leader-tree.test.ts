@@ -132,6 +132,20 @@ describe('leaderTree', () => {
       expected: { name: 'theirs', isNamed: true, isSet: false },
     },
     {
+      case: "the user's entry spelling the leader",
+      layer: { groups: { '<Space>b': 'mine' } },
+      defaults: { '<Leader>b': 'theirs' },
+      prefix: '<Leader>b',
+      expected: { name: 'mine', isNamed: true, isSet: true },
+    },
+    {
+      case: 'a default entry spelling the leader',
+      layer: null,
+      defaults: { '<Space>b': 'theirs' },
+      prefix: '<Leader>b',
+      expected: { name: 'theirs', isNamed: true, isSet: false },
+    },
+    {
       case: 'none: the manifest groups at any depth in tree order',
       layer: null,
       defaults: {},
@@ -175,6 +189,13 @@ describe('leaderTree', () => {
       entries: [],
     },
     {
+      case: 'a user groups entry spelling the leader is listed',
+      layer: { groups: { '<Space>w': 'wide' } },
+      defaults: {},
+      prefix: '<Leader>w',
+      entries: [],
+    },
+    {
       case: 'a default groups entry with no binds is not listed',
       layer: {},
       defaults: { '<Leader>y': 'why' },
@@ -211,6 +232,32 @@ describe('leaderTree', () => {
       ),
     ).toEqual(['a', 'd', 'D', '1', ';', '<Leader>']);
   });
+
+  // Each spelling of a key sorts to the one place which-key sorts it.
+  it.each([
+    { bar: '<Bar>', enter: '<CR>' },
+    { bar: '|', enter: '<Return>' },
+  ])(
+    'leaderTree_KeySpellings_SortToOnePlace: $bar $enter',
+    ({ bar, enter }) => {
+      const tree = leaderTree(
+        schema([
+          bind(`<Leader>${bar}`, 'p.a'),
+          bind('<Leader><Tab>', 'p.b'),
+          bind(`<Leader>${enter}`, 'p.c'),
+          bind('<Leader><Esc>', 'p.d'),
+          bind('<Leader>;', 'p.e'),
+        ]),
+        null,
+      );
+
+      expect(
+        group(tree, '<Leader>').entries.map((entry) =>
+          entry.type === 'item' ? entry.item.key : entry.key,
+        ),
+      ).toEqual([';', enter, '<Esc>', '<Tab>', bar]);
+    },
+  );
 
   it('leaderTree_OneKeyInTwoScopes_TwoItemsInScopeOrder', () => {
     const tree = leaderTree(
@@ -256,66 +303,60 @@ describe('keyTaken', () => {
     case: string;
     key: string;
     scope: ViewScope | null;
-    moving: string | null;
+    excluded: string[];
     expected: string | null;
   }>([
     {
       case: 'NoScope_AnyItem_Taken',
       key: 'a',
       scope: null,
-      moving: null,
+      excluded: [],
       expected: 'item a',
     },
     {
       case: 'NoScope_ScopedItem_Free',
       key: 's',
       scope: null,
-      moving: null,
+      excluded: [],
       expected: null,
     },
     {
       case: 'EqualScopes_Taken',
       key: 's',
       scope: 'p.s',
-      moving: null,
+      excluded: [],
       expected: 'item s',
     },
     {
       case: 'OtherScope_Free',
       key: 's',
       scope: 'p.t',
-      moving: null,
+      excluded: [],
       expected: null,
     },
     {
       case: 'AnyAgainstAScope_Taken',
       key: 's',
       scope: 'any',
-      moving: null,
+      excluded: [],
       expected: 'item s',
     },
     {
-      case: 'TheMovingLineItself_Free',
+      case: 'AnExcludedLine_Free',
       key: 'a',
       scope: 'any',
-      moving: 'a',
+      excluded: ['s', 'a'],
       expected: null,
     },
     {
       case: 'ANestedGroup_Group',
       key: 'z',
       scope: 'any',
-      moving: null,
+      excluded: [],
       expected: 'group <Leader>z',
     },
-  ])('keyTaken_$case', ({ key, scope, moving, expected }) => {
-    const taken = keyTaken(
-      tree,
-      top,
-      key,
-      scope,
-      moving === null ? null : lineOn(moving),
-    );
+  ])('keyTaken_$case', ({ key, scope, excluded, expected }) => {
+    const taken = keyTaken(tree, top, key, scope, excluded.map(lineOn));
 
     const shown =
       taken === null

@@ -7,7 +7,7 @@ import type {
 } from '../../../contracts/keymap';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { errorText } from '../../../shared/error-text';
-import { normalVimKeys } from '../../../shared/key-hints';
+import { normalLeaderKeys } from '../../../shared/key-hints';
 import {
   isJsonObject,
   isSameJson,
@@ -210,17 +210,19 @@ export function withLeader(
 }
 
 // `layer` with the `groups` name of `prefix` set to `name`, or removed for
-// null; an entry spelling the same keys another way is replaced. An emptied
-// `groups` drops.
+// null; an entry spelling the same keys another way under the layer's leader,
+// else the schema's default, is replaced. An emptied `groups` drops.
 export function withGroupName(
   layer: UserKeymap | null,
   prefix: string,
   name: string | null,
+  schema: UserConfigSchema,
 ): UserKeymap {
-  const normal = normalVimKeys(prefix);
+  const leader = keymapLeader(schema, layer);
+  const normal = normalLeaderKeys(prefix, leader);
   const groups = Object.fromEntries(
     Object.entries(layer?.groups ?? {}).filter(
-      ([keys]) => normalVimKeys(keys) !== normal,
+      ([keys]) => normalLeaderKeys(keys, leader) !== normal,
     ),
   );
   if (name !== null) {

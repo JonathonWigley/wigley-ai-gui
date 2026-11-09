@@ -9,17 +9,18 @@ import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { isSameJson } from '../../../shared/json';
 import {
-  compareKeys,
+  compareKeysUnder,
   compareText,
   formatVimKeys,
+  normalLeaderKeys,
   normalVimKeys,
   unnamedGroupName,
   vimTokens,
 } from '../../../shared/key-hints';
 import {
   type BindLine,
-  type CommandRow,
   firesAnywhere,
+  keymapLeader,
   keymapRows,
 } from './keymap-rows';
 
@@ -82,21 +83,33 @@ function isLeaderLine(line: BindLine): boolean {
   return firesAnywhere(line) && tokensAfterLeader(line.bind.keys) !== null;
 }
 
-// `row`'s first line in force under the leader.
-export function leaderLine(row: CommandRow): BindLine | undefined {
-  return row.binds.find(isLeaderLine);
-}
-
 // The name `groups` gives `prefix`, matching the keys through
-// `normalVimKeys`.
+// `normalLeaderKeys` under `leader`.
 export function groupNameIn(
   groups: KeyGroups,
   prefix: string,
+  leader: string,
 ): string | undefined {
-  const normal = normalVimKeys(prefix);
+  const normal = normalLeaderKeys(prefix, leader);
   return Object.entries(groups).find(
-    ([keys]) => normalVimKeys(keys) === normal,
+    ([keys]) => normalLeaderKeys(keys, leader) === normal,
   )?.[1];
+}
+
+// The tokens of a `groups` entry's keys after the leader, spelled `<Leader>`
+// or as `leader`, or null when the keys do not run past the leader.
+function groupTokensAfterLeader(keys: string, leader: string): string[] | null {
+  const afterLeader = tokensAfterLeader(keys);
+  if (afterLeader !== null) {
+    return afterLeader;
+  }
+  const tokens = vimTokens(keys, leader);
+  const leaderLength = vimTokens(leader, leader).length;
+  const isUnderLeader =
+    tokens.length > leaderLength &&
+    normalVimKeys(tokens.slice(0, leaderLength).join('')) ===
+      normalVimKeys(leader);
+  return isUnderLeader ? tokens.slice(leaderLength) : null;
 }
 
 function pathId(path: readonly string[]): string {
@@ -150,7 +163,11 @@ function draftTree(): {
   return { nodes, nodeAt };
 }
 
-function sortedEntries(schema: UserConfigSchema, node: Draft): LeaderEntry[] {
+function sortedEntries(
+  schema: UserConfigSchema,
+  node: Draft,
+  leader: string,
+): LeaderEntry[] {
   const entries: LeaderEntry[] = [
     ...node.items.map((item): LeaderEntry => ({ type: 'item', item })),
     ...node.children.map((child): LeaderEntry => ({
@@ -160,7 +177,7 @@ function sortedEntries(schema: UserConfigSchema, node: Draft): LeaderEntry[] {
     })),
   ];
   return entries.sort((a, b) => {
-    const byKey = compareKeys(entryKey(a), entryKey(b));
+    const byKey = compareKeysUnder(entryKey(a), entryKey(b), leader);
     if (byKey !== 0) {
       return byKey;
     }
@@ -200,13 +217,15 @@ function commandGroupsUnder(
 // The leader tree as which-key shows it: every bind in force whose keys start
 // with `<Leader>` and run past it, each prefix such a bind runs past as a
 // group, plus each prefix the user's `groups` names. The top level first,
-// then every group depth-first, children in key order. Tokens compare
-// through `normalVimKeys`, the first spelling seen kept.
+// then every group depth-first, children in key order (`compareKeysUnder`).
+// Tokens compare through `normalVimKeys`, the first spelling seen kept; a
+// `groups` entry matches by `normalLeaderKeys`.
 export function leaderTree(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
 ): LeaderGroup[] {
   const { nodes, nodeAt } = draftTree();
+  const leader = keymapLeader(schema, layer);
   for (const row of keymapRows(schema, layer).flatMap((group) => group.rows)) {
     for (const line of row.binds.filter(isLeaderLine)) {
       const tokens = tokensAfterLeader(line.bind.keys) ?? [];
@@ -221,7 +240,7 @@ export function leaderTree(
   }
   const userGroups = layer?.groups ?? {};
   for (const keys of Object.keys(userGroups)) {
-    const tokens = tokensAfterLeader(keys);
+    const tokens = groupTokensAfterLeader(keys, leader);
     if (tokens !== null) {
       nodeAt(tokens);
     }
@@ -230,7 +249,7 @@ export function leaderTree(
   const entriesOf = (node: Draft) => {
     let held = entries.get(node);
     if (held === undefined) {
-      held = sortedEntries(schema, node);
+      held = sortedEntries(schema, node, leader);
       entries.set(node, held);
     }
     return held;
@@ -246,7 +265,7 @@ export function leaderTree(
   const pending: Draft[] = [nodeAt([])];
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     tree.push(
-      leaderGroup(schema, userGroups, node, entriesOf(node), () =>
+      leaderGroup(schema, userGroups, leader, node, entriesOf(node), () =>
         unnamedGroupName(commandGroupsUnder(node, entriesOf, nodeOf)),
       ),
     );
@@ -261,6 +280,7 @@ export function leaderTree(
 function leaderGroup(
   schema: UserConfigSchema,
   userGroups: KeyGroups,
+  leader: string,
   node: Draft,
   entries: readonly LeaderEntry[],
   unnamed: () => string,
@@ -276,8 +296,8 @@ function leaderGroup(
       entries,
     };
   }
-  const userName = groupNameIn(userGroups, prefix);
-  const name = userName ?? groupNameIn(schema.defaultGroups, prefix);
+  const userName = groupNameIn(userGroups, prefix, leader);
+  const name = userName ?? groupNameIn(schema.defaultGroups, prefix, leader);
   return {
     prefix,
     path: node.path,
@@ -302,14 +322,14 @@ function scopesOverlap(a: ViewScope, b: ViewScope | null): boolean {
 }
 
 // What holds `key` in `group` for a bind in `scope`: the first item on it,
-// other than the `moving` line, whose scope overlaps; else a nested group on
-// it; else null.
+// other than the `excluded` lines the edit moves or removes, whose scope
+// overlaps; else a nested group on it; else null.
 export function keyTaken(
   tree: readonly LeaderGroup[],
   group: LeaderGroup,
   key: string,
   scope: ViewScope | null,
-  moving: BindLine | null,
+  excluded: readonly BindLine[],
 ): KeyTaken | null {
   const normal = normalVimKeys(key);
   const isOnKey = (entry: LeaderEntry) =>
@@ -318,7 +338,7 @@ export function keyTaken(
     const isTakingItem =
       entry.type === 'item' &&
       isOnKey(entry) &&
-      (moving === null || !isSameLine(entry.item.line, moving)) &&
+      !excluded.some((line) => isSameLine(entry.item.line, line)) &&
       scopesOverlap(entry.item.line.bind.scope, scope);
     if (isTakingItem) {
       return { type: 'item', item: entry.item };

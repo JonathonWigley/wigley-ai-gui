@@ -42,7 +42,6 @@ import {
   LEADER,
   type LeaderGroup,
   type LeaderItem,
-  leaderLine,
   leaderTree,
 } from './leader-tree';
 import type { CommitVia, RowContext } from './settings-view';
@@ -213,8 +212,20 @@ function leaderLinesOf(tree: readonly LeaderGroup[], runs: Runs): BindLine[] {
   );
 }
 
-// `layer` without each of `lines` other than `kept` whose scope overlaps
-// `scope`, each removed as `withRemovedBind` removes it.
+// Each of `lines` other than `kept` whose scope overlaps `scope`: the leader
+// paths an edit binding in `scope` removes.
+function otherLeaderPaths(
+  lines: readonly BindLine[],
+  kept: BindLine | undefined,
+  scope: ViewScope,
+): BindLine[] {
+  return lines.filter(
+    (line) => line !== kept && scopesOverlap(line.bind.scope, scope),
+  );
+}
+
+// `layer` without each of `otherLeaderPaths`, each removed as
+// `withRemovedBind` removes it.
 function withOtherLeaderPathsRemoved(
   layer: UserKeymap,
   lines: readonly BindLine[],
@@ -223,10 +234,8 @@ function withOtherLeaderPathsRemoved(
   schema: UserConfigSchema,
 ): UserKeymap {
   let edited = layer;
-  for (const line of lines) {
-    if (line !== kept && scopesOverlap(line.bind.scope, scope)) {
-      edited = withRemovedBind(edited, line, schema);
-    }
+  for (const line of otherLeaderPaths(lines, kept, scope)) {
+    edited = withRemovedBind(edited, line, schema);
   }
   return edited;
 }
@@ -313,21 +322,21 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   const asItemKey = (keys: string): string =>
     normalVimKeys(keys) === normalVimKeys(leader()) ? LEADER : keys;
 
-  // A recorded key in `group` for a bind in `scope`, the `moving` line aside:
-  // a chord, a nested group's key or an item's key in an overlapping scope is
-  // refused.
+  // A recorded key in `group` for a bind in `scope`, the `excluded` lines the
+  // edit moves or removes aside: a chord, a nested group's key or an item's
+  // key in an overlapping scope is refused.
   const judge = (
     group: LeaderGroup,
     keys: string,
     scope: ViewScope | null,
-    moving: BindLine | null,
+    excluded: readonly BindLine[],
   ): Judgement => {
     const key = asItemKey(keys);
     if (parseChord(key) !== null) {
       return { type: 'refused', note: CHORD_NOTE, reason: 'chord' };
     }
     const held = currentGroup(group);
-    const taken = keyTaken(tree, held, key, scope, moving);
+    const taken = keyTaken(tree, held, key, scope, excluded);
     const full = printed(held.prefix + key);
     if (taken?.type === 'group') {
       return {
@@ -357,7 +366,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
     key: string,
     prompt: string,
     scope: ViewScope | null,
-    moving: BindLine | null,
+    excluded: readonly BindLine[],
     keep: (keys: string, itemKey: string) => void,
   ) =>
     ctx.recordKey({
@@ -365,7 +374,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       replacing: null,
       prompt,
       confirm: 'press',
-      judge: (keys) => judge(group, keys, scope, moving),
+      judge: (keys) => judge(group, keys, scope, excluded),
       keep: (keys) => {
         const itemKey = asItemKey(keys);
         keep(currentGroup(group).prefix + itemKey, itemKey);
@@ -386,8 +395,8 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       .flatMap((group) => group.rows)
       .filter((row) => row.command.runsIn === 'page');
 
-  // The `Action` picker over every page command's rows, each with its leader
-  // keys, if any, printed beside it.
+  // The `Action` picker over every page command's rows, each with its first
+  // leader keys in the tree's order, the ones Add moves, printed beside it.
   const openActionPicker = (
     rows: readonly CommandRow[],
     selected: number | undefined,
@@ -399,7 +408,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       items: rows,
       label: (row) => capitalised(row.label),
       keysOf: (row) => {
-        const line = leaderLine(row);
+        const [line] = leaderLinesOf(tree, row);
         return line === undefined ? null : printed(line.bind.keys);
       },
       selected,
@@ -415,7 +424,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       key,
       "Press the new group's key — Esc cancels",
       'any',
-      null,
+      [],
       (prefix) =>
         ctx.openBox({
           key,
@@ -429,7 +438,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
               return;
             }
             commit(
-              withGroupName(ctx.keymapLayer(), prefix, name),
+              withGroupName(ctx.keymapLayer(), prefix, name, ctx.schema),
               { box },
               { group: `group ${prefix}`, item: null },
             );
@@ -448,12 +457,14 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
         const text = box.text().trim();
         const isDefault =
           text === '' ||
-          text === groupNameIn(ctx.schema.defaultGroups, group.prefix);
+          text ===
+            groupNameIn(ctx.schema.defaultGroups, group.prefix, leader());
         ctx.commitKeymap(
           withGroupName(
             ctx.keymapLayer(),
             group.prefix,
             isDefault ? null : text,
+            ctx.schema,
           ),
           { box },
         );
@@ -467,7 +478,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       return;
     }
     ctx.commitKeymap(
-      withGroupName(ctx.keymapLayer(), group.prefix, null),
+      withGroupName(ctx.keymapLayer(), group.prefix, null, ctx.schema),
       null,
     );
   };
@@ -475,9 +486,10 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   // ── Item edits ──────────────────────────────────────────────────────────
 
   // Records the new item's key, which meets only `any` items until the Scope
-  // picker names its scope; the key is judged again in the scope chosen, and
-  // refused there it writes nothing. A command with leader binds moves the
-  // one in the scope chosen, else its first, and loses the rest in a scope
+  // picker names its scope; the key is judged again in the scope chosen, the
+  // lines the edit moves or removes aside, and refused there it writes
+  // nothing. A command with leader binds moves the one in the scope chosen,
+  // else its first in the tree's order, and loses the rest in a scope
   // overlapping it, so it keeps one leader path per scope.
   const addItem = (group: LeaderGroup) =>
     recordIn(
@@ -485,7 +497,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       `add ${group.prefix}`,
       "Press the new item's key — Esc cancels",
       null,
-      null,
+      [],
       (keys, itemKey) =>
         openActionPicker(actionRows(), undefined, (row) => {
           const lines = leaderLinesOf(
@@ -514,7 +526,10 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
               lines[0]?.bind.scope ?? firstDefault?.bind.scope ?? 'any',
             chosen(scope, expectedText) {
               const moving = movingIn(scope);
-              const judged = judge(group, itemKey, scope, moving ?? null);
+              const judged = judge(group, itemKey, scope, [
+                ...(moving === undefined ? [] : [moving]),
+                ...otherLeaderPaths(lines, moving, scope),
+              ]);
               if (judged.type === 'refused') {
                 log(`add refused ${keys} in ${scope}: ${judged.reason}`);
                 ctx.toast(judged.note, 'info');
@@ -591,7 +606,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       itemRowKey(item.line.bind, item.line.origin === 'user'),
       prompt,
       item.line.bind.scope,
-      item.line,
+      [item.line],
       (keys) => {
         if (normalVimKeys(keys) === normalVimKeys(item.line.bind.keys)) {
           return;

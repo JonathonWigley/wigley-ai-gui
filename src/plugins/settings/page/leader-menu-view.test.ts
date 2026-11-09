@@ -71,7 +71,10 @@ interface Commit {
 // pane, keeping every commit, recording, picker, box, toast, log line, scope
 // and focus target it hands out. `land` applies the last commit as a
 // landed write does: the layer changes, `written` runs, the rows redraw.
-function shownMenu(layer: UserKeymap | null = null) {
+function shownMenu(
+  layer: UserKeymap | null = null,
+  schema: UserConfigSchema = SCHEMA,
+) {
   let current = layer;
   const committed: Commit[] = [];
   const recordings: RecordRequest[] = [];
@@ -85,7 +88,7 @@ function shownMenu(layer: UserKeymap | null = null) {
     throw new Error('not read by the Leader menu');
   };
   const context: RowContext = {
-    schema: SCHEMA,
+    schema,
     platform: 'macos',
     read: unread,
     settingsLayer: unread,
@@ -369,6 +372,17 @@ describe('createLeaderMenuView', () => {
     expect(newRow && picker.keysOf?.(newRow)).toBe('Space b n');
   });
 
+  it('leaderMenu_ActionPicker_ShowsTheLeaderKeysAddMoves', () => {
+    const menu = shownMenu();
+    onSessionItem(menu, 0);
+
+    menu.view.commands.open();
+
+    const picker = menu.pickers[0] as PickRequest<CommandRow>;
+    const two = picker.items.find((each) => each.command.id === TWO);
+    expect(two && picker.keysOf?.(two)).toBe('Space ;');
+  });
+
   it.each<{
     case: string;
     id: string;
@@ -437,6 +451,24 @@ describe('createLeaderMenuView', () => {
             { keys: '<Leader>bt', scope: 'any' },
           ],
           binds: [bind('<Leader>bq', TWO, { scope: 'p.t' })],
+        },
+      ],
+      toasts: [],
+    },
+    {
+      // `bu` in p.s moves onto `bt`, which goes with `;`: both overlap p.s.
+      case: 'Add_OntoAPathTheEditRemoves_Allowed',
+      id: TWO,
+      key: 't',
+      scope: 'p.s',
+      expected: [
+        {
+          unbind: [
+            { keys: '<Leader>bu', scope: 'p.s' },
+            { keys: '<Leader>;', scope: 'any' },
+            { keys: '<Leader>bt', scope: 'any' },
+          ],
+          binds: [bind('<Leader>bt', TWO, { scope: 'p.s' })],
         },
       ],
       toasts: [],
@@ -554,6 +586,7 @@ describe('createLeaderMenuView', () => {
   it.each<{
     case: string;
     layer: UserKeymap | null;
+    schema?: UserConfigSchema;
     downGroups: number;
     act: (menu: Menu) => void;
     committed: UserKeymap[];
@@ -593,6 +626,18 @@ describe('createLeaderMenuView', () => {
       toasts: [],
     },
     {
+      case: 'rename to a default name spelling the leader writes none',
+      layer: null,
+      schema: { ...SCHEMA, defaultGroups: { '<Space>b': 'session' } },
+      downGroups: 1,
+      act(menu) {
+        menu.view.commands.renameGroup();
+        boxWith(menu.boxes[0], 'session').accept();
+      },
+      committed: [{}],
+      toasts: [],
+    },
+    {
       case: 'add group',
       layer: null,
       downGroups: 0,
@@ -622,8 +667,8 @@ describe('createLeaderMenuView', () => {
     },
   ])(
     'leaderMenu_GroupEdit: $case',
-    ({ layer, downGroups, act, committed, toasts }) => {
-      const menu = shownMenu(layer);
+    ({ layer, schema, downGroups, act, committed, toasts }) => {
+      const menu = shownMenu(layer, schema);
       for (let step = 0; step < downGroups; step++) {
         menu.view.commands.down();
       }

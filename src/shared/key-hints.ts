@@ -63,6 +63,14 @@ const ACCELERATOR_KEY_NAMES: Partial<Record<string, string>> = {
   right: 'ArrowRight',
 };
 
+// The `<…>` name, as `normalVimKeys` spells names, of each one-character key
+// vim names.
+const VIM_NAME_BY_CHARACTER = new Map(
+  Object.entries(VIM_KEY_NAMES).flatMap(([name, key]) =>
+    key?.length === 1 ? [[key, `<${name}>`] as const] : [],
+  ),
+);
+
 const VIM_TOKEN = /<[^<>]+>|./gu;
 
 // A vim `<…>` key: its modifier prefixes, each one letter and a dash, then the
@@ -288,6 +296,19 @@ export function withLeader(keys: string, leader: string): string {
   return keys.replaceAll('<Leader>', leader);
 }
 
+// `keys` in `normalVimKeys`' one spelling with every `<Leader>`, in any case,
+// spelled as `leader`, so `<Leader>x` and `<Space>x` compare equal under a
+// `<Space>` leader.
+export function normalLeaderKeys(keys: string, leader: string): string {
+  const normalLeader = normalVimKeys(leader);
+  return (keys.match(VIM_TOKEN) ?? [])
+    .map((token) => {
+      const normal = normalVimToken(token);
+      return normal === '<leader>' ? normalLeader : normal;
+    })
+    .join('');
+}
+
 // An intercepted chord as the user reads it on `platform`, e.g. Control+Tab
 // as `⌃⇥` on macOS and `Ctrl+Tab` elsewhere.
 export function chordName(bind: InterceptBind, platform: OsName): string {
@@ -420,6 +441,19 @@ export function compareKeys(a: string, b: string): number {
     return compareText(a.toLowerCase(), b.toLowerCase()) || compareText(b, a);
   }
   return compareText(a, b);
+}
+
+// Two vim-notation keys in key order (`compareKeys`), each spelled first as
+// `normalLeaderKeys` spells it under `leader`, a one-character key vim names
+// (` `, `<`, `|`, `\`) as that `<…>` name: `<Bar>` and `|`, `<CR>` and
+// `<Enter>`, `<Leader>` and the leader each sort to one place.
+export function compareKeysUnder(a: string, b: string, leader: string): number {
+  return compareKeys(sortSpelling(a, leader), sortSpelling(b, leader));
+}
+
+function sortSpelling(key: string, leader: string): string {
+  const normal = normalLeaderKeys(key, leader);
+  return VIM_NAME_BY_CHARACTER.get(normal) ?? normal;
 }
 
 // By UTF-16 code unit, not by locale.

@@ -343,6 +343,13 @@ describe('withGroupName', () => {
       expected: { groups: { '<Leader>w': 'wide' } },
     },
     {
+      case: 'replace an entry spelling the leader',
+      layer: { groups: { '<Space>q': 'quick' } },
+      prefix: '<Leader>q',
+      name: 'quiet',
+      expected: { groups: { '<Leader>q': 'quiet' } },
+    },
+    {
       case: 'remove the last',
       layer: { leader: ',', groups: { '<Leader>q': 'quick' } },
       prefix: '<Leader>q',
@@ -350,6 +357,6 @@ describe('withGroupName', () => {
       expected: { leader: ',' },
     },
   ])('withGroupName_$case', ({ layer, prefix, name, expected }) => {
-    expect(withGroupName(layer, prefix, name)).toEqual(expected);
+    expect(withGroupName(layer, prefix, name, schema())).toEqual(expected);
   });
 });

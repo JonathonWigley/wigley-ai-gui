@@ -65,6 +65,7 @@ import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
 import { fakePlatform } from './platform.test-support';
 import { commandTarget } from './command-args';
+import { normalVimKeys } from './key-hints';
 import { keysFor } from './keys-for';
 import { type PartContext, type PluginHost, startPlugins } from './plugin-host';
 import { pluginLog } from './plugin-log';
@@ -190,7 +191,7 @@ export interface HarnessAnchor {
 // `pressCapture` hands `keys`, in vim notation, to the capture `keys.captureKey`
 // armed, and `cancelCapture` cancels it, as an Esc would; each disarms it before
 // the callback runs, as the page key engine does, and throws when none is armed.
-// `pressCapture('<Esc>')` throws, since the engine never captures Esc.
+// `pressCapture` throws on Esc, in any spelling: the engine never captures it.
 // `isCapturing` reads whether one is armed.
 // `picked` holds the qualified id of each mode whose handle's `picked` ran, in
 // order. `restores` holds each restore handed to `restores.track`; the harness
@@ -1733,7 +1734,7 @@ export function startPagePart<M extends PluginManifest>(
     },
     hintsShown: () => world.hintsShown,
     pressCapture(keys) {
-      if (keys === '<Esc>') {
+      if (normalVimKeys(keys) === normalVimKeys('<Esc>')) {
         throw new Error(
           'part harness: pressCapture never gets <Esc>; the engine cancels on Esc, so call cancelCapture',
         );

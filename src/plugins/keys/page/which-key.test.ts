@@ -69,6 +69,57 @@ describe('whichKeyModel', () => {
     });
   });
 
+  // Each spelling of a key sorts to the one place the Leader menu sorts it.
+  it.each<{ where: 'page' | 'editor'; map: Keymap; pending: string }>([
+    {
+      where: 'page',
+      map: keymap(
+        [
+          { keys: [' ', '|'], scope: 'any', command: 'splitRight' },
+          { keys: [' ', 'Tab'], scope: 'any', command: 'closeTab' },
+          { keys: [' ', 'Enter'], scope: 'any', command: 'submit' },
+          { keys: [' ', ';'], scope: 'any', command: 'openReview' },
+          { keys: [' ', 'a'], scope: 'any', command: 'nextUnanswered' },
+        ],
+        [],
+      ),
+      pending: ' ',
+    },
+    {
+      where: 'editor',
+      map: keymap(
+        [],
+        [
+          { keys: '<Leader><Bar>', scope: 'any', command: 'splitRight' },
+          { keys: '<Leader><Tab>', scope: 'any', command: 'closeTab' },
+          { keys: '<Leader><CR>', scope: 'any', command: 'submit' },
+          { keys: '<Leader>;', scope: 'any', command: 'openReview' },
+          { keys: '<Leader>a', scope: 'any', command: 'nextUnanswered' },
+        ],
+      ),
+      pending: '<Space>',
+    },
+  ])(
+    'whichKeyModel_KeySpellings_SortToOnePlace: $where',
+    ({ where, map, pending }) => {
+      const model = whichKeyModel(
+        { where, keys: [pending], scope: 's' },
+        map,
+        command,
+        label,
+        'macos',
+      );
+
+      expect(model?.entries.map((entry) => entry.keys)).toEqual([
+        'a',
+        ';',
+        '↩',
+        '⇥',
+        '|',
+      ]);
+    },
+  );
+
   it('whichKeyModel_PrefixSpanningGroups_JoinsGroups', () => {
     const map = keymap([
       { keys: [' ', 'e', 'n'], scope: 's', command: 'nextUnanswered' },
