@@ -209,7 +209,7 @@ owner's layout (`AGENTS.md` § Intent).
 
 ### Wave 5
 - [x] [Doc re-read](06-doc-re-read.md) — after 01–05
-- [ ] [Final verification](07-final-verification.md) — after 01–05
+- [x] [Final verification](07-final-verification.md) — after 01–05
 
 ## Run log
 
@@ -222,6 +222,7 @@ Review base: a42ed9f9
 - 04 · 484703ff · diff read (withMovedBind, KEYS_SECTION, buildRow scope arg, scopeTitle, openScopePicker, ScopePickRequest, key-recorder exports present) + typecheck clean; settings selftest passes per worker; settings-key-recording.png read · concerns: row-prompt.ts edited outside Files; a box/both bind reassigned onto a chord is refused at write with a toast, not during recording; find scrolls chips and header off the top (visual check for 07); recording row wraps to two lines at selftest width
 - 05 · 66d3cf28 · diff read (defaultGroups, unnamedGroupName, withGroupName, LEADER_SECTION, leader-tree, leader-menu-view present) + typecheck clean; settings selftest all passed per worker; settings-leader-menu.png read · concerns: cosmetic: recording row prompt and command columns wrap narrowly, groups header blank space, long command ids wrap mid-word (left for 07); one npx vitest run on the local dev dependency, nothing installed
 - 06 · 9a340be7 · diff read (5 docs, each line against the landed code per worker); moved-key grep outside plan folders clean · concerns: docs/features/plugin-framework/design.md may hold stale lines on which-key's keys-pending behaviour, left out of scope; the three-Esc claim in leader-keys/design.md unverified against the picker code
+- 07 · 13966760 · drive run lk07: checks 1-4 pass; 5-7 behaviour passes, layout mismatches (rows wrap, find loses header, leader ids one char per line, groups header) fixed in 13966760 and re-driven (fix07: fix-recording, fix-moved, fix-find-j read); settings selftest passes · concerns: Leader menu items cursor row is three lines (hints under the row) — design does not settle; hidden ‹ groups edge keeps its space in the items header; user-added shelf item listed first, not in key order (design gives no order); Leader menu Action/Group pickers open in NORMAL mode
 ### Contract changes
 - Leader picker commands and binds: six hand-named commands and hand-written binds → the shared LIST_PICKER_COMMANDS / listPickerCommands / LIST_PICKER_SCOPES pattern keyboard-reach added, gg/G included (ListPicker now has top/bottom) · why: keyboard-reach landed the shared pattern · consumers: 06 (the 'every list picker takes gg/G' doc line now holds) · group 03
 - headerEnd filter hint: planned → dropped · why: the core pluginPicker already anchors a / filter hint for a filter: true list · consumers: none · group 03
@@ -243,5 +244,7 @@ Review base: a42ed9f9
 - groups/items grid minmax(0,1fr) minmax(0,2fr) — max-content squeezed the items pane, rem fails the style lint — visual only · group 05 · group 05
 - sectionList_EndsKeysThenLeaderMenu folded into the existing sections test — one test per rule — none · group 05 · group 05
 - DESIGN.md: which-key entries are not row-list rows; the leader search's rows stay in the row-list group — the task text — one line · group 06 · group 06
+- while recording, the Keybindings prompt replaces the hints — both do not fit at 900 px — visual only · group 07 fix · group 07
 ### Review rounds
 ### Test gate
+- vitest: page-keys, page-api, key-sequences (01 capture); src/plugins/keys (03); src/plugins/settings (04, 05); keymap.test (02 tree); key-hints, keymap-checks, plugin-manifests (05 unnamedGroupName, 03 manifest); src/shared/layouts (layout contracts of keys and settings); src/main/config and src/contracts (05 defaultGroups) · 40 files, 917 tests pass; lint clean; typecheck clean

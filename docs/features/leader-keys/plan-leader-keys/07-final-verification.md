@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05
 Plan: [plan.md](plan.md)
@@ -50,3 +50,4 @@ Commit:    none (captures are not committed).
 
 ## Proof
 
+Commit 13966760 · proof: drive run lk07: checks 1-4 pass; 5-7 behaviour passes, layout mismatches (rows wrap, find loses header, leader ids one char per line, groups header) fixed in 13966760 and re-driven (fix07: fix-recording, fix-moved, fix-find-j read); settings selftest passes · concerns: Leader menu items cursor row is three lines (hints under the row) — design does not settle; hidden ‹ groups edge keeps its space in the items header; user-added shelf item listed first, not in key order (design gives no order); Leader menu Action/Group pickers open in NORMAL mode
