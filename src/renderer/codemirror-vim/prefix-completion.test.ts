@@ -186,6 +186,7 @@ describe('popupActionOf', () => {
 
   it.each([
     { key: 'Tab', expected: 'accept' },
+    { key: 'Tab', shiftKey: true, expected: null },
     { key: 'ArrowDown', expected: 'down' },
     { key: 'n', code: 'KeyN', ctrlKey: true, expected: 'down' },
     { key: 'т', code: 'KeyN', ctrlKey: true, expected: 'down' },

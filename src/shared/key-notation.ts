@@ -4,15 +4,21 @@
 import { parseChord } from './chord-notation';
 import { vimTokens } from './key-hints';
 
-// The page key of each named vim key the page can bind, by its lowercase
-// spelling, as vim reads names in any case; Tab is a chord in every spelling.
+// The chord each spelling of Tab and Shift+Tab stands for, by its lowercase
+// name, as vim reads names in any case.
+const CHORD_BY_VIM_NAME: Partial<Record<string, string>> = {
+  tab: '<Tab>',
+  's-tab': '<S-Tab>',
+};
+
+// The page key of each other named vim key the page can bind, by its
+// lowercase spelling.
 const PAGE_KEY_BY_VIM_NAME: Partial<Record<string, string>> = {
   space: ' ',
   cr: 'Enter',
   enter: 'Enter',
   return: 'Enter',
   esc: 'Escape',
-  tab: '<Tab>',
   bs: 'Backspace',
   lt: '<',
   bar: '|',
@@ -23,15 +29,32 @@ const VIM_TOKEN_BY_PAGE_KEY: Partial<Record<string, string>> = {
   ' ': '<Space>',
   Enter: '<CR>',
   Escape: '<Esc>',
-  Tab: '<Tab>',
   Backspace: '<BS>',
   '<': '<lt>',
   '\\': '<Bslash>',
 };
 
+// `token` in the chord notation when it is a chord in any spelling, else
+// unchanged: `<s-tab>` is `<S-Tab>`.
+function chordSpelling(token: string): string {
+  const name = token.slice(1, -1).toLowerCase();
+  return CHORD_BY_VIM_NAME[name] ?? token;
+}
+
+// Whether vim-notation `keys`, `<Leader>` spelled as `leader`, are one chord
+// in any spelling: `<C-n>` and `<tab>` are, `<Leader>` and `g<Tab>` are not.
+export function isChordKeys(keys: string, leader: string): boolean {
+  const tokens = vimTokens(keys, leader);
+  return tokens.length === 1 && parseChord(chordSpelling(tokens[0])) !== null;
+}
+
 function pageKeyFor(token: string): string {
-  if (token.length === 1 || parseChord(token) !== null) {
+  if (token.length === 1) {
     return token;
+  }
+  const chord = chordSpelling(token);
+  if (parseChord(chord) !== null) {
+    return chord;
   }
   const name = token.slice(1, -1).toLowerCase();
   const pageKey = PAGE_KEY_BY_VIM_NAME[name];
@@ -43,7 +66,7 @@ function pageKeyFor(token: string): string {
 
 // The page keys vim-notation `keys` press, every `<Leader>` spelled as
 // `leader` first: `<Leader>ks` with leader `<Space>` is `[' ', 'k', 's']`. A
-// chord stays as written. Throws on a `<…>` token the page has no key for.
+// chord comes back in the chord notation. Throws on a `<…>` token the page has no key for.
 export function pageKeysFor(keys: string, leader: string): string[] {
   return vimTokens(keys, leader).map(pageKeyFor);
 }

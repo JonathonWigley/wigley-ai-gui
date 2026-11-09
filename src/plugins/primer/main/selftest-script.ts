@@ -89,6 +89,11 @@ const PRIMER_STEPS: SelfTestStep[] = [
     why: "a on an item card shows its task's card and focuses the add-item box; leaving the box adds the item.",
   },
   { keys: ['C'], expect: '[primer] focused comment on task 2' },
+  {
+    keys: ['<S-Tab>', '<Tab>'],
+    expect: '[primer] focused comment on task 2',
+    why: 'Shift+Tab, in INSERT, moves to the box before the task comment, and Tab moves back.',
+  },
   { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
   {
     keys: ['<C-h>'],

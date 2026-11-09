@@ -27,7 +27,8 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   leader bind fires on the page and, as a vim normal-mode map, in a text box in normal mode; in
   insert mode the leader key types itself (Space types a space). Any other bind fires on the page,
   and a chord on the page fires inside a box too. `where` (`page`, `box` or `both`) sets where a
-  bind fires in place of that default, and a chord takes only `page`. A bind with `mode` fires in
+  bind fires in place of that default, and a chord takes only `page`. Tab and Shift+Tab are chords
+  in any spelling (`<tab>`, `<s-tab>`), so neither can be the leader or sit inside a longer sequence. A bind with `mode` fires in
   a box, in that vim mode.
 - `arg` hands the command its argument: a number, a string or a small record of numbers and
   strings. A command that declares an argument needs one on each of its binds, and a command that
@@ -78,7 +79,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   primer's columns, card and review, and the note popup. It is bound per main view, so a dialog,
   picker or confirm keeps its own keys; a new main view adds its scope to that list in
   `src/plugins/keymap.ts`. While a box's completion popup is open, Ctrl+n and Ctrl+p move the
-  popup's selection instead, and Tab accepts it, ahead of every bind.
+  popup's selection instead, and Tab accepts it, ahead of every bind; Shift+Tab still moves to the previous box.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
   between a view's own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog list and
   detail, the primer popup's tasks, items and card columns, and a Chat tab's transcript, box and
@@ -149,7 +150,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wd` dismiss a closed run, `ws` show or hide the side pane, `wf` open or fold finished waves            |
 | `p`                | projects                             | `pf` favorite or unfavorite the focused session's project, `pk` / `pj` move it up or down among the favorites                                                                                                                                                                                 |
 | `c`                | chat controls                        | on the page or in a box: `ci` show the attached images (`x` removes the shown one); in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `cy` copy the sign-in link (sign-in dialog) |
-| `a`                | answer                               | in a form's box and on the form's page: `a1`…`a9` pick the numbered choice or action header, `ac` clear, `ax` not applicable                                                                                                                                                                  |
+| `a`                | answer                               | in a form's box and on the form's page: `a1`…`a9` pick the numbered choice or action header, `ac` clear; `Space x` not applicable                                                                                                                                                             |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                                                                                                                                                               |
 | `zl`               | layout previews                      | `zlo` forms preview, `zlp` primer preview, `zls` sessions preview, `zlc` chat preview, `zla` agents preview, `zlw` workflow preview                                                                                                                                                           |
 

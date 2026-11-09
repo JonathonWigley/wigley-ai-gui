@@ -386,14 +386,17 @@ describe('expandBind', () => {
     expect(halves.editor?.arg).toBe(editor ? 3 : undefined);
   });
 
-  it('expandBind_ChordInBox_Throws', () => {
-    expect(() =>
-      expandBind(
-        { keys: '<A-o>', scope: 'any', command: 'c', where: 'box' },
-        '<Space>',
-      ),
-    ).toThrow('<A-o>');
-  });
+  it.each(['<A-o>', '<Tab>', '<tab>'])(
+    'expandBind_ChordInBox_Throws %s',
+    (keys) => {
+      expect(() =>
+        expandBind(
+          { keys, scope: 'any', command: 'c', where: 'box' },
+          '<Space>',
+        ),
+      ).toThrow(`${keys} is a chord`);
+    },
+  );
 
   it('throws on a bind with a mode and where page', () => {
     expect(() =>

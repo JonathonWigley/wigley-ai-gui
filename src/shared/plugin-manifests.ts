@@ -26,11 +26,10 @@ import type { AppConfig, Settings } from '../contracts/settings';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
 import type { Log } from '../contracts/log';
 import { canonicalAccelerator } from './accelerator';
-import { parseChord } from './chord-notation';
 import { errorText } from './error-text';
 import { isJsonObject } from './json';
-import { editorBindMode, vimTokens, withLeader } from './key-hints';
-import { pageKeysFor } from './key-notation';
+import { editorBindMode, withLeader } from './key-hints';
+import { isChordKeys, pageKeysFor } from './key-notation';
 import {
   requireUnambiguousBinds,
   requireUnambiguousEditorBinds,
@@ -323,8 +322,7 @@ export function expandBind(
     }
     return { page: null, editor: { keys, scope, command, mode, ...carried } };
   }
-  const tokens = vimTokens(keys, '<Leader>');
-  const isChord = tokens.length === 1 && parseChord(tokens[0]) !== null;
+  const isChord = isChordKeys(keys, '<Leader>');
   if (isChord && where !== undefined && where !== 'page') {
     throw new Error(
       `${keys} is a chord, whose page bind fires inside a box too; it takes no where "${where}".`,

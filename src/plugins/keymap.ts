@@ -680,6 +680,7 @@ export const defaultKeymap = {
     { keys: 'o', scope: 'docs.conflict', command: 'docs.conflictOverwrite' },
     { keys: '<Esc>', scope: 'docs.conflict', command: 'docs.conflictCancel' },
     { keys: '<Tab>', scope: 'docs.box', command: 'docs.boxComplete' },
+    { keys: '<S-Tab>', scope: 'docs.box', command: 'docs.boxComplete' },
     { keys: '<CR>', scope: 'docs.box', command: 'docs.boxAccept' },
     { keys: '<Esc>', scope: 'docs.box', command: 'docs.boxCancel' },
     { keys: 'y', scope: 'docs.confirm', command: 'docs.confirmYes' },

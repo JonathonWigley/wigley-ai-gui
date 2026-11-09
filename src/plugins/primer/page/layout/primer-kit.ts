@@ -410,7 +410,7 @@ function createCardBoxes<Field extends string>(
 }
 
 // A labelled box: its label over its input frame, an anchor for its command
-// in the card scope beside the label, then the `⌃P ⌃N` keys, which show on the
+// in the card scope beside the label, then the `⇧⇥ ⇥` keys, which show on the
 // frame's bottom edge while the box has focus.
 function appendField(
   deps: PrimerPartKitDeps,

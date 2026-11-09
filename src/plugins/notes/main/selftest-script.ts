@@ -86,6 +86,16 @@ const GROUPS: SelfTestGroup[] = [
         keys: ['i', ...TITLE, 'Escape'],
         expect: '[notes] field title',
       },
+      {
+        keys: ['i', '<Tab>', 'Escape', 'Escape'],
+        expect: '[notes] field body',
+        why: 'Tab moves from the title box to the body box, which takes it in INSERT.',
+      },
+      {
+        keys: ['i', '<S-Tab>', 'Escape'],
+        expect: '[notes] field title',
+        why: 'Shift+Tab, in INSERT in the body box, moves back to the title box.',
+      },
       { keys: [], expect: '[notes] draft saved' },
     ],
   },

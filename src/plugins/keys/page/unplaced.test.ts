@@ -104,10 +104,12 @@ describe('unplacedBinds', () => {
   });
 
   it('unplacedBinds_PageKeys_PrintInVimNotation', () => {
-    const map = keymap([{ keys: ['Tab'], scope: 'a.s', command: 'a.cycle' }]);
+    const map = keymap([
+      { keys: ['Backspace'], scope: 'a.s', command: 'a.cycle' },
+    ]);
 
     expect(unplacedBinds(map, 'a.s', NONE)).toEqual([
-      { keys: '<Tab>', command: 'a.cycle' },
+      { keys: '<BS>', command: 'a.cycle' },
     ]);
   });
 

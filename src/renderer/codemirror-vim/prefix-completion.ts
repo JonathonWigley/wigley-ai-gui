@@ -120,7 +120,7 @@ const POPUP_COMMANDS: Record<PopupAction, Command> = {
   up: moveCompletionSelection(false),
 };
 
-// What `event` does to an open popup: Tab accepts, Ctrl+n and ArrowDown move
+// What `event` does to an open popup: Tab without Shift accepts, Ctrl+n and ArrowDown move
 // down, Ctrl+p and ArrowUp move up. The Ctrl forms read the physical key and
 // exact modifiers, as the page's chords do.
 export function popupActionOf(
@@ -131,7 +131,7 @@ export function popupActionOf(
 ): PopupAction | null {
   const isCtrlAlone =
     event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
-  if (event.key === 'Tab') {
+  if (event.key === 'Tab' && !event.shiftKey) {
     return 'accept';
   }
   if (event.key === 'ArrowDown' || (isCtrlAlone && event.code === 'KeyN')) {

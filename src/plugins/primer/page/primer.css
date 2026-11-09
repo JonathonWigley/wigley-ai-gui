@@ -194,7 +194,7 @@
   overflow: hidden;
 }
 
-/* `⌃P ⌃N` on the frame's bottom edge at its right end, while the box has
+/* `⇧⇥ ⇥` on the frame's bottom edge at its right end, while the box has
    focus. */
 .primer-tab .box-keys {
   align-self: end;
