@@ -22,6 +22,7 @@ import {
   sessionsRowsSlot,
   type TitleSource,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import { autoRetroStateSlot } from '../contract';
 import { QUEUE_FILE } from './queue-file';
 import { DEFAULT_SETTLE_SECONDS, RESTORE_WAIT_MS } from './retro-done';
@@ -34,17 +35,12 @@ const SETTLE_MS = DEFAULT_SETTLE_SECONDS * 1000;
 const settled = () => new Promise((settle) => setImmediate(settle));
 
 function rowOf(sessionId: string, hostSessionId: string): SessionRow {
-  return {
-    sessionId,
+  return sessionRow(sessionId, {
     label: sessionId,
     project: 'wigley-agents',
-    harness: 'claude',
-    marked: false,
     projectDir: '/home/me/wigley-agents',
     hostSessionId,
-    titles: { user: null, agent: null, firstMessage: null },
-    profileDir: null,
-  };
+  });
 }
 
 function closedEvent(

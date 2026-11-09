@@ -6,6 +6,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // state and the close, and `sessions` for the rows, their titles and the Retro section.
 export const autoRetroManifest = definePlugin({
   id: 'auto-retro',
+  label: 'Auto retro',
+  description:
+    'Runs a background retro for each session the user closes, shown in the side bar until it finishes.',
   dependsOn: { main: ['chat', 'sessions'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {},

@@ -10,21 +10,17 @@ import {
   type SidebarSection,
   sessionsPageKey,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import { autoRetroStateSlot } from '../contract';
 import { autoRetroPagePart } from './start';
 
 function rowOf(sessionId: string): SessionRow {
-  return {
-    sessionId,
+  return sessionRow(sessionId, {
     label: sessionId,
     project: 'wigley-agents',
-    harness: 'claude',
-    marked: false,
     projectDir: '/home/me/wigley-agents',
     hostSessionId: `host-${sessionId}`,
-    titles: { user: null, agent: null, firstMessage: null },
-    profileDir: null,
-  };
+  });
 }
 
 // The part on the harness, over a sessions that records each section added
