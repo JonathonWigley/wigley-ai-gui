@@ -939,42 +939,44 @@ describe('workflowLargeMainPart', () => {
     {
       name: 'set_workflow_plan of a worktree copy',
       source: 'tool',
-      large: true,
       folder: W_PLAN_DIR,
-      expected: { planDir: W_PLAN_DIR, planReported: true, plan: PLAN_TICKED },
+      expected: {
+        planDir: W_PLAN_DIR,
+        planReported: true,
+        unreportedPlanDir: PLAN_DIR,
+        plan: PLAN_TICKED,
+      },
     },
     {
       name: 'a report file naming a worktree copy',
       source: 'file',
-      large: true,
       folder: W_PLAN_DIR,
-      expected: { planDir: W_PLAN_DIR, planReported: true, plan: PLAN_TICKED },
+      expected: {
+        planDir: W_PLAN_DIR,
+        planReported: true,
+        unreportedPlanDir: PLAN_DIR,
+        plan: PLAN_TICKED,
+      },
     },
     {
       name: 'set_workflow_plan of the folder already held',
       source: 'tool',
-      large: true,
       folder: PLAN_DIR,
-      expected: { planDir: PLAN_DIR, planReported: true, plan: PLAN },
-    },
-    {
-      name: 'a report file from a flow that is not Large',
-      source: 'file',
-      large: false,
-      folder: W_PLAN_DIR,
-      expected: { planDir: null, planReported: false, plan: null },
+      expected: {
+        planDir: PLAN_DIR,
+        planReported: true,
+        unreportedPlanDir: null,
+        plan: PLAN,
+      },
     },
   ])(
     'PlanReport_FoldsIntoTheFlow ($name)',
-    async ({ source, large, folder, expected }) => {
+    async ({ source, folder, expected }) => {
       const workflow = startWorkflowPart(SETTINGS);
-      workflow.exported().addWorkflow(stubWorkflow());
       await workflow.project.write(PLAN_FILE, PLAN);
       await workflow.project.write(`${W_PLAN_DIR}/plan.md`, PLAN_TICKED);
       await workflow.openS1();
-      await workflow.agentEvent(
-        large ? skill('wigley:make', PLAN_DIR) : skill('x:stub', ''),
-      );
+      await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
 
       if (source === 'tool') {
         await workflow.callTool('s1', SET_WORKFLOW_PLAN_TOOL, { folder });
@@ -990,13 +992,33 @@ describe('workflowLargeMainPart', () => {
       expect(workflow.lastLarge()).toMatchObject({
         planDir: expected.planDir,
         planReported: expected.planReported,
-        progress:
-          expected.plan === null
-            ? null
-            : readPlanProgress(expected.plan, new Map()),
+        unreportedPlanDir: expected.unreportedPlanDir,
+        progress: readPlanProgress(expected.plan, new Map()),
       });
     },
   );
+
+  it('restartOverAReportedFolderGone_ReadsTheUnreportedMainCopy', async () => {
+    const data = await savedFlowData({
+      stage: 'make',
+      planDir: W_PLAN_DIR,
+      planReported: true,
+      unreportedPlanDir: PLAN_DIR,
+    });
+    const workflow = startWorkflowPart(SETTINGS, { data, largeLater: true });
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+
+    workflow.startLarge();
+    await settled();
+    await settled();
+
+    expect(workflow.lastFlow()?.stage).toBe('make');
+    expect(workflow.lastLarge()).toMatchObject({
+      planDir: W_PLAN_DIR,
+      progress: readPlanProgress(PLAN, new Map()),
+    });
+  });
 
   it.each([
     { seconds: 3, line: 'settings: autoClearAndMake on, autoStartSeconds 3' },

@@ -23,9 +23,10 @@ export interface LargeState {
   // `set_workflow_plan`: the plan watch then reads that folder alone while it
   // holds a plan.md. A flow saved before reports reads false.
   planReported: boolean;
-  // The unreported folder held before a report moved `planDir` away, else
-  // null: the plan watch lists the plan's copies from it once the reported
-  // folder lists none. A flow saved before reports reads null.
+  // The unreported folder held before a report moved `planDir` away, when it
+  // shares the reported folder's name, else null: the plan watch lists the
+  // plan's copies from it once the reported folder lists none. A flow saved
+  // before reports reads null.
   unreportedPlanDir: string | null;
   // Null until the plan folder is read.
   progress: PlanProgress | null;

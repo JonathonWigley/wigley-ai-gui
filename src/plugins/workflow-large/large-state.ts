@@ -152,8 +152,7 @@ function planDirOfArgsPath(argsPath: string | null): string | null {
     return planDirOf(argsPath);
   }
   const folder = argsPath.replace(TRAILING_SEPARATORS, '');
-  const folderName = folder.slice(lastSeparatorIndex(folder) + 1);
-  return PLAN_FOLDER_NAME.test(folderName) ? folder : null;
+  return PLAN_FOLDER_NAME.test(folderNameOf(folder)) ? folder : null;
 }
 
 // A new plan folder drops the old plan's progress and review rounds; the
@@ -167,10 +166,17 @@ function setPlanDir(next: LargeState, planDir: string): void {
 }
 
 // A reported folder: marks it, and a new one keeps the unreported folder it
-// moves away from, or the one an earlier report kept.
+// moves away from, or the one an earlier report kept, while that folder shares
+// the reported folder's name; a folder named otherwise is another plan's.
 function reportPlanDir(next: LargeState, planDir: string): void {
   if (planDir !== next.planDir && !next.planReported) {
     next.unreportedPlanDir = next.planDir;
+  }
+  if (
+    next.unreportedPlanDir !== null &&
+    folderNameOf(next.unreportedPlanDir) !== folderNameOf(planDir)
+  ) {
+    next.unreportedPlanDir = null;
   }
   setPlanDir(next, planDir);
   next.planReported = true;
@@ -192,6 +198,10 @@ function clearPlan(next: LargeState): void {
   next.planReported = false;
   next.unreportedPlanDir = null;
   next.progress = null;
+}
+
+function folderNameOf(folder: string): string {
+  return folder.slice(lastSeparatorIndex(folder) + 1);
 }
 
 function lastSeparatorIndex(path: string): number {
