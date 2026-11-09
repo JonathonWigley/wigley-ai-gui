@@ -4,9 +4,14 @@ import { createFakeSystemStats } from './fake-system-stats';
 
 const CREATED_AT = 40_000;
 
-// The network and disk counters a rate is read from.
+// The counters a rate is read from.
 function countersOf(sample: SystemSample) {
+  const browser = sample.processes.find((process) => process.pid === 101);
   return {
+    cpuTotal: sample.cpuTotalMs,
+    cpuBusy: sample.cpuBusyMs,
+    browserCpu: browser?.cpuTimeMs ?? Number.NaN,
+    browserGpu: browser?.gpuTimeNs ?? Number.NaN,
     received: sample.network.receivedBytes,
     sent: sample.network.sentBytes,
     read: sample.disk.readBytes,
@@ -16,7 +21,16 @@ function countersOf(sample: SystemSample) {
 
 type Counters = ReturnType<typeof countersOf>;
 
+// The CPU and GPU-time rates hold through every period.
+const STEADY_RATES = {
+  cpuTotal: 8_000,
+  cpuBusy: 3_000,
+  browserCpu: 1_200,
+  browserGpu: 200_000_000,
+};
+
 const PERIOD_0 = {
+  ...STEADY_RATES,
   received: 750_000,
   sent: 100_000,
   read: 1_500_000,
@@ -37,6 +51,7 @@ describe('createFakeSystemStats', () => {
       fromMs: 4_500,
       toMs: 5_500,
       rates: {
+        ...STEADY_RATES,
         received: 12_000_000,
         sent: 900_000,
         read: 45_000_000,
@@ -48,6 +63,7 @@ describe('createFakeSystemStats', () => {
       fromMs: 1_500,
       toMs: 2_500,
       rates: {
+        ...STEADY_RATES,
         received: 395_000,
         sent: 54_000,
         read: 760_000,
@@ -72,12 +88,13 @@ describe('createFakeSystemStats', () => {
       const after = countersOf(await stats.sample());
 
       const elapsedSeconds = (toMs - fromMs) / 1000;
-      expect({
-        received: (after.received - before.received) / elapsedSeconds,
-        sent: (after.sent - before.sent) / elapsedSeconds,
-        read: (after.read - before.read) / elapsedSeconds,
-        written: (after.written - before.written) / elapsedSeconds,
-      }).toEqual(rates);
+      const measured = Object.fromEntries(
+        Object.keys(rates).map((name) => {
+          const key = name as keyof Counters;
+          return [key, (after[key] - before[key]) / elapsedSeconds];
+        }),
+      );
+      expect(measured).toEqual(rates);
     },
   );
 });

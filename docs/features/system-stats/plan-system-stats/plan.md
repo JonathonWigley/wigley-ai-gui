@@ -248,6 +248,8 @@ Review base: a2d6ccd32ff1520af587d0cacd1a70306f41e8f7
 - Drive start options: DriveInvocation start and StartOptions gain systemStats 'fake'|'live' (DriveSystemStats in scripts/drive-args.mts); RunEnvironment drive gains systemStats (DriveSystemStatsName in src/main/run-mode.ts) · why: the flag end to end · consumers: 08 · group 01
 - snapshot.ts also exports DEFAULT_REFRESH_SECONDS and refreshSecondsOf; StatsPollerDeps gains log; StatsDriveDeps drops clock; contract.ts word for word with doc comments · why: one home for the refresh rule, the poller logs handler throws, seed reads its own time · consumers: 06 · group 05
 - Layout: the s sort hint sits at the end of the System stats header, not the column heading row; layout.css adds a narrow form under a 260px container query; <Leader>vy after <Leader>vu (no vf bind exists); view model also exports isGroup · why: room at 300px and the 184px fit check · consumers: 07, 08 · group 06
+- createFakeSystemStats(clock): takes the injected Clock, counters grow per second · why: per-sample growth doubled the first short gap's rates · consumers: main.ts drive and self-test services · group 08
+- StatsProcessRow.kind and StatsRowInput.kind gain 'other'; StatsProcessRow.rssBytes is number | null · why: the Other remainder row has no RAM · consumers: page view model, default layout, user layouts (layout.d.ts) · review fix 33aaa343
 ### Rulings
 - Client sets entry.pid from the subscribe reply once the attach succeeds, not on reply receipt — an abandoned attach leaves no pid — a pid a few awaits late if wrong · group 03 · group 03
 - A spawned push after the spawner detached is dropped like a line; a later attach takes the pid from its reply — a detached spawner reads pid null · group 03 · group 03
@@ -264,5 +266,7 @@ Review base: a2d6ccd32ff1520af587d0cacd1a70306f41e8f7
 - 08 (lead): drive run B2 found the Chat session group cut by processRows; every session: group now always shows in the list in its sort position, processRows caps the other rows.
 - 08 (lead): drive FAILs B1 (row CPU undercounts the meter), the narrow form not applying at the default width, Network/Disk scale reset on config apply, the 90% tone/label mismatch and the double seeded log are fixed inside 08 by two fix dispatches (main side, page side).
 ### Review rounds
+- Round 1 · a2d6ccd3..f23f493a · 5 lanes (correctness x3, plan-and-design x2) · NEEDS FIXES: 3 important, 11 minor; lead-applied 3a91fadf (docs); report /tmp/claude-system-stats/review-f23f493a552681265f61af6e01c25946af7f911b.md · repo AGENTS.md § Review: every open finding takes its recommended pick, no forms round
+- Re-review 1 · 3a91fadf..33aaa343 (fix commits d1328be0 40d558cf 083be27d 33aaa343) · correctness x1 · NEEDS FIXES: 6 minor, all repeats or prose; lead-applied 24fbe191 (#1 #3 #5 #6); #4 fake counter test dispatched; #2 (snapshot redraw that moves the cursor does not scroll) open, reviewer's pick: leave as is · report /tmp/claude-system-stats/review/rereview-1.md
 ### Test gate
 - Filtered npm test over every test file 01-08 touched (31 files, 1436 tests) + typecheck + lint pass at 4a420502; filtered self-test (system-stats, chat) passes; whole self-test not run: not asked in this turn.
