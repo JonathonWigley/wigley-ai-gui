@@ -23,7 +23,8 @@ release a clone.
 
 Built, in `src/contracts/agent.ts`, `src/main/claude-code/claude-launch.ts` and `src/shared/session-env.ts` (the launch
 variable), `src/shared/origin-repo-names.ts` (the origin-name lookup) and
-`src/plugins/unity-pool/` (the state watch, the CLI runs and the self-test script in `main/`; the row badge, the
+`src/plugins/unity-pool/` (the state watch, the CLI runs, the claim run `runPoolClaim` in `pool-cli.ts`, chat's pool
+provider in `pool-provider.ts` and the self-test script in `main/`; the row badge, the
 right-bar panel and their view model in `page/`; the layout contract and the `default` layout in `layouts/`).
 
 ## The pool
@@ -135,7 +136,9 @@ the agent: main registers itself with chat's `addPoolProvider` and answers three
 pool's clone paths from its state, `branches(pool, refresh)` the origin branches its clones last fetched, newest
 commit first (`refresh` runs `git fetch --no-recurse-submodules origin` in the lowest-numbered clone first), and
 `claim` runs `unity-pool claim --branch <branch> --pool <pool> --wait --json` under the session id and row id it is
-given, with no time limit, stopping the CLI when chat cancels it. An agent that runs `unity-pool claim` again in its
+given, with no time limit, stopping the CLI when chat cancels it and then running `unity-pool release --json` under
+those ids. A `diverged` answer keeps its clone: the provider finds it in the fresh state file and returns its path
+with the CLI's message as a note. An agent that runs `unity-pool claim` again in its
 clone keeps the clone, as the pool's rules give any holder.
 
 ## Drawing

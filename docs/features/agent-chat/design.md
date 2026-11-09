@@ -533,7 +533,9 @@ interview on 2026-10-23; this file is the record of both.
   steps live in chat's own script over the fake adapter. The give-back rule is pinned by the tabs unit tests; the
   swap with a real round is a live check in the final verification.
 - **Starting a session from an agent**: the `start_session` MCP tool opens a chat session through the same background
-  launch Notes and Workflow use, so the row appears without taking focus. The tool is the only route from outside
+  launch Notes and Workflow use, so the row appears without taking focus. It takes `prompt`, then `folder` or
+  `project` (not both), `branch` for a pool project, and `profile`
+  (`docs/features/projects/design.md` § Starting from an agent). The tool is the only route from outside
   the window. A command-line route was rejected because it returns nothing to the caller, needs its own check of who
   is calling, and has no caller that lacks the relay. The app adds no approval and no cap: the calling session's
   permission mode gates the call, which has been checked on Claude only since a Codex caller's gate has had no live

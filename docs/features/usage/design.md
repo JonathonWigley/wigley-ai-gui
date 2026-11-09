@@ -138,7 +138,8 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   settings joins or leaves), polls every one at start and then every `usage.pollIntervalSeconds` (default 300, never
   under `MIN_POLL_SECONDS` = 60; read at each reschedule and rescheduled on a settings change) through the injected
   main `timers`. It folds each `chat.planUsage` update into that profile's plan usage, records each session's profile
-  from `chat.sessionOpened` (so the line shows the right profile before the session's first turn ends), keeps each
+  from `chat.sessionOpened` (so the line shows the right profile before the session's first turn ends; a pool project's
+  session fires it when its claim lands, and a row whose claim never lands fires none), keeps each
   session's latest `usage` agent event from `chat.agentEvent` (an event whose `at` is older than the kept one's records
   only the session's profile, keeping the kept usage), and drops a session when it ends. Chat sends a restored or
   resumed row's saved usage the same way: it reads `harness.lastUsage` on restoring a row that ever sent a message,

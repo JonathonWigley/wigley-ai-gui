@@ -18,7 +18,12 @@ right place.
 
 ## Status
 
-Planned (`plan-project-picker/`).
+Built, in `src/plugins/chat/main/projects.ts` (the setting's checks, `projectOf`, the branch order, the pool provider registry), the
+start path in `src/plugins/chat/main/chat-sessions.ts` (`startInPool`, the claim notices, `claimSettled`),
+`src/plugins/chat/main/start-session-tool.ts` (`project` and `branch`), the page steps in
+`src/plugins/chat/page/start-prompt.ts` and `start-prompt-items.ts`, `src/plugins/unity-pool/main/pool-provider.ts` and
+the claim run in `pool-cli.ts` (`runPoolClaim`), and sessions' `addProjectNamer` and `relocate`
+(`src/plugins/sessions/`).
 
 ## Projects
 
@@ -37,8 +42,10 @@ edited as JSON in Settings mode:
 - `folder` or `pool`, exactly one. A **folder project** starts in its folder (`~` is the home folder) and checks
   nothing out. A **pool project** names a `unity-pool` pool and starts in the clone a claim gives it.
 - `profile` — optional. Set, every session of the project runs under that profile and the prompt asks none. Left
-  out, the prompt asks, pre-selecting the profile last used in the project's folder.
-- `pinnedBranches` — optional, pool projects only: the branches listed first, in this order.
+  out, the prompt asks: a folder project pre-selects the profile last used in its folder, a pool project the first
+  profile.
+- `pinnedBranches` — optional, pool projects only: the branches listed first, in this order, each listed even when
+  origin lacks it.
 
 The default is an empty list. Chat checks each entry when it reads the setting, since the settings check cannot type
 the elements of an empty default list: an entry with neither or both of `folder` and `pool`, a `pinnedBranches` on a
@@ -51,9 +58,10 @@ folder project, or a name an earlier entry took is left out, and the log names t
 
 - A pool project goes to **Branch**: its pinned branches, then every other branch on origin, newest commit first,
   filtered as the user types (`/`). The list opens from the refs each clone last fetched, and refreshes once a
-  background fetch lands, keeping the cursor's branch and any filter typed meanwhile.
-- A project with no `profile` goes to **Profile**; a project with one passes it over. The sign-in check runs either
-  way.
+  background fetch lands, keeping the cursor's branch and any filter typed meanwhile. When both reads fail or list
+  nothing, the step does not open and a toast names the fetch's reason.
+- A project with no `profile` goes to **Profile**; a project with one passes it over, and one naming a profile the
+  settings lack stops with a toast. The sign-in check runs either way.
 - The session step lists the project's saved sessions from every folder it covers — for a pool project, all its
   clones — each resuming in the folder it ran in.
 
@@ -74,9 +82,10 @@ that id exists only once the row is open:
    now, with the clone as the folder; a row whose claim never lands fires neither `sessionOpened` nor
    `sessionClosed`.
 
-Closing the row while the claim runs cancels the claim: the provider stops the CLI, and a queue ticket nobody polls
-drops after two minutes. A claim that fails (`dirty`, `unknown-branch`, `no-cli`, `internal`) leaves the row resting
-with the CLI's message as an error notice. A `diverged` claim keeps its clone, by the pool's rules, so the agent
+Closing the row while the claim runs cancels the claim: the provider stops the CLI, then runs `unity-pool release
+--json` under the same ids, since the CLI may have been killed after it granted a clone. A claim that fails (`dirty`,
+`unknown-branch`, `no-cli`, `cli-failed`, `internal`) leaves the row resting with the error notice `Unity clone not
+claimed: <the CLI's message>`; a message sent to that row is refused. A `diverged` claim keeps its clone, by the pool's rules, so the agent
 starts there with the CLI's message as a notice, to settle the divergence.
 
 Resuming a pool project's saved session reopens it in the clone it ran in, with no claim: a transcript is tied to its
@@ -100,7 +109,8 @@ Sessions started through Other folder, sessions already open, and saved ones all
 `start_session` and chat's `launch` take `project` and, for a pool project, `branch`, in place of `projectDir`; the
 profile is the project's, else the one the caller names, else the caller's own; a named profile that differs from
 the project's is refused. The start runs the same path as the
-prompt, the claim on the row included.
+prompt, the claim on the row included. A call names `folder` or `project`, not both, and `branch` only with `project`.
+For a pool project the tool answers once the row is open, before the claim lands.
 
 ## Decisions
 
