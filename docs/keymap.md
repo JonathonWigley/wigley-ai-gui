@@ -172,3 +172,7 @@ files).
    under `b`, a mode under `k`, a show-or-hide under `v`. A new group needs at least two actions, a name in the
    keymap file's `groups`, and its row in the table above. Settings mode's Leader menu page edits the user's
    tree in `keymap.json`, and its group names, the same way.
+6. A key that steps 1 to 3 settle is picked without asking and shown as a Decided notice
+   (`~/wigley-agents/decisions.md` § Decided notices), in place of the key question that
+   `decisions.md` § Architecture › Keys leaves open. A key that conflicts with an existing bind or moves one
+   is asked.
