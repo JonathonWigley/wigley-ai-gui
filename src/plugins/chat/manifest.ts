@@ -19,7 +19,7 @@ export const chatManifest = definePlugin({
   commands: {
     newSession: { label: 'new session', group: 'sessions', runsIn: 'page' },
     startNewSession: {
-      label: 'new session, folder and profile only',
+      label: 'new session, no saved sessions listed',
       group: 'sessions',
       runsIn: 'page',
     },

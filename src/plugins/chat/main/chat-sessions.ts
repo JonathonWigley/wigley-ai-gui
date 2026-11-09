@@ -142,6 +142,10 @@ export interface ChatSessions {
   activeTimeOf(sessionId: string): ActiveTime | null;
   // Whether the held session is headless; false for a row chat does not hold.
   isHeadless(sessionId: string): boolean;
+  // Whether the held session's last process start carried the headless note;
+  // the saved flag until its first start in this app run. False for a row
+  // chat does not hold.
+  launchedHeadless(sessionId: string): boolean;
   // Sets the held session's headless flag, publishes it in `chat.session` and
   // saves; the value it already holds changes nothing. Logs and does nothing
   // for a row chat does not hold.
@@ -436,6 +440,9 @@ interface HeldSession {
   // an attach passes again: no pipe line reports them.
   launchControls: Record<string, string>;
   launchResume: boolean;
+  // Whether the row's last process start carried the headless note; the
+  // opening's flag until the row's first start in this app run.
+  launchHeadless: boolean;
   // Entry ids of the messages the row's last process start dropped that went
   // back to the page: a re-attach replays those drops.
   returnedDrops: Set<string>;
@@ -1560,6 +1567,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       unheldSettling: null,
       unattended: opening.unattended,
       headless: opening.headless,
+      launchHeadless: opening.headless,
       instructions: opening.instructions,
       owner,
     };
@@ -1809,6 +1817,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.confirmedPicks,
     );
     session.launchResume = resume;
+    session.launchHeadless = session.headless;
     session.returnedDrops.clear();
     const process = harness.start(
       {
@@ -3328,6 +3337,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     activeTimeOf: (sessionId) =>
       held.get(sessionId)?.slots.info().activeTime ?? null,
     isHeadless: (sessionId) => held.get(sessionId)?.headless ?? false,
+    launchedHeadless: (sessionId) =>
+      held.get(sessionId)?.launchHeadless ?? false,
     setHeadless(sessionId, headless) {
       const session = held.get(sessionId);
       if (session === undefined) {

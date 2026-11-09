@@ -525,6 +525,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       profileOf,
       activeTime: (sessionId) => chat.activeTimeOf(sessionId),
       isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
       defaultProfile,
       send: async (sessionId, message) => {
         requireHeld(sessionId);

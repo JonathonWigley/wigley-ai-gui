@@ -569,6 +569,12 @@ export interface ChatMainExports {
   activeTime(sessionId: string): ActiveTime | null;
   // Whether a session chat owns is headless; false for any other session id.
   isHeadless(sessionId: string): boolean;
+  // Whether the harness process of a session chat owns started with the
+  // headless note, which is the flag at its last process start (a `/clear`
+  // included), or its saved flag when it has not started one in this app run;
+  // false for any other session id. `isHeadless` can differ once the flag
+  // changes, since a running process keeps the instructions it started with.
+  launchedHeadless(sessionId: string): boolean;
   // The profile a launch takes when its caller names none: the profile of a
   // session chat owns, else chat's first; null when chat has no profiles.
   // `sessionId` is null when the launch comes from no session.

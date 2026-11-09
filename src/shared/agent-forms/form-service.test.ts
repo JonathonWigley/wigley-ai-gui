@@ -1727,6 +1727,23 @@ describe('auto-answer', () => {
       ),
     },
     {
+      case: 'the same form submitted and returned before auto-answer turned on',
+      leaveAnswers: async (session: AgentFormSession<TestPayload>) => {
+        autoAnswerOn = false;
+        const asking = session.open(NAMING_ARGS, null, live());
+        await vi.advanceTimersByTimeAsync(0);
+        presenter.submit(presenter.latest().formId, body('mine'));
+        await asking;
+        autoAnswerOn = true;
+      },
+      args: NAMING_ARGS,
+      expected: TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('mine'),
+      ),
+    },
+    {
       case: 'the same form finished before a restart',
       leaveAnswers: async () => {
         saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
@@ -1764,6 +1781,20 @@ describe('auto-answer', () => {
       );
     },
   );
+
+  it('auto-answers a re-send of the form the user cancelled before auto-answer turned on', async () => {
+    const { session } = startAutoSession();
+    autoAnswerOn = false;
+    const asking = session.open(NAMING_ARGS, null, live());
+    await vi.advanceTimersByTimeAsync(0);
+    presenter.cancel(presenter.latest().formId, body('stop here'));
+    await asking;
+    autoAnswerOn = true;
+
+    const payload = await session.open(NAMING_ARGS, null, live());
+
+    expect(payload).toEqual(autoAnswered(NAMING_ARGS));
+  });
 
   it("waits on the same form still unfinished in the window, and returns the user's answers", async () => {
     const { session } = startAutoSession();

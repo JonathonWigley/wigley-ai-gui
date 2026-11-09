@@ -1,19 +1,28 @@
-import { HEADLESS_NOTE, HEADLESS_OFF_NOTE } from '../../chat/contract';
+import {
+  type ChatMainExports,
+  HEADLESS_NOTE,
+  HEADLESS_OFF_NOTE,
+} from '../../chat/contract';
 import type { AgentSession } from '../../sessions/contract';
 
 export type HeadlessLineSession = Pick<AgentSession, 'id' | 'info'>;
 
+export type HeadlessFlags = Pick<
+  ChatMainExports,
+  'isHeadless' | 'launchedHeadless'
+>;
+
 // The line telling the agent a session is headless, on the results of every
 // workflow tool: `HEADLESS_NOTE` on every result while the session is
 // headless, and `HEADLESS_OFF_NOTE` on the first result from any tool after it
-// stops being so. One state per app session, kept across tool sessions; a new
-// host id, as `/clear` makes, starts it again from the flag at that time.
+// stops being so. One state per app session, kept across tool sessions. A
+// state starts at the session's first result under a host id, from the flag
+// its process started with, so a flag that turns off between that start (a
+// `/clear` included) and the first call still gets its off line.
 export interface HeadlessLines {
-  // Starts the session's state when it has none under its host id; each tool
-  // session calls it as it starts, so a flag that turns off before the first
-  // call still gets its off line.
-  track(session: HeadlessLineSession): void;
   append(session: HeadlessLineSession, text: string): string;
+  // Drops the session's state; a later result starts it again.
+  forget(session: HeadlessLineSession): void;
 }
 
 interface LineState {
@@ -21,9 +30,7 @@ interface LineState {
   wasHeadless: boolean;
 }
 
-export function createHeadlessLines(
-  isHeadless: (sessionId: string) => boolean,
-): HeadlessLines {
+export function createHeadlessLines(flags: HeadlessFlags): HeadlessLines {
   const states = new Map<string, LineState>();
   const stateOf = (session: HeadlessLineSession): LineState => {
     const hostId = session.info.sessionId;
@@ -31,23 +38,26 @@ export function createHeadlessLines(
     if (held !== undefined && held.hostId === hostId) {
       return held;
     }
-    const started = { hostId, wasHeadless: isHeadless(session.id) };
+    const started = {
+      hostId,
+      wasHeadless: flags.launchedHeadless(session.id),
+    };
     states.set(session.id, started);
     return started;
   };
   return {
-    track(session) {
-      stateOf(session);
-    },
     append(session, text) {
       const state = stateOf(session);
-      const headless = isHeadless(session.id);
+      const headless = flags.isHeadless(session.id);
       const turnedOff = state.wasHeadless && !headless;
       state.wasHeadless = headless;
       if (headless) {
         return `${text}\n${HEADLESS_NOTE}`;
       }
       return turnedOff ? `${text}\n${HEADLESS_OFF_NOTE}` : text;
+    },
+    forget(session) {
+      states.delete(session.id);
     },
   };
 }

@@ -139,6 +139,19 @@ function finishedPayload<Form, Body, Payload>(
   return type.payload(finished.form, finished.outcome, finished.body);
 }
 
+// `last` holds the user's own submitted answers to the form `formFingerprint`
+// names, which a re-send of that form gets back.
+function isUserSubmitted<Form, Body>(
+  last: FinishedForm<Form, Body>,
+  formFingerprint: string,
+): boolean {
+  return (
+    last.fingerprint === formFingerprint &&
+    last.outcome === 'submitted' &&
+    !last.autoAnswered
+  );
+}
+
 // The last finished form's answers again, framed as its first return framed
 // them: auto-answered, handed back, or plain.
 function lastFinishedPayload<Form, Body, Payload>(
@@ -585,13 +598,11 @@ async function openParsedForm<Form, Body, Payload>(
   const last = session.lastFinished;
   // A cancelled form the agent already received opens again, pre-filled, as
   // does an auto-answered one once the auto-answer is off.
-  const replaysLastSubmitted =
+  if (
     open === null &&
     last !== null &&
-    last.fingerprint === formFingerprint &&
-    last.outcome === 'submitted' &&
-    !last.autoAnswered;
-  if (replaysLastSubmitted) {
+    isUserSubmitted(last, formFingerprint)
+  ) {
     return finishedPayload(session.type, last);
   }
   const unreturned = unreturnedFinishedPayload(session, formFingerprint);
@@ -839,10 +850,12 @@ async function collectLastForm<Form, Body, Payload>(
 // after the checks every call runs: the args, a live caller, and the host id
 // the session's forms were made under. Answers the user gave come first: a
 // re-send of the form still unfinished in the window takes the normal path
-// and waits on it, and a finished form no reply has carried is returned as
-// the normal path returns it. A form open in the window stays, unless the
-// host moved. A re-send of the form last auto-answered returns its answers
-// again; any other form is saved answered and returned, and shows nowhere.
+// and waits on it, a finished form no reply has carried is returned as the
+// normal path returns it, and a re-send of the form the user last submitted
+// gets those answers again. A form open in the window stays, unless the host
+// moved. A re-send of the form last auto-answered returns its answers again;
+// any other form, a re-send of one the user cancelled included, is saved
+// answered and returned, and shows nowhere.
 async function autoAnswerForm<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   autoAnswer: AgentFormAutoAnswer<Form, Body, Payload>,
@@ -867,6 +880,9 @@ async function autoAnswerForm<Form, Body, Payload>(
     return unreturned;
   }
   const last = session.lastFinished;
+  if (last !== null && isUserSubmitted(last, formFingerprint)) {
+    return finishedPayload(session.type, last);
+  }
   const replaysLastAutoAnswered =
     last !== null && last.autoAnswered && last.fingerprint === formFingerprint;
   if (replaysLastAutoAnswered) {

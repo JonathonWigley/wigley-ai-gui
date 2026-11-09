@@ -235,9 +235,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         return store.get(sessionId)?.stage === stage.id;
       });
     // One headless-line state per session, shared by both workflow tools.
-    const headlessLines = createHeadlessLines((sessionId) =>
-      chat.isHeadless(sessionId),
-    );
+    const headlessLines = createHeadlessLines({
+      isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
+    });
     const startStepToolSession = startStepTool({
       workflows: () => workflows.all(),
       reportStep,

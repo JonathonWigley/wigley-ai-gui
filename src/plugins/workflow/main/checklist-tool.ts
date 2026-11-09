@@ -103,16 +103,13 @@ async function setWorkflowChecklist(
 export function startChecklistTool(
   deps: ChecklistToolDeps,
 ): (session: HeadlessLineSession) => ToolSession {
-  return (session) => {
-    deps.lines.track(session);
-    return {
-      call(name, args) {
-        if (name !== SET_WORKFLOW_CHECKLIST_TOOL) {
-          return Promise.reject(new Error(`no workflow tool "${name}"`));
-        }
-        return setWorkflowChecklist(deps, session, args);
-      },
-      end: () => undefined,
-    };
-  };
+  return (session) => ({
+    call(name, args) {
+      if (name !== SET_WORKFLOW_CHECKLIST_TOOL) {
+        return Promise.reject(new Error(`no workflow tool "${name}"`));
+      }
+      return setWorkflowChecklist(deps, session, args);
+    },
+    end: () => deps.lines.forget(session),
+  });
 }

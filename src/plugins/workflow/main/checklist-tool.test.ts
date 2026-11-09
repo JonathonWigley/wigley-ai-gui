@@ -19,7 +19,10 @@ function toolWith(applies: boolean, headless = false) {
       reports.push([sessionId, items]);
       return applies;
     },
-    lines: createHeadlessLines((sessionId) => headless && sessionId === 's1'),
+    lines: createHeadlessLines({
+      isHeadless: (sessionId) => headless && sessionId === 's1',
+      launchedHeadless: () => false,
+    }),
   })({ id: 's1', info: { sessionId: 'h1', projectDir: null, harness: null } });
   const call = (args: unknown) =>
     tool.call('set_workflow_checklist', args, NO_CALL_CONTEXT);

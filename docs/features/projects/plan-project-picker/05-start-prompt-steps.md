@@ -108,8 +108,8 @@ export function branchRowInput(branch: string): PickerItemInput;
   `profile` takes today's rules (one profile asks nothing): a folder project pre-selects with
   `preselectedProfile(profiles, recent, expandTilde(folder), paths)`; a pool project pre-selects row 0, since the
   page holds no clone paths to match recent folders against.
-- **Session step for a project**: lists `projectPastSessions(name, profile)`; with none it starts a new session at
-  once, as the folder step does. Every row resumes in its own `projectDir`. Folder rows from `pastSessions` are
+- **Session step for a project**: lists `projectPastSessions(name, profile)` after New session and New headless
+  session; with none, the step holds those two lines alone, as the folder step does. Every row resumes in its own `projectDir`. Folder rows from `pastSessions` are
   mapped to `ProjectPastSessionRow` with the step's folder, so the step holds one row type and resume always reads
   `row.projectDir`.
 - **Section rows on a project's session step**: `sessionItems` matches a section row to the step by folder;
@@ -117,8 +117,9 @@ export function branchRowInput(branch: string): PickerItemInput;
   profile matches and its session is among `rows` (already only the project's sessions).
 - **Start**: `start({ ...target, profile, headless })` with target `{ projectDir }` for a folder pick,
   `{ project: name, branch }` for a pool project, `{ project: name, branch: null }` for a folder project.
-- **`Ctrl+n`** (`openForNewSession`): the same Project, Branch and Profile steps with no section rows, and a new
-  session at once after the sign-in check.
+- **`Ctrl+n`** (`openForNewSession`): the same Project, Branch and Profile steps with no section rows. After the
+  sign-in check the session step holds New session and New headless session alone; `projectPastSessions` is not
+  called.
 - **Page-internal target**: `start-prompt.ts` keeps a private
   `type PromptTarget = { kind: 'folder'; projectDir: string } | { kind: 'project'; project: ChatProject; branch: string | null }`
   carried from the pick to the start, and a private `startTargetOf(target): StartTarget`.
@@ -139,8 +140,8 @@ GIVEN the new-session line WHEN picked THEN `start({ project: 'New Games', branc
 headless: false })`.
 GIVEN Wigley AI Dev picked with profiles `work`, `personal` and a recent use of `/Users/u/Documents/ai-dev` under
 `personal` THEN the Profile step opens on `personal`.
-GIVEN `Ctrl+n` WHEN New Games and `main` are picked THEN `start` runs at once after the sign-in check, with no
-`projectPastSessions` call.
+GIVEN `Ctrl+n` WHEN New Games and `main` are picked THEN after the sign-in check the session step holds New session
+and New headless session alone, with no `projectPastSessions` call.
 
 ## Tests
 
@@ -212,16 +213,18 @@ pinnedBranches: ['main'] }`, `aiDev: ChatProject = { kind: 'folder', name: 'Wigl
 - `projectNewSession: $name` — `it.each`: New Games with `main` → `{ project: 'New Games', branch: 'main', profile:
   'work', headless: false }`; Wigley AI Dev with `work` → `{ project: 'Wigley AI Dev', branch: null, profile: 'work',
   headless: false }`. Picked from the session step's new-session line.
-- `projectPastSessionsEmpty_StartsAtOnce` — `[]` → `start` runs with no session step.
-- `openForNewSession_Project_StartsWithoutTheSessionStep` — the Project step has no section rows; after `main`,
-  `start` runs and `projectPastSessions` is never invoked.
+- `projectPastSessionsEmpty_SessionStepHoldsTheNewLinesAlone` — `[]` → the session step holds New session and New
+  headless session alone; `start` does not run until one is picked.
+- `openForNewSession_Project_SessionStepHoldsTheNewLinesAlone` — the Project step has no section rows; after `main`,
+  the session step holds New session and New headless session alone, and `projectPastSessions` is never invoked.
 
 ## Doc comments to update
 
 - `StartPrompt` (start-prompt.ts): "`open` asks for a folder, then a profile…" becomes: asks for a project — or,
   through `Other folder…` or with no projects, a folder — then a branch for a pool project, then a profile unless the
   project fixes one or there is one, then signs in, then a new or saved session of the project or folder. The
-  section rows sit at the top of the first step. `openForNewSession` the same, with no sections and no session step.
+  section rows sit at the top of the first step. `openForNewSession` the same, with no sections, and a
+  session step that holds New session and New headless session alone.
 - `SessionStep`: `projectDir` becomes `target: PromptTarget`; `rows` becomes `ProjectPastSessionRow[]`, each resuming
   in its own folder.
 - `PromptContext`: the new `projects` field.

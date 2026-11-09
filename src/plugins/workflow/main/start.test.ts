@@ -135,12 +135,18 @@ function startWorkflowPart(
   const instructions: string[] = [];
   let activeTime: ActiveTime | null = null;
   let headless = false;
+  let launchedHeadless = false;
   const chat: Pick<
     ChatMainExports,
-    'activeTime' | 'addInstructions' | 'isHeadless' | 'profiles'
+    | 'activeTime'
+    | 'addInstructions'
+    | 'isHeadless'
+    | 'launchedHeadless'
+    | 'profiles'
   > = {
     activeTime: () => activeTime,
     isHeadless: () => headless,
+    launchedHeadless: () => launchedHeadless,
     profiles: () => [],
     addInstructions: (text) => {
       instructions.push(text);
@@ -275,6 +281,9 @@ function startWorkflowPart(
     },
     setHeadless: (next: boolean) => {
       headless = next;
+    },
+    setLaunchedHeadless: (next: boolean) => {
+      launchedHeadless = next;
     },
     sent,
     emit,
@@ -695,6 +704,23 @@ describe('workflowMainPart', () => {
     await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]);
 
     expect(await workflow.savedAt()).toBe(START + 5);
+  });
+
+  it('Tools_LaunchedHeadlessTurnedOffBeforeTheFirstCall_OffNoteOnTheFirstResult', async () => {
+    const workflow = startSmallAndMedium();
+    workflow.setLaunchedHeadless(true);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:small', ''));
+
+    const results = [
+      await workflow.callStepTool('s1', 'build'),
+      await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]),
+    ];
+
+    expect(results.map((result) => result.content[0].text)).toEqual([
+      `Step set to build.\n${HEADLESS_OFF_NOTE}`,
+      'Checklist set: 0 of 1 done.',
+    ]);
   });
 
   it('Tools_HeadlessTurnsOff_OffNoteOnTheFirstResultOfEitherTool', async () => {

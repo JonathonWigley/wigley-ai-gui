@@ -184,6 +184,7 @@ function startWorkflowPart(
     | 'activeTime'
     | 'addInstructions'
     | 'isHeadless'
+    | 'launchedHeadless'
   > = {
     activeTime: () => activeTime,
     send: async (sessionId, message) => {
@@ -195,6 +196,7 @@ function startWorkflowPart(
     launch: async () => 's2',
     profileOf: () => 'personal',
     isHeadless: () => false,
+    launchedHeadless: () => false,
     addInstructions: () => ({ dispose: () => undefined }),
   };
   const contributions: {

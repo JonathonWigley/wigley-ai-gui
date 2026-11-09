@@ -78,16 +78,13 @@ async function setWorkflowStep(
 export function startStepTool(
   deps: StepToolDeps,
 ): (session: HeadlessLineSession) => ToolSession {
-  return (session) => {
-    deps.lines.track(session);
-    return {
-      call(name, args) {
-        if (name !== SET_WORKFLOW_STEP_TOOL) {
-          return Promise.reject(new Error(`no workflow tool "${name}"`));
-        }
-        return setWorkflowStep(deps, session, args);
-      },
-      end: () => undefined,
-    };
-  };
+  return (session) => ({
+    call(name, args) {
+      if (name !== SET_WORKFLOW_STEP_TOOL) {
+        return Promise.reject(new Error(`no workflow tool "${name}"`));
+      }
+      return setWorkflowStep(deps, session, args);
+    },
+    end: () => deps.lines.forget(session),
+  });
 }

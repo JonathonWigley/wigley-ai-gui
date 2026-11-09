@@ -3789,6 +3789,25 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.isHeadless('row-unknown')).toBe(false);
   });
 
+  // The flag at the last process start, whatever it was set to since.
+  it.each([
+    { given: 'turned on, not cleared', clears: false, expected: false },
+    { given: 'turned on, then cleared', clears: true, expected: true },
+  ])(
+    'launchedHeadless_FlagSetAfterTheStart_KeepsTheStartsFlag: $given → $expected',
+    async ({ clears, expected }) => {
+      const test = await started();
+      test.chat.setHeadless(ROW_ID, true);
+
+      if (clears) {
+        test.chat.clear(ROW_ID);
+        await flush();
+      }
+
+      expect(test.chat.launchedHeadless(ROW_ID)).toBe(expected);
+    },
+  );
+
   it('clear_HeadlessRow_KeepsHeadless', async () => {
     const test = await started();
     test.chat.setHeadless(ROW_ID, true);
@@ -3797,6 +3816,7 @@ describe('createChatSessions saved sessions', () => {
     await flush();
 
     expect(test.chat.isHeadless(ROW_ID)).toBe(true);
+    expect(test.chat.launchedHeadless(ROW_ID)).toBe(true);
     expect(test.chat.sessions()[0].headless).toBe(true);
   });
 
@@ -3816,6 +3836,7 @@ describe('createChatSessions saved sessions', () => {
       await flush();
 
       expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.launchedHeadless(sessionId)).toBe(expected);
       expect(test.chat.sessions()[0].headless).toBe(expected);
     },
   );
@@ -3837,6 +3858,7 @@ describe('createChatSessions saved sessions', () => {
       await flush();
 
       expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.launchedHeadless(sessionId)).toBe(expected);
       expect(test.chat.sessions()[0].headless).toBe(expected);
     },
   );
@@ -3877,6 +3899,7 @@ describe('createChatSessions saved sessions', () => {
       await flush();
 
       expect(test.chat.isHeadless(sessionId)).toBe(expected);
+      expect(test.chat.launchedHeadless(sessionId)).toBe(expected);
       expect(test.chat.sessions()[0].headless).toBe(expected);
     },
   );
@@ -3893,6 +3916,7 @@ describe('createChatSessions saved sessions', () => {
     );
 
     expect(test.chat.isHeadless(ROW_ID)).toBe(true);
+    expect(test.chat.launchedHeadless(ROW_ID)).toBe(true);
     expect(test.chat.sessions()[0].headless).toBe(true);
   });
 

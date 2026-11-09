@@ -114,8 +114,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  its per-session open form, deadline, re-attach and hand-back, its optional auto-answer
                  (`AgentFormAutoAnswer`: while `isOn` holds for a session, an open call shows no form and saves and
                  returns the type's own answers at once, the file marked `auto_answered`; answers the user gave come
-                 first — a re-send of the form still unfinished in the window waits on it, and a finished form no reply
-                 has carried is returned or handed back as usual), the wake (a form the user finishes
+                 first — a re-send of the form still unfinished in the window waits on it, a finished form no reply
+                 has carried is returned or handed back as usual, and a re-send of the form the user last submitted
+                 gets those answers again), the wake (a form the user finishes
                  while no call waits on it sends its session a message naming the collect tool, through the
                  `AgentFormWake` the service is handed: chat's `send` for a session chat owns, nothing for any
                  other), the saved-form folder and memory stores,
@@ -324,7 +325,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its project, branch, folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (the branch list, clone folders and claim of a pool project, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to practice, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to practice, `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -357,7 +358,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  events, keeps each session's flow in its plugin data and writes it to the `workflow.flows` slot, contributes
                  `set_workflow_step` and `set_workflow_checklist` through sessions' `contributeTools` (each result of a headless
                  session but an error ends on chat's `HEADLESS_NOTE`, and the first from either tool after headless turns off on
-                 `HEADLESS_OFF_NOTE`: one line state per app session across tool sessions, started again by a new host id), appends a line to
+                 `HEADLESS_OFF_NOTE`: one line state per app session across tool sessions, started at the first result under each host
+                 id from chat's `launchedHeadless`, the flag the session's process started with), appends a line to
                  `runs.jsonl` when a workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/
                  (hosts the row chip, the composer strip and the side pane, each drawn through the flow's workflow's layout,
                  and the preview; exports `addWorkflow` and `createWorkflowDraw`), layouts/ (the workflow Layout contract and kit, no
