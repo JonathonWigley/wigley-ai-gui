@@ -247,6 +247,14 @@ Defects seen in a drive run, a transcript or the user's own use.
   `window.wigley.runCommand("forms.choose", 2)` resolved with no `[forms]` line, with the round's row not the one
   showing, so the run proves nothing either way. The arg is proved through a `binds` entry only. To prove it: open a
   round that shows the row, run the command by `runCommand` from the page and from main, and read the `[forms]` line.
+- **After a close, the selection lands on the new retro row** — *agent-ready*: closing rows fast with the sessions close
+  key moves the selection to the Retro-section row a close just queued, so the next press closes the running retro and
+  its retro is lost (auto-retro logs `retro <id> closed before done; <host ids> not analyzed`). Cause: `removeRow`
+  (`src/plugins/sessions/main/session-list.ts`, the right-then-left neighbour pick) knows nothing of the rows a plugin
+  section claims, and auto-retro claims the retro row (`joinRow` in `src/plugins/auto-retro/main/start.ts`) as the
+  close queues it (`afterClose` in `retro-queue.ts`). Fix: the post-close selection skips rows a plugin section
+  claims, falling to the next row outside a claimed section. Add a row to the session-list tests: GIVEN a selected
+  row with a claimed row beside it WHEN the selected row closes THEN the selection lands on an unclaimed row.
 
 ## Harness seams
 
@@ -734,6 +742,30 @@ because the earlier items rewrite many of these tests anyway.
   roster ignore `usage`. Choice: keep the bus and let the log skip replays (a marker on the event), or send saved
   usage to the usage store on its own route. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in
   wigley-ai-gui.
+- **A retro row whose process ends before its first turn never reads done** — *needs a feature plan*: `isRetroDone`
+  (`src/plugins/auto-retro/main/retro-done.ts`) returns false while `hasStarted` is false, even when `info.running` is
+  false, and `closeIfStillDone` / `checkDone` (`src/plugins/auto-retro/main/start.ts`) only run for a done row. A retro
+  row whose process dies before its first turn (a failed launch, a crash) therefore never settles, and the queue waits
+  on it forever. To decide: treat a row whose process ended with no turn as done (closed `finished`), or as failed
+  (closed with a log naming the lost retro), and move the queue on either way. Check that a row not yet attached
+  (`running` false before the process starts) is not read as ended.
+- **A restored retro row resting idle reads done** — *needs a feature plan*: on restore, `begin` in
+  `src/plugins/auto-retro/main/start.ts` (the `followRows` `added` callback) adds the row to `startedRows` so a retro
+  that finished while the app was down closes. A restored row resting idle also reads done, so it is closed `finished`
+  though the retro never ran (an app stop before its first turn). To decide: settle a restored row only after a turn
+  seen in this app run, or relaunch the retro when the restored row has no turn.
+- **A restored retro row the queue lost stays unclaimed and open** — *agent-ready*: when `queue.json` fails to load, a
+  restore is late, or the profile is gone, the row's host id is not in `launched`, so the `added` callback in
+  `src/plugins/auto-retro/main/start.ts` skips it. A close of it queues no retro, since `afterClose`
+  (`retro-queue.ts`) reads its first message (`RETRO_COMMAND`), but nothing claims it into the Retro section or closes
+  it when done. Fix: claim and watch rows whose first message starts with `RETRO_COMMAND ` as well as rows in
+  `launched`. Add a start.test.ts row: GIVEN a restored row whose first message is a retro command and an empty
+  queue WHEN the row joins THEN it joins the Retro section.
+- **Chat's `close` and `closeSessionsIn` never resolve after dispose** — *agent-ready*: a call after the chat part's
+  `dispose` (`src/plugins/chat/main/start.ts`, `closeSessionsIn` and `close` in `exports`) sets an `endWaits` entry
+  that nothing resolves, since `dispose` resolved the waits it held and cleared the map once. Fix: reject once
+  disposed, as `requireHeld` rejects an unheld session. Add a test: GIVEN a disposed chat part WHEN `close` is called
+  THEN it rejects.
 - **Docs page test seam for a session's host id change** — *agent-ready*: after `/clear`, the
   `docs-session-tab` part hears a row's host id change through `followRows` and calls `DocsViewHandle.sourceReplaced()`,
   which rebuilds a session Docs tab that has shown (`src/plugins/docs-session-tab/page/start.ts`, `docs-view.ts`). Two unit tests pin one half each: the
@@ -741,6 +773,14 @@ because the earlier items rewrite many of these tests anyway.
   `start.test.ts` pins that `sourceReplaced` rebuilds a view only once shown. No test joins them, and the chat
   self-test's clear step never shows chat-second's Docs tab. Add a self-test step that shows the Docs tab before the
   clear and expects a rebuild line after it (the self-test starts every plugin, `docs-session-tab` included).
+- **The lost-retro log's emit-time capture has an untested second path** — *agent-ready*: the `chat.sessionClosed`
+  listener in `src/plugins/auto-retro/main/start.ts` captures `isSettling` at emit, because chat's `closed()`
+  (`src/plugins/chat/main/chat-sessions.ts`) deletes the `chat.session` slot entry synchronously after the emit, which
+  clears `settle` before the chained step runs. It took three fixes (6abfbd1e, 8667b07d, 3fb0358d) and the last was
+  not re-reviewed. A second path clears `settle` the same way: `endClosed` calls `owned.end()` synchronously for a
+  non-running session, which can drop the sessions row and reach `leaveRow` before the step. Fix: add a row for that
+  path to the table test `sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone` in
+  `src/plugins/auto-retro/main/start.test.ts`, and read the capture afresh for correctness.
 - **Shell layout swap failure tests** — *agent-ready*: `mountShell`'s rollback when a layout throws or misses an area,
   and the generation-guarded restore after a later `setLayout` (`src/renderer/shell/shell.ts`), are untested. Plan
   B's gallery `Space z s` covers only a good swap and its restore; a throwing test layout and a second swap would
