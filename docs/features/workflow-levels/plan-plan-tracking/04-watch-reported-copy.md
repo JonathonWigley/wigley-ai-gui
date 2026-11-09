@@ -13,14 +13,23 @@ Decisions: a reported folder is read alone; when it holds no `plan.md`, the move
 
 ## What changes
 
-- `Watched` gets `reported: boolean`. `follow` compares `planDir` and `reported`: a follow with the same folder and
-  the same flag, on a watch that is not `gone`, does nothing. A follow that changes only the flag updates
-  `entry.reported` and reads again, and does not reopen the watches.
-- `read`: when `entry.reported` is true, it calls `readCopyAt(entry.planDir, copyDeps)`. When that returns null, or
-  when `entry.reported` is false, it calls `readMovedCopy(entry.planDir, copyDeps)`. The `planGone` rule stays: only
-  when no copy is left and the folder is gone.
+- `Watched` gets `reported: boolean` and `mainCopyDir: string | null`. `open(sessionId, planDir, reported)` sets
+  both (`mainCopyDir` starts null). `follow` compares `planDir` and `reported`: a follow with the same folder and the
+  same flag, on a watch that is not `gone`, does nothing. A follow that changes only the flag updates
+  `entry.reported` and reads again, and does not reopen the watches; during `opening` that read is allowed, and
+  `open`'s own read at its end settles it. A follow on a `gone` watch reopens it, flag included, as a folder change
+  does.
+- Each time the watch lists the copies (`open` and `check`), it keeps the main tree's copy folder (the copy with
+  `isMainTree`) in `entry.mainCopyDir` when the list holds one.
+- `read`: when `entry.reported` is true, it calls `readCopyAt(entry.planDir, copyDeps)`. When that returns null, it
+  calls `readMovedCopy(entry.mainCopyDir ?? entry.planDir, copyDeps)`: a reported worktree folder removed after its
+  merge leaves `planCopies` no clone to list from, and the remembered main copy keeps the run's checklist. When
+  `entry.reported` is false, it calls `readMovedCopy(entry.planDir, copyDeps)`. The `planGone` rule stays: only when
+  no copy is left and the folder is gone. Accepted: after an app restart with the reported folder already removed,
+  `mainCopyDir` is unknown and the watch signals `planGone`.
+- Rename the local `readNewest` to `readCopy`, and rewrite the file's header comment and the `PlanWatch` doc comment
+  for the new rule: neither says "newest" afterwards.
 - The copy watches stay as they are: every copy's folder is watched, the reported one among them.
-- Rewrite the `PlanWatch` doc comment for the new rule.
 - `start.ts`:
   - `followPlan` calls `planWatch.follow(sessionId, planDir, planReported)` when the folder or the flag changed
     between `before` and `after`, and on a `fileWritten` of a plan file, as today.
@@ -30,14 +39,21 @@ GIVEN a reported folder `/w/p/plan-a` and a main-tree copy `/r/p/plan-a` that di
 reads THEN it signals the `/w` copy's progress.
 GIVEN a reported folder whose `plan.md` was deleted while the main-tree copy remains WHEN the watch reads THEN it
 signals the main-tree copy's progress and no `planGone`.
+GIVEN a reported worktree folder `/w/p/plan-a` followed and read once WHEN the whole `/w` folder is removed while
+`/r/p/plan-a` remains THEN it signals the `/r` copy's progress and no `planGone`.
 GIVEN an unreported follow of `/r/p/plan-a` WHEN the same folder is followed with `reported: true` THEN the watch reads
 again without reopening its watches.
 
-Tests:     `follow_Reported_ReadsThatCopyAlone` — an `it.each` table with the first two rows above.
-           `follow_ReportedFlagChanges_ReadsAgainWithoutReopening` — the third row; assert the files fake's open-watch
-           count stays the same and a new `planChanged` arrives.
-           Change the existing `follow_PlanInTwoCheckouts_SignalsTheNewestCopy` to the moved-copy rule, or delete it
-           when task 01's table already pins the rule.
+Tests:     `follow_Reported_ReadsThatCopyAlone` — an `it.each` table with the first three rows above, each with
+           `cloneGit(['/r', '/w'])` and `follow('s1', <the /w folder>, true)`. Row 1 gives the `/r` copy a different
+           progress at a later time than the `/w` copy. In the memory files a folder exists only through its files,
+           so row 2 keeps a task document (`01-a.md`) in the `/w` plan folder after deleting its `plan.md`; row 3
+           deletes every file under `/w`.
+           `follow_ReportedFlagChanges_ReadsAgainWithoutReopening` — the fourth row; assert the files fake's
+           open-watch count stays the same and a new `planChanged` arrives.
+           The compiler names every two-argument `follow` call; each passes `false`.
+           The `start.ts` wiring of the flag has no unit seam; task 05's `reported plan` self-test group proves it
+           (a report file reaching the fold and the watch reading the reported copy).
 Done when: `npm test -- src/plugins/workflow-large` passes; `npm run lint` passes.
 Commit:    one commit for the group
 

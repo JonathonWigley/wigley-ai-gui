@@ -100,7 +100,14 @@ Decisions:
 - A report sets `planDir` and `planReported: true`. Every other change of `planDir` sets `planReported: false`.
 - The plan watch reads a reported folder alone while it holds `plan.md`. Otherwise it reads the moved copy. It signals
   `planGone` only when no copy is left, as today.
-- The moved copy replaces `newestPlanCopy` in Large and Backlog.
+- The moved copy replaces `newestPlanCopy` in Large and Backlog. A worktree copy with fewer ticked boxes than the
+  main tree's is behind main and never the moved copy.
+- Every source carries the folder in one form: absolute, normalized, symlinks kept (`os.path.abspath` in `plan.py`,
+  `paths.parent(paths.join(folder, 'plan.md'))` in the app), the form `fileWritten` gives, so the fold's
+  same-folder check holds.
+- A reported worktree folder removed after its merge reads the main tree's copy the watch last listed. After an app
+  restart with the folder already gone, the watch signals `planGone` (accepted).
+- A report that lands before the row's flow is Large is dropped; the run's next `plan.py` command reports again.
 - The report watch applies a report only when its file changes. It does no scan at start: `flows.json` keeps the
   reported folder across a restart.
 - The app does not delete report files: the live `Files.trash` moves files to the user's Trash.
@@ -125,8 +132,9 @@ Modified:
 - `src/plugins/workflow-large/main/plan-watch.ts`, `src/plugins/workflow-large/main/plan-watch.test.ts`
 - `src/plugins/workflow-large/main/start.ts`
 - `src/plugins/workflow-large/main/selftest-script.ts`
-- `src/plugins/workflow-large/page/preview.ts` and every test fixture that builds a `LargeState` literal (the compiler
-  lists them).
+- `src/plugins/workflow-large/page/preview.ts` and every test fixture that builds a `LargeState` literal (task 02 says
+  how to find the untyped ones).
+- `src/plugins/backlog/main/start.test.ts` — rows of the newest-timestamp rule move to the moved-copy rule.
 - marketplace `plugins/wigley/scripts/plan/plan.py`, `plugins/wigley/scripts/plan/tests/test_plan.py`,
   `plugins/wigley/.claude-plugin/plugin.json`, `plugins/wigley/.codex-plugin/plugin.json`.
 
@@ -146,6 +154,8 @@ Shared names (every task uses them as written here):
 - `PlanWatch.follow(sessionId: string, planDir: string | null, reported: boolean): void`
 - `export const SET_WORKFLOW_PLAN_TOOL = 'set_workflow_plan';`
 - `export const PLAN_RUNS_FOLDER = 'plan-runs';` in `plan-reports.ts`.
+- `export function largePlanReporter(workflow: Pick<WorkflowMainExports, 'ready' | 'flowOf' | 'signal'>): (sessionId: string, planDir: string) => Promise<boolean>` in `plan-tool.ts`.
+- `WorkflowLargeSelfTestDeps.planRunsFolder: string` in `selftest-script.ts`.
 
 ## Tasks
 
