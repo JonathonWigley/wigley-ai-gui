@@ -53,10 +53,10 @@ user closes a row ──► chat.sessionClosed (reason user, sent true)
 - **One at a time.** The ledger and its commits in `~/wigley-agents` take one writer, and two Opus retros at once spend
   the plan for nothing. The skill's ledger lock also keeps a manual run and a background run apart.
 - **On disk.** The queue, the running retro and every retro the plugin launched live in `queue.json` in the plugin's
-  data, each keyed by its host session id: chat gives a restored row a new row id, and only the host id survives a
-  restart. A close just before a quit runs on the next start; a retro row restored at start is still known as one, so
-  closing it queues nothing. A running row that is gone at start (its profile was removed) is dropped and the next
-  item launches.
+  data, each keyed by its host session id: a restored row comes back under a new row id when another session holds
+  its saved one, and only the host id always survives a restart. A close just before a quit runs on the next start;
+  a retro row restored at start is still known as one, so closing it queues nothing. A running row that is gone at
+  start (its profile was removed) is dropped and the next item launches.
 
 ## The Retro section
 
