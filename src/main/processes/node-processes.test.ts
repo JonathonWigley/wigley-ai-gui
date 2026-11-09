@@ -111,6 +111,22 @@ describe('createNodeProcesses', () => {
     const result = await runScript('process.stdout.write("x".repeat(2000000))');
 
     expect(result.stdout.length).toBe(2000000);
+    expect(result.truncated).toBeUndefined();
+  });
+
+  it('run_OutputPastMaxOutputBytes_KeepsTheCapAndMarksTruncated', async () => {
+    const result = await runScript(
+      'process.stdout.write("x".repeat(2000000)); process.stderr.write("err")',
+      { maxOutputBytes: 1000 },
+    );
+
+    expect(result).toEqual({
+      code: 0,
+      stdout: 'x'.repeat(1000),
+      stderr: 'err',
+      timedOut: false,
+      truncated: true,
+    });
   });
 
   it('run_MissingProgram_RejectsNamingIt', async () => {

@@ -1,5 +1,6 @@
 import type { JudgeResult } from '../contract';
 import {
+  answeredCase,
   type CustomInput,
   parseCustomCases,
   type Problem,
@@ -71,7 +72,7 @@ export function createPracticeRuns(deps: PracticeRunsDeps): PracticeRuns {
         problem,
         store.filePath(slug, 'solution.cpp'),
         cases,
-        { stopAtFirstFailure: true },
+        { stopAtFirstFailure: true, code },
       );
       await progress.recordSubmission(slug, result, code);
       lastResults.set(slug, { kind: 'submit', result });
@@ -93,8 +94,8 @@ function readCustomInputs(problem: Problem, text: string): CustomInput[] {
 }
 
 // The custom cases with `reference.cpp`'s outputs as their expected answers.
-// The reference runs on cases holding a placeholder answer of their own type,
-// so its Wrong Answer verdicts mean nothing.
+// The reference runs on cases holding a placeholder answer, so its Wrong Answer
+// verdicts mean nothing. Each answer is read as `problem.json` reads one.
 async function answeredByReference(
   store: ProblemStore,
   judge: Judge,
@@ -122,23 +123,25 @@ async function answeredByReference(
     const firstLine = (reference.compileOutput ?? '').split('\n')[0];
     throw new Error(`reference.cpp does not compile: ${firstLine}`);
   }
-  return placeholders.map((placeholder, index) => {
-    const refusal = (verdict: string) =>
-      new Error(
-        `reference.cpp fails on custom case ${index + 1}: ${verdict}; check the input against the constraints.`,
-      );
+  return inputs.map((input, index): JudgeCase => {
     const answer = reference.cases[index];
     const hasNoAnswer =
       answer.verdict === 'timeLimit' || answer.verdict === 'runtimeError';
     if (hasNoAnswer) {
-      throw refusal(answer.verdict);
+      throw new Error(
+        `reference.cpp fails on custom case ${index + 1}: ${answer.verdict}; check the input against the constraints.`,
+      );
     }
-    if ('input' in placeholder) {
-      return { ...placeholder, expected: answer.output };
+    try {
+      const answered = answeredCase(input, answer.output, problem.signature);
+      return { ...answered, source: 'custom' };
+    } catch (error) {
+      if (error instanceof ProblemError) {
+        throw new Error(
+          `reference.cpp's answer to custom case ${index + 1} does not fit the signature: ${error.message}`,
+        );
+      }
+      throw error;
     }
-    if (!Array.isArray(answer.output)) {
-      throw refusal('runtimeError');
-    }
-    return { ...placeholder, expected: answer.output };
   });
 }

@@ -5,7 +5,6 @@ import type {
   ProcessResult,
   ProcessRunner,
 } from '../../../contracts/processes';
-import { errorText } from '../../../shared/error-text';
 import { answersMatch } from '../compare';
 import { mapCompileErrors } from '../compile-errors';
 import type { CaseResult, JudgeResult, Verdict } from '../contract';
@@ -17,10 +16,13 @@ export type JudgeCase = (FunctionCase | DesignCase) & {
   source: 'example' | 'custom' | 'hidden';
 };
 
-// Submit stops at the first failure; Run and the import check do not. A
-// `signal` that aborts rejects the call with the runner's `Stopped <command>`.
+// Submit stops at the first failure; Run and the import check do not. `code`
+// is the text of `codePath` the caller read, compiled in place of the file's
+// current text. A `signal` that aborts rejects the call with the runner's
+// `Stopped <command>`.
 export interface JudgeOptions {
   stopAtFirstFailure: boolean;
+  code?: string;
   signal?: AbortSignal;
 }
 
@@ -40,9 +42,11 @@ export interface JudgeDeps {
   settings(): JudgeSettings;
 }
 
-// Compiles the code at `codePath` with the problem's generated driver under
-// `<buildFolder>/<slug>/<code name>/` and runs each case as its own process,
-// one judge call at a time in call order.
+// Compiles a copy of the code at `codePath` with the problem's generated
+// driver under `<buildFolder>/<slug>/<code name>/` and runs each case as its
+// own process, one judge call at a time in call order. Each run keeps at most
+// `PROGRAM_OUTPUT_BYTES` of its stdout and of its stderr. Rejects with the
+// runner's `Could not run <compiler>: <reason>` when the compiler cannot start.
 export interface Judge {
   judge(
     problem: Problem,
@@ -54,6 +58,7 @@ export interface Judge {
 
 const COMPILE_TIMEOUT_MS = 120_000;
 const OUTPUT_LIMIT = 10_000;
+const PROGRAM_OUTPUT_BYTES = 1_000_000;
 const SANITIZER_REPORTS = [
   '==ERROR: AddressSanitizer',
   '==ERROR: LeakSanitizer',
@@ -97,12 +102,15 @@ async function judgeInTurn(
   const driverPath = paths.join(runFolder, 'driver.cpp');
   const casesPath = paths.join(runFolder, 'cases.json');
   const program = paths.join(runFolder, 'program');
+  const snapshotPath = paths.join(runFolder, paths.base(codePath));
+  const code = options.code ?? (await files.read(codePath));
   await Promise.all([
-    files.write(driverPath, driverSource(problem, codePath)),
+    files.write(snapshotPath, code),
+    files.write(driverPath, driverSource(problem, snapshotPath)),
     files.write(casesPath, JSON.stringify(cases.map(driverInput))),
   ]);
   const compileFailure = await compile(deps, settings, {
-    codePath,
+    codePath: snapshotPath,
     runFolder,
     driverPath,
     program,
@@ -131,6 +139,7 @@ async function judgeInTurn(
         cwd: runFolder,
         timeoutMs: settings.timeLimitMs,
         signal: options.signal,
+        maxOutputBytes: PROGRAM_OUTPUT_BYTES,
       },
     );
     const ms = deps.clock.now() - before;
@@ -153,7 +162,8 @@ async function judgeInTurn(
   };
 }
 
-// The compiler's output when the code does not compile, null when it does.
+// The compiler's output when the code does not compile, null when it does;
+// rejects when the compiler cannot start.
 async function compile(
   deps: JudgeDeps,
   settings: JudgeSettings,
@@ -173,19 +183,12 @@ async function compile(
     build.program,
     build.driverPath,
   ];
-  let result: ProcessResult;
-  try {
-    result = await deps.processes.run(settings.compiler, args, {
-      cwd: build.runFolder,
-      timeoutMs: COMPILE_TIMEOUT_MS,
-      signal: build.signal,
-    });
-  } catch (error) {
-    if (build.signal?.aborted === true) {
-      throw error;
-    }
-    return errorText(error);
-  }
+  const result = await deps.processes.run(settings.compiler, args, {
+    cwd: build.runFolder,
+    timeoutMs: COMPILE_TIMEOUT_MS,
+    signal: build.signal,
+    maxOutputBytes: PROGRAM_OUTPUT_BYTES,
+  });
   if (result.timedOut) {
     return `Compilation took longer than ${COMPILE_TIMEOUT_MS / 1000} s.`;
   }
@@ -217,9 +220,12 @@ function caseResult(
   );
   let stderr = cut(run.stderr);
   let verdict: Verdict;
-  if (run.timedOut) {
+  // A sanitizer's symbolized report can take the run past the time limit.
+  if (hasSanitizerReport) {
+    verdict = 'runtimeError';
+  } else if (run.timedOut) {
     verdict = 'timeLimit';
-  } else if (run.code !== 0 || hasSanitizerReport) {
+  } else if (run.code !== 0) {
     verdict = 'runtimeError';
   } else if (output === undefined) {
     verdict = 'runtimeError';

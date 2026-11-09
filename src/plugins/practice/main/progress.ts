@@ -32,7 +32,8 @@ export interface ProgressDeps {
 // `problems/<slug>/progress.json: <reason>` for one that does not parse. `open`
 // starts an attempt only when the problem has none, or is due and its current
 // attempt started before the due day, writing the stub to `solution.cpp`
-// then; otherwise it writes nothing. `peek` marks the current attempt peeked
+// then; a due problem's `solution.cpp` that is not the stub is kept first as
+// `solution.<previous attempt id>.cpp`. Otherwise it writes nothing. `peek` marks the current attempt peeked
 // and drops the ladder to its first step. `recordSubmission` writes the
 // submission and moves the status, and the ladder one step on the attempt's
 // first clean Accepted. Every write runs one at a time, in call order.
@@ -119,7 +120,12 @@ export function createProgress(deps: ProgressDeps): Progress {
           return current;
         }
         const attempt = newAttempt();
-        await store.writeText(slug, 'solution.cpp', stubSource(problem));
+        const stub = stubSource(problem);
+        const code = await store.readText(slug, 'solution.cpp');
+        if (code !== null && code !== stub) {
+          await store.writeText(slug, `solution.${current.id}.cpp`, code);
+        }
+        await store.writeText(slug, 'solution.cpp', stub);
         await write(slug, { ...file, attempts: [...file.attempts, attempt] });
         return attempt;
       }),

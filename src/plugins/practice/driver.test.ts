@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stubSource } from './driver';
+import { driverSource, stubSource } from './driver';
 import type { Problem } from './problem';
 
 function problemWith(signature: Problem['signature']): Problem {
@@ -101,5 +101,30 @@ describe('stubSource', () => {
     },
   ])("writes LeetCode's stub for $name", ({ signature, stub }) => {
     expect(stubSource(problemWith(signature))).toBe(stub);
+  });
+});
+
+describe('driverSource', () => {
+  const problem = problemWith({
+    kind: 'function',
+    method: 'twoSum',
+    params: [{ name: 'nums', type: 'vector<int>' }],
+    returns: 'vector<int>',
+  });
+
+  it('includes the solution by its path as given', () => {
+    expect(driverSource(problem, 'C:\\leet code\\solution.cpp')).toContain(
+      '#include "C:\\leet code\\solution.cpp"',
+    );
+  });
+
+  it.each([
+    { name: 'a quote', path: '/leet"code/solution.cpp' },
+    { name: 'a line break', path: '/leet\ncode/solution.cpp' },
+    { name: 'a carriage return', path: '/leet\rcode/solution.cpp' },
+  ])('refuses a path holding $name', ({ path }) => {
+    expect(() => driverSource(problem, path)).toThrow(
+      'driverSource: cannot #include a path holding a quote or line break',
+    );
   });
 });

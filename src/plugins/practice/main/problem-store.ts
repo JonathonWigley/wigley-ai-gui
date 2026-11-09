@@ -6,13 +6,15 @@ import { errorText } from '../../../shared/error-text';
 import type { SubmissionRecord } from '../contract';
 import { parseProblem, type Problem } from '../problem';
 
-// The files of one problem folder `problems/<slug>/` the app reads or writes.
+// The files of one problem folder `problems/<slug>/` the app reads or writes;
+// `solution.<attempt id>.cpp` is an earlier attempt's kept code.
 export type ProblemFile =
   | 'problem.json'
   | 'problem.md'
   | 'reference.cpp'
   | 'approach.md'
   | 'solution.cpp'
+  | `solution.${string}.cpp`
   | 'notes.md'
   | 'custom-cases.json'
   | 'progress.json';
@@ -32,7 +34,9 @@ export interface ProblemStoreDeps {
 // null for a missing file. `submissions` resolves newest first, skipping and
 // logging a file that does not parse. `writeBuildFile` writes only under
 // `.build/` and resolves the absolute path written. `watch` reports the slug of
-// each change under `problems/`, null when the change names none.
+// each change under `problems/`, null when the change names none; it starts
+// watching, which makes `problems/`, at the store's first `slugs` call, and
+// logs a watch that cannot start.
 export interface ProblemStore {
   folder(): string;
   buildFolder(): string;
@@ -61,11 +65,19 @@ export function createProblemStore(deps: ProblemStoreDeps): ProblemStore {
   const submissionsFolder = (slug: string) =>
     paths.join(problemsFolder(), slug, SUBMISSIONS_FOLDER);
   const buildFolder = () => paths.join(deps.folder(), BUILD_FOLDER);
+  let hasListed = false;
+  // The starts of the watches made before the first `slugs` call.
+  const waitingWatches = new Set<() => void>();
 
   return {
     folder: () => deps.folder(),
     buildFolder,
     async slugs() {
+      if (!hasListed) {
+        hasListed = true;
+        waitingWatches.forEach((start) => start());
+        waitingWatches.clear();
+      }
       const entries = await files.list(problemsFolder(), { recursive: false });
       return entries
         .filter((entry) => entry.kind === 'folder')
@@ -136,11 +148,29 @@ export function createProblemStore(deps: ProblemStoreDeps): ProblemStore {
     interviewerText: () =>
       readIfPresent(files, paths.join(deps.folder(), 'interviewer.md')),
     watch(onChange) {
-      return files.watch(
-        problemsFolder(),
-        (path) => onChange(path.split('/')[0] || null),
-        { onError: (error) => log(`watch stopped: ${errorText(error)}`) },
-      );
+      let watching: Disposable | null = null;
+      const start = () => {
+        try {
+          watching = files.watch(
+            problemsFolder(),
+            (path) => onChange(path.split('/')[0] || null),
+            { onError: (error) => log(`watch stopped: ${errorText(error)}`) },
+          );
+        } catch (error) {
+          log(`watch not started: ${errorText(error)}`);
+        }
+      };
+      if (hasListed) {
+        start();
+      } else {
+        waitingWatches.add(start);
+      }
+      return {
+        dispose() {
+          waitingWatches.delete(start);
+          watching?.dispose();
+        },
+      };
     },
   };
 }

@@ -242,6 +242,11 @@ describe('parseProblem', () => {
       field: 'cases[0].input[1]',
     },
     {
+      name: 'tree with values past its last node',
+      json: withParamType('root', 'TreeNode*', [1, null, null, 2]),
+      field: 'cases[0].input[1]',
+    },
+    {
       name: 'list holding null',
       json: withParamType('head', 'ListNode*', [1, null]),
       field: 'cases[0].input[1]',
@@ -316,6 +321,35 @@ describe('parseProblem', () => {
     expect(() => parseProblem(json, 'two-sum')).toThrow('"7"');
   });
 
+  it.each([
+    {
+      name: 'trailing nulls',
+      tree: [1, null, 2, null, null],
+      read: [1, null, 2],
+    },
+    { name: 'only nulls past the root', tree: [1, null, null], read: [1] },
+    { name: 'no trailing null', tree: [1, 2, 3], read: [1, 2, 3] },
+    { name: 'an empty tree', tree: [], read: [] },
+  ])('reads a tree without its trailing nulls: $name', ({ tree, read }) => {
+    const json = validProblem({
+      signature: {
+        kind: 'function',
+        method: 'same',
+        params: [{ name: 'root', type: 'TreeNode*' }],
+        returns: 'TreeNode*',
+      },
+      cases: [{ input: [tree], expected: tree, visible: true }],
+    });
+
+    const problem = parseProblem(json, 'trees');
+
+    expect(problem.cases[0]).toEqual({
+      input: [read],
+      expected: read,
+      visible: true,
+    });
+  });
+
   it('reads a nested type spelling as its canonical form', () => {
     const json = validProblem({
       signature: {
@@ -379,7 +413,7 @@ describe('parseCustomCases', () => {
   });
 
   it.each([
-    { name: 'one value for two params', text: '[[[1,2]]]', field: '[0].input' },
+    { name: 'one value for two params', text: '[[[1,2]]]', field: '[0]' },
     { name: 'text that is not JSON', text: 'not json', field: '(root)' },
   ])('refuses $name, naming $field', ({ text, field }) => {
     expect(caughtField(() => parseCustomCases(text, twoSum))).toBe(field);

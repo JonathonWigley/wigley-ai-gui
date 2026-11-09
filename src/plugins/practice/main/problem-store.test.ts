@@ -80,12 +80,32 @@ describe('createProblemStore', () => {
     const { files, store } = setUp();
     const slugs: (string | null)[] = [];
     const watch = store.watch((slug) => slugs.push(slug));
+    await store.slugs();
 
     await files.write(`${PRACTICE_FOLDER}/${row.path}`, 'x');
     await files.write(`${PRACTICE_FOLDER}/.build/two-sum/driver.cpp`, 'x');
     watch.dispose();
 
     expect(slugs).toEqual([row.slug]);
+  });
+
+  it.each([
+    { name: 'made before the first slugs call', listsFirst: false },
+    { name: 'made after it', listsFirst: true },
+  ])('watch starts at the first slugs call: $name', async ({ listsFirst }) => {
+    const { files, store } = setUp();
+    if (listsFirst) {
+      await store.slugs();
+    }
+    const slugs: (string | null)[] = [];
+    const watch = store.watch((slug) => slugs.push(slug));
+
+    await files.write(`${PRACTICE_FOLDER}/problems/early/x`, 'x');
+    await store.slugs();
+    await files.write(`${PRACTICE_FOLDER}/problems/late/x`, 'x');
+    watch.dispose();
+
+    expect(slugs).toEqual(listsFirst ? ['early', 'late'] : ['late']);
   });
 
   it('submissions come newest first', async () => {

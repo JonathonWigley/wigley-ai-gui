@@ -210,14 +210,24 @@ export function parseCustomCases(
   return items.map((item, index): CustomInput => {
     const path = indexPath('', index);
     if (signature.kind === 'function') {
-      return {
-        input: readArgs(item, signature.params, keyPath(path, 'input')),
-      };
+      return { input: readArgs(item, signature.params, path) };
     }
     const object = readObject(item, path, CUSTOM_DESIGN_KEYS);
     const calls = readDesignCalls(object, signature, path);
     return { ops: calls.ops, args: calls.args };
   });
+}
+
+/** A custom case with `expected` read as `problem.json` reads a case's answer; throws a `ProblemError` naming `expected` when it does not fit the signature. */
+export function answeredCase(
+  input: CustomInput,
+  expected: unknown,
+  signature: FunctionSignature | DesignSignature,
+): FunctionCase | DesignCase {
+  const object = { ...input, expected, visible: true };
+  return signature.kind === 'function'
+    ? readFunctionCase(object, signature, '')
+    : readDesignCase(object, signature, '');
 }
 
 /** The `problem.json` text of a problem: every field but `slug`, 2-space indented. */
@@ -384,8 +394,11 @@ function readFunctionCase(
     signature.params,
     keyPath(path, 'input'),
   );
-  const expected = requiredField(object, 'expected', path);
-  checkValue(expected, signature.returns, keyPath(path, 'expected'));
+  const expected = readValue(
+    requiredField(object, 'expected', path),
+    signature.returns,
+    keyPath(path, 'expected'),
+  );
   return { input, expected, visible: readVisible(object, path) };
 }
 
@@ -407,13 +420,12 @@ function readDesignCase(
       `expected ${calls.ops.length} answers (one per op), got ${expected.length}`,
     );
   }
-  expected.forEach((answer, index) => {
-    checkValue(answer, calls.returns[index], indexPath(expectedPath, index));
-  });
   return {
     ops: calls.ops,
     args: calls.args,
-    expected: expected as JsonValue[],
+    expected: expected.map((answer, index) =>
+      readValue(answer, calls.returns[index], indexPath(expectedPath, index)),
+    ),
     visible: readVisible(object, path),
   };
 }
@@ -474,10 +486,9 @@ function readArgs(value: unknown, params: Param[], path: string): JsonValue[] {
       `expected ${params.length} values (one per param), got ${values.length}`,
     );
   }
-  values.forEach((item, index) => {
-    checkValue(item, params[index].type, indexPath(path, index));
-  });
-  return values as JsonValue[];
+  return values.map((item, index) =>
+    readValue(item, params[index].type, indexPath(path, index)),
+  );
 }
 
 function readVisible(object: JsonObject, path: string): boolean {
@@ -489,6 +500,31 @@ function readVisible(object: JsonObject, path: string): boolean {
     );
   }
   return visible;
+}
+
+/** A case value checked against its type, a tree's trailing nulls trimmed. */
+function readValue(value: unknown, type: ValueType, path: string): JsonValue {
+  checkValue(value, type, path);
+  return type === 'TreeNode*' ? readTree(value as JsonValue[], path) : value;
+}
+
+/** A level-order tree without its trailing nulls; throws when a value has no parent node left to hang from. */
+function readTree(values: JsonValue[], path: string): JsonValue[] {
+  let end = values.length;
+  while (end > 0 && values[end - 1] === null) {
+    end--;
+  }
+  const trimmed = values.slice(0, end);
+  let nodesAwaitingChildren = trimmed.length === 0 ? 0 : 1;
+  for (let index = 1; index < trimmed.length; index += 2) {
+    if (nodesAwaitingChildren === 0) {
+      fail(path, `the tree has values past its last node at [${index}]`);
+    }
+    nodesAwaitingChildren--;
+    const children = trimmed.slice(index, index + 2);
+    nodesAwaitingChildren += children.filter((child) => child !== null).length;
+  }
+  return trimmed;
 }
 
 /** Checks a case value against its type, reporting the first bad element by its own path. */

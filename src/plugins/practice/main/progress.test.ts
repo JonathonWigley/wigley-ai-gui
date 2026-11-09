@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readIfPresent } from '../../../contracts/files';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
@@ -24,6 +25,8 @@ function iso(date: number): string {
 const TODAY = 9;
 const SOLUTION = `${PRACTICE_FOLDER}/problems/two-sum/solution.cpp`;
 const PROGRESS = `${PRACTICE_FOLDER}/problems/two-sum/progress.json`;
+// Where a fresh attempt keeps the code of the attempt started on day 1.
+const KEPT = `${PRACTICE_FOLDER}/problems/two-sum/solution.a1.cpp`;
 
 function attempt(started: number, peeked = false): Attempt {
   return {
@@ -82,6 +85,7 @@ describe('createProgress', () => {
       opens: 1,
       attempts: 1,
       code: 'mine',
+      kept: null,
     },
     {
       name: 'no progress, no solution',
@@ -90,6 +94,7 @@ describe('createProgress', () => {
       opens: 1,
       attempts: 1,
       code: 'stub',
+      kept: null,
     },
     {
       name: 'not due',
@@ -102,6 +107,7 @@ describe('createProgress', () => {
       opens: 2,
       attempts: 1,
       code: 'mine',
+      kept: null,
     },
     {
       name: 'due, the attempt started before the due day',
@@ -114,6 +120,7 @@ describe('createProgress', () => {
       opens: 1,
       attempts: 2,
       code: 'stub',
+      kept: 'mine',
     },
     {
       name: 'due, opened twice',
@@ -126,39 +133,61 @@ describe('createProgress', () => {
       opens: 2,
       attempts: 2,
       code: 'stub',
+      kept: 'mine',
+    },
+    {
+      name: 'due, solution.cpp still the stub',
+      given: {
+        status: 'solved',
+        review: { step: 1, due: '2026-11-06' },
+        attempts: [attempt(1)],
+      },
+      solution: 'stub',
+      opens: 1,
+      attempts: 2,
+      code: 'stub',
+      kept: null,
     },
   ] satisfies {
     name: string;
     given: ProgressFile | null;
-    solution: string | null;
+    solution: 'mine' | 'stub' | null;
     opens: number;
     attempts: number;
     code: 'mine' | 'stub';
-  }[])('open starts an attempt only when it should: $name', async (row) => {
-    const { files, progress, given } = setUp();
-    await given(row.given);
-    if (row.solution !== null) {
-      await files.write(SOLUTION, row.solution);
-    }
-    const before = row.given === null ? null : await files.read(PROGRESS);
+    kept: 'mine' | null;
+  }[])(
+    'open starts an attempt only when it should, keeping the old code: $name',
+    async (row) => {
+      const { files, progress, given } = setUp();
+      await given(row.given);
+      if (row.solution !== null) {
+        await files.write(
+          SOLUTION,
+          row.solution === 'stub' ? stubSource(TWO_SUM) : row.solution,
+        );
+      }
+      const before = row.given === null ? null : await files.read(PROGRESS);
 
-    const opened: Attempt[] = [];
-    for (let open = 0; open < row.opens; open++) {
-      opened.push(await progress.open('two-sum', TWO_SUM));
-    }
+      const opened: Attempt[] = [];
+      for (let open = 0; open < row.opens; open++) {
+        opened.push(await progress.open('two-sum', TWO_SUM));
+      }
 
-    const file = await progress.read('two-sum');
-    expect(file.attempts).toHaveLength(row.attempts);
-    expect(opened.every((each) => each.id === file.attempts.at(-1)?.id)).toBe(
-      true,
-    );
-    expect(await files.read(SOLUTION)).toBe(
-      row.code === 'stub' ? stubSource(TWO_SUM) : 'mine',
-    );
-    if (row.attempts === 1 && before !== null) {
-      expect(await files.read(PROGRESS)).toBe(before);
-    }
-  });
+      const file = await progress.read('two-sum');
+      expect(file.attempts).toHaveLength(row.attempts);
+      expect(opened.every((each) => each.id === file.attempts.at(-1)?.id)).toBe(
+        true,
+      );
+      expect(await files.read(SOLUTION)).toBe(
+        row.code === 'stub' ? stubSource(TWO_SUM) : 'mine',
+      );
+      expect(await readIfPresent(files, KEPT)).toBe(row.kept);
+      if (row.attempts === 1 && before !== null) {
+        expect(await files.read(PROGRESS)).toBe(before);
+      }
+    },
+  );
 
   it.each([
     {

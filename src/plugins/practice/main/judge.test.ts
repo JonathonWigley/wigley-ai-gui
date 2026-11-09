@@ -8,6 +8,7 @@ import type { OsName } from '../../../contracts/platform';
 import type {
   ProcessResult,
   ProcessRunner,
+  ProcessRunOptions,
 } from '../../../contracts/processes';
 import { createNodeFiles } from '../../../main/files/node-files';
 import { createNodeProcesses } from '../../../main/processes/node-processes';
@@ -23,6 +24,7 @@ import { PRACTICE_FOLDER, TWO_SUM } from './practice-fixtures.test-support';
 
 const BUILD = `${PRACTICE_FOLDER}/.build`;
 const CODE_PATH = `${PRACTICE_FOLDER}/problems/two-sum/solution.cpp`;
+const SNAPSHOT_PATH = `${BUILD}/two-sum/solution/solution.cpp`;
 
 function exited(code: number, stdout = '', stderr = ''): ProcessResult {
   return { code, stdout, stderr, timedOut: false };
@@ -42,14 +44,16 @@ interface CaseScript {
 
 // A runner whose `clang++` call gives `compile`, and whose program call for
 // case k writes `cases[k].resultText` to the result file named in its args,
-// then gives `cases[k].result`.
+// then gives `cases[k].result`. Each call's options land in `options`.
 function scriptedRunner(
   files: MemoryFiles,
   compile: ProcessResult | Error,
   cases: CaseScript[],
+  options: (ProcessRunOptions | undefined)[],
 ): ProcessRunner {
   return {
-    async run(command, args) {
+    async run(command, args, runOptions) {
+      options.push(runOptions);
       if (command === 'clang++') {
         if (compile instanceof Error) {
           throw compile;
@@ -63,12 +67,18 @@ function scriptedRunner(
   };
 }
 
-function memoryJudge(compile: ProcessResult | Error, cases: CaseScript[]) {
+// A judge over memory files holding `class Solution {};` at `CODE_PATH`.
+async function memoryJudge(
+  compile: ProcessResult | Error,
+  cases: CaseScript[],
+) {
   const files = createMemoryFiles();
+  await files.write(CODE_PATH, 'class Solution {};');
+  const runOptions: (ProcessRunOptions | undefined)[] = [];
   let now = 1000;
   const judge = createJudge({
     files,
-    processes: scriptedRunner(files, compile, cases),
+    processes: scriptedRunner(files, compile, cases, runOptions),
     paths: posixPaths,
     clock: { now: () => (now += 7) },
     settings: () => ({
@@ -78,7 +88,7 @@ function memoryJudge(compile: ProcessResult | Error, cases: CaseScript[]) {
       timeLimitMs: 2000,
     }),
   });
-  return { files, judge };
+  return { files, judge, runOptions };
 }
 
 function cases(problem: Problem, count = problem.cases.length): JudgeCase[] {
@@ -91,19 +101,11 @@ describe('createJudge', () => {
   it.each([
     {
       name: 'compile exits 1',
-      compile: exited(1, '', `${CODE_PATH}:3:1: error: x`),
+      compile: exited(1, '', `${SNAPSHOT_PATH}:3:1: error: x`),
       run: exited(0),
       resultText: '[0,1]',
       verdict: 'compileError',
       compileOutput: 'solution.cpp:3:1: error: x',
-    },
-    {
-      name: 'compile cannot start',
-      compile: new Error('Could not run clang++: ENOENT'),
-      run: exited(0),
-      resultText: '[0,1]',
-      verdict: 'compileError',
-      compileOutput: 'Could not run clang++: ENOENT',
     },
     {
       name: 'compile times out',
@@ -119,6 +121,19 @@ describe('createJudge', () => {
       run: TIMED_OUT,
       resultText: '',
       verdict: 'timeLimit',
+      compileOutput: null,
+    },
+    {
+      name: 'run times out after a sanitizer report',
+      compile: exited(0),
+      run: {
+        code: -1,
+        stdout: '',
+        stderr: '==ERROR: AddressSanitizer: SEGV on unknown address',
+        timedOut: true,
+      },
+      resultText: '',
+      verdict: 'runtimeError',
       compileOutput: null,
     },
     {
@@ -162,7 +177,7 @@ describe('createJudge', () => {
       compileOutput: null,
     },
   ])('maps each run to a verdict: $name', async (row) => {
-    const { judge } = memoryJudge(row.compile, [
+    const { judge } = await memoryJudge(row.compile, [
       { result: row.run, resultText: row.resultText },
     ]);
 
@@ -176,8 +191,63 @@ describe('createJudge', () => {
     expect(result.cases).toHaveLength(row.compileOutput === null ? 1 : 0);
   });
 
+  it('rejects when the compiler cannot start', async () => {
+    const { judge, runOptions } = await memoryJudge(
+      new Error('Could not run clang++: ENOENT'),
+      [{ result: exited(0), resultText: '[0,1]' }],
+    );
+
+    await expect(
+      judge.judge(TWO_SUM, CODE_PATH, cases(TWO_SUM, 1), {
+        stopAtFirstFailure: false,
+      }),
+    ).rejects.toThrow('Could not run clang++: ENOENT');
+    expect(runOptions).toHaveLength(1);
+  });
+
+  it.each([
+    {
+      name: 'the code handed in',
+      code: 'class Handed {};',
+      compiled: 'class Handed {};',
+    },
+    {
+      name: 'the file when none is handed in',
+      code: undefined,
+      compiled: 'class Solution {};',
+    },
+  ])('compiles a snapshot of $name', async (row) => {
+    const { files, judge } = await memoryJudge(exited(0), [
+      { result: exited(0), resultText: '[0,1]' },
+    ]);
+
+    await judge.judge(TWO_SUM, CODE_PATH, cases(TWO_SUM, 1), {
+      stopAtFirstFailure: false,
+      code: row.code,
+    });
+
+    expect(await files.read(SNAPSHOT_PATH)).toBe(row.compiled);
+    expect(await files.read(`${BUILD}/two-sum/solution/driver.cpp`)).toContain(
+      `#include "${SNAPSHOT_PATH}"`,
+    );
+  });
+
+  it('caps the output kept of every run', async () => {
+    const { judge, runOptions } = await memoryJudge(exited(0), [
+      { result: exited(0), resultText: '[0,1]' },
+    ]);
+
+    await judge.judge(TWO_SUM, CODE_PATH, cases(TWO_SUM, 1), {
+      stopAtFirstFailure: false,
+    });
+
+    expect(runOptions.map((options) => options?.maxOutputBytes)).toEqual([
+      1_000_000, 1_000_000,
+    ]);
+  });
+
   it('marks a case that wrote no answer in its stderr', async () => {
-    const { judge } = memoryJudge(exited(0), [
+    const { judge } = await memoryJudge(exited(0), [
       { result: exited(0, '', 'boom'), resultText: '' },
     ]);
 
@@ -197,7 +267,7 @@ describe('createJudge', () => {
   ])(
     'stops at the first failure only when asked: $stopAtFirstFailure',
     async (row) => {
-      const { judge } = memoryJudge(exited(0), [
+      const { judge } = await memoryJudge(exited(0), [
         { result: exited(0), resultText: '[0,1]' },
         { result: exited(0), resultText: '[2,1]' },
         { result: exited(0), resultText: '[0,1]' },
@@ -217,7 +287,7 @@ describe('createJudge', () => {
   );
 
   it('writes the build files', async () => {
-    const { files, judge } = memoryJudge(exited(0), [
+    const { files, judge } = await memoryJudge(exited(0), [
       { result: exited(0), resultText: '[0,1]' },
     ]);
 

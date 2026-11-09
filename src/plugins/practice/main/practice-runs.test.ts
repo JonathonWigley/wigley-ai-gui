@@ -62,6 +62,20 @@ function judged(
   };
 }
 
+const TWICE: Problem = {
+  ...TWO_SUM,
+  slug: 'twice',
+  title: 'Twice',
+  signature: {
+    kind: 'function',
+    method: 'twice',
+    params: [{ name: 'x', type: 'long long' }],
+    returns: 'long long',
+  },
+  compare: 'exact',
+  cases: [{ input: [2], expected: 4, visible: true }],
+};
+
 const COMPILE_ERROR: JudgeResult = {
   verdict: 'compileError',
   passed: 0,
@@ -155,7 +169,7 @@ describe('createPracticeRuns', () => {
       problem: TWO_SUM,
       custom: '[[[1,2],3],[[3,3],6]]',
       answer: (call: JudgeCall) =>
-        judged(call.cases, ['wrongAnswer', 'runtimeError']),
+        judged(call.cases, ['wrongAnswer', 'runtimeError'], [[0, 1]]),
       message: 'reference.cpp fails on custom case 2: runtimeError',
     },
     {
@@ -170,7 +184,17 @@ describe('createPracticeRuns', () => {
       problem: COUNTER,
       custom: '[{"ops":["Counter","get"],"args":[[1],[]]}]',
       answer: (call: JudgeCall) => judged(call.cases, ['wrongAnswer'], [7]),
-      message: 'reference.cpp fails on custom case 1: runtimeError',
+      message:
+        "reference.cpp's answer to custom case 1 does not fit the signature: expected: expected an array, got 7",
+    },
+    {
+      name: 'a long long answer past the safe range',
+      problem: TWICE,
+      custom: '[[4503599627370497]]',
+      answer: (call: JudgeCall) =>
+        judged(call.cases, ['wrongAnswer'], [9007199254740994]),
+      message:
+        "reference.cpp's answer to custom case 1 does not fit the signature: expected: expected long long, got 9007199254740994",
     },
   ])(
     'run refuses when the reference fails a custom case: $name',
@@ -212,7 +236,10 @@ describe('createPracticeRuns', () => {
     const result = await runs.submit('two-sum');
 
     expect(double.calls).toHaveLength(1);
-    expect(double.calls[0].options.stopAtFirstFailure).toBe(true);
+    expect(double.calls[0].options).toEqual({
+      stopAtFirstFailure: true,
+      code: 'class Solution {};',
+    });
     expect(double.calls[0].cases.map((each) => each.source)).toEqual([
       'example',
       'hidden',

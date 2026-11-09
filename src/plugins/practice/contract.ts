@@ -66,8 +66,8 @@ export interface ProblemSummary {
   due: boolean;
 }
 
-// One go at a problem. `started` is ISO 8601; `interviewer` names the attempt's
-// interviewer session and the session it was asked from, null until launched.
+// One go at a problem. `started` is ISO 8601; `interviewer` names the
+// interviewer's row id and its harness session id, null until launched.
 export interface Attempt {
   id: string;
   started: string;
@@ -103,8 +103,10 @@ export interface OpenedProblem {
 
 // Every method rejects with main's own error text when its handler throws. The
 // page saves `solution.cpp` before it invokes `run` or `submit`. `open` is
-// idempotent: it starts a fresh attempt only when the problem is due and its
-// current attempt started before the due date.
+// idempotent: it starts the first attempt when the problem has none, and a
+// fresh one only when the problem is due and its current attempt started
+// before the due date, keeping the old `solution.cpp` as
+// `solution.<previous attempt id>.cpp`.
 export interface PracticeChannel extends ChannelShape {
   invoke: {
     list(): Promise<ProblemSummary[]>;
