@@ -513,7 +513,8 @@ export interface ModeHandle extends Disposable {
 // the registry forgets the id; so does a `show` that changes the shown mode.
 // So the mode shown before a plugin's stop shows again at its start, for a
 // restart and for a switch-off then switch-on with no other mode picked in
-// between. `shown` is the shown mode's id and throws
+// between. A mode's activity item keeps the place of its id's first add, so an
+// `add` after a `dispose` puts the item back where it was. `shown` is the shown mode's id and throws
 // before any `add` and once every mode is disposed. A `show`
 // that changes the shown mode hides the old mode's element and side bar, calls
 // the old mode's `hidden`, unhides the new mode's element and side bar, marks

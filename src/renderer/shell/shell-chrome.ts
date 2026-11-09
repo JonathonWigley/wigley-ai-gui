@@ -82,7 +82,9 @@ const NO_DRAWN = () => undefined;
 
 // Contributes one slot per part, once: the context at the title bar's
 // centre, the Dev tag at its start in the dev app, the problems at its end,
-// and each mode's item to the activity bar in add order. Every part draws
+// and each mode's item to the activity bar in the order of each mode id's first
+// add, so a mode added again (its plugin restarted or switched back on) takes
+// its item's earlier place. Every part draws
 // with `default` until the first `setLayouts`. A redraw replaces only a slot's children, so the modes,
 // plugin contributions and focus stay. The
 // context slot hides while the context is null, and the problems slot while
@@ -99,6 +101,8 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
   let problems: readonly ConfigProblem[] = [];
   let markedId: string | null = null;
   const items = new Map<string, ModeItem>();
+  // Each mode id ever added, by the order of its first add.
+  const itemOrders = new Map<string, number>();
 
   // Draws the part `partName` into `slot`, its children replaced, with the
   // first layout that defines it among the user's and `default`.
@@ -198,6 +202,17 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
 
   drawAll();
 
+  // The order of the mode id's first add, kept across its disposal.
+  const itemOrder = (modeId: string): number => {
+    const known = itemOrders.get(modeId);
+    if (known !== undefined) {
+      return known;
+    }
+    const order = itemOrders.size;
+    itemOrders.set(modeId, order);
+    return order;
+  };
+
   return {
     showContext(next) {
       context = next;
@@ -209,7 +224,7 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
     },
     addMode(mode, handle) {
       const item: ModeItem = {
-        slot: contributeSlot(areas.activityBar, 'start'),
+        slot: contributeSlot(areas.activityBar, 'start', itemOrder(mode.id)),
         mode,
         handle,
         root: null,
@@ -245,11 +260,11 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
   };
 }
 
-function contributeSlot(area: Area, align: Alignment): Slot {
+function contributeSlot(area: Area, align: Alignment, order?: number): Slot {
   const slotElement = element('span', 'shell-part-slot');
   return {
     element: slotElement,
-    contribution: area.contribute(slotElement, { align }),
+    contribution: area.contribute(slotElement, { align, order }),
     disposeDrawn: NO_DRAWN,
   };
 }

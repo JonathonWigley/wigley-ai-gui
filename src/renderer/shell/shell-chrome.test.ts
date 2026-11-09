@@ -27,15 +27,27 @@ import { mountShellChrome } from './shell-chrome';
 import { NO_FENCES } from '../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../shared/page/layout-host/fake-layout-state.test-support';
 
-// An area that appends each contribution to `root`, its alignment as
-// `data-align`, in the order contributed.
+// An area that puts each contribution in `root`, its alignment as
+// `data-align`, by its `order` (default 0), a tie keeping the order
+// contributed.
 function fakeArea() {
   const root = new FakeElement('div');
+  const orders = new Map<FakeElement, number>();
   const area: Area = {
     contribute(element, options) {
+      const fake = asFake(element);
+      const order = options?.order ?? 0;
       element.dataset.align = options?.align ?? 'start';
-      root.append(asFake(element));
-      return { dispose: () => asFake(element).remove() };
+      orders.set(fake, order);
+      const following = root.children.find(
+        (child) => (orders.get(child) ?? 0) > order,
+      );
+      if (following === undefined) {
+        root.append(fake);
+      } else {
+        root.insertBefore(fake, following);
+      }
+      return { dispose: () => fake.remove() };
     },
   };
   return { area, root };
@@ -244,6 +256,39 @@ describe('mountShellChrome', () => {
     expect(runs).toEqual([['modes.show', 'docs.docs']]);
     expect(docs.show).not.toHaveBeenCalled();
   });
+
+  // Breaks if a mode added again appends its item at the end of the bar: a
+  // restarted plugin's icon moves.
+  it.each([
+    {
+      row: 'added again',
+      id: 'sessions',
+      title: 'Sessions',
+      items: ['Sessions', 'Docs', 'Gallery'],
+    },
+    {
+      row: 'a new id',
+      id: 'notes',
+      title: 'Notes',
+      items: ['Docs', 'Gallery', 'Notes'],
+    },
+  ])(
+    'addMode_AfterADispose_TakesThePlaceOfItsIdsFirstAdd: $row',
+    ({ id, title, items }) => {
+      const { chrome, activityBar } = mountChrome();
+      chrome.setLayouts(shownMine());
+      const sessions = chrome.addMode(mode('sessions', 'Sessions'), handle());
+      chrome.addMode(mode('docs', 'Docs'), handle());
+      chrome.addMode(mode('gallery', 'Gallery'), handle());
+      sessions.dispose();
+
+      chrome.addMode(mode(id, title), handle());
+
+      expect(parts(activityBar).map((item) => item?.textContent)).toEqual(
+        items,
+      );
+    },
+  );
 
   it('showMode_KnownId_ShowsThroughTheHandle', () => {
     const { chrome } = mountChrome();
