@@ -85,15 +85,15 @@ that id exists only once the row is open:
    `sessionClosed`.
 
 Closing the row while the claim runs cancels the claim: the provider stops the CLI, then runs `unity-pool release
---json` under the same ids, since the CLI may have been killed after it granted a clone. The provider releases the
-same way after a claim that answers `internal` or `cli-failed`, which the CLI can give past the grant, and chat hands a
-landed claim back through the provider's `release` when the row closed before it landed or the move to the clone
-throws; that row's notice reads `Unity clone not used, releasing it: <reason>`. A claim stopped by the app quitting
-gets no release: the pool's claim expiry frees its clone. A claim cancelled while it
-queues leaves its queue ticket behind: the pool drops a ticket nobody polls after two minutes. A claim that fails (`dirty`,
-`unknown-branch`, `no-cli`, `cli-failed`, `internal`) leaves the row resting with the error notice `Unity clone not
-claimed: <the CLI's message>`; a message sent to that row is refused. A `diverged` claim keeps its clone, by the pool's rules, so the agent
-starts there with the CLI's message as a notice, to settle the divergence.
+--json` under the same ids, since the CLI may have been killed after it granted a clone. The provider releases the same
+way after a claim that answers `internal` or `cli-failed`, which the CLI can give past the grant, and chat hands a
+landed claim back through the provider's `release` when the row closed before it landed or the move to the clone throws;
+that row's notice reads `Unity clone not used, releasing it: <reason>`. A claim stopped by the app quitting gets no
+release: the pool's claim expiry frees its clone. A claim cancelled while it queues leaves its queue ticket behind: the
+pool drops a ticket nobody polls after two minutes. A claim that fails (`dirty`, `unknown-branch`, `no-cli`,
+`cli-failed`, `internal`) leaves the row resting with the error notice `Unity clone not claimed: <the CLI's message>`; a
+message sent to that row is refused. A `diverged` claim keeps its clone, by the pool's rules, so the agent starts there
+with the CLI's message as a notice, to settle the divergence.
 
 A restart cancels a running claim too, and the provider releases it as for a closed row. Unity-pool restarting alone
 stops its provider, so the row rests with `Unity clone not claimed: claim cancelled`. Chat restarting takes unity-pool
