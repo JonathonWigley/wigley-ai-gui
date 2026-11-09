@@ -18,11 +18,10 @@ export interface StatsPollerDeps {
   log(message: string): void;
 }
 
-// `setShown(true)` from hidden samples at once, the next sample `FIRST_GAP_MS` after the show's first good one
-// settles, and every other one the refresh interval after the last settles, a rejection's included; two samples never
-// overlap. `setShown(false)` clears
-// the timer and drops a running sample's result. `reschedule` re-arms a waiting interval timer from now with the
-// interval read now. After `dispose`, nothing samples or reports.
+// `setShown(true)` from hidden samples at once, the next sample `FIRST_GAP_MS` after the show's first good one settles,
+// and every other one the refresh interval after the last settles, a rejection's included; two samples never overlap.
+// `setShown(false)` clears the timer and drops a running sample's result. `reschedule` re-arms a waiting interval timer
+// from now with the interval read now. After `dispose`, nothing samples or reports.
 export interface StatsPoller {
   setShown(shown: boolean): void;
   reschedule(): void;

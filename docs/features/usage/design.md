@@ -160,7 +160,7 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     `usage-tab-line` plugin (in `plugins.disabled` by default) draws the whole session line as a bar part (sessions'
     `addBarPart`) in each session's tab bar. The whole line: its context bar
     (`used/limit`), its cache countdown and its spend. The context bar is tinted by its share of the limit (`warning`
-    from 70 %, `critical` from 90 %); with no autocompact limit it shows tokens alone. A narrow bar drops whole items
+    from 70 %, `critical` from 90 %, of the share rounded to a whole percent); with no autocompact limit it shows tokens alone. A narrow bar drops whole items
     from the line's end (spend, then cache, then the context text) and keeps the context bar. While the session
     compacts, the line opens with a `compacting` chip naming the trigger and its context bar pulses; main folds each
     `compactionStarted` and `compactionEnded` agent event into the session's `compaction`

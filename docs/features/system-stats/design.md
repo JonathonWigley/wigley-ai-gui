@@ -52,10 +52,10 @@ module, which takes the two samples and the time between them:
   process is shown as a **share of the whole machine**. `ps`'s smoothed `%cpu` is not used. A pid
   absent from the earlier sample, or whose CPU time went down (the pid reused), counts from zero; a
   process that renames itself keeps its pid and counts only its growth.
-- **The Other row**: the process rows count only processes alive at both samples, so they fall short
-  of the CPU meter. An `Other (exited processes, system)` row holds the rest, the meter less the
+- **The Other row**: the process rows count the processes alive at the later sample, so they fall
+  short of the CPU meter. An `Other (exited processes, system)` row holds the rest, the meter less the
   top-level rows (never below 0): kernel and system time, which belong to no process `ps` lists, and
-  processes that started and exited between the samples. It sorts with the other rows and counts
+  the CPU of every process that exited before the later sample. It sorts with the other rows and counts
   toward `system-stats.processRows`; it never opens, and its RAM and GPU show dashes.
 - **Network and disk scale**: each meter reads its rate on a fixed logarithmic scale, 1 KB/s at 0%
   and 1 GB/s at 100% (1 MB/s reads 50%), so a steady rate does not read full and one spike does not

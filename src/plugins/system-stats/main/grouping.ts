@@ -75,8 +75,8 @@ export function groupProcesses(
   return [...sessionRows, ...appRows];
 }
 
-// The CPU meter's share no top-level row holds: kernel and system time, and processes that started and exited between
-// the two samples. It has no RAM or GPU reading and never opens.
+// The CPU meter's share no top-level row holds: kernel and system time, and the CPU of every process that exited
+// before the later sample. It has no RAM or GPU reading and never opens.
 export function otherRow(
   cpuPercent: number,
   rows: readonly StatsProcessRow[],

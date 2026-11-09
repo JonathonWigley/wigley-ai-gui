@@ -31,7 +31,7 @@ export interface StatsRowInput {
   name: string;
   kind: 'app' | 'session' | 'process' | 'other';
   depth: 0 | 1; // 1: a process inside an open group
-  isOpen: boolean; // true on an open group; false on a closed group and on every process
+  isOpen: boolean; // true on an open group; false on a closed group, on every process and on the Other row
   cpu: string;
   ram: string;
   gpu: string;
