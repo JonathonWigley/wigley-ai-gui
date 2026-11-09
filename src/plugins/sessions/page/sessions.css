@@ -142,15 +142,26 @@
 }
 
 .session-tabs-close,
-.session-tabs-close.is-no-target + .session-pane-control {
+.session-tabs-close.is-no-target ~ .session-pane-control {
   margin-left: auto;
 }
 
-/* A pane control holds its icon and its key side by side. */
+/* A split prompt is its key alone, faint beside the pane's close. */
+.session-split-hint {
+  color: var(--wg-fg-tertiary);
+}
+
+/* The close-pane control holds its icon and its key side by side, its thin
+   `chrome-close` glyph small and faint until hovered. */
 .ui-icon-button.session-pane-control {
   gap: var(--wg-space-1);
   width: auto;
   padding: 0 var(--wg-space-1);
+  color: var(--wg-fg-tertiary);
+}
+
+.ui-icon-button.session-pane-control > .codicon {
+  font-size: var(--wg-text-12);
 }
 
 /* A session's tab body and the text saying why no tab shows share one

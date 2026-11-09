@@ -28,9 +28,9 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - the `title` tooltip on each row (`title · label · activity · each row part's tooltip`, each only when present) and
 //   each tab (`title`),
 //   and each tab's `aria-label` (`title`), so a tab that draws only its icon keeps its accessible name;
-// - `is-no-target` on the elements `sessionEdge`, `prevTabEdge`, `nextTabEdge` and `closeHint` return, which hides
-//   each while it has nothing to act on, and on the key inside each of `splitRightHint`, `splitDownHint` and
-//   `closePaneHint`; every tab bar's prompts and those keys take `is-no-target` outside the focused pane, since the
+// - `is-no-target` on the elements `sessionEdge`, `prevTabEdge`, `nextTabEdge`, `closeHint`, `splitRightHint` and
+//   `splitDownHint` return, which hides each while it has nothing to act on, and on the key inside `closePaneHint`;
+//   every tab bar's prompts and those keys take `is-no-target` outside the focused pane, since the
 //   keys act on the focused pane only;
 // - whether the empty text shows: `emptyText` draws only while the tab area shows no tab;
 // - the click on the star `favoriteToggle` places, which favorites or unfavorites the group's project;
@@ -248,11 +248,11 @@ export interface TabBarKit extends SessionsKit {
   // end of its element. A part that throws is logged and draws nothing. A second call throws
   // `tabBar placed contributed parts twice`, so the bar draws with `default`.
   contributedParts(parent: HTMLElement): HTMLElement;
-  // The `split-horizontal` button holding `⌥;`, which splits the pane with the new pane right.
+  // `⌥;`: the split right prompt, its key alone, titled `Split right`; it splits the pane with the new pane right.
   splitRightHint(parent: HTMLElement): HTMLElement;
-  // The `split-vertical` button holding `⌥'`, which splits the pane with the new pane below.
+  // `⌥'`: the split down prompt, its key alone, titled `Split down`; it splits the pane with the new pane below.
   splitDownHint(parent: HTMLElement): HTMLElement;
-  // The `close` button holding `⌥W`, which closes the pane.
+  // The `chrome-close` button holding `⌥W`, which closes the pane.
   closePaneHint(parent: HTMLElement): HTMLElement;
 }
 

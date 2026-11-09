@@ -347,6 +347,19 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
           controlParent.append(control);
           return { control, key: base.keyHint(control, command) };
         };
+        // A split prompt: the command's key alone, faint, its action in the
+        // tooltip.
+        const splitHint = (
+          hintParent: HTMLElement,
+          command: SessionsCommand,
+          label: string,
+        ) => {
+          const hint = base.keyHint(hintParent, command, {
+            className: 'session-split-hint',
+          });
+          hint.title = label;
+          return hint;
+        };
         const kit: TabBarKit = {
           ...base,
           prevTabEdge(edgeParent) {
@@ -374,29 +387,21 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
             return placed.close;
           },
           splitRightHint(hintParent) {
-            const { control, key } = paneControl(
+            placed.splitRight = splitHint(
               hintParent,
-              'split-horizontal',
-              'Split right',
               'splitRight',
+              'Split right',
             );
-            placed.splitRight = key;
-            return control;
+            return placed.splitRight;
           },
           splitDownHint(hintParent) {
-            const { control, key } = paneControl(
-              hintParent,
-              'split-vertical',
-              'Split down',
-              'splitDown',
-            );
-            placed.splitDown = key;
-            return control;
+            placed.splitDown = splitHint(hintParent, 'splitDown', 'Split down');
+            return placed.splitDown;
           },
           closePaneHint(hintParent) {
             const { control, key } = paneControl(
               hintParent,
-              'close',
+              'chrome-close',
               'Close the pane',
               'closePane',
             );
