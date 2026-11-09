@@ -1,6 +1,6 @@
 # 01 — Paused run row label
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -59,3 +59,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit b7244ddc, a728f9d8 · proof: diff read: both Produces present in contract.ts; tsc failed on the test's partial PageStage cast, fixed in a728f9d8; typecheck and lint pass · concerns: page-level Small/Medium tests drawing a paused stage were not run by the worker; left to the test gate

@@ -107,7 +107,7 @@ Out of scope:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Paused run row label](01-paused-run-row-label.md)
+- [x] [Paused run row label](01-paused-run-row-label.md)
 
 ### Wave 2
 - [ ] [Doc re-read](02-doc-re-read.md) — after 01
@@ -117,10 +117,12 @@ Out of scope:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 631595fa
 
 ### Groups
+- 01 · b7244ddc, a728f9d8 · diff read: both Produces present in contract.ts; tsc failed on the test's partial PageStage cast, fixed in a728f9d8; typecheck and lint pass · concerns: page-level Small/Medium tests drawing a paused stage were not run by the worker; left to the test gate
 ### Contract changes
 ### Rulings
+- contract.test.ts builds a whole PageStage literal in stageWith, since stageOf is private to workflow-view.test.ts — a later shared builder could replace it · group 01
 ### Review rounds
 ### Test gate
