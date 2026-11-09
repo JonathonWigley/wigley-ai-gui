@@ -47,6 +47,7 @@ import { requireChatHarness } from './lookups';
 import { createOpenSessions } from './open-sessions';
 import { PERMISSION_TOOLS } from './permission-tool';
 import { createChatPreview } from './preview/chat-preview';
+import { createPoolProviders } from './projects';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
 import { callerGuard, createToolCallers } from './tool-callers';
@@ -266,8 +267,9 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // read on the sessions it holds, a close of every session in a folder or of one
 // session, a registration of
 // instructions every later session start carries, a registration of send gates,
-// one of the idle compaction threshold a start passes, and one of the resume
-// sections the start prompt lists.
+// one of the idle compaction threshold a start passes, one of the resume
+// sections the start prompt lists, and one of the pool provider a pool
+// project's branches, clones and claim come from.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -292,6 +294,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       tempFolders: services.tempFolders,
       log: services.log,
     });
+    const poolProviders = createPoolProviders();
     const accounts = createAccounts({
       harness,
       profiles,
@@ -568,6 +571,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       compact: (sessionId, reason) => chat.compact(sessionId, reason),
       addResumeSection: (section) =>
         consumer.track(chat.addResumeSection(section)),
+      addPoolProvider: (provider) =>
+        consumer.track(poolProviders.add(provider)),
     });
     return {
       commands: {},

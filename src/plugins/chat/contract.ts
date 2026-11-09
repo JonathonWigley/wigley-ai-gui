@@ -51,6 +51,57 @@ export interface RecentFolder {
   lastUsed: number;
 }
 
+// One element of the `projects` setting as written: the settings check types
+// no element of an empty default list, so every field is unchecked until
+// `readProjects` reads it.
+export interface ProjectSetting {
+  name: string;
+  folder?: string;
+  pool?: string;
+  profile?: string;
+  pinnedBranches?: string[];
+}
+
+// One entry `readProjects` kept. `folder` is as written, a `~` unexpanded;
+// `profile` null when the project fixes none.
+export type ChatProject =
+  | { kind: 'folder'; name: string; folder: string; profile: string | null }
+  | {
+      kind: 'pool';
+      name: string;
+      pool: string;
+      profile: string | null;
+      pinnedBranches: readonly string[];
+    };
+
+export interface PoolClaimRequest {
+  pool: string;
+  branch: string;
+  hostSessionId: string;
+  rowId: string;
+}
+
+// `note` is the CLI's message on a `diverged` claim, else null. `error` is the
+// CLI's error code (`dirty`, `unknown-branch`, `no-cli`, `internal`), or
+// `cancelled` when the claim's signal aborted.
+export type PoolClaimResult =
+  | { ok: true; path: string; note: string | null }
+  | { ok: false; error: string; message: string };
+
+export interface PoolProvider {
+  // The pool's clone paths by clone number; [] for an unknown pool.
+  folders(pool: string): readonly string[];
+  // Origin's branch names, newest commit first; `refresh` true fetches first.
+  branches(pool: string, refresh: boolean): Promise<string[]>;
+  // Claims a clone on `branch` for the session's ids, calling `queued` when
+  // the claim waits in the pool's queue; stops the claim when `signal` aborts.
+  claim(
+    request: PoolClaimRequest,
+    signal: AbortSignal,
+    queued: () => void,
+  ): Promise<PoolClaimResult>;
+}
+
 export interface StartRequest {
   projectDir: string;
   profile: string;
@@ -633,6 +684,11 @@ export interface ChatMainExports {
   // whose `rows` fails is logged and left out. Disposing the handle removes the
   // section.
   addResumeSection(section: ResumeSection): Disposable;
+  // The newest provider still registered answers every pool question;
+  // disposing the handle removes it, and the one registered before it answers
+  // again. With none registered a pool project lists no branches and cannot
+  // start.
+  addPoolProvider(provider: PoolProvider): Disposable;
 }
 
 export const chatMainKey: DependencyKey<ChatMainExports, 'main', 'chat'> = {
