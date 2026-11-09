@@ -56,6 +56,12 @@ const USER_KIT_SPECIFIER = "'../kit'";
 const LAYOUT_FILE =
   /\.(js|mjs|css|json|svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|otf)$/;
 
+// Whether a save of `fileName` can change what a layout loads: a code, style,
+// data, image or font file whose name does not start with `.`.
+export function isLayoutFileName(fileName: string): boolean {
+  return LAYOUT_FILE.test(fileName) && !fileName.startsWith('.');
+}
+
 // An owner's repo `layout.d.ts` text as the user's folder holds it: its kit
 // specifier rewritten to name `layouts/kit.d.ts`.
 export function userLayoutTypes(layoutTypes: string): string {
@@ -225,9 +231,7 @@ export async function startLayoutRegistry(
     }
     const name = changed.slice(0, slash);
     const fileName = changed.slice(changed.lastIndexOf('/') + 1);
-    const isLayoutFile =
-      LAYOUT_FILE.test(fileName) && !fileName.startsWith('.');
-    if (name === DEFAULT_NAME || !isLayoutFile) {
+    if (name === DEFAULT_NAME || !isLayoutFileName(fileName)) {
       return;
     }
     relistInTurn(name);
