@@ -97,7 +97,8 @@ export function groupNameIn(
 }
 
 // The tokens of a `groups` entry's keys after the leader, spelled `<Leader>`
-// or as `leader`, or null when the keys do not run past the leader.
+// or as `leader`, or null when the keys do not run past the leader. The loader
+// accepts only `<Leader>` keys; the `leader` spelling is a defensive branch.
 function groupTokensAfterLeader(keys: string, leader: string): string[] | null {
   const afterLeader = tokensAfterLeader(keys);
   if (afterLeader !== null) {

@@ -396,7 +396,8 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       .filter((row) => row.command.runsIn === 'page');
 
   // The `Action` picker over every page command's rows, each with its first
-  // leader keys in the tree's order, the ones Add moves, printed beside it.
+  // leader keys in the tree's order printed beside it: the ones Add moves
+  // unless a line sits in the scope chosen.
   const openActionPicker = (
     rows: readonly CommandRow[],
     selected: number | undefined,
