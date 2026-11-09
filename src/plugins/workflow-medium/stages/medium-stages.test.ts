@@ -138,7 +138,7 @@ describe('Medium stages', () => {
   it.each([
     { stage: 'land', turnRunning: true, status: 'running' },
     { stage: 'land', turnRunning: false, status: 'paused' },
-    { stage: 'done', turnRunning: true, status: 'done' },
+    { stage: 'done', turnRunning: true, status: 'running' },
     { stage: 'done', turnRunning: false, status: 'done' },
   ])(
     'mediumStatus $stage turnRunning $turnRunning',

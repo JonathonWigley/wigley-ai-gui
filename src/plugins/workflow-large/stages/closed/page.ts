@@ -1,5 +1,6 @@
 import {
   detailLine,
+  finishingStatus,
   isBusy,
   type PageStage,
   STAGE_ACTIVITY_RANK,
@@ -30,7 +31,7 @@ export const closedPageStage: PageStage = {
     const { progress } = largeStateOf(flow);
     return progress === null ? '' : detailLine(progress.title, 'done');
   },
-  status: () => 'done',
+  status: finishingStatus,
   statusProgress(flow) {
     const { progress } = largeStateOf(flow);
     return progress === null ? '' : ` · ${progress.checked}/${progress.total}`;

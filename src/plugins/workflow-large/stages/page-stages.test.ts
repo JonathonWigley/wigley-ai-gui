@@ -426,6 +426,20 @@ describe('LARGE_PAGE_STAGES', () => {
       statusLine: 'Close · done',
     },
     {
+      name: 'closed with a turn running',
+      stage: 'closed',
+      flow: flowWith({ progress: nineOfNine, turnRunning: true }),
+      status: 'running',
+      statusLine: 'Close · running · 9/9',
+    },
+    {
+      name: 'closed with a subagent running',
+      stage: 'closed',
+      flow: flowWith({ progress: nineOfNine, runningSubagents: ['a1'] }),
+      status: 'running',
+      statusLine: 'Close · running · 9/9',
+    },
+    {
       name: 'idle',
       stage: 'idle',
       flow: flowWith({}),

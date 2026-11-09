@@ -140,6 +140,12 @@ export function busyStatus(flow: SessionFlow): StageStatus {
   return isBusy(flow) ? 'running' : 'paused';
 }
 
+// The status of a workflow's last stage: running until its flow is no longer
+// busy, then done.
+export function finishingStatus(flow: SessionFlow): StageStatus {
+  return isBusy(flow) ? 'running' : 'done';
+}
+
 // True when `signal` starts `skill` (`plugin:name`), named in full or by the
 // bare `name` Claude Code also accepts for a typed command.
 export function startsSkill(signal: WorkflowSignal, skill: string): boolean {

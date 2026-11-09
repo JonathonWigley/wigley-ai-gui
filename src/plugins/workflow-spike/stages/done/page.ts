@@ -1,4 +1,4 @@
-import type { PageStage } from '../../../workflow/contract';
+import { finishingStatus, type PageStage } from '../../../workflow/contract';
 
 export const donePageStage: PageStage = {
   id: 'done',
@@ -8,5 +8,5 @@ export const donePageStage: PageStage = {
   order: 50,
   actions: [],
   detail: () => '',
-  status: () => 'done',
+  status: finishingStatus,
 };

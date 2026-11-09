@@ -70,7 +70,7 @@ self-test script to the fake agent harness: `src/plugins/workflow-large/main/sel
 | make | `wigley:make` starts | Make, running or paused | `Make · running 3/9` | none | Resume make, Open plan |
 | review | `wigley:review` starts in make or fix, or, in make, the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | Review, running or paused | `Review · running · round 2` | none | Resume make, Open plan |
 | fix | the agent reports `fix` in make or review | Fix, running or paused | `Fix · running · cycle 2` | none | Resume make, Open plan |
-| closed | in make, review or fix, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, done | `Close · done · 9/9` | Retro | Dismiss |
+| closed | in make, review or fix, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, running while a turn or subagent runs, then done | `Close · done · 9/9` | Retro | Dismiss |
 
 A **feature run** is the stages explore, interview, plan, cold read and plan ready. A report moves the flow only from
 one of them. A session in no workflow starts at no stage: Large's flow enters idle only through a handed-off plan or
@@ -126,7 +126,7 @@ reports each step as it reaches it. The status line is the label, the status and
 | build | the agent reports `build` | Build, running or paused | `Build · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
 | check | the agent reports `check` | Check, running or paused | `Check · running` | none | none |
 | land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
-| done | the agent reports `done`, which writes the run log line | Land, done | `Land · done` | none | none |
+| done | the agent reports `done`, which writes the run log line | Land, running while a turn or subagent runs, then done | `Land · done` | none | none |
 
 ## Medium's stages
 
@@ -140,7 +140,7 @@ the fix count.
 | review | the agent reports `review` | Review, running or paused | `Review · running` | none | none |
 | fix | the agent reports `fix`; entering fix from another stage counts one fix cycle | Fix, running or paused | `Fix · running · cycle 2` after the first cycle | none | none |
 | land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
-| done | the agent reports `done`, which writes the run log line | Land, done | `Land · done` | none | none |
+| done | the agent reports `done`, which writes the run log line | Land, running while a turn or subagent runs, then done | `Land · done` | none | none |
 
 ## Spike's stages
 
@@ -154,7 +154,7 @@ A second claim in the session, or a claim after done, returns the flow to interv
 | build | the agent reports `build` | Build, running or paused | `Build · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
 | check | the agent reports `check` | Check, running or paused | `Check · running` | none | none |
 | land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
-| done | the agent reports `done`, which writes the run log line | Land, done | `Land · done` | none | none |
+| done | the agent reports `done`, which writes the run log line | Land, running while a turn or subagent runs, then done | `Land · done` | none | none |
 
 Small's, Medium's and Spike's stages have no actions: their `runAction` rejects with `Small has no actions`, `Medium has
 no actions` and `Spike has no actions`. `done` shares its trail slot with `land`, so the trail still ends at Land.
@@ -303,7 +303,7 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   take the label.
 - **Paused run** — a stage whose status reads paused, and which declares no `rowActivity` of its own, sets Needs you
   (`attention`, `urgent`) at rank 18, so a session that stopped mid-run says so even when the agent asked in chat
-  rather than in a round. A stage that ends its run (Small's, Medium's and Spike's Done, Large's Closed) reads done, plan ready
+  rather than in a round. A stage that ends its run (Small's, Medium's and Spike's Done, Large's Closed) reads running while busy and done after, never paused, plan ready
   reads ready and Large's idle has no status, so none of them sets it. The rank
   sits under chat's working, so a session waiting on its own background command or Monitor still reads Working, and
   under chat's error, so an unseen error shows first. It lasts until a turn or a subagent starts; viewing the session
