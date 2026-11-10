@@ -91,7 +91,7 @@ Decisions:
 - The harness fails loud on a throwing `ready`: logging alone still lets a test pass over it. The host keeps its
   own rule (log and go on) and the harness's `ready()` throws once every part's `ready` has run (Decided,
   `wigley:writing-code` § Guards and failure, fail loud).
-- The seam's default stays today's throwing show, so the 30 existing page tests keep their behaviour and imports;
+- The seam's default stays today's throwing show, so the 31 existing page test files keep their behaviour and imports;
   a test that draws opts in with the new entry (Decided: no migration a test does not need).
 - The new entry takes the same options as `startPagePart` without `layoutShow`, and returns the same
   `PagePartHarness` (Decided: one harness surface, `wigley:codebase-design` depth).
@@ -103,8 +103,7 @@ change.
 
 Modified:
 
-- `src/shared/plugin-host.ts` — `readyEach`'s log line and the three comments describing it (lines ~30, ~48,
-  ~403).
+- `src/shared/plugin-host.ts` — `readyEach`'s log line and the two comments quoting it (lines ~31, ~403).
 - `src/shared/plugin-host.test.ts` — the two assertions on the old line.
 - `src/shared/plugin-part-harness.test-support.ts` — the host's log, the loud `ready`, the `layoutShow` option and
   its type `HarnessLayoutShow`.

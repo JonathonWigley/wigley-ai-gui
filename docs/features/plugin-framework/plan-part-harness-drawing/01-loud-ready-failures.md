@@ -15,12 +15,13 @@ Decisions: log under the plugin's id (round 1, Decided) · the harness fails lou
 
 - **`readyEach`** (`src/shared/plugin-host.ts`) logs `log?.(id, \`ready failed: ${errorText(error)}\`)` in place of
   `log?.('plugin-host', \`ready of ${id} failed: …\`)`. Everything else stays: the next part's `ready` still runs,
-  and nothing throws. Rewrite the three comments that quote the old line (the `ready()` doc on `PluginHost` near
-  line 30, the `start` doc near line 48, and `startPlugins`' doc near line 403) to the new line and source.
+  and nothing throws. Rewrite the two comments that quote the old line (the `ready()` doc on `PluginHost` near line 31,
+  and `startPlugins`' `log` doc near line 403) to the new line, saying it logs under the plugin's id.
 - **The harness's host gets a log.** `partLifecycle`'s `startPlugins` call passes the harness world's log as `log`,
   with `known` left `undefined` and `disabled` as `[]`, so each host line (`stopping <id>` included) lands in
-  `harness.logs` as `{ source, message }`. `partLifecycle` today receives no log: hand it the world's log from both
-  `startMainPart` and `startPagePart`.
+  `harness.logs` as `{ source, message }`. `HarnessWorld` has no log member today (`createWorld` keeps `log` as a local): add
+  `log: Log` to `HarnessWorld`, built once in `createWorld`, and have `startMainPart` and `startPagePart` pass
+  `world.log` into `partLifecycle`.
 - **`ready()` fails loud.** The lifecycle's `ready()` notes how many lines `harness.logs` holds, calls the host's
   `ready()`, then reads the lines added since: for the first line whose `source` is a hosted part's id and whose
   `message` starts with `ready failed: `, it throws
@@ -30,6 +31,9 @@ Decisions: log under the plugin's id (round 1, Decided) · the harness fails lou
 - What `harness.started()` returns stays the part's own start result, unwrapped.
 - An existing test that now throws because its part's `ready` throws is a hidden failure the change uncovers:
   report it in the task's Proof with the test's name, and fix the test only when its intent is plain from its name.
+- An existing test that now fails because the host's own lines (`stopping <id>` under source `plugin-host`) land in
+  `harness.logs` reads the log too broadly: change it to filter by the source it means (the plugin's id), and list
+  each one in the Proof. The harness keeps every host line.
 
 ## Behaviour
 

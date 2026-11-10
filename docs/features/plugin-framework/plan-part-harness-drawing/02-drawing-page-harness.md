@@ -54,13 +54,17 @@ GIVEN a part started with `startPagePart` (no `layoutShow`) WHEN it draws THEN i
 
 - `layout-host/page-part-harness.test.ts` (new): `startDrawingPagePart draws a layout part with the layout the show
   picks` — table rows: no set shown (`default`), a set picking `mine` (`mine`); each asserts `layoutName` and the
-  root's `data-layout`. A second `it`: the drawn kit's key hint lands in `harness.anchors` with the command id.
+  root's `data-layout`. A second `it`: the drawn kit's key hint lands in `harness.anchors` with the qualified command id
+  `<plugin id>.<short id>`; the test's manifest declares that command, since the fake `keys.command` reads the
+  declared commands.
   Build the part, its manifest and both layouts in the test, as `owner-show.test.ts` builds its own; read that file
-  for the shapes.
+  for the shapes. Install the fake DOM (`installFakeDom`, as `owner-show.test.ts` does) before
+  `startDrawingPagePart`, and build the parent from it: the harness copies `window` and `document` at start.
 - `plugin-part-harness.test.ts`: one test, `layouts.show uses the layoutShow option` — a `layoutShow` fake records
-  its call and returns a show whose `draw` returns a sentinel; the part's `draw` returns that sentinel, and a
-  `showLayouts` call reaches the options' `setLayouts` through the inner show the fake was handed. Add a row for the
-  default: with no option, `draw` throws `layouts.show draw not faked`, unless an existing test already pins it.
+  its call and returns a show whose `draw` returns a sentinel; the part's `draw` returns that sentinel, and the fake
+  was handed the part's manifest, the show's options and an inner show (the existing `delivers a layout set to a
+  live show only` test already pins `showLayouts` reaching `setLayouts`). A second row, required: with no option,
+  `draw` throws `layouts.show draw not faked`; no test pins it today.
 
 Done when: compiles; `npm run lint` passes (the layer check included); the test gate runs both test files above.
 Commit:    one commit for the group

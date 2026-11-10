@@ -17,7 +17,7 @@ Decisions: the doc written ahead is a hypothesis, re-read against the code (`wig
   its `layouts.show` draws through the real owner show, and that `startPagePart`'s `draw` throws. Fix any stale word.
 - Remove both items from `docs/features/followups.md` § Foundations: **A throwing `ready` is silent in the part
   harness** and **The part harness cannot draw a layout part**. Leave every other item as it is.
-- `grep -rn "ready of" src scripts docs AGENTS.md` returns nothing but the harness's own thrown message
+- `grep -rn "ready of" src scripts docs AGENTS.md --exclude-dir=plan-part-harness-drawing` returns nothing but the harness's own thrown message
   (`part harness: ready of <id> failed`) and its test.
 
 Done when: each check above holds; no code change.
