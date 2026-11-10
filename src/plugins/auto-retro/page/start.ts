@@ -35,7 +35,7 @@ function isSameRows(a: readonly string[], b: readonly string[]): boolean {
 }
 
 // Registers the Retro section through sessions' `addSection`, claiming the rows `auto-retro.state` lists, with the
-// queued count at its header's end drawn through the `auto-retro.layout` layout while closes wait. Sessions knows no
+// queued count at its header's end drawn through the `auto-retro.layout` layout while retros wait. Sessions knows no
 // change of `claims`, so each change of the rows adds the section again, which redraws the side bar; a change of the
 // count alone, and each layouts set, redraws every header the side bar holds.
 export const autoRetroPagePart: PagePart<typeof autoRetroManifest> = {

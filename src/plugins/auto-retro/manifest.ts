@@ -1,14 +1,14 @@
 import { definePlugin } from '../../shared/define-plugin';
 
-// Auto retro: each session the user closes, after it sent a message, queues a background `/wigley:retro auto` run,
-// launched one at a time as an unattended chat row in the retro folder, shown in the side bar's Retro section and
+// Auto retro: each conversation the user ends, by closing its session or a /clear, after it sent a message, queues
+// a background `/wigley:retro auto` run, launched one at a time as an unattended chat row in the retro folder, shown in the side bar's Retro section and
 // closed once its work ends. It names `chat` for the close and clear events, the launch, the profiles, the session
 // state and the close, and `sessions` for the rows, their titles and the Retro section.
 export const autoRetroManifest = definePlugin({
   id: 'auto-retro',
   label: 'Auto retro',
   description:
-    'Runs a background retro for each session the user closes, shown in the side bar until it finishes.',
+    'Runs a background retro for each conversation the user ends, by a close or a /clear, shown in the side bar until it finishes.',
   dependsOn: { main: ['chat', 'sessions'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {},

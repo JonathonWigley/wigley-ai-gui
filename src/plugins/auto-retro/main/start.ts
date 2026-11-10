@@ -57,8 +57,8 @@ function hostIdsText(item: RetroItem): string {
 // Queues a retro for each session the user closes, and each conversation a `/clear` ends, after it sent a message, in
 // `queue.json` in the plugin data, launches one unattended `/wigley:retro auto <host ids>` row at a time in the
 // `folder` setting, and closes it `settleSeconds` after it reads done. Every event and launch result applies in one
-// serial chain that starts once the queue is loaded. Writes the retro rows and the queued count to `auto-retro.state`. A `queue.json` it cannot
-// read is never written during that start. In the self-test it registers its layouts and queues nothing.
+// serial chain that starts once the queue is loaded. Writes the retro rows and the queued count to
+// `auto-retro.state`. A `queue.json` it cannot read is never written during that start. In the self-test it registers its layouts and queues nothing.
 export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
   manifest: autoRetroManifest,
   start(api: AutoRetroApi) {

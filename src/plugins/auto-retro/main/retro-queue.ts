@@ -229,7 +229,7 @@ function isRetroQueue(value: unknown): value is RetroQueue {
   );
 }
 
-// The queue `queue.json` holds, without the keys it does not read; throws `queue.json is not a queue` for text that is
+// The queue `queue.json` holds, without the top-level keys it does not read; throws `queue.json is not a queue` for text that is
 // not JSON or not that shape.
 export function parseQueue(text: string): RetroQueue {
   const notAQueue = new Error('queue.json is not a queue');

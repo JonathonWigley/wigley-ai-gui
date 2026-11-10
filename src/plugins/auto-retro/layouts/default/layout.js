@@ -1,6 +1,6 @@
 // @ts-check
 
-// The built-in auto-retro look: the count of closes still queued, as quiet
+// The built-in auto-retro look: the count of retros still queued, as quiet
 // text at the end of the Retro section's header.
 
 /** @type {import('../layout').CompleteLayout} */

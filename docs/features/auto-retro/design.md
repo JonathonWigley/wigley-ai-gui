@@ -73,7 +73,7 @@ A plugin's section shows only while it claims a row.
   clone that holds the ledger.
 - A row's title is the title of the session it analyzes, and the sessions layout draws a claimed row muted, with a
   dashed accent edge, so it reads apart from the user's own sessions.
-- The header counts the closes still queued (`2 queued`), drawn through the auto-retro layout.
+- The header counts the retros still queued (`2 queued`), drawn through the auto-retro layout.
 - A click opens the row's Chat tab, to watch the run.
 
 ## Unattended sessions
@@ -89,7 +89,7 @@ A retro row is done when its main turn has ended and no subagent or task still r
 `activity` idle, `background` 0 and no compaction, after its first turn started. `chat.turnFinished` alone fires while
 the analysts still run. A process that ended (clean or crash) is done too. A short settle wait (the `settleSeconds` setting, 5 s by default) keeps a task that ends and wakes the agent from
 closing the row under a new turn. A retro row raises no Turn finished mark. A running retro whose row does not come
-back within 30 s of a start is dropped, and the next close launches.
+back within 30 s of a start is dropped, and the next queued item launches.
 
 The user can still cancel a running retro: closing its row before it is done ends the run, logs `retro <row id>
 closed before done; <host ids> not analyzed`, and launches the next queued item. The closed session goes unanalyzed
