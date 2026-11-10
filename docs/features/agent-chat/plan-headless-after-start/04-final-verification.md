@@ -1,6 +1,6 @@
 # 04 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -23,3 +23,5 @@ Not checked live: an agent calling `set_headless` in a real Claude session — t
 Done when: every check above passes or its failure is fixed
 
 ## Proof
+
+Commit 1d41e31d · proof: lint, tsc, picked tests, selftest --plugin chat all passed; drive run headless-check: Ctrl+n starts with no Session picker, Space b n lists New session + two saved rows, screenshots read · concerns: none
