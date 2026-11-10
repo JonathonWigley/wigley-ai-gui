@@ -1,6 +1,6 @@
 # 03 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -27,3 +27,4 @@ Commit:    none
 
 ## Proof
 
+Commit none · proof: npm test -- src/plugins/auto-retro 57/57, typecheck, lint pass at 95acd36a · concerns: none

@@ -112,10 +112,10 @@ No new files.
 - [x] [Queue a retro at each clear](01-queue-retro-at-clear.md)
 
 ### Wave 2
-- [ ] [Doc re-read](02-doc-re-read.md) — after 01
+- [x] [Doc re-read](02-doc-re-read.md) — after 01
 
 ### Wave 3
-- [ ] [Final verification](03-final-verification.md) — after 02
+- [x] [Final verification](03-final-verification.md) — after 02
 
 ## Run log
 
@@ -123,6 +123,8 @@ Review base: 81404c0c073f097efcb2cc822766a65cdaeafeec
 
 ### Groups
 - 01 · 95acd36a · diff read (both Produces present); npm test auto-retro 57/57, typecheck, lint pass · concerns: the plan's 'next save drops the cleared key' was false under the queue's spreads; parseQueue now keeps only the fields it reads
+- 02 · none · no doc line contradicted by the code; no edits in either repo · concerns: design.md § The Retro section's 'counts the closes still queued' and § Done's 'the next close launches' predate clears queueing
+- 03 · none · npm test -- src/plugins/auto-retro 57/57, typecheck, lint pass at 95acd36a · concerns: none
 ### Contract changes
 ### Rulings
 - The retro-row check shares only its first-message half (opensWithRetroCommand) and the item build (withRetroQueued); the launched half stays per path, since a close frees the run and a clear remaps it — a reviewer wanting one isRetroRow would restructure both branches · group 01
@@ -130,3 +132,4 @@ Review base: 81404c0c073f097efcb2cc822766a65cdaeafeec
 - start.ts gains applyLoggingQueued, which both the close and clear paths call to log a queued item before commit · group 01
 ### Review rounds
 ### Test gate
+- Low — a wrong queue costs at most an extra or missed background retro, which the next manual backfill catches · picked src/plugins/auto-retro (retro-queue.test.ts owns the queue rules, start.test.ts the event-bus wiring from chat.sessionCleared to launch) · skipped: live run and self-test (the plugin has no self-test script and queues nothing under the self-test by design) · 57/57 pass, typecheck and lint pass

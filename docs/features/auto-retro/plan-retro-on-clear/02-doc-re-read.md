@@ -1,6 +1,6 @@
 # 02 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -23,3 +23,4 @@ Commit:    one commit per repo with a fix, or none
 
 ## Proof
 
+Commit none · proof: no doc line contradicted by the code; no edits in either repo · concerns: design.md § The Retro section's 'counts the closes still queued' and § Done's 'the next close launches' predate clears queueing
