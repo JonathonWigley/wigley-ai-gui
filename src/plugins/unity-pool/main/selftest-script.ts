@@ -12,9 +12,13 @@ import {
   SELFTEST_STATE_PATH,
 } from './selftest-fixture';
 
-// The self-test's project folder, made under the self-test's home, and clone 1's folder. Its name names the session
-// in every page line.
+// The self-test's project folder, made under the self-test's home, and clone 1's folder. Its name is the row's folder
+// label, which the badge line names.
 const SELFTEST_PROJECT_NAME = 'unity-pool-selftest';
+
+// The session's first message, which titles its row: the panel names a holder by its row's title, so the cursor and
+// show lines name this.
+const SELFTEST_TITLE = 'unity-pool self-test';
 
 // `rescan` reads every pool again: the watch started on a home with no pool folder.
 export interface UnityPoolSelfTestDeps {
@@ -73,14 +77,14 @@ export function unityPoolSelfTestScript(
           expect: line('panel focused'),
           screenshot: 'panel-cursor',
         },
-        { keys: ['G'], expect: line(`cursor on ${SELFTEST_PROJECT_NAME}`) },
-        { keys: ['Enter'], expect: line(`showed ${SELFTEST_PROJECT_NAME}`) },
+        { keys: ['G'], expect: line(`cursor on ${SELFTEST_TITLE}`) },
+        { keys: ['Enter'], expect: line(`showed ${SELFTEST_TITLE}`) },
         { keys: ['<A-h>'], expect: '[page] focus back in main' },
         {
           why: "Back in the panel, the cursor re-enters on the shown session's holder.",
           keys: ['<A-l>', '<A-l>'],
           expect: line('panel focused'),
-          alsoExpect: [/^\[unity-pool\] cursor on unity-pool-selftest$/],
+          alsoExpect: [/^\[unity-pool\] cursor on unity-pool self-test$/],
         },
         { keys: ['<A-h>'], expect: '[page] focus back in main' },
       ],
@@ -142,7 +146,7 @@ export function unityPoolSelfTestScript(
         const rowId = await chat.launch({
           projectDir,
           profile: 'work',
-          message: { text: 'unity-pool self-test', images: [] },
+          message: { text: SELFTEST_TITLE, images: [] },
         });
         fixture = {
           rowId,

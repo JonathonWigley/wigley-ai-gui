@@ -25,7 +25,8 @@ export interface RowBadgeInput {
   queued: boolean;
 }
 
-// Who holds a clone. `kind` 'session' is a session with a side-bar row, whose id `sessionId` holds:
+// Who holds a clone. `kind` 'session' is a session with a side-bar row, `label` its title (its folder label while no
+// title is set), whose id `sessionId` holds:
 // `kit.command('unity-pool.selectHolder', sessionId)` selects that row. 'user' is a hold the user made and 'agent' a
 // session the app has no row for, each with a null `sessionId`. `idleMs` is the time since the claim's last renewal,
 // null for a hold, a handoff or a stranded mark. `isCursor` is true on the one session holder the keyboard cursor is

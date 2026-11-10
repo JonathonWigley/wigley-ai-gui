@@ -67,11 +67,23 @@ function pool(
   return { pool: name, updatedAt: NOW, clones, queue };
 }
 
+const NO_TITLES = { user: null, agent: null, firstMessage: null };
+
 const ROW: PoolRow = {
   sessionId: 'row-7',
   label: 'gamma 2',
+  titles: NO_TITLES,
   projectDir: '/x/repo-1',
   hostSessionId: 'host-7',
+};
+
+// A row whose agent set a title, as most rows have.
+const TITLED_ROW: PoolRow = {
+  sessionId: 'row-8',
+  label: 'gamma 3',
+  titles: { user: null, agent: 'Rival Cannons', firstMessage: 'add cannons' },
+  projectDir: '/x/repo-1',
+  hostSessionId: 'host-8',
 };
 
 const NO_PENDING: ReadonlyMap<number, PendingAction> = new Map();
@@ -135,6 +147,7 @@ describe('rowBadges', () => {
         {
           sessionId: 'row-3',
           label: 'delta 1',
+          titles: NO_TITLES,
           projectDir: '/x/repo-2',
           hostSessionId: 'host-3',
         },
@@ -345,7 +358,7 @@ const BASE_EXPECTED = {
 };
 
 describe('panelInput', () => {
-  const rows = [ROW];
+  const rows = [ROW, TITLED_ROW];
 
   it.each<{
     name: string;
@@ -395,6 +408,21 @@ describe('panelInput', () => {
         holder: {
           kind: 'session',
           label: 'gamma 2',
+          idleMs: 4_000,
+          selects: true,
+        },
+      },
+    },
+    {
+      name: 'agent claim with a titled row shows the title',
+      clone: clone(1, {
+        claim: claim('agent', 'host-x', 'row-8', NOW - 4_000),
+      }),
+      expected: {
+        ...BASE_EXPECTED,
+        holder: {
+          kind: 'session',
+          label: 'Rival Cannons',
           idleMs: 4_000,
           selects: true,
         },
@@ -800,6 +828,7 @@ describe('panelInput', () => {
   const cursorRows: PoolRow[] = ['A', 'B', 'C'].map((label) => ({
     sessionId: `row-${label}`,
     label,
+    titles: NO_TITLES,
     projectDir: null,
     hostSessionId: `host-${label}`,
   }));

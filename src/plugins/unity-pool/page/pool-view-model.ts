@@ -15,11 +15,14 @@ import type {
   PanelInput,
   RowBadgeInput,
 } from '../layouts/layout';
+import { editableTitle, type SessionTitles } from '../../sessions/contract';
 
-// A session row as the pool matches it: the app's row id, its side-bar label, its folder and its host session id.
+// A session row as the pool matches it and names it: the app's row id, its folder label (`repo 3`), its titles, its
+// folder and its host session id.
 export interface PoolRow {
   sessionId: string;
   label: string;
+  titles: SessionTitles;
   projectDir: string | null;
   hostSessionId: string | null;
 }
@@ -340,6 +343,8 @@ function cloneSessionHolder(clone: PoolClone): PoolHolder | null {
   return clone.handoff ?? clone.stranded;
 }
 
+// A holder with a row is named by the row's title (the user's, else the agent's, else the first message), else by its
+// folder label when no source set one.
 function holderInput(
   holder: PoolHolder,
   rows: readonly PoolRow[],
@@ -349,7 +354,7 @@ function holderInput(
   if (row !== undefined) {
     return {
       kind: 'session',
-      label: row.label,
+      label: editableTitle(row.titles) || row.label,
       idleMs,
       sessionId: row.sessionId,
       isCursor: false,
