@@ -281,8 +281,8 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   roots and its label, and docs reads them. Builds on harness settings with the harness and AgentHarnessRegistry.
 - **Open chat entry kinds and entry renderers** — *agent-ready*: `ChatEntry.kind` (`src/contracts/agent.ts`) opens
   for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout names them. Chat page
-  exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default, and a partial
-  chat layout falls back per entry kind (today only a throwing part falls back, `docs/features/layouts/design.md`).
+  exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default. A partial
+  chat layout already falls back to `default` per entry kind (`pickEntry` in `src/plugins/chat/page/chat-layouts.ts`).
 - **Sessions stops naming Claude** — *agent-ready*: the MCP server name comes from configuration rather than
   `wigley-forms`, and the tool-use id comes through a raw `_meta` on `ToolCallContext` or a per-harness reader, not
   `claudecode/toolUseId` (`src/plugins/sessions/main/mcp/mcp-server.ts`).
@@ -290,8 +290,8 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   supplies, settable after start, or a token passed in the spawn environment, rather than requiring a host session
   id before spawning (`session-list.ts` `connect`).
 - **Harness-neutral UI copy** — *agent-ready*: UI copy says "the agent" or the harness label rather than Claude
-  (`chat-dialogs.ts`, `src/plugins/chat/main/permission-tool.ts`, the Claude Code strings in
-  `claude-code-harness.ts`).
+  (chat's `default` layout's reason box and close confirm, the exit notice in `chat-sessions.ts`, chat's setting
+  descriptions and `start-session-tool.ts`, and the Claude adapter's notices and toasts that reach chat).
 - **Clear aliases from the adapter** — *agent-ready*: chat registers Claude's other names for `/clear`, `/reset`
   and `/new` (`src/plugins/chat/page/clear-commands.ts`), which is harness CLI knowledge in chat. The adapter
   declares its clear command's aliases, and chat registers whatever it declares.

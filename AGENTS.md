@@ -200,10 +200,6 @@ src/main/        core main process; main.ts is its composition root
                  `ioreg`, `netstat`; CIM and performance counters on Windows) and Node's `os.cpus()` into one raw
                  sample of cumulative counters, each parser a pure function over a command's text;
                  `docs/features/system-stats/design.md`
-  claude-code/   Claude Code CLI adapter behind AgentHarness, which also resolves a profile's config folder, lists
-                 and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and status
-                 and `claude -p /usage` (the plan usage poll), and asks each session for `get_context_usage` and
-                 `get_settings` → the only place the app spawns `claude`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
                  rename, trash, folder lists and watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
@@ -308,6 +304,12 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  contract and `default` layout); `docs/features/session-stash/design.md`
   window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
                  `services.window.summon`)
+  claude-code/   manifest.ts (the `command` and `profiles` settings), main/ (the Claude Code CLI adapter behind
+                 AgentHarness, registered through `services.agentHarnesses`: it resolves a profile's config folder,
+                 lists and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and
+                 status and `claude -p /usage` (the plan usage poll), asks each session for `get_context_usage` and
+                 `get_settings`, and contributes Claude's `permission_prompt` MCP tool, routed to the session's
+                 process) → the only place the app spawns `claude`; `docs/features/agent-harnesses/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round; the agents' service auto-answers a headless chat session's rounds with every item's
                  recommendation, outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout)
@@ -340,13 +342,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout); `docs/features/practice/design.md`
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
                  `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
-                 permission_prompt, start_session and set_headless MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
+                 start_session and set_headless MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
                  layout preview's sample session, held with no process), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
                  the start prompt with its project, folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `profiles` to usage, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to practice, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to practice, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -364,7 +366,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  popup over any mode: fields, images, markup, target, session and follow-up pickers,
                  `docs/features/notes/design.md`), layouts/ (the notes Layout contract and the built-in `default`
                  layout)
-  usage/         manifest.ts, contract.ts, main/ (polls each chat profile's plan usage through the Claude harness, folds
+  usage/         manifest.ts, contract.ts, main/ (polls each registered harness's profiles' plan usage, folds
                  `chat.planUsage` and `chat.agentEvent` into the `usage.snapshot` slot), page/ (the status-bar plan line, each session's context line
                  above the Chat box through chat's `addComposerPart` and its spend in the Chat status line through `addStatusPart`, its context meter and cache mark under each session row, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
@@ -433,7 +435,8 @@ which `mark` or `activate` brings back; it leaves for good when the session disc
 while selected comes back selected when the session's next form marks it within 30 seconds (a back-to-back
 round), unless the user picked another row first; later, it comes back marked. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
-host session id joins that row instead of adding one (a newer relay takes the join from an older one still
+row id (`WIGLEY_SESSION_ROW` in the process's environment) joins that row instead of adding one, and the host
+session id is set when the harness reports it (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
 its rows through its own restart or reload, its stop `keep`ing each one for the restarted part's restore to adopt
 (`OwnedSession.keep`), so the places of the session's tabs survive it, and across a relaunch, re-attaching each one whose process the session host still runs, and after a process
@@ -540,6 +543,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only reads a slot or hears
   an event lists its owner in the manifest's `reads`, which carries no start order. A value belongs in a slot and a
   moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`, `core.windowFocused`,
+  `core.agentHarnesses` (each registered harness's label and declarations, keyed by harness id),
   `core.plugins` (each catalog plugin's label, origin, whether it runs, what depends on it and its load problem, then each plugin that failed its first load) and the two runtime command
   catalogs (`src/contracts/core-state.ts`) (`docs/features/plugin-framework/design.md` § Commands and state).
 - **A command** takes at most one argument, declared in the manifest as a number, a string or a small record;
@@ -795,8 +799,11 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   it biased answers toward the recommendation. A deferral action shows its `action_reasons` entry under its header;
   the tool asks for the entry of the recommended action, and accepts one for any deferral action the origin offers.
 - **An agent harness** — Claude Code today, Codex and wigley-harness next — is an adapter behind `AgentHarness` in
-  `src/contracts/agent.ts`, handed to plugins as a main service; the fake in `src/shared/` drives the tests and the
-  self-test. The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
+  `src/contracts/agent.ts`, which a harness plugin registers through the main service `services.agentHarnesses`
+  (the `claude-code` plugin registers Claude's); the registry publishes each harness's label and declarations in
+  `core.agentHarnesses`, and no code outside a harness's plugin names its CLI, files, environment or ids
+  (`docs/features/agent-harnesses/design.md`). The fake in `src/shared/`, registered by the composition root under
+  the id `fake`, drives the tests and the self-test. The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
   events and `at`, the time it first appeared (stamped through the injected `Clock`, or read from the transcript for
   history), so a chat layout can show any field and the chat never parses a harness's JSON. The Claude adapter's
   readings of the CLI (`docs/features/agent-chat/claude-stream.md`): it reports permission mode `manual` as
@@ -805,7 +812,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   with no `result` of its own, so the adapter tracks each message by its client `uuid` (§ Message lifecycle) rather
   than counting results. Listing a folder's saved sessions and reading one into chat
   entries are adapter calls too (`listSessions`, `history`), so Claude's transcript format stays in
-  `src/main/claude-code/transcripts.ts`. That format is undocumented and was measured on the installed CLI, so a
+  `src/plugins/claude-code/main/transcripts.ts`. That format is undocumented and was measured on the installed CLI, so a
   resume that lists nothing or draws raw entries starts with `transcripts.ts` and a fresh look at a transcript's line
   shapes.
 - **An agent event** — a subagent spawned or finished, a tool call, context usage, a compaction, a user message — is
@@ -815,7 +822,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   harness's JSON (`docs/features/agent-tower/design.md`). A new kind of event is a new member of the union, added
   when a producer emits it.
 - **A session control** — Claude's permission mode, effort and model — is declared by the harness adapter (id,
-  label, choices, current value), and the Chat tab draws whatever its adapter declares. A control gets its key as a
+  label, choices, current value, and an optional `role`), and the Chat tab draws whatever its adapter declares. Chat's
+  pick keys find a control by its role (`model`, `permissionMode`, `effort`), never by its id. A role gets its key as a
   command in chat's manifest (raw `m`, `e`, `o` in the chat scope; `<Leader>cm`, `<Leader>ce`, `<Leader>co` in the
   composer box, where raw keys are vim's); `c` (`<Leader>cc` in the box) lists every control, so a new adapter's
   controls are reachable before they get a key.
