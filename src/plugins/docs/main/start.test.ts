@@ -768,7 +768,9 @@ describe('docs main part lifecycle', () => {
     await harness.stop();
 
     await loadStopped;
-    expect(harness.logs.filter(({ source }) => source === 'docs')).toEqual([]);
+    expect(
+      harness.logs.filter(({ source }) => source !== 'plugin-host'),
+    ).toEqual([]);
     expect(harness.processes.runs).toHaveLength(1);
   });
 });

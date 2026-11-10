@@ -169,5 +169,6 @@ Review base: 77940a650a00bb10488a8f65835702350222b6f5
 - fakePageApi builds const api and returns it, so layouts.show hands the seam the same object the part gets; pinned by the harness test — identity was the plan's ask — none · group 02 · group 02
 - AGENTS.md left unchanged: every claim of the 62e3bb8f sentence holds — re-read line by line — none · group 03 · group 03
 ### Review rounds
+- 1 · 2bc7b416 · NEEDS FIXES (1 Minor, determined: docs stop test log filter too narrow)
 ### Test gate
 - Medium — the host's ready log line runs in both processes, and the part harness sits under every page and main part test · whole npm test, as task 04 allows for a ~1 min Vitest suite with no Electron: the harness is under every plugin's part tests, and any of them whose part's ready throws now fails loud · skipped: self-test and drive run (nothing the app shows changes; no self-test step reads the log line) · pass: 630 files, 13024 tests, no type errors, 41 s at c24b022a (later commits doc-only); npm run lint pass
