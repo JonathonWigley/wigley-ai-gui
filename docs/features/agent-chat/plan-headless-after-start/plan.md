@@ -130,5 +130,7 @@ Review base: f8e35fea
 - owns reads chat.sessions().some(sessionId) rather than profileOf !== null — independent of a row having a profile — none, the reads agree today · group 02 · group 02
 - four start-prompt 'new lines alone' tests folded into one table sessionStep_NoRowsToList_StartsAtOnce, plus an archived-only table with a second row for archiving the last live row — they share one rule — one extra row to delete · group 01 · group 01
 ### Review rounds
+- 1 · 640af2b2 · NEEDS FIXES — 7 Minor; 1-5 lead-applied in 4167f176; 6-7 (set-headless-tool.test.ts repeat row, table name) dispatched
+- fix range 4167f176..7784c3bb · tier None (test-only + lead-applied prose/refactor) · set-headless-tool.test.ts passed 5/5, lint clean
 ### Test gate
 - Medium — UI wiring in the start prompt plus a new MCP tool across chat's contribution and its flag · picked: resume-items, start-prompt, picker-row, chat-sessions (own the changed rules), set-headless-tool + chat start (the tool and its wiring); tsc + lint; selftest --plugin chat (archive step changed); drive run Ctrl+n starts at once and Space b n shows one New session line · skipped: whole self-test (user's ask only), real-Claude set_headless call (fake harness cannot call MCP tools) · all passed
