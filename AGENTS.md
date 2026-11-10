@@ -980,7 +980,10 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   `contract.test-support.ts`, the fixtures of its records (sessions' `sessionRow`), belongs to that contract's layer,
   so any file that may import the contract may import it. A plugin's test follows its
   folder's rules, faking a provider with `fakeDependency`; a test that must start a real provider part has a whole-file
-  `sublayers` entry under its plugin in `PLUGIN_EXTRAS`.
+  `sublayers` entry under its plugin in `PLUGIN_EXTRAS`. A page part test that draws a layout part starts the part
+  with `startDrawingPagePart` (`src/shared/page/layout-host/page-part-harness.test-support.ts`), whose
+  `layouts.show` draws through the real owner show; `startPagePart`'s `draw` throws, since `src/shared` may not
+  import the layout host.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
   inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`. It judges every file under
   `src/` and takes no argument.
