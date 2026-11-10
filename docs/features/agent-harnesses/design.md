@@ -39,8 +39,9 @@ or output format. Every decision below serves that.
 - It owns its settings: `claude-code.command` (the program a session runs) and `claude-code.profiles`.
 - The core hands every main part what the adapter used to take from `main.ts`: the session host
   (`services.sessionHost`, already a service), a streaming spawn on `services.processes` that a plugin stop kills like
-  its other runs, and the agent environment (`services.agentEnvironment`: the app's environment plus the relay's
-  endpoint folder). A user-folder harness plugin so has the same reach as the built-in one.
+  its other runs, the agent environment (`services.agentEnvironment`: the app's environment plus the relay's
+  endpoint folder), and `services.agentHomeDir` (the home the adapter runs as: the user's real home in a drive run
+  on Claude, `services.homeDir` otherwise). A user-folder harness plugin so has the same reach as the built-in one.
 - In a run whose harness is the fake (the self-test, a drive run on the fake), the composition root registers the fake
   under its own id `fake` and leaves `claude-code` out of the built-in plugins, so no run spawns a real `claude`.
 
