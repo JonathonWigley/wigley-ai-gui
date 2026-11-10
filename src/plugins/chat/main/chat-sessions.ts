@@ -158,11 +158,11 @@ export interface ChatSessions {
   // saves; the value it already holds changes nothing. Logs and does nothing
   // for a row chat does not hold.
   setHeadless(sessionId: string, headless: boolean): void;
-  // Opens a row selected; a request with `headless` true opens it headless. A
-  // folder, a folder project's tilde-expanded folder, or a pool project's
-  // lowest-numbered clone starts its process at once. Throws, opening nothing,
-  // on an unknown project, a profile other than the project's own, no pool
-  // provider for a pool project, or a pool with no clones.
+  // Opens a row selected and not headless. A folder, a folder project's
+  // tilde-expanded folder, or a pool project's lowest-numbered clone starts its
+  // process at once. Throws, opening nothing, on an unknown project, a profile
+  // other than the project's own, no pool provider for a pool project, or a
+  // pool with no clones.
   start(request: StartRequest): string;
   // Starts a session with its row unselected and sends `message` as its first
   // message; returns the row's sessionId. A request with `unattended` true

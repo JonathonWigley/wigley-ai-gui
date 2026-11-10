@@ -58,8 +58,8 @@ export function sectionRowsOnce(
 
 // The session step's lines: the section rows of `step`'s folder — any folder
 // when `step.projectDir` is null — and profile whose session `rows` holds
-// unarchived, then the new-session line, then the other rows in the order given, the archived ones only when
-// `showArchived`.
+// unarchived, then the new-session line, then the other rows in the order
+// given, the archived ones only when `showArchived`.
 export function sessionItems<R extends PastSessionRow>(
   rows: readonly R[],
   sections: readonly ResumeSectionRows[],

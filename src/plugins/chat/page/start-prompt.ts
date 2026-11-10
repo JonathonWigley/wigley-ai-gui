@@ -370,9 +370,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     return preselectedIn(deps.paths.expandTilde(project.folder, deps.homeDir));
   };
 
-  // Goes on to the session step once the profile picked for `target` — or the
-  // one its project fixes — is signed in, listing its saved sessions when the
-  // prompt offers them.
+  // Once the profile picked for `target` — or the one its project fixes — is
+  // signed in, lists its saved sessions for the session step when the prompt
+  // offers them, and otherwise starts a new session at once.
   const checkProfile = (
     context: PromptContext,
     target: PromptTarget,

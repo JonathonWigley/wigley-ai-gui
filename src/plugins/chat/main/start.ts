@@ -260,7 +260,8 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // ones, asks every session it starts to name its row, lists and archives
 // the saved ones, answers their permission prompts through the
 // `permission_prompt` tool, starts a session for any agent that calls the
-// `start_session` tool, keeps the recent project folders and serves them
+// `start_session` tool, sets a session's headless flag for its main agent's
+// `set_headless` call, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
 // sign-in when the page loads again or the part is disposed), registers its
 // chat layouts, opens the layout preview's sample session (held apart from
@@ -488,6 +489,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     sessions.contributeTools(PERMISSION_TOOLS, (session) =>
       chat.permissionToolSession(session),
     );
+    const holds = (sessionId: string) =>
+      chat.sessions().some((held) => held.sessionId === sessionId);
     const profileOf = (sessionId: string) =>
       chat.sessions().find((held) => held.sessionId === sessionId)?.profile ??
       null;
@@ -511,8 +514,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     sessions.contributeTools(
       [SET_HEADLESS_TOOL],
       setHeadlessToolSession({
-        owns: (sessionId) =>
-          chat.sessions().some((held) => held.sessionId === sessionId),
+        owns: holds,
         setHeadless: (sessionId, headless) =>
           chat.setHeadless(sessionId, headless),
         log: services.log,
@@ -566,7 +568,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     }
     api.layouts.register({ layoutTypes });
     const requireHeld = (sessionId: string) => {
-      if (!chat.sessions().some((held) => held.sessionId === sessionId)) {
+      if (!holds(sessionId)) {
         throw new Error(`chat holds no session ${sessionId}`);
       }
     };
