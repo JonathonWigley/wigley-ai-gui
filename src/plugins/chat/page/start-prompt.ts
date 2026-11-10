@@ -59,9 +59,10 @@ export interface StartPromptDeps {
 }
 
 // `open` asks for a project — or, through `Other folder…` or with no
-// projects, a folder — then a profile unless the project fixes one or there is one, then signs a signed-out
-// profile in through the sign-in dialog, then asks for a new session, a new
-// headless session or one of the project's or folder's saved sessions, and
+// projects, a folder — then a profile unless the project fixes one or there
+// is one, then signs a signed-out profile in through the sign-in dialog,
+// then asks for a new session, a new headless session or one of the project's
+// or folder's saved sessions, and
 // starts or resumes a chat session there, revealing its Chat tab. Its first
 // step also lists the resume sections' rows at the top, a pick resuming that
 // session at once, and its session step those of its folders and profile. Esc

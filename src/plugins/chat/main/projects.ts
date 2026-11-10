@@ -9,8 +9,9 @@ type ProjectFields = Record<string, unknown>;
 // Each element of `raw` checked in order, the kept ones returned in settings
 // order. `raw` may hold any JSON whatever its type says, since the settings
 // check types no element of an empty default list. A key holding null counts
-// as absent, and a key no project reads is ignored. An element failing a check is left out and logs one line naming
-// its index, its name and its fault. A name is taken only by a kept entry.
+// as absent, and a key no project reads is ignored. An element failing a check
+// is left out and logs one line naming its index, its name and its fault. A
+// name is taken only by a kept entry.
 // `folder` is kept as written, a `~` unexpanded; no profile or path is checked
 // against anything outside the element.
 export function readProjects(

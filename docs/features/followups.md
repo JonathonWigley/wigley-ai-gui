@@ -517,13 +517,6 @@ User-facing features, those other work builds on first.
   against many agents on coding work is vendor evidence, and the log gives the user's own.
 - **An image, video, HTML and artifact viewer** — *needs a feature plan*: a viewer in the app, so a render or page
   the agent asks the user to look at is visible inside the gui.
-- **A pool project's session step ignores the picked branch** — *needs a feature plan*: New session in a pool project
-  asks project, branch, profile, then lists saved sessions from every clone of the pool
-  (`src/plugins/chat/page/start-prompt.ts`, `openSessionStep` path), and resuming one reopens it in the clone it ran in
-  on whatever branch that clone holds, discarding the branch the user picked. The plan's design chose this listing.
-  Options: show each row's clone and branch, filter the rows by the picked branch, or ask the branch only on the
-  new-session path. Source: the project-picker review; session Claude Code 5ff361e1-d9aa-4e7a-8d42-9f640a023fdf in
-  `~/Documents/dev/peoplefun/new-games-prototypes`.
 
 ## Code cleanup
 

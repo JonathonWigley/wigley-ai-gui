@@ -67,8 +67,8 @@ The agent claims a clone itself when its work needs one, with `unity-pool claim 
 the clone to work in; the pool's hooks renew that claim from then on, as for any agent's claim. The app never claims
 for a session.
 
-Resuming a pool project's saved session reopens it in the clone it ran in: a transcript is tied to its folder, and the
-pool's sticky ranking and stranded hand-back already return that clone to the row.
+Resuming a pool project's saved session reopens it in the clone it ran in, with no claim: a transcript is tied to its folder,
+and when its agent claims again the pool's sticky ranking and stranded hand-back favour that clone.
 
 The pool's rules, the claim's JSON and its error codes are the pool's own: `~/wigley-agents/tools/unity-pool/README.md`.
 
