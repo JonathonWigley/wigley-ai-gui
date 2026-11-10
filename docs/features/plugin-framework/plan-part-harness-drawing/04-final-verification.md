@@ -1,6 +1,6 @@
 # 04 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -28,3 +28,4 @@ Commit:    the Run log entry rides in the lead's next commit
 
 ## Proof
 
+Commit 4ffb7368 · proof: npm run lint pass; whole npm test pass (630 files / 13024 tests); the two uncovered tests were found and fixed in group 01 · concerns: none

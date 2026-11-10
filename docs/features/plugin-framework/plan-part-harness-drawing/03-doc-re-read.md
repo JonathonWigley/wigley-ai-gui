@@ -1,6 +1,6 @@
 # 03 — Doc re-read and follow-ups
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -25,3 +25,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 4ffb7368 · proof: diff read: both Foundations items removed, nothing else; AGENTS.md sentence holds against the code; ready-of grep shows only the harness message and its tests · concerns: none

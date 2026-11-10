@@ -147,10 +147,10 @@ export function startDrawingPagePart<M extends PluginManifest>(
 - [x] [Drawing page harness](02-drawing-page-harness.md) — after 01
 
 ### Wave 3
-- [ ] [Doc re-read](03-doc-re-read.md) — after 02
+- [x] [Doc re-read](03-doc-re-read.md) — after 02
 
 ### Wave 4
-- [ ] [Final verification](04-final-verification.md) — after 03
+- [x] [Final verification](04-final-verification.md) — after 03
 
 ## Run log
 
@@ -159,11 +159,15 @@ Review base: 77940a650a00bb10488a8f65835702350222b6f5
 ### Groups
 - 01 · 3eb66722 · diff read (both Produces present: readyEach logs under id; ready()/restart() throw via requireNoReadyFailed) + typecheck pass; worker ran lint, the two task test files and src/plugins · concerns: uncovered: sessions page ready_TracksOnlyTheRestoreUntilItsFocusFollows (first apply throws) now expects the throw; docs main stop_IndexRunInFlight_LogsNoFailure filters logs to source docs (no longer catches a failure logged under another source); followups.md:18 still quotes the old line (task 03)
 - 02 · c24b022a · diff read (HarnessLayoutShow, layoutShow option, startDrawingPagePart all present as planned) + typecheck pass; worker ran lint (layer check) and both task test files · concerns: none
+- 03 · 4ffb7368 · diff read: both Foundations items removed, nothing else; AGENTS.md sentence holds against the code; ready-of grep shows only the harness message and its tests · concerns: none
+- 04 · 4ffb7368 · npm run lint pass; whole npm test pass (630 files / 13024 tests); the two uncovered tests were found and fixed in group 01 · concerns: none
 ### Contract changes
 ### Rulings
 - partLifecycle takes world.log and world.logs as two trailing params rather than the world — passes only what it uses — a one-line signature change if wrong · group 01 · group 01
 - restart() rejection asserted in each row of the one it.each instead of a separate it — same rule, fewer tests — small to split · group 01 · group 01
 - fakeLayoutShow split into innerLayoutShow + module const throwingLayoutShow; PageWorld carries layoutShow beside anchorDispose so provider parts share it — follows the per-world option pattern — a rename if wrong · group 02 · group 02
 - fakePageApi builds const api and returns it, so layouts.show hands the seam the same object the part gets; pinned by the harness test — identity was the plan's ask — none · group 02 · group 02
+- AGENTS.md left unchanged: every claim of the 62e3bb8f sentence holds — re-read line by line — none · group 03 · group 03
 ### Review rounds
 ### Test gate
+- Medium — the host's ready log line runs in both processes, and the part harness sits under every page and main part test · whole npm test, as task 04 allows for a ~1 min Vitest suite with no Electron: the harness is under every plugin's part tests, and any of them whose part's ready throws now fails loud · skipped: self-test and drive run (nothing the app shows changes; no self-test step reads the log line) · pass: 630 files, 13024 tests, no type errors, 41 s at c24b022a (later commits doc-only); npm run lint pass
