@@ -96,7 +96,8 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
 - The app starts the host with its own binary as Node (`ELECTRON_RUN_AS_NODE=1`), detached, with no stdio, and
   waits for its channel. The host stays while it runs a process, or while its pending table or runs record is
   non-empty, and exits once none holds and no app is connected. A host started with no app, at login, reads both
-  files at start.
+  files at start. At login the app's own executable runs with `--start-session-host`, which starts the host
+  detached through `sessionHostLaunch`, the same command the client starts, and exits with no window or Dock icon.
 - A host that dies does not take its processes with it. The app treats the lost connection as each process's exit, so
   its row rests, but a `claude` in the middle of a tool can finish the tool and write to its session, beside whatever
   resumes that session. What closes that:
@@ -143,7 +144,9 @@ harness.
 
 - **`setPending`** replaces every pending entry the app sent before with the list it carries. An entry is
   `{ at, spawn, record, skipWhileBusy }`: `at` in epoch ms, `record` the app's JSON, handed back untouched on the run.
-  The client keeps the last list and sends it again on each connect, so a new host takes it over.
+  The client keeps the last list and sends it again on each connect, after it sent `drain` to any older host, so a
+  new host takes it over. On each connect after its first, the client tells its `onConnected` listeners, and the
+  scheduling plugin reads `listRuns` again.
 - **The timer.** The host starts each entry at `at`; an entry at or before now starts at once. Both files are
   rewritten on each change, so the queue and the runs survive a host restart.
 - **The skip rule.** `skipWhileBusy` names a hosted process id, or null. At `at`, when that process runs and its idle
@@ -156,12 +159,15 @@ harness.
 - **`listRuns`** answers every run the host started or skipped that no `forgetRuns` dropped, oldest first, and rejects
   as `list` does.
 - **`forgetRuns`** drops the runs with the given ids from the runs record, once the app has adopted them.
+- **The runs file is frozen.** `runs-v<protocol>.json`'s name form and the `HostedRun` shape keep their form in every
+  protocol version, as the children record does, so a newer host can import an older host's runs (§ Older hosts).
 
 ## Protocol
 
 Newline-delimited JSON over the channel. `hello`, `list` and `drain` keep their shape in every protocol version, so
 any app can drain any older host. The pipe log format is frozen the same way, and so are the children record's name and
-shape, so any host can end what any other left.
+shape, so any host can end what any other left, and the runs file's name and shape, so any host can import the runs
+any older one fired.
 
 - `hello` — the host's protocol version.
 - `list` — each hosted process: id, start time, running (false once it is ending) or its exit code and signal, its
@@ -211,14 +217,18 @@ lines past the last `seq` it read.
 
 ## Older hosts
 
-After an update that changed the protocol, the new app finds the older host's channel, sends it `drain`, and starts
-its own. A newer protocol's host is never drained: an older app that finds one lists its processes as not current and
+After an update that changed the protocol, the new app starts or finds its own host, then finds the older host's
+channel and sends it `drain`. A newer protocol's host is never drained: an older app that finds one lists its processes as not current and
 leaves them running. A row whose process lives in another protocol's host shows a notice that it is finishing in
 another app version and refuses a send until that process has ended; it then rests and resumes under the new host on
 the next message.
 
-A protocol bump leaves the old host's pending queue behind, in its own protocol's files. The new app sends its queue
-to the new host on connect, so every pending run moves to the new host.
+A protocol bump drops the old host's pending queue: at `drain` the old host deletes its pending file and takes no
+`setPending` after it. The new app sends its queue to the new host once the drain is sent, so every pending run
+moves to the new host. The old host's run records stay in its frozen runs file, which it writes no more after the
+drain. The new host imports every older protocol's runs file at its start and again before each `listRuns` reply: it
+adds each run its own record lacks by id, saves, and deletes the older file. So no run the old host fired is lost,
+and the app adopts it like any other.
 
 ## Platforms
 

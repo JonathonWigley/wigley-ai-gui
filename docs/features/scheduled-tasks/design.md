@@ -50,7 +50,7 @@ host; chat starts and adopts the run, and sessions answers its tool calls while 
    │   services.sessionHost.setPending([{ at, spawn, record, skipWhileBusy }])
    │   services.loginStart.set(any task active)
    ▼
- session host (detached; started by the app, or at login by launchd)
+ session host (detached; started by the app, or at login through the app's --start-session-host entry)
    │ pending-v4.json ── timer at `at` ──► skip when `skipWhileBusy` is busy, else spawn
    │   env = own env − ELECTRON_RUN_AS_NODE − unsetEnv + overlay; then writes stdin lines
    │ runs-v4.json ◄── { id, record, startedAt, skipped, exit }
@@ -62,7 +62,7 @@ host; chat starts and adopts the run, and sessions answers its tool calls while 
    │   app closed    → answers from <endpoint dir>/offline.json, appends each call to
    │                   <endpoint dir>/offline-calls/<session id>.jsonl, never starts the app
    ▼
- app open: runStarted push, or listRuns at plugin start
+ app open: runStarted push, or listRuns at plugin start and after each reconnect to a new host
    scheduling → chat.adopt(record.adopt) inside sessions.holdConnects
      process runs  → row attached (relay join lands on the owned row)
      process gone  → row resting, history pending
@@ -163,8 +163,10 @@ fall-back overlap repeats occurs once, at its first instance.
 - **Overlap.** Each pending run carries `skipWhileBusy`: the process id of the task's newest history entry with one.
   At `at`, the host skips the run while that process runs and its idle rule reads it busy, and records a run with
   `skipped: true`, which history shows as skipped. An idle run whose process stays alive does not block the next run.
-- **A failed start.** A run that fails to start — a missing folder, a spawn the host could not make (`exit.error`) —
-  is a failed history entry with its reason.
+- **A failed start.** A run that fails to start is a failed history entry with its reason. That covers a run the
+  app could not prepare (`chat.prepareLaunch` throws: a missing folder, an unknown profile, project or control id)
+  once its time has come, and a spawn the host could not make (`exit.error`). A prepare that fails before the run's
+  time queues nothing for the task and tries again at that time, since a folder missing now may exist then.
 - **A one-time task** stays listed after its run, with no next run, until the user edits or removes it.
 
 ## The environment of a run
@@ -172,8 +174,10 @@ fall-back overlap repeats occurs once, at its first instance.
 A prepared run stores only the app's own variables plus PATH, never the app's whole environment:
 `WIGLEY_AI_GUI_ENDPOINT_DIR`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, `WIGLEY_SESSION_ROW`,
 `WIGLEY_FORMS_OFFLINE` (from sessions' `offlineEnv`), and `PATH` as the app's login PATH when the run was prepared.
-The Claude adapter carries `PATH` and `WIGLEY_AI_GUI_ENDPOINT_DIR` from the app's environment into the run
-(`prepareRun`), so no plugin reads that environment. The host lays these over its own environment, less
+The Claude adapter carries `PATH`, `WIGLEY_AI_GUI_ENDPOINT_DIR` and `CLAUDE_CONFIG_DIR` from the app's environment
+into the run (`CLAUDE_CARRIED_ENV`, `prepareRun`), so no plugin reads that environment. `CLAUDE_CONFIG_DIR` rides
+along because a profile on the default folder keeps the inherited value, and the run must write its transcript where
+adoption reads it. The host lays these over its own environment, less
 `ELECTRON_RUN_AS_NODE` and the harness's unset names; a host launchd started at login has launchd's bare one. A
 variable a run needs beyond these goes in the Claude profile's settings `env`, and Schedules mode says so.
 
@@ -196,8 +200,15 @@ tool's contribution declares its answer and whether it replays, through `contrib
 | `set_session_title` | title recorded, applied when the app opens | yes |
 | the four scheduling tools | did not run | no |
 
-A tool left out of the table answers `The app is closed: <tool> did not run.`, and does not replay. So a denied
-permission prompt lets the run carry on around the tool, and `start_session` and the practice tools did nothing.
+A tool left out of the table answers `The app is closed: <tool> did not run.`, and does not replay; a
+`permission_prompt` left out gets the relay's own deny instead, `The app is closed. The user was not asked, so this
+tool call did not run.` So a denied permission prompt lets the run carry on around the tool, and `start_session` and
+the practice tools did nothing. An `offline.json` that is missing or unreadable reads as an empty table: every tool
+answers as left out of it, permission prompts with that deny.
+
+A run whose relay hello has no session id (`CLAUDE_CODE_SESSION_ID` unset, which a host-fired Claude run always
+sets) still gets each offline answer, but the relay writes no calls line and logs one stderr line, so nothing of
+that run replays.
 
 The relay appends each call it answered alone to the run's calls file, `<endpoint dir>/offline-calls/<session
 id>.jsonl`. At adoption, `sessions.replayCalls(hostSessionId)` routes each replayable call to the row's tool sessions
@@ -207,13 +218,17 @@ fed chat's tool-caller tracking, so a subagent's call is not applied as a main a
 ## Adoption
 
 The app learns of a run from the host's `runStarted` push while it is connected, or from `listRuns` when the plugin
-starts. For each run whose record is a `ScheduledRunRecord`:
+starts and each time the host client connects to a new host (`sessionHost.onConnected`). Each `listRuns` read runs
+inside `sessions.holdConnects`, so a run's relay hello waits for its row. For each run whose record is a
+`ScheduledRunRecord`:
 
 1. A skipped run, or one whose `exit.error` is set, goes straight to history.
 2. Any other run: `chat.adopt(record.adopt)` opens its row inside `sessions.holdConnects`, so the run's relay
    connection joins the owned row. A process that still runs is attached; a process that is gone gives a resting row
    with its history pending, through chat's restore path. `adopt` rejects, opening nothing, when a row already holds
-   the host session id.
+   the host session id. When that row is chat's own headless row, an earlier start adopted the run and quit before
+   forgetting it, so the history entry stands (or is written once). Any other rejection is a failed entry,
+   `not opened: <reason>`. A run's history entry names the row id `adopt` resolved to.
 3. `sessions.replayCalls(hostSessionId)` replays the calls the relay logged while the app was closed.
 4. `sessionHost.forgetRuns([id])` drops the run from the host's runs record, the history entry is written, and the
    plugin re-plans and sends `setPending`.
@@ -224,8 +239,11 @@ session does.
 ## Login start
 
 While any task is active (`services.loginStart.set(any task active)`), the session host starts when the user logs
-in, so pending runs fire after a restart with no app open. A host started this way reads its pending table and runs
-record at start. `LoginStart` (`src/contracts/login-start.ts`) is a platform seam; `set` resolves to a
+in, so pending runs fire after a restart with no app open. Both macOS login starts run the app executable with the
+flag `--start-session-host` (`LOGIN_START_FLAG`). `main.ts` checks the flag before the single-instance lock, sets the
+accessory activation policy so no Dock icon shows, starts the host detached through `sessionHostLaunch` as the app
+would, and exits; so the host's folder and channel are worked out in one place and no plist holds them. A host
+started this way reads its pending table and runs record at start. `LoginStart` (`src/contracts/login-start.ts`) is a platform seam; `set` resolves to a
 `LoginStartStatus` (`on`, `off`, `needsApproval` or `unsupported`, with a `detail` line) that Schedules mode shows.
 
 - **macOS** has two adapters in `src/main/login-start/`, label `wigley-ai-gui.session-host`. `main.ts` picks between
@@ -234,8 +252,10 @@ record at start. `LoginStart` (`src/contracts/login-start.ts`) is a platform sea
   - The login-item service (`createAgentServiceLoginStart`): Electron's `setLoginItemSettings` with type
     `agentService`, over a plist inside the bundle.
   - A LaunchAgent file (`createLaunchAgentLoginStart`): `~/Library/LaunchAgents/wigley-ai-gui.session-host.plist`,
-    starting the command `sessionHostLaunch` gives, rewritten on each start when it differs, removed when no task is
-    active.
+    running the app with the flag, rewritten on each start when it differs, deleted (`/bin/rm -f`) when no task is
+    active. The adapter runs no `launchctl`: launchd reads the file at the next login.
+  - Neither adapter imports `electron`: `main.ts` hands the login-item service Electron's `app` as a structural
+    `LoginItems` type.
 - **Windows, Linux, the dev app, the self-test and drive runs** get `createNoLoginStart()`, which answers
   `unsupported`. On Windows a task does not fire after a restart until the app opens (follow-up: Scheduled tasks
   start at login on Windows).
@@ -246,6 +266,9 @@ record at start. `LoginStart` (`src/contracts/login-start.ts`) is a platform sea
   side lists the tasks, under a "+ New task" row; each row shows its schedule and its next run, or Paused. The right
   side shows the selected task: project, schedule, permission mode and prompt, with Edit, Pause or Resume, Run now and
   Remove. The editor offers chat's profiles and projects and the harness's start controls (`editorChoices`).
+- **The mode's keys**: `j`/`k` move, `a` makes a task, `i` edits the selected one, `p` pauses or resumes it, `r` runs
+  it now, `d` removes it after a confirm; in the details, `j`/`k` move through the history and `<CR>` opens a run's
+  row. `src/plugins/keymap.ts` holds the full list.
 - **The mode's lines**: the task file's parse error while one stands; in the dev app, that it never fires; where the
   app fires, the login start's state; and that a variable a run needs goes in the profile's settings `env`.
 - **History lines** under the selected task, newest first: `Finished`, `Skipped, previous run still going`, and
@@ -253,7 +276,9 @@ record at start. `LoginStart` (`src/contracts/login-start.ts`) is a platform sea
 - **The Scheduled runs section** in the Sessions side bar, registered through sessions' `addSection`, claims every
   open run row (`SchedulingState.runRows`).
 - **The finished mark.** A run is finished at its row's first `chat.turnFinished`, or when `adopt` finds its process
-  gone or idle. A finished run stays unviewed until `sessions.selection` names its row. The page sets row activity
+  gone or idle. A finished run stays unviewed until `sessions.selection` names its row; a run that finishes while its row is
+  selected is viewed at once. The mark is the history entry's `viewed` flag, so it survives an app restart. The page
+  sets row activity
   `done` with emphasis `raised` on each unviewed run row, and main sets the `services.alerts` open count `scheduling`
   to their number, which the Dock badge shows.
 
@@ -275,7 +300,8 @@ mode like any other. With the app closed, the four tools did not run.
 
 Each task's runs are kept in `history.json` in the stable instance's plugin data (`main/history-store.ts`), the newest
 20 entries per task. An entry (`RunHistoryEntry`) holds the occurrence, the time, the outcome (`running`, `finished`,
-`skipped` or `failed`), a failed run's reason, and the row and process ids of a run that started.
+`skipped` or `failed`), a failed run's reason, the row and process ids of a run that started, and `viewed`, false
+until the user views a finished run's row.
 
 ## Decisions
 
@@ -302,6 +328,10 @@ Each task's runs are kept in `history.json` in the stable instance's plugin data
   with no process, since control ids and choices are adapter knowledge.
 - **Carried env names in the adapter.** No plugin reads the app's environment, and the adapter already sets the app's
   `WIGLEY_SESSION_ROW`.
+- **The unviewed mark in history.** Kept in `history.json` beside the entry, so a run the user has not read is still
+  marked after an app restart.
+- **One login entry in the app.** Both login starts run the app with `--start-session-host`, so the host command is
+  built by the same `sessionHostLaunch` the app uses, and an app update needs no plist change for a new host path.
 - **Live starts keep their full env.** A live start passes its whole launch env as the overlay, with `unsetEnv`
   naming what the adapter drops, so a live start's child env does not change; a prepared run passes the carried names
   only.
