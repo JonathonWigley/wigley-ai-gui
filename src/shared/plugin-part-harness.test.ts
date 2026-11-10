@@ -6,6 +6,7 @@ import type { Keymap } from '../contracts/keymap';
 import type { MarkdownRenderer } from '../contracts/markdown';
 import type {
   DependencyKey,
+  DrawnLayoutPart,
   LayoutShow,
   MainPart,
   ModeHandle,
@@ -16,6 +17,7 @@ import { definePlugin } from './define-plugin';
 import {
   countingEditors,
   fakeDependency,
+  type HarnessLayoutShow,
   noCounts,
   startMainPart,
   startPagePart,
@@ -370,6 +372,67 @@ describe('plugin part harness', () => {
     show?.dispose();
     harness.showLayouts(shown);
     expect(setLayouts).toHaveBeenCalledTimes(1);
+  });
+
+  // Breaks if `layouts.show` skips the option, hands it another API, manifest
+  // or options, or the default draw stops throwing.
+  it.each([
+    { row: 'a layoutShow option', hasOption: true },
+    { row: 'no option', hasOption: false },
+  ])('layouts.show uses the layoutShow option: $row', ({ hasOption }) => {
+    const sentinel: DrawnLayoutPart<{ element: HTMLElement }> = {
+      built: { element: {} as HTMLElement },
+      layoutName: 'faked',
+      dispose() {},
+    };
+    let partApi: unknown;
+    const handed: unknown[] = [];
+    const layoutShow: HarnessLayoutShow = (api, manifest, options, show) => {
+      const inner = show(options);
+      handed.push({ isPartApi: api === partApi, manifest, options, inner });
+      return { ...inner, draw: () => sentinel as never };
+    };
+    const showOptions = {
+      defaultLayout: { row: (parent: HTMLElement) => ({ element: parent }) },
+      defaultStylesheet: null,
+      read: () => ({ row: (parent: HTMLElement) => ({ element: parent }) }),
+      userLayout: () => 'default',
+      setLayouts: () => undefined,
+    };
+    let draw: () => unknown = () => undefined;
+    const part = pagePart((api) => {
+      partApi = api;
+      const show = api.layouts.show(showOptions);
+      draw = () => show.draw('row', {} as HTMLElement, undefined as never);
+      return { commands: { run() {} } };
+    });
+    startPagePart(part, hasOption ? { layoutShow } : {});
+
+    let drawn: unknown;
+    try {
+      drawn = draw();
+    } catch (error) {
+      drawn = (error as Error).message;
+    }
+
+    expect([drawn, handed]).toEqual(
+      hasOption
+        ? [
+            sentinel,
+            [
+              {
+                isPartApi: true,
+                manifest: pageManifest,
+                options: showOptions,
+                inner: {
+                  refresh: expect.any(Function),
+                  dispose: expect.any(Function),
+                },
+              },
+            ],
+          ]
+        : ['layouts.show draw not faked', []],
+    );
   });
 
   it('pushes a keymap to a live listener only', () => {

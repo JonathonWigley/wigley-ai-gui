@@ -1,6 +1,6 @@
 # 01 — A failed `ready` logs under its plugin, and the harness throws on it
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -63,3 +63,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 3eb66722 · proof: diff read (both Produces present: readyEach logs under id; ready()/restart() throw via requireNoReadyFailed) + typecheck pass; worker ran lint, the two task test files and src/plugins · concerns: uncovered: sessions page ready_TracksOnlyTheRestoreUntilItsFocusFollows (first apply throws) now expects the throw; docs main stop_IndexRunInFlight_LogsNoFailure filters logs to source docs (no longer catches a failure logged under another source); followups.md:18 still quotes the old line (task 03)

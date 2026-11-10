@@ -1,6 +1,6 @@
 # 02 — A page harness entry that draws layout parts
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01 (shares `plugin-part-harness.test-support.ts` and its test)
 Plan: [plan.md](plan.md)

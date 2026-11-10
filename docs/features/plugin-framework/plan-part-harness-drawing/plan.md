@@ -141,7 +141,7 @@ export function startDrawingPagePart<M extends PluginManifest>(
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Loud ready failures](01-loud-ready-failures.md)
+- [x] [Loud ready failures](01-loud-ready-failures.md)
 
 ### Wave 2
 - [ ] [Drawing page harness](02-drawing-page-harness.md) — after 01
@@ -157,7 +157,10 @@ export function startDrawingPagePart<M extends PluginManifest>(
 Review base: 77940a650a00bb10488a8f65835702350222b6f5
 
 ### Groups
+- 01 · 3eb66722 · diff read (both Produces present: readyEach logs under id; ready()/restart() throw via requireNoReadyFailed) + typecheck pass; worker ran lint, the two task test files and src/plugins · concerns: uncovered: sessions page ready_TracksOnlyTheRestoreUntilItsFocusFollows (first apply throws) now expects the throw; docs main stop_IndexRunInFlight_LogsNoFailure filters logs to source docs (no longer catches a failure logged under another source); followups.md:18 still quotes the old line (task 03)
 ### Contract changes
 ### Rulings
+- partLifecycle takes world.log and world.logs as two trailing params rather than the world — passes only what it uses — a one-line signature change if wrong · group 01 · group 01
+- restart() rejection asserted in each row of the one it.each instead of a separate it — same rule, fewer tests — small to split · group 01 · group 01
 ### Review rounds
 ### Test gate

@@ -37,6 +37,7 @@ import type {
   Mode,
   ModeHandle,
   PageApi,
+  LayoutShow,
   PageLayoutShow,
   PageModes,
   PagePart,
@@ -48,6 +49,7 @@ import type {
   PluginState,
   ProcessName,
   PushedScope,
+  ShowLayoutOptions,
   ShownLayouts,
   UntypedEvents,
 } from '../contracts/plugin';
@@ -261,9 +263,13 @@ export interface MainPartHarnessOptions<M extends PluginManifest> {
 // the app's own first part would add, so no mode the part adds shows as it is
 // added. `holdsRestores` holds the restore window each start of the part under
 // test opens until the harness's `settleRestores`. `parts` and `state` are as on main.
+// `layoutShow` makes each part's `layouts.show`, handed that part's fake page
+// API, its manifest, the show's options and the inner show; left out, a show's
+// `draw` throws `layouts.show draw not faked`.
 export interface PagePartHarnessOptions<M extends PluginManifest> {
   // Runs at each fake anchor's `dispose`, to make one throw.
   anchorDispose?(): void;
+  layoutShow?: HarnessLayoutShow;
   dependencies?: readonly FakeDependency<'page'>[];
   settings?: M['settings'];
   services?: Partial<Omit<PageServices, 'timers' | 'log'>>;
@@ -273,6 +279,15 @@ export interface PagePartHarnessOptions<M extends PluginManifest> {
   parts?: readonly PagePart[];
   state?: SlotStore;
 }
+
+// What makes a part's `layouts.show`. `show` is the inner show: it hands each
+// set `showLayouts` gives to the options' `setLayouts` until its `dispose`.
+export type HarnessLayoutShow = <L>(
+  api: PageApi<PluginManifest, any, any, any>,
+  manifest: PluginManifest,
+  options: ShowLayoutOptions<L>,
+  show: (options: ShowLayoutOptions<L>) => LayoutShow,
+) => PageLayoutShow<L>;
 
 export interface HarnessEvent {
   event: string;
@@ -1152,6 +1167,7 @@ interface PageWorld extends HarnessWorld {
   hintsShown: boolean;
   hintsHold: { hold(shown: boolean): Disposable };
   anchorDispose?(): void;
+  layoutShow?: HarnessLayoutShow;
   // The capture `keys.captureKey` armed, null when none is.
   capture: HarnessCapture | null;
 }
@@ -1366,22 +1382,32 @@ function fakeMarkdown(
   );
 }
 
-// A show whose `draw` throws `not faked`: the owner show that draws lives in
-// `src/shared/page/layout-host`, a layer this module may not import.
-function fakeLayoutShow<L>(
+// The inner show of `options`: hands each set `shows` tells to
+// `options.setLayouts` until its `dispose`.
+function innerLayoutShow<L>(
   shows: Listeners<ShownLayouts<unknown>>,
-  setLayouts: (shown: ShownLayouts<L>) => void,
-  register: CommonApi['register'],
-): PageLayoutShow<L> {
-  const listening = shows.add((shown) => setLayouts(shown as ShownLayouts<L>));
-  return register<PageLayoutShow<L>>({
-    refresh() {},
-    draw() {
-      throw new Error('layouts.show draw not faked');
-    },
-    dispose: () => listening.dispose(),
-  });
+  options: ShowLayoutOptions<L>,
+): LayoutShow {
+  const listening = shows.add((shown) =>
+    options.setLayouts(shown as ShownLayouts<L>),
+  );
+  return { refresh() {}, dispose: () => listening.dispose() };
 }
+
+// The inner show with a `draw` that throws `not faked`: the owner show that
+// draws lives in `src/shared/page/layout-host`, a layer this module may not
+// import.
+const throwingLayoutShow: HarnessLayoutShow = (
+  _api,
+  _manifest,
+  options,
+  show,
+) => ({
+  ...show(options),
+  draw() {
+    throw new Error('layouts.show draw not faked');
+  },
+});
 
 function fakePageChannelOn(
   record: PageRecord,
@@ -1425,7 +1451,7 @@ function fakePageApi(
     rightBar: area,
     overlay: area,
   };
-  return {
+  const api: PageApi<PluginManifest, any, any, any> = {
     areas,
     channel: {
       invoke: (method: string, ...args: unknown[]) =>
@@ -1534,7 +1560,14 @@ function fakePageApi(
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
     layouts: {
       show: (options) =>
-        fakeLayoutShow(record.shows, options.setLayouts, register),
+        register(
+          (world.layoutShow ?? throwingLayoutShow)(
+            api,
+            manifest,
+            options,
+            (inner) => innerLayoutShow(record.shows, inner),
+          ),
+        ),
     },
     state: {
       ...common.state,
@@ -1583,6 +1616,7 @@ function fakePageApi(
       timers: common.timers,
     },
   };
+  return api;
 }
 
 interface LiveDomListener {
@@ -1738,6 +1772,7 @@ export function startPagePart<M extends PluginManifest>(
     [part.manifest, ...realParts.map(({ manifest }) => manifest)],
   );
   world.anchorDispose = options.anchorDispose;
+  world.layoutShow = options.layoutShow;
   const holdsRestores = options.holdsRestores === true;
   world.areRestoresSettled = !holdsRestores;
   const record = newPageRecord(
