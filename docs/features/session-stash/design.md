@@ -37,7 +37,6 @@ know nothing of it.
   - reason `user` and never sent a message: it records nothing, since such a session cannot be resumed, and logs that
     it closed without a stash;
   - any other reason: it drops the asked stash.
-  - a pool project's row whose claim never lands fires no `sessionClosed`, so main hears nothing for it.
 
   A message sent while the confirm is open changes nothing: only the close's outcome decides, so ending the session
   still stashes it and keeping it drops the note. The page part has main forget every kept note as it starts, so a

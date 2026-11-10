@@ -23,7 +23,7 @@ bar view and the layout parts in `page/`; the layout contract in `layouts/`), `s
 
 A session's project is first the name a registered namer gives its folder: chat registers one for the projects in its
 settings (`addProjectNamer`, `docs/features/projects/design.md` § Membership), so a folder a project covers takes
-that project's name, read again at each change to the setting (the handle's `changed()`) and when a row moves folders (`relocate`).
+that project's name, read again at each change to the setting (the handle's `changed()`).
 Otherwise it is the repo name its folder's git
 `origin` URL ends in, with `.git` dropped
 (`git@github-personal:JonathonWigley/wigley-ai-gui.git` → `wigley-ai-gui`), read through `Git.originRepoName`.

@@ -9,7 +9,7 @@
 - **Row badge** — what a session row shows for its clone.
 - **Panel** — the right-bar panel, which pool it shows, and what each clone and ticket shows.
 - **Hold and Release** — the two buttons, run through the CLI.
-- **Claims for a project** — the pool provider chat's start prompt claims through.
+- **Clones for a project** — the clone folders the pool provider gives chat.
 - **Drawing** — the layout parts and what the app keeps.
 - **Decisions** — choices a future change would otherwise reopen.
 - **Out of scope**
@@ -23,8 +23,8 @@ release a clone.
 
 Built, in `src/contracts/agent.ts`, `src/main/claude-code/claude-launch.ts` and `src/shared/session-env.ts` (the launch
 variable), `src/shared/origin-repo-names.ts` (the origin-name lookup) and
-`src/plugins/unity-pool/` (the state watch, the CLI runs, the claim run `runPoolClaim` in `pool-cli.ts`, chat's pool
-provider in `pool-provider.ts` and the self-test script in `main/`; the row badge, the
+`src/plugins/unity-pool/` (the state watch, the CLI runs in `pool-cli.ts`, chat's pool provider in
+`pool-provider.ts` and the self-test script in `main/`; the row badge, the
 right-bar panel and their view model in `page/`; the layout contract and the `default` layout in `layouts/`).
 
 ## The pool
@@ -129,20 +129,13 @@ The panel is a right-bar stop: `Alt+l` past main's right edge gives it the keys 
 entering on the shown session's clone holder, and Enter shows the cursor's session as a click on the holder does. The
 cursor's holder draws the focus ring only while the panel holds the keys. The Hold and Release buttons stay clicks.
 
-## Claims for a project
+## Clones for a project
 
-A new session in a pool project (`docs/features/projects/design.md` § Pool projects) is claimed by the app, not by the
-agent: main registers itself with chat's `addPoolProvider`, calls the handle's `changed()` on each state change so chat
-regroups clone rows, and answers four asks. `folders(pool)` gives the pool's clone paths from its state, `branches(pool,
-refresh)` the origin branches its clones last fetched, newest commit first (`refresh` runs `git fetch
---no-recurse-submodules origin` in the lowest-numbered clone first), `claim` runs `unity-pool claim --branch <branch>
---pool <pool> --wait --json` under the session id and row id it is given, with no time limit, stopping the CLI when chat
-cancels it, and `release` runs `unity-pool release --json` under those ids from the home folder, so the CLI finds the
-pool by the session's claim rather than the app's folder. A claim that chat cancels, or that answers `internal` or
-`cli-failed`, runs that release before it settles; the log reads a `not-holder` answer as nothing to release. Once the
-plugin stops its processes are killed and no release runs: the pool's claim expiry frees the clone. A `diverged` answer
-keeps its clone: the provider finds it in the fresh state file and returns its path with the CLI's message as a note. An
-agent that runs `unity-pool claim` again in its clone keeps the clone, as the pool's rules give any holder.
+Chat starts a new session in a pool project in the pool's lowest-numbered clone
+(`docs/features/projects/design.md` § Pool projects), and the app claims nothing for it: the agent runs `unity-pool
+claim` itself when its work needs a clone. Main registers itself with chat's `addPoolProvider`, which answers one ask,
+`folders(pool)`, with the pool's clone paths in clone order from its state, and calls the handle's `changed()` on each
+state change so chat regroups clone rows.
 
 ## Drawing
 

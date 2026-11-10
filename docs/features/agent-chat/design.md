@@ -68,7 +68,7 @@ interview on 2026-10-23; this file is the record of both.
 ```
  Space b n ─► start prompt (overlay): project (each project in settings, then Other folder… for the folder step:
                  │                     the app's recent folders and every folder the harness has sessions in, newest
-                 │                     first, or the folder dialog), then branch for a pool project, then profile
+                 │                     first, or the folder dialog), then profile
                  │                     (skipped when the project fixes one, or with one profile), then sign-in when that
                  │                     profile is signed out, then a new session or one of the project's or folder's
                  │                     saved sessions to resume; a registered resume section sits at the top of the
@@ -535,7 +535,7 @@ interview on 2026-10-23; this file is the record of both.
   swap with a real round is a live check in the final verification.
 - **Starting a session from an agent**: the `start_session` MCP tool opens a chat session through the same background
   launch Notes and Workflow use, so the row appears without taking focus. It takes `prompt`, then `folder` or
-  `project` (not both), `branch` for a pool project, and `profile`
+  `project` (not both), and `profile`
   (`docs/features/projects/design.md` § Starting from an agent). The tool is the only route from outside
   the window. A command-line route was rejected because it returns nothing to the caller, needs its own check of who
   is calling, and has no caller that lacks the relay. The app adds no approval and no cap: the calling session's

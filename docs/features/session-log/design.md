@@ -28,9 +28,6 @@ can hear the same events.
 | `archived` | `chat.sessionArchived` | a saved session was archived or restored from the archive |
 | `terminalConnected`, `terminalEnded` | `sessions.connected`, `sessions.ended` | a session the app did not start connected or ended |
 
-A pool project's session fires `sessionOpened` when its claim lands, in the claimed clone; a row whose claim never
-lands fires neither `sessionOpened` nor `sessionClosed`, so the log holds no line for it.
-
 Chat fires `sessionClosed` before it drops the row, because `sessions.closed` reaches a listener too late: closing a
 resting row ends it inside the same call, so its titles are already gone, and `closeSessionsIn` never fires it.
 

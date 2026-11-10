@@ -292,7 +292,7 @@ export const chatManifest = definePlugin({
     projects: {
       label: 'Projects',
       description:
-        "The projects a new session starts from, in the order the start prompt lists them: a name, and a folder or a unity-pool pool, each; an optional profile every session of the project runs under, and a pool's pinned branches.",
+        'The projects a new session starts from, in the order the start prompt lists them: a name, and a folder or a unity-pool pool, each; and an optional profile every session of the project runs under.',
     },
     layout: {
       label: 'Layout',

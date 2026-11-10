@@ -284,9 +284,7 @@ replay or a countdown's Cancel or firing. A replayed event
 at or before that time is already in the flow, so it updates only the running turn and subagents; a later one, from a
 turn that ended while the app was closed, folds as usual. A flow saved without the time counts as saved when it loaded.
 
-A flow opens when chat opens its row (`chat.sessionOpened`, paired with the host id `sessions.connected` gave). A pool
-project's row fires `sessionOpened` when its claim lands, in the claimed clone, and `sessions.relocated` moves the
-connected session's remembered folder to that clone. The
+A flow opens when chat opens its row (`chat.sessionOpened`, paired with the host id `sessions.connected` gave). The
 engine restarting on its own while chat and sessions run hears neither for the rows already open, so its `ready()`
 opens each row in `chat.session` whose profile is in chat's settings, under the host id and folder its
 `sessions.rows` entry holds, after `flows.json` loads; an open event for a row already opened under the same host id
