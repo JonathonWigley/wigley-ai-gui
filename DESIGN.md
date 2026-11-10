@@ -323,7 +323,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
   (`createCollapsibleCard`), whose `plain` variant is a one-line row with no card chrome that opens
   its body in place under it.
 - **FloatingPanel** (`floatingPanel`, opened with `openFloatingPanel`): the L3 glass panel.
-- **Dialog** (`createDialog`): a modal over the `scrim`; `restoreFocusAfterDialog` gives focus back to its opener on
+- **Dialog** (`createDialog`): a modal over the `scrim`, its panel, title and actions row drawn by the opener's
+  layout (`drawFrame`, each owner's `dialogFrame` part); `restoreFocusAfterDialog` gives focus back to its opener on
   close.
 - **EmptyState** (`emptyState`): one line saying what to do, then the key that does it.
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.

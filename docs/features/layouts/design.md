@@ -76,7 +76,7 @@ edit shows at once, and the committed edit ships as the next build's bundled cop
   the shell names `src/renderer/shell/layouts/default/` when it registers. A user folder named `default` stays
   ignored.
 - **Reload.** Main watches each owner's default folder beside its user folder, only when the folder exists at start,
-  and a saved `layout.js` or `layout.css` raises the default's revision like any layout's; a folder that gains
+  and a saved `layout.js` raises the default's revision and a saved `layout.css` its style revision, like any layout's; a folder that gains
   `layout.js` after start goes live at revision 2. The page loads it on the same `wigley-layout:` scheme, as
   `<owner>/default/`, and redraws. The renderer dev server ignores `**/layouts/default/**`, so this path is the only
   redraw of a default in either app.
@@ -104,7 +104,10 @@ A layout draws every pane, and every repeated row, card or entry of its owner's 
 - keys, scopes and key anchors, which a layout places through its kit (`keyHint`, `keysFor`)
 - scrolling and split widths
 - text boxes and editors, which a layout places through `kit.textBox`; the app appends any box a layout leaves out
-- dialogs' and prompts' lifecycle, the status lines and the saved state
+- the lifecycle of dialogs, prompts and toasts: the scrim, showing and hiding, keys, focus, timing and removal; the
+  layout draws their frames (each owner's `dialogFrame`, `confirmBody` and the shell's `toast`)
+- the saved state a status line shows, which a layout places through its kit (`saveStatus`)
+- which keys a cursor row's prompt shows; the layout draws each one from its input through `kit.keyHint`
 
 A layout's CSS restyles only under its own root: every part root carries `data-layout="<name>"` and
 `data-layout-owner="<owner>"`, so two owners' layouts of one name never share selectors. The default's
@@ -118,7 +121,7 @@ stays in themes.
 
 | Owner | Setting | Surfaces |
 | --- | --- | --- |
-| `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the five chrome frames take the layout's CSS |
+| `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; each toast; the five chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail, review and notices panes |
 | `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session header; the composer and its status line, a `/` completion row's description (`completionDescription`), the attachments, the picker rows and section headings (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time and profile on its side-bar row (`rowClock`, `rowProfile`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
@@ -127,7 +130,7 @@ stays in themes.
 | `practice` | `practice.layout` | the problem list (its pane, header, rows and empty state) in the side bar; the problem column's three stacked panes (problem, editor, console) and the no-problem state; the problem pane's tabs (description, submissions with their rows and a submission's code, notes, solution), the console's Testcase and Result tabs, a case's result, the Solution confirm body, the interviewer pane's ask box (`askBox`) and the import dialog's body (`importBox`) |
 | `settings` | `settings.layout` | the section list, the setting, plugin, key, leader and advanced rows, the Leader menu's panes, group, item and add rows, the Keybindings section's filter chips, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
-| `sessions` | `sessions.layout` | the side bar's Favorites and Recent sections and every plugin's section (`addSection`), their project groups and the session rows in them, each session's tab strip, the session popup (`popup`) and its hidden bar (`popupBar`), where other plugins' row and bar parts sit, the rename dialog |
+| `sessions` | `sessions.layout` | the side bar's Favorites and Recent sections and every plugin's section (`addSection`), their project groups and the session rows in them, each session's tab strip, the session popup (`popup`) and its hidden bar (`popupBar`), where other plugins' row and bar parts sit, the rename dialog, the split picker's rows |
 | `agent-lines` | `agent-lines.layout` | the working line under each session row while it runs a subagent or task |
 | `session-stash` | `session-stash.layout` | the stash dialog's body: the session's name, the note box and the hint |
 | `auto-retro` | `auto-retro.layout` | the Retro section's header part: the count of closes still queued |
@@ -165,8 +168,9 @@ can be iterated in place. The sample sends nothing and raises no notification or
 - **Items part** (`items`): the selected task's items, each with its include mark, its number and its text, or the
   empty state when the Feature row or a task with no items is selected; `ItemsKit.itemRow` gives each row. `j` / `k`
   walk these rows only. `x` on an item row toggles its include mark; `y` / `n` / `u` set its task's need.
-- The app keeps the two nested splits, their widths and their handles' resize prompt, each column's header strip and
-  the card's edge strip.
+- The app keeps the two nested splits, their widths and their handles' resize prompt. Each column's header strip
+  (`tasksHead`, `itemsHead`), the tasks column's foot (`tasksFoot`), the card's edge strip (`cardEdge`) and the review
+  pane's footer (`reviewFooter`) are parts of their own.
 - **Task card** (the tasks column focused on a task row): heading, tags and need; Question, Evidence, Probes and Pointer when not
   blank; an extra task's name box; the add-item box; the task comment. It lists no items.
 - **Item card** (the items column focused on an item row): the header `⌃H ‹ 2 of 3 › ⌃L`, the item text as heading, the include mark,
@@ -175,9 +179,13 @@ can be iterated in place. The sample sends nothing and raises no notification or
 
 ## Decisions
 
-- **A reload keeps the user's chat draft either way.** A layout reload moves chat's box into the redrawn composer; a
-  page reload restores the draft and the attached images from chat's page slots (`chatPlaceSlot`,
-  `chatDraftImagesSlot`).
+- **A reload keeps the user's place.** A layout reload keeps every text box alive and moves it into the redrawn part
+  (`src/shared/page/editor-boxes.ts` owns each box's frame, and a draw that leaves a box out releases it), so its
+  text, cursor, vim mode and undo survive, as chat's composer box always has; an owner redraws only the parts whose
+  layout changed. A save that changes only a layout's `layout.css` raises its style revision alone, which re-links the
+  stylesheet with no redraw. A page reload restores chat's draft and the attached images from chat's page slots
+  (`chatPlaceSlot`, `chatDraftImagesSlot`). Boxes are kept, not snapshotted: a snapshot through `TextEditor` would
+  lose undo and add two members every editor fake carries.
 - **Core, not per plugin.** The layouts folder is core-owned and the shell is an owner with no plugin data folder, so
   layouts load on their own `wigley-layout:` scheme, not as a host on `wigley-data:`. A plugin never reaches the folder
   through `api.data`.
@@ -188,8 +196,9 @@ can be iterated in place. The sample sends nothing and raises no notification or
   A member an owner adds must not clash with `BaseKit`; `layout-contracts.test.ts` type-checks every contract against
   it.
 - **A dialog follows its opener.** A dialog or prompt draws with the layout of the owner that opens it. The shared
-  list picker and confirm prompt expose hooks (`drawRow`, `drawBody`) that each owner fills, so shared code names no
-  owner.
+  list picker, the confirm prompt and the dialog expose hooks (`drawRow`, `drawBody`, `drawFrame`) that each owner
+  fills, so shared code names no owner. `drawFrame` is required, so the compiler finds a dialog opened with no
+  layout.
 - **CSS stays inside the layout's root.** Restyling a primitive app-wide from a layout is out of scope: themes carry
   the app-wide look, and a layout rule selects under its own `data-layout` root; the default's `layout.css` keeps
   the page CSS's unscoped selectors and is linked under every pick.
