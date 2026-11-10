@@ -59,9 +59,11 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
 ## The host
 
 - The host spawns a command with args, folder and environment, writes lines to its stdin, closes its stdin, kills
-  it, and logs every pipe line, less the dropped keys below. A spawn's `env` is an overlay: the host takes its own
-  environment, drops `ELECTRON_RUN_AS_NODE` and every name in the spawn's `unsetEnv`, then lays `env` over it, so a
-  name in both `unsetEnv` and `env` takes `env`'s value. The spawn's `stdin` lines are written right after the spawn,
+  it, and logs every pipe line, less the dropped keys below. A live start's `env` (`inheritEnv` false) is the child's
+  whole environment. A prepared run's `env` (`inheritEnv` true) is an overlay: the host takes its own environment,
+  drops `ELECTRON_RUN_AS_NODE` and every name in the spawn's `unsetEnv`, then lays `env` over it, so a name in both
+  `unsetEnv` and `env` takes `env`'s value. A live start inherits nothing from the host, whose environment can be an
+  older app's or launchd's. The spawn's `stdin` lines are written right after the spawn,
   in order, each logged as `in` like a `write`. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
   and one **idle rule**: a top-level JSON key, the value that marks a stdout line as the end of a turn (for Claude
   `"type": "result"`), and the values of that key that start a turn on each pipe (for Claude `user` on stdin,
@@ -144,11 +146,14 @@ harness.
 
 - **`setPending`** replaces every pending entry the app sent before with the list it carries. An entry is
   `{ at, spawn, record, skipWhileBusy }`: `at` in epoch ms, `record` the app's JSON, handed back untouched on the run.
-  The client keeps the last list and sends it again on each connect, after it sent `drain` to any older host, so a
-  new host takes it over. On each connect after its first, the client tells its `onConnected` listeners, and the
+  The client keeps the last list, less each entry a `runStarted` or `forgetRuns` named, and sends it again on each
+  connect, after it sent `drain` to any older host, so a new host takes it over and fires no forgotten run again. On each connect after its first, the client tells its `onConnected` listeners, and the
   scheduling plugin reads `listRuns` again.
-- **The timer.** The host starts each entry at `at`; an entry at or before now starts at once. Both files are
-  rewritten on each change, so the queue and the runs survive a host restart.
+- **The timer.** The host starts each entry at `at`; an entry at or before now starts at once. The timer waits at
+  most 30 s before it reads the wall clock again, since Node's timers do not advance while a Mac sleeps; an entry
+  whose `at` passed during sleep starts within 30 s of wake. Both files are rewritten on each change, so the queue
+  and the runs survive a host restart. A fire that throws records a run whose `exit` holds the error, and the host
+  goes on.
 - **The skip rule.** `skipWhileBusy` names a hosted process id, or null. At `at`, when that process runs and its idle
   rule reads it busy, the host skips the spawn and records a run with `skipped: true` and `exit` null. An idle
   process that stays alive does not block the entry.

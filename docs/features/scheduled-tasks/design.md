@@ -66,7 +66,7 @@ host; chat starts and adopts the run, and sessions answers its tool calls while 
    scheduling → chat.adopt(record.adopt) inside sessions.holdConnects
      process runs  → row attached (relay join lands on the owned row)
      process gone  → row resting, history pending
-   → sessions.replayCalls(hostSessionId)   (after the attach replay fed chat's tool callers)
+   → sessions.replayCalls(hostSessionId)   (after adopt noted the run's tool callers)
    → sessionHost.forgetRuns([id]) → history entry → re-plan → setPending
    Sessions side bar: "Scheduled runs" section claims every open run row
    finished, unviewed run row → row activity `done` (raised) + Dock badge count
@@ -110,8 +110,10 @@ trailing newline (`taskFileText`). One task:
 ```
 
 The app watches the file and re-plans on each change. A file that fails to parse (`readTaskFile` names the first bad
-task and field) keeps the last good tasks, and Schedules mode shows the error above the list. Tasks never expire: a
-task stays until the user or an agent removes it.
+task and field) keeps the last good tasks, and Schedules mode shows the error above the list. While it fails to
+parse, the app writes nothing to it (an edit, a pause or a tool call answers that the file has an error), so a
+write never erases the user's unsaved hand edit. A deleted file reads as no tasks. A hand edit keeps the `updatedAt`
+the file holds; the app does not stamp it. Tasks never expire: a task stays until the user or an agent removes it.
 
 Each run is a new headless session in the task's folder, with the prompt as its first message and the task's
 controls as its first process's. A pool project's run starts in the pool's lowest-numbered clone with no claim; the
@@ -144,7 +146,8 @@ The cron dialect is vixie cron's numeric core:
 - no month or day names, and no `L`, `W` or `?`
 
 Daylight saving: a local time that a spring-forward gap skips does not occur that day, and a local time that a
-fall-back overlap repeats occurs once, at its first instance.
+fall-back overlap repeats occurs once, at its first instance. A one-time `at` that a gap skips is refused when the
+schedule is read, since it would never fire.
 
 ## Firing
 
@@ -155,11 +158,17 @@ fall-back overlap repeats occurs once, at its first instance.
   now press at once, else a catch-up at once, else the next occurrence. A paused task and a spent one-time task get
   none. The app sends the whole list with `setPending`, which replaces what it sent before. With the app closed, a
   task fires once and then waits until the app opens and plans again.
-- **Re-plans** happen on app start, on each task edit, on each task-file change, on a plugin reload, and after each
-  run is adopted.
+- **Re-plans** happen on app start, on each task edit, on each task-file change, on a plugin reload, after each
+  run is adopted, and when chat's session instructions change (`chat.onInstructionsChanged`), which also prepares
+  every pending run again. The `claude.command` path and chat's profiles and projects, which a prepared run also
+  holds, have no change signal: a change reaches a pending run at its next re-prepare, the next app start, edit of
+  that task, task-file change or plugin reload.
 - **Catch-up.** The planner looks back from now to the later of the task's `updatedAt` and its latest history
   occurrence. When that window holds a missed occurrence, it queues one run, at once, for the latest; older missed
-  times are dropped. So a task resumed or edited after a gap does not catch up times from before the change.
+  times are dropped. So a task resumed or edited after a gap does not catch up times from before the change. A task
+  written by hand with an `updatedAt` older than its latest occurrence, and no history, catches up once at the next
+  plan. In a start whose `history.json` could not be read, no task catches up (the window starts at that start),
+  since the app cannot tell which times already ran.
 - **Overlap.** Each pending run carries `skipWhileBusy`: the process id of the task's newest history entry with one.
   At `at`, the host skips the run while that process runs and its idle rule reads it busy, and records a run with
   `skipped: true`, which history shows as skipped. An idle run whose process stays alive does not block the next run.
@@ -176,8 +185,9 @@ A prepared run stores only the app's own variables plus PATH, never the app's wh
 `WIGLEY_FORMS_OFFLINE` (from sessions' `offlineEnv`), and `PATH` as the app's login PATH when the run was prepared.
 The Claude adapter carries `PATH`, `WIGLEY_AI_GUI_ENDPOINT_DIR` and `CLAUDE_CONFIG_DIR` from the app's environment
 into the run (`CLAUDE_CARRIED_ENV`, `prepareRun`), so no plugin reads that environment. `CLAUDE_CONFIG_DIR` rides
-along because a profile on the default folder keeps the inherited value, and the run must write its transcript where
-adoption reads it. The host lays these over its own environment, less
+along because a profile with no folder of its own keeps the inherited value, and the run must write its transcript
+where adoption reads it. A profile whose folder is the default `~/.claude` runs with `CLAUDE_CONFIG_DIR` unset, and
+any other profile folder sets it. The host lays these over its own environment, less
 `ELECTRON_RUN_AS_NODE` and the harness's unset names; a host launchd started at login has launchd's bare one. A
 variable a run needs beyond these goes in the Claude profile's settings `env`, and Schedules mode says so.
 
@@ -212,8 +222,10 @@ that run replays.
 
 The relay appends each call it answered alone to the run's calls file, `<endpoint dir>/offline-calls/<session
 id>.jsonl`. At adoption, `sessions.replayCalls(hostSessionId)` routes each replayable call to the row's tool sessions
-in order, through the tool-call guards, drops the results, and deletes the file. It runs after the attach replay has
-fed chat's tool-caller tracking, so a subagent's call is not applied as a main agent's.
+in order, through the tool-call guards, drops the results, and deletes the file. It runs after `adopt` noted the
+run's tool callers: the attach replay for a running process, or the history read for a resting row, whose saved
+history holds the main agent's calls only. A replayed main-agent-only call that no note names as the main agent's is
+skipped, with no wait, so a subagent's call is never applied as a main agent's.
 
 ## Adoption
 
@@ -222,13 +234,19 @@ starts and each time the host client connects to a new host (`sessionHost.onConn
 inside `sessions.holdConnects`, so a run's relay hello waits for its row. For each run whose record is a
 `ScheduledRunRecord`:
 
-1. A skipped run, or one whose `exit.error` is set, goes straight to history.
+1. A skipped run, or one whose `exit.error` is set, goes straight to history. A spawn error reads `could not start
+   the agent in <folder>: <error>`; an `ENOENT` says that the folder or the agent command is missing.
 2. Any other run: `chat.adopt(record.adopt)` opens its row inside `sessions.holdConnects`, so the run's relay
    connection joins the owned row. A process that still runs is attached; a process that is gone gives a resting row
-   with its history pending, through chat's restore path. `adopt` rejects, opening nothing, when a row already holds
-   the host session id. When that row is chat's own headless row, an earlier start adopted the run and quit before
-   forgetting it, so the history entry stands (or is written once). Any other rejection is a failed entry,
-   `not opened: <reason>`. A run's history entry names the row id `adopt` resolved to.
+   with its history pending, through chat's restore path. When a row already holds the host session id (an earlier
+   start adopted the run and quit before forgetting it, the same run heard twice, or the run's own relay row),
+   `adopt` opens nothing and resolves to that row, and an existing history entry stands. A relay row has no chat
+   session to report a turn's end, so its run is finished at adoption. A rejection (the app stopping, or a row chat
+   cannot open) is a failed entry, `not opened: <reason>`, except while the app stops, when the run waits for the
+   next start. A run's history entry names the row id `adopt` resolved to. A run read through
+   `listRuns` is finished at adoption when its process is gone or its row reads idle after the attach replayed the
+   pipe log; a run heard through `runStarted` is finished at adoption only when its process is gone, since its first
+   turn has just begun.
 3. `sessions.replayCalls(hostSessionId)` replays the calls the relay logged while the app was closed.
 4. `sessionHost.forgetRuns([id])` drops the run from the host's runs record, the history entry is written, and the
    plugin re-plans and sends `setPending`.
@@ -238,8 +256,8 @@ session does.
 
 ## Login start
 
-While any task is active (`services.loginStart.set(any task active)`), the session host starts when the user logs
-in, so pending runs fire after a restart with no app open. Both macOS login starts run the app executable with the
+While any task is active (`services.loginStart.set(any task active)`; active means not paused with a planned run,
+so a spent one-time task does not count), the session host starts when the user logs in, so pending runs fire after a restart with no app open. Both macOS login starts run the app executable with the
 flag `--start-session-host` (`LOGIN_START_FLAG`). `main.ts` checks the flag before the single-instance lock, sets the
 accessory activation policy so no Dock icon shows, starts the host detached through `sessionHostLaunch` as the app
 would, and exits; so the host's folder and channel are worked out in one place and no plist holds them. A host
@@ -269,14 +287,17 @@ started this way reads its pending table and runs record at start. `LoginStart` 
 - **The mode's keys**: `j`/`k` move, `a` makes a task, `i` edits the selected one, `p` pauses or resumes it, `r` runs
   it now, `d` removes it after a confirm; in the details, `j`/`k` move through the history and `<CR>` opens a run's
   row. `src/plugins/keymap.ts` holds the full list.
-- **The mode's lines**: the task file's parse error while one stands; in the dev app, that it never fires; where the
-  app fires, the login start's state; and that a variable a run needs goes in the profile's settings `env`.
-- **History lines** under the selected task, newest first: `Finished`, `Skipped, previous run still going`, and
-  `Failed to start: <reason>`. A line with a row links to it.
+- **The mode's notices**, at the top of the details: the task file's parse error while one stands; in the dev app,
+  that it never fires; where the app fires, the login start's state when it needs the user (approval, a failure, or
+  no login start on this platform). The editor says, under its rows, that a variable a run needs goes in the
+  profile's settings `env`.
+- **History lines** under the selected task, newest first: `Running`, `Finished`, `Skipped, previous run still
+  going`, and `Failed to start: <reason>`; `No runs yet.` with none. A line links to its run row while that row is
+  open; a line whose row the user closed draws unlinked.
 - **The Scheduled runs section** in the Sessions side bar, registered through sessions' `addSection`, claims every
   open run row (`SchedulingState.runRows`).
-- **The finished mark.** A run is finished at its row's first `chat.turnFinished`, or when `adopt` finds its process
-  gone or idle. A finished run stays unviewed until `sessions.selection` names its row; a run that finishes while its row is
+- **The finished mark.** A run is finished at its row's first `chat.turnFinished`, at adoption by the rule in
+  § Adoption, or when its row closes. A finished run stays unviewed until `sessions.selection` names its row; a run that finishes while its row is
   selected is viewed at once. The mark is the history entry's `viewed` flag, so it survives an app restart. The page
   sets row activity
   `done` with emphasis `raised` on each unviewed run row, and main sets the `services.alerts` open count `scheduling`
@@ -286,13 +307,16 @@ started this way reads its pending table and runs record at start. `LoginStart` 
 
 Main agents manage tasks through four tools, contributed with `{ mainAgentOnly: true }` (`main/task-tools.ts`):
 
-- `schedule_task` — makes a task, active at once; the calling session's folder and profile by default.
+- `schedule_task` — makes a task, active at once; the calling session's folder by default, and the named
+  project's own profile, else the calling session's, as `start_session` defaults. A project with its own profile
+  refuses any other.
 - `list_scheduled_tasks` — each task's id, name, schedule, next run and last outcome.
 - `update_scheduled_task` — changes any field; `paused` pauses and resumes.
 - `remove_scheduled_task` — removes a task.
 
 `schedule_task` and `update_scheduled_task` cap the task's controls at the calling session's, through the harness's
-`capControls`, so an agent cannot schedule a run with more permission than it has. A call from a run row answers `A
+`capControls`, so an agent cannot schedule a run with more permission than it has. An update caps the controls the
+task ends with, kept ones included, unless its only change is a pause. An unknown control id is refused at save. A call from a run row answers `A
 scheduled run cannot manage scheduled tasks.`, so a run cannot reschedule itself. An agent's task shows in Schedules
 mode like any other. With the app closed, the four tools did not run.
 
@@ -338,7 +362,8 @@ until the user views a finished run's row.
 - **Catch-up window from the last edit or run.** A resumed or edited task does not catch up times from before the
   change, as Hermes does for a paused job.
 - **Finished means the first turn ended.** A run row is done once its first turn ends, and it stays marked until the
-  user views it.
+  user views it. A process stays alive after its turn, so adoption reads the row's activity, not only whether the
+  process runs.
 - **A one-time task stays after its run**, with no next run, until the user edits or removes it.
 - **An in-house schedule parser.** A third-party cron or date library was rejected with the user: the dialect is five
   numeric fields, and a pure parser on the injected clock tests by table, DST cases included.
