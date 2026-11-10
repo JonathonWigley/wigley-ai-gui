@@ -138,7 +138,7 @@ Decisions:
   `mountSidebarView` gains a fifth parameter `harnesses: () => ReadonlyMap<string, AgentHarnessInfo>`;
   `SessionsViewDeps` gains `harnesses(): ReadonlyMap<string, AgentHarnessInfo>`; sessions' page start builds it
   from the slot.
-- The no-folder group label in `groupOf` (`session-list.ts:137`) (round 3, recommended; the lead confirms): a
+- The no-folder group label in `groupOf` (`session-list.ts:137`) (the user, round 3): a
   session with no folder and a harness groups as `<label> session`. One with no harness groups as `session`. Claude
   rows then read `Claude Code session` where they read `session` today. Codex rows read `codex session` until a
   Codex adapter registers. Wiring:

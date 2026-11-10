@@ -58,7 +58,7 @@ Decisions:
 - The row's waiting permission cards settle as aborted, as when their tool session ends: `settlePermission` with
   `{ allowed: false, reason: CANCELLED_REASON }`, the answer the call's abort handler gives (drafter: the adapter's
   permission route goes with its plugin, so no answer can reach it; re-verify the name after task 08).
-- What the user sees (OPEN: see the report): the row rests (`activity: 'idle'`, `running: false`, its clock paused),
+- What the user sees (the user, round 3): the row rests (`activity: 'idle'`, `running: false`, its clock paused),
   and the chat gains an info notice `<label> is not loaded. This session waits for it to load again.` A send to it
   (`send`, `sendAllNow`, the export `send`) rejects before anything queues, with
   `<label> is not loaded. Send again once it is.`; the page shows it as `Message not sent: <text>` and puts the
