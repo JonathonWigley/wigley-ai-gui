@@ -12,6 +12,7 @@
 - **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
 - **Hot reload (Wave 4)** — the closed bridge, core services that stay fixed, live stop, start and restart, the `ready` and `mayStop` hooks, the live enable switch, and quit waiting for every stop.
 - **Runtime loader (Wave 4 step 3)** — user-folder plugins, what reloads them, replacing a built-in, the types and manifest a user plugin writes against, and what a live start restores.
+- **Extension points (Lane E)** — markdown blocks, defineEx, plugin remaps, setting control kinds and the layout picker, forms item kinds and finding origins as registrations, action words in saved rounds, proof on a Nit alone.
 
 The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
 the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
@@ -355,3 +356,56 @@ Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-a
   pending events. Each plugin restart opens and closes watches, so a save made while one runs could be lost.
   `Files.watch` reports this through `onMissed`, and the user plugin source, the config store and the layout registry
   compare what they watch against their last read.
+
+## Extension points (Lane E)
+
+Settled in the 2026-11-09 interview for Lane E of `docs/features/intent-alignment/master-plan.md`; the plan is
+`intent-alignment/plan-lane-e-extension-points/`. Written before the code: the plan's docs task re-reads it against
+the landed code.
+
+- **Markdown blocks.** `MarkdownRenderer.addBlock` registers a `:::name` block by name. The adapter keeps the
+  `:::name` syntax, the closing line and nesting; a block's render gets the header text, the body lines and helpers
+  that render inner block and inline markdown and escape text, and returns HTML. A block registering its own opener
+  was rejected: the close and nesting rules are the hard part, and they stay in one place. A node tree instead of
+  HTML was rejected: fences and the rest of the adapter already trade in HTML strings.
+- **The wigley blocks are a plugin.** `:::changes`, `:::tree` and `:::details` register from a built-in
+  `markdown-blocks` plugin. Forms and chat list it in their page `dependsOn`, so the switch locks it on while either
+  runs: forms' tool text promises the blocks, and chat's replies draw them. A core registration at the composition
+  root was rejected: everything is a plugin.
+- **defineEx hands the handler its editor.** `EditorHost.defineEx(name, prefix, handler)` returns a Disposable; the
+  handler gets the editor the command ran in, the argument text and the bang. The document editor's `:w`, `:q`,
+  `:wq` and `:x` register through it inside the host and stay per-editor `DocumentEditorEvents`, because docs,
+  Practice and Settings each bind `:w` to their own editor. Moving `:w` to each plugin was rejected: a global `:w`
+  per plugin needs a claiming rule to do what the per-editor event already does.
+- **Plugin remaps.** A manifest's `keys.remaps` takes the user keymap's `{ mode, keys, to }` shape and layers in
+  dependency order under the user's keymap, as binds do.
+- **Setting control kinds.** A setting's control kind is a string id. A manifest names each setting's kind by path
+  (static, so main reads it before any part starts), and the page registers each kind's row text and editor through
+  Settings' page exports; the built-in six kinds register the same way. Main registers nothing: `settings.json` is
+  checked by the shape of each default before any plugin part starts, which already covers a structured setting. A
+  page-only kind with no manifest binding was rejected: main derives each row's control. One registration object
+  both processes import was rejected: the layering has no cross-process registry.
+- **Settings layouts stay one row part.** The `settingRow` part's `control` is a string; the kit draws the
+  registered kind's editor, and a layout that does not know a kind still draws its row.
+- **The layout name picker is a kind.** Each `<owner>.layout` setting and `shell.layout` declare the `layout` kind;
+  its picker lists the owner's names from `UserConfigRead`, as the theme row lists themes. A name a user folder no
+  longer holds stays valid in `settings.json`: the layout host already falls back to `default`.
+- **Forms item kinds register per process.** Main's registration carries parse, schema, fingerprint and the wire
+  keys; the page's carries restore, reduce, boxes and the card input, tied by the kind's id. The built-in kinds
+  register through the same calls, and plugins reach them through forms' main and page exports. Rounds hold a
+  record by kind inside and convert to the named arrays at the store and payload edge, so saved files stay
+  byte-identical. A forms layout keeps its three named cards and gains a string-keyed record for new kinds. One
+  shared registration module was rejected: page code may not reach main.
+- **Finding origins register.** `registerFindingOrigin(spec)` through forms' main and page exports, disposable, the
+  four built-in origins registered the same way; each spec is the single source for the parser, tool text and card.
+  A table inside forms with no registration was rejected: item kinds register in the same chain, and the Intent
+  counts a closed list as an extension point. A finding's card, origin, action and severity are strings in the
+  layout contract.
+- **Saved rounds carry action words.** Each `finding_answers` entry gains `action_label`, the word its card showed,
+  so retro reads it instead of its own table. A round-level map was rejected: retro reads finding answers one entry
+  at a time.
+- **A proof is required on a Nit alone.** An omitted proof is left out of the fingerprint, so old files keep their
+  hashes; a proof sent off a Nit is accepted and drawn only by a layout that reads it.
+- **`FormsScreen`.** Forms' screen union (`forms | review | confirm | idle`) is renamed `FormsScreen`, since the page
+  interface keeps `FormsView`. The `viewChanged` event keeps its name: only forms emits it, and the self-test waits on
+  its log line.
