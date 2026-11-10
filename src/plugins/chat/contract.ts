@@ -438,7 +438,9 @@ export interface ChatChannel extends ChannelShape {
     // main holds them no longer.
     returnedPlaced(sessionId: string, returnedIds: string[]): void;
     // Writes the queued message to the agent at once, ahead of the rest of the
-    // queue, sent `now` while a turn runs and no compaction does; its row stays in `chat.queued` with `sentEntryId` set, until
+    // queue, and while a turn runs asks the agent to take it in now (not during
+    // a compaction, for slash text, or behind a message written plainly and not
+    // yet taken in); its row stays in `chat.queued` with `sentEntryId` set, until
     // the agent takes it in. Does nothing for one already written or sent now.
     // On the held row it skips the compaction, as `interrupt` does, and the row
     // is written when the compaction ends.

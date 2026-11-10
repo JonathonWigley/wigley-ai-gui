@@ -432,6 +432,9 @@ interface HeldSession {
   // stamp from `heldCount`, until its entry arrives; ids restart with each
   // process.
   writtenMessages: Map<string, WrittenMessage>;
+  // Harness entry ids of the queued rows sent `now` in this process; a sent row
+  // whose id is missing here was written plainly.
+  sentNowIds: Set<string>;
   // Processes started in this row, the one running included.
   processStarts: number;
   // Control id → the value the user picked in this row that a report confirmed,
@@ -1091,17 +1094,26 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Writes the row's message and marks it with the entry id the write
   // returned; false when the write throws, which leaves it unsent. While a
-  // turn runs it asks the agent to take the message in now; while a
-  // compaction runs it writes plainly, so the compaction is not cut short.
+  // turn runs it asks the agent to take the message in now. It writes plainly
+  // during a compaction, so the compaction is not cut short; for slash text,
+  // which may start one (`/compact`); and behind a plainly written message the
+  // agent has not taken in, which a `now` message would run ahead of
+  // (claude-stream.md § Send now).
   function writeRowNow(session: HeldSession, row: QueuedMessage): boolean {
     const isNow =
-      isTurnRunning(session) && session.slots.info().compaction === null;
+      isTurnRunning(session) &&
+      session.slots.info().compaction === null &&
+      !row.text.trimStart().startsWith('/') &&
+      !hasPlainWriteWaiting(session);
     let sentEntryId: string;
     try {
       sentEntryId = deliver(session, userMessageOf(row), isNow);
     } catch (error) {
       log(`queued message ${row.id} not sent: ${errorText(error)}`);
       return false;
+    }
+    if (isNow) {
+      session.sentNowIds.add(sentEntryId);
     }
     const sentRow = { ...row, sentEntryId };
     session.slots.setQueued(
@@ -1110,6 +1122,19 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         .map((queued) => (queued.id === row.id ? sentRow : queued)),
     );
     return true;
+  }
+
+  function hasPlainWriteWaiting(session: HeldSession): boolean {
+    return (
+      session.writtenMessages.size > 0 ||
+      session.slots
+        .queued()
+        .some(
+          (queued) =>
+            queued.sentEntryId !== null &&
+            !session.sentNowIds.has(queued.sentEntryId),
+        )
+    );
   }
 
   function setCompaction(
@@ -1595,6 +1620,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       heldCount: 0,
       rowOrders: new Map(),
       writtenMessages: new Map(),
+      sentNowIds: new Set(),
       processStarts: 0,
       confirmedPicks: new Map(Object.entries(opening.confirmedPicks)),
       pendingPicks: new Map(),
@@ -1857,6 +1883,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // stop request and a hold's stretch belong to the old process and are dropped.
   function beginProcess(session: HeldSession) {
     session.processStarts += 1;
+    session.sentNowIds.clear();
     session.pendingPicks.clear();
     clearBackground(session);
     session.isStopRequested = false;

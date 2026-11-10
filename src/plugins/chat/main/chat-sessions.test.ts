@@ -23,6 +23,7 @@ import {
   FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
+  type FakeAgentCall,
   type FakeAgentHarness,
   fakePlanRowUpdate,
   fakeUsageEvent,
@@ -750,6 +751,13 @@ async function startedRefusing() {
   const process = fake.processes[0];
   const activity = (value: ProcessActivity) => process.events.activity(value);
   return { ...test, process, activity };
+}
+
+// Each message the process was sent, as its text and whether it went `now`.
+function writtenWithNow(test: { process: { calls: FakeAgentCall[] } }) {
+  return test.process.calls.flatMap((call) =>
+    call.method === 'send' ? [[call.text, call.now === true]] : [],
+  );
 }
 
 function sendCall(message: UserMessage) {
@@ -7390,14 +7398,93 @@ describe('createChatSessions send gate and hold', () => {
     expect(test.process.calls).toEqual([sendCall(first)]);
   });
 
-  it('sendNow_CompactionInARunningTurn_WritesWithoutNow', async () => {
+  it.each([
+    {
+      route: 'sendNow',
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.sendNow(ROW_ID, 'queued-1'),
+      written: [['first', false]],
+    },
+    {
+      route: 'sendAllNow',
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        void test.chat.sendAllNow(ROW_ID, null),
+      written: [
+        ['first', false],
+        ['second', false],
+      ],
+    },
+  ])(
+    'sendNow_CompactionInARunningTurn_WritesWithoutNow ($route)',
+    async ({ act, written }) => {
+      const test = await started();
+      queueTwo(test);
+      test.process.events.agentEvent(compactionStartedEvent('harness'));
+
+      act(test);
+
+      expect(writtenWithNow(test)).toEqual(written);
+    },
+  );
+
+  it.each([
+    {
+      given: 'plain rows in a running turn',
+      rows: ['a', 'b'],
+      written: [
+        ['a', true],
+        ['b', true],
+        ['box', true],
+      ],
+    },
+    {
+      // `/compact` may start a compaction a `now` write would cut short, and a
+      // `now` row would run ahead of the plain row the agent has not taken in.
+      given: 'slash text ahead of a plain row',
+      rows: ['/compact', 'b'],
+      written: [
+        ['/compact', false],
+        ['b', false],
+        ['box', false],
+      ],
+    },
+    {
+      given: 'a plain row ahead of slash text',
+      rows: ['a', '/compact'],
+      written: [
+        ['a', true],
+        ['/compact', false],
+        ['box', false],
+      ],
+    },
+  ])(
+    'sendAllNow_TurnRunning_WritesNowUntilAPlainWrite: $given',
+    async (row) => {
+      const test = await started();
+      test.activity('working');
+      for (const text of row.rows) {
+        test.chat.send(ROW_ID, { text, images: [] });
+      }
+
+      await test.chat.sendAllNow(ROW_ID, { text: 'box', images: [] });
+
+      expect(writtenWithNow(test)).toEqual(row.written);
+    },
+  );
+
+  it('sendNow_PlainWriteNotTakenIn_WritesWithoutNow', async () => {
     const test = await started();
-    const [first] = queueTwo(test);
+    queueTwo(test);
     test.process.events.agentEvent(compactionStartedEvent('harness'));
-
     test.chat.sendNow(ROW_ID, 'queued-1');
+    test.process.events.agentEvent(compactionEndedEvent('done', 'harness'));
 
-    expect(test.process.calls).toEqual([sendCall(first)]);
+    test.chat.sendNow(ROW_ID, 'queued-2');
+
+    expect(writtenWithNow(test)).toEqual([
+      ['first', false],
+      ['second', false],
+    ]);
   });
 
   it('compaction_EndWithNoStart_SendsNoMessage', async () => {

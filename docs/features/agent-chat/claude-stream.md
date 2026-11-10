@@ -947,13 +947,19 @@ ends the running turn and runs the message next. The adapter sends a message sen
 - Two `now` messages written back to back ran as one turn: both `started` together, and one `init` and one `result`
   listed both uuids.
 - In a turn with no tool call (U(Count from 1 to 300, one number per line.)), a `now` message written at the first text
-  delta ended the turn within 10 ms (`result/error_during_execution`, `aborted_streaming`) and ran next.
-- A `now` message written while a compaction runs was not measured. The app writes plainly then.
-- The CLI's own schema (`@internal`) also defines `{"subtype":"interrupt","send_now":true,"message_uuid":"<uuid>"}`,
+  delta ended the turn within 10 ms (`result/error_during_execution`, `aborted_streaming`, no `result` text) and ran
+  next.
+- **A `now` message runs ahead of a plain one still queued.** U(two) plain, then U(three) `now`, in the same
+  millisecond: T's tool was aborted, U(three) `started` alone and ran a turn of its own, and U(two) `started` only at
+  that turn's next model request, 27 s later. So the app writes plainly behind a plain message the agent has not
+  taken in.
+- A `now` message written while a compaction runs, or as slash text (`/compact`), was not measured. The app writes
+  those plainly.
+- The CLI's own schema names `"priority":"now"` as the route for a sender that still holds the message, which is
+  chat's case. The schema (`@internal`) also defines `{"subtype":"interrupt","send_now":true,"message_uuid":"<uuid>"}`,
   advertised as `interrupt_send_now_v1` on init: the terminal's send-now key for a message already queued at the CLI.
   Its reply carries `send_now`: `stopped`, `delivering` or `nothing_waiting`. Written right after the message, or
-  after the message's `queued` frame, it answered `stopped` both times. The schema names `"priority":"now"` as the
-  route for a sender that still holds the message, which is chat's case.
+  after the message's `queued` frame, it answered `stopped` both times.
 
 ## Subagents
 
