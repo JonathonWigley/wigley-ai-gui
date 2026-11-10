@@ -49,7 +49,8 @@ or output format. Every decision below serves that.
 - Each harness plugin owns its profiles (name and config folder) as its own setting. A profile carries its harness by
   where it lives. Chat, usage and docs read every harness's profiles from the registry.
 - Profile names are unique across harnesses, so a project's pinned profile, recent folders and saved sessions keep
-  naming a profile by name alone. Two harnesses declaring one name is a config problem.
+  naming a profile by name alone. When two harnesses declare one name, the first registered keeps it and the
+  registry logs the clash.
 - Chat's `defaultHarness` setting (default `claude`) picks the harness of a new session; the start prompt's profile
   step lists that harness's profiles. A project that pins a profile runs on that profile's harness. A resumed or
   re-attached session runs on the harness it was saved with. More start-prompt choices wait until a second harness
