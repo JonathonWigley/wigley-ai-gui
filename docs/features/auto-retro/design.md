@@ -2,9 +2,9 @@
 
 **Contents**
 
-- **Intent** — why a closed session gets a retro of its own.
-- **Flow** — from the user's close to the retro row closing itself.
-- **The queue** — which closes queue a retro, one run at a time, and what survives a restart.
+- **Intent** — why a closed or cleared conversation gets a retro of its own.
+- **Flow** — from the user's close or `/clear` to the retro row closing itself.
+- **The queue** — which closes and clears queue a retro, one run at a time, and what survives a restart.
 - **The Retro section** — where a retro row shows and how it looks.
 - **Unattended sessions** — how a launched row runs with nobody to answer it.
 - **Done** — when a retro row counts as finished.
@@ -14,14 +14,16 @@
 
 The `wigley:retro` skill's analysis — digest, analysts, ledger, drafts — is the slow part of a retro. The user wants it
 done before they ask, so a manual `/wigley:retro` only reports and asks. The `auto-retro` plugin starts a background
-retro for each session the user closes, shows it running where the user can see it, and closes it when it is done.
-The user never has to touch it. The skill's side of the split is its `auto <session ids>` mode
+retro for each conversation the user ends — by closing its row or by a `/clear` — shows it running where the user can
+see it, and closes it when it is done. A `/clear` ends a conversation as surely as a close, so its retro starts at the
+clear, not when the row finally closes. The user never has to touch it. The skill's side of the split is its `auto <session ids>` mode
 (`plugins/wigley/skills/retro/SKILL.md` § Modes in wigley-ai-marketplace).
 
 ## Flow
 
 ```
 user closes a row ──► chat.sessionClosed (reason user, sent true)
+user runs /clear  ──► chat.sessionCleared (sent true)
                           │
                           ▼
               auto-retro queue (plugin data) ──► one run at a time
@@ -34,22 +36,25 @@ user closes a row ──► chat.sessionClosed (reason user, sent true)
      retro row in the Retro section ── turn ends, nothing running ──►
                           │
                           ▼
-              chat.close(rowId, 'finished') ──► next queued close
+              chat.close(rowId, 'finished') ──► next queued item
 ```
 
 ## The queue
 
-- **What queues.** A `chat.sessionClosed` with reason `user` and `sent` true, for a row that is not a retro row: one
-  this plugin did not launch, and whose first message does not open with `/wigley:retro auto`. The first-message check
-  covers a retro row the queue lost — `queue.json` unread at start, or a row dropped by the restore wait or a gone
-  profile — so its close queues no retro of a retro session. Every other reason — a failed start, `closeSessionsIn`,
-  `finished` — and a quit queue nothing. A terminal session never closes in the app; the next manual retro's backfill
-  finds it. A row whose last conversation sent nothing queues nothing, even when a conversation before its `/clear`
-  sent: the backfill finds that one too. The self-test queues nothing, so its scripts' closes launch no retro; a drive
-  run queues as the app does.
-- **What a run gets.** The closed row's host session id and every id it had before a `/clear` (`chat.sessionCleared`),
-  oldest first, and the row's profile. The plugin keeps each open row's earlier ids for this, since the close payload
-  carries only the current one.
+- **What queues.** Two events, each for a row that is not a retro row: one this plugin did not launch, and whose first
+  message does not open with `/wigley:retro auto`.
+  - A `chat.sessionClosed` with reason `user` and `sent` true. Every other reason — a failed start,
+    `closeSessionsIn`, `finished` — and a quit queue nothing.
+  - A `chat.sessionCleared` with `sent` true: the conversation the clear ended. A clear of a conversation that sent
+    nothing queues nothing.
+
+  The first-message check covers a retro row the queue lost — `queue.json` unread at start, or a row dropped by the
+  restore wait or a gone profile — so its close or clear queues no retro of a retro session. A terminal session never
+  closes in the app; the next manual retro's backfill finds it. The self-test queues nothing, so its scripts' closes
+  and clears launch no retro; a drive run queues as the app does.
+- **What a run gets.** One host session id — the closed row's current one, or the id a clear ended — with the row's
+  profile and title. Each conversation is its own queue item, so a row cleared twice and then closed queues three
+  retros, each at the moment its conversation ended.
 - **One at a time.** The ledger and its commits in `~/wigley-agents` take one writer, and two Opus retros at once spend
   the plan for nothing. The skill's ledger lock also keeps a manual run and a background run apart.
 - **On disk.** The queue, the running retro and every retro the plugin launched live in `queue.json` in the plugin's
@@ -87,7 +92,7 @@ closing the row under a new turn. A retro row raises no Turn finished mark. A ru
 back within 30 s of a start is dropped, and the next close launches.
 
 The user can still cancel a running retro: closing its row before it is done ends the run, logs `retro <row id>
-closed before done; <host ids> not analyzed`, and launches the next queued close. The closed session goes unanalyzed
+closed before done; <host ids> not analyzed`, and launches the next queued item. The closed session goes unanalyzed
 until the next manual `/wigley:retro`'s backfill catches it up.
 
 On done the plugin calls chat's `close(rowId, 'finished')`. A `finished` close stays out of Recently closed and the
@@ -111,3 +116,6 @@ sessions seen, so the next manual retro's backfill analyzes them and its report 
   back; a denied one costs at most a retro that stops short, which the next manual run catches up.
 - **The closed session's profile.** Its config folder holds the transcript, and `digest.py` reads
   `$CLAUDE_CONFIG_DIR/projects`.
+- **A retro at the clear, not at the close.** The user treats a `/clear` as the end of a conversation. Holding its id
+  until the row closed left long-lived rows' conversations unanalyzed for days, and lost them when the last
+  conversation before the close sent nothing.

@@ -287,8 +287,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `sessions.ended`, hands its self-test script), page/ (the session hub's Context section through chat's
                  `addSidePart`: the sources' bar, the window's fill, a row per source that opens into its items),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
-  auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed`, queues a user close in `queue.json` in its
-                 plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
+  auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed` and `chat.sessionCleared`, queues a user
+                 close or a clear in `queue.json` in its plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
                  closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section
                  through sessions' `addSection`, its header's queued count), layouts/ (its Layout contract and `default`
                  layout); `docs/features/auto-retro/design.md`
