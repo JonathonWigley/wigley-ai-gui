@@ -15,7 +15,8 @@ Produces:  in `src/contracts/layouts.ts`: `LayoutEntry.styleRevision: number`; `
            `{ layouts: LayoutEntry[] }` (`changed` removed)
            in `src/shared/page/layout-host/layout-loader.ts`: `LayoutLoad<L>.restyled: LayoutEntry[]`
 Decisions: the registry raises a separate `styleRevision` when only a layout's style changed; the loader keys the
-           stylesheet by it and the module by `revision` (headless pick) · `LayoutSet.changed` is removed (headless
+           stylesheet by it and the module by `revision` (headless pick) · a stylesheet a layout's JS loads itself follows
+           `revision`, not `styleRevision`; `docs/features/layouts/design.md` § Reload says so, written ahead by the lead · `LayoutSet.changed` is removed (headless
            pick) · the missed-watch rescan tells a style-only change apart, as a reported save does (this task: see
            Approach) · a style-only load logs `layout <name> restyled (style revision <n>)`, so the drive and task 15
            can see the re-link (this task)
@@ -61,15 +62,18 @@ A change has one of three kinds, by the file it touches:
 | a `.css` file in a user layout's folder, at any depth | style | `styleRevision` |
 | a `.js`, `.mjs` or `.json` file in a user layout's folder | code | `revision` |
 | an image or font file (`svg png jpg jpeg gif webp woff woff2 ttf otf`) in a user layout's folder | both | both |
-| a whole folder renamed, moved or deleted (a watch path with no slash) | both | both |
+| a whole folder renamed, moved or deleted; a layout joining or leaving; a rescan that finds mixed kinds; an image or font | both | both |
 | a layout that joins or leaves the set, whatever the file | both | both |
 | the default folder's `layout.css` | style | the default's `styleRevision` |
 | the default folder's `layout.js` | code | the default's `revision` |
 | the default going live or built in (its `layout.js` appears or goes) | both | both |
 
-Why: a `.css` file reaches the page only through the `layout.css` link, whose URL holds `styleRevision`, and a
-nested stylesheet resolves under that same URL. A `.js`, `.mjs` or `.json` file reaches it only through the module URL,
-which holds `revision`. An image or font can be reached from either, so it raises both. A layout that joins or leaves
+Why: a `.css` file reaches the page through the `layout.css` link, whose URL holds `styleRevision`, and a nested
+stylesheet that link imports resolves under that same URL. A `.js`, `.mjs` or `.json` file reaches it through the
+module URL, which holds `revision`. An image or font can be reached from either, so it raises both. A stylesheet the
+layout's own JS loads itself (`new URL('x.css', import.meta.url)`, a `<link>` the JS adds) resolves under the module's
+`~revision`, so it follows `revision`, not `styleRevision`: a style-only save to it does not refresh it, and the layout
+author saves `layout.js` too. A layout that joins or leaves
 may hold any new file, so it raises both.
 
 Members to change:
@@ -101,7 +105,9 @@ owner's open view after a sleep or a burst of saves, which this plan exists to s
   and calls `relist(name, kind)`. A folder that is in only one of the two maps is `both`.
 - `defaultStampOf` returns the two lines apart (`{ code: string | null; style: string | null }`, null for a missing
   file), and `null` when either cannot be read, as today. The default watch's `onMissed` compares them with the last
-  ones: only `style` differs → `style`; only `code` → `code`; both, or a read that failed → `both`; neither → nothing.
+  ones: only `style` differs → `style`; only `code` → `code`; both → `both`; neither → nothing. A read that failed (`null`) sends
+  `both` only when the last stamp was readable; `null` against `null` sends nothing, as today, so a default that stays
+  unreadable does not redraw every owner's view after each rescan.
 - `relist` stores the new stamps for `name` as it does today.
 
 ### Loader (`src/shared/page/layout-host/layout-loader.ts`)
@@ -114,9 +120,12 @@ owner's open view after a sleep or a burst of saves, which this plan exists to s
   entry on the good version (`good.set(name, { layout, entry: setEntry })`), so its link follows `styleRevision` and
   `hasCss`. A good version at an older revision (its newer revision failed) keeps its stored entry, so a failed reload
   keeps the last good look whole, as today.
+- The loader keeps the href string it last set for each link (per link, beside it) and compares the new href string
+  against that, never against `link.href`, which a browser resolves to an absolute URL.
 - `LayoutLoad.restyled` lists each set entry whose stylesheet href this load changed while its script was not imported
   in this load: a user layout's link href moved, was added or was removed, or the default link's href moved, was added
-  or was removed. Comment it on `LayoutLoad`.
+  or was removed. A default that went built in (not imported, `builtIn`) is left out of `restyled`, and so is logged as nothing; its link
+  still moves to `defaultStylesheet`. Entries come in the set's order. Comment it on `LayoutLoad`.
 - Rewrite the comment above `createLayoutLoader`: modules are cached by name and `revision`; each stylesheet link's URL
   holds the version's `styleRevision`.
 
@@ -134,7 +143,9 @@ existing link hrefs (`url:a/layout.css@5`) stay true; the registry and service l
 
 Registry (`layout-registry.test.ts`). Add a helper `changesIn(previous: LayoutSet, next: LayoutSet): string[]` that
 lists, sorted, `<name> revision` for each entry whose `revision` rose, `<name> style` for each whose `styleRevision`
-rose, `<name> joined` and `<name> left`.
+rose, `<name> joined` and `<name> left`, and `default built-in` when the default's `builtIn` went from false to true and
+`default live` when it went from true to false. `BUILT_IN_DEFAULT` stays a constant (revision 1, style 1; the loader never
+imports it), so going built in raises neither number: only the `builtIn` flip shows it.
 
 - Each `expect(sent[i].changed).toBe(X)` becomes an assertion on `changesIn(<the set before>, sent[i])`, the set
   before being `registry.current()` read before the save or the previous sent set. For example in
@@ -147,12 +158,21 @@ rose, `<name> joined` and `<name> left`.
   `['alpha revision']`; `alpha/parts/card.mjs` → `['alpha revision']`; `alpha/strings.json` → `['alpha revision']`;
   `alpha/icons/check.svg` → `['alpha revision', 'alpha style']`; `alpha/fonts/body.woff2` →
   `['alpha revision', 'alpha style']`.
-- `watch_LayoutRemovedThenWrittenAgain_TakesAHigherRevision`: also asserts the `styleRevision` is higher than before.
+- Tests that assert `sent[0].changed` only as "this was alpha's set" (`watch_SaveInFolderThatIsNoLayout_SendsNothing`,
+  `watch_SaveInDefaultFolder_SendsNothing`, `watch_EditorSideFile_%s`, `watch_FolderNameReportFor_%s`,
+  `watch_OtherFileInDefaultFolder_SendsNothing`, `watch_UnreadableFileTime_StillListsSaves`,
+  `watch_ReportedSaveThenMissed_SendsOnce`) hold the registry that `await start()` returns, read `registry.current()`
+  right after the start as `before`, and assert `changesIn(before, sent[0])` equals `['alpha revision']`; where such a
+  test sends nothing it asserts `sent` is empty as today.
+- `watch_LayoutRemovedThenWrittenAgain_TakesAHigherRevision`: asserts the `styleRevision` and the `revision` are both 2 after
+  the leave and both 3 after the join again.
 - `watch_SaveInDefaultFolder_RaisesTheDefaultRevision` becomes `watch_SaveInDefaultFolder_RaisesTheRevisionItsFileKeys
   ($saved, from $started)`, each row gaining `changes`: `layout.js` from `[layout.js, layout.css]` →
   `['default revision']`; `layout.css` from `[layout.js, layout.css]` → `['default style']`; `layout.css` from
   `[layout.js]` → `['default style']`; `layout.js` from `[layout.test.ts]` (the default goes live) →
-  `['default revision', 'default style']`. `hasCss` per row as today.
+  `['default live', 'default revision', 'default style']`. `hasCss` per row as today.
+- `watch_DefaultLayoutJsRemovedThenWritten_BuiltInThenHigherRevision` (today asserts `['default','default']`): the two sent
+  sets give `[['default built-in'], ['default live', 'default revision', 'default style']]`.
 - `watch_DefaultLayoutCssRemoved_SendsDefaultWithoutCss`: changes `['default style']`, `hasCss: false`.
 - `watch_MissedChange_ListsAgainOnlyWhatChanged` rows' `changed` becomes `changes`, a list per sent set:
   `a save in beta` (`beta/layout.js`) → `[['beta revision']]`; `nothing` → `[]`; `a new layout` →
@@ -166,8 +186,8 @@ Service (`layout-service.test.ts`). `save_SendsOnlyThatOwnersSet` drops `expect(
 `styleRevision: 1` on each entry.
 
 Loader (`layout-loader.test.ts`). New `it.each`: `load_StyleOnlyChange_RelinksWithNoImport ($row)`. Each row loads a
-first set, then a second set, and asserts the second load's imports (none, except in the last row), that `result.layouts.get(name)` is the
-same object as after the first load (`toBe`), the link hrefs in `head`, and `restyled` names:
+first set, then a second set, and asserts the second load's imports (none, except in the last two rows), that `result.layouts.get(name)` is the
+same object as after the first load (`toBe`; the last row asserts a new object), the link hrefs in `head`, and `restyled` names:
 
 - `a user layout's css saved` — `mine` at revision 2, `hasCss`, style 1 → style 2: the `mine` link's href is the style
   URL at 2; `restyled` `['mine']`.
@@ -179,6 +199,9 @@ same object as after the first load (`toBe`), the link hrefs in `head`, and `res
 - `a newer revision failed` — `mine` loaded at revision 2 style 1; the second set holds revision 3 style 2 and the
   import of revision 3 throws: the `mine` link keeps the style URL at 1, `layouts.get('mine')` is the revision 2 object,
   `restyled` `[]`, and the second load imported `url:mine/layout.js@3` only.
+- `a code and css save` — `mine` loaded at revision 2 style 1 with `hasCss`; the second set holds revision 3 style 2: the
+  second load imports `url:mine/layout.js@3` (so `layouts.get('mine')` is a new object, not the first), the `mine` link's
+  href is the style URL at 2, and `restyled` is `[]` because the script was imported.
 
 `load_NewRevision_ImportsAgainAndMovesLink` becomes `load_NewRevision_ImportsAgainAndKeepsTheLink`: both entries
 pass `styleRevision` 1 (`entry('a', 4, true, 1)`, `entry('a', 5, true, 1)`), so the imports stay `['url:a/layout.js@4', 'url:a/layout.js@5']` and the link stays

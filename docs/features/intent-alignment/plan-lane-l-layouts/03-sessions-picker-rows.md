@@ -47,12 +47,15 @@ Tests:     `pickerRow_Draw_HandsTheItemAndTrailing ($case)` (new `it.each`, `ses
            `kit.trailing()` returned that element; the `new` item (label `New session`) with trailing null →
            `kit.trailing()` returned null. Every row: the root carries `data-layout="mine"` and
            `data-layout-owner="sessions"`.
-           `splitPicker_LayoutsChange_RedrawsTheOpenRows` (new, `start.test.ts`) — start with sessions `s1`, `s2` and
-           `chat.newSession` known; one pane shows `s1`; run `splitRight`. The picker's rows are drawn by `default`
-           (`data-layout="default"`, `data-layout-owner="sessions"`), their item kinds `['session', 'new']` and the
-           session row's text `s2`'s label. Then `setup.harness.showLayouts(withUser<Layout>(defaultLayout, {
-           pickerRow }))` with a `pickerRow` that draws `li.mine-row`: the open picker's rows are now `li.mine-row`
-           with `data-layout="mine"`, and the picker stays open.
+           `splitPicker_LayoutsChange_RedrawsTheOpenRows` (new, `start.test.ts`) — the test's setup passes
+           `fakeListPickerService({ place: (element) => document.body.append(element) })` (the file's fake DOM) as
+           `services.picker`, so the test reads the open picker's rows from the DOM; the setups that exist keep their
+           `fakeListPickerService()`. Start with sessions `s1`, `s2` and `chat.newSession` known; one pane shows `s1`; run
+           `splitRight`. First phase: the picker's two rows are `li` elements drawn by `default`
+           (`data-layout="default"`, `data-layout-owner="sessions"`), their texts `s2`'s folder label and `New session`.
+           Then `setup.harness.showLayouts(withUser<Layout>(defaultLayout, { pickerRow }))` with a `pickerRow` that draws
+           `li.mine-row` and pushes `input.item.kind` onto a list the test holds: the open picker's rows are now two
+           `li.mine-row` with `data-layout="mine"`, the list is `['session', 'new']`, and the picker stays open.
            No row in `readSessionsLayout_BadShape_ThrowsNamingIt`: the reader's `Record<keyof Layout, true>` fails to
            compile without `pickerRow`, and the shape rule does not change.
 Done when: `npm run lint` and the typecheck pass; the test gate runs the tests above, the existing
@@ -93,7 +96,9 @@ Commit:    one commit for the group: `src/plugins/sessions/layouts/layout.d.ts`
 - **View** (`sessions-view.ts`). Add `pickerItem(row)`: `{ kind: 'session', sessionId: row.sessionId, title:
   shownTitle(row.titles, titleLimit(deps.titleMaxLength())), label: row.label, project: row.project, harness:
   harnessText(row.harness), activity: activityInput(activities.top(row.sessionId)) }` — the same values the side-bar
-  row draws for that session. Widen `parts` to `Pick<SessionsParts, 'renameDialog' | 'pickerRow'>`. Add one sentence
+  row draws for that session. The picker reads them at each row draw (open, a filter change, `redraw()`, the two rows of a cursor
+  move) and does not redraw on an activity change: a session's activity while the picker is open shows on the next draw
+  of its row. Widen `parts` to `Pick<SessionsParts, 'renameDialog' | 'pickerRow'>`. Add one sentence
   for `pickerItem` to the `SessionsView` comment.
 - **Picker** (`start.ts`).
   - Move `const picker = api.services.picker.create({ filter: true })` above the `api.layouts.show` call, so the

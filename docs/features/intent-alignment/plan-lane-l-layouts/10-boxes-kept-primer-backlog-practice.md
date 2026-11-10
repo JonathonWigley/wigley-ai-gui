@@ -35,11 +35,15 @@ dropping `keepFocusedBox`; it stays, because the refocus and the sweep must run 
 ## Primer
 
 - `PrimerPartKitDeps.boxes` becomes `Pick<EditorBoxes<PrimerBox>, 'place' | 'release'>`.
-- `appendField` (~L416) now: makes `inputFrame()`, mounts into it, records `destroyBox`. After: build `field` with
-  its section header, call `deps.boxes.place(field, primerBox, boxText(primer, box.target))` (it appends the frame
-  after the header), add `primer-box` to the frame, append the `boxHint` keys after it, append `field` to `parent`,
-  and record `rollback.recordBox(() => deps.boxes.release(primerBox))`. The DOM order in the field is unchanged:
-  header, frame, keys.
+- `appendField` (~L416) now: makes `inputFrame()`, mounts into it, records `destroyBox`. After, in this order: build
+  `field` with its section header, `parent.append(field)`, call `deps.boxes.place(field, primerBox, boxText(primer,
+  box.target))` (it appends the frame after the header), add `primer-box` to the frame, append the `boxHint` keys
+  after it, and record `rollback.recordBox(() => deps.boxes.release(primerBox))`. The field is attached before the
+  editor is created, as today (`primer-view.ts`: "Editors mount into attached elements, so they can measure
+  themselves"). The DOM order in the field is unchanged: header, frame, keys.
+- The add-item box's text: `place` replaces a kept editor's text with the text it is given when they differ (task
+  06), so after `addItem` clears `newItemTexts[entryId]` the next card draw shows `''`, as today. No primer-side
+  rule is added.
 - `primer-view.ts` `rebuildCard` (~L631) keeps its `keepFocusedBox` call; `card.dispose()` now releases the card's
   boxes, and the sweep ends a box the new card leaves out (the add-item box once its task holds 20 items).
 - `destroyPrimerView`'s `destroyForm` and `forgetForm` stay.
@@ -72,11 +76,14 @@ dropping `keepFocusedBox`; it stays, because the refocus and the sweep must run 
 
 - `textBoxSlot` (~L492): after, `boxes.place(parent, id, store.get().drafts[id].text)`, add `practice-box` and
   `practice-box--<id>` to the frame, and record `rollback.recordBox(() => boxes.release(id))`.
-- **A replaced draft still mounts anew.** A kept editor ignores the text `place` gets, so a box must not be kept
-  across a new problem or a draft replaced from disk. `problem-workspace.ts` keeps
-  `placedFor: Record<BoxId, string | null>` (starts `{ notes: null, customCases: null }`): the
-  `JSON.stringify([slug, boxReplaces[id]])` of the open problem's slug that the box was last placed for.
-  `textBoxSlot` computes that key first; when it differs from `placedFor[id]`, it calls `boxes.destroyBox(id)`
+- **A replaced draft still mounts anew.** `place` would only `setText` a kept editor, which keeps its undo history,
+  so a box must not be kept across a new problem or a draft replaced from disk: those start a fresh editor.
+  `problem-workspace.ts` keeps `placedFor: Record<BoxId, string | null>` (starts `{ notes: null, customCases: null
+  }`): the key the box was last placed for. The key is the file's existing tab key data read through the store's open
+  problem (`store.get().problem?.slug`): `JSON.stringify(['notes', slug, boxReplaces.notes])` for `notes` (the
+  `notes` case of the tab key function) and `JSON.stringify(['testcase', slug, boxReplaces.customCases])` for
+  `customCases` (`consoleTabKey`'s testcase branch). Reuse those two key builders (pull each into a small helper both
+  callers use); build no second key. `textBoxSlot` computes that key first; when it differs from `placedFor[id]`, it calls `boxes.destroyBox(id)`
   (a no-op when the sweep already ended the box), then places, then sets `placedFor[id]`. A tab switch, a
   `drawBodies` redraw for the same problem and a `setLayouts` keep the box while it stays shown; a box on a tab that
   is no longer shown is released and the sweep ends it, as its destroy does today.
@@ -116,6 +123,12 @@ editor and it holds focus
 GIVEN practice's notes tab shown WHEN `refreshed` replaces the notes draft from disk THEN the old notes editor is
 destroyed and a new one mounts with the new text
 
+GIVEN practice's notes tab shown WHEN the user opens another problem and the notes tab stays shown THEN the old
+notes editor is destroyed and a new one mounts with the new problem's notes
+
+GIVEN a primer task card whose add-item box shows typed text WHEN `addItem` lands the item and clears the text THEN
+the add-item box shows `''` and its editor is the same one
+
 ## Tests
 
 - `primer-view.test.ts`: `rebuilds the shown card on setLayouts with a new pick and keeps the focused box` also
@@ -132,7 +145,10 @@ destroyed and a new one mounts with the new text
 - `start.test.ts` (practice): new `layoutChange_FocusedNotesBox_KeepsItsEditor` — the notes editor before and after
   `setLayouts` is the same, and it is the active box. New `refreshedDraft_ShownNotesBox_MountsANewEditor` — after
   a `refreshed` with a new notes text, the earlier notes editor is destroyed and the live one was created with the
-  new text.
+  new text. New `problemChange_ShownNotesBox_MountsANewEditor` — the same box key with a new slug: the earlier
+  notes editor is destroyed and the live one was created with the new problem's notes.
+- `primer-view.test.ts`: new `addItem_AddItemBoxHeldEditor_ShowsTheClearedText` — after the item lands and the card
+  redraws with the same card key, the add-item editor is the same one and its `text()` is `''`.
 
 Live check: task 15 (the primer, backlog and practice boxes keep the cursor, a visual mode and undo across a layout
 save).

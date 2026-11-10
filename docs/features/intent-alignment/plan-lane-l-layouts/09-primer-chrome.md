@@ -88,21 +88,27 @@ Kit scopes: tasksHead `tasks`, itemsHead `items`, tasksFoot `tasks`, cardEdge `c
 
 Decisions:
 - A part per strip, each with its own input; inputs carry the app's strings and raw numbers (plan § Decisions).
-  The input fields above are this task's pick (open: see report).
+  The input fields above are pinned.
 - The layout draws every button through `kit.button` over the command in the table below; no closure button
   (plan § Architecture).
 - The save status stays one `createStatusLine()` per primer view, which the app keeps current with
   `statusLine.update(true, …)` on each update, as now. The layout places it through `kit.saveStatus`. A head
   that leaves it out gets it at the start of its root, so the saved state always shows.
 - `is-no-target` and `is-pane-inactive` stay the app's. The app toggles `is-no-target` on each element in
-  `rowSteps` on each update: on while the column holds fewer than two rows (`spec.rowCount(current) < 2`).
+  `rowSteps` on each update: on while the column holds fewer than two rows (`spec.rowCount(current) < 2`). The
+  order inside one `update`: the strips draw (or redraw) first, then the toggle runs on the current `rowSteps`, so
+  a head redrawn by the same update (its `rows` changed, which is when `rows < 2` flips) is marked at once. The
+  first update draws the strips before `updateColumn` runs, since `ColumnParts.edge` is deleted and the toggle now
+  depends on the draw.
 - The app keeps a slot per strip, built once per view: `div.primer-tasks-head-slot` and
   `div.primer-tasks-foot-slot` around the tasks column body, `div.primer-items-head-slot` over the items column
   body, `div.primer-card-edge-slot` over the card, `div.primer-review-footer-slot` under the review body. Each part
   draws into its slot. The column is then `[head slot, body, foot slot]`, as the column grid expects.
 - Each strip draws on the view's first update, shown or hidden. It draws again only when its pick changed
-  (`isSamePick`) or a field of its input changed (a shallow compare of the input's fields). A draw disposes the
-  last draw first.
+  (`isSamePick`) or a field of its input changed (a shallow compare of the input's fields). A redraw runs
+  in this order: dispose the last draw, `slot.replaceChildren()` (`drawPart`'s `dispose` does not remove
+  `built.element`), draw again. `PrimerFormView.dispose()` disposes each strip's last draw, since the head, foot and
+  edge anchors now sit in each draw's rollback and no longer in the view-level `anchors` array.
 - The card edge's slot takes `hidden` while the review shows (`cardEdge.hidden = isReview` today).
 - The cursor prompt becomes input. The app computes the shown actions; the layout draws each one with `kit.keyHint`.
   A column part that draws no prompt shows none: the app no longer appends a prompt at the part's end.
@@ -111,7 +117,9 @@ Decisions:
   - tasks column: `primer.needYes` `yes`, `primer.needNo` `no`, `primer.needUnclear` `unclear` (field `need`), then
     `primer.removeExtraTask` `remove` (field `remove`)
   - items column: the three need actions, then `primer.toggleInclude` `include` (field `include`)
-- Pinned `default` layout draws (the markup and anchor options stay as the code draws them now):
+- Pinned `default` layout draws (markup as the code draws it now, except the focus pairs, which are `kit.edge`
+  spans: `kit.edge` takes no class option, so `primer-column-key` and `primer-card-edge-key` are gone; no CSS or test
+  uses either; anchor options stay as now):
 
   | Part | Root | Contents, in order |
   | --- | --- | --- |
@@ -147,7 +155,7 @@ Decisions:
 - The view's `saveStatus(primer)` function is renamed `saveContent`, so it does not share a name with the kit
   member.
 
-GIVEN the default layout WHEN a primer opens THEN each strip shows as it does now, with the same anchors.
+GIVEN the default layout WHEN a primer opens THEN each strip shows as it does now, with the same anchors; the focus pairs sit in `span.ui-key-edge`.
 GIVEN a tasks column of one row WHEN the view updates THEN the tasks head's row pair carries `is-no-target`.
 GIVEN a user `tasksHead` that never calls `saveStatus` WHEN it draws THEN the save status is the first child of its root.
 GIVEN the selected task changes WHEN the view updates THEN `itemsHead` draws again with the new `task`; an update with the same input draws nothing again.
@@ -172,9 +180,12 @@ Tests (`P/page/primer-view.test.ts` unless named):
 - delete `appends the %s column's row prompt at its part's end when the part never calls its row function`, and
   its `PLAIN_COLUMNS` fixture if no other test uses it: the app no longer appends the prompt.
 - new `columnHead_FewerThanTwoRows_MarksItsRowStepNoTarget`: `it.each` over the tasks and items columns; a column
-  of one row marks its `primer-column-edge` `is-no-target`; after a dispatch that gives it two rows, it does not.
+  of one row marks its `primer-column-edge` `is-no-target`; after a dispatch that gives it two rows, the query is
+  made again on the new element (the head redrew) and it does not carry the mark.
 - new `tasksHead_LeavesOutSaveStatus_PlacesItAtItsRootsStart`: a user `tasksHead` drawing a bare `header`; its root's
   first child is the `ui-status-line`, and the status reads the primer's save text.
+- new `chromeStrip_Redraw_LeavesOneRootInItsSlot`: a user `itemsHead` and a `selectTask` that redraws it; the slot
+  holds one root. After `view.dispose()`, the strips' anchors are released (the test's keys fake holds none).
 - new `chromeStrip_InputChanges_DrawsAgain`: a user `itemsHead` that writes `input.task` and counts its draws; the
   head reads the new task's name after `selectTask`, and a dispatch that leaves its input the same leaves the
   count unchanged.

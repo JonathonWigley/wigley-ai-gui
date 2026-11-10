@@ -97,20 +97,24 @@ Produces:
 
 Decisions:
 - A part per strip, each with its own input, resolved by forms' pane pick chain like `head`; inputs carry the
-  app's strings and raw numbers (plan § Decisions). The input fields above are this task's pick (open: see report).
+  app's strings and raw numbers (plan § Decisions). The input fields above are pinned.
 - The rail foot's Review button is `kit.button` over `forms.openReview`; no closure button (plan § Architecture).
 - The save status stays one `createStatusLine()` per build, which the app keeps current on each update with
   `statusLine.update(true, { save: roundSaveLabel(round), saveState: roundSaveState(round) ?? '' })`, as now.
   The layout places it through `kit.saveStatus` (`appSlot(…, 'saveStatus', rollback)`). A head that leaves it out
   gets it at the end of its root (`placeIfLeftOut(root, 'end')`).
-- `is-no-target` stays the app's. On each update the app toggles it on each `edges` element: the rail head's while
-  `!hasOtherUnanswered(round)`, the pager's while `railItems(round.round).length < 2`.
+- `is-no-target` stays the app's. In each `update` the strips draw first (when their input changed), then the app
+  toggles it on each current `edges` element: the rail head's while `!hasOtherUnanswered(round)`, the pager's
+  while `railItems(round.round).length < 2`. The rail head redraws when `open` or `text` changes, which is when
+  `hasOtherUnanswered` flips, so the toggle must run on the new `edges`.
 - The app keeps a slot per strip in each build: `div.rail-head-slot` first in the split's start pane,
   `div.rail-foot-slot` last in it, `div.item-pager-slot` in the main column where `div.item-pager` sits now (after
   the layout's head, before `div.items`). Each part draws into its slot. The app sets `hidden` on the pager's slot
   while the view is not `forms`, as it sets it on the pager now.
 - Each strip draws in `buildRoundParts`, then on each `update` again only when a field of its input changed (a
-  shallow compare); a draw disposes the last draw first. A pick change rebuilds the whole round, as `setLayouts`
+  shallow compare); a redraw runs in this order: dispose the last draw, `slot.replaceChildren()` (`drawPart`'s `dispose`
+  does not remove `built.element`), draw. `parts.dispose()` disposes each strip's last draw, so `rebuild` and
+  `dispose` hold no strip anchors once task 13 narrows what a pick change rebuilds. A pick change rebuilds the whole round, as `setLayouts`
   does now (task 13 narrows that).
 - Pinned `default` layout draws (markup as the code draws it now):
 
@@ -163,8 +167,11 @@ Tests:
   is written.
 - `F/page/layout/layout-panes.test.ts`, new `railHead_LeavesOutSaveStatus_PlacesItAtItsRootsEnd`.
 - `F/page/round-view.test.ts`, new `formsChrome_NoTarget_MarksItsEdges`: `it.each` with rows `the rail head with no
-  other untouched item` (its `rail-edge` carries `is-no-target`, and loses it once another item is untouched) and
+  other untouched item` (its `rail-edge` carries `is-no-target`; the test then answers the last other item and,
+  after that same update, queries the new `rail-edge` and asserts it carries the mark, the reverse case losing it) and
   `the pager of a one-stop round` (both `item-pager-edge` elements carry it).
+- `F/page/round-view.test.ts`, new `railHead_Redraw_LeavesOneRootInItsSlot`: the rail head redraws after an answer and its slot holds one
+  root; after `parts.dispose()` its anchors are released.
 - `F/page/round-view.test.ts`, new `railHead_InputChanges_DrawsAgain`: a user `railHead` that writes `input.text`
   and counts its draws; the text follows an answer, and an update with the same input leaves the count unchanged.
 - `F/page/view-model.test.ts`: the `pagerText reads $text on $case` table asserts `pagerInput` instead: rename it to

@@ -50,8 +50,10 @@ Produces:  in `src/plugins/forms/page/layout/layout-resolver.ts`:
   Its doc comment and `buildLayoutCard`'s ("The boxes the card mounts ... are recorded") say "places" and
   "released".
 - **The field frame.** `buildField` (`kinds/card-parts.ts`) makes `div.field`, its caption and the frame today.
-  After, it takes a `placeFrame: (field: HTMLElement) => HTMLElement` last parameter, called after the caption is
-  appended (so the frame sits after the caption), adds `box` to the frame it returns, and returns
+  After, it takes the `parent` and a `placeFrame: (field: HTMLElement) => HTMLElement` last parameter. Its order:
+  append the caption into `field`, `parent.append(field)`, then call `placeFrame(field)` (so the frame sits after the
+  caption and the editor is created in an attached subtree, as today), then the caller adds the key hint
+  (`appendBoxKeys`). The `parent.append(field)` falls before the `placeFrame` call. `buildField` adds `box` to the frame it returns, and returns
   `{ element: field, box: frame }`. `card-kit.ts` `mountTextBox` passes
   `(field) => card.deps.placeBox(field, box.target, box.text)`; `layout-panes.ts` `roundNote` passes
   `(field) => deps.placeBox(field, { field: 'note' }, round.note)`. The field wrapper is new on each draw and holds
@@ -63,7 +65,10 @@ Produces:  in `src/plugins/forms/page/layout/layout-resolver.ts`:
   (`round-view.ts` `setLayouts`) and goes. Every pane task 12 picked through `RoundPicks.panes` joins `PANES` and is
   compared the same way.
 - **Per-part redraw.** `RoundParts` keeps each card's, the notices pane's, the rail's, the review's and the head's
-  draw with its `dispose`, and its draw function, so one part can be disposed and drawn again alone. Redrawing one
+  draw with its `dispose`, and its draw function, so one part can be disposed and drawn again alone. Task 12's three
+  strips (`railHead`, `railFoot`, `pager`) keep a draw and dispose the same way, like the head: a changed one is
+  redrawn into its own slot (`div.rail-foot-slot`, `div.item-pager-slot`, the rail head), the pager's `hidden` set by
+  `update` after. Redrawing one
   part: note the old element's `nextSibling`, dispose the old draw (its boxes are released, its anchors and mounts
   disposed), remove the old element, draw the part with its new pick into the same parent, and move the new element
   before the noted sibling, so the DOM order is unchanged. The head keeps today's `redrawLayoutHead` route with the
@@ -77,13 +82,16 @@ Produces:  in `src/plugins/forms/page/layout/layout-resolver.ts`:
 - **`setLayouts(nextShown, current)`** picks again, computes `changedPicks(picks, nextPicks)`, sets `picks`, and
   returns when nothing changed. Otherwise, inside `keepFocusedBox(deps.boxes, current.formId, …)`: capture
   `parts.main.scrollTop`, redraw each changed card at its position, the notices pane when `noticeCards` changed or
-  `notices` is in `panes`, and each changed pane; then run `view.update(current, shownView)` without resetting
+  `notices` is in `panes`, and each changed pane (the three strips included); then run `view.update(current, shownView)` without resetting
   `shownFocus`, call `parts.rail.showEntry(current.focus)` when the rail was redrawn, and set
   `parts.main.scrollTop` back. A card not redrawn keeps its element, its boxes and its anchors.
 - **`rebuild(current)`** (reached by `forms-view.ts` `rebuild` when a card part or review column is added or
   disposed, `start.ts` ~L212) no longer calls `destroyForm`. It redraws every card, the notices pane, the review
-  pane, the rail and the head through the same per-part route inside `keepFocusedBox`, keeping the boxes, the main
-  column's scroll when the round shows the same item, and the rail's entry. A contributed card part reaches every
+  pane, the rail, the head and the three strips through the same per-part route inside `keepFocusedBox`, keeping the
+  boxes, the main column's scroll when the round shows the same item, and the rail's entry. `rebuild` leaves
+  `shownFocus` alone (it no longer sets it to `-1`) and calls `rail.showEntry(current.focus)` after the redraw, as
+  `setLayouts` does when it redrew the rail; `update`'s own `current.focus !== shownFocus` branch carries the case
+  where the item changed. A contributed card part reaches every
   card; a review column reaches the review pane: redrawing all of them covers both.
 - **Round close** still destroys: `forms-view.ts` `destroyRoundView` calls `destroyForm` and `forgetForm`.
 - **`EditorBoxes.mount`** has no caller after this task (primer, backlog and practice moved in task 10; grep
@@ -130,7 +138,8 @@ the notes box holds the one editor the failed attempt made, released and placed 
 - `round-view.test.ts`: `focuses the box that had focus again in the rebuilt round` expects the same editor
   focused and no editor created by `rebuild`. `rebuild_OpenNoticeLine_KeepsItOpenItsCursorAndItsFocusedBox` stays.
   New `setLayouts_OneCardsLayoutChanged_RedrawsOnlyThatCard` — the first case in Behaviour. New
-  `setLayouts_SamePicks_RedrawsNothing` — every card and pane element is the same object after the call.
+  `setLayouts_RailFootChanged_RedrawsOnlyIt` — only the rail foot's element is new, in the same slot; every card,
+  pane and the other strips are the same objects. New `setLayouts_SamePicks_RedrawsNothing` — every card and pane element is the same object after the call.
   New `setLayouts_ReviewPaneChanged_RedrawsOnlyItAndKeepsTheScroll` — the second case in Behaviour.
   `keeps the main column scroll while the round shows the same item` stays as is (it runs `rebuild`).
 - `layout-cards.test.ts`: `buildLayoutCard_CardThrowsAfterMountingABox_DestroysItAndDrawsDefault` becomes

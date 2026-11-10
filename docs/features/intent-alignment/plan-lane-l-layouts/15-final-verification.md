@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Wave: 9 · Depends on: 14
+Wave: 9 · Depends on: 14 (Block A also runs after Wave 4 when the run stops at the gate, plan.md § Gate)
 Plan: [plan.md](plan.md)
 
 Files:     none modified (a check that fails reopens the task that owns it; its fix lands in that task's files)
@@ -20,6 +20,12 @@ Before the checks: `npm run lint`, the typecheck and `npm test` pass on the land
 Precondition 2 prints `0`.
 
 ## Checks
+
+Two blocks. **Block A** (tasks 01–10) runs before a run stops at the Lane E gate, and again here only for a check
+whose task's files a later task changed (task 11 deletes the code-built dialog frame, so the dialog look check
+reruns). **Block B** (tasks 11–13) runs here. A run that never stopped at the gate runs both here.
+
+### Block A
 
 Toasts (task 01):
 - **expected** A toast shows at the bottom right: success and error carry a dot, info none; it fades in and is gone
@@ -46,7 +52,7 @@ Dialog frames (tasks 04, 07, 11):
 - **expected** Each dialog looks as before under `default` (capture each and compare against `DESIGN.md`'s **Dialog** primitive):
   chat sign-in, deny and end-session; docs path box and Trash; sessions rename; notes Note and discard; practice
   import and Solution confirm; backlog delete and discard; keys help; session-stash; primer cancel; the gallery
-  Dialog sample; forms cancel round.
+  Dialog sample. (Block B adds forms' cancel round and reruns this list once task 11 has deleted the code frame.)
 - **expected** Edit a `default` `dialogFrame` while a dialog with a focused plain input is open (sessions rename,
   session-stash, practice import, docs path box): the dialog redraws and keeps the input's text and focus.
 - **low** The same edit with chat's CodeMirror boxes open (deny reason, sign-in): text and focus stay. Rests on
@@ -55,7 +61,6 @@ Dialog frames (tasks 04, 07, 11):
   closes help. Where the hint sits inside the button is new.
 - **expected** The keys help dialog is still wide after its width rule moved to keys' default `layout.css`.
 - **expected** In notes, reload a layout while the markup view shows: the actions row stays hidden.
-- **expected** The forms cancel dialog redraws after a `forms.layout` change, and only the setting picks it.
 
 Fixed texts (task 08):
 - **expected** Each owner's cursor row shows its prompt keys in the same place and look as before (backlog, docs,
@@ -80,17 +85,29 @@ Primer chrome (task 09):
   redraw.
 - **low** The Review label stays whole in a narrow tasks column. Its rules moved to the default's stylesheet,
   which loads after page CSS, so the cascade order changed.
+- **low** The primer's tasks head, items head and card edge strip keep today's spacing: each focus pair is now a
+  `span.ui-key-edge` (`kit.edge`) in place of the loose chevron and key spans.
 
-Kept boxes (tasks 06, 10, 13):
-- **expected** Insert mode, cursor and undo survive a `layout.js` save in a forms box, a primer box, the backlog
+Kept boxes (tasks 06, 10):
+- **expected** Insert mode, cursor, undo and the box's scroll survive a `layout.js` save in a primer box, the backlog
   follow-up editor and practice notes; focus returns to the box after the redraw.
-- **low** Vim visual mode and its selection survive the same save in a forms or primer box. Whether
-  `@replit/codemirror-vim` leaves visual mode on blur is outside this repo's code.
-- **low** The primer's add-item box after an item lands, and after a pick change: the text shown is the one the
-  user expects (empty after a landed item). A kept editor ignores the text `place` hands it, so a box that used to
-  remount empty may now keep old text. A fail reopens task 10.
+- **low** Vim visual mode and its selection survive the same save in a primer box. Whether
+  `@replit/codemirror-vim` leaves visual mode on blur is outside this repo's code. If it is lost, the behaviour is
+  accepted (task 06 § Decisions) and the docs are reworded to "insert mode, cursor and undo" in a doc fix commit.
+- **expected** The primer's add-item box is empty after an item lands, and still empty after a pick change (task 06's
+  `place` sets a held editor's text when the owner's differs).
 
-Forms chrome and part redraw (tasks 12, 13):
+### Block B
+
+Forms dialog (task 11):
+- **expected** The forms cancel dialog looks as before, redraws after a `forms.layout` change, and only the setting
+  picks it.
+- **expected** Rerun Block A's dialog-look list now that the code-built frame is gone: each dialog still opens with its
+  title, body and actions.
+
+Forms chrome, kept boxes and part redraw (tasks 12, 13):
+- **expected** Insert mode, cursor, undo and scroll survive a `layout.js` save in a forms box; focus returns after.
+- **low** Vim visual mode survives the same save in a forms box (the same unknown as Block A's).
 - **expected** The forms rail head, Review foot and item pager look as now; the save state reads `Sending…` while
   a round sends.
 - **low** The forms rail still scrolls between head and foot in a short window. A new

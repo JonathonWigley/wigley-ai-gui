@@ -130,6 +130,9 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
 - Test: `redraw_ChangedFrameLayout_DrawsTheTrashConfirmInTheNewFrame` — confirm open; a user layout defining only
   `dialogFrame`; after `redraw`, the panel carries the user layout's name, and the question and both answer buttons
   are inside its body and actions.
+- Test: `redraw_ChangedFrameLayout_KeepsTheBoxInputAndCompletionsInTheNewFrame` — box open with a typed value; a user
+  layout defining `dialogFrame`; after `redraw`, the input is inside the new frame's body with its value, the
+  completion list is inside the new body, and the input keeps focus.
 
 ### sessions
 
@@ -166,6 +169,9 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
   right after `parts.setLayouts(shown)`, before `parts.actions(dialog.actions)` and `parts.confirm(confirm.body)`.
   The fields view and markup view appended once at line 329 move with the frame; `showFields`' `dialog.actions.hidden`
   carries over (task 04). The scrim keeps its `notes-popup` class (the scrim is the app's).
+- Comment: `layouts/layout.d.ts` line 12 "The app keeps the dialog frames and titles, the title box and the body editor,"
+  becomes "The app keeps the dialogs' scrims, keys and focus, the title box and the body editor," (`dialogFrame` draws
+  each dialog's panel, title and actions row).
 - Test: `setLayouts_ChangedFrameLayout_KeepsFieldsAndActionsInTheNewFrame` — popup open; a user layout defining
   `dialogFrame`; after `setLayouts`, the fields view is inside the new frame's body and the `actions` part inside its
   actions row.
@@ -231,8 +237,12 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
   input).built })`. `dialog.element.classList.add('keys-help-scrim')` stays; `dialog.panel.classList.add('keys-help-dialog')`
   goes. `scroller` becomes a getter returning `dialog.panel`. `layoutsChanged()` runs `dialog.redrawFrame()` with
   `draw()` while shown; when hidden it sets `isStale`, and `show()` runs `dialog.redrawFrame()` and `draw()` when
-  stale. `start.ts`: remove `closeHint` and its `keys.anchor` (lines 95–98) and the two arguments; keep
-  `closeHelpCommand` where line 115's `closeHelp` uses it.
+  stale. `start.ts`: remove `closeHint` and its `keys.anchor` (lines 95–98), the two arguments, and
+  `closeHelpCommand` (line 94): `closeHelp` (about line 112) does not use it, so it is unused once the arguments go.
+  Remove the `qualify` import (line 17) too, since nothing else in the file uses it; `element` stays (line 140).
+- Comment: `layouts/layout.d.ts` lines 2–4 "The app keeps the help dialog (its title, scrim and Close button), the
+  which-key panel's placement and timers," becomes "The app keeps the help dialog's scrim, keys and focus (its
+  `dialogFrame` draws the panel, title and Close button), the which-key panel's placement and timers,".
 - Test: `dialogFrame_Default_CloseRunsCloseHelpAndShowsItsKey` — the default frame with `hasActions: true`: its actions
   row holds one button `Close`; a click runs `keys.closeHelp` through the fake kit commands; an anchor for
   `keys.closeHelp` in scope `keys.help` was named.
@@ -270,6 +280,11 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
   `drawFrame` parameter; `framed('Dialog', () => dialogSample(drawFrame), true)`. The view passes
   `(parent, input) => parts.dialogFrame(parent, input).built`. `setLayouts` already calls `drawSections()`, which
   makes a new sample, so the sample needs no `redrawFrame`.
+- Comments: `layouts/layout.d.ts` lines 5–7 "A layout's CSS selects under its own root only, so it never restyles a
+  primitive." becomes "A layout's CSS selects under its own root only, so it never restyles a primitive; the Dialog
+  sample's panel, title and actions row are the layout's `dialogFrame`." Lines 23–24 "`isDialog` for the dialog, whose
+  frame holds its scrim." becomes "`isDialog` for the dialog, whose scrim the app keeps and whose panel `dialogFrame`
+  draws."
 - Test: none; gallery has no view test, and the sample is checked live (task 15).
 
 ### primer

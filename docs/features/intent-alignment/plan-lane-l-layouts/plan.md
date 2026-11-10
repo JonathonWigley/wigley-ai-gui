@@ -39,7 +39,9 @@ no closure button.
 
 Tasks 11, 12 and 13 edit `src/plugins/forms/`, which Lane E's forms chain rewrites first (master-plan.md § Intent,
 Side lanes). `wigley:make` starts Wave 5 only once the gate check below prints three lines; until then the run stops
-after Wave 4 and reports the gate as the reason. Waves 1–4 run beside the other lanes.
+after Wave 4 and reports the gate as the reason. Waves 1–4 run beside the other lanes. Before it stops at the gate,
+the run runs task 15's **Block A** (the live checks of tasks 01–10) and records them in task 15's Proof, so the
+items Waves 1–4 tick are proved live without waiting for the gate; Block B runs once Wave 8 lands.
 
 ```
 command grep -n '\[x\] Forms item kinds as registrations\|\[x\] Finding origin specs and open layout unions\|\[x\] Split form-state.ts and rename the FormsView union' <repo>/docs/features/intent-alignment/master-plan.md
@@ -93,7 +95,8 @@ cannot land before Lane E's chain, so `main` keeps describing forms as it is unt
 ```
  layout reload (user saves a layout file)
    registry: .js/.mjs/data → revision+1        any .css only → styleRevision+1
-             images, fonts, a layout joining or leaving, a whole-folder rescan → both (task 05)
+             images, fonts, a layout joining or leaving, a whole folder renamed, moved or deleted,
+             a missed-watch rescan that finds mixed kinds → both (task 05)
         │                                             │
    loader: re-import module ─► new layout object      re-link stylesheet only ─► no setLayouts, no redraw
         │
@@ -179,7 +182,7 @@ Design review (headless):
 - Keeps as is: the layout host's per-part fallback to `default`; `appSlot`'s place / place-if-left-out pattern for
   app elements (the save status, the settings message slot, the box frames); `kit.button` over commands.
 - The confirm prompt's `drawBody` stays; its frame comes through the same `drawFrame` the opener passes.
-- `createToasts` takes its draw as a parameter (`drawToast`), so it names no layout and tests hand it a fake.
+- `createToasts` takes its draw (`drawToast`) and a `log` as parameters, so it names no layout, logs a draw that throws, and tests hand it fakes.
 - Out of scope, tracked elsewhere: Lane E's kind registrations and open unions (they reshape the forms files the gated
   tasks touch); the Layout name picker (Lane E).
 

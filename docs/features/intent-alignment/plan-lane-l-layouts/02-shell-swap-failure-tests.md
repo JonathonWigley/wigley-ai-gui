@@ -64,7 +64,11 @@ Rows (`row`, the steps, then what the row asserts):
 Assertions, each row as one `expected` object compared whole:
 
 - `mountedBy`: the `dataset.mountedBy` of the main contribution's parent after the steps — rows 1 and 2: `A`; row 3: `B`.
-- `contributionsIn`: whether each contribution's parent is inside `root` — `[true, true]` in every row.
+- `contributionsIn`: the parent's class of each contribution, `[main's, statusBar's]` — the class `mountShell` gives the main area
+  element for `main`'s (`main` is not an aligned area; the contribution sits straight in it) and `shell-track shell-track-end` for the status bar's
+  — the same pair in every row. A rollback that filed the status-bar contribution in the `start` track fails it.
+- `handles`: the parent of the side-bar handle (`.shell-side-bar-handle`) and of the right-bar handle
+  (`.shell-right-bar-handle`) is `root` itself — `[true, true]` in every row.
 - `chrome`: the five chrome areas' `[data-layout, data-layout-owner]` through the file's `chromeLayouts(root)` — five
   `['mine', 'shell']` pairs in every row.
 - `afterRestore`: then dispose the handle that is still live (`a` in rows 1 and 2, `b` in row 3) and read `mountedBy`

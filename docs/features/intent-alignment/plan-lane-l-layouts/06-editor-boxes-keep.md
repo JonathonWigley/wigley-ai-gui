@@ -41,14 +41,23 @@ whether the sweep already ended it. No test asserts the old throw (checked at pl
   `parent`, create the editor in the frame through `host.create(frame, text, events)` with the same events `mount`
   wires today, record the first mount as `mount` does (`firstMounts`, `mountCount`), and return the frame. With an
   editor already held (placed or released): append the same frame to `parent` (a DOM move), mark the box placed,
-  and return the frame. `text` is ignored on this path: the editor keeps its own text. A second `place` with no
+  and return the frame. When `text` differs from the held editor's `text()`, `place` calls the editor's
+  `setText(text)` (no `changed`; the replace joins undo), so an owner whose state holds a different text for the key
+  (the primer's add-item box after `addItem` cleared it) shows the owner's text; equal text touches nothing, so the
+  cursor and undo stay. Practice keeps its own `placedFor` rule instead of relying on this (task 10): a new problem
+  or a draft replaced from disk must start a fresh editor with a fresh undo history. A second `place` with no
   `release` between also moves the frame and does not throw; each kit already refuses a box placed twice in one
   draw (forms' `card.mounted`, the primer's card `mounted` set, forms' `isNoteMounted`).
 - **The frame's classes.** `place` adds only `ui-input`. The owner adds its own classes to the frame `place`
   returns (`primer-box`, `backlog-editor-box`, `practice-box`, forms' `box`), on every call; `classList.add` repeats
   safely. The owner appends nothing into the frame except the editor's DOM, which the host makes, and one element it
   moves between frames (backlog's `fieldHint`): a node a draw put in the frame would stay in it across draws.
-- **`release(box)`.** Detach the frame and mark the box released. When the box is the active box, clear
+- **The scroll position.** Detaching a scrolled element resets its `scrollTop`. `release` saves the `scrollTop` of
+  the editor's scroller (`frame.querySelector('.cm-scroller')`, skipped when none is found) with the box, and `place`
+  on a held editor restores it after the frame is reattached. Evidence that moving a live view is safe: chat's
+  composer already keeps its box across a layout reload by moving an app-owned frame (`appSlot`), so a moved
+  CodeMirror view keeping its cursor and undo is the tree's own pattern.
+- **`release(box)`.** Detach the frame, save the scroll position and mark the box released. When the box is the active box, clear
   `activeKey` and call `notify()`, as `deactivate` does: the DOM move blurs the editor, and the app must not
   depend on whether the browser fires `blur` for a removed node. A release of a box already released is a no-op.
   A release of a key no editor holds is a no-op, so a rollback that runs after `destroyForm` does not throw.
@@ -76,7 +85,7 @@ whether the sweep already ended it. No test asserts the old throw (checked at pl
   when it is released, destroyed or never mounted. Each owner reads it as "the current draw shows this box"
   (backlog's and practice's left-out checks, `keepFocusedBox`).
 - **`focus(box)`** throws `No box is mounted as <key>` for a released box, as for a box never mounted. **`active()`**
-  never returns a released box (release clears it).
+  never returns a released box (release clears it), and `activeMode()` is null after a release.
 - **`fileEditor(formId, isShown)`** skips released boxes: the last-activated box counts only while placed, and the
   first-mount fallback picks only among placed boxes. `firstMounts` and `lastActivated` still outlive a release
   and a destroy, as today.
@@ -103,7 +112,10 @@ whether the sweep already ended it. No test asserts the old throw (checked at pl
   `leaving(view)`, which drops only an unfinished command (`discardUnfinishedInput`: a key buffer, count,
   operator or register), then `events.blurred()`; the host changes no mode on blur. `redrawCursorOnResize`
   re-dispatches the same selection on a resize, which keeps a visual selection. Whether `@replit/codemirror-vim`
-  itself leaves visual or insert mode on blur is not in this repo's code: task 15 checks it live.
+  itself leaves visual or insert mode on blur is not in this repo's code: task 15 checks it live. Fallback, decided
+  now: if task 15 finds vim visual mode lost on a move, the behaviour is accepted and task 14 rewords the docs to
+  "insert mode, cursor and undo"; no code change.
+- **`boxOf(editor)`** (the commands use it to find the focused box) returns undefined for a released box.
 
 ## Behaviour
 
@@ -137,9 +149,14 @@ boxes install the fake DOM (`installFakeDom(vi.stubGlobal)` from `src/shared/pag
 - `place_AfterRelease_MovesTheFrameAndKeepsTheEditor` — table over the steps between the two places: `release`
   then `place` into a second parent; `place` into a second parent with no release. Each case: one editor created,
   the second `place` returns the first frame, the frame's `parentNode` is the second parent, the editor is not
-  destroyed, and the second call's text did not reach the editor (its `text()` is the first text).
+  destroyed, and the second call, given the same text, called no `setText` on the editor.
+- `place_HeldBoxWithNewText_SetsTheEditorText` — table over a placed and a released box, `place` with a text that
+  differs from the editor's `text()`: one editor, the same frame, one `setText` with the new text, no `changed`.
+- `place_AfterRelease_RestoresTheScroll` — `release` saves the scroller's `scrollTop` (set to 40 on the fake
+  scroller), the fake DOM resets it on detach, and the `place` after it sets it back to 40.
 - `release_FocusedBox_DetachesItsFrameAndClearsTheFocus` — the frame's `parentNode` is null; `active()` and
-  `activeMode()` are null; the listener count grows by one; `isMounted` is false; the editor is not destroyed.
+  `activeMode()` are null; `boxOf(editor)` is undefined; the listener count grows by one; `isMounted` is false; a
+  `place` after it makes `isMounted` true again; the editor is not destroyed.
 - `destroyReleased_DestroysOnlyTheFormsReleasedBoxes` — the case in Behaviour.
 - `destroy_PlacedBox_RemovesItsFrame` — table over `destroyBox(notes)`, `destroyForm('f1')`, and `release(notes)`
   then `destroyReleased('f1')`: the editor is destroyed and the frame's `parentNode` is null.
@@ -159,7 +176,7 @@ boxes install the fake DOM (`installFakeDom(vi.stubGlobal)` from `src/shared/pag
   focus options land on the first editor, and no editor is created. New:
   `keepFocusedBox_BoxTheRebuildLeftOut_IsDestroyed` — the last case in Behaviour.
 
-Live check: task 15 (vim visual and insert mode, cursor and undo kept across a frame move).
+Live check: task 15 (vim visual and insert mode, cursor, undo and scroll kept across a frame move; the fallback above if visual mode is lost).
 
 Done when: `npm run lint` and the typecheck pass; the test gate runs `src/shared/page/editor-boxes.test.ts`.
 

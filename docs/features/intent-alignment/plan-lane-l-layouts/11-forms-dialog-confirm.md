@@ -13,7 +13,7 @@ hold as written.
 Paths below are relative to the repo root. `F` is `src/plugins/forms`.
 
 Files:
-- modify `F/layouts/layout.d.ts` · `F/layouts/default/layout.js` · `F/layouts/default/layout.css`
+- modify `F/layouts/layout.d.ts` · `F/layouts/default/layout.js`
 - modify `F/page/layout/read-layout.ts` · `F/page/layout/layout-resolver.ts` · `F/page/forms-view.ts`
 - create `F/page/layout/layout-dialog.ts` — the forms dialog parts' draws. They have no round, so they do not
   belong in `layout-panes.ts`; `forms-view.ts` names no layout part draw of its own.
@@ -79,15 +79,17 @@ Decisions:
   `pickLayout(part, layoutChain(null, null, active.shown.user), active.shown.layouts)`: the `forms.layout` setting,
   then `default`. A round's or item's `layout` never picks them.
 - `forms-view.ts` passes `drawBody` and `drawFrame` closures to `createConfirmPrompt`. Each closure keeps its last
-  `DrawnPart` and its pick, disposes the last draw before it draws again, and returns the new draw's `built`.
+  `DrawnPart` and its pick, and follows task 07's order: it draws the next, then disposes the last (a replacement
+  draw that throws everywhere leaves the old frame in place), and returns the new draw's `built`.
+  `Dialog.redrawFrame` tolerates an old `element` detached or still present (task 04 step 4).
   `createConfirmPrompt` draws once as it is created, so move the `active` layouts above the `createConfirmPrompt`
   call.
 - `setLayouts` sets `active.shown`, then calls `confirm.redraw()` only when the `dialogFrame` or `confirmBody` pick
   differs from its last draw's (name or layout object), as the round views compare picks.
 - The forms `default` draws:
   - `dialogFrame`: the markup the primer `default`'s `dialogFrame` draws (task 07), so the forms cancel dialog looks
-    as it does now. Copy its CSS rules into `F/layouts/default/layout.css` only if task 07 put them in the primer
-    default's `layout.css` and not in shared CSS.
+    as it does now. The frame classes keep their rules in `dialog.css` (tasks 04 and 07), so the forms default
+    `layout.css` gains nothing.
   - `confirmBody`: `kit.el(parent, 'p', '', input.body)` and return it. It places neither button, so the prompt
     appends both to the frame's actions row, as the dialog draws today.
 - The prompt's texts, commands and scope do not change: title `Cancel this round?`, body `The agent is told the round
@@ -121,7 +123,8 @@ GIVEN `setLayouts` with picks the same as the last draw's WHEN it runs THEN the 
 Tests:
 - new in `F/page/forms-view.test.ts`, `cancelPrompt_Layout_FollowsTheSettingNotTheRound`: `it.each` with rows
   `the setting names it` → the frame and body roots carry the user layout's name, and `only the round names it`
-  → both carry `default`; each row sets the layouts through `view.setLayouts`, then dispatches `askCancel`.
+  → both carry `default`; each row sets the layouts through `view.setLayouts`, then dispatches `askCancel`, and asserts `data-layout`
+  and `data-layout-owner="forms"` on both the frame and body roots.
 - new in `F/page/forms-view.test.ts`, `cancelPrompt_SetLayoutsSamePicks_DrawsNothingAgain`: a user
   `confirmBody` that counts its draws; a second `setLayouts` with the same layout objects leaves the count unchanged.
 - `src/shared/page/confirm-prompt.test.ts`: `promptSetup` passes a fake `drawFrame` (the one task 04's rows in this

@@ -183,7 +183,8 @@ can be iterated in place. The sample sends nothing and raises no notification or
   (`src/shared/page/editor-boxes.ts` owns each box's frame, and a draw that leaves a box out releases it), so its
   text, cursor, vim mode and undo survive, as chat's composer box always has; an owner redraws only the parts whose
   layout changed. A save that changes only a layout's `layout.css` raises its style revision alone, which re-links the
-  stylesheet with no redraw. A page reload restores chat's draft and the attached images from chat's page slots
+  stylesheet with no redraw; a stylesheet the layout's own JS loads follows the module's revision, so a save of it
+  shows after a `layout.js` save too. A page reload restores chat's draft and the attached images from chat's page slots
   (`chatPlaceSlot`, `chatDraftImagesSlot`). Boxes are kept, not snapshotted: a snapshot through `TextEditor` would
   lose undo and add two members every editor fake carries.
 - **Core, not per plugin.** The layouts folder is core-owned and the shell is an owner with no plugin data folder, so

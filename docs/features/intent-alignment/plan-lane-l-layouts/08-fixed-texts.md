@@ -20,7 +20,19 @@ Consumes: `interface PromptActionInput { command: string; label: string }` in
 (`<plugin>.<command>`), each `label` the word the old anchor drew. The layout draws each action with
 `kit.keyHint(parent, action.command, { label: action.label, className })` inside one prompt `span` that keeps the old
 prompt's class. An empty list draws no prompt span. The app deletes its prompt element, its anchors, its
-`hidden`/move code and the kit slot that placed the prompt.
+`hidden`/move code and the kit slot that placed the prompt. A hint's `className` is the one each row names (backlog
+`backlog-hint`, notes `notes-hint`); docs, sessions, settings and chat pass none, as their old anchors had none. A CSS
+rule whose selector named the old bare hint element is rewritten to match the element `kit.keyHint` draws.
+
+**A layout that leaves the input out.** A user part that draws no prompt or no status shows none: the app no longer
+places a prompt or a status for it (`placeIfLeftOut` goes with the slots), as for the primer's columns. Say so in each
+owner's `layout.d.ts` comment on the part. No test pins a fallback.
+
+**Comments that go untrue.** Every comment that names a removed slot, prompt element or `cursorEnd` is rewritten to
+the new shape, in each owner's `layout.d.ts`, default `layout.js`, parts module and view, and in
+`src/contracts/list-picker.ts` (find them with `command grep -rn 'cursorPrompt\|cursorActions\|cursorEnd\|status slot\|placed twice' <owner dirs>`).
+A parameter left unused by the deletions (`mountSidebarView`'s and `createTreeView`'s `anchor`, `LeaderMenuDeps.anchor`)
+is removed with its callers' argument.
 
 Two shapes, by whether the owner's rows draw again when the cursor moves:
 
@@ -29,7 +41,7 @@ Two shapes, by whether the owner's rows draw again when the cursor moves:
 - **Rows the app keeps across a cursor move** (settings and its Leader menu, notes): the owner gains a
   `cursorPrompt` part with input `{ actions: … }`, drawn into the slot the app already keeps on the cursor row. A
   cursor move draws that small part again and draws no row again, so no row redraw moves an open box or a focused
-  text box. (open: see report)
+  text box.
 
 **Scope.** `kit.keyHint` anchors in the scope of the kit that draws it (`base-kit.ts` `keyHint` →
 `anchorOptions(deps.scope, …)`), and the core hides an anchor, keeping its space, while its scope is not in force.
@@ -82,7 +94,9 @@ Decisions:
 - Status: `drawHomes` computes `statusText` as today (`state.message ??` `'No features homes found'` when loaded with
   no homes, else null). Extract the `homes` branch of `drawPanes` into `drawHomesPane()`, which keeps
   `homesList.scrollTop` as `drawPanes` does and passes `{ status: homesStatus }`. `drawHomes` calls
-  `drawHomesPane()` only when `statusText` differs from the `homesStatus` last drawn.
+  `drawHomesPane()` only when `statusText` differs from the `homesStatus` last drawn. Order inside `drawHomes`: the
+  status check and `drawHomesPane()` run first (it takes `homesList.scrollTop` before it redraws the pane), then the
+  list clears and the rows draw. `drawPanes` (a layout change) draws the homes pane with the current `homesStatus`.
 - Default `homes`: when `input.status !== null`, `kit.el(root, 'div', 'backlog-status', input.status)` with `title`
   set to the same text, where `kit.status(root)` sits now. Default row parts: where `kit.cursorActions(row)` sits now,
   a `span.backlog-row-actions` holding one `kit.keyHint` per action with `className: 'backlog-hint'`, drawn only when
@@ -110,7 +124,7 @@ Tests:
   anchor for a prompt command has scope `backlog.list`, and other rows' `prompt` is `[]`.
 - New `homesStatus_ChangesOnly_RedrawTheHomesPane` — a user `homes` part counting its calls: no homes loaded draws
   `status: 'No features homes found'`; a second render with the same status adds no call; a `state.message` render
-  draws once more with that message.
+  draws once more with that message; a layout change after it draws the user `homes` with that same `status`.
 
 ### docs
 
@@ -166,7 +180,8 @@ Tests:
   `docs-row-actions` children; it also asserts each prompt anchor's scope `docs.tree`.
 - New `setStatus_Text_DrawsOnlyTheStatusPart` — `it.each` over `{ text: 'Reading…', hidden: false }` and
   `{ text: null, hidden: true }`: the `.docs-status` text and `hidden`, the `treePane` draw count unchanged, the
-  filter input still `document.activeElement`.
+  filter input still `document.activeElement`. A third row: set `'Reading…'`, then change the layouts; the new
+  layout's `.docs-status` still reads `Reading…`.
 - `docs-parts.test.ts` — the row that lists `'docs-status'` (~L114) names `'docs-status-slot'`.
 - `read-layout.test.ts` — the reader's part list gains `treeStatus` in the existing table.
 
@@ -199,7 +214,10 @@ Decisions:
   `actions` slot through `parts.draw`, as `buildEntry` draws an entry, in the scope the row was drawn in (`rows`). It
   keeps the drawn prompt's slot element and actions, and draws again only when either changed (compare each action's
   `command` and `label`). With no cursor row it disposes the drawn prompt. A `drawRows` or `redrawRowsPane` that
-  replaces the rows disposes it first, since its slot is gone.
+  replaces the rows disposes it first, since its slot is gone, and so do `draw(true)` from `setLayouts` and the
+  view's dispose. In `LeaderMenuView`, the disposer `drawPrompt` returns runs before each pane redraw (`draw`,
+  `redraw`, `reset`, a layout change replacing its row slots), when the menu closes, and on its destroy: no prompt
+  anchor outlives its row.
 - Leader menu: `GROUP_HINTS` and `ITEM_HINTS` values become `PromptActionInput` with commands qualified as
   `settings.<command>` and the labels they hold now (`ITEM_HINTS` keeps both `changeAction` and `open`, each
   `settings.open`, labelled `change action` and `open`). `placePrompt` draws `cursorPrompt` with the row's `hints`
@@ -229,7 +247,8 @@ Decisions:
 GIVEN the cursor on a setting row WHEN the cursor moves to a key row THEN `cursorPrompt` draws once more, into the key
 row's slot, with the key row's actions (`settings.open`/`reassign`, `settings.addBind`/`add key`,
 `settings.removeBind`/`clear`, `settings.reset`/`reset`, each one the row has), no row part draws again, and each
-hint's anchor has scope `settings.rows`
+hint's anchor has scope `settings.rows`; WHEN the layouts change after THEN the sheet still holds one
+`settings-row-actions`
 GIVEN an open box WHEN a write is refused twice THEN the box holds one `.settings-box-message` with the second text;
 WHEN the layouts change THEN the message draws again in the new layout and the box keeps focus
 
@@ -242,9 +261,12 @@ Tests:
 - New `boxMessage_DrawsThroughTheLayout` — `it.each` over `{ case: 'first message' }`,
   `{ case: 'a second message replaces the first' }`, `{ case: 'a layout reload draws it in the user layout' }`
   (`data-layout` the user layout's name; the box input still focused).
-- `leader-menu-view.test.ts` — its fake `RowBox` (~L197) gains `redrawMessage`; its deps fake gains `drawPrompt`;
-  `leaderMenu_RowClickAndMoves_MoveItsPaneCursorAndReportIt` gains rows asserting the drawn prompt's actions and scope
-  for a group row and an item row.
+- `leader-menu-view.test.ts` — fakes only: its fake `RowBox` (~L197) gains `redrawMessage`; its deps fake (~L129)
+  loses `anchor` and gains `drawPrompt`.
+- `settings-view.test.ts` `leaderMenu_RowClickAndMoves_MoveItsPaneCursorAndReportIt` (~L1127) gains rows asserting the
+  drawn prompt's actions and scope for a group row and an item row.
+- `cursorPrompt_CursorMove_DrawsOnTheReachedRowOnly` also changes the layouts after the move and asserts one
+  `settings-row-actions` remains.
 - `read-layout.test.ts` — the part list gains `cursorPrompt` and `boxMessage`.
 
 ### notes
@@ -252,11 +274,12 @@ Tests:
 Files: modify `src/plugins/notes/page/popup.ts` · `src/plugins/notes/page/layout/notes-parts.ts` ·
 `src/plugins/notes/page/layout/read-notes-layout.ts` · `src/plugins/notes/layouts/layout.d.ts` ·
 `src/plugins/notes/layouts/default/layout.js` · `src/plugins/notes/layouts/default/layout.css` ·
-`src/plugins/notes/page/notes.css` · test `src/plugins/notes/page/popup.test.ts` ·
+`src/plugins/notes/page/notes.css` · `src/plugins/notes/main/selftest-script.ts` (only if a step is missing) · test
+`src/plugins/notes/page/popup.test.ts` ·
 `src/plugins/notes/page/layout/notes-parts.test.ts` · `src/plugins/notes/page/layout/read-notes-layout.test.ts`.
 
 Produces, in `src/plugins/notes/layouts/layout.d.ts`:
-- `export interface NotesPromptActionInput extends PromptActionInput { hasTarget: boolean }` (open: see report)
+- `export interface NotesPromptActionInput extends PromptActionInput { hasTarget: boolean }`
 - `export interface CursorPromptInput { actions: readonly NotesPromptActionInput[] }`
 - in `Layout`: `cursorPrompt?(parent: HTMLElement, input: CursorPromptInput, kit: NotesKit): NotesPart;`
 
@@ -265,8 +288,9 @@ Decisions:
   The input keeps that: both actions in order, `{ command: 'notes.editBox', label: 'edit', hasTarget }` with
   `hasTarget` true on `title` and `body`, and `{ command: 'notes.remove', label: 'remove', hasTarget }` with
   `hasTarget` true on `images` holding an image or `session` holding a session (today's `placeCursorPrompt` rules).
-- `notes-parts.ts` gains a `cursorPrompt(parent, input)` member drawn like `row`, with the kit of scope `popup`
-  (`notes.popup`, the old anchors' scope).
+- `notes-parts.ts` gains `cursorPrompt(parent: HTMLElement, input: CursorPromptInput): HTMLElement`, a
+  single-instance part (a second draw disposes and removes the first root, as the `NotesParts` comment describes for
+  single-instance parts), with the kit of scope `popup` (`notes.popup`, the old anchors' scope).
 - `popup.ts`: `placeCursorPrompt` draws `cursorPrompt` at the end of the selected field's row root, and draws again
   only when the field or a `hasTarget` changed, or when `drawRows` drew new rows (it disposes the drawn prompt). Rows
   do not draw again on a field move, so the title and body boxes stay where they are and keep focus. Delete
@@ -332,8 +356,8 @@ Tests:
 
 Files: modify `src/plugins/chat/page/picker.ts` · `src/plugins/chat/layouts/layout.d.ts` ·
 `src/plugins/chat/layouts/default/layout.js` · `src/contracts/list-picker.ts` ·
-`src/shared/page/list-picker.ts` · test `src/shared/page/list-picker.test.ts` ·
-`src/plugins/chat/page/start-prompt.test.ts`.
+`src/shared/page/list-picker.ts` · `src/plugins/chat/main/selftest-script.ts` (only if a step is missing) · test
+`src/shared/page/list-picker.test.ts` · `src/plugins/chat/page/start-prompt.test.ts`.
 
 Produces:
 - in `src/contracts/list-picker.ts`: `DrawRowInput.isCursor: boolean` — true on the row at the cursor
@@ -350,8 +374,9 @@ Decisions:
   `next.archiveState?.(item)` is not null; else `[]`.
 - Scope: `drawPickerRow` builds the kit with `surfaceBaseKit(deps, scope, …)`, `chat.resume` on that picker, the
   old anchors' scope (`anchored('toggleArchive', 'resume', …)`).
-- `ListPickerRequest.cursorEnd` stays in the contract: other callers may hand an app element there. Only chat used
-  it.
+- `ListPickerRequest.cursorEnd` stays in the contract with no caller after this task, kept for later pickers; the
+  `trailing` every picker row reads (notes, settings, backlog, task 03's sessions `kit.trailing()`) is then null,
+  which those rows already handle.
 - Default `pickerRow`: `trailing` is a `span.chat-picker-key` holding one `kit.keyHint` per action when
   `input.prompt` is not empty, else nothing.
 - Every test fake that builds a `DrawRowInput` adds `isCursor`.
@@ -364,7 +389,10 @@ Tests:
 - `drawRow_DrawsEachVisibleItemAndKeepsCursorAndClick` — asserts each recorded `DrawRowInput.isCursor`, true at the
   cursor only, before and after a move.
 - New `resumePicker_CursorRow_PromptNamesArchiveOrRestore` in `start-prompt.test.ts` — `it.each` over a live
-  session (`archive`), an archived one (`restore`), and a non-cursor row (`[]`).
+  session (`archive`), an archived one (`restore`), a non-cursor row (`[]`), an `archiveState` returning null (`[]`)
+  and the `picker` scope (`[]`); the live row also asserts the recorded anchor's scope `chat.resume`. The file holds
+  no resume-picker test today: build the picker through `picker.ts`'s exported entry with fake deps and a fake
+  `archiveState`, recording `drawRow` inputs.
 
 ## Done when
 
@@ -376,7 +404,7 @@ owner, the self-test step that shows each prompt action. Live check: task 15.
 
 One commit for the group, pathspecs: `src/plugins/backlog/` `src/plugins/docs/` `src/plugins/settings/`
 `src/plugins/notes/` `src/plugins/sessions/` `src/plugins/chat/page/picker.ts`
-`src/plugins/chat/page/start-prompt.test.ts` `src/plugins/chat/layouts/` `src/contracts/list-picker.ts`
+`src/plugins/chat/page/start-prompt.test.ts` `src/plugins/chat/main/selftest-script.ts` `src/plugins/chat/layouts/` `src/contracts/list-picker.ts`
 `src/shared/page/list-picker.ts` `src/shared/page/list-picker.test.ts`.
 
 ## Proof
