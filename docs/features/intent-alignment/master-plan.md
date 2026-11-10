@@ -34,6 +34,17 @@ design is `plugin-framework/design.md` § Hot reload (Wave 4). Wave 1's plan fol
 loader, has landed and its plan folder is gone; its design is `plugin-framework/design.md` § Runtime loader
 (Wave 4 step 3).
 
+Side lanes: each lane is one plan, planned in its own `wigley:feature` session, in
+`intent-alignment/plan-lane-h-harness-seams/`, `plan-lane-p-platform/`, `plan-lane-l-layouts/` and
+`plan-lane-e-extension-points/`. The lanes run in parallel sessions except where they share files, in this order:
+
+- Forms files (`src/plugins/forms/`, `src/shared/agent-forms/`): Lane H's Structured round results, then Lane E's
+  forms chain, then Lane L's forms items (dialog confirms, forms and primer column chrome, layout hot reload's
+  forms redraw).
+- Claude adapter and `src/main/main.ts`: Lane H's AgentHarnessRegistry, Permission behind the harness and Harness
+  settings with the harness, then Lane P's Per-platform program lookup and spawning.
+- Every other item may run beside the other lanes.
+
 ## Order
 
 ```
@@ -125,7 +136,8 @@ conversion of chat to slots and its chat events also edited; that conversion has
    - [ ] Sessions stops naming Claude
    - [ ] Structured round results
    - [ ] Owned sessions join by an adapter key [plan]
-4. [ ] Codex harness adapter [plan]: the proof; a second harness shows what the seams missed.
+4. [ ] Codex harness adapter [plan]: the proof; a second harness shows what the seams missed. It is planned in its
+   own session once the steps above land, outside the lane's plan.
 
 ## Lane P: platform
 
@@ -139,7 +151,8 @@ record (Wave 0) because they read it:
 
 ## Lane L: layouts everywhere
 
-All ∥, any time. Keep this lane apart from Forms item kinds (Lane E): they rewrite the same forms files. A layout
+All ∥, any time. Its forms items run after Lane E's forms chain (§ Intent, Side lanes): they rewrite the same
+forms files. A layout
 item draws a button through `kit.button`, which runs a command, and no closure button.
 
 - [ ] Toasts through the shell layout, with Shell layout swap failure tests (the same contract)
@@ -159,12 +172,13 @@ Start after Wave 1 step 1.
   - [ ] EditorHost.defineEx
   - [ ] Plugin editor remaps
   - [ ] Setting control kinds as registrations, then [ ] Layout name picker in Settings mode
-- Forms chain, in order; after Disposable tool contributions, and apart from Lane L's forms items and Every click:
+- Forms chain, in order; after Lane H's Structured round results and before Lane L's forms items:
   1. [ ] Forms item kinds as registrations
-  2. [ ] Finding origin specs and open layout unions
+  2. [ ] Finding origin specs and open layout unions, with [ ] A finding's proof becomes optional off a Nit (the
+     same origins table; its marketplace and `~/wigley-agents/forms.md` text lands in the same run)
   3. [ ] Split form-state.ts and rename the FormsView union
-- [ ] Command palette and fuzzy finders [plan], last: it needs the runtime command API, the core picker and the
-  fuzzy matcher from the slash-completion plan.
+- [ ] Command palette and fuzzy finders [plan], last and outside the lane's plan: it builds on the runtime command
+  API, the core picker and the `FuzzyMatcher` service, all landed.
 
 ## Left out
 
