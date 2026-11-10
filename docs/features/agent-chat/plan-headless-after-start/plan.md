@@ -107,11 +107,11 @@ New:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Start prompt drops the headless line](01-start-prompt.md)
+- [x] [Start prompt drops the headless line](01-start-prompt.md)
 - [x] [The set_headless tool](02-set-headless-tool.md)
 
 ### Wave 2
-- [ ] [Doc re-read and the workflows.md merge](03-doc-re-read.md) — after 01, 02
+- [x] [Doc re-read and the workflows.md merge](03-doc-re-read.md) — after 01, 02
 
 ### Wave 3
 - [ ] [Final verification](04-final-verification.md) — after 03
@@ -122,8 +122,11 @@ Review base: f8e35fea
 
 ### Groups
 - 02 · 46bd354e · diff read: all three Produces present in set-headless-tool.ts; wiring mainAgentOnly in start.ts; set-headless-tool + start tests 79 pass, no type errors · concerns: lint fails only on oxfmt in chat-sessions.test.ts (group 01's file, in progress)
+- 01 · f2d06df9 + fix 8 picker-row · diff read: both Produces present (resume-items.ts new line, contract.ts StartRequest); tsc clean after fixture fix; lint clean; resume-items/start-prompt/chat-sessions/picker-row tests pass · concerns: tsc caught a picker-row.test.ts fixture still carrying headless, fixed by re-dispatch; selftest not yet run (gate)
+- 03 · ddf11e8c · diff read: one stale design.md line fixed; AGENTS.md, workflows.md (6f50ce7) and marketplace README match the code, no edit · concerns: none
 ### Contract changes
 ### Rulings
 - owns reads chat.sessions().some(sessionId) rather than profileOf !== null — independent of a row having a profile — none, the reads agree today · group 02 · group 02
+- four start-prompt 'new lines alone' tests folded into one table sessionStep_NoRowsToList_StartsAtOnce, plus an archived-only table with a second row for archiving the last live row — they share one rule — one extra row to delete · group 01 · group 01
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 03 — Doc re-read and the workflows.md merge
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -26,3 +26,5 @@ Done when: each doc matches the code; both `headless-tool` branches ready to mer
 Commit:    one commit per repo for the fixes, when there are any
 
 ## Proof
+
+Commit ddf11e8c · proof: diff read: one stale design.md line fixed; AGENTS.md, workflows.md (6f50ce7) and marketplace README match the code, no edit · concerns: none

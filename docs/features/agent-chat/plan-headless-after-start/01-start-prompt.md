@@ -1,6 +1,6 @@
 # 01 — Start prompt drops the headless line and skips a one-line session step
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -65,3 +65,5 @@ Done when: `npm run lint` and the touched test files pass; the compiler finds no
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f2d06df9 + fix 8 picker-row · proof: diff read: both Produces present (resume-items.ts new line, contract.ts StartRequest); tsc clean after fixture fix; lint clean; resume-items/start-prompt/chat-sessions/picker-row tests pass · concerns: tsc caught a picker-row.test.ts fixture still carrying headless, fixed by re-dispatch; selftest not yet run (gate)
