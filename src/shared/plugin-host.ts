@@ -27,9 +27,9 @@ export interface PluginHost<Started, Part = unknown> {
   // stops.
   readonly started: ReadonlyMap<string, Started>;
   // Calls `ready()` on every started part, in start order. The composition
-  // root calls it once, after the start. A `ready` that throws is logged as
-  // `ready of <id> failed: <error>` and the next part's `ready` still runs; it
-  // does not throw.
+  // root calls it once, after the start. A `ready` that throws is logged under
+  // the plugin's id as `ready failed: <error>` and the next part's `ready`
+  // still runs; it does not throw.
   ready(): void;
   // Starts each held part that `pluginIds` names and that is not started, in
   // dependency order, then calls `ready()` on each one it started. The order
@@ -362,7 +362,7 @@ function readyEach(
     try {
       started.get(id)?.ready?.();
     } catch (error) {
-      log?.('plugin-host', `ready of ${id} failed: ${errorText(error)}`);
+      log?.(id, `ready failed: ${errorText(error)}`);
     }
   }
 }
@@ -400,8 +400,8 @@ function requireNoCycle(
 // in `known` with no part here, such as a page-only plugin in main, starts
 // nowhere in this process. `disabled` is read only here. `log`
 // takes the host's own lines: `stop` and `stopAll` log `stopping <id>` before
-// each part, so a hang names the plugin, a failed `ready` logs `ready of <id>
-// failed: <error>`, and a failed start logs a failed cleanup; the caller picks
+// each part, so a hang names the plugin, a failed `ready` logs `ready failed:
+// <error>` under the plugin's id, and a failed start logs a failed cleanup; the caller picks
 // who reads them. Returns the host, whose `started` holds what each start
 // returned, by plugin id, in start order, until the part stops. Throws on a
 // duplicate id or a dependency in this process not in `known` (read once

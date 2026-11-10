@@ -274,6 +274,53 @@ describe('plugin part harness', () => {
     ).toThrow('part harness: "dep" is both a fake dependency and a real part');
   });
 
+  it.each([
+    { case: 'the main part under test', failing: 'sample', start: 'main' },
+    { case: 'the page part under test', failing: 'sample', start: 'page' },
+    { case: 'a real provider part', failing: 'dep', start: 'page' },
+  ] as const)(
+    "ready throws when a part's ready threw: $case",
+    async ({ failing, start }) => {
+      const readied: string[] = [];
+      const readyOf = (id: string) => () => {
+        readied.push(id);
+        if (id === failing) {
+          throw new Error('boom');
+        }
+      };
+      const provider: PagePart = {
+        manifest: depManifest,
+        start: () => ({ commands: {}, ready: readyOf('dep') }),
+      };
+      const harness =
+        start === 'main'
+          ? startMainPart(
+              mainPart(() => ({
+                commands: { run() {} },
+                ready: readyOf('sample'),
+              })),
+              { dependencies: [depFake] },
+            )
+          : startPagePart(
+              pagePart(() => ({
+                commands: { run() {} },
+                ready: readyOf('sample'),
+              })),
+              { parts: failing === 'dep' ? [provider] : [] },
+            );
+      const thrown = `part harness: ready of ${failing} failed: boom`;
+
+      expect(() => harness.ready()).toThrow(thrown);
+
+      expect(harness.logs).toContainEqual({
+        source: failing,
+        message: 'ready failed: boom',
+      });
+      expect(readied).toContain('sample');
+      await expect(harness.restart()).rejects.toThrow(thrown);
+    },
+  );
+
   it('fires a window listener and shows its frame', async () => {
     const part = pagePart(() => {
       let frame = 0;

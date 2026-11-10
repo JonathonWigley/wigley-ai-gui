@@ -520,10 +520,12 @@ describe('sessions page part', () => {
       const selection = harness.state.publish(sessionsSelectionSlot);
       selection.set(firstSelection);
 
-      harness.ready();
       if (throwsFirstApply) {
-        harness.ready();
+        expect(() => harness.ready()).toThrow(
+          'part harness: ready of sessions failed: ui state write failed',
+        );
       }
+      harness.ready();
       const [restore] = harness.restores;
       selection.set('s1');
       await restore;

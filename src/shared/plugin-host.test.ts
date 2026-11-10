@@ -572,7 +572,7 @@ describe('startPlugins', () => {
     expect(() => host.ready()).not.toThrow();
 
     expect(readied).toEqual(['a', 'b', 'c']);
-    expect(logged).toContain('plugin-host: ready of b failed: b ready failed');
+    expect(logged).toContain('b: ready failed: b ready failed');
   });
 
   it('restart stops the part and its dependents, then starts them again with new registrations and views', async () => {
@@ -895,7 +895,7 @@ describe('startPlugins', () => {
 
     expect(() => host.start(['x'])).not.toThrow();
 
-    expect(logged).toContain('plugin-host: ready of x failed: x ready failed');
+    expect(logged).toContain('x: ready failed: x ready failed');
   });
 
   it.each([

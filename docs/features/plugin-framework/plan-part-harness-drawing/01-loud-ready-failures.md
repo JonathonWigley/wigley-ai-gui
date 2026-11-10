@@ -1,6 +1,6 @@
 # 01 — A failed `ready` logs under its plugin, and the harness throws on it
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

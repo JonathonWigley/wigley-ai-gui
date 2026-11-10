@@ -139,10 +139,12 @@ export interface HarnessCommandRun {
 
 // `started` throws while the part is stopped. `ready` calls every started
 // part's `ready`, the real parts' and the part under test's, in start order, as
-// a page load does once its parts start. `restart` stops a started part and
-// starts it again on a new host with the same fakes and the same counts, so
-// what a leaky `dispose` left stays counted, then calls every started part's
-// `ready`, as the host's own restart does. `advance` runs the due timers in due
+// a page load does once its parts start, then throws `part harness: ready of
+// <id> failed: <error>` for the first part whose `ready` threw. `restart` stops
+// a started part and starts it again on a new host with the same fakes and the
+// same counts, so what a leaky `dispose` left stays counted, then calls every
+// started part's `ready` as `ready` does, throwing the same way. `logs` holds
+// the host's own lines too (`stopping <id>` under `plugin-host`). `advance` runs the due timers in due
 // order, the clock reading each one's due time, and ends `ms` later. `emitted`
 // holds what any started part emitted, in order, under its qualified name; it
 // outlives the stop, so a test reads there what a late read emitted. `state` is
@@ -286,6 +288,8 @@ interface HarnessLogLine {
 interface HarnessWorld {
   scheduler: Scheduler;
   bus: EventBus;
+  // Appends to `logs`; the host and the core services log through it.
+  log: Log;
   logs: HarnessLogLine[];
   emitted: HarnessEvent[];
   state: SlotStore;
@@ -465,6 +469,7 @@ function createWorld(
   return {
     scheduler: createScheduler(),
     bus: createEventBus(),
+    log,
     logs,
     emitted: [],
     state: store,
@@ -657,9 +662,10 @@ function idsToStub(
 }
 
 // Starts `underTest` through the real host with one provider part per fake
-// dependency, one stub per other listed id, and the real parts. `consumerView`
-// counts only what the part under test files, since the host hands a provider
-// each dependent's own store.
+// dependency, one stub per other listed id, and the real parts, the host
+// logging through `log` into `logs`. `consumerView` counts only what the part
+// under test files, since the host hands a provider each dependent's own
+// store. `ready` throws on the first hosted part whose `ready` threw.
 function partLifecycle<Started>(
   process: ProcessName,
   underTest: HostedPart,
@@ -667,6 +673,8 @@ function partLifecycle<Started>(
   realParts: readonly HostedPart[],
   counts: PartCounts,
   commands: CommandRegistry<any>,
+  log: Log,
+  logs: readonly HarnessLogLine[],
 ): PartLifecycle<Started> {
   let underTestStore: Registrations | null = null;
   const consumerView = (consumer: Registrations) =>
@@ -699,6 +707,7 @@ function partLifecycle<Started>(
     begin: () => ({ commands: {} }),
   }));
   const hosted = [...fakes, ...stubs, ...reals, underTest];
+  const hostedIds = new Set(hosted.map(({ manifest }) => manifest.id));
   let host: PluginHost<HostedStart> | null = null;
 
   const runningHost = () => {
@@ -709,30 +718,39 @@ function partLifecycle<Started>(
   };
   const lifecycle: PartLifecycle<Started> = {
     start() {
-      host = startPlugins(hosted, process, (part, context) => {
-        const isUnderTest = part === underTest;
-        if (isUnderTest) {
-          underTestStore = context.registrations;
-        }
-        const started = part.begin(context);
-        for (const [short, handler] of Object.entries(started.commands)) {
-          const handle = commands.register(
-            qualify(part.manifest.id, short),
-            handler,
-            part.manifest.id,
-          );
-          context.registrations.track(
-            isUnderTest ? countedHandle(handle, counts) : handle,
-          );
-        }
-        return started;
-      });
+      host = startPlugins(
+        hosted,
+        process,
+        (part, context) => {
+          const isUnderTest = part === underTest;
+          if (isUnderTest) {
+            underTestStore = context.registrations;
+          }
+          const started = part.begin(context);
+          for (const [short, handler] of Object.entries(started.commands)) {
+            const handle = commands.register(
+              qualify(part.manifest.id, short),
+              handler,
+              part.manifest.id,
+            );
+            context.registrations.track(
+              isUnderTest ? countedHandle(handle, counts) : handle,
+            );
+          }
+          return started;
+        },
+        undefined,
+        [],
+        log,
+      );
     },
     started() {
       return runningHost().started.get(underTest.manifest.id) as Started;
     },
     ready() {
+      const linesBefore = logs.length;
       runningHost().ready();
+      requireNoReadyFailed(logs.slice(linesBefore), hostedIds);
     },
     async stop(stop: PartStop = 'end') {
       const stopping = host;
@@ -746,6 +764,25 @@ function partLifecycle<Started>(
     },
   };
   return lifecycle;
+}
+
+const readyFailedPrefix = 'ready failed: ';
+
+// Throws on the first of `lines` the host logged for a hosted part whose
+// `ready` threw.
+function requireNoReadyFailed(
+  lines: readonly HarnessLogLine[],
+  hostedIds: ReadonlySet<string>,
+) {
+  const failed = lines.find(
+    ({ source, message }) =>
+      hostedIds.has(source) && message.startsWith(readyFailedPrefix),
+  );
+  if (failed !== undefined) {
+    throw new Error(
+      `part harness: ready of ${failed.source} failed: ${failed.message.slice(readyFailedPrefix.length)}`,
+    );
+  }
 }
 
 function baseHarness<Started>(
@@ -1026,6 +1063,8 @@ export function startMainPart<M extends PluginManifest>(
     ),
     record.counts,
     world.commands.registry,
+    world.log,
+    world.logs,
   );
   lifecycle.start();
   return {
@@ -1726,6 +1765,8 @@ export function startPagePart<M extends PluginManifest>(
     ),
     record.counts,
     world.commands.registry,
+    world.log,
+    world.logs,
   );
   lifecycle.start();
   return {
