@@ -423,8 +423,8 @@ interview on 2026-10-23; this file is the record of both.
   folder…, the folder, then the profile (a single profile is not asked, nor one the project fixes; the last profile
   used in a folder is pre-selected). With no projects in settings, it opens on the folder step. Esc at any step
   starts nothing. `Ctrl+n` (`chat.startNewSession`) opens the same prompt, lists no saved sessions, and after the
-  profile and any sign-in starts a new session at once. A session starts headless only from its own Headless chip or
-  its agent's `set_headless` call, after it starts (§ Headless from an agent). The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
+  profile and any sign-in starts a new session at once. The prompt offers no headless line: a new session turns headless on
+  after it starts, from its own Headless chip or its agent's `set_headless` call (§ Headless from an agent). The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
   in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
   one line per folder, its newest use and the profile of that use kept. A path that is no longer a folder, one that
   sits in an OS temp folder (`MainServices.tempFolders`), and one whose check fails (logged) are left out, and the list
