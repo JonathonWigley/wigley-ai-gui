@@ -81,8 +81,8 @@ export interface WorkflowViewDeps {
 // stage, and the strip input says so.
 // `activityChanged` draws the session's chip again. A turn that ends in a stage
 // with an `unseenActivity` while another session is active sets that activity on
-// the row until `activeChanged` names the session or its flow is busy again. `headlessChanged` draws the
-// session's parts again when its headless value differs from the one they last
+// the row until `activeChanged` names the session or its flow is busy again.
+// `headlessChanged` draws the session's parts again when its headless value differs from the one they last
 // drew; `undefined`, a closed session, drops that value and draws nothing.
 // Every held part draws again on `setFlow` for its session and on `redraw`,
 // and each second while it shows a countdown, the side pane aside. `setFlow`, and

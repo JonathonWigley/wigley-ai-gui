@@ -604,7 +604,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   is one.
   Information about one session goes in a session part, not on a shared bar.
 - **A row activity** is the short state a session's row shows beside its title — a label holding its word (working,
-  needs you, done, error, ready to make, closed), also in the row's tooltip; the default layout leaves working off the title line, since the workflow chip's tag says it. A page plugin sets one per session under its own source id through the
+  needs you, done, answered, error, ready to make, closed), also in the row's tooltip; the default layout leaves working off the title line, since the workflow chip's tag says it. A page plugin sets one per session under its own source id through the
   `sessions` page export `setActivity`, and the row shows the highest rank, so a new state is a registration in the
   plugin that knows it, never an edit to sessions. One that sets an `emphasis` also asks the row to catch the eye at a
   scan of the list: `raised` for a state the user may come to when ready, `urgent` for one blocked on the user. A **session title** has three sources (user, agent, first message) kept on the row;

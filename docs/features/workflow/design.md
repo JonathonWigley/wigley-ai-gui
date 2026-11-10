@@ -306,7 +306,9 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
 - **Unseen word** — a stage that declares an `unseenActivity` sets it when a turn ends there while another session is
   the active one, as chat's `Done` does, and clears it when the user views the session or the flow is busy again:
   Small's answered reads `answered` in `success`, untagged as `Done` is, at the stage rank, so it replaces `Done` and
-  the chip keeps its neutral `Answered` tag. A page reload drops it, as it drops chat's `Done`.
+  the chip keeps its neutral `Answered` tag. A page reload drops it, as it drops chat's `Done`. Unlike `Done`, it also
+  marks a turn that ended with background tasks still running once the flow goes idle, since the flow sees only the
+  turn and its subagents; those tasks' Working outranks it while they run.
 - **Paused run** — sets nothing of its own. Needs you comes only from what blocks on the user: an open round or primer,
   and a permission prompt.
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layouts draw the level's badge (one letter, S, M or L,
