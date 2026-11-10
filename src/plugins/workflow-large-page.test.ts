@@ -654,7 +654,7 @@ describe('Large over the engine page part', () => {
     { stage: 'closed', fields: {}, word: 'closed', tag: false },
     { stage: 'planReady', fields: BUSY.turn, word: null, tag: true },
     { stage: 'closed', fields: BUSY.subagent, word: null, tag: true },
-    { stage: 'make', fields: {}, word: 'needs you', tag: false },
+    { stage: 'make', fields: {}, word: null, tag: true },
     { stage: 'make', fields: BUSY.turn, word: null, tag: true },
   ])('setFlow_$stage_RowLabelReads$word', ({ stage, fields, word, tag }) => {
     const { view, put, rowActivities } = setUp();

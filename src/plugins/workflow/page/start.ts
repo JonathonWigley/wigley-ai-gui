@@ -69,6 +69,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const activities = api.state.read(sessionsActivitySlot);
     const flows = api.state.read(workflowFlowsSlot);
     const chatSessions = api.state.read(chatSessionSlot);
+    const active = api.state.read(sessionsActiveSlot);
     const workflows = new Map<WorkflowId, PageWorkflow>();
 
     const nameOf = (sessionId: string) =>
@@ -97,6 +98,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       isHeadless: (sessionId) => chatSessions.get(sessionId)?.headless === true,
       setHeadless: (sessionId, headless) =>
         chat.setHeadless(sessionId, headless),
+      activeSessionId: () => active.get() ?? null,
     });
     view.setSidePaneHidden(services.uiState.get(SIDE_PANE_HIDDEN_KEY) === true);
 
@@ -178,7 +180,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
 
     const runKey = keyRunner(api.commands, log);
     const runOnSelected = (command: SessionCommand) => () => {
-      const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
+      const sessionId = active.get() ?? null;
       if (sessionId === null) {
         log(`no selected session for ${command}`);
         return;
@@ -221,6 +223,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
           }
         });
         activities.on((sessionId) => view.activityChanged(sessionId));
+        active.on((sessionId) => view.activeChanged(sessionId ?? null));
         chatSessions.on((sessionId, info) =>
           view.headlessChanged(sessionId, info?.headless),
         );

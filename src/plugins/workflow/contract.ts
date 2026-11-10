@@ -10,7 +10,7 @@ import type {
   PluginManifest,
 } from '../../contracts/plugin';
 import type { KeyedSlotKey } from '../../contracts/state';
-import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../sessions/contract';
+import type { RowActivity } from '../sessions/contract';
 import type {
   ChipInput,
   CompleteLayout,
@@ -220,35 +220,26 @@ export interface PageStage {
   // they draw `pending`.
   runsTasks?: boolean;
   // What the session's row says while the stage waits on the user and the flow
-  // is not busy, in place of the chip's tag. Left out, a paused stage shows
-  // `PAUSED_RUN_ACTIVITY`, and any other stage leaves the row its other
+  // is not busy, in place of the chip's tag. Left out, the row keeps its other
   // activities and the chip its tag.
   rowActivity?: RowActivity;
+  // What the session's row says in place of a finished turn's done: set when a
+  // turn ends in the stage while another session is the active one, until the
+  // user views the session or the flow is busy again. The chip keeps its tag.
+  unseenActivity?: RowActivity;
 }
 
 // Above chat's done, below chat's working: the stage's word replaces a finished
 // turn's and gives way to a running one.
 export const STAGE_ACTIVITY_RANK = 15;
 
-// Under chat's working and error, above a stage's own label.
-export const PAUSED_RUN_ACTIVITY: RowActivity = {
-  ...NEEDS_YOU_ACTIVITY,
-  rank: 18,
-};
-
 // The row activity `stage` shows for `flow`, null for none: none while busy,
-// else the stage's own `rowActivity`, else `PAUSED_RUN_ACTIVITY` when paused.
+// else the stage's own `rowActivity`.
 export function shownRowActivity(
   stage: PageStage,
   flow: SessionFlow,
 ): RowActivity | null {
-  if (isBusy(flow)) {
-    return null;
-  }
-  if (stage.rowActivity) {
-    return stage.rowActivity;
-  }
-  return stage.status(flow) === 'paused' ? PAUSED_RUN_ACTIVITY : null;
+  return isBusy(flow) ? null : (stage.rowActivity ?? null);
 }
 
 // Where a fold's signal came from. 'live' is a live event or a workflow's action;

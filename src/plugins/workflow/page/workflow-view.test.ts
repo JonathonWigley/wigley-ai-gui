@@ -129,7 +129,8 @@ function flowOf(
 // as `proj`. `workflows` is what the view reads; `sidePart` is `stub`'s. Every session in
 // `previews` shows the preview, and every session in `working` reads as working
 // and in `headless` as headless. `setHeadless` records each call, and rejects
-// with `headlessRefusal` while it is set.
+// with `headlessRefusal` while it is set. `active.session` is the session the
+// user views.
 function setUp(previews: readonly string[] = []) {
   const now = NOW;
   const sets: { run: () => void; handle: number }[] = [];
@@ -141,6 +142,7 @@ function setUp(previews: readonly string[] = []) {
   const headless = new Set<string>();
   const headlessSets: [string, boolean][] = [];
   const refusal: { headless: string | null } = { headless: null };
+  const active: { session: string | null } = { session: null };
   let isFlowOfBroken = false;
   const stages = createStageList<PageStage>();
   stages.add(stageOf('idle', 'Idle', 0, { inStepper: false }));
@@ -178,6 +180,7 @@ function setUp(previews: readonly string[] = []) {
         throw new Error(refusal.headless);
       }
     },
+    activeSessionId: () => active.session,
   });
   const held = stubWorkflow('stub', undefined, { stages: stages.all() });
   workflows.push(held.workflow);
@@ -204,6 +207,7 @@ function setUp(previews: readonly string[] = []) {
     headless,
     headlessSets,
     refusal,
+    active,
   };
 }
 
@@ -1070,6 +1074,104 @@ describe('workflow view headless', () => {
       expect(run.held.chips.length + run.held.strips.length - drawsBefore).toBe(
         draws * 2,
       );
+    },
+  );
+});
+
+describe('workflow view unseen word', () => {
+  const ANSWERED_WORD: RowActivity = {
+    word: 'answered',
+    tone: 'success',
+    rank: 15,
+  };
+  const BUSY: Partial<SessionFlow> = { turnRunning: true };
+  const IDLE: Partial<SessionFlow> = {};
+
+  it.each<{
+    name: string;
+    stage: string;
+    flows: Partial<SessionFlow>[];
+    activeAtEnd: string | null;
+    viewed: (string | null)[];
+    word: string | null;
+  }>([
+    {
+      name: 'turn ends while another session is viewed',
+      stage: 'answered',
+      flows: [BUSY, IDLE],
+      activeAtEnd: 'b',
+      viewed: [],
+      word: 'answered',
+    },
+    {
+      name: 'turn ends while the session is viewed',
+      stage: 'answered',
+      flows: [BUSY, IDLE],
+      activeAtEnd: 'a',
+      viewed: [],
+      word: null,
+    },
+    {
+      name: 'the user then views the session',
+      stage: 'answered',
+      flows: [BUSY, IDLE],
+      activeAtEnd: null,
+      viewed: ['a'],
+      word: null,
+    },
+    {
+      name: 'the user then views another session',
+      stage: 'answered',
+      flows: [BUSY, IDLE],
+      activeAtEnd: null,
+      viewed: ['b'],
+      word: 'answered',
+    },
+    {
+      name: 'a new turn starts',
+      stage: 'answered',
+      flows: [BUSY, IDLE, BUSY],
+      activeAtEnd: null,
+      viewed: [],
+      word: null,
+    },
+    {
+      name: 'first drawn already idle',
+      stage: 'answered',
+      flows: [IDLE],
+      activeAtEnd: null,
+      viewed: [],
+      word: null,
+    },
+    {
+      name: 'turn ends in a stage with no unseen word',
+      stage: 'build',
+      flows: [BUSY, IDLE],
+      activeAtEnd: null,
+      viewed: [],
+      word: null,
+    },
+  ])(
+    'setFlow_$name_RowReads$word',
+    ({ stage, flows, activeAtEnd, viewed, word }) => {
+      const { view, put, stages, rowActivities, active } = setUp();
+      stages.add(
+        stageOf('answered', 'Answered', 60, {
+          inStepper: false,
+          status: () => null,
+          unseenActivity: ANSWERED_WORD,
+        }),
+      );
+
+      active.session = activeAtEnd;
+      for (const fields of flows) {
+        put(flowOf('stub', fields, stage));
+      }
+      for (const sessionId of viewed) {
+        view.activeChanged(sessionId);
+      }
+
+      expect(rowActivities.get('a')?.word ?? null).toBe(word);
     },
   );
 });

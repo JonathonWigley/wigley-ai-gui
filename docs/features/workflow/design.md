@@ -78,7 +78,7 @@ Dismiss. `wigley:make` starting moves any stage to make, fix included, and claim
 workflow or none holds it. A standalone `wigley:explore` or `wigley:review` shows its level and trail through the level
 skill that started the run.
 
-Running means the flow is busy: a turn or a subagent at any depth runs. A permission prompt or an open round waits inside a running turn, so it reads as running, and chat or forms puts Needs you on the row. Paused means nothing runs. A run paused short of its end waits on the user — an agent that stopped to ask in chat, or a crash — so the row shows Needs you for it too (Row label, below).
+Running means the flow is busy: a turn or a subagent at any depth runs. A permission prompt or an open round waits inside a running turn, so it reads as running, and chat or forms puts Needs you on the row. Paused means nothing runs. A paused run sets no Needs you: a turn that waits on the user ends on a round, which sets it, so a paused run is an agent that replied, and the row keeps chat's Done or Error (Row label, below).
 
 - **Clear & make** clears the session (the row and its tabs stay, a new conversation starts) and sends
   `/wigley:make <plan folder>`. It is disabled while the session is busy: a turn or a subagent runs.
@@ -130,7 +130,7 @@ reports each step as it reaches it. The status line is the label, the status and
 | check | the agent reports `check` | Check, running or paused | `Check · running` | none | none |
 | land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
 | done | the agent reports `done`, which writes the run log line | Land, running while a turn or subagent runs, then done | `Land · done` | none | none |
-| answered | the agent reports `answered` for a session that only answered and built nothing, which writes the run log line | Answered, no status: a neutral tag with no check, off the trail, so every step reads pending | `Answered` | none | none |
+| answered | the agent reports `answered` for a session that only answered and built nothing, which writes the run log line | Answered, no status: a neutral tag with no check, off the trail, so every step reads pending; a turn ending here while another session is viewed reads `answered` on the row until the user views it (Row label, below) | `Answered` | none | none |
 
 ## Medium's stages
 
@@ -303,13 +303,12 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   `raised`, so the built-in sessions layout draws it as a tinted Tag in place of a finished turn's `Done`, with a status
   edge on the card, one step under the solid Tag of an `urgent` Needs you. Its rank sits above chat's done and below chat's working, so a running turn, an error and a waiting round still
   take the label.
-- **Paused run** — a stage whose status reads paused, and which declares no `rowActivity` of its own, sets Needs you
-  (`attention`, `urgent`) at rank 18, so a session that stopped mid-run says so even when the agent asked in chat
-  rather than in a round. A stage that ends its run (Small's, Medium's and Spike's Done, Large's Closed) reads running while busy and done after, never paused, plan ready
-  reads ready and Large's idle and Small's answered have no status, so none of them sets it. The rank
-  sits under chat's working, so a session waiting on its own background command or Monitor still reads Working, and
-  under chat's error, so an unseen error shows first. It lasts until a turn or a subagent starts; viewing the session
-  leaves it.
+- **Unseen word** — a stage that declares an `unseenActivity` sets it when a turn ends there while another session is
+  the active one, as chat's `Done` does, and clears it when the user views the session or the flow is busy again:
+  Small's answered reads `answered` in `success`, untagged as `Done` is, at the stage rank, so it replaces `Done` and
+  the chip keeps its neutral `Answered` tag. A page reload drops it, as it drops chat's `Done`.
+- **Paused run** — sets nothing of its own. Needs you comes only from what blocks on the user: an open round or primer,
+  and a permission prompt.
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layouts draw the level's badge (one letter, S, M or L,
   in the level's colour, `--wg-workflow-<level>-badge`, with the full word in its tooltip), then the stage's label as
   one tag toned by its status (`running`, pulsing, while running; `success` with a check when done; neutral while

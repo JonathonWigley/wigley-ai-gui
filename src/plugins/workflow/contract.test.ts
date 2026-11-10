@@ -42,7 +42,7 @@ describe('shownRowActivity', () => {
       status: 'paused',
       rowActivity: undefined,
       busy: IDLE,
-      shown: { word: 'needs you', rank: 18 },
+      shown: null,
     },
     {
       name: 'paused turn',

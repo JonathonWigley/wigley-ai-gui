@@ -20,6 +20,7 @@ import {
   defaultChecklist,
   type Drawn,
   IDLE_STAGE,
+  isBusy,
   type MarkState,
   type PageStage,
   type PageWorkflow,
@@ -50,7 +51,8 @@ import {
 // what the session's row says for its stage, null for nothing. `isWorking` is
 // whether the session's row holds a running activity, which the row's title line
 // leaves to the chip's `Working` tag. `isHeadless` is whether the session is
-// headless, and `setHeadless` turns that on or off.
+// headless, and `setHeadless` turns that on or off. `activeSessionId` is the
+// session the user is viewing, null for none.
 export interface WorkflowViewDeps {
   log: PluginLog;
   clock: Clock;
@@ -64,6 +66,7 @@ export interface WorkflowViewDeps {
   isWorking(sessionId: string): boolean;
   isHeadless(sessionId: string): boolean;
   setHeadless(sessionId: string, headless: boolean): Promise<void>;
+  activeSessionId(): string | null;
 }
 
 // `chipPart` draws a session's chip under its row, `stripPart` its strip above
@@ -76,7 +79,9 @@ export interface WorkflowViewDeps {
 // tag unless its stage is running, which its stage tag already says. While the
 // session `isHeadless`, the chip ends on an accent `Headless` tag in every
 // stage, and the strip input says so.
-// `activityChanged` draws the session's chip again. `headlessChanged` draws the
+// `activityChanged` draws the session's chip again. A turn that ends in a stage
+// with an `unseenActivity` while another session is active sets that activity on
+// the row until `activeChanged` names the session or its flow is busy again. `headlessChanged` draws the
 // session's parts again when its headless value differs from the one they last
 // drew; `undefined`, a closed session, drops that value and draws nothing.
 // Every held part draws again on `setFlow` for its session and on `redraw`,
@@ -103,6 +108,7 @@ export interface WorkflowView {
   sidePartFor(workflow: PageWorkflow): ChatSidePart;
   setFlow(flow: SessionFlow): void;
   activityChanged(sessionId: string): void;
+  activeChanged(sessionId: string | null): void;
   headlessChanged(sessionId: string, headless: boolean | undefined): void;
   forget(sessionId: string): void;
   redraw(): void;
@@ -156,6 +162,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const missingStagesLogged = new Set<string>();
   const finishedOpen = new Set<string>();
   const drawnHeadless = new Map<string, boolean>();
+  const busyDrawn = new Map<string, boolean>();
+  const unseen = new Set<string>();
   let isSidePaneHidden = false;
   let pendingTick: number | null = null;
 
@@ -256,11 +264,33 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     };
   };
 
+  const followUnseen = (flow: SessionFlow) => {
+    const { sessionId } = flow;
+    const busy = isBusy(flow);
+    const turnEnded = busyDrawn.get(sessionId) === true && !busy;
+    busyDrawn.set(sessionId, busy);
+    const stageMarksUnseen = pageStageOf(flow)?.unseenActivity !== undefined;
+    if (busy || !stageMarksUnseen) {
+      unseen.delete(sessionId);
+      return;
+    }
+    if (turnEnded && deps.activeSessionId() !== sessionId) {
+      unseen.add(sessionId);
+    }
+  };
+
   const showRowActivity = (flow: SessionFlow) => {
     const stage = pageStageOf(flow);
+    if (stage === null) {
+      deps.setRowActivity(flow.sessionId, null);
+      return;
+    }
+    const unseenActivity = unseen.has(flow.sessionId)
+      ? (stage.unseenActivity ?? null)
+      : null;
     deps.setRowActivity(
       flow.sessionId,
-      stage === null ? null : shownRowActivity(stage, flow),
+      shownRowActivity(stage, flow) ?? unseenActivity,
     );
   };
 
@@ -577,6 +607,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       try {
         logFlow(flow);
       } finally {
+        followUnseen(flow);
         showRowActivity(flow);
         drawSession(flow.sessionId);
       }
@@ -587,6 +618,11 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
           (part) => part.kind === 'chip' && part.sessionId === sessionId,
         ),
       );
+    },
+    activeChanged(sessionId) {
+      if (sessionId !== null && unseen.delete(sessionId)) {
+        showRowActivity(deps.flowOf(sessionId));
+      }
     },
     headlessChanged(sessionId, headless) {
       if (headless === undefined) {
@@ -606,6 +642,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       loggedProgress.delete(sessionId);
       countdownShown.delete(sessionId);
       finishedOpen.delete(sessionId);
+      busyDrawn.delete(sessionId);
+      unseen.delete(sessionId);
     },
     redraw() {
       const rowSessions = new Set(
