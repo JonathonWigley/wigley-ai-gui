@@ -91,8 +91,9 @@ with:
 - a dot for its state: free, a session's, the user's hold, or stuck (stranded, or dirty with no holder)
 - its branch, a dirty mark, and the editor's state in words (`editor ready`, `editor busy`, `in Play Mode`,
   `editor closed`, `editor state unknown`)
-- who has it: `Free` on a clean clone no one has; a session's title — the user's, else the agent's, else its first
-  message, and its row's folder label when none is set —, which selects that row on a click; `Held by
+- who has it: `Free` on a clean clone no one has; a session's title (the user's, else the agent's, else its first
+  message, and its row's folder label when none is set), cut to one line with the whole title as its tooltip, which
+  selects that row on a click; `Held by
   you` for a user hold; or `session <id start>` for a session the app has no row for; a stranded clone adds `Stranded`
 - an open handoff with its time left, a stranded mark with its reason (`claim expired with changes`,
   `session ended with changes`) and age, and a warm-up while it runs, or `not warmed` after it failed, with the error

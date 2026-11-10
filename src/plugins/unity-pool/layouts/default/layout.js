@@ -226,6 +226,7 @@ function drawTicket(parent, ticket, kit) {
  */
 function drawHolder(parent, holder, kit) {
   const element = kit.el(parent, 'span', 'unity-pool-holder', holder.label);
+  element.title = holder.label;
   element.classList.toggle('is-cursor', holder.isCursor);
   if (holder.sessionId === null) {
     return;

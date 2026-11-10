@@ -106,9 +106,15 @@
   color: var(--wg-fg-tertiary);
 }
 
+/* A session title can run to a whole first message: one line, cut with an ellipsis, the whole in its tooltip. */
 [data-layout-owner='unity-pool'][data-layout='default'] .unity-pool-holder {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   font-size: var(--wg-text-12);
   color: var(--wg-fg-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The keyboard cursor's holder: the one focus ring, padded clear of the text. */
