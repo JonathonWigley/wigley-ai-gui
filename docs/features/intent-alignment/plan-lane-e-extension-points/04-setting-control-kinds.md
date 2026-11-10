@@ -39,7 +39,7 @@ Files:
   - test `src/plugins/settings/page/plugin-rows.test.ts` and `src/plugins/settings/page/setting-edits.test.ts`
     (fixture shape only: `control: { kind, choices: null }`)
 
-Not edited: `src/plugins/settings/page/row-box.ts` (task 02 owns it), `src/main/config/user-settings.ts`,
+Not edited: `src/plugins/settings/page/row-box.ts` (no task edits it), `src/main/config/user-settings.ts`,
 `src/main/config/config-checks.ts`, `src/main/config/config-store.ts`, `src/plugins/settings/page/setting-edits.ts`,
 `src/plugins/settings/page/layout/read-layout.ts`, `src/plugins/settings/page/layout/settings-kit.ts`,
 `src/plugins/settings/layouts/default/layout.js`. The reasons are in Decisions.
@@ -235,5 +235,10 @@ Doc lines this task makes stale (task 11 fixes them):
 
 Commit: one commit for the group: "Setting control kinds: settingControls binds a path to a kind id in main; the
 settings page registers each kind, the six built-ins included, through addControlKind".
+
+## Rulings from the plan's cold read
+
+- `controlKindsChanged()` does nothing until the schema is read and a section is open; a row in
+  `controlKindsChanged_RedrawsTheOpenSection` pins the call made before `load()` resolves.
 
 ## Proof

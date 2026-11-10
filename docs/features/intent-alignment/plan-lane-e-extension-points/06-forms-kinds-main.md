@@ -309,6 +309,31 @@ sessions has no way to replace a contribution's tools.
 **No manifest change.** A main part's `exports` needs no manifest field. A plugin that registers a kind lists
 `forms` in its own `dependsOn.main`.
 
+**Rulings from the plan's cold read** (each pinned here; they extend the Decisions above):
+
+- **A registered kind with no items** writes its key anyway: `readFormBody` and `recommendedBody` write `[]` at its
+  `bodyKey`, and the payload functions write `[]` at its `resultKey`, as the built-ins always write
+  `notice_comments: []` and as `noRoundPayload` does. "Byte-identical" holds for a file the three built-ins alone
+  wrote; a file saved while a plugin kind was registered carries that kind's key.
+- **A failed `refresh()`.** `contributeTools` throws on a bad tool list or a failing `start`, after withdrawing. Then
+  `refresh` catches, logs `forms tools: <error>` with the failed tool names, and contributes the previous good
+  `tools()` list once more, keeping every forms session. The keep-sessions flag covers the whole `refresh`, the
+  failed `contributeTools` call included, so the `end` calls a failed start makes close no round. A throw from the
+  second contribution too is logged and leaves forms with no tools until the next registry change.
+- **Stop order.** Forms' main `dispose` unsubscribes from `registry.onChanged` before it disposes the contribution,
+  and `refresh()` after the contribution's `dispose` does nothing, so a registrant disposed after forms stops adds no
+  tools.
+- **The round type instance.** `start.ts` builds `createRoundType(() => registry.kinds())` once and shares it between
+  the agents' forms service and the preview service, as the const `roundType` is shared today; `noun` and `openTool`
+  are read from that instance. `ROUND_TOOLS` serves only `fixtures.ts` and the contribution.
+- **A saved round naming an unregistered kind** fails `parseRound` with its unknown-field `RoundError`, so it reads
+  as a round saved in a shape this app no longer accepts, as any rejected shape does; `layout-preview` skips it.
+  No new code; one `round.test.ts` row pins the error.
+
+Test rows these add: in `round.test.ts`, a round with no polls while `poll` is registered writes `poll_answers: []`
+and the payload `polls: []`; in `tool-contribution.test.ts`, a `refresh` whose `contributeTools` throws keeps the
+forms sessions and re-contributes the previous list, and a `refresh` after `dispose` calls `contributeTools` no more.
+
 ## Behaviour
 
 - GIVEN forms' main start ran WHEN `registry.kinds()` is read THEN it lists `notice`, `finding`, `question`, in that
@@ -328,7 +353,9 @@ sessions has no way to replace a contribution's tools.
 
 ## Tests
 
-Before the first code change, add the fixed-hash test below and run it on the unchanged tree. It must pass there.
+Before the first code change, add the fixed-hash test below written against today's API (`parseRound(args)`,
+`fingerprint(round)`) and run it on the unchanged tree. It must pass there. Converting its calls to
+`parseRound(BUILT_IN_KINDS, args)` and `fingerprint(BUILT_IN_KINDS, round)` is part of the refactor.
 When it fails on the unchanged tree, write the hash that today's code prints as the literal and report the change
 as a concern; today's code is the source of truth.
 
@@ -355,7 +382,7 @@ as a concern; today's code is the source of truth.
   `equals Python's json.dumps hash for the same round` keeps its literal `58960c3e...77a7`.
 - `round.test.ts` § `fingerprint` — new row: the built-ins registered in the order `question, finding, notice` give
   the same hash as `BUILT_IN_KINDS` for the args above (keys sort).
-- `round.test.ts` § `readFormBody` — new test `writes a saved body back byte for byte`: `JSON.stringify` of
+- `round.test.ts` § `readFormBody` — new test `writes a saved body back byte for byte`: `JSON.stringify` of The round is the fixed-hash test's args (its question has at least two choices and its finding offers `fix_now`).
   `readFormBody(BUILT_IN_KINDS, round, JSON.parse(text))` equals `text`, for this text with a round of one question,
   one finding (choices 1, action `fix_now` offered) and one notice:
   `{"note":"n","answers":[{"index":1,"choice":2,"not_applicable":false,"notes":"","dont_ask":false,"dont_ask_reason":""}],"finding_answers":[{"index":1,"choice":1,"not_applicable":false,"notes":"","dont_ask":false,"dont_ask_reason":"","action":"fix_now"}],"notice_comments":[{"index":1,"comment":"ok"}]}`.

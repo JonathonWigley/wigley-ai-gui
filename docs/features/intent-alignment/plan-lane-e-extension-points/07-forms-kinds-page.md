@@ -9,17 +9,18 @@ The page's closed per-kind tables become one registration per kind, `PageKind`, 
 `FormsPageExports.registerKind`. The three built-in kinds register through the same call in forms' own page start.
 A forms layout keeps its `question`, `finding` and `notice` cards and gains a `kinds` record and an `other` card.
 
-**Size.** This document is past one implementer's reading (measured at plan time: about 330k bytes of code and
-tests in the Files line). `wigley:make` may run it as two groups in order: **Part A** (state, registry, contract,
+**Size.** This document is past one implementer's reading (measured at plan time: about 517k bytes of code and
+tests in the Files line, Part A about 384k of it; re-verify). Part A stays one group however large: it is one type
+change and the call sites it ripples to, which must compile together. `wigley:make` may run it as two groups in order: **Part A** (state, registry, contract,
 kinds, boxes, review model, start) and then **Part B** (layout contract, `default` layout, kit, card host, resolver,
 reader, panes). Each Files entry below is tagged A or B. Part B consumes Part A's Produces. When it runs as one
 group, the order of work is A, then B.
 
 Files:
-- A · modify `src/plugins/forms/contract.ts` — `ItemKind` widened, `Round.items`, `PresentedRound.bodyKeys`,
+- A · modify `src/plugins/forms/contract.ts` — `ItemKind` widened, `Round.items`, `Round.bodyKeys`,
   `PageKind` and the types it references, `ItemAnswer` moved in, `FormsPageExports.registerKind`, `FormsItemRef.kind`
 - A · modify `src/plugins/forms/main/round.ts`, `main/round-type.ts` — `KindRound` folded into `Round`,
-  `bodyKeys` on the presented round · test `main/round.test.ts`, `main/round-type.test.ts`
+  `parseRound` fills `Round.bodyKeys` (not hashed) · test `main/round.test.ts`, `main/round-type.test.ts`
 - A · create `src/plugins/forms/page/kinds/page-kinds.ts` — the registry and the kind table
 - A · test `src/plugins/forms/page/kinds/page-kinds.test.ts` (create)
 - A · modify `src/plugins/forms/page/kinds/formats.ts` — `FORMATS` becomes `BUILT_IN_PAGE_KINDS`; `itemLabel`
@@ -65,9 +66,10 @@ This task finishes what 06 left closed (06 kept the page compiling on the old sh
   `readFormBody` writes them. A kind with no registration keeps its entries under its key unchanged (`heldEntries`
   below is keyed by kind id; the key it writes back to is the held kind's `bodyKey`, so `heldEntries` holds the
   `bodyKey` with the entries — `Readonly<Record<ItemKind, { bodyKey: string; entries: readonly unknown[] }>>`).
-  A held kind's `bodyKey` comes from main: the page cannot know it without the registration, so `PresentedRound`
-  carries `bodyKeys: Readonly<Record<ItemKind, string>>`, filled by 06's form type from the registered specs. Add
-  that member here (a `main/round-type.ts` line plus the contract field).
+  A held kind's `bodyKey` comes from main: the page cannot know it without the registration, so the contract
+  `Round` carries `bodyKeys: Readonly<Record<ItemKind, string>>`, filled in `parseRound` from the registered kinds'
+  specs and left out of the fingerprint and of the body. A kind registered after the round parsed has no items and
+  no key in it.
 
 Produces (A), in `src/plugins/forms/contract.ts`. Every function member is a method signature, so a built-in typed
 as `PageKind<Finding, FindingAnswer, FindingCard>` assigns to `PageKind` (method parameters are bivariant):
@@ -381,6 +383,58 @@ Done when: compiles; `npm run lint` passes the layer rules with `PageKind` in `c
 tests above. Live checks defer to task 12 ("Final verification").
 
 Commit: one commit for the group (or one per part when run as Parts A and B).
+
+## Rulings from the plan's cold read
+
+Where the text above and these differ, these win.
+
+- **Parts by compile closure.** Part A is everything the state, registry, reducer and signature change touches,
+  including the call-site edits in `layout/card-kit.ts`, `layout/layout-cards.ts`, `layout/layout-panes.ts`,
+  `layout/layout-resolver.ts` and their tests, and `itemLayout`, `roundLayoutNames` and `pickRoundLayouts`. The tree
+  compiles and the tests pass after Part A alone. Part B is only the new layout surface: `layout.d.ts` (`kinds`,
+  `other`, `OtherCard`, `KindKit`, the string widenings), `default/layout.js`'s `other`, `read-layout.ts`, the
+  two-pass resolver pick, the builder choice in `layout-cards.ts` and the plugin-kind kit in `card-kit.ts`.
+- **A kind change rebuilds before it updates.** `RoundView` rebuilds a round whose `RoundState.kinds` differs from
+  the table its parts were built with, before any update runs; start dispatches `kindsChanged` and calls no
+  `view.rebuild()` of its own. Test: a `round-view` row where a kind leaves while its card is shown throws nothing
+  and drops the card.
+- **Layout picks follow the rail.** `pickRoundLayouts(round: RoundState, user, loaded)`: `RoundPicks.cards` is over
+  the non-notices stops of `railItems(round)` in rail order, `noticeCards` over `kindItems(round.round, 'notice')`,
+  and `roundLayoutNames` over every registered kind's items.
+- **A plugin card's builder and input.** The pick returns `{ builder, input: 'kind' | 'other' }`: a `kinds[id]`
+  builder gets `cardInput.input(...)`, an `other` builder gets an `OtherCard`. A throwing `kinds` builder falls
+  back to `default`'s `other` with an `OtherCard`. Test row for that fallback.
+- **`KindKit.answerControls`** mounts the toggles always, and the text boxes of `notes` and `dontAskReason` only
+  when the kind's `boxes.fields` holds them.
+- **Answer events across a kind change.** `answerChanges` compares only items present in both states'
+  `itemAnswers`, and `statusAndPick` skips a departed item; a plugin kind's `Answer` holds primitives only (stated
+  on `PageKind`). `forms-events.test.ts` rows: a kind arrives, leaves, and is replaced under the same id, each with no
+  `answerChanged`.
+- **Focus keeps the item.** On `kindsChanged`, `focus` stays on the same item (kind, index) at its new rail
+  position while it is still on the rail, else clamps to the last stop; `reviewRow` likewise keeps the same item's
+  row, else clamps. Test: kinds at 15 and 5 arrive ahead of a focused question; focus stays on that question.
+- **Body key order.** `PageKindTable` gains `kinds(): readonly PageKind[]` (registration order). `buildBody` writes
+  `note`, then the registered kinds in reverse registration order, then the held kinds in `round.bodyKeys` order;
+  the `buildBody` row pins it.
+- **Stop order.** Forms' page `dispose` disposes the `kinds.onChanged` listener first, then the view, then the
+  built-in registrations. A `start.test.ts` row: disposing the part throws nothing and rebuilds nothing.
+- **An unregistered kind is logged, and toasted only when it leaves.** At a round's first show, a kind with no
+  registration is logged once per round (`round <roundId> holds <count> <kind> items with no page kind`), with no
+  toast, since at app start a dependent's page part may register after the round arrives. When a registered kind
+  leaves while a round holds its items, the page toasts once per round and kind for that round's life:
+  `1 <kind> item in <label> waits for the plugin that draws it` / `<count> <kind> items in <label> wait for the plugin
+  that draws them`. The GIVEN with the toast text above follows this.
+- **Spec mismatch.** At restore, a registered kind whose `spec.bodyKey` differs from `round.bodyKeys[id]` logs once
+  per round (`page kind <id> body key <a> differs from main's <b>`) and reads its entries from main's key.
+- **More test rows.** A non-answerable plugin kind: `choose`, `clearChoice`, `acceptRecommendation`,
+  `toggleNotApplicable` and `toggleDontAsk` each change nothing (one `it.each`). A round that starts with a kind
+  unregistered: `buildBody` writes its entries back unchanged. The `boxKey` rows state their keys: a comment box is
+  `<roundId>/notice/<n>/comment`, a plugin kind's `<roundId>/<kind>/<n>/<field>` (or the shape the implementer
+  derives from today's `boxKey`, written in the row before the test runs).
+- **Comments that go false**, rewritten in the part that changes them: in `layout.d.ts`, `LayoutCard.update`,
+  `Kit.contributedParts`, `Layout`'s card-lookup sentence, `RailEntryInput.label` and the `kind` unions,
+  `ReviewRowInput` (B); in `contract.ts`, `FormsItemRef`, `FormsPageEvents.answerChanged`, `FormsCardPartItem` (A);
+  in `forms-events.ts`, the "answers hold only primitives" note (A).
 
 ## Proof
 

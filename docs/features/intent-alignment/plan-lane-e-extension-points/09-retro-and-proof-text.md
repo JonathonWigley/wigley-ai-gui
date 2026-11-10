@@ -187,5 +187,17 @@ One commit per repo:
   make; bump to 2.3.4` — the version bump rides this commit.
 - AGENTS: `forms.md: a finding's proof goes on a Nit alone`.
 
+## Rulings from the plan's cold read
+
+- **An entry with the `action_label` key is new-format.** A missing or empty label is no pick, and such an entry
+  never reads through `_solution_and_action_pick`; only an entry without the key takes the older-file path. The
+  empty-label test's finding has choices that omit `action`, so it fails if the old path runs.
+- **One label builder.** The chosen and the recommended label come from the same builder, given the saved word
+  (`action_label` or `recommend_action_label`), or none for the `ACTION_LABELS` fallback; the ` — <choice label>`
+  suffix rule is unchanged.
+- **Tests.** `test_a_pick_labels_its_action_with_its_saved_action_label`'s entry carries both `action_label: "Plan it"`
+  and `recommend_action_label: "Decide now"`. Replace `test_an_accepted_pick_labels_the_recommendation_...` with an
+  override case whose expected line shows `recommended: Decide now — Per user`, so the recommended label is read.
+
 ## Proof
 

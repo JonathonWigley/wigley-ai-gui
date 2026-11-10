@@ -30,6 +30,17 @@ plugins/wigley/scripts/retro` and `python3 scripts/check_manifests.py` (09).
 `npm run selftest -- --plugin <id>` for each plugin the lane touched: `forms`, `settings`, `chat`, `docs`,
 `practice`, and `markdown-blocks` if 01 gave it a script (keys has no script: its checks run in the drive run). Each must pass as it does on `main`.
 
+## The fixture plugin
+
+Checks 4, 5, 6, 15, 16 and 20 share one dev user plugin, `lane-e-fixture`, written into the drive run's own user
+config `plugins/lane-e-fixture/` (the drive run's home, per AGENTS.md "The user config folder" and the drive skill),
+never the user's `~/.config/wigley-ai-gui`, and removed with the run. Its manifest: `dependsOn` forms (main and page),
+`keys.remaps: [{ "mode": "insert", "keys": "jk", "to": "<C-[>" }]`; its page part defines the ex command `lanee`
+and registers a page kind `poll` (answerable, rail order 15, no layout builder) and a finding origin `fixture`; its
+main part registers the matching `MainItemKind` `poll` and the same origin spec. Write it to the user-plugin rules in
+AGENTS.md "A plugin"; when the drive run cannot load a user plugin, record the checks it blocks as not run, with
+the reason.
+
 ## Live checks
 
 Through the drive run (`.agents/skills/drive/SKILL.md`) or a self-test step, whichever reaches the check; a screenshot
@@ -83,8 +94,8 @@ Finding origins and proof (08, 09):
 20. **Low-confidence.** A plugin origin registered at runtime reaches a live session's tool list (06's publish path).
 
 Split (10):
-21. **Expected.** The self-test's `[forms] event viewChanged …` line still prints, and forms keys work in
-    `forms.forms` and `forms.review`.
+21. **Expected.** Forms keys work in the `forms.forms` and `forms.review` scopes after the rename (the
+    `viewChanged` log line is pinned by `forms-events.test.ts`, not here).
 
 Record each check's result in the Proof: pass, or the failure and its fix.
 

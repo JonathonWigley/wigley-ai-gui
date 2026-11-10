@@ -185,6 +185,21 @@ Settled in this plan:
   registered `:::name` block. Update the comment on `createWigleyMarkdown` and on `trackedMarkdown` ("removes every
   fence and block the plugin added").
 
+**Rulings from the plan's cold read:**
+
+- **"Parse `text` on its own"** means `md.block.parse(text, md, env, tokens)`: block rules only, so each `inline`
+  token's `children` stay empty and the outer core `inline` pass parses them once (the full `md.parse` would fill
+  them and the outer pass would append again, doubling the text). The tokens are appended to the state's
+  `tokens`, each `level` raised by `state.level`.
+- **A `render` that throws** draws that block's opener line and body as plain text (one paragraph per line, escaped),
+  and the rest of the document renders as before: a plugin's bug must not blank a chat reply. The adapter has no
+  log; the comment on `BlockContribution.render` states the fallback. One `block contributions` row pins it.
+- **A header on `:::changes` or `:::tree`** (`:::changes foo`) now opens the block, where the old `LIST_OPENER`
+  left it as text; `changesBlock` and `treeBlock` ignore the header. One row pins it.
+- **Expected outputs are written by hand.** Every `block contributions` row states its exact expected string,
+  derived from the rules above before the test first runs, never pasted from the adapter's output (a pasted
+  expectation cannot fail).
+
 ## Behaviour
 
 GIVEN the `markdown-blocks` plugin runs WHEN chat draws `:::changes\n+ a\n:::` THEN the HTML is the same as before
@@ -235,7 +250,10 @@ GIVEN a plugin added a block WHEN the plugin stops THEN the block is gone and it
   - nested blocks close innermost first (`':::note A\n:::note B\nin\n:::\nmid\n:::\nout'`)
   - a fenced `:::` or opener inside a body stays code, with rows for ```` ``` ```` and `~~~`
   - an unclosed block runs to the end (`':::note S\nbody'`)
-  - a nested opener inside a `lines` body nests, by the one close rule (`':::lines\n:::note\nx\n:::\ny\n:::\nafter'`)
+  - a nested opener inside a `lines` body moves only the close line, by the one close rule
+    (`':::lines\n:::note\nx\n:::\ny\n:::\nafter'`): the outer `lines` closes at the last `:::`, its body is
+    `[':::note', 'x', ':::', 'y']`, drawn as four `<li>` rows holding that literal text, then `<p>after</p>`;
+    the inner `:::note` is never parsed, since `lines` only calls `inline`
   - a bare `:::` with no open block stays text (move the row `leaves a bare closer with no open block as text` here)
 - New `it` `blocks_BlockTextNotInBody_RendersWithoutMarks`: a test-local `fixed` block whose render returns
   `block('para')`, inside `document()`. The output is `<p>para</p>\n` with no `data-source-line` inside the block.

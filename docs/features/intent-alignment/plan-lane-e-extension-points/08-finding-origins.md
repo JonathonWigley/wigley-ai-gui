@@ -24,7 +24,7 @@ as a concern.
 - modify `main/start.ts` — registers the built-ins, exports `registerFindingOrigin`, rebuilds the tool on a change
 - modify `main/selftest-script.ts`, `main/preview/preview-round.ts` — proof only on a `nit`
 - modify `page/kinds/finding/verdict.ts`, `page/kinds/finding/finding-card.ts` — read the spec; `originToken`
-- modify `page/form-state.ts` — `findingActionWord` reads the spec; `buildBody` writes `action_label`
+- modify `page/form-state.ts` — `findingActionWord` reads the spec (the page writes no action labels: see the rulings)
 - modify `page/layout/card-kit.ts` — chip colour from `originToken`; `actionLabelOf` fallback
 - modify `page/start.ts` — registers the built-ins, exports `registerFindingOrigin`, redraws on a change
 - modify `page/forms.css` — one `.badge-origin` rule replaces the four per-origin rules
@@ -309,7 +309,6 @@ they run.
 - `page/kinds/card-input.test.ts` — `findingCardInput_OriginToken_IsThemeVariable` (`--wg-forms-origin-caused`);
   `findingCardInput_PluginOrigin_UsesSpecWordsAndActions`.
 - `page/layout/card-kit.test.ts` — `verdict_SetsOriginColourFromToken`; `choiceGroups_UnofferedAction_LabelsValue`.
-- `page/form-state.test.ts` — `buildBody_FindingEntry_CarriesActionLabel`.
 - `page/start.test.ts` — a `registerFindingOrigin` row in the `it.each` table "a dependent's contribution leaves when
   the dependent stops ($member)" (the table gains the expected error text per row: `is already added` for the two
   rows there now, `is already registered` for this one); and `registerFindingOrigin_RedrawsOpenRoundsKeepingAnswers`.
@@ -330,6 +329,32 @@ verification").
 
 One commit in wigley-ai-gui for the group, for example `Forms: finding origins register as one spec in each process;
 proof required on a Nit alone; saved finding answers carry action_label`.
+
+## Rulings from the plan's cold read
+
+Where the text above and these differ, these win.
+
+- **Main alone writes the labels.** The page's `restore.encode` writes neither `action_label` nor
+  `recommend_action_label`; main's `readFormBody` computes both on every body it reads (every save path goes
+  through `type.readBody`), and `recommendedBody` sets both. A finding entry's key order is `index, choice,
+  not_applicable, notes, dont_ask, dont_ask_reason, action, action_label, recommend_action_label`. 06's byte-for-byte
+  `readFormBody` row changes its fixture to that labelled shape in this task.
+- **The schema follows the registry.** `findingKind.arraySchema` becomes a getter rebuilt on each read, and
+  `formsTools(kinds)` builds the `ask_round` description inside the call (the origin, severity, proof, choices and
+  action-word texts with it), since 06's `refresh()` calls `tools()` each time.
+- **Republish order.** Forms' main start subscribes the republish listener to `findingOrigins.onChanged` after the
+  four built-ins register, and its `dispose` unsubscribes before disposing them, so start and stop each publish once.
+- **A saved open round naming a plugin origin** whose plugin has not registered yet fails `parseRound` on restore and
+  reads as unreadable, as any rejected shape does; its file stays, so a later re-send after the plugin registers
+  works. No new code.
+- **Chip selector.** The replacement rule is `:where(.form-tab) .badge-origin[data-origin]`, keeping the (0,2,0)
+  specificity the four rules had over `.ui-tag--neutral`.
+- **No origin requires proof** (only reachable with `nit` disposed): the proof sentence is left out whole from the
+  `ask_round` description, the `proof` schema description and the parser's missing-field error.
+- **More rows:** in `main/round.test.ts`, a round whose origin spec was disposed still reads its body and payload
+  (`findingEntries`, `readFormBody`, `answersPayload`) as before the dispose; the `readFormBody` and
+  `recommendedBody` rows assert `recommend_action_label` (`'Decide now'` on a Decision recommending `fix_now`,
+  whatever the pick, a saved value ignored).
 
 ## Proof
 

@@ -119,6 +119,19 @@ Settled in this plan:
   `npm run typecheck`). Fakes cast with `as unknown as EditorHost` need no change. In `countingEditors`, `defineEx`
   adds 1 to a live count and returns a handle whose first `dispose` takes 1 away; `exCommands()` reads the count.
 
+**Rulings from the plan's cold read:**
+
+- **A shared prefix.** `defineEx` rejects a prefix that another live definition from `defineEx` holds, with a fifth
+  `exDefinitionProblem` message: `ex command <name>: prefix <prefix> is already defined by <other>` (one more test
+  row). A prefix that shadows one of vim's own commands (`'s'`) is allowed; the dispose brings vim's back.
+- **The restore.** Dispose writes back the engine's prior entry only while the engine's entry still points at this
+  definition's own callback; read and write the entry under the same key the engine stores it by (name or prefix,
+  whichever `@replit/codemirror-vim` keys its table by: read its exported API and docs, not `node_modules`, and
+  name the key in the Proof). With no way to read the prior entry, stop and report before the first edit.
+- **Errors.** Only a plugin's handler runs inside the catch that logs through `log('editor', …)`. The four document
+  commands throw as today, so vim's `:` prompt still shows their error, and `hostedEntryOf`'s "ran in an editor this
+  host did not create" throws outside the catch.
+
 ## Behaviour
 
 GIVEN a docs, Practice or Settings document editor WHEN the user types `:w`, `:q`, `:q!`, `:wq` or `:x` THEN that
@@ -142,7 +155,8 @@ GIVEN a plugin calls `defineEx('write', 'w', handler)` THEN it throws `ex comman
   - `'! foo'` → `{ argString: 'foo', bang: true }`
   - `'foo!'` → `{ argString: 'foo!', bang: false }`
 - `exDefinitionProblem_NamesTheFirstProblem`, one `it.each` table, each row with `name`, `prefix`, `defined` and the
-  message, one row for each of the four messages above, and a row `('hello', 'he', {})` → null.
+  message, one row for each of the four messages above, and a row `('hello', 'he', new Set())` → null (each row's `defined` is a `Set`, e.g.
+  `new Set(['hello'])`).
 
 `src/renderer/codemirror-vim/document-ex-commands.test.ts`: replace the `documentExEvent` describe with a
 `DOCUMENT_COMMANDS` describe:

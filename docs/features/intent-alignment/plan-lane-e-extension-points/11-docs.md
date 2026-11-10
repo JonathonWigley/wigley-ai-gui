@@ -58,7 +58,9 @@ Consumes: the landed code of 01–10, and each task's Proof in its document.
 `docs/keymap.md` lines 19–21: the manifest's `keys` takes `remaps` and layers them by dependency order (03).
 
 `docs/features/settings/design.md` lines 54–60 and 176–182: control kinds as page registrations, the manifest's
-`settingControls` map, and the layout picker (04, 05).
+`settingControls` map, and the layout picker (04, 05); near line 179, a leaf's `control` is `{ kind, choices }` with
+`kind` a string id; the user config service's `read()` also serves each owner's `layoutNames` (05); a row whose kind
+no registration holds draws its value as text and offers reset only (04).
 
 `docs/features/layouts/design.md` lines 62–63 (settings layouts get a `control: string`) and line 122 (the forms row:
 "question, finding and notice cards" plus `kinds` and `other`) (04, 07).
@@ -71,7 +73,7 @@ against the landed code and fix each line the code proved wrong. Known at plan t
   list picker; no kit member was added (04).
 - Plugin remaps (near line 380): a disabled plugin's remaps leave the served keymap; a paused plugin's stay (03).
 - The action-word line: saved entries carry `recommend_action_label` beside `action_label` (08).
-- Forms rounds: `ItemKind` closes in 06 and opens in 07; `PresentedRound.bodyKeys` (07).
+- Forms rounds: `ItemKind` closes in 06 and opens in 07; `Round.bodyKeys` (07).
 
 ## Follow-ups and the master plan
 
@@ -88,8 +90,8 @@ items, the Layout name picker, and forms chain items 1, 2 (both boxes) and 3.
 GIVEN the landed code WHEN each edited passage is read beside it THEN every name, path and rule it states is in the
 tree (grep each symbol the passage names).
 
-Done when: `grep -n "ROUND_ITEMS\|ANSWER_ARRAYS\|FINGERPRINT_LISTS\|ORIGIN_CHIPS\|DOCUMENT_EX_COMMANDS" AGENTS.md docs`
-prints only lines that are still true of the tree; `grep -c "\[ \]" docs/features/intent-alignment/master-plan.md`
+Done when: `grep -rn "ROUND_ITEMS\|ANSWER_ARRAYS\|FINGERPRINT_LISTS\|ORIGIN_CHIPS\|DOCUMENT_EX_COMMANDS" AGENTS.md docs
+--exclude-dir=plan-lane-e-extension-points` prints nothing; `grep -c "\[ \]" docs/features/intent-alignment/master-plan.md`
 dropped by nine from before this task; the nine follow-ups are gone. No test runs: docs only (none picked, the
 change has no code).
 

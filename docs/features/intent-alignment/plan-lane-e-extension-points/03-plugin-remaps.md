@@ -13,12 +13,13 @@ Files:
 - modify `src/main/config/config-json.ts` (loses `jsonKind` and `JsonKind`)
 - modify `src/main/config/user-keymap.ts` (imports the moved checks)
 - modify `src/main/config/user-settings.ts` (imports `jsonKind` from `src/shared/json.ts`; no other change)
-- modify `src/main/main.ts` (the `withAppliedList` call, only if the remap layering needs the manifests there)
+- modify `src/main/main.ts` (`served()` applies `appliedRemaps`)
+- modify `src/main/config/config-store.ts` (`userRemaps()`) · test `src/main/config/config-store.test.ts`
 - modify `src/shared/plugin-catalog/validate-manifest.ts` (`KEYS_FIELDS`, `addKeysProblems`)
 - modify `src/shared/plugin-catalog/manifest-schema.ts` (`KEYS.properties.remaps`)
 - modify `src/shared/plugin-catalog/manifest.test-support.ts` (`validManifest().keys.remaps`)
 - test `src/shared/keymap-entries.test.ts` (create)
-- (the disabled-remap GIVEN) a row in the `withAppliedList` tests of `src/shared/plugin-manifests.test.ts`
+- (the disabled-remap GIVEN) a new `appliedRemaps` describe in `src/shared/plugin-manifests.test.ts`
 - test `src/shared/plugin-manifests.test.ts`
 - test `src/shared/plugin-catalog/validate-manifest.test.ts`
 - test `src/shared/plugin-catalog/manifest-schema.test.ts`
@@ -67,11 +68,15 @@ Decisions:
 - A disabled plugin's remaps leave the served keymap, as its binds do, and the layer under it shows through again
   (the default keymap's or an earlier plugin's remap for the same `mode` and `keys`). Today `withAppliedList` drops
   only binds naming a disabled plugin's command (`withoutPluginBinds`), and a remap names no command, so the merged
-  keymap cannot say which remaps to drop. Layer the remaps where the disabled list is known: the served remaps are
-  the default keymap's, then the manifests' of the plugins not in `disabled` (dependency order), then the user's
-  `keymap.json`. Where that layering sits (`withAppliedList` re-layering from the manifests, or `mergeKeymap` taking
-  the list) is the implementer's pick, inside `src/shared/plugin-manifests.ts` and the `withAppliedList` call in
-  `src/main/main.ts`; name it in the Proof. A paused plugin keeps its remaps: pausing drops binds because their
+  keymap cannot say which remaps to drop, nor un-merge one (a plugin's remap replaced the default's in place). So
+  the served remaps are layered again where the disabled list is known: a new
+  `appliedRemaps(defaults: Keymap, manifests: readonly PluginManifest[], disabled: readonly string[], userRemaps:
+  readonly EditorRemap[], leader: string): EditorRemap[]` in `src/shared/plugin-manifests.ts` layers the default
+  keymap's remaps, then the manifests' of the plugins not in `disabled` (dependency order), then the user's, with
+  the same `layerOver` and `bindIdentities(...).remaps` rule `mergeKeymap` uses. `served()` in `src/main/main.ts`
+  replaces `keymap.editor.remaps` with its result. `ConfigStore` gains `userRemaps(): readonly EditorRemap[]`, the
+  remaps of the user's keymap layer it keeps; defaults and manifests come from its `checks().deps`, the leader from
+  `config.keymap.editor.leader`. A paused plugin keeps its remaps: pausing drops binds because their
   handlers restart, and a remap has no handler.
 
 GIVEN the default keymap remaps `jk` in insert mode to `<Esc>` and plugin `p` remaps `jk` in insert mode to `<C-[>`
@@ -93,6 +98,13 @@ WHEN `p` is only paused THEN it holds `p`'s remap.
 GIVEN a user plugin's `manifest.json` with `keys.remaps: [{ "mode": "visual", "keys": "jk", "to": "<Esc>" }]`
 WHEN `validateManifest` runs THEN it returns `ok: false` with the problem
 `"keys.remaps[0].mode" must be one of normal, insert, not "visual".`
+
+GIVEN `appliedRemaps` with defaults `[{ insert, jk, <Esc> }]`, plugin `p`'s manifest remap `{ insert, jk, <C-[> }`,
+plugin `q`'s `{ normal, Y, y$ }` and user remaps `[{ normal, Y, yy }]` WHEN `disabled` is `['p']` THEN it returns
+`[{ insert, jk, <Esc> }, { normal, Y, yy }]`; WHEN `disabled` is `[]` THEN `[{ insert, jk, <C-[> }, { normal, Y, yy }]`.
+(`it.each`, the helper tested directly; a paused plugin never reaches it, since `served()` passes `disabled` only.)
+GIVEN a user `keymap.json` with remaps WHEN `ConfigStore.userRemaps()` is read THEN it returns them, and `[]` with no
+user keymap.
 
 Tests:
 - `src/shared/plugin-manifests.test.ts`, describe `mergeKeymap`: add one test
@@ -125,8 +137,7 @@ Tests:
 Done when: `npm run typecheck` and `npm run lint` pass; `grep -n "remaps" src/contracts/plugin.ts` prints the
 `PluginKeys` field; `grep -n "function readRemap" src/main/config/user-keymap.ts` prints nothing; the test gate runs
 the four test files above and `src/main/config/user-keymap.test.ts` and `src/main/config/user-settings.test.ts`
-(the moved members). No runtime check: the final verification task (`12-final-verification.md`) holds none for this
-task.
+(the moved members). Live checks defer to task 12 ("Final verification", checks 5 and 6).
 
 Doc lines this task makes stale (task 11 fixes them):
 - `docs/keymap.md` lines 19–21: "the optional manifest `keys` is for a plugin from outside the repo" — add that

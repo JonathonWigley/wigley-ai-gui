@@ -169,4 +169,14 @@ Doc lines this task makes stale (task 11 fixes them):
 Commit: one commit for the group: "Layout name picker: every layout setting declares the layout kind; Settings lists
 each owner's names from UserConfigRead.layoutNames, fresh on each add or remove".
 
+## Rulings from the plan's cold read
+
+- **No launch or quit churn.** Each registration's last-told names start as `['default']` (what `names()` serves
+  before the first set), so a first set of `['default']` tells nothing; a disposal made by `LayoutService.dispose()`
+  tells nothing; the compare and the tell run only inside `send`'s existing `if (!held.isDisposed)` guard.
+- **`namesChanged_TellsOnAddRemoveAndDisposeOnly`** is four `it.each` cases, each asserting the call count: a layout
+  folder added → 1; a new revision of an existing layout → 0; a folder removed → 1; a registration disposed → 1;
+  plus a fifth, `service.dispose()` → 0. Drive each through the registry with memory files and a counting
+  `namesChanged`.
+
 ## Proof

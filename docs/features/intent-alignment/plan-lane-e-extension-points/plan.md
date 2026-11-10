@@ -178,8 +178,9 @@ Names and types more than one task uses. A task's own internals are its document
 - `main/round.ts` (06): `KindRound extends Round { items }`, the record by kind main reads while the page still
   reads the named lists. 07 moves `items` into the contract `Round`, drops `questions`, `notices` and `findings`, and
   folds `KindRound` away. `FormBody` and `AnswersPayload` keep their named members plus an index signature: each
-  kind's list sits at its `bodyKey` or `resultKey` (06), the shape the store saves. `PresentedRound` gains
-  `bodyKeys: Readonly<Record<ItemKind, string>>` (07), so the page can write back a kind it has no registration for.
+  kind's list sits at its `bodyKey` or `resultKey` (06), the shape the store saves. The contract `Round` gains
+  `bodyKeys: Readonly<Record<ItemKind, string>>` (07, filled in `parseRound`, not hashed), so the page can write back
+  a kind it has no registration for.
 
 - `src/plugins/forms/contract.ts`:
   - `type BuiltInItemKind = 'notice' | 'finding' | 'question'` (06). `type ItemKind` stays that union in 06 (the
@@ -196,7 +197,8 @@ Names and types more than one task uses. A task's own internals are its document
 - File ownership across waves: `src/plugins/forms/manifest.ts` and `src/plugins/chat/manifest.ts` are 01's in
   Wave 1 (page `dependsOn`) and 05's in Wave 3 (`settingControls`); 08 does not edit them.
   `src/plugins/settings/page/row-box.ts` is edited by no task. `round-view.test.ts` and `forms-view.test.ts` are
-  edited by 01 (W1), 07 Part A (W2), 02 (W3, its `EditorHost` fakes), 08 (W4) and 10 (W5).
+  edited by 07 Part A (W2), 02 (W3, its `EditorHost` fakes), 08 (W4) and 10 (W5); 01 (W1) edits `round-view.test.ts`
+  only.
   - `interface FormsMainExports { registerKind(kind: MainItemKind): Disposable;
     registerFindingOrigin(spec: FindingOriginSpec): Disposable }` and `formsMainKey` (06 adds the type with
     `registerKind`; 08 adds `registerFindingOrigin`).
@@ -232,7 +234,8 @@ Names and types more than one task uses. A task's own internals are its document
 
 ### Wave 2
 - [ ] [Setting control kinds as registrations](04-setting-control-kinds.md) — after 03
-- [ ] [Forms item kinds register on the page, Part A](07-forms-kinds-page.md) — after 06; the document's A-tagged files
+- [ ] [Forms item kinds register on the page, Part A](07-forms-kinds-page.md) — after 06; Part A as its rulings
+  define it (the tree compiles after it)
 
 ### Wave 3
 - [ ] [EditorHost.defineEx](02-define-ex.md) — after 01; after 07 Part A (both edit `round-view.test.ts` and `forms-view.test.ts`)

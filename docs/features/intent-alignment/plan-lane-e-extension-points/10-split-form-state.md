@@ -19,7 +19,7 @@ name each such member in the Proof concerns.
 
 Files:
 - create `page/round-model.ts` · `page/round-answers.ts` · `page/round-draft.ts` ·
-  `page/kinds/finding/finding-answer.ts` (see Decisions for when 07 already holds a module for this)
+  `page/kinds/finding/finding-answer.ts` (always created; `finding-card.ts` imports it)
 - modify `page/form-state.ts` (keeps the session state, the actions and `apply`)
 - modify `contract.ts` (the union rename)
 - modify the importers of `form-state` known at plan time (14 sources, 11 tests besides `form-state.test.ts`; 07 and
@@ -77,7 +77,8 @@ Decisions:
   - `kinds/finding/finding-answer.ts`: pure finding rules over a `FindingAnswer`, a `Finding` or the `RoundState`
     fields. A finding rule that calls a `round-answers.ts` function (`updateFocusedFinding` calls `updateItemAnswer`)
     stays in `round-answers.ts`, so the import order below holds.
-  - A rule that 07 already moved into a page kind module stays where 07 put it.
+  - A rule that 07 already moved into a page kind module (`question-card.ts`, `finding-card.ts`, `notice-card.ts`)
+    stays where 07 put it.
 - **Finding module location.** When 07 created a module in `page/kinds/finding/` that holds the finding's
   `reduce` or `restore`, the finding rules join that module and `finding-answer.ts` is not created. Otherwise create
   `finding-answer.ts`. Record which in the Proof.
@@ -158,6 +159,28 @@ Done when:
 - Live checks defer to [12 — Final verification](12-final-verification.md).
 
 Commit: one commit for the group: the split and the rename together.
+
+## Rulings from the plan's cold read
+
+This task was drafted against the tree before 07. Where the text above and these rulings differ, these win:
+
+- **form-state.ts after 07** exports `createFormsState(kinds)`, `FormsReducer`, `roundPlace` and the types
+  `FormsState`, `ItemAction`, `FormsAction`, `FormsStore`, not module constants `apply` and `initialState`. Their
+  importers are 07's call sites and stay as 07 left them. `restoreRound` in `round-draft.ts` keeps the signature 07
+  left it (it takes the kind table).
+- **07's members**, placed by the responsibility rules: `kindItems`, `NoticesStop`, `isNoticesStop` →
+  `round-model.ts`; `kindAnswer`, `unregisteredKinds` → `round-answers.ts`; the `kindsChanged` re-derive becomes
+  `rederiveRound(round: RoundState, kinds: PageKindTable): RoundState` in `round-draft.ts`, called from the
+  `kindsChanged` case in `form-state.ts`. `ItemAnswer` lives in `contract.ts` after 07: `round-model.ts` does not
+  produce or re-export it, and importers take it from the contract. `ROUND_ITEMS`, `AnswerOf`, `KindItem`,
+  `AnswerArray`, `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` do not exist after 07: the member table's
+  rows for them are void.
+- **`kinds/finding/finding-answer.ts` is always created**, holding the pure finding pick rules. It reads
+  `round.itemAnswers.finding` and `kindItems`-free item lists (`round.round.items.finding`) directly, with type-only
+  imports from `round-model.ts` and `contract.ts`, so it never imports `round-answers.ts`. A finding rule that needs
+  a `round-answers.ts` function stays in `round-answers.ts`.
+- **`AnswerAction`** is the members of `ItemAction` that 07 left dispatching to `PageKind.reduce`;
+  `applyItemAction` forwards them to `applyAnswerAction` from its `default` branch.
 
 ## Proof
 
