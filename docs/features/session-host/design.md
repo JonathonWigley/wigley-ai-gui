@@ -5,11 +5,11 @@
 - **Intent** — sessions keep running through a quit, a relaunch and `install-app`.
 - **Vocabulary** — session host, hosted process, pipe log, replay, drain.
 - **Flow** — start, quit, relaunch and re-attach, idle end.
-- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, its known limits.
-- **Protocol** — the operations, which of them never change, and the pipe log format.
+- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, its known limits, and its pending runs.
+- **Protocol** — the operations, which of them never change, the queue messages, and the pipe log format.
 - **Re-attach** — replay through the harness's pipe fold, the history cut, replayed events, queued messages.
 - **Older hosts** — drain after an update that changed the protocol.
-- **Platforms** — the RunAsNode fuse, macOS, the Windows per-version install.
+- **Platforms** — the RunAsNode fuse, macOS, the Windows per-version install, login start.
 - **Rejected approaches** — the host running the harness, waiting for turns on quit, auto-continue.
 
 ## Intent
@@ -20,6 +20,11 @@ version — shows each session as if it had stayed open. A machine reboot or a h
 ends a turn: the row rests, the next host ends what the dead one left (§ The host), and the next message resumes the
 session under it.
 
+The host also starts the runs the app queues for later, so a scheduled task fires while the app is quit
+(`docs/features/scheduled-tasks/design.md`). It keeps a pending queue of deferred spawns and a runs record of what it
+started from that queue, persisted in `pending-v4.json` and `runs-v4.json` in its folder. It still knows no harness
+and no MCP: every harness fact a queued run needs arrives in its spawn.
+
 ## Vocabulary
 
 - **Session host** — one detached process per app instance (stable, dev, self-test, drive run) that owns every
@@ -29,6 +34,9 @@ session under it.
   stderr, each with its direction and time.
 - **Replay** — the harness reading a pipe log from its first line to rebuild a session's state, writing nothing.
 - **Drain** — telling a host to end each process at its turn end, take no new process, and exit once empty.
+- **Pending entry** — a spawn the app hands the host to start at a later time (`PendingSpawn`), with the app's own
+  record of it.
+- **Run** — what the host records when a pending entry's time comes: the spawn it started or skipped (`HostedRun`).
 
 ## Flow
 
@@ -43,14 +51,18 @@ session under it.
  quit / install-app ──▶ app disconnects; host keeps every process running
  chat switched off live ──▶ chat's stop detaches its processes as a quit does; the app stays connected and the host keeps them
  turn ends while no app is connected ──▶ idle timer (chat.keepIdleMinutes) ──▶ host ends the process
- host has no process and no app ──▶ host exits
+ pending entry's `at` comes ──▶ host spawns it, or skips it while its task's last run is busy ──▶ runStarted to every app
+ host has no process, no pending entry, no run and no app ──▶ host exits
  host dies ──▶ rows rest; next host ends what its record left ──▶ only then serves a spawn
 ```
 
 ## The host
 
 - The host spawns a command with args, folder and environment, writes lines to its stdin, closes its stdin, kills
-  it, and logs every pipe line, less the dropped keys below. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
+  it, and logs every pipe line, less the dropped keys below. A spawn's `env` is an overlay: the host takes its own
+  environment, drops `ELECTRON_RUN_AS_NODE` and every name in the spawn's `unsetEnv`, then lays `env` over it, so a
+  name in both `unsetEnv` and `env` takes `env`'s value. The spawn's `stdin` lines are written right after the spawn,
+  in order, each logged as `in` like a `write`. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
   and one **idle rule**: a top-level JSON key, the value that marks a stdout line as the end of a turn (for Claude
   `"type": "result"`), and the values of that key that start a turn on each pipe (for Claude `user` on stdin,
   `assistant` and `stream_event` on stdout, the last for a turn Claude starts by itself after a background task).
@@ -74,14 +86,17 @@ session under it.
   row stays unheld until Stop all or the keep window ends it.
 - The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
   home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json`, each host's
-  own record of its children `host-v<protocol>.<pid>.children.json`, and the host's own log `host-v<protocol>.log`. When
+  own record of its children `host-v<protocol>.<pid>.children.json`, its pending table `pending-v<protocol>.json`, its
+  runs record `runs-v<protocol>.json` (§ Pending runs), and the host's own log `host-v<protocol>.log`. When
   an earlier host wrote a line to that log, the next host renames it to `host-v<protocol>.previous.log`, so a crash
   report outlives the restart that follows it. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
   process for, unless a host of another protocol may be listening: one that answers, stays silent or denies the connect
   keeps them, and only a record whose connect proves no listener does not. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
   channel uses, named with the protocol version so two protocol versions never share a channel.
 - The app starts the host with its own binary as Node (`ELECTRON_RUN_AS_NODE=1`), detached, with no stdio, and
-  waits for its channel. The host exits once it holds no process and no app is connected.
+  waits for its channel. The host stays while it runs a process, or while its pending table or runs record is
+  non-empty, and exits once none holds and no app is connected. A host started with no app, at login, reads both
+  files at start.
 - A host that dies does not take its processes with it. The app treats the lost connection as each process's exit, so
   its row rests, but a `claude` in the middle of a tool can finish the tool and write to its session, beside whatever
   resumes that session. What closes that:
@@ -120,6 +135,28 @@ session under it.
   home and user data, so `start --run <id>` brings the run back. Any other quit of a running app ends them. A plain
   `quit` of a kept run, whose app is gone, refuses while its host may be listening: `start --run <id>` then `quit` ends it.
 
+### Pending runs
+
+The app hands the host spawns to start later, and the host keeps them through a quit of the app. Each kind of fact a
+run needs — args, carried env, unset names, opening stdin lines, idle rule — arrives in the spawn, so the queue knows no
+harness.
+
+- **`setPending`** replaces every pending entry the app sent before with the list it carries. An entry is
+  `{ at, spawn, record, skipWhileBusy }`: `at` in epoch ms, `record` the app's JSON, handed back untouched on the run.
+  The client keeps the last list and sends it again on each connect, so a new host takes it over.
+- **The timer.** The host starts each entry at `at`; an entry at or before now starts at once. Both files are
+  rewritten on each change, so the queue and the runs survive a host restart.
+- **The skip rule.** `skipWhileBusy` names a hosted process id, or null. At `at`, when that process runs and its idle
+  rule reads it busy, the host skips the spawn and records a run with `skipped: true` and `exit` null. An idle
+  process that stays alive does not block the entry.
+- **A run** is `{ id, record, startedAt, skipped, exit }`: `id` is the entry's `spawn.id`, `startedAt` when the host
+  spawned or skipped it, `exit` null while it runs and filled when it closes. A spawn that fails is a run whose `exit`
+  holds `error`.
+- **`runStarted`** is pushed to every connected client when the host starts or skips an entry.
+- **`listRuns`** answers every run the host started or skipped that no `forgetRuns` dropped, oldest first, and rejects
+  as `list` does.
+- **`forgetRuns`** drops the runs with the given ids from the runs record, once the app has adopted them.
+
 ## Protocol
 
 Newline-delimited JSON over the channel. `hello`, `list` and `drain` keep their shape in every protocol version, so
@@ -132,6 +169,8 @@ shape, so any host can end what any other left.
 - `drain` — end each process at its turn end, refuse new ones, exit once empty.
 - `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
   protocol version.
+- `setPending`, `listRuns`, `forgetRuns`, and the pushed `runStarted` — the pending queue (§ Pending runs), since
+  protocol 4. The client sends its pending list again on each connect.
 
 Each hosted process's OS pid reaches the app: `subscribe`'s reply carries `pid` (null when it has none), and the host
 sends the connection that spawned a process `{ type: 'spawned', id, pid }` once the OS reports it (both since
@@ -178,6 +217,9 @@ leaves them running. A row whose process lives in another protocol's host shows 
 another app version and refuses a send until that process has ended; it then rests and resumes under the new host on
 the next message.
 
+A protocol bump leaves the old host's pending queue behind, in its own protocol's files. The new app sends its queue
+to the new host on connect, so every pending run moves to the new host.
+
 ## Platforms
 
 - The packaged app turns the `RunAsNode` fuse on, so its binary can run the host.
@@ -186,6 +228,9 @@ the next message.
 - Windows: a running exe locks its folder, so `install-app` installs each build in its own folder under
   `%LOCALAPPDATA%\Programs\wigley-ai-gui\` and points the Start menu shortcut at the newest. An older folder is
   deleted once no host runs from it. The relay's `start_app` picks the newest folder.
+- Login start: while any scheduled task is active, the host starts when the user logs in on macOS, through a login
+  item or a LaunchAgent behind the `LoginStart` seam (`src/contracts/login-start.ts`), so pending runs fire after a
+  restart with no app open. On Windows the host starts only with the app.
 
 ## Rejected approaches
 

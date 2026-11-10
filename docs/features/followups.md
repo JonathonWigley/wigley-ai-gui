@@ -367,6 +367,10 @@ What Windows support and installers need.
   install wait until `main` is clean of it.
 - **Native window vibrancy** — *needs a feature plan*: macOS `vibrancy` and Windows 11 mica behind a window adapter,
   in place of the CSS backdrop under L1 glass (`docs/features/ui-design/design.md`).
+- **Scheduled tasks start at login on Windows** — *needs a feature plan*: the session host starts at login only on
+  macOS, so on Windows a scheduled task does not fire after a restart until the app opens. It needs a launcher outside
+  the `app-*` build folders that sets `ELECTRON_RUN_AS_NODE` and starts the host, and a Windows `LoginStart` adapter
+  behind `src/contracts/login-start.ts`.
 ## Plugin extension points
 
 Closed lists that become registrations, so a plugin adds what is hardcoded today.

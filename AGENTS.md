@@ -62,7 +62,9 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   new code on save (A user plugin, below). A built-in's code still needs a rebuild.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
   processes, file watching, the icon badge, the relay's transport — is an adapter behind a contract, picked in the
-  composition root, so adding one is a new adapter and features carry no `process.platform` checks.
+  composition root, so adding one is a new adapter and features carry no `process.platform` checks. Login start
+  (`LoginStart`, the session host starting at login for scheduled tasks) is one such seam, with a no-op adapter on
+  Windows until its follow-up lands.
 - **Any agent harness and model, eventually.** Claude Code is the first adapter behind `AgentHarness`; Codex,
   wigley-harness and other models follow. Only the seams are built now, and no knowledge of one harness — its CLI,
   events, session controls, environment variables, model names — lives outside its adapter, so a new harness or
@@ -220,6 +222,9 @@ src/main/        core main process; main.ts is its composition root
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
+  login-start/   the adapters behind LoginStart, which start the session host at login: Electron's `agentService`
+                 login item and a LaunchAgent file on macOS, and a no-op for every other platform and run; `main.ts`
+                 picks one
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
                  upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
@@ -233,7 +238,9 @@ src/main/        core main process; main.ts is its composition root
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
 src/session-host/ the session host process, its own composition root and build entry: owns every agent process,
-                 logs their pipes, ends idle ones while no app is connected → imports only src/contracts,
+                 logs their pipes, ends idle ones while no app is connected, and starts the app's pending runs at
+                 their time (`pending-queue.ts`: the persisted pending table, run records, timers and skip rule)
+                 → imports only src/contracts,
                  and src/shared; no electron import
 src/preload/     exposes only a one-time claim (`bridge-claim.ts`, as `window.wigley.claim()`) that hands the Bridge to the
                  page's first caller
@@ -307,6 +314,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section
                  through sessions' `addSection`, its header's queued count), layouts/ (its Layout contract and `default`
                  layout); `docs/features/auto-retro/design.md`
+  scheduling/    scheduled tasks: the task file, the schedule parser, the run planner and history, the host's pending
+                 queue, adoption of each run as a row, the four task tools, Schedules mode and the Scheduled runs
+                 section; `docs/features/scheduled-tasks/design.md`
   auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
                  registers the send gate that compacts a cold-cache session before a message when its context is above
                  the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction; reads
@@ -627,7 +637,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   resizes by keys; the right bar by drag alone.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
-  (Sessions on `Space k s`, Docs on `Space k d`; pressed while its mode already shows, the same command toggles the
+  (Sessions on `Space k s`, Docs on `Space k d`, Schedules on `Space k t`; pressed while its mode already shows, the same command toggles the
   side bar). The activity bar lists every mode, the side bar slot shows the shown mode's side bar, and the mode's
   handle sets the title bar's context. In a window too narrow for it the side bar opens over the content, and a plugin
   calls its handle's `picked()` when the user picks something in its side bar, which closes that overlay. The core tells the
@@ -908,7 +918,10 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   workflow tools and `set_session_title`); chat's guard, which it registers through `addToolCallGuard`, answers a subagent's call of such a tool with a success that
   changes nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
   session: sessions starts or ends the contribution's tool session there and sends MCP
-  `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
+  `notifications/tools/list_changed`. A contribution also declares each tool's answer while the app is closed, and
+  whether the call replays onto its row when the app opens, through `contributeTools(…, { offline })`; sessions
+  writes them to `offline.json` for the relay, and a tool left out answers that it did not run
+  (`docs/features/scheduled-tasks/design.md` § With the app closed). Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
 - **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
@@ -938,7 +951,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   it moves a layout setting to another owner or changes a layout contract, the report also names each user layout
   under `layouts/` that the change orphans or leaves on the old contract.
 - **The user config folder** is `~/.config/wigley-ai-gui/` on both OSes: `settings.json`, `keymap.json`,
-  `themes/` and `layouts/`, each holding only what the user changes, shared by the stable and dev apps. Main's ConfigStore watches it and serves every new config to
+  `scheduled-tasks.json`, `themes/` and `layouts/`, each holding only what the user changes, shared by the stable and dev apps. Main's ConfigStore watches it and serves every new config to
   the page over the Bridge, so everything hot reloads: plugins read `settings()` and `keys.keymap()` with
   `onChanged` rather than keeping a copy, and a setting read only when something is created (window size, the claude
   command) applies to the next one. A broken file keeps the last good config and shows the problem as a title bar
@@ -1080,6 +1093,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   user data, lock     <appData>/wigley-ai-gui            <appData>/wigley-ai-gui-dev
   relay endpoint      ~/.agents/wigley-ai-gui/           ~/.agents/wigley-ai-gui-dev/
   global shortcuts    registered                         none
+  scheduled tasks     queued and fired                   shown and edited, never fired
   user config         ~/.config/wigley-ai-gui/, shared by both
   ```
 
