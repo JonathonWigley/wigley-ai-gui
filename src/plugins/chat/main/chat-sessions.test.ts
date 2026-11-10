@@ -2600,7 +2600,7 @@ describe('createChatSessions', () => {
         holdReason: null,
       },
     ];
-    expect(test.process.calls).toEqual([sendCall(second)]);
+    expect(test.process.calls).toEqual([{ ...sendCall(second), now: true }]);
     expect(test.chat.sessions()[0].queued).toEqual(queued);
     expect(test.sent('queued').at(-1)).toEqual({ sessionId: ROW_ID, queued });
   });
@@ -2812,7 +2812,10 @@ describe('createChatSessions', () => {
 
       test.activity('idle');
 
-      expect(test.process.calls).toEqual([sendCall(first), sendCall(second)]);
+      expect(test.process.calls).toEqual([
+        { ...sendCall(first), now: true },
+        sendCall(second),
+      ]);
       const sentRow = {
         ...first,
         id: 'queued-1',
@@ -7384,6 +7387,16 @@ describe('createChatSessions send gate and hold', () => {
     expect(test.process.calls).toEqual([]);
 
     test.process.events.agentEvent(compactionEndedEvent('done', 'manual'));
+    expect(test.process.calls).toEqual([sendCall(first)]);
+  });
+
+  it('sendNow_CompactionInARunningTurn_WritesWithoutNow', async () => {
+    const test = await started();
+    const [first] = queueTwo(test);
+    test.process.events.agentEvent(compactionStartedEvent('harness'));
+
+    test.chat.sendNow(ROW_ID, 'queued-1');
+
     expect(test.process.calls).toEqual([sendCall(first)]);
   });
 

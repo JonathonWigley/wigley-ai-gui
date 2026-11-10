@@ -107,13 +107,19 @@ export function appliedControlsOf(
 // One stdin line sending the user's message: plain text content when it has
 // no images, else each image's block in order, then a text block when the
 // text is not empty. `uuid` is the message's client id, by which Claude
-// reports the message's lifecycle.
-export function userMessage(message: UserMessage, uuid: string): object {
+// reports the message's lifecycle. `isNow` adds `priority: 'now'`, which ends
+// the running turn so the message runs at once (claude-stream.md § Send now).
+export function userMessage(
+  message: UserMessage,
+  uuid: string,
+  isNow = false,
+): object {
   return {
     type: 'user',
     message: { role: 'user', content: messageContent(message) },
     parent_tool_use_id: null,
     uuid,
+    ...(isNow ? { priority: 'now' } : {}),
   };
 }
 

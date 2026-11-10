@@ -495,6 +495,18 @@ describe('createClaudeCodeHarness', () => {
     expect(run.heard).toEqual([['activity', 'working']]);
   });
 
+  it('send_Now_WritesThePriorityNowMessage', async () => {
+    const run = await startedQuiet();
+
+    run.agent.send({ text: 'hi', images: [] }, { now: true });
+    await settle();
+
+    expect(run.written.at(-1)).toEqual({
+      ...(userMessage({ text: 'hi', images: [] }, 'uuid-1') as object),
+      priority: 'now',
+    });
+  });
+
   // The timeline's user entries, user-message and skill events, drops and
   // activity, each as a short tuple.
   function sendTimeline(timeline: [string, unknown][]): unknown[][] {

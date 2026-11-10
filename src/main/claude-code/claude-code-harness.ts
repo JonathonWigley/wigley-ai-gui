@@ -542,9 +542,11 @@ function createClaudeSession(
   };
 
   const agentProcess: AgentProcess = {
-    send(userInput) {
+    send(userInput, options) {
       requireRunning();
-      writeMessage(userMessage(userInput, deps.randomUuid()));
+      writeMessage(
+        userMessage(userInput, deps.randomUuid(), options?.now === true),
+      );
       return `user-${state.sendCount}`;
     },
     interrupt() {

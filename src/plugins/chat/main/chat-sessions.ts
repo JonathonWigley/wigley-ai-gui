@@ -1090,11 +1090,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Writes the row's message and marks it with the entry id the write
-  // returned; false when the write throws, which leaves it unsent.
+  // returned; false when the write throws, which leaves it unsent. While a
+  // turn runs it asks the agent to take the message in now; while a
+  // compaction runs it writes plainly, so the compaction is not cut short.
   function writeRowNow(session: HeldSession, row: QueuedMessage): boolean {
+    const isNow =
+      isTurnRunning(session) && session.slots.info().compaction === null;
     let sentEntryId: string;
     try {
-      sentEntryId = deliver(session, userMessageOf(row));
+      sentEntryId = deliver(session, userMessageOf(row), isNow);
     } catch (error) {
       log(`queued message ${row.id} not sent: ${errorText(error)}`);
       return false;
@@ -2672,12 +2676,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Writes `message` to the agent and returns the harness's id of the entry the
   // agent adds when it takes it in, which `takeIn` matches.
-  function deliver(session: HeldSession, message: UserMessage): string {
+  function deliver(
+    session: HeldSession,
+    message: UserMessage,
+    isNow = false,
+  ): string {
     const { process } = session;
     if (process === null) {
       throw new Error(`session ${session.sessionId} has no running process`);
     }
-    const entryId = process.send(message);
+    const entryId = isNow
+      ? process.send(message, { now: true })
+      : process.send(message);
     session.isOnlyAppCompaction = false;
     if (!session.sent) {
       session.sent = true;

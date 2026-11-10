@@ -2,7 +2,7 @@ Measured on `claude --version` → `2.1.304 (Claude Code)`, 2026-10-20, macOS.
 
 § Subagents and § Compaction's opening probe measured on 2.1.316, 2026-11-01. § Queued messages, § Message lifecycle
 and § Interrupt's idle case measured on 2.1.317, 2026-11-02. § Compaction's subsections measured on 2.1.318, 2026-11-03.
-§ Subagents' Probe 7 measured on 2.1.318, 2026-11-04.
+§ Subagents' Probe 7 measured on 2.1.318, 2026-11-04. § Send now measured on 2.1.319, 2026-11-10.
 
 # Claude Code stream-json wire facts
 
@@ -928,6 +928,32 @@ on an idle process with a uuid) takes the same shape as a message with its own t
   nothing.
 - The process exited with code 1, not 0, when stdin closed right after an interrupted turn with nothing after it (one
   sample).
+
+## Send now
+
+Measured 2026-11-10 on `2.1.319`, as § How every probe ran, each message with a `uuid`. `T` is U(Use the Bash tool to
+run \`ping -c 25 127.0.0.1\`, then reply with the single word done.); `U(two)` was written 1 s after T's `tool_use`.
+
+A plain write waits for the running tool, as § Queued messages says. `"priority":"now"` on the stdin user message
+ends the running turn and runs the message next. The adapter sends a message sent now this way.
+
+| `U(two)` written as | `two` arrives after the write | How T's turn ends |
+|---|---|---|
+| plain | 28 s | runs to its end; `two` folds in after the tool result |
+| `"priority":"now"` | 3.9 s | tool result `<error>Command was aborted before completion</error>`, `result/success`, `terminal_reason` `aborted_tools`, T `cancelled`; no interrupt marker |
+| plain, then the `send_now` interrupt below | 2.6–3.1 s | `[Request interrupted by user for tool use]`, `result/error_during_execution`, `aborted_tools`, T `cancelled` |
+
+- After the aborted turn's `result`, the `now` message gets `started`, a fresh `system/init` and a turn of its own.
+- Two `now` messages written back to back ran as one turn: both `started` together, and one `init` and one `result`
+  listed both uuids.
+- In a turn with no tool call (U(Count from 1 to 300, one number per line.)), a `now` message written at the first text
+  delta ended the turn within 10 ms (`result/error_during_execution`, `aborted_streaming`) and ran next.
+- A `now` message written while a compaction runs was not measured. The app writes plainly then.
+- The CLI's own schema (`@internal`) also defines `{"subtype":"interrupt","send_now":true,"message_uuid":"<uuid>"}`,
+  advertised as `interrupt_send_now_v1` on init: the terminal's send-now key for a message already queued at the CLI.
+  Its reply carries `send_now`: `stopped`, `delivering` or `nothing_waiting`. Written right after the message, or
+  after the message's `queued` frame, it answered `stopped` both times. The schema names `"priority":"now"` as the
+  route for a sender that still holds the message, which is chat's case.
 
 ## Subagents
 

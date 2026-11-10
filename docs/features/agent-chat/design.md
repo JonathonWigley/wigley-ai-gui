@@ -314,9 +314,10 @@ interview on 2026-10-23; this file is the record of both.
     message; with the box empty it sends the pending messages alone and leaves the box and the entries as they are,
     and with no unsent pending message it sends nothing and logs `nothing to send`, as Enter does. While the turn
     runs the status line's running indicator shows `⌘↩ send now` beside `stop`. While the session is idle it sends the box as
-    Enter does, and an app slash command in the box runs as on Enter. Claude folds a message sent now into a running
-    tool turn at the turn's next model request, or runs it as its own turn straight after a turn with no tool call
-    (claude-stream.md § Queued messages). The page logs `sending a pending message now in <session>` for a row and
+    Enter does, and an app slash command in the box runs as on Enter. While the turn runs and no compaction is under
+    way, main sends each message with `now` (`AgentProcess.send`): Claude ends the running turn, aborting its tool or
+    reply, and runs the messages sent now as the next turn (claude-stream.md § Send now). While a compaction runs, main
+    writes plainly, so the compaction finishes first. The page logs `sending a pending message now in <session>` for a row and
     `sending now in <session>` for the box; a refused call logs `sendNow failed: <error>` or `sendAllNow failed:
     <error>`, and a refused box message goes back into the box. Main logs `nothing to send now in <session>` when
     the box call finds nothing unsent and no message. Main writes each message and keeps its row in the queue,

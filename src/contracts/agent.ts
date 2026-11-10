@@ -409,6 +409,10 @@ export interface AgentProcessEvents {
   ended(end: { code: number | null; error: string | null }): void;
 }
 
+export interface SendOptions {
+  now?: boolean;
+}
+
 // `send`, `interrupt`, `setControl` and `compact` throw after `end`. `setControl` also
 // throws for a control or choice the harness did not declare, or when the
 // harness cannot change that control now. `interrupt` always ends the running
@@ -425,7 +429,10 @@ export interface AgentProcess {
   // A message whose entry has not come when `ended` fires gets neither: the
   // process's end lets it go. One written before an `attach`, which the caller
   // never passed to this process's `send`, gets `messageDropped` before `ended`.
-  send(message: UserMessage): string;
+  // `now` asks the agent to take the message in at once, ending its running
+  // turn's tool or reply rather than waiting for the turn's next step; messages
+  // sent now back to back run as one turn.
+  send(message: UserMessage, options?: SendOptions): string;
   interrupt(): void;
   setControl(id: string, value: string): void;
   // Starts a compaction with trigger `app`. It makes no user entry. It throws while the process is not idle. A

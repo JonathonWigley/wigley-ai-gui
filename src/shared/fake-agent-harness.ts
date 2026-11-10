@@ -140,7 +140,7 @@ export type FakePermissionAsk = (
 ) => Promise<boolean>;
 
 export type FakeAgentCall =
-  | { method: 'send'; text: string; imageCount: number }
+  | { method: 'send'; text: string; imageCount: number; now?: true }
   | { method: 'interrupt' }
   | { method: 'setControl'; id: string; value: string }
   | { method: 'compact' }
@@ -1655,9 +1655,14 @@ export function createFakeAgentHarness(
       });
     }
     return {
-      send(message) {
+      send(message, options) {
         const { text, images } = message;
-        calls.push({ method: 'send', text, imageCount: images.length });
+        calls.push({
+          method: 'send',
+          text,
+          imageCount: images.length,
+          ...(options?.now === true ? { now: true as const } : {}),
+        });
         requireRunning();
         clearVisualHold();
         turn += 1;
