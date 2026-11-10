@@ -39,6 +39,14 @@ describe('set_headless', () => {
       text: HEADLESS_OFF_NOTE,
     },
     {
+      given: 'an owned headless row turned on again',
+      owned: true,
+      startHeadless: true,
+      args: { headless: true },
+      flag: true,
+      text: HEADLESS_NOTE,
+    },
+    {
       given: 'a row chat does not own',
       owned: false,
       startHeadless: false,
@@ -55,7 +63,7 @@ describe('set_headless', () => {
       text: null,
     },
   ])(
-    'setHeadless_Call_SetsTheFlagAndReturnsItsLine_given $given',
+    'setHeadless_Call_SetsTheFlagAndReturnsItsLineOrRefuses_given $given',
     async ({ owned, startHeadless, args, flag, text }) => {
       const { flags, setHeadless, session } = toolSession(owned, startHeadless);
 
