@@ -1,6 +1,6 @@
 # 01 — Queue a retro at each clear
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -57,3 +57,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 95acd36a · proof: diff read (both Produces present); npm test auto-retro 57/57, typecheck, lint pass · concerns: the plan's 'next save drops the cleared key' was false under the queue's spreads; parseQueue now keeps only the fields it reads

@@ -109,7 +109,7 @@ No new files.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Queue a retro at each clear](01-queue-retro-at-clear.md)
+- [x] [Queue a retro at each clear](01-queue-retro-at-clear.md)
 
 ### Wave 2
 - [ ] [Doc re-read](02-doc-re-read.md) — after 01
@@ -119,10 +119,14 @@ No new files.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 81404c0c073f097efcb2cc822766a65cdaeafeec
 
 ### Groups
+- 01 · 95acd36a · diff read (both Produces present); npm test auto-retro 57/57, typecheck, lint pass · concerns: the plan's 'next save drops the cleared key' was false under the queue's spreads; parseQueue now keeps only the fields it reads
 ### Contract changes
 ### Rulings
+- The retro-row check shares only its first-message half (opensWithRetroCommand) and the item build (withRetroQueued); the launched half stays per path, since a close frees the run and a clear remaps it — a reviewer wanting one isRetroRow would restructure both branches · group 01
+- parseQueue returns only queued, running, launched, so an old queue.json's cleared key is dropped at the next save — none in behaviour if wrong · group 01
+- start.ts gains applyLoggingQueued, which both the close and clear paths call to log a queued item before commit · group 01
 ### Review rounds
 ### Test gate
