@@ -24,7 +24,11 @@ Changes:
 - Delete `cleared` from `RetroQueue`, `EMPTY_QUEUE`, `isClearedIds`, and `isRetroQueue`.
 - `start.ts` — the `chat.sessionCleared` listener passes `profile`, `titles` and `sent` from the event. The
   `queued retro of <host ids> (<n> queued)` log line fires for a clear that queues an item, as it does for a close: move
-  the log out of `closed` so both paths reach it.
+  the log out of `closed` so both paths reach it. Each path computes `next`, logs when `next.queued` grew, then calls
+  `commit(next)`, in the order `closed` uses today.
+- Update the doc comments these changes make untrue: `RetroItem` (its host ids are one conversation's, not the ids
+  before each `/clear`), `RetroQueue`, `nextQueue` (a clear queues too), and the comment over `autoRetroMainPart` in
+  `start.ts` (it queues a retro for each close and each clear that sent a message).
 
 GIVEN a row that is not a retro row WHEN a clear arrives with `sent` true THEN `queued` gains `{ hostIds: [old id], profile, title }`
 GIVEN a row that is not a retro row WHEN a clear arrives with `sent` false THEN `queued` does not change
@@ -43,7 +47,8 @@ Tests:
   `cleared` key parses to the queue without it being read (the old file shape loads).
 - `start.test.ts` — replace `sessionCleared_ThenClose_LaunchesWithEveryId` with
   `sessionCleared_SentConversation_LaunchesItsRetroAtTheClear`: emit `chat.sessionCleared` (`h0` → `h1`, `sent` true),
-  and expect `part.texts()` to equal `['/wigley:retro auto h0']` with no close emitted. Add
+  and expect `part.texts()` to equal `['/wigley:retro auto h0']` with no close emitted, and the log to hold
+  `queued retro of h0 (1 queued)`. Add
   `sessionCleared_UnsentConversation_LaunchesNothing`: the same event with `sent` false, `part.texts()` equal to `[]`.
 
 Done when: `npm test -- src/plugins/auto-retro` passes; `npm run lint` passes; `grep -rn "cleared" src/plugins/auto-retro`

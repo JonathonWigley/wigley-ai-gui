@@ -38,8 +38,8 @@ Re-run each command before the first dispatch.
 - The emit sends the titles of the row and `sent` of the conversation that the clear ended:
   `grep -n -B12 -A8 "deps.emit('sessionCleared'" src/plugins/chat/main/chat-sessions.ts` shows `sent: wasSent`, read
   before `session.sent = false`.
-- Only `auto-retro` reads the queue's `cleared` field:
-  `grep -rn "\.cleared\b\|cleared:" src --include=*.ts | grep -v "src/plugins/auto-retro/"` prints no queue use.
+- Only `auto-retro` reads the queue's `cleared` field, since no file outside the plugin imports the queue module:
+  `grep -rln "retro-queue" src | grep -v src/plugins/auto-retro/` prints nothing.
 
 ## Docs written ahead
 
@@ -49,8 +49,8 @@ Commit `eaa438b1` on this branch:
   the new decision "A retro at the clear, not at the close".
 - `AGENTS.md` — the `auto-retro/` line of the Architecture tree.
 
-In wigley-ai-marketplace: `plugins/wigley/skills/retro/SKILL.md` — the description and the `auto <session ids>` row of
-§ Modes.
+In wigley-ai-marketplace, commit `234d36e`: `plugins/wigley/skills/retro/SKILL.md` — the description and the
+`auto <session ids>` row of § Modes — with the plugin version bumped to 2.3.3 in both manifests.
 
 ## Mandatory Reads
 
