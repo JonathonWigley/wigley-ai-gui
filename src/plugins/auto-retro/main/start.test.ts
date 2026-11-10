@@ -157,6 +157,18 @@ function startPart(
       harness.emit('chat.sessionClosed', closedEvent(host, reason));
       await settled();
     },
+    async clear(oldHost: string, newHost: string, sent: boolean) {
+      harness.emit('chat.sessionCleared', {
+        sessionId: `row-${newHost}`,
+        oldHostSessionId: oldHost,
+        newHostSessionId: newHost,
+        projectDir: '/home/me/project',
+        profile: 'work',
+        titles: { user: 'Fix login', agent: null, firstMessage: 'hi' },
+        sent,
+      });
+      await settled();
+    },
     // Starts the launched row's first turn and reads it done.
     async startedThenIdle(sessionId: string) {
       harness.emit('chat.turnStarted', { sessionId });
@@ -426,22 +438,23 @@ describe('autoRetroMainPart', () => {
     expect(part.closes).toEqual([['retro-1', 'finished']]);
   });
 
-  it('sessionCleared_ThenClose_LaunchesWithEveryId', async () => {
+  it('sessionCleared_SentConversation_LaunchesItsRetroAtTheClear', async () => {
     const part = startPart();
     await settled();
 
-    part.harness.emit('chat.sessionCleared', {
-      sessionId: 'row-h1',
-      oldHostSessionId: 'h0',
-      newHostSessionId: 'h1',
-      projectDir: '/home/me/project',
-      profile: 'work',
-      titles: { user: 'Fix login', agent: null, firstMessage: 'hi' },
-      sent: true,
-    } satisfies ChatMainEvents['sessionCleared']);
-    await part.close('h1');
+    await part.clear('h0', 'h1', true);
 
-    expect(part.texts()).toEqual(['/wigley:retro auto h0 h1']);
+    expect(part.texts()).toEqual(['/wigley:retro auto h0']);
+    expect(part.messages()).toContain('queued retro of h0 (1 queued)');
+  });
+
+  it('sessionCleared_UnsentConversation_LaunchesNothing', async () => {
+    const part = startPart();
+    await settled();
+
+    await part.clear('h0', 'h1', false);
+
+    expect(part.texts()).toEqual([]);
   });
 
   it('selfTestRunMode_UserClose_LaunchesNothing', async () => {

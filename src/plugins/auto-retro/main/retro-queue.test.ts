@@ -36,13 +36,27 @@ function closed(
   };
 }
 
-function cleared(oldHostSessionId: string, newHostSessionId: string) {
+function cleared(
+  oldHostSessionId: string,
+  newHostSessionId: string,
+  sent = true,
+  titles: SessionTitles = TITLES,
+): QueueEvent {
   return {
     kind: 'cleared',
     oldHostSessionId,
     newHostSessionId,
-  } satisfies QueueEvent;
+    profile: 'work',
+    titles,
+    sent,
+  };
 }
+
+const RETRO_TITLES: SessionTitles = {
+  user: 'Fix login',
+  agent: null,
+  firstMessage: '/wigley:retro auto h1',
+};
 
 const queueOf = (fields: Partial<RetroQueue>): RetroQueue => ({
   ...EMPTY_QUEUE,
@@ -111,21 +125,36 @@ describe('nextQueue', () => {
       }),
     },
     {
-      case: 'two clears hand every earlier id to the close, oldest first',
+      case: 'a clear that sent queues the id it ended',
+      start: EMPTY_QUEUE,
+      events: [cleared('h0', 'h1')],
+      expected: queueOf({
+        queued: [{ hostIds: ['h0'], profile: 'work', title: 'Fix login' }],
+      }),
+    },
+    {
+      case: 'a clear that sent nothing queues nothing',
+      start: EMPTY_QUEUE,
+      events: [cleared('h0', 'h1', false)],
+      expected: EMPTY_QUEUE,
+    },
+    {
+      case: 'a clear of a retro row the queue lost queues nothing',
+      start: EMPTY_QUEUE,
+      events: [cleared('r0', 'r1', true, RETRO_TITLES)],
+      expected: EMPTY_QUEUE,
+    },
+    {
+      case: 'two clears and a close queue each conversation, oldest first',
       start: EMPTY_QUEUE,
       events: [cleared('h0', 'h1'), cleared('h1', 'h2'), closed('h2')],
       expected: queueOf({
         queued: [
-          { hostIds: ['h0', 'h1', 'h2'], profile: 'work', title: 'Fix login' },
+          { hostIds: ['h0'], profile: 'work', title: 'Fix login' },
+          { hostIds: ['h1'], profile: 'work', title: 'Fix login' },
+          { hostIds: ['h2'], profile: 'work', title: 'Fix login' },
         ],
-        cleared: {},
       }),
-    },
-    {
-      case: "a close drops the row's cleared ids",
-      start: EMPTY_QUEUE,
-      events: [cleared('h0', 'h1'), closed('h1', 'start-failed')],
-      expected: queueOf({ queued: [], cleared: {} }),
     },
     {
       case: 'a close of a retro row queues nothing and frees the run',
@@ -138,15 +167,9 @@ describe('nextQueue', () => {
     },
     {
       case: 'a close of a retro row the queue lost queues nothing',
-      start: queueOf({ cleared: { r1: ['r0'] } }),
-      events: [
-        closed('r1', 'user', true, {
-          user: 'Fix login',
-          agent: null,
-          firstMessage: '/wigley:retro auto h1',
-        }),
-      ],
-      expected: queueOf({ cleared: {} }),
+      start: EMPTY_QUEUE,
+      events: [closed('r1', 'user', true, RETRO_TITLES)],
+      expected: EMPTY_QUEUE,
     },
     {
       case: 'launching moves the head to running',
@@ -201,16 +224,17 @@ describe('nextQueue', () => {
       }),
     },
     {
-      case: 'a cleared retro row keeps its run',
+      case: 'a cleared retro row keeps its run and queues nothing',
       start: queueOf({
         running: { item: A, hostSessionId: 'r1' },
         launched: ['r1'],
+        queued: [B],
       }),
       events: [cleared('r1', 'r2')],
       expected: queueOf({
         running: { item: A, hostSessionId: 'r2' },
         launched: ['r2'],
-        cleared: {},
+        queued: [B],
       }),
     },
     {
@@ -268,7 +292,6 @@ describe('parseQueue', () => {
     queued: [A, B],
     running: { item: OLD_A, hostSessionId: 'r1' },
     launched: ['r1', 'r0'],
-    cleared: { h2: ['h0', 'h1'] },
   };
   const { launched: _launched, ...withoutLaunched } = FULL;
 
@@ -287,7 +310,13 @@ describe('parseQueue', () => {
     expect(() => parseQueue(text)).toThrow('queue.json is not a queue');
   });
 
-  it('parseQueue_GoodText_ReturnsTheQueue', () => {
-    expect(parseQueue(JSON.stringify(FULL))).toEqual(FULL);
+  it.each([
+    { case: 'the queue', text: JSON.stringify(FULL) },
+    {
+      case: 'the old shape with a cleared map',
+      text: JSON.stringify({ ...FULL, cleared: { h2: ['h0', 'h1'] } }),
+    },
+  ])('parseQueue_GoodText_ReturnsTheQueue: $case', ({ text }) => {
+    expect(parseQueue(text)).toEqual(FULL);
   });
 });

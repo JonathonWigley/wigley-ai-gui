@@ -2,8 +2,8 @@ import { isJsonObject } from '../../../shared/json';
 import { isUserClose, type SessionCloseReason } from '../../chat/contract';
 import { editableTitle, type SessionTitles } from '../../sessions/contract';
 
-// One retro to run: the closed row's host ids, oldest first (its ids before each `/clear`, then its last), the
-// profile it ran under and the title its retro row takes, null for none.
+// One retro to run: the host ids of the conversation a close or a `/clear` ended, the profile it ran under and the
+// title its retro row takes, null for none.
 export interface RetroItem {
   hostIds: string[];
   profile: string;
@@ -16,7 +16,6 @@ export interface RetroQueue {
   queued: RetroItem[]; // oldest first
   running: { item: RetroItem; hostSessionId: string | null } | null;
   launched: string[]; // host ids of every open retro row
-  cleared: Record<string, string[]>; // a row's current host id → its earlier ids, oldest first
 }
 
 // The command a retro row's first message opens with, before its host ids.
@@ -26,7 +25,6 @@ export const EMPTY_QUEUE: RetroQueue = {
   queued: [],
   running: null,
   launched: [],
-  cleared: {},
 };
 
 // `started` carries the names of chat's profiles at the part's start; `restoreMissed` is a running retro whose row
@@ -40,22 +38,29 @@ export type QueueEvent =
       sent: boolean;
       reason: SessionCloseReason;
     }
-  | { kind: 'cleared'; oldHostSessionId: string; newHostSessionId: string }
+  | {
+      kind: 'cleared';
+      oldHostSessionId: string;
+      newHostSessionId: string;
+      profile: string;
+      titles: SessionTitles;
+      sent: boolean;
+    }
   | { kind: 'launching' }
   | { kind: 'launched'; hostSessionId: string }
   | { kind: 'launchFailed' }
   | { kind: 'started'; profiles: readonly string[] }
   | { kind: 'restoreMissed' };
 
-// The queue after `event`: a new object, `queue` left as it was. A user close that sent a message queues a retro,
-// unless the row is a retro row: one in `launched`, or one whose first message is a `RETRO_COMMAND`, which covers a
-// retro row `launched` lost. One retro runs at a time.
+// The queue after `event`: a new object, `queue` left as it was. A user close or a `/clear` whose conversation sent a
+// message queues a retro of that conversation, unless the row is a retro row: one in `launched`, or one whose first
+// message is a `RETRO_COMMAND`, which covers a retro row `launched` lost. One retro runs at a time.
 export function nextQueue(queue: RetroQueue, event: QueueEvent): RetroQueue {
   switch (event.kind) {
     case 'closed':
       return afterClose(queue, event);
     case 'cleared':
-      return afterClear(queue, event.oldHostSessionId, event.newHostSessionId);
+      return afterClear(queue, event);
     case 'launching':
       return afterLaunching(queue);
     case 'launched':
@@ -74,36 +79,29 @@ function afterClose(
   closed: Extract<QueueEvent, { kind: 'closed' }>,
 ): RetroQueue {
   const host = closed.hostSessionId;
-  const { [host]: earlierIds, ...cleared } = queue.cleared;
   if (queue.launched.includes(host)) {
     const isRunning = queue.running?.hostSessionId === host;
     return {
       ...queue,
       running: isRunning ? null : queue.running,
       launched: queue.launched.filter((id) => id !== host),
-      cleared,
     };
   }
-  const isRetroRow =
-    closed.titles.firstMessage?.startsWith(`${RETRO_COMMAND} `) ?? false;
-  const queuesRetro = isUserClose(closed.reason) && closed.sent && !isRetroRow;
-  if (!queuesRetro) {
-    return { ...queue, cleared };
-  }
-  const title = editableTitle(closed.titles);
-  const item: RetroItem = {
-    hostIds: [...(earlierIds ?? []), host],
-    profile: closed.profile,
-    title: title === '' ? null : title,
-  };
-  return { ...queue, queued: [...queue.queued, item], cleared };
+  const queuesRetro =
+    isUserClose(closed.reason) &&
+    closed.sent &&
+    !opensWithRetroCommand(closed.titles);
+  return queuesRetro
+    ? withRetroQueued(queue, host, closed.profile, closed.titles)
+    : { ...queue };
 }
 
 function afterClear(
   queue: RetroQueue,
-  oldHost: string,
-  newHost: string,
+  cleared: Extract<QueueEvent, { kind: 'cleared' }>,
 ): RetroQueue {
+  const oldHost = cleared.oldHostSessionId;
+  const newHost = cleared.newHostSessionId;
   if (queue.launched.includes(oldHost)) {
     const { running } = queue;
     return {
@@ -115,11 +113,30 @@ function afterClear(
       launched: queue.launched.map((id) => (id === oldHost ? newHost : id)),
     };
   }
-  const { [oldHost]: earlierIds, ...cleared } = queue.cleared;
-  return {
-    ...queue,
-    cleared: { ...cleared, [newHost]: [...(earlierIds ?? []), oldHost] },
+  const queuesRetro = cleared.sent && !opensWithRetroCommand(cleared.titles);
+  return queuesRetro
+    ? withRetroQueued(queue, oldHost, cleared.profile, cleared.titles)
+    : { ...queue };
+}
+
+// A retro row `launched` lost still opens with its `RETRO_COMMAND`.
+function opensWithRetroCommand(titles: SessionTitles): boolean {
+  return titles.firstMessage?.startsWith(`${RETRO_COMMAND} `) ?? false;
+}
+
+function withRetroQueued(
+  queue: RetroQueue,
+  host: string,
+  profile: string,
+  titles: SessionTitles,
+): RetroQueue {
+  const title = editableTitle(titles);
+  const item: RetroItem = {
+    hostIds: [host],
+    profile,
+    title: title === '' ? null : title,
   };
+  return { ...queue, queued: [...queue.queued, item] };
 }
 
 function afterLaunching(queue: RetroQueue): RetroQueue {
@@ -202,22 +219,18 @@ function isRunning(value: unknown): value is RetroQueue['running'] {
   );
 }
 
-function isClearedIds(value: unknown): value is Record<string, string[]> {
-  return isJsonObject(value) && Object.values(value).every(isStringArray);
-}
-
 function isRetroQueue(value: unknown): value is RetroQueue {
   return (
     isJsonObject(value) &&
     Array.isArray(value.queued) &&
     value.queued.every(isRetroItem) &&
     isRunning(value.running) &&
-    isStringArray(value.launched) &&
-    isClearedIds(value.cleared)
+    isStringArray(value.launched)
   );
 }
 
-// The queue `queue.json` holds; throws `queue.json is not a queue` for text that is not JSON or not that shape.
+// The queue `queue.json` holds, without the keys it does not read; throws `queue.json is not a queue` for text that is
+// not JSON or not that shape.
 export function parseQueue(text: string): RetroQueue {
   const notAQueue = new Error('queue.json is not a queue');
   let parsed: unknown;
@@ -229,5 +242,6 @@ export function parseQueue(text: string): RetroQueue {
   if (!isRetroQueue(parsed)) {
     throw notAQueue;
   }
-  return parsed;
+  const { queued, running, launched } = parsed;
+  return { queued, running, launched };
 }

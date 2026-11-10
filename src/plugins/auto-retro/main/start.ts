@@ -54,10 +54,10 @@ function hostIdsText(item: RetroItem): string {
   return item.hostIds.join(' ');
 }
 
-// Queues a retro for each session the user closes after it sent a message, in `queue.json` in the plugin data,
-// launches one unattended `/wigley:retro auto <host ids>` row at a time in the `folder` setting, and closes it
-// `settleSeconds` after it reads done. Every event and launch result applies in one serial chain that starts once
-// the queue is loaded. Writes the retro rows and the queued count to `auto-retro.state`. A `queue.json` it cannot
+// Queues a retro for each session the user closes, and each conversation a `/clear` ends, after it sent a message, in
+// `queue.json` in the plugin data, launches one unattended `/wigley:retro auto <host ids>` row at a time in the
+// `folder` setting, and closes it `settleSeconds` after it reads done. Every event and launch result applies in one
+// serial chain that starts once the queue is loaded. Writes the retro rows and the queued count to `auto-retro.state`. A `queue.json` it cannot
 // read is never written during that start. In the self-test it registers its layouts and queues nothing.
 export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
   manifest: autoRetroManifest,
@@ -202,6 +202,21 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
 
     const apply = (event: QueueEvent) => commit(nextQueue(queue, event));
 
+    // `apply`, logging the item `event` queued.
+    const applyLoggingQueued = (event: QueueEvent) => {
+      const next = nextQueue(queue, event);
+      const queuedItem =
+        next.queued.length > queue.queued.length
+          ? next.queued.at(-1)
+          : undefined;
+      if (queuedItem !== undefined) {
+        log(
+          `queued retro of ${hostIdsText(queuedItem)} (${next.queued.length} queued)`,
+        );
+      }
+      return commit(next);
+    };
+
     const launched = async (item: RetroItem, rowId: string) => {
       const host = rowsSlot.get(rowId)?.hostSessionId ?? null;
       if (host === null) {
@@ -258,17 +273,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
           `retro ${event.sessionId} closed before done; ${hostIdsText(running.item)} not analyzed`,
         );
       }
-      const next = nextQueue(queue, { kind: 'closed', ...event });
-      const queuedItem =
-        next.queued.length > queue.queued.length
-          ? next.queued.at(-1)
-          : undefined;
-      if (queuedItem !== undefined) {
-        log(
-          `queued retro of ${hostIdsText(queuedItem)} (${next.queued.length} queued)`,
-        );
-      }
-      return commit(next);
+      return applyLoggingQueued({ kind: 'closed', ...event });
     };
 
     const watchRestore = (host: string) => {
@@ -331,10 +336,13 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     });
     api.events.on('chat.sessionCleared', (event) =>
       serial(() =>
-        apply({
+        applyLoggingQueued({
           kind: 'cleared',
           oldHostSessionId: event.oldHostSessionId,
           newHostSessionId: event.newHostSessionId,
+          profile: event.profile,
+          titles: event.titles,
+          sent: event.sent,
         }),
       ),
     );
