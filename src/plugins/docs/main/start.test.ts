@@ -306,10 +306,8 @@ describe('docs main part', () => {
 
   // Each run, old and new, indexes one doc of its own, so a source re-added
   // from the session's old info allows the old doc's writes and not the new.
-  // A Codex session indexes its folder with `context`, so its run names the
-  // folder a relocate moved it to.
   it.each<{
-    event: 'sessions.hostSessionChanged' | 'sessions.relocated';
+    event: 'sessions.hostSessionChanged';
     info: SessionInfo;
     changed: SessionInfo;
     oldRun: string[];
@@ -325,15 +323,6 @@ describe('docs main part', () => {
       oldPath: '/p/old.md',
       newRun: ['session', 'new-host'],
       newPath: '/p/notes.md',
-    },
-    {
-      event: 'sessions.relocated',
-      info: { sessionId: 'host', projectDir: '/p', harness: 'codex' },
-      changed: { sessionId: 'host', projectDir: '/q', harness: 'codex' },
-      oldRun: ['context', '/p'],
-      oldPath: '/p/notes.md',
-      newRun: ['context', '/q'],
-      newPath: '/q/notes.md',
     },
   ])(
     'sessionSource_$event_RebuildAllowsOnlyTheNewRunsDocWrites',

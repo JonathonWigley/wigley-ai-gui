@@ -288,7 +288,6 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),
       addProjectNamer: (namer) => list.addProjectNamer(namer),
-      relocate: (sessionId, projectDir) => list.relocate(sessionId, projectDir),
       holdConnects: (until) => hold.hold(until),
     };
     exports.contributeTools(

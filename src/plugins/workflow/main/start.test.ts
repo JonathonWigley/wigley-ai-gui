@@ -512,31 +512,6 @@ describe('workflowMainPart', () => {
     expect(workflow.sent.map(({ sessionId }) => sessionId)).toEqual(['s1']);
   });
 
-  it('sessionRelocatedBeforeOpen_FlowOpensInTheNewFolder', async () => {
-    const workflow = startWorkflowPart();
-    const connected = session('s1', 'h1');
-    await workflow.emit('sessions.connected', {
-      id: 's1',
-      info: { ...connected.info, projectDir: '/old' },
-      owned: true,
-    });
-
-    await workflow.emit('sessions.relocated', {
-      id: 's1',
-      info: { ...connected.info, projectDir: '/new' },
-    });
-    await workflow.emit('chat.sessionOpened', {
-      sessionId: 's1',
-      profileDir: '~/.c',
-      hostSessionId: 'h1',
-      projectDir: '/new',
-      profile: 'personal',
-      origin: 'new',
-    });
-
-    expect(workflow.lastFlow()?.projectDir).toBe('/new');
-  });
-
   it('sessionEnded_EndsTheTurnOnlyFromTheCurrentHost', async () => {
     const workflow = startWorkflowPart();
     await workflow.openS1();

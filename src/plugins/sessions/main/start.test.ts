@@ -488,22 +488,6 @@ describe('sessions main part', () => {
     expect(rowProjects()).toEqual(['clone']);
   });
 
-  it('relocate_ThroughAView_OnlyForSessionsThatViewOpened', () => {
-    const state = createSlotStore(() => undefined);
-    const started = startSessionsPart(10, { state });
-    const viewA = viewOf(started);
-    const viewB = viewOf(started);
-    const { id } = viewA.open(hostInfo('host-a')).session;
-    const rowFolder = () =>
-      state.read(sessionsRowsSlot, 'test').get(id)?.projectDir;
-
-    expect(() => viewB.relocate(id, '/elsewhere')).toThrow(id);
-    expect(rowFolder()).toBeNull();
-
-    viewA.relocate(id, '/elsewhere');
-    expect(rowFolder()).toBe('/elsewhere');
-  });
-
   it('keeps a contribution live when the endpoint files cannot be written', async () => {
     const homeDir = mkdtempSync(path.join(os.tmpdir(), 'sessions-start-'));
     const logged: string[] = [];

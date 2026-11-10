@@ -89,11 +89,11 @@ interface Contribution {
 // tool name routed to the tool session that serves it.
 interface SessionEntry {
   session: AgentSession;
-  // Set at connect and again by `relocate`: the `label` override, else the
+  // Set at connect: the `label` override, else the
   // project folder's last segment, else `Codex session` for a Codex session or
   // `session`.
   group: string;
-  // Set at connect and again by `relocate`; 1 for the first of its group,
+  // Set at connect; 1 for the first of its group,
   // which reads without a number.
   number: number;
   // The row's project: `namedProject`, else `originProject`, else `group`;
@@ -101,8 +101,7 @@ interface SessionEntry {
   project: string;
   // The namers' last answer for the folder; null for none or no folder.
   namedProject: string | null;
-  // The folder's origin repo name; null until its lookup lands, and again
-  // after a `relocate`.
+  // The folder's origin repo name; null until its lookup lands.
   originProject: string | null;
   toolSessions: Map<Contribution, ToolSession>;
   toolRoutes: Map<string, ToolSession>;
@@ -287,9 +286,7 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // name for its folder, else its folder's origin repo name once that lookup
 // lands, else the group, asked again at each namer's `changed()` and `dispose()`
 // and at the lookup's landing, writing the row of a session whose project
-// changed, until `stop`. `relocate` moves an owned session to another folder,
-// renumbering its label there, asking its project again and starting the new
-// folder's lookup; the old folder's late landing changes nothing. Each `mark`
+// changed, until `stop`. Each `mark`
 // and `activate` of a connected session reads its harness's name for it into
 // its `firstMessage` title, until `stop`.
 // The rows and the selection live in the writers, whose slots outlive a stop, so
@@ -495,10 +492,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const lookUpProject = (entry: SessionEntry, projectDir: string) => {
     deps.projectName(projectDir).then(
       (name) => {
-        const isStale =
-          isStopped ||
-          entries.get(entry.session.id) !== entry ||
-          entry.session.info.projectDir !== projectDir;
+        const isStale = isStopped || entries.get(entry.session.id) !== entry;
         if (isStale) {
           return;
         }
@@ -648,46 +642,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     }
     deps.log(`owned session ${appId} now host ${newHostId}`);
     deps.emit('hostSessionChanged', entry.session);
-  };
-
-  // Changes `projectDir` inside the session's one info object, so every holder
-  // of it sees the new folder, then gives the entry the new folder's label and
-  // project; `SessionsMainExports.relocate` states the rules.
-  const relocate = (sessionId: string, projectDir: string) => {
-    const entry = entries.get(sessionId);
-    if (entry === undefined) {
-      throw new Error(`relocate for unknown session ${sessionId}`);
-    }
-    if (!entry.owned) {
-      throw new Error(
-        `relocate for session ${sessionId}, which no plugin opened`,
-      );
-    }
-    const { info } = entry.session;
-    if (info.projectDir === projectDir) {
-      return;
-    }
-    info.projectDir = projectDir;
-    entry.group = groupOf(info);
-    const otherEntries = [...entries.values()].filter(
-      (other) => other !== entry,
-    );
-    entry.number = freeNumber(otherEntries, entry.group);
-    entry.originProject = null;
-    entry.namedProject = namedProjectOf(projectDir);
-    entry.project = projectOf(entry);
-    lookUpProject(entry, projectDir);
-    const row = rows.get(sessionId);
-    if (row !== undefined) {
-      rows.set(sessionId, {
-        ...row,
-        projectDir,
-        label: labelOf(entry),
-        project: entry.project,
-      });
-    }
-    deps.log(`owned session ${sessionId} moved to ${projectDir}`);
-    deps.emit('relocated', entry.session);
   };
 
   const setTitle: SessionsMainExports['setTitle'] = (
@@ -1075,7 +1029,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         },
       };
     },
-    relocate,
     setUserTitle(sessionId, title, maxLength) {
       const isClearing = title === null || normalizedTitle(title) === '';
       const problem = isClearing ? null : titleProblem(title, maxLength);

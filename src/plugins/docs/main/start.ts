@@ -276,7 +276,6 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       addSessionSource(session);
     };
     api.events.on('sessions.hostSessionChanged', replaceSessionSource);
-    api.events.on('sessions.relocated', replaceSessionSource);
     api.events.on('sessions.ended', ({ sessionId }) => {
       sessionSources.get(sessionId)?.dispose();
       sessionSources.delete(sessionId);
