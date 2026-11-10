@@ -1,6 +1,6 @@
 # 02 — A page harness entry that draws layout parts
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01 (shares `plugin-part-harness.test-support.ts` and its test)
 Plan: [plan.md](plan.md)
@@ -71,3 +71,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit c24b022a · proof: diff read (HarnessLayoutShow, layoutShow option, startDrawingPagePart all present as planned) + typecheck pass; worker ran lint (layer check) and both task test files · concerns: none

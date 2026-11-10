@@ -15,14 +15,6 @@ headings): the Backlog plugin reads it as one follow-up per top-level list item.
 
 Core seams that most items below assume.
 
-- **A throwing `ready` is silent in the part harness** — *agent-ready*: the host logs `ready of <id> failed: <error>`
-  under `plugin-host`, not under the plugin's id, and the part harness's host has no log, so a test whose `ready` throws
-  passes in silence. Give the harness host a log, and log under the plugin's id.
-- **The part harness cannot draw a layout part** — *needs a feature plan*: the harness's `layouts.show` returns a
-  show whose `draw` throws `layouts.show draw not faked` (`src/shared/plugin-part-harness.test-support.ts`
-  `fakeLayoutShow`), because the owner show that draws lives in `src/shared/page/layout-host`, a layer the harness may
-  not import. A part test of a user `page.js` that draws through its layout kit cannot run. Decide whether the harness
-  gets the owner show through a seam or the layer rule admits it.
 - **Picker ranks recent targets higher** — *needs a feature plan*: every list picker ranks with the `FuzzyMatcher` page
   service, and a row's name outranks its path, so `gui` in the Notes target picker puts `wigley-ai-gui` first. What
   remains is recency: a recently updated target ranks higher. `NoteHome` has no updated time, and "updated" still needs

@@ -144,7 +144,7 @@ export function startDrawingPagePart<M extends PluginManifest>(
 - [x] [Loud ready failures](01-loud-ready-failures.md)
 
 ### Wave 2
-- [ ] [Drawing page harness](02-drawing-page-harness.md) — after 01
+- [x] [Drawing page harness](02-drawing-page-harness.md) — after 01
 
 ### Wave 3
 - [ ] [Doc re-read](03-doc-re-read.md) — after 02
@@ -158,9 +158,12 @@ Review base: 77940a650a00bb10488a8f65835702350222b6f5
 
 ### Groups
 - 01 · 3eb66722 · diff read (both Produces present: readyEach logs under id; ready()/restart() throw via requireNoReadyFailed) + typecheck pass; worker ran lint, the two task test files and src/plugins · concerns: uncovered: sessions page ready_TracksOnlyTheRestoreUntilItsFocusFollows (first apply throws) now expects the throw; docs main stop_IndexRunInFlight_LogsNoFailure filters logs to source docs (no longer catches a failure logged under another source); followups.md:18 still quotes the old line (task 03)
+- 02 · c24b022a · diff read (HarnessLayoutShow, layoutShow option, startDrawingPagePart all present as planned) + typecheck pass; worker ran lint (layer check) and both task test files · concerns: none
 ### Contract changes
 ### Rulings
 - partLifecycle takes world.log and world.logs as two trailing params rather than the world — passes only what it uses — a one-line signature change if wrong · group 01 · group 01
 - restart() rejection asserted in each row of the one it.each instead of a separate it — same rule, fewer tests — small to split · group 01 · group 01
+- fakeLayoutShow split into innerLayoutShow + module const throwingLayoutShow; PageWorld carries layoutShow beside anchorDispose so provider parts share it — follows the per-world option pattern — a rename if wrong · group 02 · group 02
+- fakePageApi builds const api and returns it, so layouts.show hands the seam the same object the part gets; pinned by the harness test — identity was the plan's ask — none · group 02 · group 02
 ### Review rounds
 ### Test gate
