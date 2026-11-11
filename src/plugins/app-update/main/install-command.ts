@@ -29,14 +29,16 @@ export function installCommandFor(
   if (os === 'windows') {
     // Untested on Windows. `npm.cmd`, since PowerShell's own `npm.ps1` shim
     // drops the `--` before `--ref`; ASCII, since Windows PowerShell's default
-    // file encoding writes a byte order mark.
+    // file encoding writes a byte order mark. `$LASTEXITCODE` stays null when
+    // `npm.cmd` cannot start, which would write a blank line the plugin reads
+    // as still running, so null writes 1.
     return {
       command: 'powershell.exe',
       args: [
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        `npm.cmd run install-app -- --ref ${INSTALL_REF}; $LASTEXITCODE | Out-File -Encoding ascii -FilePath ${powerShellQuoted(exitCodePath)}`,
+        `npm.cmd run install-app -- --ref ${INSTALL_REF}; $(if ($null -eq $LASTEXITCODE) { 1 } else { $LASTEXITCODE }) | Out-File -Encoding ascii -FilePath ${powerShellQuoted(exitCodePath)}`,
       ],
     };
   }

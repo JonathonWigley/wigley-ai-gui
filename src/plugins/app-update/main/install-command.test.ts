@@ -21,7 +21,7 @@ describe('installCommandFor', () => {
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        "npm.cmd run install-app -- --ref origin/main; $LASTEXITCODE | Out-File -Encoding ascii -FilePath 'C:\\Users\\u\\AppData\\it''s\\install-exit-code'",
+        "npm.cmd run install-app -- --ref origin/main; $(if ($null -eq $LASTEXITCODE) { 1 } else { $LASTEXITCODE }) | Out-File -Encoding ascii -FilePath 'C:\\Users\\u\\AppData\\it''s\\install-exit-code'",
       ],
     },
   ])(
