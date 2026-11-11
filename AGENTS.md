@@ -1077,8 +1077,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   which `node scripts/make-icon.mts` rebuilds on Windows (`make-icon.ps1` holds the crop); the dev app keeps Electron's icon.
 - **To put the running app on a new build**, run the marketplace's `start_app.py`
   (`plugins/wigley/scripts/forms/` in the wigley-ai-marketplace clone) with `--restart --dev` for the dev app, or
-  `--from <checkout>` to start the dev app from that checkout, such as the worktree holding the change (planned in
-  `app-restart`, not built yet). It quits only the process the endpoint file names, waits for it to exit, starts
+  `--from <checkout>` to start the dev app from that checkout, such as the worktree holding the change. It quits only the process the endpoint file names, waits for it to exit, starts
   the app and waits for its channel; a hand `pkill` misses processes and hits drive runs. A page edit hot reloads
   with no restart; a main-process edit needs one. The stable app runs the build `npm run install-app` last
   installed, and that command already restarts it. The forms README's Restarting the app holds the rules.
