@@ -174,4 +174,9 @@ Review base: b341b94a
 - restart_app step 4 calls start_app literally, which re-reads the endpoint file after the quit — the plan's read-once reason applies only while the old app stops — a later app that deletes endpoint.json at quit would break a plain --restart · group 02 · group 02
 - a ready result after a quit reports 'restarted' even when start_app found another start already running — message only · group 02 · group 02
 ### Review rounds
+- implementation review · gui 4c3d1da7, marketplace aed8e25 · NEEDS FIXES (1 determined, 1 open, 1 lead-applied reflow: gui 59031f49, marketplace b00e4a2)
+- Fix cycle 1: marketplace e64a984..404c074 (finding 1 read-once launch, finding 2 zombie check). Tier High: process lifecycle. Re-review: correctness lane.
+- re-review · marketplace e64a984, 404c074 · NEEDS FIXES (4 Minor, all determined; findings 1 and 2 closed)
+- Fix cycle 2: marketplace 8ad97aa (one test row and a docstring) plus lead-applied prose 136a18f. Tier Low: tests and docs only, so it closes on its commit and compile.
 ### Test gate
+- Tier High. marketplace at 136a18f: forms unittest 98 ok (2 skipped), check_manifests x2, check_pointers, scripts unittest, claude plugin validate pass. gui: npm run typecheck clean, vitest platform.test, start.test, relay/endpoint.test 32 passed.
