@@ -3,6 +3,7 @@ import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { ScreenCapture } from '../../../contracts/screen-capture';
 import type { KeyedSlotWriter } from '../../../contracts/state';
+import { errorText } from '../../../shared/error-text';
 import {
   type AgentSession,
   errorResult,
@@ -55,6 +56,8 @@ const PROJECT_PATH_NOT_ABSOLUTE =
 const BLOCKED_REPLY =
   'Screen Recording is off for Auri. The Live section shows a button that opens System Settings; the user turns it on there and restarts Auri. Carry on without the stream.';
 const HIDDEN_REPLY = 'The Live section stopped streaming.';
+const ABORTED_REPLY =
+  'show_live_view was interrupted; the Live section was left as it was.';
 
 // `[x, y, width, height]` in global screen points, top-left origin.
 export type GameRectTuple = readonly [number, number, number, number];
@@ -78,8 +81,13 @@ export interface LiveTools {
   startSession(session: AgentSession): ToolSession;
   // `show_live_view` for the session, with its args already checked: writes
   // the session's pick and replies, or replies with the error and leaves the
-  // pick as it was. A session that ends while it waits gets no pick.
-  show(sessionId: string, args: ShowArgs): Promise<ToolResult>;
+  // pick as it was. A session that hides or ends while it waits, or a call
+  // whose `signal` aborts, gets no pick.
+  show(
+    sessionId: string,
+    args: ShowArgs,
+    signal?: AbortSignal,
+  ): Promise<ToolResult>;
   // Deletes the session's pick, and keeps a `show` still waiting from writing one.
   sessionEnded(sessionId: string): void;
 }
@@ -133,20 +141,24 @@ function editorProcessId(text: string | null): number | null {
 // window its Live section streams, in the picks slot under the session's id.
 export function createLiveTools(deps: LiveToolsDeps): LiveTools {
   const { files, paths, screenCapture, picks, log } = deps;
-  // How many times each session id has ended, so a `show` that was waiting
-  // when its session ended writes no pick; a row id can come back after a
-  // restart, so the id alone does not bar it.
-  const endCounts = new Map<string, number>();
+  // Bumped per session id by each hide and end, so a `show` that was waiting
+  // through either writes no pick; a row id can come back after a restart, so
+  // the id alone does not bar it.
+  const generations = new Map<string, number>();
+  const generationOf = (sessionId: string) => generations.get(sessionId) ?? 0;
+  const bumpGeneration = (sessionId: string) =>
+    generations.set(sessionId, generationOf(sessionId) + 1);
 
   const show = async (
     sessionId: string,
     { projectPath, gameRect }: ShowArgs,
+    signal?: AbortSignal,
   ): Promise<ToolResult> => {
     const folder = paths.base(projectPath);
     if (!paths.isAbsolute(projectPath) || folder === '') {
       return errorResult(PROJECT_PATH_NOT_ABSOLUTE);
     }
-    const endsBefore = endCounts.get(sessionId) ?? 0;
+    const generationBefore = generationOf(sessionId);
     try {
       // Read before the window list, so with no editor the no-editor error
       // wins and no blocked pick is written.
@@ -170,8 +182,11 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
       if ('error' in result) {
         return errorResult(result.error);
       }
+      if (signal?.aborted === true) {
+        return errorResult(ABORTED_REPLY);
+      }
       const { pick } = result;
-      if ((endCounts.get(sessionId) ?? 0) === endsBefore) {
+      if (generationOf(sessionId) === generationBefore) {
         picks.set(sessionId, pick);
         log(
           `${sessionId} shows ${pick.kind === 'stream' ? pick.summary : 'Screen Recording off'}`,
@@ -186,11 +201,12 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
           : `Streaming the Game View of ${folder} in the Live section. It streams while the user has the section on screen.`,
       );
     } catch (error) {
-      return errorResult(String(error));
+      return errorResult(errorText(error));
     }
   };
 
   const hide = (sessionId: string): ToolResult => {
+    bumpGeneration(sessionId);
     picks.delete(sessionId);
     log(`${sessionId} hid its Live section`);
     return textResult(HIDDEN_REPLY);
@@ -199,7 +215,7 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
   return {
     definitions: LIVE_TOOLS,
     startSession: (session) => ({
-      call(name, args) {
+      call(name, args, { signal }) {
         if (name === HIDE_TOOL.name) {
           return Promise.resolve(hide(session.id));
         }
@@ -209,13 +225,13 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
         const parsed = parseShowArgs(args);
         return 'error' in parsed
           ? Promise.resolve(errorResult(parsed.error))
-          : show(session.id, parsed.args);
+          : show(session.id, parsed.args, signal);
       },
       end: () => undefined,
     }),
     show,
     sessionEnded(sessionId) {
-      endCounts.set(sessionId, (endCounts.get(sessionId) ?? 0) + 1);
+      bumpGeneration(sessionId);
       picks.delete(sessionId);
     },
   };

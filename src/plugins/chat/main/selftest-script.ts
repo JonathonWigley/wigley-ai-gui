@@ -8,6 +8,7 @@ import type {
   SelfTestStep,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { escapeRegExp } from '../../../shared/escape-reg-exp';
 import {
   FAKE_BLOCKS_TEXT,
   FAKE_COLD_TEXT,
@@ -154,9 +155,6 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
     why: 'Back on the first session, i leaves visual mode and inserts before the cursor, so ok sends hoki.',
   },
 ];
-
-const escapeRegExp = (text: string) =>
-  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // The line the Chat page logs when chat's activity on the named session's row
 // changes; `none` for no activity.

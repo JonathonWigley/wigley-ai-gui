@@ -1,6 +1,7 @@
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
+import { escapeRegExp } from '../../../shared/escape-reg-exp';
 import {
   FAKE_EDITOR_PROCESS_ID,
   FAKE_GAME_RECT,
@@ -118,9 +119,7 @@ export function liveViewSelfTestScript(
       });
       return {
         shownLine: `[chat] Chat tab shown in ${SELFTEST_PROJECT_NAME}`,
-        alsoShown: [
-          /^\[live-view\] streaming Game View · selftest-unity in selftest-unity$/,
-        ],
+        alsoShown: [new RegExp(`^${escapeRegExp(STREAMING_LINE)}$`)],
         result,
       };
     },

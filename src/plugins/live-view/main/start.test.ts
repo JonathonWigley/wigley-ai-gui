@@ -88,8 +88,8 @@ async function startPart() {
     id: SESSION,
     info: { sessionId: 'host-1', projectDir: PROJECT, harness: 'claude' },
   });
-  const call = (name: string, args: unknown) =>
-    toolSession.call(name, args, CONTEXT);
+  const call = (name: string, args: unknown, context = CONTEXT) =>
+    toolSession.call(name, args, context);
   const pickOf = (sessionId: string) =>
     harness.state.read(livePicksSlot, 'test').get(sessionId);
   return { harness, capture, contributions, call, pickOf };
@@ -107,6 +107,7 @@ describe('liveViewMainPart', () => {
   it.each<{
     given: string;
     args: unknown;
+    editorFile?: string;
     list?: () => Promise<WindowList>;
     pick: LivePick | undefined;
     error: boolean;
@@ -154,12 +155,28 @@ describe('liveViewMainPart', () => {
       text: 'No Unity editor has Other open: /home/Other/Library/EditorInstance.json is missing or has no process_id.',
     },
     {
+      given: 'an EditorInstance.json that does not parse',
+      args: { projectPath: PROJECT, gameRect: FAKE_GAME_RECT },
+      editorFile: 'not json',
+      pick: EDITOR_PICK,
+      error: true,
+      text: 'No Unity editor has Game open: /home/Game/Library/EditorInstance.json is missing or has no process_id.',
+    },
+    {
+      given: 'an EditorInstance.json with no process_id',
+      args: { projectPath: PROJECT, gameRect: FAKE_GAME_RECT },
+      editorFile: '{}',
+      pick: EDITOR_PICK,
+      error: true,
+      text: 'No Unity editor has Game open: /home/Game/Library/EditorInstance.json is missing or has no process_id.',
+    },
+    {
       given: 'a window list that rejects',
       args: { projectPath: PROJECT },
       list: () => Promise.reject(new Error('no window list')),
       pick: EDITOR_PICK,
       error: true,
-      text: 'Error: no window list',
+      text: 'no window list',
     },
     {
       given: 'no projectPath',
@@ -198,9 +215,12 @@ describe('liveViewMainPart', () => {
     },
   ])(
     'showLiveView_AfterAWholeEditorPick_WritesThePickOrLeavesIt_given $given',
-    async ({ args, list, pick, error, text }) => {
-      const { capture, call, pickOf } = await startPart();
+    async ({ args, editorFile, list, pick, error, text }) => {
+      const { harness, capture, call, pickOf } = await startPart();
       await call('show_live_view', { projectPath: PROJECT });
+      if (editorFile !== undefined) {
+        await harness.files.write(EDITOR_FILE, editorFile);
+      }
       if (list !== undefined) {
         capture.list = list;
       }
@@ -236,19 +256,44 @@ describe('liveViewMainPart', () => {
     expect(parts.pickOf(SESSION)).toBeUndefined();
   });
 
-  it('showLiveView_SessionEndsWhileTheWindowsList_WritesNoPick', async () => {
-    const { harness, capture, call, pickOf } = await startPart();
-    let answer: (list: WindowList) => void = () => undefined;
-    capture.list = () => new Promise((resolve) => (answer = resolve));
-    const shown = call('show_live_view', { projectPath: PROJECT });
-    await settle();
+  it.each<{
+    given: string;
+    stop: (
+      parts: Awaited<ReturnType<typeof startPart>>,
+      abort: AbortController,
+    ) => unknown;
+  }>([
+    {
+      given: 'the session ending',
+      stop: (parts) =>
+        parts.harness.emit('sessions.ended', { sessionId: SESSION }),
+    },
+    {
+      given: 'hide_live_view',
+      stop: (parts) => parts.call('hide_live_view', {}),
+    },
+    { given: 'the call aborting', stop: (_parts, abort) => abort.abort() },
+  ])(
+    'showLiveView_StoppedWhileTheWindowsList_WritesNoPick_given $given',
+    async ({ stop }) => {
+      const parts = await startPart();
+      const abort = new AbortController();
+      let answer: (list: WindowList) => void = () => undefined;
+      parts.capture.list = () => new Promise((resolve) => (answer = resolve));
+      const shown = parts.call(
+        'show_live_view',
+        { projectPath: PROJECT },
+        { toolUseId: null, signal: abort.signal },
+      );
+      await settle();
 
-    harness.emit('sessions.ended', { sessionId: SESSION });
-    answer(await GRANTED.listWindows());
-    await shown;
+      await stop(parts, abort);
+      answer(await GRANTED.listWindows());
+      await shown;
 
-    expect(pickOf(SESSION)).toBeUndefined();
-  });
+      expect(parts.pickOf(SESSION)).toBeUndefined();
+    },
+  );
 
   it.each([
     { given: 'the settings open', fails: false, logged: [] },
