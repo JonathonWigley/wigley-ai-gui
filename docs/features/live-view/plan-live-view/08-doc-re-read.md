@@ -1,6 +1,6 @@
 # 08 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · doc-only: prose checked against settled code
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07
@@ -42,3 +42,5 @@ Done when: every doc written ahead matches the code, and both `check_manifests.p
 Commit: one commit in each repo.
 
 ## Proof
+
+Commit gui bfea2b8c, marketplace 99bf4ec · proof: diff read of both repos' doc edits against the landed code; check_manifests.py and --against origin/main pass at 99bf4ec (2.6.0) · concerns: origin/main is the local ref (fetch fails with an SSH key error), so the version check is against a possibly stale origin; recheck at landing

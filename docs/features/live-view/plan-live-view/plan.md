@@ -238,7 +238,7 @@ and `services.files`.
 - [x] [Probe rect without the toolbar strip](07-probe-toolbar-strip.md) — after 03
 
 ### Wave 5
-- [ ] [Doc re-read](08-doc-re-read.md) — after every task above
+- [x] [Doc re-read](08-doc-re-read.md) — after every task above
 - [ ] [Final verification](09-final-verification.md)
 
 ## Run log
@@ -253,6 +253,7 @@ Review base: 1449ada4
 - 05 · hard (compile fix on hard) · 46cfe877, fix 4843128d · diff read: contract, window-pick and live-tools Produces present, sessionEnded added (contract change); wave 2 typecheck and lint clean at 4843128d after a same-rung TS2352 fix and an oxfmt pass by the lead · concerns: window-pick.test.ts uses top-level await over the fake's windows; the preview-sample test assumes on() fires once per set and not on subscribe; AGENTS.md live-view tree entry lacks window-pick.ts (task 08)
 - 07 · deep · marketplace f1181e5 · diff read; live on clone 2 (6000.3.12f1): docked [2030.85,139,354.31,767] and floating [140.77,147,346.45,750] crops start on game pixels (before: y 115 / 121 vs truth 139 / 147); aspect within 0.5% of mark stills; no compile diagnostics · concerns: Retina (pixelsPerPoint 2) unverified, only a 1x display; docked proof via screencapture -l cropped, since Auri covered the docked view; position reads stale right after LoadWindowLayout (not on start's path)
 - 06 · deep · bbb47fc5, format d64a2fcf · diff read: layout.d.ts LiveViewInput/LiveViewPart/Layout/CompleteLayout, openStream (contract change) and liveViewPagePart present; wave 3 typecheck and lint clean at d64a2fcf after a lead oxfmt pass; self-test steps 1-3 wait for the test gate · concerns: nothing run by the worker; self-test step 1 needs the offscreen window's IntersectionObserver to report the hub hidden, else steps 1-2 move to task 09's macOS check; step 3's fit check covers chat's whole preview at 1200px; play() is called on each placement, a hidden source-less video included, its rejection ignored
+- 08 · standard · gui bfea2b8c, marketplace 99bf4ec · diff read of both repos' doc edits against the landed code; check_manifests.py and --against origin/main pass at 99bf4ec (2.6.0) · concerns: origin/main is the local ref (fetch fails with an SSH key error), so the version check is against a possibly stale origin; recheck at landing
 ### Contract changes
 - Chat hub shrinksLast condition selector: nested :has(...:has()) → one :has() descendant path (.chat-side-parts:has(> .chat-side-part[data-shrinks-last] .chat-side-section:not(.is-collapsed) .chat-side-section-body > :not([hidden]))) · why: :has() cannot nest, so the planned rule would be dropped whole · consumers: 09 · group 02
 - 05: createLiveTools also returns sessionEnded(sessionId), which deletes the pick and stops a still-waiting show from writing one; it exports LiveTools, LiveToolsDeps, ShowArgs and GameRectTuple. Task 06 calls only show, so its brief is unchanged.
@@ -281,5 +282,7 @@ Review base: 1449ada4
 - 06: the sample draw loop stops on track readyState each tick, since track.stop() fires no ended · group 06
 - 06: self-test steps use checksFit held; scrollsItself adds .context-sources-name; problems reports a show_live_view error result · group 06
 - lead ran oxfmt --write on three task 06 files (editor-tooling-only) · group 06
+- 08: design.md gains the 'Live could not start the stream: <error>' notice; capture.md's start row names the probe warning and a null game_view on a failed probe · group 08
+- Log scan after the final wave: wave 3 typecheck and oxlint report no warnings or errors (the wave 1 unused-runner warning is gone since 04)
 ### Review rounds
 ### Test gate
