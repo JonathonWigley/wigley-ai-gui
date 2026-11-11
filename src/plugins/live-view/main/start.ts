@@ -10,15 +10,21 @@ import {
   FAKE_EDITOR_PROCESS_ID,
   FAKE_GAME_RECT,
 } from '../../../shared/fake-screen-capture';
-import { CHAT_PREVIEW_HOST_ID, type ChatMainEvents } from '../../chat/contract';
+import {
+  CHAT_PREVIEW_HOST_ID,
+  type ChatMainEvents,
+  chatMainKey,
+} from '../../chat/contract';
 import {
   type SessionsMainEvents,
   sessionsMainKey,
 } from '../../sessions/contract';
 import { livePicksSlot } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { liveViewManifest } from '../manifest';
 import { pickOf, rectOfTuple } from '../window-pick';
 import { createLiveTools } from './live-tools';
+import { liveViewSelfTestScript } from './selftest-script';
 
 type LiveViewApi = MainApi<
   typeof liveViewManifest,
@@ -28,13 +34,15 @@ type LiveViewApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// Contributes `show_live_view` and `hide_live_view` to every session, subagents
-// included, which write the session's pick to `live-view.picks`; deletes it on
-// `sessions.ended`; and writes chat's layout preview row a sample pick, the
-// real pick and crop over the fake ScreenCapture's windows.
+// Registers live-view's layouts; contributes `show_live_view` and
+// `hide_live_view` to every session, subagents included, which write the
+// session's pick to `live-view.picks`; deletes it on `sessions.ended`; writes
+// chat's layout preview row a sample pick, the real pick and crop over the
+// fake ScreenCapture's windows; and hands the self-test its script.
 export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
   manifest: liveViewManifest,
   start(api: LiveViewApi) {
+    api.layouts.register({ layoutTypes });
     const { services } = api;
     const picks = api.state.publish(livePicksSlot);
     const liveTools = createLiveTools({
@@ -44,9 +52,8 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
       picks,
       log: services.log,
     });
-    api
-      .dependency(sessionsMainKey)
-      .contributeTools([...liveTools.definitions], liveTools.startSession);
+    const sessions = api.dependency(sessionsMainKey);
+    sessions.contributeTools([...liveTools.definitions], liveTools.startSession);
     api.events.on('sessions.ended', ({ sessionId }) =>
       liveTools.sessionEnded(sessionId),
     );
@@ -76,6 +83,17 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
         void writeSamplePick(sessionId);
       }
     });
+
+    services.selfTest?.run(
+      liveViewSelfTestScript({
+        homeDir: services.homeDir,
+        files: services.files,
+        paths: services.paths,
+        chat: api.dependency(chatMainKey),
+        sessions,
+        show: liveTools.show,
+      }),
+    );
 
     return {
       commands: {

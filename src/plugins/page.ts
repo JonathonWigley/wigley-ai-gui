@@ -2,6 +2,7 @@ import type { PagePart } from '../contracts/plugin';
 import { agentLinesPagePart } from './agent-lines/page/start';
 import { agentSkillsPagePart } from './agent-skills/page/start';
 import { contextSourcesPagePart } from './context-sources/page/start';
+import { liveViewPagePart } from './live-view/page/start';
 import { agentStripPagePart } from './agent-strip/page/start';
 import { agentsPagePart } from './agents/page/start';
 import { autoRetroPagePart } from './auto-retro/page/start';
@@ -52,6 +53,7 @@ export const pageParts: readonly PagePart[] = [
   agentStripPagePart,
   agentSkillsPagePart,
   contextSourcesPagePart,
+  liveViewPagePart,
   docsPagePart,
   docsSessionTabPagePart,
   galleryPagePart,

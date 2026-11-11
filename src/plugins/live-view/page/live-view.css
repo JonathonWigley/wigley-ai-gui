@@ -1,0 +1,17 @@
+/* The Live section's video, which the app draws into the layout's video slot:
+   the slot's full width, shrinking with the slot's height (`min-height: 0`), at
+   the cropped frame's shape (its inline `aspect-ratio`), the frame contained
+   and cut to the Game View (its inline `object-view-box`). */
+.live-view-video {
+  display: block;
+  flex: 0 1 auto;
+  max-height: 100%;
+  max-width: 100%;
+  min-height: 0;
+  object-fit: contain;
+  width: 100%;
+}
+
+.live-view-video[hidden] {
+  display: none;
+}

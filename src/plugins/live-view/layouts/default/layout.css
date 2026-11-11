@@ -1,0 +1,31 @@
+/* The default layout's Live section: the notice line over the video's slot.
+   The part and its slot are flex columns that shrink to the height chat's
+   `shrinksLast` leaves the section, so the app's video inside shrinks with
+   them rather than scrolling the section's body. */
+
+[data-layout-owner='live-view'][data-layout='default'].live-view {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  min-height: 0;
+  min-width: 0;
+}
+
+[data-layout-owner='live-view'][data-layout='default'] .live-view-notice {
+  align-items: center;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='live-view'][data-layout='default'] .live-view-video-slot {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
