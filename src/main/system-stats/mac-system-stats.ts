@@ -11,7 +11,7 @@ import {
   parseSysctl,
   parseVmStatUsedBytes,
 } from './mac-parsers';
-import { requiredStdout } from './required-stdout';
+import { requiredStdout } from '../processes/required-stdout';
 
 const RUN_TIMEOUT_MS = 5000;
 

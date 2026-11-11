@@ -49,6 +49,7 @@ import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
 import type { OsName, Platform } from '../contracts/platform';
 import type { ProcessRunner } from '../contracts/processes';
+import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
 import type { AppConfig } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
@@ -72,6 +73,7 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
+import { createFakeScreenCapture } from '../shared/fake-screen-capture';
 import { createFakeSystemStats } from '../shared/fake-system-stats';
 import { isSameJson } from '../shared/json';
 import { osPlatform } from '../shared/os-platform';
@@ -163,6 +165,7 @@ import { limitRuns } from './processes/limited-processes';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
+import { createUnavailableScreenCapture } from './screen-capture/unavailable-screen-capture';
 import { createMacSystemStats } from './system-stats/mac-system-stats';
 import { createUnavailableSystemStats } from './system-stats/unavailable-system-stats';
 import { createWindowsSystemStats } from './system-stats/windows-system-stats';
@@ -238,7 +241,12 @@ interface ModeServices {
     context: ModeServicesContext,
   ): Pick<
     MainServices,
-    'alerts' | 'agentHarnesses' | 'window' | 'openExternal' | 'systemStats'
+    | 'alerts'
+    | 'agentHarnesses'
+    | 'window'
+    | 'openExternal'
+    | 'systemStats'
+    | 'screenCapture'
   >;
 }
 
@@ -310,9 +318,24 @@ function systemStatsFor(osName: OsName, runner: ProcessRunner): SystemStats {
   }
 }
 
+// The windows the OS `osName` can stream, its commands run through `runner`.
+// No OS has a window lister yet, so every OS's calls reject.
+function screenCaptureFor(
+  osName: OsName,
+  runner: ProcessRunner,
+): ScreenCapture {
+  switch (osName) {
+    case 'macos':
+    case 'windows':
+    default:
+      return createUnavailableScreenCapture(osName);
+  }
+}
+
 // The user's app: the OS Trash, the icon badge, native dialogs, Claude Code, whose
 // relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, links
-// opened in the user's browser, and the machine's own readings.
+// opened in the user's browser, the machine's own readings, and the OS's own
+// windows to stream.
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
@@ -324,6 +347,7 @@ function liveServices(): ModeServices {
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
       systemStats: systemStatsFor(platform.os, processes),
+      screenCapture: screenCaptureFor(platform.os, processes),
     }),
   };
 }
@@ -333,11 +357,13 @@ function liveServices(): ModeServices {
 // collects nothing; alerts are silent, the window stays offscreen and shows no
 // dialog, and no link takes the user's foreground. `runName` names the run in
 // the line a window not shown or a link not opened logs; sessions run over the
-// harness `harness` builds, and plugins read the machine `systemStats` builds.
+// harness `harness` builds, and plugins read the machine `systemStats` builds
+// and the windows `screenCapture` builds.
 function offscreenRunServices(
   runName: string,
   harness: (context: ModeServicesContext) => AgentHarness,
   systemStats: () => SystemStats,
+  screenCapture: () => ScreenCapture,
 ): ModeServices {
   return {
     trashItem: (file) => rm(file, { recursive: true }),
@@ -349,6 +375,7 @@ function offscreenRunServices(
         context.log('main', `external link not opened in ${runName}: ${url}`),
       ),
       systemStats: systemStats(),
+      screenCapture: screenCapture(),
     }),
   };
 }
@@ -390,12 +417,14 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
         'the self-test',
         () => createFakeAgentHarness(clock, files, timers),
         () => createFakeSystemStats(clock),
+        () => createFakeScreenCapture(),
       );
     case 'drive':
       return offscreenRunServices(
         'a drive run',
         (context) => driveHarness(environment.harness, context),
         () => driveSystemStats(environment.systemStats),
+        () => createFakeScreenCapture(),
       );
   }
 }

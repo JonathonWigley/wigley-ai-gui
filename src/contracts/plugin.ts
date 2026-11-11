@@ -37,6 +37,7 @@ import type { FocusTarget, OuterPanes, ResizeTarget } from './panes';
 import type { Paths } from './paths';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
+import type { ScreenCapture } from './screen-capture';
 import type { SessionHost } from './session-host';
 import type {
   JsonSlot,
@@ -1055,7 +1056,9 @@ export interface DriveHost {
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
 // the stable or the dev one. `images` re-encodes an image smaller, as PNG or
 // JPEG only, for `shrinkToFit`. `systemStats` reads the machine's CPU, GPU,
-// memory, network and disk counters. `sessionHost` owns every agent process, so a
+// memory, network and disk counters. `screenCapture` lists the windows the OS
+// can stream, each with its owner's pid and bounds, and opens the OS's screen
+// capture settings. `sessionHost` owns every agent process, so a
 // process outlives the app (`docs/features/session-host/design.md`).
 // `pluginSwitch` tells whether a plugin may switch off now.
 export interface MainServices {
@@ -1075,6 +1078,7 @@ export interface MainServices {
   alerts: Alerts;
   images: ImageEncoder;
   systemStats: SystemStats;
+  screenCapture: ScreenCapture;
   agentHarnesses: readonly AgentHarness[];
   sessionHost: SessionHost;
   window: {

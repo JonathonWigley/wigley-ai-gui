@@ -1,7 +1,7 @@
 import type { ProcessRunner } from '../../contracts/processes';
 import type { SystemSample, SystemStats } from '../../contracts/system-stats';
 import { type CpuTimes, cpuTotals } from './cpu-totals';
-import { requiredStdout } from './required-stdout';
+import { requiredStdout } from '../processes/required-stdout';
 import { parseWindowsReading } from './windows-parsers';
 
 const RUN_TIMEOUT_MS = 10000;

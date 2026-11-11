@@ -53,6 +53,7 @@ import type {
   ShownLayouts,
   UntypedEvents,
 } from '../contracts/plugin';
+import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
 import type { SlotKey, SlotWriter } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
@@ -1019,6 +1020,7 @@ function fakeMainApi(
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
       systemStats: notFaked<SystemStats>('systemStats'),
+      screenCapture: notFaked<ScreenCapture>('screenCapture'),
       // Refuses no switch-off.
       pluginSwitch: { mayDisable: async () => null },
       ...replaced,
