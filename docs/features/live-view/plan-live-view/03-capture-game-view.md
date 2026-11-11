@@ -1,6 +1,6 @@
 # 03 — `capture.py start` replies with `game_view`
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the `game_view` reply field that 07, the SKILL.md Live view bullet and the gui tool call consume
 Wave: 1 · Depends on: none
@@ -51,3 +51,5 @@ Done when: the tests above pass, and the whole `tests/` folder passes. It is sma
 Commit: one commit for the group. No version bump here; task 08 bumps once for the run.
 
 ## Proof
+
+Commit d6a4c14 (marketplace) · proof: diff read: game_view from a post-start probe, warning on failure, --append covered, four-row table plus append assertion; py_compile clean; tests run at the test gate · concerns: two existing tests rewritten to pick the start request rather than the last one; capture.md's start row does not list the new 'game view probe failed' warning (task 08)

@@ -20,6 +20,11 @@
    their own heights, the dock bounding Main agent's. Each other section takes
    its content's height, and when the column is too short gives up height by its
    content's share, scrolling in its own body and keeping its whole head.
+   While a `shrinksLast` section (`data-shrinks-last`) draws a body and is not
+   collapsed, the other sections give up height first, each down to its head and
+   the floor (`--wg-chat-side-section-floor`) of body, a shorter body leaving
+   blank to it; the `shrinksLast` section takes what is left, up to its content's
+   height, and past that shrinks down to its head.
    A section whose part draws nothing takes no space, and the hub with none left
    takes none either. Its width is the user's (`--chat-side-width`), and always
    leaves `.chat-main` its least width (`--chat-side-end-min`), both unitless
@@ -74,6 +79,31 @@
 .chat-side-part[data-part='chat.session'],
 .chat-side-part[data-part='chat.mainAgent'] {
   flex: none;
+}
+
+/* `:has()` is invalid inside `:has()`, so the condition is one path. This
+   selector outranks the `flex: none` rule above, so it leaves out Session and
+   Main agent by name; a collapsed section keeps its head alone. */
+.chat-side-parts:has(
+    > .chat-side-part[data-shrinks-last]
+      .chat-side-section:not(.is-collapsed)
+      .chat-side-section-body
+      > :not([hidden])
+  )
+  > .chat-side-part:not(
+    [data-shrinks-last],
+    [data-part='chat.session'],
+    [data-part='chat.mainAgent'],
+    :has(.chat-side-section.is-collapsed)
+  ) {
+  flex-shrink: 1000;
+  min-height: calc(
+    var(--chat-side-head-height) + var(--wg-chat-side-section-floor)
+  );
+}
+
+.chat-side-part[data-shrinks-last] {
+  flex-shrink: 1;
 }
 
 .chat-side-part:not(:has(.chat-side-section-body > :not([hidden]))) {

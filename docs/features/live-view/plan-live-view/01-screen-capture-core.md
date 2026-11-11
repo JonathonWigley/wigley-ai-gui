@@ -1,6 +1,6 @@
 # 01 — ScreenCapture core service
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses Electron, the OS permission model and the composition root's mode wiring, and adds the seam 04, 05 and 06 consume
 Wave: 1 · Depends on: none

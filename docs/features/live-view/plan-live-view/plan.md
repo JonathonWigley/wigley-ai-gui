@@ -225,7 +225,7 @@ and `services.files`.
 ### Wave 1
 - [ ] [ScreenCapture core service](01-screen-capture-core.md)
 - [ ] [Chat side part option shrinksLast](02-chat-shrinks-last.md)
-- [ ] [capture.py start replies with game_view](03-capture-game-view.md)
+- [x] [capture.py start replies with game_view](03-capture-game-view.md)
 
 ### Wave 2
 - [ ] [macOS and Windows window lists](04-os-window-lists.md) — after 01
@@ -243,10 +243,14 @@ and `services.files`.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 1449ada4
 
 ### Groups
+- 03 · hard · d6a4c14 (marketplace) · diff read: game_view from a post-start probe, warning on failure, --append covered, four-row table plus append assertion; py_compile clean; tests run at the test gate · concerns: two existing tests rewritten to pick the start request rather than the last one; capture.md's start row does not list the new 'game view probe failed' warning (task 08)
 ### Contract changes
 ### Rulings
+- Marketplace review base is 95a1dfb (live-view worktree tip at preflight); the gui base above covers wigley-ai-gui only — git fetch fails (Permission denied (publickey)) in and out of the sandbox, so both runs build on local main, which sits at the worktrees' base — a rebase at landing catches any origin drift · lead
+- The second probe runs after save_run and write_current, so a probe failure cannot lose the run — none to consumers if wrong · group 03 · group 03
+- FakeUnity gains window, recording and probe_while_recording; replies[...] still wins — a replies['stop'] override leaves recording set, no test depends on it · group 03 · group 03
 ### Review rounds
 ### Test gate

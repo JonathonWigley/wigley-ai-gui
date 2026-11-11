@@ -86,7 +86,11 @@ function setUp(uiState = fakeUiState()) {
   return { logs, layouts, parts, sections, uiState, openTab };
 }
 
-function recordingPart(id: string, order = 10) {
+function recordingPart(
+  id: string,
+  order = 10,
+  options: Pick<ChatSidePart, 'shrinksLast'> = {},
+) {
   const record = {
     builds: 0,
     disposes: 0,
@@ -95,6 +99,7 @@ function recordingPart(id: string, order = 10) {
       id,
       title: `Title ${id}`,
       order,
+      ...options,
       build(parent, _sessionId, section) {
         record.builds += 1;
         record.sections.push(section);
@@ -157,11 +162,11 @@ describe('createSideSections', () => {
     vi.restoreAllMocks();
   });
 
-  it('a tab sits its sections in order, equal orders in add order', () => {
+  it('a tab sits its sections in order, equal orders in add order, and marks only the shrinksLast wrapper', () => {
     const { parts, openTab } = setUp();
     parts.add(recordingPart('thirty', 30).part);
     parts.add(recordingPart('ten', 10).part);
-    parts.add(recordingPart('twenty', 20).part);
+    parts.add(recordingPart('twenty', 20, { shrinksLast: true }).part);
     parts.add(recordingPart('twenty-later', 20).part);
 
     const { root } = openTab();
@@ -172,6 +177,11 @@ describe('createSideSections', () => {
       'twenty-later',
       'thirty',
     ]);
+    expect(
+      root
+        .querySelectorAll('[data-shrinks-last]')
+        .map((wrapper) => wrapper.dataset.part),
+    ).toEqual(['twenty']);
   });
 
   it.each([
@@ -474,12 +484,13 @@ describe('createSideSections', () => {
     expect(sectionOrder(root)).toEqual([]);
   });
 
-  it("a part's build that throws leaves no wrapper and closes its frame", () => {
+  it("a part's build that throws leaves no wrapper and closes its frame, and a shrinksLast one sets no marker", () => {
     const { parts, openTab, logs } = setUp();
     parts.add({
       id: 'failing',
       title: 'Failing',
       order: 10,
+      shrinksLast: true,
       build() {
         throw new Error('build failed');
       },
@@ -488,6 +499,7 @@ describe('createSideSections', () => {
     const { root } = openTab();
 
     expect(sectionOrder(root)).toEqual([]);
+    expect(root.querySelectorAll('[data-shrinks-last]')).toEqual([]);
     expect(logs.join('\n')).toContain('build failed');
   });
 

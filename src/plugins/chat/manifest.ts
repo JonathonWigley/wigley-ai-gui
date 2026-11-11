@@ -310,5 +310,7 @@ export const chatManifest = definePlugin({
         "Show each command's description beside its name in the / completion list.",
     },
   },
-  themeTokens: {},
+  themeTokens: {
+    'side-section-floor': { kind: 'length', default: '64px' },
+  },
 });

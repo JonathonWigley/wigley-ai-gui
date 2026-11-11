@@ -1,6 +1,6 @@
 # 02 — Chat side part option `shrinksLast`
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `ChatSidePart.shrinksLast` contract member that 06 consumes, and the flex rules leave a layout choice
 Wave: 1 · Depends on: none

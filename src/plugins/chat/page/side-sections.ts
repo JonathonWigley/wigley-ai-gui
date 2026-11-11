@@ -115,7 +115,8 @@ export interface SideTab {
 // (equal orders keep add order). A section's collapse, the hub's hide and its
 // width, which a drag on its start edge or a nudge of a tab's `divider` sets,
 // apply to every tab and session and are kept in `uiState`; a frame change
-// updates the frame in place and never rebuilds the part.
+// updates the frame in place and never rebuilds the part. A `shrinksLast`
+// part's wrapper carries `data-shrinks-last`, which the hub's height rules read.
 export interface SideSections {
   // Appends the hub's holder to `root`, which takes `is-side-hidden` while the
   // hub is hidden. Builds no part: the caller runs `sync`.
@@ -341,6 +342,9 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
           log,
           { recordBox: (dispose) => disposes.push(dispose) },
         );
+        if (wrapper !== null && part.shrinksLast === true) {
+          wrapper.dataset.shrinksLast = '';
+        }
         return {
           wrapper,
           remove() {

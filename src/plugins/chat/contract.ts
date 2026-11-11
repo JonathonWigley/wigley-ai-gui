@@ -771,11 +771,14 @@ export interface ChatSideSection {
 // `parent` or by setting `hidden` on each, hides its section. It takes no stop
 // and no key scope. The chat layout's `sideSection` gets the part's id, so a
 // layout may frame one part its own way: the default draws `chat.session` as the
-// hub's header, with no head, which the hub's cursor then passes over.
+// hub's header, with no head, which the hub's cursor then passes over. A part
+// marked `shrinksLast` keeps its height while the other sections give theirs up,
+// down to a few lines each.
 export interface ChatSidePart {
   id: string;
   title: string;
   order: number;
+  readonly shrinksLast?: true;
   build(
     parent: HTMLElement,
     sessionId: string,
@@ -833,7 +836,8 @@ export type CompletionRowDraw = (
 // a change to its frame (a collapse, a summary) each leave it and its parent as
 // they are, so a part whose content changes redraws into its parent itself. A
 // part whose build throws is logged and stays unbuilt in that tab until it is
-// added again or the chat layout changes.
+// added again or the chat layout changes. A part marked `shrinksLast` keeps its
+// height while the other sections give theirs up, down to a few lines each.
 // `activeTime` is the session's clock in `chat.session`, null for a session with
 // no key there; read the total at a moment with `activeMsAt`.
 // `setHeadless` turns the session's headless flag on or off through the
