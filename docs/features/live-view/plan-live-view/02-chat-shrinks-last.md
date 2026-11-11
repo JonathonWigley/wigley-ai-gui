@@ -1,6 +1,6 @@
 # 02 — Chat side part option `shrinksLast`
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `ChatSidePart.shrinksLast` contract member that 06 consumes, and the flex rules leave a layout choice
 Wave: 1 · Depends on: none
@@ -67,3 +67,5 @@ Done when: `npm run typecheck` and `npm run lint` pass (lint runs the layer, com
 Commit: one commit for the group.
 
 ## Proof
+
+Commit a45c6dba · proof: diff read: shrinksLast on ChatSidePart, data-shrinks-last on the wrapper only when built, CSS rule with floor token, marker test rows; wave 1 typecheck and lint pass; flex result is 09's live check · concerns: the condition relies on the frame drawing .chat-side-section/.is-collapsed around the body (default layout does); flex order unverified until 09

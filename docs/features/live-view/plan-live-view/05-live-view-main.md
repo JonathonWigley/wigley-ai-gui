@@ -1,6 +1,6 @@
 # 05 — live-view plugin: tools, slot, window pick
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `live-view.picks` slot and the window-pick functions that 06 consumes
 Wave: 2 · Depends on: 01

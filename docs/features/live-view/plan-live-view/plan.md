@@ -223,8 +223,8 @@ and `services.files`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [ScreenCapture core service](01-screen-capture-core.md)
-- [ ] [Chat side part option shrinksLast](02-chat-shrinks-last.md)
+- [x] [ScreenCapture core service](01-screen-capture-core.md)
+- [x] [Chat side part option shrinksLast](02-chat-shrinks-last.md)
 - [x] [capture.py start replies with game_view](03-capture-game-view.md)
 
 ### Wave 2
@@ -247,10 +247,18 @@ Review base: 1449ada4
 
 ### Groups
 - 03 · hard · d6a4c14 (marketplace) · diff read: game_view from a post-start probe, warning on failure, --append covered, four-row table plus append assertion; py_compile clean; tests run at the test gate · concerns: two existing tests rewritten to pick the start request rather than the last one; capture.md's start row does not list the new 'game view probe failed' warning (task 08)
+- 01 · deep · ce592e64 · diff read: every Produces present (contract types, createScreenCapture, unavailable, electron-capture trio, fake consts, MainServices.screenCapture); wave 1 typecheck and lint pass (one expected unused 'runner' warning until 04) · concerns: screenCaptureFor's macos/windows cases fall through to unavailable with a comment 04 must rewrite; Electron API shapes checked against the spike, not 44.9.1 typings (typecheck passed); AGENTS.md src/main/processes entry does not name requiredStdout (08)
+- 02 · hard · a45c6dba · diff read: shrinksLast on ChatSidePart, data-shrinks-last on the wrapper only when built, CSS rule with floor token, marker test rows; wave 1 typecheck and lint pass; flex result is 09's live check · concerns: the condition relies on the frame drawing .chat-side-section/.is-collapsed around the body (default layout does); flex order unverified until 09
 ### Contract changes
+- Chat hub shrinksLast condition selector: nested :has(...:has()) → one :has() descendant path (.chat-side-parts:has(> .chat-side-part[data-shrinks-last] .chat-side-section:not(.is-collapsed) .chat-side-section-body > :not([hidden]))) · why: :has() cannot nest, so the planned rule would be dropped whole · consumers: 09 · group 02
 ### Rulings
 - Marketplace review base is 95a1dfb (live-view worktree tip at preflight); the gui base above covers wigley-ai-gui only — git fetch fails (Permission denied (publickey)) in and out of the sandbox, so both runs build on local main, which sits at the worktrees' base — a rebase at landing catches any origin drift · lead
 - The second probe runs after save_run and write_current, so a probe failure cannot lose the run — none to consumers if wrong · group 03 · group 03
 - FakeUnity gains window, recording and probe_while_recording; replies[...] still wins — a replies['stop'] override leaves recording set, no test depends on it · group 03 · group 03
+- The fake lists the other process's window (pid 5150, sample:800x600) first, ahead of the editor's two windows, so the pid filter has a window it must skip — 05/06 see a different first element if wrong · group 01 · group 01
+- Session and Main agent left out of the others rule by name, since the condition selector outranks their flex:none rule · group 02 · group 02
+- A collapsed other section gets no floor, keeping its head alone · group 02 · group 02
+- Token side-section-floor also listed in DESIGN.md § Space, size and shape (Density), per DESIGN.md's token rule · group 02 · group 02
+- Task 07 (Unity phase) dispatched with wave 2 rather than wave 4: it waits only on 03, which landed, and touches only the marketplace worktree and a pool clone, so no file is shared with 04 or 05 · lead
 ### Review rounds
 ### Test gate

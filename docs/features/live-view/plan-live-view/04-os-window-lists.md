@@ -1,6 +1,6 @@
 # 04 — macOS and Windows window lists
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · two OS scripts whose output units and order the crop depends on; the Windows DPI conversion is a judgement
 Wave: 2 · Depends on: 01

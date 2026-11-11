@@ -1,6 +1,6 @@
 # 01 — ScreenCapture core service
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses Electron, the OS permission model and the composition root's mode wiring, and adds the seam 04, 05 and 06 consume
 Wave: 1 · Depends on: none
@@ -116,3 +116,5 @@ the tests above. No plugin uses the service yet.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit ce592e64 · proof: diff read: every Produces present (contract types, createScreenCapture, unavailable, electron-capture trio, fake consts, MainServices.screenCapture); wave 1 typecheck and lint pass (one expected unused 'runner' warning until 04) · concerns: screenCaptureFor's macos/windows cases fall through to unavailable with a comment 04 must rewrite; Electron API shapes checked against the spike, not 44.9.1 typings (typecheck passed); AGENTS.md src/main/processes entry does not name requiredStdout (08)

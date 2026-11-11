@@ -1,6 +1,6 @@
 # 07 — Probe rect without the toolbar strip
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · a root cause inside Unity's internal GameView geometry, checked only against a live editor's pixels
 Wave: 4 (Unity phase) · Depends on: 03
