@@ -285,4 +285,6 @@ Review base: 1449ada4
 - 08: design.md gains the 'Live could not start the stream: <error>' notice; capture.md's start row names the probe warning and a null game_view on a failed probe · group 08
 - Log scan after the final wave: wave 3 typecheck and oxlint report no warnings or errors (the wave 1 unused-runner warning is gone since 04)
 ### Review rounds
+- Review 1 (implementation; gui 1449ada4..b75e157c, marketplace 95a1dfb..99bf4ece; correctness x2, plan-and-design x2): NEEDS FIXES — 2 Important, 12 Minor, 4 lead-applied at 144a8db4; report /tmp/claude-live-view/review-b75e157c.md. gui items take recommendations per gui AGENTS.md § Review: Fix now 1, 2, 4, 5, 6, 11, 12, 13, 14; Follow-up 3; Leave it 8, 9, 10. Item 7 (marketplace) goes to the user.
+- Round 1 fix range ae18e767..06f6df7b (worker fixes ae18e767, 5e30b5c5, fd7389ab, 06f6df7b; 144a8db4 lead-applied, outside): Medium — show_live_view's hide/abort guard and the videoSlot check move behaviour on a user-reachable path; re-review, correctness lane only.
 ### Test gate
