@@ -137,6 +137,7 @@ stays in themes.
 | `unity-pool` | `unity-pool.layout` | the clone badge under each session row that holds a clone or waits for one; the right-bar pool panel |
 | `system-stats` | `system-stats.layout` | the right-bar system stats panel: its section header, the five meter rows with their sparklines, and the process list's group and process rows |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
+| `live-view` | `live-view.layout` | the session hub's Live section: its line and button above the stream, and the place the stream's video goes |
 | `agent-skills` | `agent-skills.layout` | the session hub's Skills section: a chip per skill, grouped by namespace |
 | `context-sources` | `context-sources.layout` | the session hub's Context section: the sources' bar, the window's fill and a row per source with its items, the largest five until the more line shows them all |
 | `gallery` | `gallery.layout` | each primitive's sample block |
@@ -156,7 +157,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | --- | --- |
 | `Space z l o` | forms: the preview round, then each saved real round |
 | `Space z l p` | primer: a sample primer holding every field and need |
-| `Space z l c` | chat: a session of every entry kind, idle after a finished turn, so the activity dock shows that turn's finished line (the preview holds a `result` entry); its result entry as a turn divider; its steps, grouped into finished activity lines, show in the transcript only under a layout that sets `activityInTranscript`; the agent strip above the composer; the session hub's Skills section, one skill by `main` and one by a subagent; and a paused run time on its row |
+| `Space z l c` | chat: a session of every entry kind, idle after a finished turn, so the activity dock shows that turn's finished line (the preview holds a `result` entry); its result entry as a turn divider; its steps, grouped into finished activity lines, show in the transcript only under a layout that sets `activityInTranscript`; the agent strip above the composer; the session hub's Live section, streaming a sample test card; the session hub's Skills section, one skill by `main` and one by a subagent; and a paused run time on its row |
 | `Space z l s` | sessions: rows in every state |
 | `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
 | `Space z l w` | workflow: Large's sample session in every stage, the plan-ready countdown included |

@@ -459,7 +459,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `border-subtle` line parts the sections. The hub opens on the Session header, which has no title or chevron: the
   repo in `text-14` semibold with the branch beside it (a `git-branch` icon, the name in `text-11` mono, `fg-secondary`),
   the folder under them in `text-11` mono `fg-tertiary`, then Tags for each worktree (`accent`), the harness and the
-  model · effort (neutral), each ellipsized at the hub's width. Main agent holds the dock, Plan the workflow side pane,
+  model · effort (neutral), each ellipsized at the hub's width. Main agent holds the dock, Live the Game View the agent streams (its video at the hub's width, shrinking last, with a `text-12` `fg-secondary` line above it when something needs saying), Plan the workflow side pane,
   Skills a chip per skill (the name in `text-11` mono on `card-background` under a `border-subtle` hairline, `radius-sm`)
   grouped under each namespace in `text-11` `fg-tertiary`, and Context the breakdown, its rows the largest five until
   its `fg-link` `+ 3 more` line shows them all. While the hub is not visible, the composer's **activity line** shows the dock's header on one line,

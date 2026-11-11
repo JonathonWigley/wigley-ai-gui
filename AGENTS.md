@@ -89,7 +89,8 @@ src/contracts/   interfaces and records crossing a seam, the plugin API among th
                  `plugin-catalog.ts`: `CatalogEntry`, `PluginSource`, the user side's `WatchedPluginSource` and the
                  `PluginCatalog` the host, the plugin switch and the config read;
                  `list-picker.ts`: the shared list picker's contract behind `services.picker`; `system-stats.ts`: the
-                 `SystemStats` service behind `services.systemStats` and its raw sample); imports nothing
+                 `SystemStats` service behind `services.systemStats` and its raw sample; `screen-capture.ts`: the
+                 `ScreenCapture` service behind `services.screenCapture`, the windows the OS can stream); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
@@ -200,6 +201,10 @@ src/main/        core main process; main.ts is its composition root
                  `ioreg`, `netstat`; CIM and performance counters on Windows) and Node's `os.cpus()` into one raw
                  sample of cumulative counters, each parser a pure function over a command's text;
                  `docs/features/system-stats/design.md`
+  screen-capture/ the macOS and Windows adapters behind ScreenCapture: each lists the OS's windows with owner pid and
+                 bounds in points (JXA over CoreGraphics; PowerShell over user32 and DWM), matched to Electron's
+                 `desktopCapturer` sources, plus Screen Recording access and its settings pane on macOS;
+                 `docs/features/live-view/design.md`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
                  rename, trash, folder lists and watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
@@ -283,6 +288,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `sessions.ended`, hands its self-test script), page/ (the session hub's Context section through chat's
                  `addSidePart`: the sources' bar, the window's fill, a row per source that opens into its items),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
+  live-view/     manifest.ts, contract.ts (the `live-view.picks` slot: each session's stream pick), main/ (the
+                 `show_live_view` and `hide_live_view` tools, the editor window lookup through `services.screenCapture`,
+                 the preview sample, its self-test script), page/ (the session hub's Live section through chat's
+                 `addSidePart` with `shrinksLast`, streaming only while on screen), layouts/ (its Layout contract and
+                 `default` layout); `docs/features/live-view/design.md`
   auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed` and `chat.sessionCleared`, queues a user
                  close or a clear in `queue.json` in its plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
                  closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section
@@ -621,7 +631,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
   the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Large and `Checklist` for the others),
-  the agent-skills plugin's list and the context-sources plugin's breakdown are three. A side part takes no key scope and no stop: the hub is a pane of chat's
+  the agent-skills plugin's list, the context-sources plugin's breakdown and the live-view plugin's stream are four. A part marked `shrinksLast` keeps its height while the others give theirs up. A side part takes no key scope and no stop: the hub is a pane of chat's
   own (Alt+l from the transcript or the box), whose cursor walks the section heads chat draws, `Enter` or `l`
   folding one.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
@@ -848,7 +858,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
   watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
@@ -1079,7 +1089,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
-  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
   write and before the keys, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to

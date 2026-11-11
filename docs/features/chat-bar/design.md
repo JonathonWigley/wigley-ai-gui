@@ -82,14 +82,15 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 └── .chat-side-parts  264 px wide until the user drags it
       repo ⎇ branch           chat: the Session header — folder, then worktree, harness and model · effort tags
       ▾ Main agent   2:05     chat: the activity dock
+      ▾ Live  Game View · game   live-view: the Unity Game View the agent streams (`live-view/design.md`)
       ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws); Checklist for Small and Medium
       ▾ Skills       4        agent-skills: each skill the main agent started
       ▾ Context  128k · 13%   context-sources: where the main agent's context comes from
 ```
 
 - **A side part** declares a `title` and an `order`. Chat sorts the sections by `order` and draws each one's frame
-  through the chat layout's `sideSection` part, which gets the part's id. The orders: Session 0, Main agent 10, Plan 20,
-  Skills 30, Context 35. The default layout frames Session as the hub's header: its body alone, with no head, so it
+  through the chat layout's `sideSection` part, which gets the part's id. The orders: Session 0, Main agent 10, Live 15,
+  Plan 20, Skills 30, Context 35. The default layout frames Session as the hub's header: its body alone, with no head, so it
   never collapses and the hub's cursor passes over it.
 - **A section's frame:** its title, the summary its part sets (the turn's time, `5/7`, the skill count), and a chevron
   that collapses it. A click on the title toggles the section. Collapsed sections are kept in `uiState` by part id and
@@ -102,6 +103,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   buttons in the 264 px hub, all three show down to a window about 390 px high, about 490 px during a running turn. Below
   that the section's scroll reaches them, while it has any body left: during a running turn at the 360 px minimum height
   it has none. A section whose part draws nothing hides.
+  A part marked `shrinksLast` (Live) changes the order of giving up height: while it shows, the sections that share
+  the column give up height first, each down to its head and a few lines, and the `shrinksLast` section takes what is
+  left, up to its content's height.
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
   it. `Space b h` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the workflow's side pane.
