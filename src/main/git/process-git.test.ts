@@ -413,6 +413,19 @@ describe('createProcessGit', () => {
     expect(await test.git.resolveCommit(ROOT, 'origin/main')).toBe(sha);
   });
 
+  it('resolveCommit_ExitsAboveOne_RejectsNamingTheRun', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git('rev-parse', '--verify', '--quiet', 'origin/main^{commit}'),
+      exited(128, '', 'fatal: not a git repository'),
+    );
+
+    await expect(test.git.resolveCommit(ROOT, 'origin/main')).rejects.toThrow(
+      'git rev-parse exited 128: fatal: not a git repository',
+    );
+  });
+
   it.each([
     { case: 'exits 0', code: 0, isAncestor: true },
     { case: 'exits 1', code: 1, isAncestor: false },

@@ -62,6 +62,7 @@ function setUp() {
     result: vi.fn(async () => null),
   };
   const status = memorySlot();
+  const logs: string[] = [];
   const updater = createUpdater({
     installed: INSTALLED,
     cloneDir: '/clone',
@@ -70,12 +71,27 @@ function setUp() {
     status,
     timers: time.timers,
     clock: time.clock,
-    log: () => {},
+    log: (message) => logs.push(message),
   });
-  return { time, git, installer, status, updater };
+  return { time, git, installer, status, updater, logs };
 }
 
 describe('createUpdater', () => {
+  it('check_CloneBroken_LogsTheFailureAndKeepsTheStatus', async () => {
+    const test = setUp();
+    await settle();
+    test.git.resolveCommit.mockRejectedValueOnce(
+      new Error('git rev-parse exited 128: fatal: not a git repository'),
+    );
+
+    await test.updater.check();
+
+    expect(test.status.get()).toEqual({ kind: 'available', sha: '2222222' });
+    expect(test.logs).toContain(
+      'check failed: git rev-parse exited 128: fatal: not a git repository',
+    );
+  });
+
   it('start_ChecksAtOnceThenEveryInterval', async () => {
     const test = setUp();
     await settle();

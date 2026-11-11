@@ -162,7 +162,17 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         '--quiet',
         `${ref}^{commit}`,
       ]);
-      return result.code === 0 ? result.stdout.trim() : null;
+      // With `--quiet`, a ref that names no commit exits 1; above 1 is a
+      // broken or missing clone, which must not read as "no such ref".
+      if (result.code === 0) {
+        return result.stdout.trim();
+      }
+      if (result.code === 1) {
+        return null;
+      }
+      throw new Error(
+        `git rev-parse exited ${String(result.code)}: ${result.stderr.trim()}`,
+      );
     },
     isAncestor: async (root, ancestor, descendant) => {
       // Exits 0 for an ancestor, 1 for none, and above 1 on an error.
