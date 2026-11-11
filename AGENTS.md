@@ -201,15 +201,19 @@ src/main/        core main process; main.ts is its composition root
                  `ioreg`, `netstat`; CIM and performance counters on Windows) and Node's `os.cpus()` into one raw
                  sample of cumulative counters, each parser a pure function over a command's text;
                  `docs/features/system-stats/design.md`
-  screen-capture/ the macOS and Windows adapters behind ScreenCapture: each lists the OS's windows with owner pid and
-                 bounds in points (JXA over CoreGraphics; PowerShell over user32 and DWM), matched to Electron's
-                 `desktopCapturer` sources, plus Screen Recording access and its settings pane on macOS;
-                 `docs/features/live-view/design.md`
+  screen-capture/ the adapters behind ScreenCapture: `screen-capture.ts` (the service over an OS window lister and
+                 `electron-capture.ts`, Electron's `desktopCapturer` sources, Screen Recording access and its settings
+                 pane on macOS), `mac-window-list.ts` and `windows-window-list.ts` (each lists the OS's windows with
+                 owner pid and bounds in points: JXA over CoreGraphics; PowerShell over user32 and DWM, per-monitor-DPI
+                 aware), `window-rows.ts` (their shared JSON row parser) and `unavailable-screen-capture.ts` (Linux,
+                 whose list rejects); `docs/features/live-view/design.md`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
                  rename, trash, folder lists and watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
-                 ProcessRunner; `limitRuns` caps how many of a runner's programs run at once (git's runner: 4)
+                 ProcessRunner; `limitRuns` caps how many of a runner's programs run at once (git's runner: 4);
+                 `requiredStdout` runs a program and returns its stdout, rejecting naming the program when it cannot
+                 run, times out or exits non-zero
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
@@ -288,11 +292,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `sessions.ended`, hands its self-test script), page/ (the session hub's Context section through chat's
                  `addSidePart`: the sources' bar, the window's fill, a row per source that opens into its items),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
-  live-view/     manifest.ts, contract.ts (the `live-view.picks` slot: each session's stream pick), main/ (the
-                 `show_live_view` and `hide_live_view` tools, the editor window lookup through `services.screenCapture`,
-                 the preview sample, its self-test script), page/ (the session hub's Live section through chat's
-                 `addSidePart` with `shrinksLast`, streaming only while on screen), layouts/ (its Layout contract and
-                 `default` layout); `docs/features/live-view/design.md`
+  live-view/     manifest.ts, contract.ts (the `live-view.picks` slot: each session's stream pick), window-pick.ts (the
+                 editor window lookup, the crop and the moved check, as pure functions), main/ (the `show_live_view`
+                 and `hide_live_view` tools, the window list through `services.screenCapture`, the preview sample, its
+                 self-test script), page/ (live-section.ts, the session hub's Live section through chat's
+                 `addSidePart` with `shrinksLast`, streaming only while on screen; stream-source.ts, the capture or
+                 `sample:` stream; layout/, the layout reader), layouts/ (its Layout contract and `default` layout);
+                 `docs/features/live-view/design.md`
   auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed` and `chat.sessionCleared`, queues a user
                  close or a clear in `queue.json` in its plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
                  closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section

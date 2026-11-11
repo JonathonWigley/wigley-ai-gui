@@ -62,8 +62,9 @@ opens the OS's Screen Recording settings. It knows nothing of Unity. One adapter
   `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`. macOS applies a new grant only after
   the app restarts.
 - **Windows** lists top-level visible windows through PowerShell over user32 (`EnumWindows`, `GetWindowThreadProcessId`,
-  `IsWindowVisible`) with bounds from `DwmGetWindowAttribute` (`DWMWA_EXTENDED_FRAME_BOUNDS`, no drop shadow), each
-  divided by its window's scale (`GetDpiForWindow` / 96) into points, the unit Unity reports positions in. Sources
+  `IsWindowVisible`) skipping minimized and cloaked windows, with bounds from `DwmGetWindowAttribute` (`DWMWA_EXTENDED_FRAME_BOUNDS`, no drop
+  shadow). The script runs its thread per-monitor-DPI aware, so the bounds are physical pixels; each is then
+  multiplied by 96 and divided by its window's `GetDpiForWindow` into points, the unit Unity reports positions in. Sources
   match by window handle (`window:<handle>:…`). Windows has no capture permission, so access is always granted.
 - **Linux** gets an adapter whose list rejects, and the tool reply carries that message.
 
@@ -82,6 +83,8 @@ Self-test and drive runs get a fake whose window list is fixed and whose source 
 - **The Game View moved:** the page compares the stream's aspect ratio with the window's at pick time. When the editor
   window is resized, the crop no longer fits, so the section shows the whole editor window with the line
   `The Game View moved. Live shows the whole editor until the agent shows it again.`
+- **The stream would not open:** when the source cannot open, the section shows `Live could not start the stream: <error>`
+  and no video.
 - **The window closed:** when the stream ends because the window went away, the section shows
   `The editor window closed.` and no video.
 - **Screen Recording off (macOS):** the section shows `Screen Recording is off for Auri. Turn it on in System Settings,
