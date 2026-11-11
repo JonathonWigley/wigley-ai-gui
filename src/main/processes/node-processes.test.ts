@@ -1,9 +1,12 @@
+import { execFileSync } from 'node:child_process';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -192,6 +195,8 @@ describe('createNodeProcesses', () => {
       const logPath = path.join(dir, 'logs', 'run.log');
       const donePath = path.join(dir, 'done');
       try {
+        mkdirSync(path.dirname(logPath));
+        writeFileSync(logPath, 'before\n');
         await processes.startDetached(
           process.execPath,
           [
@@ -205,7 +210,43 @@ describe('createNodeProcesses', () => {
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
 
-        expect(readFileSync(logPath, 'utf8')).toBe('out err');
+        expect(readFileSync(logPath, 'utf8')).toBe('before\nout err');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  // The install it starts must outlive the app it quits, so it leads its own
+  // process group.
+  it.skipIf(process.platform === 'win32')(
+    'startDetached_Started_LeadsItsOwnProcessGroup',
+    { timeout: 10000 },
+    async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'wigley-node-processes-'));
+      const pidPath = path.join(dir, 'pid');
+      try {
+        await processes.startDetached(
+          process.execPath,
+          [
+            '-e',
+            `require("node:fs").writeFileSync(${JSON.stringify(pidPath)}, String(process.pid)); setTimeout(() => {}, 3000)`,
+          ],
+          { cwd: dir, logPath: path.join(dir, 'run.log') },
+        );
+        const deadline = Date.now() + 8000;
+        while (!existsSync(pidPath) && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        const pid = readFileSync(pidPath, 'utf8');
+        const groupOf = (target: string) =>
+          execFileSync('ps', ['-o', 'pgid=', '-p', target], {
+            encoding: 'utf8',
+          }).trim();
+
+        expect(groupOf(pid)).toBe(pid);
+        expect(groupOf(String(process.pid))).not.toBe(pid);
+        process.kill(-Number(pid), 'SIGKILL');
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

@@ -38,14 +38,24 @@ function startDetached(
       );
       return;
     }
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      detached: true,
-      stdio: ['ignore', logFd, logFd],
-      windowsHide: true,
-    });
-    // The child holds its own copy of the descriptor once spawned.
-    closeSync(logFd);
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(command, args, {
+        cwd: options.cwd,
+        detached: true,
+        stdio: ['ignore', logFd, logFd],
+        windowsHide: true,
+      });
+    } catch (error) {
+      // A spawn that throws (EINVAL, or EAGAIN on fork) rather than emitting `error`.
+      reject(
+        new Error(`Could not run ${command}: ${(error as Error).message}`),
+      );
+      return;
+    } finally {
+      // The child holds its own copy of the descriptor once spawned.
+      closeSync(logFd);
+    }
     child.once('spawn', () => {
       child.unref();
       resolve();
