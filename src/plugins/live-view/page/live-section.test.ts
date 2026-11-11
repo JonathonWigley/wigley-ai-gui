@@ -77,11 +77,15 @@ interface PendingOpen {
   reject(error: unknown): void;
 }
 
-// A section built for SESSION over a pick the test sets, drawn by a layout
-// that records each input. `openStream` stays pending until the test resolves
-// it, and the intersection hook reports what the test says, to the slot drawn
-// last. `events` records each open and each track stop, in order.
-function setUp(initial: LivePick | undefined) {
+// A section built for SESSION over a pick the test sets, drawn by a user
+// layout whose part is `userPart`, else one that records each input.
+// `openStream` stays pending until the test resolves it, and the intersection
+// hook reports what the test says, to every slot drawn and not yet disposed.
+// `events` records each open and each track stop, in order.
+function setUp(
+  initial: LivePick | undefined,
+  userPart?: Layout['liveView'],
+) {
   let pick = initial;
   let isVisible = true;
   const events: string[] = [];
@@ -142,12 +146,14 @@ function setUp(initial: LivePick | undefined) {
     isPageVisible: () => isVisible,
   });
   const recording: Layout = {
-    liveView(parent, input, kit) {
-      inputs.push(input);
-      const element = kit.el(parent, 'div', 'recorded-live-view');
-      const videoSlot = kit.el(element, 'div', 'recorded-slot');
-      return { element, videoSlot };
-    },
+    liveView:
+      userPart ??
+      ((parent, input, kit) => {
+        inputs.push(input);
+        const element = kit.el(parent, 'div', 'recorded-live-view');
+        const videoSlot = kit.el(element, 'div', 'recorded-slot');
+        return { element, videoSlot };
+      }),
   };
   section.setLayouts(withUser<Layout>(defaultLayout, recording));
   const parent = new FakeElement('div');
@@ -175,10 +181,9 @@ function setUp(initial: LivePick | undefined) {
       section.pageVisibilityChanged();
     },
     intersect(isIntersecting: boolean) {
-      observed
-        .filter((each) => !each.isDisposed)
-        .at(-1)!
-        .report(isIntersecting);
+      for (const each of observed.filter(({ isDisposed }) => !isDisposed)) {
+        each.report(isIntersecting);
+      }
     },
     // Resolves the open at `index`, the last when left out, with a stream of
     // one video track.
@@ -354,22 +359,31 @@ describe('createLiveSection', () => {
     });
   });
 
-  it('openRejects_ShowsAndLogsTheOpenFailedNotice', async () => {
+  it('openRejects_ShowsAndLogsTheOpenFailedNotice_AndOpensNothingUntilANewPick', async () => {
     const live = setUp(STREAM_PICK);
     live.intersect(true);
 
     live.opens[0]!.reject(new Error('Permission denied'));
     await settle();
-
-    const text = 'Live could not start the stream: Permission denied';
-    expect({
+    live.intersect(false);
+    live.intersect(true);
+    const failed = {
       notice: live.inputs.at(-1)!.notice,
       hidden: live.video().hidden,
-      logged: live.logged,
-    }).toEqual({
-      notice: { text, action: null },
-      hidden: true,
-      logged: [`notice in proj: ${text}`],
+      logged: [...live.logged],
+      opens: live.opens.length,
+    };
+    live.setPick({ ...STREAM_PICK });
+
+    const text = 'Live could not start the stream: Permission denied';
+    expect({ failed, opensAfterNewPick: live.opens.length }).toEqual({
+      failed: {
+        notice: { text, action: null },
+        hidden: true,
+        logged: [`notice in proj: ${text}`],
+        opens: 1,
+      },
+      opensAfterNewPick: 2,
     });
   });
 
@@ -397,19 +411,76 @@ describe('createLiveSection', () => {
     ]);
   });
 
-  it('openInFlight_PickDeleted_StopsItsTracksOnResolveAndSetsNothing', async () => {
+  it.each([
+    { name: 'pick deleted', goAway: (live: Section) => live.setPick(undefined) },
+    { name: 'section disposed', goAway: (live: Section) => live.built.dispose() },
+    {
+      name: 'session forgotten',
+      goAway: (live: Section) => live.section.forget(SESSION),
+    },
+    { name: 'page hidden', goAway: (live: Section) => live.setVisible(false) },
+  ])(
+    'openInFlight_ReasonGone_StopsItsTracksOnResolveAndSetsNothing: $name',
+    async ({ goAway }) => {
+      const live = setUp(STREAM_PICK);
+      live.intersect(true);
+
+      goAway(live);
+      const { track } = await live.resolveOpen(0);
+
+      expect([track.readyState, live.video().srcObject, live.logged]).toEqual([
+        'ended',
+        null,
+        [],
+      ]);
+    },
+  );
+
+  it('twoSectionsOnOneSession_PickDeleted_StopsBothStreams', async () => {
     const live = setUp(STREAM_PICK);
+    live.section.part.build(asHtml(new FakeElement('div')), SESSION, {
+      setSummary: () => undefined,
+    });
     live.intersect(true);
+    const first = await live.resolveOpen(0);
+    const second = await live.resolveOpen(1);
 
     live.setPick(undefined);
-    const { track } = await live.resolveOpen(0);
 
-    expect([track.readyState, live.video().srcObject, live.logged]).toEqual([
-      'ended',
-      null,
-      [],
-    ]);
+    expect([
+      live.opens.length,
+      first.track.readyState,
+      second.track.readyState,
+    ]).toEqual([2, 'ended', 'ended']);
   });
+
+  it.each([
+    {
+      name: 'no videoSlot',
+      userPart: ((parent, _input, kit) => ({
+        element: kit.el(parent, 'div', 'bad-live-view'),
+      })) as Layout['liveView'],
+    },
+    {
+      name: 'videoSlot outside its element',
+      userPart: ((parent, _input, kit) => ({
+        element: kit.el(parent, 'div', 'bad-live-view'),
+        videoSlot: asHtml(new FakeElement('div')),
+      })) as Layout['liveView'],
+    },
+  ])(
+    'userPartBadVideoSlot_DrawsDefaultWithTheVideoInIt: $name',
+    ({ userPart }) => {
+      const live = setUp(STREAM_PICK, userPart);
+
+      const [drawn] = live.parent.childNodes;
+      expect({
+        drawn: live.parent.childNodes.length,
+        layout: drawn?.dataset.layout,
+        hasVideo: drawn?.contains(live.video()),
+      }).toEqual({ drawn: 1, layout: 'default', hasVideo: true });
+    },
+  );
 
   it('noticeRedraw_MovesTheSameVideoIntoTheNewSlotAndPlaysOnce', async () => {
     const live = setUp(STREAM_PICK);

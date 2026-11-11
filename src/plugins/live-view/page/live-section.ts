@@ -133,6 +133,20 @@ function stopTracks(media: MediaStream) {
   }
 }
 
+// Throws when a part with an element returns no `videoSlot` inside it, so the
+// host draws the part with `default` instead. A part with no element is left
+// to the host's own check.
+function requireVideoSlot(part: Partial<LiveViewPart> | null | undefined) {
+  const element = part?.element;
+  if (!(element instanceof HTMLElement)) {
+    return;
+  }
+  const slot = part?.videoSlot;
+  if (!(slot instanceof HTMLElement) || !element.contains(slot)) {
+    throw new Error('liveView returned no videoSlot inside its element');
+  }
+}
+
 function createVideo(): HTMLVideoElement {
   const video = document.createElement('video');
   video.className = 'live-view-video';
@@ -343,15 +357,17 @@ export function createLiveSection(deps: LiveSectionDeps): LiveSection {
   };
 
   const drawPart = (holder: HeldSection, notice: Notice | null) =>
-    layoutParts.draw('liveView', holder.parent, (liveView, slot, rollback) =>
-      liveView(
+    layoutParts.draw('liveView', holder.parent, (liveView, slot, rollback) => {
+      const part = liveView(
         slot,
         { notice },
         createBaseKit(
           ownerBaseKitDeps(liveViewManifest, deps.kit, null, rollback),
         ),
-      ),
-    );
+      );
+      requireVideoSlot(part);
+      return part;
+    });
 
   function draw(holder: HeldSection) {
     const pick = deps.pick(holder.sessionId);
@@ -443,7 +459,14 @@ export function createLiveSection(deps: LiveSectionDeps): LiveSection {
         const sections = held.get(sessionId) ?? new Set<HeldSection>();
         sections.add(holder);
         held.set(sessionId, sections);
-        draw(holder);
+        // Chat keeps no dispose for a build that throws, so the holder goes
+        // here, or later picks would redraw it.
+        try {
+          draw(holder);
+        } catch (error) {
+          disposeHolder(holder);
+          throw error;
+        }
         return { dispose: () => disposeHolder(holder) };
       },
     },

@@ -25,6 +25,8 @@ type LiveViewApi = PageApi<
 >;
 
 const VISIBILITY_CHANGE = 'visibilitychange';
+// Below 1, the sample card redraws in a tight loop and a desktop capture fails.
+const MIN_FRAME_RATE = 1;
 
 // Reports the last entry of each batch: the target's state now.
 function observeIntersection(
@@ -43,8 +45,8 @@ function observeIntersection(
 
 // Draws the session hub's Live section through chat's side parts and the `live-view.layout` layout. Reads
 // `live-view.picks`, redrawing a session's section each time its pick changes, and streams each section's pick while
-// the section is on screen and the page visible, at the `frameRate` setting read at each open. Names each session by
-// its side-bar label for the page log.
+// the section is on screen and the page visible, at the `frameRate` setting read at each open, 1 at least. Names each
+// session by its side-bar label for the page log.
 export const liveViewPagePart: PagePart<typeof liveViewManifest> = {
   manifest: liveViewManifest,
   start(api: LiveViewApi) {
@@ -65,7 +67,10 @@ export const liveViewPagePart: PagePart<typeof liveViewManifest> = {
       nameOf: (sessionId) => rows.get(sessionId)?.label ?? sessionId,
       pick: (sessionId) => picks.get(sessionId),
       openStream: (sourceId) =>
-        streams.openStream(sourceId, api.settings().frameRate),
+        streams.openStream(
+          sourceId,
+          Math.max(MIN_FRAME_RATE, api.settings().frameRate),
+        ),
       observeIntersection,
       isPageVisible: () => document.visibilityState === 'visible',
     });

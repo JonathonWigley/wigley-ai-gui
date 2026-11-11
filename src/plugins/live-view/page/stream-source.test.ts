@@ -3,9 +3,11 @@ import { createStreamSource } from './stream-source';
 
 // Stubs a canvas whose stream records the frame rate it was captured at, a 2d
 // context that takes every draw, and `getUserMedia`, which records its
-// constraints; returns what each path hands back and records.
+// constraints; returns what each path hands back and records, and the canvas
+// stream's track.
 function stubMedia() {
-  const canvasStream = { getVideoTracks: () => [{ readyState: 'live' }] };
+  const canvasTrack = { readyState: 'live' };
+  const canvasStream = { getVideoTracks: () => [canvasTrack] };
   const desktopStream = { getVideoTracks: () => [] };
   const canvas = {
     width: 0,
@@ -28,7 +30,7 @@ function stubMedia() {
   });
   vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: () => '' }));
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
-  return { canvas, canvasStream, desktopStream, getUserMedia };
+  return { canvas, canvasStream, canvasTrack, desktopStream, getUserMedia };
 }
 
 describe('createStreamSource', () => {
@@ -87,5 +89,23 @@ describe('createStreamSource', () => {
       capturedAt: media.canvas.captureStream.mock.calls,
       constraints: media.getUserMedia.mock.calls.map((call) => call[0]),
     }).toEqual(expected);
+  });
+
+  it('sampleStream_TrackEnded_SchedulesNoFurtherFrame', async () => {
+    const media = stubMedia();
+    const scheduled: (() => void)[] = [];
+    const source = createStreamSource({
+      timers: {
+        set: (run) => scheduled.push(run),
+        clear: () => undefined,
+      },
+    });
+
+    await source.openStream('sample:405x760', 24);
+    const scheduledWhileLive = scheduled.length;
+    media.canvasTrack.readyState = 'ended';
+    scheduled[0]!();
+
+    expect([scheduledWhileLive, scheduled.length]).toEqual([1, 1]);
   });
 });
