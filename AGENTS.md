@@ -429,6 +429,14 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  self-test script), page/ (the right-bar panel through `api.areas.rightBar.contribute` with `focus` and
                  `left`, hidden and shown by `Space v y`), layouts/ (the system-stats Layout contract and the built-in
                  `default` layout); `docs/features/system-stats/design.md`
+  app-update/    manifest.ts, contract.ts (the `app-update.status` slot: none, available with its short sha, installing,
+                 failed with the error), main/ (fetches `services.appBuild`'s clone every 15 minutes and on window focus,
+                 decides in update-decision.ts, starts `install-app --ref origin/main` through
+                 `processes.startDetached` with the per-OS line in install-command.ts, polls the exit-code file the line
+                 writes, hands its self-test script over a fixture seed), page/ (the Update available button at the
+                 title bar's end through `api.areas.titleBar.contribute`, shown only while the status is not none),
+                 layouts/ (its Layout contract and `default` layout); the dev app bakes no commit and checks nothing;
+                 `docs/features/app-update/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
                  an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
@@ -1096,7 +1104,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
-  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
   write and before the keys, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
