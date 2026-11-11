@@ -60,6 +60,7 @@ function setUp() {
   const installer: Installer = {
     start: vi.fn(async () => {}),
     result: vi.fn(async () => null),
+    startedFrom: vi.fn(async () => null),
   };
   const status = memorySlot();
   const logs: string[] = [];

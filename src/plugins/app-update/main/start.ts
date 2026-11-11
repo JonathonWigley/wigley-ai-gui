@@ -53,7 +53,11 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
         installed: build.commit,
         cloneDir: build.cloneDir,
         git,
-        installer: createInstaller({ data: api.data, startProgram }),
+        installer: createInstaller({
+          data: api.data,
+          fromCommit: build.commit,
+          startProgram,
+        }),
         status,
         timers: services.timers,
         clock: services.clock,

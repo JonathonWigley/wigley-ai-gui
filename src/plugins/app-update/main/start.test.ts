@@ -3,12 +3,13 @@ import type { Git } from '../../../contracts/git';
 import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
 import { appUpdateStatusSlot } from '../contract';
 import { appUpdateMainPart } from './start';
-import { INSTALL_POLL_MS } from './updater';
+import { INSTALL_POLL_MS, RESUMED_INSTALL_CAP_MS } from './updater';
 
 const CLONE = '/Users/u/dev/wigley-ai-gui';
 const INSTALLED = '1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const ORIGIN = '2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const DATA = '/data/app-update';
+const OLDER = '0000000cccccccccccccccccccccccccccccccc';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -59,25 +60,40 @@ describe('appUpdateMainPart', () => {
   });
 
   // An install that gave up after the app began quitting started nothing
-  // again, so this start is the first to see its exit code.
+  // again, so this start is the first to see its exit code; only an install
+  // this build started counts.
   it.each([
     {
-      case: 'non-zero',
+      case: 'this build, non-zero',
+      from: INSTALLED,
       code: '1\n',
       status: { kind: 'failed', error: 'error: did not quit within 15 s' },
     },
     {
-      case: 'zero',
+      case: 'this build, zero',
+      from: INSTALLED,
       code: '0\n',
       status: { kind: 'available', sha: '2222222' },
     },
-    { case: 'empty', code: '', status: { kind: 'available', sha: '2222222' } },
+    {
+      case: 'another build, non-zero',
+      from: OLDER,
+      code: '1\n',
+      status: { kind: 'available', sha: '2222222' },
+    },
+    {
+      case: 'no from-commit, non-zero',
+      from: '',
+      code: '1\n',
+      status: { kind: 'available', sha: '2222222' },
+    },
   ])(
     'start_EarlierInstallExitCode_Status ($case)',
-    async ({ code, status }) => {
+    async ({ from, code, status }) => {
       const test = await startWithBuild(
         { commit: INSTALLED, cloneDir: CLONE },
         {
+          'install-from-commit': from,
           'install-exit-code': code,
           'install.log': 'error: did not quit within 15 s\n',
         },
@@ -86,6 +102,47 @@ describe('appUpdateMainPart', () => {
       expect(test.status()).toEqual(status);
     },
   );
+
+  // A failed swap starts this build again before the install's shell writes
+  // its code.
+  it('start_EarlierInstallNoCodeYet_PollsItToFailed', async () => {
+    const test = await startWithBuild(
+      { commit: INSTALLED, cloneDir: CLONE },
+      { 'install-from-commit': INSTALLED, 'install-exit-code': '' },
+    );
+    expect(test.status()).toEqual({ kind: 'installing' });
+
+    await test.harness.files.write(`${DATA}/install-exit-code`, '1\n');
+    test.harness.advance(INSTALL_POLL_MS);
+    await settle();
+
+    expect(test.status()).toEqual({
+      kind: 'failed',
+      error: 'install-app exited 1',
+    });
+  });
+
+  it('start_EarlierInstallNoCodeWithinTheCap_Dropped', async () => {
+    const test = await startWithBuild(
+      { commit: INSTALLED, cloneDir: CLONE },
+      { 'install-from-commit': INSTALLED, 'install-exit-code': '' },
+    );
+
+    for (
+      let polls = 0;
+      polls * INSTALL_POLL_MS <= RESUMED_INSTALL_CAP_MS;
+      polls++
+    ) {
+      test.harness.advance(INSTALL_POLL_MS);
+      await settle();
+    }
+    await settle();
+
+    expect(test.harness.logs.map(({ message }) => message)).toContain(
+      'earlier install gave no exit code within 120 s: dropped',
+    );
+    expect(test.status()).toEqual({ kind: 'available', sha: '2222222' });
+  });
 
   it('start_NoBuild_ChecksNothingAndInstallSkips', async () => {
     const test = await startWithBuild(null);
@@ -152,23 +209,24 @@ describe('appUpdateMainPart', () => {
   );
 
   it.each([
-    { branch: 'main', warns: false },
-    { branch: 'feature', warns: true },
+    { branch: 'main', warning: null },
+    {
+      branch: 'feature',
+      warning:
+        'warning: the clone is on feature, not main; the install runs its install-app',
+    },
   ])(
-    'install_CloneOn_$branch_WarnsOffMain: $warns',
-    async ({ branch, warns }) => {
+    'install_CloneOnBranch_WarnsOffMain ($branch)',
+    async ({ branch, warning }) => {
       const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
       vi.mocked(test.git.currentBranch).mockResolvedValue(branch);
 
       await test.install();
 
-      expect(
-        test.harness.logs
-          .map(({ message }) => message)
-          .includes(
-            'warning: the clone is on feature, not main; the install runs its install-app',
-          ),
-      ).toBe(warns);
+      const warnings = test.harness.logs
+        .map(({ message }) => message)
+        .filter((message) => message.startsWith('warning: the clone is on'));
+      expect(warnings).toEqual(warning === null ? [] : [warning]);
       expect(test.harness.processes.detachedStarts).toHaveLength(1);
     },
   );

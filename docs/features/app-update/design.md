@@ -22,8 +22,8 @@ or has failed.
 `install-app` bakes the commit it builds into the app as `WIGLEY_BUILD_COMMIT`, a Vite define in
 `vite.main.config.mts` (empty when unset). Main's composition root hands plugins
 `services.appBuild` (`src/contracts/app-instance.ts`): the baked commit and the clone folder
-(`WIGLEY_CLONE_DIR`), or null when either is missing and outside a live run, so a self-test or drive
-run of a packaged app never fetches the user's clone.
+(`WIGLEY_CLONE_DIR`), or null when either one is missing, and null outside a live run, so a
+self-test or drive run of a packaged app never fetches the user's clone.
 
 The plugin runs `git fetch` in the clone at start, every 15 minutes, and when the window gains focus
 (`core.windowFocused`; a focus within 60 s of the last check is skipped). The rule is the pure
@@ -52,9 +52,10 @@ The plugin's `dispose` only stops its timers, so nothing holds the quit.
   leaves `$LASTEXITCODE` null, which writes 1 rather than a blank line read as still running.
 - Linux: no line, so the plugin checks nothing.
 
-The log is `install.log` and the exit code `install-exit-code`, both in the plugin's data folder
-(`api.dataFolder`). Starting an install empties both; the plugin polls the exit-code file every 2 s
-while installing. A status of `installing` kept through a plugin restart resumes the polling.
+The log is `install.log`, the exit code `install-exit-code`, and the commit of the build that
+started the install `install-from-commit`, all in the plugin's data folder (`api.dataFolder`).
+Starting an install empties the first two and writes the third once the program runs; the plugin
+polls the exit-code file every 2 s while installing. A status of `installing` kept through a plugin restart resumes the polling.
 
 The line runs the clone's checked-out `package.json`, `scripts/install-app.mts` and `.nvmrc`, not
 origin/main's: only the build is origin/main. The clone should sit on `main`, as it does under the
@@ -81,10 +82,17 @@ A swap that fails after the quit starts the old build again (`install-app`'s `fi
 quit starts nothing: `install-app` waits 15 s for the app to quit and then gives up with `Nothing
 was installed`, while the app's own quit holds until its tasks settle, with no cap, so the app
 quits a moment later and the user is left with no app running. In both cases the error is only in
-the exit-code file, so a start whose first check finds an update reads it: a non-zero code the
-start did not write shows `failed` with the log's tail, and a zero or empty one shows nothing. The
-file stays until the next install empties it, so each start shows the failure while the update
-still waits.
+the exit-code file, so a start reads it, but only when `install-from-commit` names the running
+build: a build installed another way (`npm run install-app` from a terminal) never shows an older
+build's failure.
+
+- A non-zero code, when the start's first check finds an update, shows `failed` with the log's
+  tail. The file stays until the next install empties it, so each start of this build shows it
+  while the update still waits.
+- No code yet is the failed swap's race: `install-app` starts the old build again before its shell
+  writes the code. The start shows `installing` and polls as a restart does, for up to 2 minutes
+  from the start; past that with still no code it logs the cap, drops to `none` and checks.
+- A zero code shows nothing.
 
 ## The dev app
 
@@ -96,7 +104,7 @@ has no build and never fetches or shows the button. `app-update.install` and `ap
 
 `update-decision`, `install-command` and `updater` have Vitest tests, and the main part's tests
 (`main/start.test.ts`) cover the installer through the harness's files: a stale exit code before an
-install, a retry from `failed`, polling resumed after a restart, an earlier run's exit code at start,
+install, a retry from `failed`, polling resumed after a restart, an earlier run's exit code at start (this build's or another's, and none yet, with its cap),
 and the off-`main` warning. `process-git` and `node-processes` test the new seams, the latter
 including the detached child's own process group. The self-test
 (`main/selftest-script.ts`) seeds a fixture build, a fixture git one commit behind, and an install
