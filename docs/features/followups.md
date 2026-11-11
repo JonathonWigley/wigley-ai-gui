@@ -971,3 +971,13 @@ because the earlier items rewrite many of these tests anyway.
   mixed-DPI desktop with the Game View on the non-primary monitor, comparing the two rects. If they disagree, convert
   both to one space, for example physical pixels through per-monitor DPI awareness. Source session: Claude Code
   8bbb8a20-7952-4e78-af3b-888ed8197fde in new-games-prototypes.
+- **Self-test fit check flags every split handle's resize prompt** — *agent-ready*: the hub's 4px drag handle
+  (`div.ui-split-handle.chat-side-handle`) holds its hidden `⌥⇧H ◂ ▸ ⌥⇧L` resize prompt, absolutely positioned and
+  centred on the handle. Chromium counts that prompt in the handle's scrollWidth, so the self-test's "fits the held
+  width" check fails with "holds 44px in 4px" on any step that fit-checks while the hub shows. It is pre-existing: a
+  filtered `npm run selftest -- --plugin agent-skills` fails on it today, and context-sources likely does too, since
+  it has the same 1200px held-fit step. agent-lines and live-view each work around it in their own `scrollsItself`
+  lists (`.ui-split-handle` and `.chat-side-handle`). Fix: add `.ui-split-handle` to `PRIMITIVE_CLIPPING_SELECTORS` in
+  `src/main/drive/page-driver.ts`, since every split's prompt overflows its handle by design; then drop the two
+  per-plugin entries; then run the filtered agent-skills, context-sources, agent-lines and live-view self-tests.
+  Source session: Claude Code 8bbb8a20-7952-4e78-af3b-888ed8197fde in new-games-prototypes.
