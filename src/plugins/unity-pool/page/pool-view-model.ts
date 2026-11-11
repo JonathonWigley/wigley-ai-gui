@@ -62,8 +62,8 @@ export function ordinal(position: number): string {
 }
 
 // One badge per pool, in the snapshot's name order: `Unity <n>, <m>` listing every clone the row's session holds by
-// an agent claim or an open handoff, in clone order, else `Unity: queued <ordinal>` for its queue ticket, each holder matched to its row
-// among `rows`. A hold and a stranded mark belong to no session and show none.
+// an agent claim or an open handoff, in clone order, else `Unity: queued <ordinal>` for its queue ticket, each
+// holder matched to its row among `rows`. A hold and a stranded mark belong to no session and show none.
 export function rowBadges(
   pools: readonly PoolState[],
   rows: readonly PoolRow[],
