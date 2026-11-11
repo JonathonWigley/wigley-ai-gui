@@ -228,14 +228,14 @@ and `services.files`.
 - [x] [capture.py start replies with game_view](03-capture-game-view.md)
 
 ### Wave 2
-- [ ] [macOS and Windows window lists](04-os-window-lists.md) — after 01
-- [ ] [live-view plugin: tools, slot, window pick](05-live-view-main.md) — after 01
+- [x] [macOS and Windows window lists](04-os-window-lists.md) — after 01
+- [x] [live-view plugin: tools, slot, window pick](05-live-view-main.md) — after 01
 
 ### Wave 3
 - [ ] [live-view section, layout, preview and self-test](06-live-view-section.md) — after 02, 05
 
 ### Wave 4 (Unity phase)
-- [ ] [Probe rect without the toolbar strip](07-probe-toolbar-strip.md) — after 03
+- [x] [Probe rect without the toolbar strip](07-probe-toolbar-strip.md) — after 03
 
 ### Wave 5
 - [ ] [Doc re-read](08-doc-re-read.md) — after every task above
@@ -249,8 +249,12 @@ Review base: 1449ada4
 - 03 · hard · d6a4c14 (marketplace) · diff read: game_view from a post-start probe, warning on failure, --append covered, four-row table plus append assertion; py_compile clean; tests run at the test gate · concerns: two existing tests rewritten to pick the start request rather than the last one; capture.md's start row does not list the new 'game view probe failed' warning (task 08)
 - 01 · deep · ce592e64 · diff read: every Produces present (contract types, createScreenCapture, unavailable, electron-capture trio, fake consts, MainServices.screenCapture); wave 1 typecheck and lint pass (one expected unused 'runner' warning until 04) · concerns: screenCaptureFor's macos/windows cases fall through to unavailable with a comment 04 must rewrite; Electron API shapes checked against the spike, not 44.9.1 typings (typecheck passed); AGENTS.md src/main/processes entry does not name requiredStdout (08)
 - 02 · hard · a45c6dba · diff read: shrinksLast on ChatSidePart, data-shrinks-last on the wrapper only when built, CSS rule with floor token, marker test rows; wave 1 typecheck and lint pass; flex result is 09's live check · concerns: the condition relies on the frame drawing .chat-side-section/.is-collapsed around the body (default layout does); flex order unverified until 09
+- 04 · hard · 59067770 · diff read: all four Produces present; wave 2 typecheck and lint clean at 4843128d · concerns: Windows C# (Add-Type, C# 5) and a one-window ConvertTo-Json array are unchecked until task 09's Windows run; no test drives the adapters through FakeProcesses (args, 10000 ms timeout)
+- 05 · hard (compile fix on hard) · 46cfe877, fix 4843128d · diff read: contract, window-pick and live-tools Produces present, sessionEnded added (contract change); wave 2 typecheck and lint clean at 4843128d after a same-rung TS2352 fix and an oxfmt pass by the lead · concerns: window-pick.test.ts uses top-level await over the fake's windows; the preview-sample test assumes on() fires once per set and not on subscribe; AGENTS.md live-view tree entry lacks window-pick.ts (task 08)
+- 07 · deep · marketplace f1181e5 · diff read; live on clone 2 (6000.3.12f1): docked [2030.85,139,354.31,767] and floating [140.77,147,346.45,750] crops start on game pixels (before: y 115 / 121 vs truth 139 / 147); aspect within 0.5% of mark stills; no compile diagnostics · concerns: Retina (pixelsPerPoint 2) unverified, only a 1x display; docked proof via screencapture -l cropped, since Auri covered the docked view; position reads stale right after LoadWindowLayout (not on start's path)
 ### Contract changes
 - Chat hub shrinksLast condition selector: nested :has(...:has()) → one :has() descendant path (.chat-side-parts:has(> .chat-side-part[data-shrinks-last] .chat-side-section:not(.is-collapsed) .chat-side-section-body > :not([hidden]))) · why: :has() cannot nest, so the planned rule would be dropped whole · consumers: 09 · group 02
+- 05: createLiveTools also returns sessionEnded(sessionId), which deletes the pick and stops a still-waiting show from writing one; it exports LiveTools, LiveToolsDeps, ShowArgs and GameRectTuple. Task 06 calls only show, so its brief is unchanged.
 ### Rulings
 - Marketplace review base is 95a1dfb (live-view worktree tip at preflight); the gui base above covers wigley-ai-gui only — git fetch fails (Permission denied (publickey)) in and out of the sandbox, so both runs build on local main, which sits at the worktrees' base — a rebase at landing catches any origin drift · lead
 - The second probe runs after save_run and write_current, so a probe failure cannot lose the run — none to consumers if wrong · group 03 · group 03
@@ -260,5 +264,14 @@ Review base: 1449ada4
 - A collapsed other section gets no floor, keeping its head alone · group 02 · group 02
 - Token side-section-floor also listed in DESIGN.md § Space, size and shape (Density), per DESIGN.md's token rule · group 02 · group 02
 - Task 07 (Unity phase) dispatched with wave 2 rather than wave 4: it waits only on 03, which landed, and touches only the marketplace worktree and a pool clone, so no file is shared with 04 or 05 · lead
+- 04: shared parser helper window-rows.ts (parseWindowRows), outside the task's Files list; both listers use it · group 04
+- 04: the Windows C# sets per-monitor DPI awareness on its own thread and prints pixels plus dpi; the parser divides by dpi/96 once · group 04
+- 04: macOS live adapter check moves to task 09 check 4; the worker ran the JXA script once, read-only, for the test sample · group 04
+- 05: ended sessions tracked as per-id end counts, so a row id that returns after a restart can show again · group 05
+- 05: a bad or id-less EditorInstance.json gets the no-editor reply; other read errors reply errorResult(String(error)) · group 05
+- 05: main/start.ts registers no layouts; task 06 adds api.layouts.register({ layoutTypes }) as context-sources does · group 05
+- lead ran oxfmt --write on four wave-2 files (editor-tooling-only) · group 05
+- 07: root cause is window.position's DockArea origin at the tab strip's top; fix reads m_Parent screenPosition minus borderSize by reflection, window.position fallback · group 07
+- 07: no doc edit; capture.md already says game_view excludes the toolbar · group 07
 ### Review rounds
 ### Test gate

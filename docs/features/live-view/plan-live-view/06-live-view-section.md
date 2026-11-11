@@ -1,6 +1,6 @@
 # 06 — live-view section, layout, preview and self-test
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · media stream lifetime: getUserMedia, visibility and IntersectionObserver start and stop, and track end, across page reloads and tab moves
 Wave: 3 · Depends on: 02, 05

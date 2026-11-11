@@ -1,6 +1,6 @@
 # 05 — live-view plugin: tools, slot, window pick
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `live-view.picks` slot and the window-pick functions that 06 consumes
 Wave: 2 · Depends on: 01
@@ -149,3 +149,5 @@ plugin in `manifests.ts` and `main.ts` and with no page part yet. The test gate 
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 46cfe877, fix 4843128d · proof: diff read: contract, window-pick and live-tools Produces present, sessionEnded added (contract change); wave 2 typecheck and lint clean at 4843128d after a same-rung TS2352 fix and an oxfmt pass by the lead · concerns: window-pick.test.ts uses top-level await over the fake's windows; the preview-sample test assumes on() fires once per set and not on subscribe; AGENTS.md live-view tree entry lacks window-pick.ts (task 08)

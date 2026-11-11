@@ -1,6 +1,6 @@
 # 04 — macOS and Windows window lists
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · two OS scripts whose output units and order the crop depends on; the Windows DPI conversion is a judgement
 Wave: 2 · Depends on: 01
@@ -89,3 +89,5 @@ The Windows script runs only on Windows, so it waits for the user's Windows chec
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 59067770 · proof: diff read: all four Produces present; wave 2 typecheck and lint clean at 4843128d · concerns: Windows C# (Add-Type, C# 5) and a one-window ConvertTo-Json array are unchecked until task 09's Windows run; no test drives the adapters through FakeProcesses (args, 10000 ms timeout)

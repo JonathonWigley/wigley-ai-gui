@@ -1,6 +1,6 @@
 # 07 — Probe rect without the toolbar strip
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · a root cause inside Unity's internal GameView geometry, checked only against a live editor's pixels
 Wave: 4 (Unity phase) · Depends on: 03
@@ -79,3 +79,5 @@ script.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit marketplace f1181e5 · proof: diff read; live on clone 2 (6000.3.12f1): docked [2030.85,139,354.31,767] and floating [140.77,147,346.45,750] crops start on game pixels (before: y 115 / 121 vs truth 139 / 147); aspect within 0.5% of mark stills; no compile diagnostics · concerns: Retina (pixelsPerPoint 2) unverified, only a 1x display; docked proof via screencapture -l cropped, since Auri covered the docked view; position reads stale right after LoadWindowLayout (not on start's path)
