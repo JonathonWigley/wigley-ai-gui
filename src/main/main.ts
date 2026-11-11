@@ -165,7 +165,15 @@ import { limitRuns } from './processes/limited-processes';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
+import {
+  electronCaptureSources,
+  macScreenAccess,
+  openMacScreenSettings,
+} from './screen-capture/electron-capture';
+import { createMacWindowList } from './screen-capture/mac-window-list';
+import { createScreenCapture } from './screen-capture/screen-capture';
 import { createUnavailableScreenCapture } from './screen-capture/unavailable-screen-capture';
+import { createWindowsWindowList } from './screen-capture/windows-window-list';
 import { createMacSystemStats } from './system-stats/mac-system-stats';
 import { createUnavailableSystemStats } from './system-stats/unavailable-system-stats';
 import { createWindowsSystemStats } from './system-stats/windows-system-stats';
@@ -319,14 +327,29 @@ function systemStatsFor(osName: OsName, runner: ProcessRunner): SystemStats {
 }
 
 // The windows the OS `osName` can stream, its commands run through `runner`.
-// No OS has a window lister yet, so every OS's calls reject.
+// Linux has no window lister, so its calls reject.
 function screenCaptureFor(
   osName: OsName,
   runner: ProcessRunner,
 ): ScreenCapture {
   switch (osName) {
     case 'macos':
+      return createScreenCapture({
+        windows: createMacWindowList(runner),
+        sources: electronCaptureSources,
+        access: macScreenAccess,
+        blockedWhenNoSources: true,
+        openSettings: openMacScreenSettings,
+      });
     case 'windows':
+      return createScreenCapture({
+        windows: createWindowsWindowList(runner),
+        sources: electronCaptureSources,
+        access: () => 'granted',
+        blockedWhenNoSources: false,
+        openSettings: () =>
+          Promise.reject(new Error('Windows has no Screen Recording setting')),
+      });
     default:
       return createUnavailableScreenCapture(osName);
   }
