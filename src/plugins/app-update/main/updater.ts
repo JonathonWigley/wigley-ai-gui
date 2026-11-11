@@ -48,6 +48,11 @@ export interface Updater {
 
 // Starts checking every `CHECK_EVERY_MS` and checks at once; a status the slot
 // kept through a plugin restart stays, and an `installing` one is polled again.
+// Otherwise, when that first check finds an update, a non-zero exit code an
+// earlier run's install left shows as `failed`: an install that gave up after
+// the app was already quitting (install-app waits 15 s for the quit, and the
+// app's own quit has no cap) starts nothing again, so the user would otherwise
+// find the old build with no error. A zero or empty exit code shows nothing.
 export function createUpdater(deps: UpdaterDeps): Updater {
   const { status, timers, log } = deps;
   let isDisposed = false;
@@ -153,11 +158,30 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     schedulePoll();
   };
 
+  const showEarlierFailure = async () => {
+    await check();
+    try {
+      const result = await deps.installer.result();
+      if (
+        result !== null &&
+        result.code !== 0 &&
+        current().kind === 'available'
+      ) {
+        log(`earlier install failed: exit ${String(result.code)}`);
+        setStatus({ kind: 'failed', error: result.logTail });
+      }
+    } catch (error) {
+      log(`earlier install result unread: ${errorText(error)}`);
+    }
+  };
+
+  scheduleCheck();
   if (current().kind === 'installing') {
     schedulePoll();
+    void check();
+  } else {
+    void showEarlierFailure();
   }
-  scheduleCheck();
-  void check();
 
   return {
     check,

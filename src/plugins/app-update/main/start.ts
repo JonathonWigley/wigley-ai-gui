@@ -61,6 +61,20 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
       });
     };
 
+    // The install runs the clone's checked-out `install-app`, not origin's
+    // main's, so a clone off `main` may build with an older installer; the
+    // install goes on, with a warning in the log.
+    const warnOffMain = async (cloneDir: string) => {
+      const branch = await services.git
+        .currentBranch(cloneDir)
+        .catch(() => null);
+      if (branch !== 'main') {
+        log(
+          `warning: the clone is on ${branch ?? 'no branch'}, not main; the install runs its install-app`,
+        );
+      }
+    };
+
     const build = services.appBuild;
     const commandLine = installCommandFor(
       services.platform.os,
@@ -71,16 +85,17 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
     } else if (commandLine === null) {
       log(`no install command on ${services.platform.os}: checking nothing`);
     } else {
-      startUpdater(build, services.git, () =>
-        services.processes.startDetached(
+      startUpdater(build, services.git, async () => {
+        await warnOffMain(build.cloneDir);
+        await services.processes.startDetached(
           commandLine.command,
           commandLine.args,
           {
             cwd: build.cloneDir,
             logPath: services.paths.join(api.dataFolder, INSTALL_LOG_FILE),
           },
-        ),
-      );
+        );
+      });
     }
 
     api.state.read(coreWindowFocusedSlot).on((isFocused) => {

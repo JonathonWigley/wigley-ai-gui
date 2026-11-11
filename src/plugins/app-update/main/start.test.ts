@@ -16,19 +16,32 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 function aheadGit(): Git {
   return {
     fetch: vi.fn(async () => false),
+    currentBranch: vi.fn(async (): Promise<string | null> => 'main'),
     resolveCommit: vi.fn(async () => ORIGIN),
     isAncestor: vi.fn(async () => true),
   } as Partial<Git> as Git;
 }
 
+// `files` are written to the data folder, as an earlier run left them, and
+// the part restarted to read them.
 async function startWithBuild(
   build: { commit: string; cloneDir: string } | null,
+  files: Record<string, string> = {},
 ) {
   const git = aheadGit();
   const harness = startMainPart(appUpdateMainPart, {
     services: { appBuild: build, git },
   });
   await settle();
+  if (Object.keys(files).length > 0) {
+    for (const [name, text] of Object.entries(files)) {
+      await harness.files.write(`${DATA}/${name}`, text);
+    }
+    await harness.restart();
+    for (let turn = 0; turn < 4; turn++) {
+      await settle();
+    }
+  }
   const status = () => harness.state.read(appUpdateStatusSlot, 'test').get();
   const install = async () => {
     await harness.started().commands.install({ arg: undefined });
@@ -44,6 +57,35 @@ describe('appUpdateMainPart', () => {
     expect(test.git.fetch).toHaveBeenCalledWith(CLONE, expect.any(Number));
     expect(test.status()).toEqual({ kind: 'available', sha: '2222222' });
   });
+
+  // An install that gave up after the app began quitting started nothing
+  // again, so this start is the first to see its exit code.
+  it.each([
+    {
+      case: 'non-zero',
+      code: '1\n',
+      status: { kind: 'failed', error: 'error: did not quit within 15 s' },
+    },
+    {
+      case: 'zero',
+      code: '0\n',
+      status: { kind: 'available', sha: '2222222' },
+    },
+    { case: 'empty', code: '', status: { kind: 'available', sha: '2222222' } },
+  ])(
+    'start_EarlierInstallExitCode_Status ($case)',
+    async ({ code, status }) => {
+      const test = await startWithBuild(
+        { commit: INSTALLED, cloneDir: CLONE },
+        {
+          'install-exit-code': code,
+          'install.log': 'error: did not quit within 15 s\n',
+        },
+      );
+
+      expect(test.status()).toEqual(status);
+    },
+  );
 
   it('start_NoBuild_ChecksNothingAndInstallSkips', async () => {
     const test = await startWithBuild(null);
@@ -109,6 +151,28 @@ describe('appUpdateMainPart', () => {
     },
   );
 
+  it.each([
+    { branch: 'main', warns: false },
+    { branch: 'feature', warns: true },
+  ])(
+    'install_CloneOn_$branch_WarnsOffMain: $warns',
+    async ({ branch, warns }) => {
+      const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+      vi.mocked(test.git.currentBranch).mockResolvedValue(branch);
+
+      await test.install();
+
+      expect(
+        test.harness.logs
+          .map(({ message }) => message)
+          .includes(
+            'warning: the clone is on feature, not main; the install runs its install-app',
+          ),
+      ).toBe(warns);
+      expect(test.harness.processes.detachedStarts).toHaveLength(1);
+    },
+  );
+
   it('install_ProgramCannotStart_FailedWithTheError', async () => {
     const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
     test.harness.processes.failDetachedStarts(
@@ -140,5 +204,46 @@ describe('appUpdateMainPart', () => {
     await settle();
 
     expect(test.status()).toEqual({ kind: 'installing' });
+  });
+
+  it('install_StaleExitCodeBefore_StillInstallingAfterAPoll', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    await test.harness.files.write(`${DATA}/install-exit-code`, '1\n');
+
+    await test.install();
+    test.harness.advance(INSTALL_POLL_MS);
+    await settle();
+
+    expect(test.status()).toEqual({ kind: 'installing' });
+  });
+
+  it('install_FromFailed_StartsAgain', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    await test.install();
+    await test.harness.files.write(`${DATA}/install-exit-code`, '1\n');
+    test.harness.advance(INSTALL_POLL_MS);
+    await settle();
+    expect(test.status()).toMatchObject({ kind: 'failed' });
+
+    await test.install();
+
+    expect(test.status()).toEqual({ kind: 'installing' });
+    expect(test.harness.processes.detachedStarts).toHaveLength(2);
+  });
+
+  it('restart_WhileInstalling_PollsTheExitCodeAgain', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    await test.install();
+    await test.harness.restart();
+    await settle();
+
+    await test.harness.files.write(`${DATA}/install-exit-code`, '1\n');
+    test.harness.advance(INSTALL_POLL_MS);
+    await settle();
+
+    expect(test.status()).toEqual({
+      kind: 'failed',
+      error: 'install-app exited 1',
+    });
   });
 });
