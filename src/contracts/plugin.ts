@@ -1,7 +1,7 @@
 import type { AgentHarness } from './agent';
 import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
-import type { AppInstance } from './app-instance';
+import type { AppBuild, AppInstance } from './app-instance';
 import type {
   ArgOf,
   CommandArg,
@@ -1054,7 +1054,9 @@ export interface DriveHost {
 // paths, none in the self-test; a folder inside one is scratch space.
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
-// the stable or the dev one. `images` re-encodes an image smaller, as PNG or
+// the stable or the dev one. `appBuild` is the commit and clone the installed
+// app was packaged from; null in the dev app, and when the clone folder is
+// missing. `images` re-encodes an image smaller, as PNG or
 // JPEG only, for `shrinkToFit`. `systemStats` reads the machine's CPU, GPU,
 // memory, network and disk counters. `screenCapture` lists the windows the OS
 // can stream, each with its owner's pid and bounds, and opens the OS's screen
@@ -1091,6 +1093,7 @@ export interface MainServices {
   openExternal(url: string): Promise<void>;
   runMode: RunMode;
   appInstance: AppInstance;
+  appBuild: AppBuild | null;
   selfTest: SelfTestHost | null;
   pluginSwitch: PluginSwitchService;
 }
@@ -1106,8 +1109,9 @@ export interface PluginSwitchService {
 // plugin's exports. `Ev` and
 // `Heard` are as on `PageApi`. `data` is the files service scoped to the
 // plugin's data folder: its paths are `/`-separated and relative to that
-// folder on every OS, and one that resolves outside it fails. `settings`
-// reads the plugin's settings as the user config now sets them;
+// folder on every OS, and one that resolves outside it fails. `dataFolder` is
+// that folder's full path, for a program the plugin starts that writes there.
+// `settings` reads the plugin's settings as the user config now sets them;
 // `onSettingsChanged` hears them each time they change, until its `dispose`.
 // `drive` is the plugin's own drive host, null outside a drive run.
 // `services.log` logs under the plugin's id, called as `log(message)`.
@@ -1135,6 +1139,7 @@ export interface MainApi<
     key: DependencyKey<E, 'main', Id>,
   ): E;
   data: Files;
+  dataFolder: string;
   drive: DriveHost | null;
   layouts: {
     register(options: { layoutTypes: string }): Disposable;

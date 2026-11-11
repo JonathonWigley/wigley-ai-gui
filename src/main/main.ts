@@ -98,7 +98,7 @@ import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
 import { createMacAlerts } from './alerts/mac-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createWindowsAlerts } from './alerts/windows-alerts';
-import { appInstanceOf } from './app-instance';
+import { appBuildOf, appInstanceOf } from './app-instance';
 import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
 import {
   type ConfigStore,
@@ -1190,6 +1190,7 @@ function createWindow(
       images: nativeImageEncoder,
       runMode,
       appInstance,
+      appBuild: appBuildOf(WIGLEY_BUILD_COMMIT, inputs.repoDir),
       sessionHost,
       pluginSwitch: {
         mayDisable: (id) =>

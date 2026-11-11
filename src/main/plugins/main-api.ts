@@ -77,6 +77,7 @@ export function createMainApi(
   const channel = deps.channels.forPlugin(manifest.id);
   const events = pluginEvents(deps.bus, manifest.id, deps.services.log);
   const files = trackedFiles(deps.services.files, registrations);
+  const dataFolder = deps.services.paths.join(deps.dataRoot, manifest.id);
   const pluginCommands = deps.commands.forPlugin(manifest.id, (handle) =>
     registrations.track(handle),
   );
@@ -117,11 +118,8 @@ export function createMainApi(
     },
     dependency: <E>(key: DependencyKey<E, 'main'>) =>
       deps.dependency(key.id) as E,
-    data: scopedFiles(
-      files,
-      deps.services.paths.join(deps.dataRoot, manifest.id),
-      deps.services.paths,
-    ),
+    data: scopedFiles(files, dataFolder, deps.services.paths),
+    dataFolder,
     drive: trackedDrive(deps.driveFor(manifest.id), registrations),
     layouts: {
       register: (options) =>

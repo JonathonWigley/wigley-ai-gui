@@ -131,13 +131,16 @@ async function installOnWindows(
   await cleanInstallRoot(paths);
 }
 
-// Checks out `commit` in the build worktree and packages it there.
+// Checks out `commit` in the build worktree and packages it there, baking in
+// this clone's path and the commit, which the app's update check compares
+// against origin's main.
 function packageApp(paths: InstallPaths, commit: string): void {
   checkOutBuildWorktree(paths.buildDir, commit);
   installDependenciesWhenDue(paths.buildDir);
   runNpmStep('npm run package', paths.buildDir, {
     ...process.env,
     WIGLEY_CLONE_DIR: REPO_DIR,
+    WIGLEY_BUILD_COMMIT: commit,
   });
   if (!existsSync(paths.packagedApp)) {
     throw new Error(`npm run package left no app at ${paths.packagedApp}`);

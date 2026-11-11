@@ -9,9 +9,14 @@ const cloneDir = path.isAbsolute(envCloneDir)
   ? envCloneDir
   : path.dirname(fileURLToPath(import.meta.url));
 
+// The build's `WIGLEY_BUILD_COMMIT`, the commit `npm run install-app`
+// packages; empty when unset, as in the dev app.
+const buildCommit = process.env.WIGLEY_BUILD_COMMIT ?? '';
+
 // https://vitejs.dev/config
 export default defineConfig({
   define: {
     WIGLEY_CLONE_DIR: JSON.stringify(cloneDir),
+    WIGLEY_BUILD_COMMIT: JSON.stringify(buildCommit),
   },
 });

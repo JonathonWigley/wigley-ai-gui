@@ -989,6 +989,7 @@ function fakeMainApi(
       any
     >['dependency'],
     data: scopedFiles(partFiles, `/data/${manifest.id}`, posixPaths),
+    dataFolder: `/data/${manifest.id}`,
     drive: countedDrive(world.drive?.host, register),
     layouts: {
       register: () => fakeLayoutsRegister(manifest, record, register),
@@ -1006,6 +1007,7 @@ function fakeMainApi(
       runMode: 'selfTest',
       selfTest: null,
       appInstance: DEV_APP,
+      appBuild: null,
       window: {
         show() {},
         summon: () => false,

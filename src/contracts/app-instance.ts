@@ -6,3 +6,11 @@ export interface AppInstance {
   displayName: 'Auri' | 'Auri Dev';
   isDev: boolean;
 }
+
+// The build the installed app runs: the commit `npm run install-app` packaged
+// it from, and the repo clone it was built from (`WIGLEY_CLONE_DIR`), which
+// holds that commit.
+export interface AppBuild {
+  commit: string;
+  cloneDir: string;
+}
