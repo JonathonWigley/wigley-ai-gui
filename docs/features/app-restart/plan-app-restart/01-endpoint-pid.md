@@ -32,7 +32,9 @@ Tests:
 - `platformFor_Inputs_LaunchIsLaunchCommand` in `src/shared/platform.test.ts`: add `pid: 4242` to `INPUTS` and
   assert `relay.pid` is 4242 in each OS row. Rename the test to `platformFor_Inputs_RelayCarriesLaunchAndPid`.
 - The `start.test.ts` test that reads `endpoint.json` (it asserts `toMatchObject({ launch: platform.relay.launch })`):
-  extend the assertion to `{ launch: platform.relay.launch, pid: platform.relay.pid }`.
+  extend the assertion to `{ launch: platform.relay.launch, pid: 4242 }`, the literal `fakePlatform` passes, so a
+  wrong source for `pid` fails. No drive-run row: `pid` is set outside the run-mode branch in `openRelay`, so one
+  path writes it in every mode.
 - `endpoint.test.ts`: add `pid` to its `RelayEndpoint` literal at line 55, so the round-trip test writes it.
 Done when: `npm run typecheck` (or the compile `npm test` runs) passes; the test gate runs the tests above.
 Commit:    one commit for the group.

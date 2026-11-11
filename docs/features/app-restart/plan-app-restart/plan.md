@@ -90,7 +90,13 @@ Decisions:
 - The app records its main process id in `endpoint.json` as `pid`; the restart signals only that process (round 1).
 - `--from <folder>` starts the dev app from another checkout; the default restarts in the recorded folder (round 1).
 - The restart lives in `start_app.py`. The drive launcher manages only its own temp-home runs (Decided).
-- Graceful quit only, the same commands as `install-app`, a 15 s wait, never a force-kill (Decided).
+- Graceful quit only, a 15 s wait, never a force-kill, as `install-app` quits. On Windows the quit is
+  `install-app`'s own `CloseMainWindow()` command; on macOS and Linux it is SIGTERM to the recorded pid, which
+  Electron turns into its normal quit (Decided).
+- `--from` checks its folder and the recorded command before it quits anything, so a refusal leaves the running
+  app alone (Decided, cold read).
+- The new start begins once the Electron pid exits. forge's Vite plugin then exits within milliseconds and does
+  not touch `.vite/build`, so no wait for forge is added (Decided, cold read; task 02 names the source).
 - `--dev` selects `~/.agents/wigley-ai-gui-dev`. With neither `--dev` nor `--from`, the folder is the one
   `endpoint_dir(os.environ)` gives today (Decided).
 - With no app on the channel, `--restart` is a plain start. The quit is asked only while the channel accepts, so a
@@ -134,7 +140,8 @@ Shared names (both tasks use them; the JSON key is the contract):
 
 - `endpoint.json` key `pid`: a JSON integer, the app's main process id (`process.pid` in Electron's main process).
 - TypeScript: `PlatformRelay.pid: number`, `PlatformInputs.pid: number`, `RelayEndpoint.pid: number`.
-- Python: `Endpoint.pid: int | None`.
+- Python: `Endpoint.pid: int | None` — `None` for a missing key and for any value that is not a positive,
+  non-bool integer.
 
 Boundary rules: `start_app.py` stays standard library only, and holds no forms logic (README § Boundary rules).
 `src/contracts/` imports nothing.
