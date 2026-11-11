@@ -62,8 +62,7 @@ export function pickEditorWindow(
     return largestWindow(processWindows);
   }
   return (
-    processWindows.find((window) => holdsRect(window.bounds, gameRect)) ??
-    null
+    processWindows.find((window) => holdsRect(window.bounds, gameRect)) ?? null
   );
 }
 

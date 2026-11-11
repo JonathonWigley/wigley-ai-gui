@@ -38,8 +38,6 @@ function hasWindowFields(row: unknown, numberKeys: readonly string[]): boolean {
     return false;
   }
   const fields = row as Record<string, unknown>;
-  const hasNumbers = numberKeys.every(
-    (key) => typeof fields[key] === 'number',
-  );
+  const hasNumbers = numberKeys.every((key) => typeof fields[key] === 'number');
   return hasNumbers && typeof fields.title === 'string';
 }

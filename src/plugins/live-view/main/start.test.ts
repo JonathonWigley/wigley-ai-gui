@@ -99,8 +99,9 @@ describe('liveViewMainPart', () => {
   it('start_ContributesBothTools', async () => {
     const { contributions } = await startPart();
 
-    expect(contributions.map(({ tools }) => tools.map(({ name }) => name)))
-      .toEqual([['show_live_view', 'hide_live_view']]);
+    expect(
+      contributions.map(({ tools }) => tools.map(({ name }) => name)),
+    ).toEqual([['show_live_view', 'hide_live_view']]);
   });
 
   it.each<{

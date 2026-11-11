@@ -246,14 +246,17 @@ describe('cropOf', () => {
       rect: { x: 101, y: 51, width: 400, height: 600 },
       crop: { x: 1 / 400, y: 1 / 600, width: 399 / 400, height: 599 / 600 },
     },
-  ])('cropOf_IsTheRectAsFractionsOfTheWindow_given $given', ({ rect, crop }) => {
-    expect(cropOf(rect, bounds)).toEqual({
-      x: expect.closeTo(crop.x, 12),
-      y: expect.closeTo(crop.y, 12),
-      width: expect.closeTo(crop.width, 12),
-      height: expect.closeTo(crop.height, 12),
-    });
-  });
+  ])(
+    'cropOf_IsTheRectAsFractionsOfTheWindow_given $given',
+    ({ rect, crop }) => {
+      expect(cropOf(rect, bounds)).toEqual({
+        x: expect.closeTo(crop.x, 12),
+        y: expect.closeTo(crop.y, 12),
+        width: expect.closeTo(crop.width, 12),
+        height: expect.closeTo(crop.height, 12),
+      });
+    },
+  );
 });
 
 describe('streamMoved', () => {

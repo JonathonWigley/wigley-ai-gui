@@ -96,20 +96,20 @@ function parseShowArgs(args: unknown): { args: ShowArgs } | { error: string } {
   if (gameRect === undefined || gameRect === null) {
     return { args: { projectPath, gameRect: null } };
   }
-  const isFourFiniteNumbers =
-    Array.isArray(gameRect) &&
-    gameRect.length === 4 &&
-    gameRect.every(
-      (value) => typeof value === 'number' && Number.isFinite(value),
-    );
   const hasArea =
-    isFourFiniteNumbers &&
-    (gameRect[2] as number) > 0 &&
-    (gameRect[3] as number) > 0;
+    isFourFiniteNumbers(gameRect) && gameRect[2] > 0 && gameRect[3] > 0;
   if (!hasArea) {
     return { error: GAME_RECT_INVALID };
   }
-  return { args: { projectPath, gameRect: gameRect as GameRectTuple } };
+  return { args: { projectPath, gameRect } };
+}
+
+function isFourFiniteNumbers(value: unknown): value is GameRectTuple {
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    value.every((item) => typeof item === 'number' && Number.isFinite(item))
+  );
 }
 
 // The `process_id` of a Unity editor's `EditorInstance.json`, or null when the
