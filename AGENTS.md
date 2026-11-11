@@ -9,7 +9,7 @@
   user config file, theme, plugin data, layout, agent harness, session control, agent form type, MCP tool or
   third-party tool goes, and the layer check.
 - **Review** — every review recommendation taken without a form round.
-- **Running and testing** — the stable and dev apps side by side, `npm run install-app` and the app icon, Node
+- **Running and testing** — the stable and dev apps side by side, `npm run install-app` and the app icon, the restart, Node
   version, the self-test and the drive run the agent may start any time, and the checks only a real keyboard proves.
 - **Dev quirks** — the startup reload, a session's stale forms schema, and the login shell's PATH and SSH_AUTH_SOCK.
 
@@ -1075,6 +1075,13 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   loses them and asks again; a denied Documents grant makes every session in `~/Documents` exit with `EPERM`. The
   `install` skill (`.agents/skills/install/SKILL.md`) holds the steps. The installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
   which `node scripts/make-icon.mts` rebuilds on Windows (`make-icon.ps1` holds the crop); the dev app keeps Electron's icon.
+- **To put the running app on a new build**, run the marketplace's `start_app.py`
+  (`plugins/wigley/scripts/forms/` in the wigley-ai-marketplace clone) with `--restart --dev` for the dev app, or
+  `--from <checkout>` to start the dev app from that checkout, such as the worktree holding the change (planned in
+  `app-restart`, not built yet). It quits only the process the endpoint file names, waits for it to exit, starts
+  the app and waits for its channel; a hand `pkill` misses processes and hits drive runs. A page edit hot reloads
+  with no restart; a main-process edit needs one. The stable app runs the build `npm run install-app` last
+  installed, and that command already restarts it. The forms README's Restarting the app holds the rules.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.
 - `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round
