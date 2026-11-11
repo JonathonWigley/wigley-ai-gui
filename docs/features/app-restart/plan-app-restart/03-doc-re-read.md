@@ -14,7 +14,7 @@ Decisions:
 - Fix every line the code contradicts: a flag name, the 15 s wait, the quit commands, the `--from` rule, the
   missing-`pid` failure.
 - Drop every "planned in `app-restart`, not built yet" mark.
-- The README edit is a plugin change. Fold it into task 02's unpushed 2.6.6 bump when that bump is not pushed yet;
+- The README edit is a plugin change. Fold it into task 02's unpushed bump when that bump is not pushed yet;
   else bump to the next patch version.
 Done when: no planned mark is left; `python3 scripts/check_pointers.py` passes in the marketplace.
 Commit:    one commit per repo.

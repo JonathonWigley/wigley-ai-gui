@@ -74,7 +74,7 @@ Decisions:
   today: the message when ready, else `The wigley-ai-gui app could not be started: <message>`. Exit 0 or 1 as
   today. The ready message after a restart that quit an app says the app restarted.
 - Update the module docstring: it names the restart and README § Restarting the app.
-- Bump `version` from 2.6.5 to 2.6.6 in both plugin manifests in this commit (marketplace `AGENTS.md` § Changing a
+- Bump `version` one patch past `origin/main`'s (2.6.6 at plan time, so 2.6.7) in both plugin manifests in this commit (marketplace `AGENTS.md` § Changing a
   plugin).
 GIVEN an app answers and records pid 4242 WHEN `restart_app` runs THEN `quit` gets 4242, `exited` is polled, and
   the recorded command spawns after `exited` returns True

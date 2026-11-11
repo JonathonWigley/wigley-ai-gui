@@ -45,7 +45,7 @@ Each command runs from the named repo root. `wigley:make` runs each one again be
 | install-app's graceful quit commands and its 15 s limit | gui: `sed -n 288,320p scripts/install-app.mts` and `grep -n "QUIT_TIMEOUT_MS =" scripts/install-app.mts` | osascript `quit` on macOS, `CloseMainWindow()` through PowerShell on Windows; `15_000` |
 | `start_app.py` reads `endpoint.json` into the `Endpoint` NamedTuple `(channel, command, cwd)` | marketplace: `grep -n "class Endpoint" -A4 plugins/wigley/scripts/forms/start_app.py` | three fields |
 | The relay does not start the app within 30 s of a channel drop | marketplace: `grep -n "30 s" plugins/wigley/scripts/forms/README.md` | the "Starting the app" bullet |
-| The plugin version before this plan's code commit | marketplace: `grep -n '"version"' plugins/wigley/.claude-plugin/plugin.json plugins/wigley/.codex-plugin/plugin.json` | `2.6.5` in both (the docs-ahead commit set it) |
+| The plugin version before this plan's code commit | marketplace: `grep -n '"version"' plugins/wigley/.claude-plugin/plugin.json plugins/wigley/.codex-plugin/plugin.json` | `2.6.6` in both (the docs-ahead series set it) |
 
 ## Docs written ahead
 
@@ -54,8 +54,8 @@ Each line marks the new behaviour "planned in `app-restart`, not built yet". Tas
 - wigley-ai-gui `AGENTS.md` § Running and testing: the "To put the running app on a new build" bullet, and the
   Contents line. Commit: see the wigley-ai-gui commit "Plan app restart: docs ahead and plan folder" on `main`.
 - wigley-ai-marketplace `plugins/wigley/scripts/forms/README.md`: the `pid` field in "Finding the app", the new
-  "Restarting the app" bullet in § The relay, the § Local commands line, and the Contents lines. The same commit
-  bumps the plugin to 2.6.5. Commit: the wigley-ai-marketplace commit "forms README: the planned app restart and the
+  "Restarting the app" bullet in § The relay, the § Local commands line, and the Contents lines. The series ends
+  on the bump to 2.6.6. Commit: the wigley-ai-marketplace commit "forms README: the planned app restart and the
   endpoint pid" on `main`.
 
 ## Mandatory Reads
@@ -134,7 +134,7 @@ wigley-ai-marketplace (task 02):
 
 - modify `plugins/wigley/scripts/forms/start_app.py`
 - modify `plugins/wigley/scripts/forms/tests/test_start_app.py`
-- modify `plugins/wigley/.claude-plugin/plugin.json`, `plugins/wigley/.codex-plugin/plugin.json` — version 2.6.6
+- modify `plugins/wigley/.claude-plugin/plugin.json`, `plugins/wigley/.codex-plugin/plugin.json` — the next patch version
 
 Shared names (both tasks use them; the JSON key is the contract):
 
