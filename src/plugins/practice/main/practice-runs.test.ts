@@ -76,6 +76,21 @@ const TWICE: Problem = {
   cases: [{ input: [2], expected: 4, visible: true }],
 };
 
+const TREE_CODEC: Problem = {
+  ...TWO_SUM,
+  slug: 'tree-codec',
+  title: 'Tree Codec',
+  signature: {
+    kind: 'codec',
+    className: 'Codec',
+    encode: 'serialize',
+    decode: 'deserialize',
+    type: 'TreeNode*',
+  },
+  compare: 'exact',
+  cases: [{ input: [1, null, 2], visible: true }],
+};
+
 const COMPILE_ERROR: JudgeResult = {
   verdict: 'compileError',
   passed: 0,
@@ -206,6 +221,26 @@ describe('createPracticeRuns', () => {
       expect(double.calls.filter((call) => !isReference(call))).toEqual([]);
     },
   );
+
+  it('run takes a codec custom case as its own answer, with no reference run', async () => {
+    const double = recordingJudge((call) =>
+      judged(call.cases, ['accepted', 'accepted']),
+    );
+    const { runs } = await setUp(TREE_CODEC, double.judge, '[[1,2]]');
+
+    await runs.run(TREE_CODEC.slug);
+
+    expect(double.calls.filter(isReference)).toEqual([]);
+    expect(
+      double.calls[0].cases.map((each) => ({
+        source: each.source,
+        expected: expectedAnswer(each),
+      })),
+    ).toEqual([
+      { source: 'example', expected: [1, null, 2] },
+      { source: 'custom', expected: [1, 2] },
+    ]);
+  });
 
   it('run with no custom cases judges the examples only', async () => {
     const double = recordingJudge((call) => judged(call.cases, ['accepted']));

@@ -339,6 +339,25 @@ describe('parseProblem', () => {
       field: 'cases[0].expected',
     },
     {
+      name: 'a cyclic input to a function returning a list',
+      json: validProblem({
+        signature: {
+          kind: 'function',
+          method: 'detectCycle',
+          params: [{ name: 'head', type: 'ListNode*' }],
+          returns: 'ListNode*',
+        },
+        cases: [
+          {
+            input: [{ values: [1, 2], pos: 0 }],
+            expected: [1, 2],
+            visible: true,
+          },
+        ],
+      }),
+      field: 'cases[0].input[0]',
+    },
+    {
       name: 'a cycle position past the list',
       json: withParamType('head', 'ListNode*', { values: [1, 2], pos: 2 }),
       field: 'cases[0].input[1]',

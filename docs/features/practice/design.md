@@ -21,8 +21,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   and progress records. No autocomplete, no language server, no other language.
 - Problems come in only through an agent: the user never writes a problem file by hand.
 - Progress is practical, with no gamification: no streak, no timer, no score, no Due section, no required queue.
-- The format follows LeetCode's: a `class Solution` method or a design class, Run and Submit, the Testcase and
-  Result console, and LeetCode's verdict names.
+- The format follows LeetCode's: a `class Solution` method, a design class or a codec class, Run and Submit, the
+  Testcase and Result console, and LeetCode's verdict names.
 
 ## The mode
 
@@ -44,7 +44,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - **Content, side by side:** the problem pane on the left at full height, with the tabs Description, Submissions,
   Notes and Solution; on the right the editor holding `solution.cpp` over the console with the tabs Testcase and
   Result. Alt+h/l move between the problem pane and the editor or console, and Alt+j/k between the editor and the
-  console. The interviewer pane sits to the right of the whole column, hidden until toggled. Every divider is a `Split`, its size
+  console. In a column too narrow for both sides the problem pane stacks over the editor, and Alt+j/k move through
+  all three. The interviewer pane sits to the right of the whole column, hidden until toggled. Every divider is a `Split`, its size
   kept in `uiState`.
 - **Notes tab:** a vim box over the problem's `notes.md`, autosaved.
 - **Solution tab:** shows `approach.md` and `reference.cpp`. Opening it asks to confirm first, because opening it
@@ -143,7 +144,7 @@ notices), kept so the plan is written from them. A decision here stands unless t
 - A compiler that cannot start is an error (`Could not run <compiler>: <reason>`), not a Compile Error: Run and Submit
   show the error in place of a verdict, and Submit records nothing.
 - **Run** runs the visible cases and the user's custom cases, and records nothing. A custom case's expected answer
-  comes from running `reference.cpp` on it, as LeetCode's Run does.
+  comes from running `reference.cpp` on it, as LeetCode's Run does; a codec custom case's answer is its own input.
 - **Submit** runs every case in order, stops at the first that fails, and records a submission.
 - **Verdicts:** Accepted, Wrong Answer, Time Limit Exceeded, Runtime Error (a non-zero exit or a sanitizer report),
   Compile Error. A sanitizer report is a Runtime Error even when the run also ran past the time limit, since writing the
@@ -158,7 +159,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   array form (`[1,2,null,3]`), `vector`s and nested `vector`s of these, `GraphNode*` as LeetCode's adjacency list
   (`[[2,4],[1,3],[2,4],[1,3]]`, entry `i` for the node valued `i + 1`) and `RandomNode*` as `[val, randomIndex]` pairs
   (`[[7,null],[13,0]]`). An input `ListNode*` may be `{"values": [...], "pos": k}`, its tail linking back to node `k`
-  (none for `-1`), for cycle problems; an answer is always a plain array. The import tool refuses a problem whose
+  (none for `-1`), for cycle problems, unless the function returns a list, whose answer could loop; an answer is
+  always a plain array, and one whose `next` pointers loop back is a Runtime Error. The import tool refuses a problem whose
   signature uses any other type. A tree's trailing nulls are trimmed as `problem.json` is read, and a tree with values
   past its last node is refused.
 

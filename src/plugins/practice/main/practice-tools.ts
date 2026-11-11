@@ -58,7 +58,7 @@ export const ADD_PRACTICE_PROBLEM_TOOL: ToolDefinition = {
       signature: {
         type: 'object',
         description:
-          'The C++ signature: a function signature or a design signature.',
+          'The C++ signature: a function, design or codec signature.',
       },
       cases: {
         type: 'array',

@@ -610,10 +610,31 @@ describe.skipIf(!clangOnPath)('createJudge with clang++', () => {
       stderr: '',
     },
     {
+      name: 'a random list answer sharing a node with the input',
+      problem: COPY_RANDOM_LIST,
+      code: 'class Solution {\npublic:\n    Node* copyRandomList(Node* head) { return head; }\n};\n',
+      verdict: 'runtimeError',
+      stderr: 'the answer shares node 7 with the input: return a deep copy',
+    },
+    {
+      name: 'a list answer whose next pointers loop',
+      problem: MERGE_LISTS,
+      code: 'class Solution {\npublic:\n    ListNode* mergeKLists(vector<ListNode*>& lists) {\n        ListNode* head = new ListNode(1);\n        head->next = head;\n        return head;\n    }\n};\n',
+      verdict: 'runtimeError',
+      stderr: "the returned list's next pointers loop back",
+    },
+    {
       name: 'a codec round trip',
       problem: TREE_CODEC,
       code: TREE_CODEC_SOLUTION,
       verdict: 'accepted',
+      stderr: '',
+    },
+    {
+      name: 'a codec whose decoder reads the encoder instance',
+      problem: TREE_CODEC,
+      code: 'class Codec {\npublic:\n    string serialize(TreeNode* root) { kept = root; return ""; }\n    TreeNode* deserialize(string data) { return kept; }\nprivate:\n    TreeNode* kept = nullptr;\n};\n',
+      verdict: 'wrongAnswer',
       stderr: '',
     },
   ])(

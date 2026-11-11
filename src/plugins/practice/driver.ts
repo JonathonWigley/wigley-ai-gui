@@ -578,8 +578,12 @@ void to_json(std::string& out, const std::string& value) {
 }
 
 void to_json(std::string& out, ListNode* value) {
+    std::unordered_set<ListNode*> seen;
     out += '[';
     for (ListNode* node = value; node != nullptr; node = node->next) {
+        if (!seen.insert(node).second) {
+            throw std::runtime_error("the returned list's next pointers loop back");
+        }
         if (node != value) {
             out += ',';
         }

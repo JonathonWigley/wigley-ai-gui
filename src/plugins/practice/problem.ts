@@ -289,7 +289,14 @@ export function parseCustomCases(
     const path = indexPath('', index);
     switch (signature.kind) {
       case 'function':
-        return { input: readArgs(item, signature.params, path) };
+        return {
+          input: readArgs(
+            item,
+            signature.params,
+            path,
+            allowsCyclicInput(signature),
+          ),
+        };
       case 'design': {
         const object = readObject(item, path, CUSTOM_DESIGN_KEYS);
         const calls = readDesignCalls(object, signature, path);
@@ -512,6 +519,7 @@ function readFunctionCase(
     requiredField(object, 'input', path),
     signature.params,
     keyPath(path, 'input'),
+    allowsCyclicInput(signature),
   );
   const expected = readValue(
     requiredField(object, 'expected', path),
@@ -612,13 +620,32 @@ function readDesignCalls(
     }
     const params = method === undefined ? signature.constructor : method.params;
     ops.push(op);
-    args.push(readArgs(argItems[index], params, indexPath(argsPath, index)));
+    args.push(
+      readArgs(argItems[index], params, indexPath(argsPath, index), true),
+    );
     returns.push(method === undefined ? 'void' : method.returns);
   });
   return { ops, args, returns };
 }
 
-function readArgs(value: unknown, params: Param[], path: string): JsonValue[] {
+/**
+ * False for a function that returns a list: its answer could be a node on an
+ * input's cycle (Linked List Cycle II), which no answer form can write.
+ */
+function allowsCyclicInput(signature: FunctionSignature): boolean {
+  let type: ValueType | null = signature.returns;
+  while (type !== null && type !== 'ListNode*') {
+    type = vectorElement(type);
+  }
+  return type === null;
+}
+
+function readArgs(
+  value: unknown,
+  params: Param[],
+  path: string,
+  allowsCycle: boolean,
+): JsonValue[] {
   const values = readArray(value, path);
   if (values.length !== params.length) {
     fail(
@@ -626,9 +653,16 @@ function readArgs(value: unknown, params: Param[], path: string): JsonValue[] {
       `expected ${params.length} values (one per param), got ${values.length}`,
     );
   }
-  return values.map((item, index) =>
-    readValue(item, params[index].type, indexPath(path, index), true),
-  );
+  return values.map((item, index) => {
+    const itemPath = indexPath(path, index);
+    if (!allowsCycle && isCyclicList(item)) {
+      fail(
+        itemPath,
+        'a list written {values, pos} is refused for a function that returns a list: its answer could loop',
+      );
+    }
+    return readValue(item, params[index].type, itemPath, allowsCycle);
+  });
 }
 
 function readVisible(object: JsonObject, path: string): boolean {

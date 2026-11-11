@@ -126,16 +126,26 @@ const TAB_TITLES: Record<ProblemTab | ConsoleTab, string> = {
   result: 'Result',
 };
 
+type PaneMoves = Record<
+  WorkspacePane,
+  Partial<Record<PaneDirection, WorkspacePane>>
+>;
+
 // Where Alt+hjkl moves from each pane: the problem pane on the left, the
 // editor over the console on the right. A move with no entry leaves the
 // workspace.
-const PANE_MOVES: Record<
-  WorkspacePane,
-  Partial<Record<PaneDirection, WorkspacePane>>
-> = {
+export const PANE_MOVES: PaneMoves = {
   problem: { right: 'editor' },
   editor: { left: 'problem', down: 'console' },
   console: { left: 'problem', up: 'editor' },
+};
+
+// The same moves while the problem | code split stacks, in a narrow column:
+// the problem pane over the editor over the console.
+export const STACKED_PANE_MOVES: PaneMoves = {
+  problem: { down: 'editor' },
+  editor: { up: 'problem', down: 'console' },
+  console: { up: 'editor' },
 };
 
 // The two boxes: the notes on the Notes tab, the custom cases on Testcase.
@@ -413,7 +423,9 @@ export function createProblemWorkspace(
 
   const focusTarget: FocusTarget = {
     move(direction) {
-      const next = PANE_MOVES[pane][direction];
+      const isStacked = outer.element.classList.contains('is-stacked');
+      const moves = isStacked ? STACKED_PANE_MOVES : PANE_MOVES;
+      const next = moves[pane][direction];
       if (next === undefined) {
         return false;
       }

@@ -39,7 +39,7 @@ import type {
 
 // A pane's root, appended to `parent`. The `list` root fills the side bar's `div.practice-list`, a grid of one
 // `minmax(0, 1fr)` cell, and lays out its own children; `default` lays it out through its `practice-pane` class. The
-// `problemPane`, `editorPane` and `consolePane` roots each fill one of the column's stacked panes the same way.
+// `problemPane`, `editorPane` and `consolePane` roots each fill one of the column's three panes the same way.
 export interface PracticePane {
   element: HTMLElement;
 }
@@ -196,7 +196,7 @@ export interface ConfirmBodyKit extends PracticeKit {
 // A user layout defines only the parts it changes; `default` draws the rest. The `list` pane is drawn into the side
 // bar once per layout set; `listHeader`, the rows and `empty` on every render, one call per row; `noProblem` into the
 // problem column while no problem is open. The `problemPane`, `editorPane` and `consolePane` are drawn into the
-// column's three stacked panes once per layout set; the shown tab's part into its pane's `body` when what it shows
+// column's three panes once per layout set; the shown tab's part into its pane's `body` when what it shows
 // changes, one `submissionRow` per submission (or `empty` with `noSubmissions`), and `caseResult` into the
 // `resultTab`'s `failingCase`. `confirmBody` draws the Solution tab's confirm. `askBox` draws into the interviewer pane
 // each time the open attempt shows with no interviewer, and again on each layout set; `importBox` draws the import
