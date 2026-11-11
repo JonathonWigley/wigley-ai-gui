@@ -10,7 +10,7 @@ import type {
   Verdict,
 } from '../contract';
 import { stubSource } from '../driver';
-import { type FunctionCase, problemJson } from '../problem';
+import { expectedAnswer, type FunctionCase, problemJson } from '../problem';
 import type { JudgeCase, JudgeOptions } from './judge';
 import type { LastResult } from './practice-runs';
 import {
@@ -43,8 +43,8 @@ function caseResult(
     index,
     source: testCase.source,
     input: (testCase as FunctionCase).input,
-    expected: testCase.expected,
-    output: verdict === 'wrongAnswer' ? [9, 9] : testCase.expected,
+    expected: expectedAnswer(testCase),
+    output: verdict === 'wrongAnswer' ? [9, 9] : expectedAnswer(testCase),
     stdout: '',
     stderr,
     verdict,

@@ -18,7 +18,7 @@ import {
 } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { practiceManifest } from '../manifest';
-import type { Problem } from '../problem';
+import { expectedAnswer, type Problem } from '../problem';
 import { createJudge, type JudgeCase } from './judge';
 import { PRACTICE_FOLDER, TWO_SUM } from './practice-fixtures.test-support';
 
@@ -512,7 +512,7 @@ describe.skipIf(!clangOnPath)('createJudge with clang++', () => {
     const result = await judgeReal(ECHO, ECHO_SOLUTION);
 
     expect(result.compileOutput).toBeNull();
-    expect(result.cases[0].output).toEqual(ECHO.cases[0].expected);
+    expect(result.cases[0].output).toEqual(expectedAnswer(ECHO.cases[0]));
     expect(result.verdict).toBe('accepted');
   }, 60_000);
 
@@ -572,4 +572,301 @@ describe.skipIf(!clangOnPath)('createJudge with clang++', () => {
     },
     60_000,
   );
+
+  it.each([
+    {
+      name: 'a cyclic list input',
+      problem: HAS_CYCLE,
+      code: HAS_CYCLE_SOLUTION,
+      verdict: 'accepted',
+      stderr: '',
+    },
+    {
+      name: 'a vector of lists',
+      problem: MERGE_LISTS,
+      code: MERGE_LISTS_SOLUTION,
+      verdict: 'accepted',
+      stderr: '',
+    },
+    {
+      name: 'a graph deep copy',
+      problem: CLONE_GRAPH,
+      code: cloneGraph('copies[node] = new Node(node->val);'),
+      verdict: 'accepted',
+      stderr: '',
+    },
+    {
+      name: 'a graph answer sharing a node with the input',
+      problem: CLONE_GRAPH,
+      code: 'class Solution {\npublic:\n    Node* cloneGraph(Node* node) { return node; }\n};\n',
+      verdict: 'runtimeError',
+      stderr: 'the answer shares node 1 with the input: return a deep copy',
+    },
+    {
+      name: 'a random list deep copy',
+      problem: COPY_RANDOM_LIST,
+      code: COPY_RANDOM_LIST_SOLUTION,
+      verdict: 'accepted',
+      stderr: '',
+    },
+    {
+      name: 'a codec round trip',
+      problem: TREE_CODEC,
+      code: TREE_CODEC_SOLUTION,
+      verdict: 'accepted',
+      stderr: '',
+    },
+  ])(
+    'judges $name',
+    async (row) => {
+      const result = await judgeReal(row.problem, row.code);
+
+      expect(result.compileOutput).toBeNull();
+      expect(result.verdict, result.cases[0]?.stderr).toBe(row.verdict);
+      expect(result.cases[0].stderr).toContain(row.stderr);
+      if (row.verdict === 'accepted') {
+        expect(result.cases[0].output).toEqual(
+          expectedAnswer(row.problem.cases[0]),
+        );
+      }
+    },
+    60_000,
+  );
 });
+
+const HAS_CYCLE: Problem = {
+  slug: 'linked-list-cycle',
+  title: 'Linked List Cycle',
+  difficulty: 'easy',
+  tags: [],
+  lists: [],
+  signature: {
+    kind: 'function',
+    method: 'hasCycle',
+    params: [{ name: 'head', type: 'ListNode*' }],
+    returns: 'bool',
+  },
+  compare: 'exact',
+  cases: [
+    {
+      input: [{ values: [3, 2, 0, -4], pos: 1 }],
+      expected: true,
+      visible: true,
+    },
+  ],
+};
+
+const HAS_CYCLE_SOLUTION = `class Solution {
+public:
+    bool hasCycle(ListNode* head) {
+        ListNode* slow = head;
+        ListNode* fast = head;
+        while (fast != nullptr && fast->next != nullptr) {
+            slow = slow->next;
+            fast = fast->next->next;
+            if (slow == fast) return true;
+        }
+        return false;
+    }
+};
+`;
+
+const MERGE_LISTS: Problem = {
+  slug: 'merge-k-sorted-lists',
+  title: 'Merge k Sorted Lists',
+  difficulty: 'hard',
+  tags: [],
+  lists: [],
+  signature: {
+    kind: 'function',
+    method: 'mergeKLists',
+    params: [{ name: 'lists', type: 'vector<ListNode*>' }],
+    returns: 'ListNode*',
+  },
+  compare: 'exact',
+  cases: [
+    {
+      input: [
+        [
+          [1, 4, 5],
+          [1, 3, 4],
+          [2, 6],
+        ],
+      ],
+      expected: [1, 1, 2, 3, 4, 4, 5, 6],
+      visible: true,
+    },
+  ],
+};
+
+const MERGE_LISTS_SOLUTION = `class Solution {
+public:
+    ListNode* mergeKLists(vector<ListNode*>& lists) {
+        vector<int> values;
+        for (ListNode* list : lists) {
+            for (ListNode* node = list; node != nullptr; node = node->next) values.push_back(node->val);
+        }
+        sort(values.begin(), values.end());
+        ListNode head;
+        ListNode* tail = &head;
+        for (int value : values) {
+            tail->next = new ListNode(value);
+            tail = tail->next;
+        }
+        return head.next;
+    }
+};
+`;
+
+const CLONE_GRAPH: Problem = {
+  slug: 'clone-graph',
+  title: 'Clone Graph',
+  difficulty: 'medium',
+  tags: [],
+  lists: [],
+  signature: {
+    kind: 'function',
+    method: 'cloneGraph',
+    params: [{ name: 'node', type: 'GraphNode*' }],
+    returns: 'GraphNode*',
+  },
+  compare: 'exact',
+  cases: [
+    {
+      input: [
+        [
+          [2, 4],
+          [1, 3],
+          [2, 4],
+          [1, 3],
+        ],
+      ],
+      expected: [
+        [2, 4],
+        [1, 3],
+        [2, 4],
+        [1, 3],
+      ],
+      visible: true,
+    },
+  ],
+};
+
+function cloneGraph(copyLine: string): string {
+  return `class Solution {
+public:
+    Node* cloneGraph(Node* start) {
+        if (start == nullptr) return nullptr;
+        unordered_map<Node*, Node*> copies;
+        vector<Node*> pending = {start};
+        Node* node = start;
+        ${copyLine}
+        while (!pending.empty()) {
+            Node* current = pending.back();
+            pending.pop_back();
+            for (Node* neighbour : current->neighbors) {
+                if (copies.count(neighbour) == 0) {
+                    node = neighbour;
+                    ${copyLine}
+                    pending.push_back(neighbour);
+                }
+                copies[current]->neighbors.push_back(copies[neighbour]);
+            }
+        }
+        return copies[start];
+    }
+};
+`;
+}
+
+const COPY_RANDOM_LIST: Problem = {
+  slug: 'copy-list-with-random-pointer',
+  title: 'Copy List with Random Pointer',
+  difficulty: 'medium',
+  tags: [],
+  lists: [],
+  signature: {
+    kind: 'function',
+    method: 'copyRandomList',
+    params: [{ name: 'head', type: 'RandomNode*' }],
+    returns: 'RandomNode*',
+  },
+  compare: 'exact',
+  cases: [
+    {
+      input: [
+        [
+          [7, null],
+          [13, 0],
+          [11, 4],
+          [10, 2],
+          [1, 0],
+        ],
+      ],
+      expected: [
+        [7, null],
+        [13, 0],
+        [11, 4],
+        [10, 2],
+        [1, 0],
+      ],
+      visible: true,
+    },
+  ],
+};
+
+const COPY_RANDOM_LIST_SOLUTION = `class Solution {
+public:
+    Node* copyRandomList(Node* head) {
+        unordered_map<Node*, Node*> copies;
+        for (Node* node = head; node != nullptr; node = node->next) copies[node] = new Node(node->val);
+        for (Node* node = head; node != nullptr; node = node->next) {
+            copies[node]->next = node->next == nullptr ? nullptr : copies[node->next];
+            copies[node]->random = node->random == nullptr ? nullptr : copies[node->random];
+        }
+        return head == nullptr ? nullptr : copies[head];
+    }
+};
+`;
+
+const TREE_CODEC: Problem = {
+  slug: 'serialize-and-deserialize-binary-tree',
+  title: 'Serialize and Deserialize Binary Tree',
+  difficulty: 'hard',
+  tags: [],
+  lists: [],
+  signature: {
+    kind: 'codec',
+    className: 'Codec',
+    encode: 'serialize',
+    decode: 'deserialize',
+    type: 'TreeNode*',
+  },
+  compare: 'exact',
+  cases: [{ input: [1, 2, 3, null, null, 4, 5], visible: true }],
+};
+
+const TREE_CODEC_SOLUTION = `class Codec {
+public:
+    string serialize(TreeNode* root) {
+        if (root == nullptr) return "#";
+        return to_string(root->val) + " " + serialize(root->left) + " " + serialize(root->right);
+    }
+
+    TreeNode* deserialize(string data) {
+        istringstream in(data);
+        return read(in);
+    }
+
+private:
+    TreeNode* read(istringstream& in) {
+        string token;
+        in >> token;
+        if (token == "#") return nullptr;
+        TreeNode* node = new TreeNode(stoi(token));
+        node->left = read(in);
+        node->right = read(in);
+        return node;
+    }
+};
+`;

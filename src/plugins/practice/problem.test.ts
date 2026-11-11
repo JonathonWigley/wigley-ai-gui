@@ -81,6 +81,22 @@ function withParamType(name: string, type: string, value: unknown): Json {
   });
 }
 
+function validCodec(overrides: Json = {}): Json {
+  return {
+    title: 'Encode and Decode Strings',
+    difficulty: 'medium',
+    signature: {
+      kind: 'codec',
+      className: 'Codec',
+      encode: 'encode',
+      decode: 'decode',
+      type: 'vector<string>',
+    },
+    cases: [{ input: ['lint', 'code'], visible: true }],
+    ...overrides,
+  };
+}
+
 function caughtField(run: () => unknown): string {
   try {
     run();
@@ -303,6 +319,78 @@ describe('parseProblem', () => {
       json: validDesign({ compare: 'anyOrder' }),
       field: 'compare',
     },
+    {
+      name: 'a cyclic list as an answer',
+      json: validProblem({
+        signature: {
+          kind: 'function',
+          method: 'f',
+          params: [{ name: 'head', type: 'ListNode*' }],
+          returns: 'ListNode*',
+        },
+        cases: [
+          {
+            input: [[1]],
+            expected: { values: [1], pos: 0 },
+            visible: true,
+          },
+        ],
+      }),
+      field: 'cases[0].expected',
+    },
+    {
+      name: 'a cycle position past the list',
+      json: withParamType('head', 'ListNode*', { values: [1, 2], pos: 2 }),
+      field: 'cases[0].input[1]',
+    },
+    {
+      name: 'a graph neighbour past the last node',
+      json: withParamType('node', 'GraphNode*', [[2], [3]]),
+      field: 'cases[0].input[1]',
+    },
+    {
+      name: 'a random index past the last node',
+      json: withParamType('head', 'RandomNode*', [[7, 1]]),
+      field: 'cases[0].input[1]',
+    },
+    {
+      name: 'both node types a solution spells Node',
+      json: validProblem({
+        signature: {
+          kind: 'function',
+          method: 'f',
+          params: [{ name: 'node', type: 'GraphNode*' }],
+          returns: 'RandomNode*',
+        },
+        cases: [{ input: [[]], expected: [], visible: true }],
+      }),
+      field: 'signature',
+    },
+    {
+      name: 'a codec compared out of order',
+      json: validCodec({ compare: 'anyOrder' }),
+      field: 'compare',
+    },
+    {
+      name: 'a codec case with an expected answer',
+      json: validCodec({
+        cases: [{ input: ['a'], expected: ['a'], visible: true }],
+      }),
+      field: 'cases[0].expected',
+    },
+    {
+      name: 'a codec whose encode and decode share a name',
+      json: validCodec({
+        signature: {
+          kind: 'codec',
+          className: 'Codec',
+          encode: 'code',
+          decode: 'code',
+          type: 'vector<string>',
+        },
+      }),
+      field: 'signature',
+    },
   ])('refuses $name, naming $field', ({ json, field }) => {
     expect(caughtField(() => parseProblem(json, 'two-sum'))).toBe(field);
   });
@@ -350,6 +438,43 @@ describe('parseProblem', () => {
     });
   });
 
+  it.each([
+    {
+      name: 'a cyclic list',
+      type: 'ListNode*',
+      value: { values: [3, 2, 0, -4], pos: 1 },
+    },
+    {
+      name: 'a list with no cycle',
+      type: 'ListNode*',
+      value: { values: [1], pos: -1 },
+    },
+    { name: 'a graph', type: 'GraphNode*', value: [[2], [1]] },
+    {
+      name: 'a random list',
+      type: 'RandomNode*',
+      value: [
+        [7, null],
+        [13, 0],
+      ],
+    },
+  ])('accepts $name as an input', ({ type, value }) => {
+    const problem = parseProblem(withParamType('x', type, value), 'nodes');
+
+    expect(problem.cases[0]).toMatchObject({ input: [1, value] });
+  });
+
+  it('reads each tree of a vector without its trailing nulls', () => {
+    const json = withParamType('roots', 'vector<TreeNode*>', [
+      [1, null, null],
+      [],
+    ]);
+
+    const problem = parseProblem(json, 'forest');
+
+    expect(problem.cases[0]).toMatchObject({ input: [1, [[1], []]] });
+  });
+
   it('reads a nested type spelling as its canonical form', () => {
     const json = validProblem({
       signature: {
@@ -381,7 +506,12 @@ describe('parseValueType', () => {
     { text: 'void', type: 'void' },
     { text: 'unsigned', type: null },
     { text: 'pair<int,int>', type: null },
-    { text: 'vector<ListNode*>', type: null },
+    { text: 'vector<ListNode*>', type: 'vector<ListNode*>' },
+    { text: 'vector<TreeNode *>', type: 'vector<TreeNode*>' },
+    { text: 'GraphNode*', type: 'GraphNode*' },
+    { text: 'RandomNode*', type: 'RandomNode*' },
+    { text: 'vector<GraphNode*>', type: null },
+    { text: 'Node*', type: null },
     { text: 'vector<int', type: null },
     { text: 'int*', type: null },
   ])('reads "$text" as $type', ({ text, type }) => {
@@ -408,6 +538,12 @@ describe('parseCustomCases', () => {
       signature: counter,
       cases: [{ ops: ['Counter', 'get'], args: [[1], []] }],
     },
+    {
+      name: 'a codec value',
+      text: '[["a","b"]]',
+      signature: parseProblem(validCodec(), 'codec').signature,
+      cases: [{ value: ['a', 'b'] }],
+    },
   ])('reads $name', ({ text, signature, cases }) => {
     expect(parseCustomCases(text, signature)).toEqual(cases);
   });
@@ -424,6 +560,7 @@ describe('problemJson', () => {
   it.each([
     { name: 'a function problem', json: validProblem({ compare: 'anyOrder' }) },
     { name: 'a design problem', json: validDesign({ compare: 'float' }) },
+    { name: 'a codec problem', json: validCodec() },
   ])('round-trips $name', ({ json }) => {
     const problem = parseProblem(json, 'some-slug');
 

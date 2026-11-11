@@ -6,12 +6,7 @@
 import type { CommandKey } from '../../contracts/commands';
 import type { ChannelShape } from '../../contracts/plugin';
 import type { SlotKey } from '../../contracts/state';
-import type {
-  DesignSignature,
-  Difficulty,
-  FunctionSignature,
-  JsonValue,
-} from './problem';
+import type { Difficulty, JsonValue, Signature } from './problem';
 
 // LeetCode's verdicts: Accepted, Wrong Answer, Time Limit Exceeded, Runtime
 // Error and Compile Error.
@@ -107,7 +102,7 @@ export interface SubmissionRecord {
 export interface OpenedProblem {
   summary: ProblemSummary;
   statement: string;
-  signature: FunctionSignature | DesignSignature;
+  signature: Signature;
   code: string;
   notes: string;
   customCases: string;

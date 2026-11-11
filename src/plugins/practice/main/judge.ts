@@ -9,10 +9,15 @@ import { answersMatch } from '../compare';
 import { mapCompileErrors } from '../compile-errors';
 import type { CaseResult, JudgeResult, Verdict } from '../contract';
 import { driverSource, preludeSource } from '../driver';
-import type { DesignCase, FunctionCase, JsonValue, Problem } from '../problem';
+import {
+  type Case,
+  expectedAnswer,
+  type JsonValue,
+  type Problem,
+} from '../problem';
 
 // A case with where it came from: a visible example, the user's own, or hidden.
-export type JudgeCase = (FunctionCase | DesignCase) & {
+export type JudgeCase = Case & {
   source: 'example' | 'custom' | 'hidden';
 };
 
@@ -198,8 +203,8 @@ async function compile(
   return null;
 }
 
-// What the driver reads for one case: a function case's input array, or a
-// design case's `[ops, args]`.
+// What the driver reads for one case: a function case's input array, a codec
+// case's value, or a design case's `[ops, args]`.
 function driverInput(judgeCase: JudgeCase): JsonValue {
   return 'input' in judgeCase
     ? judgeCase.input
@@ -231,7 +236,7 @@ function caseResult(
     verdict = 'runtimeError';
     stderr = stderr === '' || stderr.endsWith('\n') ? stderr : `${stderr}\n`;
     stderr += NO_ANSWER;
-  } else if (answersMatch(judgeCase.expected, output, problem.compare)) {
+  } else if (answersMatch(expectedAnswer(judgeCase), output, problem.compare)) {
     verdict = 'accepted';
   } else {
     verdict = 'wrongAnswer';
@@ -243,7 +248,7 @@ function caseResult(
       'input' in judgeCase
         ? judgeCase.input
         : { ops: judgeCase.ops, args: judgeCase.args },
-    expected: judgeCase.expected,
+    expected: expectedAnswer(judgeCase),
     output: output ?? null,
     stdout: cut(run.stdout),
     stderr,

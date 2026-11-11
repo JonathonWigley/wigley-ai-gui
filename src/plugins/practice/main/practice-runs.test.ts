@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { CaseResult, JudgeResult, Verdict } from '../contract';
-import type { JsonValue, Problem } from '../problem';
+import { expectedAnswer, type JsonValue, type Problem } from '../problem';
 import type { Judge, JudgeCase, JudgeOptions } from './judge';
 import { createPracticeRuns } from './practice-runs';
 import {
@@ -43,7 +43,7 @@ function judged(
     index,
     source: cases[index].source,
     input: null,
-    expected: cases[index].expected,
+    expected: expectedAnswer(cases[index]),
     output: outputs[index] ?? null,
     stdout: '',
     stderr: '',
@@ -143,7 +143,7 @@ describe('createPracticeRuns', () => {
       expect(reference.codePath).toBe(
         `${PRACTICE_FOLDER}/problems/${row.problem.slug}/reference.cpp`,
       );
-      expect(reference.cases.map((each) => each.expected)).toEqual([
+      expect(reference.cases.map((each) => expectedAnswer(each))).toEqual([
         row.placeholder,
       ]);
       expect(solution.codePath).toBe(
@@ -153,10 +153,10 @@ describe('createPracticeRuns', () => {
       expect(
         solution.cases.map((each) => ({
           source: each.source,
-          expected: each.expected,
+          expected: expectedAnswer(each),
         })),
       ).toEqual([
-        { source: 'example', expected: row.problem.cases[0].expected },
+        { source: 'example', expected: expectedAnswer(row.problem.cases[0]) },
         { source: 'custom', expected: row.referenceOutput },
       ]);
       expect(runs.lastResult(row.problem.slug)?.kind).toBe('run');

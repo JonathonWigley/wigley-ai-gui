@@ -10,13 +10,14 @@ export type ScalarType =
   | 'char'
   | 'string';
 
+/** A pointer to one of the prelude's node structs. */
+export type NodeType = 'ListNode*' | 'TreeNode*' | 'GraphNode*' | 'RandomNode*';
+
+/** The node types a solution spells `Node*`: the driver aliases the one a problem uses. */
+export type AliasedNodeType = 'GraphNode*' | 'RandomNode*';
+
 /** A supported C++ type, always in its canonical spelling (see `parseValueType`). */
-export type ValueType =
-  | ScalarType
-  | 'ListNode*'
-  | 'TreeNode*'
-  | 'void'
-  | `vector<${string}>`;
+export type ValueType = ScalarType | NodeType | 'void' | `vector<${string}>`;
 
 export interface Param {
   name: string;
@@ -36,6 +37,17 @@ export interface DesignSignature {
   constructor: Param[];
   methods: { name: string; params: Param[]; returns: ValueType }[];
 }
+
+/** A class whose `decode(encode(x))` must give back `x`, with the encoded value a string. */
+export interface CodecSignature {
+  kind: 'codec';
+  className: string;
+  encode: string;
+  decode: string;
+  type: ValueType;
+}
+
+export type Signature = FunctionSignature | DesignSignature | CodecSignature;
 
 export type JsonValue =
   | null
@@ -58,20 +70,34 @@ export interface DesignCase {
   visible: boolean;
 }
 
+/** A codec case's answer is its own `input`: the value must come back unchanged. */
+export interface CodecCase {
+  input: JsonValue;
+  visible: boolean;
+}
+
+export type Case = FunctionCase | DesignCase | CodecCase;
+
+/** The answer a case expects: a codec case's is its own input. */
+export function expectedAnswer(testCase: Case): JsonValue {
+  return 'expected' in testCase ? testCase.expected : testCase.input;
+}
+
 export interface Problem {
   slug: string;
   title: string;
   difficulty: Difficulty;
   tags: string[];
   lists: string[];
-  signature: FunctionSignature | DesignSignature;
+  signature: Signature;
   compare: CompareMode;
-  cases: (FunctionCase | DesignCase)[];
+  cases: Case[];
 }
 
 export type CustomInput =
   | { input: JsonValue[] }
-  | { ops: string[]; args: JsonValue[][] };
+  | { ops: string[]; args: JsonValue[][] }
+  | { value: JsonValue };
 
 export class ProblemError extends Error {
   readonly field: string;
@@ -114,11 +140,25 @@ const ROOT_KEYS = [
 ];
 const FUNCTION_SIGNATURE_KEYS = ['kind', 'method', 'params', 'returns'];
 const DESIGN_SIGNATURE_KEYS = ['kind', 'className', 'constructor', 'methods'];
+const CODEC_SIGNATURE_KEYS = ['kind', 'className', 'encode', 'decode', 'type'];
 const PARAM_KEYS = ['name', 'type'];
 const METHOD_KEYS = ['name', 'params', 'returns'];
 const FUNCTION_CASE_KEYS = ['input', 'expected', 'visible'];
 const DESIGN_CASE_KEYS = ['ops', 'args', 'expected', 'visible'];
+const CODEC_CASE_KEYS = ['input', 'visible'];
 const CUSTOM_DESIGN_KEYS = ['ops', 'args'];
+const CYCLIC_LIST_KEYS = ['values', 'pos'];
+const NODE_TYPES: readonly NodeType[] = [
+  'ListNode*',
+  'TreeNode*',
+  'GraphNode*',
+  'RandomNode*',
+];
+const VECTOR_NODE_TYPES: readonly NodeType[] = ['ListNode*', 'TreeNode*'];
+const ALIASED_NODE_TYPES: readonly AliasedNodeType[] = [
+  'GraphNode*',
+  'RandomNode*',
+];
 
 type JsonObject = Record<string, unknown>;
 type Method = DesignSignature['methods'][number];
@@ -147,6 +187,18 @@ export function parseProblem(json: unknown, slug: string): Problem {
   if (signature.kind === 'design' && isOrderFree) {
     fail('compare', `${compare} applies to a function problem only`);
   }
+  if (signature.kind === 'codec' && compare !== 'exact') {
+    fail('compare', 'a codec problem compares exactly');
+  }
+  const aliased = ALIASED_NODE_TYPES.filter((type) =>
+    signatureTypes(signature).includes(type),
+  );
+  if (aliased.length > 1) {
+    fail(
+      'signature',
+      `uses both ${aliased.join(' and ')}; a solution spells each Node*, so a problem uses one`,
+    );
+  }
   const cases = readCases(requiredField(root, 'cases', ''), signature);
   return {
     slug,
@@ -168,21 +220,47 @@ export function parseValueType(text: string): ValueType | null {
     .replace(/\s+\*/g, '*')
     .replace(/\blong\s+long\b/g, 'long long')
     .replace(/\bstd::(string|vector)\b/g, '$1');
-  if (
-    spelled === 'void' ||
-    spelled === 'ListNode*' ||
-    spelled === 'TreeNode*'
-  ) {
+  if (spelled === 'void' || isNodeType(spelled)) {
     return spelled;
   }
   let element = spelled;
   while (element.startsWith('vector<') && element.endsWith('>')) {
     element = element.slice('vector<'.length, -1);
   }
-  if (!isScalarType(element)) {
-    return null;
+  if (element === spelled) {
+    return isScalarType(element) ? element : null;
   }
-  return element === spelled ? element : (spelled as `vector<${string}>`);
+  const isVectorElement =
+    isScalarType(element) ||
+    (VECTOR_NODE_TYPES as readonly string[]).includes(element);
+  return isVectorElement ? (spelled as `vector<${string}>`) : null;
+}
+
+/** The node type a problem's solution spells `Node*`, or null when it uses none. */
+export function aliasedNodeType(signature: Signature): AliasedNodeType | null {
+  const types = signatureTypes(signature);
+  return ALIASED_NODE_TYPES.find((type) => types.includes(type)) ?? null;
+}
+
+/** Every type a signature names: params, returns, and a codec's value type. */
+function signatureTypes(signature: Signature): ValueType[] {
+  switch (signature.kind) {
+    case 'function':
+      return [
+        ...signature.params.map((param) => param.type),
+        signature.returns,
+      ];
+    case 'design':
+      return [
+        ...signature.constructor.map((param) => param.type),
+        ...signature.methods.flatMap((method) => [
+          ...method.params.map((param) => param.type),
+          method.returns,
+        ]),
+      ];
+    case 'codec':
+      return [signature.type];
+  }
 }
 
 export function vectorElement(type: ValueType): ValueType | null {
@@ -195,7 +273,7 @@ export function vectorElement(type: ValueType): ValueType | null {
 /** Reads the Testcase tab's text: a JSON array of inputs, without expected answers. */
 export function parseCustomCases(
   text: string,
-  signature: FunctionSignature | DesignSignature,
+  signature: Signature,
 ): CustomInput[] {
   if (text.trim() === '') {
     return [];
@@ -209,21 +287,27 @@ export function parseCustomCases(
   const items = readArray(json, '');
   return items.map((item, index): CustomInput => {
     const path = indexPath('', index);
-    if (signature.kind === 'function') {
-      return { input: readArgs(item, signature.params, path) };
+    switch (signature.kind) {
+      case 'function':
+        return { input: readArgs(item, signature.params, path) };
+      case 'design': {
+        const object = readObject(item, path, CUSTOM_DESIGN_KEYS);
+        const calls = readDesignCalls(object, signature, path);
+        return { ops: calls.ops, args: calls.args };
+      }
+      case 'codec':
+        return { value: readValue(item, signature.type, path, false) };
     }
-    const object = readObject(item, path, CUSTOM_DESIGN_KEYS);
-    const calls = readDesignCalls(object, signature, path);
-    return { ops: calls.ops, args: calls.args };
   });
 }
 
 /**
- * A custom case with `expected` read as `problem.json` reads a case's answer;
- * throws a `ProblemError` naming `expected` when it does not fit the signature.
+ * A custom function or design case with `expected` read as `problem.json`
+ * reads a case's answer; throws a `ProblemError` naming `expected` when it does
+ * not fit the signature.
  */
 export function answeredCase(
-  input: CustomInput,
+  input: Exclude<CustomInput, { value: JsonValue }>,
   expected: unknown,
   signature: FunctionSignature | DesignSignature,
 ): FunctionCase | DesignCase {
@@ -247,16 +331,17 @@ export function problemJson(problem: Problem): string {
   return `${JSON.stringify(file, null, 2)}\n`;
 }
 
-function readSignature(
-  value: unknown,
-  path: string,
-): FunctionSignature | DesignSignature {
+function readSignature(value: unknown, path: string): Signature {
   const object = asObject(value, path);
   const kind = readChoice(
     requiredField(object, 'kind', path),
     keyPath(path, 'kind'),
-    ['function', 'design'] as const,
+    ['function', 'design', 'codec'] as const,
   );
+  if (kind === 'codec') {
+    refuseUnknownKeys(object, path, CODEC_SIGNATURE_KEYS);
+    return readCodecSignature(object, path);
+  }
   if (kind === 'function') {
     refuseUnknownKeys(object, path, FUNCTION_SIGNATURE_KEYS);
     return {
@@ -292,6 +377,35 @@ function readSignature(
       requiredField(object, 'methods', path),
       keyPath(path, 'methods'),
       className,
+    ),
+  };
+}
+
+function readCodecSignature(object: JsonObject, path: string): CodecSignature {
+  const className = readName(
+    requiredField(object, 'className', path),
+    keyPath(path, 'className'),
+  );
+  const encode = readName(
+    requiredField(object, 'encode', path),
+    keyPath(path, 'encode'),
+  );
+  const decode = readName(
+    requiredField(object, 'decode', path),
+    keyPath(path, 'decode'),
+  );
+  if (encode === className || decode === className || encode === decode) {
+    fail(path, 'className, encode and decode must be three different names');
+  }
+  return {
+    kind: 'codec',
+    className,
+    encode,
+    decode,
+    type: readType(
+      requiredField(object, 'type', path),
+      keyPath(path, 'type'),
+      false,
     ),
   };
 }
@@ -366,19 +480,21 @@ function readType(
   return type;
 }
 
-function readCases(
-  value: unknown,
-  signature: FunctionSignature | DesignSignature,
-): (FunctionCase | DesignCase)[] {
+function readCases(value: unknown, signature: Signature): Case[] {
   const items = readArray(value, 'cases');
   if (items.length === 0) {
     fail('cases', 'expected at least one case');
   }
-  const cases = items.map((item, index) => {
+  const cases = items.map((item, index): Case => {
     const path = indexPath('cases', index);
-    return signature.kind === 'function'
-      ? readFunctionCase(item, signature, path)
-      : readDesignCase(item, signature, path);
+    switch (signature.kind) {
+      case 'function':
+        return readFunctionCase(item, signature, path);
+      case 'design':
+        return readDesignCase(item, signature, path);
+      case 'codec':
+        return readCodecCase(item, signature, path);
+    }
   });
   if (!cases.some((testCase) => testCase.visible)) {
     fail('cases', 'expected at least one case with visible: true');
@@ -401,8 +517,24 @@ function readFunctionCase(
     requiredField(object, 'expected', path),
     signature.returns,
     keyPath(path, 'expected'),
+    false,
   );
   return { input, expected, visible: readVisible(object, path) };
+}
+
+function readCodecCase(
+  value: unknown,
+  signature: CodecSignature,
+  path: string,
+): CodecCase {
+  const object = readObject(value, path, CODEC_CASE_KEYS);
+  const input = readValue(
+    requiredField(object, 'input', path),
+    signature.type,
+    keyPath(path, 'input'),
+    false,
+  );
+  return { input, visible: readVisible(object, path) };
 }
 
 function readDesignCase(
@@ -427,7 +559,12 @@ function readDesignCase(
     ops: calls.ops,
     args: calls.args,
     expected: expected.map((answer, index) =>
-      readValue(answer, calls.returns[index], indexPath(expectedPath, index)),
+      readValue(
+        answer,
+        calls.returns[index],
+        indexPath(expectedPath, index),
+        false,
+      ),
     ),
     visible: readVisible(object, path),
   };
@@ -490,7 +627,7 @@ function readArgs(value: unknown, params: Param[], path: string): JsonValue[] {
     );
   }
   return values.map((item, index) =>
-    readValue(item, params[index].type, indexPath(path, index)),
+    readValue(item, params[index].type, indexPath(path, index), true),
   );
 }
 
@@ -505,10 +642,36 @@ function readVisible(object: JsonObject, path: string): boolean {
   return visible;
 }
 
-/** A case value checked against its type, a tree's trailing nulls trimmed. */
-function readValue(value: unknown, type: ValueType, path: string): JsonValue {
-  checkValue(value, type, path);
-  return type === 'TreeNode*' ? readTree(value as JsonValue[], path) : value;
+/**
+ * A case value checked against its type, every tree's trailing nulls trimmed.
+ * `allowsCycle` admits a `ListNode*` written `{"values": [...], "pos": k}`,
+ * which only an input can be: the driver writes every answer as a plain list.
+ */
+function readValue(
+  value: unknown,
+  type: ValueType,
+  path: string,
+  allowsCycle: boolean,
+): JsonValue {
+  checkValue(value, type, path, allowsCycle);
+  return trimmedTrees(value, type, path);
+}
+
+function trimmedTrees(
+  value: JsonValue,
+  type: ValueType,
+  path: string,
+): JsonValue {
+  if (type === 'TreeNode*') {
+    return readTree(value as JsonValue[], path);
+  }
+  const element = vectorElement(type);
+  if (element === null) {
+    return value;
+  }
+  return (value as JsonValue[]).map((item, index) =>
+    trimmedTrees(item, element, indexPath(path, index)),
+  );
 }
 
 /**
@@ -538,12 +701,13 @@ function checkValue(
   value: unknown,
   type: ValueType,
   path: string,
+  allowsCycle: boolean,
 ): asserts value is JsonValue {
   const pending = [{ value, type, path }];
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
     const element = vectorElement(item.type);
     if (element === null) {
-      if (!matchesNonVector(item.value, item.type)) {
+      if (!matchesNonVector(item.value, item.type, allowsCycle)) {
         fail(item.path, `expected ${item.type}, got ${describe(item.value)}`);
       }
       continue;
@@ -561,7 +725,11 @@ function checkValue(
   }
 }
 
-function matchesNonVector(value: unknown, type: ValueType): boolean {
+function matchesNonVector(
+  value: unknown,
+  type: ValueType,
+  allowsCycle: boolean,
+): boolean {
   switch (type) {
     case 'int':
       return isInt(value);
@@ -580,18 +748,82 @@ function matchesNonVector(value: unknown, type: ValueType): boolean {
     case 'string':
       return typeof value === 'string';
     case 'ListNode*':
-      return Array.isArray(value) && value.every(isInt);
+      return isIntList(value) || (allowsCycle && isCyclicList(value));
     case 'TreeNode*':
       return (
         Array.isArray(value) &&
         (value.length === 0 || isInt(value[0])) &&
         value.every((node) => node === null || isInt(node))
       );
+    case 'GraphNode*':
+      return isAdjacencyList(value);
+    case 'RandomNode*':
+      return isRandomList(value);
     case 'void':
       return value === null;
     default:
       return false;
   }
+}
+
+function isIntList(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every(isInt);
+}
+
+/** `{"values": [...], "pos": k}`: the tail links back to node `k`, none when `k` is -1. */
+function isCyclicList(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const object = value as JsonObject;
+  const hasOnlyListKeys = Object.keys(object).every((key) =>
+    CYCLIC_LIST_KEYS.includes(key),
+  );
+  const values = object.values;
+  const pos = object.pos;
+  return (
+    hasOnlyListKeys &&
+    isIntList(values) &&
+    typeof pos === 'number' &&
+    Number.isInteger(pos) &&
+    pos >= -1 &&
+    pos < values.length
+  );
+}
+
+/** LeetCode's graph: entry `i` lists the values of node `i + 1`'s neighbours, each in 1..n. */
+function isAdjacencyList(value: unknown): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  const count = value.length;
+  return value.every(
+    (neighbours) =>
+      isIntList(neighbours) &&
+      neighbours.every((node) => node >= 1 && node <= count),
+  );
+}
+
+/** LeetCode's random list: one `[val, randomIndex]` per node, the index null or in 0..n-1. */
+function isRandomList(value: unknown): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  const count = value.length;
+  return value.every((node) => {
+    if (!Array.isArray(node) || node.length !== 2 || !isInt(node[0])) {
+      return false;
+    }
+    const random: unknown = node[1];
+    return (
+      random === null ||
+      (isInt(random) && (random as number) >= 0 && (random as number) < count)
+    );
+  });
+}
+
+function isNodeType(text: string): text is NodeType {
+  return (NODE_TYPES as readonly string[]).includes(text);
 }
 
 function isInt(value: unknown): boolean {

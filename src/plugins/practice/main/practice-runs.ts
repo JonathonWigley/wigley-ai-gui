@@ -2,6 +2,9 @@ import type { JudgeResult } from '../contract';
 import {
   answeredCase,
   type CustomInput,
+  type DesignSignature,
+  type FunctionSignature,
+  type JsonValue,
   parseCustomCases,
   type Problem,
   ProblemError,
@@ -48,10 +51,7 @@ export function createPracticeRuns(deps: PracticeRunsDeps): PracticeRuns {
       const examples: JudgeCase[] = problem.cases
         .filter((testCase) => testCase.visible)
         .map((testCase) => ({ ...testCase, source: 'example' }));
-      const custom =
-        inputs.length === 0
-          ? []
-          : await answeredByReference(store, judge, problem, inputs);
+      const custom = await answeredCustomCases(store, judge, problem, inputs);
       const result = await judge.judge(
         problem,
         store.filePath(slug, 'solution.cpp'),
@@ -93,6 +93,37 @@ function readCustomInputs(problem: Problem, text: string): CustomInput[] {
   }
 }
 
+// The custom cases with their expected answers: a codec case's is its own
+// value, and the rest come from running `reference.cpp`.
+async function answeredCustomCases(
+  store: ProblemStore,
+  judge: Judge,
+  problem: Problem,
+  inputs: CustomInput[],
+): Promise<JudgeCase[]> {
+  if (inputs.length === 0) {
+    return [];
+  }
+  const signature = problem.signature;
+  if (signature.kind === 'codec') {
+    return inputs.flatMap((input): JudgeCase[] =>
+      'value' in input
+        ? [{ input: input.value, visible: true, source: 'custom' }]
+        : [],
+    );
+  }
+  return answeredByReference(
+    store,
+    judge,
+    problem,
+    signature,
+    inputs.filter(
+      (input): input is Exclude<CustomInput, { value: JsonValue }> =>
+        !('value' in input),
+    ),
+  );
+}
+
 // The custom cases with `reference.cpp`'s outputs as their expected answers.
 // The reference runs on cases holding a placeholder answer, so its Wrong Answer
 // verdicts mean nothing. Each answer is read as `problem.json` reads one.
@@ -100,7 +131,8 @@ async function answeredByReference(
   store: ProblemStore,
   judge: Judge,
   problem: Problem,
-  inputs: CustomInput[],
+  signature: FunctionSignature | DesignSignature,
+  inputs: Exclude<CustomInput, { value: JsonValue }>[],
 ): Promise<JudgeCase[]> {
   const placeholders: JudgeCase[] = inputs.map((input) =>
     'input' in input
@@ -133,7 +165,7 @@ async function answeredByReference(
       );
     }
     try {
-      const answered = answeredCase(input, answer.output, problem.signature);
+      const answered = answeredCase(input, answer.output, signature);
       return { ...answered, source: 'custom' };
     } catch (error) {
       if (error instanceof ProblemError) {

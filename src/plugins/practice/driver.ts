@@ -1,9 +1,13 @@
 import {
+  aliasedNodeType,
   vectorElement,
+  type CodecSignature,
   type DesignSignature,
   type FunctionSignature,
   type Param,
   type Problem,
+  type Signature,
+  type ValueType,
 } from './problem';
 
 const PRELUDE_HEADERS = [
@@ -84,6 +88,21 @@ struct TreeNode {
     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
 };
+
+struct GraphNode {
+    int val;
+    vector<GraphNode*> neighbors;
+    GraphNode() : val(0) {}
+    GraphNode(int _val) : val(_val) {}
+    GraphNode(int _val, vector<GraphNode*> _neighbors) : val(_val), neighbors(_neighbors) {}
+};
+
+struct RandomNode {
+    int val;
+    RandomNode* next;
+    RandomNode* random;
+    RandomNode(int _val) : val(_val), next(nullptr), random(nullptr) {}
+};
 `;
 
 const JSON_SUPPORT = String.raw`extern "C" const char* __asan_default_options() { return "detect_leaks=0"; }
@@ -92,11 +111,13 @@ extern "C" const char* __ubsan_default_options() { return "halt_on_error=1:print
 namespace practice_judge {
 
 struct Json {
-    enum class Kind { Null, Bool, Number, String, Array };
+    enum class Kind { Null, Bool, Number, String, Array, Object };
     Kind kind = Kind::Null;
     bool boolean = false;
     std::string text;
     std::vector<Json> items;
+    // An object's member names, item k's name at k.
+    std::vector<std::string> keys;
 };
 
 class JsonReader {
@@ -189,6 +210,38 @@ private:
                 }
                 if (separator != ',') {
                     fail("expected , or ]");
+                }
+            }
+        }
+        if (first == '{') {
+            value.kind = Json::Kind::Object;
+            ++pos_;
+            skip_space();
+            if (!at_end() && source_[pos_] == '}') {
+                ++pos_;
+                return value;
+            }
+            for (;;) {
+                skip_space();
+                if (at_end() || source_[pos_] != '"') {
+                    fail("expected a member name");
+                }
+                value.keys.push_back(read_string());
+                skip_space();
+                if (at_end() || source_[pos_++] != ':') {
+                    fail("expected :");
+                }
+                value.items.push_back(read_value());
+                skip_space();
+                if (at_end()) {
+                    fail("unterminated object");
+                }
+                char separator = source_[pos_++];
+                if (separator == '}') {
+                    return value;
+                }
+                if (separator != ',') {
+                    fail("expected , or }");
                 }
             }
         }
@@ -316,6 +369,16 @@ inline const Json& element(const Json& array, std::size_t index) {
     return expect_kind(array, Json::Kind::Array, "an array").items.at(index);
 }
 
+inline const Json& member(const Json& object, const char* key) {
+    const Json& checked = expect_kind(object, Json::Kind::Object, "an object");
+    for (std::size_t index = 0; index < checked.keys.size(); ++index) {
+        if (checked.keys[index] == key) {
+            return checked.items[index];
+        }
+    }
+    throw std::runtime_error(std::string("cases file: no member ") + key);
+}
+
 inline int int_of(const Json& json) {
     return static_cast<int>(std::strtoll(expect_kind(json, Json::Kind::Number, "a number").text.c_str(), nullptr, 10));
 }
@@ -328,6 +391,8 @@ void from_json(const Json& json, char& value);
 void from_json(const Json& json, std::string& value);
 void from_json(const Json& json, ListNode*& value);
 void from_json(const Json& json, TreeNode*& value);
+void from_json(const Json& json, GraphNode*& value);
+void from_json(const Json& json, RandomNode*& value);
 template <typename T>
 void from_json(const Json& json, std::vector<T>& value);
 
@@ -339,6 +404,8 @@ void to_json(std::string& out, char value);
 void to_json(std::string& out, const std::string& value);
 void to_json(std::string& out, ListNode* value);
 void to_json(std::string& out, TreeNode* value);
+void to_json(std::string& out, GraphNode* value);
+void to_json(std::string& out, RandomNode* value);
 template <typename T>
 void to_json(std::string& out, const std::vector<T>& value);
 
@@ -367,15 +434,22 @@ void from_json(const Json& json, std::string& value) {
     value = expect_kind(json, Json::Kind::String, "a string").text;
 }
 
+// A plain array, or {"values": [...], "pos": k} whose tail links back to node k.
 void from_json(const Json& json, ListNode*& value) {
-    const Json& array = expect_kind(json, Json::Kind::Array, "an array");
-    ListNode* head = nullptr;
-    ListNode** tail = &head;
+    bool is_cyclic = json.kind == Json::Kind::Object;
+    const Json& array = expect_kind(is_cyclic ? member(json, "values") : json, Json::Kind::Array, "an array");
+    int pos = is_cyclic ? int_of(member(json, "pos")) : -1;
+    std::vector<ListNode*> nodes;
     for (const Json& item : array.items) {
-        *tail = new ListNode(int_of(item));
-        tail = &(*tail)->next;
+        nodes.push_back(new ListNode(int_of(item)));
+        if (nodes.size() > 1) {
+            nodes[nodes.size() - 2]->next = nodes.back();
+        }
     }
-    value = head;
+    if (pos >= 0) {
+        nodes.back()->next = nodes.at(static_cast<std::size_t>(pos));
+    }
+    value = nodes.empty() ? nullptr : nodes[0];
 }
 
 void from_json(const Json& json, TreeNode*& value) {
@@ -405,6 +479,40 @@ void from_json(const Json& json, TreeNode*& value) {
         }
         ++index;
     }
+}
+
+// LeetCode's graph: entry i lists node i + 1's neighbours by value; the answer is node 1.
+void from_json(const Json& json, GraphNode*& value) {
+    const Json& array = expect_kind(json, Json::Kind::Array, "an array");
+    std::vector<GraphNode*> nodes;
+    for (std::size_t index = 0; index < array.items.size(); ++index) {
+        nodes.push_back(new GraphNode(static_cast<int>(index) + 1));
+    }
+    for (std::size_t index = 0; index < array.items.size(); ++index) {
+        for (const Json& neighbour : expect_kind(array.items[index], Json::Kind::Array, "an array").items) {
+            nodes[index]->neighbors.push_back(nodes.at(static_cast<std::size_t>(int_of(neighbour) - 1)));
+        }
+    }
+    value = nodes.empty() ? nullptr : nodes[0];
+}
+
+// LeetCode's random list: one [val, randomIndex] per node, the index null for none.
+void from_json(const Json& json, RandomNode*& value) {
+    const Json& array = expect_kind(json, Json::Kind::Array, "an array");
+    std::vector<RandomNode*> nodes;
+    for (const Json& item : array.items) {
+        nodes.push_back(new RandomNode(int_of(element(item, 0))));
+        if (nodes.size() > 1) {
+            nodes[nodes.size() - 2]->next = nodes.back();
+        }
+    }
+    for (std::size_t index = 0; index < array.items.size(); ++index) {
+        const Json& random = element(array.items[index], 1);
+        if (random.kind != Json::Kind::Null) {
+            nodes[index]->random = nodes.at(static_cast<std::size_t>(int_of(random)));
+        }
+    }
+    value = nodes.empty() ? nullptr : nodes[0];
 }
 
 template <typename T>
@@ -508,6 +616,97 @@ void to_json(std::string& out, TreeNode* value) {
     out += ']';
 }
 
+// Every node reachable from start, in breadth-first order.
+std::vector<GraphNode*> nodes_of(GraphNode* start) {
+    std::vector<GraphNode*> nodes;
+    std::unordered_set<GraphNode*> seen;
+    if (start != nullptr) {
+        nodes.push_back(start);
+        seen.insert(start);
+    }
+    for (std::size_t index = 0; index < nodes.size(); ++index) {
+        for (GraphNode* neighbour : nodes[index]->neighbors) {
+            if (neighbour != nullptr && seen.insert(neighbour).second) {
+                nodes.push_back(neighbour);
+            }
+        }
+    }
+    return nodes;
+}
+
+// The list's nodes along next; throws when next loops back.
+std::vector<RandomNode*> nodes_of(RandomNode* head) {
+    std::vector<RandomNode*> nodes;
+    std::unordered_set<RandomNode*> seen;
+    for (RandomNode* node = head; node != nullptr; node = node->next) {
+        if (!seen.insert(node).second) {
+            throw std::runtime_error("the returned list's next pointers loop back");
+        }
+        nodes.push_back(node);
+    }
+    return nodes;
+}
+
+// Throws when the answer holds any node of the input.
+template <typename Node>
+void require_deep_copy(const std::vector<Node*>& input, const std::vector<Node*>& answer) {
+    std::unordered_set<Node*> input_nodes(input.begin(), input.end());
+    for (Node* node : answer) {
+        if (input_nodes.count(node) != 0) {
+            throw std::runtime_error("the answer shares node " + std::to_string(node->val) + " with the input: return a deep copy");
+        }
+    }
+}
+
+// Entry i lists the neighbours of the node with the i-th smallest value, by value.
+void to_json(std::string& out, GraphNode* value) {
+    std::vector<GraphNode*> nodes = nodes_of(value);
+    std::stable_sort(nodes.begin(), nodes.end(), [](GraphNode* a, GraphNode* b) { return a->val < b->val; });
+    out += '[';
+    for (std::size_t index = 0; index < nodes.size(); ++index) {
+        if (index > 0) {
+            out += ',';
+        }
+        out += '[';
+        for (std::size_t k = 0; k < nodes[index]->neighbors.size(); ++k) {
+            if (k > 0) {
+                out += ',';
+            }
+            GraphNode* neighbour = nodes[index]->neighbors[k];
+            out += neighbour == nullptr ? std::string("null") : std::to_string(neighbour->val);
+        }
+        out += ']';
+    }
+    out += ']';
+}
+
+void to_json(std::string& out, RandomNode* value) {
+    std::vector<RandomNode*> nodes = nodes_of(value);
+    std::unordered_map<RandomNode*, std::size_t> index_of;
+    for (std::size_t index = 0; index < nodes.size(); ++index) {
+        index_of[nodes[index]] = index;
+    }
+    out += '[';
+    for (std::size_t index = 0; index < nodes.size(); ++index) {
+        if (index > 0) {
+            out += ',';
+        }
+        out += '[';
+        to_json(out, nodes[index]->val);
+        out += ',';
+        RandomNode* random = nodes[index]->random;
+        if (random == nullptr) {
+            out += "null";
+        } else if (index_of.count(random) == 0) {
+            throw std::runtime_error("a random pointer of the returned list points at a node outside it");
+        } else {
+            out += std::to_string(index_of[random]);
+        }
+        out += ']';
+    }
+    out += ']';
+}
+
 template <typename T>
 void to_json(std::string& out, const std::vector<T>& value) {
     out += '[';
@@ -552,7 +751,12 @@ void write_file(const char* path, const std::string& text) {
 
 const JUDGE = 'practice_judge::';
 
-/** The `prelude.h` every solution compiles against: the standard headers, `using namespace std;`, LeetCode's node types. */
+/**
+ * The `prelude.h` every solution compiles against: the standard headers,
+ * `using namespace std;`, LeetCode's node types. LeetCode names its graph and
+ * random-list nodes both `Node`, so the prelude names them `GraphNode` and
+ * `RandomNode` and the driver aliases the one a problem uses.
+ */
 export function preludeSource(): string {
   const includes = PRELUDE_HEADERS.map((header) => `#include <${header}>`);
   return [
@@ -569,14 +773,15 @@ export function preludeSource(): string {
 /** The C++ driver that runs one case of a problem against the solution at `solutionPath`. */
 export function driverSource(problem: Problem, solutionPath: string): string {
   const signature = problem.signature;
-  const body =
-    signature.kind === 'function'
-      ? functionCaseBody(signature)
-      : designCaseBody(signature);
+  const body = caseBody(signature);
+  const aliased = aliasedNodeType(signature);
+  const nodeAlias =
+    aliased === null ? [] : [`using Node = ${aliased.slice(0, -1)};`];
   return [
     '#include "prelude.h"',
     '',
     JSON_SUPPORT,
+    ...nodeAlias,
     includeLine(solutionPath),
     '',
     'int main(int argc, char** argv) {',
@@ -596,23 +801,7 @@ export function driverSource(problem: Problem, solutionPath: string): string {
 
 /** LeetCode's starting code for a problem: the class with empty member bodies. */
 export function stubSource(problem: Problem): string {
-  const signature = problem.signature;
-  const members =
-    signature.kind === 'function'
-      ? [
-          stubMember(
-            `${signature.returns} ${signature.method}`,
-            signature.params,
-          ),
-        ]
-      : [
-          stubMember(signature.className, signature.constructor),
-          ...signature.methods.map((method) =>
-            stubMember(`${method.returns} ${method.name}`, method.params),
-          ),
-        ];
-  const className =
-    signature.kind === 'function' ? 'Solution' : signature.className;
+  const { className, members } = stubClass(problem.signature);
   return [
     `class ${className} {`,
     'public:',
@@ -622,24 +811,114 @@ export function stubSource(problem: Problem): string {
   ].join('\n');
 }
 
+function stubClass(signature: Signature): {
+  className: string;
+  members: string[];
+} {
+  switch (signature.kind) {
+    case 'function':
+      return {
+        className: 'Solution',
+        members: [
+          stubMember(
+            `${spelledType(signature.returns)} ${signature.method}`,
+            signature.params,
+          ),
+        ],
+      };
+    case 'design':
+      return {
+        className: signature.className,
+        members: [
+          stubMember(signature.className, signature.constructor),
+          ...signature.methods.map((method) =>
+            stubMember(
+              `${spelledType(method.returns)} ${method.name}`,
+              method.params,
+            ),
+          ),
+        ],
+      };
+    case 'codec':
+      return {
+        className: signature.className,
+        members: [
+          stubMember(`string ${signature.encode}`, [
+            { name: 'value', type: signature.type },
+          ]),
+          stubMember(`${spelledType(signature.type)} ${signature.decode}`, [
+            { name: 'data', type: 'string' },
+          ]),
+        ],
+      };
+  }
+}
+
 function stubMember(head: string, params: Param[]): string {
   const paramList = params
     .map((param) =>
       vectorElement(param.type) !== null
         ? `${param.type}& ${param.name}`
-        : `${param.type} ${param.name}`,
+        : `${spelledType(param.type)} ${param.name}`,
     )
     .join(', ');
   return [`    ${head}(${paramList}) {`, '        ', '    }'].join('\n');
 }
 
+/** A type as the solution writes it: `Node*` for a graph or random-list node, as on LeetCode. */
+function spelledType(type: ValueType): string {
+  return type === 'GraphNode*' || type === 'RandomNode*' ? 'Node*' : type;
+}
+
+function caseBody(signature: Signature): string[] {
+  switch (signature.kind) {
+    case 'function':
+      return functionCaseBody(signature);
+    case 'design':
+      return designCaseBody(signature);
+    case 'codec':
+      return codecCaseBody(signature);
+  }
+}
+
 function functionCaseBody(signature: FunctionSignature): string[] {
   const locals = readParamsInto(signature.params, 'item', 'p', '    ');
   const callArgs = signature.params.map((_, index) => `p${index}`).join(', ');
+  // A graph or random list returned from one passed in is a copy: it may share no node with the input.
+  const returnsAliasedNode = aliasedNodeType(signature) === signature.returns;
+  const copied = signature.params.flatMap((param, index) =>
+    returnsAliasedNode && param.type === signature.returns ? [index] : [],
+  );
+  const isCopy = copied.length > 0;
+  const inputNodes = copied.map(
+    (index) =>
+      `    for (auto node : ${JUDGE}nodes_of(p${index})) input_nodes.push_back(node);`,
+  );
   return [
     ...locals,
+    ...(isCopy
+      ? [`    std::vector<${signature.returns}> input_nodes;`, ...inputNodes]
+      : []),
     '    Solution* solution = new Solution();',
     `    ${signature.returns} result = solution->${signature.method}(${callArgs});`,
+    ...(isCopy
+      ? [
+          `    ${JUDGE}require_deep_copy(input_nodes, ${JUDGE}nodes_of(result));`,
+        ]
+      : []),
+    `    ${JUDGE}to_json(out, result);`,
+  ];
+}
+
+// Two instances, as LeetCode runs a codec: the decoder never sees the encoder's state.
+function codecCaseBody(signature: CodecSignature): string[] {
+  return [
+    `    ${signature.type} value{};`,
+    `    ${JUDGE}from_json(item, value);`,
+    `    ${signature.className}* encoder = new ${signature.className}();`,
+    `    ${signature.className}* decoder = new ${signature.className}();`,
+    `    std::string encoded = encoder->${signature.encode}(value);`,
+    `    ${signature.type} result = decoder->${signature.decode}(encoded);`,
     `    ${JUDGE}to_json(out, result);`,
   ];
 }

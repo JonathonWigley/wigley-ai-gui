@@ -99,6 +99,47 @@ describe('stubSource', () => {
         '',
       ].join('\n'),
     },
+    {
+      name: 'a graph node, spelled Node',
+      signature: {
+        kind: 'function',
+        method: 'cloneGraph',
+        params: [{ name: 'node', type: 'GraphNode*' }],
+        returns: 'GraphNode*',
+      },
+      stub: [
+        'class Solution {',
+        'public:',
+        '    Node* cloneGraph(Node* node) {',
+        '        ',
+        '    }',
+        '};',
+        '',
+      ].join('\n'),
+    },
+    {
+      name: 'a codec',
+      signature: {
+        kind: 'codec',
+        className: 'Codec',
+        encode: 'serialize',
+        decode: 'deserialize',
+        type: 'TreeNode*',
+      },
+      stub: [
+        'class Codec {',
+        'public:',
+        '    string serialize(TreeNode* value) {',
+        '        ',
+        '    }',
+        '    ',
+        '    TreeNode* deserialize(string data) {',
+        '        ',
+        '    }',
+        '};',
+        '',
+      ].join('\n'),
+    },
   ])("writes LeetCode's stub for $name", ({ signature, stub }) => {
     expect(stubSource(problemWith(signature))).toBe(stub);
   });
@@ -115,6 +156,22 @@ describe('driverSource', () => {
   it('includes the solution by its path as given', () => {
     expect(driverSource(problem, 'C:\\leet code\\solution.cpp')).toContain(
       '#include "C:\\leet code\\solution.cpp"',
+    );
+  });
+
+  it.each([
+    { type: 'GraphNode*' as const, alias: 'using Node = GraphNode;' },
+    { type: 'RandomNode*' as const, alias: 'using Node = RandomNode;' },
+  ])('aliases Node to the $type a problem uses', ({ type, alias }) => {
+    const nodes = problemWith({
+      kind: 'function',
+      method: 'copy',
+      params: [{ name: 'node', type }],
+      returns: type,
+    });
+
+    expect(driverSource(nodes, '/solution.cpp')).toContain(
+      `${alias}\n#include "/solution.cpp"`,
     );
   });
 
