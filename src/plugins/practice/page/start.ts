@@ -91,6 +91,13 @@ export const practicePagePart: PagePart<typeof practiceManifest> = {
       sideBarOpenedOver: () => view.sideBarOpenedOver(),
       focusSideBar: () => view.focusSideBar(),
       focusMain: () => view.focusMain(),
+      // Alt+o and Alt+i step Practice's own tabs, never jumping to Sessions.
+      stepTab(by) {
+        void api.commands.run(
+          by === 1 ? 'practice.nextTab' : 'practice.prevTab',
+        );
+        return true;
+      },
     });
 
     api.layouts.show<PracticeLayout>({

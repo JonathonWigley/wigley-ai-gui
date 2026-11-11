@@ -227,6 +227,7 @@ export function createPageApi(
           deps.modes.add({ ...mode, id: qualify(manifest.id, mode.id) }),
         ),
       shown: () => deps.modes.shown(),
+      stepTab: (by) => deps.modes.stepTab(by),
     },
     shell: {
       setLayout: (layout) => registrations.track(deps.setLayout(layout)),

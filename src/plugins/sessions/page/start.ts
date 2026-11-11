@@ -877,7 +877,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
+    // The shown mode steps its own tabs first; one with none shows Sessions.
     const stepToTab = (by: 1 | -1) => {
+      if (api.modes.stepTab(by)) {
+        return;
+      }
       mode.show();
       const sessionId = view.panes.focusedSessionId();
       if (sessionId === null) {

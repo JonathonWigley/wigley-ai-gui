@@ -281,6 +281,7 @@ export function createModes(deps: ModesDeps): CoreModes {
       }
       return shownMode.mode.id;
     },
+    stepTab: (by) => shownMode?.mode.stepTab?.(by) ?? false,
     onChanged: (listener) => listeners.add(listener),
     focusSideBar() {
       const mode = shownMode?.mode;

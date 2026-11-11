@@ -87,11 +87,13 @@ const practiceGroups: SelfTestGroup[] = [
   },
   {
     name: 'solution peek',
-    why: 'Option+j and Option+k move between the problem pane and the editor; the Solution tab asks to confirm before it opens, and y opens it and marks the attempt peeked.',
+    why: "Option+l and Option+h move between the problem pane and the editor beside it, Option+j to the console under the editor; Option+o and gt step the problem pane's tabs, from the editor too; the Solution tab asks to confirm before it opens, and y opens it and marks the attempt peeked.",
     steps: [
-      { keys: ['<A-j>'], expect: '[practice] editor focused' },
-      { keys: ['<A-k>'], expect: '[practice] problem focused' },
-      { keys: ['g', 't'], expect: '[practice] problem tab Submissions' },
+      { keys: ['<A-l>'], expect: '[practice] editor focused' },
+      { keys: ['<A-j>'], expect: '[practice] console focused' },
+      { keys: ['<A-k>'], expect: '[practice] editor focused' },
+      { keys: ['<A-o>'], expect: '[practice] problem tab Submissions' },
+      { keys: ['<A-h>'], expect: '[practice] problem focused' },
       { keys: ['g', 't'], expect: '[practice] problem tab Notes' },
       {
         keys: ['g', 't'],

@@ -754,6 +754,38 @@ describe('the core focus keys', () => {
     },
   );
 
+  it.each([
+    { case: 'a shown mode with tabs', shownSteps: true, stepped: true },
+    { case: 'a shown mode without tabs', shownSteps: false, stepped: false },
+  ])(
+    "stepTab asks only the shown mode's hook: $case",
+    ({ shownSteps, stepped }) => {
+      const { modes } = setup();
+      const steps: string[] = [];
+      const addMode = (id: string, hasTabs: boolean) =>
+        modes.add({
+          id,
+          title: id,
+          icon: 'x',
+          element: { hidden: false } as HTMLElement,
+          shown: () => undefined,
+          hidden: () => undefined,
+          focusMain: () => undefined,
+          stepTab: hasTabs
+            ? (by) => {
+                steps.push(`${id} ${by}`);
+                return true;
+              }
+            : undefined,
+        });
+      addMode('a.one', true);
+      addMode('b.two', shownSteps).show();
+
+      expect(modes.stepTab(-1)).toBe(stepped);
+      expect(steps).toEqual(stepped ? ['b.two -1'] : []);
+    },
+  );
+
   it("focusMain calls the shown mode's hook, not a hidden mode's", () => {
     const { modes, told, add } = setup();
     add('a.one', 'One', true, true);

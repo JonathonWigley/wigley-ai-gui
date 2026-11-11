@@ -1351,6 +1351,7 @@ function fakeModes(
       }
       return world.shownMode.id;
     },
+    stepTab: (by) => world.shownMode?.added?.stepTab?.(by) ?? false,
   };
 }
 

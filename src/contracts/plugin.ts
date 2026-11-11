@@ -464,6 +464,9 @@ export interface ModeContext {
 // disposed: it gives main's last focused pane back its key scope, its resize
 // and focus targets and the DOM focus, as `shown` does for that pane, so no
 // box in the area left behind keeps the caret.
+// `stepTab` runs when the next-tab or previous-tab key fires while this mode
+// shows: it steps the mode's own tabs by `by` and returns true, or returns
+// false to leave the key to the session tabs, as a mode without it does.
 export interface Mode {
   id: string;
   title: string;
@@ -476,6 +479,7 @@ export interface Mode {
   sideBarOpenedOver?(): void;
   focusSideBar?(): void;
   focusMain(): void;
+  stepTab?(by: 1 | -1): boolean;
 }
 
 // `show` hides the shown mode and shows this one; on the shown mode it does
@@ -523,9 +527,12 @@ export interface ModeHandle extends Disposable {
 // it in the activity bar, lays out its side bar, shows its context, calls its
 // `shown` and then `sideBarHidden` or `sideBarOpenedOver` by its side bar's
 // layout, then `onChanged` listeners hear the new id, until their `dispose`.
+// `stepTab` asks the shown mode's `stepTab` and returns its answer; false with
+// no mode shown or a shown mode without one.
 export interface Modes {
   add(mode: Mode): ModeHandle;
   shown(): string;
+  stepTab(by: 1 | -1): boolean;
   onChanged(listener: (modeId: string) => void): Disposable;
 }
 
