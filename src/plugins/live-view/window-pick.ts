@@ -105,12 +105,12 @@ export function pickOf(
   if (list.access === 'blocked') {
     return { pick: { kind: 'blocked' } };
   }
-  const processWindows = list.windows.filter(
-    (window) => window.processId === processId,
-  );
-  const window = pickEditorWindow(processWindows, processId, gameRect);
+  const window = pickEditorWindow(list.windows, processId, gameRect);
   if (window === null) {
-    return processWindows.length === 0 || gameRect === null
+    const hasProcessWindow = list.windows.some(
+      (candidate) => candidate.processId === processId,
+    );
+    return !hasProcessWindow || gameRect === null
       ? {
           error: `${folder}'s editor (process ${processId}) has no window the app can stream; a minimized window cannot stream.`,
         }

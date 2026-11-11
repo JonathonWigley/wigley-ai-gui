@@ -778,7 +778,7 @@ export interface ChatSidePart {
   id: string;
   title: string;
   order: number;
-  readonly shrinksLast?: true;
+  shrinksLast?: true;
   build(
     parent: HTMLElement,
     sessionId: string,

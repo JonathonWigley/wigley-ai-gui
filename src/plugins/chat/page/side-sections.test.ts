@@ -484,13 +484,12 @@ describe('createSideSections', () => {
     expect(sectionOrder(root)).toEqual([]);
   });
 
-  it("a part's build that throws leaves no wrapper and closes its frame, and a shrinksLast one sets no marker", () => {
+  it("a part's build that throws leaves no wrapper and closes its frame", () => {
     const { parts, openTab, logs } = setUp();
     parts.add({
       id: 'failing',
       title: 'Failing',
       order: 10,
-      shrinksLast: true,
       build() {
         throw new Error('build failed');
       },
@@ -499,7 +498,6 @@ describe('createSideSections', () => {
     const { root } = openTab();
 
     expect(sectionOrder(root)).toEqual([]);
-    expect(root.querySelectorAll('[data-shrinks-last]')).toEqual([]);
     expect(logs.join('\n')).toContain('build failed');
   });
 

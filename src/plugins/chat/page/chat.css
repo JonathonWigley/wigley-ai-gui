@@ -102,10 +102,6 @@
   );
 }
 
-.chat-side-part[data-shrinks-last] {
-  flex-shrink: 1;
-}
-
 .chat-side-part:not(:has(.chat-side-section-body > :not([hidden]))) {
   display: none;
 }
