@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Rung: standard · follows the existing probe call in `start`, and adds one reply field that the fakes already model
+Rung: hard · adds the `game_view` reply field that 07, the SKILL.md Live view bullet and the gui tool call consume
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
@@ -11,7 +11,8 @@ Paths below are under `plugins/wigley/skills/unity-playtest/`.
 
 Files:
 - modify `capturelib/commands.py`: `Capture.start` (~lines 96-163)
-- modify `tests/fakes.py`: the fake editor's `probe` reply (~line 46), if it needs a `window` value that changes after `start`
+- modify `tests/fakes.py`: the fake editor's `probe` reply (~line 46). `FakeUnity` gains a reply for a probe sent
+  after `start`: a different `window`, or an error. Today `replies["probe"]` is one static reply, which models neither.
 - test `tests/test_capture.py`
 
 Consumes: the `window` field of the `probe` action. `WigleyCapture.cs` `Probe()` sets it from
@@ -26,14 +27,19 @@ Decisions:
 - The Recorder resizes the Game View to its "Recording Resolution" at start, so the first probe's `window` (taken
   before `start`) is stale. Use only the second probe.
 - `--append` replies with `game_view` too.
-- When the second probe fails, `start` still succeeds. `game_view` is `None` and a `warning` part says
-  `game view probe failed: <error>`, joined into `warning` like the other parts. The video already runs, and the
+- When the second probe raises `CaptureError`, `start` still succeeds. `game_view` is `None` and a `warning` part says
+  `game view probe failed: <error>`. It joins `warning` after the closing warnings and the recorder warning. The video already runs, and the
   agent can still call `show_live_view` without `gameRect`.
+- A second probe that replies with `playing: false` gives its `window` (null then) and no warning.
+- The second probe may run before the Recorder's resize reaches the window layout, because `Session.Start` returns
+  without waiting. This task does not wait. Task 07 checks this first (its hypothesis 0) and adds a wait here when
+  the rect is stale.
 - The screencapture fallback keeps using the first probe's `window`, as today. This task does not change it.
 
 GIVEN a fake editor whose probe `window` changes after `start` WHEN `start` runs THEN the reply's `game_view` is the post-start value
 GIVEN a fake editor with no Game View (probe `window` null) WHEN `start` runs THEN `game_view` is `None` and the run starts
 GIVEN `start --append` after `stop` WHEN it runs THEN its reply carries `game_view`
+GIVEN a fake editor whose probe fails after `start` WHEN `start` runs THEN `game_view` is `None`, `warning` contains `game view probe failed:`, and the run folder and `current` are still written
 
 Tests: add these cases to `test_capture.py` beside `test_start_opens_a_run_folder_and_points_current_at_it` and
 `test_start_append_after_stop_adds_a_segment_to_the_same_run`. They can be a parameterised table when the fake

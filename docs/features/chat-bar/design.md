@@ -104,8 +104,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   that the section's scroll reaches them, while it has any body left: during a running turn at the 360 px minimum height
   it has none. A section whose part draws nothing hides.
   A part marked `shrinksLast` (Live) changes the order of giving up height: while it shows, the sections that share
-  the column give up height first, each down to its head and a few lines, and the `shrinksLast` section takes what is
-  left, up to its content's height.
+  the column give up height first, each down to its head and a few lines (a shorter body leaves blank down to that
+  floor), and the `shrinksLast` section takes what is left, up to its content's height.
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
   it. `Space b h` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the workflow's side pane.

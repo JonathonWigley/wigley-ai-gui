@@ -27,43 +27,62 @@ Produces:
 
 Decisions:
 - **macOS:**
-  - Run `osascript -l JavaScript -e <script>`. The script calls
-    `CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, 0)`.
-  - It keeps windows with `kCGWindowLayer === 0`. It prints a JSON array of
-    `{ number: kCGWindowNumber, processId: kCGWindowOwnerPID, title: kCGWindowName ?? '', x, y, width, height }` from
-    `kCGWindowBounds`.
+  - Run `osascript -l JavaScript -e <script>` through `requiredStdout`, with `RUN_TIMEOUT_MS = 10000`. A JXA cold
+    start can pass the 5000 ms that the mac stats use. The script, verbatim (it ran on this Mac at plan time and
+    listed every on-screen layer-0 window):
+
+    ```js
+    ObjC.import("CoreGraphics");
+    const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements, 0)));
+    JSON.stringify(list.filter((w) => w.kCGWindowLayer === 0).map((w) => ({
+      number: w.kCGWindowNumber, processId: w.kCGWindowOwnerPID, title: w.kCGWindowName ?? "",
+      x: w.kCGWindowBounds.X, y: w.kCGWindowBounds.Y,
+      width: w.kCGWindowBounds.Width, height: w.kCGWindowBounds.Height })))
+    ```
+
+  - `kCGWindowName` is absent when Screen Recording is off, so `?? ""` keeps the row.
   - The list is already front to back, and the bounds are global points with a top-left origin. This is the space
     that Unity's rects use, so the adapter converts nothing.
-  - The spike's script (`git show spike/live-window-view:src/plugins/live-view/main/start.ts`, lines 28-33) is a
-    working start. It used `kCGWindowListOptionAll` and filtered out untitled windows. Do not copy those two parts:
-    the pick needs every on-screen window of the process, titled or not.
+  - The spike's script used `kCGWindowListOptionAll` and dropped untitled windows. The script above does neither,
+    because the pick needs every on-screen window of the process, titled or not.
 - **Windows:**
-  - Run one PowerShell script through the `ProcessRunner`, as `windows-system-stats.ts` does.
+  - Run one PowerShell script through `requiredStdout` with `RUN_TIMEOUT_MS = 10000`. Use the program and the
+    `-NoProfile -NonInteractive` flags of `windows-system-stats.ts`, but pass `-EncodedCommand <base64>` in place of
+    `-Command <script>`. The base64 is of the script's UTF-16LE bytes (`Buffer.from(script, 'utf16le')`). Node wraps
+    a `-Command` argument in double quotes on Windows, so a `-Command` script cannot hold `"`, and the `Add-Type` C#
+    signatures need it (`[DllImport("user32.dll")]`). The parser test does not reach this. The user's Windows check
+    (09) is its only proof.
   - The script `Add-Type`s user32 and dwmapi signatures. It walks `EnumWindows` (top-level windows come in z-order,
-    front to back) and keeps windows that pass `IsWindowVisible` and are not minimized (`IsIconic`).
+    front to back). It keeps windows that pass `IsWindowVisible`, are not minimized (`IsIconic`), and are not cloaked
+    (`DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED = 14)` non-zero: another virtual desktop, a suspended app). It drops
+    a window whose `DWMWA_EXTENDED_FRAME_BOUNDS` call fails or gives an empty rect.
   - For each window it reads `GetWindowThreadProcessId`, `GetWindowText`, `DwmGetWindowAttribute(hwnd,
     DWMWA_EXTENDED_FRAME_BOUNDS = 9)` and `GetDpiForWindow(hwnd)`. It prints JSON.
   - The parser divides each window's bounds by `dpi / 96` into points, because Unity reports `EditorWindow.position`
     in points. Unity's position on a mixed-DPI desktop is unverified. The user checks Windows live in the wrap-up.
-  - `number` is the HWND as a number. Electron's Windows source ids are `window:<hwnd>:0`.
+  - `number` is the HWND printed as a decimal `[int64]`, because Electron's Windows source ids are `window:<hwnd>:0`
+    with a decimal handle.
+  - The parser keeps fractional points and does not round: at dpi 120, a 301-pixel edge is 240.8 points. macOS
+    bounds can be fractional too, and the pick's 1-point slack takes up the difference.
   - The script sets the thread to per-monitor DPI aware (`SetThreadDpiAwarenessContext(-4)`) before it reads bounds,
     so DWM returns physical pixels.
 - Both parsers drop a row that is missing a field. They throw with the command's text when the stdout is not a JSON
-  array, as the system-stats parsers do with `required-stdout.ts`.
+  array, as the system-stats parsers do. `requiredStdout` is in `src/main/processes/required-stdout.ts` (01 moves it there).
 - `screenCaptureFor` cases:
-  - `'macos'`: `createScreenCapture({ windows: createMacWindowList(runner), sources: electronCaptureSources, access: macScreenAccess, openSettings: openMacScreenSettings })`
-  - `'windows'`: `createScreenCapture({ windows: createWindowsWindowList(runner), sources: electronCaptureSources, access: () => 'granted', openSettings: () => Promise.reject(new Error('Windows has no Screen Recording setting')) })`
+  - `'macos'`: `createScreenCapture({ windows: createMacWindowList(runner), sources: electronCaptureSources, access: macScreenAccess, blockedWhenNoSources: true, openSettings: openMacScreenSettings })`
+  - `'windows'`: `createScreenCapture({ windows: createWindowsWindowList(runner), sources: electronCaptureSources, access: () => 'granted', blockedWhenNoSources: false, openSettings: () => Promise.reject(new Error('Windows has no Screen Recording setting')) })`
 
 GIVEN captured JXA output of three windows WHEN parsed THEN three OsWindows in the same order with their pids and bounds
 GIVEN captured PowerShell output of a window at dpi 144 with frame bounds 300,150 to 1200,900 WHEN parsed THEN its bounds are `{ x: 200, y: 100, width: 600, height: 500 }`
+GIVEN captured PowerShell output of a window at dpi 120 with frame bounds 301,150 to 1201,900 WHEN parsed THEN its bounds are `{ x: 240.8, y: 120, width: 720, height: 600 }`
 GIVEN stdout that is not JSON WHEN parsed THEN it throws and names the command
 
 Tests:
 - One `it.each` table per parser, on captured output.
 - Capture the macOS sample on this Mac with the script, then trim it to three windows.
-- Write the Windows sample by hand to the script's output shape, with one row each at dpi 96, 144 and 192.
+- Write the Windows sample by hand to the script's output shape, with one row each at dpi 96, 120, 144 and 192.
 
-Done when: `npm run typecheck`, `npm run lint` and `npm run check` pass. The test gate runs both parser tests. On this
+Done when: `npm run typecheck` and `npm run lint` pass (lint runs the layer, composition-root and style checks). The test gate runs both parser tests. On this
 Mac, a scratch run of `createMacWindowList` lists the open windows: this is the one live check this task can reach.
 The Windows script runs only on Windows, so it waits for the user's Windows check (task 09).
 

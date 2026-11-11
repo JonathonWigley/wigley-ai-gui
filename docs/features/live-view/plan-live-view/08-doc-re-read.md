@@ -29,12 +29,15 @@ Decisions:
   - the `AGENTS.md` lines for `src/main/screen-capture/` and `src/plugins/live-view/`, against the files that exist
   - `capture.md`'s `game_view` sentence, against 03's reply and 07's rect
 - `SKILL.md` names the tools' arguments: check them against 05's `inputSchema`.
-- Marketplace version: bump `version` in both plugin manifests in the same commit. Follow the marketplace
+- Marketplace version: bump `version` in both plugin manifests from 2.5.0 to 2.6.0 (minor: a new reply field and a
+  new tool contract), in the same commit. When origin's manifests are already past 2.5.0, take the next minor above
+  them. Follow the marketplace
   `AGENTS.md` § Changing a plugin: one bump per pushed series, in its last commit that changes the plugin. Run
-  `scripts/check_manifests.py` from the marketplace worktree.
+  `python3 scripts/check_manifests.py` and `python3 scripts/check_manifests.py --against origin/main` from the
+  marketplace worktree. The second run checks the bump.
 - One commit per repo.
 
-Done when: every doc written ahead matches the code, and `check_manifests.py` passes.
+Done when: every doc written ahead matches the code, and both `check_manifests.py` runs pass.
 
 Commit: one commit in each repo.
 

@@ -18,6 +18,8 @@ Files:
 - modify `src/main/main.ts` (`ModeServices.forWindow`, `liveServices`, `offscreenRunServices` and its callers, a `screenCaptureFor` pick)
 - modify `scripts/check-layers.mts` (`CORE_LAYERS`, the `src/main/main.ts` entry, test entries)
 - modify `src/shared/plugin-part-harness.test-support.ts` (default services)
+- move `src/main/system-stats/required-stdout.ts` to `src/main/processes/required-stdout.ts`, unchanged, and modify
+  its two importers, `mac-system-stats.ts` and `windows-system-stats.ts`
 
 Consumes: nothing from other tasks. Pattern to follow: the `systemStats` service end to end:
 - `src/contracts/system-stats.ts`
@@ -43,9 +45,13 @@ Decisions:
   - Otherwise it calls both. It keeps each OS window that has a source whose id starts with `window:<number>:`. It
     keeps the windows' order (front to back), and it maps each to a `CaptureWindow` with that source's id.
   - A window with no source is left out.
-  - When `access()` is `'granted'` but `sources()` returns no `window:` source at all, it returns
-    `{ access: 'blocked' }`. On macOS, an undetermined grant shows the OS prompt on the first `getSources` call, and
-    that call returns no windows.
+  - When `access()` is `'granted'`, `deps.blockedWhenNoSources` is true, and `sources()` returns no `window:` source
+    at all, it returns `{ access: 'blocked' }`. On macOS, an undetermined grant shows the OS prompt on the first
+    `getSources` call, and that call returns no windows. macOS passes `true`.
+  - Windows passes `false`. Windows has no capture permission, so an empty source list there gives
+    `{ access: 'granted', windows: [] }`, and the tool replies with its no-window error.
+  - When `windows.list()` or `sources()` rejects, `listWindows` rejects with the same error. The tool replies with
+    its message.
 - `openAccessSettings()` calls `deps.openSettings()`.
 - `electron-capture.ts`:
   - `electronCaptureSources` is `desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } })`,
@@ -53,7 +59,8 @@ Decisions:
   - `macScreenAccess` maps `systemPreferences.getMediaAccessStatus('screen')`: `'denied'` and `'restricted'` give
     `'blocked'`, every other value gives `'granted'`. An undetermined grant counts as granted, so the OS prompt can show.
   - `openMacScreenSettings` is `shell.openExternal(MAC_SCREEN_SETTINGS_URL)`.
-- The Windows wiring passes `access: () => 'granted'`, because Windows has no capture permission. Its
+- The Windows wiring passes `access: () => 'granted'` and `blockedWhenNoSources: false`, because Windows has no
+  capture permission. Its
   `openSettings` rejects with `Windows has no Screen Recording setting`.
 - `screenCaptureFor(osName, runner)` in `main.ts` is a `switch` like `systemStatsFor`:
   - `'linux'` (default) returns `createUnavailableScreenCapture(osName)`. Its `listWindows` and `openAccessSettings`
@@ -76,7 +83,10 @@ Decisions:
   - `options.access: 'blocked'` makes `listWindows` return `{ access: 'blocked' }`.
   - `openAccessSettings` resolves.
 - Layers:
-  - `'src/main/screen-capture': { layers: ['src/contracts'], packages: ['electron'] }`, the alerts and images shape.
+  - `'src/main/screen-capture': { layers: ['src/contracts', 'src/main/processes'], packages: ['electron'] }`: the
+    alerts and images shape, plus `src/main/processes` for `requiredStdout`, which 04's listers use.
+  - Add `'src/main/processes'` to the `'src/main/system-stats'` entry's layers, for the moved `requiredStdout`. The
+    move keeps one copy of its timeout and exit-code rules, and neither adapter folder imports the other.
   - Add `'src/main/screen-capture'` to the `src/main/main.ts` entry's layers.
   - Give `screen-capture.test.ts` its own entry when it imports `src/shared` fakes, as `system-stats/mac-system-stats.test.ts` does.
 - Part harness: add `screenCapture: notFaked<ScreenCapture>('screenCapture')` to the default services.
@@ -89,15 +99,18 @@ Pinned values:
 
 GIVEN access blocked WHEN listWindows runs THEN it returns `{ access: 'blocked' }` and lists nothing
 GIVEN three OS windows and sources for two of them WHEN listWindows runs THEN it returns those two, in the OS order, each with its source id
-GIVEN access granted and sources with no `window:` id WHEN listWindows runs THEN it returns `{ access: 'blocked' }`
+GIVEN access granted, `blockedWhenNoSources` true and sources with no `window:` id WHEN listWindows runs THEN it returns `{ access: 'blocked' }`
+GIVEN access granted, `blockedWhenNoSources` false and sources with no `window:` id WHEN listWindows runs THEN it returns `{ access: 'granted', windows: [] }`
+GIVEN a lister that rejects WHEN listWindows runs THEN it rejects with the lister's error
 
 Tests:
 - `screen-capture.test.ts`: one `it.each` table over `listWindows` (the three cases above, plus a window whose number
-  is a prefix of another's, `window:12:` against `window:123:`), with stub deps.
+  is a prefix of another's, `window:12:` against `window:123:`). The deps are `vi.fn` stubs. The blocked row asserts
+  that `windows.list` and `sources` were never called.
 - `fake-screen-capture.test.ts`: `FAKE_GAME_RECT` lies inside the main window's bounds and outside the floating one,
   and `access: 'blocked'` returns blocked. The fake is test data other tasks rely on, so this guards their premise.
 
-Done when: `npm run typecheck`, `npm run lint` and `npm run check` pass, the layer check included. The test gate runs
+Done when: `npm run typecheck` and `npm run lint` pass (lint runs the layer, composition-root and style checks). The test gate runs
 the tests above. No plugin uses the service yet.
 
 Commit: one commit for the group.

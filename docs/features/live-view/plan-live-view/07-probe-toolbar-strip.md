@@ -9,12 +9,17 @@ Plan: [plan.md](plan.md)
 Repo: wigley-ai-marketplace, worktree `/Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-live-view`.
 Paths below are under `plugins/wigley/skills/unity-playtest/`.
 
-Files: modify `unity/WigleyCapture.cs`: `GameViewScreenRect()` (~lines 85-110) and its comment.
+Files: modify `unity/WigleyCapture.cs`: `GameViewScreenRect()` (~lines 85-110) and its comment. Modify
+`capturelib/commands.py` and `tests/test_capture.py` only when hypothesis 0 holds.
 
 Consumes: `capture.py start`'s `game_view` ← 03. Today, `probe`'s `window` is the same rect.
 
 Produces: `GameViewScreenRect()` returns the Game View's render area alone, with no toolbar or tab pixels, for a docked
 Game View and for a floating one.
+
+The same rect is the screencapture fallback's recording rect (`Media.start_screen_recording(probe.get("window"))`,
+`capturelib/commands.py` ~line 150), so that video loses the toolbar strip too. Read `capture.md` and SKILL.md for a
+line that says the fallback video shows the toolbar, and fix it in this commit.
 
 The symptom: the spike cropped the editor window to the probe's `window` rect. The crop showed a thin strip of the
 Game View's toolbar along its top. So the rect's `y` is a few points too small, or its height is a few points too
@@ -33,11 +38,21 @@ Decisions:
 - The observation that settles it:
   1. Run `capture.py start --project-path <clone>` and read `game_view`.
   2. Run `screencapture -x -R<x>,<y>,<w>,<h> <scratch>/probe.png` with that rect.
-  3. Read the PNG. The fix is done when the PNG's top row is game pixels, and the PNG holds the whole frame (compare
-     with a still from `capture.py mark`).
-  4. Do this for a docked Game View and for a floating one: drag the Game View tab out, then run `start --append`.
-  5. Put the layout back after.
+  3. Read the PNG. The fix is done when the PNG's top row is game pixels, and the PNG holds the whole frame: its
+     aspect ratio matches a still from `capture.py mark` within 1%. Compare only the aspect ratio, because the PNG is
+     in Retina pixels and the still is at the Recorder's resolution.
+  4. Do this for a docked Game View, then for a floating one. Make the floating one with a scratch `run_script`:
+     - Save the layout to a scratch `.wlt` through the internal `UnityEditor.WindowLayout.SaveWindowLayout`
+       (reflection).
+     - Close every Game View, then `ScriptableObject.CreateInstance` the GameView type and call `Show()`. A new
+       window floats. With no docked one left, `GameViewScreenRect()`'s lookup finds the floating one.
+     - Run `start --append`.
+  5. Put the layout back after, with `EditorUtility.LoadWindowLayout(<scratch .wlt>)`.
 - Hypotheses to test first, in this order:
+  0. The rect is stale, not wrong: `Session.Start` returns before the Recorder's resize reaches the window layout, so
+     03's second probe reads the old geometry. Check: compare `start`'s `game_view` with a `probe` run a second
+     later. When they differ, fix it in `Capture.start` (03's code): probe again until two probes 200 ms apart agree,
+     for at most 2 seconds, and keep the last. Add a `test_capture.py` row for it.
   1. `window.position` for a docked window is the dock area's content rect, but `viewInWindow` is relative to the
      window's root including the tab strip, or the reverse: the offsets count the tab or toolbar height once too few.
   2. `targetInView` is in pixels, not points, on a Retina display (`EditorGUIUtility.pixelsPerPoint` = 2), so its `y`

@@ -72,7 +72,8 @@ Self-test and drive runs get a fake whose window list is fixed and whose source 
 ## The section
 
 - **Height:** Live shrinks last. While it shows, every other section that shares the hub's height (Plan, Skills,
-  Context) gives up height first, down to its head and a few lines, scrolling in its own body. Live then takes what is
+  Context) gives up height first, down to its head and a few lines, scrolling in its own body; a shorter body leaves
+  blank down to that floor. Live then takes what is
   left, up to its video's full height at the hub's width, so a portrait Game View shrinks to the hub's free height and
   the whole frame shows with no scrollbar. Chat offers this as a side part option, `shrinksLast`.
 - **Streaming:** the stream runs only while the section is on screen: in a shown Chat tab, with the hub shown and the

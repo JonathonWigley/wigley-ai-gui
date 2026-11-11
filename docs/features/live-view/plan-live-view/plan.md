@@ -176,6 +176,7 @@ export interface ScreenCaptureDeps {
   readonly windows: OsWindowLister;
   sources(): Promise<readonly { readonly id: string }[]>;
   access(): 'granted' | 'blocked';
+  readonly blockedWhenNoSources: boolean;   // true on macOS: no window source means no grant yet
   openSettings(): Promise<void>;
 }
 export function createScreenCapture(deps: ScreenCaptureDeps): ScreenCapture;
@@ -200,6 +201,16 @@ export const livePicksSlot: KeyedSlotKey<LivePick, 'main', 'live-view'>;   // id
 export function pickEditorWindow(windows: readonly CaptureWindow[], processId: number, gameRect: ScreenRect | null): CaptureWindow | null;
 export function cropOf(rect: ScreenRect, bounds: ScreenRect): CaptureCrop;
 export function streamMoved(windowSize: { width: number; height: number }, streamSize: { width: number; height: number }): boolean;
+export function pickOf(list: WindowList, processId: number, gameRect: ScreenRect | null, folder: string): { pick: LivePick } | { error: string };
+export function rectOfTuple(values: readonly [number, number, number, number]): ScreenRect;
+
+// src/plugins/live-view/main/live-tools.ts  (05; 06's self-test calls show)
+export function createLiveTools(deps: LiveToolsDeps): {
+  readonly definitions: readonly ToolDefinition[];
+  startSession(session: AgentSession): ToolSession;
+  show(sessionId: string, args: { projectPath: string; gameRect: readonly [number, number, number, number] | null }): Promise<ToolResult>;
+};
+// LiveToolsDeps: files, paths, screenCapture, the picks slot writer, log; 05 names the exact Picks.
 ```
 
 **Boundary rules:** no plugin imports `electron` or `node:`. Only `src/main/screen-capture/electron-capture.ts` and
