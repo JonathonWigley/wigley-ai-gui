@@ -1055,8 +1055,8 @@ export interface DriveHost {
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
 // the stable or the dev one. `appBuild` is the commit and clone the installed
-// app was packaged from; null in the dev app, and when the clone folder is
-// missing. `images` re-encodes an image smaller, as PNG or
+// app was packaged from; null in the dev app, when the clone folder is
+// missing, and outside a live run. `images` re-encodes an image smaller, as PNG or
 // JPEG only, for `shrinkToFit`. `systemStats` reads the machine's CPU, GPU,
 // memory, network and disk counters. `screenCapture` lists the windows the OS
 // can stream, each with its owner's pid and bounds, and opens the OS's screen

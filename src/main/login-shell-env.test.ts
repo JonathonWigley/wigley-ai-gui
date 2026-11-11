@@ -10,46 +10,70 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  pathFromMarkedOutput,
-  readLoginShellPath,
-  shouldReadLoginShellPath,
-} from './login-shell-path';
+  envFromMarkedOutput,
+  readLoginShellEnv,
+  shouldReadLoginShellEnv,
+} from './login-shell-env';
 
-const START = '__WIGLEY_LOGIN_PATH_START__';
-const END = '__WIGLEY_LOGIN_PATH_END__';
+const START = '__WIGLEY_LOGIN_ENV_START__';
+const SEP = '__WIGLEY_LOGIN_ENV_SEP__';
+const END = '__WIGLEY_LOGIN_ENV_END__';
+const NONE = { path: null, sshAuthSock: null };
 
 // The shell stand-ins below are `#!/bin/sh` scripts, which only a machine
 // with that shell can run.
 const hasPosixShell = existsSync('/bin/sh');
 
-describe('pathFromMarkedOutput', () => {
-  it('reads the PATH between the markers, ignoring what the profile prints around it', () => {
-    const output = `Welcome back\n${START}/opt/homebrew/bin:/usr/bin${END}\nbye\n`;
+describe('envFromMarkedOutput', () => {
+  it('reads PATH and SSH_AUTH_SOCK between the markers, ignoring what the profile prints around them', () => {
+    const output = `Welcome back\n${START}/opt/homebrew/bin:/usr/bin${SEP}/Users/u/agent.sock${END}\nbye\n`;
 
-    expect(pathFromMarkedOutput(output)).toBe('/opt/homebrew/bin:/usr/bin');
+    expect(envFromMarkedOutput(output)).toEqual({
+      path: '/opt/homebrew/bin:/usr/bin',
+      sshAuthSock: '/Users/u/agent.sock',
+    });
   });
 
-  it('reads the first marked PATH when the shell prints the markers twice', () => {
-    const output = `${START}/a:/b${END}${START}/c${END}`;
+  it('reads the first marked variables when the shell prints the markers twice', () => {
+    const output = `${START}/a:/b${SEP}/s${END}${START}/c${SEP}/t${END}`;
 
-    expect(pathFromMarkedOutput(output)).toBe('/a:/b');
+    expect(envFromMarkedOutput(output)).toEqual({
+      path: '/a:/b',
+      sshAuthSock: '/s',
+    });
+  });
+
+  it.each([
+    [
+      'an empty SSH_AUTH_SOCK',
+      `${START}/a${SEP}${END}`,
+      { path: '/a', sshAuthSock: null },
+    ],
+    [
+      'an empty PATH',
+      `${START} ${SEP}/s${END}`,
+      { path: null, sshAuthSock: '/s' },
+    ],
+  ])('keeps the inherited variable for %s', (_case, output, env) => {
+    expect(envFromMarkedOutput(output)).toEqual(env);
   });
 
   it.each([
     ['no markers', '/usr/bin:/bin'],
-    ['no end marker, as when the shell was killed', `${START}/usr/bin`],
-    ['an end marker only', `/usr/bin${END}`],
+    ['no end marker, as when the shell was killed', `${START}/usr/bin${SEP}/s`],
+    ['an end marker only', `/usr/bin${SEP}/s${END}`],
     ['an end marker before the start marker', `${END}/usr/bin${START}`],
-    ['nothing between the markers', `${START}  ${END}`],
+    ['no separator', `${START}/usr/bin${END}`],
+    ['nothing between the markers', `${START}  ${SEP} ${END}`],
     ['empty output', ''],
-  ])('returns null for %s', (_case, output) => {
-    expect(pathFromMarkedOutput(output)).toBeNull();
+  ])('returns no variables for %s', (_case, output) => {
+    expect(envFromMarkedOutput(output)).toEqual(NONE);
   });
 });
 
-describe('shouldReadLoginShellPath', () => {
+describe('shouldReadLoginShellEnv', () => {
   it('reads for an app launchd started', () => {
-    expect(shouldReadLoginShellPath({ isLive: true, parentPid: 1 })).toBe(true);
+    expect(shouldReadLoginShellEnv({ isLive: true, parentPid: 1 })).toBe(true);
   });
 
   it.each([
@@ -57,7 +81,7 @@ describe('shouldReadLoginShellPath', () => {
     ['a self-test or drive run, even when launchd started it', false, 1],
     ['a self-test or drive run from a terminal', false, 4321],
   ])('keeps the inherited PATH for %s', (_case, isLive, parentPid) => {
-    expect(shouldReadLoginShellPath({ isLive, parentPid })).toBe(false);
+    expect(shouldReadLoginShellEnv({ isLive, parentPid })).toBe(false);
   });
 });
 
@@ -81,7 +105,7 @@ async function isRunningAfter(pid: number, limitMs: number): Promise<boolean> {
   }
 }
 
-describe('readLoginShellPath', () => {
+describe('readLoginShellEnv', () => {
   const CAP_MS = 1000;
   // Well short of how long each stand-in holds the read open without the cap.
   const SETTLE_LIMIT_MS = 3000;
@@ -105,11 +129,14 @@ describe('readLoginShellPath', () => {
   }
 
   it.skipIf(!hasPosixShell)(
-    'reads the PATH the shell prints between the markers',
+    'reads the variables the shell prints between the markers',
     async () => {
-      const shell = standInShell(`printf '%s' '${START}/a:/b${END}'`);
+      const shell = standInShell(`printf '%s' '${START}/a:/b${SEP}/s${END}'`);
 
-      expect(await readLoginShellPath(shell, CAP_MS)).toBe('/a:/b');
+      expect(await readLoginShellEnv(shell, CAP_MS)).toEqual({
+        path: '/a:/b',
+        sshAuthSock: '/s',
+      });
     },
   );
 
@@ -120,7 +147,7 @@ describe('readLoginShellPath', () => {
         `trap '' TERM\nprintf '%s' '${START}/a'\nwhile :; do :; done`,
       );
 
-      expect(await readLoginShellPath(shell, CAP_MS)).toBeNull();
+      expect(await readLoginShellEnv(shell, CAP_MS)).toEqual(NONE);
     },
     SETTLE_LIMIT_MS,
   );
@@ -130,10 +157,10 @@ describe('readLoginShellPath', () => {
     async () => {
       const pidFile = path.join(folder, 'child.pid');
       const shell = standInShell(
-        `sleep 5 &\necho $! > '${pidFile}'\nprintf '%s' '${START}/a${END}'`,
+        `sleep 5 &\necho $! > '${pidFile}'\nprintf '%s' '${START}/a${SEP}${END}'`,
       );
 
-      expect(await readLoginShellPath(shell, CAP_MS)).toBeNull();
+      expect(await readLoginShellEnv(shell, CAP_MS)).toEqual(NONE);
       const childPid = Number(readFileSync(pidFile, 'utf8'));
       expect(await isRunningAfter(childPid, 500)).toBe(false);
     },
@@ -158,7 +185,7 @@ describe('readLoginShellPath', () => {
         });
 
       try {
-        expect(await readLoginShellPath(shell, CAP_MS)).toBeNull();
+        expect(await readLoginShellEnv(shell, CAP_MS)).toEqual(NONE);
       } finally {
         kill.mockRestore();
         process.kill(-Number(readFileSync(pidFile, 'utf8')), 'SIGKILL');
@@ -169,7 +196,7 @@ describe('readLoginShellPath', () => {
 
   it('resolves null when the shell fails to start', async () => {
     expect(
-      await readLoginShellPath(path.join(folder, 'missing'), CAP_MS),
-    ).toBeNull();
+      await readLoginShellEnv(path.join(folder, 'missing'), CAP_MS),
+    ).toEqual(NONE);
   });
 });

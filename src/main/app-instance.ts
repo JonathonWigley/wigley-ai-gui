@@ -9,10 +9,15 @@ export function appInstanceOf(isPackaged: boolean): AppInstance {
 }
 
 // The build from the baked commit and the clone folder; null when the build
-// baked no commit (the dev app) or the clone folder is missing.
+// baked no commit (the dev app), the clone folder is missing, or the run is
+// not live, so a self-test or drive run of a packaged app never fetches the
+// user's clone.
 export function appBuildOf(
   commit: string,
   cloneDir: string | null,
+  isLive: boolean,
 ): AppBuild | null {
-  return commit === '' || cloneDir === null ? null : { commit, cloneDir };
+  return commit === '' || cloneDir === null || !isLive
+    ? null
+    : { commit, cloneDir };
 }

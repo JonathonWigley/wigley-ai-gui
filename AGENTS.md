@@ -11,7 +11,7 @@
 - **Review** — every review recommendation taken without a form round.
 - **Running and testing** — the stable and dev apps side by side, `npm run install-app` and the app icon, Node
   version, the self-test and the drive run the agent may start any time, and the checks only a real keyboard proves.
-- **Dev quirks** — the startup reload, a session's stale forms schema, and the login-shell PATH.
+- **Dev quirks** — the startup reload, a session's stale forms schema, and the login shell's PATH and SSH_AUTH_SOCK.
 
 UI work — a view, its CSS, a theme, a primitive, a layout or a key — reads `DESIGN.md` first: it is the standard
 every view follows, and it says where a new value or primitive goes. A new or moved key also reads `docs/keymap.md`,
@@ -1154,10 +1154,13 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
 
 ## Dev quirks
 
-- An app launched from Finder or the Dock inherits launchd's bare PATH, so before plugins start main swaps in the PATH
-  the user's login shell builds (`src/main/login-shell-path.ts`), keeping the inherited one when that read fails. Main
-  reads it only when the app's parent is launchd (`process.ppid === 1`): a terminal start (`npm start`) and the
-  self-test keep the PATH of the shell that ran them, nvm or a venv included. The read's shell leads its own process
+- An app launched from Finder or the Dock inherits launchd's environment, so before plugins start main swaps in the
+  PATH and SSH_AUTH_SOCK the user's login shell builds (`src/main/login-shell-env.ts`), keeping each inherited one when
+  the read fails or the shell sets it empty. PATH, since launchd's bare one finds the system's programs, not the
+  user's; SSH_AUTH_SOCK, since launchd's agent is not the one a profile exports (1Password's), so an ssh host whose
+  config reads `IdentityAgent SSH_AUTH_SOCK` gets no key and the app update's `git fetch` of the clone is denied. Main
+  reads them only when the app's parent is launchd (`process.ppid === 1`): a terminal start (`npm start`) and the
+  self-test keep the environment of the shell that ran them, nvm or a venv included. The read's shell leads its own process
   group, and the 3 s cap kills that whole group.
 - Under `electron-forge start` the page usually loads twice at startup: Forge's dev server reloads every connected
   page when a build lands after the page connected, which nothing guarantees. Code that acts on page load runs on

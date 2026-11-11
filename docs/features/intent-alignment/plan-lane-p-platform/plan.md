@@ -191,7 +191,7 @@ Decided by the agent (shown as Decided notices):
 
 - Moving `Cmd+,` and other menu accelerators onto page chords.
 - A chat source for the icon badge (none exists; Lane H's chat pass may add one).
-- The session host process's own `node:child_process` adapters (`src/session-host/`) and `src/main/login-shell-path.ts`.
+- The session host process's own `node:child_process` adapters (`src/session-host/`) and `src/main/login-shell-env.ts`.
 - Real Windows runs: AltGr on a physical keyboard, `cmd.exe` shims, `py -3`, a held-file rename — the user's checks,
   listed in the wrap-up.
 - The completion popup's Ctrl+N and Ctrl+P (`popupActionOf`) keep matching on `code`.

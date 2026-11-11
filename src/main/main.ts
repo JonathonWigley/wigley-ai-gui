@@ -121,10 +121,7 @@ import {
   installWindowKeybindings,
   registerGlobalShortcuts,
 } from './keybindings';
-import {
-  readLoginShellPath,
-  shouldReadLoginShellPath,
-} from './login-shell-path';
+import { readLoginShellEnv, shouldReadLoginShellEnv } from './login-shell-env';
 import {
   createLayoutService,
   type LayoutService,
@@ -231,14 +228,14 @@ const driveRunDir =
 registerAppSchemes();
 
 // Read while the app gets ready, and applied before any plugin starts. A
-// terminal start, the self-test and a drive run keep the PATH of the shell
-// that ran them and stay clear of the user's shell profile.
-const loginShellPath = shouldReadLoginShellPath({
+// terminal start, the self-test and a drive run keep the environment of the
+// shell that ran them and stay clear of the user's shell profile.
+const loginShellEnv = shouldReadLoginShellEnv({
   isLive: runMode === 'live',
   parentPid: process.ppid,
 })
-  ? readLoginShellPath(process.env.SHELL)
-  : Promise.resolve(null);
+  ? readLoginShellEnv(process.env.SHELL)
+  : Promise.resolve({ path: null, sshAuthSock: null });
 
 // The services that differ by run mode. `trashItem` backs the files service,
 // which loads the config before the window exists; `forWindow` builds the
@@ -1190,7 +1187,11 @@ function createWindow(
       images: nativeImageEncoder,
       runMode,
       appInstance,
-      appBuild: appBuildOf(WIGLEY_BUILD_COMMIT, inputs.repoDir),
+      appBuild: appBuildOf(
+        WIGLEY_BUILD_COMMIT,
+        inputs.repoDir,
+        runMode === 'live',
+      ),
       sessionHost,
       pluginSwitch: {
         mayDisable: (id) =>
@@ -1456,10 +1457,13 @@ function startApp() {
   app
     .whenReady()
     .then(async () => {
-      // With no login PATH read, the inherited one stays.
-      const shellPath = await loginShellPath;
-      if (shellPath !== null) {
-        process.env.PATH = shellPath;
+      // A variable the login shell did not set keeps the inherited one.
+      const shellEnv = await loginShellEnv;
+      if (shellEnv.path !== null) {
+        process.env.PATH = shellEnv.path;
+      }
+      if (shellEnv.sshAuthSock !== null) {
+        process.env.SSH_AUTH_SOCK = shellEnv.sshAuthSock;
       }
       if (runMode !== 'live') {
         disableCodeCache();
