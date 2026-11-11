@@ -1,6 +1,6 @@
 # 04 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -55,3 +55,5 @@ Close-out after the checks pass:
 - Land both repos per `~/wigley-agents/WigleyRepos.md` § Landing, the plugin update included.
 
 ## Proof
+
+Commit none (verification) · proof: Walked by the lead on macOS against the dev app, using the marketplace worktree's start_app.py. 1: endpoint.json pid 64259 was the dev app's Electron main process. 2: kill of that pid alone, then a plain start_app.py: the app was ready, the pid was new and the relay's tools/list returned 15 tools. 3: --restart --dev printed 'restarted' in 3.4 s, gave the new pid 67847, and tools/list answered. 4: none of the old forge, Vite or Electron pids remained. 5: --from with a detached checkout of 1d8527bb gave launch.cwd = that checkout and the new pid 71302. 6: with the app stopped, --restart --dev did a plain start ('ready'). The zombie case is not reachable on macOS: the endpoint pid's parent is forge, which reaps it, so ProcessExitedTests' real unreaped child covers it. · concerns: none

@@ -157,7 +157,7 @@ Boundary rules: `start_app.py` stays standard library only, and holds no forms l
 
 ### Wave 2
 - [x] [Doc re-read](03-doc-re-read.md) — after 01, 02
-- [ ] [Final verification](04-final-verification.md) — after 01, 02, 03
+- [x] [Final verification](04-final-verification.md) — after 01, 02, 03
 
 ## Run log
 
@@ -167,6 +167,7 @@ Review base: b341b94a
 - 01 · hard · 1d8527bb · diff read: PlatformRelay.pid, PlatformInputs.pid, RelayEndpoint.pid present and written in openRelay; npm run typecheck passes · concerns: none
 - 02 · deep · marketplace 8f13bb5 · diff read: Endpoint.pid, DEV_ENDPOINT_DIR, QUIT_WAIT_SECONDS, quit_process, process_exited, restart_app, parse_args present with planned signatures; py_compile passes; version 2.6.8 in both manifests · concerns: step 4's start_app re-reads endpoint.json after the old pid exits (plan's step 4 vs its read-once line); POSIX zombie reads as running; _winapi OpenProcess winerror unchecked on Windows
 - 03 · standard · gui 0fd2cdc6, marketplace aed8e25 · diff read: every planned app-restart mark dropped in both docs; check_pointers.py passes; no contradiction found · concerns: none
+- 04 · lead · none (verification) · Walked by the lead on macOS against the dev app, using the marketplace worktree's start_app.py. 1: endpoint.json pid 64259 was the dev app's Electron main process. 2: kill of that pid alone, then a plain start_app.py: the app was ready, the pid was new and the relay's tools/list returned 15 tools. 3: --restart --dev printed 'restarted' in 3.4 s, gave the new pid 67847, and tools/list answered. 4: none of the old forge, Vite or Electron pids remained. 5: --from with a detached checkout of 1d8527bb gave launch.cwd = that checkout and the new pid 71302. 6: with the app stopped, --restart --dev did a plain start ('ready'). The zombie case is not reachable on macOS: the endpoint pid's parent is forge, which reaps it, so ProcessExitedTests' real unreaped child covers it. · concerns: none
 ### Contract changes
 ### Rulings
 - Plugin version is 2.6.7 on marketplace origin/main at preflight (a peer's bump), so task 02 bumps to 2.6.8; marketplace review base ff28c63 — the plan's stated base moved — costs nothing if wrong · lead
