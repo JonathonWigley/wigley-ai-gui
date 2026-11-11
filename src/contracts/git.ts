@@ -22,9 +22,9 @@ export interface GitWorktree {
 // A clone's git state and the one write the app makes to it. `root` is a
 // clone's top folder, as `topLevel` returns it; paths in and out are relative
 // to it, `/`-separated. Every method but `topLevel`, `originRepoName`,
-// `currentBranch`, `hasUpstream`, `fetch` and `lastFetch` rejects
-// `git <name> exited <code>: <stderr>` on a failed run; every method but
-// `fetch` and `lastFetch` rejects when git cannot start.
+// `currentBranch`, `hasUpstream`, `resolveCommit`, `fetch` and `lastFetch`
+// rejects `git <name> exited <code>: <stderr>` on a failed run; every method
+// but `fetch` and `lastFetch` rejects when git cannot start.
 export interface Git {
   // The clone's top folder holding `folder`, a full path; null when `folder`
   // is in no clone.
@@ -55,6 +55,16 @@ export interface Git {
   // True when the fetch failed: a non-zero exit, `timeoutMs` passed, or git
   // did not start. Never rejects.
   fetch(root: string, timeoutMs: number): Promise<boolean>;
+  // The full commit sha `ref` (a branch, a remote branch such as
+  // `origin/main`, a tag or a sha) names; null when it names no commit.
+  resolveCommit(root: string, ref: string): Promise<string | null>;
+  // True when commit `ancestor` is `descendant` or one of its ancestors.
+  // Rejects when either names no commit.
+  isAncestor(
+    root: string,
+    ancestor: string,
+    descendant: string,
+  ): Promise<boolean>;
   // The modified time of the clone's FETCH_HEAD (ISO); null when never
   // fetched or on any failure. Never rejects.
   lastFetch(root: string): Promise<string | null>;

@@ -210,15 +210,16 @@ src/main/        core main process; main.ts is its composition root
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
                  rename, trash, folder lists and watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
-  processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
-                 ProcessRunner; `limitRuns` caps how many of a runner's programs run at once (git's runner: 4);
+  processes/     runs a program, killed past an optional timeout, and returns its exit code and output, or starts one
+                 detached, its output appended to a log file, so it outlives the app's quit, behind ProcessRunner;
+                 `limitRuns` caps how many of a runner's programs run at once (git's runner: 4);
                  `requiredStdout` runs a program and returns its stdout, rejecting naming the program when it cannot
                  run, times out or exits non-zero
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, and a commit of named paths
+                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes

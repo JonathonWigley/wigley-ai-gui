@@ -12,7 +12,8 @@ interface WaitingRun {
 // `runner` with at most `maxRunning` programs running at once; a run past
 // that waits its turn, in call order, and its `timeoutMs` counts from its
 // start. An abort of `signal` while it waits rejects it with
-// `Stopped <command>` without starting the program.
+// `Stopped <command>` without starting the program. A detached start neither
+// counts nor waits.
 export function limitRuns(
   runner: ProcessRunner,
   maxRunning: number,
@@ -31,6 +32,8 @@ export function limitRuns(
   };
 
   return {
+    startDetached: (command, args, options) =>
+      runner.startDetached(command, args, options),
     run(
       command: string,
       args: string[],

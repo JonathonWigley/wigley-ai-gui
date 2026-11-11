@@ -399,6 +399,47 @@ describe('createProcessGit', () => {
     },
   );
 
+  it.each([
+    { case: 'names a commit', result: exited(0, `${SHA_A}\n`), sha: SHA_A },
+    { case: 'names none', result: exited(1), sha: null },
+  ])('resolveCommit when the ref $case: $sha', async ({ result, sha }) => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git('rev-parse', '--verify', '--quiet', 'origin/main^{commit}'),
+      result,
+    );
+
+    expect(await test.git.resolveCommit(ROOT, 'origin/main')).toBe(sha);
+  });
+
+  it.each([
+    { case: 'exits 0', code: 0, isAncestor: true },
+    { case: 'exits 1', code: 1, isAncestor: false },
+  ])('isAncestor when git $case: $isAncestor', async ({ code, isAncestor }) => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git('merge-base', '--is-ancestor', SHA_A, SHA_B),
+      exited(code),
+    );
+
+    expect(await test.git.isAncestor(ROOT, SHA_A, SHA_B)).toBe(isAncestor);
+  });
+
+  it('isAncestor_ExitsAboveOne_RejectsNamingTheRun', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git('merge-base', '--is-ancestor', SHA_A, SHA_B),
+      exited(128, '', 'fatal: Not a valid commit name'),
+    );
+
+    await expect(test.git.isAncestor(ROOT, SHA_A, SHA_B)).rejects.toThrow(
+      'git merge-base exited 128: fatal: Not a valid commit name',
+    );
+  });
+
   it('lastFetch_RelativeFetchHead_ModifiedIso', async () => {
     const test = setUp();
     test.processes.script(
@@ -617,6 +658,26 @@ describe('createProcessGit over a real clone', () => {
     vi.stubEnv('GIT_COMMITTER_NAME', 'Test');
     vi.stubEnv('GIT_COMMITTER_EMAIL', 'test@example.com');
   }
+
+  it.skipIf(!gitOnPath)(
+    'resolveCommitAndIsAncestor_TwoCommits_OlderIsAncestorOfNewer',
+    async () => {
+      isolateGitConfig();
+      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+      await run('init', '--quiet', '--initial-branch=main');
+      await run('commit', '--quiet', '--allow-empty', '-m', 'first');
+      const first = (await run('rev-parse', 'HEAD')).trim();
+      await run('commit', '--quiet', '--allow-empty', '-m', 'second');
+
+      const second = await adapter.resolveCommit(root, 'main');
+
+      expect(second).not.toBe(first);
+      expect(second).toBe((await run('rev-parse', 'HEAD')).trim());
+      expect(await adapter.resolveCommit(root, 'origin/main')).toBeNull();
+      expect(await adapter.isAncestor(root, first, second ?? '')).toBe(true);
+      expect(await adapter.isAncestor(root, second ?? '', first)).toBe(false);
+    },
+  );
 
   it.skipIf(!gitOnPath)(
     'commitPaths_UnrelatedFileStaged_CommitsOnlyPathsAndKeepsItStaged',

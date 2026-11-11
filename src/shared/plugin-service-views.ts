@@ -24,7 +24,8 @@ export function trackedFiles(
 
 // One plugin's view of `processes`: `registrations` disposing it aborts every
 // run still going and every later one, as an abort of the caller's own `signal`
-// aborts that run.
+// aborts that run. A detached start passes through untracked, since it is meant
+// to outlive the plugin and the app.
 export function abortableProcesses(
   processes: ProcessRunner,
   registrations: Registrations,
@@ -32,6 +33,8 @@ export function abortableProcesses(
   const stopping = new AbortController();
   registrations.track({ dispose: () => stopping.abort() });
   return {
+    startDetached: (command, args, options) =>
+      processes.startDetached(command, args, options),
     run: (command, args, options) =>
       processes.run(command, args, {
         ...options,

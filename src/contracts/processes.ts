@@ -26,6 +26,14 @@ export interface ProcessRunOptions {
   setEnv?: Readonly<Record<string, string>>;
 }
 
+// How one `ProcessRunner.startDetached` starts its program: `logPath` is the
+// full path of the file its stdout and stderr are appended to, made when
+// missing.
+export interface DetachedStartOptions {
+  cwd?: string;
+  logPath: string;
+}
+
 // Runs the machine's programs.
 export interface ProcessRunner {
   // Runs `command` with `args`, no shell, in `cwd` when given, in the app's
@@ -41,4 +49,16 @@ export interface ProcessRunner {
     args: string[],
     options?: ProcessRunOptions,
   ): Promise<ProcessResult>;
+  // Starts `command` with `args`, no shell, in `cwd` when given and in the
+  // app's environment, detached from the app: in its own process group (on
+  // Windows, its own console-less process), its stdout and stderr appended to
+  // `logPath`, and not waited on, so it outlives the app's quit. Resolves once
+  // the program has started; rejects with `Could not run <command>: <reason>`
+  // when it cannot start or `logPath` cannot be opened. Nothing stops it: a
+  // plugin's stop and the app's quit leave it running.
+  startDetached(
+    command: string,
+    args: string[],
+    options: DetachedStartOptions,
+  ): Promise<void>;
 }

@@ -32,11 +32,24 @@ function setUp() {
       started.push(command);
       return held.get(command) ?? Promise.reject(new Error(`No ${command}`));
     },
+    startDetached: async (command: string) => {
+      started.push(`detached ${command}`);
+    },
   };
   return { started, release, limited: limitRuns(inner, 2) };
 }
 
 describe('limitRuns', () => {
+  it('startDetached_AtTheLimit_StartsAtOnce', async () => {
+    const { started, limited } = setUp();
+    limited.run('a', []);
+    limited.run('b', []);
+
+    await limited.startDetached('c', [], { logPath: '/tmp/c.log' });
+
+    expect(started).toEqual(['a', 'b', 'detached c']);
+  });
+
   it('run_PastTheLimit_WaitsForARunToEnd', async () => {
     const { started, release, limited } = setUp();
 
@@ -62,6 +75,7 @@ describe('limitRuns', () => {
             })
           : Promise.resolve(DONE);
       },
+      startDetached: () => Promise.reject(new Error('unused')),
     };
     const limited = limitRuns(inner, 1);
 

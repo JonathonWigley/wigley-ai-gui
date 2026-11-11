@@ -33,7 +33,7 @@ type ScriptOutcome =
 
 export interface IndexSourcesDeps {
   files: Files;
-  processes: ProcessRunner;
+  processes: Pick<ProcessRunner, 'run'>;
   homeDir: string;
   // Read at each index run.
   scriptPath(): string;

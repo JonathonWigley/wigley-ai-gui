@@ -1,4 +1,10 @@
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -176,5 +182,46 @@ describe('createNodeProcesses', () => {
     rmSync(dir, { recursive: true, force: true });
 
     await expect(runScript('', { cwd: dir })).rejects.toThrow(dir);
+  });
+
+  it(
+    'startDetached_Started_AppendsOutputToTheLog',
+    { timeout: 10000 },
+    async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'wigley-node-processes-'));
+      const logPath = path.join(dir, 'logs', 'run.log');
+      const donePath = path.join(dir, 'done');
+      try {
+        await processes.startDetached(
+          process.execPath,
+          [
+            '-e',
+            `process.stdout.write("out "); process.stderr.write("err"); require("node:fs").writeFileSync(${JSON.stringify(donePath)}, "")`,
+          ],
+          { cwd: dir, logPath },
+        );
+        const deadline = Date.now() + 8000;
+        while (!existsSync(donePath) && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        expect(readFileSync(logPath, 'utf8')).toBe('out err');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('startDetached_MissingProgram_RejectsNamingIt', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'wigley-node-processes-'));
+    try {
+      await expect(
+        processes.startDetached('wigley-no-such-program', [], {
+          logPath: path.join(dir, 'run.log'),
+        }),
+      ).rejects.toThrow('Could not run wigley-no-such-program');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

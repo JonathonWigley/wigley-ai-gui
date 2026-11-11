@@ -153,6 +153,34 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         return true;
       }
     },
+    resolveCommit: async (root, ref) => {
+      const result = await processes.run('git', [
+        '-C',
+        root,
+        'rev-parse',
+        '--verify',
+        '--quiet',
+        `${ref}^{commit}`,
+      ]);
+      return result.code === 0 ? result.stdout.trim() : null;
+    },
+    isAncestor: async (root, ancestor, descendant) => {
+      // Exits 0 for an ancestor, 1 for none, and above 1 on an error.
+      const result = await processes.run('git', [
+        '-C',
+        root,
+        'merge-base',
+        '--is-ancestor',
+        ancestor,
+        descendant,
+      ]);
+      if (result.code === 0 || result.code === 1) {
+        return result.code === 0;
+      }
+      throw new Error(
+        `git merge-base exited ${String(result.code)}: ${result.stderr.trim()}`,
+      );
+    },
     lastFetch: (root) => lastFetch(root, deps),
     fileAtHead: async (root, path) => {
       // `--literal-pathspecs` keeps a `*`, `?`, `[` or leading `:` in `path`

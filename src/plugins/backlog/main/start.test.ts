@@ -162,6 +162,8 @@ function fakeGit() {
     upstreamBlobs: vi.fn<Git['upstreamBlobs']>(async () => new Map()),
     fetch: vi.fn<Git['fetch']>(async () => false),
     lastFetch: vi.fn<Git['lastFetch']>(async () => null),
+    resolveCommit: vi.fn<Git['resolveCommit']>(async () => null),
+    isAncestor: vi.fn<Git['isAncestor']>(async () => false),
     fileAtHead: vi.fn<Git['fileAtHead']>(async () => null),
     commitPaths: vi.fn<Git['commitPaths']>(async () => undefined),
     log: vi.fn<Git['log']>(async () => []),

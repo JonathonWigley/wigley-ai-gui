@@ -50,7 +50,7 @@ function scriptedRunner(
   compile: ProcessResult | Error,
   cases: CaseScript[],
   options: (ProcessRunOptions | undefined)[],
-): ProcessRunner {
+): Pick<ProcessRunner, 'run'> {
   return {
     async run(command, args, runOptions) {
       options.push(runOptions);

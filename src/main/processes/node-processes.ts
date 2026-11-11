@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs';
+import path from 'node:path';
 import type {
+  DetachedStartOptions,
   ProcessResult,
   ProcessRunner,
   ProcessRunOptions,
@@ -14,8 +16,44 @@ import type {
 // `timeoutMs` the program is killed and the run resolves at once with the
 // output so far; a grandchild it started is not killed. An abort of `signal`
 // kills it the same way and the run rejects at once with `Stopped <command>`.
+// `startDetached` spawns with `detached`, its output appended to the log file,
+// and unrefs the child.
 export function createNodeProcesses(): ProcessRunner {
-  return { run: runToEnd };
+  return { run: runToEnd, startDetached };
+}
+
+function startDetached(
+  command: string,
+  args: string[],
+  options: DetachedStartOptions,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let logFd: number;
+    try {
+      mkdirSync(path.dirname(options.logPath), { recursive: true });
+      logFd = openSync(options.logPath, 'a');
+    } catch (error) {
+      reject(
+        new Error(`Could not run ${command}: ${(error as Error).message}`),
+      );
+      return;
+    }
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+      windowsHide: true,
+    });
+    // The child holds its own copy of the descriptor once spawned.
+    closeSync(logFd);
+    child.once('spawn', () => {
+      child.unref();
+      resolve();
+    });
+    child.once('error', (error: NodeJS.ErrnoException) => {
+      reject(new Error(startFailureMessage(command, options.cwd, error)));
+    });
+  });
 }
 
 function runToEnd(

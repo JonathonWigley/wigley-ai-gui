@@ -36,7 +36,7 @@ export interface JudgeSettings {
 
 export interface JudgeDeps {
   files: Files;
-  processes: ProcessRunner;
+  processes: Pick<ProcessRunner, 'run'>;
   paths: Paths;
   clock: Clock;
   settings(): JudgeSettings;

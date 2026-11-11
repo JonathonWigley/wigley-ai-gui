@@ -1,4 +1,5 @@
 import type {
+  DetachedStartOptions,
   ProcessResult,
   ProcessRunner,
   ProcessRunOptions,
@@ -14,17 +15,44 @@ export interface FakeRun {
   setEnv: Readonly<Record<string, string>> | undefined;
 }
 
+// One call `FakeProcesses.startDetached` received.
+export interface FakeDetachedStart {
+  command: string;
+  args: string[];
+  options: DetachedStartOptions;
+}
+
 type ScriptedResult = ProcessResult | Error | Promise<ProcessResult>;
 
 // A scripted `ProcessRunner` for the tests. A run nothing is scripted for
 // rejects with `FakeProcesses: no result scripted for <command> <args>`. It
 // sets no timer: a timed-out run is scripted as a result with `timedOut: true`.
 // A run whose `signal` is aborted, at the call or later while a scripted promise
-// holds it, rejects with `Stopped <command>`.
+// holds it, rejects with `Stopped <command>`. A detached start is recorded and
+// resolves, or rejects with the error `failDetachedStarts` set.
 export class FakeProcesses implements ProcessRunner {
   // Every run, in call order.
   readonly runs: FakeRun[] = [];
+  // Every detached start, in call order.
+  readonly detachedStarts: FakeDetachedStart[] = [];
   private readonly results = new Map<string, ScriptedResult>();
+  private detachedFailure: Error | null = null;
+
+  // Every later detached start rejects with `error`; null resolves them again.
+  failDetachedStarts(error: Error | null): void {
+    this.detachedFailure = error;
+  }
+
+  startDetached(
+    command: string,
+    args: string[],
+    options: DetachedStartOptions,
+  ): Promise<void> {
+    this.detachedStarts.push({ command, args: [...args], options });
+    return this.detachedFailure === null
+      ? Promise.resolve()
+      : Promise.reject(this.detachedFailure);
+  }
 
   // The result of each later run whose command and args equal these. An Error
   // rejects the run; a Promise holds the run open until the test settles it.
