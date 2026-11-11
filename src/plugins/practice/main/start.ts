@@ -104,6 +104,8 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
     sessions.contributeTools(
       [ADD_PRACTICE_PROBLEM_TOOL, READ_PRACTICE_STATE_TOOL],
       startPracticeTools({
+        files: services.files,
+        paths: services.paths,
         store,
         progress,
         judge,

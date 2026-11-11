@@ -28,6 +28,7 @@ import { createProgress } from './progress';
 
 const PROBLEM_FOLDER = `${PRACTICE_FOLDER}/problems/two-sum`;
 const REFERENCE = 'class Solution { /* REFERENCE_TEXT */ };';
+const CASES_FILE = '/scratch/two-sum.cases.json';
 const SESSION = {
   id: 'row-1',
   info: { sessionId: 'host-1', projectDir: PRACTICE_FOLDER, harness: null },
@@ -102,6 +103,8 @@ function setUp(options: {
     options: JudgeOptions;
   }[] = [];
   const tools = startPracticeTools({
+    files,
+    paths: posixPaths,
     store,
     progress,
     judge: {
@@ -150,9 +153,46 @@ describe('practice tools', () => {
     case: string;
     args: Record<string, unknown>;
     existing?: boolean;
+    written?: Record<string, string>;
     judge?: (cases: JudgeCase[]) => JudgeResult;
     text: string[];
   }>([
+    {
+      case: 'both cases and casesFile',
+      args: addArgs({ casesFile: CASES_FILE }),
+      text: ['give exactly one of cases and casesFile'],
+    },
+    {
+      case: 'neither cases nor casesFile',
+      args: addArgs({ cases: undefined }),
+      text: ['give exactly one of cases and casesFile'],
+    },
+    {
+      case: 'a relative casesFile',
+      args: addArgs({ cases: undefined, casesFile: 'cases.json' }),
+      text: ['casesFile must be an absolute path, got "cases.json"'],
+    },
+    {
+      case: 'a missing casesFile',
+      args: addArgs({ cases: undefined, casesFile: CASES_FILE }),
+      text: ['casesFile could not be read', CASES_FILE],
+    },
+    {
+      case: 'a casesFile that is not JSON',
+      args: addArgs({ cases: undefined, casesFile: CASES_FILE }),
+      written: { [CASES_FILE]: '[{' },
+      text: [`casesFile ${CASES_FILE} is not JSON`],
+    },
+    {
+      case: 'a casesFile case that does not fit the signature',
+      args: addArgs({ cases: undefined, casesFile: CASES_FILE }),
+      written: {
+        [CASES_FILE]: JSON.stringify([
+          { input: [[1, 2], 'x'], expected: [0, 1], visible: true },
+        ]),
+      },
+      text: ['cases[0].input[1]'],
+    },
     {
       case: 'a blank statement',
       args: addArgs({ statement: '' }),
@@ -216,10 +256,13 @@ describe('practice tools', () => {
     },
   ])(
     'add_practice_problem refuses and writes nothing: $case',
-    async ({ args, existing, judge, text }) => {
+    async ({ args, existing, written, judge, text }) => {
       const { files, call } = setUp({ judge });
       if (existing === true) {
         await writeProblem(files, TWO_SUM);
+      }
+      for (const [path, content] of Object.entries(written ?? {})) {
+        await files.write(path, content);
       }
 
       const result = await call(ADD_PRACTICE_PROBLEM_TOOL.name, args);
@@ -266,6 +309,22 @@ describe('practice tools', () => {
         options: { stopAtFirstFailure: false, code: REFERENCE },
       },
     ]);
+  });
+
+  it('add_practice_problem reads the cases from casesFile', async () => {
+    const { files, call, judgeCalls } = setUp({});
+    await files.write(CASES_FILE, JSON.stringify(TWO_SUM.cases));
+
+    const result = await call(
+      ADD_PRACTICE_PROBLEM_TOOL.name,
+      addArgs({ cases: undefined, casesFile: CASES_FILE }),
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(await files.read(`${PROBLEM_FOLDER}/problem.json`)).toBe(
+      problemJson(TWO_SUM),
+    );
+    expect(judgeCalls[0].cases).toHaveLength(TWO_SUM.cases.length);
   });
 
   it("replace keeps the user's files", async () => {

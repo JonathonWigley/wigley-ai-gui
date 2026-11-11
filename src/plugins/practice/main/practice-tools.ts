@@ -6,6 +6,8 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
+import type { Files } from '../../../contracts/files';
+import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import { type CaseResult, type JudgeResult, VERDICT_NAMES } from '../contract';
 import { stubSource } from '../driver';
@@ -62,7 +64,12 @@ export const ADD_PRACTICE_PROBLEM_TOOL: ToolDefinition = {
         type: 'array',
         items: { type: 'object' },
         description:
-          "The cases in LeetCode's JSON form; visible ones are the examples.",
+          "The cases in LeetCode's JSON form; visible ones are the examples. Give this or casesFile, not both.",
+      },
+      casesFile: {
+        type: 'string',
+        description:
+          'An absolute path to a JSON file holding the cases array, for cases too large to send inline. Give this or cases, not both.',
       },
       statement: {
         type: 'string',
@@ -89,7 +96,6 @@ export const ADD_PRACTICE_PROBLEM_TOOL: ToolDefinition = {
       'title',
       'difficulty',
       'signature',
-      'cases',
       'statement',
       'reference',
       'approach',
@@ -106,8 +112,10 @@ export const READ_PRACTICE_STATE_TOOL: ToolDefinition = {
 };
 
 // `interviewerSlug` names the problem whose current attempt's interviewer is
-// the session, null for any other session.
+// the session, null for any other session. `files` reads a `casesFile`.
 export interface PracticeToolsDeps {
+  files: Pick<Files, 'read'>;
+  paths: Pick<Paths, 'isAbsolute'>;
   store: ProblemStore;
   progress: Progress;
   judge: Judge;
@@ -124,6 +132,7 @@ interface AddProblemArgs {
   compare?: unknown;
   signature?: unknown;
   cases?: unknown;
+  casesFile?: unknown;
   statement?: unknown;
   reference?: unknown;
   approach?: unknown;
@@ -137,7 +146,6 @@ const PROBLEM_FIELDS = [
   'lists',
   'compare',
   'signature',
-  'cases',
 ] as const;
 const TEXT_FIELDS = ['slug', 'statement', 'reference', 'approach'] as const;
 const SHOWN_JSON_LENGTH = 200;
@@ -186,6 +194,37 @@ function referenceRefusal(result: JudgeResult): string | null {
   ].join('\n');
 }
 
+// The cases the call gives, inline or read from `casesFile`; a string is the
+// refusal when it gives both, neither, or a file that cannot be read as JSON.
+async function givenCases(
+  deps: PracticeToolsDeps,
+  named: AddProblemArgs,
+): Promise<{ cases: unknown } | string> {
+  const hasCases = named.cases !== undefined;
+  const hasCasesFile = named.casesFile !== undefined;
+  if (hasCases === hasCasesFile) {
+    return 'Refused: give exactly one of cases and casesFile.';
+  }
+  if (hasCases) {
+    return { cases: named.cases };
+  }
+  const path = named.casesFile;
+  if (typeof path !== 'string' || !deps.paths.isAbsolute(path)) {
+    return `Refused: casesFile must be an absolute path, got ${shownJson(path)}.`;
+  }
+  let text: string;
+  try {
+    text = await deps.files.read(path);
+  } catch (error) {
+    return `Refused: casesFile could not be read: ${errorText(error)}`;
+  }
+  try {
+    return { cases: JSON.parse(text) as unknown };
+  } catch (error) {
+    return `Refused: casesFile ${path} is not JSON: ${errorText(error)}`;
+  }
+}
+
 // Checks the problem and its reference, then writes its folder; every refusal
 // writes nothing under `problems/<slug>/`.
 async function addProblem(
@@ -199,11 +238,18 @@ async function addProblem(
     }
   }
   const slug = named.slug as string;
-  const fields = Object.fromEntries(
-    PROBLEM_FIELDS.filter((field) => named[field] !== undefined).map(
-      (field) => [field, named[field]],
+  const given = await givenCases(deps, named);
+  if (typeof given === 'string') {
+    return errorResult(given);
+  }
+  const fields = {
+    ...Object.fromEntries(
+      PROBLEM_FIELDS.filter((field) => named[field] !== undefined).map(
+        (field) => [field, named[field]],
+      ),
     ),
-  );
+    cases: given.cases,
+  };
   let problem: Problem;
   try {
     problem = parseProblem(fields, slug);
