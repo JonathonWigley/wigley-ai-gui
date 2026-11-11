@@ -41,9 +41,10 @@ notices), kept so the plan is written from them. A decision here stands unless t
   `attempted`, `solved`, `unsolved` (new or attempted) or `due` keeps that status; a word naming one of the problem's
   tags or lists (case-insensitive, whole word) keeps those; any other word matches the title by fuzzy match. A word
   that is a tag or list word of any problem never falls back to title matching.
-- **Content, stacked full width:** the problem pane on top with the tabs Description, Submissions, Notes and Solution;
-  the editor holding `solution.cpp` in the middle; the console at the bottom with the tabs Testcase and Result. The
-  interviewer pane sits to the right of the whole column, hidden until toggled. Every divider is a `Split`, its size
+- **Content, side by side:** the problem pane on the left at full height, with the tabs Description, Submissions,
+  Notes and Solution; on the right the editor holding `solution.cpp` over the console with the tabs Testcase and
+  Result. Alt+h/l move between the problem pane and the editor or console, and Alt+j/k between the editor and the
+  console. The interviewer pane sits to the right of the whole column, hidden until toggled. Every divider is a `Split`, its size
   kept in `uiState`.
 - **Notes tab:** a vim box over the problem's `notes.md`, autosaved.
 - **Solution tab:** shows `approach.md` and `reference.cpp`. Opening it asks to confirm first, because opening it
@@ -64,6 +65,7 @@ notices), kept so the plan is written from them. A decision here stands unless t
   | `⌘'` | every Practice scope, the editor included | Run |
   | `⌘↩` | every Practice scope, the editor included | Submit |
   | `gt` / `gT` | problem pane, console | next / previous tab of that pane |
+  | `Alt+o` / `Alt+i` | any, while Practice shows | next / previous tab: the console's from the console, else the problem pane's; never Sessions' |
   | `j` `k` `gg` `G` `Enter` `Esc` | problem pane | move over the Submissions rows, open a submission's code, back to the rows |
   | `i` / `Esc` | problem pane, console | edit the Notes or Testcase box / leave it |
   | `Ctrl-j` `Ctrl-k` `Ctrl-Shift-j` `Ctrl-Shift-k` | problem pane, console | scroll a line / half a page |
@@ -111,13 +113,25 @@ notices), kept so the plan is written from them. A decision here stands unless t
     parameters and each method's parameters and return type. A case is LeetCode's own form:
     `{ "ops": ["LRUCache","put","get"], "args": [[2],[1,1],[1]], "expected": [null,null,1] }`, `null` for the
     constructor and each void call.
-  - Each case has `visible: true` or `false`; visible cases are the examples Run uses.
+  - `codec`: a class that turns a value into a string and back (Serialize and Deserialize Binary Tree, Encode and
+    Decode Strings); the signature names the class, its encode and decode methods and the value's type. A case is
+    `{ "input": <JSON value> }` with no expected answer: the driver encodes with one instance, decodes the string with
+    a second, and the case passes when the value comes back unchanged. A codec compares `exact`.
+  - Each case has `visible: true` or `false`; visible cases are the examples Run uses, and a codec custom case needs no
+    run of `reference.cpp`, its answer being its input.
+  - The import tool takes the cases inline (`cases`) or, for a set too large for one tool call, as the absolute path
+    of a JSON file holding the array (`casesFile`); exactly one of the two.
 
 ## Judging
 
 - Solutions compile against a prelude header the app writes, holding every standard header and `using namespace
   std;`, because Apple clang has no `<bits/stdc++.h>`. The prelude also declares LeetCode's `ListNode` and
-  `TreeNode`.
+  `TreeNode`, and its two structs LeetCode names `Node` as `GraphNode` (Clone Graph) and `RandomNode` (Copy List with
+  Random Pointer); the driver of a problem using one writes `using Node = <that struct>;` before the solution, so the
+  user writes `Node*` as on LeetCode. A problem uses at most one of the two.
+- A function that takes a `GraphNode*` or `RandomNode*` and returns the same type is a deep copy: its driver records
+  every input node before the call, and a case whose answer reaches any of them is a Runtime Error naming the shared
+  node.
 - The app generates a driver per problem from its signature: it includes the prelude and `solution.cpp`, reads one
   case from a cases file named on its command line, calls the solution, and writes the result as JSON to a result
   file named on its command line, so the user's own `cout` output stays separate. `ProcessRunner` takes no stdin, which
@@ -140,8 +154,11 @@ notices), kept so the plan is written from them. A decision here stands unless t
   attempts, not a LeetCode percentile.
 - **Compare modes** (`compare` in `problem.json`): `exact`; `anyOrder` (the top-level list sorted before comparing);
   `anyOrderDeep` (each inner list sorted, then the outer list); `float` (numbers within `1e-5`, absolute or relative).
-- **Value types:** `int`, `long long`, `double`, `bool`, `char`, `string`, `vector`s and nested `vector`s of these,
-  `ListNode*` and `TreeNode*` in LeetCode's array form (`[1,2,null,3]`). The import tool refuses a problem whose
+- **Value types:** `int`, `long long`, `double`, `bool`, `char`, `string`, `ListNode*` and `TreeNode*` in LeetCode's
+  array form (`[1,2,null,3]`), `vector`s and nested `vector`s of these, `GraphNode*` as LeetCode's adjacency list
+  (`[[2,4],[1,3],[2,4],[1,3]]`, entry `i` for the node valued `i + 1`) and `RandomNode*` as `[val, randomIndex]` pairs
+  (`[[7,null],[13,0]]`). An input `ListNode*` may be `{"values": [...], "pos": k}`, its tail linking back to node `k`
+  (none for `-1`), for cycle problems; an answer is always a plain array. The import tool refuses a problem whose
   signature uses any other type. A tree's trailing nulls are trimmed as `problem.json` is read, and a tree with values
   past its last node is refused.
 

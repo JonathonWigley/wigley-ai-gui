@@ -122,8 +122,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
   `split-window -v` / `-h` do; **Ctrl+Alt+hjkl** swaps the focused chat pane with the one that way;
   **Alt+w** closes the focused chat pane and leaves its session in the side bar
   (`docs/features/chat-panes/design.md`).
-- **Alt+o / Alt+i** next and previous tab; **Alt+Shift+o / Alt+Shift+i** next and previous
-  session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
+- **Alt+o / Alt+i** next and previous tab: the shown mode's own tabs when it has them (Practice's problem pane or
+  console, through the mode's `stepTab`), else the session tabs, showing Sessions; **Alt+Shift+o / Alt+Shift+i** next
+  and previous session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
   user (forms' unanswered items).
 - **Cmd** is for OS-convention app actions only: `Cmd+Enter` send or submit, `Cmd+w` close, the
   summon chord, `Cmd+,` Settings. Nothing else takes Cmd, but Practice's `Cmd+'` Run, which

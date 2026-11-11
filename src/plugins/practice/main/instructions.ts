@@ -28,24 +28,30 @@ The user names the problems: by title, by list (for example "the Blind 75 graph 
 3. signature: the C++ signature LeetCode uses.
    - A function problem: {"kind": "function", "method": "twoSum", "params": [{"name": "nums", "type": "vector<int>"}, {"name": "target", "type": "int"}], "returns": "vector<int>"}. The user writes class Solution with that one public method.
    - A design problem (LRU Cache, Min Stack): {"kind": "design", "className": "LRUCache", "constructor": [{"name": "capacity", "type": "int"}], "methods": [{"name": "get", "params": [{"name": "key", "type": "int"}], "returns": "int"}, {"name": "put", "params": [{"name": "key", "type": "int"}, {"name": "value", "type": "int"}], "returns": "void"}]}.
-   - The supported types are int, long long, double, bool, char, string, vector<T> of any of these (nested to any depth, for example vector<vector<int>>), ListNode* and TreeNode*. void is only a design method's return type. The tool refuses every other type, and a function that returns void. Skip such a problem and tell the user which one and why.
+   - A codec problem, whose class turns a value into a string and back (Serialize and Deserialize Binary Tree, Encode and Decode Strings): {"kind": "codec", "className": "Codec", "encode": "serialize", "decode": "deserialize", "type": "TreeNode*"}. The user writes the class with string <encode>(<type> value) and <type> <decode>(string data); the judge encodes with one instance, decodes with another, and checks the value comes back unchanged.
+   - The supported types are int, long long, double, bool, char, string, ListNode*, TreeNode*, vector<T> of any of these (nested to any depth, for example vector<vector<int>> or vector<ListNode*>), GraphNode* and RandomNode*. GraphNode* is Clone Graph's Node (val, neighbors) and RandomNode* is Copy List with Random Pointer's Node (val, next, random): write these names in the signature, and the user's code and the reference spell either one Node*, as on LeetCode. A problem uses at most one of the two. void is only a design method's return type. The tool refuses every other type, and a function that returns void. Skip such a problem and tell the user which one and why.
 
 4. cases, in LeetCode's JSON form:
    - A function case: {"input": [<one value per parameter, in order>], "expected": <the return value>, "visible": true}.
    - A design case: {"ops": ["LRUCache", "put", "get"], "args": [[2], [1, 1], [1]], "expected": [null, null, 1], "visible": false}. The first op is the class name and its args are the constructor's. expected holds null for the constructor and for each void call.
-   - ListNode* is the array of the list's values: [1, 2, 3]. An empty list is [].
+   - A codec case: {"input": <the value>, "visible": true}, with no expected: the answer is the input itself.
+   - ListNode* is the array of the list's values: [1, 2, 3]. An empty list is []. An input list whose tail links back into it (Linked List Cycle) is {"values": [3, 2, 0, -4], "pos": 1}: the tail links to node pos, none when pos is -1. An expected answer is always a plain array.
    - TreeNode* is LeetCode's level order, with null for a missing child: [3, 9, 20, null, null, 15, 7]. An empty tree is [].
+   - GraphNode* is LeetCode's adjacency list: entry i lists the values of node i + 1's neighbours, [[2, 4], [1, 3], [2, 4], [1, 3]]; the input is node 1, and an empty graph is []. An answer lists its nodes by value, smallest first.
+   - RandomNode* is one [val, randomIndex] pair per node, the index null for none: [[7, null], [13, 0], [11, 4]].
+   - A function that takes a GraphNode* or RandomNode* and returns the same type is a deep copy: the judge fails a case whose answer shares any node with the input.
    - char is a one-character string: "a". long long values stay within ±9007199254740991.
    - Mark LeetCode's examples "visible": true; Run uses them. Add at least 10 hidden cases ("visible": false) that cover the edges: the smallest input, the largest values the constraints allow, duplicates, negative numbers, and empty inputs where the constraints allow them.
+   - Cases too large to send in one call (a stress case of thousands of calls, a 200×200 grid): write the whole cases array as JSON to a file and pass its absolute path as casesFile in place of cases. Give one of the two, never both.
 
 5. compare: how the user's answer is checked.
    - "exact" (the default): the answer must equal expected.
    - "anyOrder": the problem accepts the answer's list in any order.
    - "anyOrderDeep": the order inside each inner list and the order of the outer list do not matter (Group Anagrams).
    - "float": numbers match within 1e-5, absolute or relative.
-   anyOrder and anyOrderDeep apply to a function problem only.
+   anyOrder and anyOrderDeep apply to a function problem only, and a codec problem compares exactly.
 
-6. reference: a correct, complete C++ solution with the same signature. It compiles as the user's code does: every standard header is included, "using namespace std;" is in effect, and ListNode and TreeNode are defined as LeetCode defines them. Do not define them again.
+6. reference: a correct, complete C++ solution with the same signature. It compiles as the user's code does: every standard header is included, "using namespace std;" is in effect, ListNode and TreeNode are defined as LeetCode defines them, and Node names the problem's GraphNode or RandomNode. Do not define them again.
 
 7. approach: Markdown that explains the idea, the steps, and the time and space complexity.
 
