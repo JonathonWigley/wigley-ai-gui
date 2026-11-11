@@ -73,8 +73,7 @@ Main watches `~/.local/state/unity-pool/` and reads `<pool>/state.json` in each 
 A session row shows one badge per pool its session is in:
 
 - `Unity 3` while it holds clone 3: a claim, or an open `/clear` handoff to it. A session holding
-  several clones of the pool (`unity-pool claim --extra`) lists them in clone order: `Unity 3, 4`
-  (planned in `unity-pool-extra-claims`, not built yet).
+  several clones of the pool (`unity-pool claim --extra`) lists them in clone order: `Unity 3, 4`.
 - `Unity: queued 2nd` while it waits in the pool's queue, second from the head.
 
 A claim, handoff or queue ticket belongs to the row whose id is its `row`, else, when no row has that id, to the row
