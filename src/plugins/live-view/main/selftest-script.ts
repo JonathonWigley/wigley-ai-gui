@@ -1,7 +1,6 @@
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
-import { escapeRegExp } from '../../../shared/escape-reg-exp';
 import {
   FAKE_EDITOR_PROCESS_ID,
   FAKE_GAME_RECT,
@@ -34,6 +33,12 @@ const GROUPS: SelfTestGroup[] = [
     steps: [
       {
         width: 1200,
+        keys: [],
+        expect: STREAMING_LINE,
+        checksFit: 'held',
+        why: 'The hub shows only in a Chat tab at least 640px wide, so Live starts streaming once the window widens to show it.',
+      },
+      {
         keys: HUB_KEYS,
         expect: `[live-view] stream stopped in ${SELFTEST_PROJECT_NAME}`,
         checksFit: 'held',
@@ -44,7 +49,7 @@ const GROUPS: SelfTestGroup[] = [
         expect: STREAMING_LINE,
         checksFit: 'held',
         screenshot: 'live-section',
-        why: 'The hub shows only in a Chat tab at least 640px wide; the screenshot shows the cropped portrait sample fitting the hub.',
+        why: "Showing the hub again streams again; the screenshot shows the editor window's sample cut to the portrait Game View rect, whole inside the hub.",
       },
       {
         keys: [' ', 'z', 'l', 'c'],
@@ -60,8 +65,8 @@ const GROUPS: SelfTestGroup[] = [
 // Each run closes an earlier run's rows, launches a new chat session in a
 // project folder whose `Library/EditorInstance.json` names the fake editor's
 // pid, and shows Live there as the agent's `show_live_view` would, with the
-// fake Game View's rect. The first stream starts before any step begins, so
-// `open` waits for its line.
+// fake Game View's rect. The start width leaves the Chat tab too narrow for
+// the hub, so the first stream waits for the first step's width.
 export function liveViewSelfTestScript(
   deps: LiveViewSelfTestDeps,
 ): SelfTestScript {
@@ -89,7 +94,8 @@ export function liveViewSelfTestScript(
     // ellipsis in their row, as their CSS says: the preview's hub shows Skills
     // and Context beside Live. So do the activity dock's tool calls and its
     // done line; the tab bar's parts and the dock's one line clip in their own
-    // box. Live's own notice wraps.
+    // box. Live's own notice wraps. The hub's drag handle holds its resize
+    // prompt, hidden until hovered, over the hub and the transcript.
     scrollsItself: [
       '.agent-skills-name',
       '.context-sources-name',
@@ -98,6 +104,7 @@ export function liveViewSelfTestScript(
       '.chat-working-action',
       '.chat-working-line',
       '.chat-working-done',
+      '.chat-side-handle',
     ],
     open() {
       made ??= makeProject().catch((error: unknown) => {
@@ -119,7 +126,6 @@ export function liveViewSelfTestScript(
       });
       return {
         shownLine: `[chat] Chat tab shown in ${SELFTEST_PROJECT_NAME}`,
-        alsoShown: [new RegExp(`^${escapeRegExp(STREAMING_LINE)}$`)],
         result,
       };
     },
