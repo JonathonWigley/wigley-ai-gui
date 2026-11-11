@@ -1,6 +1,6 @@
 # 01 — App writes its process id to the endpoint file
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `pid` field of the endpoint contract that task 02 reads
 Wave: 1 · Depends on: none
@@ -40,3 +40,5 @@ Done when: `npm run typecheck` (or the compile `npm test` runs) passes; the test
 Commit:    one commit for the group.
 
 ## Proof
+
+Commit 1d8527bb · proof: diff read: PlatformRelay.pid, PlatformInputs.pid, RelayEndpoint.pid present and written in openRelay; npm run typecheck passes · concerns: none

@@ -152,8 +152,8 @@ Boundary rules: `start_app.py` stays standard library only, and holds no forms l
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [App writes its process id to the endpoint file](01-endpoint-pid.md)
-- [ ] [Restart in start_app.py](02-start-app-restart.md)
+- [x] [App writes its process id to the endpoint file](01-endpoint-pid.md)
+- [x] [Restart in start_app.py](02-start-app-restart.md)
 
 ### Wave 2
 - [ ] [Doc re-read](03-doc-re-read.md) — after 01, 02
@@ -164,8 +164,13 @@ Boundary rules: `start_app.py` stays standard library only, and holds no forms l
 Review base: b341b94a
 
 ### Groups
+- 01 · hard · 1d8527bb · diff read: PlatformRelay.pid, PlatformInputs.pid, RelayEndpoint.pid present and written in openRelay; npm run typecheck passes · concerns: none
+- 02 · deep · marketplace 8f13bb5 · diff read: Endpoint.pid, DEV_ENDPOINT_DIR, QUIT_WAIT_SECONDS, quit_process, process_exited, restart_app, parse_args present with planned signatures; py_compile passes; version 2.6.8 in both manifests · concerns: step 4's start_app re-reads endpoint.json after the old pid exits (plan's step 4 vs its read-once line); POSIX zombie reads as running; _winapi OpenProcess winerror unchecked on Windows
 ### Contract changes
 ### Rulings
 - Plugin version is 2.6.7 on marketplace origin/main at preflight (a peer's bump), so task 02 bumps to 2.6.8; marketplace review base ff28c63 — the plan's stated base moved — costs nothing if wrong · lead
+- RelayEndpoint.pid carries a one-line comment matching its neighbour channel — consistency — one line to drop if unwanted · group 01
+- restart_app step 4 calls start_app literally, which re-reads the endpoint file after the quit — the plan's read-once reason applies only while the old app stops — a later app that deletes endpoint.json at quit would break a plain --restart · group 02 · group 02
+- a ready result after a quit reports 'restarted' even when start_app found another start already running — message only · group 02 · group 02
 ### Review rounds
 ### Test gate

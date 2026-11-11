@@ -1,6 +1,6 @@
 # 02 — Restart in start_app.py
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · stops and starts another process across the app and its relay: process lifecycle and timing
 Wave: 1 · Depends on: none
@@ -112,3 +112,5 @@ Done when: `(cd plugins/wigley/scripts/forms && python3 -m unittest discover)` a
 Commit:    one commit for the group, the version bump included.
 
 ## Proof
+
+Commit marketplace 8f13bb5 · proof: diff read: Endpoint.pid, DEV_ENDPOINT_DIR, QUIT_WAIT_SECONDS, quit_process, process_exited, restart_app, parse_args present with planned signatures; py_compile passes; version 2.6.8 in both manifests · concerns: step 4's start_app re-reads endpoint.json after the old pid exits (plan's step 4 vs its read-once line); POSIX zombie reads as running; _winapi OpenProcess winerror unchecked on Windows
