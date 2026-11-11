@@ -1,11 +1,15 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   copyDeclarationInputs,
   type DeclarationFiles,
 } from './plugin-type-inputs.mts';
 
-const SRC = '/repo/src';
-const OUT = '/repo/.plugin-types';
+// The script joins and resolves through `node:path`, so the fixture's paths
+// are this OS's spelling.
+const SRC = path.resolve('/repo/src');
+const OUT = path.resolve('/repo/.plugin-types');
+const at = (folder: string, file: string) => path.join(folder, file);
 
 // Files by absolute path; `copy` copies text.
 function memoryFiles(start: Record<string, string>): DeclarationFiles & {
@@ -27,7 +31,8 @@ function memoryFiles(start: Record<string, string>): DeclarationFiles & {
     },
     declarationsIn: (folder) =>
       [...texts.keys()].filter(
-        (file) => file.startsWith(`${folder}/`) && file.endsWith('.d.ts'),
+        (file) =>
+          file.startsWith(`${folder}${path.sep}`) && file.endsWith('.d.ts'),
       ),
   };
 }
@@ -41,9 +46,9 @@ describe('copyDeclarationInputs', () => {
     {
       name: 'earlier copies overwritten',
       earlierCopies: {
-        [`${OUT}/plugins/workflow/layouts/layout.d.ts`]:
+        [at(OUT, 'plugins/workflow/layouts/layout.d.ts')]:
           "import type { Old } from './removed';",
-        [`${OUT}/shared/page/layout-host/kit.d.ts`]: 'export type Tag = 0;',
+        [at(OUT, 'shared/page/layout-host/kit.d.ts')]: 'export type Tag = 0;',
       },
     },
   ])(
@@ -51,29 +56,29 @@ describe('copyDeclarationInputs', () => {
     ({ earlierCopies }) => {
       const files = memoryFiles({
         ...earlierCopies,
-        [`${OUT}/plugins/workflow/contract.d.ts`]: [
+        [at(OUT, 'plugins/workflow/contract.d.ts')]: [
           "import type { Chip } from './layouts/layout';",
           "export type { Plugin } from '../../contracts/plugin';",
           "import type { App } from 'electron';",
         ].join('\n'),
-        [`${OUT}/contracts/plugin.d.ts`]: 'export type Plugin = {};',
-        [`${SRC}/plugins/workflow/layouts/layout.d.ts`]:
+        [at(OUT, 'contracts/plugin.d.ts')]: 'export type Plugin = {};',
+        [at(SRC, 'plugins/workflow/layouts/layout.d.ts')]:
           "import type { Tag } from '../../../shared/page/layout-host/kit';",
-        [`${SRC}/shared/page/layout-host/kit.d.ts`]: 'export type Tag = 1;',
-        [`${SRC}/plugins/workflow/contract.ts`]: 'unread',
+        [at(SRC, 'shared/page/layout-host/kit.d.ts')]: 'export type Tag = 1;',
+        [at(SRC, 'plugins/workflow/contract.ts')]: 'unread',
       });
 
       const copied = copyDeclarationInputs(SRC, OUT, files);
 
       expect(copied.sort()).toEqual([
-        'plugins/workflow/layouts/layout.d.ts',
-        'shared/page/layout-host/kit.d.ts',
+        path.normalize('plugins/workflow/layouts/layout.d.ts'),
+        path.normalize('shared/page/layout-host/kit.d.ts'),
       ]);
-      expect(files.texts.get(`${OUT}/shared/page/layout-host/kit.d.ts`)).toBe(
+      expect(files.texts.get(at(OUT, 'shared/page/layout-host/kit.d.ts'))).toBe(
         'export type Tag = 1;',
       );
       expect(
-        files.texts.get(`${OUT}/plugins/workflow/layouts/layout.d.ts`),
+        files.texts.get(at(OUT, 'plugins/workflow/layouts/layout.d.ts')),
       ).toBe(
         "import type { Tag } from '../../../shared/page/layout-host/kit';",
       );
@@ -82,12 +87,12 @@ describe('copyDeclarationInputs', () => {
 
   it('throws naming the file and specifier of an import with no declaration', () => {
     const files = memoryFiles({
-      [`${OUT}/plugins/notes/contract.d.ts`]:
+      [at(OUT, 'plugins/notes/contract.d.ts')]:
         "export type { Gone } from './gone';",
     });
 
     expect(() => copyDeclarationInputs(SRC, OUT, files)).toThrow(
-      'plugins/notes/contract.d.ts imports "./gone"',
+      `${path.normalize('plugins/notes/contract.d.ts')} imports "./gone"`,
     );
   });
 });

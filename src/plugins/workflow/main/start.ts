@@ -385,7 +385,12 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
             turnWork.note(sessionId, event);
           }
           const fromCurrentHost = store.hostIdOf(sessionId) === hostSessionId;
-          for (const signal of signalOf(event, flow, fromCurrentHost)) {
+          for (const signal of signalOf(
+            event,
+            flow,
+            fromCurrentHost,
+            services.paths,
+          )) {
             if (replayed) {
               applyReplayed(sessionId, signal, event.at);
             } else {

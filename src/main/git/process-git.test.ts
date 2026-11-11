@@ -13,7 +13,9 @@ import type { Git } from '../../contracts/git';
 import type { ProcessResult } from '../../contracts/processes';
 import { FakeProcesses } from '../../shared/fake-processes';
 import { createMemoryFiles } from '../../shared/memory-files';
+import { osPlatform } from '../../shared/os-platform';
 import { posixPaths } from '../../shared/paths/posix-paths';
+import { windowsPaths } from '../../shared/paths/windows-paths';
 import { createNodeProcesses } from '../processes/node-processes';
 import { createProcessGit } from './process-git';
 
@@ -585,10 +587,12 @@ const gitOnPath = (() => {
 
 describe('createProcessGit over a real clone', () => {
   const processes = createNodeProcesses();
+  // The real clone's paths are this machine's, so its OS's adapter reads them.
   const adapter = createProcessGit({
     processes,
     files: createMemoryFiles(),
-    paths: posixPaths,
+    paths:
+      osPlatform(process.platform) === 'windows' ? windowsPaths : posixPaths,
   });
   let root = '';
 
@@ -645,17 +649,19 @@ describe('createProcessGit over a real clone', () => {
       isolateGitConfig();
       root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
       await run('init', '--quiet');
-      writeFileSync(path.join(root, 'a*.md'), '');
+      // `a[b].md` is a glob matching `ab.md` too, and a name Windows takes,
+      // where it refuses `*`.
+      writeFileSync(path.join(root, 'a[b].md'), '');
       writeFileSync(path.join(root, 'ab.md'), '');
-      await run('add', '--', 'a*.md', 'ab.md');
+      await run('add', '--', ':(literal)a[b].md', 'ab.md');
       await run('commit', '--quiet', '-m', 'first');
-      writeFileSync(path.join(root, 'a*.md'), 'changed\n');
+      writeFileSync(path.join(root, 'a[b].md'), 'changed\n');
       writeFileSync(path.join(root, 'ab.md'), 'changed\n');
 
-      await adapter.commitPaths(root, ['a*.md'], 'Edit glob file');
+      await adapter.commitPaths(root, ['a[b].md'], 'Edit glob file');
 
       expect(await run('show', '--name-only', '--format=%s', 'HEAD')).toBe(
-        'Edit glob file\n\na*.md\n',
+        'Edit glob file\n\na[b].md\n',
       );
       expect(await run('status', '--porcelain=v1')).toBe(' M ab.md\n');
     },

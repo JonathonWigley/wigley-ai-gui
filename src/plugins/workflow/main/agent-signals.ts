@@ -1,5 +1,5 @@
-import path from 'node:path';
 import { type AgentEvent, MAIN_AGENT_ID } from '../../../contracts/agent';
+import type { Paths } from '../../../contracts/paths';
 import type { SessionFlow, WorkflowSignal } from '../contract';
 
 // The signals one agent event gives the session's flow, in fold order; [] for
@@ -10,6 +10,7 @@ export function signalOf(
   event: AgentEvent,
   flow: SessionFlow,
   fromCurrentHost: boolean,
+  paths: Pick<Paths, 'isAbsolute' | 'join' | 'normalize'>,
 ): WorkflowSignal[] {
   switch (event.type) {
     case 'skillStarted':
@@ -19,7 +20,7 @@ export function signalOf(
               type: 'skillStarted',
               skill: event.skill,
               args: event.args,
-              argsPath: argsPathOf(event.args, flow.projectDir),
+              argsPath: argsPathOf(event.args, flow.projectDir, paths),
             },
           ]
         : [];
@@ -54,12 +55,18 @@ export function signalOf(
   }
 }
 
-// `args` read as a path: null when empty, kept when absolute, otherwise
-// resolved against the project folder.
-function argsPathOf(args: string, projectDir: string): string | null {
+// `args` read as a path, normalized: null when empty, kept when absolute,
+// otherwise resolved against the project folder.
+function argsPathOf(
+  args: string,
+  projectDir: string,
+  paths: Pick<Paths, 'isAbsolute' | 'join' | 'normalize'>,
+): string | null {
   const trimmed = args.trim();
   if (trimmed === '') {
     return null;
   }
-  return path.isAbsolute(trimmed) ? trimmed : path.resolve(projectDir, trimmed);
+  return paths.isAbsolute(trimmed)
+    ? paths.normalize(trimmed)
+    : paths.join(projectDir, trimmed);
 }

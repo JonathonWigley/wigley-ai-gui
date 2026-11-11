@@ -114,7 +114,7 @@ export interface ChatSessionsDeps {
   poolProvider(): PoolProvider | null;
   // Expand a folder project's `~`.
   homeDir: string;
-  paths: Pick<Paths, 'expandTilde'>;
+  paths: Pick<Paths, 'expandTilde' | 'join' | 'parent' | 'segmentsBelow'>;
   randomUuid: RandomUuid;
   recent: RecentFolders;
   archived: ArchivedSessions;
@@ -1816,7 +1816,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const roots = worktrees
       .filter((worktree) => !worktree.isMain)
       .map((worktree) => worktree.path);
-    return rootSpellings(roots, folders);
+    return rootSpellings(roots, folders, deps.paths);
   }
 
   // `folder` and each folder above it, deepest first, each with its resolved
@@ -1826,7 +1826,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     for (
       let each = folder;
       !folders.includes(each);
-      each = path.dirname(each)
+      each = deps.paths.parent(each)
     ) {
       folders.push(each);
     }

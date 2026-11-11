@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent } from '../../../contracts/agent';
 import { isBusy, type SessionFlow, type WorkflowSignal } from '../contract';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import { foldFlow, newFlow } from '../flow';
 import { signalOf } from './agent-signals';
 
@@ -204,7 +205,9 @@ const ROWS: {
 
 describe('signalOf', () => {
   it.each(ROWS)('$name', ({ event, flow, fromCurrentHost, expected }) => {
-    expect(signalOf(event, flow, fromCurrentHost)).toEqual(expected);
+    expect(signalOf(event, flow, fromCurrentHost, posixPaths)).toEqual(
+      expected,
+    );
   });
 });
 
@@ -228,7 +231,7 @@ describe('nested subagents', () => {
   }
 
   function foldEvent(flow: SessionFlow, event: AgentEvent): SessionFlow {
-    return signalOf(event, flow, true).reduce(
+    return signalOf(event, flow, true, posixPaths).reduce(
       (folded, signal) => foldFlow(folded, signal, []),
       flow,
     );

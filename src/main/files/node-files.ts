@@ -141,10 +141,37 @@ async function renameWithoutReplacing(from: string, to: string): Promise<void> {
     await rename(from, to);
     return;
   }
-  if ((await lstat(from)).isFile() && (await movedByLink(from, to))) {
-    return;
+  try {
+    if ((await lstat(from)).isFile() && (await movedByLink(from, to))) {
+      return;
+    }
+    await rename(from, to);
+  } catch (error) {
+    if (await isFileAbove(to)) {
+      throw Object.assign(new Error(`a file lies above ${to}`), {
+        code: 'ENOTDIR',
+      });
+    }
+    throw error;
   }
-  await rename(from, to);
+}
+
+// Whether the nearest entry above `path` is something other than a folder.
+// macOS reports a file above a rename's target as ENOTDIR from the first
+// lstat; Windows reports it as EINVAL from `link` or ENOENT from `rename`.
+async function isFileAbove(file: string): Promise<boolean> {
+  let above = path.dirname(file);
+  for (;;) {
+    const entry = await statPath(above);
+    if (entry !== null) {
+      return !entry.isFolder;
+    }
+    const next = path.dirname(above);
+    if (next === above) {
+      return false;
+    }
+    above = next;
+  }
 }
 
 // Whether `to` names the entry at `from` in another case, as on a

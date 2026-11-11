@@ -1,6 +1,6 @@
-import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
+
+import { posixPaths } from '../../../shared/paths/posix-paths';
 
 import {
   type ResolvedFolder,
@@ -221,9 +221,9 @@ describe('rootSpellings', () => {
     real: (folder: string) => string,
   ): ResolvedFolder[] {
     const folders: ResolvedFolder[] = [];
-    for (let folder = link; ; folder = path.dirname(folder)) {
+    for (let folder = link; ; folder = posixPaths.parent(folder)) {
       folders.push({ folder, realFolder: real(folder) });
-      if (folder === path.dirname(folder)) {
+      if (folder === posixPaths.parent(folder)) {
         return folders;
       }
     }
@@ -287,6 +287,6 @@ describe('rootSpellings', () => {
       expected: ['/u/dev/.worktrees/a', '/u/dev/b'],
     },
   ])('rootSpellings_$case', ({ roots, folders, expected }) => {
-    expect(rootSpellings(roots, folders)).toEqual(expected);
+    expect(rootSpellings(roots, folders, posixPaths)).toEqual(expected);
   });
 });

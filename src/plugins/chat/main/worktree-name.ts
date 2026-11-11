@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { Paths } from '../../../contracts/paths';
 
 // The name of the git worktree holding the file at `filePath`, by the two
 // folders worktrees are made in: `.worktrees/<name>/` and Claude Code's own
@@ -65,11 +66,12 @@ export interface ResolvedFolder {
 export function rootSpellings(
   roots: readonly string[],
   folders: readonly ResolvedFolder[],
+  paths: Pick<Paths, 'join' | 'segmentsBelow'>,
 ): string[] {
   const spellings: string[] = [];
   for (const root of roots) {
     spellings.push(root);
-    const spelled = spellingThroughFolders(root, folders);
+    const spelled = spellingThroughFolders(root, folders, paths);
     if (spelled !== null && spelled !== root) {
       spellings.push(spelled);
     }
@@ -80,15 +82,12 @@ export function rootSpellings(
 function spellingThroughFolders(
   root: string,
   folders: readonly ResolvedFolder[],
+  paths: Pick<Paths, 'join' | 'segmentsBelow'>,
 ): string | null {
   for (const { folder, realFolder } of folders) {
-    const below = path.relative(realFolder, root);
-    const isUnderRealFolder =
-      below !== '..' &&
-      !below.startsWith(`..${path.sep}`) &&
-      !path.isAbsolute(below);
-    if (isUnderRealFolder) {
-      return path.join(folder, below);
+    const below = paths.segmentsBelow(root, realFolder);
+    if (below !== null) {
+      return paths.join(folder, ...below);
     }
   }
   return null;
