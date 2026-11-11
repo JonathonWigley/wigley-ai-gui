@@ -1,6 +1,6 @@
 # 03 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · doc-only, checks prose against the landed code
 Wave: 2 · Depends on: 01, 02
@@ -20,3 +20,5 @@ Done when: no planned mark is left; `python3 scripts/check_pointers.py` passes i
 Commit:    one commit per repo.
 
 ## Proof
+
+Commit gui 0fd2cdc6, marketplace aed8e25 · proof: diff read: every planned app-restart mark dropped in both docs; check_pointers.py passes; no contradiction found · concerns: none
