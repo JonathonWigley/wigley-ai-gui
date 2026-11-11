@@ -963,3 +963,11 @@ because the earlier items rewrite many of these tests anyway.
   (the `run` handler in `src/plugins/unity-pool/main/start.ts`). Fix: wrap the `stat` in `findScript` and answer `cli-failed`, with
   a row in the pool-cli tests. Source: the project-picker review; session Claude Code
   5ff361e1-d9aa-4e7a-8d42-9f640a023fdf in `~/Documents/dev/peoplefun/new-games-prototypes`.
+- **Windows live view under mixed-DPI monitors** — `src/main/screen-capture/windows-window-list.ts` converts each
+  window's pixel rect to points with that window's own DPI (pixels x 96 / dpi). On a desktop whose monitors have
+  different DPIs, the point ranges of the monitors can overlap. Live view's window pick (`pickEditorWindow`,
+  `src/plugins/live-view/window-pick.ts`) then compares that rect with the Game View rect Unity reports, and the
+  coordinate space of Unity's Windows `screenPosition` on mixed DPI is unproven. What closes it: a Windows run on a
+  mixed-DPI desktop with the Game View on the non-primary monitor, comparing the two rects. If they disagree, convert
+  both to one space, for example physical pixels through per-monitor DPI awareness. Source session: Claude Code
+  8bbb8a20-7952-4e78-af3b-888ed8197fde in new-games-prototypes.
