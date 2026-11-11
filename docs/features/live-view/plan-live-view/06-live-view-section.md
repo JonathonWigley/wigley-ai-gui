@@ -1,6 +1,6 @@
 # 06 — live-view section, layout, preview and self-test
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · media stream lifetime: getUserMedia, visibility and IntersectionObserver start and stop, and track end, across page reloads and tab moves
 Wave: 3 · Depends on: 02, 05
@@ -174,3 +174,5 @@ Done when:
 Commit: one commit for the group.
 
 ## Proof
+
+Commit bbb47fc5, format d64a2fcf · proof: diff read: layout.d.ts LiveViewInput/LiveViewPart/Layout/CompleteLayout, openStream (contract change) and liveViewPagePart present; wave 3 typecheck and lint clean at d64a2fcf after a lead oxfmt pass; self-test steps 1-3 wait for the test gate · concerns: nothing run by the worker; self-test step 1 needs the offscreen window's IntersectionObserver to report the hub hidden, else steps 1-2 move to task 09's macOS check; step 3's fit check covers chat's whole preview at 1200px; play() is called on each placement, a hidden source-less video included, its rejection ignored

@@ -232,7 +232,7 @@ and `services.files`.
 - [x] [live-view plugin: tools, slot, window pick](05-live-view-main.md) — after 01
 
 ### Wave 3
-- [ ] [live-view section, layout, preview and self-test](06-live-view-section.md) — after 02, 05
+- [x] [live-view section, layout, preview and self-test](06-live-view-section.md) — after 02, 05
 
 ### Wave 4 (Unity phase)
 - [x] [Probe rect without the toolbar strip](07-probe-toolbar-strip.md) — after 03
@@ -252,9 +252,11 @@ Review base: 1449ada4
 - 04 · hard · 59067770 · diff read: all four Produces present; wave 2 typecheck and lint clean at 4843128d · concerns: Windows C# (Add-Type, C# 5) and a one-window ConvertTo-Json array are unchecked until task 09's Windows run; no test drives the adapters through FakeProcesses (args, 10000 ms timeout)
 - 05 · hard (compile fix on hard) · 46cfe877, fix 4843128d · diff read: contract, window-pick and live-tools Produces present, sessionEnded added (contract change); wave 2 typecheck and lint clean at 4843128d after a same-rung TS2352 fix and an oxfmt pass by the lead · concerns: window-pick.test.ts uses top-level await over the fake's windows; the preview-sample test assumes on() fires once per set and not on subscribe; AGENTS.md live-view tree entry lacks window-pick.ts (task 08)
 - 07 · deep · marketplace f1181e5 · diff read; live on clone 2 (6000.3.12f1): docked [2030.85,139,354.31,767] and floating [140.77,147,346.45,750] crops start on game pixels (before: y 115 / 121 vs truth 139 / 147); aspect within 0.5% of mark stills; no compile diagnostics · concerns: Retina (pixelsPerPoint 2) unverified, only a 1x display; docked proof via screencapture -l cropped, since Auri covered the docked view; position reads stale right after LoadWindowLayout (not on start's path)
+- 06 · deep · bbb47fc5, format d64a2fcf · diff read: layout.d.ts LiveViewInput/LiveViewPart/Layout/CompleteLayout, openStream (contract change) and liveViewPagePart present; wave 3 typecheck and lint clean at d64a2fcf after a lead oxfmt pass; self-test steps 1-3 wait for the test gate · concerns: nothing run by the worker; self-test step 1 needs the offscreen window's IntersectionObserver to report the hub hidden, else steps 1-2 move to task 09's macOS check; step 3's fit check covers chat's whole preview at 1200px; play() is called on each placement, a hidden source-less video included, its rejection ignored
 ### Contract changes
 - Chat hub shrinksLast condition selector: nested :has(...:has()) → one :has() descendant path (.chat-side-parts:has(> .chat-side-part[data-shrinks-last] .chat-side-section:not(.is-collapsed) .chat-side-section-body > :not([hidden]))) · why: :has() cannot nest, so the planned rule would be dropped whole · consumers: 09 · group 02
 - 05: createLiveTools also returns sessionEnded(sessionId), which deletes the pick and stops a still-waiting show from writing one; it exports LiveTools, LiveToolsDeps, ShowArgs and GameRectTuple. Task 06 calls only show, so its brief is unchanged.
+- 06: openStream(sourceId, frameRate) landed as a method of createStreamSource({ timers }), so the sample's draw loop ticks on the page's timers service; only 06 consumes it
 ### Rulings
 - Marketplace review base is 95a1dfb (live-view worktree tip at preflight); the gui base above covers wigley-ai-gui only — git fetch fails (Permission denied (publickey)) in and out of the sandbox, so both runs build on local main, which sits at the worktrees' base — a rebase at landing catches any origin drift · lead
 - The second probe runs after save_run and write_current, so a probe failure cannot lose the run — none to consumers if wrong · group 03 · group 03
@@ -273,5 +275,11 @@ Review base: 1449ada4
 - lead ran oxfmt --write on four wave-2 files (editor-tooling-only) · group 05
 - 07: root cause is window.position's DockArea origin at the tab strip's top; fix reads m_Parent screenPosition minus borderSize by reflection, window.position fallback · group 07
 - 07: no doc edit; capture.md already says game_view excludes the toolbar · group 07
+- 06: sections held per session as a Set, so a session shown in two Chat tabs stops both on a pick delete · group 06
+- 06: an open-failed notice ends retries until a new pick, as closed does · group 06
+- 06: isIntersecting survives a redraw's new videoSlot and resets only when the pick goes · group 06
+- 06: the sample draw loop stops on track readyState each tick, since track.stop() fires no ended · group 06
+- 06: self-test steps use checksFit held; scrollsItself adds .context-sources-name; problems reports a show_live_view error result · group 06
+- lead ran oxfmt --write on three task 06 files (editor-tooling-only) · group 06
 ### Review rounds
 ### Test gate
