@@ -10,7 +10,7 @@ export function signalOf(
   event: AgentEvent,
   flow: SessionFlow,
   fromCurrentHost: boolean,
-  paths: Pick<Paths, 'isAbsolute' | 'join' | 'normalize'>,
+  paths: Pick<Paths, 'isAbsolute' | 'join'>,
 ): WorkflowSignal[] {
   switch (event.type) {
     case 'skillStarted':
@@ -55,18 +55,16 @@ export function signalOf(
   }
 }
 
-// `args` read as a path, normalized: null when empty, kept when absolute,
-// otherwise resolved against the project folder.
+// `args` read as a path: null when empty, kept when absolute, otherwise
+// resolved against the project folder.
 function argsPathOf(
   args: string,
   projectDir: string,
-  paths: Pick<Paths, 'isAbsolute' | 'join' | 'normalize'>,
+  paths: Pick<Paths, 'isAbsolute' | 'join'>,
 ): string | null {
   const trimmed = args.trim();
   if (trimmed === '') {
     return null;
   }
-  return paths.isAbsolute(trimmed)
-    ? paths.normalize(trimmed)
-    : paths.join(projectDir, trimmed);
+  return paths.isAbsolute(trimmed) ? trimmed : paths.join(projectDir, trimmed);
 }

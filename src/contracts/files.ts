@@ -71,7 +71,8 @@ export interface Files {
   // Makes the folder and any missing parents; an existing folder is no error.
   makeFolder(path: string): Promise<void>;
   // Moves a file or a folder. Rejects with `<to> already exists` when anything
-  // is at `to`, changing nothing; makes no parent folders of `to`. A rename
+  // is at `to`, changing nothing; makes no parent folders of `to`, and rejects
+  // with code `ENOTDIR` when a file lies above `to`. A rename
   // that only changes the case of a name on a case-insensitive volume moves
   // the entry. The Node adapter moves a file by hard link, so a file that
   // appears at `to` mid-move is never replaced; a folder, a symlink, or a file
