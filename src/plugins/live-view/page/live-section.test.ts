@@ -82,10 +82,7 @@ interface PendingOpen {
 // `openStream` stays pending until the test resolves it, and the intersection
 // hook reports what the test says, to every slot drawn and not yet disposed.
 // `events` records each open and each track stop, in order.
-function setUp(
-  initial: LivePick | undefined,
-  userPart?: Layout['liveView'],
-) {
+function setUp(initial: LivePick | undefined, userPart?: Layout['liveView']) {
   let pick = initial;
   let isVisible = true;
   const events: string[] = [];
@@ -412,8 +409,14 @@ describe('createLiveSection', () => {
   });
 
   it.each([
-    { name: 'pick deleted', goAway: (live: Section) => live.setPick(undefined) },
-    { name: 'section disposed', goAway: (live: Section) => live.built.dispose() },
+    {
+      name: 'pick deleted',
+      goAway: (live: Section) => live.setPick(undefined),
+    },
+    {
+      name: 'section disposed',
+      goAway: (live: Section) => live.built.dispose!(),
+    },
     {
       name: 'session forgotten',
       goAway: (live: Section) => live.section.forget(SESSION),
