@@ -53,7 +53,10 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
       log: services.log,
     });
     const sessions = api.dependency(sessionsMainKey);
-    sessions.contributeTools([...liveTools.definitions], liveTools.startSession);
+    sessions.contributeTools(
+      [...liveTools.definitions],
+      liveTools.startSession,
+    );
     api.events.on('sessions.ended', ({ sessionId }) =>
       liveTools.sessionEnded(sessionId),
     );

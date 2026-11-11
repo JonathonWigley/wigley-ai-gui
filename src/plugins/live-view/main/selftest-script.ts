@@ -6,10 +6,7 @@ import {
   FAKE_GAME_RECT,
 } from '../../../shared/fake-screen-capture';
 import type { ChatMainExports } from '../../chat/contract';
-import type {
-  SessionsMainExports,
-  ToolResult,
-} from '../../sessions/contract';
+import type { SessionsMainExports, ToolResult } from '../../sessions/contract';
 import type { LiveTools } from './live-tools';
 
 // The self-test's Unity project folder, made under the self-test's home. Its

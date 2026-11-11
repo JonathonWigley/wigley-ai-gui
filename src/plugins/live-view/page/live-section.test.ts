@@ -175,7 +175,10 @@ function setUp(initial: LivePick | undefined) {
       section.pageVisibilityChanged();
     },
     intersect(isIntersecting: boolean) {
-      observed.filter((each) => !each.isDisposed).at(-1)!.report(isIntersecting);
+      observed
+        .filter((each) => !each.isDisposed)
+        .at(-1)!
+        .report(isIntersecting);
     },
     // Resolves the open at `index`, the last when left out, with a stream of
     // one video track.
