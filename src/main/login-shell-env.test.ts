@@ -153,11 +153,31 @@ describe('readLoginShellEnv', () => {
   );
 
   it.skipIf(!hasPosixShell)(
-    'resolves null within the cap and kills the child that holds stdout open',
+    'reads the variables at the end marker while a child holds stdout open, then kills the child',
     async () => {
       const pidFile = path.join(folder, 'child.pid');
       const shell = standInShell(
-        `sleep 5 &\necho $! > '${pidFile}'\nprintf '%s' '${START}/a${SEP}${END}'`,
+        `sleep 5 &\necho $! > '${pidFile}'\nprintf '%s' '${START}/a${SEP}/s${END}'`,
+      );
+      const startedAt = Date.now();
+
+      expect(await readLoginShellEnv(shell, CAP_MS)).toEqual({
+        path: '/a',
+        sshAuthSock: '/s',
+      });
+      expect(Date.now() - startedAt).toBeLessThan(CAP_MS);
+      const childPid = Number(readFileSync(pidFile, 'utf8'));
+      expect(await isRunningAfter(childPid, 500)).toBe(false);
+    },
+    SETTLE_LIMIT_MS,
+  );
+
+  it.skipIf(!hasPosixShell)(
+    'resolves no variables within the cap when a child holds stdout open with no end marker',
+    async () => {
+      const pidFile = path.join(folder, 'child.pid');
+      const shell = standInShell(
+        `sleep 5 &\necho $! > '${pidFile}'\nprintf '%s' '${START}/a${SEP}/s'`,
       );
 
       expect(await readLoginShellEnv(shell, CAP_MS)).toEqual(NONE);

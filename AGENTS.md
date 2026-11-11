@@ -1161,7 +1161,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   config reads `IdentityAgent SSH_AUTH_SOCK` gets no key and the app update's `git fetch` of the clone is denied. Main
   reads them only when the app's parent is launchd (`process.ppid === 1`): a terminal start (`npm start`) and the
   self-test keep the environment of the shell that ran them, nvm or a venv included. The read's shell leads its own process
-  group, and the 3 s cap kills that whole group.
+  group. The read ends at the end marker, not when stdout closes, since a process the profile starts can hold stdout
+  open; the end marker or the 3 s cap kills that whole group.
 - Under `electron-forge start` the page usually loads twice at startup: Forge's dev server reloads every connected
   page when a build lands after the page connected, which nothing guarantees. Code that acts on page load runs on
   every load, as the self-test does. Main numbers each load by the window's navigation count, 1 for the first: the

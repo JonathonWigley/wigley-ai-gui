@@ -50,6 +50,15 @@ export function envFromMarkedOutput(output: string): LoginShellEnv {
   };
 }
 
+// Whether `output` holds the end marker after the start marker.
+function hasMarkedEnd(output: string): boolean {
+  const start = output.indexOf(START_MARKER);
+  return (
+    start !== -1 &&
+    output.indexOf(END_MARKER, start + START_MARKER.length) !== -1
+  );
+}
+
 function nonEmpty(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
@@ -92,30 +101,36 @@ export function readLoginShellEnv(
     // holds the app open.
     child.unref();
     let output = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      output += chunk;
-    });
-    child.on('error', () => {
-      clearTimeout(cap);
-      resolve(NO_ENV);
-    });
-    // `close` waits for stdout to close, which a process the profile started
-    // can hold open after the shell exits. A profile that errors after
-    // printing still printed the variables, so the output is read whatever
-    // the exit.
-    child.on('close', () => {
-      clearTimeout(cap);
-      resolve(envFromMarkedOutput(output));
-    });
+    let isSettled = false;
     // An interactive shell ignores SIGTERM, so the group gets SIGKILL. The
     // read settles before the kill, so a kill that fails cannot hold it open.
-    const cap = setTimeout(() => {
-      resolve(NO_ENV);
-      if (child.pid !== undefined) {
+    const settle = (env: LoginShellEnv, endsGroup: boolean) => {
+      if (isSettled) {
+        return;
+      }
+      isSettled = true;
+      clearTimeout(cap);
+      resolve(env);
+      if (endsGroup && child.pid !== undefined) {
         killProcessGroup(child.pid);
       }
-    }, timeoutMs);
+    };
+    child.stdout.setEncoding('utf8');
+    // The read ends at the end marker: a process the profile started (an
+    // agent run with no redirect) can hold stdout open long after the shell
+    // exits, and waiting for `close` would lose the variables to the cap.
+    child.stdout.on('data', (chunk: string) => {
+      output += chunk;
+      if (hasMarkedEnd(output)) {
+        settle(envFromMarkedOutput(output), true);
+      }
+    });
+    child.on('error', () => settle(NO_ENV, false));
+    // A shell that exits without the end marker. A profile that errors after
+    // printing still printed the variables, so the output is read whatever
+    // the exit.
+    child.on('close', () => settle(envFromMarkedOutput(output), false));
+    const cap = setTimeout(() => settle(NO_ENV, true), timeoutMs);
   });
 }
 
