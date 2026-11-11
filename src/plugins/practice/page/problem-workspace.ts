@@ -8,7 +8,11 @@ import type {
 } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
+import type {
+  FocusTarget,
+  PaneDirection,
+  ResizeTarget,
+} from '../../../contracts/panes';
 import type {
   KeyHints,
   PageChannel,
@@ -122,8 +126,17 @@ const TAB_TITLES: Record<ProblemTab | ConsoleTab, string> = {
   result: 'Result',
 };
 
-// The panes of the column, top to bottom: the order Alt+j and Alt+k move in.
-const PANES: readonly WorkspacePane[] = ['problem', 'editor', 'console'];
+// Where Alt+hjkl moves from each pane: the problem pane on the left, the
+// editor over the console on the right. A move with no entry leaves the
+// workspace.
+const PANE_MOVES: Record<
+  WorkspacePane,
+  Partial<Record<PaneDirection, WorkspacePane>>
+> = {
+  problem: { right: 'editor' },
+  editor: { left: 'problem', down: 'console' },
+  console: { left: 'problem', up: 'editor' },
+};
 
 // The two boxes: the notes on the Notes tab, the custom cases on Testcase.
 type BoxId = Exclude<DraftId, 'code'>;
@@ -310,11 +323,11 @@ export function createProblemWorkspace(
   });
   const outer = createSplit({
     ...splitDeps,
-    axis: 'column',
-    stateKey: 'problemHeight',
-    initial: 280,
-    min: 120,
-    endMin: 240,
+    axis: 'row',
+    stateKey: 'problemWidth',
+    initial: 600,
+    min: 320,
+    endMin: 400,
   });
   outer.end.append(inner.element);
   const column = element('div', 'practice-column');
@@ -400,10 +413,7 @@ export function createProblemWorkspace(
 
   const focusTarget: FocusTarget = {
     move(direction) {
-      if (direction !== 'up' && direction !== 'down') {
-        return false;
-      }
-      const next = PANES[PANES.indexOf(pane) + (direction === 'down' ? 1 : -1)];
+      const next = PANE_MOVES[pane][direction];
       if (next === undefined) {
         return false;
       }
@@ -412,10 +422,19 @@ export function createProblemWorkspace(
     },
   };
 
+  // The problem pane's right divider is the problem | code split; the editor
+  // and console move their shared divider, then the interviewer's when it
+  // shows, else the problem | code split on their left.
   const resizeTarget: ResizeTarget = {
     nudge(direction) {
-      const divider = pane === 'problem' ? outer : inner;
-      return divider.nudge(direction) || side.nudge(direction);
+      if (pane === 'problem') {
+        return outer.nudge(direction) || side.nudge(direction);
+      }
+      return (
+        inner.nudge(direction) ||
+        side.nudge(direction) ||
+        outer.nudge(direction)
+      );
     },
   };
 

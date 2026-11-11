@@ -49,9 +49,9 @@
   overflow-y: auto;
 }
 
-/* The open problem's workspace: the column of the problem pane, the editor and
-   the console, with the interviewer's slot beside it. Each split pane is a grid
-   of one cell its pane root fills. */
+/* The open problem's workspace: the column of the problem pane beside the
+   editor over the console, with the interviewer's slot beside it. Each split
+   pane is a grid of one cell its pane root fills. */
 .practice-workspace,
 .practice-column {
   height: 100%;
