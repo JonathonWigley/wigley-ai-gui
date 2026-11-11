@@ -216,6 +216,20 @@ describe('rowBadges', () => {
       expected: [{ text: 'Unity 2', queued: false }],
     },
     {
+      name: 'two clones held, claim and handoff',
+      pools: [
+        pool('a', [
+          clone(1),
+          clone(3, { claim: claim('agent', 'host-x', 'row-7') }),
+          clone(4, {
+            handoff: { session: 'host-x', row: 'row-7', until: NOW + 5_000 },
+          }),
+        ]),
+      ],
+      row: ROW,
+      expected: [{ text: 'Unity 3, 4', queued: false }],
+    },
+    {
       name: 'a stranded mark shows no badge',
       pools: [
         pool('a', [

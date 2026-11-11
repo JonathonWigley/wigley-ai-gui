@@ -61,8 +61,8 @@ export function ordinal(position: number): string {
   return `${position}${suffix}`;
 }
 
-// One badge per pool, in the snapshot's name order: `Unity <n>` for a clone the row's session holds by an agent
-// claim or an open handoff, else `Unity: queued <ordinal>` for its queue ticket, each holder matched to its row
+// One badge per pool, in the snapshot's name order: `Unity <n>, <m>` listing every clone the row's session holds by
+// an agent claim or an open handoff, in clone order, else `Unity: queued <ordinal>` for its queue ticket, each holder matched to its row
 // among `rows`. A hold and a stranded mark belong to no session and show none.
 export function rowBadges(
   pools: readonly PoolState[],
@@ -213,7 +213,7 @@ function poolBadge(
   pool: PoolState,
   belongsToRow: (holder: PoolHolder) => boolean,
 ): RowBadgeInput | null {
-  const held = pool.clones.find((clone) => {
+  const held = pool.clones.filter((clone) => {
     const claimedByRow =
       clone.claim !== null &&
       clone.claim.kind === 'agent' &&
@@ -221,8 +221,9 @@ function poolBadge(
     const handedToRow = clone.handoff !== null && belongsToRow(clone.handoff);
     return claimedByRow || handedToRow;
   });
-  if (held !== undefined) {
-    return { text: `Unity ${held.number}`, queued: false };
+  if (held.length > 0) {
+    const numbers = held.map((clone) => clone.number).join(', ');
+    return { text: `Unity ${numbers}`, queued: false };
   }
   const index = pool.queue.findIndex((ticket) => belongsToRow(ticket));
   return index === -1
