@@ -11,6 +11,8 @@ const SAMPLE_TEXT = 'Live sample';
 const GRID_SQUARES = 8;
 // How far the sweeping bar moves each frame, in canvas pixels.
 const SWEEP_STEP = 4;
+// Below 1, the sample card redraws in a tight loop and a desktop capture fails.
+const MIN_FRAME_RATE = 1;
 
 // `timers` ticks a sample source's test card.
 export interface StreamSourceDeps {
@@ -18,8 +20,8 @@ export interface StreamSourceDeps {
 }
 
 // `openStream` opens the stream of a capture source at most `frameRate`
-// frames a second: a sample source's moving test card, drawn on a canvas, or
-// the desktop capture of any other source.
+// frames a second, 1 at least: a sample source's moving test card, drawn on a
+// canvas, or the desktop capture of any other source.
 export interface StreamSource {
   openStream(sourceId: string, frameRate: number): Promise<MediaStream>;
 }
@@ -27,14 +29,15 @@ export interface StreamSource {
 export function createStreamSource(deps: StreamSourceDeps): StreamSource {
   return {
     async openStream(sourceId, frameRate) {
+      const rate = Math.max(MIN_FRAME_RATE, frameRate);
       if (sourceId.startsWith(SAMPLE_PREFIX)) {
         return sampleStream(
           sourceId.slice(SAMPLE_PREFIX.length),
-          frameRate,
+          rate,
           deps.timers,
         );
       }
-      return desktopStream(sourceId, frameRate);
+      return desktopStream(sourceId, rate);
     },
   };
 }

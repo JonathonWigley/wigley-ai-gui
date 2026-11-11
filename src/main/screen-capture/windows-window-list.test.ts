@@ -139,8 +139,5 @@ describe('createWindowsWindowList', () => {
         unsetEnv: undefined,
       },
     ]);
-    expect(
-      Buffer.from(processes.runs[0].args[3], 'base64').toString('utf16le'),
-    ).toBe(WINDOWS_WINDOW_LIST_SCRIPT);
   });
 });

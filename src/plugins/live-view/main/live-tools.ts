@@ -57,7 +57,7 @@ const BLOCKED_REPLY =
   'Screen Recording is off for Auri. The Live section shows a button that opens System Settings; the user turns it on there and restarts Auri. Carry on without the stream.';
 const HIDDEN_REPLY = 'The Live section stopped streaming.';
 const ABORTED_REPLY =
-  'show_live_view was interrupted; the Live section was left as it was.';
+  'show_live_view was interrupted by a hide, the session ending or the call aborting; the Live section was left as it was.';
 
 // `[x, y, width, height]` in global screen points, top-left origin.
 export type GameRectTuple = readonly [number, number, number, number];
@@ -82,7 +82,7 @@ export interface LiveTools {
   // `show_live_view` for the session, with its args already checked: writes
   // the session's pick and replies, or replies with the error and leaves the
   // pick as it was. A session that hides or ends while it waits, or a call
-  // whose `signal` aborts, gets no pick.
+  // whose `signal` aborts, gets no pick and the interrupted error reply.
   show(
     sessionId: string,
     args: ShowArgs,
@@ -182,16 +182,17 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
       if ('error' in result) {
         return errorResult(result.error);
       }
-      if (signal?.aborted === true) {
+      if (
+        signal?.aborted === true ||
+        generationOf(sessionId) !== generationBefore
+      ) {
         return errorResult(ABORTED_REPLY);
       }
       const { pick } = result;
-      if (generationOf(sessionId) === generationBefore) {
-        picks.set(sessionId, pick);
-        log(
-          `${sessionId} shows ${pick.kind === 'stream' ? pick.summary : 'Screen Recording off'}`,
-        );
-      }
+      picks.set(sessionId, pick);
+      log(
+        `${sessionId} shows ${pick.kind === 'stream' ? pick.summary : 'Screen Recording off'}`,
+      );
       if (pick.kind === 'blocked') {
         return errorResult(BLOCKED_REPLY);
       }

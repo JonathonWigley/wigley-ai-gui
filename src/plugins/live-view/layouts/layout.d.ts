@@ -32,7 +32,8 @@ export interface LiveViewPart {
 }
 
 // Each part comes from the first layout that defines it among the `live-view.layout` setting and `default`; a part
-// that throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
+// that throws, returns no element appended to `parent`, appends other nodes beside it, or returns no `videoSlot` inside
+// its element is drawn by `default` instead.
 export interface Layout {
   liveView?(
     parent: HTMLElement,

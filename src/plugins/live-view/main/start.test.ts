@@ -31,6 +31,8 @@ const SESSION = 'row-1';
 const PROJECT = '/home/Game';
 const EDITOR_FILE = '/home/Game/Library/EditorInstance.json';
 const CONTEXT = { toolUseId: null, signal: new AbortController().signal };
+const INTERRUPTED_REPLY =
+  'show_live_view was interrupted by a hide, the session ending or the call aborting; the Live section was left as it was.';
 
 const EDITOR_PICK: LivePick = {
   kind: 'stream',
@@ -262,20 +264,27 @@ describe('liveViewMainPart', () => {
       parts: Awaited<ReturnType<typeof startPart>>,
       abort: AbortController,
     ) => unknown;
+    text: string;
   }>([
     {
       given: 'the session ending',
       stop: (parts) =>
         parts.harness.emit('sessions.ended', { sessionId: SESSION }),
+      text: INTERRUPTED_REPLY,
     },
     {
       given: 'hide_live_view',
       stop: (parts) => parts.call('hide_live_view', {}),
+      text: INTERRUPTED_REPLY,
     },
-    { given: 'the call aborting', stop: (_parts, abort) => abort.abort() },
+    {
+      given: 'the call aborting',
+      stop: (_parts, abort) => abort.abort(),
+      text: INTERRUPTED_REPLY,
+    },
   ])(
-    'showLiveView_StoppedWhileTheWindowsList_WritesNoPick_given $given',
-    async ({ stop }) => {
+    'showLiveView_StoppedWhileTheWindowsList_WritesNoPickAndRepliesInterrupted_given $given',
+    async ({ stop, text }) => {
       const parts = await startPart();
       const abort = new AbortController();
       let answer: (list: WindowList) => void = () => undefined;
@@ -289,9 +298,13 @@ describe('liveViewMainPart', () => {
 
       await stop(parts, abort);
       answer(await GRANTED.listWindows());
-      await shown;
+      const result = await shown;
 
-      expect(parts.pickOf(SESSION)).toBeUndefined();
+      expect({
+        pick: parts.pickOf(SESSION),
+        isError: result.isError ?? false,
+        text: result.content[0]?.text,
+      }).toEqual({ pick: undefined, isError: true, text });
     },
   );
 

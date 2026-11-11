@@ -457,6 +457,35 @@ describe('createLiveSection', () => {
     ]).toEqual([2, 'ended', 'ended']);
   });
 
+  it('buildThrows_RethrowsAndLaterPicksLeaveItsSectionAlone', () => {
+    const live = setUp(STREAM_PICK);
+    const parent = new FakeElement('div');
+    const summaries: (string | null)[] = [];
+    const build = () =>
+      live.section.part.build(asHtml(parent), SESSION, {
+        setSummary: (text) => {
+          summaries.push(text);
+          if (summaries.length === 1) {
+            throw new Error('no summary');
+          }
+        },
+      });
+
+    expect(build).toThrow('no summary');
+    const [drawnAtThrow] = parent.childNodes;
+    live.setPick({ ...STREAM_PICK, sourceId: 'window:8:0' });
+
+    expect({
+      summaries,
+      drawn: parent.childNodes.length,
+      isTheSameDraw: parent.childNodes[0] === drawnAtThrow,
+    }).toEqual({
+      summaries: ['Game View · proj'],
+      drawn: 1,
+      isTheSameDraw: true,
+    });
+  });
+
   it.each([
     {
       name: 'no videoSlot',
