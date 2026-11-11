@@ -458,6 +458,7 @@ const modeServices = modeServicesOf(runEnvironment);
 // The platform record main runs on, as the served config and every plugin's services hold it.
 const platform: Platform = platformFor(osPlatform(process.platform), {
   username: os.userInfo().username,
+  pid: process.pid,
   env: process.env,
   execPath: process.execPath,
   cwd: process.cwd(),

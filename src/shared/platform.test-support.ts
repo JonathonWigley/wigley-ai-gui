@@ -4,6 +4,7 @@ import { platformFor } from './platform';
 export function fakePlatform(os: OsName): Platform {
   return platformFor(os, {
     username: 'tester',
+    pid: 4242,
     env: {},
     execPath: '/app/exe',
     cwd: '/app',

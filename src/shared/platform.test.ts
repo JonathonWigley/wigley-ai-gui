@@ -3,6 +3,7 @@ import { launchCommand, platformFor, type PlatformInputs } from './platform';
 
 const INPUTS: PlatformInputs = {
   username: 'tester',
+  pid: 4242,
   env: {
     npm_node_execpath: '/opt/node/bin/node',
     npm_execpath: '/opt/node/lib/npm-cli.js',
@@ -15,7 +16,7 @@ const INPUTS: PlatformInputs = {
 
 describe('platformFor', () => {
   it.each(['macos', 'windows', 'linux'] as const)(
-    'platformFor_Inputs_LaunchIsLaunchCommand: %s',
+    'platformFor_Inputs_RelayCarriesLaunchAndPid: %s',
     (os) => {
       const { relay } = platformFor(os, INPUTS);
 
@@ -23,6 +24,7 @@ describe('platformFor', () => {
         launchCommand(INPUTS.env, INPUTS.execPath, INPUTS.cwd, INPUTS.isDev),
       );
       expect(relay.username).toBe('tester');
+      expect(relay.pid).toBe(4242);
     },
   );
 });

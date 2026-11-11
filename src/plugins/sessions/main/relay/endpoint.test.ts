@@ -56,6 +56,7 @@ describe('writeEndpointFiles', () => {
     protocol: 1,
     channel: '/Users/jon/.agents/wigley-ai-gui/app.sock',
     launch: { command: ['/opt/electron'], cwd: '/work/app' },
+    pid: 4242,
   };
   const tools: ToolDefinition[] = [
     {

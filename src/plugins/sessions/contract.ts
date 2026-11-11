@@ -115,6 +115,8 @@ export interface RelayEndpoint {
   // A Unix socket path (macOS) or a named pipe path (Windows).
   channel: string;
   launch: { command: readonly string[]; cwd: string };
+  // The app's main process id.
+  pid: number;
 }
 
 export interface ToolResult {

@@ -604,7 +604,10 @@ describe('sessions main part', () => {
           'utf8',
         ),
       );
-      expect(endpoint).toMatchObject({ launch: platform.relay.launch });
+      expect(endpoint).toMatchObject({
+        launch: platform.relay.launch,
+        pid: 4242,
+      });
     } finally {
       socket.destroy();
       rmSync(homeDir, { recursive: true, force: true });

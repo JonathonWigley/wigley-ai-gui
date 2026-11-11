@@ -1,6 +1,6 @@
 # 02 — Restart in start_app.py
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · stops and starts another process across the app and its relay: process lifecycle and timing
 Wave: 1 · Depends on: none

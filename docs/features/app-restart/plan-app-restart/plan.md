@@ -161,10 +161,11 @@ Boundary rules: `start_app.py` stays standard library only, and holds no forms l
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: b341b94a
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Plugin version is 2.6.7 on marketplace origin/main at preflight (a peer's bump), so task 02 bumps to 2.6.8; marketplace review base ff28c63 — the plan's stated base moved — costs nothing if wrong · lead
 ### Review rounds
 ### Test gate

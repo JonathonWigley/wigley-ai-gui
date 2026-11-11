@@ -18,6 +18,8 @@ export interface PlatformPrograms {
 export interface PlatformRelay {
   // The user part of the relay's channel path.
   readonly username: string;
+  // The app's main process id: the process a restart asks to quit.
+  readonly pid: number;
   // How a relay starts this app.
   readonly launch: {
     readonly command: readonly string[];

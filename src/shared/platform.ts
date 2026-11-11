@@ -8,6 +8,7 @@ import type {
 
 export interface PlatformInputs {
   username: string;
+  pid: number;
   env: NodeJS.ProcessEnv;
   execPath: string;
   cwd: string;
@@ -43,6 +44,7 @@ function platformRecord(
     programs: DEFAULT_PROGRAMS,
     relay: {
       username: inputs.username,
+      pid: inputs.pid,
       launch: launchCommand(
         inputs.env,
         inputs.execPath,

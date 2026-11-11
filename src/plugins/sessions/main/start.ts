@@ -125,6 +125,7 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
       api.services.runMode === 'drive'
         ? endedDriveRunLaunch(api.services.platform.os, api.services.homeDir)
         : api.services.platform.relay.launch,
+    pid: api.services.platform.relay.pid,
   };
   return { relay, endpoint };
 }

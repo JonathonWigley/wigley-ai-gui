@@ -1,6 +1,6 @@
 # 01 — App writes its process id to the endpoint file
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `pid` field of the endpoint contract that task 02 reads
 Wave: 1 · Depends on: none
