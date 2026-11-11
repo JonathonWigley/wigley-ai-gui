@@ -38,7 +38,7 @@ Each command runs from the named repo root. `wigley:make` runs each one again be
 
 | Claim | Command | Result at plan time |
 |---|---|---|
-| The endpoint file is built in `openRelay` from `platform.relay.launch` | gui: `grep -n "api.services.platform.relay.launch" src/plugins/sessions/main/start.ts` | one hit, line 126 |
+| The endpoint file is built in `openRelay` from `platform.relay.launch` | gui: `grep -n "api.services.platform.relay.launch" src/plugins/sessions/main/start.ts` | one hit, line 127 |
 | The composition root builds the platform record once, with `platformFor` | gui: `grep -n "platformFor(osPlatform" src/main/main.ts` | one hit, line 459 |
 | Electron turns SIGTERM into a quit, and the live app holds the quit until every part stops | gui: `grep -n "SIGTERM Electron turns into a quit" src/main/main.ts` | one hit, line 531 |
 | forge 8.0.1's Vite plugin exits the forge process when Electron exits, so the quit ends the whole `npm start` | gui: `sed -n 237,244p node_modules/@electron-forge/plugin-vite/dist/VitePlugin.js` and `grep -m1 '"version"' node_modules/@electron-forge/plugin-vite/package.json` | `child.on('exit', …) → this.exitHandler({ cleanup: true, exit: true })`; version 8.0.1 |
