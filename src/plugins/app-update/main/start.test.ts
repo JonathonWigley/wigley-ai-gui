@@ -1,0 +1,144 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { Git } from '../../../contracts/git';
+import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import { appUpdateStatusSlot } from '../contract';
+import { appUpdateMainPart } from './start';
+import { INSTALL_POLL_MS } from './updater';
+
+const CLONE = '/Users/u/dev/wigley-ai-gui';
+const INSTALLED = '1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const ORIGIN = '2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const DATA = '/data/app-update';
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+// A clone whose origin's main is one commit past `INSTALLED`.
+function aheadGit(): Git {
+  return {
+    fetch: vi.fn(async () => false),
+    resolveCommit: vi.fn(async () => ORIGIN),
+    isAncestor: vi.fn(async () => true),
+  } as Partial<Git> as Git;
+}
+
+async function startWithBuild(
+  build: { commit: string; cloneDir: string } | null,
+) {
+  const git = aheadGit();
+  const harness = startMainPart(appUpdateMainPart, {
+    services: { appBuild: build, git },
+  });
+  await settle();
+  const status = () => harness.state.read(appUpdateStatusSlot, 'test').get();
+  const install = async () => {
+    await harness.started().commands.install({ arg: undefined });
+    await settle();
+  };
+  return { harness, git, status, install };
+}
+
+describe('appUpdateMainPart', () => {
+  it('start_BuildBehindOrigin_StatusAvailable', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+
+    expect(test.git.fetch).toHaveBeenCalledWith(CLONE, expect.any(Number));
+    expect(test.status()).toEqual({ kind: 'available', sha: '2222222' });
+  });
+
+  it('start_NoBuild_ChecksNothingAndInstallSkips', async () => {
+    const test = await startWithBuild(null);
+    await test.install();
+
+    expect(test.git.fetch).not.toHaveBeenCalled();
+    expect(test.status()).toEqual({ kind: 'none' });
+    expect(test.harness.processes.detachedStarts).toEqual([]);
+    expect(test.harness.logs.map(({ message }) => message)).toContain(
+      'install skipped: no build baked in',
+    );
+  });
+
+  it('install_Available_StartsTheInstallDetachedInTheClone', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+
+    await test.install();
+
+    expect(test.status()).toEqual({ kind: 'installing' });
+    expect(test.harness.processes.detachedStarts).toEqual([
+      {
+        command: '/bin/zsh',
+        args: [
+          '-lc',
+          `source ~/.nvm/nvm.sh && nvm use && npm run install-app -- --ref origin/main; echo $? > '${DATA}/install-exit-code'`,
+        ],
+        options: { cwd: CLONE, logPath: `${DATA}/install.log` },
+      },
+    ]);
+  });
+
+  it.each([
+    {
+      case: 'non-zero',
+      code: '1\n',
+      status: { kind: 'failed', error: 'step one\nerror: the build broke' },
+    },
+    // The app still runs its old build, so the check that follows finds the update again.
+    {
+      case: 'zero',
+      code: '0\n',
+      status: { kind: 'available', sha: '2222222' },
+    },
+  ])(
+    'install_ExitCodeWritten_$case_SetsTheResult',
+    async ({ code, status }) => {
+      const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+      await test.install();
+      test.harness.advance(INSTALL_POLL_MS);
+      await settle();
+      expect(test.status()).toEqual({ kind: 'installing' });
+
+      await test.harness.files.write(
+        `${DATA}/install.log`,
+        'step one\n\nerror: the build broke\n',
+      );
+      await test.harness.files.write(`${DATA}/install-exit-code`, code);
+      test.harness.advance(INSTALL_POLL_MS);
+      await settle();
+      await settle();
+
+      expect(test.status()).toEqual(status);
+    },
+  );
+
+  it('install_ProgramCannotStart_FailedWithTheError', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    test.harness.processes.failDetachedStarts(
+      new Error('Could not run /bin/zsh: spawn ENOENT'),
+    );
+
+    await test.install();
+
+    expect(test.status()).toEqual({
+      kind: 'failed',
+      error: 'Could not run /bin/zsh: spawn ENOENT',
+    });
+  });
+
+  it('install_WhileInstalling_StartsNothingMore', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    await test.install();
+
+    await test.install();
+
+    expect(test.harness.processes.detachedStarts).toHaveLength(1);
+  });
+
+  it('stop_WhileInstalling_LeavesTheStatusForTheNextStart', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    await test.install();
+
+    await test.harness.restart();
+    await settle();
+
+    expect(test.status()).toEqual({ kind: 'installing' });
+  });
+});

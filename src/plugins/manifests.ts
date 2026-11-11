@@ -1,5 +1,6 @@
 import type { PluginManifest } from '../contracts/plugin';
 import { agentLinesManifest } from './agent-lines/manifest';
+import { appUpdateManifest } from './app-update/manifest';
 import { agentSkillsManifest } from './agent-skills/manifest';
 import { contextSourcesManifest } from './context-sources/manifest';
 import { agentStripManifest } from './agent-strip/manifest';
@@ -72,6 +73,7 @@ export const builtInManifests = [
   systemStatsManifest,
   visualManifest,
   windowManifest,
+  appUpdateManifest,
 ] as const;
 
 // Every built-in plugin's manifest: main builds the served keymap, command

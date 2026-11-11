@@ -1,0 +1,15 @@
+/* The default app-update look: the title bar's update button, as compact as the Keys button beside it. */
+
+[data-layout-owner='app-update'][data-layout='default'].app-update-button {
+  gap: var(--wg-space-1);
+  padding: 0 var(--wg-space-1);
+  font-size: var(--wg-text-12);
+}
+
+/* At 640px and narrower the title bar's end track has no room for the label, so the button shows its icon alone. */
+@media (max-width: 640px) {
+  [data-layout-owner='app-update'][data-layout='default'].app-update-button
+    .ui-button-label {
+    display: none;
+  }
+}
