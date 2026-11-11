@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { parseMacWindowList } from './mac-window-list';
+import { FakeProcesses } from '../../shared/fake-processes';
+import {
+  createMacWindowList,
+  MAC_WINDOW_LIST_SCRIPT,
+  parseMacWindowList,
+} from './mac-window-list';
+
+const OSASCRIPT = '/usr/bin/osascript';
+const OSASCRIPT_ARGS = ['-l', 'JavaScript', '-e', MAC_WINDOW_LIST_SCRIPT];
 
 // Captured with MAC_WINDOW_LIST_SCRIPT on an M2 Max, macOS 26, on 2026-11-10,
 // cut to three windows and the Unity title shortened. The third is an
@@ -74,5 +82,30 @@ describe('parseMacWindowList', () => {
     { name: 'not an array', stdout: '{"number":1}' },
   ])('parseMacWindowList_NoArray ($name throws)', ({ stdout }) => {
     expect(() => parseMacWindowList(stdout)).toThrow(/osascript/);
+  });
+});
+
+describe('createMacWindowList', () => {
+  it('list_RunsTheScriptAndParsesItsWindows', async () => {
+    const processes = new FakeProcesses();
+    processes.script(OSASCRIPT, OSASCRIPT_ARGS, {
+      code: 0,
+      stdout: CAPTURED,
+      stderr: '',
+      timedOut: false,
+    });
+
+    const windows = await createMacWindowList(processes).list();
+
+    expect(windows).toEqual(CAPTURED_WINDOWS);
+    expect(processes.runs).toEqual([
+      {
+        command: OSASCRIPT,
+        args: OSASCRIPT_ARGS,
+        cwd: undefined,
+        timeoutMs: 10000,
+        unsetEnv: undefined,
+      },
+    ]);
   });
 });

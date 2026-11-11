@@ -569,6 +569,15 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/main/processes'],
     packages: ['electron'],
   },
+  // Over the shared FakeProcesses.
+  'src/main/screen-capture/mac-window-list.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/main/screen-capture'],
+    packages: [],
+  },
+  'src/main/screen-capture/windows-window-list.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/main/screen-capture'],
+    packages: [],
+  },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   // Runs the Files contract suite, which the memory adapter runs too.
   'src/main/files/node-files.test.ts': {

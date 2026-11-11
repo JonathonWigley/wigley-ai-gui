@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { parseWindowsWindowList } from './windows-window-list';
+import { FakeProcesses } from '../../shared/fake-processes';
+import {
+  createWindowsWindowList,
+  parseWindowsWindowList,
+  WINDOWS_WINDOW_LIST_SCRIPT,
+} from './windows-window-list';
+
+const POWERSHELL = 'powershell.exe';
+const POWERSHELL_ARGS = [
+  '-NoProfile',
+  '-NonInteractive',
+  '-EncodedCommand',
+  Buffer.from(WINDOWS_WINDOW_LIST_SCRIPT, 'utf16le').toString('base64'),
+];
 
 // Rows in WINDOWS_WINDOW_LIST_SCRIPT's shape, built here: the script cannot
 // run on the Mac these tests were written on. Frame bounds are physical
@@ -94,5 +107,40 @@ describe('parseWindowsWindowList', () => {
     { name: 'not an array', stdout: JSON.stringify(ROW_96) },
   ])('parseWindowsWindowList_NoArray ($name throws)', ({ stdout }) => {
     expect(() => parseWindowsWindowList(stdout)).toThrow(/powershell\.exe/);
+  });
+});
+
+describe('createWindowsWindowList', () => {
+  it('list_RunsTheEncodedScriptAndParsesItsWindows', async () => {
+    const processes = new FakeProcesses();
+    processes.script(POWERSHELL, POWERSHELL_ARGS, {
+      code: 0,
+      stdout: JSON.stringify([ROW_192]),
+      stderr: '',
+      timedOut: false,
+    });
+
+    const windows = await createWindowsWindowList(processes).list();
+
+    expect(windows).toEqual([
+      {
+        number: 1180212,
+        processId: 4120,
+        title: 'Console',
+        bounds: { x: -1500, y: 100, width: 1000, height: 600 },
+      },
+    ]);
+    expect(processes.runs).toEqual([
+      {
+        command: POWERSHELL,
+        args: POWERSHELL_ARGS,
+        cwd: undefined,
+        timeoutMs: 10000,
+        unsetEnv: undefined,
+      },
+    ]);
+    expect(
+      Buffer.from(processes.runs[0].args[3], 'base64').toString('utf16le'),
+    ).toBe(WINDOWS_WINDOW_LIST_SCRIPT);
   });
 });
