@@ -13,6 +13,7 @@ import { docsSessionTabManifest } from './docs-session-tab/manifest';
 import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
+import { liveViewManifest } from './live-view/manifest';
 import { notesManifest } from './notes/manifest';
 import { practiceManifest } from './practice/manifest';
 import { primerManifest } from './primer/manifest';
@@ -51,6 +52,7 @@ export const builtInManifests = [
   agentStripManifest,
   agentSkillsManifest,
   contextSourcesManifest,
+  liveViewManifest,
   keysManifest,
   docsManifest,
   docsSessionTabManifest,

@@ -12,6 +12,7 @@ import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
 import { galleryMainPart } from './gallery/main/start';
 import { keysMainPart } from './keys/main/start';
+import { liveViewMainPart } from './live-view/main/start';
 import { notesMainPart } from './notes/main/start';
 import { practiceMainPart } from './practice/main/start';
 import { primerMainPart } from './primer/main/start';
@@ -48,6 +49,7 @@ export const mainParts: readonly MainPart[] = [
   agentStripMainPart,
   agentSkillsMainPart,
   contextSourcesMainPart,
+  liveViewMainPart,
   docsMainPart,
   settingsMainPart,
   backlogMainPart,
