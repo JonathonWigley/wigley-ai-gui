@@ -353,10 +353,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/docs-browser/design.md`, `docs/features/docs-wiki/design.md`
   backlog/       manifest.ts, contract.ts, row-key.ts (`rowKey`, shared by main and the page), ready.ts (`AGENT_READY`,
                  `isReady`), main/ (start.ts, the main part's reader of the follow-up files of every features home
-                 through docs' index, with file watching, its exporter and its `addScopedAgent` registrar;
+                 through docs' index, with file watching, its exporter (the `load`, `tags` and `fileNote` it exports to
+                 notes) and its `addScopedAgent` registrar;
                  homes.ts, `groupHomes` and `markCreateTargets`; rows.ts, one row per item; note-images.ts, each
-                 item's images under the home's `followups-images/`; followup-writes.ts, the `load`, `tags` and
-                 `fileNote` it exports to notes, with `fileNote`'s guarded write;
+                 item's images under the home's `followups-images/`; followup-writes.ts, `fileNote`'s guarded write
+                 (`writeFollowupEdit`) and `readFollowupText`;
                  staleness.ts, each item's git staleness through `Git.log` and `Git.firstAdded`, cached in plugin data;
                  repo-folder.ts, each repo's folder (the in-repo path, else the `repoFolders` setting); chunk-store.ts,
                  the chunks in plugin data and their one writer; chunk-message.ts, a chunk's first message;

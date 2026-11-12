@@ -383,7 +383,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     | null = null;
   let loadCount = 0;
   let loadedCount = 0;
-  // The saved place's assistant pane opens on the next `shown`.
+  // The saved place's assistant pane waits to open: at the end of the first
+  // load while Backlog shows, else on the next `shown`.
   let isOpenPending = false;
   let shownSelectedKey: RowKey | null = null;
   let shownFocus: BacklogFocus | null = null;

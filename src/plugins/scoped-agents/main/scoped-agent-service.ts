@@ -29,10 +29,10 @@ export interface ScopedAgentServiceDeps {
 // <owner>/<agentId>.` for a pair with no live registration, as a disposed
 // handle's `ask` and `sessionOf` do, and its `scopeOf` resolves null. Asks for
 // one scope of one registration, and `cleared`'s host-id move on it, run one at
-// a time, and concurrent `sessionOf` calls for it share one resume. Disposing a registration launches and closes
-// nothing, and an ask in flight runs to its end. `opened`, `closed` and
-// `cleared` hear chat's `sessionOpened`, `sessionClosed` and `sessionCleared`
-// for every registration.
+// a time, and concurrent `sessionOf` calls for it share one resume. Disposing a
+// registration launches and closes nothing, and an ask in flight runs to its
+// end. `opened`, `closed` and `cleared` hear chat's `sessionOpened`,
+// `sessionClosed` and `sessionCleared` for every registration.
 export interface ScopedAgentService {
   add(spec: ScopedAgentSpec): ScopedAgent;
   ask(

@@ -174,7 +174,7 @@ goes through the assistant, a chat beside the table. A decision here stands unle
   - `writtenAt`: the date of the commit that first added the item's anchor to its file, in the home's clone
     (`Git.firstAdded`, the oldest non-merge commit whose diff added the text, through `git log -S`). The anchor
     (`itemAnchor`) is the title with the bold marks, `## ` marker and closing `:` or `.` around it, and falls back to
-    the bare title when the item's line does not hold it. History is read at the file's current path, with no
+    the bare title when the item's line does not hold it or no commit added the anchor. History is read at the file's current path, with no
     `--follow`, so a follow-ups file that moved or split dates its items at the move.
   - `namedPaths`: the repo paths the item's one line and body name (below)
   - `commitsSince`: the commits after `writtenAt` that touched a named path, in the repo folder's clone (`Git.log`,
@@ -186,7 +186,8 @@ goes through the assistant, a chat beside the table. A decision here stands unle
   the repo folder holds its first segment, so a path relative to somewhere else, or a dotted name such as
   `info.host`, is left out. A repo with no folder (§ Chunks, Folder rule) names no paths.
 - Staleness reads every path through its real path, so a home or repo folder reached through a symlink reads
-  correctly. A follow-up file that is not below its clone's real path reads `unknown`.
+  correctly. A follow-up file that is not below its clone's real path has no written date, so it reads `unknown` unless a named
+  path is gone.
 - The home's clone and the repo folder's clone are the same for an in-repo home and differ for a
   `~/wigley-features/<repo>` home; each git path is relative to its own clone.
 - The level rule, first match wins:
@@ -228,7 +229,7 @@ goes through the assistant, a chat beside the table. A decision here stands unle
   id. The result is one `ChunkStart` per chunk, its session id or the refusal; the page toasts `Started <name>` or the
   refusal. A start is refused for a chunk already started, a chunk already starting, a chunk none of whose rows is open in the
   backlog (`None of <name>'s follow-ups are open in the backlog`), a repo with no folder, chat with no profile, a
-  launch that fails, or a launched session the store did not keep (`<name> started session <id>, but it was not
+  launch that fails, `<name>'s session closed as it started`, or a launched session the store did not keep (`<name> started session <id>, but it was not
   stored: <reason>`; the start goes on to the next chunk).
 - **First message:** the `launchBrief` setting, then one block per open (not done) item in the chunk's order: `## <title>`, the one
   line, the body, and `From <file path>:<line>`. Parts are trimmed and joined by blank lines; an empty part is left
