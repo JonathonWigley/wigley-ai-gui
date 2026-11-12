@@ -2,94 +2,127 @@
 
 **Contents**
 
+- **Status** — which parts are built and which are planned.
 - **Scope** — what Backlog covers, what counts as wigley-written, and what stays out.
-- **The mode** — the plugin, its layout, its keys.
-- **Follow-ups** — reading, the structured editor, create, delete, tags, done items.
-- **Tags** — where a tag lives, the settings list, and who applies `agent-ready`.
-- **Plans and features** — the read-only views.
-- **Git** — the uncommitted chip, the Commit command, the Git adapter.
-- **Seams** — docs' exports, the shared follow-up module, the two parsers.
+- **The mode** — the plugin, the page's panes, its scopes, settings and keys.
+- **Follow-ups** — reading, watching, done items, images.
+- **Tags** — where a tag lives, the settings list, and the ready column.
+- **The table and filters** — the rows, the filters, the review pane, the empty table, the saved place.
+- **Staleness** — the git signals, the named paths, the level rule, the cache.
+- **Chunks** — the store, its rules, a start, the first message, the folder rule, retiring.
+- **The assistant** — the global scoped agent, its pane, its tools, the sweep.
+- **Seams** — docs' exports, the shared follow-up module, main's exports, the two parsers.
 
-The decisions the user settled in the 2026-10-26 interview (two rounds and the agent's Decided notices), kept so the
-plan is written from them. A decision here stands unless the user changes it.
+Backlog is the place the user reviews follow-ups across every repo, sees whether each is still true, groups them into
+chunks of one session's work, and starts those sessions. Backlog reads and starts; every edit to a follow-up file
+goes through the assistant, a chat beside the table. A decision here stands unless the user changes it.
+
+## Status
+
+The launcher is planned in `backlog/plan-launcher`, not built yet: the table, the filters, the review pane,
+staleness, chunks, the assistant and the keys below describe the design the code will follow. The built Backlog
+today is a per-home browser with a follow-up editor, delete, tags, Commit, a homes side bar, and plans and features
+views; the plan removes all of them. The plan's doc re-read task checks each line against the landed code and
+removes this notice. § Scope, § Follow-ups, § Tags and § Seams describe the code as it is, apart from the lines
+marked there.
 
 ## Scope
 
-- Backlog shows the future work the user's wigley workflows wrote, grouped by repo: every follow-up (full create,
-  read, edit, delete and tagging), every plan and every primed feature (read-only).
-- Wigley-written means a features home's files (`~/wigley-agents/AGENTS.md` § Features): `<home>/followups.md`,
-  `<home>/followups/*.md`, `<home>/<slug>/plan-*/` and `<home>/<slug>/checklist.md`. A repo's own
-  `docs/followups/*.md` is team-repo content and stays out, though the docs index lists it.
-- Old files whose shape hid their items (the gui and harness follow-up files) were converted to the list shape. Backlog
-  and the docs index read each file in its own shape.
+- Backlog shows the follow-ups the user's wigley workflows wrote, from every repo in one table (planned in
+  `backlog/plan-launcher`, not built yet; the built mode also shows plans and primed features, per home).
+- Wigley-written means a features home's follow-up files (`~/wigley-agents/AGENTS.md` § Features):
+  `<home>/followups.md` and `<home>/followups/*.md`. A repo's own `docs/followups/*.md` is team-repo content and stays
+  out, though the docs index lists it.
+- Old files whose shape hid their items (the gui and harness follow-up files) were converted to the list shape.
+  Backlog and the docs index read each file in its own shape.
+- Out of scope once the launcher lands: plans and primed features, chunking a follow-up at the time a skill writes it, and an agent-run
+  staleness check per item.
 
 ## The mode
 
-- The `backlog` plugin, with a main part and a page part, depends on `docs` and adds Backlog mode.
-- The side bar lists repos, each with its features homes. A repo normally has one home; a stray second home (an
-  in-repo `docs/features/` and a `~/wigley-features/<repo>/`) shows as its own group and edits, but is never a
-  create target while the repo has a home in git. A home that is a linked git worktree's (`git worktree add`)
-  own `docs/features/` is not listed: it is a second checkout of a clone's own home. Its plans' progress still counts
-  (§ Plans and features).
-- The content sheet shows the selected home's follow-up list, plans and features, with a detail pane on the right.
-- Keys, all checked against Docs mode's keys and `docs/keymap.md`:
+Planned in `backlog/plan-launcher`, not built yet.
 
-  | Key | Action |
-  |---|---|
-  | `Space k b` | show Backlog; again: toggle the side bar |
-  | `j` `k` `gg` `G` `l` `h` `Enter` | move, open, back, as the Docs tree |
-  | `/` | filter: fuzzy on a follow-up's title and tag and on plan and feature rows, plain substring on a follow-up's one line |
-  | `a` | new follow-up in the selected repo's home |
-  | `i` | edit the selected follow-up |
-  | `d` | delete the selected follow-up, after y/n |
-  | `t` | toggle `agent-ready` |
-  | `T` | pick any tag from the settings list |
-  | `C` | commit the home's follow-up files |
-  | `R` | rescan |
-  | `Space v d` | show or hide done follow-ups |
-  | `Space v a` | show only agent-ready follow-ups |
-  | `o` | open the selected row's file in Docs mode |
-  | `Ctrl+j` / `Ctrl+k` | scroll the detail a line (with `Shift`, half a page) |
-  | `Alt+h` / `Alt+l` | list ↔ detail pane |
-  | `Cmd+Enter` | save the editor |
-  | `Esc` | in a box's normal mode, leave the box; on the editor page, cancel (a changed draft asks to discard first) |
-  | `Tab` / `Shift+Tab` | next / previous editor field |
-  | `T` | in the editor, pick a tag for the draft's Tags field |
+- The `backlog` plugin has a main part, a page part and a layout (`backlog.layout`). Main depends on `docs`, `chat`,
+  `sessions` and `scoped-agents`; the page depends on `docs`, `chat` and `scoped-agents`.
+- The mode registers no side bar. `Space k b` shows Backlog; pressed again while Backlog shows, it does nothing.
+  `Alt+h` at the table's left edge reaches no side bar.
+- The page holds four panes. The table and the review pane sit side by side, the chunk strip under both, and the
+  assistant pane at the end, at full height, hidden until `Space v b` shows it. The table pane holds its header, the
+  filter bar, the filter box and the column head above its rows.
 
-  `C` is uppercase so the one outward step is never a single lowercase slip. The editor's `Cmd+Enter`, `Tab`
-  and `Shift+Tab` carry no `where`, so they fire inside a box as well as on the page; `Esc` and `T` carry one.
+  ```
+  [table: header · filter bar · / box · repo │ task │ ready │ staleness │ chunk] │ [review pane] │ [assistant pane]
+  [chunk strip: chunk cards · New chunk                                         ]                │
+  ```
+
+- The layout's parts: `table`, `filters`, `tableRow`, `empty` (kit scope `backlog.table`); `review`, `reviewItem`,
+  `commits` (`backlog.review`); `strip`, `chunkCard`, `newChunk` (`backlog.strip`); `pickerRow` (`backlog.picker`).
+  The assistant pane's ask box is scoped-agents' `askBox` part; Backlog's layout draws none of that pane.
+- Scopes: `backlog.table` (the table), `backlog.review` (the review pane), `backlog.strip` (the chunk strip),
+  `backlog.box` (the filter box or the chunk rename box, pushed while open; one at a time) and `backlog.picker` (the
+  repo picker, pushed while open). The assistant pane's ask box is `scoped-agents.ask`
+  (`docs/features/scoped-agents/design.md`); its mounted chat view holds chat's own scopes.
+- Settings:
+  - `tags`: kept for notes
+  - `layout`: the layout's name
+  - `launchBrief`: the text a chunk's first message opens with. Its default, verbatim: `Work these follow-ups in this
+    session. First check each one against the code as it is now: remove an item whose work has landed, and rewrite an
+    item the code has moved past. Then work the rest under your workflow, and report what you did with each item.`
+  - `repoFolders`: a list of `{ "repo": "<repo>", "folder": "<folder>" }`, default `[]`; the folder a repo whose
+    features home is outside the repo starts sessions in and resolves named paths against (§ Chunks, Folder rule). A
+    change reloads the page.
+- Keys, all checked against `docs/keymap.md` and `src/plugins/keymap.ts`:
+
+  | Key | Scope | Action |
+  |---|---|---|
+  | `Space k b` | any | show Backlog |
+  | `j` `k` `gg` `G` | table, review pane | move a row; in the review pane, scroll a line, or to the top or end |
+  | `/` | table | filter: `Enter` accepts, `Esc` cancels |
+  | `Enter` | table | on a started chunk's row, activate its session's row (Sessions mode shows it); on any other row, focus the review pane |
+  | `Enter` | strip | on a started chunk, activate its session's row; on any other card, nothing |
+  | `x` | table | mark or unmark the cursor row |
+  | `c` | table | add the marked rows, or the cursor row when none is marked, to the strip's cursor chunk, or to a new chunk when the strip's cursor is on New chunk; the marks clear |
+  | `u` | table | take the marked rows, or the cursor row, out of their chunks; the marks clear |
+  | `r` | table, strip | rename the cursor row's chunk, or in the strip the cursor chunk (the rename box: `Enter` accepts, `Esc` cancels) |
+  | `s` | table, strip | start the cursor row's chunk, or in the strip the cursor chunk |
+  | `S` | table, strip | start every shown unstarted chunk |
+  | `H` | table, strip | turn the chunk's headless flag on or off |
+  | `h` / `l` | strip | previous / next chunk; past the last chunk, the New chunk card |
+  | `gl` | table, review pane | show or hide the commits since the cursor item was written, in the review pane |
+  | `W` | table | send the staleness sweep for the filtered repo to the assistant; with no repo filter, toast `Filter to one repo first` and send nothing |
+  | `R` | table | rescan |
+  | `o` | table, review pane | open the cursor item's file in Docs mode, at its line |
+  | `Ctrl+j` / `Ctrl+k` | table, review pane | scroll the review pane a line (with `Shift`, half a page) |
+  | `Space v b` | any | show or hide the assistant pane; with Backlog hidden, show Backlog and open the pane |
+  | `Space v r` | any | pick the repo to filter to (the list picker `Repos`: `All repos`, then each repo) |
+  | `Space v a` | any | show only agent-ready follow-ups |
+  | `Space v c` | any | hide follow-ups in a chunk |
+  | `Space v s` | any | sort stale follow-ups first |
+  | `Space v d` | any | show or hide done follow-ups |
+  | `Alt+h` / `Alt+l` | core | table ↔ review pane; `Alt+l` from the review pane or the strip into the assistant pane while it shows; `Alt+h` from the assistant pane back to the last pane |
+  | `Alt+j` / `Alt+k` | core | table or review pane → chunk strip / strip → table |
+  | `Enter` / `Esc` | the assistant's ask box (`scoped-agents.ask`) | send the first message / leave the box |
+
+  The strip is a pane the core's focus keys reach, never a pushed scope. Every non-vim key gets its anchor where it
+  acts (`AGENTS.md` § Key hints). The table's cursor prompt shows only the commands that apply to the cursor row: a
+  row in a started chunk takes `session`, `commits` and `docs`; a row in an unstarted chunk `mark`, `chunk`,
+  `unchunk`, `start`, `headless`, `rename`, `commits` and `docs`; a row in no chunk `mark`, `chunk`, `commits` and
+  `docs`.
 
 ## Follow-ups
 
-- Backlog parses each follow-up file itself through the shared module, so a save shows at once without waiting on an
-  index rebuild. The index supplies which files exist and their repo and home.
-- The structured editor has four vim boxes: title, one line, tags (comma-separated) and body. A line break typed
-  in the first three joins the lines with a space. Saving rewrites the `##`
-  section and its Contents line together (or the list item, in a list-shaped file), which hand edits let drift.
-- Create writes to the repo's one features home. A home with no `followups.md` gets one in the canonical `##` +
-  Contents shape. A file of `##` sections with no Contents list gains one, built from its headings, on its first
-  write.
-- Delete removes the section, or list item, and its Contents line, after the shared y/n confirm prompt (`createConfirmPrompt`).
-- Done items (struck through, or one line starting `shipped`) are hidden until `Space v d` shows them. Delete is the
-  removal; there is no separate mark-done command. An empty list says when a toggle hid every row: "Every follow-up
-  here is done." or "No agent-ready follow-ups here."
-- A create, or an edit that renames, whose title would not read back from the file is refused with the reason, and
-  a write names one of the home's own follow-up files or none. An item whose title already in the file would not
-  read back (written by hand) cannot be rewritten: an edit or a tag change to it is refused, pointing to Docs.
-- A file changed on disk while the user edits an item: the edit is one item operation, so it re-applies to the new
-  text by the item's title, rather than a whole-file conflict prompt. The save carries the item as the editor opened
-  it; when the item on disk no longer matches (an outside edit while the editor was open), nothing is written, the
-  editor stays open with the user's draft and takes the item as it now reads on disk as its new starting point, and
-  the toast says "<title> changed on disk; save again to overwrite it". A second save then overwrites the outside
-  edit, unless the item changed on disk again in between. When the item is gone from the
-  new text, the editor says so and keeps the user's draft. A second change on disk during that one retry refuses the
-  write.
-- Backlog watches the follow-up files it lists, so an agent's append mid-session shows live, and each linked
-  worktree's `docs/features` and the worktree list of an in-git home's clone, so a plan run in a worktree shows live.
-- An item's images live in the home's `followups-images/<folder>/`, linked from its body
-  as `![<n>](<path>)` (`docs/features/notes/design.md`). Only a link that resolves to a direct subfolder of
-  `<home>/followups-images/` counts. Delete trashes each image folder the deleted item's body links and no other
-  item in the file still links.
+- Backlog parses each follow-up file itself through the shared module (`src/shared/followups/`). The docs index
+  supplies which files exist and their repo and home.
+- A repo normally has one features home. A stray second home (an in-repo `docs/features/` and a
+  `~/wigley-features/<repo>/`) adds its rows under the same repo (planned in `backlog/plan-launcher`, not built
+  yet; when two items share a repo and title, the first one read keeps the row). A home that is a linked git worktree's
+  (`git worktree add`) own `docs/features/` is not listed: it is a second checkout of a clone's own home.
+- Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.
+- Done items (struck through, or one line starting `shipped`) are hidden until `Space v d` shows them. An empty table
+  says why it is empty (§ The table and filters).
+- An item's images live in the home's `followups-images/<folder>/`, linked from its body as `![<n>](<path>)`
+  (`docs/features/notes/design.md`). Only a link that resolves to a direct subfolder of `<home>/followups-images/`
+  counts.
 
 ## Tags
 
@@ -98,46 +131,152 @@ plan is written from them. A decision here stands unless the user changes it.
   so existing files parse unchanged. The shape and the criteria for `agent-ready` live in wigley-ai-marketplace's
   `skills/review/triage.md` § The project's follow-ups; the docs index parses tags into `meta.tags`. In a file of
   `##` sections the span is read from the item's Contents line only, and `_a, b_:` reads like `*a, b*:`.
-- The tag list is a Backlog setting, defaulting to `agent-ready` and `needs a feature plan`. `T` picks from it, and a
-  tag found in a file but missing from the list still shows.
-- Skills tag each follow-up they write. A one-time agent pass tagged the follow-ups written before this feature. The
-  user overrides either in Backlog.
+- The `tags` setting, defaulting to `agent-ready` and `needs a feature plan`, is the list the notes popup offers
+  through Backlog main's `tags` export.
+- Skills tag each follow-up they write. The table's ready column shows `agent-ready` (planned in
+  `backlog/plan-launcher`, not built yet); the page changes no tag, and the assistant changes one on the user's ask.
 
-## Plans and features
+## The table and filters
 
-- A plan shows its name, feature, progress (checked of total), target and written date; a primed feature shows its
-  slug and progress.
-- A plan's progress and its tasks' statuses come from the shared plan reader (`src/shared/plan-progress.ts`) over the
-  plan's moved copy across the clone and its git worktrees (`src/shared/plan-copies.ts`): a copy whose progress
-  differs from the main tree's and is not behind it (no fewer ticked boxes, and no task's `Status` ranked before main's for the same task document; the order is not started, in progress, done, and a status outside that order is never behind), the most recently modified when several differ, else the
-  main tree's. A run in a worktree shows in Backlog too, and neither a fresh worktree's untouched copy nor an idle
-  worktree's copy left behind main wins. Each load lists a clone's worktrees once, for all its plans. The
-  count is the boxes under `## Tasks`, not the docs index's count of every checkbox in the file. Opening one renders
-  `plan.md` (or `checklist.md`) and its task documents inside Backlog, with a key to open the file in Docs mode for hand
-  edits.
-- A row and its detail read one copy: a plan, and each task its moved copy's `plan.md` links, show that copy's file;
-  a task it does not link keeps the index's file and status. A worktree copy's `Status:` value outside the three task
-  statuses shows no status, never another copy's. The title, target and written date stay the index copy's, and the
-  selection and expansion stay keyed on the index's path, so they hold when the moved copy changes. Open in Docs opens
-  the index's file, since Docs opens only indexed files and the index skips linked worktrees.
+Planned in `backlog/plan-launcher`, not built yet.
 
-## Git
+- One row per follow-up, across every repo: homes in load order grouped by repo, then file order, then item order.
+  A row shows its repo, its task (the title and the one line), ready (`agent-ready`), its staleness level (`…` until
+  read) and its chunk's name.
+- A row's key is `<repo>\n<title>` (`RowKey`, built by `rowKey` in the plugin's own folder, so main and the page make
+  the same key). Selection, marks and chunks hold row keys.
+- Filters, combined, each a button in the filter bar (on or off), with a `<n> marked` tag after them while rows are
+  marked:
+  - the repo button (`All repos`, or the repo): opens the repo picker, as `Space v r` does
+  - Ready (`Space v a`): only `agent-ready` rows
+  - Hide chunked (`Space v c`): rows in no chunk
+  - Stale first (`Space v s`): rows sorted, stably, `stale`, then `moved`, `unknown`, `fresh`, then rows whose
+    staleness is not read yet
+  - Done (`Space v d`): done rows shown
+  - `/`: a text filter, trimmed: fuzzy over the title and each tag, a plain substring over the one line
+- A filter change keeps the cursor on its row while the row still shows, else moves it to the row now at its place.
+- A started chunk's rows dim, and their chunk cell carries a link icon: `Enter` on the row activates that session's
+  row.
+- The review pane always shows the cursor item: its title, tags, staleness note, one line, repo and file, its chunk
+  (`In chunk <name>`, `, started` while started) and its body. `gl` shows or hides the commits since the item was
+  written under it (`Commits since written`; `commitsSince` over the channel, read once per cursor row), and the
+  choice holds across cursor moves. The list reads `Reading commits…` until it arrives and
+  `No commits since it was written.` for none.
+- The staleness note, verbatim (`<date>` is the first 10 characters of `writtenAt`):
+  - no entry yet: `Staleness not read yet.`
+  - `unknown`: `Unknown: not in git history.`
+  - otherwise `<Level>: written <date>`, then, joined by ` · `: `names no paths` when the item names none, else
+    `<n> commit(s) since on <k> named path(s)`; `gone: <paths joined ', '>` when any; `last: <subject>` when a commit
+    touched them. Example: `Moved: written 2026-10-20 · 3 commits since on 2 named paths · last: Fix the strip`.
+- An empty table says why, the first that holds:
+  - a text filter: `No rows match "<filter>".`
+  - every item of the filtered repo done, done hidden: `Every follow-up here is done.`
+  - Ready on: `No agent-ready follow-ups here.`
+  - Hide chunked on: `Every follow-up here is in a chunk.`
+  - else: `No follow-ups yet: ask the assistant to add one.`, with the `Space v b` hint
+- The title bar shows `Backlog` with the repo filter (`All repos` for none).
+- `backlog.place` keeps the page's place across a reload: the selected key, the repo filter, the text filter, the
+  marked keys, each filter toggle and whether the assistant pane shows. The first load puts it back (a repo or mark
+  no row holds is dropped, and a gone selected key selects the first row) and opens the assistant pane when it showed.
+  Main reads it for `read_backlog_state`.
 
-- An edit to an in-repo home stays uncommitted, and the home shows an uncommitted chip. `C` commits that home's
-  follow-up files and the changed files inside a folder of its `followups-images/` (`followups-images/<folder>/…`; a
-  file directly in `followups-images/` is left out), never anything else in the clone, with the message `Follow-ups edited in Backlog: added …;
-  edited …; removed …; tagged …; images <folders>` (an empty part left out; the folders are the changed
-  image folders), built by matching each file's items by title between its
-  parse at HEAD and its parse on disk. A file that differs from HEAD with no item changed (a header edit, a reorder,
-  line endings) commits with the plain subject `Follow-ups edited in Backlog`; a change to images alone
-  gives `Follow-ups edited in Backlog: images <folders>`; `C` with no follow-up file and no image changed commits
-  nothing. The user's press decides when a shared file is committed, so a peer agent's half-written entry is never
-  swept in by an automatic commit.
-- A home is in git only when it is its clone's `docs/features` folder, compared on real paths. Every other home
-  (`~/wigley-features/` homes, even under an enclosing repo) is not in git and shows no chip.
-- Git runs behind a `Git` contract with one adapter over ProcessRunner (`src/main/git/`); `src/contracts/git.ts`
-  lists its methods, `worktrees` among them. Docs' plugin statuses move onto it, so the app runs `git` in one place, except the Backlog
-  self-test's fixture repo, which runs git through `services.processes`.
+## Staleness
+
+Planned in `backlog/plan-launcher`, not built yet.
+
+- Staleness is git-only, and main computes it. It runs no agent.
+- The signals, per open item:
+  - `writtenAt`: the date of the commit that first added the item's title to its file, in the home's clone
+    (`Git.firstAdded`, the oldest non-merge commit whose diff added the text, through `git log -S`)
+  - `namedPaths`: the repo paths the item's one line and body name (below)
+  - `commitsSince`: the commits after `writtenAt` that touched a named path, in the repo folder's clone (`Git.log`,
+    the latest 100 read), with the latest as `lastCommit`
+  - `gonePaths`: the named paths missing from the repo folder
+- Named paths: each text between single backticks, outside fenced code, with a trailing `:<line>` reference, a
+  leading `./` and a trailing `/` stripped. A candidate counts when it holds a `/` or ends in a file extension, and
+  holds no space, glob, bracket or quote, no `://`, and no leading `/`, `~`, `-` or `..`. A candidate counts only when
+  the repo folder holds its first segment, so a path relative to somewhere else, or a dotted name such as
+  `info.host`, is left out. A repo with no folder (§ Chunks, Folder rule) names no paths.
+- The home's clone and the repo folder's clone are the same for an in-repo home and differ for a
+  `~/wigley-features/<repo>` home; each git path is relative to its own clone.
+- The level rule, first match wins:
+  1. any gone path → `stale`
+  2. any commit since → `moved`
+  3. no history (the home is outside git, or a git call failed, so `writtenAt` is null) → `unknown`
+  4. else → `fresh`
+- `namedPaths` and the level rule (`stalenessOf`) are pure functions; a reader runs them over the injected `Git` and
+  `Files`. A failed git call logs `staleness of <title>: <error>`.
+- Main caches each item's staleness in `staleness.json` in its plugin data, keyed by row key. An entry holds while
+  both clones' HEAD shas and the item's one line and body are as they were, so an uncommitted edit that names a new
+  path reads again. The page's `staleness()` returns the valid cached entries at once; main reads the rest one row at
+  a time and sends them in `stalenessRead` messages, ten rows to a message.
+
+## Chunks
+
+Planned in `backlog/plan-launcher`, not built yet.
+
+- A chunk is a named group of follow-ups for one session: its id, repo, name, the item titles, a headless flag, and the
+  session id once started. The strip shows the chunks in the order they were made (only the filtered repo's while a
+  repo filter is set), then the New chunk card.
+- **Store:** chunks live in `chunks.json` in Backlog's plugin data, not in the follow-up files. No file tag and no
+  skill change marks a chunked item. Backlog main is the one writer, and runs one store call at a time: the page's
+  `editChunks` and `startChunks` and the assistant's `set_backlog_chunks` all go through it, and every change sends
+  `chunksChanged` to the page.
+- **Rules:**
+  - A chunk holds rows of one repo.
+  - A row sits in at most one chunk. Adding a row that sits in another unstarted chunk moves it.
+  - A started chunk's rows cannot join another chunk or leave theirs, and its headless flag cannot change; it may be
+    renamed.
+  - An `add` with no chunk id makes a new chunk named after the first title.
+  - A chunk left with no rows is deleted.
+  - A rename trims the name; an empty name is refused.
+  - A refused edit rejects with the reason, writes nothing, and the page toasts the reason as an error.
+- **Start:** `s` starts one chunk, `S` every shown unstarted chunk. A start launches one session through chat's
+  `launch` in the repo's folder, under chat's default profile, headless only when the chunk's headless flag is on. It
+  has no owner: it is the user's own session, with its row in the Sessions side bar. The chunk stores the new session's
+  id. The result is one `ChunkStart` per chunk, its session id or the refusal; the page toasts `Started <name>` or the
+  refusal. A start is refused for a chunk already started, a chunk none of whose rows is in the backlog, a repo with
+  no folder, chat with no profile, or a launch that fails.
+- **First message:** the `launchBrief` setting, then one block per item in the chunk's order: `## <title>`, the one
+  line, the body, and `From <file path>:<line>`. Parts are trimmed and joined by blank lines; an empty part is left
+  out, and a title with no row is left out. The builder (`chunkMessage`) is a pure function.
+- **Folder rule:** one rule serves starts and staleness. The repo's folder is:
+  1. the folder above `docs/features` when the home's path ends in `docs/features` and the home is in a git clone
+     (a repo that is a folder of a larger clone counts)
+  2. else the `folder` of the first `repoFolders` entry whose `repo` is the repo, `~` expanded
+  3. else none: the start is refused with
+     `<repo> has no folder: add { "repo": "<repo>", "folder": "<its folder>" } to the backlog setting repoFolders`
+- **Retire:** chat's `sessionClosed` for a chunk's session retires the chunk: main removes it from the store, and its
+  rows show as unchunked. A started chunk whose session chat no longer holds (it ended while the app was closed) is
+  retired at the next edit or start, before it applies.
+
+## The assistant
+
+Planned in `backlog/plan-launcher`, not built yet.
+
+- The assistant is one global scoped agent (`docs/features/scoped-agents/design.md`), agent id `assistant`, scope
+  `global`, title `Backlog assistant`. It runs from the home folder under chat's default profile. Its store is
+  `assistant.json` in Backlog's plugin data: it supersedes nothing, and an ask may launch at any time. Its
+  instructions tell it the user's view is out of its sight, so it reads `read_backlog_state` before acting on the
+  cursor, marks or filters; that it edits follow-up files directly, in their own shape; and that it lands each change
+  per that repo's rules and reports each change by repo and title.
+- The assistant pane sits at the end of the page, hidden until `Space v b` shows it. It shows the ask box (heading
+  `Backlog assistant`, hint `Ask to add, rewrite or drop follow-ups in any repo, or to group them into chunks.`) until
+  the first message, then the assistant's chat view.
+- The assistant makes every edit to a follow-up file. The user asks it in the pane; it edits the files with its own
+  tools and lands the change per that repo's rules.
+- **Tools**, both MCP tools every session lists and only the assistant may call (any other session gets the error
+  result `<tool> answers only the Backlog assistant session.`; the check runs at call time, since the tool list is
+  global):
+  - `read_backlog_state`: Markdown of the view (cursor, marked rows, filters), the cursor item's full text and
+    staleness, the chunks, and every open row (done rows too while shown) by repo with its ready, staleness and chunk
+  - `set_backlog_chunks`: replaces one repo's unstarted chunks with the given `{ name, titles }` list; started chunks
+    stay as they are, and an empty list removes the repo's unstarted chunks. A refusal reads `Refused: <reason>`.
+- **Sweep:** `W` sends the staleness sweep for the filtered repo to the assistant as a message, through the
+  channel's `sweep(repo)`. The message lists the repo's follow-up files and its open `stale` and `moved` items, and
+  asks the assistant to fix the files: remove landed items, rewrite drifted ones, keep the rest, check every item
+  against the code, land the change per that repo's rules, and report each change. The page then opens the pane when
+  hidden and refreshes it, so it shows the assistant's chat view.
 
 ## Seams
 
@@ -145,12 +284,13 @@ plan is written from them. A decision here stands unless the user changes it.
   write and the file watch from its main part, and Backlog goes through them, so the changed-on-disk check stays in
   one place.
 - `src/shared/followups/` is the one writer of the follow-up shape in the app, and is pure (text in, text out, no
-  I/O): Backlog and Docs' create dialog both call it.
+  I/O): Backlog's `fileNote` and Docs' create dialog both call it.
 - Backlog's main part exports `load` (the homes), `tags` and `fileNote` (the follow-up write with the note's images)
-  to the `notes` plugin, so every follow-up and image write in the app other than Docs' create dialog goes through
-  Backlog.
-- `src/shared/plan-progress.ts` and `src/shared/plan-copies.ts` are the plan reader Backlog and `workflow-large`
-  share, since neither plugin may import the other.
+  to the `notes` plugin, so every follow-up and image write in the app other than Docs' create dialog and the
+  assistant's own edits goes through Backlog.
+- Git runs behind the `Git` contract (`src/contracts/git.ts`), with one adapter over ProcessRunner (`src/main/git/`).
+  Staleness reads through its `log` and `firstAdded` (`firstAdded` planned in `backlog/plan-launcher`, not built
+  yet). The Backlog self-test's fixture repo runs git through `services.processes`.
 - The follow-up format has two readers in two languages: the shared module here, and `docs_index.py`'s parser for
   agents and other index readers. Each is tested against the format triage.md gives; a change to the format changes
   both in the same piece of work.

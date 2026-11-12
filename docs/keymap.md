@@ -57,7 +57,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   views are the doc, its editor too while editing, the chat transcript, the session hub, an open
   agent-strip box's tool list, the form and its review, the primer card and its review, the Backlog
   list and detail, the Practice problem pane and console, the gallery and the key help; the docs tree takes both pairs and scrolls the doc
-  beside it.
+  beside it. Once Backlog's launcher lands (planned in `backlog/plan-launcher`, not built yet), the Backlog table
+  and review pane take both pairs and scroll the review pane.
   In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
@@ -76,7 +77,10 @@ hjkl is the direction in every layer; the modifier picks the verb.
   view and its boxes in every vim mode: Sessions with nothing shown, the Sessions list, the Chat tab, its
   session hub and its agent strip, the docs tree, doc and the doc's right column, the Backlog homes,
   list, detail and editor, the Settings sections, rows and Leader menu panes, the gallery, a form and its review, the
-  primer's columns, card and review, the note popup, and the Practice list, problem pane, editor, console and interviewer ask box. It is bound per main view, so a dialog,
+  primer's columns, card and review, the note popup, and the Practice list, problem pane, editor, console and interviewer ask box
+  (planned in `backlog/plan-launcher`, not built yet: the Backlog table, review pane and chunk strip in place of the
+  Backlog homes, list, detail and editor, and the scoped-agents ask box, `scoped-agents.ask`, in place of
+  `practice.ask`, serving both Practice's interviewer and Backlog's assistant). It is bound per main view, so a dialog,
   picker or confirm keeps its own keys; a new main view adds its scope to that list in
   `src/plugins/keymap.ts`. While a box's completion popup is open, Ctrl+n and Ctrl+p move the
   popup's selection instead, and Tab accepts it, ahead of every bind; Shift+Tab still moves to the previous box.
@@ -86,7 +90,10 @@ hjkl is the direction in every layer; the modifier picks the verb.
   and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode,
   Practice's interviewer pane beside its column), then, at main's edge, to the shown mode's side bar on the left (the
   Sessions list, the docs tree, the Backlog homes, the Settings sections) and the right bar on the right (each part of
-  it that has rows, Alt+j/k between them). From the side bar Alt+l, and from the right bar Alt+h, return to main's last
+  it that has rows, Alt+j/k between them). Planned in `backlog/plan-launcher`, not built yet: Backlog has no side bar;
+  Alt+h/l move between its table and review pane, Alt+j from the table or review pane to the chunk strip and Alt+k
+  back to the table, and Alt+l from the review pane or the strip into the assistant pane while it shows (its outer
+  pane). From the side bar Alt+l, and from the right bar Alt+h, return to main's last
   pane. A hidden side bar or right bar is no stop: focus stops at the outer edge, and stays put while any scope is
   pushed over the view (a dialog, a confirm, a picker, a filter box, help). The commands are the core's
   `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`, bound in every scope; a view takes part
@@ -95,14 +102,17 @@ hjkl is the direction in every layer; the modifier picks the verb.
   behind keeps no focus.
 - **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping
   focus in the list (the docs tree, the Sessions list, the Backlog homes, the Settings sections, the Practice list). `a` on
-  the Practice list starts an import. The Sessions
+  the Practice list starts an import. Backlog's own keys (the table's `Enter` activate, `x` mark, `c` chunk, `u` unchunk,
+  `r` rename, `s`/`S` start, `H` headless, `gl` commits since, `W` sweep, and the strip's `h`/`l` and `Enter`) are listed in
+  `docs/features/backlog/design.md` § The mode (planned in `backlog/plan-launcher`, not built yet). The Sessions
   list's cursor row also takes `s` favorite its project, `J`/`K` move its project among the favorites, `r` rename
   and `d` close, as the docs tree's `s`, `r` and `d` do; `Esc` returns to the focused pane.
 - **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
 - **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line
   where the pane has no rows): the doc, the Backlog detail, the form and its review, the primer card and its
   review, the session hub (its section heads), the doc's right column, the Practice problem pane, the gallery and the
-  key help. The doc's right column also opens its cursor row on `Enter` or `l` and returns to the doc on `Esc`. The
+  key help (planned in `backlog/plan-launcher`, not built yet: the Backlog table and review pane in place of the
+  detail). The doc's right column also opens its cursor row on `Enter` or `l` and returns to the doc on `Esc`. The
   right bar's system stats panel (scope `system-stats.panel`) moves its process rows with `j`/`k` and `gg`/`G`, cycles
   its sort column on `s`, opens a group on `Enter` or `l` and closes it on `h`.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
@@ -128,7 +138,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
   user (forms' unanswered items).
 - **Cmd** is for OS-convention app actions only: `Cmd+Enter` send or submit, `Cmd+w` close, the
   summon chord, `Cmd+,` Settings. Nothing else takes Cmd, but Practice's `Cmd+'` Run, which
-  matches LeetCode's own key, beside its `Cmd+Enter` Submit. `Cmd+,` is an app menu accelerator
+  matches LeetCode's own key, beside its `Cmd+Enter` Submit. Planned in `backlog/plan-launcher`, not built yet: the two
+  bind in `scoped-agents.ask` in place of `practice.ask`, and do nothing while Practice is hidden, since Backlog's
+  assistant box shares that scope. `Cmd+,` is an app menu accelerator
   (`CommandOrControl+,`), since a page chord cannot hold `,`, so on Windows it is `Ctrl+,`, where
   `Win+,` belongs to the OS. `D-` is the Win key on Windows, so these binds are Win
   chords there: the user holds the four modifiers the same way on both OSes.
@@ -152,7 +164,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `k`                | go to                                | `ks` Sessions, `kd` Docs, `kb` Backlog, `kp` Practice, `k,` Settings                                                                                                                                                                                                                                             |
 | `n`                | notes                                | `nn` open or close the note popup; in the popup `nf` new follow-up, `na` append to a follow-up, `ns` new session, `nc` capture the window, `nd` discard                                                                                                                                                          |
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                                                                                                                                                                                                                             |
-| `v`                | view                                 | `vt` hide or show the docs tree, `vw` switch the docs sidebar between the wiki and All pages, `vd` show or hide done follow-ups, `va` show only agent-ready follow-ups (Backlog), `vi` show or hide the Practice interviewer, `vu` hide or show usage details, `vy` hide or show the system stats panel          |
+| `v`                | view                                 | `vt` hide or show the docs tree, `vw` switch the docs sidebar between the wiki and All pages, `vd` show or hide done follow-ups, `va` show only agent-ready follow-ups (Backlog), `vb` show or hide the Backlog assistant, `vr` pick the Backlog repo, `vc` hide chunked follow-ups, `vs` stale follow-ups first (those four planned in `backlog/plan-launcher`, not built yet), `vi` show or hide the Practice interviewer, `vu` hide or show usage details, `vy` hide or show the system stats panel          |
 | `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wd` dismiss a closed run, `ws` show or hide the side pane, `wf` open or fold finished waves, `wh` turn headless on or off |
 | `p`                | projects                             | `pf` favorite or unfavorite the focused session's project, `pk` / `pj` move it up or down among the favorites                                                                                                                                                                                                    |
 | `c`                | chat controls                        | on the page or in a box: `ci` show the attached images (`x` removes the shown one); in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `cy` copy the sign-in link (sign-in dialog)                    |

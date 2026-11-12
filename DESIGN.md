@@ -518,6 +518,24 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border. The page draws through a frame of article and right column; the column holds On this
   page and Linked from and sticks while the article scrolls.
+- **Backlog** (planned in `backlog/plan-launcher`, not built yet; `docs/features/backlog/design.md`): no side bar.
+  The sheet holds three Splits: the table pane beside the review pane (the table `640px` at first), the chunk strip
+  under both (`120px`), and the assistant pane at the end at full height (`380px`, hidden until shown). The table pane
+  stacks a header (its box hints and the edge prompt to the review pane), the status line, the filter bar, the filter
+  box, a column head and the rows. The filter bar is a Button per filter, `primary` while on and `ghost` while off,
+  then an accent `<n> marked` Tag while rows are marked. The column head and each row share one grid: repo `8rem`
+  (a `check` Icon first while marked), task filling the rest, ready `4rem`, staleness `5.5rem`, chunk `9rem`. A row is
+  `row-list`: the title with its one line as detail; ready an accent `ready` Tag; staleness a Tag of the level, `fresh`
+  in `success`, `moved` in `warning`, `stale` in `error`, `unknown` neutral and `…` neutral until read; the chunk's
+  name, with a `link-external` Icon while started. A started chunk's rows draw in `fg-tertiary`. The review pane has
+  a sticky head (the edge prompt to the table, the docs and commits hints) over the item: its title as
+  a heading, a Tag per tag (`agent-ready` accent), the staleness note, the one line, the repo and file in
+  `fg-tertiary`, `In chunk <name>`, the body, then while shown a `Commits since written` section header over one
+  `row-list` row per commit (the subject, `<sha> · <date>` as detail). The strip is a `Chunks` section header and one
+  scrolling row of Cards (`radius-md`, `space-2` apart, the cursor card with the focus ring): the name, the repo as a
+  neutral Tag, the item count, an accent `headless` Tag while on, and a `running` StatusDot with `started` while
+  started; the last card reads `New chunk`. An empty table shows one empty-state line saying why, and `Space v b` when
+  nothing is left to show.
 - **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows, each a
   label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the user set
   carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame, its check

@@ -348,20 +348,38 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  bar, and as a split of tree and page in each view `addView` hands out, the `docs-session-tab` plugin's
                  session tab among them), layouts/ (the docs Layout contract and the built-in `default` layout);
                  `docs/features/docs-browser/design.md`, `docs/features/docs-wiki/design.md`
-  backlog/       manifest.ts, contract.ts, main/ (the follow-up files, plans and features of every features home,
-                 read through docs' index and written through its guard, file watching, each in-repo home's
-                 uncommitted state and its Commit, each item's images under the home's `followups-images/`, the
-                 `load`, `tags` and `fileNote` it exports to notes), page/ (Backlog mode: repos and homes in the side bar, the
-                 follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
-                 layouts/ (the backlog Layout contract and the built-in `default` layout)
+  backlog/       (the launcher planned in `backlog/plan-launcher`, not built yet; until it lands the mode is a per-home
+                 browser with a follow-up editor, delete, tags, Commit, a homes side bar and plans and features views)
+                 manifest.ts, contract.ts, main/ (the follow-up files of every features home, read through docs' index,
+                 file watching, each item's images under the home's `followups-images/`, the `load`, `tags` and
+                 `fileNote` it exports to notes, each item's git staleness through `Git.log` and `Git.firstAdded`
+                 cached in plugin data, each repo's folder (the in-repo path, else the `repoFolders` setting), the
+                 chunk store in plugin data and its one writer, chunk starts through chat's `launch` and their retiring
+                 on `sessionClosed` or once chat no longer holds the session, the assistant's scoped-agents
+                 registration, its `assistant.json` store, the sweep, and its `read_backlog_state` and
+                 `set_backlog_chunks` tools), page/ (Backlog mode: the filter bar, one table of
+                 every repo's follow-ups, the review pane, the chunk strip, the assistant pane through scoped-agents'
+                 `addAgentPane`), layouts/ (the backlog Layout contract and the built-in `default` layout);
+                 `docs/features/backlog/design.md`
   practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge
                  that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress and
-                 the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import and
-                 interviewer sessions through chat's `launch` and `resume`, a `problems/` watch started at the first
-                 list, the self-test's script and its `writeFixture` drive action), page/ (Practice mode: the problem
-                 list in the side bar, the stacked problem pane, editor and console, the interviewer pane through chat's
-                 `mountChat`, the import box), layouts/ (the practice Layout contract and the built-in `default`
-                 layout); `docs/features/practice/design.md`
+                 the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import session
+                 through chat's `launch`, the interviewer as a scoped-agents registration with its `progress.json`
+                 store (planned in `backlog/plan-launcher`, not built yet; today `practice-sessions.ts` runs it through
+                 chat's `launch` and `resume`), a `problems/` watch started at the first list, the self-test's script
+                 and its `writeFixture` drive action), page/ (Practice mode: the problem list in the side bar, the
+                 stacked problem pane, editor and console, the interviewer pane through scoped-agents' `addAgentPane`
+                 (planned, as above; today `interviewer-pane.ts` mounts chat's `mountChat`), the import box), layouts/
+                 (the practice Layout contract and the built-in `default` layout); `docs/features/practice/design.md`
+  scoped-agents/ (planned in `backlog/plan-launcher`, not built yet; `docs/features/scoped-agents/design.md`)
+                 manifest.ts, contract.ts, main/ (owned chat sessions keyed by owner, agent id and scope, registered
+                 through `addScopedAgent` with the owner's manifest id and a store adapter each: launched on the
+                 first ask through chat's `launch`, resumed through chat's `resume`, the superseded row closed, chat's
+                 `sessionOpened`, `sessionClosed` and `sessionCleared` heard once for every registration, `scopeOf`
+                 for each owner's tool check), page/ (the agent pane `addAgentPane` hands out: the ask box until the
+                 first message, then the session's chat view through chat's `mountChat`; the `scoped-agents.ask`
+                 keys), layouts/ (the scoped-agents Layout contract with its `askBox` part and the built-in `default`
+                 layout)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
                  `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
                  start_session and set_headless MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
