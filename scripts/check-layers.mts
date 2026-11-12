@@ -74,6 +74,19 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: ['node:'],
       },
+      // Starts the real sessions page, whose exports the picker files under.
+      'src/plugins/audio-picker/page/start.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/page',
+          'src/plugins/audio-picker/contract.ts',
+          'src/plugins/audio-picker/page',
+          'src/plugins/sessions/contract.ts',
+          'src/plugins/sessions/page',
+        ],
+        packages: [],
+      },
     },
   },
   // Its contract's records hold the follow-up file module's types.

@@ -1,0 +1,53 @@
+/* A session's audio picker popup holds its picker view. */
+.audio-picker-tab {
+  height: 100%;
+}
+
+/* A picker fills its popup: the list scrolling on its own over the footer. */
+.audio-picker-tab .audio-picker-form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.audio-picker-tab .audio-picker-scroller {
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-6);
+}
+
+.audio-picker-tab .audio-picker-scroller > * {
+  max-width: var(--wg-prose-measure);
+}
+
+@media (max-width: 800px) {
+  .audio-picker-tab .audio-picker-scroller {
+    padding: var(--wg-space-3) var(--wg-space-4) var(--wg-space-4);
+  }
+}
+
+/* The slot one layout part draws into lays out as that part alone. */
+.audio-picker-part {
+  display: contents;
+}
+
+/* One moment: its title, its rows, None of these and its notes. */
+.audio-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  margin-top: var(--wg-space-6);
+}
+
+/* Cancel picker and Send, under the list. */
+.audio-picker-footer {
+  border-top: 1px solid var(--wg-border-default);
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  justify-content: flex-end;
+  padding: var(--wg-space-3) var(--wg-space-6);
+}

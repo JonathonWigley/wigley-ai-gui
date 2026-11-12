@@ -1,6 +1,7 @@
 import type { PagePart } from '../contracts/plugin';
 import { agentLinesPagePart } from './agent-lines/page/start';
 import { appUpdatePagePart } from './app-update/page/start';
+import { audioPickerPagePart } from './audio-picker/page/start';
 import { agentSkillsPagePart } from './agent-skills/page/start';
 import { contextSourcesPagePart } from './context-sources/page/start';
 import { liveViewPagePart } from './live-view/page/start';
@@ -41,6 +42,7 @@ export const pageParts: readonly PagePart[] = [
   chatPagePart,
   formsPagePart,
   primerPagePart,
+  audioPickerPagePart,
   agentsPagePart,
   agentLinesPagePart,
   workflowPagePart,

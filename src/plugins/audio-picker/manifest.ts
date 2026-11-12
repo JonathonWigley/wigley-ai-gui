@@ -77,7 +77,7 @@ export const audioPickerManifest = definePlugin({
     confirm: 'In the audio picker cancel confirmation',
     idle: 'With no audio picker open',
   },
-  settings: { autosaveDelayMs: 400, deadlineSeconds: 240 },
+  settings: { autosaveDelayMs: 400, deadlineSeconds: 240, layout: 'default' },
   settingInfo: {
     autosaveDelayMs: {
       label: 'Autosave delay',
@@ -88,6 +88,10 @@ export const audioPickerManifest = definePlugin({
       label: 'Audio picker deadline',
       description:
         'How long an agent waits on an audio picker before it gets a draft back, in seconds, when its session names no deadline.',
+    },
+    layout: {
+      label: 'Audio picker layout',
+      description: 'Which layout draws the audio picker.',
     },
   },
   themeTokens: {},

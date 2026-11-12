@@ -258,6 +258,7 @@ export const defaultKeymap = {
         'primer.items',
         'primer.card',
         'primer.review',
+        'audio-picker.list',
         'backlog.editor',
         'notes.popup',
         'notes.title',
@@ -494,6 +495,102 @@ export const defaultKeymap = {
       keys: '<Esc>',
       scope: 'primer.confirm',
       command: 'primer.dismissConfirm',
+    },
+
+    // ── Audio picker ───────────────────────────────────────────────────────
+    { keys: 'j', scope: 'audio-picker.list', command: 'audio-picker.nextRow' },
+    { keys: 'k', scope: 'audio-picker.list', command: 'audio-picker.prevRow' },
+    {
+      keys: 'gg',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.firstRow',
+    },
+    { keys: 'G', scope: 'audio-picker.list', command: 'audio-picker.lastRow' },
+    {
+      keys: '<C-l>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.nextMoment',
+    },
+    {
+      keys: '<C-h>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.prevMoment',
+    },
+    {
+      keys: '<CR>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.chooseRow',
+    },
+    ...DIGITS.map((digit) => ({
+      keys: digit,
+      scope: 'audio-picker.list' as const,
+      command: 'audio-picker.choose' as const,
+      arg: Number(digit),
+    })),
+    ...DIGITS.map((digit) => ({
+      keys: `<Leader>a${digit}`,
+      scope: 'audio-picker.list' as const,
+      command: 'audio-picker.choose' as const,
+      arg: Number(digit),
+      where: 'box' as const,
+    })),
+    {
+      keys: 'p',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.togglePlay',
+    },
+    { keys: 'a', scope: 'audio-picker.list', command: 'audio-picker.editNote' },
+    { keys: 'i', scope: 'audio-picker.list', command: 'audio-picker.editNote' },
+    {
+      keys: '<Tab>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.nextBox',
+    },
+    {
+      keys: '<S-Tab>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.prevBox',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.leaveBox',
+      where: 'box',
+    },
+    {
+      keys: '<D-Enter>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.submit',
+    },
+    {
+      keys: 'C',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.askCancel',
+    },
+    {
+      keys: '<C-j>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.lineDown',
+    },
+    {
+      keys: '<C-k>',
+      scope: 'audio-picker.list',
+      command: 'audio-picker.lineUp',
+    },
+    {
+      keys: 'y',
+      scope: 'audio-picker.confirm',
+      command: 'audio-picker.confirmCancel',
+    },
+    {
+      keys: 'n',
+      scope: 'audio-picker.confirm',
+      command: 'audio-picker.dismissConfirm',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'audio-picker.confirm',
+      command: 'audio-picker.dismissConfirm',
     },
 
     // ── Chat ───────────────────────────────────────────────────────────────
