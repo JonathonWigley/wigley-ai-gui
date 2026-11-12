@@ -695,6 +695,10 @@ describe('primer state', () => {
       { selectedTask: TASK_1, selectedItem: 2, cardColumn: 'items' },
     ],
     [
+      { field: 'itemText', entryId: '1', item: 2 },
+      { selectedTask: TASK_1, selectedItem: 2, cardColumn: 'items' },
+    ],
+    [
       { field: 'newItem', entryId: '1' },
       { selectedTask: TASK_1, selectedItem: 1, cardColumn: 'tasks' },
     ],
@@ -1024,4 +1028,123 @@ describe('placeRestored', () => {
       expect(restored.view).toBe('review');
     },
   );
+});
+
+describe('an added item text', () => {
+  // Task `1` holding the agent's `Read the store`, then the user's added
+  // `Write the store` and `Test the store`.
+  function withAdded(): PrimerState {
+    return stateWith([
+      primerEntry('1', 'primer', {
+        items: [
+          primerItem('Read the store'),
+          primerItem('Write the store', { added: true }),
+          primerItem('Test the store', { added: true }),
+        ],
+      }),
+    ]);
+  }
+
+  function setItemText(
+    state: PrimerState,
+    item: number,
+    value: string,
+  ): PrimerState {
+    return apply(state, {
+      type: 'setText',
+      formId: 'p1',
+      target: { field: 'itemText', entryId: '1', item },
+      value,
+    });
+  }
+
+  function itemTexts(state: PrimerState): string[] {
+    return primerOf(state).entries[0].items.map((item) => item.text);
+  }
+
+  it("edits an added item's text as a body edit, and never an agent item's", () => {
+    const state = withAdded();
+
+    const edited = setItemText(state, 2, 'Write the store twice');
+
+    expect(itemTexts(edited)).toEqual([
+      'Read the store',
+      'Write the store twice',
+      'Test the store',
+    ]);
+    expect(primerOf(edited).revision).toBe(primerOf(state).revision + 1);
+    expect(setItemText(state, 1, 'Changed')).toBe(state);
+  });
+
+  it('keeps blank text while the box is being edited', () => {
+    const blank = setItemText(withAdded(), 2, '  ');
+
+    expect(itemTexts(blank)).toEqual([
+      'Read the store',
+      '  ',
+      'Test the store',
+    ]);
+  });
+
+  it.each([
+    { selected: 1, drop: 2, after: 1 },
+    { selected: 2, drop: 2, after: 2 },
+    { selected: 3, drop: 2, after: 2 },
+    { selected: 3, drop: 3, after: 2 },
+  ])(
+    'drops blank item $drop with item $selected selected, leaving item $after selected',
+    ({ selected, drop, after }) => {
+      const state = setItemText(onItemOf1(withAdded(), selected), drop, '');
+
+      const dropped = apply(state, {
+        type: 'dropBlankItem',
+        formId: 'p1',
+        entryId: '1',
+        item: drop,
+      });
+
+      expect(itemTexts(dropped)).toHaveLength(2);
+      expect(primerOf(dropped).selectedItem).toBe(after);
+      expect(primerOf(dropped).revision).toBe(primerOf(state).revision + 1);
+    },
+  );
+
+  it('selects no item once the last item is dropped', () => {
+    const lone = stateWith([
+      primerEntry('1', 'primer', {
+        items: [primerItem('', { added: true })],
+      }),
+    ]);
+
+    const dropped = apply(onItemOf1(lone, 1), {
+      type: 'dropBlankItem',
+      formId: 'p1',
+      entryId: '1',
+      item: 1,
+    });
+
+    expect(primerOf(dropped).entries[0].items).toEqual([]);
+    expect(primerOf(dropped).selectedItem).toBeNull();
+  });
+
+  it('drops no item whose text is not blank', () => {
+    const state = withAdded();
+
+    expect(
+      apply(state, {
+        type: 'dropBlankItem',
+        formId: 'p1',
+        entryId: '1',
+        item: 2,
+      }),
+    ).toBe(state);
+  });
+
+  it('drops every blank item as the review opens', () => {
+    const blank = setItemText(setItemText(withAdded(), 2, ''), 3, ' ');
+
+    const review = apply(blank, { type: 'openReview' });
+
+    expect(itemTexts(review)).toEqual(['Read the store']);
+  });
 });

@@ -28,6 +28,8 @@ export function boxKey(box: PrimerBox): string {
       return `${primerId}/feature/${target.name}`;
     case 'taskName':
       return `${primerId}/task/${target.entryId}/name`;
+    case 'itemText':
+      return `${primerId}/task/${target.entryId}/item/${target.item}/text`;
     case 'itemComment':
       return `${primerId}/task/${target.entryId}/item/${target.item}/comment`;
     case 'newItem':
@@ -47,6 +49,8 @@ export function boxDescription(box: PrimerBox): string {
         : `${target.name} of the feature`;
     case 'taskName':
       return `name of task ${target.entryId}`;
+    case 'itemText':
+      return `text of item ${target.item} of task ${target.entryId}`;
     case 'itemComment':
       return `comment on item ${target.item} of task ${target.entryId}`;
     case 'newItem':
@@ -98,8 +102,10 @@ function boxesInView(
   const row = cardRow(primer);
   const entry = selectedEntry(primer);
   if (row.kind === 'item') {
-    const { entryId, item } = row;
-    return [{ primerId, target: { field: 'itemComment', entryId, item } }];
+    return itemTargets(entry, row.item).map((target) => ({
+      primerId,
+      target,
+    }));
   }
   if (entry === null) {
     return FEATURE_FIELDS.map(([name]) => ({
@@ -128,6 +134,30 @@ export function taskTargets(entry: PrimerEntry): TaskTarget[] {
   return [...name, ...newItem, { field: 'taskComment', entryId }];
 }
 
+// What an item card's box edits.
+export type ItemTarget = Extract<
+  TextTarget,
+  { field: 'itemText' | 'itemComment' }
+>;
+
+// Item `item`'s (1-based) card's boxes, in card order: the text of an item
+// the user added, then the item's comment. `entry` null, as for a card row of
+// a task the primer no longer holds, gives none.
+export function itemTargets(
+  entry: PrimerEntry | null,
+  item: number,
+): ItemTarget[] {
+  const shown = entry?.items[item - 1];
+  if (entry === null || shown === undefined) {
+    return [];
+  }
+  const entryId = entry.id;
+  const text: ItemTarget[] = shown.added
+    ? [{ field: 'itemText', entryId, item }]
+    : [];
+  return [...text, { field: 'itemComment', entryId, item }];
+}
+
 // A task holding MAX_PRIMER_ITEMS items takes no more.
 export function hasAddItemBox(entry: PrimerEntry): boolean {
   return entry.items.length < MAX_PRIMER_ITEMS;
@@ -153,6 +183,7 @@ export function boxText(primer: OpenPrimer, target: TextTarget): string {
       return entry.task;
     case 'taskComment':
       return entry.comment;
+    case 'itemText':
     case 'itemComment': {
       const item = entry.items[target.item - 1];
       if (item === undefined) {
@@ -160,7 +191,7 @@ export function boxText(primer: OpenPrimer, target: TextTarget): string {
           `task ${entry.id} of primer ${primer.formId} has no item ${target.item}`,
         );
       }
-      return item.comment;
+      return target.field === 'itemText' ? item.text : item.comment;
     }
   }
 }

@@ -1081,14 +1081,17 @@ function paneElement(
 }
 
 // What a card is built for: the Feature row; a task row and whether its card
-// holds the add-item box; or an item row.
+// holds the add-item box; or an item row and its task's item count, since a
+// removed item moves the next one into its place.
 function cardKeyOf(primer: OpenPrimer): string {
   const selected = cardRow(primer);
   switch (selected.kind) {
     case 'feature':
       return 'feature';
-    case 'item':
-      return `item ${selected.entryId} ${selected.item}`;
+    case 'item': {
+      const count = selectedEntry(primer)?.items.length ?? 0;
+      return `item ${selected.entryId} ${selected.item} of ${count}`;
+    }
     case 'task': {
       const entry = selectedEntry(primer);
       const isOpen = entry !== null && hasAddItemBox(entry);

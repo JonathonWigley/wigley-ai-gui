@@ -28,10 +28,12 @@ import type { PrimerScopeName } from '../ids';
 
 export type FeatureField = 'name' | 'slug' | 'spec' | 'summary' | 'notes';
 
-// `item` is 1-based within the task's items.
+// `item` is 1-based within the task's items. `itemText` exists only on an
+// item the user added.
 export type TextTarget =
   | { field: 'feature'; name: FeatureField }
   | { field: 'taskName'; entryId: string }
+  | { field: 'itemText'; entryId: string; item: number }
   | { field: 'itemComment'; entryId: string; item: number }
   | { field: 'newItem'; entryId: string }
   | { field: 'taskComment'; entryId: string };
@@ -89,10 +91,13 @@ type PrimerOwnAction =
   | { type: 'toggleInclude' }
   // Adds the task's add-item text as an item.
   | { type: 'addItem'; formId: string; entryId: string }
+  // Removes item `item` (1-based) of the task when its text is blank.
+  | { type: 'dropBlankItem'; formId: string; entryId: string; item: number }
   // Selects the row a text box sits on, and focuses the card.
   | { type: 'showTarget'; formId: string; target: TextTarget }
   | { type: 'setText'; formId: string; target: TextTarget; value: string }
-  // Commits each task's add-item text as an item, then opens the review.
+  // Commits each task's add-item text as an item and removes every item whose
+  // text is blank, then opens the review.
   | { type: 'openReview' }
   | { type: 'reviewNext' }
   | { type: 'reviewPrev' }
@@ -228,6 +233,10 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
       return updateForm(state, action.formId, (primer) =>
         addItem(primer, action.entryId),
       );
+    case 'dropBlankItem':
+      return updateForm(state, action.formId, (primer) =>
+        dropBlankItem(primer, action.entryId, action.item),
+      );
     case 'showTarget':
       return action.formId === active
         ? updateForm(state, active, (primer) =>
@@ -242,7 +251,7 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
       return active === null
         ? state
         : updateForm({ ...state, view: 'review' }, active, (primer) =>
-            withReviewRow(addNewItems(primer), 0),
+            withReviewRow(dropBlankItems(addNewItems(primer)), 0),
           );
     case 'reviewNext':
       return updateForm(state, active, (primer) =>
@@ -745,6 +754,46 @@ function addItem(primer: OpenPrimer, entryId: string): OpenPrimer {
   };
 }
 
+// Removes every item whose text is blank, as `dropBlankItem` does.
+function dropBlankItems(primer: OpenPrimer): OpenPrimer {
+  return primer.entries.reduce(
+    (current, entry) =>
+      entry.items.reduceRight(
+        (dropped, _item, i) => dropBlankItem(dropped, entry.id, i + 1),
+        current,
+      ),
+    primer,
+  );
+}
+
+// Removes item `number` (1-based) of the task when its text is blank, as the
+// add-item box adds no item for blank text. A selected item past the removed
+// one moves up with it; the selection stays on the removed item's place,
+// clamped to the items left, or none when none are left.
+function dropBlankItem(
+  primer: OpenPrimer,
+  entryId: string,
+  number: number,
+): OpenPrimer {
+  const entry = entryOf(primer, entryId);
+  const item = entry?.items[number - 1];
+  if (entry === null || item === undefined || item.text.trim() !== '') {
+    return primer;
+  }
+  const items = entry.items.filter((_current, i) => i !== number - 1);
+  const dropped = withEntry(primer, { ...entry, items });
+  const selected = primer.selectedItem;
+  const isSelectedTask = selectedEntry(primer)?.id === entryId;
+  if (!isSelectedTask || selected === null) {
+    return dropped;
+  }
+  const shifted = selected > number ? selected - 1 : selected;
+  return {
+    ...dropped,
+    selectedItem: items.length === 0 ? null : Math.min(shifted, items.length),
+  };
+}
+
 // The task row a target's box sits on: the Feature row for a feature box.
 function targetTask(target: TextTarget): TaskRow {
   return target.field === 'feature'
@@ -752,27 +801,29 @@ function targetTask(target: TextTarget): TaskRow {
     : { kind: 'task', entryId: target.entryId };
 }
 
-// Shows the card a target's box sits on and focuses it: an item comment's
-// item card, from the items column; another box's task or Feature card, from
-// the tasks column. A no-op for a target on a task the primer does not hold.
+// Shows the card a target's box sits on and focuses it: an item text's or
+// comment's item card, from the items column; another box's task or Feature
+// card, from the tasks column. A no-op for a target on a task the primer does
+// not hold.
 function showTarget(primer: OpenPrimer, target: TextTarget): OpenPrimer {
   const isHeldTask =
     target.field === 'feature' || entryOf(primer, target.entryId) !== null;
   if (!isHeldTask) {
     return primer;
   }
-  const shown =
-    target.field === 'itemComment'
-      ? {
-          ...primer,
-          selectedTask: targetTask(target),
-          selectedItem: target.item,
-          cardColumn: 'items' as const,
-        }
-      : {
-          ...withTask(primer, targetTask(target)),
-          cardColumn: 'tasks' as const,
-        };
+  const isItemBox =
+    target.field === 'itemText' || target.field === 'itemComment';
+  const shown = isItemBox
+    ? {
+        ...primer,
+        selectedTask: targetTask(target),
+        selectedItem: target.item,
+        cardColumn: 'items' as const,
+      }
+    : {
+        ...withTask(primer, targetTask(target)),
+        cardColumn: 'tasks' as const,
+      };
   const isUnchanged =
     isSameTask(shown.selectedTask, primer.selectedTask) &&
     shown.selectedItem === primer.selectedItem &&
@@ -810,7 +861,7 @@ function setEntryText(
   primer: OpenPrimer,
   target: Extract<
     TextTarget,
-    { field: 'taskName' | 'itemComment' | 'taskComment' }
+    { field: 'taskName' | 'itemText' | 'itemComment' | 'taskComment' }
   >,
   value: string,
 ): OpenPrimer {
@@ -827,6 +878,20 @@ function setEntryText(
       return entry.comment === value
         ? primer
         : withEntry(primer, { ...entry, comment: value });
+    case 'itemText': {
+      // The agent's items keep their text; only an added item's is the user's.
+      const position = target.item - 1;
+      const item = entry.items[position];
+      if (item === undefined || !item.added || item.text === value) {
+        return primer;
+      }
+      return withEntry(primer, {
+        ...entry,
+        items: entry.items.map((current, i) =>
+          i === position ? { ...item, text: value } : current,
+        ),
+      });
+    }
     case 'itemComment': {
       const position = target.item - 1;
       const item = entry.items[position];

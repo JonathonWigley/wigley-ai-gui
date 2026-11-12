@@ -129,7 +129,7 @@ export function primerCommandHandlers(
     nextBox: handler((box) => stepFocus(deps, box, 1)),
     prevBox: handler((box) => stepFocus(deps, box, -1)),
     leaveBox: handler((box) => {
-      commitNewItem(deps, box);
+      commitBox(deps, box);
       boxes.leave();
       log('left the box');
     }),
@@ -138,7 +138,7 @@ export function primerCommandHandlers(
     halfPageDown: handler(() => scrollPrimer(deps, 'halfPage', 1)),
     halfPageUp: handler(() => scrollPrimer(deps, 'halfPage', -1)),
     openReview: handler((box) => {
-      commitNewItem(deps, box);
+      commitBox(deps, box);
       changeView(deps, { type: 'openReview' }, 'review', 'review opened');
     }),
     closeReview: handler(() =>
@@ -211,14 +211,14 @@ function focusTarget(
   deps.boxes.focus({ primerId: primer.formId, target }, APPEND);
 }
 
-// Adds an add-item box's text first, since the move leaves the box. Logs the
-// card row's name when the move changed it.
+// Commits the box first, since the move leaves it. Logs the card row's name
+// when the move changed it.
 function moveRow(
   deps: PrimerCommandDeps,
   box: PrimerBox | undefined,
   action: PrimerAction,
 ) {
-  commitNewItem(deps, box);
+  commitBox(deps, box);
   const before = selectedRowName(deps.store.get());
   deps.store.dispatch(action);
   const after = selectedRowName(deps.store.get());
@@ -289,8 +289,8 @@ const PANE_ORDER: readonly PrimerPane[] = ['tasks', 'items', 'card'];
 
 // The shown primer's panes for the core's focus keys: left and right step
 // through tasks, items and card, and every other move returns false. A move
-// first shows the focused box's row; one into a column commits the add-item
-// text and leaves the box, as a click there would.
+// first shows the focused box's row; one into a column commits the box and
+// leaves it.
 export function primerFocusTarget(
   deps: Pick<PrimerCommandDeps, 'store' | 'boxes' | 'log'>,
 ): FocusTarget {
@@ -304,7 +304,7 @@ export function primerFocusTarget(
         return false;
       }
       if (pane !== 'card') {
-        commitNewItem(deps, box);
+        commitBox(deps, box);
         deps.boxes.leave();
       }
       return focusPane(deps, pane);
@@ -460,8 +460,41 @@ function fullTaskLine(entryId: string): string {
   return `no item added: task ${entryId} holds ${MAX_PRIMER_ITEMS} items`;
 }
 
-// Adds the add-item box's text as an item when `box` is an add-item box,
-// before a key that leaves it acts; a focus change alone adds nothing.
+// Commits `box` before a key that leaves it acts: an add-item box's text
+// becomes an item, and an added item whose text box was emptied is removed.
+// A focus change alone commits nothing.
+function commitBox(
+  deps: Pick<PrimerCommandDeps, 'store' | 'log'>,
+  box: PrimerBox | undefined | null,
+) {
+  commitNewItem(deps, box);
+  dropBlankItem(deps, box);
+}
+
+// Removes the item an item text box edits when its text is blank, as the
+// add-item box adds no item for blank text.
+function dropBlankItem(
+  deps: Pick<PrimerCommandDeps, 'store' | 'log'>,
+  box: PrimerBox | undefined | null,
+) {
+  if (box === undefined || box === null || box.target.field !== 'itemText') {
+    return;
+  }
+  const { primerId } = box;
+  const { entryId, item } = box.target;
+  const before = deps.store.get();
+  deps.store.dispatch({
+    type: 'dropBlankItem',
+    formId: primerId,
+    entryId,
+    item,
+  });
+  if (deps.store.get() !== before) {
+    deps.log(`removed blank item ${item} on task ${entryId}`);
+  }
+}
+
+// Adds the add-item box's text as an item when `box` is an add-item box.
 function commitNewItem(
   deps: Pick<PrimerCommandDeps, 'store' | 'log'>,
   box: PrimerBox | undefined | null,
@@ -493,7 +526,7 @@ function stepFocus(
   box: PrimerBox | undefined,
   step: 1 | -1,
 ) {
-  commitNewItem(deps, box);
+  commitBox(deps, box);
   const next = boxAfterStep(shownBoxes(deps.store.get()), box, step);
   if (next === null) {
     deps.log('no box to focus');

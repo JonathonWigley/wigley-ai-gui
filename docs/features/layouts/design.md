@@ -176,8 +176,9 @@ can be iterated in place. The sample sends nothing and raises no notification or
   pane's footer (`reviewFooter`) are parts of their own.
 - **Task card** (the tasks column focused on a task row): heading, tags and need; Question, Evidence, Probes and Pointer when not
   blank; an extra task's name box; the add-item box; the task comment. It lists no items.
-- **Item card** (the items column focused on an item row): the header `⌃H ‹ 2 of 3 › ⌃L`, the item text as heading, the include mark,
-  an Added tag on an item the user added, and the item's comment box.
+- **Item card** (the items column focused on an item row): the header `⌃H ‹ 2 of 3 › ⌃L`, the item text as heading (on an item
+  the user added, its text box, `ItemKit.textBox(parent, 'text')`, in the heading's place), the include mark, an Added tag on
+  an item the user added, and the item's comment box.
 - The review pane does not change.
 
 ## Decisions

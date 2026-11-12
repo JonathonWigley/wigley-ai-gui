@@ -548,6 +548,17 @@ describe('primerCommandHandlers', () => {
       moves: ['right'],
       box: 'p1/task/1/item/1/comment',
     },
+    {
+      card: 'an item the user added, its text',
+      entries: [
+        primerEntry('1', 'primer', {
+          items: [primerItem('Read the store', { added: true })],
+        }),
+      ],
+      steps: ['nextRow'],
+      moves: ['right'],
+      box: 'p1/task/1/item/1/text',
+    },
   ])(
     'focuses $box on $card for editFirstField',
     ({ entries, steps, moves, box }) => {
@@ -611,6 +622,75 @@ describe('primerCommandHandlers', () => {
     expect(store.get().view).toBe('review');
     expect(primer().entries[0].items).toHaveLength(20);
     expect(logs).toEqual([expect.stringContaining('task 1'), 'review opened']);
+  });
+
+  it.each<{ key: PrimerCommand; logs: string[] }>([
+    {
+      key: 'leaveBox',
+      logs: ['removed blank item 2 on task 1', 'left the box'],
+    },
+    { key: 'nextBox', logs: ['removed blank item 2 on task 1'] },
+    { key: 'nextRow', logs: ['removed blank item 2 on task 1'] },
+    {
+      key: 'openReview',
+      logs: ['removed blank item 2 on task 1', 'review opened'],
+    },
+  ])(
+    'removes an added item whose text box was emptied on $key',
+    ({ key, logs: expected }) => {
+      const itemText: PrimerBox = {
+        primerId: 'p1',
+        target: { field: 'itemText', entryId: '1', item: 2 },
+      };
+      const { run, store, primer, logs } = setup({
+        entries: [
+          primerEntry('1', 'primer', {
+            items: [
+              primerItem('Read the store'),
+              primerItem('Write the store', { added: true }),
+            ],
+          }),
+        ],
+      });
+      store.dispatch({
+        type: 'setText',
+        formId: 'p1',
+        target: itemText.target,
+        value: ' ',
+      });
+
+      run(key, { editor: editorOf(itemText) });
+
+      expect(primer().entries[0].items.map((item) => item.text)).toEqual([
+        'Read the store',
+      ]);
+      expect(logs.slice(0, expected.length)).toEqual(expected);
+    },
+  );
+
+  it('keeps an added item whose edited text is not blank', () => {
+    const itemText: PrimerBox = {
+      primerId: 'p1',
+      target: { field: 'itemText', entryId: '1', item: 1 },
+    };
+    const { run, store, primer, logs } = setup({
+      entries: [
+        primerEntry('1', 'primer', {
+          items: [primerItem('Read the store', { added: true })],
+        }),
+      ],
+    });
+    store.dispatch({
+      type: 'setText',
+      formId: 'p1',
+      target: itemText.target,
+      value: 'Read the store twice',
+    });
+
+    run('leaveBox', { editor: editorOf(itemText) });
+
+    expect(primer().entries[0].items[0].text).toBe('Read the store twice');
+    expect(logs).toEqual(['left the box']);
   });
 
   it('adds nothing for blank add-item text', () => {

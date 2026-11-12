@@ -36,6 +36,8 @@ import type {
 import { primerManifest } from '../../manifest';
 import {
   boxText,
+  type ItemTarget,
+  itemTargets,
   type PrimerBox,
   type TaskTarget,
   taskTargets,
@@ -106,6 +108,22 @@ const TASK_BOXES: {
   },
 };
 
+// The item card's box for each target `itemTargets` lists, but its target.
+// The text box sits first on an added item's card, so `i` reaches it.
+const ITEM_BOXES: {
+  [F in ItemTarget['field']]: Omit<
+    CardBox<Parameters<ItemKit['textBox']>[1]>,
+    'target'
+  >;
+} = {
+  itemText: { field: 'text', label: 'Item', command: 'editFirstField' },
+  itemComment: {
+    field: 'comment',
+    label: 'Comment',
+    command: 'editItemComment',
+  },
+};
+
 // The base kit for one part draw in the primer `scope`, each anchor it names
 // recorded in `rollback`, with the need tag.
 export function createPrimerKit(
@@ -167,9 +185,10 @@ export function createTaskKit(
   };
 }
 
-// The kit of item `number` (1-based) of `entry`. Each include mark it drew
-// runs `primer.toggleInclude`, on the selected item as the key does, and
-// shows the item's include on each `update`.
+// The kit of item `number` (1-based) of `entry`: its comment box, and on an
+// item the user added its text box. Each include mark it drew runs
+// `primer.toggleInclude`, on the selected item as the key does, and shows the
+// item's include on each `update`.
 export function createItemKit(
   deps: PrimerPartKitDeps,
   primer: OpenPrimer,
@@ -178,14 +197,15 @@ export function createItemKit(
   rollback: RollbackDeps,
 ): CardKit<ItemKit, ItemCardInput> {
   const item = itemOf(entry, number);
-  const boxes = createCardBoxes(deps, primer, rollback, [
-    {
-      field: 'comment',
-      target: { field: 'itemComment', entryId: entry.id, item: number },
-      label: 'Comment',
-      command: 'editItemComment',
-    },
-  ]);
+  const boxes = createCardBoxes(
+    deps,
+    primer,
+    rollback,
+    itemTargets(entry, number).map((target) => ({
+      ...ITEM_BOXES[target.field],
+      target,
+    })),
+  );
   const marks: HTMLElement[] = [];
   const base = createPrimerKit(deps, 'card', rollback);
   return {

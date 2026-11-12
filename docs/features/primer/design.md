@@ -96,7 +96,7 @@ iterating a layout in place.
   while the tasks column has focus, the selected item's card while the items column has focus. An items column with
   no item to select keeps the task card (the feature card on the Feature row). Focusing the card keeps the card of the column it came from, and the
   card's edge strip shows `‹ items ⌥H`. A box focused from the card shows its card from the tasks column (an item
-  comment's, from the items column), so a row step from an add-item box steps the tasks column.
+  text's or comment's, from the items column), so a row step from an add-item box steps the tasks column.
   - The Feature row's card holds the name, slug, spec, summary and notes boxes.
   - A task row's card holds its heading, tags and need; its question, evidence, probes and pointer when not blank;
     an extra task's name box; the add-item box; and the task's own comment box. It lists no items: the items
@@ -106,6 +106,10 @@ iterating a layout in place.
   - An item row's card holds the header `⌃H ‹ 2 of 3 › ⌃L` (its place among its task's items), the item text as
     heading, its include mark, an Added tag on an item the user added, and the item's comment box. The header's
     step keys follow the focused pane: the items column binds `k`/`⌃H` and `j`/`⌃L`, the card `⌃H` and `⌃L`.
+  - An item the user added keeps its text editable: its card holds a text box in the heading's place, first in box
+    order. The agent's items stay read-only. An added item whose text is blank when a key leaves its box, or when
+    the review opens, is removed, as the add-item box adds no item for blank text; a click or window switch that
+    moves focus leaves it.
 - **Review pane** before send: every task's need, its items (the left-out ones tagged) and every comment, with the
   tallies; submit from there checks that the slug matches the slug rule and every extra task is named, and shows what
   failed.
@@ -138,7 +142,7 @@ right divider, the card its left one).
 | `c` | card | edit the item's comment (item card) |
 | `C` | card | edit the task's comment (task card; from an item card, its task's card) |
 | `a` | card | add an item (task card; from an item card, its task's card) |
-| `i` | card | edit the card's first box: the Feature card's name, an extra task's name; on any other task card the add-item box (the comment once the task is full), as `a` (`C`); on an item card its comment, as `c` |
+| `i` | card | edit the card's first box: the Feature card's name, an extra task's name; on any other task card the add-item box (the comment once the task is full), as `a` (`C`); on an item card the text of an item the user added, else its comment, as `c` |
 | `<Tab>` / `<S-Tab>` | card, box | next / previous box |
 | `<Esc>` | box | leave the box |
 | `<C-j>` / `<C-k>`, `<C-S-j>` / `<C-S-k>` | card, review | scroll a line / half a page |

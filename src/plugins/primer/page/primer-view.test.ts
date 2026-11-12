@@ -587,27 +587,77 @@ describe('primer item card', () => {
     return setup;
   }
 
-  it.each([true, false])(
-    'holds the place, the item, its mark and its comment box (added %s)',
-    (added) => {
-      const { popup, boxes } = onAddedItem(added);
-      const card = pane(popup, 'primer-card');
+  const itemText2: PrimerBox = {
+    primerId: 'p1',
+    target: { field: 'itemText', entryId: '1', item: 2 },
+  };
+  const itemComment2: PrimerBox = {
+    primerId: 'p1',
+    target: { field: 'itemComment', entryId: '1', item: 2 },
+  };
 
-      expect(pane(card, 'primer-item-step').textContent).toContain('2 of 2');
-      expect(pane(card, 'primer-card-heading').textContent).toBe(
-        'Write the store',
-      );
-      const [mark] = findAll(card, 'ui-toggle-mark');
-      expect(mark.classList.contains('is-selected')).toBe(false);
-      expect(card.textContent.includes('Added')).toBe(added);
-      const itemComment: PrimerBox = {
-        primerId: 'p1',
-        target: { field: 'itemComment', entryId: '1', item: 2 },
-      };
-      expect(boxes.isMounted(itemComment)).toBe(true);
-      expect(findAll(card, 'primer-box')).toHaveLength(1);
-    },
-  );
+  it("holds the place, an agent item's text as heading, its mark and its comment box", () => {
+    const { popup, boxes } = onAddedItem(false);
+    const card = pane(popup, 'primer-card');
+
+    expect(pane(card, 'primer-item-step').textContent).toContain('2 of 2');
+    expect(pane(card, 'primer-card-heading').textContent).toBe(
+      'Write the store',
+    );
+    const [mark] = findAll(card, 'ui-toggle-mark');
+    expect(mark.classList.contains('is-selected')).toBe(false);
+    expect(card.textContent.includes('Added')).toBe(false);
+    expect(boxes.isMounted(itemText2)).toBe(false);
+    expect(boxes.isMounted(itemComment2)).toBe(true);
+    expect(findAll(card, 'primer-box')).toHaveLength(1);
+  });
+
+  it("holds an added item's text box in place of the heading, then its comment box", () => {
+    const { popup, boxes } = onAddedItem(true);
+    const card = pane(popup, 'primer-card');
+
+    expect(findAll(card, 'primer-card-heading')).toEqual([]);
+    expect(card.textContent.includes('Added')).toBe(true);
+    expect(boxes.isMounted(itemText2)).toBe(true);
+    expect(boxes.isMounted(itemComment2)).toBe(true);
+    expect(findAll(card, 'primer-box')).toHaveLength(2);
+  });
+
+  it("rebuilds the card on the item that takes a dropped blank item's place", () => {
+    const setup = primerPopupSetup({
+      entries: [
+        primerEntry('1', 'primer', {
+          items: [
+            primerItem('Read the store'),
+            primerItem('Write the store', { added: true }),
+            primerItem('Test the store', { added: true }),
+          ],
+        }),
+      ],
+    });
+    setup.store.dispatch({ type: 'selectTask', row: 1 });
+    setup.store.dispatch({ type: 'selectItem', item: 2 });
+    const card = pane(setup.popup, 'primer-card');
+    const before = findAll(card, 'primer-box');
+    setup.store.dispatch({
+      type: 'setText',
+      formId: 'p1',
+      target: itemText2.target,
+      value: '',
+    });
+
+    setup.store.dispatch({
+      type: 'dropBlankItem',
+      formId: 'p1',
+      entryId: '1',
+      item: 2,
+    });
+
+    expect(pane(card, 'primer-item-step').textContent).toContain('2 of 2');
+    const after = findAll(card, 'primer-box');
+    expect(after).toHaveLength(2);
+    expect(after.some((frame) => before.includes(frame))).toBe(false);
+  });
 
   it('flips its mark on toggleInclude with no rebuild', () => {
     const { popup, boxes, run } = onAddedItem(false);

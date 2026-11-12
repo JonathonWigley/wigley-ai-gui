@@ -137,7 +137,11 @@ const layout = {
       const place = kit.el(step, 'span', 'primer-item-place', placeText(input));
       kit.chevron(step, '›');
       kit.stepKey(step, 'nextRow');
-      kit.el(card, 'h2', 'primer-card-heading', input.text);
+      if (input.added) {
+        kit.textBox(card, 'text');
+      } else {
+        kit.el(card, 'h2', 'primer-card-heading', input.text);
+      }
       const include = kit.el(card, 'div', 'primer-item-include');
       kit.includeMark(include);
       kit.el(include, 'span', '', 'Include');

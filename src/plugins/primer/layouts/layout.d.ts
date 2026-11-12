@@ -43,7 +43,8 @@ export interface TaskCardInput {
 }
 
 // One item of a task. `number` is its 1-based place among its task's items, and `count` the task's item count;
-// `added` marks an item the user added.
+// `added` marks an item the user added, whose text the card edits in its `text` box. The app rebuilds the card when
+// the task's item count changes.
 export interface ItemCardInput {
   entryId: string;
   taskName: string;
@@ -187,8 +188,10 @@ export interface TaskKit extends PrimerKit {
   ): HTMLElement;
 }
 
+// `text` exists only on an item the user added; an agent's item text is read-only. An added item's text left blank
+// when a key leaves its box, or when the review opens, removes the item, as the add-item box adds none for blank text.
 export interface ItemKit extends PrimerKit {
-  textBox(parent: HTMLElement, field: 'comment'): HTMLElement;
+  textBox(parent: HTMLElement, field: 'text' | 'comment'): HTMLElement;
   // The item's ToggleMark: a click toggles the item, and it shows the item's include on each change while the card
   // shows.
   includeMark(parent: HTMLElement): HTMLElement;

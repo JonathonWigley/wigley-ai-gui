@@ -17,7 +17,8 @@ import {
   primerItem,
 } from './test-primers';
 
-// Tasks column rows: the feature (0), then `extra-1` with two items (1).
+// Tasks column rows: the feature (0), then `extra-1` with two items and a
+// third the user added (1).
 function setup() {
   return initialState(
     [
@@ -28,6 +29,7 @@ function setup() {
             items: [
               primerItem('First'),
               primerItem('Second', { comment: 'why' }),
+              primerItem('Third', { added: true }),
             ],
           }),
         ],
@@ -58,15 +60,24 @@ describe('primer boxes', () => {
     ]);
   });
 
-  it("shows the item's comment box only on an item card", () => {
+  it.each([
+    {
+      name: "an agent's item",
+      item: 2,
+      keys: ['p1/task/extra-1/item/2/comment'],
+    },
+    {
+      name: 'an item the user added',
+      item: 3,
+      keys: ['p1/task/extra-1/item/3/text', 'p1/task/extra-1/item/3/comment'],
+    },
+  ])('shows the item card boxes of $name', ({ item, keys }) => {
     const state = apply(apply(setup(), { type: 'nextRow' }), {
       type: 'selectItem',
-      item: 2,
+      item,
     });
 
-    expect(shownBoxes(state).map(boxKey)).toEqual([
-      'p1/task/extra-1/item/2/comment',
-    ]);
+    expect(shownBoxes(state).map(boxKey)).toEqual(keys);
   });
 
   it('shows no box in the review', () => {
@@ -105,6 +116,7 @@ describe('primer boxes', () => {
       { primerId: 'p1', target: { field: 'feature', name: 'slug' } },
       { primerId: 'p1', target: { field: 'feature', name: 'notes' } },
       { primerId: 'p1', target: { field: 'taskName', entryId: '3' } },
+      { primerId: 'p1', target: { field: 'itemText', entryId: '3', item: 2 } },
       {
         primerId: 'p1',
         target: { field: 'itemComment', entryId: '3', item: 2 },
@@ -117,6 +129,7 @@ describe('primer boxes', () => {
       ['p1/feature/slug', 'slug of the feature'],
       ['p1/feature/notes', 'notes on the feature'],
       ['p1/task/3/name', 'name of task 3'],
+      ['p1/task/3/item/2/text', 'text of item 2 of task 3'],
       ['p1/task/3/item/2/comment', 'comment on item 2 of task 3'],
       ['p1/task/3/new-item', 'new item on task 3'],
       ['p1/task/3/comment', 'comment on task 3'],
@@ -135,6 +148,9 @@ describe('primer boxes', () => {
     expect(
       boxText(primer, { field: 'itemComment', entryId: 'extra-1', item: 2 }),
     ).toBe('why');
+    expect(
+      boxText(primer, { field: 'itemText', entryId: 'extra-1', item: 3 }),
+    ).toBe('Third');
     expect(boxText(primer, { field: 'newItem', entryId: 'extra-1' })).toBe('');
   });
 
