@@ -1,38 +1,30 @@
-/* The default layout's homes pane, list pane, detail head and editor pane. */
+/* The default layout's table pane and its rows, review head and item, and the
+   chunk strip. */
 
-/* The default homes pane's tracks: its header of keys, the load's status
-   line, then each repo's header over its homes. */
-.backlog-homes > .backlog-pane {
+/* The default table pane's tracks: its header of keys, the load's status
+   line, the filter bar, the filter box, the column head, then the rows. The
+   rows keep the last track while the status line is hidden. */
+.backlog-table > .backlog-pane {
+  container: backlog-table / inline-size;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
 }
 
-.backlog-repo {
-  padding: var(--wg-space-2) var(--wg-space-2) 0;
+.backlog-table > .backlog-pane > .backlog-rows {
+  grid-row: -2;
 }
 
-/* The default list pane's tracks: its header of keys, the filter, then the
-   rows. */
-.backlog-list > .backlog-pane {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  min-height: 0;
-  min-width: 0;
-}
-
-/* The keys that act on the open home, then the edge prompt to the detail;
-   on the homes, the keys that act on the cursor home. */
-.backlog-homes-header,
-.backlog-list-header {
+/* A pane header: the keys that act on the pane, then its edge prompt. */
+.backlog-pane-header {
   align-items: baseline;
   display: flex;
   gap: var(--wg-space-3);
   padding: var(--wg-space-2) var(--wg-space-3) 0;
 }
 
-.backlog-list-keys {
+.backlog-pane-keys {
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-3);
@@ -47,6 +39,94 @@
   margin-left: auto;
 }
 
+.backlog-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1);
+  padding: var(--wg-space-2) var(--wg-space-3) 0;
+}
+
+/* The row grid the column head and each row share: repo, task (the row's
+   title, then its one line), ready, staleness and chunk. A cursor row's
+   actions take a line of their own under it. */
+.backlog-columns,
+.ui-row.backlog-table-row {
+  column-gap: var(--wg-space-2);
+  display: grid;
+  grid-template-columns:
+    [repo] 8rem [task] minmax(0, max-content) minmax(0, 1fr)
+    [ready] 4rem [staleness] 5.5rem [chunk] 9rem [end];
+}
+
+/* A table too narrow for the fixed columns shares its width among every
+   column in their proportions, so each row keeps the column head's grid. */
+@container backlog-table (width < 40rem) {
+  .backlog-columns,
+  .ui-row.backlog-table-row {
+    grid-template-columns:
+      [repo] minmax(0, 8fr) [task] minmax(0, 8fr) minmax(0, 4fr)
+      [ready] minmax(0, 4fr) [staleness] minmax(0, 5.5fr) [chunk] minmax(0, 9fr)
+      [end];
+  }
+}
+
+.backlog-columns {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  margin: var(--wg-space-2) var(--wg-space-2) 0;
+  padding: 0 var(--wg-space-2);
+}
+
+.backlog-table-row > .ui-row-trailing {
+  display: contents;
+}
+
+.backlog-table-row .backlog-row-actions {
+  grid-column: repo / end;
+}
+
+.backlog-cell {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlog-cell--repo {
+  grid-column: repo;
+}
+
+.backlog-cell--task {
+  grid-column: task / ready;
+}
+
+.backlog-cell--ready {
+  grid-column: ready;
+}
+
+.backlog-cell--staleness {
+  grid-column: staleness;
+}
+
+.backlog-cell--chunk {
+  grid-column: chunk;
+}
+
+.backlog-chunk-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-row.backlog-table-row.is-started,
+.ui-row.backlog-table-row.is-started .ui-row-detail {
+  color: var(--wg-fg-tertiary);
+}
+
 .backlog-tags {
   display: inline-flex;
   flex-wrap: wrap;
@@ -55,7 +135,7 @@
 
 /* The header covers the pane's top padding as well, so no text scrolls
    above it. */
-.backlog-detail-head {
+.backlog-review-head {
   align-items: baseline;
   background: var(--wg-sheet-background);
   display: flex;
@@ -67,39 +147,110 @@
   z-index: 1;
 }
 
-.backlog-followup {
+.backlog-review-item,
+.backlog-commits {
   display: flex;
   flex-direction: column;
   gap: var(--wg-space-2);
 }
 
-.backlog-detail-title,
-.backlog-editor-heading {
+.backlog-commits {
+  margin-top: var(--wg-space-4);
+}
+
+.backlog-commit-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.backlog-review-title {
   font-size: var(--wg-text-16);
   font-weight: var(--wg-weight-semibold);
   margin: 0;
 }
 
-.backlog-detail-line {
+.backlog-review-line {
   color: var(--wg-fg-secondary);
 }
 
-/* The default editor pane: its heading, the fields, then the keys. */
-.backlog-editor > .backlog-pane {
-  display: flex;
-  flex-direction: column;
-  gap: var(--wg-space-3);
+.backlog-staleness,
+.backlog-review-path,
+.backlog-review-chunk {
+  font-size: var(--wg-text-12);
+  margin: 0;
 }
 
-.backlog-editor-fields {
+.backlog-staleness--fresh {
+  color: var(--wg-status-success);
+}
+
+.backlog-staleness--moved {
+  color: var(--wg-status-warning);
+}
+
+.backlog-staleness--stale {
+  color: var(--wg-status-error);
+}
+
+.backlog-staleness--unknown,
+.backlog-staleness--reading,
+.backlog-review-path,
+.backlog-review-chunk {
+  color: var(--wg-fg-tertiary);
+}
+
+/* The default strip pane: its header, the rename box while open, then one
+   row of chunk cards. */
+.backlog-strip > .backlog-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  min-height: 0;
+  min-width: 0;
+}
+
+.backlog-chunks {
+  padding: 0 var(--wg-space-3) var(--wg-space-2);
+}
+
+.backlog-chunk {
+  border-radius: var(--wg-radius-md);
   display: flex;
   flex-direction: column;
   gap: var(--wg-space-1);
+  max-width: 16rem;
+  min-width: 9rem;
+  padding: var(--wg-space-2);
 }
 
-/* The editor's footer of keys. */
-.backlog-editor-keys {
+.backlog-chunk.is-cursor {
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+.backlog-chunk--new {
+  color: var(--wg-fg-tertiary);
+  justify-content: center;
+}
+
+.backlog-chunk-title {
+  font-weight: var(--wg-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlog-chunk-facts {
+  align-items: center;
+  color: var(--wg-fg-tertiary);
   display: flex;
   flex-wrap: wrap;
-  gap: var(--wg-space-3);
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-1);
+}
+
+.backlog-chunk-started {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-1);
 }

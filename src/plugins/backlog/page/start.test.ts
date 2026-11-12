@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
-  countingEditors,
   fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { type DocsPageExports, docsPageKey } from '../../docs/contract';
+import {
+  type AgentPane,
+  scopedAgentsPageKey,
+} from '../../scoped-agents/contract';
 import { type BacklogRead, backlogPlaceSlot } from '../contract';
+import { rowKey } from '../row-key';
 import { backlogPagePart } from './start';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
@@ -16,6 +20,36 @@ const fakeDocs = fakeDependency(
   docsPageKey,
   () => ({ openDoc: () => undefined }) as unknown as DocsPageExports,
 );
+
+// Every call Backlog made on the assistant's pane, across restarts.
+const paneCalls: string[] = [];
+
+// The assistant's pane: hidden until toggled, its outer panes taking no move.
+const fakeScopedAgents = fakeDependency(scopedAgentsPageKey, () => ({
+  addAgentPane(): AgentPane {
+    let isPaneShown = false;
+    return {
+      element: document.createElement('div'),
+      isShown: () => isPaneShown,
+      toggle() {
+        paneCalls.push('toggle');
+        isPaneShown = !isPaneShown;
+      },
+      scopeOpened: () => undefined,
+      refresh: () => undefined,
+      hostTookKeys: () => undefined,
+      modeHidden() {
+        paneCalls.push('modeHidden');
+      },
+      outerPanes: {
+        focus: { move: () => false },
+        resize: { nudge: () => false },
+      },
+      redraw: () => undefined,
+      dispose: () => undefined,
+    };
+  },
+}));
 
 const ROOT = '/home/repo/docs/features';
 
@@ -27,7 +61,6 @@ const READ: BacklogRead = {
       root: ROOT,
       isCreateTarget: true,
       gitRoot: null,
-      uncommitted: false,
       repoFolder: null,
       followupFiles: [
         {
@@ -43,26 +76,32 @@ const READ: BacklogRead = {
           })),
         },
       ],
-      plans: [],
-      features: [],
     },
   ],
   message: null,
 };
 
-// A Backlog page over main's side `invoke`, by default one whose `load` reads
-// `READ` at once, its editor boxes made by `editor` when given.
-function startBacklogPage(
-  invoke = async (method: string): Promise<unknown> =>
-    method === 'load' ? READ : undefined,
-  editor?: ReturnType<typeof countingEditors>['host'],
-) {
-  installFakeDom(vi.stubGlobal);
+// Main's answers: `load` reads `READ`, `staleness` none, `chunks` none.
+async function answer(method: string): Promise<unknown> {
+  switch (method) {
+    case 'load':
+      return READ;
+    case 'staleness':
+      return {};
+    case 'chunks':
+      return [];
+    default:
+      return undefined;
+  }
+}
+
+// A Backlog page over main's side `invoke`, by default `answer`.
+function startBacklogPage(invoke = answer) {
+  installFocusFakeDom(vi.stubGlobal);
   return startPagePart(backlogPagePart, {
-    dependencies: [fakeDocs],
+    dependencies: [fakeDocs, fakeScopedAgents],
     firstModeTaken: true,
     services: {
-      ...(editor === undefined ? {} : { editor }),
       picker: fakeListPickerService(),
       markdown: {
         block: (text) => text,
@@ -82,11 +121,12 @@ async function settle() {
 describe('backlog page part lifecycle', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    paneCalls.length = 0;
   });
 
   it('stop_LeavesNoLiveRegistration', async () => {
     const harness = startBacklogPage();
-    expect(harness.counts().observers).toBe(1);
+    expect(harness.counts().observers).toBeGreaterThan(0);
 
     await harness.stop();
 
@@ -101,21 +141,30 @@ describe('backlog page part lifecycle', () => {
     expect(harness.started().commands).toHaveProperty('showMode');
   });
 
-  it('reload_restores_the_open_home_and_selected_row', async () => {
+  it('reload_RestoresFiltersMarksAndSelectedRow', async () => {
     const harness = startBacklogPage();
     await settle();
     const commands = harness.started().commands;
-    commands.openHomeRow({ arg: ROOT });
     commands.listDown({ arg: undefined });
+    commands.mark({ arg: undefined });
+    commands.toggleDone({ arg: undefined });
+    commands.toggleStaleFirst({ arg: undefined });
     const logsBefore = harness.logs.length;
 
     await harness.restart();
     await settle();
 
-    const place = harness.state.read(backlogPlaceSlot, 'test').get();
-    expect(place).toMatchObject({
-      openRoot: ROOT,
-      selectedKey: `followup:${ROOT}/followups.md#Beta`,
+    const beta = rowKey('repo', 'Beta');
+    expect(harness.state.read(backlogPlaceSlot, 'test').get()).toEqual({
+      selectedKey: beta,
+      repo: null,
+      filter: '',
+      marked: [beta],
+      isReadyOnly: false,
+      isChunkedHidden: false,
+      isStaleFirst: true,
+      isDoneShown: true,
+      isAssistantShown: false,
     });
     const logs = harness.logs.slice(logsBefore).map((line) => line.message);
     expect(logs).toContain('selected Beta');
@@ -123,14 +172,12 @@ describe('backlog page part lifecycle', () => {
 
   it('reload_ChangeBeforeTheFirstLoad_KeepsTheLastPagesPlace', async () => {
     let isLoadHeld = false;
-    const harness = startBacklogPage(async (method) => {
-      if (method !== 'load') {
-        return undefined;
-      }
-      return isLoadHeld ? new Promise(() => undefined) : READ;
-    });
+    const harness = startBacklogPage(async (method) =>
+      method === 'load' && isLoadHeld
+        ? new Promise(() => undefined)
+        : answer(method),
+    );
     await settle();
-    harness.started().commands.openHomeRow({ arg: ROOT });
     harness.started().commands.listDown({ arg: undefined });
     const placeSlot = harness.state.read(backlogPlaceSlot, 'test');
     const saved = placeSlot.get();
@@ -142,36 +189,19 @@ describe('backlog page part lifecycle', () => {
 
     expect(placeSlot.get()).toEqual(saved);
   });
-  it.each([
-    { case: 'nothing typed', opensEditor: false, text: null, expected: null },
-    {
-      case: 'editor open, unchanged',
-      opensEditor: true,
-      text: null,
-      expected: null,
-    },
-    {
-      case: 'typed and not kept',
-      opensEditor: true,
-      text: 'typed',
-      expected: 'Save or close the follow-up you are editing first',
-    },
-  ])('mayStop_$case', async ({ opensEditor, text, expected }) => {
-    const editors = countingEditors();
-    const harness = startBacklogPage(undefined, editors.host);
+
+  it('showMode_WhileShown_DoesNothing', async () => {
+    const harness = startBacklogPage();
     await settle();
     const commands = harness.started().commands;
-    commands.openHomeRow({ arg: ROOT });
+    commands.showMode({ arg: undefined });
+    await settle();
 
-    if (opensEditor) {
-      commands.edit({ arg: undefined });
-      expect(editors.live()).toBeGreaterThan(0);
-    }
-    if (text !== null) {
-      editors.type(text);
-    }
+    commands.showMode({ arg: undefined });
+    await settle();
 
-    expect(harness.started().mayStop?.()).toBe(expected);
-    await harness.stop();
+    const messages = harness.logs.map((line) => line.message);
+    expect(messages.filter((message) => message === 'shown')).toHaveLength(1);
+    expect(paneCalls).not.toContain('modeHidden');
   });
 });

@@ -22,11 +22,8 @@ function home(change: Partial<BacklogHome>): BacklogHome {
     root: '/r/docs/features',
     isCreateTarget: true,
     gitRoot: '/r',
-    uncommitted: false,
     repoFolder: '/r',
     followupFiles: [],
-    plans: [],
-    features: [],
     ...change,
   };
 }

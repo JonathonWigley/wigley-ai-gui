@@ -12,52 +12,9 @@ import type {
 import type { SlotKey } from '../../contracts/state';
 import type {
   FollowupDraft,
-  FollowupEdit,
   FollowupEditResult,
   FollowupItem,
 } from '../../shared/followups/followup-file';
-
-// A numbered task document; `path` is the index's copy of it. `copyPath` is
-// the copy `status` was read from and the detail shows: in a plan's newer
-// worktree copy when that copy's `plan.md` links the task, else `path`.
-// `status` is its `Status:` line, null when absent; a worktree copy's line
-// whose value is not a task status reads as null.
-// Removed in 08: main no longer serves this.
-export interface BacklogTask {
-  path: string;
-  copyPath: string;
-  title: string;
-  status: string | null;
-}
-
-// `path` is the index's copy of the plan's `plan.md`, `copyPath` the copy
-// `checked` and `total` were read from and the detail shows: the moved copy
-// across the clone's checkouts. `title` is the index copy's first `# `
-// heading less a trailing ` — plan`, else the plan folder's name; `target`
-// and `written` from its `Target: … · Written: …` line, each null when
-// absent.
-// Removed in 08: main no longer serves this.
-export interface BacklogPlan {
-  path: string;
-  copyPath: string;
-  feature: string;
-  title: string;
-  checked: number;
-  total: number;
-  target: string | null;
-  written: string | null;
-  tasks: BacklogTask[];
-}
-
-// `path` is the feature's `checklist.md`.
-// Removed in 08: main no longer serves this.
-export interface BacklogFeature {
-  path: string;
-  slug: string;
-  checked: number;
-  total: number;
-  tasks: BacklogTask[];
-}
 
 export interface BacklogFollowupFile {
   path: string;
@@ -78,14 +35,8 @@ export interface BacklogHome {
   root: string;
   isCreateTarget: boolean;
   gitRoot: string | null;
-  // Removed in 08: main no longer serves this. Main fills false.
-  uncommitted: boolean;
   repoFolder: string | null;
   followupFiles: BacklogFollowupFile[];
-  // Removed in 08: main no longer serves this. Main fills [].
-  plans: BacklogPlan[];
-  // Removed in 08: main no longer serves this. Main fills [].
-  features: BacklogFeature[];
 }
 
 // `${repo}\n${title}`, built only by `rowKey` in `row-key.ts`.
@@ -150,13 +101,6 @@ export type ChunkStart =
   | { chunkId: string; sessionId: string }
   | { chunkId: string; refusal: string };
 
-// A follow-up edit as the page sends it. An `edit` carries `baseline`, the
-// item as the editor opened it.
-// Removed in 08: main no longer serves this.
-export type BacklogEdit =
-  | Exclude<FollowupEdit, { type: 'edit' }>
-  | (Extract<FollowupEdit, { type: 'edit' }> & { baseline: FollowupDraft });
-
 // `refused`: the title would not read back, the path is not one of the home's
 // follow-up files, the docs guard refused the write, or the file kept
 // changing on disk. `changed`: the item on disk no longer matches an edit's
@@ -176,8 +120,8 @@ export type NoteTarget =
 // Backlog main's exports to the plugins that depend on it.
 export interface BacklogMainExports {
   load(): Promise<BacklogRead>;
-  // The tag list Backlog's tag picker offers: the backlog `tags` setting as
-  // the user config now sets it.
+  // The tag list the notes popup offers: the backlog `tags` setting as the
+  // user config now sets it.
   tags(): string[];
   // 'create' adds an item to the home's create-target file with `text` as its
   // body; 'append' adds `text` to the end of that item's body. Each PNG in
@@ -195,16 +139,17 @@ export interface BacklogMainExports {
   ): Promise<BacklogWriteResult>;
 }
 
-// Opens the home whose root is `arg`, as a click on its side bar row does.
-export const backlogOpenHomeRowCommand: CommandKey<
-  string,
-  'backlog.openHomeRow'
-> = { id: 'backlog.openHomeRow' };
-
-// Selects the list row whose key is `arg` and focuses the items, as a click on
-// the row does.
+// Selects the table row whose key is `arg` and focuses the table, as a click
+// on the row does.
 export const backlogSelectRowCommand: CommandKey<string, 'backlog.selectRow'> =
   { id: 'backlog.selectRow' };
+
+// Puts the strip cursor on the chunk whose id is `arg` and focuses the strip,
+// as a click on its card does.
+export const backlogSelectChunkCommand: CommandKey<
+  string,
+  'backlog.selectChunk'
+> = { id: 'backlog.selectChunk' };
 
 export const backlogMainKey: DependencyKey<
   BacklogMainExports,
@@ -226,19 +171,6 @@ export interface BacklogChannel extends ChannelShape {
     load(): Promise<BacklogRead>;
     // Rebuilds the machine index, then loads.
     rescan(): Promise<BacklogRead>;
-    // Removed in 08: main no longer serves this.
-    readDoc(path: string): Promise<string>;
-    // `path` null: the home's create target file, created when missing; else
-    // one of the home's follow-up files.
-    // Removed in 08: main no longer serves this.
-    applyEdit(
-      homeRoot: string,
-      path: string | null,
-      edit: BacklogEdit,
-    ): Promise<BacklogWriteResult>;
-    // Rejects with the git error text; resolves to the commit message used.
-    // Removed in 08: main no longer serves this.
-    commit(homeRoot: string): Promise<string>;
     // The last load's open rows with a cached staleness still valid; main
     // reads the rest one row at a time and sends them in `stalenessRead`.
     staleness(): Promise<Record<RowKey, BacklogStaleness>>;
@@ -273,31 +205,21 @@ export interface BacklogChannel extends ChannelShape {
   };
 }
 
-// Where the list keys act: the side bar's homes, the open home's rows, or the
-// detail pane.
-export type BacklogFocus = 'homes' | 'items' | 'detail';
-
-// Where the user was in Backlog mode, so a page reload puts them back:
-// `homeCursor` indexes the side bar's homes in order, `selectedKey` is a row's
-// key, and `expanded` the plan and feature paths whose task rows show. Main
-// reads it for `read_backlog_state`.
+// Where the user was in Backlog mode, so a page reload puts them back; main
+// reads it for `read_backlog_state`. `selectedKey`: the selected row's key;
 // `repo`: the repo filter, null for every repo; `marked`: the marked rows'
 // keys; the `is…` flags: the table's view toggles and whether the assistant
-// pane shows. Optional until 08's page writes them.
+// pane shows.
 export interface BacklogPlace {
-  focus: BacklogFocus;
-  homeCursor: number;
-  openRoot: string | null;
-  selectedKey: string | null;
-  expanded: string[];
+  selectedKey: RowKey | null;
+  repo: string | null;
   filter: string;
-  repo?: string | null;
-  marked?: RowKey[];
-  isReadyOnly?: boolean;
-  isChunkedHidden?: boolean;
-  isStaleFirst?: boolean;
-  isDoneShown?: boolean;
-  isAssistantShown?: boolean;
+  marked: RowKey[];
+  isReadyOnly: boolean;
+  isChunkedHidden: boolean;
+  isStaleFirst: boolean;
+  isDoneShown: boolean;
+  isAssistantShown: boolean;
 }
 
 export const backlogPlaceSlot: SlotKey<BacklogPlace, 'page', 'backlog'> = {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readBacklogLayout } from './read-layout';
 
-const followupRow = () => ({}) as HTMLElement;
+const tableRow = () => ({}) as HTMLElement;
 
 describe('readBacklogLayout', () => {
   it.each([
@@ -13,17 +13,17 @@ describe('readBacklogLayout', () => {
     },
     {
       case: 'a part that is not a function',
-      module: { default: { homeRow: 1 } },
-      throws: 'homeRow is not a function',
+      module: { default: { tableRow: 1 } },
+      throws: 'tableRow is not a function',
     },
     {
       case: 'one row part',
-      module: { default: { followupRow } },
+      module: { default: { tableRow } },
       throws: null,
     },
   ])('reads $case', ({ module, throws }) => {
     if (throws === null) {
-      expect(readBacklogLayout(module, 'mine').followupRow).toBe(followupRow);
+      expect(readBacklogLayout(module, 'mine').tableRow).toBe(tableRow);
     } else {
       expect(() => readBacklogLayout(module, 'mine')).toThrow(throws);
     }

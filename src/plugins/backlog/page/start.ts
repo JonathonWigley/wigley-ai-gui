@@ -1,7 +1,8 @@
 import '../../../shared/page/markdown.css';
 import './backlog.css';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type { ModeHandle, PageApi, PagePart } from '../../../contracts/plugin';
 import { docsPageKey } from '../../docs/contract';
+import { scopedAgentsPageKey } from '../../scoped-agents/contract';
 import { placeWrites } from '../../../shared/page/place-slot';
 import {
   type BacklogChannel,
@@ -23,25 +24,35 @@ type BacklogApi = PageApi<typeof backlogManifest, BacklogChannel>;
 
 const TITLE = 'Backlog';
 
-// Backlog mode: the repos and their features homes in the side bar, the open
-// home's follow-ups, plans and features beside a detail pane in the sheet,
-// drawn with the layout the `layout` setting names. `showMode` shows the mode,
-// or toggles its side bar while it shows. Each `changed` message reads the
-// homes again, keeping the selection and any open editor's draft, and a
-// changed draft refuses a switch-off. The place
-// (focus, cursors, open home, selection, expansion, filter) goes to
-// `backlog.place` on each change, and a page load puts the last page's back.
+// Backlog mode: the table of every repo's follow-ups beside the review pane,
+// over the chunk strip, with the Backlog assistant's pane at the right, drawn
+// with the layout the `layout` setting names. `showMode` shows the mode, and
+// does nothing while it shows. Each `changed` message reads the homes again,
+// keeping the selection; `stalenessRead` and `chunksChanged` carry main's
+// staleness and chunks to the view. The title bar's detail is the repo
+// filter. The place (selection, repo, filter, marks, toggles, assistant
+// shown) goes to `backlog.place` on each change, and a page load puts the
+// last page's back.
 export const backlogPagePart: PagePart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
     const { services } = api;
     const docs = api.dependency(docsPageKey);
+    const scopedAgents = api.dependency(scopedAgentsPageKey);
     let isShown = false;
+    // The mode, once added; the view sets the title bar's detail as it is
+    // made, before the mode is.
+    let modeHandle: ModeHandle | null = null;
+    let contextDetail: string | null = null;
+    const showContext = () => {
+      if (contextDetail !== null) {
+        modeHandle?.setContext({ title: TITLE, detail: contextDetail });
+      }
+    };
     const placeWriter = api.state.publish(backlogPlaceSlot);
     const place = placeWrites<BacklogPlace>((value) => placeWriter.set(value));
     const view = createBacklogView({
       channel: api.channel,
-      editor: services.editor,
       markdown: services.markdown,
       matcher: services.fuzzy,
       paths: services.paths,
@@ -50,62 +61,49 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       timers: services.timers,
       log: services.log,
       toast: services.toast,
-      drops: api.drops,
       keys: api.keys,
       platform: api.platform.os,
       state: api.state.forLayouts,
       commands: kitCommandsOf(api),
-      tags: () => api.settings().tags,
       openDoc: (path, line) => docs.openDoc(path, line),
       setScope: (scope) => api.keys.setScope(scope),
       setResizeTarget: (target) => api.panes.setResizeTarget(target),
       setFocusTarget: (target) => api.panes.setFocusTarget(target),
+      setOuterPanes: (panes) => api.panes.setOuterPanes(panes),
       pushScope: (scope) => api.keys.pushScope(scope),
       picker: services.picker,
-      addOverlay: (element) => api.areas.overlay.contribute(element),
       run: (command) => api.commands.run(command),
-      isShown: () => isShown,
-      revealSideBar: () => {
-        if (!mode.sideBarShown()) {
-          mode.toggleSideBar();
-        }
-      },
-      homePicked: () => mode.picked(),
       runKey: keyRunner(api.commands, services.log),
-      homeShown: (home) =>
-        mode.setContext(
-          home === null
-            ? null
-            : {
-                title: TITLE,
-                detail: `${home.repo} ${services.paths.tilde(home.root, services.homeDir)}`,
-              },
-        ),
+      isShown: () => isShown,
+      showMode: () => mode.show(),
+      addAgentPane: (spec) => scopedAgents.addAgentPane(spec),
+      setContext(detail) {
+        contextDetail = detail;
+        showContext();
+      },
       savedPlace: placeWriter.get() ?? null,
       placeChanged: (value) => place.write(value),
     });
 
     // The view reads `mode` only once a key runs or a load lands, after
-    // `add`: Backlog mode is never the first mode added. Focus leaves the
-    // side bar as it hides and moves to it as it opens over the sheet.
+    // `add`: Backlog mode is never the first mode added.
     const mode = api.modes.add({
       id: 'main',
       title: TITLE,
       icon: 'checklist',
       element: view.sheet,
-      sideBar: view.sideBar,
       shown() {
         isShown = true;
         view.shown();
       },
       hidden() {
         isShown = false;
+        view.hidden();
       },
-      sideBarHidden: () => view.sideBarHidden(),
-      sideBarOpenedOver: () => view.sideBarOpenedOver(),
-      focusSideBar: () => view.focusSideBar(),
       focusMain: () => view.focusMain(),
     });
+    modeHandle = mode;
+    showContext();
 
     api.layouts.show<BacklogLayout>({
       defaultLayout,
@@ -116,25 +114,25 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
     });
 
     api.channel.on('changed', () => view.reload());
+    api.channel.on('stalenessRead', ({ entries }) =>
+      view.stalenessRead(entries),
+    );
+    api.channel.on('chunksChanged', ({ chunks }) =>
+      view.chunksChanged(chunks),
+    );
     view.load();
-
-    // The core logs the side bar's hiding and showing.
-    const showMode = () => {
-      if (!mode.isShown()) {
-        mode.show();
-        return;
-      }
-      mode.toggleSideBar();
-    };
 
     return {
       commands: {
-        showMode,
+        showMode() {
+          if (!mode.isShown()) {
+            mode.show();
+          }
+        },
         ...view.commands,
-        openHomeRow: ({ arg }) => view.openHomeRow(arg),
         selectRow: ({ arg }) => view.selectRow(arg),
+        selectChunk: ({ arg }) => view.selectChunk(arg),
       },
-      mayStop: () => view.mayStop(),
       dispose: () => view.dispose(),
     };
   },

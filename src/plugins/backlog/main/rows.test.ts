@@ -26,14 +26,11 @@ function home(
     root,
     isCreateTarget: true,
     gitRoot: null,
-    uncommitted: false,
     repoFolder,
     followupFiles: Object.entries(files).map(([path, items]) => ({
       path,
       items,
     })),
-    plans: [],
-    features: [],
   };
 }
 

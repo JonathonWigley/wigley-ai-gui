@@ -4,22 +4,17 @@ import type { BacklogLayout } from '../../layouts/layout';
 // Every part a Backlog layout may define, so a part added to the contract and
 // missed here fails to compile.
 const LAYOUT_PARTS: Record<keyof BacklogLayout, true> = {
-  homes: true,
-  list: true,
-  detail: true,
-  editor: true,
-  repoHeader: true,
-  homeRow: true,
-  groupHeader: true,
-  followupRow: true,
-  planRow: true,
-  featureRow: true,
-  taskRow: true,
+  table: true,
+  filters: true,
+  tableRow: true,
   empty: true,
-  followupDetail: true,
-  docDetail: true,
+  review: true,
+  reviewItem: true,
+  commits: true,
+  strip: true,
+  chunkCard: true,
+  newChunk: true,
   pickerRow: true,
-  confirmBody: true,
 };
 
 // The Backlog layout a user's `layout.js` module exports as its default. A

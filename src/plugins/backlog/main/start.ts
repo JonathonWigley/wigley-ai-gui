@@ -216,8 +216,7 @@ async function readFollowupFiles(
 }
 
 // `homeDir` is the home folder with its links resolved, which a `~` in the
-// `repoFolders` setting expands to. Plans, features and `uncommitted` are no
-// longer read: each is filled empty.
+// `repoFolders` setting expands to.
 async function readHome(
   deps: BacklogDeps,
   home: MarkedHome,
@@ -229,7 +228,6 @@ async function readHome(
     root: home.root,
     isCreateTarget: home.isCreateTarget,
     gitRoot: home.gitRoot,
-    uncommitted: false,
     repoFolder: repoFolderOf(
       home,
       home.isInClone,
@@ -238,8 +236,6 @@ async function readHome(
       homeDir,
     ),
     followupFiles,
-    plans: [],
-    features: [],
   };
 }
 
@@ -894,7 +890,6 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       backlogSelfTestScript({
         files: services.files,
         processes: services.processes,
-        git: services.git,
         paths: services.paths,
         homeDir: services.homeDir,
         started: fixture,

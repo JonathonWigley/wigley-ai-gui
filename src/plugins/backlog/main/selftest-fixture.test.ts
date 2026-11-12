@@ -16,6 +16,8 @@ const GIT_RUNS: string[][] = [
   ['config', 'core.hooksPath', `${REPO}/.git/no-hooks`],
   ['add', '--all'],
   ['commit', '--quiet', '-m', 'Backlog self-test fixture'],
+  ['add', '--all'],
+  ['commit', '--quiet', '-m', 'Change the app'],
 ];
 
 async function fixtureDeps() {
@@ -29,7 +31,7 @@ async function fixtureDeps() {
 }
 
 describe('writeBacklogFixture', () => {
-  it('GIVEN an empty home WHEN the fixture is written THEN git inits, sets its own identity, no signing and no hooks, then commits every file', async () => {
+  it('GIVEN an empty home WHEN the fixture is written THEN git inits, sets its own identity, no signing and no hooks, then commits every file and then the change', async () => {
     const deps = await fixtureDeps();
 
     await writeBacklogFixture(deps, HOME);
@@ -37,6 +39,26 @@ describe('writeBacklogFixture', () => {
     expect(deps.processes.runs.map((run) => run.args)).toEqual(
       GIT_RUNS.map((args) => ['-C', REPO, ...args]),
     );
+  });
+
+  it('GIVEN an empty home WHEN the fixture is written THEN the first commit is dated 2026-10-20 and the change a day later', async () => {
+    const deps = await fixtureDeps();
+
+    await writeBacklogFixture(deps, HOME);
+
+    const commits = deps.processes.runs.filter(
+      (run) => run.args[2] === 'commit',
+    );
+    expect(commits.map((run) => run.setEnv)).toEqual([
+      {
+        GIT_AUTHOR_DATE: '2026-10-20T10:00:00Z',
+        GIT_COMMITTER_DATE: '2026-10-20T10:00:00Z',
+      },
+      {
+        GIT_AUTHOR_DATE: '2026-10-21T10:00:00Z',
+        GIT_COMMITTER_DATE: '2026-10-21T10:00:00Z',
+      },
+    ]);
   });
 
   it('GIVEN an earlier run left a file in the repo WHEN the fixture is written again THEN the file is gone', async () => {

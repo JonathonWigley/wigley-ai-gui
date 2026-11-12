@@ -1,5 +1,4 @@
 import type { Files } from '../../../contracts/files';
-import type { Git } from '../../../contracts/git';
 import type { Paths } from '../../../contracts/paths';
 import type {
   SelfTestGroup,
@@ -8,20 +7,11 @@ import type {
 } from '../../../contracts/plugin';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
-import { holdsWithin } from '../../../shared/holds-within';
-import {
-  BACKLOG_FEATURES_HOME,
-  BACKLOG_FOLLOWUPS,
-  BACKLOG_REPO,
-  FIXTURE_COMMIT_SUBJECT,
-  runGit,
-  writeBacklogFixture,
-} from './selftest-fixture';
+import { writeBacklogFixture } from './selftest-fixture';
 
 export interface BacklogSelfTestDeps {
   files: Files;
   processes: ProcessRunner;
-  git: Git;
   paths: Paths;
   // `services.homeDir`, the self-test's temp home.
   homeDir: string;
@@ -32,345 +22,204 @@ export interface BacklogSelfTestDeps {
   reload(): void;
 }
 
-// Docs' list-shaped follow-ups file, relative to the temp home, and the text
-// a step writes over it from outside the app.
-const LIST_FOLLOWUPS = 'wigley-features/selftest-repo/followups.md';
-const LIST_WITH_OUTSIDE_ITEM =
-  '# Follow-ups\n\n- **First follow-up** — waits.\n- **Outside item** — written on disk.\n';
-
-// The follow-up the steps create, the text the edit adds to its title, and
-// its one line and body.
-const CREATED = 'Zesty';
-const RENAME_SUFFIX = 'Two';
-const RENAMED = `${CREATED}${RENAME_SUFFIX}`;
-const CREATED_ONE_LINE = 'tidy';
-const CREATED_BODY = 'Body';
-
-const COMMIT_SUBJECT = 'Follow-ups edited in Backlog: tagged Plain item';
-
-// How long one result check waits for the disk to show a step's write.
-const CHECK_TIMEOUT_MS = 60_000;
-
-function backlogGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
-  // A path below the home as the page shows it.
-  const shown = (relative: string) =>
-    paths.tilde(paths.join(homeDir, relative), homeDir);
-  const gitHome = shown(BACKLOG_FEATURES_HOME);
-  const openedGitHome = `[backlog] opened backlog-repo ${gitHome}`;
+// The table, done hidden: the git home's Ready item, Plain item, Moved item
+// and Stale item (fresh, fresh, moved, stale), then the list-shaped home's
+// First follow-up (unknown: outside git); Shipped item follows Plain item
+// while done shows.
+function backlogGroups(): SelfTestGroup[] {
   const open: SelfTestStep[] = [
     { keys: [' ', 'k', 'b'], expect: '[backlog] shown', checksFit: true },
     {
       keys: ['R'],
       expect: '[backlog] loaded 2 homes',
-      why: 'The side bar lists the git home and the list-shaped home.',
-    },
-    { keys: ['g', 'g', 'l'], expect: openedGitHome },
-    {
-      keys: ['Enter'],
-      expect: '[backlog] list focused',
-      why: 'l opened the home and kept focus on the homes; Enter on the open home focuses its list.',
-    },
-    { keys: ['j'], expect: '[backlog] selected Plain item' },
-    {
-      keys: ['j'],
-      expect: '[backlog] selected Backlog X',
-      checksFit: true,
-      screenshot: 'home',
-      why: 'The struck item is hidden, so the plan follows the untagged item; the screenshot shows agent-ready on the first row.',
-    },
-  ];
-  const doneAndFilter: SelfTestStep[] = [
-    { keys: [' ', 'v', 'd'], expect: '[backlog] done shown' },
-    {
-      keys: ['k'],
-      expect: '[backlog] selected Shipped item',
-      why: 'The struck item now shows above the plan.',
-    },
-    { keys: [' ', 'v', 'd'], expect: '[backlog] done hidden' },
-    { keys: ['k'], expect: '[backlog] selected Plain item' },
-    {
-      keys: [' ', 'v', 'a'],
-      expect: '[backlog] selected Ready item',
-      why: 'Only the tagged item shows, so the selection leaves the untagged one for it.',
-    },
-    { keys: [' ', 'v', 'a'], expect: '[backlog] agent-ready only off' },
-    {
-      keys: ['/', ...'plain'],
-      expect: '[backlog] selected Plain item',
-      why: 'The filter hides the tagged item, so the selection moves to the match.',
-    },
-    { keys: ['Enter'], expect: '[backlog] filter plain' },
-    {
-      keys: ['/', 'Escape', 'k'],
-      expect: '[backlog] selected Ready item',
-      why: '/ then Esc clears the filter, so the tagged item shows above the match again.',
-    },
-    { keys: ['j'], expect: '[backlog] selected Plain item' },
-  ];
-  const tag: SelfTestStep[] = [
-    {
-      keys: ['t'],
-      expect: '[backlog] loaded 2 homes',
-      why: 'The write reloads the homes; the result checks the Contents line and the uncommitted file.',
-    },
-  ];
-  const createAndEdit: SelfTestStep[] = [
-    { keys: ['a'], expect: '[backlog] editor open create' },
-    {
-      keys: [...CREATED, '<Tab>'],
-      expect: '[backlog] focused One line box',
-    },
-    {
-      keys: ['i', ...CREATED_ONE_LINE, '<Tab>', '<Tab>'],
-      expect: '[backlog] focused Body box',
-    },
-    {
-      keys: ['i', ...CREATED_BODY, '<S-Tab>'],
-      expect: '[backlog] focused Tags (comma-separated) box',
-      checksFit: true,
-      screenshot: 'editor',
-      why: "The screenshot shows the editor's filled boxes and the git home's uncommitted tag.",
-    },
-    {
-      keys: ['<D-Enter>'],
-      expect: `[backlog] selected ${CREATED}`,
-      why: 'A saved create closes the editor and selects the new follow-up.',
-    },
-    { keys: ['i'], expect: '[backlog] editor open edit' },
-    {
-      keys: [...RENAME_SUFFIX, '<D-Enter>'],
-      expect: `[backlog] selected ${RENAMED}`,
-    },
-  ];
-  const deleteItem: SelfTestStep[] = [
-    { keys: ['k'], expect: '[backlog] selected Plain item' },
-    { keys: ['j'], expect: `[backlog] selected ${RENAMED}` },
-    {
-      keys: ['d', 'y'],
-      expect: '[backlog] selected Backlog X',
-      why: 'The deleted row leaves the list, so the selection moves to the plan in its place.',
-    },
-  ];
-  const outsideChange: SelfTestStep[] = [
-    {
-      keys: ['h', 'j', 'Enter'],
-      expect: `[backlog] opened selftest-repo ${shown('wigley-features/selftest-repo')}`,
-    },
-    {
-      writeFile: { path: LIST_FOLLOWUPS, text: LIST_WITH_OUTSIDE_ITEM },
-      keys: [],
-      expect: '[backlog] loaded 2 homes',
+      why: 'The table reads both homes: the git home and the list-shaped home.',
     },
     {
       keys: ['G'],
-      expect: '[backlog] selected Outside item',
-      why: 'The item written on disk shows with no rescan.',
-    },
-  ];
-  const commit: SelfTestStep[] = [
-    { keys: ['h', 'k', 'Enter'], expect: openedGitHome },
-    {
-      keys: ['C'],
-      expect: `[backlog] committed ${gitHome}`,
-      why: 'The result checks the commit subject and that the home is clean.',
-    },
-  ];
-  const plan: SelfTestStep[] = [
-    { keys: ['G'], expect: '[backlog] selected Backlog X' },
-    {
-      keys: ['Enter', 'j'],
-      expect: '[backlog] selected First task',
-      why: "Enter expands the plan's task rows.",
-    },
-    { keys: ['j'], expect: '[backlog] selected Second task' },
-  ];
-  const sideBarKeys: SelfTestStep[] = [
-    {
-      keys: ['<A-h>'],
-      expect: '[backlog] homes focused',
-      why: "Option+h at the list's left edge reaches the homes through the mode's focusSideBar.",
-    },
-    { keys: ['<A-l>'], expect: '[backlog] list focused' },
-    { keys: ['<A-l>'], expect: '[backlog] detail focused' },
-    { keys: ['<A-h>'], expect: '[backlog] list focused' },
-    { keys: ['h'], expect: '[backlog] homes focused' },
-    {
-      keys: ['<A-l>'],
-      expect: '[backlog] list focused',
-      why: 'h left the homes holding the keys with the area at main, so the view steps out of them.',
-    },
-    {
-      keys: ['h', 'j', 'l'],
-      expect: `[backlog] opened selftest-repo ${shown('wigley-features/selftest-repo')}`,
-    },
-    {
-      keys: ['k', 'Enter'],
-      expect: openedGitHome,
-      alsoExpect: [/^\[backlog\] list focused$/],
-      why: 'l kept focus on the homes, so k moved the homes cursor back to the git home.',
-    },
-    { keys: ['a'], expect: '[backlog] editor open create' },
-    {
-      keys: ['<A-h>'],
-      expect: '[backlog] pane keys ignored: the editor is open',
-    },
-    {
-      keys: ['Escape', 'Escape', 'Escape'],
-      expect: '[backlog] editor closed',
-      why: 'Esc leaves insert mode, then the box, then cancels the unchanged editor.',
-    },
-  ];
-  const detailAndTagPicker: SelfTestStep[] = [
-    { keys: ['<A-l>'], expect: '[backlog] detail focused' },
-    { keys: ['G'], expect: '[backlog] scrolled the detail to the end' },
-    { keys: ['g', 'g'], expect: '[backlog] scrolled the detail to the top' },
-    { keys: ['<A-h>'], expect: '[backlog] list focused' },
-    {
-      keys: ['j'],
-      expect: '[backlog] selected Plain item',
-      why: 'Reopening the git home in the side bar keys group put the cursor on its first row, so j leaves it for gg to return.',
+      expect: '[backlog] selected First follow-up',
+      why: "The list-shaped home's item ends the one table.",
     },
     { keys: ['g', 'g'], expect: '[backlog] selected Ready item' },
-    { keys: ['T'], expect: '[backlog] picker shown: Tags' },
-    { keys: ['G'], expect: '[page] G ran backlog.pickerBottom' },
-    { keys: ['g', 'g'], expect: '[page] gg ran backlog.pickerTop' },
-    { keys: ['/'], expect: '[backlog] picker filter: Tags' },
-    { keys: ['Escape', 'Escape'], expect: '[backlog] picker list: Tags' },
+    { keys: ['j'], expect: '[backlog] selected Plain item' },
     {
-      keys: ['Escape'],
-      expect: '[page] Escape ran backlog.pickerCancel',
-      why: 'Closing the picker writes no tag.',
+      keys: ['j'],
+      expect: '[backlog] selected Moved item',
+      why: 'The struck item is hidden, so Moved item follows Plain item.',
     },
+    {
+      keys: ['j'],
+      expect: '[backlog] selected Stale item',
+      checksFit: true,
+      screenshot: 'table',
+      why: 'The screenshot shows the four staleness levels: fresh, moved, stale and unknown.',
+    },
+  ];
+  const filters: SelfTestStep[] = [
+    { keys: [' ', 'v', 'd'], expect: '[backlog] done shown' },
+    {
+      keys: ['k', 'k'],
+      expect: '[backlog] selected Shipped item',
+      why: 'The struck item now shows after Plain item.',
+    },
+    { keys: [' ', 'v', 'd'], expect: '[backlog] done hidden' },
+    {
+      keys: [' ', 'v', 'a'],
+      expect: '[backlog] selected Ready item',
+      why: 'Only the agent-ready item shows, so the selection moves to it.',
+    },
+    { keys: [' ', 'v', 'a'], expect: '[backlog] agent-ready only off' },
+    { keys: [' ', 'v', 'r'], expect: '[backlog] picker shown: Repos' },
+    {
+      keys: ['G', 'Enter'],
+      expect: '[backlog] repo selftest-repo',
+      why: 'The last repo row filters the table to the list-shaped home.',
+    },
+    { keys: [' ', 'v', 'r'], expect: '[backlog] picker shown: Repos' },
+    {
+      keys: ['g', 'g', 'Enter'],
+      expect: '[backlog] repo all',
+      why: 'All repos shows every row again; the selection stays on First follow-up.',
+    },
+    { keys: [' ', 'v', 's'], expect: '[backlog] stale first on' },
+    {
+      keys: ['g', 'g'],
+      expect: '[backlog] selected Stale item',
+      why: 'Stale ranks first.',
+    },
+    {
+      keys: ['j', 'j'],
+      expect: '[backlog] selected First follow-up',
+      why: 'Stale, then moved, then unknown rank above fresh, so the levels main read from git are in place.',
+    },
+    { keys: [' ', 'v', 's'], expect: '[backlog] stale first off' },
+    {
+      keys: ['/', ...'plain'],
+      expect: '[backlog] selected Plain item',
+      why: 'The filter hides every other row, so the selection moves to the match.',
+    },
+    { keys: ['Enter'], expect: '[backlog] filter plain' },
+    {
+      keys: ['/', 'Escape', 'g', 'g'],
+      expect: '[backlog] selected Ready item',
+      why: '/ then Esc clears the filter, so the first row shows again.',
+    },
+  ];
+  const review: SelfTestStep[] = [
+    { keys: ['j', 'j'], expect: '[backlog] selected Moved item' },
+    { keys: ['<A-l>'], expect: '[backlog] review focused' },
+    { keys: ['g', 'l'], expect: '[backlog] commits shown' },
+    {
+      keys: ['G'],
+      expect: '[backlog] scrolled the review to the end',
+      screenshot: 'review',
+      why: "The screenshot shows Moved item's staleness note and its one commit since, Change the app.",
+    },
+    { keys: ['g', 'g'], expect: '[backlog] scrolled the review to the top' },
+    { keys: ['g', 'l'], expect: '[backlog] commits hidden' },
+    { keys: ['<A-h>'], expect: '[backlog] table focused' },
+  ];
+  const chunks: SelfTestStep[] = [
+    { keys: ['g', 'g'], expect: '[backlog] selected Ready item' },
+    { keys: ['x'], expect: '[backlog] marked Ready item' },
+    { keys: ['j', 'x'], expect: '[backlog] marked Plain item' },
+    {
+      keys: ['c'],
+      expect: '[backlog] added 2 to Ready item',
+      screenshot: 'chunk',
+      why: 'With the strip on New chunk, c makes a chunk of both marked rows, named after the first.',
+    },
+    { keys: ['<A-j>'], expect: '[backlog] strip focused' },
+    { keys: ['H'], expect: '[backlog] headless Ready item on' },
+    { keys: ['H'], expect: '[backlog] headless Ready item off' },
+    { keys: ['r'], expect: '[backlog] renaming Ready item' },
+    {
+      keys: [...'Pair', 'Enter'],
+      expect: '[backlog] renamed Pair',
+      why: "The letters replace the rename box's selected name.",
+    },
+    { keys: ['<A-k>'], expect: '[backlog] table focused' },
+    {
+      keys: [' ', 'v', 'c'],
+      expect: '[backlog] chunked hidden',
+      alsoExpect: [/^\[backlog\] selected Stale item$/],
+      why: 'Both chunked rows hide, so the selection moves from Plain item to the row now at its place.',
+    },
+    { keys: [' ', 'v', 'c'], expect: '[backlog] chunked shown' },
+  ];
+  const startRefused: SelfTestStep[] = [
+    { keys: ['<A-j>'], expect: '[backlog] strip focused' },
+    { keys: ['l'], expect: '[backlog] strip on new chunk' },
+    { keys: ['<A-k>'], expect: '[backlog] table focused' },
+    { keys: ['G'], expect: '[backlog] selected First follow-up' },
+    { keys: ['c'], expect: '[backlog] added 1 to First follow-up' },
+    {
+      keys: ['s'],
+      expect: '[backlog] start refused First follow-up',
+      why: 'selftest-repo has no repo folder, so main refuses the start.',
+    },
+  ];
+  const unchunk: SelfTestStep[] = [
+    { keys: ['u'], expect: '[backlog] took 1 out of chunks' },
+    {
+      keys: ['g', 'g', 'x', 'j', 'x', 'u'],
+      expect: '[backlog] took 2 out of chunks',
+      why: "The emptied chunks are dropped, so the next run starts with none, and the selection rests on Plain item for the next run's G to change.",
+    },
+  ];
+  const assistant: SelfTestStep[] = [
+    {
+      keys: [' ', 'v', 'b'],
+      expect: '[backlog] assistant shown',
+      alsoExpect: [/^\[backlog\] assistant focused$/],
+      checksFit: true,
+      screenshot: 'assistant',
+      why: 'The pane opens beside the table and takes the keys.',
+    },
+    { keys: ['<A-h>'], expect: '[backlog] table focused' },
+    { keys: [' ', 'v', 'b'], expect: '[backlog] assistant hidden' },
   ];
   return [
     {
       name: 'open',
-      why: 'Space k b shows Backlog with both homes in the side bar; the git home lists its two open follow-ups, the struck one hidden, then its plan.',
+      why: "Space k b shows Backlog's one table across both repos, the struck item hidden.",
       steps: open,
     },
     {
-      name: 'done and filter',
-      why: 'Space v d shows and hides the struck item, Space v a keeps only the agent-ready item, and / narrows the list by a title fragment.',
-      steps: doneAndFilter,
+      name: 'filters',
+      why: 'Space v d, Space v a, Space v r, Space v s and / each narrow or reorder the one table.',
+      steps: filters,
     },
     {
-      name: 'tag',
-      why: 't tags the untagged item agent-ready in its Contents line, leaving the file uncommitted.',
-      steps: tag,
+      name: 'review',
+      why: 'The review pane takes its keys, lists the commits since the item was written, and gives focus back to the table.',
+      steps: review,
     },
     {
-      name: 'create and edit',
-      why: "a creates a follow-up from the editor's boxes, and i renames it; each save rewrites the Contents line and the section.",
-      steps: createAndEdit,
+      name: 'chunks',
+      why: 'x marks rows, c makes a chunk of them, the strip turns headless on and off and renames it, and Space v c hides the chunked rows.',
+      steps: chunks,
     },
     {
-      name: 'delete',
-      why: "d and y delete a follow-up's section and Contents line.",
-      steps: deleteItem,
+      name: 'start refused',
+      why: "s asks main to start the chunk and shows main's refusal for a repo with no folder.",
+      steps: startRefused,
     },
     {
-      name: 'outside change',
-      why: 'An item written to a follow-up file outside the app shows in the list without a rescan.',
-      steps: outsideChange,
+      name: 'unchunk',
+      why: 'u takes the cursor row, or the marked rows, out of their chunks.',
+      steps: unchunk,
     },
     {
-      name: 'commit',
-      why: "C commits the git home's follow-up files under a Backlog subject.",
-      steps: commit,
-    },
-    {
-      name: 'plan',
-      why: 'Selecting the plan shows it, Enter expands its task rows, and j selects them.',
-      steps: plan,
-    },
-    {
-      name: 'side bar keys',
-      why: 'Option+h and Option+l move between the list, the homes and the detail; h still reaches the homes and Option+l steps out of them; l on a home opens it keeping focus and Enter opens it focusing the list; the open editor ignores the pane keys.',
-      steps: sideBarKeys,
-    },
-    {
-      name: 'detail and tag picker',
-      why: 'In the detail gg and G scroll to its top and end; the tag picker takes the shared list keys, its filter included, and Esc closes it unchosen.',
-      steps: detailAndTagPicker,
+      name: 'assistant',
+      why: 'Space v b opens the assistant pane beside the table with the keys, Option+h gives them back, and Space v b hides it. No step asks or sweeps: each launches a session.',
+      steps: assistant,
     },
   ];
 }
 
-// The checks the result runs in order over the git home's follow-ups file,
-// each naming the state the steps' writes leave it in.
-const FILE_CHECKS: readonly {
-  what: string;
-  holds(lines: string[]): boolean;
-}[] = [
-  {
-    what: 'the untagged item tagged agent-ready',
-    holds: (lines) =>
-      lines.includes('- **Plain item** — *agent-ready*: needs a look'),
-  },
-  {
-    what: `the created ${CREATED}`,
-    holds: (lines) =>
-      lines.includes(`- **${CREATED}** — ${CREATED_ONE_LINE}`) &&
-      lines.includes(`## ${CREATED}`) &&
-      lines.includes(CREATED_BODY),
-  },
-  {
-    what: `${CREATED} renamed ${RENAMED}`,
-    holds: (lines) =>
-      lines.includes(`- **${RENAMED}** — ${CREATED_ONE_LINE}`) &&
-      lines.includes(`## ${RENAMED}`) &&
-      !lines.includes(`## ${CREATED}`),
-  },
-  {
-    what: `${RENAMED} deleted`,
-    holds: (lines) => !lines.some((line) => line.includes(RENAMED)),
-  },
-];
-
-// Follows the steps' writes on disk and in git, returning what was wrong.
-// The file checks run in order, the tag's also checking the file is
-// uncommitted; then the commit's subject and a clean home are checked.
-async function followWrites(deps: BacklogSelfTestDeps): Promise<string[]> {
-  const { files, processes, git, paths } = deps;
-  const home = await files.realPath(deps.homeDir);
-  const repo = paths.join(home, BACKLOG_REPO);
-  const followups = paths.join(home, BACKLOG_FOLLOWUPS);
-  const problems: string[] = [];
-  const isUncommitted = async () =>
-    (await git.changedPaths(repo, 'docs/features')).includes(
-      'docs/features/followups.md',
-    );
-  for (const [index, check] of FILE_CHECKS.entries()) {
-    const held = await holdsWithin(
-      async () => check.holds((await files.read(followups)).split('\n')),
-      CHECK_TIMEOUT_MS,
-    );
-    if (!held) {
-      problems.push(`followups.md never held ${check.what}`);
-    } else if (index === 0 && !(await isUncommitted())) {
-      problems.push('followups.md not uncommitted after the tag');
-    }
-  }
-  let subject = FIXTURE_COMMIT_SUBJECT;
-  const isCommitted = await holdsWithin(async () => {
-    subject = (
-      await runGit(processes, repo, ['log', '-1', '--format=%s'])
-    ).trim();
-    return subject !== FIXTURE_COMMIT_SUBJECT;
-  }, CHECK_TIMEOUT_MS);
-  if (!isCommitted) {
-    problems.push('the home was never committed');
-  } else if (subject !== COMMIT_SUBJECT) {
-    problems.push(`commit subject "${subject}"`);
-  } else if (await isUncommitted()) {
-    problems.push('followups.md uncommitted after the commit');
-  }
-  return problems;
-}
-
 // Each run rewrites the fixture repo, once the one before it is written, and
 // tells the page to read the homes again. The result lists what was wrong
-// with the fixture or the writes the steps make, empty when nothing was.
+// with the fixture, empty when nothing was.
 export function backlogSelfTestScript(
   deps: BacklogSelfTestDeps,
 ): SelfTestScript {
@@ -378,7 +227,8 @@ export function backlogSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    scrollsItself: [],
+    // A table cell and a chunk card's name clip their text in their own box.
+    scrollsItself: ['.backlog-cell', '.backlog-chunk-title'],
     open() {
       const fixture = written
         .catch(() => undefined)
@@ -387,13 +237,13 @@ export function backlogSelfTestScript(
       const result = fixture.then(
         () => {
           deps.reload();
-          return followWrites(deps);
+          return [];
         },
         (error: unknown) => [`fixture not ready: ${errorText(error)}`],
       );
       return { shownLine: '[backlog] loaded 2 homes', result };
     },
-    groups: backlogGroups(deps.paths, deps.homeDir),
+    groups: backlogGroups(),
     problems: (result) => result as string[],
   };
 }

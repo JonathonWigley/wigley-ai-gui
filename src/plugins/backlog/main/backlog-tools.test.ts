@@ -475,35 +475,10 @@ describe('backlog tools', () => {
   }>([
     { name: 'never opened', place: undefined, expected: null },
     {
-      name: 'the old shape',
+      name: 'every field set',
       place: {
-        focus: 'items',
-        homeCursor: 2,
-        openRoot: null,
         selectedKey: A.key,
-        expanded: [],
         filter: 'chip',
-      },
-      expected: {
-        selectedKey: A.key,
-        repo: null,
-        filter: 'chip',
-        marked: [],
-        isReadyOnly: false,
-        isChunkedHidden: false,
-        isStaleFirst: false,
-        isDoneShown: false,
-      },
-    },
-    {
-      name: 'the new fields set',
-      place: {
-        focus: 'items',
-        homeCursor: 0,
-        openRoot: null,
-        selectedKey: null,
-        expanded: [],
-        filter: '',
         repo: 'r',
         marked: [B.key],
         isReadyOnly: true,
@@ -513,9 +488,9 @@ describe('backlog tools', () => {
         isAssistantShown: true,
       },
       expected: {
-        selectedKey: null,
+        selectedKey: A.key,
         repo: 'r',
-        filter: '',
+        filter: 'chip',
         marked: [B.key],
         isReadyOnly: true,
         isChunkedHidden: true,
@@ -523,7 +498,7 @@ describe('backlog tools', () => {
         isDoneShown: true,
       },
     },
-  ])('assistantPlace_MissingFields_Defaults ($name)', ({ place, expected }) => {
+  ])('assistantPlace_ByPlace ($name)', ({ place, expected }) => {
     expect(assistantPlace(place)).toEqual(expected);
   });
 });

@@ -248,9 +248,9 @@ export const defaultKeymap = {
         'docs.tree',
         'docs.doc',
         'docs.aside',
-        'backlog.homes',
-        'backlog.list',
-        'backlog.detail',
+        'backlog.table',
+        'backlog.review',
+        'backlog.strip',
         'settings.sections',
         'settings.rows',
         'settings.leaderGroups',
@@ -263,7 +263,6 @@ export const defaultKeymap = {
         'primer.card',
         'primer.review',
         'audio-picker.list',
-        'backlog.editor',
         'notes.popup',
         'notes.title',
         'practice.list',
@@ -294,6 +293,14 @@ export const defaultKeymap = {
       scope: 'any',
       command: 'backlog.toggleAgentReadyOnly',
     },
+    { keys: '<Leader>vb', scope: 'any', command: 'backlog.toggleAssistant' },
+    { keys: '<Leader>vr', scope: 'any', command: 'backlog.pickRepo' },
+    {
+      keys: '<Leader>vc',
+      scope: 'any',
+      command: 'backlog.toggleChunkedHidden',
+    },
+    { keys: '<Leader>vs', scope: 'any', command: 'backlog.toggleStaleFirst' },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
     { keys: '<Leader>vy', scope: 'any', command: 'system-stats.togglePanel' },
 
@@ -865,75 +872,45 @@ export const defaultKeymap = {
     { keys: '<Esc>', scope: 'settings.box', command: 'settings.boxCancel' },
 
     // ── Backlog ────────────────────────────────────────────────────────────
-    // The homes share the list's moves and its repo keys.
-    ...(['backlog.homes', 'backlog.list'] as const).flatMap((scope) => [
-      { keys: 'j', scope, command: 'backlog.listDown' as const },
-      { keys: 'k', scope, command: 'backlog.listUp' as const },
-      { keys: 'gg', scope, command: 'backlog.listTop' as const },
-      { keys: 'G', scope, command: 'backlog.listBottom' as const },
-      { keys: 'l', scope, command: 'backlog.open' as const },
-      { keys: '<CR>', scope, command: 'backlog.toggle' as const },
-      // Uppercase, so the one step out of the app is never a lowercase slip.
-      { keys: 'C', scope, command: 'backlog.commit' as const },
-      { keys: 'R', scope, command: 'backlog.rescan' as const },
+    { keys: 'j', scope: 'backlog.table', command: 'backlog.listDown' },
+    { keys: 'k', scope: 'backlog.table', command: 'backlog.listUp' },
+    { keys: 'gg', scope: 'backlog.table', command: 'backlog.listTop' },
+    { keys: 'G', scope: 'backlog.table', command: 'backlog.listBottom' },
+    { keys: '<CR>', scope: 'backlog.table', command: 'backlog.activate' },
+    { keys: '/', scope: 'backlog.table', command: 'backlog.filter' },
+    { keys: 'R', scope: 'backlog.table', command: 'backlog.rescan' },
+    { keys: 'o', scope: 'backlog.table', command: 'backlog.openInDocs' },
+    { keys: 'x', scope: 'backlog.table', command: 'backlog.mark' },
+    { keys: 'c', scope: 'backlog.table', command: 'backlog.addToChunk' },
+    { keys: 'u', scope: 'backlog.table', command: 'backlog.removeFromChunk' },
+    { keys: 'gl', scope: 'backlog.table', command: 'backlog.toggleCommits' },
+    { keys: 'W', scope: 'backlog.table', command: 'backlog.sweep' },
+    // The chunk keys act on the cursor row's chunk in the table and on the
+    // cursor chunk in the strip.
+    ...(['backlog.table', 'backlog.strip'] as const).flatMap((scope) => [
+      { keys: 'r', scope, command: 'backlog.renameChunk' as const },
+      { keys: 's', scope, command: 'backlog.startChunk' as const },
+      { keys: 'S', scope, command: 'backlog.startAllChunks' as const },
+      { keys: 'H', scope, command: 'backlog.toggleHeadless' as const },
     ]),
-    { keys: 'h', scope: 'backlog.list', command: 'backlog.back' },
-    { keys: '/', scope: 'backlog.list', command: 'backlog.filter' },
-    { keys: 'a', scope: 'backlog.list', command: 'backlog.create' },
-    { keys: 'i', scope: 'backlog.list', command: 'backlog.edit' },
-    { keys: 'd', scope: 'backlog.list', command: 'backlog.delete' },
-    { keys: 't', scope: 'backlog.list', command: 'backlog.toggleAgentReady' },
-    { keys: 'T', scope: 'backlog.list', command: 'backlog.pickTag' },
-    { keys: 'o', scope: 'backlog.list', command: 'backlog.openInDocs' },
-    // The homes' and the list's scroll keys scroll the detail shown beside
-    // them.
-    ...(['backlog.homes', 'backlog.list', 'backlog.detail'] as const).flatMap(
-      (scope) => [
-        { keys: '<C-j>', scope, command: 'backlog.lineDown' as const },
-        { keys: '<C-k>', scope, command: 'backlog.lineUp' as const },
-        { keys: '<C-S-j>', scope, command: 'backlog.halfPageDown' as const },
-        { keys: '<C-S-k>', scope, command: 'backlog.halfPageUp' as const },
-      ],
-    ),
-    { keys: 'j', scope: 'backlog.detail', command: 'backlog.lineDown' },
-    { keys: 'k', scope: 'backlog.detail', command: 'backlog.lineUp' },
-    { keys: 'gg', scope: 'backlog.detail', command: 'backlog.scrollTop' },
-    { keys: 'G', scope: 'backlog.detail', command: 'backlog.scrollEnd' },
-    { keys: 'o', scope: 'backlog.detail', command: 'backlog.openInDocs' },
-    // A chord fires inside a box as well, so the editor's chords need no
-    // `where`.
-    { keys: '<D-Enter>', scope: 'backlog.editor', command: 'backlog.save' },
-    { keys: '<Tab>', scope: 'backlog.editor', command: 'backlog.nextField' },
-    {
-      keys: '<S-Tab>',
-      scope: 'backlog.editor',
-      command: 'backlog.previousField',
-    },
-    // Esc in a box's normal mode leaves the box; on the page it cancels.
-    {
-      keys: '<Esc>',
-      scope: 'backlog.editor',
-      command: 'backlog.leaveBox',
-      where: 'box',
-    },
-    {
-      keys: '<Esc>',
-      scope: 'backlog.editor',
-      command: 'backlog.cancelEdit',
-      where: 'page',
-    },
-    // Inside a box `T` stays vim's.
-    {
-      keys: 'T',
-      scope: 'backlog.editor',
-      command: 'backlog.pickTag',
-      where: 'page',
-    },
+    // The table's scroll keys scroll the review shown beside it.
+    ...(['backlog.table', 'backlog.review'] as const).flatMap((scope) => [
+      { keys: '<C-j>', scope, command: 'backlog.lineDown' as const },
+      { keys: '<C-k>', scope, command: 'backlog.lineUp' as const },
+      { keys: '<C-S-j>', scope, command: 'backlog.halfPageDown' as const },
+      { keys: '<C-S-k>', scope, command: 'backlog.halfPageUp' as const },
+    ]),
+    { keys: 'j', scope: 'backlog.review', command: 'backlog.lineDown' },
+    { keys: 'k', scope: 'backlog.review', command: 'backlog.lineUp' },
+    { keys: 'gg', scope: 'backlog.review', command: 'backlog.scrollTop' },
+    { keys: 'G', scope: 'backlog.review', command: 'backlog.scrollEnd' },
+    { keys: 'o', scope: 'backlog.review', command: 'backlog.openInDocs' },
+    { keys: 'gl', scope: 'backlog.review', command: 'backlog.toggleCommits' },
+    { keys: 'h', scope: 'backlog.strip', command: 'backlog.stripLeft' },
+    { keys: 'l', scope: 'backlog.strip', command: 'backlog.stripRight' },
+    { keys: '<CR>', scope: 'backlog.strip', command: 'backlog.activate' },
     { keys: '<CR>', scope: 'backlog.box', command: 'backlog.boxAccept' },
     { keys: '<Esc>', scope: 'backlog.box', command: 'backlog.boxCancel' },
-    { keys: 'y', scope: 'backlog.confirm', command: 'backlog.confirmYes' },
-    { keys: 'n', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
-    { keys: '<Esc>', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
 
     // ── Practice ───────────────────────────────────────────────────────────
     { keys: 'j', scope: 'practice.list', command: 'practice.listDown' },

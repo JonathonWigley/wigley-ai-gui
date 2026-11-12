@@ -118,10 +118,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   the history read, so two resumes of the same past session started together can each open a row for one host id.
   Re-check `holding` and `isOpenOnOtherRow` after the await, as `send` re-checks its row after its pending-history
   read, with a row in the resume tests.
-- **Backlog applied save closes another editor** — *agent-ready*: in `src/plugins/backlog/page/backlog-view.ts`, an
-  `applied` save result closes whichever editor is open and selects the saved title, so leaving the editor mid-save
-  and opening another loses that editor. Guard `closeEditor` as `moveEditorBaseline` is guarded: act only when the
-  open editor's path and baseline title match the write.
 - **A note opening with "Shipped" files as done** — *needs a feature plan*: Notes files a follow-up whose one line is
   the body's first sentence (`src/plugins/notes/main/note-sender.ts`), and Backlog reads an item whose one line
   starts with "shipped" as done (`startsWithShipped`, `src/shared/followups/followup-file.ts`), so such a note never
@@ -889,10 +885,6 @@ because the earlier items rewrite many of these tests anyway.
   `WIGLEY_SESSION_ROW`, so its first `/clear` starts the new process under the new id, the pool misses the handoff, and
   the claim falls back to the expiry rules (`~/wigley-agents/tools/unity-pool/README.md` § Claims). To decide: whether
   the case is rare enough to leave, or `/clear` passes the old row id to the new process.
-- **Backlog `/` with no home open does nothing and leaves the letters as commands** — *agent-ready*: `openFilter` in
-  `src/plugins/backlog/page/backlog-view.ts` returns silently when no home is open, so `backlog.filter` logs, no box
-  opens, and the following letters run as `backlog.list` commands. Source session: Claude Code
-  a65d02f6-eab9-453b-be96-34ac71d33876 in wigley-ai-gui.
 - **Escape on a chat picker leaves focus off the box** — *needs a decision*: `open` in
   `src/plugins/chat/page/picker.ts` calls `blurFocusedElement()` and the `cancelled` path only logs, so after Escape
   nothing refocuses the box and the next keys go to the page until `i`. To decide: whether a cancelled step hands focus
@@ -925,11 +917,6 @@ because the earlier items rewrite many of these tests anyway.
 - **The Sessions title wraps letter by letter at the least width** — *agent-ready*: the Sessions header title
   (`src/plugins/sessions/layouts/default/layout.css:35`) has no `min-width`/`white-space` rule, so at the side bar's
   least width it breaks one letter per line beside its hints. Source: the keyboard-reach review (finding 33).
-- **Backlog records area `side` while its open editor keeps the keys** — *needs a decision*: in a narrow window with
-  the editor open, `sideBarOpenedOver` (`src/plugins/backlog/page/backlog-view.ts`) and `src/renderer/shell/modes.ts:142-145`
-  record the focus area as `side` while the editor still holds DOM focus and the keys, so the next pane move starts
-  from the wrong area. To decide: the editor keeps the area `main`, or the side bar overlay takes focus from the
-  editor. Source: the keyboard-reach review (finding 34).
 - **A click into the Backlog detail is pulled back to the list** — *agent-ready*: no Backlog `focusin` handler sets the
   scope, so a click into the detail pane while a right-bar stop holds the keys ends the stop's turn, and the deferred
   `focusMain` (`src/plugins/backlog/page/backlog-view.ts:986-998`) focuses `lastMainFocus`, often the list, off the

@@ -284,9 +284,11 @@ function backlogEntries(fixture: FixturePaths, paths: Paths): IndexEntry[] {
       meta: { plan: 'x', status },
     });
   return [
-    followup(9, 'Ready item', 'waits for an agent', 'open', ['agent-ready']),
-    followup(13, 'Plain item', 'needs a look', 'open', []),
-    followup(17, 'Shipped item', 'landed', 'done', []),
+    followup(11, 'Ready item', 'waits for an agent', 'open', ['agent-ready']),
+    followup(15, 'Plain item', 'needs a look', 'open', []),
+    followup(19, 'Shipped item', 'landed', 'done', []),
+    followup(23, 'Moved item', 'reads `src/app.ts`', 'open', []),
+    followup(27, 'Stale item', 'reads `src/gone.ts`', 'open', []),
     entry({
       kind: 'plan',
       source: 'features',

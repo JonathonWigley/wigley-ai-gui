@@ -1,45 +1,93 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
-import type { DroppedFile, DropTarget } from '../../../contracts/drops';
-import type { EditorEvents, EditorHost } from '../../../contracts/editor';
-import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
+import type {
+  OuterPanes,
+  PaneDirection,
+  FocusTarget,
+  ResizeTarget,
+} from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
-import type { PageChannel } from '../../../contracts/plugin';
+import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import type { FollowupItem } from '../../../shared/followups/followup-file';
-import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import {
-  type RecordedAnchor,
   recordingAnchors,
   USER_LAYOUT,
   withUser as withLayouts,
 } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
-  type FakeElement,
   type FocusFakeDocument,
   type FocusFakeElement,
   findAll,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
-import type { BacklogChannel, BacklogRead } from '../contract';
+import { deferred } from '../../../shared/plugin-part-harness.test-support';
+import type { AgentPane, AgentPaneSpec } from '../../scoped-agents/contract';
+import type {
+  BacklogChannel,
+  BacklogChunk,
+  BacklogPlace,
+  BacklogRead,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
-import type { BacklogLayout } from '../layouts/layout';
-import { createBacklogView } from './backlog-view';
+import type { BacklogLayout, CommitsInput } from '../layouts/layout';
+import { rowKey } from '../row-key';
+import { type BacklogView, createBacklogView } from './backlog-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
-const ROOT = '/home/repo/docs/features';
+// Each call the view made on the strip's scroller, and each item it revealed.
+const scroller = vi.hoisted(() => ({
+  calls: [] as string[],
+  revealed: [] as unknown[],
+}));
+vi.mock('../../../shared/page/ui/h-scroller', () => ({
+  createHScroller() {
+    const element = document.createElement('div');
+    element.classList.add('ui-h-scroller');
+    const track = document.createElement('div');
+    element.append(track);
+    return {
+      element,
+      track,
+      refresh: () => scroller.calls.push('refresh'),
+      reveal(item: HTMLElement) {
+        scroller.calls.push('reveal');
+        scroller.revealed.push(item);
+      },
+      dispose: () => scroller.calls.push('dispose'),
+    };
+  },
+}));
 
-interface CreatedEditor {
-  parent: FakeElement;
-  doc: string;
-  events: EditorEvents;
-  isDestroyed: boolean;
-  focusOptions: unknown[];
-  // Every text inserted at the cursor, which sits after an `x`.
-  inserted: string[];
-}
+// Each split's nudges and dispose, as `<stateKey> <call>`.
+const splitCalls = vi.hoisted(() => [] as string[]);
+vi.mock('../../../shared/page/ui/split', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../shared/page/ui/split')>();
+  return {
+    ...actual,
+    createSplit(...args: Parameters<typeof actual.createSplit>) {
+      const [{ stateKey }] = args;
+      const split = actual.createSplit(...args);
+      return {
+        ...split,
+        nudge(direction: PaneDirection) {
+          splitCalls.push(`${stateKey} nudge`);
+          return split.nudge(direction);
+        },
+        dispose() {
+          splitCalls.push(`${stateKey} dispose`);
+          split.dispose();
+        },
+      };
+    },
+  };
+});
+
+const APP_ROOT = '/home/app/docs/features';
+const LIB_ROOT = '/home/lib/docs/features';
 
 function item(title: string): FollowupItem {
   return {
@@ -47,91 +95,97 @@ function item(title: string): FollowupItem {
     oneLine: `${title} gist`,
     tags: [],
     body: '',
-    line: 1,
-    endLine: 1,
+    line: 3,
+    endLine: 3,
     done: false,
   };
 }
 
-// The plan's moved copy, in a linked worktree, and its task's.
-const PLAN_COPY = '/wt/docs/features/feature/plan-p/plan.md';
-const TASK_COPY = '/wt/docs/features/feature/plan-p/01-t.md';
-
-// One repo with one home holding two follow-ups and one plan of one task.
+// Two repos: `app` holds First and Second, `lib` holds Third.
 const READ: BacklogRead = {
   homes: [
     {
-      repo: 'repo',
-      root: ROOT,
+      repo: 'app',
+      root: APP_ROOT,
       isCreateTarget: true,
       gitRoot: null,
-      uncommitted: false,
       repoFolder: null,
       followupFiles: [
         {
-          path: `${ROOT}/followups.md`,
+          path: `${APP_ROOT}/followups.md`,
           items: [item('First'), item('Second')],
         },
       ],
-      plans: [
-        {
-          path: `${ROOT}/feature/plan-p/plan.md`,
-          copyPath: PLAN_COPY,
-          feature: 'feature',
-          title: 'Plan',
-          checked: 0,
-          total: 0,
-          target: null,
-          written: null,
-          tasks: [
-            {
-              path: `${ROOT}/feature/plan-p/01-t.md`,
-              copyPath: TASK_COPY,
-              title: 'Task',
-              status: null,
-            },
-          ],
-        },
+    },
+    {
+      repo: 'lib',
+      root: LIB_ROOT,
+      isCreateTarget: true,
+      gitRoot: null,
+      repoFolder: null,
+      followupFiles: [
+        { path: `${LIB_ROOT}/followups.md`, items: [item('Third')] },
       ],
-      features: [],
     },
   ],
   message: null,
 };
 
-// Focus fires the editor's focused event, as a real editor's DOM focus does.
-function fakeEditorHost() {
-  const created: CreatedEditor[] = [];
-  const host = {
-    create(parent: HTMLElement, doc: string, events: EditorEvents) {
-      const editor: CreatedEditor = {
-        parent: asFake(parent),
-        doc,
-        events,
-        isDestroyed: false,
-        focusOptions: [],
-        inserted: [],
-      };
-      created.push(editor);
-      return {
-        text: () => editor.doc,
-        setText: () => undefined,
-        insert: (text: string) => {
-          editor.inserted.push(text);
-        },
-        charBeforeCursor: () => 'x',
-        focus: (options: unknown) => {
-          editor.focusOptions.push(options);
-          events.focused();
-        },
-        blur: () => events.blurred(),
-        destroy: () => {
-          editor.isDestroyed = true;
-        },
-      };
-    },
-  } as unknown as EditorHost;
-  return { host, created };
+const FIRST = rowKey('app', 'First');
+const SECOND = rowKey('app', 'Second');
+
+function chunk(
+  id: string,
+  repo: string,
+  name: string,
+  titles: string[],
+  sessionId: string | null = null,
+): BacklogChunk {
+  return { id, repo, name, titles, headless: false, sessionId };
+}
+
+// `Fixes` holds Second; `Lib work` holds Third and started; `Lib docs` holds
+// nothing yet.
+const CHUNKS: BacklogChunk[] = [
+  chunk('c1', 'app', 'Fixes', ['Second']),
+  chunk('c2', 'lib', 'Lib work', ['Third'], 's2'),
+  chunk('c3', 'lib', 'Lib docs', []),
+];
+
+function place(overrides: Partial<BacklogPlace> = {}): BacklogPlace {
+  return {
+    selectedKey: null,
+    repo: null,
+    filter: '',
+    marked: [],
+    isReadyOnly: false,
+    isChunkedHidden: false,
+    isStaleFirst: false,
+    isDoneShown: false,
+    isAssistantShown: false,
+    ...overrides,
+  };
+}
+
+// Main's default answer to each invoke.
+function answerOf(method: string): unknown {
+  switch (method) {
+    case 'load':
+    case 'rescan':
+      return READ;
+    case 'staleness':
+      return {};
+    case 'chunks':
+    case 'editChunks':
+      return CHUNKS;
+    case 'commitsSince':
+    case 'startChunks':
+      return [];
+    case 'sweep':
+      return 'assistant-session';
+    default:
+      return undefined;
+  }
 }
 
 async function settle() {
@@ -144,39 +198,112 @@ type ScopeCall =
   | ['setScope', string]
   | ['setResizeTarget' | 'setFocusTarget', 'target' | null];
 
-// A Backlog view, shown, over a channel that loads `READ`, with its home
-// open and its first follow-up selected. `calls` logs every `setScope`,
-// `setResizeTarget` and `setFocusTarget` call, in call order; `move` presses
-// the core's focus key toward `direction` on the last focus target set.
-// `targets` holds every drop target the view registered; `readDocs` each
-// path the view read through the channel; `openedDocs` each path it asked
-// Docs to open. `runs` holds each command a click ran with its arg, `logs`
-// each line logged and `picked` the count of `homePicked` calls.
-async function backlogSetup() {
+// The assistant's pane as scoped-agents runs it: `toggle` shows it and takes
+// the keys, or hides it, giving them back through `leave` while it holds them;
+// `modeHidden` gives them back the same way and leaves it shown.
+interface FakePane {
+  spec: AgentPaneSpec | null;
+  calls: string[];
+  outerPanes: OuterPanes;
+}
+
+function fakeAgentPane(record: FakePane, spec: AgentPaneSpec): AgentPane {
+  record.spec = spec;
+  let isPaneShown = false;
+  let holdsKeys = false;
+  const giveBack = () => {
+    if (holdsKeys) {
+      spec.leave();
+      holdsKeys = false;
+    }
+  };
+  return {
+    element: document.createElement('div'),
+    isShown: () => isPaneShown,
+    toggle() {
+      record.calls.push('toggle');
+      if (isPaneShown) {
+        giveBack();
+        isPaneShown = false;
+        spec.setShown(false);
+        return;
+      }
+      isPaneShown = true;
+      spec.setShown(true);
+      holdsKeys = true;
+      spec.tookKeys();
+    },
+    scopeOpened(scope) {
+      record.calls.push(`scopeOpened ${String(scope)}`);
+    },
+    refresh() {
+      record.calls.push('refresh');
+    },
+    hostTookKeys() {
+      record.calls.push('hostTookKeys');
+      holdsKeys = false;
+    },
+    modeHidden() {
+      record.calls.push('modeHidden');
+      giveBack();
+    },
+    outerPanes: record.outerPanes,
+    redraw() {
+      record.calls.push('redraw');
+    },
+    dispose() {
+      record.calls.push('dispose');
+    },
+  };
+}
+
+interface SetupOptions {
+  // Whether Backlog mode shows as the view loads; true unless given.
+  isShown?: boolean;
+  savedPlace?: BacklogPlace;
+  // Answers that replace main's default for a method.
+  answers?: Partial<Record<string, (...args: unknown[]) => Promise<unknown>>>;
+}
+
+// A Backlog view over a channel that loads `READ` and the chunks `CHUNKS`,
+// loaded, and shown unless `isShown` is false. `calls` logs every
+// `setScope`, `setResizeTarget` and `setFocusTarget` call in order; `move`
+// presses the core's focus key on the last focus target set, and
+// `resizeTarget` is the last resize target set. `invokes` holds each invoke
+// with its args, `runs` each command a click ran with its arg, `events` the
+// mode shows and each scope pushed or popped, `places` each place written,
+// `outer` each `setOuterPanes`, `contexts` each title bar detail.
+async function backlogSetup(options: SetupOptions = {}) {
   const calls: ScopeCall[] = [];
-  const readDocs: string[] = [];
-  const openedDocs: string[] = [];
+  const invokes: unknown[][] = [];
   const runs: [string, unknown][] = [];
   const logs: string[] = [];
-  const picked = { count: 0 };
-  const targets: DropTarget[] = [];
+  const toasts: [string, ToastTone][] = [];
+  const events: string[] = [];
+  const places: BacklogPlace[] = [];
+  const outer: (OuterPanes | null)[] = [];
+  const contexts: string[] = [];
+  const pane: FakePane = {
+    spec: null,
+    calls: [],
+    outerPanes: {
+      focus: { move: () => false },
+      resize: { nudge: () => false },
+    },
+  };
+  const mode = { isShown: options.isShown ?? true };
   let focusTarget: FocusTarget | null = null;
-  const { host, created } = fakeEditorHost();
-  const overlays: FakeElement[] = [];
-  const recorded = recordingAnchors();
-  const anchors = recorded.anchors;
-  const { keys } = recorded;
+  let resizeTarget: ResizeTarget | null = null;
+  const { keys } = recordingAnchors();
   const channel = {
     invoke: async (method: string, ...args: unknown[]) => {
-      if (method === 'readDoc') {
-        readDocs.push(String(args[0]));
-      }
-      return method === 'load' ? READ : '';
+      invokes.push([method, ...args]);
+      const answer = options.answers?.[method];
+      return answer === undefined ? answerOf(method) : answer(...args);
     },
   } as unknown as PageChannel<BacklogChannel>;
-  const view = createBacklogView({
+  const view: BacklogView = createBacklogView({
     channel,
-    editor: host,
     matcher: fakeFuzzyMatcher,
     markdown: {
       block: (text) => text,
@@ -189,14 +316,7 @@ async function backlogSetup() {
     uiState: { get: () => undefined, set: () => undefined },
     timers: { set: () => 0, clear: () => undefined },
     log: (line) => logs.push(line),
-    toast: () => undefined,
-    drops: {
-      addTarget: (target) => {
-        targets.push(target);
-        return { dispose: () => undefined };
-      },
-      savePasted: () => Promise.reject(new Error('not used by the backlog')),
-    },
+    toast: (text, tone) => toasts.push([text, tone]),
     keys,
     platform: 'macos',
     state: noLayoutState,
@@ -205,151 +325,155 @@ async function backlogSetup() {
       argShape: () => undefined,
       run: () => undefined,
     },
-    tags: () => ['agent-ready', 'later'],
-    openDoc: (path) => openedDocs.push(path),
+    openDoc: () => undefined,
     setScope: (scope) => calls.push(['setScope', scope]),
-    setResizeTarget: (target) =>
-      calls.push(['setResizeTarget', target === null ? null : 'target']),
+    setResizeTarget: (target) => {
+      resizeTarget = target;
+      calls.push(['setResizeTarget', target === null ? null : 'target']);
+    },
     setFocusTarget: (target) => {
       focusTarget = target;
       calls.push(['setFocusTarget', target === null ? null : 'target']);
     },
-    pushScope: () => ({
-      pop: () => undefined,
-      dispose: () => undefined,
-      onBaseChanged: () => ({ dispose: () => undefined }),
-    }),
+    setOuterPanes: (panes) => outer.push(panes),
+    pushScope: (scope) => {
+      events.push(`push ${scope}`);
+      return {
+        pop: () => events.push(`pop ${scope}`),
+        dispose: () => undefined,
+        onBaseChanged: () => ({ dispose: () => undefined }),
+      };
+    },
     picker: fakeListPickerService({
-      place(element) {
-        overlays.push(asFake(element));
+      pushScope(scope) {
+        events.push(`push ${scope}`);
+        return {
+          pop: () => undefined,
+          dispose: () => undefined,
+          onBaseChanged: () => ({ dispose: () => undefined }),
+        };
       },
     }),
-    addOverlay: (element) => {
-      overlays.push(asFake(element));
-      return { dispose: () => undefined };
-    },
     run: () => undefined,
-    isShown: () => true,
-    revealSideBar: () => undefined,
-    homePicked: () => {
-      picked.count += 1;
-    },
-    savedPlace: null,
-    placeChanged: () => undefined,
-    homeShown: () => undefined,
     runKey: (key, arg) => runs.push([key.id, arg]),
+    isShown: () => mode.isShown,
+    showMode: () => {
+      events.push('showMode');
+      show();
+    },
+    addAgentPane: (spec) => fakeAgentPane(pane, spec),
+    setContext: (detail) => contexts.push(detail),
+    savedPlace: options.savedPlace ?? null,
+    placeChanged: (value) => places.push(value),
   });
+  const show = () => {
+    mode.isShown = true;
+    view.shown();
+  };
   const sheet = asFake(view.sheet);
   sheet.isPageRoot = true;
   view.load();
   await settle();
-  view.commands.toggle();
-  await settle();
-  picked.count = 0;
-  const move = (direction: PaneDirection) =>
-    focusTarget?.move(direction) ?? false;
+  if (mode.isShown) {
+    view.shown();
+    await settle();
+  }
   return {
     view,
-    created,
-    anchors,
-    overlays,
     sheet,
     calls,
-    move,
-    targets,
-    readDocs,
-    openedDocs,
+    invokes,
     runs,
     logs,
-    picked,
+    toasts,
+    events,
+    places,
+    outer,
+    contexts,
+    pane,
+    show,
+    move: (direction: PaneDirection) => focusTarget?.move(direction) ?? false,
+    resizeTarget: () => resizeTarget,
   };
 }
 
-// The side bar's home rows and the list's rows, as drawn now.
-function drawnRows(setup: Awaited<ReturnType<typeof backlogSetup>>) {
+type Setup = Awaited<ReturnType<typeof backlogSetup>>;
+
+// The table's rows, as drawn now.
+function tableRows(setup: Setup) {
   const [list] = findAll(setup.sheet, 'backlog-rows');
-  return {
-    homes: findAll(asFake(setup.view.sideBar), 'ui-row'),
-    items: list.children.filter((row) => row.classList.contains('ui-row')),
-  };
+  return list.children.filter((row) => row.classList.contains('ui-row'));
 }
 
-// The key the second list row's click runs `backlog.selectRow` with.
-function secondRowKey(setup: Awaited<ReturnType<typeof backlogSetup>>) {
-  drawnRows(setup).items[1].click();
+// Whether each table row holds `className`, in order.
+function rowFlags(setup: Setup, className: string) {
+  return tableRows(setup).map((row) => row.classList.contains(className));
+}
+
+// The strip's cards, the chunks' then New chunk, as drawn now.
+function chunkCards(setup: Setup) {
+  return findAll(setup.sheet, 'backlog-chunk');
+}
+
+function cursorCards(setup: Setup) {
+  return chunkCards(setup).map((card) => card.classList.contains('is-cursor'));
+}
+
+// The key the second table row's click runs `backlog.selectRow` with.
+function secondRowKey(setup: Setup) {
+  tableRows(setup)[1].click();
   const [, key] = setup.runs.splice(0).at(-1) ?? [];
   return key as string;
+}
+
+// The scope the view set last.
+function lastScope(setup: Setup) {
+  return setup.calls.filter((call) => call[0] === 'setScope').at(-1)?.[1];
+}
+
+// Each invoke of `method` since `from`, with its args.
+function invokesOf(setup: Setup, method: string, from = 0) {
+  return setup.invokes
+    .slice(from)
+    .filter(([name]) => name === method)
+    .map(([, ...args]) => args);
 }
 
 function withUser(layout: BacklogLayout) {
   return withLayouts<BacklogLayout>(defaultLayout, layout);
 }
 
-// The live editors mounted for `field`.
-function liveEditors(created: CreatedEditor[], field: string) {
-  return created.filter(
-    (editor) =>
-      !editor.isDestroyed &&
-      editor.parent.classList.contains(`backlog-editor-box--${field}`),
-  );
+// A layout whose `commits` part records each input it draws.
+function recordingCommits(drawn: CommitsInput[]): BacklogLayout {
+  return {
+    commits(parent, input, kit) {
+      drawn.push(input);
+      return kit.el(parent, 'div', 'mine-commits');
+    },
+  };
 }
 
-// A user editor pane that mounts only the title box.
-const titleOnlyEditor: BacklogLayout = {
-  editor(parent, _input, kit) {
-    const root = kit.el(parent, 'div', 'mine-editor');
-    kit.textBox(root, 'title');
-    return { element: root };
-  },
-};
+let fakeDocument: FocusFakeDocument;
+
+beforeEach(() => {
+  fakeDocument = installFocusFakeDom((name, value) =>
+    vi.stubGlobal(name, value),
+  );
+  scroller.calls.length = 0;
+  scroller.revealed.length = 0;
+  splitCalls.length = 0;
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('backlog view layouts', () => {
-  let fakeDocument: FocusFakeDocument;
-
-  beforeEach(() => {
-    fakeDocument = installFocusFakeDom((name, value) =>
-      vi.stubGlobal(name, value),
-    );
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('a layout reload keeps the open editor draft and focused box', async () => {
-    const { view, created, sheet } = await backlogSetup();
-    view.commands.create();
-    const [title] = liveEditors(created, 'title');
-    title.events.changed('Changed title');
-    title.events.modeChanged({ mode: 'insert', subMode: '' });
-
-    view.setLayouts(withUser(titleOnlyEditor));
-
-    const [remounted] = liveEditors(created, 'title');
-    expect(remounted).not.toBe(title);
-    expect(remounted.doc).toBe('Changed title');
-    expect(remounted.focusOptions).toEqual([{ insertAtEnd: true }]);
-    const [pane] = findAll(sheet, 'mine-editor');
-    expect(pane.dataset.layout).toBe(USER_LAYOUT);
-  });
-
-  it('a box the editor pane leaves out is appended', async () => {
-    const { view, created } = await backlogSetup();
-    view.setLayouts(withUser(titleOnlyEditor));
-
-    view.commands.create();
-
-    const mounted = ['title', 'oneLine', 'tags', 'body'].map(
-      (field) => liveEditors(created, field).length,
-    );
-    expect(mounted).toEqual([1, 1, 1, 1]);
-  });
-
   it('a partial layout draws its own rows and default for the rest', async () => {
-    const { view, sheet } = await backlogSetup();
+    const setup = await backlogSetup();
 
-    view.setLayouts(
+    setup.view.setLayouts(
       withUser({
-        followupRow(parent, input, kit) {
+        tableRow(parent, input, kit) {
           const row = kit.el(parent, 'li', 'mine-row', input.title);
           kit.cursorActions(row);
           return row;
@@ -357,97 +481,21 @@ describe('backlog view layouts', () => {
       }),
     );
 
-    const [rows] = findAll(sheet, 'backlog-rows');
-    const followupRows = findAll(rows, 'mine-row');
-    const planRows = rows.children.filter((row) =>
-      row.classList.contains('ui-row'),
-    );
-    expect(followupRows.map((row) => row.dataset.layout)).toEqual([
+    const [rows] = findAll(setup.sheet, 'backlog-rows');
+    const mine = findAll(rows, 'mine-row');
+    expect(mine.map((row) => row.dataset.layout)).toEqual([
+      USER_LAYOUT,
       USER_LAYOUT,
       USER_LAYOUT,
     ]);
-    expect(planRows.map((row) => row.dataset.layout)).toEqual(['default']);
+    const [review] = findAll(setup.sheet, 'backlog-review-item');
+    expect(review.dataset.layout).toBe('default');
     const [prompt] = findAll(rows, 'backlog-row-actions');
     const slot = prompt.parentNode!;
     expect(slot.classList.contains('backlog-row-actions-slot')).toBe(true);
-    expect(slot.parentNode).toBe(followupRows[0]);
-    expect(followupRows[0].classList.contains('is-selected')).toBe(true);
+    expect(slot.parentNode).toBe(mine[0]);
+    expect(mine[0].classList.contains('is-selected')).toBe(true);
   });
-
-  it.each([
-    { case: 'a follow-up', select: () => undefined },
-    {
-      case: 'a plan',
-      select: (view: Awaited<ReturnType<typeof backlogSetup>>['view']) =>
-        view.commands.listBottom(),
-    },
-  ])(
-    "a reload draws $case's detail again at its scroll",
-    async ({ select }) => {
-      const { view, sheet } = await backlogSetup();
-      select(view);
-      await settle();
-      const [detail] = findAll(sheet, 'backlog-detail');
-      detail.scrollTop = 120;
-
-      view.setLayouts(
-        withUser({
-          followupDetail: (parent, _input, kit) =>
-            kit.el(parent, 'div', 'mine-detail'),
-          docDetail: (parent, _input, kit) =>
-            kit.el(parent, 'div', 'mine-detail'),
-        }),
-      );
-      await settle();
-
-      expect(findAll(detail, 'mine-detail')).toHaveLength(1);
-      expect(detail.scrollTop).toBe(120);
-    },
-  );
-
-  it('scrollEnd_DetailShown_ScrollsItToTheEndAndLogs', async () => {
-    const { view, sheet, logs } = await backlogSetup();
-    const [detail] = findAll(sheet, 'backlog-detail');
-    Object.assign(detail, { scrollHeight: 900 });
-    detail.scrollTop = 40;
-    logs.length = 0;
-
-    view.commands.scrollEnd();
-
-    expect({ scrollTop: detail.scrollTop, logs }).toEqual({
-      scrollTop: 900,
-      logs: ['scrolled the detail to the end'],
-    });
-  });
-
-  it("a plan's detail reads its moved copy", async () => {
-    const { view, readDocs } = await backlogSetup();
-
-    view.commands.listBottom();
-    await settle();
-
-    expect(readDocs).toEqual([PLAN_COPY]);
-  });
-
-  // `expand` opens the plan's task rows, the task row then being the bottom.
-  it.each([
-    { case: 'a plan', expand: false, opened: `${ROOT}/feature/plan-p/plan.md` },
-    { case: 'a task', expand: true, opened: `${ROOT}/feature/plan-p/01-t.md` },
-  ])(
-    'Open in Docs on $case opens the index copy, not the newest',
-    async ({ expand, opened }) => {
-      const { view, openedDocs } = await backlogSetup();
-      view.commands.listBottom();
-      if (expand) {
-        view.commands.open();
-        view.commands.listBottom();
-      }
-
-      view.commands.openInDocs();
-
-      expect(openedDocs).toEqual([opened]);
-    },
-  );
 
   it('a reload keeps the open filter text and focus', async () => {
     const { view, sheet } = await backlogSetup();
@@ -457,8 +505,8 @@ describe('backlog view layouts', () => {
 
     view.setLayouts(
       withUser({
-        list(parent, kit) {
-          const root = kit.el(parent, 'div', 'mine-list');
+        table(parent, kit) {
+          const root = kit.el(parent, 'div', 'mine-table');
           kit.filterBox(root);
           kit.rows(root);
           return { element: root };
@@ -466,377 +514,555 @@ describe('backlog view layouts', () => {
       }),
     );
 
-    const [pane] = findAll(sheet, 'mine-list');
+    const [pane] = findAll(sheet, 'mine-table');
     const [moved] = findAll(pane, 'backlog-filter-input');
     expect(moved).toBe(input);
     expect((moved as FocusFakeElement).value).toBe('fir');
     expect(fakeDocument.activeElement).toBe(input);
   });
 
-  it.each([
-    {
-      case: 'the Tags picker',
-      layout: {
-        pickerRow(parent, input, kit) {
-          return kit.row(parent, {
-            density: 'list',
-            tag: 'li',
-            label: input.label,
-            trailing: kit.trailing(),
-          });
-        },
-      } satisfies BacklogLayout,
-      open: (view: Awaited<ReturnType<typeof backlogSetup>>['view']) =>
-        view.commands.pickTag(),
-      check(overlays: FakeElement[]) {
-        const [layer] = overlays;
-        const [list] = findAll(layer, 'ui-picker-list');
-        expect(layer.hidden).toBe(false);
-        expect(list.children.map((row) => row.dataset.layout)).toEqual([
-          USER_LAYOUT,
-          USER_LAYOUT,
-        ]);
-      },
-    },
-    {
-      case: 'the delete prompt',
-      layout: {
-        confirmBody(parent, input, kit) {
-          const root = kit.el(parent, 'div', 'mine-body', input.body);
-          kit.keepButton(root);
-          return root;
-        },
-      } satisfies BacklogLayout,
-      open: (view: Awaited<ReturnType<typeof backlogSetup>>['view']) =>
-        view.commands.delete(),
-      check(overlays: FakeElement[], anchors: RecordedAnchor[]) {
-        const deleteScrim = overlays[1];
-        const [body] = findAll(deleteScrim, 'mine-body');
-        const [actions] = findAll(deleteScrim, 'ui-dialog-actions');
-        expect(deleteScrim.hidden).toBe(false);
-        expect(body.dataset.layout).toBe(USER_LAYOUT);
-        expect(actions.textContent).toContain('Delete');
-        const liveConfirms = anchors.filter(
-          (anchor) =>
-            anchor.command === 'backlog.confirmYes' && !anchor.isDisposed,
-        );
-        expect(liveConfirms.length).toBeGreaterThan(0);
-      },
-    },
-  ])(
-    '$case draws through the layout and redraws on a reload',
-    async ({ layout, open, check }) => {
-      const { view, overlays, anchors } = await backlogSetup();
-      open(view);
+  it('scrollEnd_ReviewShown_ScrollsItToTheEndAndLogs', async () => {
+    const { view, sheet, logs } = await backlogSetup();
+    const [review] = findAll(sheet, 'backlog-review');
+    Object.assign(review, { scrollHeight: 900 });
+    review.scrollTop = 40;
+    logs.length = 0;
 
-      view.setLayouts(withUser(layout as BacklogLayout));
+    view.commands.scrollEnd();
 
-      check(overlays, anchors);
-    },
-  );
+    expect({ scrollTop: review.scrollTop, logs }).toEqual({
+      scrollTop: 900,
+      logs: ['scrolled the review to the end'],
+    });
+  });
 });
 
 describe('backlog pane targets', () => {
-  beforeEach(() => {
-    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
+  // `to` is the scope the move sets; false for a move the view turns down.
   it.each<{
-    name: string;
-    run(setup: Awaited<ReturnType<typeof backlogSetup>>): void;
-    last: ScopeCall[];
-  }>([
-    {
-      name: 'a focus move to the detail',
-      run: (setup) => setup.move('right'),
-      last: [
-        ['setScope', 'detail'],
-        ['setResizeTarget', 'target'],
-        ['setFocusTarget', 'target'],
-      ],
-    },
-    {
-      name: 'sideBarOpenedOver',
-      run: (setup) => setup.view.sideBarOpenedOver(),
-      last: [
-        ['setScope', 'homes'],
-        ['setResizeTarget', null],
-        ['setFocusTarget', 'target'],
-      ],
-    },
-  ])(
-    '$name sets the scope, then the resize and focus targets',
-    async ({ run, last }) => {
-      const setup = await backlogSetup();
-
-      run(setup);
-
-      expect(setup.calls.slice(-3)).toEqual(last);
-    },
-  );
-
-  // `scope` is the scope the view sets last; a move that returns false sets
-  // none.
-  it.each<{
-    from: 'list' | 'detail' | 'homes';
+    from: 'table' | 'review' | 'strip';
     direction: PaneDirection;
-    scope: string;
-    moved: boolean;
+    to: string | false;
   }>([
-    { from: 'list', direction: 'right', scope: 'detail', moved: true },
-    { from: 'detail', direction: 'left', scope: 'list', moved: true },
-    { from: 'list', direction: 'left', scope: 'list', moved: false },
-    { from: 'detail', direction: 'right', scope: 'detail', moved: false },
-    { from: 'homes', direction: 'right', scope: 'list', moved: true },
-    { from: 'homes', direction: 'left', scope: 'homes', moved: false },
-    { from: 'list', direction: 'up', scope: 'list', moved: false },
-    { from: 'detail', direction: 'down', scope: 'detail', moved: false },
-  ])(
-    'moves focus $direction from the $from to scope $scope',
-    async ({ from, direction, scope, moved }) => {
-      const setup = await backlogSetup();
-      if (from === 'detail') {
-        setup.move('right');
-      } else if (from === 'homes') {
-        setup.view.sideBarOpenedOver();
-      }
-      const before = setup.calls.length;
-
-      const result = setup.move(direction);
-
-      const scopes = setup.calls.filter((call) => call[0] === 'setScope');
-      expect(result).toBe(moved);
-      expect(scopes.at(-1)?.[1]).toBe(scope);
-      expect(setup.calls.length > before).toBe(moved);
-    },
-  );
-
-  it('focusTarget_EditorOpen_IgnoresEveryMove', async () => {
+    { from: 'table', direction: 'right', to: 'review' },
+    { from: 'review', direction: 'left', to: 'table' },
+    { from: 'table', direction: 'down', to: 'strip' },
+    { from: 'strip', direction: 'up', to: 'table' },
+    { from: 'review', direction: 'down', to: 'strip' },
+    { from: 'table', direction: 'left', to: false },
+    { from: 'table', direction: 'up', to: false },
+    { from: 'review', direction: 'right', to: false },
+    { from: 'review', direction: 'up', to: false },
+    { from: 'strip', direction: 'right', to: false },
+    { from: 'strip', direction: 'left', to: false },
+    { from: 'strip', direction: 'down', to: false },
+  ])('focusTarget_Moves: $from $direction', async ({ from, direction, to }) => {
     const setup = await backlogSetup();
-    setup.view.commands.create();
-    const before = setup.calls.length;
-    const logsBefore = setup.logs.length;
-    const directions: PaneDirection[] = ['left', 'right', 'up', 'down'];
+    if (from === 'review') {
+      setup.move('right');
+    } else if (from === 'strip') {
+      setup.move('down');
+    }
 
-    const results = directions.map((direction) => setup.move(direction));
+    const result = setup.move(direction);
 
-    expect(results).toEqual([true, true, true, true]);
-    expect(setup.calls.slice(before)).toEqual([]);
-    expect(setup.logs.slice(logsBefore)).toEqual(
-      directions.map(() => 'pane keys ignored: the editor is open'),
+    expect({ result, scope: lastScope(setup) }).toEqual(
+      to === false
+        ? { result: false, scope: from }
+        : { result: true, scope: to },
     );
   });
 
-  // The rows without the side bar's turn catch a `focusMain` that leaves the
-  // scope and targets to a render that never runs when the focus is unchanged,
-  // as after a turn in another plugin's scope.
+  // `first` is the split the pane's resize keys try first.
   it.each<{
-    last: string;
-    run(setup: Awaited<ReturnType<typeof backlogSetup>>): void;
-    isFromSideBar: boolean;
+    focus: 'table' | 'review' | 'strip';
+    direction: PaneDirection;
+    first: string;
   }>([
-    {
-      last: 'list',
-      run: (setup) => {
-        setup.move('right');
-        setup.move('left');
-      },
-      isFromSideBar: true,
-    },
-    {
-      last: 'detail',
-      run: (setup) => setup.move('right'),
-      isFromSideBar: true,
-    },
-    {
-      last: 'detail',
-      run: (setup) => setup.move('right'),
-      isFromSideBar: false,
-    },
-    {
-      last: 'editor',
-      run: (setup) => setup.view.commands.create(),
-      isFromSideBar: false,
-    },
+    { focus: 'table', direction: 'left', first: 'tableWidth nudge' },
+    { focus: 'review', direction: 'left', first: 'assistantWidth nudge' },
+    { focus: 'strip', direction: 'up', first: 'stripHeight nudge' },
   ])(
-    'focusMain_ReturnsToMainsLastPane: $last, from the side bar $isFromSideBar',
-    async ({ last, run, isFromSideBar }) => {
+    'resizeTarget_ByFocus: $focus',
+    async ({ focus, direction, first }) => {
       const setup = await backlogSetup();
-      run(setup);
-      if (isFromSideBar) {
-        setup.view.focusSideBar();
+      if (focus === 'review') {
+        setup.move('right');
+      } else if (focus === 'strip') {
+        setup.move('down');
       }
-      const before = setup.calls.length;
+      splitCalls.length = 0;
 
-      setup.view.focusMain();
+      setup.resizeTarget()?.nudge(direction);
 
-      expect(setup.calls.slice(before).slice(-3)).toEqual([
-        ['setScope', last],
-        ['setResizeTarget', 'target'],
-        ['setFocusTarget', 'target'],
-      ]);
-      expect(setup.picked.count).toBe(1);
+      expect(splitCalls[0]).toBe(first);
     },
   );
 
-  it.each([
-    { command: 'open', picked: 0 },
-    { command: 'toggle', picked: 1 },
-  ] as const)(
-    'homeKeys_PickClosesOverlayOnlyOnEnter: $command',
-    async ({ command, picked }) => {
-      const setup = await backlogSetup();
-      setup.view.sideBarOpenedOver();
+  it('assistantPane_TookKeys_FocusAssistantNoScopeSet', async () => {
+    const setup = await backlogSetup();
+    const callsBefore = setup.calls.length;
+    const logsBefore = setup.logs.length;
 
-      setup.view.commands[command]();
+    setup.view.commands.toggleAssistant();
 
-      expect(setup.picked.count).toBe(picked);
-    },
-  );
-});
-
-describe('backlog follow-up editor drop target', () => {
-  beforeEach(() => {
-    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    expect(setup.calls.slice(callsBefore)).toEqual([]);
+    expect(setup.logs.slice(logsBefore)).toEqual([
+      'assistant focused',
+      'assistant shown',
+    ]);
   });
 
-  it('followupEditor_DropTarget_OnTheSlot', async () => {
-    const { view, created, sheet, targets } = await backlogSetup();
-    const file: DroppedFile = {
-      name: 'a.md',
-      mediaType: 'text/markdown',
-      path: '/d/a.md',
-      bytes: async () => new Uint8Array(),
-    };
-    view.commands.create();
+  it('assistantPane_ShownHidden_SetsAndClearsOuterPanes', async () => {
+    const setup = await backlogSetup();
 
-    targets[0].take([file]);
-    await settle();
+    setup.view.hidden();
 
-    const [slot] = findAll(sheet, 'backlog-editor');
-    expect(targets).toHaveLength(1);
-    expect(asFake(targets[0].element)).toBe(slot);
-    const [title] = liveEditors(created, 'title');
-    expect(title.inserted).toEqual([insertionText(['/d/a.md'], 'x')]);
+    expect(setup.outer).toEqual([setup.pane.outerPanes, null]);
+    expect(setup.pane.calls).toContain('modeHidden');
   });
 
-  it('followupEditor_DropAfterRedraw_GoesToTheBoxUsedLast', async () => {
-    const { view, created, targets } = await backlogSetup();
-    const file: DroppedFile = {
-      name: 'a.md',
-      mediaType: 'text/markdown',
-      path: '/d/a.md',
-      bytes: async () => new Uint8Array(),
-    };
-    view.commands.create();
-    const [body] = liveEditors(created, 'body');
-    body.events.focused();
-    body.events.blurred();
+  it('assistantPane_SetShown_WritesPlace', async () => {
+    const setup = await backlogSetup();
+    setup.view.commands.toggleAssistant();
+    const opened = setup.places.at(-1);
+    const before = setup.places.length;
 
-    view.setLayouts(withUser(titleOnlyEditor));
-    targets[0].take([file]);
-    await settle();
+    setup.view.hidden();
 
-    const [remountedBody] = liveEditors(created, 'body');
-    const [remountedTitle] = liveEditors(created, 'title');
-    expect(remountedBody.inserted).toEqual([insertionText(['/d/a.md'], 'x')]);
-    expect(remountedTitle.inserted).toEqual([]);
+    expect(opened?.isAssistantShown).toBe(true);
+    expect(
+      setup.places.slice(before).filter((each) => !each.isAssistantShown),
+    ).toEqual([]);
+  });
+
+  it('focusMain_FromAssistant_GivesKeysToLastHostPane', async () => {
+    const setup = await backlogSetup();
+    setup.move('right');
+    setup.view.commands.toggleAssistant();
+    setup.pane.calls.length = 0;
+
+    setup.view.focusMain();
+
+    expect(setup.calls.slice(-3)).toEqual([
+      ['setScope', 'review'],
+      ['setResizeTarget', 'target'],
+      ['setFocusTarget', 'target'],
+    ]);
+    expect(setup.pane.calls).toEqual(['hostTookKeys']);
   });
 });
 
 describe('backlog row commands', () => {
-  beforeEach(() => {
-    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('rowClick_RunsItsCommandWithItsKey: home row', async () => {
-    const setup = await backlogSetup();
-
-    drawnRows(setup).homes[0].click();
-
-    expect(setup.runs).toEqual([['backlog.openHomeRow', ROOT]]);
-  });
-
   it('rowClick_RunsItsCommandWithItsKey: item row', async () => {
     const setup = await backlogSetup();
 
-    drawnRows(setup).items[1].click();
+    tableRows(setup)[1].click();
 
     const [[id, key]] = setup.runs;
     expect(id).toBe('backlog.selectRow');
     setup.view.selectRow(key as string);
-    const selected = drawnRows(setup).items.map((row) =>
-      row.classList.contains('is-selected'),
-    );
-    expect(selected.slice(0, 2)).toEqual([false, true]);
+    expect(rowFlags(setup, 'is-selected')).toEqual([false, true, false]);
   });
 
-  it('openHomeRow_DispatchesThenCallsHomePicked', async () => {
-    const setup = await backlogSetup();
-    const pickedBefore = setup.picked.count;
-
-    setup.view.openHomeRow(ROOT);
-
-    expect(setup.picked.count).toBe(pickedBefore + 1);
-    expect(drawnRows(setup).homes[0].classList.contains('is-selected')).toBe(
-      true,
-    );
-  });
-
-  it('selectRow_SelectsTheRowAndFocusesTheItems', async () => {
+  it('selectRow_SelectsTheRowAndFocusesTheTable', async () => {
     const setup = await backlogSetup();
     const key = secondRowKey(setup);
-    setup.view.sideBarOpenedOver();
+    setup.move('right');
 
     setup.view.selectRow(key);
 
-    const cursor = drawnRows(setup).items.map((row) =>
-      row.classList.contains('is-cursor'),
-    );
-    expect(cursor.slice(0, 2)).toEqual([false, true]);
+    expect(rowFlags(setup, 'is-cursor')).toEqual([false, true, false]);
+    expect(lastScope(setup)).toBe('table');
   });
 
-  it.each<{
-    name: string;
-    run(view: Awaited<ReturnType<typeof backlogSetup>>['view']): void;
-    logged: string;
-  }>([
+  it('activate_StartedRow_RunsSessionsSelectRow', async () => {
+    const setup = await backlogSetup();
+    setup.view.commands.listBottom();
+
+    setup.view.commands.activate();
+
+    expect(setup.runs).toEqual([['sessions.selectRow', 's2']]);
+    expect(setup.logs).toContain('opened session Lib work');
+  });
+
+  it('selectChunk_Unknown_LogsNoChunk', async () => {
+    const setup = await backlogSetup();
+    const logsBefore = setup.logs.length;
+
+    setup.view.selectChunk('gone');
+
+    expect(setup.logs.slice(logsBefore)).toEqual(['no chunk gone']);
+    expect(lastScope(setup)).toBe('table');
+  });
+
+  it('selectChunk_Known_SetsStripCursorAndFocusesStrip', async () => {
+    const setup = await backlogSetup();
+
+    setup.view.selectChunk('c1');
+
+    expect(cursorCards(setup)).toEqual([true, false, false, false]);
+    expect(lastScope(setup)).toBe('strip');
+  });
+});
+
+describe('backlog chunk commands', () => {
+  it('addToChunk_Applied_ClearsMarksAndSelectsChunk', async () => {
+    const added = chunk('c4', 'app', 'New chunk 1', ['First']);
+    const setup = await backlogSetup({
+      answers: { editChunks: async () => [...CHUNKS, added] },
+    });
+    setup.view.commands.mark();
+
+    setup.view.commands.addToChunk();
+    await settle();
+
+    expect(invokesOf(setup, 'editChunks')).toEqual([
+      [{ type: 'add', keys: [FIRST], chunkId: null }],
+    ]);
+    expect(rowFlags(setup, 'is-marked')).toEqual([false, false, false]);
+    expect(cursorCards(setup)).toEqual([false, false, false, true, false]);
+    expect(setup.logs).toContain('added 1 to New chunk 1');
+  });
+
+  it.each([
     {
-      name: 'unknown root',
-      run: (view) => view.openHomeRow('/gone'),
-      logged: 'no home /gone',
+      test: 'addToChunk_Rejected_ToastsTextKeepsMarks',
+      name: 'addToChunk',
+      select: (_setup: Setup) => undefined,
+      edit: { type: 'add', keys: [FIRST], chunkId: null },
+      marked: [true, false, false],
     },
     {
-      name: 'unknown key',
-      run: (view) => view.selectRow('followup:gone'),
-      logged: 'no row followup:gone',
+      test: 'removeFromChunk_Rejected_ToastsTextKeepsMarks',
+      name: 'removeFromChunk',
+      select: (setup: Setup) => setup.view.commands.listDown(),
+      edit: { type: 'remove', keys: [SECOND] },
+      marked: [false, true, false],
     },
-  ])(
-    'rowCommand_TargetGone_LogsAndChangesNothing: $name',
-    async ({ run, logged }) => {
+  ] as const)('$test', async ({ name, select, edit, marked }) => {
+    const setup = await backlogSetup({
+      answers: {
+        editChunks: () => Promise.reject(new Error('No chunk c9')),
+      },
+    });
+    select(setup);
+    setup.view.commands.mark();
+
+    setup.view.commands[name]();
+    await settle();
+
+    expect(invokesOf(setup, 'editChunks')).toEqual([[edit]]);
+    expect(setup.toasts).toEqual([['No chunk c9', 'error']]);
+    expect(setup.logs).toContain('editChunks failed: No chunk c9');
+    expect(rowFlags(setup, 'is-marked')).toEqual(marked);
+  });
+
+  it.each(['renameChunk', 'startChunk', 'toggleHeadless'] as const)(
+    'chunkCommands_NoActedChunk_DoNothing: %s',
+    async (command) => {
       const setup = await backlogSetup();
-      setup.view.sideBarOpenedOver();
+      const invokesBefore = setup.invokes.length;
       const logsBefore = setup.logs.length;
-      const pickedBefore = setup.picked.count;
 
-      run(setup.view);
+      setup.view.commands[command]();
+      await settle();
 
-      const { homes, items } = drawnRows(setup);
-      expect(setup.logs.slice(logsBefore)).toEqual([logged]);
-      expect(setup.picked.count).toBe(pickedBefore);
-      expect(homes[0].classList.contains('is-cursor')).toBe(true);
-      expect(items.some((row) => row.classList.contains('is-cursor'))).toBe(
-        false,
-      );
+      expect(setup.invokes.slice(invokesBefore)).toEqual([]);
+      expect(setup.logs.slice(logsBefore)).toEqual([]);
     },
   );
+
+  // Opens the rename box on Second's chunk, `Fixes`, and types `text`.
+  async function renameSetup(text: string) {
+    const setup = await backlogSetup();
+    setup.view.commands.listDown();
+    setup.view.commands.renameChunk();
+    const [input] = findAll(setup.sheet, 'backlog-rename-input');
+    (input as FocusFakeElement).value = text;
+    return setup;
+  }
+
+  it('rename_BoxAccept_SendsTrimmedName', async () => {
+    const setup = await renameSetup('  Better fixes  ');
+
+    setup.view.commands.boxAccept();
+    await settle();
+
+    expect(invokesOf(setup, 'editChunks')).toEqual([
+      [{ type: 'rename', chunkId: 'c1', name: 'Better fixes' }],
+    ]);
+    expect(setup.logs).toContain('renaming Fixes');
+    expect(setup.logs).toContain('renamed Better fixes');
+  });
+
+  it('rename_EmptyText_SendsNothing', async () => {
+    const setup = await renameSetup('   ');
+
+    setup.view.commands.boxAccept();
+    await settle();
+
+    expect(invokesOf(setup, 'editChunks')).toEqual([]);
+  });
+
+  it('rename_BoxCancel_ClosesTheBox', async () => {
+    const setup = await renameSetup('Other');
+
+    setup.view.commands.boxCancel();
+    await settle();
+
+    const [frame] = findAll(setup.sheet, 'backlog-rename');
+    expect(frame.hidden).toBe(true);
+    expect(setup.events.slice(-2)).toEqual(['push box', 'pop box']);
+    expect(invokesOf(setup, 'editChunks')).toEqual([]);
+  });
+
+  it('startChunks_MixedResults_ToastEach', async () => {
+    const setup = await backlogSetup({
+      answers: {
+        startChunks: async () => [
+          { chunkId: 'c1', sessionId: 's9' },
+          { chunkId: 'c3', refusal: 'Lib docs is starting' },
+        ],
+      },
+    });
+
+    setup.view.commands.startAllChunks();
+    await settle();
+
+    expect(invokesOf(setup, 'startChunks')).toEqual([[['c1', 'c3']]]);
+    expect(setup.toasts).toEqual([
+      ['Started Fixes', 'success'],
+      ['Lib docs is starting', 'error'],
+    ]);
+    expect(setup.logs).toEqual(
+      expect.arrayContaining(['started Fixes', 'start refused Lib docs']),
+    );
+  });
+
+  it('startAllChunks_RepoFilter_StartsOnlyShownChunks', async () => {
+    const setup = await backlogSetup({ savedPlace: place({ repo: 'lib' }) });
+
+    setup.view.commands.startAllChunks();
+    await settle();
+
+    expect(invokesOf(setup, 'startChunks')).toEqual([[['c3']]]);
+  });
+
+  it('sweep_NoRepo_ToastsAndSendsNothing', async () => {
+    const setup = await backlogSetup();
+
+    setup.view.commands.sweep();
+    await settle();
+
+    expect(setup.toasts).toEqual([['Filter to one repo first', 'error']]);
+    expect(invokesOf(setup, 'sweep')).toEqual([]);
+  });
+
+  it('sweep_Repo_SendsOpensPaneAndRefreshes', async () => {
+    const setup = await backlogSetup({ savedPlace: place({ repo: 'app' }) });
+
+    setup.view.commands.sweep();
+    await settle();
+
+    expect(invokesOf(setup, 'sweep')).toEqual([['app']]);
+    expect(setup.pane.calls.slice(-2)).toEqual(['toggle', 'refresh']);
+    expect(setup.logs).toContain('sweep sent app');
+  });
+
+  it('sweep_Rejected_LogsAndToasts', async () => {
+    const setup = await backlogSetup({
+      savedPlace: place({ repo: 'app' }),
+      answers: {
+        sweep: () => Promise.reject(new Error('No Backlog repo app')),
+      },
+    });
+
+    setup.view.commands.sweep();
+    await settle();
+
+    expect(setup.toasts).toEqual([['No Backlog repo app', 'error']]);
+    expect(setup.logs).toContain('sweep failed: No Backlog repo app');
+    expect(setup.pane.calls).not.toContain('toggle');
+  });
+});
+
+describe('backlog commits', () => {
+  it('commits_Reply_SlicesShaTo7AndDateTo10', async () => {
+    const setup = await backlogSetup({
+      answers: {
+        commitsSince: async () => [
+          {
+            sha: '0123456789abcdef',
+            subject: 'Fix the parser',
+            at: '2026-10-21T09:30:00+01:00',
+            paths: [],
+          },
+        ],
+      },
+    });
+    const drawn: CommitsInput[] = [];
+    setup.view.setLayouts(withUser(recordingCommits(drawn)));
+
+    setup.view.commands.toggleCommits();
+    await settle();
+
+    expect(invokesOf(setup, 'commitsSince')).toEqual([[FIRST]]);
+    expect(drawn.at(-1)).toEqual({
+      commits: [
+        { shortSha: '0123456', subject: 'Fix the parser', date: '2026-10-21' },
+      ],
+      problem: null,
+    });
+  });
+
+  it('commits_Rejected_DrawsProblem', async () => {
+    const setup = await backlogSetup({
+      answers: {
+        commitsSince: () => Promise.reject(new Error('No Backlog row x')),
+      },
+    });
+    const drawn: CommitsInput[] = [];
+    setup.view.setLayouts(withUser(recordingCommits(drawn)));
+
+    setup.view.commands.toggleCommits();
+    await settle();
+
+    expect(drawn.at(-1)?.problem).toBe('No Backlog row x');
+    expect(setup.logs).toContain('commitsSince failed: No Backlog row x');
+  });
+
+  it('commits_OvertakenReply_DrawsOnlyTheLatest', async () => {
+    const replies = new Map<unknown, ReturnType<typeof deferred<unknown>>>();
+    const setup = await backlogSetup({
+      answers: {
+        commitsSince(key) {
+          const reply = deferred<unknown>();
+          replies.set(key, reply);
+          return reply.promise;
+        },
+      },
+    });
+    const drawn: CommitsInput[] = [];
+    setup.view.setLayouts(withUser(recordingCommits(drawn)));
+    const commit = (subject: string) => ({
+      sha: 'abcdef0123',
+      subject,
+      at: '2026-10-21T09:30:00Z',
+      paths: [],
+    });
+    setup.view.commands.toggleCommits();
+    setup.view.commands.listDown();
+
+    replies.get(SECOND)?.resolve([commit('Second commit')]);
+    replies.get(FIRST)?.resolve([commit('First commit')]);
+    await settle();
+
+    const subjects = drawn.flatMap((input) =>
+      (input.commits ?? []).map((each) => each.subject),
+    );
+    expect(subjects).not.toContain('First commit');
+    expect(drawn.at(-1)?.commits?.map((each) => each.subject)).toEqual([
+      'Second commit',
+    ]);
+  });
+
+  it('commits_ReplyAfterHidden_DrawsNothing', async () => {
+    const reply = deferred<unknown>();
+    const setup = await backlogSetup({
+      answers: { commitsSince: () => reply.promise },
+    });
+    const drawn: CommitsInput[] = [];
+    setup.view.setLayouts(withUser(recordingCommits(drawn)));
+    setup.view.commands.toggleCommits();
+    setup.view.commands.toggleCommits();
+    const drawnBefore = drawn.length;
+
+    reply.resolve([
+      { sha: 'abcdef0123', subject: 'Late', at: '2026-10-21', paths: [] },
+    ]);
+    await settle();
+
+    expect(drawn.length).toBe(drawnBefore);
+    expect(findAll(setup.sheet, 'mine-commits')).toEqual([]);
+  });
+});
+
+describe('backlog strip', () => {
+  it('strip_CursorChanged_RefreshesThenReveals', async () => {
+    const setup = await backlogSetup();
+    scroller.calls.length = 0;
+    scroller.revealed.length = 0;
+
+    setup.view.selectChunk('c2');
+
+    const reveal = scroller.calls.indexOf('reveal');
+    expect(scroller.calls.filter((call) => call === 'reveal')).toHaveLength(1);
+    expect(scroller.calls[reveal - 1]).toBe('refresh');
+    const [revealed] = scroller.revealed as HTMLElement[];
+    expect(revealed.classList.contains('is-cursor')).toBe(true);
+    expect(asFake(revealed).textContent).toContain('Lib work');
+  });
+
+  it('dispose_DisposesTheScroller', async () => {
+    const setup = await backlogSetup();
+
+    setup.view.dispose();
+
+    expect(scroller.calls).toContain('dispose');
+    expect(splitCalls).toEqual(
+      expect.arrayContaining([
+        'tableWidth dispose',
+        'stripHeight dispose',
+        'assistantWidth dispose',
+      ]),
+    );
+    expect(setup.pane.calls).toContain('dispose');
+  });
+});
+
+describe('backlog restore, mode and reads', () => {
+  it('restore_BacklogHidden_TogglesOnceOnNextShown', async () => {
+    const setup = await backlogSetup({
+      isShown: false,
+      savedPlace: place({ isAssistantShown: true }),
+    });
+    const togglesWhileHidden = setup.pane.calls.filter(
+      (call) => call === 'toggle',
+    ).length;
+
+    setup.show();
+    setup.view.hidden();
+    setup.show();
+
+    expect(togglesWhileHidden).toBe(0);
+    expect(setup.pane.calls.filter((call) => call === 'toggle')).toHaveLength(
+      1,
+    );
+  });
+
+  it('pickRepo_BacklogHidden_ShowsModeFirst', async () => {
+    const setup = await backlogSetup({ isShown: false });
+
+    setup.view.commands.pickRepo();
+
+    expect(setup.events).toEqual(['showMode', 'push picker']);
+  });
+
+  it('setContext_AtStart_AllRepos', async () => {
+    const setup = await backlogSetup();
+
+    expect(setup.contexts).toEqual(['All repos']);
+  });
+
+  it('shown_InvokesStalenessAgain', async () => {
+    const setup = await backlogSetup();
+    const before = invokesOf(setup, 'staleness').length;
+
+    setup.view.hidden();
+    setup.view.shown();
+    await settle();
+
+    expect(invokesOf(setup, 'staleness')).toHaveLength(before + 1);
+  });
 });

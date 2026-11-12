@@ -77,8 +77,7 @@ export interface AssistantPlace {
   isDoneShown: boolean;
 }
 
-// Null when the page never opened Backlog; a field the page's place lacks
-// reads as its default.
+// Null when the page never opened Backlog.
 export function assistantPlace(
   place: BacklogPlace | undefined,
 ): AssistantPlace | null {
@@ -87,13 +86,13 @@ export function assistantPlace(
   }
   return {
     selectedKey: place.selectedKey,
-    repo: place.repo ?? null,
+    repo: place.repo,
     filter: place.filter,
-    marked: place.marked ?? [],
-    isReadyOnly: place.isReadyOnly ?? false,
-    isChunkedHidden: place.isChunkedHidden ?? false,
-    isStaleFirst: place.isStaleFirst ?? false,
-    isDoneShown: place.isDoneShown ?? false,
+    marked: place.marked,
+    isReadyOnly: place.isReadyOnly,
+    isChunkedHidden: place.isChunkedHidden,
+    isStaleFirst: place.isStaleFirst,
+    isDoneShown: place.isDoneShown,
   };
 }
 

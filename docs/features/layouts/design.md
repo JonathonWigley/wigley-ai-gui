@@ -127,7 +127,7 @@ stays in themes.
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `audio-picker` | `audio-picker.layout` | the head, moment, candidate, None of these and notes parts |
 | `docs` | `docs.layout` | the tree, its rows and its Wiki and All pages switch; the rendered doc, its page frame and right column, header, disk banner, section edit control and editor frame; Recent changes and the missing Main page's empty state; the list pages and their rows; the box and confirm dialogs, the create dialog's completion and picker rows |
-| `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
+| `backlog` | `backlog.layout` | the table and its filters, rows and empty text, the review pane with its item and commits, the chunk strip with its chunk and New chunk cards, and the picker rows |
 | `practice` | `practice.layout` | the problem list (its pane, header, rows and empty state) in the side bar; the problem column's three stacked panes (problem, editor, console) and the no-problem state; the problem pane's tabs (description, submissions with their rows and a submission's code, notes, solution), the console's Testcase and Result tabs, a case's result, the Solution confirm body and the import dialog's body (`importBox`) |
 | `scoped-agents` | `scoped-agents.layout` | the agent pane's ask box (`askBox`), drawn for Practice's interviewer and Backlog's assistant |
 | `settings` | `settings.layout` | the section list, the setting, plugin, key, leader and advanced rows, the Leader menu's panes, group, item and add rows, the Keybindings section's filter chips, the problem line, the picker rows |

@@ -1,153 +1,177 @@
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
-import type {
-  FollowupDraft,
-  FollowupItem,
-} from '../../../shared/followups/followup-file';
+import type { FollowupItem } from '../../../shared/followups/followup-file';
 import { matchesSubstring } from '../../../shared/matches-substring';
 import type {
-  BacklogEdit,
-  BacklogFeature,
-  BacklogFocus,
+  BacklogChunk,
   BacklogHome,
   BacklogPlace,
-  BacklogPlan,
   BacklogRead,
-  BacklogTask,
+  BacklogStaleness,
+  ChunkEdit,
+  RowKey,
 } from '../contract';
-import { AGENT_READY } from '../ready';
+import { isReady } from '../ready';
+import { rowKey } from '../row-key';
 
-export type EditorField = 'title' | 'oneLine' | 'tags' | 'body';
+// Where the page's keys act: the table, the review pane beside it, the chunk
+// strip under them, or the assistant pane.
+export type BacklogFocus = 'table' | 'review' | 'strip' | 'assistant';
 
-export const EDITOR_FIELDS: readonly EditorField[] = [
-  'title',
-  'oneLine',
-  'tags',
-  'body',
-];
+export type StalenessLevel = BacklogStaleness['level'];
 
-// Each editor box's text; `tags` is comma-separated.
-export type DraftTexts = Record<EditorField, string>;
-
-// `path` and `baseline` are null for a create, which writes to `homeRoot`'s
-// create target. `baseline` is the item as the editor opened it, or as it read
-// on disk when a save found it changed there; `initial` the text the editor
-// opened with.
-export interface BacklogEditor {
-  kind: 'create' | 'edit';
-  homeRoot: string;
-  path: string | null;
-  baseline: FollowupDraft | null;
-  initial: DraftTexts;
-  draft: DraftTexts;
+// One follow-up of every repo's table. `path` is its follow-up file's path;
+// `chunk` the chunk holding it, null for none.
+export interface BacklogRow {
+  key: RowKey;
+  repo: string;
+  path: string;
+  item: FollowupItem;
+  chunk: BacklogChunk | null;
 }
-
-export type BacklogConfirm =
-  | { kind: 'delete'; homeRoot: string; path: string; title: string }
-  | { kind: 'discard' };
 
 export interface BacklogState {
   homes: readonly BacklogHome[];
   message: string | null;
   isLoaded: boolean;
+  staleness: Readonly<Record<RowKey, BacklogStaleness>>;
+  chunks: readonly BacklogChunk[];
   focus: BacklogFocus;
-  // An index into `orderedHomes`.
-  homeCursor: number;
-  openRoot: string | null;
-  selectedKey: string | null;
-  // The title of a follow-up to select once a load holds it: a save's reload
-  // can land after the save asks for its row. A filter or toggle change
-  // clears it.
-  pendingSelect: string | null;
-  // The plan and feature paths whose task rows show.
-  expanded: readonly string[];
+  selectedKey: RowKey | null;
+  // A shown chunk's id, or null for the strip's New chunk cell.
+  stripCursor: string | null;
+  // The repo filter; null for every repo.
+  repo: string | null;
   filter: string;
+  marked: readonly RowKey[];
+  isReadyOnly: boolean;
+  isChunkedHidden: boolean;
+  isStaleFirst: boolean;
   isDoneShown: boolean;
-  isAgentReadyOnly: boolean;
-  editor: BacklogEditor | null;
-  confirm: BacklogConfirm | null;
+  isCommitsShown: boolean;
 }
-
-export type BacklogRow =
-  | { kind: 'followup'; key: string; path: string; item: FollowupItem }
-  | { kind: 'plan'; key: string; plan: BacklogPlan; isExpanded: boolean }
-  | {
-      kind: 'feature';
-      key: string;
-      feature: BacklogFeature;
-      isExpanded: boolean;
-    }
-  | { kind: 'task'; key: string; task: BacklogTask };
 
 export type BacklogAction =
   | { type: 'loaded'; read: BacklogRead }
   // A reloaded page's place, put back once the first homes load.
   | { type: 'placeRestored'; place: BacklogPlace }
+  | { type: 'stalenessRead'; entries: Record<RowKey, BacklogStaleness> }
+  | { type: 'chunksChanged'; chunks: readonly BacklogChunk[] }
   | { type: 'move'; to: 'down' | 'up' | 'top' | 'bottom' }
-  | { type: 'open' }
-  | { type: 'toggle' }
-  | { type: 'back' }
-  | { type: 'focusHomes' }
+  | { type: 'select'; key: RowKey }
   | { type: 'focus'; focus: BacklogFocus }
-  | { type: 'openHome'; root: string }
-  | { type: 'select'; key: string }
-  | { type: 'selectFollowup'; title: string }
   | { type: 'setFilter'; text: string }
+  | { type: 'setRepo'; repo: string | null }
   | { type: 'toggleDone' }
-  | { type: 'toggleAgentReadyOnly' }
-  | { type: 'openCreate' }
-  | { type: 'openEdit' }
-  | { type: 'draftChanged'; field: EditorField; text: string }
-  // Applies only to the open editor of the item at `path` titled `title`.
-  | {
-      type: 'moveEditorBaseline';
-      path: string | null;
-      title: string;
-      baseline: FollowupDraft;
-    }
-  | { type: 'closeEditor' }
-  | { type: 'askDelete' }
-  | { type: 'askDiscard' }
-  | { type: 'dismissConfirm' };
+  | { type: 'toggleReadyOnly' }
+  | { type: 'toggleChunkedHidden' }
+  | { type: 'toggleStaleFirst' }
+  | { type: 'toggleMark' }
+  | { type: 'clearMarks' }
+  | { type: 'stripMove'; by: 1 | -1 }
+  | { type: 'stripSelect'; chunkId: string | null }
+  | { type: 'toggleCommits' };
 
 export function initialBacklogState(): BacklogState {
   return {
     homes: [],
     message: null,
     isLoaded: false,
-    focus: 'homes',
-    homeCursor: 0,
-    openRoot: null,
+    staleness: {},
+    chunks: [],
+    focus: 'table',
     selectedKey: null,
-    pendingSelect: null,
-    expanded: [],
+    stripCursor: null,
+    repo: null,
     filter: '',
+    marked: [],
+    isReadyOnly: false,
+    isChunkedHidden: false,
+    isStaleFirst: false,
     isDoneShown: false,
-    isAgentReadyOnly: false,
-    editor: null,
-    confirm: null,
+    isCommitsShown: false,
   };
 }
 
-// The homes in side bar order: grouped by repo, each repo where its first
-// home falls in the read.
-export function orderedHomes(state: BacklogState): BacklogHome[] {
-  const repos = [...new Set(state.homes.map((home) => home.repo))];
-  return repos.flatMap((repo) =>
+// Every follow-up of every home: the repos in the order each first appears in
+// `homes`, each repo's homes in that order, then files and items in order. An
+// item whose key an earlier row holds is left out. The order of main's
+// `backlogRows`.
+export function allRows(state: BacklogState): BacklogRow[] {
+  const repoOrder = [...new Set(state.homes.map((home) => home.repo))];
+  const homes = repoOrder.flatMap((repo) =>
     state.homes.filter((home) => home.repo === repo),
   );
-}
-
-export function openHome(state: BacklogState): BacklogHome | null {
-  return state.homes.find((home) => home.root === state.openRoot) ?? null;
-}
-
-// The home the change keys act on: the side bar's cursor home while the side
-// bar has focus, else the open home.
-export function actedHome(state: BacklogState): BacklogHome | null {
-  if (state.focus === 'homes') {
-    return orderedHomes(state)[state.homeCursor] ?? null;
+  const chunkOf = chunksByKey(state.chunks);
+  const rows: BacklogRow[] = [];
+  const keys = new Set<RowKey>();
+  for (const home of homes) {
+    for (const file of home.followupFiles) {
+      for (const item of file.items) {
+        const key = rowKey(home.repo, item.title);
+        if (keys.has(key)) {
+          continue;
+        }
+        keys.add(key);
+        rows.push({
+          key,
+          repo: home.repo,
+          path: file.path,
+          item,
+          chunk: chunkOf.get(key) ?? null,
+        });
+      }
+    }
   }
-  return openHome(state);
+  return rows;
+}
+
+const STALENESS_RANK: Record<StalenessLevel, number> = {
+  stale: 0,
+  moved: 1,
+  unknown: 2,
+  fresh: 3,
+};
+
+const UNREAD_RANK = 4;
+
+// `allRows` less a done row unless `isDoneShown`, another repo's row while
+// `repo` is set, a row not agent-ready while `isReadyOnly`, a chunked row
+// while `isChunkedHidden`, and a row the filter misses. The trimmed filter
+// matches the title and each tag fuzzily and the one line as a substring,
+// ignoring case; a filter of only spaces is none. `isStaleFirst` sorts the
+// rows stably by staleness, stale first and unread last.
+export function visibleRows(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogRow[] {
+  const query = state.filter.trim();
+  const isFilterMatch = (item: FollowupItem) =>
+    query === '' ||
+    [item.title, ...item.tags].some((text) => matcher.matches(query, text)) ||
+    matchesSubstring(query, item.oneLine);
+  const rows = allRows(state).filter((row) => {
+    const isDoneHidden = row.item.done && !state.isDoneShown;
+    const isOtherRepo = state.repo !== null && row.repo !== state.repo;
+    const isNotReadyHidden = state.isReadyOnly && !isReady(row.item.tags);
+    const isChunkedHidden = state.isChunkedHidden && row.chunk !== null;
+    return (
+      !isDoneHidden &&
+      !isOtherRepo &&
+      !isNotReadyHidden &&
+      !isChunkedHidden &&
+      isFilterMatch(row.item)
+    );
+  });
+  if (!state.isStaleFirst) {
+    return rows;
+  }
+  const rank = (row: BacklogRow) => {
+    const staleness = state.staleness[row.key];
+    return staleness === undefined
+      ? UNREAD_RANK
+      : STALENESS_RANK[staleness.level];
+  };
+  return rows.sort((a, b) => rank(a) - rank(b));
 }
 
 export function selectedRow(
@@ -160,185 +184,126 @@ export function selectedRow(
   );
 }
 
-// The selected row when it is a follow-up.
-export function selectedFollowup(
-  state: BacklogState,
-  matcher: FuzzyMatcher,
-): Extract<BacklogRow, { kind: 'followup' }> | null {
-  const row = selectedRow(state, matcher);
-  return row?.kind === 'followup' ? row : null;
+// The repos in `allRows` order, each once.
+export function repos(state: BacklogState): string[] {
+  return [...new Set(allRows(state).map((row) => row.repo))];
 }
 
-// The row the row keys act on: the selected row while focus is off the side
-// bar.
-export function actedRow(
-  state: BacklogState,
-  matcher: FuzzyMatcher,
-): BacklogRow | null {
-  return state.focus === 'homes' ? null : selectedRow(state, matcher);
+// The chunks the strip shows, in order: only the repo filter's repo while it
+// is set.
+export function shownChunks(state: BacklogState): BacklogChunk[] {
+  return state.chunks.filter(
+    (chunk) => state.repo === null || chunk.repo === state.repo,
+  );
 }
 
-// The follow-up the follow-up keys act on: the selected follow-up while focus
-// is off the side bar.
-export function actedFollowup(
+// The shown chunk under the strip's cursor; null on the New chunk cell.
+export function stripChunk(state: BacklogState): BacklogChunk | null {
+  return (
+    shownChunks(state).find((chunk) => chunk.id === state.stripCursor) ?? null
+  );
+}
+
+// The keys the chunk keys add or take out: the marked rows' keys in `allRows`
+// order; with none marked, the selected row's key while the table has focus.
+export function actedKeys(
   state: BacklogState,
   matcher: FuzzyMatcher,
-): Extract<BacklogRow, { kind: 'followup' }> | null {
-  return state.focus === 'homes' ? null : selectedFollowup(state, matcher);
+): RowKey[] {
+  const marked = new Set<RowKey>(state.marked);
+  const markedKeys = allRows(state)
+    .filter((row) => marked.has(row.key))
+    .map((row) => row.key);
+  if (markedKeys.length > 0) {
+    return markedKeys;
+  }
+  const row = state.focus === 'table' ? selectedRow(state, matcher) : null;
+  return row === null ? [] : [row.key];
+}
+
+// The chunk the chunk keys act on: the strip's cursor chunk while the strip
+// has focus, the selected row's chunk while the table has.
+export function actedChunk(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): BacklogChunk | null {
+  switch (state.focus) {
+    case 'strip':
+      return stripChunk(state);
+    case 'table':
+      return selectedRow(state, matcher)?.chunk ?? null;
+    default:
+      return null;
+  }
+}
+
+// The add `c` sends: the acted keys into the strip's cursor chunk, or into a
+// new chunk on the New chunk cell; null with no key to add.
+export function addEdit(
+  state: BacklogState,
+  matcher: FuzzyMatcher,
+): Extract<ChunkEdit, { type: 'add' }> | null {
+  const keys = actedKeys(state, matcher);
+  if (keys.length === 0) {
+    return null;
+  }
+  return { type: 'add', keys, chunkId: stripChunk(state)?.id ?? null };
 }
 
 // A command the cursor row's prompt shows.
 export type CursorCommand =
-  | 'edit'
-  | 'delete'
-  | 'toggleAgentReady'
-  | 'pickTag'
+  | 'activate'
+  | 'mark'
+  | 'addToChunk'
+  | 'removeFromChunk'
+  | 'startChunk'
+  | 'toggleHeadless'
+  | 'renameChunk'
+  | 'toggleCommits'
   | 'openInDocs';
 
-const FOLLOWUP_CURSOR_COMMANDS: readonly CursorCommand[] = [
-  'edit',
-  'delete',
-  'toggleAgentReady',
-  'pickTag',
+const STARTED_CURSOR_COMMANDS: readonly CursorCommand[] = [
+  'activate',
+  'toggleCommits',
   'openInDocs',
 ];
 
-const DOC_CURSOR_COMMANDS: readonly CursorCommand[] = ['openInDocs'];
+const UNSTARTED_CURSOR_COMMANDS: readonly CursorCommand[] = [
+  'mark',
+  'addToChunk',
+  'removeFromChunk',
+  'startChunk',
+  'toggleHeadless',
+  'renameChunk',
+  'toggleCommits',
+  'openInDocs',
+];
+
+const UNCHUNKED_CURSOR_COMMANDS: readonly CursorCommand[] = [
+  'mark',
+  'addToChunk',
+  'toggleCommits',
+  'openInDocs',
+];
 
 // The commands that act on `row` while it is the cursor row, in prompt
-// order: every row action on a follow-up, opening in Docs alone on a plan,
-// feature or task.
+// order, by its chunk: started, unstarted, or none.
 export function cursorCommands(row: BacklogRow): readonly CursorCommand[] {
-  return row.kind === 'followup'
-    ? FOLLOWUP_CURSOR_COMMANDS
-    : DOC_CURSOR_COMMANDS;
-}
-
-export function rowTitle(row: BacklogRow): string {
-  switch (row.kind) {
-    case 'followup':
-      return row.item.title;
-    case 'plan':
-      return row.plan.title;
-    case 'feature':
-      return row.feature.slug;
-    case 'task':
-      return row.task.title;
+  if (row.chunk === null) {
+    return UNCHUNKED_CURSOR_COMMANDS;
   }
+  return row.chunk.sessionId === null
+    ? UNSTARTED_CURSOR_COMMANDS
+    : STARTED_CURSOR_COMMANDS;
 }
 
-// The open home's rows in list order: follow-ups, then plans, then features,
-// each expanded plan or feature followed by its task rows. Done follow-ups
-// show only while `isDoneShown`; `isAgentReadyOnly` keeps only follow-ups
-// tagged `agent-ready`. The filter fuzzily matches a follow-up's title or tags,
-// a plan's title or feature, and a feature's slug; a follow-up's one line
-// matches when it holds the trimmed filter, ignoring case. Rows keep this order
-// under a filter, and a filter of only spaces is none.
-export function visibleRows(
-  state: BacklogState,
-  matcher: FuzzyMatcher,
-): BacklogRow[] {
-  const home = openHome(state);
-  if (home === null) {
-    return [];
-  }
-  const query = state.filter.trim();
-  const matches = (...texts: string[]) =>
-    query === '' || texts.some((text) => matcher.matches(query, text));
-  const isFollowupMatch = (item: FollowupItem) =>
-    matches(item.title, ...item.tags) || matchesSubstring(query, item.oneLine);
-  const rows: BacklogRow[] = [];
-  for (const file of home.followupFiles) {
-    for (const item of file.items) {
-      const isDoneHidden = item.done && !state.isDoneShown;
-      const isUntaggedHidden =
-        state.isAgentReadyOnly && !item.tags.includes(AGENT_READY);
-      if (isDoneHidden || isUntaggedHidden || !isFollowupMatch(item)) {
-        continue;
-      }
-      rows.push({
-        kind: 'followup',
-        key: followupKey(file.path, item.title),
-        path: file.path,
-        item,
-      });
-    }
-  }
-  if (state.isAgentReadyOnly) {
-    return rows;
-  }
-  for (const plan of home.plans) {
-    if (!matches(plan.title, plan.feature)) {
-      continue;
-    }
-    const isExpanded = state.expanded.includes(plan.path);
-    rows.push({ kind: 'plan', key: docKey(plan.path), plan, isExpanded });
-    rows.push(...taskRows(plan.tasks, isExpanded));
-  }
-  for (const feature of home.features) {
-    if (!matches(feature.slug)) {
-      continue;
-    }
-    const isExpanded = state.expanded.includes(feature.path);
-    rows.push({
-      kind: 'feature',
-      key: docKey(feature.path),
-      feature,
-      isExpanded,
-    });
-    rows.push(...taskRows(feature.tasks, isExpanded));
-  }
-  return rows;
-}
-
-// The tags a Tags box's comma-separated text names, trimmed, empties dropped.
-export function tagsOf(text: string): string[] {
-  return text
-    .split(',')
-    .map((each) => each.trim())
-    .filter((each) => each !== '');
-}
-
-// `tags` with `tag` removed when present, else appended; the others keep
-// their order.
-export function withTagToggled(tags: readonly string[], tag: string): string[] {
-  return tags.includes(tag)
-    ? tags.filter((each) => each !== tag)
-    : [...tags, tag];
-}
-
-// The draft the editor's boxes hold. The title, one line and tags take one
-// line, so a line break typed in one of them joins the lines with a space.
-export function draftOf(texts: DraftTexts): FollowupDraft {
-  const oneLine = (text: string) => text.replace(/\s*\n\s*/g, ' ').trim();
-  return {
-    title: oneLine(texts.title),
-    oneLine: oneLine(texts.oneLine),
-    tags: tagsOf(oneLine(texts.tags)),
-    body: texts.body.trim(),
-  };
-}
-
-// The write the editor's save sends: a create, or an edit of the item it
-// opened carrying that item as its baseline.
-export function editorEdit(
-  editor: BacklogEditor,
-): Extract<BacklogEdit, { type: 'create' | 'edit' }> {
-  const draft = draftOf(editor.draft);
-  const { baseline } = editor;
-  return baseline === null
-    ? { type: 'create', draft }
-    : { type: 'edit', title: baseline.title, draft, baseline };
-}
-
-// Why the open home shows no rows, for the empty list's text.
-// `agentReadyNone`: the agent-ready toggle hides every row; `allDone`: every
-// follow-up is done and done ones are hidden.
+// Why the table shows no rows, for its empty text. `allDone`: every
+// follow-up of the repo filter's repos is done and done ones are hidden.
 export type EmptyReason =
-  | 'noHome'
   | 'filter'
   | 'allDone'
-  | 'agentReadyNone'
+  | 'readyNone'
+  | 'allChunked'
   | 'nothing';
 
 // Null while a row shows.
@@ -346,41 +311,79 @@ export function emptyReason(
   state: BacklogState,
   matcher: FuzzyMatcher,
 ): EmptyReason | null {
-  const home = openHome(state);
-  if (home === null) {
-    return 'noHome';
-  }
   if (visibleRows(state, matcher).length > 0) {
     return null;
   }
   if (state.filter.trim() !== '') {
     return 'filter';
   }
-  const items = home.followupFiles.flatMap((file) => file.items);
-  const isEveryFollowupDone =
-    items.length > 0 && items.every((item) => item.done);
-  if (isEveryFollowupDone && !state.isDoneShown) {
+  const items = allRows(state)
+    .filter((row) => state.repo === null || row.repo === state.repo)
+    .map((row) => row.item);
+  const isEveryItemDone = items.length > 0 && items.every((item) => item.done);
+  if (isEveryItemDone && !state.isDoneShown) {
     return 'allDone';
   }
-  return state.isAgentReadyOnly ? 'agentReadyNone' : 'nothing';
+  if (state.isReadyOnly) {
+    return 'readyNone';
+  }
+  return state.isChunkedHidden ? 'allChunked' : 'nothing';
 }
 
-// The part of `state` a page reload puts back.
-export function placeOf(state: BacklogState): BacklogPlace {
+const LEVEL_WORDS: Record<Exclude<StalenessLevel, 'unknown'>, string> = {
+  fresh: 'Fresh',
+  moved: 'Moved',
+  stale: 'Stale',
+};
+
+// The review pane's staleness line.
+export function stalenessNote(staleness: BacklogStaleness | undefined): string {
+  if (staleness === undefined) {
+    return 'Staleness not read yet.';
+  }
+  if (staleness.level === 'unknown') {
+    return 'Unknown: not in git history.';
+  }
+  const { writtenAt, namedPaths, gonePaths, lastCommit } = staleness;
+  const level = LEVEL_WORDS[staleness.level];
+  const parts = [
+    writtenAt === null
+      ? `${level}: not in git history yet`
+      : `${level}: written ${writtenAt.slice(0, 10)}`,
+  ];
+  if (namedPaths.length === 0) {
+    parts.push('names no paths');
+  } else if (writtenAt !== null) {
+    parts.push(
+      `${counted(staleness.commitsSince, 'commit')} since on ${counted(namedPaths.length, 'named path')}`,
+    );
+  }
+  if (gonePaths.length > 0) {
+    parts.push(`gone: ${gonePaths.join(', ')}`);
+  }
+  if (lastCommit !== null) {
+    parts.push(`last: ${lastCommit.subject}`);
+  }
+  return parts.join(' · ');
+}
+
+// The part of `state` a page reload puts back, and main reads for
+// `read_backlog_state`.
+export function placeOf(
+  state: BacklogState,
+  isAssistantShown: boolean,
+): BacklogPlace {
   return {
-    focus: state.focus,
-    homeCursor: state.homeCursor,
-    openRoot: state.openRoot,
     selectedKey: state.selectedKey,
-    expanded: [...state.expanded],
+    repo: state.repo,
     filter: state.filter,
+    marked: [...state.marked],
+    isReadyOnly: state.isReadyOnly,
+    isChunkedHidden: state.isChunkedHidden,
+    isStaleFirst: state.isStaleFirst,
+    isDoneShown: state.isDoneShown,
+    isAssistantShown,
   };
-}
-
-export function isDraftChanged(editor: BacklogEditor): boolean {
-  return EDITOR_FIELDS.some(
-    (field) => editor.draft[field] !== editor.initial[field],
-  );
 }
 
 export function backlogReducer(
@@ -393,123 +396,90 @@ export function backlogReducer(
       return loaded(state, action.read, matcher);
     case 'placeRestored':
       return placeRestored(state, action.place, matcher);
-    case 'move':
-      return move(state, action.to, matcher);
-    case 'open':
-      return openOrStepIn(state, matcher);
-    case 'toggle':
-      return toggle(state, matcher);
-    case 'back':
-      return state.focus === 'items' ? focusHomes(state) : state;
-    case 'focusHomes':
-      return focusHomes(state);
-    case 'focus':
-      return focusOn(state, action.focus, matcher);
-    case 'openHome':
-      return openHomeAt(state, action.root, matcher);
-    case 'select':
-      return { ...state, selectedKey: action.key };
-    case 'selectFollowup':
-      return selectPending({ ...state, pendingSelect: action.title }, matcher);
-    case 'setFilter':
+    case 'stalenessRead':
+      return {
+        ...state,
+        staleness: { ...state.staleness, ...action.entries },
+      };
+    case 'chunksChanged':
       return reselect(
         state,
-        {
-          ...state,
-          filter: action.text,
-          pendingSelect: null,
-        },
+        replaceStripCursor(state, { ...state, chunks: action.chunks }),
+        matcher,
+      );
+    case 'move':
+      return move(state, action.to, matcher);
+    case 'select':
+      return { ...state, selectedKey: action.key };
+    case 'focus':
+      return focusOn(state, action.focus, matcher);
+    case 'setFilter':
+      return reselect(state, { ...state, filter: action.text }, matcher);
+    case 'setRepo':
+      return reselect(
+        state,
+        replaceStripCursor(state, { ...state, repo: action.repo }),
         matcher,
       );
     case 'toggleDone':
       return reselect(
         state,
-        {
-          ...state,
-          isDoneShown: !state.isDoneShown,
-          pendingSelect: null,
-        },
+        { ...state, isDoneShown: !state.isDoneShown },
         matcher,
       );
-    case 'toggleAgentReadyOnly':
+    case 'toggleReadyOnly':
       return reselect(
         state,
-        {
-          ...state,
-          isAgentReadyOnly: !state.isAgentReadyOnly,
-          pendingSelect: null,
-        },
+        { ...state, isReadyOnly: !state.isReadyOnly },
         matcher,
       );
-    case 'openCreate':
-      return openCreate(state);
-    case 'openEdit':
-      return openEdit(state, matcher);
-    case 'draftChanged':
-      return state.editor === null
-        ? state
-        : {
-            ...state,
-            editor: {
-              ...state.editor,
-              draft: { ...state.editor.draft, [action.field]: action.text },
-            },
-          };
-    case 'moveEditorBaseline': {
-      const { editor } = state;
-      const isSavingEditor =
-        editor !== null &&
-        editor.path === action.path &&
-        editor.baseline?.title === action.title;
-      return isSavingEditor
-        ? { ...state, editor: { ...editor, baseline: action.baseline } }
-        : state;
+    case 'toggleChunkedHidden':
+      return reselect(
+        state,
+        replaceStripCursor(state, {
+          ...state,
+          isChunkedHidden: !state.isChunkedHidden,
+        }),
+        matcher,
+      );
+    case 'toggleStaleFirst':
+      return reselect(
+        state,
+        { ...state, isStaleFirst: !state.isStaleFirst },
+        matcher,
+      );
+    case 'toggleMark':
+      return toggleMark(state, matcher);
+    case 'clearMarks':
+      return state.marked.length === 0 ? state : { ...state, marked: [] };
+    case 'stripMove':
+      return stripMove(state, action.by);
+    case 'stripSelect': {
+      const isCell =
+        action.chunkId === null ||
+        shownChunks(state).some((chunk) => chunk.id === action.chunkId);
+      return isCell ? { ...state, stripCursor: action.chunkId } : state;
     }
-    case 'closeEditor':
-      return state.editor === null
-        ? state
-        : { ...state, editor: null, confirm: null, focus: 'items' };
-    case 'askDelete': {
-      const row = actedFollowup(state, matcher);
-      const home = openHome(state);
-      if (row === null || home === null || state.editor !== null) {
-        return state;
-      }
-      return {
-        ...state,
-        confirm: {
-          kind: 'delete',
-          homeRoot: home.root,
-          path: row.path,
-          title: row.item.title,
-        },
-      };
-    }
-    case 'askDiscard':
-      return state.editor === null
-        ? state
-        : { ...state, confirm: { kind: 'discard' } };
-    case 'dismissConfirm':
-      return state.confirm === null ? state : { ...state, confirm: null };
+    case 'toggleCommits':
+      return { ...state, isCommitsShown: !state.isCommitsShown };
   }
 }
 
-function followupKey(path: string, title: string): string {
-  return `followup:${path}#${title}`;
-}
-
-function docKey(path: string): string {
-  return `doc:${path}`;
-}
-
-function taskRows(
-  tasks: readonly BacklogTask[],
-  isExpanded: boolean,
-): BacklogRow[] {
-  if (!isExpanded) {
-    return [];
+function chunksByKey(
+  chunks: readonly BacklogChunk[],
+): Map<RowKey, BacklogChunk> {
+  const byKey = new Map<RowKey, BacklogChunk>();
+  for (const chunk of chunks) {
+    for (const title of chunk.titles) {
+      byKey.set(rowKey(chunk.repo, title), chunk);
+    }
   }
-  return tasks.map((task) => ({ kind: 'task', key: docKey(task.path), task }));
+  return byKey;
+}
+
+// `1 commit`, `2 commits`.
+function counted(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
 function clampIndex(index: number, count: number): number {
@@ -517,7 +487,8 @@ function clampIndex(index: number, count: number): number {
 }
 
 // Keeps `next`'s selection when its row still shows; else selects the row
-// now at the selected row's place in `previous`, clamped, or nothing.
+// now at the selected row's place in `previous`, clamped, or nothing. With
+// nothing selected, the review gives focus back to the table.
 function reselect(
   previous: BacklogState,
   next: BacklogState,
@@ -531,92 +502,83 @@ function reselect(
     (row) => row.key === previous.selectedKey,
   );
   const index = clampIndex(Math.max(previousIndex, 0), rows.length);
-  return { ...next, selectedKey: rows[index]?.key ?? null };
+  const selectedKey = rows[index]?.key ?? null;
+  const isReviewEmptied = selectedKey === null && next.focus === 'review';
+  return {
+    ...next,
+    selectedKey,
+    focus: isReviewEmptied ? 'table' : next.focus,
+  };
 }
 
-// Selects the visible follow-up titled `pendingSelect` and clears it; with
-// none showing, `pendingSelect` waits for the next load.
-function selectPending(
-  state: BacklogState,
-  matcher: FuzzyMatcher,
+// Keeps `next`'s strip cursor while a shown chunk holds it; else puts it on
+// the shown chunk at its place in `previous`, clamped, or on the New chunk
+// cell. The New chunk cell stays where it is.
+function replaceStripCursor(
+  previous: BacklogState,
+  next: BacklogState,
 ): BacklogState {
-  const found = visibleRows(state, matcher).find(
-    (row) => row.kind === 'followup' && row.item.title === state.pendingSelect,
+  if (next.stripCursor === null) {
+    return next;
+  }
+  const chunks = shownChunks(next);
+  if (chunks.some((chunk) => chunk.id === next.stripCursor)) {
+    return next;
+  }
+  const previousIndex = shownChunks(previous).findIndex(
+    (chunk) => chunk.id === previous.stripCursor,
   );
-  return found === undefined
-    ? state
-    : { ...state, selectedKey: found.key, pendingSelect: null };
+  const index = clampIndex(Math.max(previousIndex, 0), chunks.length);
+  return { ...next, stripCursor: chunks[index]?.id ?? null };
 }
 
-// The open home stays open while the read still holds it; the side bar's
-// cursor stays on its home, else on its place, clamped. A pending follow-up
-// is selected when the read holds it, and is cleared either way.
+function keysHeld(state: BacklogState, keys: readonly RowKey[]): RowKey[] {
+  const held = new Set<RowKey>(allRows(state).map((row) => row.key));
+  return keys.filter((key) => held.has(key));
+}
+
+// Keeps the selection by key, else at its place; drops the marks no row
+// holds.
 function loaded(
   state: BacklogState,
   read: BacklogRead,
   matcher: FuzzyMatcher,
 ): BacklogState {
-  const cursorRoot = orderedHomes(state)[state.homeCursor]?.root ?? null;
   const next: BacklogState = {
     ...state,
     homes: read.homes,
     message: read.message,
     isLoaded: true,
   };
-  const homes = orderedHomes(next);
-  const cursorIndex = homes.findIndex((home) => home.root === cursorRoot);
-  next.homeCursor = clampIndex(
-    cursorIndex === -1 ? state.homeCursor : cursorIndex,
-    homes.length,
-  );
-  const isOpenHomeGone = state.openRoot !== null && openHome(next) === null;
-  if (isOpenHomeGone) {
-    return {
-      ...next,
-      openRoot: null,
-      selectedKey: null,
-      pendingSelect: null,
-      focus: state.editor === null ? 'homes' : state.focus,
-    };
-  }
   const reselected = reselect(state, next, matcher);
-  if (state.pendingSelect === null) {
-    return reselected;
-  }
-  return { ...selectPending(reselected, matcher), pendingSelect: null };
+  return { ...reselected, marked: keysHeld(reselected, state.marked) };
 }
 
-// Puts `place` back over the loaded homes. A saved open home no home holds
-// opens none, with focus on the homes; a saved row no shown row holds selects
-// the first; the detail takes focus only with a row selected.
+// Puts `place` back over the loaded homes. A repo no row holds filters
+// nothing; a saved row no shown row holds selects the first.
 function placeRestored(
   state: BacklogState,
   place: BacklogPlace,
   matcher: FuzzyMatcher,
 ): BacklogState {
-  const homes = orderedHomes(state);
-  const isOpenRootHeld = homes.some((home) => home.root === place.openRoot);
+  const isRepoHeld = place.repo !== null && repos(state).includes(place.repo);
   const next: BacklogState = {
     ...state,
-    homeCursor: clampIndex(place.homeCursor, homes.length),
-    openRoot: isOpenRootHeld ? place.openRoot : null,
-    expanded: place.expanded,
+    repo: isRepoHeld ? place.repo : null,
     filter: place.filter,
-    pendingSelect: null,
+    isReadyOnly: place.isReadyOnly,
+    isChunkedHidden: place.isChunkedHidden,
+    isStaleFirst: place.isStaleFirst,
+    isDoneShown: place.isDoneShown,
+    marked: keysHeld(state, place.marked),
+    focus: 'table',
   };
   const rows = visibleRows(next, matcher);
   const isSelectedShown = rows.some((row) => row.key === place.selectedKey);
   const selectedKey = isSelectedShown
     ? place.selectedKey
     : (rows[0]?.key ?? null);
-  const restored: BacklogState = {
-    ...next,
-    selectedKey,
-    focus: next.openRoot === null ? 'homes' : 'items',
-  };
-  return place.focus === 'detail'
-    ? focusOn(restored, 'detail', matcher)
-    : { ...restored, focus: next.openRoot === null ? 'homes' : place.focus };
+  return { ...next, selectedKey };
 }
 
 function move(
@@ -624,25 +586,7 @@ function move(
   to: 'down' | 'up' | 'top' | 'bottom',
   matcher: FuzzyMatcher,
 ): BacklogState {
-  const step = (index: number, count: number): number => {
-    switch (to) {
-      case 'down':
-        return clampIndex(index + 1, count);
-      case 'up':
-        return clampIndex(index - 1, count);
-      case 'top':
-        return 0;
-      case 'bottom':
-        return count - 1;
-    }
-  };
-  if (state.focus === 'homes') {
-    const count = orderedHomes(state).length;
-    return count === 0
-      ? state
-      : { ...state, homeCursor: step(state.homeCursor, count) };
-  }
-  if (state.focus !== 'items') {
+  if (state.focus !== 'table') {
     return state;
   }
   const rows = visibleRows(state, matcher);
@@ -650,189 +594,53 @@ function move(
     return state;
   }
   const index = rows.findIndex((row) => row.key === state.selectedKey);
-  return { ...state, selectedKey: rows[step(index, rows.length)].key };
-}
-
-// Opens `root` with focus on its rows; reopening the open home keeps its
-// selection, and a newly opened home selects its first row.
-function openHomeAt(
-  state: BacklogState,
-  root: string,
-  matcher: FuzzyMatcher,
-): BacklogState {
-  const homes = orderedHomes(state);
-  const index = homes.findIndex((home) => home.root === root);
-  if (index === -1) {
-    return state;
-  }
-  if (state.openRoot === root) {
-    return { ...state, homeCursor: index, focus: 'items' };
-  }
-  const next: BacklogState = {
-    ...state,
-    homeCursor: index,
-    openRoot: root,
-    focus: 'items',
-    filter: '',
-    expanded: [],
+  const step = (): number => {
+    switch (to) {
+      case 'down':
+        return clampIndex(index + 1, rows.length);
+      case 'up':
+        return clampIndex(index - 1, rows.length);
+      case 'top':
+        return 0;
+      case 'bottom':
+        return rows.length - 1;
+    }
   };
-  return { ...next, selectedKey: visibleRows(next, matcher)[0]?.key ?? null };
+  return { ...state, selectedKey: rows[step()].key };
 }
 
-function setExpanded(
-  state: BacklogState,
-  path: string,
-  isExpanded: boolean,
-): BacklogState {
-  const others = state.expanded.filter((each) => each !== path);
-  return { ...state, expanded: isExpanded ? [...others, path] : others };
-}
-
-function expandablePath(row: BacklogRow): string | null {
-  if (row.kind === 'plan') {
-    return row.plan.path;
-  }
-  return row.kind === 'feature' ? row.feature.path : null;
-}
-
-// Opens the side bar's cursor home with focus on its rows.
-function openCursorHome(
-  state: BacklogState,
-  matcher: FuzzyMatcher,
-): BacklogState {
-  const home = orderedHomes(state)[state.homeCursor];
-  return home === undefined ? state : openHomeAt(state, home.root, matcher);
-}
-
-// `l`: on the homes, opens the cursor home, focus staying on the homes. On a
-// row: a collapsed plan or feature expands, an expanded one steps to its
-// first task, and any other row, or one with no tasks, moves focus to the
-// detail.
-function openOrStepIn(
-  state: BacklogState,
-  matcher: FuzzyMatcher,
-): BacklogState {
-  if (state.focus === 'homes') {
-    const opened = openCursorHome(state, matcher);
-    return opened === state ? state : { ...opened, focus: 'homes' };
-  }
-  const row = selectedRow(state, matcher);
-  if (state.focus !== 'items' || row === null) {
-    return state;
-  }
-  const path = expandablePath(row);
-  if (path === null || hasNoTasks(row)) {
-    return focusOn(state, 'detail', matcher);
-  }
-  if (!state.expanded.includes(path)) {
-    return setExpanded(state, path, true);
-  }
-  const rows = visibleRows(state, matcher);
-  const firstTask = rows[rows.findIndex((each) => each.key === row.key) + 1];
-  return firstTask?.kind === 'task'
-    ? { ...state, selectedKey: firstTask.key }
-    : state;
-}
-
-function hasNoTasks(row: BacklogRow): boolean {
-  if (row.kind === 'plan') {
-    return row.plan.tasks.length === 0;
-  }
-  return row.kind === 'feature' && row.feature.tasks.length === 0;
-}
-
-// Enter: on the homes, opens the cursor home and focuses its rows. On a plan
-// or feature, expands or collapses its task rows; on any other row, moves
-// focus to the detail.
-function toggle(state: BacklogState, matcher: FuzzyMatcher): BacklogState {
-  if (state.focus === 'homes') {
-    return openCursorHome(state, matcher);
-  }
-  const row = selectedRow(state, matcher);
-  if (state.focus !== 'items' || row === null) {
-    return state;
-  }
-  const path = expandablePath(row);
-  if (path === null) {
-    return focusOn(state, 'detail', matcher);
-  }
-  return setExpanded(state, path, !state.expanded.includes(path));
-}
-
-// Focus moves to the homes from the rows or the detail, the cursor on the
-// open home.
-function focusHomes(state: BacklogState): BacklogState {
-  if (state.focus === 'homes') {
-    return state;
-  }
-  const index = orderedHomes(state).findIndex(
-    (home) => home.root === state.openRoot,
-  );
-  return {
-    ...state,
-    focus: 'homes',
-    homeCursor: index === -1 ? state.homeCursor : index,
-  };
-}
-
-// The detail takes focus only with a row selected.
+// The review takes focus only with a row selected.
 function focusOn(
   state: BacklogState,
   focus: BacklogFocus,
   matcher: FuzzyMatcher,
 ): BacklogState {
-  if (focus === 'detail' && selectedRow(state, matcher) === null) {
+  if (focus === 'review' && selectedRow(state, matcher) === null) {
     return state;
   }
   return state.focus === focus ? state : { ...state, focus };
 }
 
-const EMPTY_DRAFT: DraftTexts = { title: '', oneLine: '', tags: '', body: '' };
-
-// A create goes to the create target of the acted home's repo.
-function openCreate(state: BacklogState): BacklogState {
-  const acted = actedHome(state);
-  if (acted === null || state.editor !== null) {
+function toggleMark(state: BacklogState, matcher: FuzzyMatcher): BacklogState {
+  const row = state.focus === 'table' ? selectedRow(state, matcher) : null;
+  if (row === null) {
     return state;
   }
-  const target = state.homes.find(
-    (home) => home.repo === acted.repo && home.isCreateTarget,
-  );
-  if (target === undefined) {
-    return state;
-  }
-  return {
-    ...state,
-    focus: 'detail',
-    editor: {
-      kind: 'create',
-      homeRoot: target.root,
-      path: null,
-      baseline: null,
-      initial: EMPTY_DRAFT,
-      draft: EMPTY_DRAFT,
-    },
-  };
+  const marked = state.marked.includes(row.key)
+    ? state.marked.filter((key) => key !== row.key)
+    : [...state.marked, row.key];
+  return { ...state, marked };
 }
 
-function openEdit(state: BacklogState, matcher: FuzzyMatcher): BacklogState {
-  const row = actedFollowup(state, matcher);
-  const home = openHome(state);
-  if (row === null || home === null || state.editor !== null) {
-    return state;
-  }
-  const { title, oneLine, tags, body } = row.item;
-  const texts: DraftTexts = { title, oneLine, tags: tags.join(', '), body };
-  return {
-    ...state,
-    focus: 'detail',
-    editor: {
-      kind: 'edit',
-      homeRoot: home.root,
-      path: row.path,
-      baseline: { title, oneLine, tags, body },
-      initial: texts,
-      draft: texts,
-    },
-  };
+// Steps over the strip's cells, the shown chunks then the New chunk cell,
+// clamped at each end.
+function stripMove(state: BacklogState, by: 1 | -1): BacklogState {
+  const cells: (string | null)[] = [
+    ...shownChunks(state).map((chunk) => chunk.id),
+    null,
+  ];
+  const index = cells.indexOf(state.stripCursor);
+  const from = index === -1 ? cells.length - 1 : index;
+  const stripCursor = cells[clampIndex(from + by, cells.length)];
+  return stripCursor === state.stripCursor ? state : { ...state, stripCursor };
 }
