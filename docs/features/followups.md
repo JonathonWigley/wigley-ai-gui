@@ -233,6 +233,12 @@ Defects seen in a drive run, a transcript or the user's own use.
   close queues it (`afterClose` in `retro-queue.ts`). Fix: the post-close selection skips rows a plugin section
   claims, falling to the next row outside a claimed section. Add a row to the session-list tests: GIVEN a selected
   row with a claimed row beside it WHEN the selected row closes THEN the selection lands on an unclaimed row.
+- **The right bar overlays the main cell at a narrow window** — *agent-ready*: at a narrow window the shell's right
+  bar (`.shell-right-bar`, System stats; `src/renderer/shell/shell.css`, `shell-layout.ts`) overlays the mode's main
+  cell instead of stacking under it or hiding. At the 420px minimum it covers the right half of Backlog (seen at x 220,
+  200 wide, in the backlog launcher's live check), so the filter bar is cut off. `fit` does not report the overlap, only
+  truncated cells. Fix: below the width the main cell needs, the right bar stacks or hides, as a split's stacked panes
+  do; add an overlap check to `fit`.
 
 ## Harness seams
 

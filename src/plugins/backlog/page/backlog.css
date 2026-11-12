@@ -18,28 +18,28 @@
   height: 100%;
 }
 
-/* Stacked, with both panes shown, the table takes a fixed share of the height
-   and the review the rest, and the Backlog area takes the larger share over
-   the assistant. The `.ui-split` prefix outranks the shared split's stacked
-   rows whatever order the sheets load in. */
+/* Stacked, with both panes shown, the table takes the larger share of the
+   height (3fr over the review's 2fr) and the Backlog area takes the larger
+   share (2fr over the assistant's 1fr). The `.ui-split` prefix outranks the
+   shared split's stacked rows whatever order the sheets load in. */
 .ui-split.backlog-table-split.is-stacked:not(.is-start-hidden, .is-end-hidden) {
-  grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
 }
 
 .ui-split.backlog-assistant-split.is-stacked:not(
     .is-start-hidden,
     .is-end-hidden
   ) {
-  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
 }
 
 @media (max-width: 640px) {
   .ui-split.backlog-table-split:not(.is-start-hidden, .is-end-hidden) {
-    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   }
 
   .ui-split.backlog-assistant-split:not(.is-start-hidden, .is-end-hidden) {
-    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
   }
 }
 
