@@ -1,6 +1,6 @@
 # 06 — Backlog chunks and starts
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses plugin data (one serial writer), chat's `launch` and its `sessionClosed` lifecycle, and removes main code the page still compiles against
 Wave: 3 · Depends on: 05

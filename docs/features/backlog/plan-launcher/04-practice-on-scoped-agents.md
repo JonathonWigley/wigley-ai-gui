@@ -1,6 +1,6 @@
 # 04 — Practice on scoped agents: the interviewer becomes a registration
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses main and page through the interviewer's lifetime, and keeps it in `progress.json` through a new store adapter
 Wave: 3 · Depends on: 02, 03

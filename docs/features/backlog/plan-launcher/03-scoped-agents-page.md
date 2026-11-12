@@ -1,6 +1,6 @@
 # 03 — Scoped agents page: the agent pane, its layout and its keys
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · async pane lifecycle across page and main: in-flight asks and reads against scope changes, and a key
 hand-off with a host
@@ -258,3 +258,5 @@ script: Practice still draws its own pane until 04. The live checks of the pane 
 Commit: one commit for the group
 
 ## Proof
+
+Commit e992d43bb · proof: diff read: createAgentPane/AgentPaneView/AgentPaneDeps, scopedAgentsPagePart, layout.d.ts types, readScopedAgentsLayout, createScopedAgentsKit, scoped-agents.ask binds, layouts owners row, main layout registration; wave 2 typecheck + lint pass after oxfmt 9fb5e5f46 · concerns: remount test row also expects the setScope/setFocusTarget/setResizeTarget events its setup records

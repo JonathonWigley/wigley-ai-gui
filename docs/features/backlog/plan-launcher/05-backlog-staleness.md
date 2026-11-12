@@ -1,6 +1,6 @@
 # 05 — Backlog staleness
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses git, the files service and plugin data through an async read queue and a cache keyed on two clones' HEADs
 Wave: 2 · Depends on: 01
@@ -296,3 +296,5 @@ of staleness in the page is `10-final-verification.md`'s. The backlog self-test 
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 5a5c5ccc8 · proof: diff read: RowKey/rowKey, RepoFolderSetting, BacklogHome.repoFolder, BacklogStaleness, staleness/commitsSince invokes, stalenessRead message, namedPaths/itemAnchor/stalenessOf/createStalenessReader; wave 2 typecheck + lint pass after oxfmt 9fb5e5f46 · concerns: a path or repo folder spelled through a symlink while git reports the real path reads as unknown/no history (no realPath in the reader); a cached read still asks git for each clone's HEAD; homes.ts HomeShape and five test literals (backlog page x3, notes main x2) edited outside Files for the new repoFolder field

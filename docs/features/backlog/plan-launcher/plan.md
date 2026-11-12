@@ -284,8 +284,8 @@ beyond its `contract.ts`.
 - [x] [Scoped agents main](02-scoped-agents-main.md)
 
 ### Wave 2
-- [ ] [Scoped agents page and layout](03-scoped-agents-page.md) — after 02
-- [ ] [Backlog staleness](05-backlog-staleness.md) — after 01
+- [x] [Scoped agents page and layout](03-scoped-agents-page.md) — after 02
+- [x] [Backlog staleness](05-backlog-staleness.md) — after 01
 
 ### Wave 3
 - [ ] [Practice on scoped agents](04-practice-on-scoped-agents.md) — after 02, 03
@@ -308,6 +308,8 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 ### Groups
 - 01 · hard · 2c7ae1554 · diff read: firstAdded on Git and createProcessGit as specified, both full fakes updated, six tests; wave 1 typecheck + lint pass after fix 8bd73679b (octal escape) · concerns: dash test's toContain('-S--x') repeats the helper
 - 02 · deep · c76441063 · diff read: contract names word for word, manifest, service exports HOST_ID_WAIT_MS/ScopedAgentServiceDeps/ScopedAgentService/createScopedAgentService, main part, manifests/main/PLUGIN_EXTRAS; wave 1 typecheck + lint pass after fix 8bd73679b (LaunchRequest narrowing in a test, oxfmt) · concerns: oxfmt hand-formatting; timeout cases attach rejects after advancing timers (watch for unhandled rejection at the test gate); scope-collision test relies on vi.waitFor polling under fake timers; page commands/scope/layout setting declared with no handler until 03
+- 03 · deep · e992d43bb · diff read: createAgentPane/AgentPaneView/AgentPaneDeps, scopedAgentsPagePart, layout.d.ts types, readScopedAgentsLayout, createScopedAgentsKit, scoped-agents.ask binds, layouts owners row, main layout registration; wave 2 typecheck + lint pass after oxfmt 9fb5e5f46 · concerns: remount test row also expects the setScope/setFocusTarget/setResizeTarget events its setup records
+- 05 · deep · 5a5c5ccc8 · diff read: RowKey/rowKey, RepoFolderSetting, BacklogHome.repoFolder, BacklogStaleness, staleness/commitsSince invokes, stalenessRead message, namedPaths/itemAnchor/stalenessOf/createStalenessReader; wave 2 typecheck + lint pass after oxfmt 9fb5e5f46 · concerns: a path or repo folder spelled through a symlink while git reports the real path reads as unknown/no history (no realPath in the reader); a cached read still asks git for each clone's HEAD; homes.ts HomeShape and five test literals (backlog page x3, notes main x2) edited outside Files for the new repoFolder field
 ### Contract changes
 - scoped-agents contract.ts comments: trailing aligned comments → each on its own line above its member (oxfmt 80 columns); the block's '// Channel:' comment → the ScopedAgentsChannel interface · why: oxfmt --check · consumers: 03, 04, 07, 08 (no name or type changed) · group 02
 ### Rulings
@@ -315,5 +317,11 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - A handle is live only while the registry holds that same registration object; a disposed handle's ask/sessionOf reject and its second dispose leaves a re-added pair alone — costs a stale handle silently failing if a host keeps one · group 02 · group 02
 - A store.write(scope, null) rejection after a refused resume rejects sessionOf and ask (practice's behaviour unchanged) — the plan names no case — costs a store failure there surfacing as an ask error rather than a launch · group 02 · group 02
 - Lead ran oxfmt --write (formatter only, no oxlint --fix) on three files the wave 1 lint flagged, docs/keymap.md among them (pre-existing from the docs-written-ahead commit) — tooling, behaviour-preserving — none · lead
+- Hiding the pane while it holds the keys runs leave() then releases them, as modeHidden does — symmetric with mode hide — costs a host that wanted keys kept on hide · group 03 · group 03
+- refresh() re-holds the keys only when the answer changed what shows, leaving the caret alone — avoids stealing focus on a sweep — costs a stale caret if the host expected focus · group 03 · group 03
+- The page part's held-keys record is cleared only by the pane recorded, so one pane giving up keys cannot wipe another's — costs nothing known · group 03 · group 03
+- A ~ in a repoFolders entry expands against the home folder with its links resolved — matches how home roots compare — costs a mismatch only if the user expects the unresolved path · group 05 · group 05
+- repoFolders setting changes are detected with isSameJson, as chat does, and send changed with homeRoot null — costs nothing known · group 05 · group 05
+- commitsSince counts by filtering the latest 100 commits on writtenAt rather than stopping at the first older one — robust to non-monotonic dates — costs reading the full 100 each time · group 05 · group 05
 ### Review rounds
 ### Test gate
