@@ -2,7 +2,6 @@
 
 **Contents**
 
-- **Status** — planned, not built.
 - **What a scoped agent is** — an owned chat session per scope, and who uses one.
 - **Registration** — the spec, the owner, the store seam and its two adapters.
 - **Lifetime** — first ask, later asks, resume, a refused resume, the superseded close, `/clear`.
@@ -16,13 +15,6 @@ A scoped agent is a chat session a plugin owns for one scope of its own, such as
 Backlog. The `scoped-agents` plugin holds the mechanics every such agent shares, so a tool that wants an agent beside
 its view registers one and writes no session code. Practice's interviewer and Backlog's assistant are its two
 registrations.
-
-## Status
-
-Planned in `backlog/plan-launcher`, not built yet. Every behaviour below is the design the code will follow. Today
-the same mechanics live inside Practice (`src/plugins/practice/main/practice-sessions.ts` and
-`src/plugins/practice/page/interviewer-pane.ts`, `docs/features/practice/design.md` § The interviewer). The plan's
-doc re-read task checks each line against the landed code and removes this notice.
 
 ## What a scoped agent is
 

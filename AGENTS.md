@@ -351,38 +351,37 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  bar, and as a split of tree and page in each view `addView` hands out, the `docs-session-tab` plugin's
                  session tab among them), layouts/ (the docs Layout contract and the built-in `default` layout);
                  `docs/features/docs-browser/design.md`, `docs/features/docs-wiki/design.md`
-  backlog/       (the launcher planned in `backlog/plan-launcher`, not built yet; until it lands the mode is a per-home
-                 browser with a follow-up editor, delete, tags, Commit, a homes side bar and plans and features views)
-                 manifest.ts, contract.ts, main/ (the follow-up files of every features home, read through docs' index,
-                 file watching, each item's images under the home's `followups-images/`, the `load`, `tags` and
-                 `fileNote` it exports to notes, each item's git staleness through `Git.log` and `Git.firstAdded`
-                 cached in plugin data, each repo's folder (the in-repo path, else the `repoFolders` setting), the
-                 chunk store in plugin data and its one writer, chunk starts through chat's `launch` and their retiring
-                 on `sessionClosed` or once chat no longer holds the session, the assistant's scoped-agents
-                 registration, its `assistant.json` store, the sweep, and its `read_backlog_state` and
-                 `set_backlog_chunks` tools), page/ (Backlog mode: the filter bar, one table of
-                 every repo's follow-ups, the review pane, the chunk strip, the assistant pane through scoped-agents'
-                 `addAgentPane`), layouts/ (the backlog Layout contract and the built-in `default` layout);
+  backlog/       manifest.ts, contract.ts, row-key.ts (`rowKey`, shared by main and the page), ready.ts (`AGENT_READY`,
+                 `isReady`), main/ (homes.ts, the follow-up files of every features home read through docs' index,
+                 with file watching; rows.ts, one row per item; note-images.ts, each item's images under the home's
+                 `followups-images/`; followup-writes.ts, the `load`, `tags` and `fileNote` it exports to notes;
+                 staleness.ts, each item's git staleness through `Git.log` and `Git.firstAdded`, cached in plugin data;
+                 repo-folder.ts, each repo's folder (the in-repo path, else the `repoFolders` setting); chunk-store.ts,
+                 the chunks in plugin data and their one writer; chunk-message.ts, a chunk's first message;
+                 chunk-start.ts, starts through chat's `launch` and retiring on `sessionClosed` or once chat no longer
+                 holds the session; assistant.ts, the assistant's scoped-agents registration, its `assistant.json`
+                 store and the sweep message; backlog-tools.ts, the `read_backlog_state` and `set_backlog_chunks`
+                 tools; drive-actions.ts and the self-test's fixture and script), page/ (Backlog mode: backlog-state.ts,
+                 the pure view state; backlog-view.ts, the filter bar, one table of every repo's follow-ups, the review
+                 pane, the chunk strip and the assistant pane through scoped-agents' `addAgentPane`; layout/, the layout
+                 reader and kit), layouts/ (the backlog Layout contract and the built-in `default` layout);
                  `docs/features/backlog/design.md`
   practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge
                  that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress and
                  the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import session
                  through chat's `launch`, the interviewer as a scoped-agents registration with its `progress.json`
-                 store (planned in `backlog/plan-launcher`, not built yet; today `practice-sessions.ts` runs it through
-                 chat's `launch` and `resume`), a `problems/` watch started at the first list, the self-test's script
+                 store (`interviewer-agent.ts`; `practice-sessions.ts` runs the import session only), a `problems/` watch started at the first list, the self-test's script
                  and its `writeFixture` drive action), page/ (Practice mode: the problem list in the side bar, the
-                 stacked problem pane, editor and console, the interviewer pane through scoped-agents' `addAgentPane`
-                 (planned, as above; today `interviewer-pane.ts` mounts chat's `mountChat`), the import box), layouts/
+                 stacked problem pane, editor and console, the interviewer pane through scoped-agents' `addAgentPane`, the import box), layouts/
                  (the practice Layout contract and the built-in `default` layout); `docs/features/practice/design.md`
-  scoped-agents/ (planned in `backlog/plan-launcher`, not built yet; `docs/features/scoped-agents/design.md`)
-                 manifest.ts, contract.ts, main/ (owned chat sessions keyed by owner, agent id and scope, registered
+  scoped-agents/ manifest.ts, contract.ts, main/ (owned chat sessions keyed by owner, agent id and scope, registered
                  through `addScopedAgent` with the owner's manifest id and a store adapter each: launched on the
                  first ask through chat's `launch`, resumed through chat's `resume`, the superseded row closed, chat's
                  `sessionOpened`, `sessionClosed` and `sessionCleared` heard once for every registration, `scopeOf`
                  for each owner's tool check), page/ (the agent pane `addAgentPane` hands out: the ask box until the
                  first message, then the session's chat view through chat's `mountChat`; the `scoped-agents.ask`
                  keys), layouts/ (the scoped-agents Layout contract with its `askBox` part and the built-in `default`
-                 layout)
+                 layout); `docs/features/scoped-agents/design.md`
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
                  `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
                  start_session and set_headless MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
@@ -392,7 +391,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
-                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to practice, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to practice, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
+                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to scoped-agents, `launch` and `defaultProfile` to practice (its import session), `launch`, `defaultProfile`, `profileOf` and `restored` (settles once chat's restore of saved sessions has run) to backlog, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to scoped-agents, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the leader search (`leader-search.ts`), the title bar's Keys button, and the placement check over the core's anchors), layouts/
@@ -689,9 +688,9 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
   A **row with an owner** — opened with an `owner`, the plugin it belongs to; not the "owned session" of `open` — has
   no place in the side bar, the next and previous session keys or the pane tree: it shows only where its owner mounts
-  its chat view through chat's `mountChat` (Practice's interviewer, `docs/features/practice/design.md`). The start
+  its chat view through chat's `mountChat` (Practice's interviewer and Backlog's assistant, both through scoped-agents, `docs/features/scoped-agents/design.md`). The start
   prompt's saved sessions leave out a session on such a row, and a `resume` whose `owner` differs from the held row's
-  (no owner counting as one) rejects; Practice then launches a fresh interviewer.
+  (no owner counting as one) rejects; scoped-agents then launches a fresh session.
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
@@ -753,7 +752,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the pushed scope, or move focus behind it. **The outer panes** are the
   panes around the view, handed over by the mode that tiles them with `api.panes.setOuterPanes({ focus, resize })`
   and kept across scope changes until that mode sets null (Sessions mode's chat panes and Practice's interviewer
-  pane, each set while its mode shows). A
+  pane and Backlog's assistant pane, each set while its mode shows). A
   view never binds `Alt+hjkl` itself: the key engine cannot hold a key in one scope and in `any` both. The split core draws each handle's
   resize prompt (`⌥⇧H ◂ ▸ ⌥⇧L`, shown on hover, during a drag and for a moment after a nudge) through the anchor
   function it is given: a view passes its `keys.anchor`, the shell anchors the side bar handle's prompt through the

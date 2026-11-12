@@ -2,7 +2,6 @@
 
 **Contents**
 
-- **Status** — which parts are built and which are planned.
 - **Scope** — what Backlog covers, what counts as wigley-written, and what stays out.
 - **The mode** — the plugin, the page's panes, its scopes, settings and keys.
 - **Follow-ups** — reading, watching, done items, images.
@@ -17,33 +16,21 @@ Backlog is the place the user reviews follow-ups across every repo, sees whether
 chunks of one session's work, and starts those sessions. Backlog reads and starts; every edit to a follow-up file
 goes through the assistant, a chat beside the table. A decision here stands unless the user changes it.
 
-## Status
-
-The launcher is planned in `backlog/plan-launcher`, not built yet: the table, the filters, the review pane,
-staleness, chunks, the assistant and the keys below describe the design the code will follow. The built Backlog
-today is a per-home browser with a follow-up editor, delete, tags, Commit, a homes side bar, and plans and features
-views; the plan removes all of them. The plan's doc re-read task checks each line against the landed code and
-removes this notice. § Scope, § Follow-ups, § Tags and § Seams describe the code as it is, apart from the lines
-marked there.
-
 ## Scope
 
-- Backlog shows the follow-ups the user's wigley workflows wrote, from every repo in one table (planned in
-  `backlog/plan-launcher`, not built yet; the built mode also shows plans and primed features, per home).
+- Backlog shows the follow-ups the user's wigley workflows wrote, from every repo in one table.
 - Wigley-written means a features home's follow-up files (`~/wigley-agents/AGENTS.md` § Features):
   `<home>/followups.md` and `<home>/followups/*.md`. A repo's own `docs/followups/*.md` is team-repo content and stays
   out, though the docs index lists it.
 - Old files whose shape hid their items (the gui and harness follow-up files) were converted to the list shape.
   Backlog and the docs index read each file in its own shape.
-- Out of scope once the launcher lands: plans and primed features, chunking a follow-up at the time a skill writes it, and an agent-run
+- Out of scope: plans and primed features, chunking a follow-up at the time a skill writes it, and an agent-run
   staleness check per item.
 
 ## The mode
 
-Planned in `backlog/plan-launcher`, not built yet.
-
 - The `backlog` plugin has a main part, a page part and a layout (`backlog.layout`). Main depends on `docs`, `chat`,
-  `sessions` and `scoped-agents`; the page depends on `docs`, `chat` and `scoped-agents`.
+  `sessions` and `scoped-agents`; the page depends on `docs` and `scoped-agents` and reads `sessions`.
 - The mode registers no side bar. `Space k b` shows Backlog; pressed again while Backlog shows, it does nothing.
   `Alt+h` at the table's left edge reaches no side bar.
 - The page holds four panes. The table and the review pane sit side by side, the chunk strip under both, and the
@@ -114,8 +101,7 @@ Planned in `backlog/plan-launcher`, not built yet.
 - Backlog parses each follow-up file itself through the shared module (`src/shared/followups/`). The docs index
   supplies which files exist and their repo and home.
 - A repo normally has one features home. A stray second home (an in-repo `docs/features/` and a
-  `~/wigley-features/<repo>/`) adds its rows under the same repo (planned in `backlog/plan-launcher`, not built
-  yet; when two items share a repo and title, the first one read keeps the row). A home that is a linked git worktree's
+  `~/wigley-features/<repo>/`) adds its rows under the same repo (when two items share a repo and title, the first one read keeps the row). A home that is a linked git worktree's
   (`git worktree add`) own `docs/features/` is not listed: it is a second checkout of a clone's own home.
 - Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.
 - Done items (struck through, or one line starting `shipped`) are hidden until `Space v d` shows them. An empty table
@@ -133,12 +119,9 @@ Planned in `backlog/plan-launcher`, not built yet.
   `##` sections the span is read from the item's Contents line only, and `_a, b_:` reads like `*a, b*:`.
 - The `tags` setting, defaulting to `agent-ready` and `needs a feature plan`, is the list the notes popup offers
   through Backlog main's `tags` export.
-- Skills tag each follow-up they write. The table's ready column shows `agent-ready` (planned in
-  `backlog/plan-launcher`, not built yet); the page changes no tag, and the assistant changes one on the user's ask.
+- Skills tag each follow-up they write. The table's ready column shows `agent-ready`; the page changes no tag, and the assistant changes one on the user's ask.
 
 ## The table and filters
-
-Planned in `backlog/plan-launcher`, not built yet.
 
 - One row per follow-up, across every repo: homes in load order grouped by repo, then file order, then item order.
   A row shows its repo, its task (the title and the one line), ready (`agent-ready`), its staleness level (`…` until
@@ -182,8 +165,6 @@ Planned in `backlog/plan-launcher`, not built yet.
 
 ## Staleness
 
-Planned in `backlog/plan-launcher`, not built yet.
-
 - Staleness is git-only, and main computes it. It runs no agent.
 - The signals, per open item:
   - `writtenAt`: the date of the commit that first added the item's title to its file, in the home's clone
@@ -212,8 +193,6 @@ Planned in `backlog/plan-launcher`, not built yet.
   a time and sends them in `stalenessRead` messages, ten rows to a message.
 
 ## Chunks
-
-Planned in `backlog/plan-launcher`, not built yet.
 
 - A chunk is a named group of follow-ups for one session: its id, repo, name, the item titles, a headless flag, and the
   session id once started. The strip shows the chunks in the order they were made (only the filtered repo's while a
@@ -252,8 +231,6 @@ Planned in `backlog/plan-launcher`, not built yet.
 
 ## The assistant
 
-Planned in `backlog/plan-launcher`, not built yet.
-
 - The assistant is one global scoped agent (`docs/features/scoped-agents/design.md`), agent id `assistant`, scope
   `global`, title `Backlog assistant`. It runs from the home folder under chat's default profile. Its store is
   `assistant.json` in Backlog's plugin data: it supersedes nothing, and an ask may launch at any time. Its
@@ -289,8 +266,7 @@ Planned in `backlog/plan-launcher`, not built yet.
   to the `notes` plugin, so every follow-up and image write in the app other than Docs' create dialog and the
   assistant's own edits goes through Backlog.
 - Git runs behind the `Git` contract (`src/contracts/git.ts`), with one adapter over ProcessRunner (`src/main/git/`).
-  Staleness reads through its `log` and `firstAdded` (`firstAdded` planned in `backlog/plan-launcher`, not built
-  yet). The Backlog self-test's fixture repo runs git through `services.processes`.
+  Staleness reads through its `log` and `firstAdded`. The Backlog self-test's fixture repo runs git through `services.processes`.
 - The follow-up format has two readers in two languages: the shared module here, and `docs_index.py`'s parser for
   agents and other index readers. Each is tested against the format triage.md gives; a change to the format changes
   both in the same piece of work.

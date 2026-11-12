@@ -59,7 +59,7 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
 | Surface | Image | Other file or folder |
 |---|---|---|
 | Chat composer | attached image, thumbnail above the box (shrunk to fit) | file chip |
-| Vim boxes (Form, Primer, Backlog editor, Notes body) | file chip | file chip |
+| Vim boxes (Form, Primer, Notes body) | file chip | file chip |
 | One-line inputs (settings rows, filters, dialogs) | plain path | plain path |
 | Docs editor | `![name](path)`, path relative to the doc | `[name](path)`, path relative to the doc |
 | Notes popup | its Images field, as today | file chip in its Body |

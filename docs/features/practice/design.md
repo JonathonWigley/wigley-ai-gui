@@ -27,10 +27,9 @@ notices), kept so the plan is written from them. A decision here stands unless t
 ## The mode
 
 - The `practice` plugin has a main part, a page part and a layout (`practice.layout`, contract
-  `src/plugins/practice/layouts/layout.d.ts`, built-in `default`), and adds Practice mode. Main depends on `chat` and
-  `sessions`; the page depends on `chat`. Planned in `backlog/plan-launcher`, not built yet: main also depends on
-  `scoped-agents` (the interviewer), and the page depends on `scoped-agents` alone, since its only use of `chat` was
-  `mountChat`.
+  `src/plugins/practice/layouts/layout.d.ts`, built-in `default`), and adds Practice mode. Main depends on `chat`,
+  `sessions` and `scoped-agents` (the interviewer); the page depends on `scoped-agents` alone, since its only use of
+  `chat` was `mountChat`.
 - **Side bar:** one flat list of every problem, sorted by status (attempted, then new, then solved), then difficulty
   (easy, medium, hard), then title. Each row shows the title, the difficulty, a status mark and a due mark when its
   review date has come. A header line counts solved of total for each difficulty. There is no Due section and no
@@ -74,17 +73,16 @@ notices), kept so the plan is written from them. A decision here stands unless t
   | `Ctrl-j` `Ctrl-k` `Ctrl-Shift-j` `Ctrl-Shift-k` | problem pane, console | scroll a line / half a page |
   | `y` `n` `Esc` | the Solution confirm (scope `practice.confirm`, pushed) | open the tab / keep solving |
   | `Space v i` | any | show or hide the interviewer pane; with Practice hidden and the pane shown, it only shows Practice |
-  | `Enter` / `Esc` | the interviewer's ask box (scope `practice.ask`; planned in `backlog/plan-launcher`, not built yet: `scoped-agents.ask`) | send the first message / leave the box |
+  | `Enter` / `Esc` | the interviewer's ask box (scope `scoped-agents.ask`) | send the first message / leave the box |
   | `⌥h` `⌥j` `⌥k` `⌥l` | core | move between the list, the problem pane, the editor, the console and the interviewer |
 
-  `practice.ask` is a base scope the view sets through `setScope`, so it sits in the `<C-n>` list beside the list,
+  `scoped-agents.ask` is a base scope the pane sets through `setScope`, so it sits in the `<C-n>` list beside the list,
   problem, editor and console scopes and is never pushed; `practice.box`, `practice.confirm` and `practice.import` are
   pushed over the base scope while their box or prompt is open. A click into the list or into a pane of the column
   hands that pane the keys.
 
-  Planned in `backlog/plan-launcher`, not built yet: the ask box's scope becomes `scoped-agents.ask`, which holds
-  `Enter`, `Esc`, `<C-n>`, `⌘'` and `⌘↩`, and `practice.ask` goes. Backlog's assistant box shares that scope, so Run
-  and Submit do nothing while Practice is hidden and log `run ignored: practice hidden` or
+  The ask box's scope, `scoped-agents.ask`, holds `Enter`, `Esc`, `<C-n>`, `⌘'` and `⌘↩`. Backlog's assistant box
+  shares that scope, so Run and Submit do nothing while Practice is hidden and log `run ignored: practice hidden` or
   `submit ignored: practice hidden`.
 
   The interviewer's mounted chat view holds chat's own keys, so there `⌘↩` sends the message and Run and Submit wait
@@ -215,11 +213,12 @@ notices), kept so the plan is written from them. A decision here stands unless t
   user could close. Asks for one problem run one at a time. A launch that gets no host session id from chat within
   two seconds is closed and fails; a failed read or mount of the interviewer shows an error toast and logs
   `interviewer not read <slug>` or `interviewer not mounted <slug>`.
-- **On scoped agents** (planned in `backlog/plan-launcher`, not built yet): the interviewer becomes a registration of
+- **On scoped agents:** the interviewer is a registration of
   the `scoped-agents` plugin (`docs/features/scoped-agents/design.md`), agent id `interviewer`, scope the problem's
-  slug, owner `practice` (passed in the spec), with no change in behaviour but one: an ask whose stored interviewer
+  slug, owner `practice` (passed in the spec; `main/interviewer-agent.ts`). One ask differs from the interviewer's
+  first design: an ask whose stored interviewer
   went away under it (the problem reopened as due between the ask's two reads) launches for the current attempt, in
-  place of today's `<slug> has no interviewer; ask again.` refusal. That plugin owns the shared mechanics above: the
+  place of a `<slug> has no interviewer; ask again.` refusal. That plugin owns the shared mechanics above: the
   launch, the resume, the cleared resume, the superseded close, `/clear`, one ask at a time, the two-second host id
   wait, the pane and its ask box. The pane's log lines move from `[practice]` to `[scoped-agents]` and name the agent
   (`[scoped-agents] interviewer ask box shown for <slug>`). Practice keeps what is its own:
@@ -233,8 +232,8 @@ notices), kept so the plan is written from them. A decision here stands unless t
   - `Space v i`, which with no problem open toasts `Open a problem first`, logs `interviewer needs an open problem`
     and opens nothing
   - `Alt+l` into the pane only from the problem column, never from the list
-  The ask box's scope becomes `scoped-agents.ask` in place of `practice.ask`, and the `askBox` layout part moves
-  to `scoped-agents`' layout. `practice-sessions.ts` keeps only the import session; `interviewer-pane.ts` goes.
+  The ask box's scope is `scoped-agents.ask`, and the `askBox` layout part lives in `scoped-agents`' layout.
+  `practice-sessions.ts` holds only the import session.
 - Talking to the interviewer is not a peek.
 - **Instructions:** built into the plugin; `interviewer.md` in the practice folder replaces them when present. They
   reach the harness as the session's own instructions, not as a message.

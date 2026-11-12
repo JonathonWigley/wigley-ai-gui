@@ -917,11 +917,11 @@ because the earlier items rewrite many of these tests anyway.
 - **The Sessions title wraps letter by letter at the least width** — *agent-ready*: the Sessions header title
   (`src/plugins/sessions/layouts/default/layout.css:35`) has no `min-width`/`white-space` rule, so at the side bar's
   least width it breaks one letter per line beside its hints. Source: the keyboard-reach review (finding 33).
-- **A click into the Backlog detail is pulled back to the list** — *agent-ready*: no Backlog `focusin` handler sets the
-  scope, so a click into the detail pane while a right-bar stop holds the keys ends the stop's turn, and the deferred
-  `focusMain` (`src/plugins/backlog/page/backlog-view.ts:986-998`) focuses `lastMainFocus`, often the list, off the
-  clicked pane. Fix: a focusin on each Backlog pane records it as `lastMainFocus` (and sets the scope) before
-  `focusMain` runs. A click into the detail with no right-bar stop in play also leaves the keys with the list, so j/k
+- **A click into the Backlog review pane is pulled back to the table** — *agent-ready*: no Backlog `focusin` handler sets the
+  scope, so a click into the review pane while a right-bar stop holds the keys ends the stop's turn, and the deferred
+  `focusMain` (`focusHost` in `src/plugins/backlog/page/backlog-view.ts`) focuses `lastHostFocus`, often the table, off the
+  clicked pane. Fix: a focusin on each Backlog pane records it as `lastHostFocus` (and sets the scope) before
+  `focusMain` runs. A click into the review pane with no right-bar stop in play also leaves the keys with the table, so j/k
   act on a hidden cursor; the same handler fixes both (Practice's `focusin` loop over `listPane` and `mainPane` in
   `src/plugins/practice/page/practice-view.ts` and Docs' `focusin` handoff in `src/plugins/docs/page/docs-view.ts` are
   the model). Pre-existing before keyboard-reach (it ran synchronously then). Source: the keyboard-reach

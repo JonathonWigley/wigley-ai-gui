@@ -519,7 +519,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border. The page draws through a frame of article and right column; the column holds On this
   page and Linked from and sticks while the article scrolls.
-- **Backlog** (planned in `backlog/plan-launcher`, not built yet; `docs/features/backlog/design.md`): no side bar.
+- **Backlog** (`docs/features/backlog/design.md`): no side bar.
   The sheet holds three Splits: the table pane beside the review pane (the table `640px` at first), the chunk strip
   under both (`120px`), and the assistant pane at the end at full height (`380px`, hidden until shown). The table pane
   stacks a header (its box hints and the edge prompt to the review pane), the status line, the filter bar, the filter

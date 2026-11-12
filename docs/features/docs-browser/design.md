@@ -134,7 +134,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   learning, reference, feature doc and follow-up; each kind offers only the places the index finds it in, and writes
   at its standard path with a starter template (a skill gets `name`/`description` frontmatter); a follow-up is
   appended to the home's `followups.md` through the shared follow-up file module (`src/shared/followups/`), in the
-  file's own shape, as Backlog mode writes it (`../backlog/design.md`); a missing or empty `followups.md` starts from
+  file's own shape (`../backlog/design.md` § Follow-ups); a missing or empty `followups.md` starts from
   the canonical new-file text named for the home folder's base name, a title already in the file is refused, and the
   editor opens on the new item's line. The path box lists matching folders and files
   under the chosen place as the user types, and Tab completes the shared part, as a shell does.
