@@ -80,8 +80,8 @@ import type {
   RowKit,
 } from '../layouts/layout';
 import type { backlogManifest } from '../manifest';
+import { AGENT_READY } from '../ready';
 import {
-  AGENT_READY,
   actedFollowup,
   actedHome,
   actedRow,

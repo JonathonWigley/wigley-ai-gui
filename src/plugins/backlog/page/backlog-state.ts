@@ -14,8 +14,7 @@ import type {
   BacklogRead,
   BacklogTask,
 } from '../contract';
-
-export const AGENT_READY = 'agent-ready';
+import { AGENT_READY } from '../ready';
 
 export type EditorField = 'title' | 'oneLine' | 'tags' | 'body';
 

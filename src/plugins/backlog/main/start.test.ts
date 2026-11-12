@@ -24,6 +24,16 @@ import {
   type IndexEntry,
   type SourceRead,
 } from '../../docs/contract';
+import {
+  type ScopedAgentSpec,
+  type ScopedAgentsMainExports,
+  scopedAgentsMainKey,
+} from '../../scoped-agents/contract';
+import {
+  type SessionsMainExports,
+  sessionsMainKey,
+  type ToolDefinition,
+} from '../../sessions/contract';
 import type {
   BacklogChunk,
   BacklogMainExports,
@@ -202,7 +212,10 @@ function chunkOf(
 // what `Files` reads, `realPath` aside, seeded with every `disk` file at time
 // 0; `setTime` sets the modified time its next writes stamp. `data` is the
 // plugin data folder; `pushSettings` replaces the settings and tells each
-// `onSettingsChanged` listener.
+// `onSettingsChanged` listener. `specs` holds each `addScopedAgent` spec, and
+// `asked` each of its agent's asks, which resolve `sess-a`; `contributed`
+// holds each `contributeTools` call's tool names. The page never opened
+// Backlog, and the run is no drive run.
 function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const links = new Map<string, string>();
   const files = new Map(Object.entries(disk));
@@ -242,6 +255,29 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     profileOf: (sessionId: string) => (held.has(sessionId) ? 'work' : null),
     restored: async () => undefined,
   };
+  const specs: ScopedAgentSpec[] = [];
+  const asked: [string, string][] = [];
+  const scopedAgents: ScopedAgentsMainExports = {
+    addScopedAgent(spec) {
+      specs.push(spec);
+      return {
+        ask: async (scope, text) => {
+          asked.push([scope, text]);
+          return 'sess-a';
+        },
+        sessionOf: async () => null,
+        scopeOf: async () => null,
+        dispose: () => undefined,
+      };
+    },
+  };
+  const contributed: string[][] = [];
+  const sessions = {
+    contributeTools: (tools: ToolDefinition[]) => {
+      contributed.push(tools.map((tool) => tool.name));
+      return { dispose: () => undefined };
+    },
+  } as unknown as SessionsMainExports;
   const docs: DocsMainExports = {
     addSource: () => ({ dispose: () => undefined }),
     machineIndex: async () => index.read,
@@ -275,6 +311,12 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       return { dispose: () => watched.splice(watched.indexOf(watch), 1) };
     },
   };
+  const dependencies: Record<string, unknown> = {
+    chat,
+    docs,
+    'scoped-agents': scopedAgents,
+    sessions,
+  };
   const api = {
     channel: {
       handle: (name: string, handler: (...args: unknown[]) => unknown) =>
@@ -303,7 +345,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       log: (message: string) => logged.push(message),
       randomHex: () => 'c-new',
     },
-    dependency: (key: { id: string }) => (key.id === 'chat' ? chat : docs),
+    dependency: (key: { id: string }) => dependencies[key.id],
     settings: () => settings,
     onSettingsChanged: (listener: (next: BacklogSettings) => void) => {
       settingsListeners.push(listener);
@@ -311,6 +353,13 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     },
     data,
     layouts: { register: () => ({ dispose: () => undefined }) },
+    state: {
+      read: () => ({
+        get: () => undefined,
+        on: () => ({ dispose: () => undefined }),
+      }),
+    },
+    drive: null,
   } as unknown as Parameters<typeof backlogMainPart.start>[0];
   const part = backlogMainPart.start(api);
   const invoke = async <T>(name: string, ...args: unknown[]): Promise<T> => {
@@ -343,6 +392,9 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     data,
     chat,
     held,
+    specs,
+    asked,
+    contributed,
     // The chunks `chunks.json` holds.
     savedChunks: async (): Promise<BacklogChunk[]> =>
       (JSON.parse(await data.read('chunks.json')) as { chunks: BacklogChunk[] })
@@ -364,8 +416,9 @@ function settle(): Promise<void> {
 }
 
 // Backlog's main part on the harness over a docs fake that lists FOLLOWUPS and
-// files each watch under the part, as docs' view does, and a chat fake that
-// holds no session. `watched` lists each live watch's path.
+// files each watch under the part, as docs' view does, a chat fake that
+// holds no session, and scoped-agents and sessions fakes that file nothing.
+// `watched` lists each live watch's path.
 function startBacklogOnHarness() {
   const watched: string[] = [];
   const docs = fakeDependency(
@@ -390,8 +443,26 @@ function startBacklogOnHarness() {
         profileOf: () => null,
       }) as unknown as ChatMainExports,
   );
+  const scopedAgents = fakeDependency(
+    scopedAgentsMainKey,
+    (): ScopedAgentsMainExports => ({
+      addScopedAgent: () => ({
+        ask: async () => 'sess-a',
+        sessionOf: async () => null,
+        scopeOf: async () => null,
+        dispose: () => undefined,
+      }),
+    }),
+  );
+  const sessions = fakeDependency(
+    sessionsMainKey,
+    () =>
+      ({
+        contributeTools: () => ({ dispose: () => undefined }),
+      }) as unknown as SessionsMainExports,
+  );
   const harness = startMainPart(backlogMainPart, {
-    dependencies: [docs, chat],
+    dependencies: [docs, chat, scopedAgents, sessions],
     services: { git: fakeGit(), runMode: 'live' },
   });
   return { harness, watched };
@@ -839,6 +910,71 @@ describe('backlog main part', () => {
     });
 
     expect(chunks).toEqual([{ ...chunkOf('c1', ['Alpha']), name: 'Renamed' }]);
+  });
+
+  it('start_RegistersTheAssistant', async () => {
+    const backlog = startBacklog([], {});
+
+    const [spec] = backlog.specs;
+
+    expect(backlog.specs).toHaveLength(1);
+    expect(spec.owner).toBe('backlog');
+    expect(spec.agentId).toBe('assistant');
+    expect(spec.folder('global')).toBe('/home/me');
+    expect(await spec.title('global')).toBe('Backlog assistant');
+  });
+
+  it('start_ContributesBothTools', () => {
+    const backlog = startBacklog([], {});
+
+    expect(backlog.contributed).toEqual([
+      ['read_backlog_state', 'set_backlog_chunks'],
+    ]);
+  });
+
+  it('sweep_KnownRepo_AsksTheAssistant', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.git.resolveCommit.mockResolvedValue('h1');
+    const read = await backlog.invoke<BacklogRead>('load');
+    const alpha = read.homes[0].followupFiles[0].items[0];
+    await backlog.data.write(
+      'staleness.json',
+      JSON.stringify({
+        entries: {
+          'r\nAlpha': {
+            heads: 'h1 h1',
+            body: `${alpha.oneLine}\n${alpha.body}`,
+            facts: { writtenAt: WRITTEN.at, commitsSince: 2, lastCommit: null },
+          },
+        },
+      }),
+    );
+    await backlog.invoke('staleness');
+
+    const sessionId = await backlog.invoke('sweep', 'r');
+
+    expect(sessionId).toBe('sess-a');
+    expect(backlog.asked).toHaveLength(1);
+    const [[scope, text]] = backlog.asked;
+    expect(scope).toBe('global');
+    expect(text).toContain(`Files:\n- ${FOLLOWUPS}\n\n`);
+    expect(text).toContain(
+      'Items Backlog reads as stale or moved:\n- Alpha: moved; 2 commits since it was written; gone: none\n\n',
+    );
+  });
+
+  it('sweep_UnknownRepo_Rejects', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    await backlog.invoke('load');
+
+    await expect(backlog.invoke('sweep', 'x')).rejects.toThrow(
+      'No Backlog repo x',
+    );
+    expect(backlog.asked).toEqual([]);
   });
 
   describe('follow-up events', () => {

@@ -28,21 +28,39 @@ import {
   MACHINE_SOURCE_ID,
   type SourceRead,
 } from '../../docs/contract';
-import type {
-  BacklogChannel,
-  BacklogFollowupFile,
-  BacklogHome,
-  BacklogMainEvents,
-  BacklogMainExports,
-  BacklogRead,
-  BacklogWriteResult,
-  NoteTarget,
-  RepoFolderSetting,
+import { scopedAgentsMainKey } from '../../scoped-agents/contract';
+import { sessionsMainKey } from '../../sessions/contract';
+import {
+  type BacklogChannel,
+  type BacklogFollowupFile,
+  type BacklogHome,
+  type BacklogMainEvents,
+  type BacklogMainExports,
+  type BacklogRead,
+  type BacklogWriteResult,
+  backlogPlaceSlot,
+  type NoteTarget,
+  type RepoFolderSetting,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { backlogManifest } from '../manifest';
+import {
+  ASSISTANT_ID,
+  ASSISTANT_INSTRUCTIONS,
+  ASSISTANT_SCOPE,
+  ASSISTANT_TITLE,
+  createAssistantStore,
+  sweepMessage,
+} from './assistant';
+import {
+  assistantPlace,
+  READ_BACKLOG_STATE_TOOL,
+  SET_BACKLOG_CHUNKS_TOOL,
+  startBacklogTools,
+} from './backlog-tools';
 import { createChunkStarter } from './chunk-start';
 import { createChunkStore, titlesByRepo } from './chunk-store';
+import { addDriveActions } from './drive-actions';
 import {
   type NoteEdit,
   readFollowupText,
@@ -734,8 +752,12 @@ async function startFixture(
 // each open follow-up's git staleness, cached in plugin data, and the commits
 // since it was written. It keeps the chunks in plugin data, the one writer of
 // them, starts them through chat's `launch`, and retires a chunk when chat
-// closes its session. Outside a live run it writes the self-test's fixture
-// repo at start, before Docs' self-test counts the files the index lists.
+// closes its session. It registers the Backlog assistant with scoped-agents,
+// its records in plugin data, sends it a repo's staleness sweep on `sweep`,
+// and gives it the `read_backlog_state` and `set_backlog_chunks` tools; a
+// drive run gets the `callTool` action. Outside a live run it writes the
+// self-test's fixture repo at start, before Docs' self-test counts the files
+// the index lists.
 export const backlogMainPart: MainPart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
@@ -782,6 +804,33 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       launchBrief: () => api.settings().launchBrief,
       log: services.log,
     });
+    const assistant = api.dependency(scopedAgentsMainKey).addScopedAgent({
+      owner: backlogManifest.id,
+      agentId: ASSISTANT_ID,
+      folder: () => services.homeDir,
+      instructions: () => Promise.resolve(ASSISTANT_INSTRUCTIONS),
+      title: () => Promise.resolve(ASSISTANT_TITLE),
+      store: createAssistantStore(api.data, services.log),
+    });
+    const place = api.state.read(backlogPlaceSlot);
+    const tools = startBacklogTools({
+      scopeOf: (session) => assistant.scopeOf(session),
+      rows: lastRows,
+      staleness: () => staleness.entries(),
+      chunks: store,
+      place: () => assistantPlace(place.get()),
+    });
+    const sessions = api.dependency(sessionsMainKey);
+    sessions.contributeTools(
+      [READ_BACKLOG_STATE_TOOL, SET_BACKLOG_CHUNKS_TOOL],
+      tools,
+    );
+    if (api.drive !== null) {
+      addDriveActions(api.drive, {
+        assistantSession: () => assistant.sessionOf(ASSISTANT_SCOPE),
+        tools,
+      });
+    }
     const exports: BacklogMainExports = {
       load: backlog.load,
       tags: () => api.settings().tags,
@@ -795,6 +844,21 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       return store.edit(edit);
     });
     channel.handle('startChunks', (chunkIds) => starter.start(chunkIds));
+    channel.handle('sweep', async (repo) => {
+      const read = await backlog.lastRead();
+      const homes = read.homes.filter((home) => home.repo === repo);
+      if (homes.length === 0) {
+        throw new Error(`No Backlog repo ${repo}`);
+      }
+      const files = homes.flatMap((home) =>
+        home.followupFiles.map((file) => file.path),
+      );
+      const rows = backlogRows(read).filter((row) => row.repo === repo);
+      return assistant.ask(
+        ASSISTANT_SCOPE,
+        sweepMessage(repo, files, rows, staleness.entries()),
+      );
+    });
     api.events.on('chat.sessionClosed', ({ sessionId }) => {
       store
         .retire(sessionId)

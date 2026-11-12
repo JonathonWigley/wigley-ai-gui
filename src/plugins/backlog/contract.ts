@@ -256,6 +256,10 @@ export interface BacklogChannel extends ChannelShape {
     // Starts each chunk in order through chat's `launch`: one result per id,
     // in order.
     startChunks(chunkIds: string[]): Promise<ChunkStart[]>;
+    // Asks the Backlog assistant to sweep the repo's follow-up files for
+    // staleness; resolves to the assistant's sessionId. Rejects with
+    // `No Backlog repo <repo>` when the last load holds no home of the repo.
+    sweep(repo: string): Promise<string>;
   };
   messages: {
     // A listed follow-up file changed or `fileNote` wrote to it (`homeRoot`
@@ -275,7 +279,11 @@ export type BacklogFocus = 'homes' | 'items' | 'detail';
 
 // Where the user was in Backlog mode, so a page reload puts them back:
 // `homeCursor` indexes the side bar's homes in order, `selectedKey` is a row's
-// key, and `expanded` the plan and feature paths whose task rows show.
+// key, and `expanded` the plan and feature paths whose task rows show. Main
+// reads it for `read_backlog_state`.
+// `repo`: the repo filter, null for every repo; `marked`: the marked rows'
+// keys; the `is…` flags: the table's view toggles and whether the assistant
+// pane shows. Optional until 08's page writes them.
 export interface BacklogPlace {
   focus: BacklogFocus;
   homeCursor: number;
@@ -283,6 +291,13 @@ export interface BacklogPlace {
   selectedKey: string | null;
   expanded: string[];
   filter: string;
+  repo?: string | null;
+  marked?: RowKey[];
+  isReadyOnly?: boolean;
+  isChunkedHidden?: boolean;
+  isStaleFirst?: boolean;
+  isDoneShown?: boolean;
+  isAssistantShown?: boolean;
 }
 
 export const backlogPlaceSlot: SlotKey<BacklogPlace, 'page', 'backlog'> = {
