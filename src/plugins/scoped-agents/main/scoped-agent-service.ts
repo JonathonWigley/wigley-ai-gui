@@ -28,8 +28,8 @@ export interface ScopedAgentServiceDeps {
 // of one (owner, agent id); `ask` and `sessionOf` reject `No scoped agent
 // <owner>/<agentId>.` for a pair with no live registration, as a disposed
 // handle's `ask` and `sessionOf` do, and its `scopeOf` resolves null. Asks for
-// one scope of one registration run one at a time, and concurrent `sessionOf`
-// calls for it share one resume. Disposing a registration launches and closes
+// one scope of one registration, and `cleared`'s host-id move on it, run one at
+// a time, and concurrent `sessionOf` calls for it share one resume. Disposing a registration launches and closes
 // nothing, and an ask in flight runs to its end. `opened`, `closed` and
 // `cleared` hear chat's `sessionOpened`, `sessionClosed` and `sessionCleared`
 // for every registration.
@@ -78,7 +78,7 @@ export function createScopedAgentService(
   const hostIds = new Map<string, string>();
   // Row id → the `hostIdOf` read waiting for its `sessionOpened`.
   const waitingReads = new Map<string, (hostSessionId: string) => void>();
-  // Turn key → the shared resume, and → the last ask's settling.
+  // Turn key → the shared resume, and → the last turn's settling.
   const resumes = new Map<string, Promise<string | null>>();
   const asks = new Map<string, Promise<unknown>>();
 
@@ -130,7 +130,7 @@ export function createScopedAgentService(
     }
   };
 
-  // Runs `work` after every earlier ask under `key` has settled.
+  // Runs `work` after every earlier turn under `key` has settled.
   const inTurn = <T>(key: string, work: () => Promise<T>): Promise<T> => {
     const turn = (asks.get(key) ?? Promise.resolve()).then(work);
     const settled = turn.catch(() => undefined);
@@ -225,10 +225,10 @@ export function createScopedAgentService(
         owner: spec.owner,
       });
     } catch (error) {
+      await store.write(scope, null);
       log(
         `${agentId} ${record.sessionId} not resumed, so cleared: ${errorText(error)}`,
       );
-      await store.write(scope, null);
       return null;
     }
     if (id !== record.sessionId) {
@@ -295,7 +295,8 @@ export function createScopedAgentService(
   };
 
   // Stores `newHostSessionId` on the scope whose record is row `sessionId`,
-  // so a later resume brings back the cleared conversation.
+  // so a later resume brings back the cleared conversation. The write runs in
+  // the scope's turn, and only while its record still holds the row.
   const moveHostId = async (
     spec: ScopedAgentSpec,
     sessionId: string,
@@ -304,12 +305,19 @@ export function createScopedAgentService(
     const found = (await spec.store.entries()).find(
       ({ record }) => record.sessionId === sessionId,
     );
-    if (found !== undefined) {
-      await spec.store.write(found.scope, {
-        sessionId,
-        hostSessionId: newHostSessionId,
-      });
+    if (found === undefined) {
+      return;
     }
+    const { scope } = found;
+    await inTurn(turnKey(spec, scope), async () => {
+      const record = await spec.store.read(scope);
+      if (record?.sessionId === sessionId) {
+        await spec.store.write(scope, {
+          sessionId,
+          hostSessionId: newHostSessionId,
+        });
+      }
+    });
   };
 
   return {

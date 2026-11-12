@@ -85,7 +85,8 @@ function fakeChat(options: {
 }
 
 // A store over `records`, scope → record. `checkAsk` refuses a scope in
-// `refused`; `afterRead` runs after each `read`, once its answer is taken;
+// `refused`; `afterRead` runs after each `read`, once its answer is taken, and
+// `afterEntries` is awaited in each `entries` once its answer is taken;
 // `writeError` and `entriesError`, when set, make `write` and `entries` reject.
 function fakeStore(records: Record<string, ScopedAgentRecord> = {}) {
   const control = {
@@ -93,6 +94,7 @@ function fakeStore(records: Record<string, ScopedAgentRecord> = {}) {
     refused: new Set<string>(),
     superseded: null as ScopedAgentRecord | null,
     afterRead: undefined as ((scope: string) => void) | undefined,
+    afterEntries: undefined as (() => Promise<void>) | undefined,
     writeError: undefined as string | undefined,
     entriesError: undefined as string | undefined,
   };
@@ -116,10 +118,12 @@ function fakeStore(records: Record<string, ScopedAgentRecord> = {}) {
       if (control.entriesError !== undefined) {
         throw new Error(control.entriesError);
       }
-      return [...control.records].map(([scope, record]) => ({
+      const entries = [...control.records].map(([scope, record]) => ({
         scope,
         record,
       }));
+      await control.afterEntries?.();
+      return entries;
     },
     async superseded() {
       return control.superseded;
@@ -472,10 +476,14 @@ describe('scoped agent service', () => {
     record: ScopedAgentRecord | null;
     held: string[];
     resumeError?: string;
+    writeError?: string;
     calls: number;
     id: string | null;
+    // The rejection each call gets in place of `id`.
+    error?: string;
     resumes: number;
     stored: ScopedAgentRecord | null;
+    logs?: string[];
   }>([
     {
       case: 'no record',
@@ -513,6 +521,20 @@ describe('scoped agent service', () => {
       id: null,
       resumes: 1,
       stored: null,
+      logs: ['interviewer row-0 not resumed, so cleared'],
+    },
+    {
+      case: 'resume refused, the clear not written',
+      record: { sessionId: 'row-0', hostSessionId: 'host-7' },
+      held: [],
+      resumeError: 'Chat has no session host-7.',
+      writeError: 'disk full',
+      calls: 1,
+      id: null,
+      error: 'disk full',
+      resumes: 1,
+      stored: { sessionId: 'row-0', hostSessionId: 'host-7' },
+      logs: [],
     },
     {
       case: 'row gone, two calls at once',
@@ -525,18 +547,36 @@ describe('scoped agent service', () => {
     },
   ])(
     'sessionOf brings the session back: $case',
-    async ({ record, held, resumeError, calls, id, resumes, stored }) => {
+    async ({
+      record,
+      held,
+      resumeError,
+      writeError,
+      calls,
+      id,
+      error,
+      resumes,
+      stored,
+      logs,
+    }) => {
       const part = setUp({
         records: record === null ? {} : { s: record },
         held,
         resumeError,
       });
+      part.store.writeError = writeError;
 
-      const ids = await Promise.all(
+      const answers = await Promise.allSettled(
         Array.from({ length: calls }, () => part.agent.sessionOf('s')),
       );
 
-      expect(ids).toEqual(Array.from({ length: calls }, () => id));
+      expect(
+        answers.map((answer) =>
+          answer.status === 'fulfilled'
+            ? answer.value
+            : (answer.reason as Error).message,
+        ),
+      ).toEqual(Array.from({ length: calls }, () => error ?? id));
       expect(part.resumes).toHaveLength(resumes);
       if (resumes > 0) {
         expect(part.resumes[0]).toEqual({
@@ -549,6 +589,9 @@ describe('scoped agent service', () => {
         });
       }
       expect(part.store.records.get('s') ?? null).toEqual(stored);
+      expect(part.logs).toEqual(
+        (logs ?? []).map((line) => expect.stringContaining(line)),
+      );
     },
   );
 
@@ -572,6 +615,33 @@ describe('scoped agent service', () => {
     expect([...other.records]).toEqual([
       ['global', { sessionId: 'row-2', hostSessionId: 'host-2' }],
     ]);
+  });
+
+  it('cleared leaves a record an ask replaced after its entries read', async () => {
+    const part = setUp({
+      records: { s: { sessionId: 'row-0', hostSessionId: 'host-0' } },
+    });
+    let releaseEntries: () => void = () => undefined;
+    part.store.afterEntries = () =>
+      new Promise<void>((resolve) => {
+        releaseEntries = () => resolve();
+      });
+    let reads = 0;
+    part.store.afterRead = () => {
+      reads += 1;
+    };
+
+    part.service.cleared({ sessionId: 'row-0', newHostSessionId: 'host-9' });
+    // The ask resumes row-0 as row-1 and stores it, in two reads.
+    const id = await part.agent.ask('s', 'hi');
+    releaseEntries();
+
+    expect(id).toBe('row-1');
+    await vi.waitFor(() => expect(reads).toBe(3));
+    expect(part.store.records.get('s')).toEqual({
+      sessionId: 'row-1',
+      hostSessionId: 'host-0',
+    });
   });
 
   it.each<{

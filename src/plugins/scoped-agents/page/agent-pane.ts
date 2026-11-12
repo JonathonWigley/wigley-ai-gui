@@ -68,12 +68,14 @@ interface AskBox {
 // hidden; `toggle` shows it, asking `sessionOf` and giving it the keys, or
 // hides it. The mount is keyed on the open scope `scopeOpened` names: the same
 // scope keeps the mount and the ask box's text, another or null drops both.
-// `send` asks the agent with the ask box's text and mounts its chat view. An
-// answer for a scope no longer open is dropped. While the pane holds the keys
-// it sets the scope `ask`; `hostTookKeys` hears them leave, and `modeHidden`
-// gives them back to the host as the host hides. `outerPanes` moves Alt+h from
-// the pane to the host and Alt+l from the host into the shown pane. After
-// `dispose` every method does nothing.
+// Within one scope, an answer naming another session than the mounted one
+// remounts on it. `send` asks the agent with the ask box's text and mounts its
+// chat view. An answer for a scope no longer open is dropped. While the pane
+// holds the keys it sets the scope `ask`; `hostTookKeys` hears them leave.
+// Hiding, `modeHidden`, Alt+h and `leaveBox` give them back to the host and
+// give them up whether or not the host's `leave` answers. `outerPanes` moves
+// Alt+h from the pane to the host and Alt+l from the host into the shown pane.
+// After `dispose` every method does nothing.
 export function createAgentPane(
   deps: AgentPaneDeps,
   spec: AgentPaneSpec,
@@ -91,6 +93,8 @@ export function createAgentPane(
   let takesKeysOnAnswer = false;
   let isSending = false;
   let mount: ChatMount | null = null;
+  // The session `mount` shows; null while there is no mount.
+  let mountedSessionId: string | null = null;
   let askBox: AskBox | null = null;
 
   // Draws the ask box's part again, keeping the focus in its frame.
@@ -124,6 +128,7 @@ export function createAgentPane(
     }
     mount?.dispose();
     mount = null;
+    mountedSessionId = null;
   };
 
   // Sets the keys on what the pane shows; `movesFocus` takes the DOM focus
@@ -166,8 +171,11 @@ export function createAgentPane(
   };
 
   // Hands the keys back to the host, then gives them up, unless the host's
-  // `leave` already said it took them.
+  // `leave` already said it took them; a pane without the keys does nothing.
   const leaveToHost = () => {
+    if (!hasKeys) {
+      return;
+    }
     spec.leave();
     releaseKeys();
   };
@@ -211,13 +219,27 @@ export function createAgentPane(
       deps.toast(errorText(error), 'error');
       return;
     }
+    mountedSessionId = sessionId;
     log(`${agentId} mounted ${scope}`);
   };
 
+  // Shows `sessionId`'s chat view in place of the ask box or a mount of
+  // another session; a mount of `sessionId` stays. Says whether it changed
+  // what shows.
+  const showSession = (scope: string, sessionId: string): boolean => {
+    if (mount !== null && mountedSessionId === sessionId) {
+      return false;
+    }
+    dropMount();
+    destroyAskBox();
+    mountSession(scope, sessionId);
+    return true;
+  };
+
   // Shows the answer to `sessionOf` for the open scope: its chat view, or the
-  // ask box for none; a shown one stays. The keys go where they went before:
-  // to the pane when it waits to take them, onto what changed when it holds
-  // them.
+  // ask box for none. A shown ask box stays on null; a mount stays unless the
+  // answer names another session. The keys go where they went before: to the
+  // pane when it waits to take them, onto what changed when it holds them.
   const showAnswer = (asked: OpenScope, sessionId: string | null) => {
     let isChanged = false;
     if (sessionId === null) {
@@ -225,10 +247,8 @@ export function createAgentPane(
         showAskBox(asked.scope);
         isChanged = true;
       }
-    } else if (mount === null) {
-      destroyAskBox();
-      mountSession(asked.scope, sessionId);
-      isChanged = true;
+    } else {
+      isChanged = showSession(asked.scope, sessionId);
     }
     if (takesKeysOnAnswer) {
       takesKeysOnAnswer = false;
@@ -277,9 +297,7 @@ export function createAgentPane(
 
   const hide = () => {
     takesKeysOnAnswer = false;
-    if (hasKeys) {
-      leaveToHost();
-    }
+    leaveToHost();
     isPaneShown = false;
     spec.setShown(false);
     log(`${agentId} pane hidden`);
@@ -308,9 +326,7 @@ export function createAgentPane(
         }
         isSending = false;
         destroyAskBox();
-        if (mount === null) {
-          mountSession(asked.scope, sessionId);
-        }
+        showSession(asked.scope, sessionId);
         if (hasKeys) {
           holdKeys(true);
         }
@@ -336,7 +352,7 @@ export function createAgentPane(
           return false;
         }
         if (direction === 'left' && hasKeys) {
-          spec.leave();
+          leaveToHost();
           return true;
         }
         if (direction === 'right' && isPaneShown && !hasKeys) {
@@ -389,15 +405,13 @@ export function createAgentPane(
     },
     leaveBox() {
       if (!isDisposed) {
-        spec.leave();
+        leaveToHost();
       }
     },
     hostTookKeys: releaseKeys,
     modeHidden() {
       takesKeysOnAnswer = false;
-      if (hasKeys) {
-        leaveToHost();
-      }
+      leaveToHost();
     },
     outerPanes,
     redraw() {

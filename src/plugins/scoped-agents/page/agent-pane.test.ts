@@ -61,11 +61,14 @@ function fakeEditorHost() {
 // Practice's interviewer pane over deps whose `sessionOf` and `ask` answers
 // wait in `sessionAnswers` and `askAnswers`, one per call, in call order. The
 // spec's `tookKeys` gives the fake host's focus to the pane and its `leave`
-// takes it back and tells the pane, as a host does; `calls` records them and
-// `setShown`. `events` records each `sessionOf`, each `setScope`,
-// `setFocusTarget` and `setResizeTarget`, and each mount's `dispose`, in
-// order. `mountError` makes every `mountChat` throw it.
-function paneSetup(options: { mountError?: string } = {}) {
+// takes it back and tells the pane, as a host does, unless `hostAnswersLeave`
+// is false; `calls` records them and `setShown`. `events` records each
+// `sessionOf`, each `setScope`, `setFocusTarget` and `setResizeTarget`, and
+// each mount's `dispose`, in order. `mountError` makes every `mountChat` throw
+// it.
+function paneSetup(
+  options: { mountError?: string; hostAnswersLeave?: boolean } = {},
+) {
   const logs: string[] = [];
   const toasts: [string, string][] = [];
   const events: string[] = [];
@@ -92,7 +95,9 @@ function paneSetup(options: { mountError?: string } = {}) {
     leave() {
       calls.push('leave');
       focus = 'host';
-      pane.hostTookKeys();
+      if (options.hostAnswersLeave !== false) {
+        pane.hostTookKeys();
+      }
     },
   };
   const pane = createAgentPane(
@@ -486,6 +491,7 @@ describe('createAgentPane', () => {
   it.each<{
     case: string;
     state: 'holding' | 'host' | 'hidden';
+    hostAnswersLeave?: false;
     direction: PaneDirection;
     result: boolean;
     calls: string[];
@@ -494,6 +500,15 @@ describe('createAgentPane', () => {
     {
       case: 'left from the pane',
       state: 'holding',
+      direction: 'left',
+      result: true,
+      calls: ['leave'],
+      logs: ['interviewer left'],
+    },
+    {
+      case: "left from the pane, the host's leave not answering",
+      state: 'holding',
+      hostAnswersLeave: false,
       direction: 'left',
       result: true,
       calls: ['leave'],
@@ -526,7 +541,7 @@ describe('createAgentPane', () => {
       })),
     ),
   ])('outer panes: $case', async (row) => {
-    const setup = paneSetup();
+    const setup = paneSetup({ hostAnswersLeave: row.hostAnswersLeave });
     if (row.state === 'hidden') {
       setup.pane.scopeOpened('two-sum');
     } else {
@@ -624,6 +639,7 @@ describe('createAgentPane', () => {
 
   it.each<{
     case: string;
+    hostAnswersLeave?: false;
     before: (setup: Setup) => Promise<void>;
     act: (setup: Setup) => Promise<void>;
     // The spec's calls and the log lines the act adds.
@@ -648,6 +664,15 @@ describe('createAgentPane', () => {
     },
     {
       case: 'hide while holding the keys',
+      before: (setup) => setup.openTwoSum(null),
+      act: async (setup) => setup.pane.toggle(),
+      calls: ['leave', 'setShown false'],
+      logs: ['interviewer left', 'interviewer pane hidden'],
+      isShown: false,
+    },
+    {
+      case: "hide while holding the keys, the host's leave not answering",
+      hostAnswersLeave: false,
       before: (setup) => setup.openTwoSum(null),
       act: async (setup) => setup.pane.toggle(),
       calls: ['leave', 'setShown false'],
@@ -682,7 +707,7 @@ describe('createAgentPane', () => {
       isShown: false,
     },
   ])('toggle: $case', async (row) => {
-    const setup = paneSetup();
+    const setup = paneSetup({ hostAnswersLeave: row.hostAnswersLeave });
     await row.before(setup);
     setup.calls.length = 0;
     setup.logs.length = 0;
@@ -778,6 +803,17 @@ describe('createAgentPane', () => {
       mounts: [{ sessionId: 's1', shown: 1, disposed: 0 }],
       liveBoxes: 0,
       events: ['sessionOf two-sum', 'sessionOf two-sum'],
+    },
+    {
+      case: 'a mount of another session remounts',
+      shows: 'mount',
+      answer: 's2',
+      mounts: [
+        { sessionId: 's1', shown: 1, disposed: 1 },
+        { sessionId: 's2', shown: 1, disposed: 0 },
+      ],
+      liveBoxes: 0,
+      events: ['sessionOf two-sum', 'sessionOf two-sum', 'dispose s1'],
     },
     {
       case: 'hidden asks nothing',

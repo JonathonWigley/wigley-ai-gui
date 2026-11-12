@@ -165,6 +165,9 @@ describe('scoped-agents page part', () => {
     await settle();
     assistant.pane.toggle();
     await settle();
+    // The interviewer giving up the keys after the assistant took them leaves
+    // the assistant recorded.
+    interviewer.pane.hostTookKeys();
     page.boxes[0]!.text = 'how do I start';
     page.boxes[1]!.text = 'which items are stale';
     page.run('askSend');
