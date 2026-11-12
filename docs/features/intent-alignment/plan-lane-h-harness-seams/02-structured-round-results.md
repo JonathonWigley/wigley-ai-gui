@@ -241,7 +241,7 @@ Tests:
 - `src/plugins/primer/main/primer-type.test.ts` — new: `'returns a malformed open_primer's message as its tool error
   text'`: `createAgentFormToolSession(session, primerType)` over a fake session whose `open` runs
   `primerType.parse(args)`, args `{ feature: SAMPLE_PRIMER_ARGS.feature, entries: [] }`; the result is
-  `{ content: [{ type: 'text', text: "'entries' must be a non-empty array: the eighteen primer rows, then the standing tasks." }], isError: true }`.
+  `{ content: [{ type: 'text', text: "'entries' must be a non-empty array: the primer rows, then the standing tasks." }], isError: true }`.
 - `round-type.test.ts`, `tool-definitions.test.ts`, `start.test.ts`: no change; they must still pass.
 - Self-test: no new step. The task adds no behaviour. The forms self-test already checks the fixture round's
   `summary` string and the unknown-layout refusal's text (`src/plugins/forms/main/selftest-script.ts`,

@@ -65,7 +65,7 @@ function stringOr(value: unknown, fallback: string): string {
 function parseItemTexts(items: unknown, where: string): string[] {
   if (!Array.isArray(items) || items.length === 0) {
     throw new PrimerError(
-      `${where}.items must list the work items as strings, two to six of them.`,
+      `${where}.items must list the work items as strings, one to ${MAX_PRIMER_ITEMS} of them.`,
     );
   }
   if (items.length > MAX_PRIMER_ITEMS) {

@@ -106,6 +106,40 @@ const PRIMER_STEPS: SelfTestStep[] = [
   { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
 ];
 
+// From task 1 in the tasks column: Polish's item card on task 2 edits its
+// text to Polished; a second added item is emptied in its text box and leaving
+// the box removes it; focus returns to the tasks column.
+const ITEM_TEXT_STEPS: SelfTestStep[] = [
+  { keys: ['j'], expect: '[primer] selected task 2' },
+  { keys: ['<A-l>'], expect: '[page] <A-l> ran panes.focusRight' },
+  { keys: ['G'], expect: '[primer] selected item 3 on task 2' },
+  { keys: ['<A-l>'], expect: '[page] <A-l> ran panes.focusRight' },
+  {
+    keys: ['i'],
+    expect: '[primer] focused text of item 3 of task 2',
+    checksFit: true,
+    screenshot: 'added-item-card',
+    why: "i on an added item's card focuses its text box.",
+  },
+  { keys: ['e', 'd', 'Escape', 'Escape'], expect: '[primer] left the box' },
+  {
+    keys: ['a', 'Z', 'Escape', 'Escape'],
+    expect: '[primer] added item 4 on task 2',
+  },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
+  { keys: ['<A-l>'], expect: '[page] <A-l> ran panes.focusRight' },
+  { keys: ['G'], expect: '[primer] selected item 4 on task 2' },
+  { keys: ['<A-l>'], expect: '[page] <A-l> ran panes.focusRight' },
+  { keys: ['i'], expect: '[primer] focused text of item 4 of task 2' },
+  {
+    keys: ['Backspace', 'Escape', 'Escape'],
+    expect: '[primer] removed blank item 4 on task 2',
+    why: "Leaving an added item's emptied text box removes the item.",
+  },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
+];
+
 // An extra task added from the tasks column and removed again, so the
 // submitted payload holds only the sent tasks.
 const EXTRA_TASK_STEPS: SelfTestStep[] = [
@@ -183,7 +217,7 @@ const EXPECTED_NEEDS = ['no', 'yes', 'unclear', 'yes'];
 const EXPECTED_SCREEN_ITEMS: PrimerItem[] = [
   { text: 'Draw the screen', include: true, comment: '', added: false },
   { text: 'Wire its buttons', include: false, comment: '', added: false },
-  { text: 'Polish', include: true, comment: '', added: true },
+  { text: 'Polished', include: true, comment: '', added: true },
 ];
 
 // The primer the script opened and the run that opened it.
@@ -256,6 +290,11 @@ export function primerSelfTestScript(
         name: 'primer',
         why: "The Primer popup's tasks column selects a task and its items column lists that task's items; needs are set and items toggled from both columns and the item card, ⌃H on the card steps the column it came from, ⌥H and ⌥L move focus between the columns and the card, and the task's boxes are reached from an item card; the agent gets every change back once the review submits.",
         steps: PRIMER_STEPS,
+      },
+      {
+        name: 'item text',
+        why: "i on an item card the user added focuses the item's text box, and the edit reaches the agent; leaving an emptied text box removes the item.",
+        steps: ITEM_TEXT_STEPS,
       },
       {
         name: 'extra task',

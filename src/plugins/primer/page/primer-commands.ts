@@ -212,14 +212,23 @@ function focusTarget(
 }
 
 // Commits the box first, since the move leaves it. Logs the card row's name
-// when the move changed it.
+// when the move changed it. When the commit removed the selected item, the
+// next item has already moved up into its place, so a forward step stays
+// there rather than skipping it.
 function moveRow(
   deps: PrimerCommandDeps,
   box: PrimerBox | undefined,
   action: PrimerAction,
 ) {
-  commitBox(deps, box);
+  const selectedBefore = shownPrimer(deps.store.get())?.selectedItem ?? null;
+  const removed = commitBox(deps, box);
   const before = selectedRowName(deps.store.get());
+  if (removed !== null && removed === selectedBefore && action.type === 'nextRow') {
+    if (before !== null) {
+      deps.log(`selected ${before}`);
+    }
+    return;
+  }
   deps.store.dispatch(action);
   const after = selectedRowName(deps.store.get());
   if (after !== null && after !== before) {
@@ -462,23 +471,25 @@ function fullTaskLine(entryId: string): string {
 
 // Commits `box` before a key that leaves it acts: an add-item box's text
 // becomes an item, and an added item whose text box was emptied is removed.
-// A focus change alone commits nothing.
+// A focus change alone commits nothing. Returns the number of the item
+// removed, or null.
 function commitBox(
   deps: Pick<PrimerCommandDeps, 'store' | 'log'>,
   box: PrimerBox | undefined | null,
-) {
+): number | null {
   commitNewItem(deps, box);
-  dropBlankItem(deps, box);
+  return dropBlankItem(deps, box);
 }
 
 // Removes the item an item text box edits when its text is blank, as the
-// add-item box adds no item for blank text.
+// add-item box adds no item for blank text. Returns the removed item's
+// number, or null when nothing was removed.
 function dropBlankItem(
   deps: Pick<PrimerCommandDeps, 'store' | 'log'>,
   box: PrimerBox | undefined | null,
-) {
+): number | null {
   if (box === undefined || box === null || box.target.field !== 'itemText') {
-    return;
+    return null;
   }
   const { primerId } = box;
   const { entryId, item } = box.target;
@@ -489,9 +500,11 @@ function dropBlankItem(
     entryId,
     item,
   });
-  if (deps.store.get() !== before) {
-    deps.log(`removed blank item ${item} on task ${entryId}`);
+  if (deps.store.get() === before) {
+    return null;
   }
+  deps.log(`removed blank item ${item} on task ${entryId}`);
+  return item;
 }
 
 // Adds the add-item box's text as an item when `box` is an add-item box.

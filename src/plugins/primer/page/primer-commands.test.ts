@@ -668,6 +668,47 @@ describe('primerCommandHandlers', () => {
     },
   );
 
+  // Breaks if a forward step from the emptied item skips the item that moved
+  // into its place.
+  it.each<{ key: PrimerCommand; selected: string }>([
+    { key: 'nextRow', selected: 'Test the store' },
+    { key: 'prevRow', selected: 'Read the store' },
+  ])(
+    'selects $selected after $key from an emptied item text box',
+    ({ key, selected }) => {
+      const itemText: PrimerBox = {
+        primerId: 'p1',
+        target: { field: 'itemText', entryId: '1', item: 2 },
+      };
+      const { run, store, primer } = setup({
+        entries: [
+          primerEntry('1', 'primer', {
+            items: [
+              primerItem('Read the store'),
+              primerItem('Write the store', { added: true }),
+              primerItem('Test the store'),
+              primerItem('Ship the store'),
+            ],
+          }),
+        ],
+      });
+      store.dispatch({ type: 'selectTask', row: 1 });
+      store.dispatch({ type: 'focusPane', pane: 'items' });
+      run('nextRow');
+      store.dispatch({
+        type: 'setText',
+        formId: 'p1',
+        target: itemText.target,
+        value: '',
+      });
+
+      run(key, { editor: editorOf(itemText) });
+
+      const { entries, selectedItem } = primer();
+      expect(entries[0].items[(selectedItem ?? 0) - 1]?.text).toBe(selected);
+    },
+  );
+
   it('keeps an added item whose edited text is not blank', () => {
     const itemText: PrimerBox = {
       primerId: 'p1',
