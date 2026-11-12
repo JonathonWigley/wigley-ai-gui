@@ -450,6 +450,13 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   The card column shows one card for the focused column's selection: a task card (context, add-item and task
   comment) or the feature card while the tasks column has focus, an item card (the item, its ToggleMark and its
   comment box) while the items column has focus. A review pane of every answer opens before it sends.
+- **Audio picker** (planned in `audio-picker`, not built yet; `docs/features/audio-picker/design.md`): a popup sheet as
+  the Popup entry describes. It holds one list of moment sections: each section's title in the section-header
+  style, the agent's reason under it in `fg-tertiary`. A candidate row holds a play IconButton, a small waveform in
+  `fg-tertiary` that turns `accent` on the cursor row, the name in `font-mono`, the library, length and loudness in
+  tabular numerals, and a neutral Tag for the play format. The chosen row takes `accent-tint`, and the recommended
+  row carries the accent mark, since Cmd+Enter accepts it. A playing row shows a `status-running` mark. Each section
+  ends in a None of these row and a notes box in an InputFrame.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
   (tool calls, thinking, raw events) show in the **session hub**'s **activity dock**. The hub is

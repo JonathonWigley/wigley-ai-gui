@@ -334,6 +334,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
                  the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
+  audio-picker/  (planned in `audio-picker`, not built yet; `docs/features/audio-picker/design.md`)
+                 manifest.ts, contract.ts, main/ (the audio picker form type, its MCP tools `open_audio_picker` and
+                 `collect_last_audio_picker`, the audio reads that serve only files the session's open picker lists),
+                 page/ (the picker popup: one list of moment sections with candidate rows, the Web Audio playback),
+                 layouts/ (the audio picker Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
                  of marketplace clone plugin files, the log behind Recent changes), page/ (one docs view per source — the machine view's wiki sidebar built
@@ -852,7 +857,7 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   command in chat's manifest (raw `m`, `e`, `o` in the chat scope; `<Leader>cm`, `<Leader>ce`, `<Leader>co` in the
   composer box, where raw keys are vim's); `c` (`<Leader>cc` in the box) lists every control, so a new adapter's
   controls are reachable before they get a key.
-- **An agent form type** — a kind of form an agent opens and waits on, forms' round and the feature primer today —
+- **An agent form type** — a kind of form an agent opens and waits on, forms' round and the feature primer today, the audio picker next (planned in `audio-picker`, not built yet) —
   is an `AgentFormType` (`src/contracts/agent-forms.ts`): how to parse the agent's args, fingerprint them, read the
   page's body back and build each reply payload. Its plugin hands the type to the shared service in
   `src/shared/agent-forms/`, which owns the one open form per session, the deadline, re-attach, hand-back and the
