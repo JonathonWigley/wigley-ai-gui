@@ -902,17 +902,20 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     );
   };
 
-  // Opens the saved place's assistant pane: now while Backlog shows, else on
-  // the next `shown`, since opening takes the keys.
-  const openRestoredPane = () => {
-    if (deps.isShown()) {
-      pane.toggle();
-    } else {
-      isOpenPending = true;
+  // Opens the assistant pane a restored place left pending.
+  const openPendingPane = () => {
+    if (isOpenPending) {
+      isOpenPending = false;
+      if (!pane.isShown()) {
+        pane.toggle();
+      }
     }
   };
 
-  // A read overtaken by a later one is dropped.
+  // A read overtaken by a later one is dropped. The saved place's assistant
+  // pane is pending before the first load's dispatches, so the place they
+  // write keeps it, and opens now while Backlog shows, else on the next
+  // `shown`, since opening takes the keys.
   const read = async (method: 'load' | 'rescan') => {
     const count = ++loadCount;
     const result = await channel.invoke(method);
@@ -921,12 +924,17 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     loadedCount += 1;
     const isFirstLoad = loadedCount === 1;
+    const isRestoringPane =
+      isFirstLoad && deps.savedPlace?.isAssistantShown === true;
+    if (isRestoringPane) {
+      isOpenPending = true;
+    }
     dispatch({ type: 'loaded', read: result });
     if (isFirstLoad && deps.savedPlace !== null) {
       dispatch({ type: 'placeRestored', place: deps.savedPlace });
-      if (deps.savedPlace.isAssistantShown) {
-        openRestoredPane();
-      }
+    }
+    if (isRestoringPane && deps.isShown()) {
+      openPendingPane();
     }
     deps.log(`loaded ${String(result.homes.length)} homes`);
     readStaleness();
@@ -1014,8 +1022,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     render(true);
   };
 
-  // Pushes the box scope for `kind`, closing the box when the base scope
-  // changes under it.
+  // Pushes the box scope, closing the box when the base scope changes under
+  // it.
   const pushBox = (): PushedScope => {
     const scope = deps.pushScope('box');
     scope.onBaseChanged(() => {
@@ -1219,7 +1227,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     },
     startAllChunks() {
       startChunks(
-        shownChunks(store.get()).filter((chunk) => chunk.sessionId === null),
+        shownChunks(store.get()).filter(
+          (chunk) => chunk.sessionId === null && chunk.titles.length > 0,
+        ),
       );
     },
     toggleHeadless() {
@@ -1314,12 +1324,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       render(true);
       deps.log('shown');
       readStaleness();
-      if (isOpenPending) {
-        isOpenPending = false;
-        if (!pane.isShown()) {
-          pane.toggle();
-        }
-      }
+      openPendingPane();
     },
     hidden() {
       pane.modeHidden();

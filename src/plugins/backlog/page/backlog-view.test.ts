@@ -152,6 +152,9 @@ const CHUNKS: BacklogChunk[] = [
   chunk('c3', 'lib', 'Lib docs', []),
 ];
 
+// An unstarted `lib` chunk with a title, beside the started and empty ones.
+const LIB_TESTS = chunk('c4', 'lib', 'Lib tests', ['Fourth']);
+
 function place(overrides: Partial<BacklogPlace> = {}): BacklogPlace {
   return {
     selectedKey: null,
@@ -817,9 +820,10 @@ describe('backlog chunk commands', () => {
   it('startChunks_MixedResults_ToastEach', async () => {
     const setup = await backlogSetup({
       answers: {
+        chunks: async () => [...CHUNKS, LIB_TESTS],
         startChunks: async () => [
           { chunkId: 'c1', sessionId: 's9' },
-          { chunkId: 'c3', refusal: 'Lib docs is starting' },
+          { chunkId: 'c4', refusal: 'Lib tests is starting' },
         ],
       },
     });
@@ -827,23 +831,26 @@ describe('backlog chunk commands', () => {
     setup.view.commands.startAllChunks();
     await settle();
 
-    expect(invokesOf(setup, 'startChunks')).toEqual([[['c1', 'c3']]]);
+    expect(invokesOf(setup, 'startChunks')).toEqual([[['c1', 'c4']]]);
     expect(setup.toasts).toEqual([
       ['Started Fixes', 'success'],
-      ['Lib docs is starting', 'error'],
+      ['Lib tests is starting', 'error'],
     ]);
     expect(setup.logs).toEqual(
-      expect.arrayContaining(['started Fixes', 'start refused Lib docs']),
+      expect.arrayContaining(['started Fixes', 'start refused Lib tests']),
     );
   });
 
-  it('startAllChunks_RepoFilter_StartsOnlyShownChunks', async () => {
-    const setup = await backlogSetup({ savedPlace: place({ repo: 'lib' }) });
+  it('startAllChunks_RepoFilter_StartsShownUnstartedChunksWithTitles', async () => {
+    const setup = await backlogSetup({
+      savedPlace: place({ repo: 'lib' }),
+      answers: { chunks: async () => [...CHUNKS, LIB_TESTS] },
+    });
 
     setup.view.commands.startAllChunks();
     await settle();
 
-    expect(invokesOf(setup, 'startChunks')).toEqual([[['c3']]]);
+    expect(invokesOf(setup, 'startChunks')).toEqual([[['c4']]]);
   });
 
   it('sweep_NoRepo_ToastsAndSendsNothing', async () => {
@@ -1019,7 +1026,7 @@ describe('backlog strip', () => {
 });
 
 describe('backlog restore, mode and reads', () => {
-  it('restore_BacklogHidden_TogglesOnceOnNextShown', async () => {
+  it('restore_BacklogHidden_KeepsPlaceAndTogglesOnceOnNextShown', async () => {
     const setup = await backlogSetup({
       isShown: false,
       savedPlace: place({ isAssistantShown: true }),
@@ -1027,12 +1034,16 @@ describe('backlog restore, mode and reads', () => {
     const togglesWhileHidden = setup.pane.calls.filter(
       (call) => call === 'toggle',
     ).length;
+    const shownWrittenWhileHidden = new Set<boolean>(
+      setup.places.map((each) => each.isAssistantShown),
+    );
 
     setup.show();
     setup.view.hidden();
     setup.show();
 
     expect(togglesWhileHidden).toBe(0);
+    expect(shownWrittenWhileHidden).toEqual(new Set([true]));
     expect(setup.pane.calls.filter((call) => call === 'toggle')).toHaveLength(
       1,
     );

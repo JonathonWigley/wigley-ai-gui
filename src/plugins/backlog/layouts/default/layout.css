@@ -62,7 +62,9 @@
 }
 
 /* A table too narrow for the fixed columns shares its width among every
-   column in their proportions, so each row keeps the column head's grid. */
+   column in their proportions, so each row keeps the column head's grid.
+   40rem is the fixed columns' 13.25 × space-8 (424px at Mocha's 32px) plus
+   room for the task column. */
 @container backlog-table (width < 40rem) {
   .backlog-columns,
   .ui-row.backlog-table-row {
