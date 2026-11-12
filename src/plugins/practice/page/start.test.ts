@@ -523,9 +523,9 @@ describe('practicePagePart', () => {
         await settle();
       }
 
-      expect(pane.calls.filter((call) => call.startsWith('scopeOpened'))).toEqual(
-        calls,
-      );
+      expect(
+        pane.calls.filter((call) => call.startsWith('scopeOpened')),
+      ).toEqual(calls);
     },
   );
 

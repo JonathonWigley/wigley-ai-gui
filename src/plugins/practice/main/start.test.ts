@@ -157,11 +157,13 @@ describe('practice main part', () => {
       info: { sessionId: 'host-1', projectDir: PRACTICE_FOLDER, harness: null },
     } as AgentSession;
 
-    const result = await harness.contributed[0].start(session).call(
-      'read_practice_state',
-      {},
-      { toolUseId: null, signal: new AbortController().signal },
-    );
+    const result = await harness.contributed[0]
+      .start(session)
+      .call(
+        'read_practice_state',
+        {},
+        { toolUseId: null, signal: new AbortController().signal },
+      );
 
     expect(harness.scopeAsked).toEqual([session]);
     expect(result.isError).toBeUndefined();

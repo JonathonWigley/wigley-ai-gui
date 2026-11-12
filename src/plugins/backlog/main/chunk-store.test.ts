@@ -540,7 +540,8 @@ describe('chunk store', () => {
     },
     {
       case: 'a remove of its key',
-      call: (store) => store.edit({ type: 'remove', keys: [rowKey('r', 'b2')] }),
+      call: (store) =>
+        store.edit({ type: 'remove', keys: [rowKey('r', 'b2')] }),
       result: 'b2 is in Beta, which is starting',
     },
     {
@@ -551,7 +552,8 @@ describe('chunk store', () => {
     },
     {
       case: 'a rename of it',
-      call: (store) => store.edit({ type: 'rename', chunkId: 'B', name: 'New' }),
+      call: (store) =>
+        store.edit({ type: 'rename', chunkId: 'B', name: 'New' }),
       result: 'Beta is starting',
     },
     {

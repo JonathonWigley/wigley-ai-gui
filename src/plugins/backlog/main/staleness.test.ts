@@ -506,25 +506,22 @@ describe('staleness reader', () => {
       homeClone: CLONE,
       level: 'fresh',
     },
-  ])(
-    'read_NoRepoFolder_NoNamedPaths ($name)',
-    async ({ homeClone, level }) => {
-      const stale = startReader();
-      await stale.files.write(`${CLONE}/src/a.ts`, 'x');
-      stale.git.topLevel.mockResolvedValue(homeClone);
-      const outside = row({ repoFolder: null, body: 'In `src/a.ts`.' });
+  ])('read_NoRepoFolder_NoNamedPaths ($name)', async ({ homeClone, level }) => {
+    const stale = startReader();
+    await stale.files.write(`${CLONE}/src/a.ts`, 'x');
+    stale.git.topLevel.mockResolvedValue(homeClone);
+    const outside = row({ repoFolder: null, body: 'In `src/a.ts`.' });
 
-      await stale.reader.read([outside]);
-      await settle();
+    await stale.reader.read([outside]);
+    await settle();
 
-      expect(stale.sent[0][outside.key]).toMatchObject({
-        namedPaths: [],
-        gonePaths: [],
-        level,
-      });
-      expect(stale.git.log).not.toHaveBeenCalled();
-    },
-  );
+    expect(stale.sent[0][outside.key]).toMatchObject({
+      namedPaths: [],
+      gonePaths: [],
+      level,
+    });
+    expect(stale.git.log).not.toHaveBeenCalled();
+  });
 
   it('read_HomeOutsideGit_Unknown', async () => {
     const stale = startReader();

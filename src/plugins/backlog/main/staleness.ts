@@ -397,14 +397,7 @@ async function rowHistory(
   }
   return {
     written,
-    since: await commitsAfter(
-      deps,
-      row,
-      written,
-      repoFolder,
-      repoClone,
-      named,
-    ),
+    since: await commitsAfter(deps, row, written, repoFolder, repoClone, named),
   };
 }
 

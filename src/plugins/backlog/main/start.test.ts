@@ -452,8 +452,7 @@ function startBacklogOnHarness({ drive = false } = {}) {
     (): ScopedAgentsMainExports => ({
       addScopedAgent: () => ({
         ask: async () => 'sess-a',
-        sessionOf: async (scope) =>
-          scope === 'global' ? ASSISTANT_ROW : null,
+        sessionOf: async (scope) => (scope === 'global' ? ASSISTANT_ROW : null),
         scopeOf: async (session) =>
           session.id === ASSISTANT_ROW ? 'global' : null,
         dispose: () => undefined,
