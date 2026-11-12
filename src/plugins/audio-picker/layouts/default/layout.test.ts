@@ -204,6 +204,11 @@ describe('default audio picker layout', () => {
       parts: ['tag:Loop · -1 to +3 st:neutral'],
     },
     {
+      case: 'fractional pitch',
+      root: () => candidate({ play: 'loop', pitch: { min: 0.5, max: 1.25 } }),
+      parts: ['tag:Loop · +0.5 to +1.25 st:neutral'],
+    },
+    {
       case: 'fixed pitch',
       root: () =>
         candidate({

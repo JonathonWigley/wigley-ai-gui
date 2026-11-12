@@ -312,7 +312,7 @@ describe('audio picker page part', () => {
   it.each<
     [string, ('submit' | 'askCancel' | 'confirmCancel')[], boolean, string[]]
   >([
-    ['a submit main takes', ['submit'], true, ['sent']],
+    ['a submit main takes', ['submit'], true, ['submitted']],
     [
       'a cancel main takes',
       ['askCancel', 'confirmCancel'],
@@ -321,7 +321,7 @@ describe('audio picker page part', () => {
     ],
     ['a submit main refuses', ['submit'], false, []],
   ])(
-    'audioPickerPagePart_Finish_LogsSentOrCancelled: %s',
+    'audioPickerPagePart_Finish_LogsSubmittedOrCancelledOnce: %s',
     async (_name, commandNames, isTaken, lines) => {
       const setup = await startOverOpenPickers(
         { forms: [presentedPicker('p1')] },
@@ -334,17 +334,23 @@ describe('audio picker page part', () => {
         void commands[name]({} as PageCommandContext);
       }
       await settle();
+      // Main closes a finish it takes, as its finish does.
+      if (isTaken) {
+        setup.harness.send('formClosed', { formId: 'p1', byFinish: true });
+      }
 
       expect(
         setup
           .messages()
-          .filter((message) => message === 'sent' || message === 'cancelled'),
+          .filter(
+            (message) => message === 'submitted' || message === 'cancelled',
+          ),
       ).toEqual(lines);
       await setup.harness.stop();
     },
   );
 
-  it('audioPickerPagePart_NotesBoxFocused_LogsTheMoment', async () => {
+  it('audioPickerPagePart_NotesBoxFocused_LogsTheMomentOnce', async () => {
     const setup = await startOverOpenPickers({
       forms: [presentedPicker('p1')],
     });
@@ -358,10 +364,8 @@ describe('audio picker page part', () => {
     moment2Box.focused();
 
     expect(
-      setup
-        .messages()
-        .filter((message) => message === 'focused note on moment 2'),
-    ).toEqual(['focused note on moment 2', 'focused note on moment 2']);
+      setup.messages().filter((message) => message.startsWith('focused note')),
+    ).toEqual(['focused notes on moment 2', 'focused notes on moment 2']);
     await setup.harness.stop();
   });
 

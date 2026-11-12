@@ -1,4 +1,6 @@
 import { definePlugin } from '../../shared/define-plugin';
+// Re-exported for the default keymap, which may import only the manifests.
+export { MAX_CANDIDATES } from './contract';
 
 // The audio picker's scopes are its popup's places, each titled for the key
 // help; a notes box binds in `list` with `where: 'box'`.

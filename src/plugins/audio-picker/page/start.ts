@@ -55,7 +55,7 @@ import { mountPickerPopups } from './picker-view';
 type PickerApi = PageApi<typeof audioPickerManifest, AudioPickerChannel>;
 
 // Each notes box's edits reach the store, and a box taking focus shows its
-// moment and logs the focus, so every way into a box logs it once.
+// moment; the editor boxes log the focus once, however the box took it.
 function createBoxes(
   api: PickerApi,
   store: PickerStore,
@@ -71,14 +71,12 @@ function createBoxes(
           moment: box.moment,
           value,
         }),
-      activated: (box) => {
+      activated: (box) =>
         store.dispatch({
           type: 'showMoment',
           formId: box.formId,
           moment: box.moment,
-        });
-        log(`focused note on moment ${box.moment + 1}`);
-      },
+        }),
     },
     log,
     PICKER_BOX_IDENTITY,
@@ -257,10 +255,7 @@ export function createAudioPickerPagePart(
           store,
           boxes,
           audio,
-          finish: (formId, end) =>
-            api.channel.invoke('finish', formId, end).then(() => {
-              services.log(end.kind === 'submitted' ? 'sent' : 'cancelled');
-            }),
+          finish: (formId, end) => api.channel.invoke('finish', formId, end),
           scrollPicker: (step, direction) => popups.scrollBy(step, direction),
           openPreview: () => api.channel.invoke('openPreview'),
           toast: services.toast,

@@ -41,15 +41,14 @@ export interface PickerAudioDeps {
 
 // The page's sounds: it reads and decodes each picker's candidates as the
 // picker arrives in the store, and plays one sound at a time across the page.
-// A play stops on `stop()`, on a `toggle` of any row, and when its picker
-// leaves the store, starts sending or stops being the visible surface; moving
-// the cursor leaves it playing. No rejection escapes `toggle`.
+// A play stops on a `toggle` of any row, and when its picker leaves the store,
+// starts sending or stops being the visible surface; moving the cursor leaves
+// it playing. No rejection escapes `toggle`.
 export interface PickerAudio extends Disposable {
   // Stops the row's sound when it is the one playing; otherwise stops the
   // sound playing and plays the row's. Does nothing for a picker not in the
   // store or sending.
   toggle(formId: string, moment: number, candidate: number): void;
-  stop(): void;
 }
 
 // One open picker's reads and decoded sounds.
@@ -275,7 +274,7 @@ export function createPickerAudio(deps: PickerAudioDeps): PickerAudio {
         addPicker(picker);
       }
     }
-    for (const formId of [...loads.keys()]) {
+    for (const formId of loads.keys()) {
       if (formById(state, formId) === undefined) {
         loads.delete(formId);
       }
@@ -378,10 +377,6 @@ export function createPickerAudio(deps: PickerAudioDeps): PickerAudio {
         return;
       }
       void startPlay(latestToggle, formId, load, moment, candidateIndex);
-    },
-    stop() {
-      latestToggle += 1;
-      stopCurrent();
     },
     dispose() {
       isDisposed = true;

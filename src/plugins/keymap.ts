@@ -12,7 +12,7 @@ import type {
 } from '../contracts/panes';
 import type { QualifiedCommandId, QualifiedScopeId } from '../contracts/plugin';
 import type { ListPickerCommand } from '../shared/list-picker-commands';
-import { type builtInManifests, DIGITS } from './manifests';
+import { type builtInManifests, DIGITS, MAX_CANDIDATES } from './manifests';
 
 type BuiltInManifest = (typeof builtInManifests)[number];
 
@@ -44,6 +44,10 @@ type BuiltInKeymap = Omit<
   })[];
   global: BuiltInAcceleratorBind[];
 };
+
+// The digits of an audio picker moment's rows: its candidates, then None of
+// these, so no digit binds a row a moment can never hold.
+const AUDIO_PICKER_ROW_DIGITS = DIGITS.slice(0, MAX_CANDIDATES + 1);
 
 // A bare digit picks a numbered choice or action on the page; in a text box,
 // where vim reads a digit as a count, `<Leader>a` and a digit picks.
@@ -521,13 +525,13 @@ export const defaultKeymap = {
       scope: 'audio-picker.list',
       command: 'audio-picker.chooseRow',
     },
-    ...DIGITS.map((digit) => ({
+    ...AUDIO_PICKER_ROW_DIGITS.map((digit) => ({
       keys: digit,
       scope: 'audio-picker.list' as const,
       command: 'audio-picker.choose' as const,
       arg: Number(digit),
     })),
-    ...DIGITS.map((digit) => ({
+    ...AUDIO_PICKER_ROW_DIGITS.map((digit) => ({
       keys: `<Leader>a${digit}`,
       scope: 'audio-picker.list' as const,
       command: 'audio-picker.choose' as const,

@@ -37,6 +37,7 @@ import { workflowSpikeManifest } from './workflow-spike/manifest';
 
 // The digits that pick forms' numbered choices, which the default keymap binds.
 export { DIGITS } from './forms/manifest';
+export { MAX_CANDIDATES } from './audio-picker/manifest';
 
 // Every built-in plugin's manifest, each keeping its literal id, command ids
 // and scopes in its type, which the default keymap is checked against.

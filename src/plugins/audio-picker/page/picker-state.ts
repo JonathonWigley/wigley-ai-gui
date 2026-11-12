@@ -249,7 +249,7 @@ export function statusOf(picker: OpenPicker): string {
 
 // The 0-based row of the moment's choice: its candidate's, or the None of
 // these row for choice 0.
-export function chosenRow(picker: OpenPicker, moment: number): number {
+function chosenRow(picker: OpenPicker, moment: number): number {
   return rowOfChoice(
     picker.picker.moments[moment],
     picker.answers[moment].choice,
@@ -265,8 +265,22 @@ function rowOfChoice(moment: AudioMoment, choice: number): number {
   return choice === 0 ? moment.candidates.length : choice - 1;
 }
 
+// The choice the moment's 0-based `row` stands for: its candidate's 1-based
+// number, or 0 for the None of these row.
+export function choiceOfRow(
+  picker: OpenPicker,
+  moment: number,
+  row: number,
+): number {
+  return row === noneRow(picker, moment) ? 0 : row + 1;
+}
+
 // Whether `row` is one of the moment's rows, its None of these row included.
-function isRowOf(picker: OpenPicker, moment: number, row: number): boolean {
+export function isRowOf(
+  picker: OpenPicker,
+  moment: number,
+  row: number,
+): boolean {
   const isMoment = moment >= 0 && moment < picker.picker.moments.length;
   return isMoment && row >= 0 && row <= noneRow(picker, moment);
 }
@@ -380,7 +394,7 @@ function choose(picker: OpenPicker, moment: number, row: number): OpenPicker {
     return picker;
   }
   const answer = picker.answers[moment];
-  const choice = row === noneRow(picker, moment) ? 0 : row + 1;
+  const choice = choiceOfRow(picker, moment, row);
   return answer.choice === choice
     ? picker
     : withAnswer(picker, moment, { ...answer, choice });

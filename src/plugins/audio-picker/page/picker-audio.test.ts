@@ -195,6 +195,8 @@ function setup(options: Options = {}) {
     },
     // Runs every pending timer, as VISIBILITY_POLL_MS passing does.
     advance: () => {
+      // Each run re-arms its timer, which a live iteration would run again.
+      // oxlint-disable-next-line unicorn/no-useless-spread
       for (const [handle, run] of [...timers]) {
         timers.delete(handle);
         run();

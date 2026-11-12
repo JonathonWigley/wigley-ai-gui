@@ -29,6 +29,8 @@ import { PICKER_BOX_IDENTITY, type PickerBox } from './layout/picker-kit';
 import type { PickerAudio } from './picker-audio';
 import {
   buildBody,
+  choiceOfRow,
+  isRowOf,
   listedPicker,
   noneRow,
   type OpenPicker,
@@ -40,7 +42,10 @@ import type { PickerStore } from './picker-store';
 
 export interface PickerCommandDeps {
   store: PickerStore;
-  boxes: Pick<EditorBoxes<PickerBox>, 'focus' | 'leave' | 'active' | 'boxOf'>;
+  boxes: Pick<
+    EditorBoxes<PickerBox>,
+    'focus' | 'leave' | 'active' | 'activeMode' | 'boxOf'
+  >;
   audio: Pick<PickerAudio, 'toggle'>;
   // Hands the finished picker to main; rejects with the reason when main
   // keeps it open.
@@ -187,19 +192,24 @@ function logCursorMove(deps: PickerCommandDeps, before: PickerCursor | null) {
   }
 }
 
-// A moment move fired from a box focuses the new moment's box, so typing goes
-// on in the moment the user moved to.
+// A moment move fired from a box focuses the new moment's box in the mode the
+// box was in, so typing goes on in the moment the user moved to: insert mode
+// at the text's end, else the new box keeps its own mode.
 function moveMoment(
   deps: PickerCommandDeps,
   box: PickerBox | undefined,
   action: PickerAction,
 ) {
+  const wasInserting = deps.boxes.activeMode()?.mode === 'insert';
   moveCursor(deps, action);
   const picker = listedPicker(deps.store.get());
   const isOtherMoment =
     box !== undefined && picker !== null && picker.cursor.moment !== box.moment;
   if (isOtherMoment) {
-    deps.boxes.focus(momentBox(picker, picker.cursor.moment), APPEND);
+    deps.boxes.focus(
+      momentBox(picker, picker.cursor.moment),
+      wasInserting ? APPEND : undefined,
+    );
   }
 }
 
@@ -226,7 +236,7 @@ function chooseNumbered(deps: PickerCommandDeps, n: number) {
     return;
   }
   const { moment } = picker.cursor;
-  if (n - 1 > noneRow(picker, moment)) {
+  if (!isRowOf(picker, moment, n - 1)) {
     deps.log(`no row ${n} in moment ${moment + 1}`);
     return;
   }
@@ -241,16 +251,16 @@ function chooseAt(
   at: { moment: number; row: number },
 ) {
   const { moment, row } = at;
-  const isOwnRow = row >= 0 && row <= noneRow(picker, moment);
-  if (picker.sending !== null || !isOwnRow) {
+  if (picker.sending !== null || !isRowOf(picker, moment, row)) {
     return;
   }
   deps.store.dispatch({ type: 'choose', formId: picker.formId, moment, row });
-  const choice =
-    row === noneRow(picker, moment)
+  const choice = choiceOfRow(picker, moment, row);
+  const chosen =
+    choice === 0
       ? 'None of these'
-      : picker.picker.moments[moment].candidates[row].name;
-  deps.log(`chose ${choice} on moment ${moment + 1}`);
+      : picker.picker.moments[moment].candidates[choice - 1].name;
+  deps.log(`chose ${chosen} on moment ${moment + 1}`);
 }
 
 function togglePlay(deps: PickerCommandDeps) {

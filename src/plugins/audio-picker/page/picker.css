@@ -18,7 +18,9 @@
   padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-6);
 }
 
-.audio-picker-tab .audio-picker-scroller > * {
+/* The head's slot lays out as its part, so the part takes the cap. */
+.audio-picker-tab .audio-picker-scroller > *,
+.audio-picker-tab .audio-picker-scroller > .audio-picker-part > * {
   max-width: var(--wg-prose-measure);
 }
 
@@ -39,6 +41,46 @@
   flex-direction: column;
   gap: var(--wg-space-1);
   margin-top: var(--wg-space-6);
+}
+
+/* A notes box: the input frame owns background, border, radius and the focus
+   ring; this sets the editor's height only. The editor grows with its text up
+   to a cap, then scrolls. */
+.audio-picker-tab .audio-picker-notes-field {
+  display: grid;
+}
+
+.audio-picker-tab .audio-picker-notes-field > .audio-picker-notes-box,
+.audio-picker-tab .audio-picker-notes-field > .box-keys {
+  grid-area: 1 / 1;
+}
+
+.audio-picker-tab .audio-picker-notes-box {
+  overflow: hidden;
+}
+
+/* `⇧⇥ ⇥` on the frame's bottom edge at its right end, while the box has
+   focus. */
+.audio-picker-tab .audio-picker-notes-field > .box-keys {
+  align-self: end;
+  background: var(--wg-sheet-background);
+  justify-self: end;
+  line-height: 1;
+  margin-right: var(--wg-space-2);
+  padding: 0 var(--wg-space-1);
+  transform: translateY(50%);
+}
+
+.audio-picker-tab .audio-picker-notes-field:not(:focus-within) > .box-keys {
+  visibility: hidden;
+}
+
+.audio-picker-tab .audio-picker-notes-box .cm-editor {
+  max-height: calc(var(--wg-space-8) * 8);
+}
+
+.audio-picker-tab .audio-picker-notes-box .cm-scroller {
+  overflow: auto;
 }
 
 /* Cancel picker and Send, under the list. */

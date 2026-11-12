@@ -514,6 +514,17 @@ describe('mountPickerPopups', () => {
       },
       1,
     ],
+    [
+      'a focused box under the cancel prompt',
+      null,
+      (h) => {
+        const leave = vi.spyOn(h.boxes, 'leave');
+        h.boxes.focus(MOMENT_1_BOX);
+        h.store.dispatch({ type: 'openCancelPrompt' });
+        return leave.mock.calls.length;
+      },
+      1,
+    ],
   ])(
     'mountPickerPopups_Lifecycle_FollowsThePicker: %s',
     (_name, draft, act, expected) => {

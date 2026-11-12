@@ -73,6 +73,7 @@ import {
   type PickerPartKitDeps,
 } from './layout/picker-kit';
 import {
+  listedPicker,
   type OpenPicker,
   type PickerState,
   scopeOf,
@@ -262,7 +263,7 @@ export function mountPickerPopups(deps: PickerViewDeps): PickerPopups {
   // A view per open picker, built when the picker appears, which mounts it in
   // its session's popup, and destroyed with its boxes when the picker leaves.
   const syncViews = (state: PickerState) => {
-    for (const formId of [...views.keys()]) {
+    for (const formId of views.keys()) {
       if (formById(state, formId) === undefined) {
         destroyView(formId);
       }
@@ -286,9 +287,10 @@ export function mountPickerPopups(deps: PickerViewDeps): PickerPopups {
       return;
     }
     const state = store.get();
-    // Left before syncViews destroys a closed picker's boxes with its view.
+    // Left before syncViews destroys a closed picker's boxes with its view,
+    // and under the cancel prompt, so its keys never type into the note.
     const box = boxes.active();
-    if (box !== null && activeForm(state)?.formId !== box.formId) {
+    if (box !== null && listedPicker(state)?.formId !== box.formId) {
       boxes.leave();
     }
     syncViews(state);
@@ -348,7 +350,7 @@ export function mountPickerPopups(deps: PickerViewDeps): PickerPopups {
     dispose() {
       statusPart.dispose();
       storeSubscription.dispose();
-      for (const formId of [...views.keys()]) {
+      for (const formId of views.keys()) {
         destroyView(formId);
       }
     },

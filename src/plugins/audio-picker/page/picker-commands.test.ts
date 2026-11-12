@@ -3,7 +3,11 @@ import type {
   AgentFormEnd,
   AgentFormEndKind,
 } from '../../../contracts/agent-forms';
-import type { FocusOptions, TextEditor } from '../../../contracts/editor';
+import type {
+  FocusOptions,
+  TextEditor,
+  VimMode,
+} from '../../../contracts/editor';
 import type {
   CommandHandler,
   PageCommandContext,
@@ -44,6 +48,13 @@ function box(moment: number): PickerBox {
   return { formId: 'p1', moment };
 }
 
+// A box of picker `p1` a command fires in, in vim mode `mode`.
+type BoxTyping = { box: PickerBox; mode: 'insert' | 'normal' };
+
+function typing(moment: number, mode: BoxTyping['mode']): BoxTyping {
+  return { box: box(moment), mode };
+}
+
 // Picker `p1` of the two-moment fixture, active in view 'list' with the
 // cursor at `cursor` (moment 1's chosen row, `{0,1}`, unless given): moment 1
 // rows `Soft chime`, `Bright chime`, None; moment 2 rows `Low thud`,
@@ -61,6 +72,7 @@ function setup(cursor?: PickerCursor) {
   }
   const focused: { box: PickerBox; options: FocusOptions | undefined }[] = [];
   let active: PickerBox | null = null;
+  let mode: VimMode | null = null;
   let leaves = 0;
   const toggles: [string, number, number][] = [];
   const finished: { formId: string; end: AgentFormEnd<AudioPickerBody> }[] = [];
@@ -78,6 +90,7 @@ function setup(cursor?: PickerCursor) {
         active = null;
       },
       active: () => active,
+      activeMode: () => mode,
       boxOf: (editor) => boxEditors.get(editor),
     },
     audio: {
@@ -113,6 +126,10 @@ function setup(cursor?: PickerCursor) {
     finished,
     logs,
     leaves: () => leaves,
+    // Puts the focused box in vim mode `name`, as typing in it does.
+    setMode: (name: string) => {
+      mode = { mode: name, subMode: '' };
+    },
     choices: () => picker().answers.map((answer) => answer.choice),
     cursor: () => picker().cursor,
   };
@@ -268,7 +285,7 @@ describe('pickerCommandHandlers', () => {
       string,
       PickerCursor | undefined,
       PickerCommand,
-      PickerBox | null,
+      BoxTyping | null,
       { box: PickerBox; options: FocusOptions | undefined }[],
       PickerCursor,
       number,
@@ -299,7 +316,7 @@ describe('pickerCommandHandlers', () => {
       "nextBox from moment 1's box",
       undefined,
       'nextBox',
-      box(0),
+      typing(0, 'insert'),
       [{ box: box(1), options: undefined }],
       { moment: 0, row: 1 },
       0,
@@ -309,18 +326,28 @@ describe('pickerCommandHandlers', () => {
       "prevBox from moment 1's box",
       undefined,
       'prevBox',
-      box(0),
+      typing(0, 'insert'),
       [{ box: box(0), options: undefined }],
       { moment: 0, row: 1 },
       0,
       [],
     ],
     [
-      "nextMoment from moment 1's box",
+      "nextMoment from moment 1's box in insert mode",
       undefined,
       'nextMoment',
-      box(0),
+      typing(0, 'insert'),
       [{ box: box(1), options: { insertAtEnd: true } }],
+      { moment: 1, row: 0 },
+      0,
+      ['cursor moment 2 row 1'],
+    ],
+    [
+      "nextMoment from moment 1's box in normal mode",
+      undefined,
+      'nextMoment',
+      typing(0, 'normal'),
+      [{ box: box(1), options: undefined }],
       { moment: 1, row: 0 },
       0,
       ['cursor moment 2 row 1'],
@@ -329,7 +356,7 @@ describe('pickerCommandHandlers', () => {
       'leaveBox',
       undefined,
       'leaveBox',
-      box(0),
+      typing(0, 'insert'),
       [],
       { moment: 0, row: 1 },
       1,
@@ -339,8 +366,11 @@ describe('pickerCommandHandlers', () => {
     'pickerCommandHandlers_Box_FocusesTheMomentsBox: %s',
     (_name, start, command, inBox, focused, cursor, leaves, logs) => {
       const h = setup(start);
+      if (inBox !== null) {
+        h.setMode(inBox.mode);
+      }
 
-      h.run(command, inBox === null ? {} : { editor: editorOf(inBox) });
+      h.run(command, inBox === null ? {} : { editor: editorOf(inBox.box) });
 
       expect(h.focused).toEqual(focused);
       expect(h.cursor()).toEqual(cursor);
