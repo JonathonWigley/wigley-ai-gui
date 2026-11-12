@@ -19,6 +19,7 @@ import { liveViewManifest } from './live-view/manifest';
 import { notesManifest } from './notes/manifest';
 import { practiceManifest } from './practice/manifest';
 import { primerManifest } from './primer/manifest';
+import { scopedAgentsManifest } from './scoped-agents/manifest';
 import { sessionLogManifest } from './session-log/manifest';
 import { sessionStashManifest } from './session-stash/manifest';
 import { sessionsManifest } from './sessions/manifest';
@@ -62,6 +63,7 @@ export const builtInManifests = [
   docsSessionTabManifest,
   galleryManifest,
   settingsManifest,
+  scopedAgentsManifest,
   backlogManifest,
   notesManifest,
   practiceManifest,

@@ -215,6 +215,24 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  'scoped-agents': {
+    sublayers: {
+      // Runs its host-id wait on the shared global timers under fake timers.
+      'src/plugins/scoped-agents/main/scoped-agent-service.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/paths',
+          'src/shared/agent-forms',
+          'src/plugins/scoped-agents/contract.ts',
+          'src/plugins/scoped-agents/main',
+          'src/plugins/chat/contract.ts',
+          'src/plugins/sessions/contract.ts',
+        ],
+        packages: [],
+      },
+    },
+  },
   // Its relay's socket and its MCP adapter's SDK sit in sublayers of main; the
   // relay and its channel path use the shared local channel transport.
   sessions: {
