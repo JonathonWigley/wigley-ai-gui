@@ -2,7 +2,6 @@
 
 **Contents**
 
-- **Status** — what is built and what is planned.
 - **Intent** — what the picker is for, who opens it, and what a good outcome looks like.
 - **Tool contract** — the two tools, the arguments, the outcomes and the picks.
 - **Path and size rules** — which files the picker reads, and why only those.
@@ -11,13 +10,8 @@
 - **Look** — the list, the rows, the None of these row and the notes box.
 - **Keys** — the binds and the playback rules.
 - **Headless** — the auto-answer.
+- **Settings and files** — the three settings and the two data folders.
 - **Out of scope** — what the picker leaves alone.
-
-## Status
-
-Planned in `audio-picker` (plan folder `plan-audio-picker`), not built yet. Every tool, key, look and behaviour
-below is the design the code will follow, not what the app does today. The plan's doc re-read task checks each line
-against the landed code and removes this notice.
 
 ## Intent
 
@@ -48,14 +42,20 @@ contract names.
 |---|---|---|
 | picker | `heading`, `overview` | a title, and an optional line on the feature |
 | moment | `title`, `reason`, `recommend` | the moment the sound marks, the agent's one-line reason, the 1-based recommended candidate |
-| moment | `candidates` | 2 to 5 candidates |
+| moment | `candidates` | 1 to `MAX_CANDIDATES` (5) candidates in parse; the skill asks the agent for 2 to 5 |
 | candidate | `name`, `library`, `files` | the sound's name, its library, its absolute file paths |
 | candidate | `play`, `volume`, `pitch` | `one-shot`, `loop` or `variants`; the game's volume 0..1; an optional semitone range `{ min, max }` |
 | candidate | `loudness_lufs`, `drive_url` | both optional, the agent's own |
 
 The payload holds an `outcome` and the user's `picks`, one per moment: the chosen candidate (1-based) or `0` for
-None of these, and the moment's note. Outcomes follow the shared form outcomes plus
-`auto_answered` for a headless session.
+None of these, and the moment's note. The `outcome` is one of:
+
+- `submitted`, `draft` and `cancelled`, as a forms round returns them
+- `auto_answered`, for a headless session
+- `no_audio_picker`, from `collect_last_audio_picker` when no picker is open and no finished picks wait
+- `needs_manual_open`, from the `wigley-forms` relay only, when it cannot start the app
+
+A result may carry `earlier_heading`: its picks belong to an earlier picker the agent never received.
 
 The agent supplies the play format, volume and pitch because only the agent knows how the game will play the sound.
 The picker plays what the agent describes, so the user approves the sound as it will run.
@@ -76,8 +76,9 @@ The picker plays what the agent describes, so the user approves the sound as it 
 - The page decodes the bytes with Web Audio (`AudioContext.decodeAudioData`). The page's CSP has no `media-src`, so an
   `<audio>` element or a `blob:` media URL is blocked. Web Audio needs no CSP change, so the app's security stays as
   it is.
-- Web Audio also fits the playback: an `AudioBufferSourceNode` loops a buffer with no gap, where an `<audio>` loop
-  can leave a gap at the seam. A seamless loop is the point of the loop format.
+- Web Audio also fits the playback: an `AudioBufferSourceNode` loops the decoded buffer with no gap of its own. A
+  compressed file (`.mp3`, `.m4a`, `.ogg`) carries encoder padding, so its loop can still gap at the seam; a
+  seamless loop needs an uncompressed or gapless-trimmed file.
 - On open, the page reads and decodes every candidate file, two at a time, so each row shows its waveform. A row
   shows a loading state until its decode lands, and an error line when the read or the decode fails (a Drive file
   that will not download, a format Chromium cannot decode).
@@ -96,7 +97,8 @@ sound plays: the picker is for approving and choosing, and a control would let t
 never plays.
 
 - **one-shot** plays the file once.
-- **loop** plays one file as a seamless loop until the user stops it.
+- **loop** plays one file in a loop until the user stops it. The loop is gapless for an uncompressed file; a compressed
+  file can gap at the seam (How bytes reach the page).
 - **variants** is a set of two or more files. Each play picks one at random, as the game will.
 - **pitch** is an optional semitone range. Each play picks a uniform value in it and sets
   `playbackRate = 2^(semitones/12)`.
@@ -138,17 +140,24 @@ Scopes and binds follow `docs/keymap.md`; the preview is `Space z l m`.
 | `Ctrl+j` / `Ctrl+k` | scroll |
 | `Ctrl+n` | as in every main view |
 
-Leader routes from a box follow forms' `<Leader>a…` group. Cancel uses the key forms uses for cancel, with the same
-confirm.
+Leader routes from a box follow forms' `<Leader>a…` group. `C` asks to cancel, as in forms, and the confirm takes `y` to cancel and `n` or
+`Esc` to keep the picker. `Esc` in a notes box leaves the box.
 
-A loop keeps playing when the cursor moves, so the user can hear it against another row's start. Hiding the popup,
-sending, cancelling and closing the session stop playback.
+A loop keeps playing when the cursor moves, so the user can hear it against another row's start. Playback stops when
+the picker stops being the visible surface (hidden, covered by another popup, Sessions mode left, another session
+shown in the focused pane), and on send, cancel and the session closing.
 
 ## Headless
 
 A headless session has no user to play the sounds. The shared service auto-answers it at once with each moment's
 recommended candidate and an empty note, outcome `auto_answered`, the way forms answers a headless round with its
 recommendations. The agent wires the recommended picks and carries on.
+
+## Settings and files
+
+- Settings: `autosaveDelayMs` (400), `deadlineSeconds` (240) and `layout` (`default`).
+- `~/.agents/wigley-audio-picker/pickers` holds each picker's saved form and draft.
+- `~/.agents/wigley-audio-picker/sample-sounds` holds the sounds the layout preview plays.
 
 ## Out of scope
 

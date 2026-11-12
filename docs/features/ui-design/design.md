@@ -177,7 +177,7 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 | Title bar, activity bar, side bar, tab strips, status bar | L1 chrome | glass |
 | Sessions list | L1, side bar slot | |
 | Session tab content (Chat, Docs) | L2 sheet | tabs sit on the sheet's top edge |
-| Session popup (round, primer) | L2 sheet | raised over the tabs under the `scrim`, no shadow (`../session-popups/design.md`) |
+| Session popup (round, primer, audio picker) | L2 sheet | raised over the tabs under the `scrim`, no shadow (`../session-popups/design.md`) |
 | Forms rail | L2 | the left pane of a split inside the session popup |
 | Chat transcript | L2 | user turns as tinted blocks; tool calls as collapsible cards with a status dot |
 | Chat composer | L3 | floating glass, radius 14, 12px inset; entries scroll beneath it; holds the editor, the session controls as chips, and send |

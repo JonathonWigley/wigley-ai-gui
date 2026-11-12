@@ -7,13 +7,13 @@
 - **Open, hidden and gone** — the three states, and what moves between them.
 - **Keys and focus** — which surface holds the key scope, and the toggle key.
 - **Look** — height, scrim, motion, the hidden bar.
-- **Forms and the primer** — how the shared form helper uses popups.
+- **Forms and the primer** — how the shared form helper uses popups, for forms, the primer and the audio picker.
 - **The session Docs tab** — why it moved to a plugin that starts off.
 - **Decisions** — what was settled and rejected.
 
 ## Intent
 
-A round or a primer needs the user now, but the user often needs the chat to answer it: what the agent said,
+A round, a primer or an audio picker needs the user now, but the user often needs the chat to answer it: what the agent said,
 what it changed. As a tab, the form replaced the chat, and reading the chat meant leaving the form. As a popup,
 the form slides up over the session's tabs and can be put away for a moment and brought back, so the chat stays
 one key away while the form waits.
@@ -33,7 +33,7 @@ one key away while the form waits.
 - **It belongs to the session, not the pane.** The popup lives in the session's frame, so it moves with the session
   between panes as the tab bar does, and a frame no pane shows keeps its popups hidden in the holder.
 - **Its status is the row part's.** `setStatus` names the popup in the hidden bar only. A round's status reaches the
-  session row through forms' and primer's row parts (`forms.status`, `primer.status`), whose tooltip joins the row's.
+  session row through forms', primer's and audio picker's row parts (`forms.status`, `primer.status`, `audio-picker.status`), whose tooltip joins the row's.
 - **Its close guard is a tab's.** `beforeClose(atOnce)` joins the tabs' guards when the user closes the session, and a
   popup that says `closesAtOnce` makes the close key end its round at once, as a tab that says it does.
 
@@ -99,8 +99,8 @@ one key away while the form waits.
 
 ## Forms and the primer
 
-- The shared helper `src/shared/page/session-form-popups.ts` replaces `session-form-tabs.ts`: forms' rounds and the
-  primer each build their per-session popup through it. It adds the popup with the session's first form, disposes it
+- The shared helper `src/shared/page/session-form-popups.ts` replaces `session-form-tabs.ts`: forms' rounds, the
+  primer and the audio picker (the third user) each build their per-session popup through it. It adds the popup with the session's first form, disposes it
   with the last, and keeps the `needs you` activity it kept for the tab; the round's status stays its row part, and
   its place on reload stays `session-form-places.ts`'s.
 - Every session shows its forms this way, a terminal session with no Chat tab included: hidden there, the popup

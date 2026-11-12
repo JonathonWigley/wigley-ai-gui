@@ -125,6 +125,7 @@ stays in themes.
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail, review and notices panes |
 | `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session header; the composer and its status line, a `/` completion row's description (`completionDescription`), the attachments, the picker rows and section headings (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time and profile on its side-bar row (`rowClock`, `rowProfile`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
+| `audio-picker` | `audio-picker.layout` | the head, moment, candidate, None of these and notes parts |
 | `docs` | `docs.layout` | the tree, its rows and its Wiki and All pages switch; the rendered doc, its page frame and right column, header, disk banner, section edit control and editor frame; Recent changes and the missing Main page's empty state; the list pages and their rows; the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
 | `practice` | `practice.layout` | the problem list (its pane, header, rows and empty state) in the side bar; the problem column's three stacked panes (problem, editor, console) and the no-problem state; the problem pane's tabs (description, submissions with their rows and a submission's code, notes, solution), the console's Testcase and Result tabs, a case's result, the Solution confirm body, the interviewer pane's ask box (`askBox`) and the import dialog's body (`importBox`) |
@@ -161,6 +162,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l s` | sessions: rows in every state |
 | `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
 | `Space z l w` | workflow: Large's sample session in every stage, the plan-ready countdown included |
+| `Space z l m` | audio picker: a sample picker of three moments, every play format, and a file that will not decode |
 
 ## The primer's columns
 
