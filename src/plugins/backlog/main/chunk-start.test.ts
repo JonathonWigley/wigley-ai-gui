@@ -4,7 +4,7 @@ import type { ChatMainExports } from '../../chat/contract';
 import type { BacklogChunk, ChunkStart } from '../contract';
 import { rowKey } from '../row-key';
 import { createChunkStarter, noFolderRefusal } from './chunk-start';
-import { createChunkStore } from './chunk-store';
+import { createChunkStore, titlesByRepo } from './chunk-store';
 import type { BacklogRow } from './rows';
 
 const FOLLOWUPS = '/dev/r/docs/features/followups.md';
@@ -52,10 +52,12 @@ type FakeChat = Pick<
   'launch' | 'defaultProfile' | 'profileOf'
 >;
 
+type SetSessionSpy = Awaited<ReturnType<typeof starterOver>>['setSession'];
+
 // A starter over a real store holding `chunks`, whose prune, retireUnheld and
-// setSession are spies. Chat holds the sessions in `held`; its `launch`
-// resolves to `sess-1`, `sess-2`, … and holds each, unless `chat` replaces a
-// member. The launch brief is `Brief.`.
+// setSession are spies; prune keeps every title of `rows`. Chat holds the
+// sessions in `held`; its `launch` resolves to `sess-1`, `sess-2`, … and holds
+// each, unless `chat` replaces a member. The launch brief is `Brief.`.
 async function starterOver(
   chunks: BacklogChunk[],
   {
@@ -71,6 +73,7 @@ async function starterOver(
   const store = createChunkStore({
     data,
     randomHex: () => 'new',
+    clock: { now: () => 0 },
     restored: async () => undefined,
     isHeld: (sessionId) => holding.has(sessionId),
     log: () => undefined,
@@ -97,6 +100,7 @@ async function starterOver(
   const starter = createChunkStarter({
     store,
     rows: async () => rows,
+    prunableTitles: async () => titlesByRepo(rows),
     chat: fakeChat,
     launchBrief: () => 'Brief.',
     log: (message) => logged.push(message),
@@ -150,7 +154,10 @@ describe('chunk starter', () => {
       case: 'no row for any title',
       ids: ['U'],
       results: [
-        { chunkId: 'U', refusal: "None of U's follow-ups are in the backlog" },
+        {
+          chunkId: 'U',
+          refusal: "None of U's follow-ups are open in the backlog",
+        },
       ],
       launched: false,
       stored: false,
@@ -209,6 +216,16 @@ describe('chunk starter', () => {
       launched: true,
       stored: true,
     },
+    {
+      case: 'one id twice',
+      ids: ['C', 'C'],
+      results: [
+        { chunkId: 'C', sessionId: 'sess-1' },
+        { chunkId: 'C', refusal: 'C has started' },
+      ],
+      launched: true,
+      stored: true,
+    },
   ])(
     'startChunks_Cases given $case',
     async ({ ids, held, rows, chat, results, launched, stored }) => {
@@ -226,11 +243,12 @@ describe('chunk starter', () => {
 
   it('startChunks_Launch_PassesFolderProfileHeadlessAndMessage', async () => {
     const starting = await starterOver(
-      [chunk('H', ['b', 'gone', 'a'], { headless: true })],
+      [chunk('H', ['b', 'gone', 'a', 'd'], { headless: true })],
       {
         rows: [
           row('a', { line: 3 }),
           row('b', { line: 9, oneLine: '', body: 'B body.' }),
+          row('d', { done: true }),
         ],
       },
     );
@@ -249,7 +267,7 @@ describe('chunk starter', () => {
       headless: true,
     });
     expect(await starting.saved()).toEqual([
-      chunk('H', ['b', 'a'], { headless: true, sessionId: 'sess-1' }),
+      chunk('H', ['b', 'a', 'd'], { headless: true, sessionId: 'sess-1' }),
     ]);
   });
 
@@ -290,6 +308,78 @@ describe('chunk starter', () => {
     expect(await first).toEqual([{ chunkId: 'C', sessionId: 'sess-1' }]);
     expect(starting.chat.launch).toHaveBeenCalledTimes(1);
   });
+
+  it('startChunks_OtherCallStartsLaterId_RefusedAsStarted', async () => {
+    let release: () => void = () => undefined;
+    let launched = 0;
+    const starting = await starterOver([chunk('D', ['b']), C], {
+      chat: {
+        launch: () => {
+          const sessionId = `sess-${String(++launched)}`;
+          return new Promise<string>((resolve) => {
+            const hold = () => {
+              starting.holding.add(sessionId);
+              resolve(sessionId);
+            };
+            if (sessionId === 'sess-1') {
+              release = hold;
+            } else {
+              hold();
+            }
+          });
+        },
+      },
+    });
+
+    const first = starting.starter.start(['D', 'C']);
+    await settle();
+    const second = await starting.starter.start(['C']);
+    release();
+
+    expect(second).toEqual([{ chunkId: 'C', sessionId: 'sess-2' }]);
+    expect(await first).toEqual([
+      { chunkId: 'D', sessionId: 'sess-1' },
+      { chunkId: 'C', refusal: 'C has started' },
+    ]);
+    expect(starting.chat.launch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    {
+      case: 'a write that fails',
+      fail: (setSession: SetSessionSpy) =>
+        setSession.mockRejectedValueOnce(new Error('disk full')),
+      reason: 'disk full',
+    },
+    {
+      case: 'a chunk gone from the store',
+      fail: (setSession: SetSessionSpy) =>
+        setSession.mockResolvedValueOnce(false),
+      reason: 'the chunk is gone',
+    },
+  ])(
+    'startChunks_SessionNotStored_RefusalNamesItAndGoesOn given $case',
+    async ({ fail, reason }) => {
+      const starting = await starterOver([
+        chunk('C1', ['a']),
+        chunk('C2', ['b']),
+      ]);
+      fail(starting.setSession);
+
+      const results = await starting.starter.start(['C1', 'C2']);
+
+      expect(results).toEqual([
+        {
+          chunkId: 'C1',
+          refusal: `C1 started session sess-1, but it was not stored: ${reason}`,
+        },
+        { chunkId: 'C2', sessionId: 'sess-2' },
+      ]);
+      expect(starting.logged).toEqual([
+        `chunk C1: session sess-1 not stored: ${reason}`,
+      ]);
+    },
+  );
 
   it('startChunks_RowClosedBeforeStored_ChunkNotStarted', async () => {
     const starting = await starterOver([C], {

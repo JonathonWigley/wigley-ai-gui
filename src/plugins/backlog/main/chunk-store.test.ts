@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { BacklogChunk, ChunkEdit } from '../contract';
 import { rowKey } from '../row-key';
-import { type ChunkPlan, createChunkStore } from './chunk-store';
+import {
+  type ChunkPlan,
+  type ChunkStore,
+  createChunkStore,
+} from './chunk-store';
 
 const FILE = 'chunks.json';
+const NOW = 1700;
 
 function chunk(
   id: string,
@@ -36,6 +41,7 @@ function settle(): Promise<void> {
 // A store over plugin data holding `chunks` (no file when null). `held` lists
 // the sessions chat holds; `restored` is what `deps.restored` returns. Each
 // new id is `new1`, `new2`, …; `changes` holds each `changed` call's chunks.
+// The clock reads NOW.
 async function storeOver(
   chunks: BacklogChunk[] | null,
   {
@@ -58,6 +64,7 @@ async function storeOver(
   const store = createChunkStore({
     data,
     randomHex: () => `new${String(++made)}`,
+    clock: { now: () => NOW },
     restored,
     isHeld: isHeld ?? ((sessionId) => held.includes(sessionId)),
     log: (message) => logged.push(message),
@@ -427,29 +434,162 @@ describe('chunk store', () => {
       case: 'a known id',
       chunkId: 'A',
       expected: [{ ...A, sessionId: 'sess-2' }, B],
-      written: true,
+      stored: true,
       logged: [],
     },
     {
       case: 'an unknown id',
       chunkId: 'Z',
       expected: [A, B],
-      written: false,
+      stored: false,
       logged: ['No chunk Z for session sess-2'],
     },
   ])(
     'setSession_Cases given $case',
-    async ({ chunkId, expected, written, logged }) => {
+    async ({ chunkId, expected, stored, logged }) => {
       const store = await storeOver([A, B]);
       const write = vi.spyOn(store.data, 'write');
 
-      expect(await store.store.setSession(chunkId, 'sess-2')).toEqual(expected);
+      expect(await store.store.setSession(chunkId, 'sess-2')).toBe(stored);
       expect(await store.saved()).toEqual(expected);
-      expect(write.mock.calls.length > 0).toBe(written);
-      expect(store.changes).toEqual(written ? [expected] : []);
+      expect(write.mock.calls.length > 0).toBe(stored);
+      expect(store.changes).toEqual(stored ? [expected] : []);
       expect(store.logged).toEqual(logged);
     },
   );
+
+  it.each<{
+    case: string;
+    marked: string[];
+    cleared: string[];
+    chunkId: string;
+    result: BacklogChunk | string;
+  }>([
+    {
+      case: 'no such chunk',
+      marked: [],
+      cleared: [],
+      chunkId: 'Z',
+      result: 'No chunk Z',
+    },
+    {
+      case: 'a started chunk',
+      marked: [],
+      cleared: [],
+      chunkId: 'S',
+      result: 'Started has started',
+    },
+    {
+      case: 'a chunk already marked',
+      marked: ['B'],
+      cleared: [],
+      chunkId: 'B',
+      result: 'Beta is starting',
+    },
+    {
+      case: 'a chunk marked then cleared',
+      marked: ['B'],
+      cleared: ['B'],
+      chunkId: 'B',
+      result: B,
+    },
+    {
+      case: 'an unstarted chunk beside a marked one',
+      marked: ['B'],
+      cleared: [],
+      chunkId: 'A',
+      result: A,
+    },
+  ])(
+    'markStarting_Cases given $case',
+    async ({ marked, cleared, chunkId, result }) => {
+      const { store } = await storeOver([A, B, S]);
+      for (const id of marked) {
+        await store.markStarting(id);
+      }
+      for (const id of cleared) {
+        store.clearStarting(id);
+      }
+
+      if (typeof result === 'string') {
+        await expect(store.markStarting(chunkId)).rejects.toThrow(
+          new Error(result),
+        );
+      } else {
+        expect(await store.markStarting(chunkId)).toEqual(result);
+      }
+    },
+  );
+
+  it.each<{
+    case: string;
+    call: (store: ChunkStore) => Promise<BacklogChunk[]>;
+    result: BacklogChunk[] | string;
+  }>([
+    {
+      case: 'an add to it',
+      call: (store) =>
+        store.edit({ type: 'add', keys: [rowKey('r', 'x')], chunkId: 'B' }),
+      result: 'Beta is starting; its follow-ups cannot change',
+    },
+    {
+      case: 'an add of its key elsewhere',
+      call: (store) =>
+        store.edit({ type: 'add', keys: [rowKey('r', 'b1')], chunkId: 'A' }),
+      result: 'b1 is in Beta, which is starting',
+    },
+    {
+      case: 'a remove of its key',
+      call: (store) => store.edit({ type: 'remove', keys: [rowKey('r', 'b2')] }),
+      result: 'b2 is in Beta, which is starting',
+    },
+    {
+      case: 'a headless flag on it',
+      call: (store) =>
+        store.edit({ type: 'setHeadless', chunkId: 'B', headless: true }),
+      result: 'Beta is starting; its headless flag cannot change',
+    },
+    {
+      case: 'a rename of it',
+      call: (store) => store.edit({ type: 'rename', chunkId: 'B', name: 'New' }),
+      result: 'Beta is starting',
+    },
+    {
+      case: 'a replace naming its title',
+      call: (store) =>
+        store.replaceUnstarted(
+          'r',
+          [{ name: 'P', titles: ['b1'] }],
+          new Set(['b1']),
+        ),
+      result: 'b1 is in Beta, which is starting',
+    },
+    {
+      case: "a replace of its repo's unstarted chunks",
+      call: (store) =>
+        store.replaceUnstarted(
+          'r',
+          [{ name: 'Beta', titles: ['x'] }],
+          new Set(['x']),
+        ),
+      result: [B, S, O, chunk('new1', 'r', 'Beta', ['x'])],
+    },
+    {
+      case: 'a prune of its titles',
+      call: (store) => store.prune(new Map([['r', new Set(['a1', 's1'])]])),
+      result: [{ ...A, titles: ['a1'] }, B, S, O],
+    },
+  ])('starting_Cases_ChunkLeftAlone given $case', async ({ call, result }) => {
+    const { store, saved } = await storeOver([A, B, S, O]);
+    await store.markStarting('B');
+
+    if (typeof result === 'string') {
+      await expect(call(store)).rejects.toThrow(new Error(result));
+    } else {
+      expect(await call(store)).toEqual(result);
+      expect(await saved()).toEqual(result);
+    }
+  });
 
   it.each([
     {
@@ -508,28 +648,73 @@ describe('chunk store', () => {
     expect(await saved()).toEqual([chunk('A', 'r', 'A', ['a1', 'x', 'y'])]);
   });
 
-  it.each([
-    { case: 'no file', text: null, logged: [] },
+  it.each<{
+    case: string;
+    text: string | null;
+    chunks: BacklogChunk[];
+    logged: string[];
+  }>([
+    { case: 'no file', text: null, chunks: [], logged: [] },
     {
       case: 'text that is not JSON',
       text: 'not json',
+      chunks: [],
       logged: ['chunks.json unreadable; starting with no chunks'],
     },
     {
       case: 'chunks that are not a list',
       text: '{ "chunks": 3 }',
+      chunks: [],
       logged: ['chunks.json unreadable; starting with no chunks'],
     },
+    {
+      case: 'malformed chunks among good ones',
+      text: JSON.stringify({
+        chunks: [
+          A,
+          { ...B, titles: 'b1' },
+          null,
+          { id: 'X', repo: 'r', name: 'X', titles: [] },
+          S,
+        ],
+      }),
+      chunks: [A, S],
+      logged: [
+        'chunks.json: dropped malformed chunk at index 1',
+        'chunks.json: dropped malformed chunk at index 2',
+        'chunks.json: dropped malformed chunk at index 3',
+      ],
+    },
   ])(
-    'chunks_FileUnreadable_LoggedAndEmpty given $case',
-    async ({ text, logged }) => {
+    'chunks_FileRead_KeepsWellFormedAndLogs given $case',
+    async ({ text, chunks, logged }) => {
       const store = await storeOver(null);
       if (text !== null) {
         await store.data.write(FILE, text);
       }
 
-      expect(await store.store.chunks()).toEqual([]);
+      expect(await store.store.chunks()).toEqual(chunks);
       expect(store.logged).toEqual(logged);
     },
   );
+
+  it('edit_FileUnreadable_MovesItAsideBeforeWriting', async () => {
+    const store = await storeOver(null);
+    await store.data.write(FILE, 'not json');
+
+    await store.store.edit({
+      type: 'add',
+      keys: [rowKey('r', 'n1')],
+      chunkId: null,
+    });
+    await store.store.edit({ type: 'rename', chunkId: 'new1', name: 'New' });
+
+    const aside = `${FILE}.unreadable-${String(NOW)}`;
+    expect(await store.data.read(aside)).toBe('not json');
+    expect(await store.saved()).toEqual([chunk('new1', 'r', 'New', ['n1'])]);
+    expect(store.logged).toEqual([
+      'chunks.json unreadable; starting with no chunks',
+      `chunks.json moved aside to ${aside}`,
+    ]);
+  });
 });

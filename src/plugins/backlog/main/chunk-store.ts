@@ -1,7 +1,8 @@
-import type { RandomHex } from '../../../contracts/ambient';
+import type { Clock, RandomHex } from '../../../contracts/ambient';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
 import { isSameJson } from '../../../shared/json';
+import { createSerialQueue } from '../../../shared/serial-queue';
 import type { BacklogChunk, ChunkEdit, RowKey } from '../contract';
 import type { BacklogRow } from './rows';
 
@@ -19,7 +20,9 @@ export interface ChunkPlan {
 // the file, then calls `changed`; a refused call rejects with its reason and
 // writes and sends nothing. `edit`, `replaceUnstarted` and `retireUnheld`
 // first retire each started chunk whose session chat no longer holds, asking
-// only once chat's restore settled.
+// only once chat's restore settled. A chunk marked starting is left alone:
+// `edit` refuses every change to it (`<name> is starting`), and
+// `replaceUnstarted` and `prune` keep it.
 export interface ChunkStore {
   // The chunks, a missing or unreadable file reading as none.
   chunks(): Promise<BacklogChunk[]>;
@@ -33,9 +36,14 @@ export interface ChunkStore {
     plans: readonly ChunkPlan[],
     titles: ReadonlySet<string>,
   ): Promise<BacklogChunk[]>;
-  // Stores the session the chunk started; for an id no chunk has, logs and
-  // changes nothing.
-  setSession(chunkId: string, sessionId: string): Promise<BacklogChunk[]>;
+  // Marks the chunk starting and resolves to it; rejects with `No chunk <id>`,
+  // `<name> has started` or `<name> is starting`, marking nothing.
+  markStarting(chunkId: string): Promise<BacklogChunk>;
+  // Drops the chunk's starting mark; nothing when it has none.
+  clearStarting(chunkId: string): void;
+  // Stores the session the chunk started and resolves true; for an id no
+  // chunk has, logs, changes nothing and resolves false.
+  setSession(chunkId: string, sessionId: string): Promise<boolean>;
   // Deletes the chunk that started `sessionId`; nothing when none did.
   retire(sessionId: string): Promise<void>;
   // Retires each started chunk whose session chat no longer holds; resolves
@@ -51,10 +59,12 @@ export interface ChunkStore {
 
 // `data` is backlog's plugin data. `restored` settles once chat's restore
 // of its saved rows ends; `isHeld` says whether chat holds a session.
-// `changed` hears the chunks after each change.
+// `changed` hears the chunks after each change. `clock` stamps the name an
+// unreadable file is moved aside to.
 export interface ChunkStoreDeps {
-  data: Pick<Files, 'read' | 'write'>;
+  data: Pick<Files, 'read' | 'write' | 'rename'>;
   randomHex: RandomHex;
+  clock: Clock;
   restored(): Promise<void>;
   isHeld(sessionId: string): boolean;
   log: PluginLog;
@@ -64,6 +74,13 @@ export interface ChunkStoreDeps {
 interface KeyParts {
   repo: string;
   title: string;
+}
+
+// `chunks.json` as read: `unreadable` when a file is there that could not be
+// read or parsed.
+interface ChunksRead {
+  chunks: BacklogChunk[];
+  unreadable: boolean;
 }
 
 // For each repo the rows hold, its rows' titles, done rows included.
@@ -84,6 +101,18 @@ export function titlesByRepo(
 
 function isStarted(chunk: BacklogChunk): boolean {
   return chunk.sessionId !== null;
+}
+
+// Why the chunk's follow-ups and headless flag cannot change — `has started`
+// or `is starting` — or null when they can.
+function startState(
+  chunk: BacklogChunk,
+  starting: ReadonlySet<string>,
+): string | null {
+  if (isStarted(chunk)) {
+    return 'has started';
+  }
+  return starting.has(chunk.id) ? 'is starting' : null;
 }
 
 // The repo and title of a row key, split at its first newline.
@@ -145,14 +174,19 @@ function requireKeys(keys: readonly RowKey[]): KeyParts[] {
   return keys.map(keyParts);
 }
 
-function refuseStartedKeys(
+function refuseKeysOfStartingOrStarted(
   chunks: readonly BacklogChunk[],
   keys: readonly KeyParts[],
+  starting: ReadonlySet<string>,
 ): void {
   for (const key of keys) {
     const holder = chunkHolding(chunks, key);
-    if (holder !== undefined && isStarted(holder)) {
-      throw new Error(`${key.title} is in ${holder.name}, which has started`);
+    if (holder === undefined) {
+      continue;
+    }
+    const state = startState(holder, starting);
+    if (state !== null) {
+      throw new Error(`${key.title} is in ${holder.name}, which ${state}`);
     }
   }
 }
@@ -171,10 +205,12 @@ function addTarget(
   chunks: readonly BacklogChunk[],
   chunkId: string,
   keys: readonly KeyParts[],
+  starting: ReadonlySet<string>,
 ): BacklogChunk {
   const target = chunkById(chunks, chunkId);
-  if (isStarted(target)) {
-    throw new Error(`${target.name} has started; its follow-ups cannot change`);
+  const state = startState(target, starting);
+  if (state !== null) {
+    throw new Error(`${target.name} ${state}; its follow-ups cannot change`);
   }
   const other = keys.find((key) => key.repo !== target.repo);
   if (other !== undefined) {
@@ -189,14 +225,17 @@ function added(
   chunks: readonly BacklogChunk[],
   edit: Extract<ChunkEdit, { type: 'add' }>,
   randomHex: RandomHex,
+  starting: ReadonlySet<string>,
 ): BacklogChunk[] {
   const keys = requireKeys(edit.keys);
   const target =
-    edit.chunkId === null ? null : addTarget(chunks, edit.chunkId, keys);
+    edit.chunkId === null
+      ? null
+      : addTarget(chunks, edit.chunkId, keys, starting);
   if (target === null) {
     refuseTwoRepos(keys);
   }
-  refuseStartedKeys(chunks, keys);
+  refuseKeysOfStartingOrStarted(chunks, keys, starting);
   const repo = target?.repo ?? keys[0].repo;
   const held = target?.titles ?? [];
   const moving = [
@@ -226,9 +265,10 @@ function added(
 function removed(
   chunks: readonly BacklogChunk[],
   edit: Extract<ChunkEdit, { type: 'remove' }>,
+  starting: ReadonlySet<string>,
 ): BacklogChunk[] {
   const keys = requireKeys(edit.keys);
-  refuseStartedKeys(chunks, keys);
+  refuseKeysOfStartingOrStarted(chunks, keys, starting);
   let next = [...chunks];
   for (const key of keys) {
     next = withoutTitles(next, key.repo, new Set([key.title]));
@@ -236,11 +276,16 @@ function removed(
   return next;
 }
 
+// A started chunk may be renamed; one starting may not.
 function renamed(
   chunks: readonly BacklogChunk[],
   edit: Extract<ChunkEdit, { type: 'rename' }>,
+  starting: ReadonlySet<string>,
 ): BacklogChunk[] {
   const chunk = chunkById(chunks, edit.chunkId);
+  if (starting.has(chunk.id)) {
+    throw new Error(`${chunk.name} is starting`);
+  }
   const name = edit.name.trim();
   if (name === '') {
     throw new Error('A chunk needs a name');
@@ -253,12 +298,12 @@ function renamed(
 function withHeadless(
   chunks: readonly BacklogChunk[],
   edit: Extract<ChunkEdit, { type: 'setHeadless' }>,
+  starting: ReadonlySet<string>,
 ): BacklogChunk[] {
   const chunk = chunkById(chunks, edit.chunkId);
-  if (isStarted(chunk)) {
-    throw new Error(
-      `${chunk.name} has started; its headless flag cannot change`,
-    );
+  const state = startState(chunk, starting);
+  if (state !== null) {
+    throw new Error(`${chunk.name} ${state}; its headless flag cannot change`);
   }
   return chunks.map((candidate) =>
     candidate === chunk ? { ...candidate, headless: edit.headless } : candidate,
@@ -270,16 +315,17 @@ function edited(
   chunks: readonly BacklogChunk[],
   edit: ChunkEdit,
   randomHex: RandomHex,
+  starting: ReadonlySet<string>,
 ): BacklogChunk[] {
   switch (edit.type) {
     case 'add':
-      return added(chunks, edit, randomHex);
+      return added(chunks, edit, randomHex, starting);
     case 'remove':
-      return removed(chunks, edit);
+      return removed(chunks, edit, starting);
     case 'rename':
-      return renamed(chunks, edit);
+      return renamed(chunks, edit, starting);
     case 'setHeadless':
-      return withHeadless(chunks, edit);
+      return withHeadless(chunks, edit, starting);
   }
 }
 
@@ -289,6 +335,7 @@ function refusePlans(
   repo: string,
   plans: readonly ChunkPlan[],
   titles: ReadonlySet<string>,
+  starting: ReadonlySet<string>,
 ): void {
   if (plans.some((plan) => plan.name === '')) {
     throw new Error('A chunk needs a name');
@@ -308,26 +355,28 @@ function refusePlans(
   if (repeated !== undefined) {
     throw new Error(`${repeated} is in two chunks`);
   }
-  refuseStartedKeys(
+  refuseKeysOfStartingOrStarted(
     chunks,
     planned.map((title) => ({ repo, title })),
+    starting,
   );
 }
 
 // `repo`'s unstarted chunks replaced by one chunk per plan at the end; each
 // plan takes the id and headless flag of the first unmatched old chunk of
-// its name.
+// its name. A starting chunk stays.
 function replaced(
   chunks: readonly BacklogChunk[],
   repo: string,
   plans: readonly ChunkPlan[],
   titles: ReadonlySet<string>,
   randomHex: RandomHex,
+  starting: ReadonlySet<string>,
 ): BacklogChunk[] {
   const trimmed = plans.map((plan) => ({ ...plan, name: plan.name.trim() }));
-  refusePlans(chunks, repo, trimmed, titles);
+  refusePlans(chunks, repo, trimmed, titles, starting);
   const isReplaced = (chunk: BacklogChunk) =>
-    chunk.repo === repo && !isStarted(chunk);
+    chunk.repo === repo && startState(chunk, starting) === null;
   const unmatched = chunks.filter(isReplaced);
   const made = trimmed.map((plan): BacklogChunk => {
     const index = unmatched.findIndex((chunk) => chunk.name === plan.name);
@@ -347,12 +396,46 @@ function replaced(
 function pruned(
   chunks: readonly BacklogChunk[],
   titlesByRepo: ReadonlyMap<string, ReadonlySet<string>>,
+  starting: ReadonlySet<string>,
 ): BacklogChunk[] {
   return chunks.flatMap((chunk) => {
     const titles = titlesByRepo.get(chunk.repo);
-    return titles === undefined || isStarted(chunk)
+    return titles === undefined || startState(chunk, starting) !== null
       ? [chunk]
       : keptTitles(chunk, (title) => titles.has(title));
+  });
+}
+
+function isChunk(value: unknown): value is BacklogChunk {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const chunk = value as Record<string, unknown>;
+  const hasNames = [chunk.id, chunk.repo, chunk.name].every(
+    (field) => typeof field === 'string',
+  );
+  const hasTitles =
+    Array.isArray(chunk.titles) &&
+    chunk.titles.every((title) => typeof title === 'string');
+  const hasSession =
+    chunk.sessionId === null || typeof chunk.sessionId === 'string';
+  return (
+    hasNames && hasTitles && typeof chunk.headless === 'boolean' && hasSession
+  );
+}
+
+// The chunks of `listed` that have a chunk's shape; each other one is
+// dropped and logged.
+function wellFormedChunks(
+  listed: readonly unknown[],
+  log: PluginLog,
+): BacklogChunk[] {
+  return listed.flatMap((value, index) => {
+    if (isChunk(value)) {
+      return [value];
+    }
+    log(`${CHUNKS_FILE}: dropped malformed chunk at index ${String(index)}`);
+    return [];
   });
 }
 
@@ -361,38 +444,49 @@ function pruned(
 async function readChunks(
   data: ChunkStoreDeps['data'],
   log: PluginLog,
-): Promise<BacklogChunk[]> {
+): Promise<ChunksRead> {
+  let listed: unknown[];
   try {
     const text = await readIfPresent(data, CHUNKS_FILE);
     if (text === null) {
-      return [];
+      return { chunks: [], unreadable: false };
     }
     const { chunks } = JSON.parse(text) as { chunks: unknown };
     if (!Array.isArray(chunks)) {
       throw new Error(`${CHUNKS_FILE} holds no chunks`);
     }
-    return chunks as BacklogChunk[];
+    listed = chunks;
   } catch {
     log(`${CHUNKS_FILE} unreadable; starting with no chunks`);
-    return [];
+    return { chunks: [], unreadable: true };
   }
+  return { chunks: wellFormedChunks(listed, log), unreadable: false };
 }
 
-// The chunks are read once and kept in memory.
+// The chunks are read once and kept in memory; starting marks live only in
+// memory. An unreadable file is moved aside to
+// `chunks.json.unreadable-<epoch ms>` before the first write.
 export function createChunkStore(deps: ChunkStoreDeps): ChunkStore {
   const { data, randomHex, log } = deps;
+  const queue = createSerialQueue();
+  const starting = new Set<string>();
   let kept: BacklogChunk[] | null = null;
-  let last: Promise<unknown> = Promise.resolve();
-
-  function queued<T>(run: () => Promise<T>): Promise<T> {
-    const result = last.then(run);
-    last = result.catch(() => undefined);
-    return result;
-  }
+  let isUnreadableFileKept = false;
 
   async function current(): Promise<BacklogChunk[]> {
-    kept ??= await readChunks(data, log);
+    if (kept === null) {
+      const read = await readChunks(data, log);
+      kept = read.chunks;
+      isUnreadableFileKept = read.unreadable;
+    }
     return kept;
+  }
+
+  async function moveUnreadableAside(): Promise<void> {
+    const aside = `${CHUNKS_FILE}.unreadable-${String(deps.clock.now())}`;
+    await data.rename(CHUNKS_FILE, aside);
+    isUnreadableFileKept = false;
+    log(`${CHUNKS_FILE} moved aside to ${aside}`);
   }
 
   // Writes `next` and tells `changed` when it differs from `before`.
@@ -402,6 +496,9 @@ export function createChunkStore(deps: ChunkStoreDeps): ChunkStore {
   ): Promise<BacklogChunk[]> {
     if (isSameJson(before, next)) {
       return before;
+    }
+    if (isUnreadableFileKept) {
+      await moveUnreadableAside();
     }
     await data.write(CHUNKS_FILE, JSON.stringify({ chunks: next }, null, 2));
     kept = next;
@@ -424,35 +521,52 @@ export function createChunkStore(deps: ChunkStoreDeps): ChunkStore {
   }
 
   return {
-    chunks: () => queued(current),
+    chunks: () => queue.run(current),
     edit: (edit) =>
-      queued(async () => {
+      queue.run(async () => {
         const before = await current();
         const live = await withoutUnheld(before);
-        return stored(before, edited(live, edit, randomHex));
+        return stored(before, edited(live, edit, randomHex, starting));
       }),
     replaceUnstarted: (repo, plans, titles) =>
-      queued(async () => {
+      queue.run(async () => {
         const before = await current();
         const live = await withoutUnheld(before);
-        return stored(before, replaced(live, repo, plans, titles, randomHex));
+        return stored(
+          before,
+          replaced(live, repo, plans, titles, randomHex, starting),
+        );
       }),
+    markStarting: (chunkId) =>
+      queue.run(async () => {
+        const chunk = chunkById(await current(), chunkId);
+        const state = startState(chunk, starting);
+        if (state !== null) {
+          throw new Error(`${chunk.name} ${state}`);
+        }
+        starting.add(chunkId);
+        return chunk;
+      }),
+    clearStarting: (chunkId) => {
+      starting.delete(chunkId);
+    },
     setSession: (chunkId, sessionId) =>
-      queued(async () => {
+      queue.run(async () => {
         const before = await current();
         if (!before.some((chunk) => chunk.id === chunkId)) {
           log(`No chunk ${chunkId} for session ${sessionId}`);
-          return before;
+          return false;
         }
-        return stored(
+        await stored(
           before,
           before.map((chunk) =>
             chunk.id === chunkId ? { ...chunk, sessionId } : chunk,
           ),
         );
+        return true;
       }),
     retire: (sessionId) =>
-      queued(async () => {
+      queue.run(async () => {
         const before = await current();
         await stored(
           before,
@@ -460,14 +574,14 @@ export function createChunkStore(deps: ChunkStoreDeps): ChunkStore {
         );
       }),
     retireUnheld: () =>
-      queued(async () => {
+      queue.run(async () => {
         const before = await current();
         return stored(before, await withoutUnheld(before));
       }),
     prune: (titlesByRepo) =>
-      queued(async () => {
+      queue.run(async () => {
         const before = await current();
-        return stored(before, pruned(before, titlesByRepo));
+        return stored(before, pruned(before, titlesByRepo, starting));
       }),
   };
 }
