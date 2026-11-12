@@ -50,43 +50,38 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `J`/`K` by message beside `j`/`k` by block, `R` rescan. Chat's `V` is vim's line select
   instead, since `v` opens visuals.
-- **Ctrl+hjkl** moves inside the content. `Ctrl+j`/`Ctrl+k` are the app's scroll keys, and every
-  view that scrolls its content takes them: they scroll one line of the text the view shows
-  (its prose's line height, the editor's own line in the editor), key repeat supplying the
-  speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the bigger step. The
-  views are the doc, its editor too while editing, the chat transcript, the session hub, an open
-  agent-strip box's tool list, the form and its review, the primer card and its review, the audio picker's
-  list, the Backlog list and detail, the Practice problem pane and console, the gallery and the key help; the docs
-  tree takes both pairs and scrolls the doc beside it. Once Backlog's launcher lands
-  (planned in `backlog/plan-launcher`, not built yet), the Backlog table and review pane take both pairs and scroll the review pane.
-  In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
-  `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
-  `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
-  views with a cursor (settings, the pickers, the chat session list) move with `j`/`k` and bind
-  neither pair yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items, the rows of the focused
-  primer column, on the primer card the rows of the column the card came from, the audio picker's moments, and a doc's
-  sections). A chord bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
-  the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
-  `Ctrl+o`/`Ctrl+i` go back and forward through the docs view's places, as vim's jump list does, while the doc pane has focus.
-- **Tab / Shift+Tab** move to the next and previous text box, from the page or inside a box in
-  every vim mode (forms' notes, reason and comment boxes, the audio picker's notes
-  boxes). Every view with more than one box takes them, so the keys that move between boxes are the same on every
-  page. Inside such a view's
-  boxes they take the key from vim, so a box there types no tab character. `<Tab>` and `<S-Tab>` are
-  chords in the page's notation for this reason: they fire ahead of a box's vim, as Ctrl chords do.
-- **Ctrl+n** opens the new-session prompt with only its folder and profile steps, from every main
-  view and its boxes in every vim mode: Sessions with nothing shown, the Sessions list, the Chat tab, its
-  session hub and its agent strip, the docs tree, doc and the doc's right column, the Backlog homes,
-  list, detail and editor, the Settings sections, rows and Leader menu panes, the gallery, a form and its review, the
-  primer's columns, card and review, the audio picker's list, the note popup,
-  and the Practice list, problem pane, editor, console and
-  interviewer ask box (planned in `backlog/plan-launcher`, not built yet: the Backlog table, review pane and
-  chunk strip in place of the Backlog homes, list, detail and editor, and the scoped-agents ask box,
-  `scoped-agents.ask`, in place of
-  `practice.ask`, serving both Practice's interviewer and Backlog's assistant). It is bound per main view, so a dialog,
-  picker or confirm keeps its own keys; a new main view adds its scope to that list in
-  `src/plugins/keymap.ts`. While a box's completion popup is open, Ctrl+n and Ctrl+p move the
-  popup's selection instead, and Tab accepts it, ahead of every bind; Shift+Tab still moves to the previous box.
+- **Ctrl+hjkl** moves inside the content. `Ctrl+j`/`Ctrl+k` are the app's scroll keys, and every view that scrolls its
+  content takes them: they scroll one line of the text the view shows (its prose's line height, the editor's own line in
+  the editor), key repeat supplying the speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the
+  bigger step. The views are the doc, its editor too while editing, the chat transcript, the session hub, an open
+  agent-strip box's tool list, the form and its review, the primer card and its review, the audio picker's list, the
+  Backlog list and detail, the Practice problem pane and console, the gallery and the key help; the docs tree takes both
+  pairs and scrolls the doc beside it. Once Backlog's launcher lands (planned in `backlog/plan-launcher`, not built
+  yet), the Backlog table and review pane take both pairs and scroll the review pane. In the editor the line scroll
+  keeps the cursor unless it would leave the view, as vim's `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the
+  scroll in visual mode, as vim's `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor.
+  Other list views with a cursor (settings, the pickers, the chat session list) move with `j`/`k` and bind neither pair
+  yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items, the rows of the focused primer column, on the
+  primer card the rows of the column the card came from, the audio picker's moments, and a doc's sections). A chord bind
+  takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and the doc editor, vim's
+  `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design. `Ctrl+o`/`Ctrl+i` go back and forward through
+  the docs view's places, as vim's jump list does, while the doc pane has focus.
+- **Tab / Shift+Tab** move to the next and previous text box, from the page or inside a box in every vim mode (forms'
+  notes, reason and comment boxes, the audio picker's notes boxes). Every view with more than one box takes them, so the
+  keys that move between boxes are the same on every page. Inside such a view's boxes they take the key from vim, so a
+  box there types no tab character. `<Tab>` and `<S-Tab>` are chords in the page's notation for this reason: they fire
+  ahead of a box's vim, as Ctrl chords do.
+- **Ctrl+n** opens the new-session prompt with only its folder and profile steps, from every main view and its boxes in
+  every vim mode: Sessions with nothing shown, the Sessions list, the Chat tab, its session hub and its agent strip, the
+  docs tree, doc and the doc's right column, the Backlog homes, list, detail and editor, the Settings sections, rows and
+  Leader menu panes, the gallery, a form and its review, the primer's columns, card and review, the audio picker's list,
+  the note popup, and the Practice list, problem pane, editor, console and interviewer ask box (planned in
+  `backlog/plan-launcher`, not built yet: the Backlog table, review pane and chunk strip in place of the Backlog homes,
+  list, detail and editor, and the scoped-agents ask box, `scoped-agents.ask`, in place of `practice.ask`, serving both
+  Practice's interviewer and Backlog's assistant). It is bound per main view, so a dialog, picker or confirm keeps its
+  own keys; a new main view adds its scope to that list in `src/plugins/keymap.ts`. While a box's completion popup is
+  open, Ctrl+n and Ctrl+p move the popup's selection instead, and Tab accepts it, ahead of every bind; Shift+Tab still
+  moves to the previous box.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first between a view's
   own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog list and detail, the primer
   popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat tab's transcript, box
@@ -111,14 +106,13 @@ hjkl is the direction in every layer; the modifier picks the verb.
   list's cursor row also takes `s` favorite its project, `J`/`K` move its project among the favorites, `r` rename
   and `d` close, as the docs tree's `s`, `r` and `d` do; `Esc` returns to the focused pane.
 - **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
-- **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line
-  where the pane has no rows): the doc, the Backlog detail, the form and its review, the primer card and its
-  review, the audio picker's list, the session hub (its section heads), the doc's right column, the Practice problem
-  pane, the gallery and the key help (planned in `backlog/plan-launcher`, not built yet: the Backlog table and review
-  pane in place of the
-  detail). The doc's right column also opens its cursor row on `Enter` or `l` and returns to the doc on `Esc`. The
-  right bar's system stats panel (scope `system-stats.panel`) moves its process rows with `j`/`k` and `gg`/`G`, cycles
-  its sort column on `s`, opens a group on `Enter` or `l` and closes it on `h`.
+- **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line where
+  the pane has no rows): the doc, the Backlog detail, the form and its review, the primer card and its review, the audio
+  picker's list, the session hub (its section heads), the doc's right column, the Practice problem pane, the gallery and
+  the key help (planned in `backlog/plan-launcher`, not built yet: the Backlog table and review pane in place of the
+  detail). The doc's right column also opens its cursor row on `Enter` or `l` and returns to the doc on `Esc`. The right
+  bar's system stats panel (scope `system-stats.panel`) moves its process rows with `j`/`k` and `gg`/`G`, cycles its
+  sort column on `s`, opens a group on `Enter` or `l` and closes it on `h`.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
   pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider
   moves its left one; `Alt+Shift+j`/`Alt+Shift+k` move the pane's lower divider down and up, else its

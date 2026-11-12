@@ -13,11 +13,10 @@
 
 ## Intent
 
-A round, a primer or an audio picker needs the user now, but the user often needs the chat to answer it:
-what the agent said, what it changed. As a tab, the form replaced the chat, and reading the chat meant leaving the
-form. As a popup,
-the form slides up over the session's tabs and can be put away for a moment and brought back, so the chat stays
-one key away while the form waits.
+A round, a primer or an audio picker needs the user now, but the user often needs the chat to answer it: what the agent
+said, what it changed. As a tab, the form replaced the chat, and reading the chat meant leaving the form. As a popup,
+the form slides up over the session's tabs and can be put away for a moment and brought back, so the chat stays one key
+away while the form waits.
 
 ## The popup surface
 
@@ -35,8 +34,7 @@ one key away while the form waits.
   between panes as the tab bar does, and a frame no pane shows keeps its popups hidden in the holder.
 - **Its status is the row part's.** `setStatus` names the popup in the hidden bar only. A round's status reaches the
   session row through forms', primer's and audio picker's row parts (`forms.status`, `primer.status`,
-  `audio-picker.status`),
-  whose tooltip joins the row's.
+  `audio-picker.status`), whose tooltip joins the row's.
 - **Its close guard is a tab's.** `beforeClose(atOnce)` joins the tabs' guards when the user closes the session, and a
   popup that says `closesAtOnce` makes the close key end its round at once, as a tab that says it does.
 

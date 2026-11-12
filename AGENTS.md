@@ -336,11 +336,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
                  the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
   audio-picker/  manifest.ts, contract.ts, ids.ts, main/ (the audio picker form type, its MCP tools
-                 `open_audio_picker` and
-                 `collect_last_audio_picker`, the audio reads that serve only files the session's open picker lists,
-                 fixtures, preview/: the layout preview's sample picker in a session of its own),
-                 page/ (the picker popup: one list of moment sections with candidate rows; audio/: the Web Audio
-                 playback, the decoded-buffer cache and the waveforms; layout/: the kit the layout draws with),
+                 `open_audio_picker` and `collect_last_audio_picker`, the audio reads that serve only files the
+                 session's open picker lists, fixtures, preview/: the layout preview's sample picker in a session of
+                 its own), page/ (the picker popup: one list of moment sections with candidate rows; audio/: the Web
+                 Audio playback, the decoded-buffer cache and the waveforms; layout/: the kit the layout draws with),
                  layouts/ (the audio picker Layout contract and the built-in `default` layout);
                  `docs/features/audio-picker/design.md`
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
@@ -495,9 +494,8 @@ its rows through its own restart or reload, its stop `keep`ing each one for the 
 exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
 guard (`addCloseGuard`) refuses a close while the plugin still has something open there (forms: an open round; primer:
 an open primer; audio-picker: an open picker), since main, not the page, decides. The user's close key ends the hold
-first: a tab or popup that
-`closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through with no prompt. The review's
-Cancel prompt is a different act: it cancels the round and leaves the session open.
+first: a tab or popup that `closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through
+with no prompt. The review's Cancel prompt is a different act: it cancels the round and leaves the session open.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes (each with the title help shows over its keys), settings
@@ -883,9 +881,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   composer box, where raw keys are vim's); `c` (`<Leader>cc` in the box) lists every control, so a new adapter's
   controls are reachable before they get a key.
 - **An agent form type** — a kind of form an agent opens and waits on, forms' round, the feature primer and the audio
-  picker —
-  is an `AgentFormType` (`src/contracts/agent-forms.ts`): how to parse the agent's args, fingerprint them, read the
-  page's body back and build each reply payload. Its plugin hands the type to the shared service in
+  picker — is an `AgentFormType` (`src/contracts/agent-forms.ts`): how to parse the agent's args, fingerprint them, read
+  the page's body back and build each reply payload. Its plugin hands the type to the shared service in
   `src/shared/agent-forms/`, which owns the one open form per session, the deadline, re-attach, hand-back and the
   saved-form files, and adds only its own MCP tools and page.
 - **An agent form source** — MCP today, the wigley harness next — is an adapter that calls the form type's
