@@ -40,10 +40,13 @@
   padding: var(--wg-space-1) var(--wg-space-2);
 }
 
+/* A row's parts wrap onto further lines when the row has no room, so the
+   name keeps its width and the cursor prompt stays inside the row. */
 .audio-picker-row-line {
   align-items: center;
   display: flex;
-  gap: var(--wg-space-2);
+  flex-wrap: wrap;
+  gap: var(--wg-space-1) var(--wg-space-2);
   min-width: 0;
 }
 
@@ -92,12 +95,12 @@
   fill: currentColor;
 }
 
+/* The name is how the user tells files apart, so one too long for its line
+   breaks onto more lines rather than clipping. */
 .audio-picker-name {
   font-family: var(--wg-font-mono);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .audio-picker-library {
