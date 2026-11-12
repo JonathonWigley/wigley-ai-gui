@@ -1,6 +1,6 @@
 # 08 — Backlog page: the table, review pane, chunk strip and assistant pane
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · crosses into scoped-agents' pane lifecycle (outer panes, the focus hand-off, mode hide) and async channel reads and messages, over a rewrite of every page file
 Wave: 5 · Depends on: 03, 04, 07

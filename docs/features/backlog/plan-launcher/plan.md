@@ -292,7 +292,7 @@ beyond its `contract.ts`.
 - [x] [Backlog chunks and starts](06-backlog-chunks.md) — after 05
 
 ### Wave 4
-- [ ] [Backlog assistant and tools](07-backlog-assistant.md) — after 02, 06
+- [x] [Backlog assistant and tools](07-backlog-assistant.md) — after 02, 06
 
 ### Wave 5
 - [ ] [Backlog page](08-backlog-page.md) — after 03, 04, 07
@@ -312,6 +312,7 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - 05 · deep · 5a5c5ccc8 · diff read: RowKey/rowKey, RepoFolderSetting, BacklogHome.repoFolder, BacklogStaleness, staleness/commitsSince invokes, stalenessRead message, namedPaths/itemAnchor/stalenessOf/createStalenessReader; wave 2 typecheck + lint pass after oxfmt 9fb5e5f46 · concerns: a path or repo folder spelled through a symlink while git reports the real path reads as unknown/no history (no realPath in the reader); a cached read still asks git for each clone's HEAD; homes.ts HomeShape and five test literals (backlog page x3, notes main x2) edited outside Files for the new repoFolder field
 - 04 · deep · e135cbbfd · diff read: interviewer is a scoped-agents registration with a progress.json store, interviewer-pane gone, keymap binds moved to scoped-agents.ask; wave 3 typecheck + lint pass after e9b8f553d (oxfmt) · concerns: the 'planned, not built yet' doc text is left for 09; the page test compares the fake pane's whole call list
 - 06 · deep · 1ac71bc2d · diff read: every Produces present (BacklogChunk, ChunkEdit, ChunkStart, channel chunks/editChunks/startChunks/chunksChanged, chunk-store/-message/-start exports, chat restored, NoteEdit); wave 3 typecheck + lint pass after e9b8f553d (Set<string> in a test, oxfmt) · concerns: AGENTS.md chat entry lacks backlog as a consumer of launch/defaultProfile/profileOf/restored (for 09); page and backlog self-test still call removed readDoc/applyEdit/commit until 08; exports_Restored test assumes invoke returns the handler's promise unwrapped; starter's extra started set has no test of its own
+- 07 · deep · e5dbd279c · diff read: every Produces present (sweep invoke, optional BacklogPlace fields, assistant.ts consts/store/sweepMessage, backlog-tools tools/AssistantPlace/backlogStateText/startBacklogTools, ready.ts AGENT_READY/isReady); wave 4 typecheck + lint pass after 7614053dc (oxfmt) · concerns: start.test's fake api now needs drive: null (undefined read as a drive run); one documentary cast in assistant.ts; design docs and AGENTS.md still say planned (for 09)
 ### Contract changes
 - scoped-agents contract.ts comments: trailing aligned comments → each on its own line above its member (oxfmt 80 columns); the block's '// Channel:' comment → the ScopedAgentsChannel interface · why: oxfmt --check · consumers: 03, 04, 07, 08 (no name or type changed) · group 02
 ### Rulings
@@ -331,5 +332,10 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - a rejected setSession in the starter propagates and startChunks rejects · group 06
 - followup-writes' setTags and delete test rows were converted to create and edit rows rather than deleted · group 06
 - Wave 3: lead ran oxfmt --write on the 8 files lint flagged (editor tooling), in e9b8f553d
+- the assistant store queues reads as well as writes · group 07
+- one bad record makes the whole assistant.json read as {} · group 07
+- set_backlog_chunks counts done rows as the repo's titles, so a repo with only done rows can take chunks · group 07
+- the sweep lists only rows whose staleness is already read and triggers no read · group 07
+- Wave 4: lead ran oxfmt --write on the 3 files lint flagged (editor tooling), in 7614053dc
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 07 — Backlog assistant and tools
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses plugin data through a serial `assistant.json` writer and chat's session lifecycle through the scoped-agent service, and adds two MCP tools 08's page and the assistant session consume
 Wave: 4 · Depends on: 02, 06
@@ -254,3 +254,5 @@ assistant chat, its tool calls and the sweep are `10-final-verification.md`'s.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit e5dbd279c · proof: diff read: every Produces present (sweep invoke, optional BacklogPlace fields, assistant.ts consts/store/sweepMessage, backlog-tools tools/AssistantPlace/backlogStateText/startBacklogTools, ready.ts AGENT_READY/isReady); wave 4 typecheck + lint pass after 7614053dc (oxfmt) · concerns: start.test's fake api now needs drive: null (undefined read as a drive run); one documentary cast in assistant.ts; design docs and AGENTS.md still say planned (for 09)
