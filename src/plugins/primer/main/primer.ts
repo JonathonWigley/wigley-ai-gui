@@ -114,9 +114,10 @@ function parseEntry(entry: unknown, index: number): PrimerEntry {
     probes: textOf(entry, 'probes'),
     pointer: textOf(entry, 'pointer'),
     comment: '',
+    // A row the agent judged not needed opens with its items left out.
     items: texts.map((text) => ({
       text,
-      include: true,
+      include: need !== 'no',
       comment: '',
       added: false,
     })),

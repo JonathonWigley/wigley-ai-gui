@@ -89,7 +89,9 @@ iterating a layout in place.
 - **Items column**: the selected task's items as rows, each with its include mark (a ToggleMark), its number and
   its text. Its header holds `‹ tasks ⌥H`, `⌃H ▲ ▼ ⌃L` and `⌥L card ›`. On the Feature row it shows the empty
   state "Select a task to see its items."; on a task with no items, "No items. Press `a` on the task card to add
-  one." Selecting another task selects that task's first item.
+  one." Selecting another task selects that task's first item. A task the agent sent with need `no` opens with
+  every item left out, and a `yes` or `unclear` one with every item included; changing the need later leaves the
+  marks as they are, and a saved draft keeps its own marks.
 - **Card** for the focused column's selection, one at a time: the task card (the feature card on the Feature row)
   while the tasks column has focus, the selected item's card while the items column has focus. An items column with
   no item to select keeps the task card (the feature card on the Feature row). Focusing the card keeps the card of the column it came from, and the

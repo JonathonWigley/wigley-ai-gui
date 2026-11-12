@@ -48,7 +48,7 @@ function entryOf(entries: PrimerEntry[] | undefined, id: string): PrimerEntry {
 }
 
 describe('parsePrimer', () => {
-  it('parses the sample into a primer with blank comments and every item included', () => {
+  it("parses the sample into a primer with blank comments, a no row's items left out", () => {
     const primer = sample();
 
     expect(primer.feature).toEqual({
@@ -79,13 +79,28 @@ describe('parsePrimer', () => {
       items: [
         {
           text: 'Add the sound cues',
-          include: true,
+          include: false,
           comment: '',
           added: false,
         },
       ],
     });
     expect(entryOf(primer.entries, 'tests').group).toBe('standing');
+  });
+
+  it.each([
+    { need: 'yes', include: true },
+    { need: 'unclear', include: true },
+    { need: 'no', include: false },
+  ])("opens a $need row's items with include $include", ({ need, include }) => {
+    const primer = parsePrimer(
+      argsWith([entry({ need, items: ['Add the record type', 'Save it'] })]),
+    );
+
+    expect(primer.entries[0].items.map((item) => item.include)).toEqual([
+      include,
+      include,
+    ]);
   });
 
   it.each([
@@ -271,6 +286,20 @@ describe('readPrimerBody', () => {
       ],
     });
     expect(entryOf(read.entries, '1')).toEqual(entryOf(primer.entries, '1'));
+  });
+
+  it("keeps a no row's saved include, and its parsed one when the body sends no items", () => {
+    const primer = sample();
+    const ticked = {
+      id: '3',
+      items: [{ text: 'Add the sound cues', include: true }],
+    };
+
+    const read = readPrimerBody(primer, { entries: [ticked] });
+    const unsent = readPrimerBody(primer, { entries: [{ id: '3' }] });
+
+    expect(entryOf(read.entries, '3').items[0].include).toBe(true);
+    expect(entryOf(unsent.entries, '3').items[0].include).toBe(false);
   });
 
   it("keeps the agent's question, evidence, probes and pointer whatever the body sends", () => {
