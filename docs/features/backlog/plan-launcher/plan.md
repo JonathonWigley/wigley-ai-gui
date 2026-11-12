@@ -347,5 +347,11 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - followups.md also drops the side-bar/editor focus-area item, whose code is gone · group 08
 - Wave 5: group 08 split across two deep workers by its A–E parts (A+C, B+D+E), files disjoint; lead ran oxfmt --write on the 4 files lint flagged, in a645c7b79
 - Wave 6: lead ran oxfmt --write on docs/keymap.md (table realignment), in c700ed676; 09 landed before the lint result was read, the format fix follows it
+- Review step 7: the lead applied no determined fix inline; every determined finding rides the 6.2 fix workers, one worker per file, with the open ones — the set spans 40 sites in code the lead has not read
+- Narrow window (review finding 4): assistantSplit stacks as every split does (a row axis cannot hold 280+520 at the 420px minimum); the stacked Backlog area takes the larger track and the table split's 2fr/3fr extends to .is-stacked — replaces 08 C's 'keeps its row axis'
+- Fix round 1 (finding 2) supersedes group 06's 'a rejected setSession makes startChunks reject': setSession resolves whether it stored, and a launched session not stored becomes its chunk's refusal naming the session; a failed setSession clears the starting mark, so the chunk reads unstarted while its session runs · fix-chunks
+- Fix round 1: a chunk being started refuses a rename too, as the store's 'is starting' rule reads; s on one empty chunk still reaches main and toasts main's refusal, only S skips empty chunks · fix workers
+- Fix round 1: lead ran oxfmt --write on 7 fix-range files lint flagged (editor tooling), in c057ce7d0
 ### Review rounds
+- Round 1 (implementation review, 6 correctness + 3 plan-design lanes, pinned e71eb3878): NEEDS FIXES — 4 Important (symlink staleness, launch race in the chunk store, stale agent-pane mount, narrow-window stacking), 39 Minor, 2 pre-existing; report /tmp/claude-backlog-launcher/review-e71eb3878e6652522fe81c3e01639ecebafe02fe.md. Repo rule (AGENTS.md § Review): every open finding takes its recommended pick, no round.
 ### Test gate
