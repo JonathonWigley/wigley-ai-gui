@@ -105,7 +105,11 @@ export interface NotesKit extends PickerKit {
 
 export interface AudioPickerLayout {
   // The picker's heading, overview and counts, over the moments.
-  head?(parent: HTMLElement, input: HeadInput, kit: PickerKit): PickerLayoutPart;
+  head?(
+    parent: HTMLElement,
+    input: HeadInput,
+    kit: PickerKit,
+  ): PickerLayoutPart;
   // A moment's title and reason, over its rows.
   moment?(
     parent: HTMLElement,

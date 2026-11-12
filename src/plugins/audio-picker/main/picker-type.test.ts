@@ -140,7 +140,10 @@ describe('the audio picker type through the agent form service', () => {
 
     expect(shown.label).toContain('Shop sounds');
     expect(payload.outcome).toBe('submitted');
-    const answers = payload.picks?.map(({ choice, note }) => ({ choice, note }));
+    const answers = payload.picks?.map(({ choice, note }) => ({
+      choice,
+      note,
+    }));
     expect(answers).toEqual(ANSWERED.answers);
     expect(payload.picks?.[0].candidate?.name).toBe('Coin');
   });

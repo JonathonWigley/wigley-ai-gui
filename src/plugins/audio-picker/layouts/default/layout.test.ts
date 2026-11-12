@@ -140,7 +140,12 @@ function candidate(overrides: Partial<CandidateRowInput>): FakeElement {
 
 describe('default audio picker layout', () => {
   // `parts` must be drawn in that order; `absent` must be in no part.
-  it.each([
+  it.each<{
+    case: string;
+    root: () => FakeElement;
+    parts: string[];
+    absent?: string;
+  }>([
     {
       case: 'counts, plural',
       root: () => head({ moments: 3, onRecommendation: 1, noneOfThese: 2 }),

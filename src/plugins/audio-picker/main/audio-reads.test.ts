@@ -224,11 +224,10 @@ describe('withAudioFileCheck', () => {
       const inner = fakeInner();
       const session = withAudioFileCheck(inner, parse, await files());
 
-      const result = await session.call(
-        OPEN_AUDIO_PICKER_TOOL,
-        ONE_FILE_ARGS,
-        { toolUseId: null, signal: live() },
-      );
+      const result = await session.call(OPEN_AUDIO_PICKER_TOOL, ONE_FILE_ARGS, {
+        toolUseId: null,
+        signal: live(),
+      });
 
       expect(result.isError).toBe(true);
       const text = result.content[0]?.text ?? '';
