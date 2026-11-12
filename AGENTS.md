@@ -28,8 +28,8 @@ it in the report.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
-tools, receiving agents' review rounds, feature primers and audio pickers and showing each in a popup over its agent session's tabs
-for the user to answer; and it
+tools, receiving agents' review rounds, feature primers and audio pickers and showing each in a popup
+over its agent session's tabs for the user to answer; and it
 browses and edits every agent doc on the machine through the docs index, as a wiki over the user's own pages and as a tree of all of them (`docs_index.py`, `plugins/wigley/scripts/docs-index/`
 in wigley-ai-marketplace, whose README states the index schema). It also starts Claude Code sessions itself and
 chats with them in each session's Chat tab, a round from that session sliding up over the chat in a popup that hides and shows
@@ -117,7 +117,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  preview draw
   file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
                  and per-segment decoding that refuses an encoded `/`
-  agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer, the audio picker): the service with
+  agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer, the audio
+                 picker): the service with
                  its per-session open form, deadline, re-attach and hand-back, its optional auto-answer
                  (`AgentFormAutoAnswer`: while `isOn` holds for a session, an open call shows no form and saves and
                  returns the type's own answers at once, the file marked `auto_answered`; answers the user gave come
@@ -334,7 +335,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
                  the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
-  audio-picker/  manifest.ts, contract.ts, ids.ts, main/ (the audio picker form type, its MCP tools `open_audio_picker` and
+  audio-picker/  manifest.ts, contract.ts, ids.ts, main/ (the audio picker form type, its MCP tools
+                 `open_audio_picker` and
                  `collect_last_audio_picker`, the audio reads that serve only files the session's open picker lists,
                  fixtures, preview/: the layout preview's sample picker in a session of its own),
                  page/ (the picker popup: one list of moment sections with candidate rows; audio/: the Web Audio
@@ -492,7 +494,8 @@ its rows through its own restart or reload, its stop `keep`ing each one for the 
 (`OwnedSession.keep`), so the places of the session's tabs survive it, and across a relaunch, re-attaching each one whose process the session host still runs, and after a process
 exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
 guard (`addCloseGuard`) refuses a close while the plugin still has something open there (forms: an open round; primer:
-an open primer; audio-picker: an open picker), since main, not the page, decides. The user's close key ends the hold first: a tab or popup that
+an open primer; audio-picker: an open picker), since main, not the page, decides. The user's close key ends the hold
+first: a tab or popup that
 `closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through with no prompt. The review's
 Cancel prompt is a different act: it cancels the round and leaves the session open.
 
@@ -644,12 +647,13 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   the tab bar draws it with the title as its tooltip.
 - **A session popup** is a surface that slides up over a session's tabs while a plugin has something for the user,
   added through the `sessions` page export `addPopup` (`SessionPopupView` in, `SessionPopupHandle` out; one per id per
-  session). Forms adds one for a session's rounds, primer for its primer and audio-picker for its pickers, through the shared
-  `src/shared/page/session-form-popups.ts`, and disposes it when the last form leaves. `<Leader>bp`
+  session). Forms adds one for a session's rounds, primer for its primer and audio-picker for its pickers, through the
+  shared `src/shared/page/session-form-popups.ts`, and disposes it when the last form leaves. `<Leader>bp`
   (`sessions.togglePopup`, scope `any`) hides and shows it; hidden, it leaves a bar at the bottom of the session's frame.
   An open popup is the visible surface and holds the key scope, and its `beforeClose` joins the tabs' close guards.
-  A page reload brings back the popup of a round, primer or audio picker the last page showed, hidden when that page had hidden it.
-  The sessions layout draws it through the `popup` and `popupBar` parts (`docs/features/session-popups/design.md`).
+  A page reload brings back the popup of a round, primer or audio picker the last page showed, hidden when that page
+  had hidden it. The sessions layout draws it through the `popup` and `popupBar` parts
+  (`docs/features/session-popups/design.md`).
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
@@ -715,7 +719,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
   `Space z l`: forms' on `Space z l o`, the primer's on `Space z l p`, sessions' on `Space z l s`, chat's on
-  `Space z l c`, agents' on `Space z l a`, workflow's (Large's sample session in every stage) on `Space z l w` and the audio picker's on `Space z l m`; the gallery's `Space z g`, which shows Gallery
+  `Space z l c`, agents' on `Space z l a`, workflow's (Large's sample session in every stage) on `Space z l w` and
+  the audio picker's on `Space z l m`; the gallery's `Space z g`, which shows Gallery
   mode, and its `Space z s`, which swaps the shell to a test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
@@ -877,7 +882,8 @@ Cancel prompt is a different act: it cancels the round and leaves the session op
   command in chat's manifest (raw `m`, `e`, `o` in the chat scope; `<Leader>cm`, `<Leader>ce`, `<Leader>co` in the
   composer box, where raw keys are vim's); `c` (`<Leader>cc` in the box) lists every control, so a new adapter's
   controls are reachable before they get a key.
-- **An agent form type** — a kind of form an agent opens and waits on, forms' round, the feature primer and the audio picker —
+- **An agent form type** — a kind of form an agent opens and waits on, forms' round, the feature primer and the audio
+  picker —
   is an `AgentFormType` (`src/contracts/agent-forms.ts`): how to parse the agent's args, fingerprint them, read the
   page's body back and build each reply payload. Its plugin hands the type to the shared service in
   `src/shared/agent-forms/`, which owns the one open form per session, the deadline, re-attach, hand-back and the
@@ -1135,7 +1141,8 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
-  primer, `src/plugins/audio-picker/main/selftest-script.ts` for the audio picker, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
+  primer, `src/plugins/audio-picker/main/selftest-script.ts` for the audio picker,
+  `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
   Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
   write and before the keys, and a step's `screenshot` (a lowercase name in words joined by

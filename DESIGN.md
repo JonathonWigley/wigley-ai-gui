@@ -436,8 +436,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   system)` row holds the CPU no other row does, sorts with them, never opens, and shows dashes for RAM and GPU. Under a 360px container query
   each meter keeps one line, its Meter filling the room between label and value and its Sparkline hidden, and a row's
   cells drop under its name.
-- **Popup:** a session's form (round, primer or audio picker) is an L2 content sheet raised over the session's tabs, with no shadow
-  (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the `sessions.popup-top` token
+- **Popup:** a session's form (round, primer or audio picker) is an L2 content sheet raised over the session's tabs,
+  with no shadow (§ Separation): `sheet-background`, `radius-lg` on its top corners, its top edge at the
+  `sessions.popup-top` token
   (`15%` of the frame's body), the tab under it dimmed by the `scrim`. It slides up on open and down on hide over
   `duration-slow`; hidden, a slim bar at the frame's bottom names it (`docs/features/session-popups/design.md`).
 - **Forms:** the rail is the start pane of a split in the session popup's sheet, on the sheet colour with no fill of its own. Its header holds the
@@ -453,8 +454,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Audio picker** (`docs/features/audio-picker/design.md`): a popup sheet as
   the Popup entry describes. It holds one list of moment sections: each section's title in the section-header
   style, the agent's reason under it in `fg-tertiary`. A candidate row holds a play IconButton, a small waveform in
-  `fg-tertiary` that turns `accent` on the cursor row, the name in `font-mono`, the library, length and loudness in
-  tabular numerals, and a neutral Tag for the play format. The chosen row takes `accent-tint`, and the recommended
+  `fg-tertiary` that turns `accent` on the cursor row, the name in `font-mono`, the library as text, the length
+  and loudness in tabular numerals, and a neutral Tag for the play format. The chosen row takes `accent-tint`, and the
+  recommended
   row carries the accent mark, since Cmd+Enter accepts it. A playing row shows a `status-running` mark. Each section
   ends in a None of these row and a notes box in an InputFrame.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on

@@ -55,31 +55,34 @@ hjkl is the direction in every layer; the modifier picks the verb.
   (its prose's line height, the editor's own line in the editor), key repeat supplying the
   speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the bigger step. The
   views are the doc, its editor too while editing, the chat transcript, the session hub, an open
-  agent-strip box's tool list, the form and its review, the primer card and its review, the audio picker's list, the Backlog
-  list and detail, the Practice problem pane and console, the gallery and the key help; the docs tree takes both pairs and scrolls the doc
-  beside it. Once Backlog's launcher lands (planned in `backlog/plan-launcher`, not built yet), the Backlog table
-  and review pane take both pairs and scroll the review pane.
+  agent-strip box's tool list, the form and its review, the primer card and its review, the audio picker's
+  list, the Backlog list and detail, the Practice problem pane and console, the gallery and the key help; the docs
+  tree takes both pairs and scrolls the doc beside it. Once Backlog's launcher lands
+  (planned in `backlog/plan-launcher`, not built yet), the Backlog table and review pane take both pairs and scroll the review pane.
   In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
   views with a cursor (settings, the pickers, the chat session list) move with `j`/`k` and bind
   neither pair yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items, the rows of the focused
-  primer column, on the primer card the rows of the column the card came from, the audio picker's moments, and a doc's sections). A chord
-  bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
+  primer column, on the primer card the rows of the column the card came from, the audio picker's moments, and a doc's
+  sections). A chord bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
   the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
   `Ctrl+o`/`Ctrl+i` go back and forward through the docs view's places, as vim's jump list does, while the doc pane has focus.
 - **Tab / Shift+Tab** move to the next and previous text box, from the page or inside a box in
-  every vim mode (forms' notes, reason and comment boxes, the audio picker's notes boxes). Every view with more than one box
-  takes them, so the keys that move between boxes are the same on every page. Inside such a view's
+  every vim mode (forms' notes, reason and comment boxes, the audio picker's notes
+  boxes). Every view with more than one box takes them, so the keys that move between boxes are the same on every
+  page. Inside such a view's
   boxes they take the key from vim, so a box there types no tab character. `<Tab>` and `<S-Tab>` are
   chords in the page's notation for this reason: they fire ahead of a box's vim, as Ctrl chords do.
 - **Ctrl+n** opens the new-session prompt with only its folder and profile steps, from every main
   view and its boxes in every vim mode: Sessions with nothing shown, the Sessions list, the Chat tab, its
   session hub and its agent strip, the docs tree, doc and the doc's right column, the Backlog homes,
   list, detail and editor, the Settings sections, rows and Leader menu panes, the gallery, a form and its review, the
-  primer's columns, card and review, the audio picker's list, the note popup, and the Practice list, problem pane, editor, console and interviewer ask box
-  (planned in `backlog/plan-launcher`, not built yet: the Backlog table, review pane and chunk strip in place of the
-  Backlog homes, list, detail and editor, and the scoped-agents ask box, `scoped-agents.ask`, in place of
+  primer's columns, card and review, the audio picker's list, the note popup,
+  and the Practice list, problem pane, editor, console and
+  interviewer ask box (planned in `backlog/plan-launcher`, not built yet: the Backlog table, review pane and
+  chunk strip in place of the Backlog homes, list, detail and editor, and the scoped-agents ask box,
+  `scoped-agents.ask`, in place of
   `practice.ask`, serving both Practice's interviewer and Backlog's assistant). It is bound per main view, so a dialog,
   picker or confirm keeps its own keys; a new main view adds its scope to that list in
   `src/plugins/keymap.ts`. While a box's completion popup is open, Ctrl+n and Ctrl+p move the
@@ -110,8 +113,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
 - **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line
   where the pane has no rows): the doc, the Backlog detail, the form and its review, the primer card and its
-  review, the audio picker's list, the session hub (its section heads), the doc's right column, the Practice problem pane, the gallery and the
-  key help (planned in `backlog/plan-launcher`, not built yet: the Backlog table and review pane in place of the
+  review, the audio picker's list, the session hub (its section heads), the doc's right column, the Practice problem
+  pane, the gallery and the key help (planned in `backlog/plan-launcher`, not built yet: the Backlog table and review
+  pane in place of the
   detail). The doc's right column also opens its cursor row on `Enter` or `l` and returns to the doc on `Esc`. The
   right bar's system stats panel (scope `system-stats.panel`) moves its process rows with `j`/`k` and `gg`/`G`, cycles
   its sort column on `s`, opens a group on `Enter` or `l` and closes it on `h`.
@@ -168,7 +172,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wd` dismiss a closed run, `ws` show or hide the side pane, `wf` open or fold finished waves, `wh` turn headless on or off                                                                                                                                                                                       |
 | `p`                | projects                             | `pf` favorite or unfavorite the focused session's project, `pk` / `pj` move it up or down among the favorites                                                                                                                                                                                                                                                                                                                                                                                          |
 | `c`                | chat controls                        | on the page or in a box: `ci` show the attached images (`x` removes the shown one); in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `cy` copy the sign-in link (sign-in dialog)                                                                                                                                                                                                          |
-| `a`                | answer                               | in a form's box and on the form's page: `a1`…`a9` pick the numbered choice or action header (in the audio picker's notes box, the numbered candidate), `ac` clear, `ax` not applicable                                                                                                                                                                                                                                                                                                                 |
+| `a`                | answer                               | in a form's box and on the form's page: `a1`…`a9` pick the numbered choice or action header (in the audio picker's notes box, `a1`…`a6` pick the numbered candidate), `ac` clear, `ax` not applicable                                                                                                                                                                                                                                                                                                  |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `zl`               | layout previews                      | `zlo` forms preview, `zlp` primer preview, `zls` sessions preview, `zlc` chat preview, `zla` agents preview, `zlw` workflow preview, `zlm` audio picker preview                                                                                                                                                                                                                                                                                                                                        |
 

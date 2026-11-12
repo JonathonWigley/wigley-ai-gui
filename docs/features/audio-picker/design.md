@@ -114,7 +114,8 @@ The popup follows `DESIGN.md` § Surfaces (Audio picker) and draws through its o
 - **One list.** Each moment is a section: its title, and the agent's reason under it. Candidate rows sit under the
   section.
 - **A candidate row** shows a play button, a small waveform, the name, the library, the length, the loudness and a
-  Tag for the play format. A variant set is one row (`sparkle_a…d`, `variants ×4`), with the first file's waveform.
+  Tag for the play format. A variant set is one row (the candidate's name, Tag `Variants ×4`), with the first
+  file's waveform.
 - **The recommended row** carries the accent, and each moment opens on it, so Cmd+Enter alone sends the agent's
   picks. The reason: the user then edits only the moments where the ear disagrees.
 - **The None of these row** ends each moment, with a notes box under it. Choosing it makes the agent search again with
@@ -131,7 +132,7 @@ Scopes and binds follow `docs/keymap.md`; the preview is `Space z l m`.
 |---|---|
 | `j` / `k`, `gg` / `G` | next or previous row, first or last row |
 | `Enter` | choose the cursor row |
-| `1`–`9` | choose the cursor moment's nth row; None of these takes the number after the last candidate |
+| `1`–`6` | choose the cursor moment's nth row (at most 5 candidates); None of these takes the number after the last candidate |
 | `Ctrl+h` / `Ctrl+l` | previous or next moment |
 | `p` | play or stop the cursor row's sound |
 | `a`, `i` | the cursor moment's notes box |
@@ -140,8 +141,9 @@ Scopes and binds follow `docs/keymap.md`; the preview is `Space z l m`.
 | `Ctrl+j` / `Ctrl+k` | scroll |
 | `Ctrl+n` | as in every main view |
 
-Leader routes from a box follow forms' `<Leader>a…` group. `C` asks to cancel, as in forms, and the confirm takes `y` to cancel and `n` or
-`Esc` to keep the picker. `Esc` in a notes box leaves the box.
+Leader routes from a box follow forms' `<Leader>a…` group, with `<Leader>a1`…`a6` choosing the cursor moment's nth
+row. `C` asks to cancel, as in forms, and the confirm takes `y` to cancel and `n` or `Esc` to keep the picker. `Esc` in
+a notes box leaves the box.
 
 A loop keeps playing when the cursor moves, so the user can hear it against another row's start. Playback stops when
 the picker stops being the visible surface (hidden, covered by another popup, Sessions mode left, another session
@@ -157,7 +159,8 @@ recommendations. The agent wires the recommended picks and carries on.
 
 - Settings: `autosaveDelayMs` (400), `deadlineSeconds` (240) and `layout` (`default`).
 - `~/.agents/wigley-audio-picker/pickers` holds each picker's saved form and draft.
-- `~/.agents/wigley-audio-picker/sample-sounds` holds the sounds the layout preview plays.
+- The plugin's own data folder (`api.dataFolder`), in its `sample-sounds` subfolder, holds the sounds the layout
+  preview plays, so the preview never writes into the user's `~/.agents`.
 
 ## Out of scope
 
