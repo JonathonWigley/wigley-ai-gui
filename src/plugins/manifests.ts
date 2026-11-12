@@ -1,6 +1,7 @@
 import type { PluginManifest } from '../contracts/plugin';
 import { agentLinesManifest } from './agent-lines/manifest';
 import { appUpdateManifest } from './app-update/manifest';
+import { audioPickerManifest } from './audio-picker/manifest';
 import { agentSkillsManifest } from './agent-skills/manifest';
 import { contextSourcesManifest } from './context-sources/manifest';
 import { agentStripManifest } from './agent-strip/manifest';
@@ -43,6 +44,7 @@ export const builtInManifests = [
   sessionsManifest,
   formsManifest,
   primerManifest,
+  audioPickerManifest,
   chatManifest,
   autoCompactManifest,
   sessionStashManifest,
