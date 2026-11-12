@@ -13,6 +13,7 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { isSameJson } from '../../../shared/json';
 import {
   type FollowupDraft,
   type FollowupItem,
@@ -43,6 +44,7 @@ import type {
   BacklogRead,
   BacklogWriteResult,
   NoteTarget,
+  RepoFolderSetting,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { backlogManifest } from '../manifest';
@@ -64,8 +66,11 @@ import {
   linkedImages,
   noteBody,
 } from './note-images';
+import { repoFolderOf } from './repo-folder';
+import { backlogRows } from './rows';
 import { hasBacklogFixture, writeBacklogFixture } from './selftest-fixture';
 import { backlogSelfTestScript } from './selftest-script';
+import { createStalenessReader } from './staleness';
 
 type BacklogApi = MainApi<
   typeof backlogManifest,
@@ -98,16 +103,22 @@ interface BacklogDeps {
   log: PluginLog;
   channel: Pick<MainChannel<BacklogChannel>, 'send'>;
   emit: PluginEvents<BacklogMainEvents>['emit'];
+  homeDir: string;
+  // The `repoFolders` setting as the user config now sets it.
+  repoFolders(): readonly RepoFolderSetting[];
 }
 
 // The git calls a plan copy read makes; a load's lists each clone's worktrees
 // once (`worktreesListedOnce`).
 type LoadGit = PlanCopyDeps['git'];
 
-type MarkedHome = HomeShape & {
+// `isInClone`: `git.topLevel` found a clone holding the home.
+type LocatedHome = HomeShape & {
   gitRoot: string | null;
-  isCreateTarget: boolean;
+  isInClone: boolean;
 };
+
+type MarkedHome = LocatedHome & { isCreateTarget: boolean };
 
 // `path` below `folder` as a `/`-separated relative path; null when outside.
 function relativePath(
@@ -191,16 +202,18 @@ async function realPathOrNull(
 }
 
 // The home with its `gitRoot`: the clone whose `docs/features` folder it is,
-// else null. Null in place of the home when it is a linked worktree's
+// else null; and whether any clone holds it, a `topLevel` that throws counting
+// as none. Null in place of the home when it is a linked worktree's
 // `docs/features` folder.
 async function locateHome(
   deps: BacklogDeps,
   home: HomeShape,
-): Promise<(HomeShape & { gitRoot: string | null }) | null> {
+): Promise<LocatedHome | null> {
+  let topLevel: string | null = null;
   try {
-    const topLevel = await deps.git.topLevel(home.root);
+    topLevel = await deps.git.topLevel(home.root);
     if (topLevel === null) {
-      return { ...home, gitRoot: null };
+      return { ...home, gitRoot: null, isInClone: false };
     }
     const [homeReal, featuresReal] = await Promise.all([
       realPathOrNull(deps.files, home.root),
@@ -211,15 +224,15 @@ async function locateHome(
       featuresReal !== null &&
       deps.paths.samePath(homeReal, featuresReal);
     if (!isClonesFeaturesFolder) {
-      return { ...home, gitRoot: null };
+      return { ...home, gitRoot: null, isInClone: true };
     }
     if (await deps.git.isLinkedWorktree(topLevel)) {
       return null;
     }
-    return { ...home, gitRoot: topLevel };
+    return { ...home, gitRoot: topLevel, isInClone: true };
   } catch (error) {
     logSkipped(deps.log, home.root, error);
-    return { ...home, gitRoot: null };
+    return { ...home, gitRoot: null, isInClone: topLevel !== null };
   }
 }
 
@@ -386,10 +399,13 @@ async function isUncommitted(
   }
 }
 
+// `homeDir` is the home folder with its links resolved, which a `~` in the
+// `repoFolders` setting expands to.
 async function readHome(
   deps: BacklogDeps,
   copyDeps: PlanCopyDeps,
   home: MarkedHome,
+  homeDir: string,
 ): Promise<BacklogHome> {
   const followupFiles = await readFollowupFiles(deps, home);
   const plans = await Promise.all(
@@ -406,6 +422,13 @@ async function readHome(
     isCreateTarget: home.isCreateTarget,
     gitRoot: home.gitRoot,
     uncommitted,
+    repoFolder: repoFolderOf(
+      home,
+      home.isInClone,
+      deps.repoFolders(),
+      deps.paths,
+      homeDir,
+    ),
     followupFiles,
     plans: plans.filter((plan) => plan !== null),
     features: home.features,
@@ -425,9 +448,11 @@ async function readHomes(
       locateHome(deps, home),
     ),
   );
+  const homeDir =
+    (await realPathOrNull(deps.files, deps.homeDir)) ?? deps.homeDir;
   const homes = await Promise.all(
     markCreateTargets(located.filter((home) => home !== null)).map((home) =>
-      readHome(deps, copyDeps, home),
+      readHome(deps, copyDeps, home, homeDir),
     ),
   );
   return { homes, message: read.message };
@@ -1076,9 +1101,16 @@ function createBacklogMain(deps: BacklogDeps) {
     return message;
   }
 
+  // The last load's read, so a caller reads the rows the page loaded last;
+  // a load when there is none yet.
+  async function lastRead(): Promise<BacklogRead> {
+    return last ?? load();
+  }
+
   return {
     load,
     rescan: () => serve(() => docs.rebuildMachineIndex()),
+    lastRead,
     applyEdit,
     fileNote,
     commit,
@@ -1107,7 +1139,9 @@ async function startFixture(
 // home's follow-up commit, and exports the load, the tag list and note filing
 // to dependent plugins; watches each listed follow-up file and each in-git
 // home's linked worktrees, and hears the machine index reload, each sending
-// `changed`. Outside a live run it writes
+// `changed`, as a change to the `repoFolders` setting does. It serves each
+// open follow-up's git staleness, cached in plugin data, and the commits since
+// it was written. Outside a live run it writes
 // the self-test's fixture repo at start, before Docs' self-test counts the
 // files the index lists.
 export const backlogMainPart: MainPart<typeof backlogManifest> = {
@@ -1128,6 +1162,16 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       log: services.log,
       channel,
       emit: (event, data) => api.events.emit(event, data),
+      homeDir: services.homeDir,
+      repoFolders: () => api.settings().repoFolders,
+    });
+    const staleness = createStalenessReader({
+      git: services.git,
+      files: services.files,
+      data: api.data,
+      paths: services.paths,
+      log: services.log,
+      send: (entries) => channel.send('stalenessRead', { entries }),
     });
     const exports: BacklogMainExports = {
       load: backlog.load,
@@ -1139,10 +1183,29 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     channel.handle('readDoc', (path) => docs.readDoc(path));
     channel.handle('applyEdit', backlog.applyEdit);
     channel.handle('commit', backlog.commit);
+    channel.handle('staleness', async () =>
+      staleness.read(backlogRows(await backlog.lastRead())),
+    );
+    channel.handle('commitsSince', async (key) => {
+      const rows = backlogRows(await backlog.lastRead());
+      const row = rows.find((candidate) => candidate.key === key);
+      if (row === undefined) {
+        throw new Error(`No Backlog row ${key.replaceAll('\n', ' — ')}`);
+      }
+      return staleness.commitsSince(row);
+    });
     api.events.on('docs.indexLoaded', ({ sourceId }) => {
       if (sourceId === MACHINE_SOURCE_ID) {
         channel.send('changed', { homeRoot: null });
       }
+    });
+    let repoFolders = api.settings().repoFolders;
+    api.onSettingsChanged((settings) => {
+      if (isSameJson(settings.repoFolders, repoFolders)) {
+        return;
+      }
+      repoFolders = settings.repoFolders;
+      channel.send('changed', { homeRoot: null });
     });
     services.selfTest?.run(
       backlogSelfTestScript({
@@ -1159,6 +1222,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     return {
       commands: {},
       exports: () => exports,
+      dispose: () => staleness.dispose(),
     };
   },
 };

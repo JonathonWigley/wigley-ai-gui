@@ -1,10 +1,13 @@
 import { definePlugin } from '../../shared/define-plugin';
 import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
+import type { RepoFolderSetting } from './contract';
 
 // Backlog mode: every features home's follow-ups (create, edit, delete, tags),
 // plans and primed features (read-only), grouped by repo. `tags` is the list
 // the tag picker offers; a tag a file holds that the list lacks still shows.
-// `layout` names the layout Backlog draws with. `openHomeRow` and `selectRow`
+// `layout` names the layout Backlog draws with. `launchBrief` is what a
+// chunk's session reads first; `repoFolders` gives the folder of each repo
+// whose features home lies outside it. `openHomeRow` and `selectRow`
 // are the clicks on a home row and an item row, each naming its row, so
 // neither has a key.
 export const backlogManifest = definePlugin({
@@ -115,6 +118,9 @@ export const backlogManifest = definePlugin({
   settings: {
     tags: ['agent-ready', 'needs a feature plan'],
     layout: 'default',
+    launchBrief:
+      'Work these follow-ups in this session. First check each one against the code as it is now: remove an item whose work has landed, and rewrite an item the code has moved past. Then work the rest under your workflow, and report what you did with each item.',
+    repoFolders: [] as RepoFolderSetting[],
   },
   settingInfo: {
     tags: {
@@ -125,6 +131,16 @@ export const backlogManifest = definePlugin({
       label: 'Layout',
       description:
         "The Backlog layout: a folder name in backlog's layouts folder, or default.",
+    },
+    launchBrief: {
+      label: 'Launch brief',
+      description:
+        "The text a chunk's session reads first, before the chunk's follow-ups.",
+    },
+    repoFolders: {
+      label: 'Repo folders',
+      description:
+        'The folder each repo whose features home is outside the repo starts sessions in and resolves paths against: a list of { "repo", "folder" }.',
     },
   },
   themeTokens: {},

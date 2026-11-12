@@ -87,6 +87,7 @@ function home(
     isCreateTarget: true,
     gitRoot: null,
     uncommitted: false,
+    repoFolder: null,
     followupFiles: [{ path: `${root}/followups.md`, items }],
     plans,
     features: [],

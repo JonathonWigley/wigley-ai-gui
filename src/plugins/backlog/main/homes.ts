@@ -8,7 +8,12 @@ export type PlanShape = Omit<BacklogPlan, 'title' | 'target' | 'written'>;
 // header fields, which the main part reads from disk and git.
 export type HomeShape = Omit<
   BacklogHome,
-  'isCreateTarget' | 'gitRoot' | 'uncommitted' | 'followupFiles' | 'plans'
+  | 'isCreateTarget'
+  | 'gitRoot'
+  | 'uncommitted'
+  | 'repoFolder'
+  | 'followupFiles'
+  | 'plans'
 > & { followupFiles: { path: string }[]; plans: PlanShape[] };
 
 interface HomeBuild {

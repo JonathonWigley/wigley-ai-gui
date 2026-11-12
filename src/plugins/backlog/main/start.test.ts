@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Files } from '../../../contracts/files';
-import type { Git, GitWorktree } from '../../../contracts/git';
+import type { Git, GitCommit, GitWorktree } from '../../../contracts/git';
 import {
   type FollowupDraft,
   followupTitleProblem,
@@ -26,6 +26,7 @@ import type {
   BacklogRead,
   NoteTarget,
 } from '../contract';
+import type { backlogManifest } from '../manifest';
 import { backlogMainPart } from './start';
 
 const CLONE = '/dev/r';
@@ -68,6 +69,22 @@ const OLD_FOLDER = '20261020-090000-old';
 const OLD_BODY = `Old.\n\n![1](followups-images/${OLD_FOLDER}/1.png)`;
 const PNG_A = new Uint8Array([137, 80, 78, 71, 1]);
 const PNG_B = new Uint8Array([137, 80, 78, 71, 2]);
+
+const WRITTEN: GitCommit = {
+  sha: 'w',
+  subject: 'Add follow-ups',
+  at: '2026-10-01T10:00:00+00:00',
+  paths: [],
+};
+
+type BacklogSettings = typeof backlogManifest.settings;
+
+const SETTINGS: BacklogSettings = {
+  tags: ['agent-ready'],
+  layout: 'default',
+  launchBrief: 'Work these.',
+  repoFolders: [],
+};
 
 const CHIP_TARGET: NoteTarget = {
   type: 'create',
@@ -190,7 +207,9 @@ function firstFollowupDraft(read: BacklogRead): FollowupDraft {
 // `calls` lists each docs read, write and trash in order; a path in `refuse`
 // makes its `writeDoc` or `writeBytes` reject with that reason. `listed` is
 // what `Files` reads, `realPath` aside, seeded with every `disk` file at time
-// 0; `setTime` sets the modified time its next writes stamp.
+// 0; `setTime` sets the modified time its next writes stamp. `data` is the
+// plugin data folder; `pushSettings` replaces the settings and tells each
+// `onSettingsChanged` listener.
 function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const links = new Map<string, string>();
   const files = new Map(Object.entries(disk));
@@ -217,6 +236,9 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const logged: string[] = [];
   const git = fakeGit();
   const index = { read: indexRead(entries) };
+  const data = createMemoryFiles();
+  let settings = SETTINGS;
+  const settingsListeners: ((next: BacklogSettings) => void)[] = [];
   const docs: DocsMainExports = {
     addSource: () => ({ dispose: () => undefined }),
     machineIndex: async () => index.read,
@@ -274,10 +296,16 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       paths: posixPaths,
       clock: { now: () => NOW },
       runMode: 'live',
+      homeDir: '/home/me',
       log: (message: string) => logged.push(message),
     },
     dependency: () => docs,
-    settings: () => ({ tags: ['agent-ready'], layout: 'default' }),
+    settings: () => settings,
+    onSettingsChanged: (listener: (next: BacklogSettings) => void) => {
+      settingsListeners.push(listener);
+      return { dispose: () => undefined };
+    },
+    data,
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof backlogMainPart.start>[0];
   const part = backlogMainPart.start(api);
@@ -308,9 +336,21 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     logged,
     git,
     index,
+    data,
+    pushSettings: (next: BacklogSettings) => {
+      settings = next;
+      for (const listener of settingsListeners) {
+        listener(next);
+      }
+    },
     invoke,
     emit,
   };
+}
+
+// Lets a staleness pass over immediate fakes run to its end.
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 // Backlog's main part on the harness over a docs fake that lists FOLLOWUPS and
@@ -356,6 +396,7 @@ describe('backlog main part', () => {
       gitRoot: CLONE,
       isCreateTarget: true,
       uncommitted: false,
+      repoFolder: CLONE,
     });
     expect(
       home.followupFiles.map((file) => [
@@ -366,6 +407,113 @@ describe('backlog main part', () => {
       [FOLLOWUPS, [['Alpha', []]]],
       [UI_FOLLOWUPS, [['Button', ['agent-ready']]]],
     ]);
+  });
+
+  it('staleness_Invoke_CachedThenSendsTheRest', async () => {
+    const backlog = startBacklog(
+      [entry('followup', FOLLOWUPS), entry('followup', UI_FOLLOWUPS)],
+      { [FOLLOWUPS]: FOLLOWUPS_TEXT, [UI_FOLLOWUPS]: UI_TEXT },
+    );
+    backlog.git.resolveCommit.mockResolvedValue('h1');
+    backlog.git.firstAdded.mockResolvedValue(WRITTEN);
+    const read = await backlog.invoke<BacklogRead>('load');
+    const alpha = read.homes[0].followupFiles[0].items[0];
+    const facts = { writtenAt: WRITTEN.at, commitsSince: 0, lastCommit: null };
+    await backlog.data.write(
+      'staleness.json',
+      JSON.stringify({
+        entries: {
+          'r\nAlpha': {
+            heads: 'h1 h1',
+            body: `${alpha.oneLine}\n${alpha.body}`,
+            facts,
+          },
+        },
+      }),
+    );
+
+    const cached = await backlog.invoke('staleness');
+    await settle();
+
+    expect(cached).toEqual({
+      'r\nAlpha': { ...facts, namedPaths: [], gonePaths: [], level: 'fresh' },
+    });
+    expect(backlog.git.firstAdded).toHaveBeenCalledTimes(1);
+    expect(backlog.git.firstAdded).toHaveBeenCalledWith(
+      CLONE,
+      'docs/features/followups/ui.md',
+      '**Button**',
+    );
+    expect(backlog.sent).toEqual([
+      [
+        'stalenessRead',
+        {
+          entries: {
+            'r\nButton': expect.objectContaining({
+              writtenAt: WRITTEN.at,
+              level: 'fresh',
+            }),
+          },
+        },
+      ],
+    ]);
+  });
+
+  it('commitsSince_UnknownKey_Rejects', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    await backlog.invoke('load');
+
+    await expect(backlog.invoke('commitsSince', 'r\nNobody')).rejects.toThrow(
+      'No Backlog row r — Nobody',
+    );
+  });
+
+  it.each<{ name: string; next: BacklogSettings; sent: unknown[] }>([
+    {
+      name: 'repoFolders changed',
+      next: { ...SETTINGS, repoFolders: [{ repo: 'r', folder: '~/dev/r' }] },
+      sent: [['changed', { homeRoot: null }]],
+    },
+    {
+      name: 'only tags changed',
+      next: { ...SETTINGS, tags: ['agent-ready', 'later'] },
+      sent: [],
+    },
+  ])('settings_RepoFoldersChanged_SendsChanged ($name)', ({ next, sent }) => {
+    const backlog = startBacklog([], {});
+
+    backlog.pushSettings(next);
+
+    expect(backlog.sent).toEqual(sent);
+  });
+
+  it('lastRead_AfterLoad_NoSecondLoad', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    const machineIndex = vi.spyOn(backlog.docs, 'machineIndex');
+
+    await backlog.invoke('load');
+    await backlog.invoke('staleness');
+
+    expect(machineIndex).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispose_Part_DisposesTheReader', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    await backlog.invoke('load');
+
+    await backlog.part.dispose?.('end');
+    const cached = await backlog.invoke('staleness');
+    await settle();
+
+    expect(cached).toEqual({});
+    expect(backlog.git.firstAdded).not.toHaveBeenCalled();
+    expect(backlog.sent).toEqual([]);
   });
 
   it('load_IndexFailed_NoHomesWithItsMessage', async () => {

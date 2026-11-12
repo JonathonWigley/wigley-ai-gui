@@ -28,6 +28,7 @@ const READ: BacklogRead = {
       isCreateTarget: true,
       gitRoot: null,
       uncommitted: false,
+      repoFolder: null,
       followupFiles: [
         {
           path: `${ROOT}/followups.md`,

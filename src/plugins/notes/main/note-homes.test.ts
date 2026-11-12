@@ -23,6 +23,7 @@ function home(change: Partial<BacklogHome>): BacklogHome {
     isCreateTarget: true,
     gitRoot: '/r',
     uncommitted: false,
+    repoFolder: '/r',
     followupFiles: [],
     plans: [],
     features: [],

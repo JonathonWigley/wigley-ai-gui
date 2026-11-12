@@ -42,6 +42,7 @@ const READ: BacklogRead = {
       isCreateTarget: true,
       gitRoot: '/home/me/repo',
       uncommitted: false,
+      repoFolder: '/home/me/repo',
       followupFiles: [],
       plans: [],
       features: [],

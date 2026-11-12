@@ -3,6 +3,7 @@
 // index, and the follow-up writes and commit the main part makes.
 
 import type { CommandKey } from '../../contracts/commands';
+import type { GitCommit } from '../../contracts/git';
 import type {
   ChannelShape,
   DependencyKey,
@@ -67,15 +68,50 @@ export interface BacklogFollowupFile {
 // folder is no home.
 // `uncommitted`: a follow-up file, or a file in a folder of the home's
 // `followups-images/`, differs from HEAD.
+// `repoFolder`: the folder the repo's sessions start in and its follow-ups'
+// named paths resolve against: the folder above `docs/features` for a home of
+// that shape in a clone, else the `repoFolders` setting's folder for the repo;
+// null when neither gives one.
 export interface BacklogHome {
   repo: string;
   root: string;
   isCreateTarget: boolean;
   gitRoot: string | null;
   uncommitted: boolean;
+  repoFolder: string | null;
   followupFiles: BacklogFollowupFile[];
   plans: BacklogPlan[];
   features: BacklogFeature[];
+}
+
+// `${repo}\n${title}`, built only by `rowKey` in `row-key.ts`.
+export type RowKey = string;
+
+// One element of the `repoFolders` setting: the folder `repo` starts sessions
+// in, when its features home lies outside the repo. `folder` may start with
+// `~`.
+export interface RepoFolderSetting {
+  repo: string;
+  folder: string;
+}
+
+// One open follow-up's git staleness. `writtenAt`: the committer date of the
+// commit that first added the item to its file, in the home's clone; null
+// when the home is outside git, the item is not committed, or a git call
+// failed. `namedPaths`: the paths its one line and body name that the repo
+// folder holds the first segment of, relative to the repo folder.
+// `gonePaths`: those of them missing from the repo folder. `commitsSince`:
+// the commits after `writtenAt` that touched a named path, of the latest 100;
+// `lastCommit` the newest of them. `level`: `stale` when a path is gone, else
+// `moved` when a commit came since, else `unknown` when `writtenAt` is null,
+// else `fresh`.
+export interface BacklogStaleness {
+  writtenAt: string | null;
+  commitsSince: number;
+  lastCommit: GitCommit | null;
+  namedPaths: string[];
+  gonePaths: string[];
+  level: 'fresh' | 'moved' | 'stale' | 'unknown';
 }
 
 // `message`: the docs index load's line to show, null when none.
@@ -171,12 +207,22 @@ export interface BacklogChannel extends ChannelShape {
     ): Promise<BacklogWriteResult>;
     // Rejects with the git error text; resolves to the commit message used.
     commit(homeRoot: string): Promise<string>;
+    // The last load's open rows with a cached staleness still valid; main
+    // reads the rest one row at a time and sends them in `stalenessRead`.
+    staleness(): Promise<Record<RowKey, BacklogStaleness>>;
+    // The commits since the row's item was written that touched a path it
+    // names, newest first, read now. Rejects with `No Backlog row <key>`, its
+    // newline shown as ` — `, when the last load holds no such row.
+    commitsSince(key: RowKey): Promise<GitCommit[]>;
   };
   messages: {
     // A listed follow-up file changed, or a linked worktree's `docs/features`
     // or the worktree list of an in-git home's clone changed (`homeRoot` its
-    // home), or the machine index reloaded (`homeRoot` null).
+    // home), or the machine index reloaded or the `repoFolders` setting changed
+    // (`homeRoot` null).
     changed: { homeRoot: string | null };
+    // Staleness read since the last `stalenessRead`, ten rows or fewer.
+    stalenessRead: { entries: Record<RowKey, BacklogStaleness> };
   };
 }
 
