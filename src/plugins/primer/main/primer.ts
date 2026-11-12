@@ -127,7 +127,7 @@ function parseEntry(entry: unknown, index: number): PrimerEntry {
 function parseEntries(entries: unknown): PrimerEntry[] {
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new PrimerError(
-      "'entries' must be a non-empty array: the eighteen primer rows, then the standing tasks.",
+      "'entries' must be a non-empty array: the primer rows, then the standing tasks.",
     );
   }
   if (entries.length > MAX_PRIMER_ENTRIES) {
