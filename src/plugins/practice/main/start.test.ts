@@ -13,7 +13,11 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
 } from '../../sessions/contract';
-import type { ToolDefinition } from '../../sessions/contract';
+import type {
+  AgentSession,
+  ToolDefinition,
+  ToolSession,
+} from '../../sessions/contract';
 import type { OpenedProblem, ProblemSummary } from '../contract';
 import {
   PRACTICE_FOLDER,
@@ -24,18 +28,26 @@ import { practiceMainPart } from './start';
 
 // Practice's main part over the harness, home `/home/u`, so the default
 // `folder` setting reads `/home/u/leetcode`. Chat's `launch` resolves `row-1`;
-// `contributed` holds each `contributeTools` call's tools, `specs` each
-// `addScopedAgent` call's spec, whose agent's `scopeOf` answers `two-sum`.
+// `contributed` holds each `contributeTools` call's tools and its `start`,
+// `specs` each `addScopedAgent` call's spec, `scopeAsked` each session its
+// agent's `scopeOf` was asked, which answers `two-sum`.
 function startPractice() {
-  const contributed: ToolDefinition[][] = [];
+  const contributed: {
+    tools: ToolDefinition[];
+    start: (session: AgentSession) => ToolSession;
+  }[] = [];
+  const scopeAsked: AgentSession[] = [];
   const specs: ScopedAgentSpec[] = [];
   const chat = {
     launch: async () => 'row-1',
     defaultProfile: () => 'default',
   } as unknown as ChatMainExports;
   const sessions = {
-    contributeTools: (tools: ToolDefinition[]) => {
-      contributed.push(tools);
+    contributeTools: (
+      tools: ToolDefinition[],
+      start: (session: AgentSession) => ToolSession,
+    ) => {
+      contributed.push({ tools, start });
       return { dispose: () => undefined };
     },
   } as unknown as SessionsMainExports;
@@ -45,7 +57,10 @@ function startPractice() {
       return {
         ask: async () => 'row-1',
         sessionOf: async () => null,
-        scopeOf: async () => 'two-sum',
+        scopeOf: async (session) => {
+          scopeAsked.push(session);
+          return 'two-sum';
+        },
         dispose: () => undefined,
       };
     },
@@ -58,7 +73,7 @@ function startPractice() {
     ],
     services: { homeDir: '/home/u' },
   });
-  return Object.assign(harness, { contributed, specs });
+  return Object.assign(harness, { contributed, specs, scopeAsked });
 }
 
 describe('practice main part', () => {
@@ -124,7 +139,7 @@ describe('practice main part', () => {
     const harness = startPractice();
 
     expect(
-      harness.contributed.map((tools) => tools.map((tool) => tool.name)),
+      harness.contributed.map(({ tools }) => tools.map((tool) => tool.name)),
     ).toEqual([['add_practice_problem', 'read_practice_state']]);
     expect(
       harness.specs.map((spec) => ({
@@ -132,5 +147,24 @@ describe('practice main part', () => {
         agentId: spec.agentId,
       })),
     ).toEqual([{ owner: 'practice', agentId: 'interviewer' }]);
+  });
+
+  it("read_practice_state answers for the problem the interviewer's scope names", async () => {
+    const harness = startPractice();
+    await writeProblem(harness.files, TWO_SUM);
+    const session = {
+      id: 'row-1',
+      info: { sessionId: 'host-1', projectDir: PRACTICE_FOLDER, harness: null },
+    } as AgentSession;
+
+    const result = await harness.contributed[0].start(session).call(
+      'read_practice_state',
+      {},
+      { toolUseId: null, signal: new AbortController().signal },
+    );
+
+    expect(harness.scopeAsked).toEqual([session]);
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain(`# ${TWO_SUM.title}`);
   });
 });

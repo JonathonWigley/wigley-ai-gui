@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   type FakeElement,
@@ -25,6 +26,7 @@ import {
   type ProblemSummary,
   practicePlaceSlot,
 } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
 import { AUTOSAVE_DELAY_MS } from './problem-workspace';
 import { practicePagePart } from './start';
 
@@ -521,18 +523,110 @@ describe('practicePagePart', () => {
         await settle();
       }
 
-      expect(pane.calls).toEqual(calls);
-      expect({
-        owner: pane.spec?.owner,
-        agentId: pane.spec?.agentId,
-        hint: pane.spec?.hint,
-        heading: pane.spec?.heading(),
-      }).toEqual({
-        owner: 'practice',
-        agentId: 'interviewer',
-        hint: 'Ask about the problem. The interviewer asks guiding questions and gives no answers.',
-        heading: HARD.title,
-      });
+      expect(pane.calls.filter((call) => call.startsWith('scopeOpened'))).toEqual(
+        calls,
+      );
+    },
+  );
+
+  it('registers the interviewer pane with its owner, agent, hint and heading', async () => {
+    const { pane } = await startWithProblemOpen();
+
+    expect({
+      owner: pane.spec?.owner,
+      agentId: pane.spec?.agentId,
+      hint: pane.spec?.hint,
+      heading: pane.spec?.heading(),
+    }).toEqual({
+      owner: 'practice',
+      agentId: 'interviewer',
+      hint: 'Ask about the problem. The interviewer asks guiding questions and gives no answers.',
+      heading: HARD.title,
+    });
+  });
+
+  // The list holds the keys after an open that keeps focus; each row acts on
+  // the page, with the pane's spec callbacks Practice owns driven as the pane
+  // drives them.
+  it.each<{
+    case: string;
+    act: (page: ReturnType<typeof startPracticePage>) => void;
+    hostCalls: string[];
+    scope: string;
+    isOuterPanesSet: boolean;
+  }>([
+    {
+      case: 'focus leaves the interviewer for the column',
+      act: ({ harness, pane }) => {
+        pane.spec!.tookKeys();
+        const body = asFake(
+          harness.mode('practice.main').element,
+        ).querySelector('.practice-tab-body');
+        focusIn(body!);
+      },
+      hostCalls: ['hostTookKeys'],
+      scope: 'practice.problem',
+      isOuterPanesSet: true,
+    },
+    {
+      case: 'leave while the interviewer holds the keys',
+      act: ({ pane }) => {
+        pane.spec!.tookKeys();
+        pane.spec!.leave();
+      },
+      hostCalls: ['hostTookKeys'],
+      scope: 'practice.problem',
+      isOuterPanesSet: true,
+    },
+    {
+      case: 'leave while the list holds the keys',
+      act: ({ pane }) => pane.spec!.leave(),
+      hostCalls: [],
+      scope: 'practice.problem',
+      isOuterPanesSet: true,
+    },
+    {
+      case: 'Practice hidden',
+      act: ({ harness }) => harness.mode('practice.main').hidden(),
+      hostCalls: ['modeHidden'],
+      scope: 'practice.list',
+      isOuterPanesSet: false,
+    },
+    {
+      case: 'layouts set while the interviewer holds the keys',
+      act: ({ harness, pane }) => {
+        pane.spec!.tookKeys();
+        harness.showLayouts(
+          withUser(defaultLayout, defaultLayout) as Parameters<
+            typeof harness.showLayouts
+          >[0],
+        );
+      },
+      hostCalls: [],
+      scope: 'practice.list',
+      isOuterPanesSet: true,
+    },
+  ])(
+    'the pane hands the keys to the page: $case',
+    async ({ act, hostCalls, scope, isOuterPanesSet }) => {
+      const page = startPracticePage();
+      const commands = page.harness.started().commands;
+      commands.showMode({ arg: undefined });
+      await settle();
+      commands.openKeepingFocus({ arg: undefined });
+      await settle();
+      await settle();
+      page.pane.calls.length = 0;
+
+      act(page);
+
+      expect(
+        page.pane.calls.filter(
+          (call) => call === 'hostTookKeys' || call === 'modeHidden',
+        ),
+      ).toEqual(hostCalls);
+      expect(page.harness.scope()).toBe(scope);
+      expect(page.harness.outerPanes() !== null).toBe(isOuterPanesSet);
     },
   );
 
