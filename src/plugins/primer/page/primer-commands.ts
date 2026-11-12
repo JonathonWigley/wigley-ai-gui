@@ -223,7 +223,11 @@ function moveRow(
   const selectedBefore = shownPrimer(deps.store.get())?.selectedItem ?? null;
   const removed = commitBox(deps, box);
   const before = selectedRowName(deps.store.get());
-  if (removed !== null && removed === selectedBefore && action.type === 'nextRow') {
+  if (
+    removed !== null &&
+    removed === selectedBefore &&
+    action.type === 'nextRow'
+  ) {
     if (before !== null) {
       deps.log(`selected ${before}`);
     }
