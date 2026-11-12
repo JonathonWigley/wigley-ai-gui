@@ -346,5 +346,6 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - contract.ts removals of the Removed-in-08 members landed in the A+C half; BacklogWriteResult kept for fileNote · group 08
 - followups.md also drops the side-bar/editor focus-area item, whose code is gone · group 08
 - Wave 5: group 08 split across two deep workers by its A–E parts (A+C, B+D+E), files disjoint; lead ran oxfmt --write on the 4 files lint flagged, in a645c7b79
+- Wave 6: lead ran oxfmt --write on docs/keymap.md (table realignment), in c700ed676; 09 landed before the lint result was read, the format fix follows it
 ### Review rounds
 ### Test gate
