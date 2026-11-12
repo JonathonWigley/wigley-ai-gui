@@ -1,0 +1,18 @@
+/* The default layout's look: the agent pane's ask box. */
+
+/* The ask box: the heading, the hint, then the frame. */
+.scoped-agents-ask[data-layout-owner='scoped-agents'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-3);
+}
+
+[data-layout-owner='scoped-agents'] .scoped-agents-ask-title {
+  margin: 0;
+}
+
+[data-layout-owner='scoped-agents'] .scoped-agents-ask-hint {
+  color: var(--wg-fg-secondary);
+  margin: 0;
+}

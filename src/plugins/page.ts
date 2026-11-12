@@ -18,6 +18,7 @@ import { keysPagePart } from './keys/page/start';
 import { notesPagePart } from './notes/page/start';
 import { practicePagePart } from './practice/page/start';
 import { primerPagePart } from './primer/page/start';
+import { scopedAgentsPagePart } from './scoped-agents/page/start';
 import { sessionStashPagePart } from './session-stash/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
@@ -61,6 +62,7 @@ export const pageParts: readonly PagePart[] = [
   docsSessionTabPagePart,
   galleryPagePart,
   settingsPagePart,
+  scopedAgentsPagePart,
   backlogPagePart,
   practicePagePart,
   notesPagePart,

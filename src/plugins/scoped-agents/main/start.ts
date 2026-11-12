@@ -6,6 +6,7 @@ import type {
 } from '../../../contracts/plugin';
 import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
 import type { ScopedAgentsChannel, ScopedAgentsMainExports } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { scopedAgentsManifest } from '../manifest';
 import { createScopedAgentService } from './scoped-agent-service';
 
@@ -19,11 +20,13 @@ type ScopedAgentsApi = MainApi<
 // Runs one scoped agent service for every registration, hearing chat's
 // session events once for all of them, and serves the page's `ask` and
 // `sessionOf` by owner and agent id. Each dependent's `addScopedAgent` files
-// the registration with that dependent's registrations.
+// the registration with that dependent's registrations. Registers the
+// scoped-agents layout contract.
 export const scopedAgentsMainPart: MainPart<typeof scopedAgentsManifest> = {
   manifest: scopedAgentsManifest,
   start(api: ScopedAgentsApi) {
     const { services, channel } = api;
+    api.layouts.register({ layoutTypes });
     const service = createScopedAgentService({
       chat: api.dependency(chatMainKey),
       paths: services.paths,

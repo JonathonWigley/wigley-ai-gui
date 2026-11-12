@@ -271,6 +271,7 @@ export const defaultKeymap = {
         'practice.editor',
         'practice.console',
         'practice.ask',
+        'scoped-agents.ask',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -1017,6 +1018,26 @@ export const defaultKeymap = {
       keys: '<CR>',
       scope: 'practice.ask',
       command: 'practice.askSend',
+      mode: 'insert',
+    },
+    // The scoped-agents ask box, the same keys: Enter sends in normal and
+    // insert mode, Esc in normal mode leaves it.
+    {
+      keys: '<CR>',
+      scope: 'scoped-agents.ask',
+      command: 'scoped-agents.askSend',
+      where: 'box',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'scoped-agents.ask',
+      command: 'scoped-agents.leaveBox',
+      where: 'box',
+    },
+    {
+      keys: '<CR>',
+      scope: 'scoped-agents.ask',
+      command: 'scoped-agents.askSend',
       mode: 'insert',
     },
     {
