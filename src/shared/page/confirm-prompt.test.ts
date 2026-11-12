@@ -163,6 +163,18 @@ describe('confirm prompt', () => {
     expect(log).toHaveBeenCalledWith(DISMISSED);
   });
 
+  it('stays silent when the base scope changes after a choice closed the prompt', () => {
+    const { caller, dismiss, log, render, changeBase } = promptSetup();
+    caller.asked = true;
+    render();
+    caller.asked = false;
+
+    changeBase();
+
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+  });
+
   it('dismisses on a base change with no onBaseChanged given', () => {
     const { caller, dismiss, render, changeBase } = promptSetup(false);
     caller.asked = true;

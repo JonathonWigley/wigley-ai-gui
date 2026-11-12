@@ -62,8 +62,8 @@ The picker plays what the agent describes, so the user approves the sound as it 
 
 ## Path and size rules
 
-- Main reads only files the agent named. A path is absolute, ends in an audio extension (`.wav .mp3 .ogg .flac .aif
-  .aiff .m4a`) and exists as a file when the picker opens. The read refuses a file over 200 MB.
+- Main reads only files the agent named. A path is absolute, ends in an audio extension (`.wav .mp3 .ogg .flac
+  .m4a`) and exists as a file when the picker opens. The read refuses a file over 200 MB.
 - A rejected argument names the path and the rule, so the agent fixes the call at once.
 - The page asks for a file by its position in the open picker (moment, candidate, file), never by path. Main serves
   a read only for a position in the session's open picker. The reason: the page is a renderer, and a path argument

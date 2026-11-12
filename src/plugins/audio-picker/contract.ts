@@ -55,14 +55,12 @@ export type AudioPickerBody = { answers: MomentAnswer[] };
 // 0-based in every field.
 export type AudioPosition = { moment: number; candidate: number; file: number };
 
-// Lowercase; .aif, .aiff and .m4a may not decode in Chromium.
+// Lowercase; .m4a may not decode in Chromium.
 export const AUDIO_EXTENSIONS: readonly string[] = [
   '.wav',
   '.mp3',
   '.ogg',
   '.flac',
-  '.aif',
-  '.aiff',
   '.m4a',
 ];
 

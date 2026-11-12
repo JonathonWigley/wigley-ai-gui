@@ -139,6 +139,10 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
       if (pushedScope !== pushed) {
         return;
       }
+      // The prompt's own choice already closed it, and its scope is popped on the next render.
+      if (!deps.isAsked()) {
+        return;
+      }
       deps.dismiss();
       if (!deps.isAsked()) {
         deps.log(DISMISSED_LINE);
