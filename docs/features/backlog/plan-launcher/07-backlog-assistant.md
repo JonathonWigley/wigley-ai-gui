@@ -1,6 +1,6 @@
 # 07 — Backlog assistant and tools
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses plugin data through a serial `assistant.json` writer and chat's session lifecycle through the scoped-agent service, and adds two MCP tools 08's page and the assistant session consume
 Wave: 4 · Depends on: 02, 06

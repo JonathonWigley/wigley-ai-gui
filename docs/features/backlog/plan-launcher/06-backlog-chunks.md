@@ -1,6 +1,6 @@
 # 06 — Backlog chunks and starts
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses plugin data (one serial writer), chat's `launch` and its `sessionClosed` lifecycle, and removes main code the page still compiles against
 Wave: 3 · Depends on: 05
@@ -286,3 +286,5 @@ ChatMainExports`, `({}) as ChatMainExports`), so the new member breaks none. The
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 1ac71bc2d · proof: diff read: every Produces present (BacklogChunk, ChunkEdit, ChunkStart, channel chunks/editChunks/startChunks/chunksChanged, chunk-store/-message/-start exports, chat restored, NoteEdit); wave 3 typecheck + lint pass after e9b8f553d (Set<string> in a test, oxfmt) · concerns: AGENTS.md chat entry lacks backlog as a consumer of launch/defaultProfile/profileOf/restored (for 09); page and backlog self-test still call removed readDoc/applyEdit/commit until 08; exports_Restored test assumes invoke returns the handler's promise unwrapped; starter's extra started set has no test of its own

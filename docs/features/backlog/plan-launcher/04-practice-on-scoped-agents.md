@@ -1,6 +1,6 @@
 # 04 — Practice on scoped agents: the interviewer becomes a registration
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses main and page through the interviewer's lifetime, and keeps it in `progress.json` through a new store adapter
 Wave: 3 · Depends on: 02, 03
@@ -240,3 +240,5 @@ practice` passes, its `interviewer` group included; `grep -rn "interviewer sessi
 Commit: one commit for the group
 
 ## Proof
+
+Commit e135cbbfd · proof: diff read: interviewer is a scoped-agents registration with a progress.json store, interviewer-pane gone, keymap binds moved to scoped-agents.ask; wave 3 typecheck + lint pass after e9b8f553d (oxfmt) · concerns: the 'planned, not built yet' doc text is left for 09; the page test compares the fake pane's whole call list

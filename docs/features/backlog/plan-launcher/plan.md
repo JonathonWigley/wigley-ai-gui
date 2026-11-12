@@ -288,8 +288,8 @@ beyond its `contract.ts`.
 - [x] [Backlog staleness](05-backlog-staleness.md) — after 01
 
 ### Wave 3
-- [ ] [Practice on scoped agents](04-practice-on-scoped-agents.md) — after 02, 03
-- [ ] [Backlog chunks and starts](06-backlog-chunks.md) — after 05
+- [x] [Practice on scoped agents](04-practice-on-scoped-agents.md) — after 02, 03
+- [x] [Backlog chunks and starts](06-backlog-chunks.md) — after 05
 
 ### Wave 4
 - [ ] [Backlog assistant and tools](07-backlog-assistant.md) — after 02, 06
@@ -310,6 +310,8 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - 02 · deep · c76441063 · diff read: contract names word for word, manifest, service exports HOST_ID_WAIT_MS/ScopedAgentServiceDeps/ScopedAgentService/createScopedAgentService, main part, manifests/main/PLUGIN_EXTRAS; wave 1 typecheck + lint pass after fix 8bd73679b (LaunchRequest narrowing in a test, oxfmt) · concerns: oxfmt hand-formatting; timeout cases attach rejects after advancing timers (watch for unhandled rejection at the test gate); scope-collision test relies on vi.waitFor polling under fake timers; page commands/scope/layout setting declared with no handler until 03
 - 03 · deep · e992d43bb · diff read: createAgentPane/AgentPaneView/AgentPaneDeps, scopedAgentsPagePart, layout.d.ts types, readScopedAgentsLayout, createScopedAgentsKit, scoped-agents.ask binds, layouts owners row, main layout registration; wave 2 typecheck + lint pass after oxfmt 9fb5e5f46 · concerns: remount test row also expects the setScope/setFocusTarget/setResizeTarget events its setup records
 - 05 · deep · 5a5c5ccc8 · diff read: RowKey/rowKey, RepoFolderSetting, BacklogHome.repoFolder, BacklogStaleness, staleness/commitsSince invokes, stalenessRead message, namedPaths/itemAnchor/stalenessOf/createStalenessReader; wave 2 typecheck + lint pass after oxfmt 9fb5e5f46 · concerns: a path or repo folder spelled through a symlink while git reports the real path reads as unknown/no history (no realPath in the reader); a cached read still asks git for each clone's HEAD; homes.ts HomeShape and five test literals (backlog page x3, notes main x2) edited outside Files for the new repoFolder field
+- 04 · deep · e135cbbfd · diff read: interviewer is a scoped-agents registration with a progress.json store, interviewer-pane gone, keymap binds moved to scoped-agents.ask; wave 3 typecheck + lint pass after e9b8f553d (oxfmt) · concerns: the 'planned, not built yet' doc text is left for 09; the page test compares the fake pane's whole call list
+- 06 · deep · 1ac71bc2d · diff read: every Produces present (BacklogChunk, ChunkEdit, ChunkStart, channel chunks/editChunks/startChunks/chunksChanged, chunk-store/-message/-start exports, chat restored, NoteEdit); wave 3 typecheck + lint pass after e9b8f553d (Set<string> in a test, oxfmt) · concerns: AGENTS.md chat entry lacks backlog as a consumer of launch/defaultProfile/profileOf/restored (for 09); page and backlog self-test still call removed readDoc/applyEdit/commit until 08; exports_Restored test assumes invoke returns the handler's promise unwrapped; starter's extra started set has no test of its own
 ### Contract changes
 - scoped-agents contract.ts comments: trailing aligned comments → each on its own line above its member (oxfmt 80 columns); the block's '// Channel:' comment → the ScopedAgentsChannel interface · why: oxfmt --check · consumers: 03, 04, 07, 08 (no name or type changed) · group 02
 ### Rulings
@@ -323,5 +325,11 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - A ~ in a repoFolders entry expands against the home folder with its links resolved — matches how home roots compare — costs a mismatch only if the user expects the unresolved path · group 05 · group 05
 - repoFolders setting changes are detected with isSameJson, as chat does, and send changed with homeRoot null — costs nothing known · group 05 · group 05
 - commitsSince counts by filtering the latest 100 commits on writtenAt rather than stopping at the first older one — robust to non-monotonic dates — costs reading the full 100 each time · group 05 · group 05
+- groupHomes keeps a home with any features-source entry, followupFiles [] when it has no follow-up file, so notes' create targets see the same homes · group 06
+- a refused edit or replace writes nothing, not even the retirement it computed · group 06
+- a store call whose result equals the current list writes and sends nothing · group 06
+- a rejected setSession in the starter propagates and startChunks rejects · group 06
+- followup-writes' setTags and delete test rows were converted to create and edit rows rather than deleted · group 06
+- Wave 3: lead ran oxfmt --write on the 8 files lint flagged (editor tooling), in e9b8f553d
 ### Review rounds
 ### Test gate
