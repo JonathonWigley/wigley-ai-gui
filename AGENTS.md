@@ -222,7 +222,7 @@ src/main/        core main process; main.ts is its composition root
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
                  upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
-                 `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
+                 `config`, `add` and two commits, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
                  `kit.d.ts` and each owner's `layout.d.ts` and sends each owner's set of layouts to the page
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page, the `wigley-layout:`
@@ -352,15 +352,17 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  session tab among them), layouts/ (the docs Layout contract and the built-in `default` layout);
                  `docs/features/docs-browser/design.md`, `docs/features/docs-wiki/design.md`
   backlog/       manifest.ts, contract.ts, row-key.ts (`rowKey`, shared by main and the page), ready.ts (`AGENT_READY`,
-                 `isReady`), main/ (homes.ts, the follow-up files of every features home read through docs' index,
-                 with file watching; rows.ts, one row per item; note-images.ts, each item's images under the home's
-                 `followups-images/`; followup-writes.ts, the `load`, `tags` and `fileNote` it exports to notes;
+                 `isReady`), main/ (start.ts, the main part's reader of the follow-up files of every features home
+                 through docs' index, with file watching, its exporter and its `addScopedAgent` registrar;
+                 homes.ts, `groupHomes` and `markCreateTargets`; rows.ts, one row per item; note-images.ts, each
+                 item's images under the home's `followups-images/`; followup-writes.ts, the `load`, `tags` and
+                 `fileNote` it exports to notes, with `fileNote`'s guarded write;
                  staleness.ts, each item's git staleness through `Git.log` and `Git.firstAdded`, cached in plugin data;
                  repo-folder.ts, each repo's folder (the in-repo path, else the `repoFolders` setting); chunk-store.ts,
                  the chunks in plugin data and their one writer; chunk-message.ts, a chunk's first message;
                  chunk-start.ts, starts through chat's `launch` and retiring on `sessionClosed` or once chat no longer
-                 holds the session; assistant.ts, the assistant's scoped-agents registration, its `assistant.json`
-                 store and the sweep message; backlog-tools.ts, the `read_backlog_state` and `set_backlog_chunks`
+                 holds the session; assistant.ts, the assistant's constants, instructions, `assistant.json`
+                 store and sweep message; backlog-tools.ts, the `read_backlog_state` and `set_backlog_chunks`
                  tools; drive-actions.ts and the self-test's fixture and script), page/ (Backlog mode: backlog-state.ts,
                  the pure view state; backlog-view.ts, the filter bar, one table of every repo's follow-ups, the review
                  pane, the chunk strip and the assistant pane through scoped-agents' `addAgentPane`; layout/, the layout
@@ -687,8 +689,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   focused pane's top open popup, else its selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
   of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
   A **row with an owner** — opened with an `owner`, the plugin it belongs to; not the "owned session" of `open` — has
-  no place in the side bar, the next and previous session keys or the pane tree: it shows only where its owner mounts
-  its chat view through chat's `mountChat` (Practice's interviewer and Backlog's assistant, both through scoped-agents, `docs/features/scoped-agents/design.md`). The start
+  no place in the side bar, the next and previous session keys or the pane tree: it shows only where scoped-agents mounts
+  its chat view for the owner, through chat's `mountChat` (Practice's interviewer and Backlog's assistant, `docs/features/scoped-agents/design.md`). The start
   prompt's saved sessions leave out a session on such a row, and a `resume` whose `owner` differs from the held row's
   (no owner counting as one) rejects; scoped-agents then launches a fresh session.
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and

@@ -641,10 +641,11 @@ because the earlier items rewrite many of these tests anyway.
   have the script open the session it waits on.
 - **A failing worktree list goes unreported** — *agent-ready*: `planCopies` (`src/shared/plan-copies.ts`) falls back to
   the plan's own copy, with no log, when `git.worktrees` rejects, so a list that keeps failing hides every worktree
-  copy from Large and Backlog in silence. Log the rejection once per clone.
-- **Backlog reloads once per worktree edit** — *agent-ready*: each change under a linked worktree's `docs/features`
-  sends `changed`, and the Backlog page runs a full, uncoalesced load for each one (`src/plugins/backlog/main/start.ts`
-  `watchWorktrees`). Coalesce the page's `changed` reloads if a burst of worktree edits proves slow.
+  copy from Large in silence. Log the rejection once per clone.
+- **`Git.commitPaths` has no caller** — *agent-ready*: `Git.commitPaths` (`src/contracts/git.ts`,
+  `src/main/git/process-git.ts`) is called only from tests now that Backlog's Commit is gone, and `AGENTS.md`'s git
+  adapter entry still lists "a commit of named paths only". Remove the method, its adapter, its tests and the
+  AGENTS.md mention, or name the next caller.
 - **A hand-back's join counts one step short** — *agent-ready*: in `src/main/claude-code/stream-decoder.ts`, a
   non-empty turn right after a hand-back result puts its init in the hand-back turn's events entry, so its divider
   counts one step fewer; a second hand-back right after the first does the same. Key the join on the next result

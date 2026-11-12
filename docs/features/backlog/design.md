@@ -42,6 +42,9 @@ goes through the assistant, a chat beside the table. A decision here stands unle
   [chunk strip: chunk cards · New chunk                                         ]                │
   ```
 
+  In a narrow window the assistant pane stacks under the Backlog area, as every split does when narrow, and the
+  stacked Backlog area takes the larger share.
+
 - The layout's parts: `table`, `filters`, `tableRow`, `empty` (kit scope `backlog.table`); `review`, `reviewItem`,
   `commits` (`backlog.review`); `strip`, `chunkCard`, `newChunk` (`backlog.strip`); `pickerRow` (`backlog.picker`).
   The assistant pane's ask box is scoped-agents' `askBox` part; Backlog's layout draws none of that pane.
@@ -148,7 +151,8 @@ goes through the assistant, a chat beside the table. A decision here stands unle
 - The staleness note, verbatim (`<date>` is the first 10 characters of `writtenAt`):
   - no entry yet: `Staleness not read yet.`
   - `unknown`: `Unknown: not in git history.`
-  - otherwise `<Level>: written <date>`, then, joined by ` · `: `names no paths` when the item names none, else
+  - otherwise `<Level>: written <date>` (`<Level>: not in git history yet` while `writtenAt` is null, as for a stale
+    item), then, joined by ` · `: `names no paths` when the item names none, else, only when `writtenAt` is set,
     `<n> commit(s) since on <k> named path(s)`; `gone: <paths joined ', '>` when any; `last: <subject>` when a commit
     touched them. Example: `Moved: written 2026-10-20 · 3 commits since on 2 named paths · last: Fix the strip`.
 - An empty table says why, the first that holds:
@@ -167,17 +171,22 @@ goes through the assistant, a chat beside the table. A decision here stands unle
 
 - Staleness is git-only, and main computes it. It runs no agent.
 - The signals, per open item:
-  - `writtenAt`: the date of the commit that first added the item's title to its file, in the home's clone
-    (`Git.firstAdded`, the oldest non-merge commit whose diff added the text, through `git log -S`)
+  - `writtenAt`: the date of the commit that first added the item's anchor to its file, in the home's clone
+    (`Git.firstAdded`, the oldest non-merge commit whose diff added the text, through `git log -S`). The anchor
+    (`itemAnchor`) is the title with the bold marks, `## ` marker and closing `:` or `.` around it, and falls back to
+    the bare title when the item's line does not hold it. A follow-ups file that moved or split dates its items at
+    the move.
   - `namedPaths`: the repo paths the item's one line and body name (below)
   - `commitsSince`: the commits after `writtenAt` that touched a named path, in the repo folder's clone (`Git.log`,
     the latest 100 read), with the latest as `lastCommit`
   - `gonePaths`: the named paths missing from the repo folder
 - Named paths: each text between single backticks, outside fenced code, with a trailing `:<line>` reference, a
   leading `./` and a trailing `/` stripped. A candidate counts when it holds a `/` or ends in a file extension, and
-  holds no space, glob, bracket or quote, no `://`, and no leading `/`, `~`, `-` or `..`. A candidate counts only when
+  holds no space, `:`, glob, bracket, quote or any of `<>$=,|#`, and no leading `/`, `~`, `-` or `..`. A candidate counts only when
   the repo folder holds its first segment, so a path relative to somewhere else, or a dotted name such as
   `info.host`, is left out. A repo with no folder (§ Chunks, Folder rule) names no paths.
+- Staleness reads every path through its real path, so a home or repo folder reached through a symlink reads
+  correctly.
 - The home's clone and the repo folder's clone are the same for an in-repo home and differ for a
   `~/wigley-features/<repo>` home; each git path is relative to its own clone.
 - The level rule, first match wins:
@@ -200,23 +209,25 @@ goes through the assistant, a chat beside the table. A decision here stands unle
 - **Store:** chunks live in `chunks.json` in Backlog's plugin data, not in the follow-up files. No file tag and no
   skill change marks a chunked item. Backlog main is the one writer, and runs one store call at a time: the page's
   `editChunks` and `startChunks` and the assistant's `set_backlog_chunks` all go through it, and every change sends
-  `chunksChanged` to the page.
+  `chunksChanged` to the page. A `chunks.json` main cannot read is renamed aside and logged, never overwritten.
 - **Rules:**
   - A chunk holds rows of one repo.
   - A row sits in at most one chunk. Adding a row that sits in another unstarted chunk moves it.
   - A started chunk's rows cannot join another chunk or leave theirs, and its headless flag cannot change; it may be
     renamed.
+  - A chunk being started cannot be edited, replaced or pruned until its session is stored: an edit to it is refused
+    `<name> is starting`.
   - An `add` with no chunk id makes a new chunk named after the first title.
   - A chunk left with no rows is deleted.
   - A rename trims the name; an empty name is refused.
   - A refused edit rejects with the reason, writes nothing, and the page toasts the reason as an error.
-- **Start:** `s` starts one chunk, `S` every shown unstarted chunk. A start launches one session through chat's
+- **Start:** `s` starts one chunk, `S` every shown unstarted chunk, skipping empty chunks. A start launches one session through chat's
   `launch` in the repo's folder, under chat's default profile, headless only when the chunk's headless flag is on. It
   has no owner: it is the user's own session, with its row in the Sessions side bar. The chunk stores the new session's
   id. The result is one `ChunkStart` per chunk, its session id or the refusal; the page toasts `Started <name>` or the
   refusal. A start is refused for a chunk already started, a chunk none of whose rows is in the backlog, a repo with
   no folder, chat with no profile, or a launch that fails.
-- **First message:** the `launchBrief` setting, then one block per item in the chunk's order: `## <title>`, the one
+- **First message:** the `launchBrief` setting, then one block per open (not done) item in the chunk's order: `## <title>`, the one
   line, the body, and `From <file path>:<line>`. Parts are trimmed and joined by blank lines; an empty part is left
   out, and a title with no row is left out. The builder (`chunkMessage`) is a pure function.
 - **Folder rule:** one rule serves starts and staleness. The repo's folder is:

@@ -1,6 +1,7 @@
 import { type Files, isMissingFile } from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
+import { createSerialQueue } from '../../../shared/serial-queue';
 import type { NoteDraft, NoteFields, NoteImage } from '../contract';
 import {
   emptyDraft,
@@ -89,13 +90,7 @@ async function trashImage(
 // `files` is notes' data folder. The draft is read once and kept in memory.
 export function createDraftStore(files: Files, log: PluginLog): DraftStore {
   let kept: NoteDraft | null = null;
-  let last: Promise<unknown> = Promise.resolve();
-
-  function queued<T>(run: () => Promise<T>): Promise<T> {
-    const result = last.then(run);
-    last = result.catch(() => undefined);
-    return result;
-  }
+  const { run: queued } = createSerialQueue();
 
   async function current(): Promise<NoteDraft> {
     kept ??= await readDraft(files, log);

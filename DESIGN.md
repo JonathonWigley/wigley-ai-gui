@@ -521,11 +521,13 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   page and Linked from and sticks while the article scrolls.
 - **Backlog** (`docs/features/backlog/design.md`): no side bar.
   The sheet holds three Splits: the table pane beside the review pane (the table `640px` at first), the chunk strip
-  under both (`120px`), and the assistant pane at the end at full height (`380px`, hidden until shown). The table pane
+  under both (`120px`), and the assistant pane at the end at full height (`380px`, hidden until shown); in a narrow window the assistant
+  pane stacks under the Backlog area, which takes the larger share. The table pane
   stacks a header (its box hints and the edge prompt to the review pane), the status line, the filter bar, the filter
   box, a column head and the rows. The filter bar is a Button per filter, `primary` while on and `ghost` while off,
-  then an accent `<n> marked` Tag while rows are marked. The column head and each row share one grid: repo `8rem`
-  (a `check` Icon first while marked), task filling the rest, ready `4rem`, staleness `5.5rem`, chunk `9rem`. A row is
+  then an accent `<n> marked` Tag while rows are marked. The column head and each row share one grid: repo `4` x `space-8`
+  (a `check` Icon first while marked), task filling the rest, ready `2` x `space-8`, staleness `2.75` x `space-8`, chunk
+  `4.5` x `space-8`; below `40rem` of table width the columns share the width in those proportions. A row is
   `row-list`: the title with its one line as detail; ready an accent `ready` Tag; staleness a Tag of the level, `fresh`
   in `success`, `moved` in `warning`, `stale` in `error`, `unknown` neutral and `…` neutral until read; the chunk's
   name, with a `link-external` Icon while started. A started chunk's rows draw in `fg-tertiary`. The review pane has

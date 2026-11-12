@@ -88,8 +88,7 @@ session.
   in `src/renderer/fabric/`.
 - **Backlog** — owns every follow-up write and the `followups-images/` folder. Its main part exports `load` (the
   homes), `tags` and `fileNote`, which writes the follow-up and saves the images with it, and trashes them again when
-  the write is refused or fails. Its delete trashes the image folders the deleted item links, and
-  its commit takes the changed images under `followups-images/` with the follow-up files.
+  the write is refused or fails.
 - **Docs** — its main exports gain `writeBytes` (a guarded binary write, so images pass the same write guard as
   text) and `trashDoc`.
 - **Chat** — its main part exports `launch` (start a session and send its first message, without selecting the row),

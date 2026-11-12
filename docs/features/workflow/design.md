@@ -399,15 +399,14 @@ The layout preview opens on `<Leader>zlw`.
   added upkeep and showed nothing new. Open plan shows the whole plan.
 - **Review rounds stay a count.** The Run log gives the number of logged rounds, so the status line names the round and
   the checklist draws no row per round.
-- **One plan reader, shared with Backlog.** `src/shared/plan-progress.ts` reads a plan's boxes, waves, Run log and task
-  statuses, and `src/shared/plan-copies.ts` finds a plan's copies and picks the moved one, so Backlog and an unreported
-  Large run show the same copy. The docs index's counts take every checkbox in the file and carry no waves or Run log.
+- **One plan reader.** `src/shared/plan-progress.ts` reads a plan's boxes, waves, Run log and task
+  statuses, and `src/shared/plan-copies.ts` finds a plan's copies and picks the moved one, so every Large run shows the
+  same copy. The docs index's counts take every checkbox in the file and carry no waves or Run log.
 - **A reported copy, not a guessed one.** A run in a worktree ticks that worktree's copy, often through a shell that
   sends no write event, so following the session's own path or its agents' write paths would miss it. Picking the
   copy with the newest modified time failed too: every new worktree checks the plan out with fresh times. `plan.py`
   is the one writer of a run's progress, so its report rides on writes that already happen; the agent's tool covers a
-  resumed run before its first write. The moved-copy rule is the fallback for terminal sessions and for Backlog,
-  which has no session.
+  resumed run before its first write. The moved-copy rule is the fallback for terminal sessions.
 - **Only the main agent reports.** A subagent's step or checklist describes its own task, not the session's, and the
   user asked for no per-agent surface: its call changes nothing.
 - **Only scroll events move the side list's kept scroll.** A draw writes the kept value and never reads the list. A
