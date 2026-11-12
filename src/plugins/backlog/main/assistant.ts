@@ -1,6 +1,7 @@
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
 import { isJsonObject } from '../../../shared/json';
+import { createSerialQueue } from '../../../shared/serial-queue';
 import type {
   ScopedAgentRecord,
   ScopedAgentStore,
@@ -63,19 +64,13 @@ export function createAssistantStore(
   data: Pick<Files, 'read' | 'write'>,
   log: PluginLog,
 ): ScopedAgentStore {
-  let last: Promise<unknown> = Promise.resolve();
-
-  function queued<T>(run: () => Promise<T>): Promise<T> {
-    const result = last.then(run);
-    last = result.catch(() => undefined);
-    return result;
-  }
+  const queue = createSerialQueue();
 
   return {
     read: (scope) =>
-      queued(async () => (await readRecords(data, log))[scope] ?? null),
+      queue.run(async () => (await readRecords(data, log))[scope] ?? null),
     write: (scope, record) =>
-      queued(async () => {
+      queue.run(async () => {
         const records = await readRecords(data, log);
         if (record === null) {
           delete records[scope];
@@ -85,7 +80,7 @@ export function createAssistantStore(
         await data.write(ASSISTANT_FILE, JSON.stringify(records, null, 2));
       }),
     entries: () =>
-      queued(async () =>
+      queue.run(async () =>
         Object.entries(await readRecords(data, log)).map(([scope, record]) => ({
           scope,
           record,
@@ -112,7 +107,7 @@ export function sweepMessage(
   staleness: Readonly<Record<RowKey, BacklogStaleness>>,
 ): string {
   const items = rows.flatMap((row) => {
-    const entry = staleness[row.key] as BacklogStaleness | undefined;
+    const entry = staleness[row.key];
     const isListed =
       !row.done && entry !== undefined && LISTED_LEVELS.includes(entry.level);
     return isListed

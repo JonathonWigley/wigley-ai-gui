@@ -145,11 +145,13 @@ const FULL_TEXT = [
 // what `scopeOf` answers.
 function depsOver({
   rows = ROWS,
+  loadedRows = rows,
   chunks = [chunk('First', ['A'])],
   place = PLACE,
   scope = 'global',
 }: {
   rows?: BacklogRow[];
+  loadedRows?: BacklogRow[];
   chunks?: BacklogChunk[];
   place?: AssistantPlace | null;
   scope?: string | null;
@@ -157,6 +159,7 @@ function depsOver({
   return {
     scopeOf: vi.fn(async () => scope),
     rows: vi.fn(async () => rows),
+    loadRows: vi.fn(async () => loadedRows),
     staleness: vi.fn(() => ENTRIES),
     chunks: {
       chunks: vi.fn(async () => chunks),
@@ -199,6 +202,7 @@ describe('backlog tools', () => {
         isError: true,
       });
       expect(deps.rows).not.toHaveBeenCalled();
+      expect(deps.loadRows).not.toHaveBeenCalled();
       expect(deps.place).not.toHaveBeenCalled();
       expect(deps.chunks.chunks).not.toHaveBeenCalled();
       expect(deps.chunks.replaceUnstarted).not.toHaveBeenCalled();
@@ -387,6 +391,8 @@ describe('backlog tools', () => {
   it.each<{
     name: string;
     args: unknown;
+    // The rows a new load gives, when not the last load's.
+    loadedRows?: BacklogRow[];
     text: string;
     isError: boolean;
     after: Pick<BacklogChunk, 'name' | 'titles'>[];
@@ -401,7 +407,7 @@ describe('backlog tools', () => {
     {
       name: 'a repo that is no string',
       args: { repo: 5, chunks: [] },
-      text: 'Refused: no follow-ups in 5.',
+      text: 'Refused: repo must be a string.',
       isError: true,
       after: [{ name: 'Old', titles: ['A'] }],
     },
@@ -434,6 +440,14 @@ describe('backlog tools', () => {
       after: [{ name: 'One', titles: ['A', 'B'] }],
     },
     {
+      name: 'a title only a new load holds',
+      args: { repo: 'r', chunks: [{ name: 'One', titles: ['Fresh'] }] },
+      loadedRows: [...ROWS, row('r', 'Fresh')],
+      text: 'Set 1 unstarted chunks for r: One (1).',
+      isError: false,
+      after: [{ name: 'One', titles: ['Fresh'] }],
+    },
+    {
       name: 'an empty list',
       args: { repo: 'r', chunks: [] },
       text: 'Set no unstarted chunks for r.',
@@ -442,7 +456,7 @@ describe('backlog tools', () => {
     },
   ])(
     'setBacklogChunks_Cases ($name)',
-    async ({ args, text, isError, after }) => {
+    async ({ args, loadedRows, text, isError, after }) => {
       const data = createMemoryFiles();
       await data.write(
         'chunks.json',
@@ -456,7 +470,7 @@ describe('backlog tools', () => {
         log: () => undefined,
         changed: () => undefined,
       });
-      const deps = { ...depsOver(), chunks: store };
+      const deps = { ...depsOver({ loadedRows }), chunks: store };
 
       const result = await callTool(deps, 'set_backlog_chunks', args);
 

@@ -63,6 +63,9 @@ const FOLLOWUPS_TEXT = [
 
 const UI_TEXT = '# UI\n\n- **Button** — *agent-ready*: bigger button\n';
 
+// The session the harness's assistant holds.
+const ASSISTANT_ROW = 'row-1';
+
 const BAD_TITLE_FOLLOWUPS_TEXT = '# Follow-ups — r\n\n## Wrap this:\n\nBody.\n';
 
 // 2026-10-27T14:03:09Z
@@ -417,9 +420,10 @@ function settle(): Promise<void> {
 
 // Backlog's main part on the harness over a docs fake that lists FOLLOWUPS and
 // files each watch under the part, as docs' view does, a chat fake that
-// holds no session, and scoped-agents and sessions fakes that file nothing.
-// `watched` lists each live watch's path.
-function startBacklogOnHarness() {
+// holds no session, a scoped-agents fake whose assistant holds
+// ASSISTANT_ROW at scope `global`, and a sessions fake that files nothing;
+// a drive run when `drive`. `watched` lists each live watch's path.
+function startBacklogOnHarness({ drive = false } = {}) {
   const watched: string[] = [];
   const docs = fakeDependency(
     docsMainKey,
@@ -448,8 +452,10 @@ function startBacklogOnHarness() {
     (): ScopedAgentsMainExports => ({
       addScopedAgent: () => ({
         ask: async () => 'sess-a',
-        sessionOf: async () => null,
-        scopeOf: async () => null,
+        sessionOf: async (scope) =>
+          scope === 'global' ? ASSISTANT_ROW : null,
+        scopeOf: async (session) =>
+          session.id === ASSISTANT_ROW ? 'global' : null,
         dispose: () => undefined,
       }),
     }),
@@ -464,6 +470,7 @@ function startBacklogOnHarness() {
   const harness = startMainPart(backlogMainPart, {
     dependencies: [docs, chat, scopedAgents, sessions],
     services: { git: fakeGit(), runMode: 'live' },
+    drive,
   });
   return { harness, watched };
 }
@@ -892,10 +899,22 @@ describe('backlog main part', () => {
     expect(backlog.logged).toEqual(['chunk of sess-1 not retired: disk full']);
   });
 
-  it('editChunks_ItemGone_PrunedBeforeEdit', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
+  it.each<{ name: string; entries: IndexEntry[]; expected: BacklogChunk[] }>([
+    {
+      name: 'every file read, gone items pruned',
+      entries: [entry('followup', FOLLOWUPS)],
+      expected: [{ ...chunkOf('c1', ['Alpha']), name: 'Renamed' }],
+    },
+    {
+      name: 'a listed file unread, the repo left unpruned',
+      entries: [entry('followup', FOLLOWUPS), entry('followup', UI_FOLLOWUPS)],
+      expected: [
+        { ...chunkOf('c1', ['Alpha', 'Gone']), name: 'Renamed' },
+        chunkOf('c2', ['Gone too']),
+      ],
+    },
+  ])('editChunks_PrunedBeforeEdit ($name)', async ({ entries, expected }) => {
+    const backlog = startBacklog(entries, { [FOLLOWUPS]: FOLLOWUPS_TEXT });
     await backlog.data.write(
       'chunks.json',
       JSON.stringify({
@@ -909,7 +928,7 @@ describe('backlog main part', () => {
       name: 'Renamed',
     });
 
-    expect(chunks).toEqual([{ ...chunkOf('c1', ['Alpha']), name: 'Renamed' }]);
+    expect(chunks).toEqual(expected);
   });
 
   it('start_RegistersTheAssistant', async () => {
@@ -922,6 +941,19 @@ describe('backlog main part', () => {
     expect(spec.agentId).toBe('assistant');
     expect(spec.folder('global')).toBe('/home/me');
     expect(await spec.title('global')).toBe('Backlog assistant');
+  });
+
+  it('start_DriveRun_CallToolRunsAsTheAssistant', async () => {
+    const { harness } = startBacklogOnHarness({ drive: true });
+
+    const result = await harness.drive?.run('callTool', {
+      session: 'assistant',
+      tool: 'read_backlog_state',
+    });
+
+    expect(result).toMatchObject({
+      content: [{ type: 'text', text: expect.stringContaining('## Chunks') }],
+    });
   });
 
   it('start_ContributesBothTools', () => {

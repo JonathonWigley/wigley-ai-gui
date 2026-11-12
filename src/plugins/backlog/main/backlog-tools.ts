@@ -97,11 +97,13 @@ export function assistantPlace(
 }
 
 // `scopeOf` names the assistant's scope for its session, null for any other
-// session. `rows` are the last load's rows, `staleness` every entry read so
-// far, and `place` the page's place.
+// session. `rows` are the last load's rows, `loadRows` loads the backlog anew
+// and gives its rows, `staleness` is every entry read so far, and `place` the
+// page's place.
 export interface BacklogToolsDeps {
   scopeOf(session: AgentSession): Promise<string | null>;
   rows(): Promise<BacklogRow[]>;
+  loadRows(): Promise<BacklogRow[]>;
   staleness(): Record<RowKey, BacklogStaleness>;
   chunks: Pick<ChunkStore, 'chunks' | 'replaceUnstarted'>;
   place(): AssistantPlace | null;
@@ -316,15 +318,13 @@ async function setBacklogChunks(
   }
   const named: JsonObject = isJsonObject(args) ? args : {};
   const { repo } = named;
-  const repoRows =
-    typeof repo === 'string'
-      ? (await deps.rows()).filter((row) => row.repo === repo)
-      : [];
-  if (repoRows.length === 0) {
-    const shown = typeof repo === 'string' ? repo : JSON.stringify(repo);
-    return errorResult(`Refused: no follow-ups in ${shown}.`);
+  if (typeof repo !== 'string') {
+    return errorResult('Refused: repo must be a string.');
   }
-  const repoName = repo as string;
+  const repoRows = (await deps.loadRows()).filter((row) => row.repo === repo);
+  if (repoRows.length === 0) {
+    return errorResult(`Refused: no follow-ups in ${repo}.`);
+  }
   const plans = chunkPlans(named.chunks);
   if (plans === null) {
     return errorResult('Refused: chunks must be a list of { name, titles }.');
@@ -332,7 +332,7 @@ async function setBacklogChunks(
   let after: BacklogChunk[];
   try {
     after = await deps.chunks.replaceUnstarted(
-      repoName,
+      repo,
       plans,
       new Set<string>(repoRows.map((row) => row.title)),
     );
@@ -340,9 +340,9 @@ async function setBacklogChunks(
     return errorResult(`Refused: ${errorText(error)}`);
   }
   const set = after.filter(
-    (chunk) => chunk.repo === repoName && chunk.sessionId === null,
+    (chunk) => chunk.repo === repo && chunk.sessionId === null,
   );
-  return textResult(setChunksText(repoName, set));
+  return textResult(setChunksText(repo, set));
 }
 
 // The `start` backlog hands sessions' `contributeTools` with

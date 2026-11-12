@@ -119,6 +119,13 @@ type LocatedHome = HomeShape & {
 
 type MarkedHome = LocatedHome & { isCreateTarget: boolean };
 
+// A load's read, and the repos it left a follow-up file out of because the
+// file did not read: their titles in the read are not all of their titles.
+interface LoadedRead {
+  read: BacklogRead;
+  reposWithUnreadFile: ReadonlySet<string>;
+}
+
 function logSkipped(log: PluginLog, path: string, error: unknown): void {
   log(`${path}: ${errorText(error)}`);
 }
@@ -185,66 +192,79 @@ function followupPathsOf(home: MarkedHome, paths: Paths): string[] {
   return isListed ? listed : [...listed, createPath];
 }
 
-// The file and its items; null when unreadable, logged unless it is a create
-// target file the index does not list and the disk lacks.
+// The file and its items; null for a create target file the index does not
+// list and the disk lacks; `unread`, logged, when any other file does not
+// read.
 async function readFollowupFile(
   deps: BacklogDeps,
   path: string,
   isListed: boolean,
-): Promise<BacklogFollowupFile | null> {
+): Promise<BacklogFollowupFile | 'unread' | null> {
   try {
     return { path, items: parseFollowups(await deps.docs.readDoc(path)).items };
   } catch (error) {
-    if (isListed || !isMissingFile(error)) {
-      logSkipped(deps.log, path, error);
+    if (!isListed && isMissingFile(error)) {
+      return null;
     }
-    return null;
+    logSkipped(deps.log, path, error);
+    return 'unread';
   }
 }
 
+// The home's follow-up files that read, and whether one did not.
 async function readFollowupFiles(
   deps: BacklogDeps,
   home: MarkedHome,
-): Promise<BacklogFollowupFile[]> {
+): Promise<{ files: BacklogFollowupFile[]; hasUnreadFile: boolean }> {
   const listedCount = home.followupFiles.length;
   const read = await Promise.all(
     followupPathsOf(home, deps.paths).map((path, index) =>
       readFollowupFile(deps, path, index < listedCount),
     ),
   );
-  return read.filter((file) => file !== null);
+  return {
+    files: read.filter((file) => file !== null && file !== 'unread'),
+    hasUnreadFile: read.includes('unread'),
+  };
 }
 
-// `homeDir` is the home folder with its links resolved, which a `~` in the
+// The home, and whether one of its follow-up files did not read. `homeDir`
+// is the home folder with its links resolved, which a `~` in the
 // `repoFolders` setting expands to.
 async function readHome(
   deps: BacklogDeps,
   home: MarkedHome,
   homeDir: string,
-): Promise<BacklogHome> {
-  const followupFiles = await readFollowupFiles(deps, home);
+): Promise<{ home: BacklogHome; hasUnreadFile: boolean }> {
+  const { files, hasUnreadFile } = await readFollowupFiles(deps, home);
   return {
-    repo: home.repo,
-    root: home.root,
-    isCreateTarget: home.isCreateTarget,
-    gitRoot: home.gitRoot,
-    repoFolder: repoFolderOf(
-      home,
-      home.isInClone,
-      deps.repoFolders(),
-      deps.paths,
-      homeDir,
-    ),
-    followupFiles,
+    home: {
+      repo: home.repo,
+      root: home.root,
+      isCreateTarget: home.isCreateTarget,
+      gitRoot: home.gitRoot,
+      repoFolder: repoFolderOf(
+        home,
+        home.isInClone,
+        deps.repoFolders(),
+        deps.paths,
+        homeDir,
+      ),
+      followupFiles: files,
+    },
+    hasUnreadFile,
   };
 }
 
 async function readHomes(
   deps: BacklogDeps,
   read: SourceRead,
-): Promise<BacklogRead> {
+): Promise<LoadedRead> {
   if (read.document === null) {
-    return { homes: [], message: read.message };
+    return {
+      read: { homes: [], message: read.message },
+      reposWithUnreadFile: new Set(),
+    };
   }
   const located = await Promise.all(
     groupHomes(read.document.entries).map((home) => locateHome(deps, home)),
@@ -256,7 +276,14 @@ async function readHomes(
       readHome(deps, home, homeDir),
     ),
   );
-  return { homes, message: read.message };
+  return {
+    read: { homes: homes.map(({ home }) => home), message: read.message },
+    reposWithUnreadFile: new Set<string>(
+      homes.flatMap(({ home, hasUnreadFile }) =>
+        hasUnreadFile ? [home.repo] : [],
+      ),
+    ),
+  };
 }
 
 // Why an edited item's title, as the file already holds it, would not read
@@ -326,13 +353,13 @@ function emitFollowupEvent(
 // `fileNote`, and its follow-up files are the ones watched.
 function createBacklogMain(deps: BacklogDeps) {
   const { docs, files, paths, clock, log, channel, emit } = deps;
-  let last: BacklogRead | null = null;
+  let last: LoadedRead | null = null;
   let watches: Disposable[] = [];
   // Counts loads, so only the newest load keeps its watches.
   let loads = 0;
 
   function homeAt(homeRoot: string): BacklogHome {
-    const home = last?.homes.find((candidate) =>
+    const home = last?.read.homes.find((candidate) =>
       paths.samePath(candidate.root, homeRoot),
     );
     if (home === undefined) {
@@ -371,24 +398,24 @@ function createBacklogMain(deps: BacklogDeps) {
     }
   }
 
-  async function serve(index: () => Promise<SourceRead>): Promise<BacklogRead> {
+  async function serve(index: () => Promise<SourceRead>): Promise<LoadedRead> {
     loads += 1;
     const load = loads;
-    const read = await readHomes(deps, await index());
+    const loaded = await readHomes(deps, await index());
     if (load === loads) {
-      last = read;
+      last = loaded;
     }
-    await watchHomes(read, load);
-    return read;
+    await watchHomes(loaded.read, load);
+    return loaded;
   }
 
   // One load runs at a time: every call made while one runs shares the single
   // load that starts once it ends, so a burst of `changed` events costs two
   // loads, and each caller still gets a read begun after its call.
-  let runningLoad: Promise<BacklogRead> | null = null;
-  let queuedLoad: Promise<BacklogRead> | null = null;
+  let runningLoad: Promise<LoadedRead> | null = null;
+  let queuedLoad: Promise<LoadedRead> | null = null;
 
-  function startLoad(): Promise<BacklogRead> {
+  function startLoad(): Promise<LoadedRead> {
     const started = serve(() => docs.machineIndex());
     runningLoad = started;
     const settle = () => {
@@ -400,7 +427,7 @@ function createBacklogMain(deps: BacklogDeps) {
     return started;
   }
 
-  function load(): Promise<BacklogRead> {
+  function loadAll(): Promise<LoadedRead> {
     if (queuedLoad !== null) {
       return queuedLoad;
     }
@@ -413,6 +440,10 @@ function createBacklogMain(deps: BacklogDeps) {
       return startLoad();
     });
     return queuedLoad;
+  }
+
+  async function load(): Promise<BacklogRead> {
+    return (await loadAll()).read;
   }
 
   function imagesRootOf(home: BacklogHome): string {
@@ -709,15 +740,20 @@ function createBacklogMain(deps: BacklogDeps) {
     return result;
   }
 
-  // The last load's read, so a caller reads the rows the page loaded last;
-  // a load when there is none yet.
+  // The last load, so a caller reads the rows the page loaded last; a load
+  // when there is none yet.
+  async function lastLoaded(): Promise<LoadedRead> {
+    return last ?? loadAll();
+  }
+
   async function lastRead(): Promise<BacklogRead> {
-    return last ?? load();
+    return (await lastLoaded()).read;
   }
 
   return {
     load,
-    rescan: () => serve(() => docs.rebuildMachineIndex()),
+    rescan: async () => (await serve(() => docs.rebuildMachineIndex())).read,
+    lastLoaded,
     lastRead,
     fileNote,
   };
@@ -793,6 +829,16 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       changed: (chunks) => channel.send('chunksChanged', { chunks }),
     });
     const lastRows = async () => backlogRows(await backlog.lastRead());
+    // The last load's titles by repo, less each repo it left a file out of:
+    // a prune by them keeps the titles of a file that did not read.
+    const prunableTitles = async () => {
+      const { read, reposWithUnreadFile } = await backlog.lastLoaded();
+      const titles = titlesByRepo(backlogRows(read));
+      for (const repo of reposWithUnreadFile) {
+        titles.delete(repo);
+      }
+      return titles;
+    };
     const starter = createChunkStarter({
       store,
       rows: lastRows,
@@ -812,6 +858,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     const tools = startBacklogTools({
       scopeOf: (session) => assistant.scopeOf(session),
       rows: lastRows,
+      loadRows: async () => backlogRows(await backlog.load()),
       staleness: () => staleness.entries(),
       chunks: store,
       place: () => assistantPlace(place.get()),
@@ -836,7 +883,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     channel.handle('rescan', backlog.rescan);
     channel.handle('chunks', () => store.chunks());
     channel.handle('editChunks', async (edit) => {
-      await store.prune(titlesByRepo(await lastRows()));
+      await store.prune(await prunableTitles());
       return store.edit(edit);
     });
     channel.handle('startChunks', (chunkIds) => starter.start(chunkIds));

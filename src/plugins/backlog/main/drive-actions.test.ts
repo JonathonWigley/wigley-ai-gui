@@ -14,6 +14,7 @@ function driveOver(assistantSession: string | null) {
     scopeOf: async (session) =>
       session.id === ASSISTANT_ROW ? 'global' : null,
     rows: async () => [],
+    loadRows: async () => [],
     staleness: () => ({}),
     chunks: { chunks: async () => [], replaceUnstarted: async () => [] },
     place: () => null,
