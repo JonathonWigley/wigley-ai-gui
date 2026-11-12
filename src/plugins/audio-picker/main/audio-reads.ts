@@ -141,29 +141,36 @@ function errorResult(text: string): AgentFormToolResult {
   return { content: [{ type: 'text', text }], isError: true };
 }
 
-// `inner` with each open_audio_picker call's files checked first, outside the
-// service's call queue: a file missing, a folder or unreadable returns an
-// error result naming it and opens nothing. Parse is synchronous and `stat`
-// is not, so the check lives here rather than in the form type.
+// `inner` with each open_audio_picker call's files checked first: a file
+// missing, a folder or unreadable returns an error result naming it and opens
+// nothing. Parse is synchronous and `stat` is not, so the check lives here
+// rather than in the form type. Calls reach `inner` in the order they arrive,
+// each after the one before it was handed over or refused, so a later call
+// never overtakes an open still being checked.
 export function withAudioFileCheck(
   inner: AgentFormToolSession,
   parse: (args: unknown) => AudioPickerForm,
   files: Pick<Files, 'stat'>,
 ): AgentFormToolSession {
+  // Settles once the last call so far was handed to `inner` or refused; the
+  // result rides in an object so the chain never waits on `inner`'s answer.
+  let handedOver: Promise<unknown> = Promise.resolve();
   return {
-    async call(name, args, context) {
-      if (name === OPEN_AUDIO_PICKER_TOOL) {
-        const problem = await firstFileProblem(
-          args,
-          parse,
-          files,
-          context.signal,
-        );
-        if (problem !== null) {
-          return errorResult(problem);
-        }
-      }
-      return inner.call(name, args, context);
+    call(name, args, context) {
+      const turn = handedOver.then(async () => {
+        const problem =
+          name === OPEN_AUDIO_PICKER_TOOL
+            ? await firstFileProblem(args, parse, files, context.signal)
+            : null;
+        return {
+          result:
+            problem === null
+              ? inner.call(name, args, context)
+              : Promise.resolve(errorResult(problem)),
+        };
+      });
+      handedOver = turn.catch(() => undefined);
+      return turn.then((handed) => handed.result);
     },
     end: () => inner.end(),
   };

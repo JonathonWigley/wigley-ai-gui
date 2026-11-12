@@ -73,7 +73,7 @@ export function addDriveActions(
       defaultForm,
       openTool: OPEN_AUDIO_PICKER_TOOL,
       openDescription:
-        'Opens an audio picker in the session sessionId names without waiting for its answers: the live one audio-picker opened before under that id, else the owned session holding it (one sessions.open opened), else a new one; the default picker is the two-moment sample over the sample sounds in the run home.',
+        'Opens an audio picker in the session sessionId names without waiting for its answers: the live one audio-picker opened before under that id, else the owned session holding it (one sessions.open opened), else a new one; the default picker is the two-moment sample over the sample sounds in the plugin data folder.',
       answersDescription:
         "The latest audio picker's tool result once send or cancel resolved it, else { pending: true }.",
     },
@@ -89,8 +89,8 @@ export function addDriveActions(
 // layout preview on the page's ask over a service of its own whose store is in
 // memory and whose pickers go through the presenter's quiet view; refuses a
 // switch-off while an agent's picker is open. Outside a live run it writes the
-// sample sounds into the run's home first; once written, the self-test gets
-// its picker and a drive run gets its drive actions.
+// sample sounds into the plugin's data folder first; once written, the
+// self-test gets its picker and a drive run gets its drive actions.
 export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
   manifest: audioPickerManifest,
   start(api: AudioPickerApi) {
@@ -135,7 +135,7 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
       timers: services.timers,
       autoAnswer: audioPickerAutoAnswer((id) => chat.isHeadless(id)),
     });
-    const soundsDir = sampleSoundsDir(services.homeDir, services.paths);
+    const soundsDir = sampleSoundsDir(api.dataFolder, services.paths);
     const writeSounds = () =>
       writeSampleSounds(services.files, soundsDir, services.paths);
     const previewService = createAgentFormService({

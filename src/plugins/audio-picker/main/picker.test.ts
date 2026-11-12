@@ -223,6 +223,41 @@ describe('parseAudioPicker', () => {
       holds: ['moments', `holds ${MAX_MOMENTS + 1}`],
     },
     {
+      rule: 'a moment not an object',
+      args: pickerArgs({ moments: [momentArgs(), 'tap'] }),
+      holds: ['moments[2]', "'tap'"],
+    },
+    {
+      rule: 'candidates not an array',
+      args: withMoment({ candidates: 'coin' }),
+      holds: ['moments[2].candidates', "'coin'"],
+    },
+    {
+      rule: 'a candidate not an object',
+      args: withMoment({ candidates: [candidateArgs(), 7] }),
+      holds: [C, '7'],
+    },
+    {
+      rule: 'files not an array',
+      args: withCandidate({ files: '/sounds/a.wav' }),
+      holds: [`${C}.files`, "'/sounds/a.wav'"],
+    },
+    {
+      rule: 'pitch not an object',
+      args: withCandidate({ pitch: 'wide' }),
+      holds: [`${C}.pitch`, "'wide'"],
+    },
+    {
+      rule: 'pitch min not a number',
+      args: withCandidate({ pitch: { min: 'low', max: 1 } }),
+      holds: [`${C}.pitch.min`, "'low'"],
+    },
+    {
+      rule: 'drive_url not a string',
+      args: withCandidate({ drive_url: 5 }),
+      holds: [`${C}.drive_url`, '5'],
+    },
+    {
       rule: 'blank title',
       args: withMoment({ title: '' }),
       holds: ['moments[2].title', "''"],
@@ -548,27 +583,40 @@ describe('audioPickerPayload', () => {
 
   it.each([
     {
+      name: 'submitted',
       outcome: 'submitted' as const,
+      form: twoMomentForm,
+      body: ONE_CHOSEN_ONE_NONE,
       summary: '2 moments: 1 chosen, 1 None of these.',
       next: ['search again', 'new picker'],
     },
     {
+      name: 'draft',
       outcome: 'draft' as const,
+      form: twoMomentForm,
+      body: ONE_CHOSEN_ONE_NONE,
       summary:
         '2 moments: 1 chosen, 1 None of these. The picker is still open.',
       next: ['collect_last_audio_picker'],
     },
     {
+      name: 'cancelled',
       outcome: 'cancelled' as const,
+      form: twoMomentForm,
+      body: ONE_CHOSEN_ONE_NONE,
       summary: '2 moments: 1 chosen, 1 None of these.',
       next: ['wire nothing'],
     },
-  ])('gives each outcome its summary and next ($outcome)', (row) => {
-    const payload = audioPickerPayload(
-      twoMomentForm(),
-      row.outcome,
-      ONE_CHOSEN_ONE_NONE,
-    );
+    {
+      name: 'submitted, one moment',
+      outcome: 'submitted' as const,
+      form: () => parse(pickerArgs({ moments: [momentArgs()] })),
+      body: { answers: [{ choice: 0, note: '' }] },
+      summary: '1 moment: 0 chosen, 1 None of these.',
+      next: ['search again'],
+    },
+  ])('gives each outcome its summary and next ($name)', (row) => {
+    const payload = audioPickerPayload(row.form(), row.outcome, row.body);
 
     expect(payload.summary).toBe(row.summary);
     for (const part of row.next) {

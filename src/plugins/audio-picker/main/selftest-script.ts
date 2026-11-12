@@ -21,8 +21,9 @@ function selfTestPicker(args: SamplePickerArgs, run: number): SamplePickerArgs {
 
 // Moment 1 opens on tap_a, which plays to its end, and tap_b is chosen;
 // moment 2's loop plays, stops and plays again, the variant set's play stops
-// it, None of these is chosen by its number and gets the note `quieter`; the
-// cursor then moves back to moment 1 and to its last and first rows.
+// it, None of these, row 6 after the five candidates, is chosen by its number
+// and gets the note `quieter`; the cursor then moves back to moment 1 and to
+// its last and first rows.
 const CHOOSE_AND_PLAY_STEPS: SelfTestStep[] = [
   {
     keys: ['p'],
@@ -50,13 +51,13 @@ const CHOOSE_AND_PLAY_STEPS: SelfTestStep[] = [
     why: "Starting a play stops the one playing. Sparkle's files are 0.1 s and end on their own (`ended sparkle`), so no step waits on a stop for it.",
   },
   {
-    keys: ['3'],
+    keys: ['6'],
     expect: '[audio-picker] chose None of these on moment 2',
-    why: 'None of these takes the number after the last candidate.',
+    why: 'None of these takes the number after the last candidate; moment 2 holds the most candidates a moment can, so every row number draws.',
   },
   {
     keys: ['a'],
-    expect: '[audio-picker] focused note on moment 2',
+    expect: '[audio-picker] focused notes on moment 2',
     checksFit: true,
     screenshot: 'note',
   },
@@ -78,7 +79,7 @@ const CANCEL_AND_SEND_STEPS: SelfTestStep[] = [
     screenshot: 'confirm',
   },
   { keys: ['n'], expect: '[page] n ran audio-picker.dismissConfirm' },
-  { keys: ['<D-Enter>'], expect: '[audio-picker] sent' },
+  { keys: ['<D-Enter>'], expect: '[audio-picker] submitted' },
 ];
 
 // The preview picker opens in a session of its own, every file but `broken`
@@ -182,7 +183,7 @@ export function audioPickerSelfTestScript(
       return {
         shownLine:
           '[audio-picker] form shown: audio-picker-selftest · Self-test picker',
-        alsoShown: [/\[audio-picker\] decoded 5 of 5 files/],
+        alsoShown: [/\[audio-picker\] decoded 8 of 8 files/],
         result,
       };
     },

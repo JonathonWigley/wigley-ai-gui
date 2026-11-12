@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { MAX_CANDIDATES } from '../contract';
 import { samplePickerArgs, sineWav, writeSampleSounds } from './fixtures';
 import { createAudioPickerType } from './picker-type';
 import { previewPickerArgs } from './preview/preview-picker';
@@ -45,6 +46,18 @@ describe('sineWav', () => {
       });
     },
   );
+});
+
+describe('samplePickerArgs', () => {
+  it('holds a moment of MAX_CANDIDATES candidates, so the self-test draws every row number', () => {
+    const { moments } = createAudioPickerType(posixPaths).parse(
+      samplePickerArgs('/home/sounds', posixPaths),
+    );
+
+    expect(moments.map((moment) => moment.candidates.length)).toContain(
+      MAX_CANDIDATES,
+    );
+  });
 });
 
 describe('writeSampleSounds', () => {

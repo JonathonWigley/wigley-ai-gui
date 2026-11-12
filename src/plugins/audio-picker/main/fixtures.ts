@@ -61,15 +61,18 @@ const SAMPLE_SOUNDS: readonly { file: string; bytes(): Uint8Array }[] = [
   { file: 'sparkle_a.wav', bytes: () => sineWav(1320, 0.1) },
   { file: 'sparkle_b.wav', bytes: () => sineWav(1480, 0.1) },
   { file: 'sparkle_c.wav', bytes: () => sineWav(1760, 0.1) },
+  { file: 'drone.wav', bytes: () => sineWav(82, 1) },
+  { file: 'buzz.wav', bytes: () => sineWav(220, 1) },
+  { file: 'chime.wav', bytes: () => sineWav(990, 0.3) },
   { file: 'broken.wav', bytes: () => new TextEncoder().encode('not audio') },
 ];
 
-// Where the sample sounds live under a home folder.
+// Where the sample sounds live in the plugin's data folder.
 export function sampleSoundsDir(
-  homeDir: string,
+  dataFolder: string,
   paths: Pick<Paths, 'join'>,
 ): string {
-  return paths.join(homeDir, '.agents', 'wigley-audio-picker', 'sample-sounds');
+  return paths.join(dataFolder, 'sample-sounds');
 }
 
 // Writes every sample sound into `dir`, overwriting what is there.
@@ -86,8 +89,9 @@ export async function writeSampleSounds(
 }
 
 // A valid open_audio_picker call over the sample sounds in `dir`: two
-// moments, a one-shot pair recommending `tap_a`, and a loop and a variant set
-// recommending `hum`. Its five files all decode.
+// moments, a one-shot pair recommending `tap_a`, and five candidates (the
+// most a moment holds, so every row number draws) recommending the loop
+// `hum`, the variant set `sparkle` second. Its eight files all decode.
 export function samplePickerArgs(
   dir: string,
   paths: Pick<Paths, 'join'>,
@@ -140,6 +144,27 @@ export function samplePickerArgs(
             play: 'variants',
             volume: 0.6,
             pitch: { min: -1, max: 1 },
+          },
+          {
+            name: 'drone',
+            library: 'Sample library',
+            files: [file('drone.wav')],
+            play: 'loop',
+            volume: 0.3,
+          },
+          {
+            name: 'buzz',
+            library: 'Sample library',
+            files: [file('buzz.wav')],
+            play: 'loop',
+            volume: 0.3,
+          },
+          {
+            name: 'chime',
+            library: 'Sample library',
+            files: [file('chime.wav')],
+            play: 'one-shot',
+            volume: 0.5,
           },
         ],
       },

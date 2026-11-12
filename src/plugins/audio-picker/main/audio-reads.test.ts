@@ -297,6 +297,35 @@ describe('withAudioFileCheck', () => {
     },
   );
 
+  it('a later call waits for an earlier open to finish its check before reaching inner', async () => {
+    const files = createMemoryFiles();
+    await files.writeBytes(COIN, new Uint8Array([1]));
+    const statted = Promise.withResolvers<void>();
+    const checked = {
+      stat: (path: string) => statted.promise.then(() => files.stat(path)),
+    };
+    const inner = fakeInner();
+    const session = withAudioFileCheck(inner, parse, checked);
+    const context = { toolUseId: null, signal: live() };
+
+    const opened = session.call(OPEN_AUDIO_PICKER_TOOL, ONE_FILE_ARGS, context);
+    const collected = session.call(
+      COLLECT_AUDIO_PICKER_TOOL,
+      { wait: false },
+      context,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(inner.call).not.toHaveBeenCalled();
+    statted.resolve();
+    await Promise.all([opened, collected]);
+
+    expect(inner.call.mock.calls.map(([name]) => name)).toEqual([
+      OPEN_AUDIO_PICKER_TOOL,
+      COLLECT_AUDIO_PICKER_TOOL,
+    ]);
+  });
+
   it('end() ends inner once', () => {
     const inner = fakeInner();
 

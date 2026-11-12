@@ -120,8 +120,9 @@ const MOMENT_SCHEMA = {
   },
 };
 
-// The two audio picker tools as MCP tools/list publishes them; parse holds
-// every rule these schemas state, and more.
+// The two audio picker tools as MCP tools/list publishes them. Parse checks
+// every rule these schemas state, and more, except `additionalProperties`:
+// it ignores a field it does not know.
 export const AUDIO_PICKER_TOOLS: ToolDefinition[] = [
   {
     name: OPEN_AUDIO_PICKER_TOOL,

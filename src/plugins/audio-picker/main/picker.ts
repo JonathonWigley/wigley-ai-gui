@@ -349,8 +349,9 @@ function picksOf(form: AudioPickerForm, body: AudioPickerBody): AudioPick[] {
 
 function summarise(picks: AudioPick[], stillOpen: boolean): string {
   const noneOfThese = picks.filter((pick) => pick.choice === 0).length;
+  const moments = picks.length === 1 ? 'moment' : 'moments';
   const line =
-    `${picks.length} moments: ${picks.length - noneOfThese} chosen, ` +
+    `${picks.length} ${moments}: ${picks.length - noneOfThese} chosen, ` +
     `${noneOfThese} None of these.`;
   return stillOpen ? `${line} The picker is still open.` : line;
 }

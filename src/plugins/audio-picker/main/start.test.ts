@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
@@ -29,19 +32,23 @@ import { type SamplePickerArgs, samplePickerArgs, sineWav } from './fixtures';
 import { createAudioPickerType } from './picker-type';
 import { addDriveActions, audioPickerMainPart } from './start';
 
-// Where start.ts writes the sample sounds under the harness's home, `/home`.
-const SOUNDS_DIR = '/home/.agents/wigley-audio-picker/sample-sounds';
+// Where start.ts writes the sample sounds in the harness's data folder for
+// the plugin, `/data/audio-picker`.
+const SOUNDS_DIR = '/data/audio-picker/sample-sounds';
 
 // The real sessions part, so a drive action's open reaches the contributed
-// tool.
-function startWithSessions(
-  options: { isHeadless?: (sessionId: string) => boolean } = {},
-) {
+// tool. `homeDir` holds the picker folder, which the store writes with
+// node:fs.
+function startWithSessions(options: {
+  homeDir: string;
+  isHeadless?: (sessionId: string) => boolean;
+}) {
   return startMainPart(audioPickerMainPart, {
     parts: [sessionsMainPart],
     dependencies: [fakeChat(options.isHeadless)],
     drive: true,
     services: {
+      homeDir: options.homeDir,
       alerts: { setOpenCount() {} },
       git: { originRepoName: () => Promise.resolve(null) } as never,
     },
@@ -152,10 +159,20 @@ describe('audio-picker drive actions', () => {
 });
 
 describe('audio-picker main part', () => {
+  // A home of its own per test: the picker store writes real files there.
+  let homeDir = '';
+  beforeEach(() => {
+    homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-audio-picker-'));
+  });
+  afterEach(() => {
+    rmSync(homeDir, { recursive: true, force: true });
+  });
+
   it('stops with nothing live and starts again', async () => {
     const harness = startMainPart(audioPickerMainPart, {
       parts: [sessionsMainPart],
       dependencies: [fakeChat()],
+      services: { homeDir },
     });
     expect(harness.counts().registrations).toBeGreaterThan(0);
 
@@ -167,11 +184,12 @@ describe('audio-picker main part', () => {
     await harness.stop();
   });
 
-  it("openPicker opens the sample picker from the run's home, whose files exist", async () => {
+  it("openPicker opens the sample picker from the plugin's data folder, whose files exist", async () => {
     const sessions = recordingSessions();
     const harness = startMainPart(audioPickerMainPart, {
       dependencies: [fakeChat(), sessions.dependency],
       drive: true,
+      services: { homeDir },
     });
     await driveActionsAdded(harness);
 
@@ -180,14 +198,14 @@ describe('audio-picker main part', () => {
     const args = samplePickerArgs(SOUNDS_DIR, posixPaths);
     expect(sessions.calls[0]).toEqual([OPEN_AUDIO_PICKER_TOOL, args]);
     const stats = await Promise.all(
-      listedFiles(args).map((path) => harness.files.stat(path)),
+      listedFiles(args).map((file) => harness.files.stat(file)),
     );
     expect(stats.map((stat) => stat?.isFolder)).toEqual(stats.map(() => false));
     await harness.stop();
   });
 
   it('a candidate file missing from disk makes the open call an error', async () => {
-    const harness = startWithSessions();
+    const harness = startWithSessions({ homeDir });
     await driveActionsAdded(harness);
     const picker = {
       heading: 'Missing file',
@@ -219,7 +237,7 @@ describe('audio-picker main part', () => {
   });
 
   it("readAudio serves an open picker's file and refuses after finish", async () => {
-    const harness = startWithSessions();
+    const harness = startWithSessions({ homeDir });
     const shown = await openedPicker(harness);
     const readFirst = () =>
       harness.invoke('readAudio', shown.sessionId, {
@@ -235,34 +253,51 @@ describe('audio-picker main part', () => {
     await harness.stop();
   });
 
-  it('stop before ready registers no actions', async () => {
-    const memory = createMemoryFiles();
-    const written = Promise.withResolvers<void>();
-    const files = {
-      ...memory,
-      writeBytes: (path: string, bytes: Uint8Array) =>
-        written.promise.then(() => memory.writeBytes(path, bytes)),
-    };
-    const harness = startMainPart(audioPickerMainPart, {
-      parts: [sessionsMainPart],
-      dependencies: [fakeChat()],
-      drive: true,
-      services: { files },
-    });
+  it.each([
+    { name: 'added once it lands', stopsFirst: false, added: true },
+    {
+      name: 'none after a stop before it lands',
+      stopsFirst: true,
+      added: false,
+    },
+  ])(
+    'drive actions wait on the sample write ($name)',
+    async ({ stopsFirst, added }) => {
+      const memory = createMemoryFiles();
+      const written = Promise.withResolvers<void>();
+      const files = {
+        ...memory,
+        writeBytes: (file: string, bytes: Uint8Array) =>
+          written.promise.then(() => memory.writeBytes(file, bytes)),
+      };
+      const harness = startMainPart(audioPickerMainPart, {
+        parts: [sessionsMainPart],
+        dependencies: [fakeChat()],
+        drive: true,
+        services: { files, homeDir },
+      });
+      await flush();
+      expect(harness.drive?.actions.has('openPicker')).toBe(false);
 
-    await harness.stop();
-    written.resolve();
-    await flush();
+      if (stopsFirst) {
+        await harness.stop();
+      }
+      written.resolve();
+      await flush();
 
-    expect(harness.drive?.actions.has('openPicker')).toBe(false);
-  });
+      expect(harness.drive?.actions.has('openPicker')).toBe(added);
+      if (!stopsFirst) {
+        await harness.stop();
+      }
+    },
+  );
 
   it("a headless session's picker comes back auto_answered and shows nothing", async () => {
-    const harness = startWithSessions({ isHeadless: () => true });
+    const harness = startWithSessions({ homeDir, isHeadless: () => true });
     const files = listedFiles(samplePickerArgs(SOUNDS_DIR, posixPaths));
     await vi.waitFor(async () => {
       const stats = await Promise.all(
-        files.map((path) => harness.files.stat(path)),
+        files.map((file) => harness.files.stat(file)),
       );
       expect(stats.every((stat) => stat !== null)).toBe(true);
     });
@@ -288,7 +323,7 @@ describe('audio-picker main part', () => {
   });
 
   it('mayStop names the open picker until it resolves', async () => {
-    const harness = startWithSessions();
+    const harness = startWithSessions({ homeDir });
     const shown = await openedPicker(harness);
 
     expect(harness.started().mayStop?.()).toBe(
@@ -300,10 +335,33 @@ describe('audio-picker main part', () => {
     await harness.stop();
   });
 
+  it('a quit leaves the open picker open on disk and on the page, for the agent to send again', async () => {
+    const harness = startWithSessions({ homeDir });
+    await openedPicker(harness);
+    const pickersDir = path.join(
+      homeDir,
+      '.agents',
+      'wigley-audio-picker',
+      'pickers',
+    );
+
+    await harness.stop('quit');
+
+    const outcomes = readdirSync(pickersDir).map(
+      (name) =>
+        JSON.parse(readFileSync(path.join(pickersDir, name), 'utf8')).outcome,
+    );
+    expect(outcomes).toEqual(['open']);
+    expect(
+      harness.sent.filter((sent) => sent.message === 'formClosed'),
+    ).toEqual([]);
+  });
+
   it("stop ends the open preview's session", async () => {
     const sessions = previewSessions();
     const harness = startMainPart(audioPickerMainPart, {
       dependencies: [fakeChat(), sessions.dependency],
+      services: { homeDir },
     });
     harness.invoke('openPreview');
 
