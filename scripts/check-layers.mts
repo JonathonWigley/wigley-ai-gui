@@ -67,7 +67,9 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       'src/plugins/audio-picker/main/start.test.ts': {
         layers: [
           'src/shared',
+          'src/shared/paths',
           'src/plugins/agent-form-fakes.test-support.ts',
+          'src/plugins/audio-picker/contract.ts',
           'src/plugins/audio-picker/main',
           'src/plugins/sessions/contract.ts',
           'src/plugins/sessions/main',

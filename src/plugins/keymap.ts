@@ -1176,6 +1176,12 @@ export const defaultKeymap = {
       where: 'page',
     },
     {
+      keys: '<Leader>zlm',
+      scope: 'any',
+      command: 'audio-picker.openPreview',
+      where: 'page',
+    },
+    {
       keys: '<Leader>zls',
       scope: 'any',
       command: 'sessions.openPreview',
