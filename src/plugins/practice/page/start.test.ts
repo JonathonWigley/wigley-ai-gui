@@ -560,7 +560,12 @@ describe('practicePagePart', () => {
       ],
       toggles: [],
     },
-    { case: 'a problem open', start: 'open', refusals: [], toggles: ['toggle'] },
+    {
+      case: 'a problem open',
+      start: 'open',
+      refusals: [],
+      toggles: ['toggle'],
+    },
   ])('toggleInterviewer: $case', async ({ start, refusals, toggles }) => {
     const { harness, pane } =
       start === 'open' ? await startWithProblemOpen() : startPracticePage();

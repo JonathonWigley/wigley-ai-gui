@@ -47,7 +47,10 @@ function settle(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-type FakeChat = Pick<ChatMainExports, 'launch' | 'defaultProfile' | 'profileOf'>;
+type FakeChat = Pick<
+  ChatMainExports,
+  'launch' | 'defaultProfile' | 'profileOf'
+>;
 
 // A starter over a real store holding `chunks`, whose prune, retireUnheld and
 // setSession are spies. Chat holds the sessions in `held`; its `launch`
@@ -251,7 +254,10 @@ describe('chunk starter', () => {
   });
 
   it('startChunks_TwoIds_RunInOrder', async () => {
-    const starting = await starterOver([chunk('C1', ['a']), chunk('C2', ['b'])]);
+    const starting = await starterOver([
+      chunk('C1', ['a']),
+      chunk('C2', ['b']),
+    ]);
 
     const results = await starting.starter.start(['C2', 'C1']);
 
@@ -312,7 +318,10 @@ describe('chunk starter', () => {
   });
 
   it('startChunks_PrunesThenRetiresOnce', async () => {
-    const starting = await starterOver([chunk('C1', ['a']), chunk('C2', ['b'])]);
+    const starting = await starterOver([
+      chunk('C1', ['a']),
+      chunk('C2', ['b']),
+    ]);
 
     await starting.starter.start(['C1', 'C2']);
 

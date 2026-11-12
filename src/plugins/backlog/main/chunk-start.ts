@@ -85,7 +85,10 @@ export function createChunkStarter(deps: ChunkStarterDeps): ChunkStarter {
         log(
           `chunk ${chunk.name}: session ${sessionId} closed before it was stored`,
         );
-        return { chunkId, refusal: `${chunk.name}'s session closed as it started` };
+        return {
+          chunkId,
+          refusal: `${chunk.name}'s session closed as it started`,
+        };
       }
       const stored = store.setSession(chunkId, sessionId);
       started.add(chunkId);

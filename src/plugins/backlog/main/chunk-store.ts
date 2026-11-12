@@ -178,9 +178,7 @@ function addTarget(
   }
   const other = keys.find((key) => key.repo !== target.repo);
   if (other !== undefined) {
-    throw new Error(
-      `${other.title} is in ${other.repo}, not ${target.repo}`,
-    );
+    throw new Error(`${other.title} is in ${other.repo}, not ${target.repo}`);
   }
   return target;
 }
@@ -263,9 +261,7 @@ function withHeadless(
     );
   }
   return chunks.map((candidate) =>
-    candidate === chunk
-      ? { ...candidate, headless: edit.headless }
-      : candidate,
+    candidate === chunk ? { ...candidate, headless: edit.headless } : candidate,
   );
 }
 

@@ -799,7 +799,9 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       store
         .retire(sessionId)
         .catch((error: unknown) =>
-          services.log(`chunk of ${sessionId} not retired: ${errorText(error)}`),
+          services.log(
+            `chunk of ${sessionId} not retired: ${errorText(error)}`,
+          ),
         );
     });
     channel.handle('staleness', async () => staleness.read(await lastRows()));

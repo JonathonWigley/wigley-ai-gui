@@ -785,22 +785,27 @@ describe('backlog main part', () => {
     ]);
   });
 
-  it.each<SessionCloseReason>(['user', 'start-failed', 'project-closed', 'finished'])(
-    'sessionClosed_StartedChunk_Retired (%s)',
-    async (reason) => {
-      const backlog = startBacklog([], {});
-      const chunks = [chunkOf('c1', ['Alpha'], 'sess-1'), chunkOf('c2', ['Beta'])];
-      await backlog.data.write('chunks.json', JSON.stringify({ chunks }));
+  it.each<SessionCloseReason>([
+    'user',
+    'start-failed',
+    'project-closed',
+    'finished',
+  ])('sessionClosed_StartedChunk_Retired (%s)', async (reason) => {
+    const backlog = startBacklog([], {});
+    const chunks = [
+      chunkOf('c1', ['Alpha'], 'sess-1'),
+      chunkOf('c2', ['Beta']),
+    ];
+    await backlog.data.write('chunks.json', JSON.stringify({ chunks }));
 
-      backlog.emit('chat.sessionClosed', { sessionId: 'sess-1', reason });
-      await settle();
+    backlog.emit('chat.sessionClosed', { sessionId: 'sess-1', reason });
+    await settle();
 
-      expect(await backlog.savedChunks()).toEqual([chunkOf('c2', ['Beta'])]);
-      expect(backlog.sent).toEqual([
-        ['chunksChanged', { chunks: [chunkOf('c2', ['Beta'])] }],
-      ]);
-    },
-  );
+    expect(await backlog.savedChunks()).toEqual([chunkOf('c2', ['Beta'])]);
+    expect(backlog.sent).toEqual([
+      ['chunksChanged', { chunks: [chunkOf('c2', ['Beta'])] }],
+    ]);
+  });
 
   it('sessionClosed_RetireRejects_Logged', async () => {
     const backlog = startBacklog([], {});
@@ -813,9 +818,7 @@ describe('backlog main part', () => {
     backlog.emit('chat.sessionClosed', { sessionId: 'sess-1', reason: 'user' });
     await settle();
 
-    expect(backlog.logged).toEqual([
-      'chunk of sess-1 not retired: disk full',
-    ]);
+    expect(backlog.logged).toEqual(['chunk of sess-1 not retired: disk full']);
   });
 
   it('editChunks_ItemGone_PrunedBeforeEdit', async () => {
@@ -835,9 +838,7 @@ describe('backlog main part', () => {
       name: 'Renamed',
     });
 
-    expect(chunks).toEqual([
-      { ...chunkOf('c1', ['Alpha']), name: 'Renamed' },
-    ]);
+    expect(chunks).toEqual([{ ...chunkOf('c1', ['Alpha']), name: 'Renamed' }]);
   });
 
   describe('follow-up events', () => {
@@ -1022,7 +1023,12 @@ describe('backlog main part', () => {
       [UI_FOLLOWUPS]: UI_TEXT,
     });
 
-    const result = await backlog.exports.fileNote(HOME, CHIP_TARGET, 'Text.', []);
+    const result = await backlog.exports.fileNote(
+      HOME,
+      CHIP_TARGET,
+      'Text.',
+      [],
+    );
 
     expect(result).toMatchObject({ type: 'applied' });
     expect(backlog.files.get(FOLLOWUPS)).toContain('# Follow-ups — r');

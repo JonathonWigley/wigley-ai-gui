@@ -13,7 +13,15 @@ function chunk(
   titles: string[],
   fields: Partial<BacklogChunk> = {},
 ): BacklogChunk {
-  return { id, repo, name, titles, headless: false, sessionId: null, ...fields };
+  return {
+    id,
+    repo,
+    name,
+    titles,
+    headless: false,
+    sessionId: null,
+    ...fields,
+  };
 }
 
 const A = chunk('A', 'r', 'Alpha', ['a1', 'a2']);
@@ -126,7 +134,12 @@ describe('chunk store', () => {
     {
       case: 'an add of a key in another unstarted chunk',
       edit: { type: 'add', keys: [rowKey('r', 'b1')], chunkId: 'A' },
-      result: [{ ...A, titles: ['a1', 'a2', 'b1'] }, { ...B, titles: ['b2'] }, S, O],
+      result: [
+        { ...A, titles: ['a1', 'a2', 'b1'] },
+        { ...B, titles: ['b2'] },
+        S,
+        O,
+      ],
     },
     {
       case: 'an add of a key already in the target',
@@ -270,7 +283,11 @@ describe('chunk store', () => {
     const b = chunk('B', 'r', 'Beta', ['b1']);
     const TITLES = new Set(['a1', 'b1', 's1', 'x', 'y']);
 
-    it.each<{ case: string; plans: ChunkPlan[]; result: BacklogChunk[] | string }>([
+    it.each<{
+      case: string;
+      plans: ChunkPlan[];
+      result: BacklogChunk[] | string;
+    }>([
       {
         case: 'a blank name',
         plans: [{ name: '  ', titles: ['x'] }],
@@ -357,7 +374,11 @@ describe('chunk store', () => {
     it('replaceUnstarted_SessionNotHeld_RetiresBeforeApplying', async () => {
       const { store, saved } = await storeOver([b, S], { held: [] });
 
-      await store.replaceUnstarted('r', [{ name: 'P', titles: ['s1'] }], TITLES);
+      await store.replaceUnstarted(
+        'r',
+        [{ name: 'P', titles: ['s1'] }],
+        TITLES,
+      );
 
       expect(await saved()).toEqual([chunk('new1', 'r', 'P', ['s1'])]);
     });
@@ -365,7 +386,12 @@ describe('chunk store', () => {
 
   it.each([
     { case: 'an unheld session', held: [], expected: [A], changes: [[A]] },
-    { case: 'every session held', held: ['sess'], expected: [A, S], changes: [] },
+    {
+      case: 'every session held',
+      held: ['sess'],
+      expected: [A, S],
+      changes: [],
+    },
   ])(
     'retireUnheld_Cases_ChangedOnlyWhenRetired given $case',
     async ({ held, expected, changes }) => {
@@ -453,7 +479,10 @@ describe('chunk store', () => {
   ])('prune_Cases given $case', async ({ titles, expected, changed }) => {
     const store = await storeOver([A, B, S, O]);
     const byRepo = new Map(
-      Object.entries(titles).map(([repo, list]) => [repo, new Set(list)]),
+      Object.entries(titles).map(([repo, list]) => [
+        repo,
+        new Set<string>(list),
+      ]),
     );
 
     expect(await store.store.prune(byRepo)).toEqual(expected);

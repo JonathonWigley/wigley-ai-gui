@@ -11,7 +11,10 @@ export type HomeShape = Pick<BacklogHome, 'repo' | 'root'> & {
 // repo, then root; each home's follow-up files sorted by path. Any entry of a
 // home makes it a home; only its follow-up entries name its files.
 export function groupHomes(entries: readonly IndexEntry[]): HomeShape[] {
-  const builds = new Map<string, { repo: string; followupPaths: Set<string> }>();
+  const builds = new Map<
+    string,
+    { repo: string; followupPaths: Set<string> }
+  >();
   for (const entry of entries) {
     const { source, repo, root } = entry;
     const isHomeEntry = source === 'features' && repo !== null && root !== null;
