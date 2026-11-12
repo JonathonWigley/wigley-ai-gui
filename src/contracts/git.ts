@@ -79,4 +79,15 @@ export interface Git {
   // `[]` for a path with no history, and for an empty `paths`, running nothing.
   // Rejects when HEAD has no commit yet.
   log(root: string, paths: string[], limit: number): Promise<GitCommit[]>;
+  // The oldest non-merge commit whose diff changed how often `text` occurs in
+  // `path` (`git log -S`), which is the one that first added it; its `paths` is
+  // `[path]`. `text` is matched as a raw substring, newlines included, so the
+  // caller passes enough text to be unique in the file: `### Item` also matches
+  // a commit that added `### Item two`. Null when no commit did, and for an
+  // empty `text`, running nothing. Rejects when HEAD has no commit yet.
+  firstAdded(
+    root: string,
+    path: string,
+    text: string,
+  ): Promise<GitCommit | null>;
 }

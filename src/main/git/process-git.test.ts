@@ -626,6 +626,90 @@ describe('createProcessGit', () => {
       'git log exited 128',
     );
   });
+
+  function firstAddedArgs(filePath: string, text: string): string[] {
+    return git(
+      '--literal-pathspecs',
+      'log',
+      '--no-show-signature',
+      '--no-merges',
+      '--reverse',
+      `-S${text}`,
+      '--format=%x00%H%x00%cI%x00%s',
+      '-z',
+      '--name-only',
+      '--',
+      filePath,
+    );
+  }
+
+  it('firstAdded_ScriptedOutput_OldestRecord', async () => {
+    const test = setUp();
+    const older = '2026-11-04T09:00:00Z';
+    const newer = '2026-11-05T10:00:00-06:00';
+    test.processes.script(
+      'git',
+      firstAddedArgs('docs/followups.md', '### Item'),
+      exited(
+        0,
+        `\0${SHA_A}\0${older}\0add item\0\ndocs/followups.md\0` +
+          `\0${SHA_B}\0${newer}\0re-add item\0\ndocs/followups.md\0`,
+      ),
+    );
+
+    expect(
+      await test.git.firstAdded(ROOT, 'docs/followups.md', '### Item'),
+    ).toEqual({
+      sha: SHA_A,
+      subject: 'add item',
+      at: older,
+      paths: ['docs/followups.md'],
+    });
+  });
+
+  it('firstAdded_ExitsZeroWithNoOutput_Null', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      firstAddedArgs('a.md', '### Item'),
+      exited(0),
+    );
+
+    expect(await test.git.firstAdded(ROOT, 'a.md', '### Item')).toBeNull();
+  });
+
+  it('firstAdded_EmptyText_RunsNothing', async () => {
+    const test = setUp();
+
+    expect(await test.git.firstAdded(ROOT, 'a.md', '')).toBeNull();
+    expect(test.processes.runs).toEqual([]);
+  });
+
+  it('firstAdded_ExitsNonZero_Rejects', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      firstAddedArgs('a.md', '### Item'),
+      exited(128, '', 'fatal: bad\n'),
+    );
+
+    await expect(test.git.firstAdded(ROOT, 'a.md', '### Item')).rejects.toThrow(
+      'git log exited 128',
+    );
+  });
+
+  it('firstAdded_TextStartingWithDash_AttachedToS', async () => {
+    const test = setUp();
+    const args = firstAddedArgs('a.md', '--x');
+    test.processes.script(
+      'git',
+      args,
+      exited(0, `\0${SHA_A}\02026-11-04T09:00:00Z\0dash\0\na.md\0`),
+    );
+
+    expect((await test.git.firstAdded(ROOT, 'a.md', '--x'))?.sha).toBe(SHA_A);
+    expect(args).toContain('-S--x');
+  });
 });
 
 // The real-clone test runs the machine's git, which a machine without git on
@@ -838,6 +922,45 @@ describe('createProcessGit over a real clone', () => {
         expect(Date.parse(commit.at)).not.toBeNaN();
       }
       expect(await adapter.log(root, ['a b.md', 'c.md'], 1)).toHaveLength(1);
+    },
+  );
+
+  it.skipIf(!gitOnPath)(
+    'firstAdded_RealRepo_FirstCommitAddingTheText',
+    async () => {
+      isolateGitConfig();
+      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+      const commitFiles = async (
+        subject: string,
+        texts: Record<string, string>,
+      ) => {
+        for (const [file, text] of Object.entries(texts)) {
+          writeFileSync(path.join(root, file), text);
+        }
+        await run('add', '--', ...Object.keys(texts));
+        await run('commit', '--quiet', '-m', subject);
+      };
+      await run('init', '--quiet');
+      await commitFiles('first', { 'a.md': '', 'b.md': 'x\n', 'c.md': '' });
+      await commitFiles('item in other file', { 'b.md': 'x\n### Item\n' });
+      await commitFiles('add item', { 'a.md': '### Item\n' });
+      await commitFiles('edit other', { 'b.md': 'y\n### Item\n' });
+      await commitFiles('remove item', { 'a.md': '' });
+      await commitFiles('re-add item', { 'a.md': '### Item\n' });
+      await commitFiles('longer title', { 'c.md': '### Item two\n' });
+      await commitFiles('short title', { 'c.md': '### Item two\n### Item\n' });
+
+      const added = await adapter.firstAdded(root, 'a.md', '### Item');
+
+      expect(added?.subject).toBe('add item');
+      expect(added?.paths).toEqual(['a.md']);
+      expect(await adapter.firstAdded(root, 'a.md', '### Never')).toBeNull();
+      expect((await adapter.firstAdded(root, 'c.md', '### Item'))?.subject).toBe(
+        'longer title',
+      );
+      expect(
+        (await adapter.firstAdded(root, 'c.md', '### Item\n'))?.subject,
+      ).toBe('short title');
     },
   );
 });

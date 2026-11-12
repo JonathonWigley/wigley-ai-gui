@@ -266,6 +266,32 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         ]),
       );
     },
+    firstAdded: async (root, path, text) => {
+      if (text === '') {
+        return null;
+      }
+      // `--reverse` lists the oldest first; `--max-count` would apply before
+      // it and keep the newest. `-S` is attached so a text starting with `-`
+      // is not read as an option.
+      const commits = logCommits(
+        await gitOutput(processes, 'log', [
+          '-C',
+          root,
+          '--literal-pathspecs',
+          'log',
+          '--no-show-signature',
+          '--no-merges',
+          '--reverse',
+          `-S${text}`,
+          '--format=%x00%H%x00%cI%x00%s',
+          '-z',
+          '--name-only',
+          '--',
+          path,
+        ]),
+      );
+      return commits[0] ?? null;
+    },
   };
 }
 
