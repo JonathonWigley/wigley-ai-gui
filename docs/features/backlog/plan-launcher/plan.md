@@ -280,8 +280,8 @@ beyond its `contract.ts`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Git firstAdded](01-git-first-added.md)
-- [ ] [Scoped agents main](02-scoped-agents-main.md)
+- [x] [Git firstAdded](01-git-first-added.md)
+- [x] [Scoped agents main](02-scoped-agents-main.md)
 
 ### Wave 2
 - [ ] [Scoped agents page and layout](03-scoped-agents-page.md) — after 02
@@ -306,7 +306,14 @@ beyond its `contract.ts`.
 Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 
 ### Groups
+- 01 · hard · 2c7ae1554 · diff read: firstAdded on Git and createProcessGit as specified, both full fakes updated, six tests; wave 1 typecheck + lint pass after fix 8bd73679b (octal escape) · concerns: dash test's toContain('-S--x') repeats the helper
+- 02 · deep · c76441063 · diff read: contract names word for word, manifest, service exports HOST_ID_WAIT_MS/ScopedAgentServiceDeps/ScopedAgentService/createScopedAgentService, main part, manifests/main/PLUGIN_EXTRAS; wave 1 typecheck + lint pass after fix 8bd73679b (LaunchRequest narrowing in a test, oxfmt) · concerns: oxfmt hand-formatting; timeout cases attach rejects after advancing timers (watch for unhandled rejection at the test gate); scope-collision test relies on vi.waitFor polling under fake timers; page commands/scope/layout setting declared with no handler until 03
 ### Contract changes
+- scoped-agents contract.ts comments: trailing aligned comments → each on its own line above its member (oxfmt 80 columns); the block's '// Channel:' comment → the ScopedAgentsChannel interface · why: oxfmt --check · consumers: 03, 04, 07, 08 (no name or type changed) · group 02
 ### Rulings
+- Git.firstAdded paths come from git's --name-only output (which is [path] under the one-path pathspec) rather than set literally — matches log's parsing — costs nothing unless git lists another path · group 01 · group 01
+- A handle is live only while the registry holds that same registration object; a disposed handle's ask/sessionOf reject and its second dispose leaves a re-added pair alone — costs a stale handle silently failing if a host keeps one · group 02 · group 02
+- A store.write(scope, null) rejection after a refused resume rejects sessionOf and ask (practice's behaviour unchanged) — the plan names no case — costs a store failure there surfacing as an ask error rather than a launch · group 02 · group 02
+- Lead ran oxfmt --write (formatter only, no oxlint --fix) on three files the wave 1 lint flagged, docs/keymap.md among them (pre-existing from the docs-written-ahead commit) — tooling, behaviour-preserving — none · lead
 ### Review rounds
 ### Test gate

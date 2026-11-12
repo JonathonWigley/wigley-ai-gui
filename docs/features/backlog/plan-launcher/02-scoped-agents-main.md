@@ -1,6 +1,6 @@
 # 02 — Scoped agents: the plugin, its contract and its main service
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses chat's session lifecycle async: the host-id wait on `sessionOpened`, serial asks per scope, shared resumes, `/clear` following
 Wave: 1 · Depends on: none
@@ -246,3 +246,5 @@ Commit: one commit for the group — "scoped-agents plugin: owned chat sessions 
 generalized from Practice's interviewer"
 
 ## Proof
+
+Commit c76441063 · proof: diff read: contract names word for word, manifest, service exports HOST_ID_WAIT_MS/ScopedAgentServiceDeps/ScopedAgentService/createScopedAgentService, main part, manifests/main/PLUGIN_EXTRAS; wave 1 typecheck + lint pass after fix 8bd73679b (LaunchRequest narrowing in a test, oxfmt) · concerns: oxfmt hand-formatting; timeout cases attach rejects after advancing timers (watch for unhandled rejection at the test gate); scope-collision test relies on vi.waitFor polling under fake timers; page commands/scope/layout setting declared with no handler until 03

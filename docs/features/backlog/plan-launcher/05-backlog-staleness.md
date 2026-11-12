@@ -1,6 +1,6 @@
 # 05 — Backlog staleness
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses git, the files service and plugin data through an async read queue and a cache keyed on two clones' HEADs
 Wave: 2 · Depends on: 01

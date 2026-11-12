@@ -1,6 +1,6 @@
 # 01 — Git firstAdded: the commit that first added a text to a file
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds `Git.firstAdded`, which 05's staleness reader consumes
 Wave: 1 · Depends on: none
@@ -98,3 +98,5 @@ Commit: one commit for the group — "Git.firstAdded: the oldest commit that add
 staleness"
 
 ## Proof
+
+Commit 2c7ae1554 · proof: diff read: firstAdded on Git and createProcessGit as specified, both full fakes updated, six tests; wave 1 typecheck + lint pass after fix 8bd73679b (octal escape) · concerns: dash test's toContain('-S--x') repeats the helper

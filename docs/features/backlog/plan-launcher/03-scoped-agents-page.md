@@ -1,6 +1,6 @@
 # 03 — Scoped agents page: the agent pane, its layout and its keys
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · async pane lifecycle across page and main: in-flight asks and reads against scope changes, and a key
 hand-off with a host
