@@ -28,6 +28,7 @@ Files:
 - delete `src/plugins/practice/page/interviewer-pane.ts`
 - delete `src/plugins/practice/page/interviewer-pane.test.ts`
 - modify `src/plugins/keymap.ts`
+- modify `scripts/check-layers.mts` (the `practice-sessions.test.ts` sublayer entry)
 - modify `docs/features/layouts/design.md` (the `practice` row loses the ask box)
 
 Consumes:
@@ -56,13 +57,15 @@ Produces:
   (`src/plugins/practice/page/practice-view.ts`)
 
 Decisions:
-- No change in behaviour (plan.md § Architecture). The interviewer keeps `Space v i`, its per-attempt lifetime,
-  `progress.json`'s `attempts[].interviewer` shape and `read_practice_state`'s refusal text. The one difference 02
-  settled (an ask whose attempt changed under it launches instead of refusing) is 02's.
+- The interviewer keeps `Space v i`, its per-attempt lifetime, `progress.json`'s `attempts[].interviewer` shape and
+  `read_practice_state`'s refusal text. The one change in behaviour is plan.md § Architecture decisions' ask race,
+  which 02 builds; this task adds nothing to it beyond the write below.
 - **Store adapter** (`createInterviewerStore`), scope = the problem's slug, "current attempt" = `attempts.at(-1)`:
   - `read(slug)`: the current attempt's `interviewer`; null for none or no attempt
   - `write(slug, record)`: `progress.setInterviewer(slug, <current attempt's id>, record)`; no attempt throws
-    `<slug> has no attempt; open it first.`
+    `<slug> has no attempt; open it first.` The attempt is the one current at write time, not the one current when
+    the ask began: a launch that races a reopen as due stores its record on the new attempt (plan.md § Architecture
+    decisions, the ask race). No test pins which attempt that race lands on.
   - `entries()`: for each of `store.slugs()`, the current attempt's interviewer when non-null, as `{ scope: slug,
     record }`; a progress file that fails to read is skipped (as `findInterviewer` does today)
   - `superseded(slug)`: the last attempt before the current one whose `interviewer` is non-null (today's `old` in
@@ -98,9 +101,24 @@ Decisions:
     'main' ? false : interviewer.outerPanes.focus.move(direction) }, resize: interviewer.outerPanes.resize }`. The old
     pane took `right` only from `main`; 03's pane takes it whenever it does not hold the keys, so Practice keeps
     `Alt+l` from the list going to the column.
-  - **No open problem.** `toggleInterviewer`, where it would open the pane (the pane hidden) with no problem shown,
-    toasts `Open a problem first` (info), logs `interviewer needs an open problem` and opens nothing: the copy moves
-    from the old pane to Practice, under `[practice]` as before.
+  - **No open problem.** "No problem shown" means `noteShown` has kept no pair yet (the old pane's `pair === null`).
+    `toggleInterviewer` has two paths that call `interviewer.toggle()` on a hidden pane: Practice shown, and
+    Practice hidden (`deps.showMode()` first, as today, then `toggle()` when `!interviewer.isShown()`). On both,
+    just before that `toggle()`, with no pair kept, it toasts `Open a problem first` (info), logs `interviewer needs
+    an open problem` and does not call `toggle()`. The hidden path still calls `showMode()` first, so the mode shows
+    with the toast, as today. A toggle that would hide a shown pane is never refused. The copy moves from the old
+    pane to Practice, under `[practice]` as before.
+- **Comments.** Rewrite every comment in this task's files that names the moved interviewer code, so each describes
+  the code after this task: the header comments of `main/start.ts` ("Runs the import and interviewer sessions
+  through chat, hearing chat's session events" → the import session through chat, the interviewer through
+  scoped-agents), `main/practice-sessions.ts` (the import session only), `page/start.ts` ("The interviewer pane
+  draws chat's view…" → the interviewer's pane is scoped-agents', added through `addAgentPane`), `contract.ts` line 4
+  ("the import and interviewer sessions" → "the import session"), and the `practice-view.ts` comments that name
+  "the interviewer pane", `InterviewerCommand`, `problemOpened` or `columnTookKeys`.
+- **Layer check.** `scripts/check-layers.mts`'s `PLUGIN_EXTRAS.practice.sublayers` entry for
+  `src/plugins/practice/main/practice-sessions.test.ts` goes: after this task that file tests only `startImport`,
+  with no host-id wait, so it imports no `global-timers.test-support`. If `npm run lint` then reports a layer error
+  in that file, keep the entry with only the layers the error names and a comment naming the import that needs them.
   - `InterviewerCommand` loses `askSend` and `askLeave`; their handlers go.
   - **Run and Submit outside Practice.** `<D-'>` and `<D-Enter>` were bound in `practice.ask`; they move to
     `scoped-agents.ask` so Practice's ask box keeps them. That scope also holds Backlog's assistant box (08), so the
@@ -159,6 +177,8 @@ GIVEN Practice shows Two Sum's attempt a1 WHEN the problem reopens as due with a
 `scopeOpened(null)` then `scopeOpened('two-sum')`
 GIVEN Practice shows with no problem open WHEN `Space v i` runs THEN it toasts `Open a problem first` and the pane
 stays hidden
+GIVEN Practice is hidden with no problem open WHEN `Space v i` runs THEN Practice shows, it toasts `Open a problem
+first` and the pane stays hidden
 GIVEN Practice is hidden WHEN `practice.run` runs THEN no judge call goes to main and `[practice] run ignored:
 practice hidden` logs
 
@@ -203,8 +223,9 @@ Tests:
   - new `hands the pane its scope per attempt: $case` — rows `first open` (`['scopeOpened null', 'scopeOpened
     <slug>']`), `the same attempt refreshed` (no call), `a fresh attempt of the same problem` (`['scopeOpened null',
     'scopeOpened <slug>']`)
-  - new `toggleInterviewer: $case` — rows `no open problem` (toast `['Open a problem first', 'info']`, log
-    `interviewer needs an open problem`, no `toggle`), `a problem open` (`toggle`)
+  - new `toggleInterviewer: $case` — rows `no open problem` (Practice shown; toast `['Open a problem first',
+    'info']`, log `interviewer needs an open problem`, no `toggle`), `no open problem, Practice hidden` (`showMode`
+    ran, the same toast and log, no `toggle`), `a problem open` (`toggle`)
   - new `the outer panes take right only from main` — after `showMode`, `harness.outerPanes()!.focus.move('right')`
     returns false with the list holding the keys, and reaches the fake pane's `outerPanes` with main holding them
   - new `run and submit do nothing while Practice is hidden` — `run` and `submit` before `showMode` invoke nothing
@@ -214,7 +235,7 @@ Tests:
 
 Done when: `npm run typecheck` and `npm run lint` pass; `npm test` runs the four test files above and
 `src/shared/layouts/layout-contracts.test.ts`; `grep -rn "interviewer-pane\|askInterviewer\|interviewerOf\|practice.ask\b\|AskBoxInput" src/plugins/practice src/plugins/keymap.ts` finds nothing; `npm run selftest -- --plugin
-practice` passes, its `interviewer` group included. The live check "Practice unchanged" is
+practice` passes, its `interviewer` group included; `grep -rn "interviewer sessions\|hearing chat's session\|interviewer pane draws" src/plugins/practice` finds nothing. The live check "Practice unchanged" is
 `10-final-verification.md`'s.
 Commit: one commit for the group
 

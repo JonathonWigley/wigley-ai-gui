@@ -31,10 +31,14 @@ Consumes (the tree holds each):
   (`src/contracts/plugin.ts`); `Timers` (`src/contracts/ambient.ts`); `Paths` (`src/contracts/paths.ts`)
 
 Produces:
-- `src/plugins/scoped-agents/contract.ts` — plan.md § File Structure's shared names word for word, with the seam fix
-  below (`owner` on both specs) and these additions every later task reads:
-  - `ScopedAgentSpec` gains `owner: string; // the registering plugin's manifest id; chat's \`owner\` on each row`
-  - `AgentPaneSpec` gains `owner: string;` (same meaning; 03 hands it to the channel)
+- `src/plugins/scoped-agents/contract.ts` — plan.md § File Structure's shared-names block word for word, its `owner`
+  fields included (plan.md § Architecture decisions, the owner bullet), and these additions every later task reads:
+  - on `ScopedAgentStore.entries`, the comment line "Never rejects for one scope's failure: it leaves that scope
+    out." (Decisions, store failures)
+  - on `ScopedAgentStore.write`, the comment line "Writes to the scope's state as it is when the write runs."
+    (Decisions, launch)
+  - on `ScopedAgentSpec.folder`, the comment line "Chat gets it as `projectDir`, so its `sessionOpened` names this
+    folder."
   - the `ScopedAgentsMainExports` comment reads: "`spec.owner` names the registering plugin; the registration is
     filed with the consumer's registrations, so it ends when the consumer stops."
   - `export interface ScopedAgentsChannel extends ChannelShape { invoke: { ask(owner: string, agentId: string,
@@ -65,13 +69,6 @@ Produces:
   scopedAgentsManifest>`; `exports(consumer: Registrations): ScopedAgentsMainExports` returns
   `{ addScopedAgent: (spec) => consumer.track(service.add(spec)) }`.
 
-Seam fix (reported to the lead): plan.md says the owner comes "from `exports(consumer)`", but the consumer the host
-hands `exports` is a bare `Registrations` (`track` only, `src/contracts/disposable.ts`; `dependencyFor` in
-`src/shared/plugin-host.ts` passes the dependent's registrations store), so no id reaches the provider. This task
-puts `owner: string` on `ScopedAgentSpec` and `AgentPaneSpec` instead: practice passes `practiceManifest.id`,
-backlog `backlogManifest.id`, as practice already does for chat's `owner`. The tracking half of the plan holds: the
-registration is filed with `consumer.track`.
-
 Decisions:
 - One service, many registrations (plan.md § Architecture decisions: "chat's session events are heard once"). The
   main part creates one `createScopedAgentService({ chat, paths: services.paths, timers: services.timers, log:
@@ -84,23 +81,38 @@ Decisions:
   (the interviewer's self-test groups stay practice's; 04 and 08 own the live groups).
 - Registrations are keyed by `(owner, agentId)`. `add` throws `Scoped agent <owner>/<agentId> is already
   registered.` for a second live one; `ask`/`sessionOf` for a pair with no live registration reject `No scoped agent
-  <owner>/<agentId>.` A registration's `dispose` removes it from the registry; an ask in flight runs to its end.
-  Disposing launches and closes no session: the rows stay where the store names them, for the next start.
-- Host ids (generalizes `hostIdOf`, `opened`, `closed`): the buffer and waiting reads are the service's, shared by
-  every registration and keyed by row id. `opened` resolves a waiting read for its row; otherwise it buffers the
-  host id only while a launch is in flight in a folder `paths.samePath` matches to `event.projectDir` (practice
-  buffered only for its own folder; a registration's folder depends on the scope, so the in-flight launches name
-  it). `closed` drops the row's buffered id. The read waits `HOST_ID_WAIT_MS` on `deps.timers`, then resolves null.
+  <owner>/<agentId>.` A registration's `dispose` removes the registry entry only while the entry is still this
+  registration (compare the registration object, not the key), and a second `dispose` does nothing: a consumer that
+  stops and starts again re-adds the pair, and the old handle's late dispose must not remove the new one. An ask in
+  flight runs to its end. Disposing launches and closes no session: the rows stay where the store names them, for
+  the next start. On a disposed handle, `ask` and `sessionOf` reject `No scoped agent <owner>/<agentId>.` (the
+  channel's rule), and `scopeOf` resolves null (no agent, so no session is its); a disposed registration takes no
+  part in `cleared`.
+- Host ids (generalizes `hostIdOf`, `opened`, `closed`): the buffer, the waiting reads and the in-flight launch list
+  are the service's, shared by every registration; the buffer and waiting reads are keyed by row id.
+  - In-flight launches: one entry per launch, holding the folder. The launch adds its entry just before it calls
+    `chat.launch` (chat fires `sessionOpened` inside `launch`) and removes it in a `finally` that wraps
+    `chat.launch` and the host-id read, whatever the outcome: resolved, timed out or thrown. Two launches in one
+    folder hold two entries.
+  - `opened` ignores an event unless its `projectDir` `paths.samePath`-matches the folder of an in-flight entry.
+    For such an event it resolves the waiting read for its row, else it buffers the host id. Practice heard only
+    its own folder; a registration's folder depends on the scope, so the in-flight entries name the folders.
+  - `closed` drops the row's buffered id. The read takes a buffered id at once, else waits `HOST_ID_WAIT_MS` on
+    `deps.timers`, then resolves null.
+- Turn keys: `inTurn` and `sessionOf`'s shared in-flight resume are each keyed by registration and scope, the key
+  `` `${owner}/${agentId}\n${scope}` ``. Two registrations may use one scope string (a Practice slug `global`
+  against Backlog's `global`), and their asks and resumes stay apart.
+- Store failures: `scopeOf` and `cleared` call `store.entries()`, which per its contract comment leaves out a scope
+  that fails to read (Practice skips a `progress.json` that fails to read, as `findInterviewer` does today). When
+  `entries()` rejects anyway, `scopeOf` logs `<agentId> records not read: <error>` and resolves null, so a tool
+  refuses an unknown session instead of throwing; `cleared` logs `<agentId> <sessionId> host id not moved:
+  <error>`.
 - `ask(scope, text)` per registration runs after every earlier ask for that scope of that registration has settled
-  (`inTurn`, keyed per registration and scope), then: `await store.checkAsk(scope)` (its rejection is the ask's);
+  (`inTurn`, Turn keys above), then: `await store.checkAsk(scope)` (its rejection is the ask's);
   `store.read(scope)`; null → launch. Otherwise `sessionOf(scope)`; an id → `chat.send(id, { text, images: [] })`
   and resolve the id. Null (the resume was refused and cleared the record, or the store's record went away under the
   ask) → `await store.checkAsk(scope)` again, then launch.
-  - Behaviour change from practice, settled here: practice refused `<slug> has no interviewer; ask again.` when the
-    attempt changed under an ask; the generic store cannot say an attempt changed, so the ask launches for the
-    store's current scope state instead. The race needs a problem reopened as due between an ask's two reads. (plan.md
-    § Architecture: "its interviewer moves onto `scoped-agents` with no change in behaviour" — this is the one case
-    the `ScopedAgentStore` seam cannot keep; reported to the lead.)
+  - This is the one behaviour change from Practice: plan.md § Architecture decisions, the ask race bullet.
 - Launch (generalizes `launchInterviewer`), in this order: `chat.defaultProfile(null)`, null → throw `Chat has no
   profiles.`; `old = await store.superseded(scope)`; `chat.launch({ projectDir: spec.folder(scope), profile,
   message: { text, images: [] }, instructions: [await spec.instructions(scope)], owner: spec.owner })`; the host-id
@@ -110,8 +122,13 @@ Decisions:
   `unstored <agentId>`) and rethrows. Then, when `old` is non-null and `chat.profileOf(old.sessionId)` is non-null,
   close it (label `old <agentId>`). Resolves the new id. With `agentId` `interviewer` every log line and error text
   is practice's today, word for word.
-- `sessionOf(scope)` (generalizes `bringBack` and `interviewerOf`): concurrent calls for one scope share one
-  in-flight promise, dropped when it settles. `store.read(scope)` null → null. A record whose `sessionId` chat holds
+  - `superseded` is read before the launch and `write` runs after it and the host-id wait (up to 2 s), so the two
+    may see different scope states: a Practice problem reopened as due in that window gets the new record on its new
+    attempt, and the old attempt's record is the one closed. This is accepted, as the ask race is (plan.md
+    § Architecture decisions), and no test pins it. Do not add a token that pins the state `checkAsk` saw: the
+    generic store has no attempt to name.
+- `sessionOf(scope)` (generalizes `bringBack` and `interviewerOf`): concurrent calls for one scope of one
+  registration share one in-flight promise (Turn keys above), dropped when it settles. `store.read(scope)` null → null. A record whose `sessionId` chat holds
   (`profileOf` non-null) → that id. Otherwise the profile as above, then `spec.title(scope)` and
   `spec.instructions(scope)` together, then `chat.resume({ projectDir: spec.folder(scope), profile, hostSessionId:
   record.hostSessionId, title, instructions: [instructions], owner: spec.owner })`. A rejection logs `<agentId>
@@ -163,7 +180,9 @@ Tests:
   `Map<string, ScopedAgentRecord>` with a settable `superseded` answer, a `checkAsk` that rejects for scopes named in
   a `refused` set with `<scope> has no attempt; open it first.`, and a `write` a test can make reject) and the fake
   chat of `practice-sessions.test.ts` (copied: `row-1`, `row-2`, … ids, `held`, `resumeError`,
-  `beforeLaunchResolves`), `globalTimers` under `vi.useFakeTimers()`, `posixPaths`. Each case below is copied from
+  `beforeLaunchResolves`, plus a new settable `launchError` that makes `launch` reject before it takes an id), a
+  fake store that also takes an `afterRead(scope)` hook a test uses to change the store between reads,
+  `globalTimers` under `vi.useFakeTimers()`, `posixPaths`. Each case below is copied from
   `src/plugins/practice/main/practice-sessions.test.ts` by its current name and rewritten against the fake store
   (practice's copies stay until 04 removes them with the code they test):
   - `askInterviewer launches an owned session and stores it: $case` → `ask launches an owned session and stores it:
@@ -174,12 +193,24 @@ Tests:
     launch: $case` (`one after another`, `both at once`).
   - `askInterviewer launches afresh when chat refuses the resume` → `ask launches afresh when chat refuses the
     resume` (log `row-0 not resumed`).
+  - new `ask launches when the record goes away between its two reads`: a stored record for `s`, `afterRead`
+    deletes it after the first `store.read`; one launch, no resume, the store holds the new record.
+  - new `ask does not launch when the second checkAsk refuses`: a stored record whose row chat does not hold,
+    `resumeError` set, and `afterRead` adds `s` to `refused` on the second `store.read` of `s` (the one `sessionOf`
+    makes); the resume fails and clears the record, and the ask rejects `s has no attempt; open it first.` with no
+    launch.
   - `askInterviewer refuses without a stored interviewer, a profile or its attempt: $case` → `ask refuses and
     closes what it launched: $case`, rows `no sessionOpened` (error `Chat sent no sessionOpened for interviewer
     row-1.`, close `row-1`), `record not stored` (`disk full`), `no profile` (`Chat has no profiles.`, no launch),
     `checkAsk refuses` (`s has no attempt; open it first.`, no launch), and a new row `sessionOpened in another
     folder` (the opened event names another folder: times out as `no sessionOpened`). The `attempt changed under the
     ask` row is dropped: Decisions, the behaviour change.
+  - new `opened is not kept outside a launch: $case` — `opened` for `row-1` in the registration's folder, then an
+    ask whose launch resolves `row-1` with no further `opened`: rejects `Chat sent no sessionOpened for <agentId>
+    row-1.` Rows: `no launch yet` (the `opened` comes first), `after a launch that rejected` (an ask with
+    `launchError` set rejects with it, then the `opened`, then `launchError` cleared and the ask).
+  - new `closed drops a buffered host id`: inside the launch (`beforeLaunchResolves`), `opened` then `closed` for
+    the new row; the ask rejects `Chat sent no sessionOpened for <agentId> row-1.`
   - `askInterviewer on a new attempt closes the old interviewer: $case` → `ask closes the superseded session:
     $case` (`held` closes `row-0`, `not held` closes nothing).
   - `interviewerOf brings the interviewer back: $case` → `sessionOf brings the session back: $case`, rows
@@ -188,11 +219,17 @@ Tests:
   - `cleared moves the stored host id` → `cleared moves the stored host id of the registration holding the row`:
     two registrations, only the holder's store changes.
   - `interviewerSlug matches the current attempt only: $case` → `scopeOf matches a stored record: $case`, rows
-    `row id`, `host id`, `any other`; the `an older attempt` row is the Practice store's `entries` rule and goes to
-    04.
+    `row id`, `host id`, `any other`, and `entries rejects` (resolves null, logs `<agentId> records not read:
+    <error>`); the `an older attempt` row is the Practice store's `entries` rule and goes to 04.
   - new `add refuses a second registration of one owner and agent id`, and `ask and sessionOf route by owner and
     agent id: $case` (rows: the matching registration answers; a disposed registration and an unknown pair reject
     `No scoped agent practice/interviewer.`).
+  - new `a disposed handle refuses: $case` — rows `ask` and `sessionOf` reject `No scoped agent
+    practice/interviewer.`; `scopeOf` resolves null.
+  - new `a re-added registration survives the old handle's second dispose`: add, dispose, add the same pair again,
+    dispose the first handle again; the second handle's `ask` still launches.
+  - new `two registrations keep one scope string apart`: registrations `a/x` and `b/y`, both asked for scope
+    `global` at once with no record; each launches its own row and each store holds its own record.
 - `src/plugins/scoped-agents/main/start.test.ts` — `startMainPart(scopedAgentsMainPart, { dependencies:
   [fakeDependency(chatMainKey, () => chat)] })`, exports taken with `harness.started().exports?.(consumer)`:
   - `chat session events reach the service once` — `harness.emit('chat.sessionOpened', …)` resolves a launch

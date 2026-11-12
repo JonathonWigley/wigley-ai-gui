@@ -2,7 +2,8 @@
 
 Status: not started
 Type: Task
-Rung: hard · adds `addAgentPane`, which 04 and 08 consume, and moves async pane code onto a new spec
+Rung: deep · async pane lifecycle across page and main: in-flight asks and reads against scope changes, and a key
+hand-off with a host
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
 
@@ -65,9 +66,16 @@ Produces:
 
 Decisions:
 - The pane is `interviewer-pane.ts` moved and generalized; every rule it has today holds, keyed on the scope where it
-  was keyed on the pair (slug, attempt id) (plan.md § Architecture: the interviewer moves "with no change in
-  behaviour"). The per-attempt lifetime stays Practice's: Practice calls `scopeOpened(null)` and then
-  `scopeOpened(slug)` when the attempt changes (task 04).
+  was keyed on the pair (slug, attempt id). The pane changes no behaviour: plan.md § Architecture decisions' one
+  change (the ask race) is main's (02). The per-attempt lifetime stays Practice's: Practice calls `scopeOpened(null)`
+  and then `scopeOpened(slug)` when the attempt changes (task 04).
+- **The open scope's identity.** The pane holds one object for the open scope (`{ scope }`), made new by each
+  `scopeOpened(scope)` call that changes the open scope (a call with the scope already open makes none).
+  `scopeOpened(null)` and `dispose` set it to null. Every `sessionOf` and `ask` answer, resolved or rejected,
+  compares the object captured at its call with the current one, and an answer whose object is not current is
+  dropped: no mount, no ask box, no log, no toast, no change to `isSending` or `takesKeysOnAnswer`. A string compare
+  is not enough: Practice reopens a fresh attempt as `scopeOpened(null)` then the same slug, and an answer for the
+  old attempt must not land in the new one (the old pane's `Pair` object did this).
 - Mapping from the old pane: `problemOpened(slug, attemptId)` → `scopeOpened(scope)`; `columnTookKeys` →
   `hostTookKeys`; `deps.view.setFocus('interviewer')` → `spec.tookKeys()`; `deps.view.focusColumn()` →
   `spec.leave()`; `deps.workspace.setSidePaneShown` → `spec.setShown`; `deps.workspace.sideResizeTarget` →
@@ -80,6 +88,15 @@ Decisions:
 - `scopeOpened(null)` drops the mount and the ask box, as another scope does, and leaves no scope open. `toggle()`
   with no scope open shows nothing, logs `<agentId> has no scope` and toasts nothing: the host's copy for that case
   is the host's (Practice's `Open a problem first` moves to Practice, task 04).
+- `toggle()` while shown hides the pane: it clears a pending `takesKeysOnAnswer` (so a later `sessionOf` answer
+  takes no keys), runs `spec.leave()` only while the pane holds the keys, sets the pane hidden, calls
+  `spec.setShown(false)` and logs `<agentId> pane hidden`. `toggle()` while hidden, with a scope open, sets the pane
+  shown, calls `spec.setShown(true)`, logs `<agentId> pane shown`, and then takes the keys (a mount shows) or sets
+  `takesKeysOnAnswer` and asks `sessionOf`, as today.
+- `modeHidden()`: clears `takesKeysOnAnswer`; while the pane holds the keys, runs `spec.leave()` and then gives up
+  the keys as `hostTookKeys` does (a no-op when the host's `leave` already called `hostTookKeys`). It keeps the pane
+  shown (`isShown()` stays true, no `setShown` call), so the pane is open when the host shows again. While the pane
+  does not hold the keys it changes nothing but `takesKeysOnAnswer`.
 - `refresh()` does nothing while the pane is hidden or no scope is open (the next `toggle` asks `sessionOf`). While
   shown, it asks `sessionOf` for the open scope and applies the answer as the toggle's answer does: a shown mount
   stays; a session id with no mount destroys the ask box and mounts it; null keeps a shown ask box and its text, and
@@ -93,11 +110,12 @@ Decisions:
 - The page part keeps one record of the pane that holds the keys (`heldKeys`): a pane sets it to itself where it
   takes the keys and to null where it gives them up (`hostTookKeys`, `modeHidden`, `dispose`). `askSend` runs `send`
   on that pane and `leaveBox` runs `leaveBox` on it; with none, each does nothing.
-- The owner in each channel call is the spec's `owner` (seam fix shared with 02; see the lead's report): the host
+- The owner in each channel call is the spec's `owner` (plan.md § Architecture decisions, the owner field): the host
   passes its own plugin id. `addAgentPane` binds `ask` and `sessionOf` to `(spec.owner, spec.agentId, scope)`.
 - The log lines go out under `[scoped-agents]` (the page part's `services.log`). Each names the agent id, so the
   interviewer's lines keep today's words after the prefix wherever they named the interviewer.
-- Each disposal is idempotent: the consumer's stop and the page part's own dispose may both dispose one pane.
+- Each disposal is idempotent: the consumer's stop and the page part's own dispose may both dispose one pane. After
+  `dispose`, every method is a no-op and every pending answer is dropped.
 - The layout is a plugin layout (AGENTS.md § Architecture, A layout): main registers the contract text with
   `api.layouts.register({ layoutTypes })` (as `src/plugins/practice/main/start.ts` does, `layoutTypes` imported from
   `../layouts/layout.d.ts?raw`), and the page part shows it with `api.layouts.show<ScopedAgentsLayout>` (as
@@ -161,20 +179,27 @@ Tests:
   `sessionOf` (recording `sessionOf <scope>` in `events`); the fake view becomes the spec's `tookKeys` (records
   `tookKeys`, sets the fake focus to the pane) and `leave` (records `leave`, then calls `pane.hostTookKeys()`); the
   spec is `{ owner: 'practice', agentId: 'interviewer', heading: () => 'Two Sum', hint: 'Ask about the problem.', … }`;
-  `openTwoSum` runs `scopeOpened('two-sum')` then `toggle()`. Moved cases, each with its new name and the change to
-  its assertions:
+  `openTwoSum` runs `scopeOpened('two-sum')` then `toggle()`. The setup's `setScope`, `setFocusTarget` and `setResizeTarget` record
+  `setScope <scope>`, `setFocusTarget <target or null>` and `setResizeTarget` in `events`; the spec's `setShown`
+  records `setShown <shown>` in the spec's calls beside `tookKeys` and `leave`. Moved cases, each with its new name
+  and the change to its assertions:
   - `opens on the ask box when the scope has no session` (was `opens on the ask box when the attempt has no
-    interviewer`): logs `['interviewer pane shown', 'interviewer ask box shown for two-sum', 'interviewer focused']`
+    interviewer`): logs `['interviewer pane shown', 'interviewer ask box shown for two-sum', 'interviewer focused']`;
+    `events` holds `setScope ask`, `setFocusTarget null`, `setResizeTarget` in that order; the spec's calls start
+    `['setShown true']`
   - `mounts the session's chat when the scope has one` (was `mounts the interviewer's chat when the attempt has
     one`): logs contain `interviewer mounted two-sum`
   - `send: $case` — the four rows as today (`a question`, `blank`, `a second send while pending`, `rejected`); asks
     record `[scope, text]`; lines `interviewer mounted two-sum`, `interviewer ask ignored: empty`, `interviewer ask
     ignored: sending`, `interviewer ask failed: no harness`; the rejected row's toast `['Could not start the
     interviewer: no harness', 'error']`
-  - `keeps the focus in the ask box across a redraw` — unchanged
+  - `keeps the focus in the ask box across a redraw` — as today, plus: the spec's `heading` returns `LRU Cache`
+    before `redraw()`, and the redrawn part's `input.heading` reads `LRU Cache`
   - `keeps the keys on the mount that replaces the ask box` — unchanged
   - `drops a sessionOf answer once $case` (was `drops an interviewer answer once $case`): rows `another scope opened`
-    (`scopeOpened('lru-cache')`) and `the pane disposed`
+    (`scopeOpened('lru-cache')`), `the pane disposed`, and `the scope closed and reopened as the same scope`
+    (`scopeOpened(null)` then `scopeOpened('two-sum')` before the first answer lands; the first answer mounts
+    nothing and takes no keys, and only the second `sessionOf two-sum` answer is applied)
   - `takes no keys on a later answer once the read failed` — the second open is `scopeOpened(null)` then
     `scopeOpened('two-sum')`; toasts `[['no harness', 'error']]`
   - `keeps the keys in the pane when the chat view fails to mount` — line `interviewer not mounted two-sum: no view`
@@ -188,10 +213,22 @@ Tests:
     pane hidden`, and the four `up`/`down` rows; the `column` state is reached with `pane.leaveBox()` as today
   - `gives up the keys when the host takes them` (was `… when the column takes them`): `hostTookKeys()` twice hides
     the mount once and logs `interviewer left` once
-  - `modeHidden hides the mount and keeps it` — the mount reads `{ hidden: 1, disposed: 0 }`; the spec's `leave` ran
+  - `modeHidden: $case` (was `modeHidden hides the mount and keeps it`) — rows `while the pane holds the keys` (the
+    mount reads `{ hidden: 1, disposed: 0 }`; the spec's calls end `['leave']`; `isShown()` true), `while the pane
+    does not hold the keys` (after `pane.leaveBox()`: no further `leave`, the mount's counts unchanged, `isShown()`
+    true), `before the answer lands` (`toggle()`, `modeHidden()`, then the `sessionOf` answer: the box shows, no
+    `tookKeys`)
   - `opens nothing with no scope` (replaces `toasts and opens nothing with no open problem`): `toggle()` before any
     `scopeOpened` leaves `isShown()` false, asks nothing, toasts nothing, and logs `['interviewer has no scope']`
   New cases:
+  - `toggle: $case` — rows `open` (spec calls `['setShown true', 'tookKeys']`, logs start `interviewer pane
+    shown`), `hide while holding the keys` (the second `toggle()`: spec calls add `leave` then `setShown false`; logs
+    end `interviewer pane hidden`; `isShown()` false), `hide while not holding the keys` (after `pane.leaveBox()`:
+    the hide adds `setShown false` and no `leave`), `hide before the answer lands` (`toggle()` twice, then the
+    `sessionOf` answer: no `tookKeys`)
+  - `drops an ask answer once $case` — `send()` on the box, then before the answer: rows `another scope opened`,
+    `the pane disposed`, `the scope closed and reopened as the same scope`; the answer mounts nothing and logs
+    nothing, and in the reopened rows a `send()` on the new box with text asks again (not `ask ignored: sending`)
   - `refresh: $case` — rows `a host-made ask mounts its session` (ask box shown; `refresh()`; `sessionOf` answers
     `s3`: the box is destroyed, `s3` mounts, the mount's `shown` is 1 since the pane held the keys), `a shown mount
     stays` (mounted `s1`; answer `s1`: no second mount, no dispose), `hidden asks nothing` (scope open, pane never
@@ -208,6 +245,9 @@ Tests:
     with no pane holding the keys, `askSend` invokes nothing
   - `the toggled pane sets the ask scope` — `harness.scope()` reads `scoped-agents.ask` after a toggle onto the ask
     box
+  - `askSend does nothing once the pane gave up the keys: $case` — a pane toggled onto its ask box with text typed,
+    then rows `hostTookKeys`, `modeHidden`, `dispose`; `askSend` and `leaveBox` then invoke nothing and run no further
+    `leave`; in the `dispose` row a second `dispose()` throws nothing and changes nothing
   - `a consumer's stop disposes its panes` — the consumer's tracked handles, disposed, remove the panes' ask boxes
     and dispose their mounts; `stops with nothing live` (`harness.counts()` equals `noCounts` after `harness.stop()`)
 

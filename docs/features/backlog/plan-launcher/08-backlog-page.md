@@ -33,11 +33,18 @@ Files:
 - delete `src/plugins/backlog/page/followup-editor.ts` (D)
 - modify `src/plugins/backlog/main/backlog-tools.ts` · test `src/plugins/backlog/main/backlog-tools.test.ts` (D — `assistantPlace`'s defaults)
 - modify `src/plugins/backlog/main/selftest-script.ts` (E)
+- modify `src/plugins/backlog/main/selftest-fixture.ts` · test `src/plugins/backlog/main/selftest-fixture.test.ts` (E — a
+  `moved` and a `stale` item)
+- modify `src/plugins/docs/main/selftest-fixture.ts` (E — the stand-in index's follow-up entries for the new file)
+- modify `docs/features/layouts/design.md` (C — the `backlog` row of the owners table)
+- modify `docs/features/followups.md` (D — two follow-ups on code this task deletes)
 
 Consumes:
 - `ScopedAgentsPageExports { addAgentPane(spec: AgentPaneSpec): AgentPane }`, `AgentPaneSpec`, `AgentPane` ← 03, from
   `src/plugins/scoped-agents/contract.ts`, and its page `DependencyKey` `scopedAgentsPageKey` ← 03
 - `rowKey(repo: string, title: string): RowKey` in `src/plugins/backlog/row-key.ts` ← 05
+- `isReady(tags: readonly string[]): boolean`, `AGENT_READY` in `src/plugins/backlog/ready.ts` ← 07 (the page keeps no
+  copy)
 - the contract members 06 kept for the old page, each marked `// Removed in 08: main no longer serves this.`: the
   `readDoc`, `applyEdit` and `commit` invokes, `BacklogEdit`, `BacklogPlan`, `BacklogTask`, `BacklogFeature`,
   `BacklogHome.plans`, `features` and `uncommitted` ← 06 (this task deletes them, D)
@@ -98,6 +105,8 @@ Decisions:
 - A started chunk's rows dim and Enter on them activates the session (Decisions 6).
 - `W` sends the sweep for the filtered repo (Decisions 8). With no repo filter `W` toasts `Filter to one repo first`
   and sends nothing (settled here: the plan names only the filtered repo).
+- `S` starts every unstarted chunk the strip shows: with a repo filter on, only that repo's (settled here, so the key
+  acts on what the user sees; plan.md's key line says the same).
 - The assistant pane comes from `addAgentPane` (03), in a right column with its own `Split` (Architecture, design
   review 1); Backlog's layout draws none of it: scoped-agents' `askBox` part draws its ask box.
 - The mode registers no side bar (Decisions, last line). The core's `toggleSideBar` throws `Mode "main" has no side
@@ -141,10 +150,11 @@ Actions: `loaded {read}`, `placeRestored {place}`, `stalenessRead {entries}`, `c
 Rules:
 - Every row key is `rowKey(repo, title)` from `src/plugins/backlog/row-key.ts` (05), the key main builds.
 - `allRows`: every follow-up item of every home, homes in load order grouped by repo (each repo where its first home
-  falls, as `orderedHomes` does today), then file order, then item order. A key a row already holds (two homes of one
-  repo, one title) keeps the first row. `chunk` is the chunk whose `repo` is the row's and whose `titles` hold its title.
+  falls, the homes of one repo in load order), then file order, then item order. A key a row already holds (two homes
+  of one repo, one title) keeps the first row. This is the order of 05's `backlogRows` word for word, so the table and
+  `read_backlog_state` list rows in one order. `chunk` is the chunk whose `repo` is the row's and whose `titles` hold its title.
 - `visibleRows`: `allRows` less a done item unless `isDoneShown`, a row of another repo while `repo` is set, an item
-  without the `agent-ready` tag while `isReadyOnly`, a row with a chunk while `isChunkedHidden`, and a row the filter
+  with `isReady(tags)` false while `isReadyOnly`, a row with a chunk while `isChunkedHidden`, and a row the filter
   misses. The filter matches as today: trimmed, fuzzy on the title and each tag, plain substring (`matchesSubstring`)
   on the one line; a filter of only spaces is none. `isStaleFirst` sorts the result stably by level rank: `stale` 0,
   `moved` 1, `unknown` 2, `fresh` 3, a row with no staleness entry 4.
@@ -164,6 +174,8 @@ Rules:
   (`isChunkedHidden`); `nothing`.
 - `loaded`: sets `homes`, `message`, `isLoaded`; keeps `selectedKey` while a visible row holds it, else selects the
   row now at its old index, clamped, or null (today's `reselect`); drops a `marked` key no row of `allRows` holds.
+  Every reselect (here and in each action below that "reselects") that ends with `selectedKey` null while focus is
+  `review` sets focus `table`.
 - `stalenessRead`: merges `entries` over `staleness`, each key replaced; selection kept by key.
 - `chunksChanged`: replaces `chunks`; `stripCursor` stays while a shown chunk holds it, else moves to the shown chunk
   at the old index, clamped, else null; reselects as `loaded` does (hide-chunked may hide the selected row).
@@ -184,9 +196,12 @@ Rules:
   - no entry: `Staleness not read yet.`
   - `unknown`: `Unknown: not in git history.`
   - otherwise `<Level>: written <date>`, then, joined by ` · `: `names no paths` when `namedPaths` is empty, else
-    `<n> commit(s) since on <k> named path(s)` (`1 commit`, `2 commits`; `1 named path`, `2 named paths`); then
+    `<n> commit(s) since on <k> named path(s)` (`0 commits`, `1 commit`, `2 commits`; `1 named path`, `2 named paths`); then
     `gone: <gonePaths joined ', '>` when any; then `last: <lastCommit.subject>` when `lastCommit` is set. `<Level>` is
     `Fresh`, `Moved` or `Stale`. Example: `Moved: written 2026-10-20 · 3 commits since on 2 named paths · last: Fix the strip`.
+  - `writtenAt` null with a level other than `unknown` (05 gives `stale` for a gone path with no history):
+    `<Level>: not in git history yet`, then the parts above less the commits part (no history to count from): `names no
+    paths` when `namedPaths` is empty, `gone: …`, `last: …`. Example: `Stale: not in git history yet · gone: src/gone.ts`.
 
 ### B — the layout contract and `default`
 
@@ -247,7 +262,11 @@ does"); `backlogSelectChunkCommand` (`{ id: 'backlog.selectChunk' }`) puts the s
 
 Manifest (`manifest.ts`), after this task:
 - description `Adds Backlog mode: every repo's follow-ups in one table, their staleness, and chunks started as sessions.`
-- `dependsOn.page` `['docs', 'chat', 'scoped-agents']` (plan.md Boundary rules; `dependsOn.main` as 07 left it).
+- `dependsOn.page` `['docs', 'scoped-agents']` and `reads.page` `['sessions']` (plan.md Boundary rules;
+  `dependsOn.main` and `reads.main` as 07 left them). The page imports `sessionsSelectRowCommand` from
+  `src/plugins/sessions/contract.ts` and only runs it by key, as docs' page reads sessions (`src/plugins/docs/manifest.ts`);
+  `scripts/check-layers.mts` admits a page import of a plugin's `contract.ts` only through `dependsOn.page` or
+  `reads.page`. The page imports nothing of chat: `mountChat` is reached through scoped-agents.
 - commands kept: `showMode` (label `backlog`), `listDown`, `listUp`, `listTop`, `listBottom`, `filter`, `rescan`,
   `toggleDone`, `toggleAgentReadyOnly`, `openInDocs`, `lineDown`, `lineUp`, `halfPageDown`, `halfPageUp`, `scrollTop`,
   `scrollEnd`, `...LIST_PICKER_COMMANDS`, `boxAccept`, `boxCancel`, `selectRow` (label `select this row`, arg `string`).
@@ -256,7 +275,7 @@ Manifest (`manifest.ts`), after this task:
 - commands added (all `runsIn: 'page'`), label and group: `activate` `open the row's session, or the review` (list);
   `mark` `mark or unmark the row` (chunks); `addToChunk` `add to the strip's chunk, or a new one` (chunks);
   `removeFromChunk` `take out of its chunk` (chunks); `renameChunk` `rename the chunk` (chunks); `startChunk`
-  `start the chunk` (chunks); `startAllChunks` `start every unstarted chunk` (chunks); `toggleHeadless`
+  `start the chunk` (chunks); `startAllChunks` `start every shown unstarted chunk` (chunks); `toggleHeadless`
   `turn the chunk's headless on or off` (chunks); `toggleCommits` `show or hide the commits since written` (review);
   `sweep` `send the staleness sweep to the assistant` (chunks); `toggleAssistant` `show or hide the assistant` (view);
   `pickRepo` `pick a repo` (view); `toggleChunkedHidden` `hide or show chunked rows` (view); `toggleStaleFirst`
@@ -304,9 +323,12 @@ View (`backlog-view.ts`), rewritten.
   `initial: 380`, `min: 280`, `endMin: 520`) holding `stripSplit` | `div.backlog-assistant`, which holds the agent
   pane's `element`; `assistantSplit` starts `setEndHidden(true)`. The sheet holds `assistantSplit`.
 - The agent pane, created once: `addAgentPane({ owner: backlogManifest.id, agentId: 'assistant', heading: () => 'Backlog assistant', hint:
-  'Ask to add, rewrite or drop follow-ups in any repo, or to group them into chunks.', setShown: (shown) =>
-  assistantSplit.setEndHidden(!shown), resizeTarget: assistantSplit, tookKeys, leave })`, then
-  `pane.scopeOpened('global')`. `tookKeys` sets focus `assistant` (logs `assistant focused`) and sets no scope or
+  'Ask to add, rewrite or drop follow-ups in any repo, or to group them into chunks.', setShown, resizeTarget:
+  assistantSplit, tookKeys, leave })`, then `pane.scopeOpened('global')`. `setShown(shown)` calls
+  `assistantSplit.setEndHidden(!shown)`, then, while `state.isLoaded`, `deps.placeChanged(placeOf(state, shown))`: 03
+  calls `setShown` on each toggle (the `toggleAssistant`, `sweep` and restore opens alike) and not on `modeHidden`, so
+  the place follows the pane and a mode hide keeps `isAssistantShown`. The store subscription passes
+  `pane.isShown()` as the second argument of `placeOf`. `tookKeys` sets focus `assistant` (logs `assistant focused`) and sets no scope or
   target, as Practice's `interviewer` focus does; `leave` gives the keys to the last host pane (`table`, `review` or
   `strip`). Focus leaving `assistant` for a host pane calls `pane.hostTookKeys()`. `shown()` calls
   `setOuterPanes(pane.outerPanes)`; `hidden()` calls `pane.modeHidden()` then `setOuterPanes(null)`; `setLayouts` calls
@@ -317,32 +339,54 @@ View (`backlog-view.ts`), rewritten.
   `review` → `assistantSplit.nudge(d) || tableSplit.nudge(d)`; `strip` → `stripSplit.nudge(d) ||
   assistantSplit.nudge(d)`. Each `setScope` is followed by `setResizeTarget` and `setFocusTarget`, as today; focus
   `assistant` sets none of them.
+- The strip's `HScroller` (`createHScroller()`, `src/shared/page/ui/h-scroller.ts`): after each strip draw the view
+  calls `scroller.refresh()`, then `scroller.reveal(card)` with the cursor card when `stripCursor` changed since the
+  last draw (the New chunk card for null). `dispose` disposes it with the pane and the three splits.
+- Narrow window: below 640px wide (today's `@media (max-width: 640px)` in `backlog.css`), `tableSplit` stacks the review
+  under the table, `minmax(0, 2fr) minmax(0, 3fr)`, as today's `.backlog-split` stacks the detail. `stripSplit` is a
+  column already. `assistantSplit` keeps its row axis; its `min` and `endMin` clamp the two widths as the split does at
+  any width.
+- Focus main (`focusMain()`): gives the keys to the last host pane (`table`, `review` or `strip`), as `leave` does,
+  with `pane.hostTookKeys()` when focus was `assistant`.
 - Reads: `load` and `reload` invoke `load` (a read overtaken by a later one dropped, as today), then `staleness()`
   (dispatched as `stalenessRead`) and, on the first load only, `chunks()` (dispatched as `chunksChanged`); the first
-  load puts `savedPlace` back and, when `savedPlace.isAssistantShown`, opens the pane with `toggle()`. `rescan`
-  invokes `rescan` the same way. The channel's `stalenessRead` and `chunksChanged` messages reach `stalenessRead` /
-  `chunksChanged` (start wires them).
+  load puts `savedPlace` back and, when `savedPlace.isAssistantShown`, opens the pane: with `toggle()` while
+  `deps.isShown()`; else it sets `pendingOpen`, and the next `shown()` clears it and calls `toggle()` once when
+  `pane.isShown()` is false (`toggle()` always takes the keys, so a restore under Chat or Sessions must not run it).
+  `rescan` invokes `rescan` the same way. `shown()` invokes `staleness()` again (dispatched as `stalenessRead`), so a
+  commit with no follow-up file change shows when Backlog is shown (main reads staleness only when `staleness()` is
+  invoked). The channel's `stalenessRead` and `chunksChanged` messages reach
+  `stalenessRead` / `chunksChanged` (start wires them).
+- Failures, one rule: `load` and `rescan` keep today's `readQuietly`. Every other channel invoke that rejects logs
+  `<invoke name> failed: <errorText>` (`editChunks failed: No chunk c1`) and changes no state. The writes
+  (`editChunks`, `startChunks`, `sweep`) also toast the text in `error`; the reads (`staleness`, `chunks`) toast
+  nothing and keep the last state; `commitsSince` draws `commits` with `problem` the text. A per-chunk `refusal` in a
+  resolved `startChunks` is not a rejection (below).
 - Commits: while `isCommitsShown` and a row is selected, `commitsSince(key)` is invoked once per selected key (a reply
   overtaken by a later selection drawn nowhere) and drawn as `commits`; `shortSha` is the sha's first 7 characters,
   `date` the commit's `at` first 10.
 - Commands: `activate` → focus `table`: a started row runs `sessionsSelectRowCommand` with its chunk's `sessionId`
   through `runKey` (logs `opened session <name>`), else focuses `review`; focus `strip`: a started cursor chunk the
   same, else nothing. `mark` → `toggleMark`, logs `marked <title>` or `unmarked <title>`. `addToChunk` → `editChunks(addEdit)`: on success `clearMarks`,
-  `chunksChanged` with the reply, `stripSelect` the chunk holding the first key, logs `added <n> to <chunk name>`; on
-  a rejection, logs `chunk edit refused` and toasts the rejection's text (`errorText`) in `error`. `removeFromChunk` →
-  `editChunks({ type: 'remove', keys: actedKeys })`, `clearMarks`, logs `took <n> out of chunks`. `renameChunk` → with
-  an `actedChunk`, opens the rename box (pushed `box` scope, the box holding the chunk's name, selected; logs
+  `chunksChanged` with the reply, `stripSelect` the chunk holding the first key, logs `added <n> to <chunk name>`; a
+  rejection follows the failure rule and keeps the marks. `removeFromChunk` → `editChunks({ type: 'remove', keys:
+  actedKeys })`; on success `clearMarks` and logs `took <n> out of chunks`; a rejection follows the failure rule and
+  keeps the marks. `renameChunk`, `startChunk` and `toggleHeadless` with no `actedChunk` do nothing and log nothing.
+  `renameChunk` → with an `actedChunk`, opens the rename box (pushed `box` scope, the box holding the chunk's name, selected; logs
   `renaming <name>`); `boxAccept` sends `{ type: 'rename', chunkId, name }` with the trimmed text (an empty text renames
   nothing) and logs `renamed <name>`; `boxCancel` closes it. One pushed box at a time: the filter or the rename.
   `startChunk` → `startChunks([actedChunk.id])`; `startAllChunks` → `startChunks` with every shown unstarted chunk's
-  id; each `ChunkStart` with a `sessionId` logs `started <name>` and toasts `Started <name>` in `success`, each with a
+  id (`shownChunks`: with a repo filter on, only that repo's chunks, the ones the strip shows; with none shown it sends
+  nothing); a chunk whose launch is still in flight comes back as the per-chunk refusal `<name> is starting` (06), so
+  the page keeps no guard of its own, and a chunk whose session closes as it starts comes back as `<name>'s session
+  closed as it started`; both toast as any other refusal; each `ChunkStart` with a `sessionId` logs `started <name>` and toasts `Started <name>` in `success`, each with a
   `refusal` logs `start refused <name>` and toasts the refusal in `error`. `toggleHeadless` →
   `{ type: 'setHeadless', chunkId, headless: !chunk.headless }`, logs `headless <name> on|off`. `toggleCommits` logs
-  `commits shown` / `commits hidden`. `sweep` → with `repo` set, `sweep(repo)`, then opens the pane when hidden
+  `commits shown` / `commits hidden`. `sweep` → with `repo` set, `sweep(repo)`, then, on success (a rejection follows the failure rule), opens the pane when hidden
   (`toggle()`) and calls `pane.refresh()`, logs `sweep sent <repo>`; with no repo, toasts `Filter to one repo first` in
   `error`. `toggleAssistant` → while Backlog shows, `pane.toggle()`; while hidden, `showMode()` then opens the pane if
-  closed (Practice's `toggleInterviewer`); logs `assistant shown` / `assistant hidden`. `pickRepo` opens the list
-  picker titled `Repos` over `All repos` then `repos(state)` (rows drawn by `pickerRow`); a choice dispatches `setRepo`
+  closed (Practice's `toggleInterviewer`); logs `assistant shown` / `assistant hidden`. `pickRepo` (scope `any`) first
+  calls `showMode()` while Backlog is hidden, then opens the list picker titled `Repos` over `All repos` then `repos(state)` (rows drawn by `pickerRow`); a choice dispatches `setRepo`
   and logs `repo <repo>` or `repo all`. `toggleChunkedHidden` logs `chunked hidden|shown`; `toggleStaleFirst` logs
   `stale first on|off`; `toggleDone` and `toggleAgentReadyOnly` keep today's lines (`done shown|hidden`,
   `agent-ready only on|off`, the latter dispatching `toggleReadyOnly`). `stripLeft` / `stripRight` → `stripMove`, logs
@@ -352,8 +396,11 @@ View (`backlog-view.ts`), rewritten.
 - Logs kept: `shown`, `loaded <n> homes`, `not loaded: …`, `selected <title>`, `filter <text>`, `no row <key>`; each
   focus change logs `table focused`, `review focused`, `strip focused` or `assistant focused`; `selectChunk` on an id
   no shown chunk holds logs `no chunk <id>`.
-- Title bar: `setContext(state.repo ?? 'All repos')` whenever the repo filter changes; start.ts maps it to
-  `{ title: 'Backlog', detail }`.
+- Title bar: `setContext(state.repo ?? 'All repos')` once when the view is made and again whenever the repo filter
+  changes; start.ts maps it to `{ title: 'Backlog', detail }`.
+- `layouts/design.md` owners table, the `backlog` row's third cell becomes: `the table and its filters, rows and empty
+  text, the review pane with its item and commits, the chunk strip with its chunk and New chunk cards, and the picker
+  rows`.
 - The cursor prompt holds one anchor per `CursorCommand` in scope `table`, labels `session`, `mark`, `chunk`,
   `unchunk`, `start`, `headless`, `rename`, `commits`, `docs`, each hidden unless `cursorCommands` lists it.
 
@@ -379,47 +426,104 @@ is gallery's (shows, else nothing). It reads `scopedAgentsPageKey` through `api.
   `main/homes.ts`), and every `BacklogHome` fixture drops the three fields: `backlog/main/start.test.ts`,
   `backlog/main/homes.test.ts`, `notes/main/start.test.ts`, `notes/main/note-homes.test.ts`, and the page tests
   rewritten in A and C.
+- `docs/features/followups.md`: the items **Backlog applied save closes another editor** and **Backlog `/` with no home
+  open does nothing and leaves the letters as commands** are removed (each list item whole): the code they name
+  (`backlog-view.ts`'s applied save and editor, `openFilter` with no open home) is deleted here.
 
 ### E — the self-test script (`main/selftest-script.ts`)
 
-The fixture is kept as it is (`selftest-fixture.ts`: the git home `dev/backlog-repo/docs/features` with Ready item
-(agent-ready), Plain item, struck Shipped item and plan Backlog X; docs' list home `wigley-features/selftest-repo` with
-First follow-up). Table order: Ready item, Plain item, (Shipped item), First follow-up. Staleness: the git home's items
-name no paths (`fresh`); the list home is outside git (`unknown`). `settings: {}`, so `repoFolders` is empty and a
-`selftest-repo` chunk's start is refused. Written against the fixture at `b5c719691`: if 05–07 changed its items,
-re-derive each `expect` from it. Groups, each `why` pinned in substance:
+The fixture (`selftest-fixture.ts`) gains one row per staleness level it lacks, so the git glue (`firstAdded`, `log`,
+the gone-path check) meets a real repo in the self-test and in 10's check 2:
+- The git home's `followups.md` becomes, exactly (the plan file and task files stay):
 
-1. `open` — `Space k b` → `[backlog] shown` (checksFit); `R` → `[backlog] loaded 2 homes`; `gg` → `[backlog] selected
-   Ready item`; `j` → `selected Plain item`; `j` → `selected First follow-up` (checksFit, screenshot `table`). Proves one
-   table across both repos with the struck item hidden.
-2. `filters` — `Space v d` → `done shown`; `k` → `selected Shipped item`; `Space v d` → `done hidden`; `Space v a` →
+  ```
+  # Follow-ups — backlog-repo
+
+  **Contents**
+
+  - **Ready item** — *agent-ready*: waits for an agent
+  - **Plain item** — needs a look
+  - ~~**Shipped item**~~ — landed
+  - **Moved item** — reads `src/app.ts`
+  - **Stale item** — reads `src/gone.ts`
+
+  ## Ready item
+
+  Waits for an agent.
+
+  ## Plain item
+
+  Needs a look.
+
+  ## ~~Shipped item~~
+
+  Landed.
+
+  ## Moved item
+
+  Its code changed after it was written.
+
+  ## Stale item
+
+  Its file is gone.
+  ```
+
+- `src/app.ts` (`export const app = 1;\n`) joins `FILES`. The first commit (`FIXTURE_COMMIT_SUBJECT`) runs with
+  `setEnv` `{ GIT_AUTHOR_DATE: '2026-10-20T10:00:00Z', GIT_COMMITTER_DATE: '2026-10-20T10:00:00Z' }`. Then the fixture
+  writes `src/app.ts` as `export const app = 2;\n`, runs `add --all`, and commits with subject
+  `FIXTURE_CHANGE_SUBJECT = 'Change the app'` under the same two names set to `2026-10-21T10:00:00Z`. The fixed dates
+  matter: 05 keeps a commit only while its committer date (`%cI`) is later than `writtenAt`, and two commits in one
+  second would leave Moved item `fresh`. `runGit` gains an optional fourth parameter `setEnv`, passed to
+  `processes.run` as `{ setEnv }`. The head comment says five follow-ups and the two commits.
+- Levels this gives (05's rules): Ready item and Plain item `fresh` (written 2026-10-20, name no paths); Moved item
+  `moved` (`src/app.ts` held by the repo folder, one commit since: `Change the app`); Stale item `stale` (`src/` is in
+  the repo folder, `src/gone.ts` is not); First follow-up `unknown` (the list home is outside git).
+- Docs' stand-in index (`src/plugins/docs/main/selftest-fixture.ts`, the `followup(line, …)` entries) follows the
+  file: Ready item line 11, Plain item 15, Shipped item 19, and two new entries `followup(23, 'Moved item', 'reads
+  \`src/app.ts\`', 'open', [])` and `followup(27, 'Stale item', 'reads \`src/gone.ts\`', 'open', [])`.
+
+Table order, done hidden: Ready item, Plain item, Moved item, Stale item, First follow-up (done shown: Shipped item
+after Plain item). `settings: {}`, so `repoFolders` is empty and a `selftest-repo` chunk's start is refused. Each
+`expect` is a line the step's keys cause: a `selected …` line only when the selection changes. Groups, each `why`
+pinned in substance:
+
+1. `open` — `Space k b` → `[backlog] shown` (checksFit); `R` → `[backlog] loaded 2 homes`; `G` → `[backlog] selected
+   First follow-up`; `gg` → `selected Ready item`; `j` → `selected Plain item`; `j` → `selected Moved item`; `j` →
+   `selected Stale item` (checksFit, screenshot `table`). Proves one table across both repos with the struck item
+   hidden; the screenshot shows the four staleness levels.
+2. `filters` — `Space v d` → `done shown`; `k k` → `selected Shipped item`; `Space v d` → `done hidden`; `Space v a` →
    `selected Ready item`; `Space v a` → `agent-ready only off`; `Space v r` → `[backlog] picker shown: Repos`; `G
-   Enter` → `repo selftest-repo`; `Space v r`, then `gg Enter` → `repo all`; `Space v s` → `stale first on`; `gg` →
-   `selected First follow-up` (unknown ranks above fresh); `Space v s` → `stale first off`; `/ plain` → `selected Plain
-   item`; `Enter` → `filter plain`; `/ Escape gg` → `selected Ready item`. Proves done, ready, repo, stale-first and `/`
-   each narrow or reorder the one table.
-3. `review` — `<A-l>` → `review focused`; `gl` → `commits shown`; `gl` → `commits hidden`; `G` → `scrolled the review
-   to the end`; `gg` → `scrolled the review to the top`; `<A-h>` → `table focused`. Proves the review pane's keys and the
-   focus moves between it and the table.
-4. `chunks` — on Ready item: `x` → `marked Ready item`; `j x` → `marked Plain item`; `c` → `added 2 to Ready item` (screenshot `chunk`); `<A-j>` → `strip
-   focused`; `H` → `headless Ready item on`; `H` → `headless Ready item off`; `r` → `renaming Ready item`; `Pair
-   Enter` (typed into the selected text) → `renamed Pair`; `<A-k>` → `table focused`; `Space v c` → `chunked hidden`
-   with `alsoExpect` `/^\[backlog\] selected First follow-up$/`; `Space v c` → `chunked shown`. Proves marks, a new
-   chunk from them, the strip's headless and rename, and hide-chunked.
+   Enter` → `repo selftest-repo`; `Space v r`, then `gg Enter` → `repo all` (the selection stays on First follow-up);
+   `Space v s` → `stale first on`; `gg` → `selected Stale item`; `j j` → `selected First follow-up` (why: stale, then
+   moved, then unknown rank above fresh, so the levels main read from git are in place); `Space v s` → `stale first
+   off`; `/ plain` → `selected Plain item`; `Enter` → `filter plain`; `/ Escape gg` → `selected Ready item`. Proves done,
+   ready, repo, stale-first and `/` each narrow or reorder the one table.
+3. `review` — `j j` → `selected Moved item`; `<A-l>` → `review focused`; `gl` → `commits shown`; `G` → `scrolled the
+   review to the end` (screenshot `review`: Moved item's note and its one commit, `Change the app`); `gg` → `scrolled
+   the review to the top`; `gl` → `commits hidden`; `<A-h>` → `table focused`. Proves the review pane's keys, the
+   commit list, and the focus moves between it and the table.
+4. `chunks` — `gg` → `selected Ready item`; `x` → `marked Ready item`; `j x` → `marked Plain item`; `c` → `added 2 to
+   Ready item` (screenshot `chunk`); `<A-j>` → `strip focused`; `H` → `headless Ready item on`; `H` → `headless Ready
+   item off`; `r` → `renaming Ready item`; `Pair Enter` (typed into the selected text) → `renamed Pair`; `<A-k>` →
+   `table focused`; `Space v c` → `chunked hidden` with `alsoExpect` `/^\[backlog\] selected Stale item$/` (Plain item
+   at index 1 is hidden, and Stale item is now at index 1); `Space v c` → `chunked shown`. Proves marks, a new chunk
+   from them, the strip's headless and rename, and hide-chunked.
 5. `start refused` — `<A-j>` → `strip focused`; `l` → `strip on new chunk`; `<A-k>` → `table focused`; `G` →
    `selected First follow-up`; `c` → `added 1 to First follow-up`; `s` → `start refused First follow-up`. Proves `s`
    asks main and shows its refusal for a repo with no folder.
 6. `unchunk` — `u` → `took 1 out of chunks`; `gg x j x u` → `took 2 out of chunks`. Leaves no chunk for the next run
-   (an emptied chunk is dropped by main, 06).
+   (an emptied chunk is dropped by main, 06), and the selection on Plain item, so the next run's `G` changes it.
 7. `assistant` — `Space v b` → `assistant shown` with `alsoExpect` `/^\[backlog\] assistant focused$/` (checksFit,
    screenshot `assistant`); `<A-h>` → `table focused`; `Space v b` → `assistant hidden`. Proves the pane opens beside
    the table with the keys and gives them back. No step sends an ask or `W`: each launches a session.
 
-The result replaces
-`followWrites` with a check that the page wrote nothing: within `CHECK_TIMEOUT_MS` after the run, `git.changedPaths(repo,
-'docs/features')` holds no path (problem `followups.md changed by the page`) and `git log -1 --format=%s` is still
-`FIXTURE_COMMIT_SUBJECT` (problem `the home was committed`). `CREATED`, `RENAMED`, `COMMIT_SUBJECT`, `LIST_FOLLOWUPS`,
-`FILE_CHECKS` and the old groups go. The shown line stays `[backlog] loaded 2 homes`.
+The result drops `followWrites` and checks no write: 06 removed `applyEdit` and `commit` from main, so the page has
+no write path left, and `problems` runs only after `result` settles, which `open` creates before any step. `result` is
+`fixture.then(() => { deps.reload(); return []; }, (error) => [`fixture not ready: ${errorText(error)}`])`.
+`CREATED`, `RENAMED`, `COMMIT_SUBJECT`, `LIST_FOLLOWUPS`, `LIST_WITH_OUTSIDE_ITEM`, `FILE_CHECKS`, `CHECK_TIMEOUT_MS`,
+`followWrites` and the old groups go, and `git` leaves `BacklogSelfTestDeps` (and main's wiring of it) when nothing
+else reads it; `processes` stays for `writeBacklogFixture`. The
+shown line stays `[backlog] loaded 2 homes`.
 
 GIVEN rows in two repos WHEN the page loads THEN one table lists both repos' open items in load order, the struck item hidden
 GIVEN a repo filter, `Space v a`, `Space v c` or `/` WHEN applied THEN only matching rows show and the selection stays on its row or moves to the row at its place
@@ -432,6 +536,10 @@ GIVEN the assistant pane shown WHEN `Alt+l` from the review THEN the core moves 
 GIVEN Backlog showing WHEN `Space k b` again THEN nothing changes and no error is thrown
 GIVEN no repo filter WHEN `W` THEN `Filter to one repo first` toasts and `sweep` is not invoked
 GIVEN a saved place with `isAssistantShown` WHEN the page reloads THEN the first load restores the filters, marks and selected row and opens the pane
+GIVEN a saved place with `isAssistantShown` and another mode shown WHEN the first load lands THEN `toggle` is not called, and the next `shown()` calls it once
+GIVEN the pane closed WHEN `Space v b` opens it THEN `placeChanged` gets `isAssistantShown: true`; WHEN Backlog is hidden THEN no place write sets it false
+GIVEN a repo filter and unstarted chunks in two repos WHEN `S` THEN `startChunks` gets only the filtered repo's chunk ids
+GIVEN a `remove` main rejects WHEN `u` THEN `editChunks failed: <text>` is logged, the text toasts as an error, and the marks stay
 
 Tests:
 - `backlog-state.test.ts`, rewritten. Kept, re-pointed at `BacklogRow` with repo: `visibleRows_DoneHidden_LeavesStruckItemOut`,
@@ -449,7 +557,15 @@ Tests:
   none → cursor key in `table`, `[]` in `strip`); `addEdit_StripCursor_ChunkIdOrNull`; `cursorCommands_ByChunkState`
   (no chunk, unstarted, started → the three lists in A); `focus_ReviewWithNoRow_Unchanged`;
   `stalenessNote_ByLevel` (a table: no entry, unknown, fresh with no paths → `Fresh: written 2026-10-20 · names no
-  paths`, moved with 1 commit and 1 path and a last subject, stale with two gone paths → each exact string in A).
+  paths`, fresh with 2 paths and no commits → `Fresh: written 2026-10-20 · 0 commits since on 2 named paths`, moved
+  with 1 commit and 1 path and a last subject, stale with two gone paths, stale with `writtenAt` null and one gone path
+  → `Stale: not in git history yet · gone: src/gone.ts` → each exact string in A);
+  `allRows_ReposInterleaved_GroupsByRepo` (homes A1, B, A2 → rows A1, A2, B);
+  `stalenessRead_Merge_ReplacesEachKeyKeepsSelection`; `loaded_GoneMarkedKey_Pruned`;
+  `reselect_After_$action` (`it.each` over `toggleChunkedHidden`, `setRepo`, `toggleReadyOnly`: a hidden selected row
+  moves the selection to the row at its index);
+  `reselect_NoRowLeftWhileReview_FocusesTable`; `moveAndToggleMark_OutsideTable_DoNothing` (focus `review` and
+  `strip`).
 - `read-layout.test.ts`: the `homeRow` case reads `tableRow`; `one row part` reads `tableRow`.
 - `backlog-view.test.ts`, rewritten over a fake `addAgentPane` recording its spec and calls. Kept in substance, re-pointed:
   `a partial layout draws its own rows and default for the rest` (a user `tableRow`), `a reload keeps the open filter text
@@ -462,7 +578,18 @@ Tests:
   `assistantPane_ShownHidden_SetsAndClearsOuterPanes`; `addToChunk_Rejected_ToastsTextKeepsMarks`;
   `addToChunk_Applied_ClearsMarksAndSelectsChunk`; `activate_StartedRow_RunsSessionsSelectRow`;
   `startChunks_MixedResults_ToastEach`; `sweep_NoRepo_ToastsAndSendsNothing`; `sweep_Repo_SendsOpensPaneAndRefreshes`;
-  `commits_OvertakenReply_DrawsOnlyTheLatest`; `rename_BoxAccept_SendsTrimmedName`; `selectChunk_Unknown_LogsNoChunk`.
+  `commits_OvertakenReply_DrawsOnlyTheLatest`; `rename_BoxAccept_SendsTrimmedName`; `selectChunk_Unknown_LogsNoChunk`;
+  `restore_BacklogHidden_TogglesOnceOnNextShown`; `assistantPane_SetShown_WritesPlace` (open → `isAssistantShown:
+  true`; `hidden()` writes no `false`); `removeFromChunk_Rejected_ToastsTextKeepsMarks`; `sweep_Rejected_LogsAndToasts`
+  (the pane is not opened); `commits_Rejected_DrawsProblem`; `commits_Reply_SlicesShaTo7AndDateTo10`;
+  `commits_ReplyAfterHidden_DrawsNothing` (`gl` hides the list before the reply); `rename_EmptyText_SendsNothing`;
+  `rename_BoxCancel_ClosesTheBox`; `selectChunk_Known_SetsStripCursorAndFocusesStrip`;
+  `startAllChunks_RepoFilter_StartsOnlyShownChunks`; `chunkCommands_NoActedChunk_DoNothing` (`r`, `s`, `H` on a row in
+  no chunk: no invoke, no log); `strip_CursorChanged_RefreshesThenReveals` and `dispose_DisposesTheScroller` (a fake
+  scroller); `pickRepo_BacklogHidden_ShowsModeFirst`; `setContext_AtStart_AllRepos`;
+  `focusMain_FromAssistant_GivesKeysToLastHostPane`; `shown_InvokesStalenessAgain`.
+- `selftest-fixture.test.ts`: `GIT_RUNS` gains `add --all` and `commit --quiet -m Change the app` after the first commit;
+  a new test asserts the two commits' `setEnv` dates (`FakeProcesses.runs[].setEnv`).
 - `start.test.ts`: the lifecycle tests kept with a fake `scopedAgentsPageKey` dependency;
   `reload_restores_the_open_home_and_selected_row` → `reload_RestoresFiltersMarksAndSelectedRow`;
   `reload_ChangeBeforeTheFirstLoad_KeepsTheLastPagesPlace` kept with the new place; `mayStop_$case` deleted; new
@@ -474,11 +601,12 @@ Dropped (pinned by a test above, so not in 10): the ordering and filter rules, t
 toasts, the focus and resize chains, the place restore.
 
 Deferred to `10-final-verification.md`: the table, review, strip and assistant pane as drawn (the screenshots `table`,
-`chunk`, `assistant`), a chunk start that launches a session and Enter on its rows, `W`'s sweep reaching the
+`review`, `chunk`, `assistant`), a chunk start that launches a session and Enter on its rows, `W`'s sweep reaching the
 assistant, the layout's look at a narrow window.
 
 Done when: `npm run typecheck` passes; `npm test -- src/plugins/backlog src/plugins/notes src/shared/layouts/layout-contracts.test.ts`
-passes; `npm run lint` passes; `npm run selftest -- --plugin backlog` passes.
+passes, and `npm test -- src/plugins/docs/main/selftest-fixture.test.ts` passes; `npm run lint` passes;
+`npm run selftest -- --plugin backlog --plugin docs` passes (docs' stand-in index changed with the fixture).
 Commit: one commit for the group.
 
 ## Proof

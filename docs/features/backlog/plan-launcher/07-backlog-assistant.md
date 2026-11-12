@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Rung: hard · adds the assistant registration, its store adapter and two MCP tools that 08's page and the assistant session consume
+Rung: deep · crosses plugin data through a serial `assistant.json` writer and chat's session lifecycle through the scoped-agent service, and adds two MCP tools 08's page and the assistant session consume
 Wave: 4 · Depends on: 02, 06
 Plan: [plan.md](plan.md)
 
@@ -13,6 +13,9 @@ unstarted chunks through the chunk store.
 Files:
 - create `src/plugins/backlog/main/assistant.ts` · test `src/plugins/backlog/main/assistant.test.ts`
 - create `src/plugins/backlog/main/backlog-tools.ts` · test `src/plugins/backlog/main/backlog-tools.test.ts`
+- create `src/plugins/backlog/ready.ts`
+- create `src/plugins/backlog/main/drive-actions.ts` · test `src/plugins/backlog/main/drive-actions.test.ts`
+- modify `src/plugins/backlog/page/backlog-state.ts` · modify `src/plugins/backlog/page/backlog-view.ts`
 - modify `src/plugins/backlog/contract.ts`
 - modify `src/plugins/backlog/manifest.ts`
 - modify `src/plugins/backlog/main/start.ts` · test `src/plugins/backlog/main/start.test.ts`
@@ -24,6 +27,7 @@ Consumes:
 - `BacklogChunk` in `src/plugins/backlog/contract.ts` ← 06
 - `StalenessReader.entries()` in `src/plugins/backlog/main/staleness.ts`, `BacklogStaleness`, `RowKey` ← 05
 - `BacklogRow`, `backlogRows` in `src/plugins/backlog/main/rows.ts` ← 05
+- `backlog.lastRead(): Promise<BacklogRead>` on `createBacklogMain` in `src/plugins/backlog/main/start.ts` ← 05
 - `sessionsMainKey`, `contributeTools`, `ToolDefinition`, `ToolSession`, `AgentSession`, `textResult`, `errorResult`
   in `src/plugins/sessions/contract.ts` — in the tree
 - `backlogPlaceSlot` in `src/plugins/backlog/contract.ts`, `api.state.read` — in the tree
@@ -49,8 +53,15 @@ Produces:
   - `export interface BacklogToolsDeps { scopeOf(session: AgentSession): Promise<string | null>; rows(): Promise<BacklogRow[]>; staleness(): Record<RowKey, BacklogStaleness>; chunks: Pick<ChunkStore, 'chunks' | 'replaceUnstarted'>; place(): AssistantPlace | null }`
   - `export function backlogStateText(state: { rows: readonly BacklogRow[]; staleness: Readonly<Record<RowKey, BacklogStaleness>>; chunks: readonly BacklogChunk[]; place: AssistantPlace | null }): string`
   - `export function startBacklogTools(deps: BacklogToolsDeps): (session: AgentSession) => ToolSession`
+- `src/plugins/backlog/ready.ts`: `export const AGENT_READY = 'agent-ready';` and
+  `export function isReady(tags: readonly string[]): boolean` (true when `tags` holds `AGENT_READY`). 08's page
+  consumes `isReady`.
 
 Decisions:
+- **One ready rule** (cold read: main cannot import the page's `AGENT_READY`, and two copies drift). `ready.ts` sits
+  in the plugin's own folder, outside `main/` and `page/`, as 05's `row-key.ts` does. `page/backlog-state.ts` drops
+  its `export const AGENT_READY` and imports it from `../ready`; `page/backlog-view.ts` imports `AGENT_READY` from
+  `../ready` in place of `./backlog-state`. No page behaviour changes.
 - **Registration** (interview: one global assistant, a scoped agent with scope `global`, run from the home folder,
   default profile, ids in backlog's plugin data; design review: a third use is one registration). In `start`:
   `api.dependency(scopedAgentsMainKey).addScopedAgent({ owner: backlogManifest.id, agentId: ASSISTANT_ID, folder: () => services.homeDir, instructions: () => Promise.resolve(ASSISTANT_INSTRUCTIONS), title: () => Promise.resolve(ASSISTANT_TITLE), store: createAssistantStore(api.data, services.log) })`.
@@ -75,12 +86,12 @@ Decisions:
 
   The user writes to you from the Backlog page, which you cannot see. Call read_backlog_state before you act on the cursor item, the marked rows or the filters: it gives every row with its staleness and chunk, the cursor item's full text, the marked rows, the filters and the chunks.
 
-  Edit a follow-up file directly, in the shape it already has (wigley-ai-marketplace's skills/review/triage.md § The project's follow-ups). To group follow-ups into chunks, call set_backlog_chunks with a repo and its chunks. It replaces that repo's unstarted chunks, so pass every chunk the repo keeps. A chunk that has started cannot change.
+  Edit a follow-up file directly, in the shape it already has (wigley-ai-marketplace's skills/review/triage.md § The project's follow-ups). To group follow-ups into chunks, call set_backlog_chunks with a repo and its chunks. It replaces that repo's unstarted chunks, so pass every chunk the repo keeps. A chunk you pass under its current name keeps its headless flag. A chunk that has started cannot change.
 
   Land each change to a repo per that repo's own rules: its AGENTS.md and the user's git rules. Then report each change by repo and title.
   ```
 - **Sweep** (interview: `W` sends the staleness sweep for the filtered repo to the assistant as a message). Handler
-  `sweep(repo)`: the last load's homes (a load first when there is none) whose `repo` equals `repo`; none → reject
+  `sweep(repo)`: `read = await backlog.lastRead()`, and its homes whose `repo` equals `repo`; none → reject
   `No Backlog repo <repo>`. Else `assistant.ask(ASSISTANT_SCOPE, sweepMessage(repo, files, rows, staleness.entries()))`,
   where `files` is every `followupFiles[].path` of those homes in load order and `rows` is `backlogRows(read)`
   filtered to `repo`. Resolves the ask's sessionId; the page refreshes its pane with it (08). `sweepMessage`, verbatim,
@@ -104,7 +115,7 @@ Decisions:
 - **Tools** (interview: `read_backlog_state` and `set_backlog_chunks`; both refuse any session but the assistant).
   `start` calls `api.dependency(sessionsMainKey).contributeTools([READ_BACKLOG_STATE_TOOL, SET_BACKLOG_CHUNKS_TOOL], startBacklogTools(deps))`,
   as `src/plugins/practice/main/start.ts` does, with `scopeOf: (session) => assistant.scopeOf(session)`,
-  `rows: async () => backlogRows(await backlog.load())`, `staleness: () => staleness.entries()`, `chunks: store`, and
+  `rows: async () => backlogRows(await backlog.lastRead())`, `staleness: () => staleness.entries()`, `chunks: store`, and
   `place: () => assistantPlace(api.state.read(backlogPlaceSlot).get())`. The reader of the slot is made once in
   `start`. `startBacklogTools` follows `startPracticeTools` in `src/plugins/practice/main/practice-tools.ts`: a
   `switch` on the tool name, an unknown name rejects `no backlog tool "<name>"`, and `end` does nothing.
@@ -151,7 +162,7 @@ Decisions:
   ### <title>
 
   Repo: <repo> · File: <path>:<line> · Tags: <tags joined by ", ", or none>
-  Staleness: <level>; written <writtenAt, or unknown>; <commitsSince> commits since; gone: <gonePaths joined by ", ", or none>; named: <namedPaths joined by ", ", or none>
+  Staleness: <level>; written <first 10 characters of writtenAt, or unknown>; <commitsSince> commits since; gone: <gonePaths joined by ", ", or none>; named: <namedPaths joined by ", ", or none>
 
   <oneLine>
 
@@ -175,8 +186,17 @@ Decisions:
   section. `Marked: none` for an empty list, and a marked key no row has is left out. `Repo filter: all repos` for
   null; `Text filter: none` for `''`. `## Chunks` holds the line `None.` when there are no chunks. Rows are the open
   rows, plus the done rows when `isDoneShown` is true, grouped under one `### <repo>` per repo in row order. `Ready` is
-  `yes` when the row's tags hold `agent-ready`. A row with no staleness entry yet shows `not read yet` in its
-  Staleness cell. A row's Chunk cell is the name of the chunk whose repo and titles hold it.
+  `yes` when `isReady(row.tags)`. A row with no staleness entry yet shows `not read yet` in its Staleness cell, and
+  the cursor item's line reads `Staleness: not read yet.` in place of the `Staleness:` line above. A row's Chunk cell
+  is the name of the chunk whose repo and titles hold it. A chunk line reads `started: session <sessionId>` for a chunk
+  with a `sessionId`, else `not started`, then `, headless` only when `headless` is true.
+- **Drive action** `backlog.callTool` (after `src/plugins/workflow/main/drive-actions.ts`: the fake harness makes no
+  tool call, and 10's check 5 needs one), added in `start` only when `api.drive !== null`. Args `{ "session": string,
+  "tool": string, "args"?: object }`. `session` `"assistant"` resolves to `await assistant.sessionOf('global')`; when
+  that is null it rejects `The assistant has no session yet`. Any other value is a row id. It runs
+  `startBacklogTools(deps)({ id, info: { sessionId: null, projectDir: null, harness: null } }).call(tool, args ?? {},
+  { toolUseId: null, signal: new AbortController().signal })`, then `end()`, and returns the `ToolResult`. Tests:
+  `callTool_Assistant_RunsAsTheAssistant`, `callTool_OtherRow_GetsTheRefusal`.
 - **Self-test**: no key behaviour changes in this task (the `W` key and the assistant pane are 08's), so no self-test
   group is added here. Fixture: no change.
 
@@ -196,23 +216,37 @@ sweep text listing that row, and the invoke resolves the ask's sessionId.
 Tests:
 - `assistant.test.ts` (memory files as plugin data):
   - `store_WriteReadEntries_RoundTrips` — write `global`, read it back, `entries()` lists it; write null deletes it.
-  - `store_FileUnreadable_LoggedAndEmpty`.
+  - `store_FileUnreadable_LoggedAndEmpty` — rows: the file holds `{`; the file holds
+    `{ "global": { "sessionId": 1, "hostSessionId": "h" } }`. Each logs the line and reads as `{}`.
   - `store_SupersededAndCheckAsk_NullAndResolves`.
+  - `store_WritesOverlapping_RunInOrder` — two `write` calls made without awaiting the first both land.
   - `sweepMessage_StaleAndMovedRows_ListedInRowOrder` — exact text for two files and one `stale`, one `moved`, one
     `fresh` and one done `stale` row (the last two not listed).
   - `sweepMessage_NoStaleRows_NoneLine`.
 - `backlog-tools.test.ts`:
-  - `tools_SessionNotTheAssistant_Refused` — `it.each` over both tool names, asserting the exact refusal.
+  - `tools_SessionNotTheAssistant_Refused` — `it.each` over both tool names, asserting the exact refusal, and spies
+    on `deps.rows`, `deps.place`, `chunks.chunks` and `chunks.replaceUnstarted` showing none was called.
   - `readBacklogState_PlaceAndRows_ExactText` — one full expected text for two repos, a cursor, one marked row, one
     chunk and one row with no staleness entry.
+  - `readBacklogState_CursorNotRead_NotReadYetLine` — the cursor row has no staleness entry: the line
+    `Staleness: not read yet.`; with an entry, `written` shows the first 10 characters of `writtenAt`.
+  - `backlogStateText_ViewVariants` — one `it.each` row per rule, each asserting the lines it changes:
+    `isDoneShown` true adds a done row; a `selectedKey` no row has → `Cursor: none` and no `## Cursor item`; a marked
+    key no row has is left out; an empty `marked` → `Marked: none`; `repo` null → `Repo filter: all repos`, set →
+    `Repo filter: <repo>`; `filter` `''` → `Text filter: none`, set → `Text filter: "<filter>"`; no chunks →
+    `## Chunks` holds `None.`.
+  - `backlogStateText_ChunkLines_StartedHeadlessUnstarted` — one started chunk, one headless unstarted chunk and one
+    plain unstarted chunk give their three exact lines.
   - `readBacklogState_NoPlace_PageNotOpenedLine`.
   - `backlogStateText_CellWithPipe_Escaped`.
-  - `setBacklogChunks_Cases` — rows: repo with no rows; `chunks` not a list; a store rejection (its text after
-    `Refused: `); success with one plan; success with an empty list.
+  - `setBacklogChunks_Cases` — rows: repo with no rows; `repo` a number (`Refused: no follow-ups in 5.`); `chunks` not
+    a list; a store rejection (its text after `Refused: `); success with one plan; success with an empty list.
   - `assistantPlace_MissingFields_Defaults` — undefined → null; an old-shape place → defaults.
 - `start.test.ts`, added to `describe('backlog main part')`: `start_RegistersTheAssistant` (a fake `scoped-agents`
   export records the spec: owner `backlog`, agentId `assistant`, folder the home folder); `sweep_KnownRepo_AsksTheAssistant`;
   `sweep_UnknownRepo_Rejects`; `start_ContributesBothTools` (a fake `sessions` export records the two tool names).
+- `ready.ts` needs no test file of its own: `readBacklogState_PlaceAndRows_ExactText` holds one ready and one not-ready
+  row, and the page's existing ready-only tests run through the moved constant.
 
 Done when: `npm run typecheck` passes; `npm test -- src/plugins/backlog` passes; `npm run lint` passes. The live
 assistant chat, its tool calls and the sweep are `10-final-verification.md`'s.

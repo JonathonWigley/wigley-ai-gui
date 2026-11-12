@@ -27,6 +27,7 @@ Systems touched, all in `wigley-ai-gui`:
   The page's editor, delete, tags, commit, homes side bar and plans and features views go. Main keeps `load`, `tags`
   and `fileNote` for notes.
 - **core git**: `Git.firstAdded`.
+- **chat**: `ChatMainExports.restored()` (06), so backlog retires no chunk before chat's restore ends.
 
 ## Preconditions
 
@@ -94,7 +95,7 @@ Decisions (from the interview):
   notes.
 - Rows across all repos show repo, task (title and one line), ready, staleness, chunk. The review pane always shows
   the cursor item's full text and staleness note; `gl` toggles the commits since the item was written in it.
-- Staleness is git-only, computed by main: `writtenAt` from the commit that first added the item's title,
+- Staleness is git-only, computed by main: `writtenAt` from the commit that first added the item's heading (05 `itemAnchor`),
   `commitsSince` over the paths the body names, `gonePaths` the named paths missing. Level: any gone path →
   `stale`; else commits since → `moved`; else no history (home outside git) → `unknown`; else `fresh`. Cached in
   plugin data keyed by row key and HEAD sha.
@@ -116,7 +117,7 @@ Decisions (from the interview):
 - `W` sends the staleness sweep for the filtered repo to the assistant as a message: fix the file (remove landed
   items, rewrite drifted ones, keep the rest), land per that repo's rules, report each change.
 - Keys: `x` mark, `c` add marked (or cursor) rows to the strip's cursor chunk or a new one, `u` take out of a chunk,
-  `r` rename the chunk, `s` start the cursor row's or strip cursor's chunk, `S` start every unstarted chunk, `H`
+  `r` rename the chunk, `s` start the cursor row's or strip cursor's chunk, `S` start every unstarted chunk the strip shows (only the filtered repo's while a repo filter is on), `H`
   toggle the chunk's headless flag, `gl` commits since written, `W` sweep, `Space v b` assistant pane, `Space v r`
   repo picker, `Space v a` ready only (kept), `Space v c` hide chunked, `Space v s` stale first, `Space v d` done
   (kept). The strip is a pane the core's focus keys reach (`Alt+j` from the table); `h`/`l` move in it.
@@ -140,7 +141,9 @@ Architecture decisions (design review):
   two reads, the service re-runs `checkAsk` and launches for the scope's current state, where Practice refused
   `<slug> has no interviewer; ask again.` The generic store cannot say an attempt changed, and the race needs a
   problem reopened as due during an ask; the page already moves to the new attempt (`scopeOpened(null)` then
-  `scopeOpened(slug)`).
+  `scopeOpened(slug)`). Likewise a launch whose scope changes between `checkAsk` and `store.write` stores its record
+  on the scope's state at write time (Practice: the new attempt, which then resumes the launched conversation); no
+  test pins it.
 - Practice's Run (`Cmd+'`) and Submit (`Cmd+Enter`) move into `scoped-agents.ask` so the interviewer's box keeps
   them; they do nothing while Practice is hidden (04).
 - During waves 3–4 the old Backlog page still compiles: 06 stops serving the removed invokes but keeps their
@@ -169,8 +172,10 @@ export interface ScopedAgentRecord { sessionId: string; hostSessionId: string }
 // backlog: one JSON file in its plugin data.
 export interface ScopedAgentStore {
   read(scope: string): Promise<ScopedAgentRecord | null>;
+  // Writes to the scope's state as it is when the write runs.
   write(scope: string, record: ScopedAgentRecord | null): Promise<void>;
   // Every scope's record, for scopeOf and following /clear's new host id.
+  // Never rejects for one scope's failure: it leaves that scope out.
   entries(): Promise<{ scope: string; record: ScopedAgentRecord }[]>;
   // The record a fresh launch for `scope` replaces, closed after the launch; null for none.
   superseded(scope: string): Promise<ScopedAgentRecord | null>;
@@ -180,7 +185,7 @@ export interface ScopedAgentStore {
 export interface ScopedAgentSpec {
   owner: string;                                  // the host's manifest id: 'practice', 'backlog'
   agentId: string;                                // unique within its owner: 'interviewer', 'assistant'
-  folder(scope: string): string;
+  folder(scope: string): string;                 // chat gets it as projectDir, so sessionOpened names it
   instructions(scope: string): Promise<string>;
   title(scope: string): Promise<string>;          // the resumed row's title
   store: ScopedAgentStore;
@@ -263,8 +268,9 @@ the oldest non-merge commit whose diff added `text` to `path` (`git log -S`), `p
 
 Backlog settings after the change: `tags` (kept for notes), `layout`, `launchBrief`, `repoFolders` (`[] as RepoFolderSetting[]`).
 
-Boundary rules: backlog's manifest adds `chat`, `sessions` and `scoped-agents` to `dependsOn.main` and `chat` and
-`scoped-agents` to `dependsOn.page`; practice's adds `scoped-agents` to both and its page drops `chat` (`mountChat`
+Boundary rules: backlog's manifest adds `chat`, `sessions` and `scoped-agents` to `dependsOn.main` and
+`scoped-agents` to `dependsOn.page` and `sessions` to `reads.page` (the page runs `sessionsSelectRowCommand` by key;
+`mountChat` comes through scoped-agents); practice's adds `scoped-agents` to both and its page drops `chat` (`mountChat`
 was its only use). No plugin imports another's files
 beyond its `contract.ts`.
 
