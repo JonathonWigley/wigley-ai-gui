@@ -465,6 +465,7 @@ describe('backlog tools', () => {
       const store = createChunkStore({
         data,
         randomHex: () => 'new',
+        clock: { now: () => 0 },
         restored: async () => undefined,
         isHeld: () => true,
         log: () => undefined,

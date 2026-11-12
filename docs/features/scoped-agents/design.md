@@ -82,11 +82,12 @@ registrations.
 - **Resume.** `sessionOf(scope)` resolves the stored session id, or null when the scope has none. When chat no longer
   holds the row, it resumes it through chat's main `resume`, with the spec's title, instructions and owner, and writes
   the new row id with the same host id. Concurrent calls for one scope share one resume.
-- **Cleared resume.** A resume chat refuses logs `<agentId> <sessionId> not resumed, so cleared: <error>`, writes a
-  null record for the scope, and `sessionOf` resolves null. The next ask launches a fresh session.
+- **Cleared resume.** A resume chat refuses writes a null record for the scope, then logs
+  `<agentId> <sessionId> not resumed, so cleared: <error>`, and `sessionOf` resolves null. A failed write rejects
+  `sessionOf` with no log. The next ask launches a fresh session.
 - **`/clear`.** The plugin hears chat's `sessionOpened`, `sessionClosed` and `sessionCleared` once, for every
   registration. A clear moves the row to a new host id; the registration whose `entries()` holds the row writes the
-  new host id, so a later resume brings back the cleared conversation.
+  new host id in the scope's turn, and only while the scope's record still holds the row, so a later resume brings back the cleared conversation.
 - **`scopeOf(session)`** names the first scope in `entries()` whose record holds the session's row id or host id, and
   null for any other session.
 
@@ -111,7 +112,7 @@ registrations.
     or null drops both. Practice passes the open problem's slug, and calls `scopeOpened(null)` then
     `scopeOpened(slug)` when the attempt changes, so a fresh attempt drops them too; Backlog passes `global` once.
   - `refresh()` reads `sessionOf` again after an ask the host made itself (Backlog's sweep): while the pane shows, an
-    answered session replaces the ask box. A hidden pane reads nothing.
+    answered session replaces the ask box, or a mount of another session. A hidden pane reads nothing.
   - `redraw()` draws the ask box again; the page part redraws every pane on a layout set, so a host calls it only
     when its heading changes
   - `hostTookKeys()` hears the keys leave the pane; `modeHidden()` gives them back as the mode hides

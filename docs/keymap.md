@@ -98,7 +98,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping
   focus in the list (the docs tree, the Sessions list, the Settings sections, the Practice list). `a` on
   the Practice list starts an import. Backlog's own keys (the table's `Enter` activate, `x` mark, `c` chunk, `u` unchunk,
-  `r` rename, `s`/`S` start, `H` headless, `gl` commits since, `W` sweep, and the strip's `h`/`l` and `Enter`) are listed in
+  `r` rename, `s`/`S` start (`S` skips started and empty chunks), `H` headless, `gl` commits since, `W` sweep, and the strip's `h`/`l` and `Enter`) are listed in
   `docs/features/backlog/design.md` § The mode. The Sessions
   list's cursor row also takes `s` favorite its project, `J`/`K` move its project among the favorites, `r` rename
   and `d` close, as the docs tree's `s`, `r` and `d` do; `Esc` returns to the focused pane.

@@ -823,6 +823,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     const store = createChunkStore({
       data: api.data,
       randomHex: services.randomHex,
+      clock: services.clock,
       restored: () => chat.restored(),
       isHeld: (sessionId) => chat.profileOf(sessionId) !== null,
       log: services.log,
@@ -842,6 +843,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     const starter = createChunkStarter({
       store,
       rows: lastRows,
+      prunableTitles,
       chat,
       launchBrief: () => api.settings().launchBrief,
       log: services.log,

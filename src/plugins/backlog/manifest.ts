@@ -51,7 +51,7 @@ export const backlogManifest = definePlugin({
     renameChunk: { label: 'rename the chunk', group: 'chunks', runsIn: 'page' },
     startChunk: { label: 'start the chunk', group: 'chunks', runsIn: 'page' },
     startAllChunks: {
-      label: 'start every shown unstarted chunk',
+      label: 'start every shown unstarted chunk with titles',
       group: 'chunks',
       runsIn: 'page',
     },
