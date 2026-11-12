@@ -582,22 +582,19 @@ describe('backlog pane targets', () => {
     { focus: 'table', direction: 'left', first: 'tableWidth nudge' },
     { focus: 'review', direction: 'left', first: 'assistantWidth nudge' },
     { focus: 'strip', direction: 'up', first: 'stripHeight nudge' },
-  ])(
-    'resizeTarget_ByFocus: $focus',
-    async ({ focus, direction, first }) => {
-      const setup = await backlogSetup();
-      if (focus === 'review') {
-        setup.move('right');
-      } else if (focus === 'strip') {
-        setup.move('down');
-      }
-      splitCalls.length = 0;
+  ])('resizeTarget_ByFocus: $focus', async ({ focus, direction, first }) => {
+    const setup = await backlogSetup();
+    if (focus === 'review') {
+      setup.move('right');
+    } else if (focus === 'strip') {
+      setup.move('down');
+    }
+    splitCalls.length = 0;
 
-      setup.resizeTarget()?.nudge(direction);
+    setup.resizeTarget()?.nudge(direction);
 
-      expect(splitCalls[0]).toBe(first);
-    },
-  );
+    expect(splitCalls[0]).toBe(first);
+  });
 
   it('assistantPane_TookKeys_FocusAssistantNoScopeSet', async () => {
     const setup = await backlogSetup();

@@ -117,9 +117,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
     api.channel.on('stalenessRead', ({ entries }) =>
       view.stalenessRead(entries),
     );
-    api.channel.on('chunksChanged', ({ chunks }) =>
-      view.chunksChanged(chunks),
-    );
+    api.channel.on('chunksChanged', ({ chunks }) => view.chunksChanged(chunks));
     view.load();
 
     return {

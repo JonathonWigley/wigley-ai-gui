@@ -60,7 +60,14 @@ function chunk(
   titles: string[],
   sessionId: string | null = null,
 ): BacklogChunk {
-  return { id, repo, name: titles[0] ?? id, titles, headless: false, sessionId };
+  return {
+    id,
+    repo,
+    name: titles[0] ?? id,
+    titles,
+    headless: false,
+    sessionId,
+  };
 }
 
 function staleness(
@@ -194,9 +201,10 @@ describe('visibleRows', () => {
       'c1',
       null,
     ]);
-    expect(visibleRows(state, fakeFuzzyMatcher).map((row) => row.key)).toEqual(
-      [rowKey('alpha', 'Kept'), rowKey('beta', 'Chunked')],
-    );
+    expect(visibleRows(state, fakeFuzzyMatcher).map((row) => row.key)).toEqual([
+      rowKey('alpha', 'Kept'),
+      rowKey('beta', 'Chunked'),
+    ]);
   });
 
   it('visibleRows_StaleFirst_OrdersByLevelStably', () => {

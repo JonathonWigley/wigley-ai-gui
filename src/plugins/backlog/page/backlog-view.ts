@@ -1234,9 +1234,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     },
     toggleCommits() {
       dispatch({ type: 'toggleCommits' });
-      deps.log(
-        store.get().isCommitsShown ? 'commits shown' : 'commits hidden',
-      );
+      deps.log(store.get().isCommitsShown ? 'commits shown' : 'commits hidden');
     },
     sweep() {
       const { repo } = store.get();
