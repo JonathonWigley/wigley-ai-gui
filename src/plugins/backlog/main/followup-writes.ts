@@ -3,14 +3,21 @@ import { errorText } from '../../../shared/error-text';
 import {
   applyFollowupEdit,
   type FollowupDraft,
+  type FollowupEdit,
   type FollowupItem,
   newFollowupsFile,
   parseFollowups,
 } from '../../../shared/followups/followup-file';
 import type { DocsMainExports } from '../../docs/contract';
-import type { BacklogEdit, BacklogWriteResult } from '../contract';
+import type { BacklogWriteResult } from '../contract';
 
 export type FollowupWriteDeps = Pick<DocsMainExports, 'readDoc' | 'writeDoc'>;
+
+// A follow-up write `fileNote` makes: a new item, or an edit carrying
+// `baseline`, the item as it read before the edit.
+export type NoteEdit =
+  | Extract<FollowupEdit, { type: 'create' }>
+  | (Extract<FollowupEdit, { type: 'edit' }> & { baseline: FollowupDraft });
 
 // What one write attempt over a known disk text came to: a result to return,
 // or the newer disk text the guarded write found.
@@ -45,7 +52,7 @@ function matchesBaseline(item: FollowupItem, baseline: FollowupDraft): boolean {
 // The edited item as `diskText` holds it when it changed from the edit's
 // baseline; null when it is unchanged or gone.
 function changedOnDisk(
-  edit: Extract<BacklogEdit, { type: 'edit' }>,
+  edit: Extract<NoteEdit, { type: 'edit' }>,
   diskText: string,
 ): FollowupDraft | null {
   const item = parseFollowups(diskText).items.find(
@@ -61,7 +68,7 @@ function changedOnDisk(
 async function attempt(
   deps: FollowupWriteDeps,
   path: string,
-  edit: BacklogEdit,
+  edit: NoteEdit,
   newFileRepo: string | null,
   diskText: string,
 ): Promise<Attempt> {
@@ -101,7 +108,7 @@ async function attempt(
 
 // Applies `edit` to the follow-up file at `path` through Docs' guarded write.
 // A missing or empty file starts from `newFollowupsFile(newFileRepo)`; with
-// `newFileRepo` null, an edit, setTags or delete there is `missing`. An edit
+// `newFileRepo` null, an edit there is `missing`. An edit
 // whose item on disk differs from its `baseline` is `changed`, carrying the
 // item as it reads on disk. When the disk changed since the read, the edit
 // re-applies once to the new disk text; a second change, or a write the guard
@@ -109,7 +116,7 @@ async function attempt(
 export async function writeFollowupEdit(
   deps: FollowupWriteDeps,
   path: string,
-  edit: BacklogEdit,
+  edit: NoteEdit,
   newFileRepo: string | null,
 ): Promise<BacklogWriteResult> {
   const first = await attempt(

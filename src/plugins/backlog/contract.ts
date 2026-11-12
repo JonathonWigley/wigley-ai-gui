@@ -1,6 +1,6 @@
 // The backlog plugin's channel between its main and page parts: every
-// features home's follow-ups, plans and features, read through the docs
-// index, and the follow-up writes and commit the main part makes.
+// features home's follow-ups, read through the docs index, each open
+// follow-up's staleness, and the chunks the main part stores and starts.
 
 import type { CommandKey } from '../../contracts/commands';
 import type { GitCommit } from '../../contracts/git';
@@ -22,6 +22,7 @@ import type {
 // worktree copy when that copy's `plan.md` links the task, else `path`.
 // `status` is its `Status:` line, null when absent; a worktree copy's line
 // whose value is not a task status reads as null.
+// Removed in 08: main no longer serves this.
 export interface BacklogTask {
   path: string;
   copyPath: string;
@@ -35,6 +36,7 @@ export interface BacklogTask {
 // heading less a trailing ` — plan`, else the plan folder's name; `target`
 // and `written` from its `Target: … · Written: …` line, each null when
 // absent.
+// Removed in 08: main no longer serves this.
 export interface BacklogPlan {
   path: string;
   copyPath: string;
@@ -48,6 +50,7 @@ export interface BacklogPlan {
 }
 
 // `path` is the feature's `checklist.md`.
+// Removed in 08: main no longer serves this.
 export interface BacklogFeature {
   path: string;
   slug: string;
@@ -66,8 +69,6 @@ export interface BacklogFollowupFile {
 // folder the home is (compared on real paths); null for any other home, which
 // counts as not in git. A home that is a linked worktree's `docs/features`
 // folder is no home.
-// `uncommitted`: a follow-up file, or a file in a folder of the home's
-// `followups-images/`, differs from HEAD.
 // `repoFolder`: the folder the repo's sessions start in and its follow-ups'
 // named paths resolve against: the folder above `docs/features` for a home of
 // that shape in a clone, else the `repoFolders` setting's folder for the repo;
@@ -77,10 +78,13 @@ export interface BacklogHome {
   root: string;
   isCreateTarget: boolean;
   gitRoot: string | null;
+  // Removed in 08: main no longer serves this. Main fills false.
   uncommitted: boolean;
   repoFolder: string | null;
   followupFiles: BacklogFollowupFile[];
+  // Removed in 08: main no longer serves this. Main fills [].
   plans: BacklogPlan[];
+  // Removed in 08: main no longer serves this. Main fills [].
   features: BacklogFeature[];
 }
 
@@ -120,8 +124,35 @@ export interface BacklogRead {
   message: string | null;
 }
 
+// A named group of one repo's follow-ups for one session, in strip order.
+// `titles` are its follow-ups' titles in its order; each one's row key is
+// `rowKey(repo, title)`. `sessionId` is the session it started, null until it
+// starts; a started chunk is retired when that session closes.
+export interface BacklogChunk {
+  id: string;
+  repo: string;
+  name: string;
+  titles: string[];
+  headless: boolean;
+  sessionId: string | null;
+}
+
+// One change to the chunks. `add` with `chunkId` null makes a new chunk named
+// after the first key's title.
+export type ChunkEdit =
+  | { type: 'add'; keys: RowKey[]; chunkId: string | null }
+  | { type: 'remove'; keys: RowKey[] }
+  | { type: 'rename'; chunkId: string; name: string }
+  | { type: 'setHeadless'; chunkId: string; headless: boolean };
+
+// One chunk's start: the session it started, or why it did not start.
+export type ChunkStart =
+  | { chunkId: string; sessionId: string }
+  | { chunkId: string; refusal: string };
+
 // A follow-up edit as the page sends it. An `edit` carries `baseline`, the
 // item as the editor opened it.
+// Removed in 08: main no longer serves this.
 export type BacklogEdit =
   | Exclude<FollowupEdit, { type: 'edit' }>
   | (Extract<FollowupEdit, { type: 'edit' }> & { baseline: FollowupDraft });
@@ -181,14 +212,12 @@ export const backlogMainKey: DependencyKey<
   'backlog'
 > = { id: 'backlog', process: 'main' };
 
-// One follow-up edit landing, from the page or `fileNote`: a `setTags` is an
-// edit, and a `fileNote` append edits the item it adds to. A refused edit fires
-// none, and neither does a commit. `changed` stays the page's channel, since a
-// file watch has no item to name.
+// One `fileNote` write landing: a create, or an append, which edits the item
+// it adds to. A refused write fires none. `changed` stays the page's channel,
+// since a file watch has no item to name.
 export interface BacklogMainEvents extends EventShape {
   followupCreated: { homeRoot: string; title: string };
   followupEdited: { homeRoot: string; title: string };
-  followupDeleted: { homeRoot: string; title: string };
 }
 
 // Every method rejects with main's own error text when its handler throws.
@@ -197,15 +226,18 @@ export interface BacklogChannel extends ChannelShape {
     load(): Promise<BacklogRead>;
     // Rebuilds the machine index, then loads.
     rescan(): Promise<BacklogRead>;
+    // Removed in 08: main no longer serves this.
     readDoc(path: string): Promise<string>;
     // `path` null: the home's create target file, created when missing; else
     // one of the home's follow-up files.
+    // Removed in 08: main no longer serves this.
     applyEdit(
       homeRoot: string,
       path: string | null,
       edit: BacklogEdit,
     ): Promise<BacklogWriteResult>;
     // Rejects with the git error text; resolves to the commit message used.
+    // Removed in 08: main no longer serves this.
     commit(homeRoot: string): Promise<string>;
     // The last load's open rows with a cached staleness still valid; main
     // reads the rest one row at a time and sends them in `stalenessRead`.
@@ -214,15 +246,26 @@ export interface BacklogChannel extends ChannelShape {
     // names, newest first, read now. Rejects with `No Backlog row <key>`, its
     // newline shown as ` — `, when the last load holds no such row.
     commitsSince(key: RowKey): Promise<GitCommit[]>;
+    // The stored chunks, in strip order.
+    chunks(): Promise<BacklogChunk[]>;
+    // Applies one edit, after dropping the titles the last load's rows no
+    // longer hold from unstarted chunks and retiring each started chunk whose
+    // session chat no longer holds; resolves to the chunks after it. A refused
+    // edit rejects with the reason and changes nothing.
+    editChunks(edit: ChunkEdit): Promise<BacklogChunk[]>;
+    // Starts each chunk in order through chat's `launch`: one result per id,
+    // in order.
+    startChunks(chunkIds: string[]): Promise<ChunkStart[]>;
   };
   messages: {
-    // A listed follow-up file changed, or a linked worktree's `docs/features`
-    // or the worktree list of an in-git home's clone changed (`homeRoot` its
-    // home), or the machine index reloaded or the `repoFolders` setting changed
-    // (`homeRoot` null).
+    // A listed follow-up file changed or `fileNote` wrote to it (`homeRoot`
+    // its home), or the machine index reloaded or the `repoFolders` setting
+    // changed (`homeRoot` null).
     changed: { homeRoot: string | null };
     // Staleness read since the last `stalenessRead`, ten rows or fewer.
     stalenessRead: { entries: Record<RowKey, BacklogStaleness> };
+    // The chunks after a change to them, in strip order.
+    chunksChanged: { chunks: BacklogChunk[] };
   };
 }
 

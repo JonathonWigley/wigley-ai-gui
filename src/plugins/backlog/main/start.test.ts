@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Files } from '../../../contracts/files';
-import type { Git, GitCommit, GitWorktree } from '../../../contracts/git';
+import type { Git, GitCommit } from '../../../contracts/git';
 import {
-  type FollowupDraft,
   followupTitleProblem,
   parseFollowups,
 } from '../../../shared/followups/followup-file';
@@ -15,15 +14,21 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
+  type ChatMainExports,
+  chatMainKey,
+  type SessionCloseReason,
+} from '../../chat/contract';
+import {
   type DocsMainExports,
   docsMainKey,
   type IndexEntry,
   type SourceRead,
 } from '../../docs/contract';
 import type {
-  BacklogEdit,
+  BacklogChunk,
   BacklogMainExports,
   BacklogRead,
+  ChunkStart,
   NoteTarget,
 } from '../contract';
 import type { backlogManifest } from '../manifest';
@@ -33,16 +38,6 @@ const CLONE = '/dev/r';
 const HOME = `${CLONE}/docs/features`;
 const FOLLOWUPS = `${HOME}/followups.md`;
 const UI_FOLLOWUPS = `${HOME}/followups/ui.md`;
-const PLAN_DIR = `${HOME}/f/plan-p`;
-const PLAN = `${PLAN_DIR}/plan.md`;
-const MAIN_TREE: GitWorktree = { path: CLONE, branch: 'main', isMain: true };
-const WORKTREE: GitWorktree = {
-  path: `${CLONE}/.worktrees/w`,
-  branch: 'w',
-  isMain: false,
-};
-const WORKTREE_PLAN_DIR = `${WORKTREE.path}/docs/features/f/plan-p`;
-
 const FOLLOWUPS_TEXT = [
   '# Follow-ups — r',
   '',
@@ -151,12 +146,6 @@ function indexRead(entries: IndexEntry[]): SourceRead {
   };
 }
 
-// A plan.md holding `boxes` under `## Tasks`, each a line such as
-// `- [x] [01 — A](01-a.md)`.
-function planText(...boxes: string[]): string {
-  return ['# P — plan', '', '## Tasks', '', ...boxes, ''].join('\n');
-}
-
 function missingFile(path: string): Error {
   return Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' });
 }
@@ -193,17 +182,21 @@ function callsOf(calls: [string, string][], name: string): string[] {
   return calls.filter(([called]) => called === name).map(([, path]) => path);
 }
 
-// The first home's first follow-up as an editor draft.
-function firstFollowupDraft(read: BacklogRead): FollowupDraft {
-  const { title, oneLine, tags, body } =
-    read.homes[0].followupFiles[0].items[0];
-  return { title, oneLine, tags, body };
+// A chunk of repo `r`, unstarted unless `sessionId` says otherwise.
+function chunkOf(
+  id: string,
+  titles: string[],
+  sessionId: string | null = null,
+): BacklogChunk {
+  return { id, repo: 'r', name: id, titles, headless: false, sessionId };
 }
 
 // Backlog's main part over a fake docs export serving `disk` and an index of
 // `entries`. `invoke` calls a channel handler; `exports` are the part's;
 // `sent` holds each message; `watched` lists each live watch; `emit` fires a
-// docs event at backlog. `links` maps a symlinked path to its real path.
+// docs or chat event at backlog. `links` maps a symlinked path to its real path.
+// `chat` is a fake chat export whose `launch` resolves to `sess-1` and holds
+// it; `held` lists the sessions its `profileOf` knows.
 // `calls` lists each docs read, write and trash in order; a path in `refuse`
 // makes its `writeDoc` or `writeBytes` reject with that reason. `listed` is
 // what `Files` reads, `realPath` aside, seeded with every `disk` file at time
@@ -239,6 +232,16 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const data = createMemoryFiles();
   let settings = SETTINGS;
   const settingsListeners: ((next: BacklogSettings) => void)[] = [];
+  const held = new Set<string>();
+  const chat = {
+    launch: vi.fn<ChatMainExports['launch']>(async () => {
+      held.add('sess-1');
+      return 'sess-1';
+    }),
+    defaultProfile: () => 'work',
+    profileOf: (sessionId: string) => (held.has(sessionId) ? 'work' : null),
+    restored: async () => undefined,
+  };
   const docs: DocsMainExports = {
     addSource: () => ({ dispose: () => undefined }),
     machineIndex: async () => index.read,
@@ -298,8 +301,9 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       runMode: 'live',
       homeDir: '/home/me',
       log: (message: string) => logged.push(message),
+      randomHex: () => 'c-new',
     },
-    dependency: () => docs,
+    dependency: (key: { id: string }) => (key.id === 'chat' ? chat : docs),
     settings: () => settings,
     onSettingsChanged: (listener: (next: BacklogSettings) => void) => {
       settingsListeners.push(listener);
@@ -337,6 +341,12 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     git,
     index,
     data,
+    chat,
+    held,
+    // The chunks `chunks.json` holds.
+    savedChunks: async (): Promise<BacklogChunk[]> =>
+      (JSON.parse(await data.read('chunks.json')) as { chunks: BacklogChunk[] })
+        .chunks,
     pushSettings: (next: BacklogSettings) => {
       settings = next;
       for (const listener of settingsListeners) {
@@ -354,8 +364,8 @@ function settle(): Promise<void> {
 }
 
 // Backlog's main part on the harness over a docs fake that lists FOLLOWUPS and
-// files each watch under the part, as docs' view does. `watched` lists each live
-// watch's path.
+// files each watch under the part, as docs' view does, and a chat fake that
+// holds no session. `watched` lists each live watch's path.
 function startBacklogOnHarness() {
   const watched: string[] = [];
   const docs = fakeDependency(
@@ -372,8 +382,16 @@ function startBacklogOnHarness() {
         },
       }) as unknown as DocsMainExports,
   );
+  const chat = fakeDependency(
+    chatMainKey,
+    () =>
+      ({
+        restored: async () => undefined,
+        profileOf: () => null,
+      }) as unknown as ChatMainExports,
+  );
   const harness = startMainPart(backlogMainPart, {
-    dependencies: [docs],
+    dependencies: [docs, chat],
     services: { git: fakeGit(), runMode: 'live' },
   });
   return { harness, watched };
@@ -395,7 +413,6 @@ describe('backlog main part', () => {
       root: HOME,
       gitRoot: CLONE,
       isCreateTarget: true,
-      uncommitted: false,
       repoFolder: CLONE,
     });
     expect(
@@ -531,29 +548,6 @@ describe('backlog main part', () => {
     });
   });
 
-  it.each([
-    { changed: 'docs/features/followups.md', uncommitted: true },
-    { changed: 'docs/features/followups-images/F/1.png', uncommitted: true },
-    { changed: 'docs/features/f/notes.md', uncommitted: false },
-    { changed: 'docs/features/followups-images/.DS_Store', uncommitted: false },
-  ])(
-    'load with $changed changed: uncommitted $uncommitted',
-    async ({ changed, uncommitted }) => {
-      const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-        [FOLLOWUPS]: FOLLOWUPS_TEXT,
-      });
-      backlog.git.changedPaths.mockResolvedValue([changed]);
-
-      const read = await backlog.invoke<BacklogRead>('load');
-
-      expect(read.homes[0].uncommitted).toBe(uncommitted);
-      expect(backlog.git.changedPaths).toHaveBeenCalledWith(
-        CLONE,
-        'docs/features',
-      );
-    },
-  );
-
   it('load_CreateTargetFileOnDiskNotIndexed_Listed', async () => {
     const backlog = startBacklog([entry('followup', UI_FOLLOWUPS)], {
       [UI_FOLLOWUPS]: UI_TEXT,
@@ -597,241 +591,6 @@ describe('backlog main part', () => {
     expect(backlog.logged).toEqual([expect.stringContaining(UI_FOLLOWUPS)]);
   });
 
-  it.each([
-    ['# Backlog mode — plan\n', 'Backlog mode'],
-    ['# Backlog mode\n', 'Backlog mode'],
-    ['No heading here.\n', 'plan-backlog'],
-  ])('load_PlanHeading %j_Title %s', async (heading, title) => {
-    const planPath = `${HOME}/backlog/plan-backlog/plan.md`;
-    const backlog = startBacklog(
-      [entry('plan', planPath, { feature: 'backlog', checked: 2, total: 9 })],
-      {
-        [planPath]: `${heading}\nFeature: Backlog\nTarget: gui \`main\` · Written: 2026-10-26\n`,
-      },
-    );
-
-    const read = await backlog.invoke<BacklogRead>('load');
-
-    expect(read.homes[0].plans).toEqual([
-      {
-        path: planPath,
-        copyPath: planPath,
-        feature: 'backlog',
-        title,
-        checked: 0,
-        total: 0,
-        target: 'gui `main`',
-        written: '2026-10-26',
-        tasks: [],
-      },
-    ]);
-  });
-
-  it.each<{
-    name: string;
-    meta: { checked: number; total: number };
-    tasks: [file: string, status: string][];
-    files: [path: string, text: string, time: number][];
-    trees: GitWorktree[];
-    plan: {
-      copyPath: string;
-      checked: number;
-      total: number;
-      tasks: [copyPath: string, status: string | null][];
-    };
-  }>([
-    {
-      name: 'boxes under Tasks only',
-      meta: { checked: 0, total: 9 },
-      tasks: [],
-      files: [
-        [
-          PLAN,
-          [
-            '# P — plan',
-            '',
-            '## Preconditions',
-            '',
-            '- [x] ready',
-            '',
-            '## Tasks',
-            '',
-            '- [x] one',
-            '- [ ] two',
-            '- [ ] three',
-            '',
-          ].join('\n'),
-          0,
-        ],
-      ],
-      trees: [MAIN_TREE],
-      plan: { copyPath: PLAN, checked: 1, total: 3, tasks: [] },
-    },
-    {
-      name: 'a newer worktree copy ahead of main',
-      meta: { checked: 0, total: 2 },
-      tasks: [
-        ['01-a.md', 'not started'],
-        ['02-b.md', 'not started'],
-      ],
-      files: [
-        [PLAN, planText('- [ ] [A](01-a.md)', '- [ ] [B](02-b.md)'), 0],
-        [`${PLAN_DIR}/01-a.md`, 'Status: not started\n', 0],
-        [
-          `${WORKTREE_PLAN_DIR}/plan.md`,
-          planText('- [ ] [A](01-a.md)', '- [x] [B](02-b.md)'),
-          10,
-        ],
-        [`${WORKTREE_PLAN_DIR}/01-a.md`, 'Status: in progress\n', 10],
-        [`${WORKTREE_PLAN_DIR}/02-b.md`, 'Status: done\n', 10],
-      ],
-      trees: [MAIN_TREE, WORKTREE],
-      plan: {
-        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
-        checked: 1,
-        total: 2,
-        tasks: [
-          [`${WORKTREE_PLAN_DIR}/01-a.md`, 'in progress'],
-          [`${WORKTREE_PLAN_DIR}/02-b.md`, 'done'],
-        ],
-      },
-    },
-    {
-      name: 'an equal-time worktree copy',
-      meta: { checked: 2, total: 9 },
-      tasks: [['01-a.md', 'done']],
-      files: [
-        [PLAN, planText('- [ ] [A](01-a.md)', '- [ ] [B](02-b.md)'), 10],
-        [`${PLAN_DIR}/01-a.md`, 'Status: not started\n', 10],
-        [
-          `${WORKTREE_PLAN_DIR}/plan.md`,
-          planText('- [ ] [A](01-a.md)', '- [x] [B](02-b.md)'),
-          10,
-        ],
-        [`${WORKTREE_PLAN_DIR}/01-a.md`, 'Status: in progress\n', 10],
-      ],
-      trees: [MAIN_TREE, WORKTREE],
-      plan: {
-        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
-        checked: 1,
-        total: 2,
-        tasks: [[`${WORKTREE_PLAN_DIR}/01-a.md`, 'in progress']],
-      },
-    },
-    {
-      name: 'a task no line names keeps its index status',
-      meta: { checked: 0, total: 9 },
-      tasks: [
-        ['01-a.md', 'not started'],
-        ['09-extra.md', 'done'],
-      ],
-      files: [
-        [PLAN, planText('- [x] [A](01-a.md)'), 0],
-        [`${PLAN_DIR}/01-a.md`, 'Status: done\n', 0],
-        [`${PLAN_DIR}/09-extra.md`, 'Status: not started\n', 0],
-      ],
-      trees: [MAIN_TREE],
-      plan: {
-        copyPath: PLAN,
-        checked: 1,
-        total: 1,
-        tasks: [
-          [`${PLAN_DIR}/01-a.md`, 'done'],
-          [`${PLAN_DIR}/09-extra.md`, 'done'],
-        ],
-      },
-    },
-    {
-      name: 'an unreadable copy status keeps the index status',
-      meta: { checked: 0, total: 9 },
-      tasks: [['01-a.md', 'blocked']],
-      files: [
-        [PLAN, planText('- [ ] [A](01-a.md)'), 0],
-        [`${PLAN_DIR}/01-a.md`, 'Status: blocked\n', 0],
-      ],
-      trees: [MAIN_TREE],
-      plan: {
-        copyPath: PLAN,
-        checked: 0,
-        total: 1,
-        tasks: [[`${PLAN_DIR}/01-a.md`, 'blocked']],
-      },
-    },
-    {
-      name: 'a worktree copy reads its own status, a task it does not link the index',
-      meta: { checked: 0, total: 9 },
-      tasks: [
-        ['01-a.md', 'not started'],
-        ['09-extra.md', 'done'],
-      ],
-      files: [
-        [PLAN, planText('- [ ] [A](01-a.md)'), 0],
-        [`${PLAN_DIR}/01-a.md`, 'Status: not started\n', 0],
-        [`${PLAN_DIR}/09-extra.md`, 'Status: done\n', 0],
-        [`${WORKTREE_PLAN_DIR}/plan.md`, planText('- [ ] [A](01-a.md)'), 10],
-        [`${WORKTREE_PLAN_DIR}/01-a.md`, 'Status: blocked\n', 10],
-      ],
-      trees: [MAIN_TREE, WORKTREE],
-      plan: {
-        copyPath: `${WORKTREE_PLAN_DIR}/plan.md`,
-        checked: 0,
-        total: 1,
-        tasks: [
-          [`${WORKTREE_PLAN_DIR}/01-a.md`, null],
-          [`${PLAN_DIR}/09-extra.md`, 'done'],
-        ],
-      },
-    },
-  ])(
-    'load_PlanProgress_FromTheMovedCopy ($name)',
-    async ({ meta, tasks, files, trees, plan }) => {
-      const backlog = startBacklog(
-        [
-          entry('plan', PLAN, { feature: 'f', ...meta }),
-          ...tasks.map(([file, status]) =>
-            entry('task', `${PLAN_DIR}/${file}`, { plan: 'p', status }),
-          ),
-        ],
-        { [PLAN]: '# P — plan\n' },
-      );
-      backlog.git.worktrees.mockResolvedValue(trees);
-      for (const [path, text, time] of files) {
-        backlog.setTime(time);
-        await backlog.listed.write(path, text);
-      }
-
-      const read = await backlog.invoke<BacklogRead>('load');
-
-      expect(
-        read.homes[0].plans.map(
-          ({ copyPath, checked, total, tasks: rows }) => ({
-            copyPath,
-            checked,
-            total,
-            tasks: rows.map((task) => [task.copyPath, task.status]),
-          }),
-        ),
-      ).toEqual([plan]);
-    },
-  );
-
-  it('load_PlansInOneClone_ListWorktreesOnce', async () => {
-    const otherPlan = `${HOME}/g/plan-q/plan.md`;
-    const backlog = startBacklog(
-      [
-        entry('plan', PLAN, { feature: 'f' }),
-        entry('plan', otherPlan, { feature: 'g' }),
-      ],
-      { [PLAN]: planText('- [ ] one'), [otherPlan]: planText('- [ ] two') },
-    );
-    backlog.git.worktrees.mockResolvedValue([MAIN_TREE, WORKTREE]);
-
-    const read = await backlog.invoke<BacklogRead>('load');
-
-    expect(read.homes[0].plans.map((plan) => plan.total)).toEqual([1, 1]);
-    expect(backlog.git.worktrees).toHaveBeenCalledTimes(1);
-  });
-
   it('load_CalledWhileOneRuns_LaterCallsShareOneNextLoad', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
       [FOLLOWUPS]: FOLLOWUPS_TEXT,
@@ -855,82 +614,6 @@ describe('backlog main part', () => {
     expect(new Set(laterReads).size).toBe(1);
   });
 
-  it('load_PlanCopyFails_LoggedAndSkipped', async () => {
-    const backlog = startBacklog(
-      [entry('plan', PLAN, { feature: 'f', checked: 0, total: 1 })],
-      { [PLAN]: planText('- [ ] [A](01-a.md)') },
-    );
-    const { list } = backlog.listed;
-    vi.spyOn(backlog.listed, 'list').mockImplementation(
-      async (folder, options) => {
-        if (folder === PLAN_DIR) {
-          throw Object.assign(new Error(`EACCES: ${folder}`), {
-            code: 'EACCES',
-          });
-        }
-        return list(folder, options);
-      },
-    );
-
-    const read = await backlog.invoke<BacklogRead>('load');
-
-    expect(read.homes[0].plans).toEqual([]);
-    expect(backlog.logged).toEqual([expect.stringContaining(PLAN)]);
-  });
-
-  it('load_PlanWithoutWrittenDate_WrittenNull', async () => {
-    const planPath = `${HOME}/f/plan-p/plan.md`;
-    const backlog = startBacklog([entry('plan', planPath, { feature: 'f' })], {
-      [planPath]: '# P\n\nTarget: main\n',
-    });
-
-    const read = await backlog.invoke<BacklogRead>('load');
-
-    expect(read.homes[0].plans[0]).toMatchObject({
-      target: 'main',
-      written: null,
-    });
-  });
-
-  it('commit_OneFollowupFileChanged_CommitsOnlyIt', async () => {
-    const edited = FOLLOWUPS_TEXT.replace(
-      '- **Alpha** — first thing',
-      '- **Alpha** — *agent-ready*: first thing',
-    );
-    const backlog = startBacklog(
-      [entry('followup', FOLLOWUPS), entry('followup', UI_FOLLOWUPS)],
-      { [FOLLOWUPS]: edited, [UI_FOLLOWUPS]: UI_TEXT },
-    );
-    backlog.git.fileAtHead.mockImplementation(async (_root, path) =>
-      path === 'docs/features/followups.md' ? FOLLOWUPS_TEXT : UI_TEXT,
-    );
-    await backlog.invoke('load');
-
-    const message = await backlog.invoke('commit', HOME);
-
-    expect(message).toBe('Follow-ups edited in Backlog: tagged Alpha');
-    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
-      CLONE,
-      ['docs/features/followups.md'],
-      message,
-    );
-    expect(backlog.sent).toContainEqual(['changed', { homeRoot: HOME }]);
-  });
-
-  it('commit_UnbornHead_AllItemsAdded', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    backlog.git.fileAtHead.mockRejectedValue(
-      new Error('git cat-file exited 128: Not a valid object name HEAD'),
-    );
-    await backlog.invoke('load');
-
-    expect(await backlog.invoke('commit', HOME)).toBe(
-      'Follow-ups edited in Backlog: added Alpha',
-    );
-  });
-
   it('load_HomeInLinkedWorktree_Dropped', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
       [FOLLOWUPS]: FOLLOWUPS_TEXT,
@@ -950,12 +633,10 @@ describe('backlog main part', () => {
       { [`${elsewhere}/followups.md`]: FOLLOWUPS_TEXT },
     );
     backlog.git.topLevel.mockResolvedValue('/dev');
-    backlog.git.changedPaths.mockResolvedValue(['docs/features/followups.md']);
 
     const read = await backlog.invoke<BacklogRead>('load');
 
-    expect(read.homes[0]).toMatchObject({ gitRoot: null, uncommitted: false });
-    expect(backlog.git.changedPaths).not.toHaveBeenCalled();
+    expect(read.homes[0].gitRoot).toBeNull();
   });
 
   it('load_HomeOutsideLinkedWorktreesFeaturesFolder_KeptNotInGit', async () => {
@@ -999,148 +680,18 @@ describe('backlog main part', () => {
     ]);
   });
 
-  it('commit_HomeThroughSymlink_CommitsClonePaths', async () => {
+  it('load_HomeThroughSymlink_GitRootIsTheClone', async () => {
     const linked = '/link/features';
-    const linkedFollowups = `${linked}/followups.md`;
     const backlog = startBacklog(
-      [entry('followup', linkedFollowups, {}, linked)],
-      { [linkedFollowups]: FOLLOWUPS_TEXT },
+      [entry('followup', `${linked}/followups.md`, {}, linked)],
+      { [`${linked}/followups.md`]: FOLLOWUPS_TEXT },
     );
     backlog.links.set(linked, HOME);
-    backlog.git.changedPaths.mockImplementation(async (_root, pathspec) =>
-      pathspec === 'docs/features' ? ['docs/features/followups.md'] : [],
-    );
+
     const read = await backlog.invoke<BacklogRead>('load');
 
-    await backlog.invoke('commit', linked);
-
-    expect(read.homes[0]).toMatchObject({ gitRoot: CLONE, uncommitted: true });
-    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
-      CLONE,
-      ['docs/features/followups.md'],
-      'Follow-ups edited in Backlog: added Alpha',
-    );
+    expect(read.homes[0].gitRoot).toBe(CLONE);
   });
-
-  it('commit_OnlyHeaderChanged_PlainSubject', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT.replace('# Follow-ups — r', '# Follow-ups'),
-    });
-    backlog.git.fileAtHead.mockResolvedValue(FOLLOWUPS_TEXT);
-    await backlog.invoke('load');
-
-    expect(await backlog.invoke('commit', HOME)).toBe(
-      'Follow-ups edited in Backlog',
-    );
-    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
-      CLONE,
-      ['docs/features/followups.md'],
-      'Follow-ups edited in Backlog',
-    );
-  });
-
-  it.each([
-    { change: 'nothing changed', changed: [] },
-    {
-      change: 'only a stray file in the images folder changed',
-      changed: ['docs/features/followups-images/.chip.png.1a2b.tmp'],
-    },
-  ])('commit rejects and commits nothing when $change', async ({ changed }) => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    backlog.git.fileAtHead.mockResolvedValue(FOLLOWUPS_TEXT);
-    backlog.git.changedPaths.mockResolvedValue(changed);
-    await backlog.invoke('load');
-
-    await expect(backlog.invoke('commit', HOME)).rejects.toThrow(HOME);
-    expect(backlog.git.commitPaths).not.toHaveBeenCalled();
-  });
-
-  it('applyEdit_NoPath_CreatesTheCreateTargetFile', async () => {
-    const backlog = startBacklog([entry('followup', UI_FOLLOWUPS)], {
-      [UI_FOLLOWUPS]: UI_TEXT,
-    });
-    await backlog.invoke('load');
-
-    const result = await backlog.invoke('applyEdit', HOME, null, {
-      type: 'create',
-      draft: { title: 'New', oneLine: 'a new one', tags: [], body: '' },
-    });
-
-    expect(result).toMatchObject({ type: 'applied' });
-    expect(backlog.files.get(FOLLOWUPS)).toContain('# Follow-ups — r');
-    expect(backlog.files.get(FOLLOWUPS)).toContain('## New');
-  });
-
-  it('applyEdit_PathNotTheHomesFollowupFile_Refused', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    await backlog.invoke('load');
-    const other = `${HOME}/backlog/design.md`;
-
-    const result = await backlog.invoke('applyEdit', HOME, other, {
-      type: 'delete',
-      title: 'Alpha',
-    });
-
-    expect(result).toEqual({
-      type: 'refused',
-      reason: `${other} is not a follow-up file of ${HOME}`,
-    });
-  });
-
-  it('applyEdit_TitleWouldNotReadBack_RefusedWithTheProblem', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    await backlog.invoke('load');
-
-    const result = await backlog.invoke('applyEdit', HOME, null, {
-      type: 'create',
-      draft: { title: ' ', oneLine: '', tags: [], body: '' },
-    });
-
-    expect(result).toEqual({
-      type: 'refused',
-      reason: followupTitleProblem(' '),
-    });
-    expect(backlog.files.get(FOLLOWUPS)).toBe(FOLLOWUPS_TEXT);
-  });
-
-  it.each<(item: FollowupDraft) => BacklogEdit>([
-    (item) => ({ type: 'setTags', title: item.title, tags: ['agent-ready'] }),
-    (item) => ({
-      type: 'edit',
-      title: item.title,
-      draft: { ...item, body: 'New body.' },
-      baseline: item,
-    }),
-  ])(
-    'applyEdit_ExistingTitleWouldNotReadBackAndKept_RefusedPointingToDocs %#',
-    async (editOf) => {
-      const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-        [FOLLOWUPS]: BAD_TITLE_FOLLOWUPS_TEXT,
-      });
-      const read = await backlog.invoke<BacklogRead>('load');
-      const item = firstFollowupDraft(read);
-
-      const result = await backlog.invoke(
-        'applyEdit',
-        HOME,
-        FOLLOWUPS,
-        editOf(item),
-      );
-
-      expect(item.title).toBe('Wrap this:');
-      expect(result).toEqual({
-        type: 'refused',
-        reason: expect.stringContaining('Wrap this:'),
-      });
-      expect(backlog.files.get(FOLLOWUPS)).toBe(BAD_TITLE_FOLLOWUPS_TEXT);
-    },
-  );
 
   it('watch_FollowupFileChanged_SendsChangedWithHomeRoot', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
@@ -1151,56 +702,6 @@ describe('backlog main part', () => {
     backlog.watched.find((watch) => watch.path === FOLLOWUPS)?.changed();
 
     expect(backlog.sent).toEqual([['changed', { homeRoot: HOME }]]);
-  });
-
-  it.each<{ name: string; seed: string[]; write: string; sends: boolean }>([
-    {
-      name: 'a linked worktree copy edited',
-      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
-      write: `${WORKTREE_PLAN_DIR}/01-a.md`,
-      sends: true,
-    },
-    {
-      name: 'a worktree added',
-      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
-      write: `${CLONE}/.git/worktrees/x/HEAD`,
-      sends: true,
-    },
-    {
-      name: 'the first worktree added',
-      seed: [`${CLONE}/.git/HEAD`],
-      write: `${CLONE}/.git/worktrees/x/HEAD`,
-      sends: true,
-    },
-    {
-      name: "a worktree's git state changed",
-      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
-      write: `${CLONE}/.git/worktrees/w/index`,
-      sends: false,
-    },
-    {
-      name: 'the main checkout edited',
-      seed: [`${CLONE}/.git/worktrees/w/HEAD`],
-      write: `${PLAN_DIR}/01-a.md`,
-      sends: false,
-    },
-  ])('watch_$name_SendsChanged $sends', async ({ seed, write, sends }) => {
-    const backlog = startBacklog([entry('plan', PLAN, { feature: 'f' })], {
-      [PLAN]: planText('- [ ] [A](01-a.md)'),
-    });
-    backlog.git.worktrees.mockResolvedValue([MAIN_TREE, WORKTREE]);
-    for (const path of [`${WORKTREE_PLAN_DIR}/plan.md`, ...seed]) {
-      await backlog.listed.write(path, 'x');
-    }
-    await backlog.invoke('load');
-
-    await backlog.listed.write(write, 'y');
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(backlog.sent.length > 0).toBe(sends);
-    expect(backlog.sent).toEqual(
-      backlog.sent.map(() => ['changed', { homeRoot: HOME }]),
-    );
   });
 
   it('watch_Reload_DisposesTheLastLoadsWatches', async () => {
@@ -1250,100 +751,96 @@ describe('backlog main part', () => {
     expect(backlog.sent).toEqual(sent);
   });
 
-  describe('follow-up events', () => {
-    const DRAFT = { title: 'New', oneLine: 'a new one', tags: [], body: '' };
-    const ALPHA = {
-      title: 'Alpha',
-      oneLine: 'first thing',
-      tags: [],
-      body: 'Stale.',
-    };
+  it('chunks_Invoke_ServesTheStore', async () => {
+    const backlog = startBacklog([], {});
+    const chunks = [chunkOf('c1', ['Alpha']), chunkOf('c2', ['Beta'])];
+    await backlog.data.write('chunks.json', JSON.stringify({ chunks }));
 
-    it.each<{
-      case: string;
-      path: string | null;
-      edit: (read: BacklogRead) => BacklogEdit;
-      emitted: [string, unknown][];
-    }>([
-      {
-        case: 'create',
-        path: null,
-        edit: () => ({ type: 'create', draft: DRAFT }),
-        emitted: [['followupCreated', { homeRoot: HOME, title: 'New' }]],
-      },
-      {
-        case: 'edit that retitles, named by the new title',
-        path: FOLLOWUPS,
-        edit: (read) => {
-          const item = firstFollowupDraft(read);
-          return {
-            type: 'edit',
-            title: item.title,
-            draft: { ...item, title: 'Renamed' },
-            baseline: item,
-          };
-        },
-        emitted: [['followupEdited', { homeRoot: HOME, title: 'Renamed' }]],
-      },
-      {
-        case: 'setTags',
-        path: FOLLOWUPS,
-        edit: () => ({
-          type: 'setTags',
-          title: 'Alpha',
-          tags: ['agent-ready'],
-        }),
-        emitted: [['followupEdited', { homeRoot: HOME, title: 'Alpha' }]],
-      },
-      {
-        case: 'delete',
-        path: FOLLOWUPS,
-        edit: () => ({ type: 'delete', title: 'Alpha' }),
-        emitted: [['followupDeleted', { homeRoot: HOME, title: 'Alpha' }]],
-      },
-      {
-        case: 'missing',
-        path: FOLLOWUPS,
-        edit: () => ({ type: 'delete', title: 'Nobody' }),
-        emitted: [],
-      },
-      {
-        case: 'titleTaken',
-        path: null,
-        edit: () => ({ type: 'create', draft: { ...DRAFT, title: 'Alpha' } }),
-        emitted: [],
-      },
-      {
-        case: 'refused',
-        path: null,
-        edit: () => ({ type: 'create', draft: { ...DRAFT, title: ' ' } }),
-        emitted: [],
-      },
-      {
-        case: 'changed on disk',
-        path: FOLLOWUPS,
-        edit: () => ({
-          type: 'edit',
-          title: 'Alpha',
-          draft: ALPHA,
-          baseline: ALPHA,
-        }),
-        emitted: [],
-      },
-    ])(
-      'followupEvents_EditLands_FireByType ($case)',
-      async ({ path, edit, emitted }) => {
-        const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-          [FOLLOWUPS]: FOLLOWUPS_TEXT,
-        });
-        const read = await backlog.invoke<BacklogRead>('load');
+    expect(await backlog.invoke('chunks')).toEqual(chunks);
+  });
 
-        await backlog.invoke('applyEdit', HOME, path, edit(read));
-
-        expect(backlog.emitted).toEqual(emitted);
-      },
+  it('startChunks_Invoke_LaunchesThroughChat', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    await backlog.data.write(
+      'chunks.json',
+      JSON.stringify({ chunks: [chunkOf('c1', ['Alpha'])] }),
     );
 
+    const started = await backlog.invoke<ChunkStart[]>('startChunks', ['c1']);
+
+    expect(started).toEqual([{ chunkId: 'c1', sessionId: 'sess-1' }]);
+    expect(backlog.chat.launch).toHaveBeenCalledWith({
+      projectDir: CLONE,
+      profile: 'work',
+      message: {
+        text: `Work these.\n\n## Alpha\n\nfirst thing\n\nAlpha body.\n\nFrom ${FOLLOWUPS}:7`,
+        images: [],
+      },
+      headless: false,
+    });
+    expect(backlog.sent.filter(([name]) => name === 'chunksChanged')).toEqual([
+      ['chunksChanged', { chunks: [chunkOf('c1', ['Alpha'], 'sess-1')] }],
+    ]);
+  });
+
+  it.each<SessionCloseReason>(['user', 'start-failed', 'project-closed', 'finished'])(
+    'sessionClosed_StartedChunk_Retired (%s)',
+    async (reason) => {
+      const backlog = startBacklog([], {});
+      const chunks = [chunkOf('c1', ['Alpha'], 'sess-1'), chunkOf('c2', ['Beta'])];
+      await backlog.data.write('chunks.json', JSON.stringify({ chunks }));
+
+      backlog.emit('chat.sessionClosed', { sessionId: 'sess-1', reason });
+      await settle();
+
+      expect(await backlog.savedChunks()).toEqual([chunkOf('c2', ['Beta'])]);
+      expect(backlog.sent).toEqual([
+        ['chunksChanged', { chunks: [chunkOf('c2', ['Beta'])] }],
+      ]);
+    },
+  );
+
+  it('sessionClosed_RetireRejects_Logged', async () => {
+    const backlog = startBacklog([], {});
+    await backlog.data.write(
+      'chunks.json',
+      JSON.stringify({ chunks: [chunkOf('c1', ['Alpha'], 'sess-1')] }),
+    );
+    vi.spyOn(backlog.data, 'write').mockRejectedValue(new Error('disk full'));
+
+    backlog.emit('chat.sessionClosed', { sessionId: 'sess-1', reason: 'user' });
+    await settle();
+
+    expect(backlog.logged).toEqual([
+      'chunk of sess-1 not retired: disk full',
+    ]);
+  });
+
+  it('editChunks_ItemGone_PrunedBeforeEdit', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    await backlog.data.write(
+      'chunks.json',
+      JSON.stringify({
+        chunks: [chunkOf('c1', ['Alpha', 'Gone']), chunkOf('c2', ['Gone too'])],
+      }),
+    );
+
+    const chunks = await backlog.invoke('editChunks', {
+      type: 'rename',
+      chunkId: 'c1',
+      name: 'Renamed',
+    });
+
+    expect(chunks).toEqual([
+      { ...chunkOf('c1', ['Alpha']), name: 'Renamed' },
+    ]);
+  });
+
+  describe('follow-up events', () => {
     it.each<{ case: string; target: NoteTarget; event: string; title: string }>(
       [
         {
@@ -1520,6 +1017,57 @@ describe('backlog main part', () => {
     ]);
   });
 
+  it('fileNote_CreateTargetFileMissing_CreatesIt', async () => {
+    const backlog = startBacklog([entry('followup', UI_FOLLOWUPS)], {
+      [UI_FOLLOWUPS]: UI_TEXT,
+    });
+
+    const result = await backlog.exports.fileNote(HOME, CHIP_TARGET, 'Text.', []);
+
+    expect(result).toMatchObject({ type: 'applied' });
+    expect(backlog.files.get(FOLLOWUPS)).toContain('# Follow-ups — r');
+    expect(bodyOf(backlog.files.get(FOLLOWUPS), CHIP_TITLE)).toBe('Text.');
+  });
+
+  it('fileNote_AppendPathNotTheHomesFollowupFile_Refused', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    const other = `${HOME}/backlog/design.md`;
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      { type: 'append', path: other, title: 'Alpha' },
+      'More.',
+      [],
+    );
+
+    expect(result).toEqual({
+      type: 'refused',
+      reason: `${other} is not a follow-up file of ${HOME}`,
+    });
+    expect(callsOf(backlog.calls, 'writeDoc')).toEqual([]);
+  });
+
+  it('fileNote_AppendExistingTitleWouldNotReadBack_RefusedPointingToDocs', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: BAD_TITLE_FOLLOWUPS_TEXT,
+    });
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      { type: 'append', path: FOLLOWUPS, title: 'Wrap this:' },
+      'More.',
+      [],
+    );
+
+    expect(result).toEqual({
+      type: 'refused',
+      reason: expect.stringContaining('Wrap this:'),
+    });
+    expect(backlog.files.get(FOLLOWUPS)).toBe(BAD_TITLE_FOLLOWUPS_TEXT);
+  });
+
   it('fileNote_CreateTitleWouldNotReadBack_RefusesWritingNoImage', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
       [FOLLOWUPS]: FOLLOWUPS_TEXT,
@@ -1583,131 +1131,5 @@ describe('backlog main part', () => {
       reason: expect.stringContaining(elsewhere),
     });
     expect(callsOf(backlog.calls, 'writeBytes')).toEqual([]);
-  });
-
-  it('delete_ItemWithImages_TrashesFolderAfterWrite', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: followupsFile(
-        { title: 'A', body: 'See ![1](followups-images/F/1.png)' },
-        { title: 'B', body: 'Nothing linked.' },
-      ),
-    });
-    await backlog.invoke('load');
-
-    const result = await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
-      type: 'delete',
-      title: 'A',
-    });
-
-    expect(result).toMatchObject({ type: 'applied' });
-    expect(backlog.calls.filter(([name]) => name !== 'readDoc')).toEqual([
-      ['writeDoc', FOLLOWUPS],
-      ['trashDoc', `${IMAGES}/F`],
-    ]);
-  });
-
-  it('delete_FolderStillLinked_KeepsFolder', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: followupsFile(
-        { title: 'A', body: 'See ![1](followups-images/F/1.png)' },
-        { title: 'B', body: 'See ![2](followups-images/F/2.png)' },
-      ),
-    });
-    await backlog.invoke('load');
-
-    await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
-      type: 'delete',
-      title: 'A',
-    });
-
-    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([]);
-  });
-
-  it('delete_LinkOutsideImagesFolder_KeepsIt', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: followupsFile({
-        title: 'A',
-        body: 'See ![1](../followups-images/F/1.png)',
-      }),
-    });
-    await backlog.invoke('load');
-
-    await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
-      type: 'delete',
-      title: 'A',
-    });
-
-    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([]);
-  });
-
-  it('delete_WriteRefused_TrashesNothing', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: followupsFile({
-        title: 'A',
-        body: 'See ![1](followups-images/F/1.png)',
-      }),
-    });
-    await backlog.invoke('load');
-    backlog.refuse.set(FOLLOWUPS, 'Refused: x');
-
-    const result = await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
-      type: 'delete',
-      title: 'A',
-    });
-
-    expect(result).toEqual({ type: 'refused', reason: 'Refused: x' });
-    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([]);
-  });
-
-  it('commit_ChangedImages_CommitsThemWithFollowups', async () => {
-    const imagePath = `docs/features/followups-images/${CHIP_FOLDER}/1.png`;
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: followupsFile(
-        { title: 'Alpha', body: 'Alpha body.' },
-        { title: CHIP_TITLE, body: 'The chip is grey.' },
-      ),
-    });
-    backlog.git.fileAtHead.mockResolvedValue(
-      followupsFile({ title: 'Alpha', body: 'Alpha body.' }),
-    );
-    backlog.git.changedPaths.mockImplementation(async (_root, pathspec) =>
-      pathspec === 'docs/features/followups-images' ? [imagePath] : [],
-    );
-    await backlog.invoke('load');
-
-    const message = await backlog.invoke('commit', HOME);
-
-    expect(message).toBe(
-      `Follow-ups edited in Backlog: added ${CHIP_TITLE}; images ${CHIP_FOLDER}`,
-    );
-    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
-      CLONE,
-      ['docs/features/followups.md', imagePath],
-      message,
-    );
-  });
-
-  it('commit_StrayFileInImagesFolder_LeftOutOfCommitAndMessage', async () => {
-    const imagePath = `docs/features/followups-images/${CHIP_FOLDER}/1.png`;
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    backlog.git.fileAtHead.mockResolvedValue(FOLLOWUPS_TEXT);
-    backlog.git.changedPaths.mockImplementation(async (_root, pathspec) =>
-      pathspec === 'docs/features/followups-images'
-        ? ['docs/features/followups-images/.DS_Store', imagePath]
-        : [],
-    );
-    await backlog.invoke('load');
-
-    const message = await backlog.invoke('commit', HOME);
-
-    expect(message).not.toContain('followups-images');
-    expect(message).toContain(CHIP_FOLDER);
-    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
-      CLONE,
-      [imagePath],
-      message,
-    );
   });
 });

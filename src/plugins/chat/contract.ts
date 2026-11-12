@@ -640,6 +640,10 @@ export interface ChatMainExports {
   // session chat owns, else chat's first; null when chat has no profiles.
   // `sessionId` is null when the launch comes from no session.
   defaultProfile(sessionId: string | null): string | null;
+  // Settles once main's restore of the saved rows ends, a failed one
+  // included, so it never rejects; until then profileOf is null for a row the
+  // restore is about to reopen.
+  restored(): Promise<void>;
   // Sends as the composer does: queued while the session's turn or compaction
   // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.

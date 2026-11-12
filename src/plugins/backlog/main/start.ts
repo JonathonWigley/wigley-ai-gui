@@ -1,7 +1,7 @@
 import type { Clock } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, isMissingFile } from '../../../contracts/files';
-import type { Git, GitWorktree } from '../../../contracts/git';
+import type { Git } from '../../../contracts/git';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -20,12 +20,7 @@ import {
   followupTitleProblem,
   parseFollowups,
 } from '../../../shared/followups/followup-file';
-import {
-  type PlanCopy,
-  type PlanCopyDeps,
-  readMovedCopy,
-} from '../../../shared/plan-copies';
-import type { PlanProgress } from '../../../shared/plan-progress';
+import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
 import {
   type DocsMainEvents,
   type DocsMainExports,
@@ -35,12 +30,10 @@ import {
 } from '../../docs/contract';
 import type {
   BacklogChannel,
-  BacklogEdit,
   BacklogFollowupFile,
   BacklogHome,
   BacklogMainEvents,
   BacklogMainExports,
-  BacklogPlan,
   BacklogRead,
   BacklogWriteResult,
   NoteTarget,
@@ -48,14 +41,14 @@ import type {
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { backlogManifest } from '../manifest';
-import { commitMessage } from './commit-message';
-import { readFollowupText, writeFollowupEdit } from './followup-writes';
+import { createChunkStarter } from './chunk-start';
+import { createChunkStore, titlesByRepo } from './chunk-store';
 import {
-  groupHomes,
-  type HomeShape,
-  markCreateTargets,
-  type PlanShape,
-} from './homes';
+  type NoteEdit,
+  readFollowupText,
+  writeFollowupEdit,
+} from './followup-writes';
+import { groupHomes, type HomeShape, markCreateTargets } from './homes';
 import {
   appendedBody,
   IMAGES_FOLDER,
@@ -76,28 +69,20 @@ type BacklogApi = MainApi<
   typeof backlogManifest,
   BacklogChannel,
   BacklogMainEvents,
-  QualifiedEvents<'docs', DocsMainEvents>
+  QualifiedEvents<'docs', DocsMainEvents> &
+    QualifiedEvents<'chat', ChatMainEvents>
 >;
 
 // The file a home's new follow-ups go to.
 const CREATE_TARGET_FILE = 'followups.md';
 // The one folder of a clone that is a home in git.
 const FEATURES_FOLDER = 'docs/features';
-// An in-git home's images folder, relative to its clone.
-const IMAGES_PATHSPEC = `${FEATURES_FOLDER}/${IMAGES_FOLDER}`;
 const IMAGE_FILE = /^(\d+)\.png$/;
-const PLAN_TITLE_SUFFIX = ' — plan';
-const PLAN_DATES_LINE = /^(Target|Written): /;
-// The entry of git's shared folder that holds one folder per linked worktree.
-const WORKTREES = 'worktrees';
 
 interface BacklogDeps {
   docs: DocsMainExports;
   git: Git;
-  files: Pick<
-    Files,
-    'read' | 'modified' | 'list' | 'realPath' | 'stat' | 'watch'
-  >;
+  files: Pick<Files, 'list' | 'realPath'>;
   paths: Paths;
   clock: Clock;
   log: PluginLog;
@@ -108,10 +93,6 @@ interface BacklogDeps {
   repoFolders(): readonly RepoFolderSetting[];
 }
 
-// The git calls a plan copy read makes; a load's lists each clone's worktrees
-// once (`worktreesListedOnce`).
-type LoadGit = PlanCopyDeps['git'];
-
 // `isInClone`: `git.topLevel` found a clone holding the home.
 type LocatedHome = HomeShape & {
   gitRoot: string | null;
@@ -120,70 +101,8 @@ type LocatedHome = HomeShape & {
 
 type MarkedHome = LocatedHome & { isCreateTarget: boolean };
 
-// `path` below `folder` as a `/`-separated relative path; null when outside.
-function relativePath(
-  path: string,
-  folder: string,
-  paths: Paths,
-): string | null {
-  return paths.segmentsBelow(path, folder)?.join('/') ?? null;
-}
-
 function logSkipped(log: PluginLog, path: string, error: unknown): void {
   log(`${path}: ${errorText(error)}`);
-}
-
-// The folders in git's shared `worktrees` folder `folder`, one per linked
-// worktree, sorted and joined by newlines; '' when it is missing.
-async function worktreeNames(
-  files: Pick<Files, 'list'>,
-  folder: string,
-): Promise<string> {
-  return (await files.list(folder))
-    .filter((entry) => entry.kind === 'folder')
-    .map((entry) => entry.path)
-    .sort()
-    .join('\n');
-}
-
-// `git` for one load: the first `worktrees` call for a clone answers every
-// later call for it, so the load's plans in one clone share one listing.
-function worktreesListedOnce(git: Git): LoadGit {
-  const listed = new Map<string, Promise<GitWorktree[]>>();
-  return {
-    topLevel: (folder) => git.topLevel(folder),
-    worktrees: (root) => {
-      let trees = listed.get(root);
-      if (trees === undefined) {
-        trees = git.worktrees(root);
-        listed.set(root, trees);
-      }
-      return trees;
-    },
-  };
-}
-
-// `path` below an in-git home at `homeRoot`, relative to its clone: an in-git
-// home is its clone's `docs/features` folder. Null when outside the home.
-function clonePath(
-  homeRoot: string,
-  path: string,
-  paths: Paths,
-): string | null {
-  const below = relativePath(path, homeRoot, paths);
-  return below === null ? null : `${FEATURES_FOLDER}/${below}`;
-}
-
-// The folder a clone-relative path lies in under the images folder, for a
-// path `followups-images/<folder>/…`; null for any other path, a file lying
-// directly in the images folder included.
-function imageFolderOf(path: string): string | null {
-  const prefix = `${IMAGES_PATHSPEC}/`;
-  if (!path.startsWith(prefix)) {
-    return null;
-  }
-  const below = path.slice(prefix.length).split('/');
-  return below.length >= 2 && below[0] !== '' ? below[0] : null;
 }
 
 // The real path; null when nothing is there.
@@ -278,150 +197,21 @@ async function readFollowupFiles(
   return read.filter((file) => file !== null);
 }
 
-// The plan's title from its first `# ` heading (else the plan folder's name)
-// and its target and written date from its `Target: … · Written: …` line.
-function planHeader(
-  text: string,
-  folderName: string,
-): Pick<BacklogPlan, 'title' | 'target' | 'written'> {
-  const lines = text.split('\n').map((line) => line.trimEnd());
-  const heading = lines.find((line) => line.startsWith('# '));
-  const headingText = heading?.slice(2).trim();
-  const title =
-    headingText === undefined
-      ? folderName
-      : headingText.endsWith(PLAN_TITLE_SUFFIX)
-        ? headingText.slice(0, -PLAN_TITLE_SUFFIX.length)
-        : headingText;
-  const dateParts =
-    lines.find((line) => PLAN_DATES_LINE.test(line))?.split(' · ') ?? [];
-  const partValue = (label: string) =>
-    dateParts
-      .find((part) => part.startsWith(label))
-      ?.slice(label.length)
-      .trim() ?? null;
-  return {
-    title,
-    target: partValue('Target: '),
-    written: partValue('Written: '),
-  };
-}
-
-// The plan's counts, task statuses and copy paths from `progress`, read from
-// `copy`. A task no line names keeps its index status and path. In the
-// index's own copy a line with no status keeps the index status, which reads
-// the same file; in a worktree copy the task's status and path are that
-// copy's, a line with no status reading as null.
-function withProgress(
-  plan: PlanShape,
-  copy: PlanCopy,
-  isIndexCopy: boolean,
-  progress: PlanProgress,
-  paths: Paths,
-): PlanShape {
-  return {
-    ...plan,
-    copyPath: isIndexCopy ? plan.path : paths.join(copy.planDir, 'plan.md'),
-    checked: progress.checked,
-    total: progress.total,
-    tasks: plan.tasks.map((task) => {
-      const file = paths.base(task.path);
-      const line = progress.tasks.find((candidate) => candidate.file === file);
-      const readsIndexFile = line === undefined || isIndexCopy;
-      if (readsIndexFile) {
-        return { ...task, status: line?.status ?? task.status };
-      }
-      return {
-        ...task,
-        copyPath: paths.join(copy.planDir, file),
-        status: line.status,
-      };
-    }),
-  };
-}
-
-// The plan with its header from the index's copy, and its counts, task
-// statuses and copy paths from the moved copy across its clone's checkouts;
-// the index's when no copy holds a `plan.md`. Null, logged, when a read
-// fails.
-async function readPlan(
-  deps: BacklogDeps,
-  copyDeps: PlanCopyDeps,
-  plan: PlanShape,
-): Promise<BacklogPlan | null> {
-  const { docs, files, paths } = deps;
-  try {
-    const text = await docs.readDoc(plan.path);
-    const planDir = paths.parent(plan.path);
-    const header = planHeader(text, paths.base(planDir));
-    const moved = await readMovedCopy(planDir, copyDeps);
-    if (moved === null) {
-      return { ...plan, ...header };
-    }
-    const { copy, progress } = moved;
-    const isIndexCopy = paths.samePath(
-      await files.realPath(copy.planDir),
-      await files.realPath(planDir),
-    );
-    return {
-      ...withProgress(plan, copy, isIndexCopy, progress, paths),
-      ...header,
-    };
-  } catch (error) {
-    logSkipped(deps.log, plan.path, error);
-    return null;
-  }
-}
-
-// Whether git lists any of the home's follow-up files, or any file in a
-// folder of its images folder, as changed from HEAD.
-async function isUncommitted(
-  deps: BacklogDeps,
-  home: MarkedHome,
-  followupPaths: string[],
-): Promise<boolean> {
-  const { gitRoot } = home;
-  if (gitRoot === null) {
-    return false;
-  }
-  try {
-    const changed = await deps.git.changedPaths(gitRoot, FEATURES_FOLDER);
-    const changedSet = new Set(changed);
-    const isFollowupChanged = followupPaths.some((path) =>
-      changedSet.has(clonePath(home.root, path, deps.paths) ?? ''),
-    );
-    return (
-      isFollowupChanged || changed.some((path) => imageFolderOf(path) !== null)
-    );
-  } catch (error) {
-    logSkipped(deps.log, home.root, error);
-    return false;
-  }
-}
-
 // `homeDir` is the home folder with its links resolved, which a `~` in the
-// `repoFolders` setting expands to.
+// `repoFolders` setting expands to. Plans, features and `uncommitted` are no
+// longer read: each is filled empty.
 async function readHome(
   deps: BacklogDeps,
-  copyDeps: PlanCopyDeps,
   home: MarkedHome,
   homeDir: string,
 ): Promise<BacklogHome> {
   const followupFiles = await readFollowupFiles(deps, home);
-  const plans = await Promise.all(
-    home.plans.map((plan) => readPlan(deps, copyDeps, plan)),
-  );
-  const uncommitted = await isUncommitted(
-    deps,
-    home,
-    followupFiles.map((file) => file.path),
-  );
   return {
     repo: home.repo,
     root: home.root,
     isCreateTarget: home.isCreateTarget,
     gitRoot: home.gitRoot,
-    uncommitted,
+    uncommitted: false,
     repoFolder: repoFolderOf(
       home,
       home.isInClone,
@@ -430,38 +220,35 @@ async function readHome(
       homeDir,
     ),
     followupFiles,
-    plans: plans.filter((plan) => plan !== null),
-    features: home.features,
+    plans: [],
+    features: [],
   };
 }
 
 async function readHomes(
   deps: BacklogDeps,
-  copyDeps: PlanCopyDeps,
   read: SourceRead,
 ): Promise<BacklogRead> {
   if (read.document === null) {
     return { homes: [], message: read.message };
   }
   const located = await Promise.all(
-    groupHomes(read.document.entries, deps.paths).map((home) =>
-      locateHome(deps, home),
-    ),
+    groupHomes(read.document.entries).map((home) => locateHome(deps, home)),
   );
   const homeDir =
     (await realPathOrNull(deps.files, deps.homeDir)) ?? deps.homeDir;
   const homes = await Promise.all(
     markCreateTargets(located.filter((home) => home !== null)).map((home) =>
-      readHome(deps, copyDeps, home, homeDir),
+      readHome(deps, home, homeDir),
     ),
   );
   return { homes, message: read.message };
 }
 
-// Why an edited or retagged item's title, as the file already holds it, would
-// not read back once rewritten; null when it would, or for a create or delete.
-function existingTitleProblem(edit: BacklogEdit): string | null {
-  if (edit.type !== 'edit' && edit.type !== 'setTags') {
+// Why an edited item's title, as the file already holds it, would not read
+// back once rewritten; null when it would, or for a create.
+function existingTitleProblem(edit: NoteEdit): string | null {
+  if (edit.type !== 'edit') {
     return null;
   }
   const problem = followupTitleProblem(edit.title);
@@ -473,7 +260,7 @@ function existingTitleProblem(edit: BacklogEdit): string | null {
 // Why the edit's item would not read back from the file once written: its
 // existing title, or a create's title or an edit's new title; null when it
 // would.
-function titleProblem(edit: BacklogEdit): string | null {
+function titleProblem(edit: NoteEdit): string | null {
   const existingProblem = existingTitleProblem(edit);
   if (existingProblem !== null) {
     return existingProblem;
@@ -482,19 +269,6 @@ function titleProblem(edit: BacklogEdit): string | null {
     edit.type === 'create' ||
     (edit.type === 'edit' && edit.draft.title !== edit.title);
   return isNewTitle ? followupTitleProblem(edit.draft.title) : null;
-}
-
-// The file's text at HEAD; '' when HEAD lacks it or has no commit yet.
-async function headText(
-  git: Git,
-  gitRoot: string,
-  path: string,
-): Promise<string> {
-  try {
-    return (await git.fileAtHead(gitRoot, path)) ?? '';
-  } catch {
-    return '';
-  }
 }
 
 // Where a note goes: a new item in the create target file at `path`, or the
@@ -522,7 +296,7 @@ interface SavedImages {
 function emitFollowupEvent(
   emit: PluginEvents<BacklogMainEvents>['emit'],
   homeRoot: string,
-  edit: BacklogEdit,
+  edit: NoteEdit,
 ): void {
   switch (edit.type) {
     case 'create':
@@ -531,20 +305,13 @@ function emitFollowupEvent(
     case 'edit':
       emit('followupEdited', { homeRoot, title: edit.draft.title });
       return;
-    case 'setTags':
-      emit('followupEdited', { homeRoot, title: edit.title });
-      return;
-    case 'delete':
-      emit('followupDeleted', { homeRoot, title: edit.title });
-      return;
   }
 }
 
 // Serves the channel and the exports: the last load's homes answer
-// `applyEdit`, `fileNote` and `commit`, and its follow-up files and its in-git
-// homes' linked worktrees are the ones watched.
+// `fileNote`, and its follow-up files are the ones watched.
 function createBacklogMain(deps: BacklogDeps) {
-  const { docs, git, files, paths, clock, log, channel, emit } = deps;
+  const { docs, files, paths, clock, log, channel, emit } = deps;
   let last: BacklogRead | null = null;
   let watches: Disposable[] = [];
   // Counts loads, so only the newest load keeps its watches.
@@ -574,97 +341,13 @@ function createBacklogMain(deps: BacklogDeps) {
     }
   }
 
-  // Watches where the in-git home's plans have copies outside it: each linked
-  // worktree's `docs/features`, and the clone's worktree list, as the folders
-  // in git's shared `worktrees` folder, which a watch of git's folder may not
-  // hear change. Each change sends `changed` for the home. None outside git; a
-  // failure is logged, and the watches it opened are disposed.
-  async function watchWorktrees(
-    home: BacklogHome,
-    loadGit: LoadGit,
-  ): Promise<Disposable[]> {
-    const { gitRoot } = home;
-    if (gitRoot === null) {
-      return [];
-    }
-    const send = () => channel.send('changed', { homeRoot: home.root });
-    const logError = (folder: string) => (error: unknown) =>
-      logSkipped(log, folder, error);
-    const opened: Disposable[] = [];
-    try {
-      const commonDir = await git.commonDir(gitRoot);
-      const worktreesFolder = paths.join(commonDir, WORKTREES);
-      const watchedNames = await worktreeNames(files, worktreesFolder);
-      const onListChange = () => {
-        worktreeNames(files, worktreesFolder)
-          .then((names) => {
-            if (names !== watchedNames) {
-              send();
-            }
-          })
-          .catch(logError(worktreesFolder));
-      };
-      const featureFolders = (await loadGit.worktrees(gitRoot))
-        .filter((tree) => !tree.isMain)
-        .map((tree) => paths.join(tree.path, FEATURES_FOLDER));
-      const [featureStats, commonStat, worktreesStat] = await Promise.all([
-        Promise.all(featureFolders.map((folder) => files.stat(folder))),
-        files.stat(commonDir),
-        files.stat(worktreesFolder),
-      ]);
-      for (const [index, folder] of featureFolders.entries()) {
-        if (featureStats[index]?.isFolder === true) {
-          opened.push(files.watch(folder, send, { onError: logError(folder) }));
-        }
-      }
-      if (commonStat?.isFolder === true) {
-        opened.push(
-          files.watch(
-            commonDir,
-            (changed) => {
-              if (changed === WORKTREES) {
-                onListChange();
-              }
-            },
-            { recursive: false, onError: logError(commonDir) },
-          ),
-        );
-      }
-      if (worktreesStat?.isFolder === true) {
-        opened.push(
-          files.watch(worktreesFolder, onListChange, {
-            recursive: false,
-            onError: logError(worktreesFolder),
-          }),
-        );
-      }
-      return opened;
-    } catch (error) {
-      for (const watch of opened) {
-        watch.dispose();
-      }
-      logSkipped(log, gitRoot, error);
-      return [];
-    }
-  }
-
-  async function watchHomes(
-    read: BacklogRead,
-    load: number,
-    loadGit: LoadGit,
-  ): Promise<void> {
-    const [fileWatches, worktreeWatches] = await Promise.all([
-      Promise.all(
-        read.homes.flatMap((home) =>
-          home.followupFiles.map((file) => watchFile(file.path, home.root)),
-        ),
+  async function watchHomes(read: BacklogRead, load: number): Promise<void> {
+    const fileWatches = await Promise.all(
+      read.homes.flatMap((home) =>
+        home.followupFiles.map((file) => watchFile(file.path, home.root)),
       ),
-      Promise.all(read.homes.map((home) => watchWorktrees(home, loadGit))),
-    ]);
-    const next = [
-      ...fileWatches.filter((watch) => watch !== null),
-      ...worktreeWatches.flat(),
-    ];
+    );
+    const next = fileWatches.filter((watch) => watch !== null);
     const superseded = load !== loads ? next : watches;
     for (const watch of superseded) {
       watch.dispose();
@@ -677,16 +360,11 @@ function createBacklogMain(deps: BacklogDeps) {
   async function serve(index: () => Promise<SourceRead>): Promise<BacklogRead> {
     loads += 1;
     const load = loads;
-    const loadGit = worktreesListedOnce(git);
-    const read = await readHomes(
-      deps,
-      { git: loadGit, files, paths },
-      await index(),
-    );
+    const read = await readHomes(deps, await index());
     if (load === loads) {
       last = read;
     }
-    await watchHomes(read, load, loadGit);
+    await watchHomes(read, load);
     return read;
   }
 
@@ -782,38 +460,12 @@ function createBacklogMain(deps: BacklogDeps) {
         };
   }
 
-  // The image folders the item titled `title` in `file` links and no other
-  // item there does.
-  async function orphanedImageFolders(
-    home: BacklogHome,
-    file: string,
-    title: string,
-  ): Promise<string[]> {
-    const { items } = parseFollowups(await readFollowupText(docs, file));
-    const deleted = items.find((item) => item.title === title);
-    if (deleted === undefined) {
-      return [];
-    }
-    const stillLinked = items
-      .filter((item) => item !== deleted)
-      .flatMap((item) => homeImages(home, file, item.body))
-      .map((image) => image.folderPath);
-    const orphaned: string[] = [];
-    for (const { folderPath } of homeImages(home, file, deleted.body)) {
-      const isKept = [...stillLinked, ...orphaned].some((folder) =>
-        paths.samePath(folder, folderPath),
-      );
-      if (!isKept) {
-        orphaned.push(folderPath);
-      }
-    }
-    return orphaned;
-  }
-
+  // `path` null: the home's create target file, created when missing; else
+  // one of the home's follow-up files.
   async function applyEdit(
     homeRoot: string,
     path: string | null,
-    edit: BacklogEdit,
+    edit: NoteEdit,
   ): Promise<BacklogWriteResult> {
     const problem = titleProblem(edit);
     if (problem !== null) {
@@ -826,10 +478,6 @@ function createBacklogMain(deps: BacklogDeps) {
       return refusal;
     }
     const file = path ?? paths.join(home.root, CREATE_TARGET_FILE);
-    const orphaned =
-      edit.type === 'delete'
-        ? await orphanedImageFolders(home, file, edit.title)
-        : [];
     const result = await writeFollowupEdit(
       docs,
       file,
@@ -837,9 +485,6 @@ function createBacklogMain(deps: BacklogDeps) {
       path === null ? home.repo : null,
     );
     if (result.type === 'applied') {
-      for (const folder of orphaned) {
-        await trashLogged(folder);
-      }
       emitFollowupEvent(emit, home.root, edit);
     }
     return result;
@@ -984,7 +629,7 @@ function createBacklogMain(deps: BacklogDeps) {
   function noteEdit(
     place: Exclude<NotePlace, { type: 'blocked' }>,
     text: string,
-  ): BacklogEdit {
+  ): NoteEdit {
     if (place.type === 'create') {
       const { title, oneLine, tags } = place;
       return { type: 'create', draft: { title, oneLine, tags, body: text } };
@@ -1050,57 +695,6 @@ function createBacklogMain(deps: BacklogDeps) {
     return result;
   }
 
-  // Commits the home's changed follow-up files and every changed file in a
-  // folder of its images folder; resolves to the message.
-  async function commit(homeRoot: string): Promise<string> {
-    const home = homeAt(homeRoot);
-    const { gitRoot } = home;
-    if (gitRoot === null) {
-      throw new Error(`${home.root} is in no git clone`);
-    }
-    const inHome = home.followupFiles.flatMap(({ path }) => {
-      const relative = clonePath(home.root, path, paths);
-      return relative === null ? [] : [{ path, relative }];
-    });
-    const texts = await Promise.all(
-      inHome.map(async ({ path, relative }) => ({
-        relative,
-        before: await headText(git, gitRoot, relative),
-        after: await readFollowupText(docs, path),
-      })),
-    );
-    const changed = texts.filter(({ before, after }) => before !== after);
-    const changedImages = (
-      await git.changedPaths(gitRoot, IMAGES_PATHSPEC)
-    ).flatMap((path) => {
-      const folder = imageFolderOf(path);
-      return folder === null ? [] : [{ path, folder }];
-    });
-    if (changed.length === 0 && changedImages.length === 0) {
-      throw new Error(`Nothing to commit in ${home.root}`);
-    }
-    const imageFolders = [
-      ...new Set(changedImages.map(({ folder }) => folder)),
-    ].sort();
-    const message = commitMessage(
-      changed.map(({ before, after }) => ({
-        before: parseFollowups(before).items,
-        after: parseFollowups(after).items,
-      })),
-      imageFolders,
-    );
-    await git.commitPaths(
-      gitRoot,
-      [
-        ...changed.map(({ relative }) => relative),
-        ...changedImages.map(({ path }) => path),
-      ],
-      message,
-    );
-    channel.send('changed', { homeRoot: home.root });
-    return message;
-  }
-
   // The last load's read, so a caller reads the rows the page loaded last;
   // a load when there is none yet.
   async function lastRead(): Promise<BacklogRead> {
@@ -1111,9 +705,7 @@ function createBacklogMain(deps: BacklogDeps) {
     load,
     rescan: () => serve(() => docs.rebuildMachineIndex()),
     lastRead,
-    applyEdit,
     fileNote,
-    commit,
   };
 }
 
@@ -1135,20 +727,21 @@ async function startFixture(
 }
 
 // Registers backlog's layouts, and serves the page every features home on the
-// machine, from the docs machine index, Docs' guarded follow-up writes and the
-// home's follow-up commit, and exports the load, the tag list and note filing
-// to dependent plugins; watches each listed follow-up file and each in-git
-// home's linked worktrees, and hears the machine index reload, each sending
-// `changed`, as a change to the `repoFolders` setting does. It serves each
-// open follow-up's git staleness, cached in plugin data, and the commits since
-// it was written. Outside a live run it writes
-// the self-test's fixture repo at start, before Docs' self-test counts the
-// files the index lists.
+// machine, from the docs machine index, and exports the load, the tag list and
+// note filing through Docs' guarded follow-up writes to dependent plugins;
+// watches each listed follow-up file and hears the machine index reload, each
+// sending `changed`, as a change to the `repoFolders` setting does. It serves
+// each open follow-up's git staleness, cached in plugin data, and the commits
+// since it was written. It keeps the chunks in plugin data, the one writer of
+// them, starts them through chat's `launch`, and retires a chunk when chat
+// closes its session. Outside a live run it writes the self-test's fixture
+// repo at start, before Docs' self-test counts the files the index lists.
 export const backlogMainPart: MainPart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
     const { services, channel } = api;
     const docs = api.dependency(docsMainKey);
+    const chat = api.dependency(chatMainKey);
     const fixture = startFixture(services);
     fixture.catch((error: unknown) =>
       services.log(`fixture not written: ${errorText(error)}`),
@@ -1173,6 +766,22 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       log: services.log,
       send: (entries) => channel.send('stalenessRead', { entries }),
     });
+    const store = createChunkStore({
+      data: api.data,
+      randomHex: services.randomHex,
+      restored: () => chat.restored(),
+      isHeld: (sessionId) => chat.profileOf(sessionId) !== null,
+      log: services.log,
+      changed: (chunks) => channel.send('chunksChanged', { chunks }),
+    });
+    const lastRows = async () => backlogRows(await backlog.lastRead());
+    const starter = createChunkStarter({
+      store,
+      rows: lastRows,
+      chat,
+      launchBrief: () => api.settings().launchBrief,
+      log: services.log,
+    });
     const exports: BacklogMainExports = {
       load: backlog.load,
       tags: () => api.settings().tags,
@@ -1180,14 +789,22 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     };
     channel.handle('load', backlog.load);
     channel.handle('rescan', backlog.rescan);
-    channel.handle('readDoc', (path) => docs.readDoc(path));
-    channel.handle('applyEdit', backlog.applyEdit);
-    channel.handle('commit', backlog.commit);
-    channel.handle('staleness', async () =>
-      staleness.read(backlogRows(await backlog.lastRead())),
-    );
+    channel.handle('chunks', () => store.chunks());
+    channel.handle('editChunks', async (edit) => {
+      await store.prune(titlesByRepo(await lastRows()));
+      return store.edit(edit);
+    });
+    channel.handle('startChunks', (chunkIds) => starter.start(chunkIds));
+    api.events.on('chat.sessionClosed', ({ sessionId }) => {
+      store
+        .retire(sessionId)
+        .catch((error: unknown) =>
+          services.log(`chunk of ${sessionId} not retired: ${errorText(error)}`),
+        );
+    });
+    channel.handle('staleness', async () => staleness.read(await lastRows()));
     channel.handle('commitsSince', async (key) => {
-      const rows = backlogRows(await backlog.lastRead());
+      const rows = await lastRows();
       const row = rows.find((candidate) => candidate.key === key);
       if (row === undefined) {
         throw new Error(`No Backlog row ${key.replaceAll('\n', ' — ')}`);

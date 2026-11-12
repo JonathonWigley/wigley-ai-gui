@@ -112,7 +112,12 @@ describe('writeFollowupEdit', () => {
     const result = await writeFollowupEdit(
       docs.deps,
       PATH,
-      { type: 'setTags', title: 'Alpha', tags: ['agent-ready'] },
+      {
+        type: 'edit',
+        title: 'Alpha',
+        draft: { ...ALPHA, tags: ['agent-ready'] },
+        baseline: ALPHA,
+      },
       null,
     );
 
@@ -136,7 +141,7 @@ describe('writeFollowupEdit', () => {
     const result = await writeFollowupEdit(
       docs.deps,
       PATH,
-      { type: 'delete', title: 'Beta' },
+      { type: 'create', draft: DRAFT },
       null,
     );
 
@@ -153,7 +158,7 @@ describe('writeFollowupEdit', () => {
     const result = await writeFollowupEdit(
       docs.deps,
       PATH,
-      { type: 'delete', title: 'Beta' },
+      { type: 'create', draft: DRAFT },
       null,
     );
 
@@ -181,14 +186,15 @@ describe('writeFollowupEdit', () => {
     expect(titles(docs.state.disk)).toEqual(['Gamma']);
   });
 
-  it.each([
-    { type: 'edit' as const, title: 'Alpha', draft: DRAFT, baseline: DRAFT },
-    { type: 'setTags' as const, title: 'Alpha', tags: [] },
-    { type: 'delete' as const, title: 'Alpha' },
-  ])('writeFollowupEdit_MissingFileNoRepo_$type_Missing', async (edit) => {
+  it('writeFollowupEdit_MissingFileNoRepo_EditMissing', async () => {
     const docs = fakeDocs(undefined);
 
-    const result = await writeFollowupEdit(docs.deps, PATH, edit, null);
+    const result = await writeFollowupEdit(
+      docs.deps,
+      PATH,
+      { type: 'edit', title: 'Alpha', draft: DRAFT, baseline: DRAFT },
+      null,
+    );
 
     expect(result).toEqual({ type: 'missing', title: 'Alpha' });
     expect(docs.state.writes).toEqual([]);

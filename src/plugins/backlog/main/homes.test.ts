@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { IndexEntry } from '../../docs/contract';
 import { groupHomes, markCreateTargets } from './homes';
 
@@ -48,7 +47,7 @@ describe('groupHomes', () => {
       entry('followup', `${HOME}/followups.md`, {}),
     ];
 
-    const homes = groupHomes(entries, posixPaths);
+    const homes = groupHomes(entries);
 
     expect(homes.map((home) => [home.repo, home.root])).toEqual([
       ['a', '/dev/a/docs/features'],
@@ -64,7 +63,7 @@ describe('groupHomes', () => {
       entry('followup', `${HOME}/followups.md`, {}, { line: 9 }),
     ];
 
-    const [home] = groupHomes(entries, posixPaths);
+    const [home] = groupHomes(entries);
 
     expect(home.followupFiles).toEqual([
       { path: `${HOME}/followups.md` },
@@ -72,79 +71,14 @@ describe('groupHomes', () => {
     ]);
   });
 
-  it('groupHomes_Tasks_AttachToTheirPlanOrFeature', () => {
-    const planPath = `${HOME}/f/plan-p/plan.md`;
-    const checklist = `${HOME}/f/checklist.md`;
+  it('groupHomes_OnlyPlanAndTaskEntries_AHomeWithNoFollowupFiles', () => {
     const entries = [
-      entry(
-        'task',
-        `${HOME}/f/plan-p/02-b.md`,
-        { plan: 'p', status: null },
-        {
-          title: 'B',
-        },
-      ),
-      entry('plan', planPath, { feature: 'f', checked: 1, total: 3 }),
-      entry(
-        'task',
-        `${HOME}/f/plan-p/01-a.md`,
-        { plan: 'p', status: 'done' },
-        {
-          title: 'A',
-        },
-      ),
-      entry('feature', checklist, { slug: 'f', checked: 2, total: 5 }),
-      entry(
-        'task',
-        `${HOME}/f/01-c.md`,
-        { plan: null, status: 'open' },
-        {
-          title: 'C',
-        },
-      ),
-      entry('task', `${HOME}/g/plan-q/01-d.md`, { plan: 'q' }, { title: 'D' }),
+      entry('plan', `${HOME}/f/plan-p/plan.md`, { feature: 'f' }),
+      entry('task', `${HOME}/f/plan-p/01-a.md`, { plan: 'p' }),
     ];
 
-    const [home] = groupHomes(entries, posixPaths);
-
-    expect(home.plans).toEqual([
-      {
-        path: planPath,
-        copyPath: planPath,
-        feature: 'f',
-        checked: 1,
-        total: 3,
-        tasks: [
-          {
-            path: `${HOME}/f/plan-p/01-a.md`,
-            copyPath: `${HOME}/f/plan-p/01-a.md`,
-            title: 'A',
-            status: 'done',
-          },
-          {
-            path: `${HOME}/f/plan-p/02-b.md`,
-            copyPath: `${HOME}/f/plan-p/02-b.md`,
-            title: 'B',
-            status: null,
-          },
-        ],
-      },
-    ]);
-    expect(home.features).toEqual([
-      {
-        path: checklist,
-        slug: 'f',
-        checked: 2,
-        total: 5,
-        tasks: [
-          {
-            path: `${HOME}/f/01-c.md`,
-            copyPath: `${HOME}/f/01-c.md`,
-            title: 'C',
-            status: 'open',
-          },
-        ],
-      },
+    expect(groupHomes(entries)).toEqual([
+      { repo: 'r', root: HOME, followupFiles: [] },
     ]);
   });
 
@@ -162,7 +96,7 @@ describe('groupHomes', () => {
       entry('followup', `${HOME}/followups.md`, {}),
     ];
 
-    const homes = groupHomes(entries, posixPaths);
+    const homes = groupHomes(entries);
 
     expect(homes.map((home) => home.root)).toEqual([HOME]);
     expect(homes[0].followupFiles).toEqual([{ path: `${HOME}/followups.md` }]);

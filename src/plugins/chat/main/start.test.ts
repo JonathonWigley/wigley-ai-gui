@@ -1094,6 +1094,28 @@ describe('chat main part', () => {
     );
   });
 
+  it.each([
+    { given: 'a restore that reopens the saved row', harnessId: undefined },
+    { given: 'a restore that throws', harnessId: 'not-chats' },
+  ])(
+    'exports_Restored_SettlesWithTheRestore given $given',
+    async ({ harnessId }) => {
+      const chat = startChatPart({
+        harnessId,
+        list: () =>
+          Promise.resolve([
+            { id: 'p1', startedAt: 1, running: true, current: true },
+          ]),
+        data: await dataWithSavedRow(),
+      });
+
+      const restored = chat.exports.restored();
+
+      expect(restored).toBe(chat.invoke('restored'));
+      await expect(restored).resolves.toBeUndefined();
+    },
+  );
+
   it('restore_SessionHostListFails_LogsAndRestsEveryRow given a list that resolves first', async () => {
     const chat = startChatPart({ list: () => Promise.resolve([]) });
 

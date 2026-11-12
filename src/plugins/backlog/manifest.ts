@@ -15,7 +15,7 @@ export const backlogManifest = definePlugin({
   label: 'Backlog',
   description:
     'Adds Backlog mode, with the follow-ups, plans and primed features of every features home.',
-  dependsOn: { main: ['docs'], page: ['docs'] },
+  dependsOn: { main: ['docs', 'chat', 'sessions'], page: ['docs'] },
   reads: { main: [], page: [] },
   commands: {
     showMode: {

@@ -581,6 +581,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       isHeadless: (sessionId) => chat.isHeadless(sessionId),
       launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
       defaultProfile,
+      restored: () => restored,
       send: async (sessionId, message) => {
         requireHeld(sessionId);
         return chat.send(sessionId, message);
