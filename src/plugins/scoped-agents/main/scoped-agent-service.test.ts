@@ -164,7 +164,8 @@ function setUp(
     ...options,
     beforeLaunchResolves:
       options.beforeLaunchResolves ??
-      ((id, request) => opened(id, request.projectDir)),
+      ((id, request) =>
+        opened(id, 'projectDir' in request ? request.projectDir : undefined)),
   });
   const logs: string[] = [];
   service = createScopedAgentService({

@@ -5,10 +5,7 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
-import type {
-  ScopedAgentsChannel,
-  ScopedAgentsMainExports,
-} from '../contract';
+import type { ScopedAgentsChannel, ScopedAgentsMainExports } from '../contract';
 import { scopedAgentsManifest } from '../manifest';
 import { createScopedAgentService } from './scoped-agent-service';
 

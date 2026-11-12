@@ -669,11 +669,7 @@ describe('createProcessGit', () => {
 
   it('firstAdded_ExitsZeroWithNoOutput_Null', async () => {
     const test = setUp();
-    test.processes.script(
-      'git',
-      firstAddedArgs('a.md', '### Item'),
-      exited(0),
-    );
+    test.processes.script('git', firstAddedArgs('a.md', '### Item'), exited(0));
 
     expect(await test.git.firstAdded(ROOT, 'a.md', '### Item')).toBeNull();
   });
@@ -701,10 +697,11 @@ describe('createProcessGit', () => {
   it('firstAdded_TextStartingWithDash_AttachedToS', async () => {
     const test = setUp();
     const args = firstAddedArgs('a.md', '--x');
+    const at = '2026-11-04T09:00:00Z';
     test.processes.script(
       'git',
       args,
-      exited(0, `\0${SHA_A}\02026-11-04T09:00:00Z\0dash\0\na.md\0`),
+      exited(0, `\0${SHA_A}\0${at}\0dash\0\na.md\0`),
     );
 
     expect((await test.git.firstAdded(ROOT, 'a.md', '--x'))?.sha).toBe(SHA_A);
@@ -955,9 +952,9 @@ describe('createProcessGit over a real clone', () => {
       expect(added?.subject).toBe('add item');
       expect(added?.paths).toEqual(['a.md']);
       expect(await adapter.firstAdded(root, 'a.md', '### Never')).toBeNull();
-      expect((await adapter.firstAdded(root, 'c.md', '### Item'))?.subject).toBe(
-        'longer title',
-      );
+      expect(
+        (await adapter.firstAdded(root, 'c.md', '### Item'))?.subject,
+      ).toBe('longer title');
       expect(
         (await adapter.firstAdded(root, 'c.md', '### Item\n'))?.subject,
       ).toBe('short title');
