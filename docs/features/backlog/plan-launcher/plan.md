@@ -352,6 +352,10 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - Fix round 1 (finding 2) supersedes group 06's 'a rejected setSession makes startChunks reject': setSession resolves whether it stored, and a launched session not stored becomes its chunk's refusal naming the session; a failed setSession clears the starting mark, so the chunk reads unstarted while its session runs · fix-chunks
 - Fix round 1: a chunk being started refuses a rename too, as the store's 'is starting' rule reads; s on one empty chunk still reaches main and toasts main's refusal, only S skips empty chunks · fix workers
 - Fix round 1: lead ran oxfmt --write on 7 fix-range files lint flagged (editor tooling), in c057ce7d0
+- Fix round 2: lead ran oxfmt --write on staleness.test.ts (editor tooling); the CRLF heading anchor may also match a longer heading starting with the same text, as the repeat's pick accepted
 ### Review rounds
 - Round 1 (implementation review, 6 correctness + 3 plan-design lanes, pinned e71eb3878): NEEDS FIXES — 4 Important (symlink staleness, launch race in the chunk store, stale agent-pane mount, narrow-window stacking), 39 Minor, 2 pre-existing; report /tmp/claude-backlog-launcher/review-e71eb3878e6652522fe81c3e01639ecebafe02fe.md. Repo rule (AGENTS.md § Review): every open finding takes its recommended pick, no round.
+- Fix range 1 (e71eb3878..a34a1f5b1, 11 commits): High — the chunk store's launch-in-flight redesign, the starter's refusals, load/prune data flow and the agent pane's remount change behaviour across main and page; re-review: correctness lane, 2 agents
+- Round 2 (re-review of fix range 1, correctness ×2, pinned a34a1f5b1): NEEDS FIXES — 0 Critical/Important, 7 Minor (1 repeat: CRLF anchor, R1#24), 1 pre-existing doc; report /tmp/claude-backlog-launcher/review-a34a1f5b1822d5598f121b0d5614ee5182bd6261.md. Repo rule: every pick taken; repeat pick: a CRLF line's anchor drops its trailing newline
+- Fix range 2 (a34a1f5b1..HEAD, 3 commits after the Run log entry): Low — an anchor's trailing newline for CRLF lines, two test rows, and doc/comment lines; closes on commit and compile, no re-review
 ### Test gate
