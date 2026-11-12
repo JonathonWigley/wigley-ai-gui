@@ -1,6 +1,6 @@
 # 02 — Scoped agents: the plugin, its contract and its main service
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses chat's session lifecycle async: the host-id wait on `sessionOpened`, serial asks per scope, shared resumes, `/clear` following
 Wave: 1 · Depends on: none

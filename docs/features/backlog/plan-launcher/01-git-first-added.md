@@ -1,6 +1,6 @@
 # 01 — Git firstAdded: the commit that first added a text to a file
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds `Git.firstAdded`, which 05's staleness reader consumes
 Wave: 1 · Depends on: none
