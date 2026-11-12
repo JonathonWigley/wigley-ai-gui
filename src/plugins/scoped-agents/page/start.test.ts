@@ -214,7 +214,11 @@ describe('scoped-agents page part', () => {
     'askSend does nothing once the pane gave up the keys: $case',
     async (row) => {
       const page = startScopedAgentsPage();
-      const { pane, calls } = page.addPane('practice', 'interviewer', 'two-sum');
+      const { pane, calls } = page.addPane(
+        'practice',
+        'interviewer',
+        'two-sum',
+      );
       pane.toggle();
       await settle();
       page.boxes[0]!.text = 'how do I start';

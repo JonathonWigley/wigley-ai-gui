@@ -133,8 +133,14 @@ describe('namedPaths', () => {
     ['`npm run selftest -- --plugin chat`', []],
     ['`CLAUDE_CONFIG_DIR`', []],
     ['`../other/file.ts`', []],
-    ['```ts\nimport `src/fenced.ts`\n```\nthen `src/after.ts`', ['src/after.ts']],
-    ['`src/a.ts` and again `./src/a.ts`, then `b/c.md`', ['src/a.ts', 'b/c.md']],
+    [
+      '```ts\nimport `src/fenced.ts`\n```\nthen `src/after.ts`',
+      ['src/after.ts'],
+    ],
+    [
+      '`src/a.ts` and again `./src/a.ts`, then `b/c.md`',
+      ['src/a.ts', 'b/c.md'],
+    ],
   ])('namedPaths_TokenTable_KeepsPathsOnly %j', (text, paths) => {
     expect(namedPaths(text)).toEqual(paths);
   });
@@ -467,7 +473,11 @@ describe('staleness reader', () => {
     level: BacklogStaleness['level'];
   }>([
     { name: 'home outside git', homeClone: null, level: 'unknown' },
-    { name: "the home's clone dates the item", homeClone: CLONE, level: 'fresh' },
+    {
+      name: "the home's clone dates the item",
+      homeClone: CLONE,
+      level: 'fresh',
+    },
   ])(
     'read_NoRepoFolder_EmptyListsUnknown ($name)',
     async ({ homeClone, level }) => {
@@ -602,9 +612,9 @@ describe('staleness reader', () => {
       stale.git.firstAdded.mockResolvedValue(written);
       stale.git.log.mockResolvedValue([NEWEST, NEWER, WRITTEN, OLDER]);
 
-      expect(await stale.reader.commitsSince(row({ repoFolder, body }))).toEqual(
-        commits,
-      );
+      expect(
+        await stale.reader.commitsSince(row({ repoFolder, body })),
+      ).toEqual(commits);
     },
   );
 

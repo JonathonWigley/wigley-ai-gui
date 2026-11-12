@@ -105,8 +105,7 @@ export const scopedAgentsPagePart: PagePart<typeof scopedAgentsManifest> = {
           setScope: (scope) => api.keys.setScope(scope),
           setResizeTarget: (target) => api.panes.setResizeTarget(target),
           setFocusTarget: (target) => api.panes.setFocusTarget(target),
-          mountChat: (element, sessionId) =>
-            chat.mountChat(element, sessionId),
+          mountChat: (element, sessionId) => chat.mountChat(element, sessionId),
           drawAskBox,
           // A pane giving up the keys clears the record only while it is the
           // one recorded.

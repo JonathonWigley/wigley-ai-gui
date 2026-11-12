@@ -39,5 +39,4 @@ export interface ScopedAgentsLayout {
 }
 
 // A layout with every part defined, as `default` is.
-export interface CompleteScopedAgentsLayout
-  extends Required<ScopedAgentsLayout> {}
+export interface CompleteScopedAgentsLayout extends Required<ScopedAgentsLayout> {}
