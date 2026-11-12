@@ -298,7 +298,7 @@ beyond its `contract.ts`.
 - [x] [Backlog page](08-backlog-page.md) — after 03, 04, 07
 
 ### Wave 6
-- [ ] [Doc re-read](09-doc-re-read.md) — after 08
+- [x] [Doc re-read](09-doc-re-read.md) — after 08
 - [ ] [Final verification](10-final-verification.md)
 
 ## Run log
@@ -314,6 +314,7 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - 06 · deep · 1ac71bc2d · diff read: every Produces present (BacklogChunk, ChunkEdit, ChunkStart, channel chunks/editChunks/startChunks/chunksChanged, chunk-store/-message/-start exports, chat restored, NoteEdit); wave 3 typecheck + lint pass after e9b8f553d (Set<string> in a test, oxfmt) · concerns: AGENTS.md chat entry lacks backlog as a consumer of launch/defaultProfile/profileOf/restored (for 09); page and backlog self-test still call removed readDoc/applyEdit/commit until 08; exports_Restored test assumes invoke returns the handler's promise unwrapped; starter's extra started set has no test of its own
 - 07 · deep · e5dbd279c · diff read: every Produces present (sweep invoke, optional BacklogPlace fields, assistant.ts consts/store/sweepMessage, backlog-tools tools/AssistantPlace/backlogStateText/startBacklogTools, ready.ts AGENT_READY/isReady); wave 4 typecheck + lint pass after 7614053dc (oxfmt) · concerns: start.test's fake api now needs drive: null (undefined read as a drive run); one documentary cast in assistant.ts; design docs and AGENTS.md still say planned (for 09)
 - 08 · deep · 8557485fb · split across two deep workers (A+C, B+D+E); diff read: every Produces present (state exports, 11 layout parts in LAYOUT_PARTS, kit scopes, BacklogView/Deps/Command, backlogSelectChunkCommand); wave 5 typecheck + lint pass after a645c7b79 (space-token widths, oxfmt) · concerns: the strip's <CR> has no key-hint anchor in the strip pane; self-test's first Space k b assumes Backlog is not showing at start; followup 'A click into the Backlog detail…' needs re-checking against the view; view tests mock h-scroller and wrap createSplit via vi.mock and find nodes by layout.js class names; the 40rem container query assumes Mocha's 32px space-8; rows.test.ts edited outside the Files list (the one fixture that filled the dropped fields)
+- 09 · standard · da94057db · diff read: every plan-launcher 'not built yet' marker cleared outside the plan folder (only audio-picker's own remain); AGENTS.md backlog/practice/chat entries updated; wave 6 typecheck + lint pass · concerns: deep main-side wording (staleness text, tool messages) spot-checked, not re-read line by line; followups.md edited outside the Files list (one stale Backlog detail item reworded)
 ### Contract changes
 - scoped-agents contract.ts comments: trailing aligned comments → each on its own line above its member (oxfmt 80 columns); the block's '// Channel:' comment → the ScopedAgentsChannel interface · why: oxfmt --check · consumers: 03, 04, 07, 08 (no name or type changed) · group 02
 ### Rulings

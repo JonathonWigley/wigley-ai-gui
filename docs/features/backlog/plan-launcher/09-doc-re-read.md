@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · doc-only: prose checked against landed code
 Wave: 6 · Depends on: 08
@@ -20,3 +20,5 @@ Done when: the lines named in Decisions are read against the code; every stale l
 Commit:    one commit for the group
 
 ## Proof
+
+Commit da94057db · proof: diff read: every plan-launcher 'not built yet' marker cleared outside the plan folder (only audio-picker's own remain); AGENTS.md backlog/practice/chat entries updated; wave 6 typecheck + lint pass · concerns: deep main-side wording (staleness text, tool messages) spot-checked, not re-read line by line; followups.md edited outside the Files list (one stale Backlog detail item reworded)
