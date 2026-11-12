@@ -1,6 +1,7 @@
 import type { MainPart } from '../contracts/plugin';
 import { agentLinesMainPart } from './agent-lines/main/start';
 import { appUpdateMainPart } from './app-update/main/start';
+import { audioPickerMainPart } from './audio-picker/main/start';
 import { agentSkillsMainPart } from './agent-skills/main/start';
 import { contextSourcesMainPart } from './context-sources/main/start';
 import { agentStripMainPart } from './agent-strip/main/start';
@@ -39,6 +40,7 @@ export const mainParts: readonly MainPart[] = [
   sessionsMainPart,
   formsMainPart,
   primerMainPart,
+  audioPickerMainPart,
   chatMainPart,
   autoCompactMainPart,
   // Before session-log, so chat lists Stashed above Recently closed.

@@ -59,6 +59,23 @@ const LARGE_FOLD_TESTS = [
 ];
 
 const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
+  'audio-picker': {
+    // A picker is an agent form with a `node:crypto` fingerprint.
+    main: { layers: ['src/shared/agent-forms'], packages: ['node:'] },
+    sublayers: {
+      // Starts the real sessions main, which refuses a tool name contributed twice.
+      'src/plugins/audio-picker/main/start.test.ts': {
+        layers: [
+          'src/shared',
+          'src/plugins/agent-form-fakes.test-support.ts',
+          'src/plugins/audio-picker/main',
+          'src/plugins/sessions/contract.ts',
+          'src/plugins/sessions/main',
+        ],
+        packages: ['node:'],
+      },
+    },
+  },
   // Its contract's records hold the follow-up file module's types.
   backlog: { contract: { layers: ['src/shared/followups'] } },
   chat: {
