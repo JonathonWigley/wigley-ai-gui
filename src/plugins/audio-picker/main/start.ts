@@ -136,8 +136,7 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
       autoAnswer: audioPickerAutoAnswer((id) => chat.isHeadless(id)),
     });
     const soundsDir = sampleSoundsDir(api.dataFolder, services.paths);
-    const writeSounds = () =>
-      writeSampleSounds(services.files, soundsDir, services.paths);
+    const writeSounds = () => writeSampleSounds(api.data);
     const previewService = createAgentFormService({
       type,
       presenter: reads.watch(presenter.quiet),

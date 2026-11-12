@@ -297,7 +297,7 @@ describe('withAudioFileCheck', () => {
     },
   );
 
-  it('a later call waits for an earlier open to finish its check before reaching inner', async () => {
+  it("a later call waits for an earlier open to finish its check before reaching inner, but not for inner's answer to it", async () => {
     const files = createMemoryFiles();
     await files.writeBytes(COIN, new Uint8Array([1]));
     const statted = Promise.withResolvers<void>();
@@ -305,10 +305,12 @@ describe('withAudioFileCheck', () => {
       stat: (path: string) => statted.promise.then(() => files.stat(path)),
     };
     const inner = fakeInner();
+    // The open's answer never comes, as a picker waiting on the user's send.
+    inner.call.mockImplementationOnce(() => new Promise(() => {}));
     const session = withAudioFileCheck(inner, parse, checked);
     const context = { toolUseId: null, signal: live() };
 
-    const opened = session.call(OPEN_AUDIO_PICKER_TOOL, ONE_FILE_ARGS, context);
+    void session.call(OPEN_AUDIO_PICKER_TOOL, ONE_FILE_ARGS, context);
     const collected = session.call(
       COLLECT_AUDIO_PICKER_TOOL,
       { wait: false },
@@ -318,8 +320,8 @@ describe('withAudioFileCheck', () => {
     await Promise.resolve();
     expect(inner.call).not.toHaveBeenCalled();
     statted.resolve();
-    await Promise.all([opened, collected]);
 
+    await expect(collected).resolves.toBe(OK);
     expect(inner.call.mock.calls.map(([name]) => name)).toEqual([
       OPEN_AUDIO_PICKER_TOOL,
       COLLECT_AUDIO_PICKER_TOOL,

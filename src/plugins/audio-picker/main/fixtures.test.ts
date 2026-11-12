@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { scopedFiles } from '../../../shared/scoped-files';
 import { MAX_CANDIDATES } from '../contract';
-import { samplePickerArgs, sineWav, writeSampleSounds } from './fixtures';
+import {
+  samplePickerArgs,
+  sampleSoundsDir,
+  sineWav,
+  writeSampleSounds,
+} from './fixtures';
 import { createAudioPickerType } from './picker-type';
 import { previewPickerArgs } from './preview/preview-picker';
 
@@ -63,10 +69,11 @@ describe('samplePickerArgs', () => {
 describe('writeSampleSounds', () => {
   it('writes every file the sample and preview pickers name', async () => {
     const files = createMemoryFiles();
-    const dir = '/home/sounds';
+    const dataFolder = '/data/audio-picker';
+    const dir = sampleSoundsDir(dataFolder, posixPaths);
     const type = createAudioPickerType(posixPaths);
 
-    await writeSampleSounds(files, dir, posixPaths);
+    await writeSampleSounds(scopedFiles(files, dataFolder, posixPaths));
 
     const named = [
       samplePickerArgs(dir, posixPaths),

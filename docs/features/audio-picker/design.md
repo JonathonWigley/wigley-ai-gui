@@ -159,8 +159,9 @@ recommendations. The agent wires the recommended picks and carries on.
 
 - Settings: `autosaveDelayMs` (400), `deadlineSeconds` (240) and `layout` (`default`).
 - `~/.agents/wigley-audio-picker/pickers` holds each picker's saved form and draft.
-- The plugin's own data folder (`api.dataFolder`), in its `sample-sounds` subfolder, holds the sounds the layout
-  preview plays, so the preview never writes into the user's `~/.agents`.
+- The plugin's own data folder, in its `sample-sounds` subfolder, holds the sounds the layout preview plays, so the
+  preview never writes into the user's `~/.agents`. Main writes them through `api.data`; the files a picker lists are
+  their full paths under `api.dataFolder`.
 
 ## Out of scope
 

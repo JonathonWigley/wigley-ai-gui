@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   fakeDependency,
@@ -35,6 +34,26 @@ import { addDriveActions, audioPickerMainPart } from './start';
 // Where start.ts writes the sample sounds in the harness's data folder for
 // the plugin, `/data/audio-picker`.
 const SOUNDS_DIR = '/data/audio-picker/sample-sounds';
+
+// While `gate` is set, the sample write waits on it before writing: start
+// writes through `api.data`, which the harness builds over its own memory
+// files, so a replaced `services.files` cannot hold the write back.
+const sampleWrite = vi.hoisted(() => ({
+  gate: null as Promise<void> | null,
+}));
+
+vi.mock('./fixtures', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./fixtures')>();
+  return {
+    ...original,
+    writeSampleSounds: async (
+      data: Parameters<typeof original.writeSampleSounds>[0],
+    ) => {
+      await sampleWrite.gate;
+      return original.writeSampleSounds(data);
+    },
+  };
+});
 
 // The real sessions part, so a drive action's open reaches the contributed
 // tool. `homeDir` holds the picker folder, which the store writes with
@@ -165,6 +184,7 @@ describe('audio-picker main part', () => {
     homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-audio-picker-'));
   });
   afterEach(() => {
+    sampleWrite.gate = null;
     rmSync(homeDir, { recursive: true, force: true });
   });
 
@@ -263,18 +283,13 @@ describe('audio-picker main part', () => {
   ])(
     'drive actions wait on the sample write ($name)',
     async ({ stopsFirst, added }) => {
-      const memory = createMemoryFiles();
       const written = Promise.withResolvers<void>();
-      const files = {
-        ...memory,
-        writeBytes: (file: string, bytes: Uint8Array) =>
-          written.promise.then(() => memory.writeBytes(file, bytes)),
-      };
+      sampleWrite.gate = written.promise;
       const harness = startMainPart(audioPickerMainPart, {
         parts: [sessionsMainPart],
         dependencies: [fakeChat()],
         drive: true,
-        services: { files, homeDir },
+        services: { homeDir },
       });
       await flush();
       expect(harness.drive?.actions.has('openPicker')).toBe(false);

@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../../shared/memory-files';
 import { posixPaths } from '../../../../shared/paths/posix-paths';
+import { scopedFiles } from '../../../../shared/scoped-files';
 import { PLAY_MODES } from '../../contract';
-import { writeSampleSounds } from '../fixtures';
+import { sampleSoundsDir, writeSampleSounds } from '../fixtures';
 import { createAudioPickerType } from '../picker-type';
 import { previewPickerArgs } from './preview-picker';
 
 describe('previewPickerArgs', () => {
   it('previewPickerArgs parses, and holds every play mode, a pitch range, loudness and link both present and absent, and a file that will not decode', async () => {
-    const dir = '/home/sounds';
+    const dataFolder = '/data/audio-picker';
+    const dir = sampleSoundsDir(dataFolder, posixPaths);
     const files = createMemoryFiles();
-    await writeSampleSounds(files, dir, posixPaths);
+    await writeSampleSounds(scopedFiles(files, dataFolder, posixPaths));
 
     const { moments } = createAudioPickerType(posixPaths).parse(
       previewPickerArgs(dir, posixPaths),

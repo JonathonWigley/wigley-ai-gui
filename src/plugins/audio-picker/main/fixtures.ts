@@ -67,23 +67,28 @@ const SAMPLE_SOUNDS: readonly { file: string; bytes(): Uint8Array }[] = [
   { file: 'broken.wav', bytes: () => new TextEncoder().encode('not audio') },
 ];
 
-// Where the sample sounds live in the plugin's data folder.
+// The sample sounds' folder, relative to the plugin's data folder.
+const SAMPLE_SOUNDS_FOLDER = 'sample-sounds';
+
+// The full path of the sample sounds' folder in the plugin's data folder
+// `dataFolder`, for the files a picker lists.
 export function sampleSoundsDir(
   dataFolder: string,
   paths: Pick<Paths, 'join'>,
 ): string {
-  return paths.join(dataFolder, 'sample-sounds');
+  return paths.join(dataFolder, SAMPLE_SOUNDS_FOLDER);
 }
 
-// Writes every sample sound into `dir`, overwriting what is there.
+// Writes every sample sound into the folder `sampleSoundsDir` names,
+// overwriting what is there. `data` is the files service scoped to the
+// plugin's data folder (`api.data`), so its paths are `/`-separated and
+// relative to that folder.
 export async function writeSampleSounds(
-  files: Pick<Files, 'writeBytes'>,
-  dir: string,
-  paths: Pick<Paths, 'join'>,
+  data: Pick<Files, 'writeBytes'>,
 ): Promise<void> {
   await Promise.all(
     SAMPLE_SOUNDS.map((sound) =>
-      files.writeBytes(paths.join(dir, sound.file), sound.bytes()),
+      data.writeBytes(`${SAMPLE_SOUNDS_FOLDER}/${sound.file}`, sound.bytes()),
     ),
   );
 }
