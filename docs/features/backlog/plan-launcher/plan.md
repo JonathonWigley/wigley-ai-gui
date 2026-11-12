@@ -295,7 +295,7 @@ beyond its `contract.ts`.
 - [x] [Backlog assistant and tools](07-backlog-assistant.md) — after 02, 06
 
 ### Wave 5
-- [ ] [Backlog page](08-backlog-page.md) — after 03, 04, 07
+- [x] [Backlog page](08-backlog-page.md) — after 03, 04, 07
 
 ### Wave 6
 - [ ] [Doc re-read](09-doc-re-read.md) — after 08
@@ -313,6 +313,7 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - 04 · deep · e135cbbfd · diff read: interviewer is a scoped-agents registration with a progress.json store, interviewer-pane gone, keymap binds moved to scoped-agents.ask; wave 3 typecheck + lint pass after e9b8f553d (oxfmt) · concerns: the 'planned, not built yet' doc text is left for 09; the page test compares the fake pane's whole call list
 - 06 · deep · 1ac71bc2d · diff read: every Produces present (BacklogChunk, ChunkEdit, ChunkStart, channel chunks/editChunks/startChunks/chunksChanged, chunk-store/-message/-start exports, chat restored, NoteEdit); wave 3 typecheck + lint pass after e9b8f553d (Set<string> in a test, oxfmt) · concerns: AGENTS.md chat entry lacks backlog as a consumer of launch/defaultProfile/profileOf/restored (for 09); page and backlog self-test still call removed readDoc/applyEdit/commit until 08; exports_Restored test assumes invoke returns the handler's promise unwrapped; starter's extra started set has no test of its own
 - 07 · deep · e5dbd279c · diff read: every Produces present (sweep invoke, optional BacklogPlace fields, assistant.ts consts/store/sweepMessage, backlog-tools tools/AssistantPlace/backlogStateText/startBacklogTools, ready.ts AGENT_READY/isReady); wave 4 typecheck + lint pass after 7614053dc (oxfmt) · concerns: start.test's fake api now needs drive: null (undefined read as a drive run); one documentary cast in assistant.ts; design docs and AGENTS.md still say planned (for 09)
+- 08 · deep · 8557485fb · split across two deep workers (A+C, B+D+E); diff read: every Produces present (state exports, 11 layout parts in LAYOUT_PARTS, kit scopes, BacklogView/Deps/Command, backlogSelectChunkCommand); wave 5 typecheck + lint pass after a645c7b79 (space-token widths, oxfmt) · concerns: the strip's <CR> has no key-hint anchor in the strip pane; self-test's first Space k b assumes Backlog is not showing at start; followup 'A click into the Backlog detail…' needs re-checking against the view; view tests mock h-scroller and wrap createSplit via vi.mock and find nodes by layout.js class names; the 40rem container query assumes Mocha's 32px space-8; rows.test.ts edited outside the Files list (the one fixture that filled the dropped fields)
 ### Contract changes
 - scoped-agents contract.ts comments: trailing aligned comments → each on its own line above its member (oxfmt 80 columns); the block's '// Channel:' comment → the ScopedAgentsChannel interface · why: oxfmt --check · consumers: 03, 04, 07, 08 (no name or type changed) · group 02
 ### Rulings
@@ -337,5 +338,12 @@ Review base: d2cb6a97ef2eecfcc7f325b7021451bd2c4f4d95
 - set_backlog_chunks counts done rows as the repo's titles, so a repo with only done rows can take chunks · group 07
 - the sweep lists only rows whose staleness is already read and triggers no read · group 07
 - Wave 4: lead ran oxfmt --write on the 3 files lint flagged (editor tooling), in 7614053dc
+- the place subscription passes pane.isShown() || pendingOpen so a restore made while Backlog is hidden survives a reload · group 08
+- assistantSplit still stacks below 640px with the shared .ui-split CSS; no override added · group 08
+- page start holds the first setContext value until the mode is added · group 08
+- layout.d.ts defines its own StalenessLevel and EmptyReason, since a layout.d.ts may import only the kit · group 08
+- contract.ts removals of the Removed-in-08 members landed in the A+C half; BacklogWriteResult kept for fileNote · group 08
+- followups.md also drops the side-bar/editor focus-area item, whose code is gone · group 08
+- Wave 5: group 08 split across two deep workers by its A–E parts (A+C, B+D+E), files disjoint; lead ran oxfmt --write on the 4 files lint flagged, in a645c7b79
 ### Review rounds
 ### Test gate

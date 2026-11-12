@@ -1,6 +1,6 @@
 # 08 — Backlog page: the table, review pane, chunk strip and assistant pane
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · crosses into scoped-agents' pane lifecycle (outer panes, the focus hand-off, mode hide) and async channel reads and messages, over a rewrite of every page file
 Wave: 5 · Depends on: 03, 04, 07
@@ -611,3 +611,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 8557485fb · proof: split across two deep workers (A+C, B+D+E); diff read: every Produces present (state exports, 11 layout parts in LAYOUT_PARTS, kit scopes, BacklogView/Deps/Command, backlogSelectChunkCommand); wave 5 typecheck + lint pass after a645c7b79 (space-token widths, oxfmt) · concerns: the strip's <CR> has no key-hint anchor in the strip pane; self-test's first Space k b assumes Backlog is not showing at start; followup 'A click into the Backlog detail…' needs re-checking against the view; view tests mock h-scroller and wrap createSplit via vi.mock and find nodes by layout.js class names; the 40rem container query assumes Mocha's 32px space-8; rows.test.ts edited outside the Files list (the one fixture that filled the dropped fields)

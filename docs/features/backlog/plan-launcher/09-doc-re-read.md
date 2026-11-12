@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · doc-only: prose checked against landed code
 Wave: 6 · Depends on: 08
