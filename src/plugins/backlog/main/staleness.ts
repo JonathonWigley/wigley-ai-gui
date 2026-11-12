@@ -343,11 +343,13 @@ async function writtenCommit(
     logNotBelow(deps.log, row, file, homeClone);
     return null;
   }
-  const file = below.join('/');
+  const gitPath = below.join('/');
   const anchor = await anchorOf(row, readText);
-  const written = await deps.git.firstAdded(homeClone, file, anchor);
+  const written = await deps.git.firstAdded(homeClone, gitPath, anchor);
   const triesTitle = written === null && anchor !== row.title;
-  return triesTitle ? deps.git.firstAdded(homeClone, file, row.title) : written;
+  return triesTitle
+    ? deps.git.firstAdded(homeClone, gitPath, row.title)
+    : written;
 }
 
 // The commits strictly later than `written`, by committer date, that touched
