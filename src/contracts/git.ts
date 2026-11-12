@@ -83,8 +83,10 @@ export interface Git {
   // `path` (`git log -S`), which is the one that first added it; its `paths` is
   // `[path]`. `text` is matched as a raw substring, newlines included, so the
   // caller passes enough text to be unique in the file: `### Item` also matches
-  // a commit that added `### Item two`. Null when no commit did, and for an
-  // empty `text`, running nothing. Rejects when HEAD has no commit yet.
+  // a commit that added `### Item two`. History is read at `path` only, with
+  // no `--follow`, so a file that was moved or split dates its items at the
+  // commit that moved them there. Null when no commit did, and for an empty
+  // `text`, running nothing. Rejects when HEAD has no commit yet.
   firstAdded(
     root: string,
     path: string,

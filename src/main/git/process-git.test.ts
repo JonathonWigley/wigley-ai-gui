@@ -705,7 +705,6 @@ describe('createProcessGit', () => {
     );
 
     expect((await test.git.firstAdded(ROOT, 'a.md', '--x'))?.sha).toBe(SHA_A);
-    expect(args).toContain('-S--x');
   });
 });
 

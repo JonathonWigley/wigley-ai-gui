@@ -158,6 +158,7 @@ describe('itemAnchor', () => {
     ['- Fix the cache. Warm it first.', 'Fix the cache', 'Fix the cache.'],
     ['- Fix the cache', 'Fix the cache', 'Fix the cache\n'],
     ['- **Fix the cache', 'Fix the cache warmup', 'Fix the cache warmup'],
+    ['## Fix the cache\r', 'Fix the cache', '## Fix the cache\n'],
   ])('itemAnchor_LineTable_HeadingFormOrTitle %j', (line, title, anchor) => {
     expect(itemAnchor(line, title)).toBe(anchor);
   });
@@ -302,11 +303,18 @@ describe('staleness reader', () => {
     });
   });
 
-  it('read_RepoFolderBelowClone_PathsPrefixed', async () => {
+  it.each<{ name: string; spelled: string }>([
+    { name: 'spelled as git spells the clone', spelled: CLONE },
+    { name: 'home and repo folder through a link', spelled: '/link' },
+  ])('read_RepoFolderBelowClone_PathsPrefixed ($name)', async ({ spelled }) => {
     const stale = startReader();
-    const repoFolder = `${CLONE}/wigley-ai-gui`;
+    const repoFolder = `${spelled}/wigley-ai-gui`;
     const homeRoot = `${repoFolder}/docs/features`;
     await stale.files.write(`${repoFolder}/src/a.ts`, 'x');
+    // `spelled` is a link to CLONE.
+    vi.spyOn(stale.files, 'realPath').mockImplementation(async (path) =>
+      path.replace(spelled, CLONE),
+    );
     const named = row({
       homeRoot,
       path: `${homeRoot}/followups.md`,
@@ -327,6 +335,26 @@ describe('staleness reader', () => {
       ['wigley-ai-gui/src/a.ts'],
       STALENESS_LOG_LIMIT,
     );
+    expect(stale.logged).toEqual([]);
+  });
+
+  it('read_FileNotBelowItsClone_LoggedUnknown', async () => {
+    const stale = startReader();
+    const homeRoot = '/link/docs/features';
+    const linked = row({
+      homeRoot,
+      path: `${homeRoot}/followups.md`,
+      repoFolder: '/link',
+    });
+
+    await stale.reader.read([linked]);
+    await settle();
+
+    expect(stale.logged).toEqual([
+      `staleness of ${TITLE}: ${homeRoot}/followups.md is not below its clone ${CLONE}`,
+    ]);
+    expect(stale.git.firstAdded).not.toHaveBeenCalled();
+    expect(stale.sent[0][linked.key].level).toBe('unknown');
   });
 
   it('read_CacheValid_NoGitCall', async () => {
@@ -479,7 +507,7 @@ describe('staleness reader', () => {
       level: 'fresh',
     },
   ])(
-    'read_NoRepoFolder_EmptyListsUnknown ($name)',
+    'read_NoRepoFolder_NoNamedPaths ($name)',
     async ({ homeClone, level }) => {
       const stale = startReader();
       await stale.files.write(`${CLONE}/src/a.ts`, 'x');

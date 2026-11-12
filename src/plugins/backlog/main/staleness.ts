@@ -2,6 +2,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import {
   type Files,
   type FileStat,
+  isMissingFile,
   readIfPresent,
 } from '../../../contracts/files';
 import type { Git, GitCommit } from '../../../contracts/git';
@@ -42,7 +43,8 @@ export interface StalenessReader extends Disposable {
   read(rows: readonly BacklogRow[]): Promise<Record<RowKey, BacklogStaleness>>;
   // The commits after the row was written that touched a path it names,
   // newest first, read now; `[]` when the row has no written commit, no repo
-  // clone or no named paths. Rejects with git's error.
+  // clone or no named paths. Rejects with git's error, or the error resolving
+  // a path that is there.
   commitsSince(row: BacklogRow): Promise<GitCommit[]>;
   // Every entry read or cached in this run.
   entries(): Record<RowKey, BacklogStaleness>;
@@ -51,7 +53,7 @@ export interface StalenessReader extends Disposable {
 // `data` is the plugin's data folder; `send` gets each pass's batches.
 export interface StalenessDeps {
   git: Pick<Git, 'topLevel' | 'resolveCommit' | 'log' | 'firstAdded'>;
-  files: Pick<Files, 'stat' | 'read'>;
+  files: Pick<Files, 'stat' | 'read' | 'realPath'>;
   data: Pick<Files, 'read' | 'write'>;
   paths: Paths;
   log: PluginLog;
@@ -80,8 +82,12 @@ const NO_FACTS: StalenessFacts = {
 
 type FoundPaths = Pick<BacklogStaleness, 'namedPaths' | 'gonePaths'>;
 
-// The clone holding the row's home, and the one holding its repo folder.
+// The row's follow-up file and repo folder with every link resolved, as git
+// spells paths below a clone; the clone holding the row's home, and the one
+// holding its repo folder.
 interface RowClones {
+  file: string;
+  repoFolder: string | null;
   homeClone: string | null;
   repoClone: string | null;
 }
@@ -107,6 +113,8 @@ interface Lookups {
   // The clone's HEAD sha; '' for no clone or no commit.
   head(clone: string | null): Promise<string>;
   stat(path: string): Promise<FileStat | null>;
+  // `path` with every link resolved; `path` itself when nothing is there.
+  realPath(path: string): Promise<string>;
 }
 
 // The candidate between a pair of backticks as a repo path; null when it is
@@ -166,9 +174,10 @@ export function namedPaths(text: string): string[] {
 // The text of the follow-up file's `line` that `Git.firstAdded` searches for
 // the item titled `title`: the title with the bold marks around it, a `## `
 // heading's marker, and its closing `:` or `.`, ending in a newline when it
-// ends the line. A list marker is left out. `title` when the line does not
-// hold it.
-export function itemAnchor(line: string, title: string): string {
+// ends the line, a trailing `\r` dropped first. A list marker is left out.
+// `title` when the line does not hold it.
+export function itemAnchor(fileLine: string, title: string): string {
+  const line = fileLine.endsWith('\r') ? fileLine.slice(0, -1) : fileLine;
   const at = line.indexOf(title);
   if (at < 0) {
     return title;
@@ -230,6 +239,16 @@ function createLookups(
     topLevel: async (folder) => (folder === null ? null : topLevel(folder)),
     head: async (clone) => (clone === null ? '' : head(clone)),
     stat: onceEach((path) => files.stat(path)),
+    realPath: onceEach(async (path) => {
+      try {
+        return await files.realPath(path);
+      } catch (error) {
+        if (isMissingFile(error)) {
+          return path;
+        }
+        throw error;
+      }
+    }),
   };
 }
 
@@ -268,11 +287,26 @@ async function rowClones(
   row: BacklogRow,
   lookups: Lookups,
 ): Promise<RowClones> {
-  const [homeClone, repoClone] = await Promise.all([
-    lookups.topLevel(row.homeRoot),
-    lookups.topLevel(row.repoFolder),
+  const [file, homeRoot, repoFolder] = await Promise.all([
+    lookups.realPath(row.path),
+    lookups.realPath(row.homeRoot),
+    row.repoFolder === null ? null : lookups.realPath(row.repoFolder),
   ]);
-  return { homeClone, repoClone };
+  const [homeClone, repoClone] = await Promise.all([
+    lookups.topLevel(homeRoot),
+    lookups.topLevel(repoFolder),
+  ]);
+  return { file, repoFolder, homeClone, repoClone };
+}
+
+// Logs that `path` is not below `clone`, which git gave as holding it.
+function logNotBelow(
+  log: PluginLog,
+  row: BacklogRow,
+  path: string,
+  clone: string,
+): void {
+  log(`staleness of ${row.title}: ${path} is not below its clone ${clone}`);
 }
 
 // The anchor of the row's line in its follow-up file as `readText` gives it
@@ -292,18 +326,21 @@ async function anchorOf(
 }
 
 // The oldest commit that added the row's anchor to its file, or its title
-// when no commit added the anchor; null outside a clone.
+// when no commit added the anchor; null outside a clone, and, logged, when
+// the file is not below its clone.
 async function writtenCommit(
-  deps: Pick<StalenessDeps, 'git' | 'paths'>,
+  deps: Pick<StalenessDeps, 'git' | 'paths' | 'log'>,
   row: BacklogRow,
-  homeClone: string | null,
+  clones: RowClones,
   readText: (path: string) => Promise<string>,
 ): Promise<GitCommit | null> {
+  const { file, homeClone } = clones;
   if (homeClone === null) {
     return null;
   }
-  const below = deps.paths.segmentsBelow(row.path, homeClone);
+  const below = deps.paths.segmentsBelow(file, homeClone);
   if (below === null) {
+    logNotBelow(deps.log, row, file, homeClone);
     return null;
   }
   const file = below.join('/');
@@ -315,17 +352,21 @@ async function writtenCommit(
 
 // The commits strictly later than `written`, by committer date, that touched
 // a named path, of the newest STALENESS_LOG_LIMIT; each path below the repo
-// folder's clone.
+// folder's clone. None, logged, when the repo folder is not below its clone.
 async function commitsAfter(
-  deps: Pick<StalenessDeps, 'git' | 'paths'>,
+  deps: Pick<StalenessDeps, 'git' | 'paths' | 'log'>,
+  row: BacklogRow,
   written: GitCommit,
   repoFolder: string,
   repoClone: string,
   named: readonly string[],
 ): Promise<GitCommit[]> {
   const prefix = deps.paths.segmentsBelow(repoFolder, repoClone);
-  const hasPathsToLog = prefix !== null && named.length > 0;
-  if (!hasPathsToLog) {
+  if (prefix === null) {
+    logNotBelow(deps.log, row, repoFolder, repoClone);
+    return [];
+  }
+  if (named.length === 0) {
     return [];
   }
   const logPaths = named.map((path) => [...prefix, path].join('/'));
@@ -339,15 +380,14 @@ async function commitsAfter(
 }
 
 async function rowHistory(
-  deps: Pick<StalenessDeps, 'git' | 'paths'>,
+  deps: Pick<StalenessDeps, 'git' | 'paths' | 'log'>,
   row: BacklogRow,
   clones: RowClones,
   named: readonly string[],
   readText: (path: string) => Promise<string>,
 ): Promise<RowHistory> {
-  const written = await writtenCommit(deps, row, clones.homeClone, readText);
-  const { repoFolder } = row;
-  const { repoClone } = clones;
+  const written = await writtenCommit(deps, row, clones, readText);
+  const { repoFolder, repoClone } = clones;
   const hasRepoHistory =
     written !== null && repoClone !== null && repoFolder !== null;
   if (!hasRepoHistory) {
@@ -355,7 +395,14 @@ async function rowHistory(
   }
   return {
     written,
-    since: await commitsAfter(deps, written, repoFolder, repoClone, named),
+    since: await commitsAfter(
+      deps,
+      row,
+      written,
+      repoFolder,
+      repoClone,
+      named,
+    ),
   };
 }
 
@@ -447,8 +494,9 @@ export function createStalenessReader(deps: StalenessDeps): StalenessReader {
     row: BacklogRow,
     lookups: Lookups,
   ): Promise<QueuedRow> {
-    const found = await foundPaths(row, lookups, paths);
+    let found: FoundPaths = { namedPaths: [], gonePaths: [] };
     try {
+      found = await foundPaths(row, lookups, paths);
       const clones = await rowClones(row, lookups);
       const [repoHead, homeHead] = await Promise.all([
         lookups.head(clones.repoClone),
