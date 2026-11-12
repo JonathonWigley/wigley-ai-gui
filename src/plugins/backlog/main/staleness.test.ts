@@ -94,6 +94,9 @@ function startReader() {
   return { reader, files, data, git, logged, sent, hooks };
 }
 
+// Makes one of the reader's calls reject with `error`.
+type Reject = (stale: ReturnType<typeof startReader>, error: Error) => unknown;
+
 // Lets a pass over immediate fakes run to its end.
 function settle(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -158,7 +161,9 @@ describe('itemAnchor', () => {
     ['- Fix the cache. Warm it first.', 'Fix the cache', 'Fix the cache.'],
     ['- Fix the cache', 'Fix the cache', 'Fix the cache\n'],
     ['- **Fix the cache', 'Fix the cache warmup', 'Fix the cache warmup'],
-    ['## Fix the cache\r', 'Fix the cache', '## Fix the cache\n'],
+    ['## Fix the cache\r', 'Fix the cache', '## Fix the cache'],
+    ['- Fix the cache\r', 'Fix the cache', 'Fix the cache'],
+    ['- **Fix the cache** — warm it\r', 'Fix the cache', '**Fix the cache**'],
   ])('itemAnchor_LineTable_HeadingFormOrTitle %j', (line, title, anchor) => {
     expect(itemAnchor(line, title)).toBe(anchor);
   });
@@ -338,24 +343,50 @@ describe('staleness reader', () => {
     expect(stale.logged).toEqual([]);
   });
 
-  it('read_FileNotBelowItsClone_LoggedUnknown', async () => {
-    const stale = startReader();
-    const homeRoot = '/link/docs/features';
-    const linked = row({
-      homeRoot,
-      path: `${homeRoot}/followups.md`,
-      repoFolder: '/link',
-    });
+  // `/link` resolves to itself while git gives CLONE as its clone.
+  it.each<{
+    name: string;
+    homeRoot: string;
+    notBelow: string;
+    writtenAt: string | null;
+    level: BacklogStaleness['level'];
+  }>([
+    {
+      name: 'the follow-up file: undated',
+      homeRoot: '/link/docs/features',
+      notBelow: '/link/docs/features/followups.md',
+      writtenAt: null,
+      level: 'unknown',
+    },
+    {
+      name: 'the repo folder only: dated, no commits since',
+      homeRoot: HOME,
+      notBelow: '/link',
+      writtenAt: WRITTEN.at,
+      level: 'fresh',
+    },
+  ])(
+    'read_PathNotBelowItsClone_LoggedNoLog ($name)',
+    async ({ homeRoot, notBelow, writtenAt, level }) => {
+      const stale = startReader();
+      await stale.files.write('/link/src/a.ts', 'x');
+      const linked = row({
+        homeRoot,
+        path: `${homeRoot}/followups.md`,
+        repoFolder: '/link',
+        body: 'In `src/a.ts`.',
+      });
 
-    await stale.reader.read([linked]);
-    await settle();
+      await stale.reader.read([linked]);
+      await settle();
 
-    expect(stale.logged).toEqual([
-      `staleness of ${TITLE}: ${homeRoot}/followups.md is not below its clone ${CLONE}`,
-    ]);
-    expect(stale.git.firstAdded).not.toHaveBeenCalled();
-    expect(stale.sent[0][linked.key].level).toBe('unknown');
-  });
+      expect(stale.logged).toEqual([
+        `staleness of ${TITLE}: ${notBelow} is not below its clone ${CLONE}`,
+      ]);
+      expect(stale.git.log).not.toHaveBeenCalled();
+      expect(stale.sent[0][linked.key]).toMatchObject({ writtenAt, level });
+    },
+  );
 
   it('read_CacheValid_NoGitCall', async () => {
     const stale = startReader();
@@ -452,12 +483,28 @@ describe('staleness reader', () => {
     expect(stale.sent).toEqual([]);
   });
 
-  it('read_GitRejects_LoggedAndLevelled', async () => {
+  it.each<{ name: string; message: string; reject: Reject }>([
+    {
+      name: 'git rejects',
+      message: 'git log exited 128: index.lock exists',
+      reject: (stale, error) =>
+        stale.git.firstAdded.mockRejectedValue(error),
+    },
+    {
+      name: 'resolving a path that is there rejects',
+      message: 'EACCES: permission denied',
+      reject: (stale, error) =>
+        vi
+          .spyOn(stale.files, 'realPath')
+          .mockRejectedValue(Object.assign(error, { code: 'EACCES' })),
+    },
+  ])('read_RowRejects_LoggedUnknownNotStored ($name)', async ({
+    message,
+    reject,
+  }) => {
     const stale = startReader();
     await stale.files.write(`${CLONE}/src/a.ts`, 'x');
-    stale.git.firstAdded.mockRejectedValue(
-      new Error('git log exited 128: index.lock exists'),
-    );
+    reject(stale, new Error(message));
     const named = row({ body: 'In `src/a.ts`.' });
 
     await stale.reader.read([named]);
@@ -471,11 +518,10 @@ describe('staleness reader', () => {
       gonePaths: [],
       level: 'unknown',
     };
-    expect(stale.logged).toEqual([
-      `staleness of ${TITLE}: git log exited 128: index.lock exists`,
-    ]);
+    expect(stale.logged).toEqual([`staleness of ${TITLE}: ${message}`]);
     expect(stale.sent).toEqual([{ [named.key]: failed }]);
     expect(stale.reader.entries()).toEqual({ [named.key]: failed });
+    expect(await storedKeys(stale.data)).toEqual([]);
   });
 
   it('read_GitRejectedThenGood_ReadsAgainUnderSameHeads', async () => {

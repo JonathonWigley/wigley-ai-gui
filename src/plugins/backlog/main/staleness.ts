@@ -174,10 +174,12 @@ export function namedPaths(text: string): string[] {
 // The text of the follow-up file's `line` that `Git.firstAdded` searches for
 // the item titled `title`: the title with the bold marks around it, a `## `
 // heading's marker, and its closing `:` or `.`, ending in a newline when it
-// ends the line, a trailing `\r` dropped first. A list marker is left out.
-// `title` when the line does not hold it.
+// ends an LF line. A CRLF line's anchor drops its `\r` and ends in no
+// newline, so it matches a commit that stored the line as LF or as CRLF. A
+// list marker is left out. `title` when the line does not hold it.
 export function itemAnchor(fileLine: string, title: string): string {
-  const line = fileLine.endsWith('\r') ? fileLine.slice(0, -1) : fileLine;
+  const isCrlfLine = fileLine.endsWith('\r');
+  const line = isCrlfLine ? fileLine.slice(0, -1) : fileLine;
   const at = line.indexOf(title);
   if (at < 0) {
     return title;
@@ -194,7 +196,8 @@ export function itemAnchor(fileLine: string, title: string): string {
     end += 1;
   }
   const anchor = line.slice(start, end);
-  return end === line.length ? `${anchor}\n` : anchor;
+  const isNewlineKept = end === line.length && !isCrlfLine;
+  return isNewlineKept ? `${anchor}\n` : anchor;
 }
 
 // First match wins: a gone path, a commit since, no written date, else fresh.
