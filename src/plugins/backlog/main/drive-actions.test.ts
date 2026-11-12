@@ -11,7 +11,8 @@ const ASSISTANT_ROW = 'row-1';
 function driveOver(assistantSession: string | null) {
   const drive = fakeDriveHost();
   const tools = startBacklogTools({
-    scopeOf: async (session) => (session.id === ASSISTANT_ROW ? 'global' : null),
+    scopeOf: async (session) =>
+      session.id === ASSISTANT_ROW ? 'global' : null,
     rows: async () => [],
     staleness: () => ({}),
     chunks: { chunks: async () => [], replaceUnstarted: async () => [] },
@@ -37,7 +38,9 @@ describe('backlog drive actions', () => {
       content: [
         {
           type: 'text',
-          text: expect.stringContaining('The Backlog page has not been opened.'),
+          text: expect.stringContaining(
+            'The Backlog page has not been opened.',
+          ),
         },
       ],
     });
@@ -63,7 +66,10 @@ describe('backlog drive actions', () => {
     const drive = driveOver(null);
 
     await expect(
-      drive.run('callTool', { session: 'assistant', tool: 'read_backlog_state' }),
+      drive.run('callTool', {
+        session: 'assistant',
+        tool: 'read_backlog_state',
+      }),
     ).rejects.toThrow('The assistant has no session yet');
   });
 });

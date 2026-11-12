@@ -440,30 +440,33 @@ describe('backlog tools', () => {
       isError: false,
       after: [],
     },
-  ])('setBacklogChunks_Cases ($name)', async ({ args, text, isError, after }) => {
-    const data = createMemoryFiles();
-    await data.write(
-      'chunks.json',
-      JSON.stringify({ chunks: [chunk('Old', ['A'])] }),
-    );
-    const store = createChunkStore({
-      data,
-      randomHex: () => 'new',
-      restored: async () => undefined,
-      isHeld: () => true,
-      log: () => undefined,
-      changed: () => undefined,
-    });
-    const deps = { ...depsOver(), chunks: store };
+  ])(
+    'setBacklogChunks_Cases ($name)',
+    async ({ args, text, isError, after }) => {
+      const data = createMemoryFiles();
+      await data.write(
+        'chunks.json',
+        JSON.stringify({ chunks: [chunk('Old', ['A'])] }),
+      );
+      const store = createChunkStore({
+        data,
+        randomHex: () => 'new',
+        restored: async () => undefined,
+        isHeld: () => true,
+        log: () => undefined,
+        changed: () => undefined,
+      });
+      const deps = { ...depsOver(), chunks: store };
 
-    const result = await callTool(deps, 'set_backlog_chunks', args);
+      const result = await callTool(deps, 'set_backlog_chunks', args);
 
-    expect(textOf(result)).toBe(text);
-    expect(result.isError ?? false).toBe(isError);
-    expect(
-      (await store.chunks()).map(({ name, titles }) => ({ name, titles })),
-    ).toEqual(after);
-  });
+      expect(textOf(result)).toBe(text);
+      expect(result.isError ?? false).toBe(isError);
+      expect(
+        (await store.chunks()).map(({ name, titles }) => ({ name, titles })),
+      ).toEqual(after);
+    },
+  );
 
   it.each<{
     name: string;

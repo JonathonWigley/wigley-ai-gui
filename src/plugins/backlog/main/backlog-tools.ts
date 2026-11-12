@@ -49,7 +49,8 @@ export const SET_BACKLOG_CHUNKS_TOOL: ToolDefinition = {
             titles: {
               type: 'array',
               items: { type: 'string' },
-              description: "The follow-ups' titles, exactly as the file has them.",
+              description:
+                "The follow-ups' titles, exactly as the file has them.",
             },
           },
           required: ['name', 'titles'],
@@ -175,13 +176,7 @@ function cursorSection(
     `Repo: ${row.repo} · File: ${row.path}:${row.line} · Tags: ${joinedOrNone(row.tags)}`,
     cursorStalenessLine(entry),
   ].join('\n');
-  return [
-    '## Cursor item',
-    `### ${row.title}`,
-    facts,
-    row.oneLine,
-    row.body,
-  ]
+  return ['## Cursor item', `### ${row.title}`, facts, row.oneLine, row.body]
     .filter((part) => part !== '')
     .join('\n\n');
 }
@@ -250,9 +245,7 @@ export function backlogStateText(state: {
   const { rows, staleness, chunks, place } = state;
   const cursorKey = place?.selectedKey ?? null;
   const cursor =
-    cursorKey === null
-      ? undefined
-      : rows.find((row) => row.key === cursorKey);
+    cursorKey === null ? undefined : rows.find((row) => row.key === cursorKey);
   const sections = [
     '# Backlog',
     viewSection(place, cursor, rows),
@@ -276,10 +269,7 @@ async function readBacklogState(
   if ((await deps.scopeOf(session)) === null) {
     return refusedSession(READ_BACKLOG_STATE_TOOL.name);
   }
-  const [rows, chunks] = await Promise.all([
-    deps.rows(),
-    deps.chunks.chunks(),
-  ]);
+  const [rows, chunks] = await Promise.all([deps.rows(), deps.chunks.chunks()]);
   return textResult(
     backlogStateText({
       rows,
