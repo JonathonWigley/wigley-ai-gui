@@ -1,12 +1,9 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
-import type {
-  MainApi,
-  MainPart,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
+import type { MainApi, MainPart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
+import { chatMainKey } from '../../chat/contract';
+import { scopedAgentsMainKey } from '../../scoped-agents/contract';
 import { sessionsMainKey } from '../../sessions/contract';
 import type {
   OpenedProblem,
@@ -15,6 +12,7 @@ import type {
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { practiceManifest } from '../manifest';
+import { interviewerAgentSpec } from './interviewer-agent';
 import { createJudge } from './judge';
 import { createPracticeRuns } from './practice-runs';
 import { createPracticeSessions } from './practice-sessions';
@@ -31,18 +29,13 @@ import {
 } from './selftest-fixture';
 import { practiceSelfTestScript } from './selftest-script';
 
-type PracticeApi = MainApi<
-  typeof practiceManifest,
-  PracticeChannel,
-  Record<never, never>,
-  QualifiedEvents<'chat', ChatMainEvents>
->;
+type PracticeApi = MainApi<typeof practiceManifest, PracticeChannel>;
 
 // Serves the page the practice folder's problems through the problem store,
 // progress and the judge, and from the page's first `list` watches
 // `problems/`, sending `changed` with the slug of each change; a change of the
-// `folder` setting moves the watch. Runs the import and interviewer sessions
-// through chat, hearing chat's session events, and gives every session the
+// `folder` setting moves the watch. Runs the import session through chat and
+// registers the interviewer with scoped-agents, and gives every session the
 // `add_practice_problem` and `read_practice_state` tools. Registers the
 // Practice layout contract. Hands the self-test its script, telling it of each
 // submit, and offers a drive run the `writeFixture` action.
@@ -83,23 +76,14 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
     const runs = createPracticeRuns({ store, progress, judge });
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
+    const scopedAgents = api.dependency(scopedAgentsMainKey);
     const practiceSessions = createPracticeSessions({
       chat,
       store,
-      progress,
       files: services.files,
-      paths: services.paths,
-      timers: services.timers,
-      log: services.log,
     });
-    api.events.on('chat.sessionOpened', (event) =>
-      practiceSessions.opened(event),
-    );
-    api.events.on('chat.sessionClosed', (event) =>
-      practiceSessions.closed(event),
-    );
-    api.events.on('chat.sessionCleared', (event) =>
-      practiceSessions.cleared(event),
+    const interviewer = scopedAgents.addScopedAgent(
+      interviewerAgentSpec({ store, progress }),
     );
     sessions.contributeTools(
       [ADD_PRACTICE_PROBLEM_TOOL, READ_PRACTICE_STATE_TOOL],
@@ -110,7 +94,7 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
         progress,
         judge,
         lastResult: runs.lastResult,
-        interviewerSlug: practiceSessions.interviewerSlug,
+        interviewerSlug: (session) => interviewer.scopeOf(session),
       }),
     );
     const reload = () => channel.send('changed', { slug: null });
@@ -154,12 +138,6 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
     });
     channel.handle('startImport', (request) =>
       practiceSessions.startImport(request),
-    );
-    channel.handle('askInterviewer', (slug, text) =>
-      practiceSessions.askInterviewer(slug, text),
-    );
-    channel.handle('interviewerOf', (slug) =>
-      practiceSessions.interviewerOf(slug),
     );
     const watchProblems = (): Disposable =>
       store.watch((slug) => channel.send('changed', { slug }));

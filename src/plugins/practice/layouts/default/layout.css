@@ -1,6 +1,6 @@
 /* The default layout's look: the list pane, its counts and rows' marks; the
    column's panes, their tabs bars and headers; the tabs' documents, boxes and
-   results; the interviewer's ask box; and the import dialog's body. */
+   results; and the import dialog's body. */
 
 /* The list pane's tracks: its header of counts and keys, the filter, then the
    rows. */
@@ -174,24 +174,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--wg-space-1);
-}
-
-/* The interviewer pane's ask box: the problem's title, the hint, then the
-   frame. */
-.practice-ask[data-layout-owner='practice'] {
-  display: flex;
-  flex-direction: column;
-  gap: var(--wg-space-2);
-  padding: var(--wg-space-3);
-}
-
-[data-layout-owner='practice'] .practice-ask-title {
-  margin: 0;
-}
-
-[data-layout-owner='practice'] .practice-ask-hint {
-  color: var(--wg-fg-secondary);
-  margin: 0;
 }
 
 /* The import dialog's body: the frame, the problem, then the hint. */

@@ -40,7 +40,7 @@ import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { ChatMount } from '../../chat/contract';
+import type { AgentPane, AgentPaneSpec } from '../../scoped-agents/contract';
 import {
   type OpenedProblem,
   type PracticeChannel,
@@ -55,7 +55,6 @@ import type {
 } from '../layouts/layout';
 import type { practiceManifest } from '../manifest';
 import { createImportBox } from './import-box';
-import { createInterviewerPane } from './interviewer-pane';
 import {
   createPracticeKit,
   type PracticeBaseScope,
@@ -80,6 +79,9 @@ import {
 
 const PLUGIN_ID = 'practice';
 
+const ASK_HINT =
+  'Ask about the problem. The interviewer asks guiding questions and gives no answers.';
+
 // A drawn part whose root the view keeps, and the dispose of its anchors and
 // boxes.
 type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
@@ -91,11 +93,9 @@ export type PracticeCommand = Exclude<
   'showMode' | 'openProblemRow' | 'showTab' | 'openSubmissionRow'
 >;
 
-// The commands the interviewer pane and the import box handle.
+// The interviewer's toggle and the commands the import box handles.
 type InterviewerCommand =
   | 'toggleInterviewer'
-  | 'askSend'
-  | 'askLeave'
   | 'importStart'
   | 'importAccept'
   | 'importCancel';
@@ -134,11 +134,11 @@ export interface PracticeViewDeps {
   isShown(): boolean;
   // Shows Practice mode.
   showMode(): void;
-  // Sets the panes around the column, the interviewer pane's, while Practice
-  // shows; null as it hides.
+  // Sets the panes around the column, the interviewer's pane's, while
+  // Practice shows; null as it hides.
   setOuterPanes(panes: OuterPanes | null): void;
-  // Draws the interviewer's chat view of `sessionId` into `element`.
-  mountChat(element: HTMLElement, sessionId: string): ChatMount;
+  // Adds scoped-agents' pane for the interviewer.
+  addAgentPane(spec: AgentPaneSpec): AgentPane;
   // Hears each problem the user picks from the side bar, by click or Enter,
   // and main taking the keys; `l` opens one without picking it.
   picked(): void;
@@ -171,8 +171,10 @@ export interface PracticeViewDeps {
 // read to land puts `savedPlace` back and opens its problem again, keeping the
 // list's focus; `reload` reads it again (the channel's `changed`); `shown`
 // sets the scope and focus where the keys were left. An opened problem shows
-// in the workspace, which fills the column from then on, with the interviewer
-// pane in its side slot; the import box opens over the page.
+// in the workspace, which fills the column from then on, with the
+// interviewer's agent pane in its side slot, opened on each shown attempt; the
+// import box opens over the page. Run and Submit do nothing while Practice is
+// hidden.
 export interface PracticeView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -181,7 +183,7 @@ export interface PracticeView {
   load(): void;
   reload(): void;
   shown(): void;
-  // Practice hid: the interviewer pane gives the column its keys back.
+  // Practice hid: the interviewer's pane gives the column its keys back.
   hidden(): void;
   // The side bar was hidden: focus leaves it for main.
   sideBarHidden(): void;
@@ -277,35 +279,31 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   // ── Interviewer and import ─────────────────────────────────────────────
   // The open problem's title, for the ask box.
   let openTitle = '';
-  const interviewer = createInterviewerPane({
-    channel,
-    editor: deps.editor,
-    keys: deps.keys,
-    log: deps.log,
-    toast: deps.toast,
-    setScope: deps.setScope,
-    setResizeTarget: deps.setResizeTarget,
-    setFocusTarget: deps.setFocusTarget,
-    mountChat: deps.mountChat,
-    workspace,
-    view: {
-      setFocus: (focus) => setFocus(focus),
-      focusColumn: () => focusColumn(),
-    },
-    focus: () => store.get().focus,
-    problemTitle: () => openTitle,
-    drawAskBox: (parent, input, frame) =>
-      parts.draw('askBox', parent, (askBox, into, rollback) => {
-        const slot = appSlot(frame, 'textBox', rollback);
-        const box = askBox(into, input, {
-          ...kitFor('ask', rollback),
-          textBox: slot.place,
-        });
-        slot.placeIfLeftOut(requireElementIn(into, box.element, 'askBox'));
-        return box;
-      }),
+  // The problem and attempt shown, null before the first shows; the
+  // interviewer's scope changes with the pair.
+  let shownPair: { slug: string; attemptId: string } | null = null;
+  const interviewer = deps.addAgentPane({
+    owner: PLUGIN_ID,
+    agentId: 'interviewer',
+    heading: () => openTitle,
+    hint: ASK_HINT,
+    setShown: (shown) => workspace.setSidePaneShown(shown),
+    resizeTarget: workspace.sideResizeTarget,
+    tookKeys: () => setFocus('interviewer'),
+    leave: () => focusColumn(),
   });
   workspace.sidePane.append(interviewer.element);
+  // The pane takes `right` whenever it lacks the keys; Practice gives it only
+  // from the column, so Alt+l from the list goes on to the column.
+  const outerPanes: OuterPanes = {
+    focus: {
+      move: (direction) =>
+        direction === 'right' && store.get().focus !== 'main'
+          ? false
+          : interviewer.outerPanes.focus.move(direction),
+    },
+    resize: interviewer.outerPanes.resize,
+  };
 
   const importBox = createImportBox({
     channel,
@@ -592,7 +590,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     }
     dispatch({ type: 'focus', focus });
     if (before === 'interviewer' && isChanged) {
-      interviewer.columnTookKeys();
+      interviewer.hostTookKeys();
     }
     if (isChanged && focus !== 'interviewer') {
       deps.log(`${focus} focused`);
@@ -602,7 +600,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   const setFocus = (focus: PracticeFocus) => changeFocus(focus, true);
 
   // A click or a box's focus into the list or the column hands it the keys;
-  // in the interviewer pane only the ask box takes them, itself.
+  // in the interviewer's pane only its ask box takes them, itself.
   for (const [pane, focus] of [
     [listPane, 'list'],
     [mainPane, 'main'],
@@ -619,10 +617,19 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
 
   // ── Reads ──────────────────────────────────────────────────────────────
   // Tells the title bar, the ask box and the interviewer which problem shows.
+  // A new pair closes the interviewer's scope and opens it again, so a fresh
+  // attempt of the same problem drops the mount and the typed text.
   const noteShown = (problem: OpenedProblem) => {
     deps.opened(problem);
     openTitle = problem.summary.title;
-    interviewer.problemOpened(problem.summary.slug, problem.attempt.id);
+    const slug = problem.summary.slug;
+    const attemptId = problem.attempt.id;
+    if (shownPair?.slug === slug && shownPair.attemptId === attemptId) {
+      return;
+    }
+    shownPair = { slug, attemptId };
+    interviewer.scopeOpened(null);
+    interviewer.scopeOpened(slug);
   };
 
   const applyOpened = (problem: OpenedProblem) => {
@@ -794,26 +801,45 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       }
     },
   };
+  // Toggles the interviewer's pane; showing it needs a shown problem, else it
+  // toasts and stays hidden. Hiding it is never refused.
+  const toggleInterviewerPane = () => {
+    if (!interviewer.isShown() && shownPair === null) {
+      deps.toast('Open a problem first', 'info');
+      deps.log('interviewer needs an open problem');
+      return;
+    }
+    interviewer.toggle();
+  };
   const interviewerCommands: Record<InterviewerCommand, () => void> = {
     toggleInterviewer() {
       if (deps.isShown()) {
-        interviewer.toggle();
+        toggleInterviewerPane();
         return;
       }
       deps.showMode();
       if (!interviewer.isShown()) {
-        interviewer.toggle();
+        toggleInterviewerPane();
       }
     },
-    askSend: () => interviewer.send(),
-    askLeave: () => interviewer.leaveBox(),
     importStart: () => importBox.open(),
     importAccept: () => importBox.accept(),
     importCancel: () => importBox.cancel(),
   };
+  // Run and Submit are bound in `scoped-agents.ask`, which Backlog's
+  // assistant box shares, so they act only while Practice shows.
+  const judgeWhileShown = (command: 'run' | 'submit') => () => {
+    if (!deps.isShown()) {
+      deps.log(`${command} ignored: practice hidden`);
+      return;
+    }
+    workspace.commands[command]();
+  };
   const commands: Record<PracticeCommand, () => void> = {
     ...listCommands,
     ...workspace.commands,
+    run: judgeWhileShown('run'),
+    submit: judgeWhileShown('submit'),
     ...interviewerCommands,
   };
 
@@ -834,7 +860,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       void refreshOpen();
     },
     shown() {
-      deps.setOuterPanes(interviewer.outerPanes);
+      deps.setOuterPanes(outerPanes);
       render(true);
       deps.log('shown');
     },
@@ -861,7 +887,6 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       drawListPane();
       drawMain(true);
       workspace.setLayouts(next);
-      interviewer.redraw();
       importBox.redraw();
       render(true);
       if (filterScope !== null) {

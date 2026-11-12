@@ -244,13 +244,6 @@ const layout = {
   confirmBody(parent, input, kit) {
     return kit.el(parent, 'p', '', input.body);
   },
-  askBox(parent, input, kit) {
-    const root = kit.el(parent, 'div', 'practice-ask');
-    kit.el(root, 'h3', 'practice-ask-title', input.problemTitle);
-    kit.el(root, 'p', 'practice-ask-hint', input.hint);
-    kit.textBox(root);
-    return { element: root };
-  },
   importBox(parent, input, kit) {
     const root = kit.el(parent, 'div', 'practice-import');
     kit.textBox(root);

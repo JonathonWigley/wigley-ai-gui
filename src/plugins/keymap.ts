@@ -270,7 +270,6 @@ export const defaultKeymap = {
         'practice.problem',
         'practice.editor',
         'practice.console',
-        'practice.ask',
         'scoped-agents.ask',
       ] as const
     ).map((scope) => ({
@@ -958,7 +957,7 @@ export const defaultKeymap = {
         'practice.problem',
         'practice.editor',
         'practice.console',
-        'practice.ask',
+        'scoped-agents.ask',
       ] as const
     ).flatMap((scope) => [
       { keys: "<D-'>", scope, command: 'practice.run' as const },
@@ -1004,22 +1003,6 @@ export const defaultKeymap = {
     { keys: 'y', scope: 'practice.confirm', command: 'practice.confirmYes' },
     { keys: 'n', scope: 'practice.confirm', command: 'practice.confirmNo' },
     { keys: '<Esc>', scope: 'practice.confirm', command: 'practice.confirmNo' },
-    // The ask box sends on Enter in normal and insert mode, as the chat box
-    // does; Esc in its normal mode leaves it.
-    ...[
-      { keys: '<CR>', command: 'practice.askSend' as const },
-      { keys: '<Esc>', command: 'practice.askLeave' as const },
-    ].map((bind) => ({
-      ...bind,
-      scope: 'practice.ask' as const,
-      where: 'box' as const,
-    })),
-    {
-      keys: '<CR>',
-      scope: 'practice.ask',
-      command: 'practice.askSend',
-      mode: 'insert',
-    },
     // The scoped-agents ask box, the same keys: Enter sends in normal and
     // insert mode, Esc in normal mode leaves it.
     {

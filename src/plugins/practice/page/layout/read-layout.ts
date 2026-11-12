@@ -21,7 +21,6 @@ const LAYOUT_PARTS: Record<keyof PracticeLayout, true> = {
   resultTab: true,
   caseResult: true,
   confirmBody: true,
-  askBox: true,
   importBox: true,
 };
 

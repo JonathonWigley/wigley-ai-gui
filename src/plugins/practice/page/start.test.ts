@@ -9,9 +9,15 @@ import {
 import {
   countingEditors,
   deferred,
+  fakeDependency,
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
+import {
+  type AgentPane,
+  type AgentPaneSpec,
+  scopedAgentsPageKey,
+} from '../../scoped-agents/contract';
 import {
   type JudgeResult,
   type OpenedProblem,
@@ -19,7 +25,6 @@ import {
   type ProblemSummary,
   practicePlaceSlot,
 } from '../contract';
-import defaultLayout from '../layouts/default/layout.js';
 import { AUTOSAVE_DELAY_MS } from './problem-workspace';
 import { practicePagePart } from './start';
 
@@ -41,7 +46,7 @@ const EASY: ProblemSummary = {
 };
 const SECOND = HARD.slug;
 
-function opened(summary: ProblemSummary): OpenedProblem {
+function opened(summary: ProblemSummary, attemptId = 'a1'): OpenedProblem {
   return {
     summary,
     statement: '',
@@ -55,7 +60,7 @@ function opened(summary: ProblemSummary): OpenedProblem {
     notes: '',
     customCases: '',
     attempt: {
-      id: 'a1',
+      id: attemptId,
       started: '2026-01-01T00:00:00Z',
       peeked: false,
       interviewer: null,
@@ -81,14 +86,58 @@ type HeldAnswer = (
   args: unknown[],
 ) => Promise<unknown> | undefined;
 
+// The interviewer's pane scoped-agents hands Practice: `spec` the spec it
+// got, `calls` each call Practice made on it. It shows only once toggled, and
+// its outer panes take every move.
+interface FakePane {
+  spec: AgentPaneSpec | null;
+  calls: string[];
+}
+
+function fakeAgentPane(pane: FakePane): AgentPane {
+  let isPaneShown = false;
+  return {
+    element: document.createElement('div'),
+    isShown: () => isPaneShown,
+    toggle() {
+      pane.calls.push('toggle');
+      isPaneShown = !isPaneShown;
+    },
+    scopeOpened(scope) {
+      pane.calls.push(`scopeOpened ${String(scope)}`);
+    },
+    refresh: () => undefined,
+    hostTookKeys() {
+      pane.calls.push('hostTookKeys');
+    },
+    modeHidden() {
+      pane.calls.push('modeHidden');
+    },
+    outerPanes: {
+      focus: {
+        move(direction) {
+          pane.calls.push(`move ${direction}`);
+          return true;
+        },
+      },
+      resize: { nudge: () => true },
+    },
+    redraw: () => undefined,
+    dispose() {
+      pane.calls.push('dispose');
+    },
+  };
+}
+
 // A Practice page whose `list` reads both problems, whose `open` opens the
 // slug asked for and whose judge accepts, unless `held` answers first; `calls`
 // holds each invoke, `place` the last page's place, `editors` the code editor
-// and boxes it made.
+// and boxes it made, `pane` the interviewer's fake pane.
 function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
   installFocusFakeDom(vi.stubGlobal);
   const editors = countingEditors();
   const calls: { method: string; args: unknown[] }[] = [];
+  const pane: FakePane = { spec: null, calls: [] };
   const state = createSlotStore(() => undefined);
   if (place !== undefined) {
     const oldPage = state.publish(practicePlaceSlot);
@@ -98,6 +147,14 @@ function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
   const harness = startPagePart(practicePagePart, {
     firstModeTaken: true,
     state,
+    dependencies: [
+      fakeDependency(scopedAgentsPageKey, () => ({
+        addAgentPane(spec) {
+          pane.spec = spec;
+          return fakeAgentPane(pane);
+        },
+      })),
+    ],
     services: {
       editor: editors.host,
       markdown: {
@@ -128,7 +185,7 @@ function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
       return undefined;
     },
   });
-  return { harness, calls, editors };
+  return { harness, calls, editors, pane };
 }
 
 // A Practice page, shown, with `SECOND` open in the workspace.
@@ -435,25 +492,135 @@ describe('practicePagePart', () => {
     expect(messagesOf(harness)).toContain('main focused');
   });
 
-  it('keeps the focus in the ask box across a layout change', async () => {
-    const { harness, commands } = await startWithProblemOpen((method) =>
-      method === 'interviewerOf' ? Promise.resolve(null) : undefined,
-    );
-    commands.toggleInterviewer({ arg: undefined });
+  it.each<{ case: string; reopenedAttempt: string | null; calls: string[] }>([
+    {
+      case: 'first open',
+      reopenedAttempt: null,
+      calls: ['scopeOpened null', `scopeOpened ${SECOND}`],
+    },
+    { case: 'the same attempt refreshed', reopenedAttempt: 'a1', calls: [] },
+    {
+      case: 'a fresh attempt of the same problem',
+      reopenedAttempt: 'a2',
+      calls: ['scopeOpened null', `scopeOpened ${SECOND}`],
+    },
+  ])(
+    'hands the pane its scope per attempt: $case',
+    async ({ reopenedAttempt, calls }) => {
+      let attemptId = 'a1';
+      const { harness, pane } = await startWithProblemOpen((method, args) =>
+        method === 'open' && args[0] === SECOND
+          ? Promise.resolve(opened(HARD, attemptId))
+          : undefined,
+      );
+      if (reopenedAttempt !== null) {
+        pane.calls.length = 0;
+        attemptId = reopenedAttempt;
+        harness.send('changed', { slug: SECOND });
+        await settle();
+        await settle();
+      }
+
+      expect(pane.calls).toEqual(calls);
+      expect({
+        owner: pane.spec?.owner,
+        agentId: pane.spec?.agentId,
+        hint: pane.spec?.hint,
+        heading: pane.spec?.heading(),
+      }).toEqual({
+        owner: 'practice',
+        agentId: 'interviewer',
+        hint: 'Ask about the problem. The interviewer asks guiding questions and gives no answers.',
+        heading: HARD.title,
+      });
+    },
+  );
+
+  it.each<{
+    case: string;
+    start: 'hidden' | 'shown' | 'open';
+    refusals: string[];
+    toggles: string[];
+  }>([
+    {
+      case: 'no open problem',
+      start: 'shown',
+      refusals: [
+        'toast info: Open a problem first',
+        'interviewer needs an open problem',
+      ],
+      toggles: [],
+    },
+    {
+      case: 'no open problem, Practice hidden',
+      start: 'hidden',
+      refusals: [
+        'toast info: Open a problem first',
+        'interviewer needs an open problem',
+      ],
+      toggles: [],
+    },
+    { case: 'a problem open', start: 'open', refusals: [], toggles: ['toggle'] },
+  ])('toggleInterviewer: $case', async ({ start, refusals, toggles }) => {
+    const { harness, pane } =
+      start === 'open' ? await startWithProblemOpen() : startPracticePage();
+    const commands = harness.started().commands;
+    if (start === 'shown') {
+      commands.showMode({ arg: undefined });
+    }
     await settle();
-    const askBox = asFake(harness.mode('practice.main').element).querySelector(
-      '.practice-ask-box',
+
+    commands.toggleInterviewer({ arg: undefined });
+
+    expect(
+      messagesOf(harness).filter(
+        (line) =>
+          line.startsWith('toast') ||
+          line === 'interviewer needs an open problem',
+      ),
+    ).toEqual(refusals);
+    expect(pane.calls.filter((call) => call === 'toggle')).toEqual(toggles);
+    expect(messagesOf(harness)).toContain('shown');
+  });
+
+  it('the outer panes take right only from main', async () => {
+    const { harness, pane } = startPracticePage();
+    const commands = harness.started().commands;
+    commands.showMode({ arg: undefined });
+    await settle();
+
+    const fromList = harness.outerPanes()!.focus.move('right');
+    const callsFromList = [...pane.calls];
+    commands.listDown({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    const fromMain = harness.outerPanes()!.focus.move('right');
+
+    expect([fromList, callsFromList]).toEqual([false, []]);
+    expect([fromMain, pane.calls.at(-1)]).toEqual([true, 'move right']);
+  });
+
+  it('run and submit do nothing while Practice is hidden', async () => {
+    const { harness, calls } = startPracticePage();
+    const commands = harness.started().commands;
+    await settle();
+    commands.listDown({ arg: undefined });
+    commands.openKeepingFocus({ arg: undefined });
+    await settle();
+    await settle();
+    calls.length = 0;
+
+    commands.run({ arg: undefined });
+    commands.submit({ arg: undefined });
+    await settle();
+
+    expect(calls).toEqual([]);
+    expect(messagesOf(harness)).toEqual(
+      expect.arrayContaining([
+        'run ignored: practice hidden',
+        'submit ignored: practice hidden',
+      ]),
     );
-    const content = document.createElement('div');
-    askBox!.append(asFake(content));
-    content.focus();
-
-    harness.showLayouts({
-      layouts: new Map([['default', defaultLayout]]),
-      user: 'default',
-    });
-
-    expect(document.activeElement === content).toBe(true);
   });
 
   it('stops with nothing live', async () => {

@@ -1,7 +1,7 @@
 // The practice plugin's channel between its main and page parts: the problem
 // list, one problem opened with its attempt and submissions, the user's saves,
-// Run and Submit through the judge, the Solution tab's peek, and the import and
-// interviewer sessions. Also the page's place and its click commands.
+// Run and Submit through the judge, the Solution tab's peek, and the import
+// session. Also the page's place and its click commands.
 
 import type { CommandKey } from '../../contracts/commands';
 import type { ChannelShape } from '../../contracts/plugin';
@@ -130,8 +130,6 @@ export interface PracticeChannel extends ChannelShape {
     // Marks the attempt peeked and drops the ladder to its first step.
     peek(slug: string): Promise<{ approach: string; reference: string }>;
     startImport(request: string): Promise<string>;
-    askInterviewer(slug: string, text: string): Promise<string>;
-    interviewerOf(slug: string): Promise<string | null>;
   };
   messages: {
     // The list or an open problem changed on disk, the app's own writes

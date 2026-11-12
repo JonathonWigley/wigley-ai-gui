@@ -3,8 +3,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // Practice mode: LeetCode-style problems in C++ under the `folder` setting, judged
 // by compiling with `compiler` and `flags` and running each case under
 // `timeLimitMs`, with progress on a review ladder of `reviewSteps` days. Its main
-// names `chat` and `sessions` for the import and interviewer sessions; its page
-// names `chat` for the interviewer's chat view. `layout` names the layout
+// names `chat` for the import session, `sessions` for its tools and
+// `scoped-agents` for the interviewer; its page names `scoped-agents` for the
+// interviewer's pane. `layout` names the layout
 // Practice draws with. `openProblemRow` is the click on a list row, naming its
 // problem, `showTab` the click on a tab and `openSubmissionRow` the click on a
 // Submissions row, so they have no key.
@@ -13,7 +14,10 @@ export const practiceManifest = definePlugin({
   label: 'Practice',
   description:
     'Adds Practice mode, for solving LeetCode-style problems in C++ with a judge, progress and an interviewer.',
-  dependsOn: { main: ['chat', 'sessions'], page: ['chat'] },
+  dependsOn: {
+    main: ['chat', 'sessions', 'scoped-agents'],
+    page: ['scoped-agents'],
+  },
   reads: { main: [], page: [] },
   commands: {
     showMode: {
@@ -99,12 +103,6 @@ export const practiceManifest = definePlugin({
       group: 'interviewer',
       runsIn: 'page',
     },
-    askSend: {
-      label: 'ask the interviewer',
-      group: 'interviewer',
-      runsIn: 'page',
-    },
-    askLeave: { label: 'leave the box', group: 'interviewer', runsIn: 'page' },
     importStart: { label: 'import problems', group: 'import', runsIn: 'page' },
     importAccept: {
       label: 'start the import',
@@ -120,7 +118,6 @@ export const practiceManifest = definePlugin({
     console: 'In the practice console',
     box: 'In the practice filter box',
     confirm: 'In a practice confirmation',
-    ask: 'In the interviewer ask box',
     import: 'In the import box',
   },
   settings: {

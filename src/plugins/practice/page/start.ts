@@ -6,7 +6,7 @@ import {
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
 import { placeWrites } from '../../../shared/page/place-slot';
-import { chatPageKey } from '../../chat/contract';
+import { scopedAgentsPageKey } from '../../scoped-agents/contract';
 import {
   type PracticeChannel,
   type PracticePlace,
@@ -29,14 +29,14 @@ const TITLE = 'Practice';
 // `changed` message reads the list again, keeping the selection. The place
 // (selection, open problem, filter, the workspace's pane and tabs) goes to
 // `practice.place` on each change, and a page load puts the last page's back.
-// The interviewer pane draws chat's view of the attempt's interviewer, and the
-// panes around the column are its while Practice shows. The page may not stop
-// while a draft is unsaved.
+// The interviewer's pane is scoped-agents', added through `addAgentPane`, and
+// the panes around the column are its while Practice shows. The page may not
+// stop while a draft is unsaved.
 export const practicePagePart: PagePart<typeof practiceManifest> = {
   manifest: practiceManifest,
   start(api: PracticeApi) {
     const { services } = api;
-    const chat = api.dependency(chatPageKey);
+    const scopedAgents = api.dependency(scopedAgentsPageKey);
     let isShown = false;
     const placeWriter = api.state.publish(practicePlaceSlot);
     const place = placeWrites<PracticePlace>((value) => placeWriter.set(value));
@@ -57,7 +57,7 @@ export const practicePagePart: PagePart<typeof practiceManifest> = {
       isShown: () => isShown,
       showMode: () => mode.show(),
       setOuterPanes: (panes) => api.panes.setOuterPanes(panes),
-      mountChat: (element, sessionId) => chat.mountChat(element, sessionId),
+      addAgentPane: (spec) => scopedAgents.addAgentPane(spec),
       picked: () => mode.picked(),
       opened: (problem) =>
         mode.setContext({ title: TITLE, detail: problem.summary.title }),

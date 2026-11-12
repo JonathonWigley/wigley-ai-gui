@@ -125,30 +125,30 @@ const practiceGroups: SelfTestGroup[] = [
   },
   {
     name: 'interviewer',
-    why: "Space v i opens the interviewer pane on LRU Cache's ask box; Enter launches the interviewer over the fake harness and mounts its chat view; Option+h leaves the chat view for the column and Option+l returns; another problem shows its own ask box, and LRU Cache brings its interviewer back; Space v i hides the pane.",
+    why: "Space v i opens the interviewer pane on LRU Cache's ask box; Enter launches the interviewer over the fake harness and mounts its chat view; Option+h leaves the chat view for the column and Option+l returns; another problem shows its own ask box, and LRU Cache brings its interviewer back; Space v i hides the pane. The pane is scoped-agents', so its lines log under that plugin.",
     steps: [
       {
         keys: [' ', 'v', 'i'],
-        expect: '[practice] ask box shown for lru-cache',
+        expect: '[scoped-agents] interviewer ask box shown for lru-cache',
         alsoExpect: [
-          /^\[practice\] interviewer pane shown$/,
-          /^\[practice\] interviewer focused$/,
+          /^\[scoped-agents\] interviewer pane shown$/,
+          /^\[scoped-agents\] interviewer focused$/,
         ],
         checksFit: true,
         screenshot: 'ask-box',
       },
       {
         keys: [...'how do I start', 'Enter'],
-        expect: '[practice] interviewer mounted lru-cache',
+        expect: '[scoped-agents] interviewer mounted lru-cache',
         screenshot: 'interviewer-chat',
       },
       {
         keys: ['<A-h>'],
-        expect: '[practice] interviewer left',
+        expect: '[scoped-agents] interviewer left',
         alsoExpect: [/^\[practice\] main focused$/],
         why: "The chat view turns Option+h down at its left edge, so Practice's outer panes give the column the keys.",
       },
-      { keys: ['<A-l>'], expect: '[practice] interviewer focused' },
+      { keys: ['<A-l>'], expect: '[scoped-agents] interviewer focused' },
       { keys: ['<A-h>', '<A-h>'], expect: '[practice] list focused' },
       {
         keys: ['j'],
@@ -157,18 +157,21 @@ const practiceGroups: SelfTestGroup[] = [
       },
       {
         keys: ['Enter'],
-        expect: '[practice] ask box shown for two-sum',
+        expect: '[scoped-agents] interviewer ask box shown for two-sum',
         alsoExpect: [/^\[practice\] opened two-sum$/],
         why: "Two Sum's attempt has no interviewer.",
       },
       { keys: ['<A-h>'], expect: '[practice] list focused' },
       {
         keys: ['k', 'Enter'],
-        expect: '[practice] interviewer mounted lru-cache',
+        expect: '[scoped-agents] interviewer mounted lru-cache',
         alsoExpect: [/^\[practice\] opened lru-cache$/],
         why: "Reopening the problem brings back its attempt's interviewer.",
       },
-      { keys: [' ', 'v', 'i'], expect: '[practice] interviewer pane hidden' },
+      {
+        keys: [' ', 'v', 'i'],
+        expect: '[scoped-agents] interviewer pane hidden',
+      },
     ],
   },
   {
