@@ -11,7 +11,7 @@ import { HEADLESS_NOTE, HEADLESS_OFF_NOTE } from '../contract';
 export const SET_HEADLESS_TOOL: ToolDefinition = {
   name: 'set_headless',
   description:
-    'Turn this session\'s headless mode on or off in the Auri app. While the session is headless the app shows no forms round: every ask_round comes back answered with its recommendations. Turn it on only when the user hands you the rest of the run ("continue with your own suggestions", "run headless", "stop asking me, finish it"); a reply that takes your recommendations for one round answers that round only. Turn it off when the user asks to be asked again. Only a session the Auri app started can be headless. Returns the line that says whether the session is now headless.',
+    'Turn this session\'s headless mode on or off in the Auri app. While the session is headless the app shows no forms round: every ask_round comes back answered with its recommendations. Every open_audio_picker comes back auto_answered with each moment\'s recommended candidate. Turn it on only when the user hands you the rest of the run ("continue with your own suggestions", "run headless", "stop asking me, finish it"); a reply that takes your recommendations for one round answers that round only. Turn it off when the user asks to be asked again. Only a session the Auri app started can be headless. Returns the line that says whether the session is now headless.',
   inputSchema: {
     type: 'object',
     properties: {
