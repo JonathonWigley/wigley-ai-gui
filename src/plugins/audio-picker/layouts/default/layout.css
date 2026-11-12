@@ -1,0 +1,140 @@
+/* The default audio picker layout: the head, each moment's header and reason,
+   the candidate and None of these rows, and the notes. */
+.audio-picker-head {
+  padding: var(--wg-space-2) var(--wg-space-2) 0;
+}
+
+.audio-picker-heading {
+  font-size: var(--wg-text-20);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0 0 var(--wg-space-2);
+}
+
+.audio-picker-counts {
+  color: var(--wg-fg-secondary);
+  font-variant-numeric: tabular-nums;
+  margin: var(--wg-space-2) 0 0;
+}
+
+.audio-picker-save {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  margin: var(--wg-space-1) 0 0;
+}
+
+/* Moment */
+.audio-picker-moment {
+  margin-top: var(--wg-space-4);
+  padding: 0 var(--wg-space-2);
+}
+
+.audio-picker-reason {
+  color: var(--wg-fg-tertiary);
+  margin-bottom: var(--wg-space-1);
+}
+
+/* Rows */
+.audio-picker-row {
+  border-radius: var(--wg-radius-sm);
+  cursor: default;
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+.audio-picker-row-line {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+.audio-picker-row.is-selected {
+  background: var(--wg-accent-tint);
+}
+
+.audio-picker-row.is-cursor {
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+/* The recommended row's start-edge mark, kept beside the cursor's ring. */
+.audio-picker-candidate.audio-picker-recommended {
+  box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-accent);
+}
+
+.audio-picker-candidate.audio-picker-recommended.is-cursor {
+  box-shadow:
+    inset var(--wg-indicator-width) 0 0 var(--wg-accent),
+    inset 0 0 0 1px var(--wg-focus-border);
+}
+
+.audio-picker-candidate.is-active .audio-picker-play {
+  color: var(--wg-status-running);
+}
+
+.audio-picker-waveform {
+  color: var(--wg-fg-tertiary);
+  display: inline-block;
+  flex: none;
+  height: var(--wg-space-4);
+  width: calc(var(--wg-space-8) * 2);
+}
+
+.audio-picker-row.is-cursor .audio-picker-waveform {
+  color: var(--wg-accent);
+}
+
+.audio-picker-waveform svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.audio-picker-waveform rect {
+  fill: currentColor;
+}
+
+.audio-picker-name {
+  font-family: var(--wg-font-mono);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-picker-library {
+  color: var(--wg-fg-secondary);
+  white-space: nowrap;
+}
+
+.audio-picker-length,
+.audio-picker-loudness {
+  color: var(--wg-fg-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.audio-picker-cursor-prompt {
+  margin-left: auto;
+}
+
+.audio-picker-load-error {
+  color: var(--wg-status-error);
+  margin: var(--wg-space-1) 0 0;
+}
+
+.audio-picker-none-label {
+  color: var(--wg-fg-secondary);
+}
+
+/* Notes */
+.audio-picker-notes {
+  padding: var(--wg-space-1) var(--wg-space-2) var(--wg-space-2);
+}
+
+.audio-picker-notes-label {
+  align-items: baseline;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-2);
+  margin-bottom: var(--wg-space-1);
+}
