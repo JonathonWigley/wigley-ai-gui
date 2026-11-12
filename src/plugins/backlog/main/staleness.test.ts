@@ -487,8 +487,7 @@ describe('staleness reader', () => {
     {
       name: 'git rejects',
       message: 'git log exited 128: index.lock exists',
-      reject: (stale, error) =>
-        stale.git.firstAdded.mockRejectedValue(error),
+      reject: (stale, error) => stale.git.firstAdded.mockRejectedValue(error),
     },
     {
       name: 'resolving a path that is there rejects',
@@ -498,31 +497,31 @@ describe('staleness reader', () => {
           .spyOn(stale.files, 'realPath')
           .mockRejectedValue(Object.assign(error, { code: 'EACCES' })),
     },
-  ])('read_RowRejects_LoggedUnknownNotStored ($name)', async ({
-    message,
-    reject,
-  }) => {
-    const stale = startReader();
-    await stale.files.write(`${CLONE}/src/a.ts`, 'x');
-    reject(stale, new Error(message));
-    const named = row({ body: 'In `src/a.ts`.' });
+  ])(
+    'read_RowRejects_LoggedUnknownNotStored ($name)',
+    async ({ message, reject }) => {
+      const stale = startReader();
+      await stale.files.write(`${CLONE}/src/a.ts`, 'x');
+      reject(stale, new Error(message));
+      const named = row({ body: 'In `src/a.ts`.' });
 
-    await stale.reader.read([named]);
-    await settle();
+      await stale.reader.read([named]);
+      await settle();
 
-    const failed: BacklogStaleness = {
-      writtenAt: null,
-      commitsSince: 0,
-      lastCommit: null,
-      namedPaths: ['src/a.ts'],
-      gonePaths: [],
-      level: 'unknown',
-    };
-    expect(stale.logged).toEqual([`staleness of ${TITLE}: ${message}`]);
-    expect(stale.sent).toEqual([{ [named.key]: failed }]);
-    expect(stale.reader.entries()).toEqual({ [named.key]: failed });
-    expect(await storedKeys(stale.data)).toEqual([]);
-  });
+      const failed: BacklogStaleness = {
+        writtenAt: null,
+        commitsSince: 0,
+        lastCommit: null,
+        namedPaths: ['src/a.ts'],
+        gonePaths: [],
+        level: 'unknown',
+      };
+      expect(stale.logged).toEqual([`staleness of ${TITLE}: ${message}`]);
+      expect(stale.sent).toEqual([{ [named.key]: failed }]);
+      expect(stale.reader.entries()).toEqual({ [named.key]: failed });
+      expect(await storedKeys(stale.data)).toEqual([]);
+    },
+  );
 
   it('read_GitRejectedThenGood_ReadsAgainUnderSameHeads', async () => {
     const stale = startReader();
