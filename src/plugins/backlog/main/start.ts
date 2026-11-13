@@ -93,7 +93,8 @@ type BacklogApi = MainApi<
 
 // The file a home's new follow-ups go to.
 const CREATE_TARGET_FILE = 'followups.md';
-// The one folder of a clone that is a home in git.
+// A clone's own home in git; a project folder's is the same path under that
+// folder.
 const FEATURES_FOLDER = 'docs/features';
 const IMAGE_FILE = /^(\d+)\.png$/;
 
@@ -145,10 +146,26 @@ async function realPathOrNull(
   }
 }
 
+// The folders of a clone at `topLevel` that may be `root`: the clone's own
+// `docs/features`, and the `docs/features` of the project folder directly
+// under the clone that `root` names, which the docs index lists as a home
+// only when that folder holds its own `AGENTS.md`.
+function clonesFeaturesFolders(
+  paths: Paths,
+  topLevel: string,
+  root: string,
+): string[] {
+  const projectFolder = paths.parent(paths.parent(root));
+  return [
+    paths.join(topLevel, FEATURES_FOLDER),
+    paths.join(topLevel, paths.base(projectFolder), FEATURES_FOLDER),
+  ];
+}
+
 // The home with its `gitRoot`: the clone whose `docs/features` folder it is,
-// else null; and whether any clone holds it, a `topLevel` that throws counting
-// as none. Null in place of the home when it is a linked worktree's
-// `docs/features` folder.
+// its own or a project folder's, else null; and whether any clone holds it, a
+// `topLevel` that throws counting as none. Null in place of the home when it
+// is such a folder of a linked worktree.
 async function locateHome(
   deps: BacklogDeps,
   home: HomeShape,
@@ -159,14 +176,16 @@ async function locateHome(
     if (topLevel === null) {
       return { ...home, gitRoot: null, isInClone: false };
     }
-    const [homeReal, featuresReal] = await Promise.all([
-      realPathOrNull(deps.files, home.root),
-      realPathOrNull(deps.files, deps.paths.join(topLevel, FEATURES_FOLDER)),
-    ]);
+    const folders = clonesFeaturesFolders(deps.paths, topLevel, home.root);
+    const [homeReal, ...featuresReals] = await Promise.all(
+      [home.root, ...folders].map((path) => realPathOrNull(deps.files, path)),
+    );
     const isClonesFeaturesFolder =
       homeReal !== null &&
-      featuresReal !== null &&
-      deps.paths.samePath(homeReal, featuresReal);
+      featuresReals.some(
+        (featuresReal) =>
+          featuresReal !== null && deps.paths.samePath(homeReal, featuresReal),
+      );
     if (!isClonesFeaturesFolder) {
       return { ...home, gitRoot: null, isInClone: true };
     }

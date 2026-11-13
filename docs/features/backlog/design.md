@@ -103,7 +103,9 @@ goes through the assistant, a chat beside the table. A decision here stands unle
 
 - Backlog parses each follow-up file itself through the shared module (`src/shared/followups/`). The docs index
   supplies which files exist and their repo and home.
-- A repo normally has one features home. A stray second home (an in-repo `docs/features/` and a
+- A repo normally has one features home. A repo of several projects (the `ai` repo) has one per project folder,
+  each a repo of its own here, named for its folder, in git with the clone as its git root and the project folder as
+  its repo folder. A stray second home (an in-repo `docs/features/` and a
   `~/wigley-features/<repo>/`) adds its rows under the same repo (when two items share a repo and title, the first one read keeps the row). A home that is a linked git worktree's
   (`git worktree add`) own `docs/features/` is not listed: it is a second checkout of a clone's own home.
 - Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.

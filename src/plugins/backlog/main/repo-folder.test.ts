@@ -21,6 +21,13 @@ describe('repoFolderOf', () => {
       folder: '/dev/r',
     },
     {
+      name: "a project folder's in-repo home in a clone",
+      root: '/dev/r/proj/docs/features',
+      isInClone: true,
+      settings: [],
+      folder: '/dev/r/proj',
+    },
+    {
       name: 'in-repo shape not in a clone, with a setting entry',
       root: '/dev/r/docs/features',
       isInClone: false,

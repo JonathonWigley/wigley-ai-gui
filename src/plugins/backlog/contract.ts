@@ -23,12 +23,13 @@ export interface BacklogFollowupFile {
 
 // One features home. `isCreateTarget`: the one home per repo a new follow-up
 // goes to, a home in git first. `gitRoot`: the clone whose `docs/features`
-// folder the home is (compared on real paths); null for any other home, which
-// counts as not in git. A home that is a linked worktree's `docs/features`
-// folder is no home.
+// folder the home is, its own or a project folder's directly under it
+// (compared on real paths); null for any other home, which counts as not in
+// git. A home that is such a folder of a linked worktree is no home.
 // `repoFolder`: the folder the repo's sessions start in and its follow-ups'
 // named paths resolve against: the folder above `docs/features` for a home of
-// that shape in a clone, else the `repoFolders` setting's folder for the repo;
+// that shape in a clone (the project folder for a project folder's home), else
+// the `repoFolders` setting's folder for the repo;
 // null when neither gives one.
 export interface BacklogHome {
   repo: string;

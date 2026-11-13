@@ -600,6 +600,21 @@ Duplication and drift with no user-visible defect.
   the `question` to `summary` rename remains. Remove `LEGACY_SUMMARY_FIELD` in
   `src/plugins/forms/main/kinds/question/question-format.ts`, its filter in the missing-field check, the error for both
   fields present, and the two legacy rows in `question-format.test.ts`.
+- **Promote the audio picker's waveform to a shared ui primitive** — *agent-ready*: the audio picker draws its
+  waveform with a plugin-local helper in `src/plugins/audio-picker/page/layout/picker-kit.ts`, while `DESIGN.md`
+  § Primitives puts a reusable visual piece in the shared primitives with a gallery entry. The audio-picker review
+  (finding 6) left it local because one surface uses it. When a second surface wants a waveform, or as a tidy-up
+  before then, move it into the shared ui primitives, add its gallery entry and its `DESIGN.md` § Primitives row, and
+  point the audio picker at it; its size stays a `calc` of space tokens. Source session: Claude Code
+  6c8ae463-d34c-4c99-ae9e-8a92d1952360 in new-games-prototypes.
+- **Folder form store writes through `node:fs`** — *agent-ready*: `src/shared/agent-forms/form-store.ts` imports
+  `node:fs`, while the ambient service rule (`AGENTS.md` § Architecture) has main code reach files through the
+  injected `services.files`. Its callers are the forms, primer and audio-picker `main/start.ts`, and tests that start
+  those parts must give it a temp home (`mkdtempSync` in the audio-picker and forms `start.test.ts`). Make
+  `createFolderFormStore` take a files service (the plugin's scoped `api.data` where the folder sits in its data
+  folder, else `services.files`), keep its writes synchronous where callers rely on it, and move its tests to the
+  in-memory files double. Found by the audio-picker review (finding 24). Source session: Claude Code
+  6c8ae463-d34c-4c99-ae9e-8a92d1952360 in new-games-prototypes.
 
 ## Latent defects and tests
 

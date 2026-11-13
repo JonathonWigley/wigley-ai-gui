@@ -770,6 +770,32 @@ describe('backlog main part', () => {
     expect(read.homes[0].gitRoot).toBe(CLONE);
   });
 
+  it('load_ProjectFolderHome_InGitWithTheProjectAsRepoFolder', async () => {
+    const projectHome = `${CLONE}/proj/docs/features`;
+    const backlog = startBacklog(
+      [entry('followup', `${projectHome}/followups.md`, {}, projectHome)],
+      { [`${projectHome}/followups.md`]: FOLLOWUPS_TEXT },
+    );
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes.map((home) => [home.gitRoot, home.repoFolder])).toEqual([
+      [CLONE, `${CLONE}/proj`],
+    ]);
+  });
+
+  it('load_DocsFeaturesDeeperThanAProjectFolder_NotInGit', async () => {
+    const deep = `${CLONE}/a/proj/docs/features`;
+    const backlog = startBacklog(
+      [entry('followup', `${deep}/followups.md`, {}, deep)],
+      { [`${deep}/followups.md`]: FOLLOWUPS_TEXT },
+    );
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes[0].gitRoot).toBeNull();
+  });
+
   it('watch_FollowupFileChanged_SendsChangedWithHomeRoot', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
       [FOLLOWUPS]: FOLLOWUPS_TEXT,
