@@ -90,6 +90,7 @@ function chipInput(): ChipInput {
     workflowLabel: 'Large',
     stage: 'make',
     label: 'Make',
+    progress: ' 3/8',
     status: 'running',
     statusText: 'Make · running',
     detail: '',
@@ -147,12 +148,12 @@ function withoutBadge(parts: string[]): string[] {
 }
 
 describe('default layout chip', () => {
-  it('chip_RunningStage_TagReadsTheStageAndItsStatus', () => {
+  it('chip_RunningStage_TagReadsTheStageItsProgressAndItsStatus', () => {
     const parent = new FakeElement('parent');
 
     const chip = layout.chip(asHtml(parent), chipInput(), fakeKit());
 
-    expect(withoutBadge(drawn(chip))).toEqual(['stage:Make:running']);
+    expect(withoutBadge(drawn(chip))).toEqual(['stage:Make 3/8:running']);
   });
 
   it('chip_StateOnRowLabel_DrawsOnlyTheCountdown', () => {
@@ -168,7 +169,7 @@ describe('default layout chip', () => {
   });
 
   it.each([
-    { onRowLabel: false, parts: ['badge:L:Large', 'stage:Make:running'] },
+    { onRowLabel: false, parts: ['badge:L:Large', 'stage:Make 3/8:running'] },
     { onRowLabel: true, parts: ['badge:L:Large'] },
   ])(
     'chip_DrawsTheBadgeFirst onRowLabel $onRowLabel',

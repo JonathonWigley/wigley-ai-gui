@@ -189,7 +189,8 @@ function isPlanTaskLine(value: unknown): value is PlanTaskLine {
     typeof value.done === 'boolean' &&
     (value.file === null || typeof value.file === 'string') &&
     (value.status === null ||
-      (TASK_STATUSES as readonly unknown[]).includes(value.status))
+      (TASK_STATUSES as readonly unknown[]).includes(value.status)) &&
+    typeof value.verification === 'boolean'
   );
 }
 

@@ -253,7 +253,8 @@ function sameProgress(
         task.text === other.text &&
         task.done === other.done &&
         task.file === other.file &&
-        task.status === other.status
+        task.status === other.status &&
+        task.verification === other.verification
       );
     });
   return sameScalars && sameTasks;

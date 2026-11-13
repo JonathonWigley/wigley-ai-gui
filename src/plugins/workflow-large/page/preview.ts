@@ -36,13 +36,13 @@ const PREVIEW_TITLE = 'Preview plan';
 
 // The sample plan's seven tasks, by the wave each sits under.
 const PREVIEW_TASKS: readonly Omit<PlanTaskLine, 'done' | 'status'>[] = [
-  { wave: 1, text: 'Write the contract', file: null },
-  { wave: 1, text: 'Read the plan file', file: null },
-  { wave: 1, text: 'Fold the signals', file: null },
-  { wave: 2, text: 'Draw the row chip', file: null },
-  { wave: 2, text: 'Draw the composer strip', file: null },
-  { wave: 2, text: 'Add the side pane', file: null },
-  { wave: 3, text: 'Run the self-test', file: null },
+  { wave: 1, text: 'Write the contract', file: null, verification: false },
+  { wave: 1, text: 'Read the plan file', file: null, verification: false },
+  { wave: 1, text: 'Fold the signals', file: null, verification: false },
+  { wave: 2, text: 'Draw the row chip', file: null, verification: false },
+  { wave: 2, text: 'Draw the composer strip', file: null, verification: false },
+  { wave: 2, text: 'Add the side pane', file: null, verification: false },
+  { wave: 3, text: 'Run the self-test', file: null, verification: false },
 ];
 
 // The stages whose sample tasks carry a status: each done task `done`, the

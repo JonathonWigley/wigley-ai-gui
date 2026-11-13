@@ -216,6 +216,9 @@ export interface PageStage {
   // stepper's current step, its separator included: ' 3/9', ' · round 2'. Left
   // out, nothing follows.
   statusProgress?(flow: SessionFlow): string;
+  // What follows the stage's word on the session row's chip, its separator
+  // included: ' 3/8'. Left out, nothing follows.
+  chipProgress?(flow: SessionFlow): string;
   // True when the current group's open items draw the stage's status; left out,
   // they draw `pending`.
   runsTasks?: boolean;

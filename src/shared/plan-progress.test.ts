@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildProgress,
   type PlanProgress,
   readPlanProgress,
   readTaskStatus,
@@ -35,12 +36,13 @@ Review base: c95c7eb
 ${runLog}`;
 }
 
-// The `file` and `status` of a task line with no link.
-const UNLINKED = { file: null, status: null } as const;
+// The `file`, `status` and `verification` of a task line with no link.
+const UNLINKED = { file: null, status: null, verification: false } as const;
 
-// The `file` and `status` of a task line linking `file`, no text read for it.
+// The `file`, `status` and `verification` of a task line linking `file`, no
+// text read for it.
 function linked(file: string) {
-  return { file, status: null };
+  return { file, status: null, verification: false };
 }
 
 // Progress of one wave-1 plan whose task lines are `tasks`, all open.
@@ -408,13 +410,21 @@ const rows: {
       ['02-b.md', '# 02 — B\n\n**Status:** in progress\n'],
     ]),
     expected: openWaveOne([
-      { wave: 1, text: '01 — A', done: false, file: '01-a.md', status: 'done' },
+      {
+        wave: 1,
+        text: '01 — A',
+        done: false,
+        file: '01-a.md',
+        status: 'done',
+        verification: false,
+      },
       {
         wave: 1,
         text: '02 — B — after 01',
         done: false,
         file: '02-b.md',
         status: 'in progress',
+        verification: true,
       },
     ]),
   },
@@ -474,6 +484,46 @@ const rows: {
     ]),
   },
   {
+    name: 'the last read task document with no Rung field is the verification task',
+    text: plan(`### Wave 1
+- [x] [01 — A](01-a.md)
+- [ ] [02 — B](02-b.md)
+- [ ] [03 — Final verification](03-final.md)
+- [ ] [04 — C](04-c.md)
+`),
+    taskTexts: new Map([
+      ['01-a.md', 'Rung: standard\n'],
+      ['02-b.md', 'Rung (unity): hard\n'],
+      ['03-final.md', '```\nRung: standard\n```\n'],
+      ['04-c.md', 'Rung: rote\n'],
+    ]),
+    expected: {
+      ...openWaveOne([
+        { wave: 1, text: '01 — A', done: true, ...linked('01-a.md') },
+        { wave: 1, text: '02 — B', done: false, ...linked('02-b.md') },
+        {
+          wave: 1,
+          text: '03 — Final verification',
+          done: false,
+          ...linked('03-final.md'),
+          verification: true,
+        },
+        { wave: 1, text: '04 — C', done: false, ...linked('04-c.md') },
+      ]),
+      checked: 1,
+    },
+  },
+  {
+    name: 'a plan whose task documents all hold a Rung has no verification task',
+    text: plan(`### Wave 1
+- [ ] [01 — A](01-a.md)
+`),
+    taskTexts: new Map([['01-a.md', 'Rung: standard\n']]),
+    expected: openWaveOne([
+      { wave: 1, text: '01 — A', done: false, ...linked('01-a.md') },
+    ]),
+  },
+  {
     name: 'empty text',
     text: '',
     expected: {
@@ -490,6 +540,32 @@ const rows: {
 describe('readPlanProgress', () => {
   it.each(rows)('$name', ({ text, taskTexts = new Map(), expected }) => {
     expect(readPlanProgress(text, taskTexts)).toEqual(expected);
+  });
+});
+
+describe('buildProgress', () => {
+  it.each([
+    {
+      name: 'the verification task is left out of both counts',
+      verification: [false, false, true],
+      done: [true, false, false],
+      expected: { checked: 1, total: 2 },
+    },
+    {
+      name: 'every box counts when no task is the verification task',
+      verification: [false, false, false],
+      done: [true, false, true],
+      expected: { checked: 2, total: 3 },
+    },
+  ])('$name', ({ verification, done, expected }) => {
+    const tasks = verification.map((isVerification, index) => ({
+      wave: 1,
+      text: `task ${index}`,
+      done: done[index],
+      ...UNLINKED,
+      verification: isVerification,
+    }));
+    expect(buildProgress(openWaveOne(tasks))).toEqual(expected);
   });
 });
 

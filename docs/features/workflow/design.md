@@ -67,7 +67,7 @@ self-test script to the fake agent harness: `src/plugins/workflow-large/main/sel
 | plan | the agent reports `plan` in a feature run | Plan, running or paused | `Plan · running` | none | Open plan, once a plan is written |
 | cold read | the agent reports `cold_read` in a feature run | Cold read, running or paused | `Cold read · running` | none | Open plan, once a plan is written |
 | plan ready | in explore, interview, plan or cold read, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | Make, ready | `Make · ready` | Clear & make (Cancel during the countdown), Make in new session | Open plan |
-| make | `wigley:make` starts | Make, running or paused | `Make · running 3/9` | none | Resume make, Open plan |
+| make | `wigley:make` starts | Make, running or paused | `Make · running 3/8`, counting every box but the final verification task, which make runs after its review | none | Resume make, Open plan |
 | review | `wigley:review` starts in make or fix, or, in make, the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | Review, running or paused | `Review · running · round 2` | none | Resume make, Open plan |
 | fix | the agent reports `fix` in make or review | Fix, running or paused | `Fix · running · cycle 2` | none | Resume make, Open plan |
 | closed | in make, review or fix, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, running while a turn or subagent runs, then done | `Close · done · 9/9` | Retro | Dismiss |
@@ -312,8 +312,8 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
 - **Paused run** — sets nothing of its own. Needs you comes only from what blocks on the user: an open round or primer,
   and a permission prompt.
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layouts draw the level's badge (one letter, S, M or L,
-  in the level's colour, `--wg-workflow-<level>-badge`, with the full word in its tooltip), then the stage's label as
-  one tag toned by its status (`running`, pulsing, while running; `success` with a check when done; neutral while
+  in the level's colour, `--wg-workflow-<level>-badge`, with the full word in its tooltip), then the stage's label and
+  the progress its stage gives the chip (`chipProgress`: make's build count, `Make 3/8`) as one tag toned by its status (`running`, pulsing, while running; `success` with a check when done; neutral while
   paused or ready), unless the row label says it, and Large's countdown. The row's own label shows no Working: this tag
   says it. On a row too narrow for it, usage's
   bar shrinks away first, then the tag ellipsizes. A user layout can also draw the

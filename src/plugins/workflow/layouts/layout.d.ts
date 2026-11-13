@@ -59,12 +59,14 @@ export interface ActionInput {
 // `badge` is the workflow's letter (`S`), `workflowLabel` its word (`Small`), `stage` the stage's id (`build`), `label`
 // its word (`Build`), `status` what it is doing, `statusText` the two as one (`Build · running`), `detail` its line
 // (`3/7 · Claim grants`, or ''), `countdown` the seconds left (`9s`) or null, `mainAction` the stage's main
-// action, null when it has none, and `onRowLabel` whether the row's own label already says the stage's state.
+// action, null when it has none, `onRowLabel` whether the row's own label already says the stage's state, and
+// `progress` what the stage shows after its word on the chip, its separator included (` 3/8`), or ''.
 export interface ChipInput {
   badge: string;
   workflowLabel: string;
   stage: string;
   label: string;
+  progress: string;
   status: StageStatus | null;
   statusText: string;
   detail: string;

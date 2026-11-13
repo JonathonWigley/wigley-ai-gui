@@ -12,19 +12,23 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
 // One counted box under `## Tasks`: the `### Wave N` it sits under (null
 // before any wave heading), its text with links reduced to their text and
 // `~~` removed, whether it is ticked or struck, its first link's target when
-// that is a bare `.md` file name in the plan folder, and that file's status.
+// that is a bare `.md` file name in the plan folder, that file's status, and
+// whether it is the plan's final verification task: the last box whose task
+// document was read and holds no `Rung:` field, as `plan.py waves` finds it.
 export interface PlanTaskLine {
   readonly wave: number | null;
   readonly text: string;
   readonly done: boolean;
   readonly file: string | null;
   readonly status: TaskStatus | null;
+  readonly verification: boolean;
 }
 
 // A plan.md read for progress. `checked` and `total` count the boxes under
 // `## Tasks`; `wave` is the first `### Wave N` holding an open box, null when
 // none is open; `reviewRounds` counts the `- ` lines under `### Review rounds`
 // in `## Run log`; `title` is the first `# ` heading less a trailing ` — plan`.
+// `buildProgress` counts the boxes `wigley:make` builds before its review.
 export interface PlanProgress {
   checked: number;
   total: number;
@@ -42,6 +46,8 @@ const MARKDOWN_LINK = /\[([^\]]*)\]\([^)]*\)/g;
 const FIRST_LINK_TARGET = /\[[^\]]*\]\(([^)]*)\)/;
 const NOT_A_BARE_FILE_NAME = /[/\\:#]/;
 const STATUS_LINE = /^(\*\*)?Status:(\*\*)?\s*(.+)$/;
+// `task_field(..., "Rung")` in `plan.py`: `Rung:` or `Rung (<qualifier>):`.
+const RUNG_FIELD = /^Rung(?: \([^)\n]*\))?:/;
 // `STATUS_SEARCH_LINES` in the docs index's `markdown.py`.
 const STATUS_SEARCH_LINES = 15;
 const PLAN_TITLE_SUFFIX = ' — plan';
@@ -88,12 +94,14 @@ export function readPlanProgress(
           file,
           status:
             taskDocument === undefined ? null : readTaskStatus(taskDocument),
+          verification: false,
         });
       }
     } else if (inReviewRounds && line.startsWith('- ')) {
       reviewRounds++;
     }
   }
+  markVerificationTask(tasks, taskTexts);
   return {
     checked: tasks.filter((task) => task.done).length,
     total: tasks.length,
@@ -102,6 +110,39 @@ export function readPlanProgress(
     title: title ?? '',
     tasks,
   };
+}
+
+// The boxes `wigley:make` builds before its review: every box but the final
+// verification task, which it runs after the review.
+export function buildProgress(progress: PlanProgress): {
+  checked: number;
+  total: number;
+} {
+  const built = progress.tasks.filter((task) => !task.verification);
+  return {
+    checked: built.filter((task) => task.done).length,
+    total: built.length,
+  };
+}
+
+function markVerificationTask(
+  tasks: PlanTaskLine[],
+  taskTexts: ReadonlyMap<string, string>,
+): void {
+  const index = tasks.findLastIndex((task) => {
+    const taskDocument =
+      task.file === null ? undefined : taskTexts.get(task.file);
+    return taskDocument !== undefined && !hasRungField(taskDocument);
+  });
+  if (index !== -1) {
+    tasks[index] = { ...tasks[index], verification: true };
+  }
+}
+
+function hasRungField(taskText: string): boolean {
+  return linesOutsideFences(splitLines(taskText)).some((line) =>
+    RUNG_FIELD.test(line),
+  );
 }
 
 // The first `Status:` line's value among the first `STATUS_SEARCH_LINES`

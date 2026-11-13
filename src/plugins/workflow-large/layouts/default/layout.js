@@ -1,7 +1,8 @@
 // @ts-check
 
 // The built-in workflow look: a one-line chip under the session row (the
-// level's badge, the stage's tag, coloured and pulsing by its status, unless the
+// level's badge, the stage's tag with its progress (`Make 3/8`), coloured and
+// pulsing by its status, unless the
 // row's label says it, and the countdown), a strip above the
 // composer (the stepper's trail while it shows the stage; for a stage outside
 // it, the status mark and line, with the trail until a checklist exists; the
@@ -109,7 +110,7 @@ const layout = {
     const chip = kit.el(parent, 'div', 'workflow-chip');
     kit.badge(chip, input.badge, input.workflowLabel);
     if (!input.onRowLabel) {
-      kit.stageTag(chip, input.label, input.status);
+      kit.stageTag(chip, input.label + input.progress, input.status);
     }
     if (input.countdown !== null) {
       kit.countdown(chip, input.countdown);

@@ -255,6 +255,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       workflowLabel: workflow.label,
       stage: stage.id,
       label: stage.label,
+      progress: stage.chipProgress?.(flow) ?? '',
       status,
       statusText: statusText(stage.label, status),
       detail: stage.detail(flow),

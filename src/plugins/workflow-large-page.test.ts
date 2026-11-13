@@ -86,6 +86,7 @@ function progressOf(
       done: false,
       file: null,
       status: null,
+      verification: false,
     })),
   );
   tasks.forEach((task, index) => {
@@ -160,6 +161,7 @@ function planOf(
       text: `${wave === null ? 't' : `w${wave}`}.${at}`,
       file: null,
       status,
+      verification: false,
     };
   });
   return {

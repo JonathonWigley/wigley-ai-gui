@@ -6,7 +6,7 @@ import {
   statusLine,
 } from '../../workflow/contract';
 import { newFlow } from '../../workflow/flow';
-import type { PlanProgress } from '../../../shared/plan-progress';
+import type { PlanProgress, PlanTaskLine } from '../../../shared/plan-progress';
 import {
   LARGE_WORKFLOW_ID,
   type LargeState,
@@ -22,14 +22,36 @@ function pageStage(id: string): PageStage {
   return stage;
 }
 
+// `total` build task lines, the first `checked` of them ticked.
+function tasksOf(checked: number, total: number): PlanTaskLine[] {
+  return Array.from({ length: total }, (_, index) => ({
+    wave: 1,
+    text: `task ${index + 1}`,
+    done: index < checked,
+    file: null,
+    status: null,
+    verification: false,
+  }));
+}
+
+// Two build tasks, the first ticked, then the open final verification task.
+const VERIFIED_PLAN_TASKS: PlanTaskLine[] = [
+  ...tasksOf(1, 2),
+  { ...tasksOf(0, 1)[0], text: 'Final verification', verification: true },
+];
+
+// A plan of 3 ticked boxes in 7 unless `fields` says otherwise, its task lines
+// matching its counts.
 function progress(fields: Partial<PlanProgress>): PlanProgress {
+  const checked = fields.checked ?? 3;
+  const total = fields.total ?? 7;
   return {
-    checked: 3,
-    total: 7,
+    checked,
+    total,
     wave: 2,
     reviewRounds: 0,
     title: 'Claim grants',
-    tasks: [],
+    tasks: tasksOf(checked, total),
     ...fields,
   };
 }
@@ -105,6 +127,14 @@ describe('LARGE_PAGE_STAGES', () => {
       stage: 'make',
       flow: flowWith({ progress: null }),
       detail: '',
+    },
+    {
+      name: 'make leaves the final verification task out of its count',
+      stage: 'make',
+      flow: flowWith({
+        progress: progress({ wave: null, tasks: VERIFIED_PLAN_TASKS }),
+      }),
+      detail: '1/2 · Claim grants',
     },
     {
       name: 'review with rounds',
@@ -482,5 +512,25 @@ describe('LARGE_PAGE_STAGES', () => {
       (command) => !Object.hasOwn(LARGE_COMMANDS, command),
     );
     expect(undeclared).toEqual([]);
+  });
+
+  it.each<{ name: string; stage: string; flow: SessionFlow; chip: string }>([
+    { name: 'make', stage: 'make', flow: flowWith({}), chip: ' 3/7' },
+    {
+      name: 'make leaves out the final verification task',
+      stage: 'make',
+      flow: flowWith({ progress: progress({ tasks: VERIFIED_PLAN_TASKS }) }),
+      chip: ' 1/2',
+    },
+    {
+      name: 'make unread',
+      stage: 'make',
+      flow: flowWith({ progress: null }),
+      chip: '',
+    },
+    { name: 'review', stage: 'review', flow: flowWith({}), chip: '' },
+    { name: 'fix', stage: 'fix', flow: flowWith({}), chip: '' },
+  ])('chip progress: $name', ({ stage, flow, chip }) => {
+    expect(pageStage(stage).chipProgress?.(flow) ?? '').toBe(chip);
   });
 });

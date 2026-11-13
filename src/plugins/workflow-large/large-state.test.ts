@@ -64,9 +64,30 @@ const PROGRESS: PlanProgress = {
   reviewRounds: 1,
   title: 'Plan A',
   tasks: [
-    { wave: 1, text: 'first', done: true, file: null, status: null },
-    { wave: 2, text: 'second', done: false, file: null, status: null },
-    { wave: 2, text: 'third', done: false, file: null, status: null },
+    {
+      wave: 1,
+      text: 'first',
+      done: true,
+      file: null,
+      status: null,
+      verification: false,
+    },
+    {
+      wave: 2,
+      text: 'second',
+      done: false,
+      file: null,
+      status: null,
+      verification: false,
+    },
+    {
+      wave: 2,
+      text: 'third',
+      done: false,
+      file: null,
+      status: null,
+      verification: false,
+    },
   ],
 };
 // A state whose progress holds the one task line `task`, as a saved flow may.

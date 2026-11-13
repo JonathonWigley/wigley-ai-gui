@@ -23,6 +23,7 @@ const chipInput: ChipInput = {
   workflowLabel: 'Medium',
   stage: 'build',
   label: 'Build',
+  progress: '',
   status: 'running',
   statusText: 'Build · running',
   detail: '',

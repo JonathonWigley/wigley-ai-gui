@@ -31,6 +31,7 @@ function planOf(tasks: TaskRow[]): PlanProgress {
     text: `t${index}`,
     file: null,
     status,
+    verification: false,
   }));
   return {
     checked: lines.filter((line) => line.done).length,
