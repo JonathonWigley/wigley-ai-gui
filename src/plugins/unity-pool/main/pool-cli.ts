@@ -45,13 +45,19 @@ export function readActionResult(result: ProcessResult): PoolActionResult {
   }
   const answer = parseJson(lastLine(result.stdout));
   if (isJsonObject(answer)) {
-    const { pool, clone } = answer;
+    const { pool, clone, editorOpening } = answer;
     if (
       answer.ok === true &&
       typeof pool === 'string' &&
       typeof clone === 'number'
     ) {
-      return { ok: true, pool, clone };
+      return {
+        ok: true,
+        pool,
+        clone,
+        editorOpening:
+          typeof editorOpening === 'boolean' ? editorOpening : null,
+      };
     }
   }
   return failureOf(answer, result);

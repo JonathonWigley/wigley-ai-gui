@@ -109,9 +109,10 @@ export const unityPoolReleaseCommand: CommandKey<
 export const unityPoolOpenCommand: CommandKey<PoolCloneArg, 'unity-pool.open'> =
   { id: 'unity-pool.open' };
 
-// The CLI's own JSON answer, or `no-cli` and `cli-failed` when it gave none.
+// The CLI's own JSON answer, or `no-cli` and `cli-failed` when it gave none. `editorOpening` is open's: true when it
+// started the editor, false when it brought a running one to the front, null for an answer without it.
 export type PoolActionResult =
-  | { ok: true; pool: string; clone: number }
+  | { ok: true; pool: string; clone: number; editorOpening: boolean | null }
   | { ok: false; error: string; message: string };
 
 // `originName` is a folder's origin repo name, null outside a clone with an origin. `run` runs

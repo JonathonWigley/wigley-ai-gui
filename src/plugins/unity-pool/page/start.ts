@@ -62,6 +62,22 @@ const DONE_WORDS: Record<PoolAction, string> = {
   open: 'Opened',
 };
 
+// `Held Unity 3`; an Open says whether it started the editor or brought it to
+// the front.
+function doneText(
+  action: PoolAction,
+  clone: number,
+  editorOpening: boolean | null,
+): string {
+  const words =
+    action === 'open' && editorOpening !== null
+      ? editorOpening
+        ? 'Starting'
+        : 'Focused'
+      : DONE_WORDS[action];
+  return `${words} Unity ${clone}`;
+}
+
 // A folder's origin repo name: asked of main and not answered yet, or read.
 type OriginEntry = { kind: 'pending' } | { kind: 'read'; name: string | null };
 
@@ -405,7 +421,10 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         (result) =>
           finish(
             result.ok
-              ? { ok: true, text: `${DONE_WORDS[action]} Unity ${clone}` }
+              ? {
+                  ok: true,
+                  text: doneText(action, clone, result.editorOpening),
+                }
               : { ok: false, text: result.message },
           ),
         (error: unknown) => {

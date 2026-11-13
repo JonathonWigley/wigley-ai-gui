@@ -127,7 +127,8 @@ the rest), so the CLI takes it as the user's even in an app started from a Claud
 run times out after 30 seconds, an Open run after 120, since it may wait on the editor's focus call. A clone runs one
 at a time: its buttons are disabled while its run is in
 flight, and the clone then shows the result until the page reloads: `Held Unity 3`, `Released Unity 3`,
-`Opened Unity 3`, or the CLI's error message. The CLI's `ok` decides, not its exit code. A script missing from its path gives `no-cli`, and a run
+`Starting Unity 3` or `Focused Unity 3` after an Open, or the CLI's error message. Open refuses while the clone
+warms up, closes its idle editor or resets. The CLI's `ok` decides, not its exit code. A script missing from its path gives `no-cli`, and a run
 with no JSON answer gives `cli-failed` carrying the last stderr line. The panel offers no release of an
 agent's claim or a stranded mark: those take `release --force`, which runs only on the user's word in a terminal.
 

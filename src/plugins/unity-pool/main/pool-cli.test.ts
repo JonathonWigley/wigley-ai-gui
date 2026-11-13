@@ -41,7 +41,15 @@ describe('readActionResult', () => {
     {
       name: 'ok JSON',
       result: exited(0, '{"ok": true, "pool": "p", "clone": 3}\n'),
-      expected: { ok: true, pool: 'p', clone: 3 },
+      expected: { ok: true, pool: 'p', clone: 3, editorOpening: null },
+    },
+    {
+      name: 'open starting the editor',
+      result: exited(
+        0,
+        '{"ok": true, "pool": "p", "clone": 3, "held": true, "editorFocused": false, "editorOpening": true}\n',
+      ),
+      expected: { ok: true, pool: 'p', clone: 3, editorOpening: true },
     },
     {
       name: 'the CLI refusing with exit code 1',
@@ -57,7 +65,7 @@ describe('readActionResult', () => {
         0,
         'fetching origin\n{"ok": true, "pool": "q", "clone": 5}\n\n',
       ),
-      expected: { ok: true, pool: 'q', clone: 5 },
+      expected: { ok: true, pool: 'q', clone: 5, editorOpening: null },
     },
     {
       name: 'a stack trace on stderr',
@@ -156,7 +164,12 @@ describe('runPoolCommand', () => {
           ]),
         },
       ]);
-      expect(result).toEqual({ ok: true, pool: 'p', clone: 4 });
+      expect(result).toEqual({
+        ok: true,
+        pool: 'p',
+        clone: 4,
+        editorOpening: null,
+      });
     },
   );
 
