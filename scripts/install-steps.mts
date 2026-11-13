@@ -7,6 +7,9 @@
 import path from 'node:path';
 
 export interface InstallPaths {
+  // The build-only git worktree, beside the git checkout.
+  worktreeDir: string;
+  // The app's folder in the worktree, where it builds.
   buildDir: string;
   packagedDir: string;
   // What gets copied to installDir: packagedDir itself on Windows, the bundle
@@ -63,8 +66,10 @@ export function parseInstallArgs(argv: readonly string[]): { ref: string } {
   return { ref };
 }
 
-// Where the build worktree, its packaged output and the app in it, the
-// installed app, its staged copy, its binary and its Start menu shortcut sit. On
+// Where the build worktree, the app's folder in it, its packaged output and
+// the app in it, the installed app, its staged copy, its binary and its Start
+// menu shortcut sit. The worktree sits beside `gitRoot`, the checkout holding
+// `repoRoot`, which is the app's folder or a folder above it. On
 // Windows each `commit` installs into its own `app-<short sha>` folder; macOS
 // ignores `commit`. Built with the target platform's path module, so the result
 // is the same whichever OS computes it. Throws on a platform other than Windows
@@ -73,6 +78,7 @@ export function installPaths(
   platform: NodeJS.Platform,
   arch: string,
   repoRoot: string,
+  gitRoot: string,
   env: NodeJS.ProcessEnv,
   commit: string,
 ): InstallPaths {
@@ -81,7 +87,11 @@ export function installPaths(
     throw new Error(`install-app supports Windows and macOS, not ${platform}`);
   }
   const paths = isWindows ? path.win32 : path.posix;
-  const buildDir = paths.join(paths.dirname(repoRoot), '.wigley-ai-gui-build');
+  const worktreeDir = paths.join(
+    paths.dirname(gitRoot),
+    '.wigley-ai-gui-build',
+  );
+  const buildDir = paths.join(worktreeDir, paths.relative(gitRoot, repoRoot));
   const packagedDir = paths.join(
     buildDir,
     'out',
@@ -90,6 +100,7 @@ export function installPaths(
   if (!isWindows) {
     const installDir = '/Applications/wigley-ai-gui.app';
     return {
+      worktreeDir,
       buildDir,
       packagedDir,
       packagedApp: paths.join(packagedDir, 'wigley-ai-gui.app'),
@@ -112,6 +123,7 @@ export function installPaths(
     `${APP_FOLDER_PREFIX}${commit.slice(0, SHORT_SHA_LENGTH)}`,
   );
   return {
+    worktreeDir,
     buildDir,
     packagedDir,
     packagedApp: packagedDir,

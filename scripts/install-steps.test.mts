@@ -29,6 +29,7 @@ function windowsPaths() {
     'win32',
     'x64',
     'D:\\ai-dev\\wigley-ai-gui',
+    'D:\\ai-dev\\wigley-ai-gui',
     WINDOWS_ENV,
     COMMIT,
   );
@@ -38,6 +39,7 @@ function macPaths() {
   return installPaths(
     'darwin',
     'arm64',
+    '/Users/me/ai-dev/wigley-ai-gui',
     '/Users/me/ai-dev/wigley-ai-gui',
     {},
     COMMIT,
@@ -75,6 +77,7 @@ describe('parseInstallArgs', () => {
 describe('installPaths', () => {
   it('GIVEN win32, x64, repo D:\\ai-dev\\wigley-ai-gui and LOCALAPPDATA/APPDATA set WHEN installPaths runs THEN every path equals the pinned value', () => {
     expect(windowsPaths()).toEqual({
+      worktreeDir: 'D:\\ai-dev\\.wigley-ai-gui-build',
       buildDir: 'D:\\ai-dev\\.wigley-ai-gui-build',
       packagedDir:
         'D:\\ai-dev\\.wigley-ai-gui-build\\out\\wigley-ai-gui-win32-x64',
@@ -94,6 +97,7 @@ describe('installPaths', () => {
 
   it('GIVEN darwin, arm64 WHEN installPaths runs THEN packagedApp is the bundle in packagedDir, installDir is /Applications/wigley-ai-gui.app and shortcut null', () => {
     expect(macPaths()).toEqual({
+      worktreeDir: '/Users/me/ai-dev/.wigley-ai-gui-build',
       buildDir: '/Users/me/ai-dev/.wigley-ai-gui-build',
       packagedDir:
         '/Users/me/ai-dev/.wigley-ai-gui-build/out/wigley-ai-gui-darwin-arm64',
@@ -107,9 +111,33 @@ describe('installPaths', () => {
     });
   });
 
+  it('GIVEN the app folder inside a larger git checkout WHEN installPaths runs THEN the worktree sits beside the checkout and builds in its app folder', () => {
+    const paths = installPaths(
+      'darwin',
+      'arm64',
+      '/Users/me/ai/wigley-ai-gui',
+      '/Users/me/ai',
+      {},
+      COMMIT,
+    );
+
+    expect([paths.worktreeDir, paths.buildDir, paths.packagedDir]).toEqual([
+      '/Users/me/.wigley-ai-gui-build',
+      '/Users/me/.wigley-ai-gui-build/wigley-ai-gui',
+      '/Users/me/.wigley-ai-gui-build/wigley-ai-gui/out/wigley-ai-gui-darwin-arm64',
+    ]);
+  });
+
   it('GIVEN linux WHEN installPaths runs THEN it throws the pinned message', () => {
     expect(() =>
-      installPaths('linux', 'x64', '/home/me/wigley-ai-gui', {}, COMMIT),
+      installPaths(
+        'linux',
+        'x64',
+        '/home/me/wigley-ai-gui',
+        '/home/me/wigley-ai-gui',
+        {},
+        COMMIT,
+      ),
     ).toThrow('install-app supports Windows and macOS, not linux');
   });
 
@@ -118,6 +146,7 @@ describe('installPaths', () => {
       installPaths(
         'win32',
         'x64',
+        'D:\\ai-dev\\wigley-ai-gui',
         'D:\\ai-dev\\wigley-ai-gui',
         { APPDATA: WINDOWS_ENV.APPDATA },
         COMMIT,

@@ -61,6 +61,6 @@ asks again. A certificate's identity outlasts a rebuild, so these steps run once
   drains the older host at its first run, so each running process ends at its turn end and resumes under
   the new host on its next message.
 - A peer's uncommitted edits stay as they are: the build runs in its own worktree,
-  `../.wigley-ai-gui-build`.
+  `.wigley-ai-gui-build` beside the git checkout.
 - Windows has no signing step: each build installs in its own folder under
   `%LOCALAPPDATA%\Programs\wigley-ai-gui\`.

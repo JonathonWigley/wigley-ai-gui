@@ -54,6 +54,7 @@ async function main(ref: string): Promise<void> {
     process.platform,
     process.arch,
     REPO_DIR,
+    gitRoot(),
     process.env,
     commit,
   );
@@ -135,7 +136,7 @@ async function installOnWindows(
 // this clone's path and the commit, which the app's update check compares
 // against origin's main.
 function packageApp(paths: InstallPaths, commit: string): void {
-  checkOutBuildWorktree(paths.buildDir, commit);
+  checkOutBuildWorktree(paths.worktreeDir, commit);
   installDependenciesWhenDue(paths.buildDir);
   runNpmStep('npm run package', paths.buildDir, {
     ...process.env,
@@ -189,6 +190,16 @@ function runNpmStep(
   });
 }
 
+// The top of the git checkout holding this clone.
+function gitRoot(): string {
+  return runStep(
+    'Finding the git root',
+    'git',
+    ['rev-parse', '--show-toplevel'],
+    { cwd: REPO_DIR },
+  ).trim();
+}
+
 function resolveCommit(ref: string): string {
   return runStep(
     `Resolving ${ref}`,
@@ -200,19 +211,19 @@ function resolveCommit(ref: string): string {
 
 // The worktree holds only builds, so a forced checkout loses nothing; its
 // git-ignored `node_modules`, `out` and `.vite` survive it.
-function checkOutBuildWorktree(buildDir: string, commit: string): void {
-  if (!existsSync(buildDir)) {
+function checkOutBuildWorktree(worktreeDir: string, commit: string): void {
+  if (!existsSync(worktreeDir)) {
     runStep(
       'git worktree add',
       'git',
-      ['worktree', 'add', '--detach', buildDir, commit],
+      ['worktree', 'add', '--detach', worktreeDir, commit],
       { cwd: REPO_DIR },
     );
     return;
   }
   runStep('git checkout', 'git', [
     '-C',
-    buildDir,
+    worktreeDir,
     'checkout',
     '--detach',
     '--force',
