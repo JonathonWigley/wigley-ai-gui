@@ -70,6 +70,7 @@ describe('escaping and disabled syntax', () => {
 
   it.each([
     ['a relative link', '[guide](docs/a.md)'],
+    ['an empty link', '[x]()'],
     ['a file link', '[x](file:///etc/hosts)'],
     ['a javascript link', '[x](javascript:alert(1))'],
     ['a bare host', 'see example.com or a.md now'],

@@ -48,8 +48,12 @@ export function moveConnected(
   }
 }
 
+// A link the markdown renderer drew, whose click the page core opens.
+export const RENDERED_LINK = 'a.md-link[data-href]';
+
 // A button that never takes focus, so page keys still drive the page after a
-// click and Enter or Space never re-press it.
+// click and Enter or Space never re-press it. A click on a rendered link inside
+// it opens the link alone.
 export function button(
   className: string,
   text: string,
@@ -59,7 +63,12 @@ export function button(
   node.type = 'button';
   node.tabIndex = -1;
   node.addEventListener('mousedown', (event) => event.preventDefault());
-  node.addEventListener('click', onClick);
+  node.addEventListener('click', (event) => {
+    const isOnLink = (event.target as Element).closest(RENDERED_LINK) !== null;
+    if (!isOnLink) {
+      onClick();
+    }
+  });
   return node;
 }
 

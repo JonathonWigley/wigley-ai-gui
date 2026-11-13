@@ -2,8 +2,7 @@ import { CORE_OPEN_LINK } from '../contracts/commands';
 import type { PageCommandContext, PageServices } from '../contracts/plugin';
 import type { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
-
-const RENDERED_LINK = 'a.md-link[data-href]';
+import { RENDERED_LINK } from '../shared/page/dom';
 
 export interface LinkCommandDeps {
   openExternal: PageServices['openExternal'];
@@ -31,15 +30,14 @@ export function registerLinkCommands(
   );
 }
 
-// Runs `open` with the `data-href` of each rendered link a primary click lands
-// on, unless a view's own listener already took the click (docs' links).
+// Runs `open` with the `data-href` of each rendered link a click lands on,
+// unless a view's own listener already took the click (docs' links).
 export function listenToLinkClicks(
   root: Pick<Document, 'addEventListener'>,
   open: (url: string) => void,
 ): void {
   root.addEventListener('click', (event) => {
-    const isPrimaryClick = event.button === 0;
-    if (event.defaultPrevented || !isPrimaryClick) {
+    if (event.defaultPrevented) {
       return;
     }
     // A click's target is always an element: one on text targets its parent.

@@ -1,7 +1,36 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { blurFocusedElement, focusOutOfFrame, moveConnected } from './dom';
+import {
+  blurFocusedElement,
+  button,
+  focusOutOfFrame,
+  moveConnected,
+  RENDERED_LINK,
+} from './dom';
 import { installMarkdownDom } from './markdown-mount.test-support';
-import { asFake } from './test-dom';
+import { asFake, installFakeDom } from './test-dom';
+
+describe('button', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { case: 'on the button', isOnLink: false, isPressed: true },
+    { case: 'on a rendered link inside it', isOnLink: true, isPressed: false },
+  ])('click $case presses it: $isPressed', ({ isOnLink, isPressed }) => {
+    installFakeDom(vi.stubGlobal);
+    const onClick = vi.fn();
+    const node = asFake(button('pick', 'Pick', onClick));
+    const target = {
+      closest: (selector: string) =>
+        isOnLink && selector === RENDERED_LINK ? {} : null,
+    };
+
+    node.fire('click', { target });
+
+    expect(onClick).toHaveBeenCalledTimes(isPressed ? 1 : 0);
+  });
+});
 
 describe('moveConnected', () => {
   afterEach(() => {

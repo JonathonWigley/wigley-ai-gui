@@ -14,7 +14,7 @@ function fakeRoot() {
   } as unknown as Document;
   const click = (
     link: { href: string } | null,
-    init: { button?: number; defaultPrevented?: boolean } = {},
+    init: { defaultPrevented?: boolean } = {},
   ) => {
     const target = {
       closest: (selector: string) =>
@@ -23,7 +23,6 @@ function fakeRoot() {
           : null,
     };
     const event = {
-      button: init.button ?? 0,
       defaultPrevented: init.defaultPrevented ?? false,
       target,
       preventDefault: vi.fn(),
@@ -48,7 +47,6 @@ describe('listenToLinkClicks', () => {
 
   it.each([
     ['taken by a view', { href: 'https://e.com' }, { defaultPrevented: true }],
-    ['a middle click', { href: 'https://e.com' }, { button: 1 }],
     ['outside any link', null, {}],
   ])('click_%s_OpensNothing', (_case, link, init) => {
     const open = vi.fn();
