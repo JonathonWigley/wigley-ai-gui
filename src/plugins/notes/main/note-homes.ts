@@ -13,7 +13,7 @@ function noteHome(home: BacklogHome, paths: Paths): NoteHome {
   return {
     repo: home.repo,
     root: home.root,
-    folder: isInRepo ? home.gitRoot : null,
+    folder: isInRepo ? home.repoFolder : null,
     followups,
   };
 }

@@ -32,6 +32,7 @@ const ZETA_IN_REPO = home({
   repo: 'zeta',
   root: '/zeta/docs/features',
   gitRoot: '/zeta',
+  repoFolder: '/zeta',
   followupFiles: [
     {
       path: '/zeta/docs/features/followups/a.md',
@@ -87,6 +88,23 @@ describe('noteHomes', () => {
 
   it('noteHomes_HomeOutsideGitRoot_FolderNull', () => {
     expect(result.homes[0].folder).toBeNull();
+  });
+
+  it('noteHomes_ProjectHomesInOneClone_FolderIsEachProject', () => {
+    const read = {
+      homes: ['proj-a', 'proj-b'].map((project) =>
+        home({
+          repo: project,
+          root: `/ai/${project}/docs/features`,
+          gitRoot: '/ai',
+          repoFolder: `/ai/${project}`,
+        }),
+      ),
+      message: null,
+    };
+    expect(
+      noteHomes(read, posixPaths).homes.map((each) => each.folder),
+    ).toEqual(['/ai/proj-a', '/ai/proj-b']);
   });
 
   it('noteHomes_NoGitRoot_FolderNull', () => {

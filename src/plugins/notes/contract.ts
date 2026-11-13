@@ -45,8 +45,9 @@ export interface NoteFollowup {
   title: string;
 }
 
-// One repo's create-target home. `folder` is the clone the home sits in, null
-// for a home outside its repo.
+// One repo's create-target home. `folder` is the folder above its in-git
+// `docs/features`: the clone, or the project folder in a clone of several
+// projects; null for a home outside its repo.
 export interface NoteHome {
   repo: string;
   root: string;
