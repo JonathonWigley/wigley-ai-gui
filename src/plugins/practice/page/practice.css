@@ -51,8 +51,10 @@
 
 /* The open problem's workspace: the problem pane beside the editor over the
    console over the interviewer's slot. Each split pane is a grid of one cell
-   its pane root fills. */
+   its pane root fills, as is the workspace itself. */
 .practice-workspace {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   height: 100%;
 }
 
