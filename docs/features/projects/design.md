@@ -12,7 +12,7 @@
 - **Out of scope**
 
 The user works on a few projects, not on folders: New Games, spread over four Unity clones on whatever branch each
-holds, and Wigley AI Dev, four repos in one parent folder. A project fixes where a new session starts and which profile
+holds, and Wigley AI Dev, the one `ai` repo and its four folders. A project fixes where a new session starts and which profile
 it runs under, so the user picks one line and the agent lands in the right place.
 
 ## Status
@@ -30,7 +30,7 @@ edited as JSON in Settings mode:
 ```json
 "projects": [
   { "name": "New Games", "pool": "new-games-prototypes", "profile": "work" },
-  { "name": "Wigley AI Dev", "folder": "~/Documents/ai-dev" }
+  { "name": "Wigley AI Dev", "folder": "~/Documents/ai" }
 ]
 ```
 

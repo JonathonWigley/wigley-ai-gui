@@ -69,7 +69,7 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   model is a new adapter folder.
 - **One user, no backwards compatibility.** The user is the app's only user and updates the app and
   wigley-ai-marketplace together. A change replaces a shape in place, with no migration, fallback or version
-  shim: a contract, a config or data file the app writes, the docs index schema. A shape both repos read changes in
+  shim: a contract, a config or data file the app writes, the docs index schema. A shape both folders read changes in
   both in the same piece of work.
 
 ## Architecture
@@ -479,7 +479,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
 wigley-ai-marketplace, whose README states the tool contract, the saved-round file format
 the `retro` skill reads, and the relay's side of the channel). A change to either contract
-lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin. A
+lands in both folders together. Each relay connection is one agent session, owned by the `sessions` plugin. A
 connected session (one the app did not start, such as a terminal `claude` or Codex session) has no row in the sessions
 sidebar until a plugin needs the user there: `mark` or `activate` adds its row, as a form opening does, and `release` closes it
 again once every close guard allows, as the form presenter does after every form close, by submit, cancel or
@@ -1106,7 +1106,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   `install` skill (`.agents/skills/install/SKILL.md`) holds the steps. The installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
   which `node scripts/make-icon.mts` rebuilds on Windows (`make-icon.ps1` holds the crop); the dev app keeps Electron's icon.
 - **To put the running app on a new build**, run the marketplace's `start_app.py`
-  (`plugins/wigley/scripts/forms/` in the wigley-ai-marketplace clone) with `--restart --dev` for the dev app, or
+  (`wigley-ai-marketplace/plugins/wigley/scripts/forms/` in the `ai` clone) with `--restart --dev` for the dev app, or
   `--from <checkout>` to start the dev app from that checkout, such as the worktree holding the change. It quits
   only the process the endpoint file names, waits for it to exit, starts the app and waits for its channel; a hand
   `pkill` misses processes and hits drive runs. A page edit hot reloads with no restart; a main-process edit needs

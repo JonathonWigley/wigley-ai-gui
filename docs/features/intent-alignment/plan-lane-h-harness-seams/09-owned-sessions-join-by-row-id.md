@@ -40,7 +40,7 @@ Files (wigley-ai-gui):
 - modify `docs/features/followups.md` — remove the "Owned sessions join by an adapter key" item
 - modify `docs/features/intent-alignment/master-plan.md` — tick its box
 
-Files (wigley-ai-marketplace, `~/Documents/ai-dev/wigley-ai-marketplace`):
+Files (wigley-ai-marketplace, `~/Documents/ai/wigley-ai-marketplace`):
 - modify `plugins/wigley/scripts/forms/relay.py` — `hello_from_env` gains `row_id`
 - test `plugins/wigley/scripts/forms/tests/test_relay.py`
 - modify `plugins/wigley/scripts/forms/README.md` — § The relay's **Hello** bullet names `row_id`

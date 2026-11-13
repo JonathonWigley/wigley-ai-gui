@@ -58,7 +58,7 @@ Run each from the repo root before the first dispatch. Each must print what its 
 | The session host is already a main service | `grep -c 'sessionHost: SessionHost' src/contracts/plugin.ts` | `1` |
 | The adapter is still core, no plugin yet | `test -d src/main/claude-code && ! test -e src/plugins/claude-code && echo ok` | `ok` |
 | The Claude launch puts the row id in the env | `grep -c 'SESSION_ROW_ENV\] = request.rowId' src/main/claude-code/claude-launch.ts` | `1` |
-| The relay's hello has no row id yet | `grep -c row_id ~/Documents/ai-dev/wigley-ai-marketplace/plugins/wigley/scripts/forms/relay.py` | `0` |
+| The relay's hello has no row id yet | `grep -c row_id ~/Documents/ai/wigley-ai-marketplace/plugins/wigley/scripts/forms/relay.py` | `0` |
 | Lane E's forms chain and Lane P's program lookup have not started | `grep -c '\[ \] Forms item kinds as registrations\|\[ \] Per-platform program lookup' docs/features/intent-alignment/master-plan.md` | `2` |
 | `RoundError` throw sites (measured at plan time, re-verify) | `grep -rn 'new RoundError(' src/plugins/forms src/plugins/primer src/shared/agent-forms --include='*.ts' \| grep -vc test` | `46` |
 | Chat still pins Claude | `grep -c "CHAT_HARNESS_ID = 'claude'" src/plugins/chat/contract.ts` | `1` |
@@ -84,7 +84,7 @@ Every implementer:
   is about 23k tokens whole; read the whole file only when a task's Mandatory line says so.
 - `docs/features/agent-harnesses/design.md` — whole.
 - `wigley:writing-code`, `wigley:codebase-design`, `wigley:writing-tests` (read from the marketplace clone,
-  `~/Documents/ai-dev/wigley-ai-marketplace/plugins/wigley/skills/<skill>/SKILL.md`).
+  `~/Documents/ai/wigley-ai-marketplace/plugins/wigley/skills/<skill>/SKILL.md`).
 
 Per task, as its document lists:
 

@@ -7,7 +7,7 @@ Plan: [plan.md](plan.md)
 
 Files:     modify `docs/features/agent-harnesses/design.md` · modify `AGENTS.md` · modify `docs/features/followups.md` ·
            modify `.agents/skills/drive/SKILL.md` ·
-           modify `/Users/jonathonwigley/Documents/ai-dev/wigley-ai-marketplace/plugins/wigley/scripts/forms/README.md`
+           modify `/Users/jonathonwigley/Documents/ai/wigley-ai-marketplace/plugins/wigley/scripts/forms/README.md`
            (each only where the landed code disagrees with it)
 Consumes:  the landed code of tasks 01–15
 Produces:  no code; each doc agrees with the landed code

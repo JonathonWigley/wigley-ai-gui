@@ -5,9 +5,9 @@ Type: Batch
 Wave: 5 · Depends on: 08
 Plan: [plan.md](plan.md)
 
-Two repos outside wigley-ai-gui. `MKT` is `/Users/jonathonwigley/Documents/ai-dev/wigley-ai-marketplace`; `AGENTS`
-is `~/wigley-agents` (`/Users/jonathonwigley/Documents/ai-dev/wigley-agents`). Each lands through
-`~/wigley-agents/WigleyRepos.md` § Landing: a worktree per repo, a fast-forward into `main`, then the push. Read
+Two folders of the `ai` repo outside wigley-ai-gui. `MKT` is `/Users/jonathonwigley/Documents/ai/wigley-ai-marketplace`; `AGENTS`
+is `~/wigley-agents` (`/Users/jonathonwigley/Documents/ai/wigley-agents`). Each lands through
+`~/wigley-agents/WigleyRepos.md` § Landing: one worktree for every folder the session changes, a fast-forward into `main`, then the push. Read
 `MKT/AGENTS.md` first. Tree facts were read at plan time (2026-11-09).
 
 ## Files

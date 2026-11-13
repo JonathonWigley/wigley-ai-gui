@@ -30,13 +30,13 @@ Systems touched:
 - **wigley-ai-marketplace**: `plugins/wigley/scripts/retro/answers.py` and its tests, `scripts/forms/README.md`,
   `skills/review/triage.md`. **wigley-agents**: `forms.md` § Findings.
 
-Every wigley repo lands through `~/wigley-agents/WigleyRepos.md` § Landing: a worktree per repo, a fast-forward into
+Every wigley repo lands through `~/wigley-agents/WigleyRepos.md` § Landing: one worktree for every folder the session changes, a fast-forward into
 `main`, then the push.
 
 ## Preconditions
 
 `make` re-runs each command before the first dispatch, and the gate commands before the group they gate. `GUI` is the
-wigley-ai-gui checkout the run works in; `MKT` is `/Users/jonathonwigley/Documents/ai-dev/wigley-ai-marketplace`.
+wigley-ai-gui checkout the run works in; `MKT` is `/Users/jonathonwigley/Documents/ai/wigley-ai-marketplace`.
 
 1. Wave 1 step 1 (disposable registrations) has landed:
    `grep -n "\[x\] Disposable registrations, disposed per plugin" GUI/docs/features/intent-alignment/master-plan.md`
