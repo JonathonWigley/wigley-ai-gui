@@ -720,6 +720,24 @@ describe('practicePagePart', () => {
     expect([fromConsole, pane.calls.at(-1)]).toEqual([true, 'move down']);
   });
 
+  it('the outer panes resize only the interviewer divider', async () => {
+    const { harness } = startPracticePage();
+    const commands = harness.started().commands;
+    commands.showMode({ arg: undefined });
+    await settle();
+    commands.listDown({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    for (const handle of asFake(
+      harness.mode('practice.main').element,
+    ).querySelectorAll('.ui-split-handle')) {
+      handle.hasLayoutBox = true;
+    }
+    const resize = harness.outerPanes()!.resize;
+
+    expect([resize.nudge('left'), resize.nudge('up')]).toEqual([false, true]);
+  });
+
   it('run and submit do nothing while Practice is hidden', async () => {
     const { harness, calls } = startPracticePage();
     const commands = harness.started().commands;

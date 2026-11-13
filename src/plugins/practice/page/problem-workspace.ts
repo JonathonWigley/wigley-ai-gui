@@ -238,6 +238,8 @@ export interface ProblemWorkspace {
   setInterviewerShown(isShown: boolean): void;
   // The divider over `interviewerSlot`, then the problem | code split.
   interviewerResizeTarget: ResizeTarget;
+  // The divider over `interviewerSlot` alone.
+  interviewerDivider: ResizeTarget;
   // Saves every unsaved draft first when another problem shows, edits typed
   // during the save included, then shows `problem` on its first tabs, the
   // problem pane holding the keys; the saved place's open problem shows with
@@ -1217,6 +1219,7 @@ export function createProblemWorkspace(
     interviewerSlot,
     setInterviewerShown: (isShown) => interviewerSplit.setEndHidden(!isShown),
     interviewerResizeTarget,
+    interviewerDivider: interviewerSplit,
     async show(problem) {
       const count = ++showCount;
       const shown = store.get().problem;

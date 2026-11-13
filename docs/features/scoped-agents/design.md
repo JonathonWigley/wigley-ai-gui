@@ -106,11 +106,11 @@ registrations.
     for one below it (Practice); the opposite move leaves the pane
   - `resizeTarget`: the slot's divider, for the resize keys
   - `tookKeys()`: the pane took the keys, so the host's focus is the pane
-  - `leave()`: `Esc` in the ask box or `Alt+h` from the pane; the host takes the keys back
+  - `leave()`: `Esc` in the ask box or the move opposite `entersFrom` from the pane; the host takes the keys back
 - The host drives the pane through `AgentPane`:
   - `toggle()` shows the pane and gives it the keys, or hides it; an always-shown pane takes the keys, or hands them
     back to the host, and never hides. An always-shown pane reads `sessionOf` on each `scopeOpened` and takes no keys
-    from it. With no scope open it shows nothing and logs
+    from it, so its `toggle` gives the keys at once to what shows. With no scope open it shows nothing and logs
     `<agentId> has no scope`; the host's own copy for that case is the host's (Practice toasts
     `Open a problem first`).
   - `scopeOpened(scope | null)` names the open scope; the same scope keeps the mount and the ask box's text, another
@@ -124,6 +124,8 @@ registrations.
   - `outerPanes` moves the `entersFrom` direction into the shown pane from wherever the host has the keys, and the
     opposite direction from the pane to the host; no move enters a pane with no scope open. A host that must refuse
     the move in from one of its own panes wraps it (Practice takes `Alt+j` only from its console).
+- A focus anywhere in the shown pane, as a click on the ask box or the chat view gives, hands it the keys while the
+  host holds them.
 - The ask box's `Enter` and `Esc` act on the pane that holds the keys.
 - The page reaches main over the plugin's channel: `ask(owner, agentId, scope, text)` and
   `sessionOf(owner, agentId, scope)`.

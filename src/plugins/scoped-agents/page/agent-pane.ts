@@ -76,16 +76,18 @@ interface AskBox {
 // hidden, and `toggle` shows it, asking `sessionOf` and giving it the keys, or
 // hides it; a spec's `isAlwaysShown` pane shows from the start, reads
 // `sessionOf` on each scope without taking the keys, and `toggle` gives it the
-// keys or hands them back to the host. The mount is keyed on the open scope `scopeOpened` names: the same
-// scope keeps the mount and the ask box's text, another or null drops both.
-// Within one scope, an answer naming another session than the mounted one
-// remounts on it. `send` asks the agent with the ask box's text and mounts its
-// chat view. An answer for a scope no longer open is dropped. While the pane
-// holds the keys it sets the scope `ask`; `hostTookKeys` hears them leave.
-// Hiding, `modeHidden`, Alt+h and `leaveBox` give them back to the host and
-// give them up whether or not the host's `leave` answers. `outerPanes` moves
-// the spec's `entersFrom` direction from the host into the shown pane, and the
-// opposite one from the pane to the host.
+// keys or hands them back to the host. A focus anywhere in the shown pane,
+// as a click gives, takes the keys while the host holds them. The mount is
+// keyed on the open scope `scopeOpened` names: the same scope keeps the mount
+// and the ask box's text, another or null drops both. Within one scope, an
+// answer naming another session than the mounted one remounts on it. `send`
+// asks the agent with the ask box's text and mounts its chat view. An answer
+// for a scope no longer open is dropped. While the pane holds the keys it
+// sets the scope `ask`; `hostTookKeys` hears them leave. Hiding,
+// `modeHidden`, the move opposite `entersFrom` and `leaveBox` give them back
+// to the host and give them up whether or not the host's `leave` answers.
+// `outerPanes` moves the spec's `entersFrom` direction from the host into the
+// shown pane, and the opposite one from the pane to the host.
 // After `dispose` every method does nothing.
 export function createAgentPane(
   deps: AgentPaneDeps,
@@ -197,15 +199,9 @@ export function createAgentPane(
     const sendAnchor = element('span', 'scoped-agents-ask-send');
     const box: AskBox = {
       frame,
-      // A click in the box while the host holds the keys gives them to the
-      // pane.
       editor: deps.editor.create(frame, '', {
         changed: () => undefined,
-        focused() {
-          if (isPaneShown && !hasKeys) {
-            takeKeys(false);
-          }
-        },
+        focused: () => undefined,
         blurred: () => undefined,
         modeChanged: () => undefined,
       }),
@@ -290,10 +286,13 @@ export function createAgentPane(
     );
   };
 
-  // Gives the shown pane the keys, once `sessionOf` answers when it shows no
-  // chat view yet.
+  // Gives the shown pane the keys, once `sessionOf` answers when it shows
+  // nothing yet, or no chat view in a pane that hides; an always-shown pane
+  // read `sessionOf` on its scope's open.
   const enter = () => {
-    if (mount !== null) {
+    const showsAnswer =
+      mount !== null || (spec.isAlwaysShown && askBox !== null);
+    if (showsAnswer) {
       takeKeys(true);
       return;
     }
@@ -457,6 +456,12 @@ export function createAgentPane(
       }
     },
   };
+  body.addEventListener('focusin', () => {
+    const isHostHolding = isPaneShown && open !== null && !hasKeys;
+    if (!isDisposed && isHostHolding) {
+      takeKeys(false);
+    }
+  });
   if (spec.isAlwaysShown) {
     show();
   }

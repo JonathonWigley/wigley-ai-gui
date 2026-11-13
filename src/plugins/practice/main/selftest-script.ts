@@ -145,7 +145,7 @@ const practiceGroups: SelfTestGroup[] = [
         keys: ['<A-k>'],
         expect: '[scoped-agents] interviewer left',
         alsoExpect: [/^\[practice\] main focused$/],
-        why: "The chat view turns Option+k down at its top edge, so Practice's outer panes give the column the keys.",
+        why: "The chat view opens on its transcript, which turns Option+k down, so Practice's outer panes give the column the keys; from the box a first Option+k would reach the transcript.",
       },
       { keys: [' ', 'v', 'i'], expect: '[scoped-agents] interviewer focused' },
       {

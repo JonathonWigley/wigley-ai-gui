@@ -83,7 +83,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog table and review pane, the primer
   popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat tab's transcript, box
   and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode,
-  Practice's interviewer pane under its editor and console, reached with Alt+j from the console), then, at main's edge, to the shown mode's side bar on the left (the
+  Practice's interviewer pane under its editor and console, reached with Alt+j from the console and left with Alt+k, from the chat box after a first Alt+k to its transcript), then, at main's edge, to the shown mode's side bar on the left (the
   Sessions list, the docs tree, the Settings sections) and the right bar on the right (each part of
   it that has rows, Alt+j/k between them). Backlog has no side bar;
   Alt+h/l move between its table and review pane, Alt+j from the table or review pane to the chunk strip and Alt+k

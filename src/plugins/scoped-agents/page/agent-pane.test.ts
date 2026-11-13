@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
 import type { PaneDirection } from '../../../contracts/panes';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
-import { installFocusFakeDom } from '../../../shared/page/test-dom';
+import { asFake, installFocusFakeDom } from '../../../shared/page/test-dom';
 import { deferred } from '../../../shared/plugin-part-harness.test-support';
 import type { AgentPaneSpec } from '../contract';
 import type { AskBoxInput } from '../layouts/layout';
@@ -682,6 +682,116 @@ describe('createAgentPane', () => {
     expect(setup.calls).toEqual(row.calls);
     expect(setup.focus()).toBe(row.focus);
     expect(setup.pane.isShown()).toBe(true);
+  });
+
+  it.each<{
+    case: string;
+    scope: string | null;
+    answer: string | null;
+    calls: string[];
+    reads: number;
+    log: string;
+  }>([
+    {
+      case: 'over the ask box gives the keys with no second read',
+      scope: 'two-sum',
+      answer: null,
+      calls: ['tookKeys'],
+      reads: 1,
+      log: 'interviewer focused',
+    },
+    {
+      case: 'with no scope gives no keys',
+      scope: null,
+      answer: null,
+      calls: [],
+      reads: 0,
+      log: 'interviewer has no scope',
+    },
+  ])('always shown: toggle $case', async (row) => {
+    const setup = paneSetup({ isAlwaysShown: true });
+    if (row.scope !== null) {
+      setup.pane.scopeOpened(row.scope);
+      await setup.answerSession(row.answer);
+    }
+    setup.calls.length = 0;
+
+    setup.pane.toggle();
+
+    expect(setup.calls).toEqual(row.calls);
+    expect(
+      setup.events.filter((event) => event.startsWith('sessionOf')),
+    ).toHaveLength(row.reads);
+    expect(setup.logs.at(-1)).toBe(row.log);
+    expect(setup.pane.isShown()).toBe(true);
+  });
+
+  it('always shown: keeps the keys on the next scope', async () => {
+    const setup = paneSetup({ isAlwaysShown: true });
+    setup.pane.scopeOpened('two-sum');
+    await setup.answerSession('s1');
+    setup.pane.toggle();
+    setup.calls.length = 0;
+    setup.events.length = 0;
+
+    setup.pane.scopeOpened('lru-cache');
+    await setup.answerSession(null);
+
+    expect(setup.focus()).toBe('pane');
+    expect(setup.calls).toEqual([]);
+    expect(setup.events).toEqual([
+      'dispose s1',
+      'sessionOf lru-cache',
+      'setScope ask',
+      'setFocusTarget null',
+      'setResizeTarget',
+    ]);
+    expect(setup.boxes.at(-1)!.focusOptions).toEqual([{ insertAtEnd: true }]);
+  });
+
+  it.each<{
+    case: string;
+    isAlwaysShown: boolean;
+    answer: string | null;
+    calls: string[];
+    mountShown: number;
+  }>([
+    {
+      case: 'the chat view of a shown pane',
+      isAlwaysShown: true,
+      answer: 's1',
+      calls: ['tookKeys'],
+      mountShown: 1,
+    },
+    {
+      case: 'the ask box of a shown pane',
+      isAlwaysShown: true,
+      answer: null,
+      calls: ['tookKeys'],
+      mountShown: 0,
+    },
+    {
+      case: 'a hidden pane',
+      isAlwaysShown: false,
+      answer: null,
+      calls: [],
+      mountShown: 0,
+    },
+  ])('a focus in $case while the host holds the keys', async (row) => {
+    const setup = paneSetup({ isAlwaysShown: row.isAlwaysShown });
+    setup.pane.scopeOpened('two-sum');
+    if (row.isAlwaysShown) {
+      await setup.answerSession(row.answer);
+    }
+    setup.calls.length = 0;
+
+    asFake(setup.pane.element).fire('focusin', {
+      target: setup.pane.element,
+    });
+
+    expect(setup.calls).toEqual(row.calls);
+    expect(setup.mounts[0]?.shown ?? 0).toBe(row.mountShown);
+    expect(setup.boxes.flatMap((box) => box.focusOptions)).toEqual([]);
   });
 
   it.each<{

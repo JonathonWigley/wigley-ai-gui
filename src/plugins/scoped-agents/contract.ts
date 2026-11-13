@@ -88,7 +88,8 @@ export interface AgentPaneSpec {
   resizeTarget: ResizeTarget;
   // The pane took the keys: the host's focus is the pane.
   tookKeys(): void;
-  // Esc in the ask box / Alt+h: the host takes the keys back.
+  // Esc in the ask box or the move opposite `entersFrom`: the host takes the
+  // keys back.
   leave(): void;
 }
 

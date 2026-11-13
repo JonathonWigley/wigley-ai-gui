@@ -74,7 +74,7 @@ notices), kept so the plan is written from them. A decision here stands unless t
   | `y` `n` `Esc` | the Solution confirm (scope `practice.confirm`, pushed) | open the tab / keep solving |
   | `Space v i` | any | give the interviewer pane the keys, or hand them back to the column; with Practice hidden it shows Practice with the keys in the pane |
   | `Enter` / `Esc` | the interviewer's ask box (scope `scoped-agents.ask`) | send the first message / leave the box |
-  | `⌥h` `⌥j` `⌥k` `⌥l` | core | move between the list, the problem pane, the editor, the console and the interviewer (`⌥j` from the console into it, `⌥k` back out) |
+  | `⌥h` `⌥j` `⌥k` `⌥l` | core | move between the list, the problem pane, the editor, the console and the interviewer (`⌥j` from the console into it, `⌥k` back out; from the chat view's box a first `⌥k` reaches its transcript) |
 
   `scoped-agents.ask` is a base scope the pane sets through `setScope`, so it sits in the `<C-n>` list beside the list,
   problem, editor and console scopes and is never pushed; `practice.box`, `practice.confirm` and `practice.import` are

@@ -296,7 +296,8 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   });
   workspace.interviewerSlot.append(interviewer.element);
   // The pane takes `down` whenever it lacks the keys; Practice gives it only
-  // from the console, the pane right over it.
+  // from the console, the pane right over it. A resize from outside the
+  // column moves only the pane's divider.
   const outerPanes: OuterPanes = {
     focus: {
       move(direction) {
@@ -307,7 +308,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
           : interviewer.outerPanes.focus.move(direction);
       },
     },
-    resize: interviewer.outerPanes.resize,
+    resize: workspace.interviewerDivider,
   };
 
   const importBox = createImportBox({
@@ -605,7 +606,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   const setFocus = (focus: PracticeFocus) => changeFocus(focus, true);
 
   // A click or a box's focus into the list or the column hands it the keys;
-  // in the interviewer's pane only its ask box takes them, itself.
+  // the interviewer's pane takes them itself.
   for (const [pane, focus] of [
     [listPane, 'list'],
     [mainPane, 'main'],
