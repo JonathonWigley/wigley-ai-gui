@@ -8,8 +8,8 @@
 // The app keeps:
 // - the row part and the right-bar slot, contributed while the shown session has a pool and removed when it has none;
 // - the clicks: a holder's click runs `unity-pool.selectHolder` with its `sessionId`, which selects its row, and an
-//   action's button runs the action's `command` with its `arg`, which runs `unity-pool hold|release` through main, the
-//   clone's `action.running` true until the result lands in its `result`;
+//   action's button runs the action's `command` with its `arg`, which runs `unity-pool hold|release|open` through
+//   main, the clone's `action.running` and `open.running` true until the result lands in its `result`;
 // - the keys and the focus: Alt+l past main's right edge gives the panel the keys, `j`/`k`/`gg`/`G` walk a cursor
 //   over the session holders and Enter shows the cursor's session, as the holder's click does; the buttons and
 //   links never take focus;
@@ -44,7 +44,9 @@ export interface HolderInput {
 // `editor` is the editor's state in words (`editor ready`, `in Play Mode`). `blocking` is true only while the queue
 // has a long wait, on each clone that keeps the queue waiting: held, handed off, stranded or dirty. `action` is Hold
 // on a free clone and Release on the user's hold, null otherwise: `kit.button(parent, label, command, { arg })` runs it.
-// `result` is the last Hold or Release's outcome.
+// `open` is on every clone: its command holds a free clone for the user, then brings the clone's editor to the front,
+// or starts it when none runs. Hold, Release and Open run one at a time per clone, so `open.running` and
+// `action.running` are true together. `result` is the last Hold, Release or Open's outcome.
 export interface PanelCloneInput {
   title: string;
   path: string;
@@ -62,6 +64,11 @@ export interface PanelCloneInput {
     arg: { pool: string; clone: number };
     running: boolean;
   } | null;
+  open: {
+    command: string;
+    arg: { pool: string; clone: number };
+    running: boolean;
+  };
   result: { ok: boolean; text: string } | null;
 }
 

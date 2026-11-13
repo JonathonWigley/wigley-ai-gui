@@ -7,6 +7,7 @@ import {
   type PoolHolder,
   type PoolState,
   unityPoolHoldCommand,
+  unityPoolOpenCommand,
   unityPoolReleaseCommand,
 } from '../contract';
 import type {
@@ -27,7 +28,7 @@ export interface PoolRow {
   hostSessionId: string | null;
 }
 
-// A clone's Hold or Release: running until main answers, then its outcome.
+// A clone's Hold, Release or Open: running until main answers, then its outcome.
 export interface PendingAction {
   action: PoolAction;
   running: boolean;
@@ -104,8 +105,9 @@ export function poolOfRow(
 }
 
 // The panel of `pool` at `now`: each clone in number order with its holder matched to `rows`, the queue in order,
-// and the counts. `pending` holds this pool's Hold and Release runs by clone number; an action names the
-// `unity-pool.hold` or `unity-pool.release` command with its pool and clone, and a session holder carries its row id.
+// and the counts. `pending` holds this pool's Hold, Release and Open runs by clone number; an action names the
+// `unity-pool.hold` or `unity-pool.release` command and every clone's `open` the `unity-pool.open` command, each with
+// its pool and clone, and a session holder carries its row id.
 // `cursor` is the keyboard cursor's index in `sessionHolders` order, clamped to the last holder, its holder alone
 // marked `isCursor`; null marks none.
 export function panelInput(
@@ -287,6 +289,11 @@ function cloneInput(
         : { state: warmup.state, error: warmup.error },
     blocking: longWait && (!unheld || isDirty),
     action: cloneAction(pool, clone, unheld, pending),
+    open: {
+      command: unityPoolOpenCommand.id,
+      arg: { pool, clone: clone.number },
+      running: pending?.running ?? false,
+    },
     result: pending?.result ?? null,
   };
 }

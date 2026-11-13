@@ -13,7 +13,7 @@ import { unityPoolSelfTestScript } from './selftest-script';
 type UnityPoolApi = MainApi<typeof unityPoolManifest, UnityPoolChannel>;
 
 // Watches unity-pool's state files and writes `unity-pool.snapshot` at start and on each change, and runs the CLI for
-// the panel's Hold and Release, logging each run's outcome and reading every pool again after it in case the OS
+// the panel's Hold, Release and Open, logging each run's outcome and reading every pool again after it in case the OS
 // watcher misses the write. Registers as chat's pool provider, which gives each pool's clone folders, and tells chat at
 // each change that those folders may have changed.
 // Registers the layouts and hands the self-test the badge and panel script.

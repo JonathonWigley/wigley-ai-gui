@@ -86,9 +86,9 @@ export const unityPoolSnapshotSlot: SlotKey<
   'unity-pool'
 > = { id: 'unity-pool.snapshot', process: 'main', kind: 'value' };
 
-export type PoolAction = 'hold' | 'release';
+export type PoolAction = 'hold' | 'release' | 'open';
 
-// The clone a Hold or Release acts on.
+// The clone a Hold, Release or Open acts on.
 export interface PoolCloneArg {
   pool: string;
   clone: number;
@@ -103,6 +103,11 @@ export const unityPoolReleaseCommand: CommandKey<
   PoolCloneArg,
   'unity-pool.release'
 > = { id: 'unity-pool.release' };
+
+// Holds the clone for the user when nothing holds it, then brings its editor to the front or starts it, as the
+// panel's Open button does.
+export const unityPoolOpenCommand: CommandKey<PoolCloneArg, 'unity-pool.open'> =
+  { id: 'unity-pool.open' };
 
 // The CLI's own JSON answer, or `no-cli` and `cli-failed` when it gave none.
 export type PoolActionResult =

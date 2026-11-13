@@ -1,17 +1,17 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // The unity-pool view: which pool clone each session holds or waits for, as a badge on its sidebar row, and every
-// clone of the shown session's pool in a right-bar panel with Hold and Release buttons, read from unity-pool's state
-// files and changed only through its CLI. The panel is a right-bar stop: while it holds the keys, `j`/`k`/`gg`/`G`
-// walk a cursor over its session holders and Enter shows the cursor's session. Its click commands each name what
-// they act on, so none has a key: Hold and Release a clone, and a holder's label selecting that session's row. It
+// clone of the shown session's pool in a right-bar panel with Hold, Release and Open buttons, read from unity-pool's
+// state files and changed only through its CLI. The panel is a right-bar stop: while it holds the keys, `j`/`k`/`gg`/
+// `G` walk a cursor over its session holders and Enter shows the cursor's session. Its click commands each name what
+// they act on, so none has a key: Hold, Release and Open a clone, and a holder's label selecting that session's row. It
 // names `sessions` for the rows it badges and the sessions it matches, and `chat` for the pool provider it registers
 // and its self-test's launch.
 export const unityPoolManifest = definePlugin({
   id: 'unity-pool',
   label: 'Unity pool',
   description:
-    'Shows which Unity pool clone each session holds, with Hold and Release buttons.',
+    'Shows which Unity pool clone each session holds, with Hold, Release and Open buttons.',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {
@@ -32,6 +32,12 @@ export const unityPoolManifest = definePlugin({
       runsIn: 'page',
       arg: { pool: 'string', clone: 'number' },
     },
+    open: {
+      label: 'open the clone in Unity',
+      group: 'pool',
+      runsIn: 'page',
+      arg: { pool: 'string', clone: 'number' },
+    },
     selectHolder: {
       label: "show the holder's session",
       group: 'pool',
@@ -45,7 +51,7 @@ export const unityPoolManifest = definePlugin({
     scriptPath: {
       label: 'unity-pool command',
       description:
-        "The unity-pool script the panel's Hold and Release buttons run with the Python command. ~ is the home folder. Empty, it is ~/.local/bin/unity-pool, and on Windows ~/wigley-agents/tools/unity-pool/unity-pool, since a Windows install writes launchers, not a symlink Python can run.",
+        "The unity-pool script the panel's Hold, Release and Open buttons run with the Python command. ~ is the home folder. Empty, it is ~/.local/bin/unity-pool, and on Windows ~/wigley-agents/tools/unity-pool/unity-pool, since a Windows install writes launchers, not a symlink Python can run.",
     },
     pythonCommand: {
       label: 'Python command',

@@ -200,6 +200,11 @@ describe('unityPoolPagePart', () => {
       sent: [['release', 'q', 2]],
     },
     {
+      name: 'open',
+      runs: (commands: PoolCommands) => commands.open({ arg: CLONE_2 }),
+      sent: [['open', 'q', 2]],
+    },
+    {
       name: 'a second hold while the first runs',
       runs: (commands: PoolCommands) => {
         commands.hold({ arg: CLONE_2 });

@@ -340,7 +340,7 @@ describe('poolOfRow', () => {
 
 // A clone's input with its holder's `sessionId` replaced by whether it selects.
 function plainClone(input: PanelCloneInput) {
-  const { holder, action, ...rest } = input;
+  const { holder, action, open: _open, ...rest } = input;
   return {
     ...rest,
     holder:
@@ -835,6 +835,31 @@ describe('panelInput', () => {
       command: 'unity-pool.hold',
       arg: { pool: 'p', clone: 4 },
     });
+  });
+
+  it('panelInput_Open_OnEveryCloneRunningWhileItsActionRuns', () => {
+    const input = panelInput(
+      pool('p', [
+        clone(3, { claim: claim('agent', 'host-7', null) }),
+        clone(4),
+      ]),
+      rows,
+      NOW,
+      new Map([[4, { action: 'open', running: true, result: null }]]),
+      null,
+    );
+    expect(input.clones.map((each) => each.open)).toEqual([
+      {
+        command: 'unity-pool.open',
+        arg: { pool: 'p', clone: 3 },
+        running: false,
+      },
+      {
+        command: 'unity-pool.open',
+        arg: { pool: 'p', clone: 4 },
+        running: true,
+      },
+    ]);
   });
 
   // Clone 1 held by the user, clone 2 claimed by row A, clone 3 handed off to row B, then a ticket queued by row C

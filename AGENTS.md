@@ -448,7 +448,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  land, done), main/ (its self-test script), page/, layouts/ (the built-in `default` layout); claims
                  `wigley:medium`
   unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json` into the `unity-pool.snapshot` slot, runs
-                 `unity-pool hold|release` for the panel, gives chat its pools' clone folders, hands its self-test script), page/ (the clone badge under
+                 `unity-pool hold|release|open` for the panel, gives chat its pools' clone folders, hands its self-test script), page/ (the clone badge under
                  each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
                  Layout contract and the built-in `default` layout); `docs/features/unity-pool/design.md`
   system-stats/  manifest.ts, contract.ts (the `system-stats.snapshot` slot), main/ (polls `services.systemStats` while a

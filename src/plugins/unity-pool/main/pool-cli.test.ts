@@ -20,8 +20,8 @@ function exited(
 }
 
 describe('poolCommandArgs', () => {
-  it.each<PoolAction>(['hold', 'release'])(
-    'poolCommandArgs_HoldAndRelease: %s',
+  it.each<PoolAction>(['hold', 'release', 'open'])(
+    'poolCommandArgs_EachAction: %s',
     (action) => {
       expect(poolCommandArgs('/s/unity-pool', action, 'p', 3)).toEqual([
         '-X',

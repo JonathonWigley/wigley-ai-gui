@@ -3,7 +3,7 @@
 // The built-in unity-pool look: a tag under a session row for each clone it
 // holds or queue it waits in, and the right-bar panel: a summary of the counts,
 // a two-column grid with one tile per clone (a dot for its state, its Hold or
-// Release button, branch, editor state, dirty mark, who has it or `Free`, and
+// Release button, its Open button, branch, editor state, dirty mark, who has it or `Free`, and
 // any handoff, stranded mark, warm-up or result), then the queue. A clone
 // blocking a long wait takes the attention edge and shows its holder's idle
 // time. The session holder under the keyboard cursor takes the focus ring.
@@ -79,6 +79,12 @@ function drawClone(parent, clone, kit) {
     });
     button.disabled = clone.action.running;
   }
+  const open = kit.button(head, 'Open', clone.open.command, {
+    arg: clone.open.arg,
+    variant: 'ghost',
+  });
+  open.disabled = clone.open.running;
+  open.title = `Open ${clone.title}: holds it when free, then brings its editor up`;
   kit.el(box, 'span', 'unity-pool-branch', clone.branch);
   const facts = kit.el(box, 'div', 'unity-pool-facts');
   kit.el(facts, 'span', 'unity-pool-muted', clone.editor);

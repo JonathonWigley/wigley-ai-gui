@@ -8,7 +8,7 @@
 - **Reading the state** — the files main watches and how it reads them.
 - **Row badge** — what a session row shows for its clone.
 - **Panel** — the right-bar panel, which pool it shows, and what each clone and ticket shows.
-- **Hold and Release** — the two buttons, run through the CLI.
+- **Hold, Release and Open** — the three buttons, run through the CLI.
 - **Clones for a project** — the clone folders the pool provider gives chat.
 - **Drawing** — the layout parts and what the app keeps.
 - **Decisions** — choices a future change would otherwise reopen.
@@ -99,7 +99,7 @@ with:
 - an open handoff with its time left, a stranded mark with its reason (`claim expired with changes`,
   `session ended with changes`) and age, and a warm-up while it runs, or `not warmed` after it failed, with the error
   in its tooltip since a failed warm-up blocks no claim
-- its Hold or Release button (below)
+- its Hold or Release button and its Open button (below)
 
 Under the clones it lists the queue in order: position, the waiting session, its branch and how long it has waited.
 
@@ -109,10 +109,13 @@ since its last renewal. The app sends no notification for a long wait.
 
 The panel redraws on each state change, each change of the shown session, and once a minute for the times.
 
-## Hold and Release
+## Hold, Release and Open
 
 - **Hold** shows on a clone with no claim, handoff or stranded mark. It runs `unity-pool hold <pool> <n> --json`.
 - **Release** shows on a clone the user holds. It runs `unity-pool release <pool> <n> --json`.
+- **Open** shows on every clone. It runs `unity-pool open <pool> <n> --json`, which holds a clone with no claim,
+  handoff or stranded mark for the user first, so the pool's idle close and an agent's claim leave the editor alone,
+  then brings the clone's running editor to the front or starts one. A clone someone else has keeps its holder.
 
 Main runs the CLI as `<python> -X utf8 <script> …`, the Python being the `unity-pool.pythonCommand` setting
 (`python3` by default; `py` or `python` on a Windows install with no `python3`) and the script the
@@ -120,17 +123,19 @@ Main runs the CLI as `<python> -X utf8 <script> …`, the Python being the `unit
 `~/wigley-agents/tools/unity-pool/unity-pool`, since a Windows install writes launchers, not a symlink a Python can
 run; `resolveScriptPath` picks it from the platform main reads. A run drops every session variable from the app's
 environment (`SESSION_IDENTITY_ENV`, `src/shared/session-env.ts`: `CLAUDE_CODE_SESSION_ID`, `WIGLEY_SESSION_ROW` and
-the rest), so the CLI takes it as the user's even in an app started from a Claude Code terminal. A run times out
-after 30 seconds. The button is disabled while its run is in
-flight, and the clone then shows the result until the page reloads: `Held Unity 3`, `Released Unity 3`, or the CLI's
-error message. The CLI's `ok` decides, not its exit code. A script missing from its path gives `no-cli`, and a run
+the rest), so the CLI takes it as the user's even in an app started from a Claude Code terminal. A Hold or Release
+run times out after 30 seconds, an Open run after 120, since it may wait on the editor's focus call. A clone runs one
+at a time: its buttons are disabled while its run is in
+flight, and the clone then shows the result until the page reloads: `Held Unity 3`, `Released Unity 3`,
+`Opened Unity 3`, or the CLI's error message. The CLI's `ok` decides, not its exit code. A script missing from its path gives `no-cli`, and a run
 with no JSON answer gives `cli-failed` carrying the last stderr line. The panel offers no release of an
 agent's claim or a stranded mark: those take `release --force`, which runs only on the user's word in a terminal.
 
 The panel is a right-bar stop: `Alt+l` past main's right edge gives it the keys (scope `unity-pool.panel`), and
 `Alt+h` hands them back. `j`/`k`/`gg`/`G` walk a cursor over its session holders, in clone order then queue order,
 entering on the shown session's clone holder, and Enter shows the cursor's session as a click on the holder does. The
-cursor's holder draws the focus ring only while the panel holds the keys. The Hold and Release buttons stay clicks.
+cursor's holder draws the focus ring only while the panel holds the keys. The Hold, Release and Open buttons stay
+clicks.
 
 ## Clones for a project
 
@@ -159,8 +164,11 @@ pending runs and every redraw. The default look is in `DESIGN.md` § Surfaces (U
   panel then names what blocks it.
 - **Pool membership by clone path, then by origin name**: a session started inside a clone is in its pool; one
   started in a worktree or a subfolder elsewhere still matches through the repo name the side bar already groups by.
-- **Keys walk the session holders alone**: the cursor stops only where Enter has a session to show; Hold and
-  Release stay clicks.
+- **Keys walk the session holders alone**: the cursor stops only where Enter has a session to show; Hold,
+  Release and Open stay clicks.
+- **Open holds a free clone**: the pool closes an idle editor on a free clone and an agent's claim may switch its
+  branch, so an editor the user opens by hand wants the hold. The focus-or-start choice lives in `unity-pool open`,
+  which knows the clone's Unity project folder; the app knows only the clone.
 
 ## Out of scope
 

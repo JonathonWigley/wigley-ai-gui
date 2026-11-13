@@ -59,6 +59,7 @@ const PANEL_ORDER = 10;
 const DONE_WORDS: Record<PoolAction, string> = {
   hold: 'Held',
   release: 'Released',
+  open: 'Opened',
 };
 
 // A folder's origin repo name: asked of main and not answered yet, or read.
@@ -76,8 +77,8 @@ interface HeldWrapper {
 // row's match keys from `sessions.rows` and the shown session from
 // `sessions.active`; asks main for the shown
 // session's folder's origin name once per folder while any pool exists. A
-// holder's click selects its row through `sessions.activate`. Hold and Release
-// run through main, one at a time per clone, each clone's last result kept
+// holder's click selects its row through `sessions.activate`. Hold, Release and
+// Open run through main, one at a time per clone, each clone's last result kept
 // until the page reloads. Redraws all at `ready`, on each of those, on each
 // layouts set and once a minute for the times. The panel is a right-bar stop:
 // given the keys, it walks a cursor over its session holders and Enter shows
@@ -112,7 +113,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
     const rows = api.state.read(sessionsRowsSlot);
     const active = api.state.read(sessionsActiveSlot);
     const originNames = new Map<string, OriginEntry>();
-    // Each pool's Hold and Release runs, by clone number.
+    // Each pool's Hold, Release and Open runs, by clone number.
     const pendingByPool = new Map<string, Map<number, PendingAction>>();
     const held = new Map<string, HeldWrapper>();
     // Each row's badge text last logged; a row never logged reads `none`.
@@ -463,6 +464,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         showHolder,
         hold: ({ arg }) => runAction(arg.pool, 'hold', arg.clone),
         release: ({ arg }) => runAction(arg.pool, 'release', arg.clone),
+        open: ({ arg }) => runAction(arg.pool, 'open', arg.clone),
         selectHolder: ({ arg }) => sessions.activate(arg),
       },
       ready() {

@@ -9,7 +9,12 @@ import { isJsonObject } from '../../../shared/json';
 import { SESSION_IDENTITY_ENV } from '../../../shared/session-env';
 import type { PoolAction, PoolActionResult } from '../contract';
 
-const RUN_TIMEOUT_MS = 30_000;
+// Open may wait on `unity status` and then on the editor's `editor_focus`, which the CLI gives 60 seconds.
+const RUN_TIMEOUT_MS: Record<PoolAction, number> = {
+  hold: 30_000,
+  release: 30_000,
+  open: 120_000,
+};
 
 type CliFailure = { ok: false; error: string; message: string };
 
@@ -98,7 +103,7 @@ export async function runPoolCommand(
     const result = await deps.processes.run(
       deps.pythonCommand,
       poolCommandArgs(script, action, pool, clone),
-      { timeoutMs: RUN_TIMEOUT_MS, unsetEnv: SESSION_IDENTITY_ENV },
+      { timeoutMs: RUN_TIMEOUT_MS[action], unsetEnv: SESSION_IDENTITY_ENV },
     );
     return readActionResult(result);
   } catch (error) {
