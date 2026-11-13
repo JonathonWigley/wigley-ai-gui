@@ -99,7 +99,7 @@ export const practiceManifest = definePlugin({
     confirmYes: { label: 'open it', group: 'confirm', runsIn: 'page' },
     confirmNo: { label: 'keep solving', group: 'confirm', runsIn: 'page' },
     toggleInterviewer: {
-      label: 'show or hide the interviewer',
+      label: 'focus or leave the interviewer',
       group: 'interviewer',
       runsIn: 'page',
     },

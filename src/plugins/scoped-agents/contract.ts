@@ -4,7 +4,11 @@
 // between the plugin's main and page parts.
 
 import type { Disposable } from '../../contracts/disposable';
-import type { OuterPanes, ResizeTarget } from '../../contracts/panes';
+import type {
+  OuterPanes,
+  PaneDirection,
+  ResizeTarget,
+} from '../../contracts/panes';
 import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
 import type { AgentSession } from '../sessions/contract';
 
@@ -73,6 +77,13 @@ export interface AgentPaneSpec {
   hint: string;
   // The host shows or hides the slot holding `element`.
   setShown(shown: boolean): void;
+  // Shows the pane from the start and never hides it: `toggle` moves the keys
+  // into the pane and back out (Practice); else the pane starts hidden and
+  // `toggle` shows and hides it (backlog).
+  isAlwaysShown: boolean;
+  // The Alt move from the host into the shown pane: `right` for a slot right
+  // of the host, `down` for one below it. The opposite move leaves the pane.
+  entersFrom: PaneDirection;
   // The slot's divider.
   resizeTarget: ResizeTarget;
   // The pane took the keys: the host's focus is the pane.

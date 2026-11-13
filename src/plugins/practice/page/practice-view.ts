@@ -93,7 +93,7 @@ export type PracticeCommand = Exclude<
   'showMode' | 'openProblemRow' | 'showTab' | 'openSubmissionRow'
 >;
 
-// The interviewer's toggle and the commands the import box handles.
+// The interviewer's keys toggle and the commands the import box handles.
 type InterviewerCommand =
   | 'toggleInterviewer'
   | 'importStart'
@@ -172,9 +172,9 @@ export interface PracticeViewDeps {
 // list's focus; `reload` reads it again (the channel's `changed`); `shown`
 // sets the scope and focus where the keys were left. An opened problem shows
 // in the workspace, which fills the column from then on, with the
-// interviewer's agent pane in its side slot, opened on each shown attempt; the
-// import box opens over the page. Run and Submit do nothing while Practice is
-// hidden.
+// interviewer's agent pane always shown under the editor and console, opened
+// on each shown attempt; the import box opens over the page. Run and Submit do
+// nothing while Practice is hidden.
 export interface PracticeView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -287,20 +287,25 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     agentId: 'interviewer',
     heading: () => openTitle,
     hint: ASK_HINT,
-    setShown: (shown) => workspace.setSidePaneShown(shown),
-    resizeTarget: workspace.sideResizeTarget,
+    setShown: (shown) => workspace.setInterviewerShown(shown),
+    isAlwaysShown: true,
+    entersFrom: 'down',
+    resizeTarget: workspace.interviewerResizeTarget,
     tookKeys: () => setFocus('interviewer'),
     leave: () => focusColumn(),
   });
-  workspace.sidePane.append(interviewer.element);
-  // The pane takes `right` whenever it lacks the keys; Practice gives it only
-  // from the column, so Alt+l from the list goes on to the column.
+  workspace.interviewerSlot.append(interviewer.element);
+  // The pane takes `down` whenever it lacks the keys; Practice gives it only
+  // from the console, the pane right over it.
   const outerPanes: OuterPanes = {
     focus: {
-      move: (direction) =>
-        direction === 'right' && store.get().focus !== 'main'
+      move(direction) {
+        const isAtConsole =
+          store.get().focus === 'main' && workspace.pane() === 'console';
+        return direction === 'down' && !isAtConsole
           ? false
-          : interviewer.outerPanes.focus.move(direction),
+          : interviewer.outerPanes.focus.move(direction);
+      },
     },
     resize: interviewer.outerPanes.resize,
   };
@@ -801,10 +806,12 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       }
     },
   };
-  // Toggles the interviewer's pane; showing it needs a shown problem, else it
-  // toasts and stays hidden. Hiding it is never refused.
-  const toggleInterviewerPane = () => {
-    if (!interviewer.isShown() && shownPair === null) {
+  // Moves the keys into the interviewer's pane, or back to the column from
+  // it; entering needs a shown problem, else it toasts. Leaving is never
+  // refused.
+  const toggleInterviewerKeys = () => {
+    const entersPane = store.get().focus !== 'interviewer';
+    if (entersPane && shownPair === null) {
       deps.toast('Open a problem first', 'info');
       deps.log('interviewer needs an open problem');
       return;
@@ -814,12 +821,12 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   const interviewerCommands: Record<InterviewerCommand, () => void> = {
     toggleInterviewer() {
       if (deps.isShown()) {
-        toggleInterviewerPane();
+        toggleInterviewerKeys();
         return;
       }
       deps.showMode();
-      if (!interviewer.isShown()) {
-        toggleInterviewerPane();
+      if (store.get().focus !== 'interviewer') {
+        toggleInterviewerKeys();
       }
     },
     importStart: () => importBox.open(),

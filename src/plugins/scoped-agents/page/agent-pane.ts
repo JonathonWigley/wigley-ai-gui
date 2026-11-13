@@ -3,6 +3,7 @@ import type { EditorHost, TextEditor } from '../../../contracts/editor';
 import type {
   FocusTarget,
   OuterPanes,
+  PaneDirection,
   ResizeTarget,
 } from '../../../contracts/panes';
 import type { KeyHints, ToastTone } from '../../../contracts/plugin';
@@ -49,6 +50,13 @@ export interface AgentPaneDeps {
   heldKeys(pane: AgentPaneView | null): void;
 }
 
+const OPPOSITE_DIRECTIONS: Record<PaneDirection, PaneDirection> = {
+  left: 'right',
+  right: 'left',
+  up: 'down',
+  down: 'up',
+};
+
 // The open scope; a new object on each change, so an answer can tell whether
 // the scope it was asked for is still open, even when the same scope was
 // closed and opened again.
@@ -65,8 +73,10 @@ interface AskBox {
 
 // One agent pane in a host's slot: the open scope's chat view, mounted with
 // `mountChat`, or the ask box while the scope has no session. It starts
-// hidden; `toggle` shows it, asking `sessionOf` and giving it the keys, or
-// hides it. The mount is keyed on the open scope `scopeOpened` names: the same
+// hidden, and `toggle` shows it, asking `sessionOf` and giving it the keys, or
+// hides it; a spec's `isAlwaysShown` pane shows from the start, reads
+// `sessionOf` on each scope without taking the keys, and `toggle` gives it the
+// keys or hands them back to the host. The mount is keyed on the open scope `scopeOpened` names: the same
 // scope keeps the mount and the ask box's text, another or null drops both.
 // Within one scope, an answer naming another session than the mounted one
 // remounts on it. `send` asks the agent with the ask box's text and mounts its
@@ -74,7 +84,8 @@ interface AskBox {
 // holds the keys it sets the scope `ask`; `hostTookKeys` hears them leave.
 // Hiding, `modeHidden`, Alt+h and `leaveBox` give them back to the host and
 // give them up whether or not the host's `leave` answers. `outerPanes` moves
-// Alt+h from the pane to the host and Alt+l from the host into the shown pane.
+// the spec's `entersFrom` direction from the host into the shown pane, and the
+// opposite one from the pane to the host.
 // After `dispose` every method does nothing.
 export function createAgentPane(
   deps: AgentPaneDeps,
@@ -279,20 +290,21 @@ export function createAgentPane(
     );
   };
 
-  const show = () => {
-    if (open === null) {
-      log(`${agentId} has no scope`);
-      return;
-    }
-    isPaneShown = true;
-    spec.setShown(true);
-    log(`${agentId} pane shown`);
+  // Gives the shown pane the keys, once `sessionOf` answers when it shows no
+  // chat view yet.
+  const enter = () => {
     if (mount !== null) {
       takeKeys(true);
       return;
     }
     takesKeysOnAnswer = true;
     readSession();
+  };
+
+  const show = () => {
+    isPaneShown = true;
+    spec.setShown(true);
+    log(`${agentId} pane shown`);
   };
 
   const hide = () => {
@@ -351,11 +363,13 @@ export function createAgentPane(
         if (isDisposed) {
           return false;
         }
-        if (direction === 'left' && hasKeys) {
+        const entersPane = direction === spec.entersFrom;
+        const leavesPane = direction === OPPOSITE_DIRECTIONS[spec.entersFrom];
+        if (leavesPane && hasKeys) {
           leaveToHost();
           return true;
         }
-        if (direction === 'right' && isPaneShown && !hasKeys) {
+        if (entersPane && isPaneShown && open !== null && !hasKeys) {
           takeKeys(true);
           return true;
         }
@@ -372,10 +386,18 @@ export function createAgentPane(
       if (isDisposed) {
         return;
       }
-      if (isPaneShown) {
+      const hidesPane = isPaneShown && !spec.isAlwaysShown;
+      if (spec.isAlwaysShown && hasKeys) {
+        leaveToHost();
+      } else if (hidesPane) {
         hide();
+      } else if (open === null) {
+        log(`${agentId} has no scope`);
       } else {
-        show();
+        if (!isPaneShown) {
+          show();
+        }
+        enter();
       }
     },
     scopeOpened(scope) {
@@ -435,5 +457,8 @@ export function createAgentPane(
       }
     },
   };
+  if (spec.isAlwaysShown) {
+    show();
+  }
   return view;
 }

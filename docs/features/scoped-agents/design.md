@@ -101,11 +101,16 @@ registrations.
 - `AgentPaneSpec` holds `owner` and `agentId` (the pane's channel calls name them), `heading()`, `hint`, and the
   host's hooks:
   - `setShown(shown)`: the host shows or hides the slot holding the pane
+  - `isAlwaysShown`: the pane shows from the start and never hides (Practice), else it starts hidden (Backlog)
+  - `entersFrom`: the Alt move from the host into the pane, `right` for a slot right of the host (Backlog), `down`
+    for one below it (Practice); the opposite move leaves the pane
   - `resizeTarget`: the slot's divider, for the resize keys
   - `tookKeys()`: the pane took the keys, so the host's focus is the pane
   - `leave()`: `Esc` in the ask box or `Alt+h` from the pane; the host takes the keys back
 - The host drives the pane through `AgentPane`:
-  - `toggle()` shows the pane and gives it the keys, or hides it. With no scope open it shows nothing and logs
+  - `toggle()` shows the pane and gives it the keys, or hides it; an always-shown pane takes the keys, or hands them
+    back to the host, and never hides. An always-shown pane reads `sessionOf` on each `scopeOpened` and takes no keys
+    from it. With no scope open it shows nothing and logs
     `<agentId> has no scope`; the host's own copy for that case is the host's (Practice toasts
     `Open a problem first`).
   - `scopeOpened(scope | null)` names the open scope; the same scope keeps the mount and the ask box's text, another
@@ -116,9 +121,9 @@ registrations.
   - `redraw()` draws the ask box again; the page part redraws every pane on a layout set, so a host calls it only
     when its heading changes
   - `hostTookKeys()` hears the keys leave the pane; `modeHidden()` gives them back as the mode hides
-  - `outerPanes` moves `Alt+h` from the pane to the host, and `Alt+l` into the shown pane from wherever the host has
-    the keys. A host that must refuse `Alt+l` from one of its own panes wraps it (Practice takes it only from its
-    problem column, not its list).
+  - `outerPanes` moves the `entersFrom` direction into the shown pane from wherever the host has the keys, and the
+    opposite direction from the pane to the host; no move enters a pane with no scope open. A host that must refuse
+    the move in from one of its own panes wraps it (Practice takes `Alt+j` only from its console).
 - The ask box's `Enter` and `Esc` act on the pane that holds the keys.
 - The page reaches main over the plugin's channel: `ask(owner, agentId, scope, text)` and
   `sessionOf(owner, agentId, scope)`.
@@ -157,7 +162,7 @@ registrations.
 ## The self-test
 
 - The plugin has no mode, so it has no self-test script of its own. Each host's script drives its pane over the fake
-  harness. Practice's `interviewer` group drives the ask box, the launch and mount, `Alt+h` out and `Alt+l` back,
+  harness. Practice's `interviewer` group drives the ask box, the launch and mount, `Alt+k` out and `Space v i` back,
   another scope's ask box, and the resume of an earlier scope. Backlog's `assistant` group opens the pane with the
   keys and gives them back, and sends no ask, since each ask launches a session.
 

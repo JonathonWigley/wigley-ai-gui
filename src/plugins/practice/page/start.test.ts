@@ -89,21 +89,18 @@ type HeldAnswer = (
 ) => Promise<unknown> | undefined;
 
 // The interviewer's pane scoped-agents hands Practice: `spec` the spec it
-// got, `calls` each call Practice made on it. It shows only once toggled, and
-// its outer panes take every move.
+// got, `calls` each call Practice made on it. Its outer panes take every move.
 interface FakePane {
   spec: AgentPaneSpec | null;
   calls: string[];
 }
 
 function fakeAgentPane(pane: FakePane): AgentPane {
-  let isPaneShown = false;
   return {
     element: document.createElement('div'),
-    isShown: () => isPaneShown,
+    isShown: () => true,
     toggle() {
       pane.calls.push('toggle');
-      isPaneShown = !isPaneShown;
     },
     scopeOpened(scope) {
       pane.calls.push(`scopeOpened ${String(scope)}`);
@@ -529,7 +526,7 @@ describe('practicePagePart', () => {
     },
   );
 
-  it('registers the interviewer pane with its owner, agent, hint and heading', async () => {
+  it('registers the interviewer pane always shown under the console, with its owner, agent, hint and heading', async () => {
     const { pane } = await startWithProblemOpen();
 
     expect({
@@ -537,11 +534,15 @@ describe('practicePagePart', () => {
       agentId: pane.spec?.agentId,
       hint: pane.spec?.hint,
       heading: pane.spec?.heading(),
+      isAlwaysShown: pane.spec?.isAlwaysShown,
+      entersFrom: pane.spec?.entersFrom,
     }).toEqual({
       owner: 'practice',
       agentId: 'interviewer',
       hint: 'Ask about the problem. The interviewer asks guiding questions and gives no answers.',
       heading: HARD.title,
+      isAlwaysShown: true,
+      entersFrom: 'down',
     });
   });
 
@@ -632,10 +633,16 @@ describe('practicePagePart', () => {
 
   it.each<{
     case: string;
-    start: 'hidden' | 'shown' | 'open';
+    start: 'hidden' | 'shown' | 'open' | 'holding';
     refusals: string[];
     toggles: string[];
   }>([
+    {
+      case: 'the interviewer holds the keys, no open problem',
+      start: 'holding',
+      refusals: [],
+      toggles: ['toggle'],
+    },
     {
       case: 'no open problem',
       start: 'shown',
@@ -664,10 +671,13 @@ describe('practicePagePart', () => {
     const { harness, pane } =
       start === 'open' ? await startWithProblemOpen() : startPracticePage();
     const commands = harness.started().commands;
-    if (start === 'shown') {
+    if (start === 'shown' || start === 'holding') {
       commands.showMode({ arg: undefined });
     }
     await settle();
+    if (start === 'holding') {
+      pane.spec!.tookKeys();
+    }
 
     commands.toggleInterviewer({ arg: undefined });
 
@@ -682,21 +692,32 @@ describe('practicePagePart', () => {
     expect(messagesOf(harness)).toContain('shown');
   });
 
-  it('the outer panes take right only from main', async () => {
+  it('the outer panes take down only from the console', async () => {
     const { harness, pane } = startPracticePage();
     const commands = harness.started().commands;
     commands.showMode({ arg: undefined });
     await settle();
 
-    const fromList = harness.outerPanes()!.focus.move('right');
-    const callsFromList = [...pane.calls];
+    const fromList = harness.outerPanes()!.focus.move('down');
     commands.listDown({ arg: undefined });
     commands.openProblem({ arg: undefined });
     await settle();
-    const fromMain = harness.outerPanes()!.focus.move('right');
+    const fromProblem = harness.outerPanes()!.focus.move('down');
+    const callsBeforeConsole = pane.calls.filter((call) =>
+      call.startsWith('move'),
+    );
+    const consoleBody = asFake(harness.mode('practice.main').element)
+      .querySelectorAll('.practice-tab-body')
+      .at(-1);
+    focusIn(consoleBody!);
+    const fromConsole = harness.outerPanes()!.focus.move('down');
 
-    expect([fromList, callsFromList]).toEqual([false, []]);
-    expect([fromMain, pane.calls.at(-1)]).toEqual([true, 'move right']);
+    expect([fromList, fromProblem, callsBeforeConsole]).toEqual([
+      false,
+      false,
+      [],
+    ]);
+    expect([fromConsole, pane.calls.at(-1)]).toEqual([true, 'move down']);
   });
 
   it('run and submit do nothing while Practice is hidden', async () => {

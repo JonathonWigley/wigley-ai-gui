@@ -46,7 +46,7 @@ notices), kept so the plan is written from them. A decision here stands unless t
   Notes and Solution; on the right the editor holding `solution.cpp` over the console with the tabs Testcase and
   Result. Alt+h/l move between the problem pane and the editor or console, and Alt+j/k between the editor and the
   console. In a column too narrow for both sides the problem pane stacks over the editor, and Alt+j/k move through
-  all three. The interviewer pane sits to the right of the whole column, hidden until toggled. Every divider is a `Split`, its size
+  all three. The interviewer pane sits under the editor and console, always shown while a problem is open; in a stacked column it is the last pane of the scroll. Every divider is a `Split`, its size
   kept in `uiState`.
 - **Notes tab:** a vim box over the problem's `notes.md`, autosaved.
 - **Solution tab:** shows `approach.md` and `reference.cpp`. Opening it asks to confirm first, because opening it
@@ -72,9 +72,9 @@ notices), kept so the plan is written from them. A decision here stands unless t
   | `i` / `Esc` | problem pane, console | edit the Notes or Testcase box / leave it |
   | `Ctrl-j` `Ctrl-k` `Ctrl-Shift-j` `Ctrl-Shift-k` | problem pane, console | scroll a line / half a page |
   | `y` `n` `Esc` | the Solution confirm (scope `practice.confirm`, pushed) | open the tab / keep solving |
-  | `Space v i` | any | show or hide the interviewer pane; with Practice hidden and the pane shown, it only shows Practice |
+  | `Space v i` | any | give the interviewer pane the keys, or hand them back to the column; with Practice hidden it shows Practice with the keys in the pane |
   | `Enter` / `Esc` | the interviewer's ask box (scope `scoped-agents.ask`) | send the first message / leave the box |
-  | `⌥h` `⌥j` `⌥k` `⌥l` | core | move between the list, the problem pane, the editor, the console and the interviewer |
+  | `⌥h` `⌥j` `⌥k` `⌥l` | core | move between the list, the problem pane, the editor, the console and the interviewer (`⌥j` from the console into it, `⌥k` back out) |
 
   `scoped-agents.ask` is a base scope the pane sets through `setScope`, so it sits in the `<C-n>` list beside the list,
   problem, editor and console scopes and is never pushed; `practice.box`, `practice.confirm` and `practice.import` are
@@ -226,12 +226,13 @@ notices), kept so the plan is written from them. A decision here stands unless t
     problem's current attempt only, `superseded` is the latest earlier attempt's interviewer, and `checkAsk` refuses
     a problem with no attempt (`<slug> has no attempt; open it first.`)
   - the folder (the practice folder), the instructions, and the resumed row's title (`Interviewer: <title>`)
-  - the pane's heading (the open problem's title) and hint, and its place right of the problem column
+  - the pane's heading (the open problem's title) and hint, and its place under the editor and console, always
+    shown (`isAlwaysShown`, `entersFrom: 'down'`)
   - the per-attempt lifetime: when the shown problem or its attempt changes, Practice calls the pane's
     `scopeOpened(null)` then `scopeOpened(<slug>)`
   - `Space v i`, which with no problem open toasts `Open a problem first`, logs `interviewer needs an open problem`
-    and opens nothing
-  - `Alt+l` into the pane only from the problem column, never from the list
+    and gives the pane no keys
+  - `Alt+j` into the pane only from the console, never from the list or the problem pane
   The ask box's scope is `scoped-agents.ask`, and the `askBox` layout part lives in `scoped-agents`' layout.
   `practice-sessions.ts` holds only the import session.
 - Talking to the interviewer is not a peek.

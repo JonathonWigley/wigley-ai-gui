@@ -225,19 +225,19 @@ export interface ProblemWorkspaceDeps {
 
 // The open problem's workspace: the problem pane (Description, Submissions,
 // Notes, Solution) over the editor holding `solution.cpp` over the console
-// (Testcase, Result), each divider a column `Split` kept in `uiState`, with
-// `sidePane`, an empty slot right of the whole column, hidden until
-// `setSidePaneShown`. The drafts of the code, the notes and the custom cases
+// (Testcase, Result), with `interviewerSlot`, an empty slot under the editor
+// and console, hidden until `setInterviewerShown`; each divider a `Split` kept
+// in `uiState`. The drafts of the code, the notes and the custom cases
 // autosave once typing pauses, and every unsaved one saves at once before a
 // Run, a Submit or another problem shows. Every decision about what shows
 // lives in `workspaceReducer`; the workspace draws its state after each
 // change, each tab's part only when what it shows changed.
 export interface ProblemWorkspace {
   element: HTMLElement;
-  sidePane: HTMLElement;
-  setSidePaneShown(isShown: boolean): void;
-  // The divider beside `sidePane`.
-  sideResizeTarget: ResizeTarget;
+  interviewerSlot: HTMLElement;
+  setInterviewerShown(isShown: boolean): void;
+  // The divider over `interviewerSlot`, then the problem | code split.
+  interviewerResizeTarget: ResizeTarget;
   // Saves every unsaved draft first when another problem shows, edits typed
   // during the save included, then shows `problem` on its first tabs, the
   // problem pane holding the keys; the saved place's open problem shows with
@@ -253,8 +253,8 @@ export interface ProblemWorkspace {
   focus(): void;
   // Alt+j and Alt+k between the panes; every other move returns false.
   focusTarget: FocusTarget;
-  // The focused pane's divider, the lower one else the upper, then the
-  // divider beside `sidePane`.
+  // The focused pane's divider, the vertical one else the problem | code
+  // split.
   resizeTarget: ResizeTarget;
   setLayouts(shown: ShownLayouts<PracticeLayout>): void;
   commands: Record<WorkspaceCommand, () => void>;
@@ -339,23 +339,22 @@ export function createProblemWorkspace(
     min: 320,
     endMin: 400,
   });
-  outer.end.append(inner.element);
-  const column = element('div', 'practice-column');
-  column.append(outer.element);
-  const side = createSplit({
+  const interviewerSplit = createSplit({
     ...splitDeps,
-    axis: 'row',
+    axis: 'column',
     sizedPane: 'end',
-    stateKey: 'interviewerWidth',
-    initial: 380,
-    min: 280,
-    endMin: 400,
+    stateKey: 'interviewerHeight',
+    initial: 240,
+    min: 120,
+    endMin: 280,
   });
-  side.element.classList.add('practice-workspace');
-  const sidePane = element('div', 'practice-side');
-  side.start.append(column);
-  side.end.append(sidePane);
-  side.setEndHidden(true);
+  const interviewerSlot = element('div', 'practice-interviewer');
+  interviewerSplit.start.append(inner.element);
+  interviewerSplit.end.append(interviewerSlot);
+  interviewerSplit.setEndHidden(true);
+  outer.end.append(interviewerSplit.element);
+  const workspaceRoot = element('div', 'practice-workspace');
+  workspaceRoot.append(outer.element);
 
   // ── Boxes and the editor ───────────────────────────────────────────────
   const boxes = createEditorBoxes<BoxId>(
@@ -435,19 +434,19 @@ export function createProblemWorkspace(
   };
 
   // The problem pane's right divider is the problem | code split; the editor
-  // and console move their shared divider, then the interviewer's when it
-  // shows, else the problem | code split on their left.
+  // and console move their shared divider, else the problem | code split on
+  // their left; the interviewer moves the divider over it, else that split.
   const resizeTarget: ResizeTarget = {
     nudge(direction) {
       if (pane === 'problem') {
-        return outer.nudge(direction) || side.nudge(direction);
+        return outer.nudge(direction);
       }
-      return (
-        inner.nudge(direction) ||
-        side.nudge(direction) ||
-        outer.nudge(direction)
-      );
+      return inner.nudge(direction) || outer.nudge(direction);
     },
+  };
+  const interviewerResizeTarget: ResizeTarget = {
+    nudge: (direction) =>
+      interviewerSplit.nudge(direction) || outer.nudge(direction),
   };
 
   const notePlace = (state: WorkspaceState) => {
@@ -1214,10 +1213,10 @@ export function createProblemWorkspace(
   };
 
   return {
-    element: side.element,
-    sidePane,
-    setSidePaneShown: (isShown) => side.setEndHidden(!isShown),
-    sideResizeTarget: side,
+    element: workspaceRoot,
+    interviewerSlot,
+    setInterviewerShown: (isShown) => interviewerSplit.setEndHidden(!isShown),
+    interviewerResizeTarget,
     async show(problem) {
       const count = ++showCount;
       const shown = store.get().problem;
@@ -1316,7 +1315,7 @@ export function createProblemWorkspace(
       parts.dispose();
       outer.dispose();
       inner.dispose();
-      side.dispose();
+      interviewerSplit.dispose();
     },
   };
 }

@@ -62,12 +62,19 @@ function fakeEditorHost() {
 // wait in `sessionAnswers` and `askAnswers`, one per call, in call order. The
 // spec's `tookKeys` gives the fake host's focus to the pane and its `leave`
 // takes it back and tells the pane, as a host does, unless `hostAnswersLeave`
-// is false; `calls` records them and `setShown`. `events` records each
+// is false; `calls` records them and `setShown`. The pane starts hidden and is
+// entered from the right unless `isAlwaysShown` and `entersFrom` say
+// otherwise. `events` records each
 // `sessionOf`, each `setScope`, `setFocusTarget` and `setResizeTarget`, and
 // each mount's `dispose`, in order. `mountError` makes every `mountChat` throw
 // it.
 function paneSetup(
-  options: { mountError?: string; hostAnswersLeave?: boolean } = {},
+  options: {
+    mountError?: string;
+    hostAnswersLeave?: boolean;
+    isAlwaysShown?: boolean;
+    entersFrom?: PaneDirection;
+  } = {},
 ) {
   const logs: string[] = [];
   const toasts: [string, string][] = [];
@@ -87,6 +94,8 @@ function paneSetup(
     heading: () => heading,
     hint: 'Ask about the problem.',
     setShown: (shown) => calls.push(`setShown ${shown}`),
+    isAlwaysShown: options.isAlwaysShown ?? false,
+    entersFrom: options.entersFrom ?? 'right',
     resizeTarget: { nudge: () => true },
     tookKeys() {
       calls.push('tookKeys');
@@ -624,6 +633,120 @@ describe('createAgentPane', () => {
     );
     expect(liveBoxCount(setup)).toBe(row.liveBoxes);
     expect(setup.pane.isShown()).toBe(true);
+  });
+
+  it('always shown: shows from the start and fills each scope without taking the keys', async () => {
+    const setup = paneSetup({ isAlwaysShown: true });
+
+    setup.pane.scopeOpened('two-sum');
+    await setup.answerSession(null);
+
+    expect(setup.pane.isShown()).toBe(true);
+    expect(setup.calls).toEqual(['setShown true']);
+    expect(setup.events).toEqual(['sessionOf two-sum']);
+    expect(setup.focus()).toBe('host');
+    expect(setup.logs).toEqual([
+      'interviewer pane shown',
+      'interviewer ask box shown for two-sum',
+    ]);
+  });
+
+  it.each<{
+    case: string;
+    toggles: number;
+    calls: string[];
+    focus: 'host' | 'pane';
+  }>([
+    {
+      case: 'once gives the pane the keys',
+      toggles: 1,
+      calls: ['tookKeys'],
+      focus: 'pane',
+    },
+    {
+      case: 'twice hands them back and keeps the pane shown',
+      toggles: 2,
+      calls: ['tookKeys', 'leave'],
+      focus: 'host',
+    },
+  ])('always shown: toggle $case', async (row) => {
+    const setup = paneSetup({ isAlwaysShown: true });
+    setup.pane.scopeOpened('two-sum');
+    await setup.answerSession('s1');
+    setup.calls.length = 0;
+
+    for (let toggle = 0; toggle < row.toggles; toggle += 1) {
+      setup.pane.toggle();
+    }
+
+    expect(setup.calls).toEqual(row.calls);
+    expect(setup.focus()).toBe(row.focus);
+    expect(setup.pane.isShown()).toBe(true);
+  });
+
+  it.each<{
+    case: string;
+    hasScope: boolean;
+    holdsKeys: boolean;
+    direction: PaneDirection;
+    result: boolean;
+    calls: string[];
+  }>([
+    {
+      case: 'down from the host enters',
+      hasScope: true,
+      holdsKeys: false,
+      direction: 'down',
+      result: true,
+      calls: ['tookKeys'],
+    },
+    {
+      case: 'up from the pane leaves',
+      hasScope: true,
+      holdsKeys: true,
+      direction: 'up',
+      result: true,
+      calls: ['leave'],
+    },
+    {
+      case: 'left from the pane stays',
+      hasScope: true,
+      holdsKeys: true,
+      direction: 'left',
+      result: false,
+      calls: [],
+    },
+    {
+      case: 'right from the host stays out',
+      hasScope: true,
+      holdsKeys: false,
+      direction: 'right',
+      result: false,
+      calls: [],
+    },
+    {
+      case: 'down with no scope stays out',
+      hasScope: false,
+      holdsKeys: false,
+      direction: 'down',
+      result: false,
+      calls: [],
+    },
+  ])('outer panes entered from below: $case', async (row) => {
+    const setup = paneSetup({ isAlwaysShown: true, entersFrom: 'down' });
+    if (row.hasScope) {
+      setup.pane.scopeOpened('two-sum');
+      await setup.answerSession('s1');
+    }
+    if (row.holdsKeys) {
+      setup.pane.outerPanes.focus.move('down');
+    }
+    setup.calls.length = 0;
+
+    const result = setup.pane.outerPanes.focus.move(row.direction);
+
+    expect(result).toBe(row.result);
+    expect(setup.calls).toEqual(row.calls);
   });
 
   it('opens nothing with no scope', () => {

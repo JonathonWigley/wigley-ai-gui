@@ -104,6 +104,8 @@ function startScopedAgentsPage(sessions: Record<string, string> = {}) {
       heading: () => agentId,
       hint: `Ask the ${agentId}.`,
       setShown: () => undefined,
+      isAlwaysShown: false,
+      entersFrom: 'right',
       resizeTarget: { nudge: () => true },
       tookKeys: () => calls.push('tookKeys'),
       leave() {

@@ -125,31 +125,34 @@ const practiceGroups: SelfTestGroup[] = [
   },
   {
     name: 'interviewer',
-    why: "Space v i opens the interviewer pane on LRU Cache's ask box; Enter launches the interviewer over the fake harness and mounts its chat view; Option+h leaves the chat view for the column and Option+l returns; another problem shows its own ask box, and LRU Cache brings its interviewer back; Space v i hides the pane. The pane is scoped-agents', so its lines log under that plugin.",
+    why: "The interviewer pane always shows under the editor and console, on LRU Cache's ask box; Space v i gives it the keys; Enter launches the interviewer over the fake harness and mounts its chat view; Option+k leaves the chat view for the column and Space v i returns; Option+h goes on to the list; another problem shows its own ask box, and LRU Cache brings its interviewer back. The pane is scoped-agents', so its lines log under that plugin.",
     steps: [
       {
         keys: [' ', 'v', 'i'],
-        expect: '[scoped-agents] interviewer ask box shown for lru-cache',
-        alsoExpect: [
-          /^\[scoped-agents\] interviewer pane shown$/,
-          /^\[scoped-agents\] interviewer focused$/,
-        ],
+        expect: '[scoped-agents] interviewer focused',
+        width: 1400,
         checksFit: true,
         screenshot: 'ask-box',
+        why: 'A window wide enough for the problem pane beside the code, the interviewer under the editor and console.',
       },
       {
+        width: 'start',
         keys: [...'how do I start', 'Enter'],
         expect: '[scoped-agents] interviewer mounted lru-cache',
         screenshot: 'interviewer-chat',
       },
       {
-        keys: ['<A-h>'],
+        keys: ['<A-k>'],
         expect: '[scoped-agents] interviewer left',
         alsoExpect: [/^\[practice\] main focused$/],
-        why: "The chat view turns Option+h down at its left edge, so Practice's outer panes give the column the keys.",
+        why: "The chat view turns Option+k down at its top edge, so Practice's outer panes give the column the keys.",
       },
-      { keys: ['<A-l>'], expect: '[scoped-agents] interviewer focused' },
-      { keys: ['<A-h>', '<A-h>'], expect: '[practice] list focused' },
+      { keys: [' ', 'v', 'i'], expect: '[scoped-agents] interviewer focused' },
+      {
+        keys: ['<A-h>'],
+        expect: '[practice] list focused',
+        why: 'The pane leaves only upward, so Option+h goes on to the side bar.',
+      },
       {
         keys: ['j'],
         expect: '[practice] selected two-sum',
@@ -170,7 +173,7 @@ const practiceGroups: SelfTestGroup[] = [
       },
       {
         keys: [' ', 'v', 'i'],
-        expect: '[scoped-agents] interviewer pane hidden',
+        expect: '[scoped-agents] interviewer focused',
       },
     ],
   },

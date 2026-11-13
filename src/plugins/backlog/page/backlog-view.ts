@@ -861,6 +861,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         deps.placeChanged(placeOf(state, shown));
       }
     },
+    isAlwaysShown: false,
+    entersFrom: 'right',
     resizeTarget: assistantSplit,
     tookKeys: () => setFocus('assistant'),
     leave: focusHost,
