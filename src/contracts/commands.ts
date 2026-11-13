@@ -49,6 +49,12 @@ export const MODES_SHOW: CommandKey<string, 'modes.show'> = {
   id: 'modes.show',
 };
 
+// Opens the http or https URL its arg names in the default browser, as a
+// click on a rendered link does; toasts the refusal of any other URL.
+export const CORE_OPEN_LINK: CommandKey<string, 'core.openLink'> = {
+  id: 'core.openLink',
+};
+
 // Loads the user plugin its arg names again from its folder, as a save under
 // that folder does; rejects for a built-in or unknown id.
 export const CORE_RELOAD_PLUGIN: CommandKey<string, 'core.reloadPlugin'> = {

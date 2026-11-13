@@ -7,7 +7,7 @@ import './index.css';
 import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
-import { MODES_SHOW } from '../contracts/commands';
+import { CORE_OPEN_LINK, MODES_SHOW } from '../contracts/commands';
 import {
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
@@ -56,6 +56,7 @@ import { runEditorBind } from './editor-binds';
 import { createFabricMarkupEditor } from './fabric/fabric-markup-editor';
 import { createFzfMatcher } from './fzf/fzf-matcher';
 import { createAnchors } from './key-anchors';
+import { listenToLinkClicks, registerLinkCommands } from './link-commands';
 import { createLiveConfig, onChangedPart } from './live-config';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
@@ -331,6 +332,19 @@ async function start() {
     'core',
   );
   const pickerCommands = registerPickerCommands(registry);
+  registerLinkCommands(registry, {
+    openExternal: (url) => bridge.openExternal(url),
+    toast: (text, tone) => toasts.show(text, tone),
+    log: (message) => log('page', message),
+  });
+  listenToLinkClicks(document, (url) => {
+    commands.router.run(CORE_OPEN_LINK.id, url).catch((error: unknown) => {
+      log(
+        'commands',
+        `command ${CORE_OPEN_LINK.id} failed: ${errorText(error)}`,
+      );
+    });
+  });
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
   const paths = config.platform.os === 'windows' ? windowsPaths : posixPaths;

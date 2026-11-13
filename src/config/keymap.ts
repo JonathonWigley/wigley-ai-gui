@@ -1,5 +1,6 @@
 import {
   type CommandId,
+  CORE_OPEN_LINK,
   CORE_RELOAD_PLUGIN,
   MODES_SHOW,
   PICKER_CANCEL,
@@ -66,6 +67,12 @@ export const coreCommands: Record<CommandId, CommandDecl> = {
   [MODES_SHOW.id]: {
     label: 'show the mode',
     group: 'modes',
+    runsIn: 'page',
+    arg: 'string',
+  },
+  [CORE_OPEN_LINK.id]: {
+    label: 'open the link',
+    group: 'links',
     runsIn: 'page',
     arg: 'string',
   },

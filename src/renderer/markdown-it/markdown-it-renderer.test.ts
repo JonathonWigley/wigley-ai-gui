@@ -48,23 +48,46 @@ describe('escaping and disabled syntax', () => {
     expect(html).toContain('&lt;div onclick=&quot;x&quot;&gt;hi&lt;/div&gt;');
   });
 
-  it('shows links, images, autolinks and bare URLs as text', () => {
-    expect(block('[site](https://example.com)')).toBe(
-      '<p>[site](https://example.com)</p>\n',
-    );
-    expect(block('![alt](pic.png)')).toBe('<p>![alt](pic.png)</p>\n');
-    expect(block('<https://example.com>')).toBe(
-      '<p>&lt;https://example.com&gt;</p>\n',
-    );
-    expect(block('see https://example.com now')).toBe(
-      '<p>see https://example.com now</p>\n',
+  it.each([
+    [
+      'a link',
+      '[site](https://example.com)',
+      '<p><a class="md-link" href="#" data-href="https://example.com" title="https://example.com">site</a></p>\n',
+    ],
+    [
+      'an autolink',
+      '<https://example.com>',
+      '<p><a class="md-link" href="#" data-href="https://example.com" title="https://example.com">https://example.com</a></p>\n',
+    ],
+    [
+      'a bare URL',
+      'see http://example.com/a?b=1 now',
+      '<p>see <a class="md-link" href="#" data-href="http://example.com/a?b=1" title="http://example.com/a?b=1">http://example.com/a?b=1</a> now</p>\n',
+    ],
+  ])('renders %s to a web page as a link', (_case, text, html) => {
+    expect(block(text)).toBe(html);
+  });
+
+  it.each([
+    ['a relative link', '[guide](docs/a.md)'],
+    ['a file link', '[x](file:///etc/hosts)'],
+    ['a javascript link', '[x](javascript:alert(1))'],
+    ['a bare host', 'see example.com or a.md now'],
+    ['a URL in code', '`https://example.com`'],
+  ])('keeps %s as text', (_case, text) => {
+    expect(block(text)).not.toContain('<a');
+  });
+
+  it('shows an image as its alt text', () => {
+    expect(block('![alt](https://example.com/p.png)')).toBe(
+      '<p><span class="md-image">alt</span></p>\n',
     );
   });
 
   it('shows a reference definition as text instead of dropping it', () => {
     const html = block('[ref]\n\n[ref]: https://example.com');
-    expect(html).toContain('[ref]: https://example.com');
-    expect(html).not.toContain('<a');
+    expect(html).toContain('<p>[ref]</p>');
+    expect(html).toContain('<p>[ref]: <a class="md-link"');
   });
 });
 
@@ -75,10 +98,11 @@ describe('inline()', () => {
     );
   });
 
-  it('shows a link as text', () => {
+  it('renders a web link as a link and any other as text', () => {
     expect(markdown.inline('[x](https://example.com)')).toBe(
-      '[x](https://example.com)',
+      '<a class="md-link" href="#" data-href="https://example.com" title="https://example.com">x</a>',
     );
+    expect(markdown.inline('[x](docs/a.md)')).toBe('[x](docs/a.md)');
   });
 });
 
@@ -508,9 +532,15 @@ describe('document()', () => {
     );
   });
 
-  it('keeps a javascript link and a bare URL as text', async () => {
+  it('keeps a javascript link and a bare host as text', async () => {
     expect(await render('[x](javascript:alert(1))')).not.toContain('<a');
-    expect(await render('see https://e.com')).not.toContain('<a');
+    expect(await render('see e.com')).not.toContain('<a');
+  });
+
+  it('renders a bare URL as a link', async () => {
+    expect(await render('see https://e.com')).toContain(
+      'data-href="https://e.com"',
+    );
   });
 
   it('renders an image as its alt text', async () => {

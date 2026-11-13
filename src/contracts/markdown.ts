@@ -1,8 +1,11 @@
 import type { Disposable } from './disposable';
 
-// Agent-written markdown to safe HTML. `block` and `inline` show raw HTML and
-// links as literal text; `document` renders a whole doc with links as anchors,
-// heading anchors and highlighted fences, raw HTML still escaped. `block` and
+// Agent-written markdown to safe HTML, raw HTML escaped. A link, an autolink
+// and a bare URL with a scheme render as an `a.md-link` holding its target in
+// `data-href`, whose click the page handles; an image renders as its alt text.
+// `block` and `inline` draw only http and https links, any other staying
+// literal text; `document` draws every link markdown-it allows, and adds
+// heading anchors and highlighted fences. `block` and
 // `document` emit a placeholder for each fence whose language has a
 // contribution, `document` highlighting a live one's code inside it; the
 // markdown mount (`src/shared/page/markdown-mount.ts`) hydrates it. `block`

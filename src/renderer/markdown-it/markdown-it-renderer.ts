@@ -54,13 +54,16 @@ const SLUG_DROPPED = /[^\p{L}\p{M}\p{N}\s_-]/gu;
 const WHITESPACE = /\s/g;
 // markdown-it's own `alt` list for its fence rule.
 const FENCE_ALT = ['paragraph', 'reference', 'blockquote', 'list'];
+// The links `block` and `inline` draw: web pages only.
+const WEB_LINK = /^https?:\/\//i;
 
 export function createMarkdownItRenderer(
   highlighter: CodeHighlighter,
 ): MarkdownRenderer {
   const fences: Fences = new Map();
   const md = createWigleyMarkdown();
-  md.disable(['link', 'image', 'autolink', 'linkify', 'reference']);
+  md.disable(['reference']);
+  md.validateLink = isWebLink;
   installBlockRules(md, fences);
   const documentMd = createWigleyMarkdown();
   installDocumentRules(documentMd, fences);
@@ -110,16 +113,22 @@ function diffFence(escapeHtml: EscapeHtml): FenceContribution {
   };
 }
 
-// Raw HTML escaped and bare URLs left as text, with the wigley blocks, table
-// alignment classes and the fence's closed flag.
+// Raw HTML escaped, bare URLs with a scheme linked, links and images drawn as
+// the views expect, with the wigley blocks, table alignment classes and the
+// fence's closed flag.
 function createWigleyMarkdown(): Md {
-  const md = new MarkdownIt({ html: false, linkify: false });
+  const md = new MarkdownIt({ html: false, linkify: true });
+  md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
   md.block.ruler.before('fence', 'wigley_blocks', wigleyBlock, {
     alt: FENCE_ALT,
   });
   installClosedFlag(md);
-  installSharedRules(md.renderer.rules);
+  installSharedRules(md.renderer.rules, md.utils.escapeHtml);
   return md;
+}
+
+function isWebLink(url: string): boolean {
+  return WEB_LINK.test(url);
 }
 
 // Wraps markdown-it's fence rule so each fence token's `meta.closed` says
@@ -459,7 +468,26 @@ function pushInline(state: StateBlock, content: string): void {
   token.children = [];
 }
 
-function installSharedRules(rules: Md['renderer']['rules']): void {
+// A link is an anchor whose click the page handles from its `data-href`, and
+// an image is its alt text.
+function installSharedRules(
+  rules: Md['renderer']['rules'],
+  escapeHtml: EscapeHtml,
+): void {
+  rules.link_open = (tokens, idx) => {
+    const token = tokens[idx];
+    const href = String(token.attrGet('href') ?? '');
+    const title = String(token.attrGet('title') ?? href);
+    return `<a class="md-link" href="#" data-href="${escapeHtml(href)}" title="${escapeHtml(title)}">`;
+  };
+  rules.image = (tokens, idx, options, env, self) => {
+    const alt = self.renderInlineAsText(
+      tokens[idx].children ?? [],
+      options,
+      env,
+    );
+    return `<span class="md-image">${escapeHtml(alt)}</span>`;
+  };
   rules.th_open = alignedCell;
   rules.td_open = alignedCell;
   rules.md_changes_open = openTagWithAttrs('<ul class="md-changes"');
@@ -543,20 +571,6 @@ function installDocumentRules(md: Md, fences: Fences): void {
     const { slugs } = env as DocumentEnv;
     const slug = uniqueSlug(headingSlug(tokens[idx + 1]), slugs);
     return `<${token.tag} data-anchor="${slug}"${self.renderAttrs(token)}>`;
-  };
-  rules.link_open = (tokens, idx) => {
-    const token = tokens[idx];
-    const href = String(token.attrGet('href') ?? '');
-    const title = String(token.attrGet('title') ?? href);
-    return `<a class="md-link" href="#" data-href="${escapeHtml(href)}" title="${escapeHtml(title)}">`;
-  };
-  rules.image = (tokens, idx, options, env, self) => {
-    const alt = self.renderInlineAsText(
-      tokens[idx].children ?? [],
-      options,
-      env,
-    );
-    return `<span class="md-image">${escapeHtml(alt)}</span>`;
   };
   const codeOf = (token: Token, env: unknown) =>
     (env as DocumentEnv).highlighted.get(token) ?? escapeHtml(token.content);
