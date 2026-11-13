@@ -62,12 +62,19 @@
 }
 
 [data-layout-owner='unity-pool'][data-layout='default']
+  .unity-pool-clone-actions {
+  display: flex;
+  flex: none;
+  gap: var(--wg-space-1);
+  margin-inline-start: auto;
+}
+
+[data-layout-owner='unity-pool'][data-layout='default']
   .unity-pool-clone-head
   .ui-button {
   flex: none;
   height: var(--wg-icon-button-sm);
   min-height: 0;
-  margin-inline-start: auto;
   padding-block: 0;
   padding-inline: var(--wg-space-1);
   font-size: var(--wg-text-12);

@@ -71,15 +71,16 @@ function drawClone(parent, clone, kit) {
   const head = kit.el(box, 'div', 'unity-pool-clone-head');
   kit.statusDot(head, cloneDot(clone));
   kit.el(head, 'span', 'unity-pool-clone-title', clone.title);
+  const actions = kit.el(head, 'span', 'unity-pool-clone-actions');
   if (clone.action !== null) {
     const { label, command, arg } = clone.action;
-    const button = kit.button(head, label, command, {
+    const button = kit.button(actions, label, command, {
       arg,
       variant: label === 'Hold' ? 'ghost' : 'secondary',
     });
     button.disabled = clone.action.running;
   }
-  const open = kit.button(head, 'Open', clone.open.command, {
+  const open = kit.button(actions, 'Open', clone.open.command, {
     arg: clone.open.arg,
     variant: 'ghost',
   });
