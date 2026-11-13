@@ -104,6 +104,7 @@ describe('inline()', () => {
       '<a class="md-link" href="#" data-href="https://example.com" title="https://example.com">x</a>',
     );
     expect(markdown.inline('[x](docs/a.md)')).toBe('[x](docs/a.md)');
+    expect(markdown.inline('[x]()')).toBe('x');
   });
 });
 

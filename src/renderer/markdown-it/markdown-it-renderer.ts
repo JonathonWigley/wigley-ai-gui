@@ -132,8 +132,8 @@ function isWebLink(url: string): boolean {
   return WEB_LINK.test(url);
 }
 
-// markdown-it keeps an empty destination (`[x]()`) as a link without asking
-// `validateLink`; this leaves its text alone.
+// markdown-it keeps a link whose destination is empty (`[x]()`) even when
+// `validateLink` refuses it; this leaves its text alone.
 function dropNonWebLinks(state: { tokens: Token[] }): void {
   for (const block of state.tokens) {
     if (block.type !== 'inline' || block.children === null) {

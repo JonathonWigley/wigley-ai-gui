@@ -49,7 +49,7 @@ export function createMainWindow(
   window.on('page-title-updated', (event) => {
     event.preventDefault();
   });
-  // A middle click or Shift click on a link otherwise opens a second window.
+  // A middle click on a link otherwise opens a second window.
   window.webContents.setWindowOpenHandler(({ url }) => {
     log('main', `window open refused: ${url}`);
     return { action: 'deny' };
