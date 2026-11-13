@@ -30,7 +30,8 @@ interface FakeMount {
 // `sessionOf` with `sessions[agentId]`, null for an agent it lacks, and `ask`
 // with `s9`; `invokes` holds each invoke's method and arguments. `boxes` holds
 // each ask box made, `mounts` each chat view mounted. `addPane` adds a pane
-// for `consumer`, opens `scope` in it and returns it with its spec's calls:
+// for `consumer`, always shown when `isAlwaysShown`, opens `scope` in it and
+// returns it with its spec's calls:
 // `tookKeys`, and `leave`, which tells the pane the host took the keys.
 function startScopedAgentsPage(sessions: Record<string, string> = {}) {
   const invokes: unknown[][] = [];
@@ -95,7 +96,12 @@ function startScopedAgentsPage(sessions: Record<string, string> = {}) {
   const exports = harness.started().exports!(
     consumer,
   ) as ScopedAgentsPageExports;
-  const addPane = (owner: string, agentId: string, scope: string) => {
+  const addPane = (
+    owner: string,
+    agentId: string,
+    scope: string,
+    options: { isAlwaysShown?: boolean } = {},
+  ) => {
     const calls: string[] = [];
     const held: { pane: AgentPane | null } = { pane: null };
     const pane = exports.addAgentPane({
@@ -104,7 +110,7 @@ function startScopedAgentsPage(sessions: Record<string, string> = {}) {
       heading: () => agentId,
       hint: `Ask the ${agentId}.`,
       setShown: () => undefined,
-      isAlwaysShown: false,
+      isAlwaysShown: options.isAlwaysShown ?? false,
       entersFrom: 'right',
       resizeTarget: { nudge: () => true },
       tookKeys: () => calls.push('tookKeys'),
@@ -178,6 +184,19 @@ describe('scoped-agents page part', () => {
     expect(page.asks()).toEqual([
       ['ask', 'backlog', 'assistant', 'global', 'which items are stale'],
     ]);
+  });
+
+  it('a focus into an always-shown pane sets the ask scope', async () => {
+    const page = startScopedAgentsPage();
+    const { pane, calls } = page.addPane('practice', 'interviewer', 'two-sum', {
+      isAlwaysShown: true,
+    });
+    await settle();
+
+    asFake(pane.element).fire('focusin', { target: pane.element });
+
+    expect(calls).toEqual(['tookKeys']);
+    expect(page.harness.scope()).toBe('scoped-agents.ask');
   });
 
   it('the toggled pane sets the ask scope', async () => {

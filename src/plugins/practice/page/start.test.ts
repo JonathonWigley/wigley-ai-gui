@@ -720,8 +720,8 @@ describe('practicePagePart', () => {
     expect([fromConsole, pane.calls.at(-1)]).toEqual([true, 'move down']);
   });
 
-  it('the outer panes resize only the interviewer divider', async () => {
-    const { harness } = startPracticePage();
+  it('the outer panes resize the interviewer divider, and the problem | code split only from the pane', async () => {
+    const { harness, pane } = startPracticePage();
     const commands = harness.started().commands;
     commands.showMode({ arg: undefined });
     await settle();
@@ -734,8 +734,12 @@ describe('practicePagePart', () => {
       handle.hasLayoutBox = true;
     }
     const resize = harness.outerPanes()!.resize;
+    const fromColumn = [resize.nudge('left'), resize.nudge('up')];
+    pane.spec!.tookKeys();
+    const fromPane = [resize.nudge('left'), resize.nudge('up')];
 
-    expect([resize.nudge('left'), resize.nudge('up')]).toEqual([false, true]);
+    expect(fromColumn).toEqual([false, true]);
+    expect(fromPane).toEqual([true, true]);
   });
 
   it('run and submit do nothing while Practice is hidden', async () => {

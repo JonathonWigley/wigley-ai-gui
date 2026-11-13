@@ -296,8 +296,9 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   });
   workspace.interviewerSlot.append(interviewer.element);
   // The pane takes `down` whenever it lacks the keys; Practice gives it only
-  // from the console, the pane right over it. A resize from outside the
-  // column moves only the pane's divider.
+  // from the console, the pane right over it. A resize the shown view turned
+  // down moves the pane's divider, then, while the pane holds the keys, the
+  // problem | code split.
   const outerPanes: OuterPanes = {
     focus: {
       move(direction) {
@@ -308,7 +309,12 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
           : interviewer.outerPanes.focus.move(direction);
       },
     },
-    resize: workspace.interviewerDivider,
+    resize: {
+      nudge: (direction) =>
+        store.get().focus === 'interviewer'
+          ? workspace.interviewerResizeTarget.nudge(direction)
+          : workspace.interviewerDivider.nudge(direction),
+    },
   };
 
   const importBox = createImportBox({

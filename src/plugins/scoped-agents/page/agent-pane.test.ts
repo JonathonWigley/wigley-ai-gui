@@ -726,6 +726,19 @@ describe('createAgentPane', () => {
     expect(setup.pane.isShown()).toBe(true);
   });
 
+  it('always shown: a toggle waiting on its first answer takes no keys from the next scope', async () => {
+    const setup = paneSetup({ isAlwaysShown: true });
+    setup.pane.scopeOpened('two-sum');
+    setup.pane.toggle();
+
+    setup.pane.scopeOpened('lru-cache');
+    await setup.answerSession(null);
+    await setup.answerSession(null);
+
+    expect(setup.calls).not.toContain('tookKeys');
+    expect(setup.focus()).toBe('host');
+  });
+
   it('always shown: keeps the keys on the next scope', async () => {
     const setup = paneSetup({ isAlwaysShown: true });
     setup.pane.scopeOpened('two-sum');

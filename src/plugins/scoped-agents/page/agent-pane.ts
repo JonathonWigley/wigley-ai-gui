@@ -408,6 +408,9 @@ export function createAgentPane(
       dropMount();
       destroyAskBox();
       isSending = false;
+      if (spec.isAlwaysShown) {
+        takesKeysOnAnswer = false;
+      }
       open = scope === null ? null : { scope };
       if (isPaneShown) {
         readSession();
