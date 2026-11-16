@@ -1,4 +1,4 @@
-import type { SettingInfos } from '../contracts/plugin';
+import type { SettingInfos, SettingPath } from '../contracts/plugin';
 import type { Settings } from '../contracts/settings';
 
 export function coreDefaultSettings(): Settings {
@@ -31,6 +31,12 @@ export const optionalSettings: Readonly<
 export const settingChoices: Readonly<Record<string, readonly string[]>> = {
   transparency: ['system', 'full', 'reduced'],
 };
+
+// The id of the control kind a core setting's row draws with, by its dotted
+// path, for a setting the default rules would give another kind.
+export const settingControls: Readonly<
+  Partial<Record<SettingPath<Settings>, string>>
+> = {};
 
 // Each core setting's row in Settings mode, by its dotted path.
 export const settingInfo: SettingInfos<Settings> = {

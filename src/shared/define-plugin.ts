@@ -4,6 +4,7 @@ import type {
   PluginKeys,
   SettingInfos,
   SettingKind,
+  SettingPath,
 } from '../contracts/plugin';
 import type { TokenDecl } from '../contracts/theme';
 
@@ -45,9 +46,9 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // its `context.arg` as anything but what its command's `arg` declares, a top-level
 // setting defaulting to null whose kind `optionalSettings` leaves out, and a
 // `settingInfo` missing a leaf setting's path or naming a path that is no
-// leaf; a dependency key for a plugin missing from that process's list fails to
-// compile, and so does a slot key read from a plugin in neither its `dependsOn`
-// nor its `reads` there. Throws on an id `pluginIdProblem` refuses.
+// leaf, and a `settingControls` path that is no leaf; a dependency key for a
+// plugin missing from that process's list fails to compile, and so does a slot
+// key read from a plugin in neither its `dependsOn` nor its `reads` there. Throws on an id `pluginIdProblem` refuses.
 // `label` and `description` name the plugin in Settings' Plugins section.
 export function definePlugin<
   const Id extends string,
@@ -75,6 +76,9 @@ export function definePlugin<
     settings: T;
     optionalSettings?: Readonly<Record<string, SettingKind>>;
     settingInfo: SettingInfos<NoInfer<T>>;
+    settingControls?: Readonly<
+      Partial<Record<SettingPath<NoInfer<T>>, string>>
+    >;
     themeTokens: Readonly<Record<string, TokenDecl>>;
   } & NullKindsDeclared<NoInfer<T>>,
 ): typeof manifest {

@@ -9,6 +9,7 @@ import {
 import { placeWrites } from '../../../shared/page/place-slot';
 import {
   type SettingsChannel,
+  type SettingsPageExports,
   type SettingsPlace,
   settingsPlaceSlot,
 } from '../contract';
@@ -16,6 +17,8 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { SettingsLayout } from '../layouts/layout';
 import { settingsManifest } from '../manifest';
+import { BUILT_IN_CONTROL_KINDS } from './built-in-control-kinds';
+import { createControlKinds } from './control-kinds';
 import { readSettingsLayout } from './layout/read-layout';
 import { createSettingsView } from './settings-view';
 
@@ -32,6 +35,9 @@ const TITLE = 'Settings';
 // recording, so a capture never outlives the mode on screen. The cursors,
 // the Leader menu's two among them, the open section and the filter go to
 // `settings.place` on each change, and a page load puts the last page's back.
+// Setting rows draw and edit through the control kinds the part registers: the
+// built-ins, then each one a dependent adds through `addControlKind`, which
+// redraws the open section on each change; the registry goes with the part.
 export const settingsPagePart: PagePart<typeof settingsManifest> = {
   manifest: settingsManifest,
   start(api: SettingsApi) {
@@ -40,6 +46,10 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
     const placeWriter = api.state.publish(settingsPlaceSlot);
     const place = placeWrites<SettingsPlace>((value) => placeWriter.set(value));
     const plugins = api.state.read(corePluginsSlot);
+    const controlKinds = createControlKinds();
+    for (const kind of BUILT_IN_CONTROL_KINDS) {
+      controlKinds.add(kind);
+    }
     const view = createSettingsView({
       channel: api.channel,
       editor: services.editor,
@@ -63,7 +73,9 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       runKey: keyRunner(api.commands, log),
       placeChanged: (value) => place.write(value),
       plugins: () => plugins.get() ?? [],
+      controlKind: (id) => controlKinds.get(id),
     });
+    controlKinds.onChanged(() => view.controlKindsChanged());
     const savedPlace = placeWriter.get();
     if (savedPlace !== undefined) {
       view.restorePlace(savedPlace);
@@ -121,6 +133,9 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
         moveToRow: ({ arg }) => view.moveToRow(arg),
         openSectionAt: ({ arg }) => view.openSectionAt(arg),
       },
+      exports: (consumer): SettingsPageExports => ({
+        addControlKind: (kind) => consumer.track(controlKinds.add(kind)),
+      }),
     };
   },
 };

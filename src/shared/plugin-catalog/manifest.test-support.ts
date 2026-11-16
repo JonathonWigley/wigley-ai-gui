@@ -50,6 +50,7 @@ export function validManifest(): RawManifest {
         description: 'The text the list shows notes for.',
       },
     },
+    settingControls: { filter: 'string' },
     themeTokens: { accent: { kind: 'color', default: '#3366ff' } },
   };
 }

@@ -1,6 +1,6 @@
 # 04 — Setting control kinds as registrations
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)

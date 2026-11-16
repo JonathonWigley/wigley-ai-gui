@@ -415,6 +415,18 @@ describe('validateManifest', () => {
       },
     ],
     [
+      'settingControls must be an object',
+      (m) => {
+        m.settingControls = [];
+      },
+    ],
+    [
+      'settingControls "filter" must be a non-empty string',
+      (m) => {
+        m.settingControls.filter = '';
+      },
+    ],
+    [
       'themeTokens must be an object',
       (m) => {
         m.themeTokens = 'accent';
@@ -472,6 +484,12 @@ describe('validateManifest', () => {
       'settingInfo declares "view", which is no leaf setting',
       (m) => {
         m.settingInfo.view = { label: 'View', description: 'The view.' };
+      },
+    ],
+    [
+      'Plugin "notes-plus" settingControls names "nope", which is no leaf setting',
+      (m) => {
+        m.settingControls.nope = 'x';
       },
     ],
     [

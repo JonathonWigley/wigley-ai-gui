@@ -94,6 +94,7 @@ function shownMenu(
     settingsLayer: unread,
     keymapLayer: () => current,
     matcher: fakeFuzzyMatcher,
+    controlKind: unread,
     openBox: (request) => boxes.push(request),
     closeBox: () => undefined,
     boxProblem: unread,

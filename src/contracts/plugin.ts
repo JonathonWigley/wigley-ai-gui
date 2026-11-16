@@ -203,7 +203,9 @@ export type SettingInfos<T> = [SettingPath<T>] extends [never]
 // each setting whose default is null or unset, by its dotted path inside
 // `settings` (an array element's fields under `<path>[]`); `settingInfo`
 // declares each leaf setting's label and description by its dotted path, as
-// `SettingPath` names the leaves (`definePlugin` checks the paths); `themeTokens`
+// `SettingPath` names the leaves (`definePlugin` checks the paths);
+// `settingControls` binds a leaf setting, by the same dotted path, to the id of
+// the control kind its row draws with; `themeTokens`
 // declares the plugin's own theme tokens by their unqualified names
 // (`origin-caused`), each with its kind and default; each `dependsOn` list names
 // the plugins whose exports that process reads or whose events it hears there;
@@ -236,6 +238,7 @@ export interface PluginManifest<
   settings: T;
   optionalSettings?: Readonly<Record<string, SettingKind>>;
   settingInfo: Readonly<Record<string, SettingInfo>>;
+  settingControls?: Readonly<Record<string, string>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
 }
 

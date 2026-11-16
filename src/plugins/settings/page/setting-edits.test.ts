@@ -6,7 +6,7 @@ const windowWidth: SettingLeaf = {
   path: 'window.width',
   label: 'Window width',
   description: 'Width of a new window',
-  control: { kind: 'number' },
+  control: { kind: 'number', choices: null },
   fallback: { value: 900 },
 };
 

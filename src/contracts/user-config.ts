@@ -9,15 +9,14 @@ import type {
 } from './keymap';
 import type { CommandInfo, ScopeInfo } from './plugin';
 
-// How a row edits a leaf setting. `theme` picks from `UserConfigRead.themes`;
-// `json` is an array, edited whole as JSON.
-export type SettingControl =
-  | { kind: 'number' }
-  | { kind: 'string' }
-  | { kind: 'boolean' }
-  | { kind: 'choice'; choices: readonly string[] }
-  | { kind: 'theme' }
-  | { kind: 'json' };
+// How a row edits a leaf setting. `kind` is the id of a control kind the
+// settings page registers: a built-in (`number`, `string`, `boolean`,
+// `choice`, `theme`, `json`) or a plugin's. `choices` holds the only strings
+// a closed setting takes, null for any other.
+export interface SettingControl {
+  kind: string;
+  choices: readonly string[] | null;
+}
 
 // `path` nests as settings.json does: core `fonts.ui`, plugin `forms.autosaveDelayMs`.
 // `fallback` null: the defaults leave it unset (`fonts.ui`); otherwise the default, null included.

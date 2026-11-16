@@ -95,6 +95,14 @@ describe('definePlugin', () => {
         delayMs: { label: 'Delay', description: 'The delay.' },
       },
     });
+    definePlugin({
+      ...manifest,
+      settingControls: {
+        delayMs: 'number',
+        // @ts-expect-error -- `delay` is no setting
+        delay: 'number',
+      },
+    });
 
     // A nested setting and an array setting are declared by their leaf
     // paths exactly: a missing path fails, and so does an extra one.

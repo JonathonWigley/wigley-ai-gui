@@ -1,10 +1,9 @@
 import type {
-  SettingControl,
   SettingLeaf,
   SettingSection,
 } from '../../../contracts/user-config';
-import { errorText } from '../../../shared/error-text';
 import { isJsonObject } from '../../../shared/json';
+import type { SettingControlKind } from '../contract';
 
 export interface SettingRow {
   leaf: SettingLeaf;
@@ -12,13 +11,6 @@ export interface SettingRow {
   value: unknown;
   isSet: boolean;
 }
-
-// What a text box's text commits as: a value, the setting left unset, or a
-// problem shown under the box.
-export type BoxValue =
-  | { type: 'value'; value: unknown }
-  | { type: 'unset' }
-  | { type: 'problem'; problem: string };
 
 // The user's value at a dotted `path` of `layer`; `isSet` false when a key on
 // the path is missing or a step is not an object.
@@ -51,52 +43,15 @@ export function settingRows(
   });
 }
 
-// A value as its row prints it on one line.
-export function valueText(value: unknown, control: SettingControl): string {
+// A value as its row prints it on one line: `Not set` when unset or null,
+// else as `kind` prints it, or as JSON when no registration holds the row's
+// kind.
+export function valueText(
+  value: unknown,
+  kind: SettingControlKind | undefined,
+): string {
   if (value === undefined || value === null) {
     return 'Not set';
   }
-  return control.kind === 'json' ? JSON.stringify(value) : String(value);
-}
-
-// What the text of a number, string or JSON box commits as. Throws for a
-// control that opens no text box.
-export function parseBoxText(text: string, control: SettingControl): BoxValue {
-  switch (control.kind) {
-    case 'number': {
-      if (text.trim() === '') {
-        return { type: 'unset' };
-      }
-      const value = Number(text);
-      return Number.isFinite(value)
-        ? { type: 'value', value }
-        : { type: 'problem', problem: 'Enter a number' };
-    }
-    case 'string':
-      return text === '' ? { type: 'unset' } : { type: 'value', value: text };
-    case 'json':
-      if (text.trim() === '') {
-        return { type: 'unset' };
-      }
-      try {
-        return { type: 'value', value: JSON.parse(text) };
-      } catch (error) {
-        return {
-          type: 'problem',
-          problem: `Not valid JSON: ${errorText(error)}`,
-        };
-      }
-    default:
-      throw new Error(`A ${control.kind} setting opens no text box`);
-  }
-}
-
-// The text a row's box opens with.
-export function boxText(row: SettingRow): string {
-  if (row.value === undefined || row.value === null) {
-    return '';
-  }
-  return row.leaf.control.kind === 'json'
-    ? JSON.stringify(row.value, null, 2)
-    : String(row.value);
+  return kind === undefined ? JSON.stringify(value) : kind.text(value);
 }

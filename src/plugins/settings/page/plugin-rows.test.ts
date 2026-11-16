@@ -33,7 +33,7 @@ function listLeaf(fallback: readonly string[]): SettingLeaf {
     path: PLUGIN_LIST_PATH,
     label: 'Disabled plugins',
     description: 'The plugins that do not run',
-    control: { kind: 'json' },
+    control: { kind: 'json', choices: null },
     fallback: { value: fallback },
   };
 }

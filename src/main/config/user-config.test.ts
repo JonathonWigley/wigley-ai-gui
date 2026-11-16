@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DefaultKeymap, KeyGroups } from '../../contracts/keymap';
 import type { Settings } from '../../contracts/settings';
-import type { UserConfig } from '../../contracts/user-config';
+import type { SettingControl, UserConfig } from '../../contracts/user-config';
 import { definePlugin } from '../../shared/define-plugin';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import { EMPTY_RUNTIME_CATALOG } from '../../shared/runtime-commands';
@@ -178,6 +178,7 @@ async function create(
     folder: FOLDER,
     store: served,
     settingInfo: CORE_INFO,
+    settingControls: {},
     applied,
   });
 }
@@ -545,7 +546,7 @@ describe('createUserConfig', () => {
     expect(
       schema.sections[0].leaves.find((leaf) => leaf.path === 'window.width'),
     ).toMatchObject({
-      control: { kind: 'number' },
+      control: { kind: 'number', choices: null },
       fallback: { value: 900 },
     });
     expect(result).toEqual({ type: 'written' });
@@ -570,21 +571,21 @@ describe('createUserConfig', () => {
             path: 'window.width',
             label: 'Width',
             description: 'Width.',
-            control: { kind: 'number' },
+            control: { kind: 'number', choices: null },
             fallback: { value: 900 },
           },
           {
             path: 'theme',
             label: 'Theme',
             description: 'A theme.',
-            control: { kind: 'theme' },
+            control: { kind: 'theme', choices: null },
             fallback: { value: 'mocha' },
           },
           {
             path: 'fonts.ui',
             label: 'UI font',
             description: 'A font.',
-            control: { kind: 'string' },
+            control: { kind: 'string', choices: null },
             fallback: null,
           },
         ],
@@ -597,14 +598,14 @@ describe('createUserConfig', () => {
             path: 'p.list',
             label: 'List',
             description: 'The list.',
-            control: { kind: 'json' },
+            control: { kind: 'json', choices: null },
             fallback: { value: ['a', 'b'] },
           },
           {
             path: 'p.timeout',
             label: 'Timeout',
             description: 'The timeout.',
-            control: { kind: 'number' },
+            control: { kind: 'number', choices: null },
             fallback: { value: null },
           },
         ],
@@ -672,6 +673,7 @@ describe('createUserConfig', () => {
       folder: FOLDER,
       store,
       settingInfo: {},
+      settingControls: {},
       applied: NONE_APPLIED,
     }).schema();
 
@@ -679,10 +681,55 @@ describe('createUserConfig', () => {
       .flatMap((section) => section.leaves)
       .map((leaf) => [leaf.path, leaf.control]);
     expect(controls).toEqual([
-      ['f.wrap', { kind: 'boolean' }],
-      ['f.strict', { kind: 'boolean' }],
+      ['f.wrap', { kind: 'boolean', choices: null }],
+      ['f.strict', { kind: 'boolean', choices: null }],
     ]);
   });
+
+  it.each<
+    [
+      string,
+      readonly PluginManifest[],
+      Record<string, string>,
+      string,
+      SettingControl,
+    ]
+  >([
+    [
+      'a plugin binding over an array default',
+      [definePlugin({ ...listPlugin, settingControls: { list: 'p-list' } })],
+      {},
+      'p.list',
+      { kind: 'p-list', choices: null },
+    ],
+    [
+      'the core map',
+      MANIFESTS,
+      { 'fonts.ui': 'font' },
+      'fonts.ui',
+      { kind: 'font', choices: null },
+    ],
+  ])(
+    'schema_SettingControls_NameTheKindBeforeTheDefaultRules: %s',
+    async (_case, manifests, settingControls, path, control) => {
+      const files = createMemoryFiles();
+      const store = await storeOver(files, manifests);
+
+      const schema = createUserConfig({
+        files,
+        folder: FOLDER,
+        store,
+        settingInfo: CORE_INFO,
+        settingControls,
+        applied: NONE_APPLIED,
+      }).schema();
+
+      const leaf = schema.sections
+        .flatMap((section) => section.leaves)
+        .find((each) => each.path === path);
+      expect(leaf?.control).toEqual(control);
+    },
+  );
 
   it('adds no section for a plugin without settings', async () => {
     const schema = (await create(createMemoryFiles())).schema();
@@ -728,6 +775,7 @@ describe('createUserConfig', () => {
       folder: FOLDER,
       store,
       settingInfo: {},
+      settingControls: {},
       applied: NONE_APPLIED,
     }).schema();
 
@@ -793,6 +841,7 @@ describe('createUserConfig', () => {
         folder: FOLDER,
         store,
         settingInfo: {},
+        settingControls: {},
         applied: NONE_APPLIED,
       }).schema();
 

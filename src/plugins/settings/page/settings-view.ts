@@ -44,6 +44,7 @@ import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { sheet } from '../../../shared/page/ui/sheet';
 import {
   type LeaderCursors,
+  type SettingControlKind,
   type SettingsChannel,
   type SettingsPlace,
   settingsMoveToRowCommand,
@@ -204,6 +205,8 @@ export interface RowContext {
   settingsLayer(): Record<string, unknown> | null;
   keymapLayer(): UserKeymap | null;
   matcher: FuzzyMatcher;
+  // The control kind registered as `id` now, or undefined for none.
+  controlKind(id: string): SettingControlKind | undefined;
   openBox(request: BoxRequest): void;
   closeBox(box: RowBox): void;
   // Logs the problem and shows it under the box, which stays open.
@@ -263,6 +266,8 @@ export interface SettingsViewDeps {
   // Every plugin row as the plugin switch last wrote it: each catalog plugin,
   // then each plugin that failed its first load.
   plugins(): readonly PluginStatus[];
+  // The control kind registered as `id` now, or undefined for none.
+  controlKind(id: string): SettingControlKind | undefined;
 }
 
 export type SettingsCommand =
@@ -341,6 +346,10 @@ export interface SettingsView {
   // The plugin switch wrote a new status list: the rows redraw while the
   // Plugins section is open.
   pluginsChanged(): void;
+  // A control kind was registered or removed: the open section redraws, an
+  // open box or picker staying open. Before `load` reads the schema it draws
+  // nothing.
+  controlKindsChanged(): void;
   // The mode was hidden: a key recording in progress is cancelled.
   hidden(): void;
 }
@@ -1054,6 +1063,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     },
     toast: deps.toast,
     plugins: deps.plugins,
+    controlKind: deps.controlKind,
     async mayDisable(pluginId) {
       try {
         return await channel.invoke('mayDisable', pluginId);
@@ -1507,6 +1517,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         draw();
       }
     },
+    controlKindsChanged: () => draw(),
     hidden: () => recorder.cancel(),
   };
 }

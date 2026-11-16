@@ -18,6 +18,7 @@ import {
   appliedScopes,
   defaultKeyLayers,
   mergeKeymap,
+  pluginSettingControls,
   pluginSettingInfo,
 } from '../../shared/plugin-manifests';
 import type { ThemeFileText } from '../themes/theme-loader';
@@ -37,7 +38,8 @@ import type { ConfigStore } from './config-store';
 import { settingsFileDefaults } from './user-settings';
 
 // `folder` is the absolute user config folder `store` watches; `settingInfo`
-// declares each core setting by its dotted path; the schema lists no command
+// declares each core setting by its dotted path; `settingControls` binds a core
+// setting, by its dotted path, to a control kind id; the schema lists no command
 // or scope of a plugin in `applied`'s list. Every check reads `store.checks()`
 // at its call, so it follows the plugins the store admits.
 export interface UserConfigDeps {
@@ -45,6 +47,7 @@ export interface UserConfigDeps {
   folder: string;
   store: ConfigStore;
   settingInfo: Readonly<Record<string, SettingInfo>>;
+  settingControls: Readonly<Record<string, string>>;
   applied: { disabled(): readonly string[] };
 }
 
@@ -60,7 +63,8 @@ const CORE_SECTION = 'core';
 
 // The `userConfig` main service over the user config folder. `schema()`
 // builds the schema over the plugins the store admits now, so it throws on a
-// plugin setting with no declaration or a declaration naming no setting.
+// plugin setting with no declaration, and on a declaration or a control binding
+// naming no setting.
 export function createUserConfig(deps: UserConfigDeps): UserConfig {
   const filePath = (file: string) => `${deps.folder}/${file}`;
 
@@ -138,7 +142,12 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
     schema: () => {
       const checks = deps.store.checks();
       return withRuntime(
-        userConfigSchema(deps.settingInfo, checks.deps, checks.schema),
+        userConfigSchema(
+          deps.settingInfo,
+          deps.settingControls,
+          checks.deps,
+          checks.schema,
+        ),
         checks.deps,
         deps,
       );
@@ -189,17 +198,24 @@ function settingsProblem(
   return settingsThemeProblem(themeName, deps.builtInThemes, userThemes);
 }
 
+// `settingControls` is the core's map; each plugin's `settingControls` lays
+// over it.
 function userConfigSchema(
   settingInfo: UserConfigDeps['settingInfo'],
+  settingControls: UserConfigDeps['settingControls'],
   deps: ConfigCheckDeps,
   fixed: ConfigSchema,
 ): UserConfigSchema {
+  const controls = {
+    ...settingControls,
+    ...pluginSettingControls(deps.manifests),
+  };
   const sections: SettingSection[] = [
     {
       id: CORE_SECTION,
       title: 'Core',
       leaves: Object.entries(settingInfo).map(([path, info]) =>
-        settingLeaf(path, info, deps, fixed),
+        settingLeaf(path, info, controls, deps, fixed),
       ),
     },
   ];
@@ -210,7 +226,7 @@ function userConfigSchema(
         id: manifest.id,
         title: capitalised(manifest.id),
         leaves: infos.map(([path, info]) =>
-          settingLeaf(path, info, deps, fixed),
+          settingLeaf(path, info, controls, deps, fixed),
         ),
       });
     }
@@ -258,10 +274,12 @@ function withRuntime(
   };
 }
 
-// `path` is the setting's full dotted path, a plugin's under its id.
+// `path` is the setting's full dotted path, a plugin's under its id;
+// `controls` binds full dotted paths to control kind ids.
 function settingLeaf(
   path: string,
   info: SettingInfo,
+  controls: Readonly<Record<string, string>>,
   deps: ConfigCheckDeps,
   fixed: ConfigSchema,
 ): SettingLeaf {
@@ -273,7 +291,7 @@ function settingLeaf(
     path,
     label: info.label,
     description: info.description,
-    control: settingControl(path, fallback, deps, fixed),
+    control: settingControl(path, fallback, controls, deps, fixed),
     fallback,
   };
 }
@@ -291,31 +309,36 @@ function defaultAt(path: string, defaults: object): { value: unknown } | null {
   return { value };
 }
 
-// A closed choice, then the core theme, then an array, then by the
-// default's kind or the declared kind of an unset or null setting.
+// The kind `controls` binds, then a closed choice, then the core theme, then an
+// array, then by the default's kind or the declared kind of an unset or null
+// setting.
 function settingControl(
   path: string,
   fallback: { value: unknown } | null,
+  controls: Readonly<Record<string, string>>,
   deps: ConfigCheckDeps,
   fixed: ConfigSchema,
 ): SettingControl {
   const choices = deps.settingChoices[path];
+  if (Object.hasOwn(controls, path)) {
+    return { kind: controls[path], choices: choices ?? null };
+  }
   if (choices !== undefined) {
     return { kind: 'choice', choices };
   }
   if (path === 'theme') {
-    return { kind: 'theme' };
+    return { kind: 'theme', choices: null };
   }
   const value = fallback?.value;
   if (Array.isArray(value)) {
-    return { kind: 'json' };
+    return { kind: 'json', choices: null };
   }
   const kind = fixed.optionalSettings[path];
   if (typeof value === 'boolean' || kind === 'boolean') {
-    return { kind: 'boolean' };
+    return { kind: 'boolean', choices: null };
   }
   if (typeof value === 'number' || kind === 'number') {
-    return { kind: 'number' };
+    return { kind: 'number', choices: null };
   }
-  return { kind: 'string' };
+  return { kind: 'string', choices: null };
 }

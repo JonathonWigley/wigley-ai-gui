@@ -13,6 +13,7 @@ import {
   BIND_WHERES,
   EDITOR_MODES,
   pluginOptionalSettings,
+  pluginSettingControls,
   pluginSettingInfo,
   pluginThemeTokens,
   requireDeclaredScope,
@@ -74,6 +75,7 @@ const MANIFEST_FIELDS = membersOf({
   settings: true,
   optionalSettings: true,
   settingInfo: true,
+  settingControls: true,
   themeTokens: true,
 } satisfies Record<keyof PluginManifest, true>);
 
@@ -201,6 +203,7 @@ function shapeProblems(raw: JsonObject): string[] {
   addSettingsProblems(raw.settings, problems);
   addOptionalSettingsProblems(raw.optionalSettings, problems);
   addSettingInfoProblems(raw.settingInfo, problems);
+  addSettingControlsProblems(raw.settingControls, problems);
   addThemeTokensProblems(raw.themeTokens, problems);
   return problems;
 }
@@ -526,6 +529,24 @@ function addSettingInfoProblems(settingInfo: unknown, problems: string[]) {
   }
 }
 
+function addSettingControlsProblems(
+  settingControls: unknown,
+  problems: string[],
+) {
+  if (settingControls === undefined) {
+    return;
+  }
+  if (!isJsonObject(settingControls)) {
+    problems.push('settingControls must be an object');
+    return;
+  }
+  for (const [path, kind] of Object.entries(settingControls)) {
+    if (typeof kind !== 'string' || kind === '') {
+      problems.push(`settingControls "${path}" must be a non-empty string`);
+    }
+  }
+}
+
 function addThemeTokensProblems(themeTokens: unknown, problems: string[]) {
   if (!isJsonObject(themeTokens)) {
     problems.push('themeTokens must be an object');
@@ -567,6 +588,7 @@ function declarationProblems(manifest: PluginManifest): string[] {
       .map((bind) => () => requireDeclaredScope(manifest, bind.scope)),
     () => pluginOptionalSettings([manifest]),
     () => pluginSettingInfo([manifest]),
+    () => pluginSettingControls([manifest]),
     () => pluginThemeTokens({}, [manifest]),
   ];
   const problems: string[] = [];

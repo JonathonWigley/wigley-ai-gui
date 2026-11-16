@@ -1023,6 +1023,27 @@ export function pluginSettingInfo(
   return infos;
 }
 
+// Every manifest's `settingControls`, each path qualified as
+// `<pluginId>.<path>`. Throws on a path naming no leaf setting; the kind ids
+// are the settings page's, so none is checked here.
+export function pluginSettingControls(
+  manifests: readonly PluginManifest[],
+): Record<string, string> {
+  const controls: Record<string, string> = {};
+  for (const manifest of manifests) {
+    const leaves = settingLeafPaths(manifest);
+    for (const [path, kind] of Object.entries(manifest.settingControls ?? {})) {
+      if (!leaves.has(path)) {
+        throw new Error(
+          `Plugin "${manifest.id}" settingControls names "${path}", which is no leaf setting`,
+        );
+      }
+      controls[qualify(manifest.id, path)] = kind;
+    }
+  }
+  return controls;
+}
+
 // Every manifest's theme tokens, each qualified as `<pluginId>.<token>`.
 // Throws on a token name that is not lowercase letters and digits joined by
 // `-` or `_`, which its CSS variable could not carry unchanged, and on a token

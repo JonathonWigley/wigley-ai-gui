@@ -25,6 +25,7 @@ import {
   neededBy,
   overrideSettings,
   pluginOptionalSettings,
+  pluginSettingControls,
   pluginSettingInfo,
   pluginSettings,
   pluginThemeTokens,
@@ -1230,6 +1231,32 @@ describe('pluginSettingInfo', () => {
     ]);
 
     expect(Object.keys(infos).sort()).toEqual(['p.fonts.ui', 'p.window.width']);
+  });
+});
+
+describe('pluginSettingControls', () => {
+  it('pluginSettingControls_QualifiesEachPath', () => {
+    const controls = pluginSettingControls([
+      manifest('p', {
+        settings: { list: ['a'] },
+        settingControls: { list: 'p-list' },
+      }),
+    ]);
+
+    expect(controls).toEqual({ 'p.list': 'p-list' });
+  });
+
+  it('pluginSettingControls_PathNoLeaf_Throws', () => {
+    expect(() =>
+      pluginSettingControls([
+        manifest('p', {
+          settings: { list: ['a'] },
+          settingControls: { nope: 'x' },
+        }),
+      ]),
+    ).toThrow(
+      'Plugin "p" settingControls names "nope", which is no leaf setting',
+    );
   });
 });
 

@@ -23,9 +23,14 @@ import {
   findAll,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
-import type { SettingsChannel, SettingsPlace } from '../contract';
+import type {
+  SettingControlKind,
+  SettingsChannel,
+  SettingsPlace,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { SettingsLayout } from '../layouts/layout';
+import { BUILT_IN_CONTROL_KINDS } from './built-in-control-kinds';
 import { createSettingsView, type SettingsView } from './settings-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
@@ -41,7 +46,7 @@ const SCHEMA: UserConfigSchema = {
           path: 'p.name',
           label: 'Name',
           description: 'A name',
-          control: { kind: 'string' },
+          control: { kind: 'string', choices: null },
           fallback: { value: '' },
         },
         {
@@ -62,23 +67,24 @@ const SCHEMA: UserConfigSchema = {
   defaultLeader: '<Space>',
 };
 
-// A channel serving `schema`, `keymap` (or `keymapRead`, when given) and an
-// empty settings file, recording each settings write and each keymap write,
-// which the next read then serves, and each `mayDisable` asked, which
-// `mayDisable` answers. Each settings write is refused with the next of
-// `refusals` while any are left.
+// A channel serving `schema`, `keymap` (or `keymapRead`, when given) and a
+// settings file holding `settingsLayer` (null: no file), recording each
+// settings write and each keymap write, which the next read then serves, and
+// each `mayDisable` asked, which `mayDisable` answers. Each settings write is
+// refused with the next of `refusals` while any are left.
 function fakeChannel(
   schema: UserConfigSchema,
   keymap: UserKeymap | null,
   mayDisable: (pluginId: string) => Promise<string | null>,
   keymapRead?: UserConfigRead['keymap'],
   refusals: string[] = [],
+  settingsLayer: Record<string, unknown> | null = null,
 ) {
   const written: Record<string, unknown>[] = [];
   const writtenKeymaps: UserKeymap[] = [];
   const asked: string[] = [];
   const read: UserConfigRead = {
-    settings: { state: 'ok', layer: null, text: null },
+    settings: { state: 'ok', layer: settingsLayer, text: null },
     keymap: keymapRead ?? { state: 'ok', layer: keymap, text: null },
     themes: [],
   };
@@ -124,7 +130,14 @@ interface ShownViewOptions {
   restored?: SettingsPlace;
   plugins?: () => readonly PluginStatus[];
   mayDisable?: (pluginId: string) => Promise<string | null>;
+  settingsLayer?: Record<string, unknown> | null;
+  controlKind?: (id: string) => SettingControlKind | undefined;
+  // Runs on the created view before its load.
+  beforeLoad?: (view: SettingsView) => void;
 }
+
+const builtInKind = (id: string) =>
+  BUILT_IN_CONTROL_KINDS.find((kind) => kind.id === id);
 
 // A view over the fake channel, shown with its first section open and focus
 // on the rows, the overlay its picker draws in, every anchor its layout parts
@@ -140,6 +153,9 @@ async function shownView({
   restored,
   plugins = () => [],
   mayDisable = async () => null,
+  settingsLayer = null,
+  controlKind = builtInKind,
+  beforeLoad = () => undefined,
 }: ShownViewOptions = {}) {
   const { channel, written, writtenKeymaps, asked } = fakeChannel(
     schema,
@@ -147,6 +163,7 @@ async function shownView({
     mayDisable,
     keymapRead,
     refusals,
+    settingsLayer,
   );
   const overlay = asFake(document.createElement('div'));
   const { anchors, keys } = recordingAnchors();
@@ -197,10 +214,12 @@ async function shownView({
     runKey: (key, arg) => runs.push([key.id, arg]),
     placeChanged: (place) => places.push(place),
     plugins,
+    controlKind,
   });
   if (restored !== undefined) {
     view.restorePlace(restored);
   }
+  beforeLoad(view);
   await view.load();
   view.shown();
   const move = (direction: PaneDirection): boolean => {
@@ -785,7 +804,7 @@ describe('createSettingsView', () => {
             path: 'q.size',
             label: 'Size',
             description: 'A size',
-            control: { kind: 'string' },
+            control: { kind: 'string', choices: null },
             fallback: { value: '' },
           },
         ],
@@ -881,14 +900,14 @@ describe('createSettingsView', () => {
               path: 'keySequenceTimeoutMs',
               label: 'Key sequence timeout',
               description: 'A timeout',
-              control: { kind: 'number' },
+              control: { kind: 'number', choices: null },
               fallback: { value: 1000 },
             },
             {
               path: 'plugins.disabled',
               label: 'Disabled plugins',
               description: 'The plugins that do not run',
-              control: { kind: 'json' },
+              control: { kind: 'json', choices: null },
               fallback: { value: fallback },
             },
           ],
@@ -1351,6 +1370,81 @@ describe('createSettingsView', () => {
 
     expect(values()).toEqual(['false']);
   });
+
+  // Section `p` holding one leaf of kind `nope`, which no registration holds,
+  // the user's value `{ a: 1 }`.
+  const UNREGISTERED: UserConfigSchema = {
+    ...SCHEMA,
+    sections: [
+      {
+        id: 'p',
+        title: 'P',
+        leaves: [
+          {
+            path: 'p.blob',
+            label: 'Blob',
+            description: 'A blob',
+            control: { kind: 'nope', choices: null },
+            fallback: { value: null },
+          },
+        ],
+      },
+    ],
+  };
+
+  it('settingRow_UnregisteredKind_DrawsJsonTextAndResetsOnly', async () => {
+    const { view, sheet, overlay, written } = await shownView({
+      schema: UNREGISTERED,
+      settingsLayer: { p: { blob: { a: 1 } }, theme: 't' },
+    });
+
+    const values = findAll(sheet, 'settings-row-value').map(
+      (value) => value.textContent,
+    );
+    view.commands.edit();
+    await settle();
+    const boxes = findAll(sheet, 'settings-box').length;
+    const shownPickers = findAll(overlay, 'ui-picker-layer').filter(
+      (layer) => !layer.hidden,
+    ).length;
+    view.commands.reset();
+    await settle();
+
+    expect(values).toEqual(['{"a":1}']);
+    expect([boxes, shownPickers]).toEqual([0, 0]);
+    expect(written).toEqual([{ theme: 't' }]);
+  });
+
+  it.each([
+    { when: 'after the load', isBeforeLoad: false },
+    { when: 'before the load reads the schema', isBeforeLoad: true },
+  ])(
+    'controlKindsChanged_RedrawsTheOpenSection: $when',
+    async ({ isBeforeLoad }) => {
+      let drawn: SettingControlKind | undefined;
+      const drawnKind: SettingControlKind = {
+        id: 'choice',
+        text: () => 'drawn',
+        edit: { type: 'picker', items: () => [], label: String },
+      };
+      const { view, sheet } = await shownView({
+        controlKind: (id) => (id === 'choice' ? drawn : builtInKind(id)),
+        beforeLoad: (created) => {
+          if (isBeforeLoad) {
+            drawn = drawnKind;
+            created.controlKindsChanged();
+          }
+        },
+      });
+      drawn = drawnKind;
+
+      view.controlKindsChanged();
+
+      expect(
+        findAll(sheet, 'settings-row-value').map((value) => value.textContent),
+      ).toEqual(['', 'drawn']);
+    },
+  );
 
   it('pluginRow_NeededByARunningPlugin_DrawsTheLock', async () => {
     const { view, sheet } = await shownView({

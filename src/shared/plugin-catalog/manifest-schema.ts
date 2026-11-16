@@ -152,6 +152,10 @@ export const manifestSchema: object = {
         additionalProperties: false,
       },
     },
+    settingControls: {
+      type: 'object',
+      additionalProperties: { type: 'string', minLength: 1 },
+    },
     themeTokens: {
       type: 'object',
       additionalProperties: {

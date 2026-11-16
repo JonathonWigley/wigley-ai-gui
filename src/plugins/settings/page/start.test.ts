@@ -8,11 +8,17 @@ import type {
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
-import { installFocusFakeDom } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  findAll,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
 import {
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
+import { createRegistrations } from '../../../shared/registrations';
+import type { SettingControlKind, SettingsPageExports } from '../contract';
 import { settingsPagePart } from './start';
 
 const SCHEMA: UserConfigSchema = {
@@ -25,7 +31,7 @@ const SCHEMA: UserConfigSchema = {
           path: 'p.name',
           label: 'Name',
           description: 'A name',
-          control: { kind: 'string' },
+          control: { kind: 'string', choices: null },
           fallback: { value: '' },
         },
       ],
@@ -46,6 +52,39 @@ const EMPTY_READ: UserConfigRead = {
 };
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// One section `p` holding a list leaf of kind `p-list`, which no built-in is.
+const LIST_SCHEMA: UserConfigSchema = {
+  ...SCHEMA,
+  sections: [
+    {
+      id: 'p',
+      title: 'P',
+      leaves: [
+        {
+          path: 'p.list',
+          label: 'List',
+          description: 'A list',
+          control: { kind: 'p-list', choices: null },
+          fallback: { value: ['a'] },
+        },
+      ],
+    },
+  ],
+};
+
+const LIST_KIND: SettingControlKind = {
+  id: 'p-list',
+  text: () => 'drawn',
+  edit: { type: 'picker', items: () => [], label: String },
+};
+
+// The part's exports for a consumer, as the host hands them to a dependent.
+function exportsOf(harness: ReturnType<typeof startPagePart>) {
+  return harness.started().exports as (
+    consumer: ReturnType<typeof createRegistrations>,
+  ) => SettingsPageExports;
+}
 
 describe('settings page part', () => {
   beforeEach(() => {
@@ -131,6 +170,54 @@ describe('settings page part', () => {
 
     expect(harness.isCapturing()).toBe(false);
     expect(() => harness.pressCapture('j')).toThrow('no key capture is armed');
+    await harness.stop();
+  });
+
+  it('exports_AddControlKind_DrawsWithItUntilTheConsumerStops', async () => {
+    const harness = startPagePart(settingsPagePart, {
+      firstModeTaken: true,
+      invoke: async (method) =>
+        method === 'schema' ? LIST_SCHEMA : EMPTY_READ,
+      services: {
+        markdown: PLAIN_MARKDOWN,
+        fuzzy: fakeFuzzyMatcher,
+        picker: fakeListPickerService(),
+      },
+    });
+    await settle();
+    harness.mode('settings.main').shown?.();
+    const values = () =>
+      findAll(
+        asFake(harness.mode('settings.main').element),
+        'settings-row-value',
+      ).map((value) => value.textContent);
+    const consumer = createRegistrations();
+    const valuesBefore = values();
+
+    exportsOf(harness)(consumer).addControlKind(LIST_KIND);
+    const valuesAdded = values();
+    consumer.dispose();
+
+    expect([valuesBefore, valuesAdded, values()]).toEqual([
+      ['["a"]'],
+      ['drawn'],
+      ['["a"]'],
+    ]);
+    await harness.stop();
+  });
+
+  it('exports_AddControlKind_HeldId_Throws', async () => {
+    const harness = startPagePart(settingsPagePart, {
+      firstModeTaken: true,
+      services: { picker: fakeListPickerService() },
+    });
+
+    expect(() =>
+      exportsOf(harness)(createRegistrations()).addControlKind({
+        ...LIST_KIND,
+        id: 'number',
+      }),
+    ).toThrow('control kind number is already registered');
     await harness.stop();
   });
 });

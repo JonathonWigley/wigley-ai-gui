@@ -25,6 +25,7 @@ import {
   coreDefaultSettings,
   optionalSettings,
   settingChoices,
+  settingControls,
   settingInfo,
 } from '../config/settings';
 import { coreThemeTokens } from '../config/theme-tokens';
@@ -818,6 +819,7 @@ async function loadConfig(
       folder: deps.folder,
       store,
       settingInfo,
+      settingControls,
       applied,
     }),
     applied,

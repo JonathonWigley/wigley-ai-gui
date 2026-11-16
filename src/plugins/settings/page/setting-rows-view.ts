@@ -1,14 +1,9 @@
 import type { SettingSection } from '../../../contracts/user-config';
+import type { SettingControlKind, SettingKindEditor } from '../contract';
 import { PLUGIN_LIST_PATH } from './plugin-rows';
 import { matchesSetting } from './row-filter';
 import { withoutSetting, withSetting } from './setting-edits';
-import {
-  boxText,
-  parseBoxText,
-  type SettingRow,
-  settingRows,
-  valueText,
-} from './setting-rows';
+import { type SettingRow, settingRows, valueText } from './setting-rows';
 import type {
   CommitVia,
   RowActions,
@@ -17,27 +12,16 @@ import type {
   SettingsRow,
 } from './settings-view';
 
-// The value a picker offers for each item of a choice, boolean or theme row.
-function pickerItems(row: SettingRow, ctx: RowContext): readonly unknown[] {
-  const { control } = row.leaf;
-  switch (control.kind) {
-    case 'choice':
-      return control.choices;
-    case 'boolean':
-      return [true, false];
-    case 'theme':
-      return ctx.read().themes;
-    default:
-      return [];
-  }
-}
+type BoxKindEditor = Extract<SettingKindEditor, { type: 'box' }>;
+type PickerKindEditor = Extract<SettingKindEditor, { type: 'picker' }>;
 
-function rowActions(row: SettingRow, ctx: RowContext): RowActions {
+// Opens the kind's box under the row, empty for an unset or null value; a
+// document box takes the JSON language from its `<path>.json` file name.
+function openKindBox(row: SettingRow, editor: BoxKindEditor, ctx: RowContext) {
   const { leaf } = row;
-  const { control } = leaf;
   // Commits a box's text; returns the problem when the text does not parse.
   const commitText = (text: string, via: CommitVia): string | null => {
-    const parsed = parseBoxText(text, control);
+    const parsed = editor.parse(text);
     if (parsed.type === 'problem') {
       return parsed.problem;
     }
@@ -50,53 +34,71 @@ function rowActions(row: SettingRow, ctx: RowContext): RowActions {
     );
     return null;
   };
-  const edit = () => {
-    if (
-      control.kind === 'number' ||
-      control.kind === 'string' ||
-      control.kind === 'json'
-    ) {
-      ctx.openBox({
-        key: leaf.path,
-        file: 'settings',
-        text: boxText(row),
-        editor:
-          control.kind === 'json'
-            ? { type: 'document', fileName: `${leaf.path}.json` }
-            : { type: 'line' },
-        accept(box) {
-          const problem = commitText(box.text(), { box });
-          if (problem !== null) {
-            ctx.boxProblem(box, problem);
-          }
-        },
-      });
-      return;
-    }
-    const items = pickerItems(row, ctx);
-    ctx.openPicker({
-      file: 'settings',
-      title: leaf.label,
-      items,
-      label: (item) => String(item),
-      selected: items.indexOf(row.value),
-      chosen: (item, expectedText) =>
-        ctx.commitSettings(withSetting(ctx.settingsLayer(), leaf, item), {
-          expectedText,
-        }),
-    });
-  };
-  return {
-    open: edit,
-    edit,
-    reset: () =>
-      ctx.commitSettings(withoutSetting(ctx.settingsLayer(), leaf.path), null),
-  };
+  const isUnset = row.value === undefined || row.value === null;
+  ctx.openBox({
+    key: leaf.path,
+    file: 'settings',
+    text: isUnset ? '' : editor.text(row.value),
+    editor:
+      editor.box === 'document'
+        ? { type: 'document', fileName: `${leaf.path}.json` }
+        : { type: 'line' },
+    accept(box) {
+      const problem = commitText(box.text(), { box });
+      if (problem !== null) {
+        ctx.boxProblem(box, problem);
+      }
+    },
+  });
+}
+
+// Opens the list picker on the kind's items, the cursor on the row's value.
+function openKindPicker(
+  row: SettingRow,
+  editor: PickerKindEditor,
+  ctx: RowContext,
+) {
+  const { leaf } = row;
+  const items = editor.items({ leaf, config: ctx.read() });
+  ctx.openPicker({
+    file: 'settings',
+    title: leaf.label,
+    items,
+    label: (item) => editor.label(item),
+    selected: items.indexOf(row.value),
+    chosen: (item, expectedText) =>
+      ctx.commitSettings(withSetting(ctx.settingsLayer(), leaf, item), {
+        expectedText,
+      }),
+  });
+}
+
+// A row whose kind no registration holds only resets.
+function rowActions(
+  row: SettingRow,
+  kind: SettingControlKind | undefined,
+  ctx: RowContext,
+): RowActions {
+  const reset = () =>
+    ctx.commitSettings(
+      withoutSetting(ctx.settingsLayer(), row.leaf.path),
+      null,
+    );
+  if (kind === undefined) {
+    return { reset };
+  }
+  const editor = kind.edit;
+  const edit =
+    editor.type === 'box'
+      ? () => openKindBox(row, editor, ctx)
+      : () => openKindPicker(row, editor, ctx);
+  return { open: edit, edit, reset };
 }
 
 // The rows of a settings section that match `query`, drawn from the last
-// good settings layer. The `plugins.disabled` leaf draws no row: the Plugins
-// section switches each plugin, asking the plugin switch before it writes.
+// good settings layer, each with the control kind its leaf names. The
+// `plugins.disabled` leaf draws no row: the Plugins section switches each
+// plugin, asking the plugin switch before it writes.
 export function settingSection(
   section: SettingSection,
   ctx: RowContext,
@@ -108,6 +110,7 @@ export function settingSection(
     .map((row) => {
       const { leaf } = row;
       const fallback = leaf.fallback?.value;
+      const kind = ctx.controlKind(leaf.control.kind);
       return {
         key: leaf.path,
         file: 'settings',
@@ -117,14 +120,14 @@ export function settingSection(
             path: leaf.path,
             label: leaf.label,
             description: leaf.description,
-            value: valueText(row.value, leaf.control),
+            value: valueText(row.value, kind),
             isUnset: row.value === undefined || row.value === null,
             isSet: row.isSet,
-            defaultText: valueText(fallback, leaf.control),
+            defaultText: valueText(fallback, kind),
             control: leaf.control.kind,
           },
         },
-        actions: rowActions(row, ctx),
+        actions: rowActions(row, kind, ctx),
       };
     });
   return { entries: rows.map((row) => ({ type: 'row', row })), rows };

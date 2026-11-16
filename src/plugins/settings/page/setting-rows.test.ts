@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { SettingLeaf } from '../../../contracts/user-config';
-import { parseBoxText, settingRows } from './setting-rows';
+import { settingRows, valueText } from './setting-rows';
 
 function leaf(path: string, fallback: SettingLeaf['fallback']): SettingLeaf {
   return {
     path,
     label: path,
     description: `${path} description`,
-    control: { kind: 'number' },
+    control: { kind: 'number', choices: null },
     fallback,
   };
 }
@@ -43,29 +43,12 @@ describe('settingRows', () => {
   });
 });
 
-describe('parseBoxText', () => {
-  it('parseBoxText_Number', () => {
-    const number = { kind: 'number' } as const;
-
-    expect(parseBoxText(' 12 ', number)).toEqual({ type: 'value', value: 12 });
-    expect(parseBoxText('', number)).toEqual({ type: 'unset' });
-    expect(parseBoxText('1e', number)).toEqual({
-      type: 'problem',
-      problem: 'Enter a number',
-    });
-  });
-
-  it('parseBoxText_Json', () => {
-    const json = { kind: 'json' } as const;
-
-    expect(parseBoxText('[{"a":1}]', json)).toEqual({
-      type: 'value',
-      value: [{ a: 1 }],
-    });
-    const broken = parseBoxText('[', json);
-    expect(broken.type).toBe('problem');
-    expect(broken.type === 'problem' && broken.problem).toEqual(
-      expect.any(String),
-    );
+describe('valueText', () => {
+  it.each<[string, unknown, string]>([
+    ['undefined', undefined, 'Not set'],
+    ['null', null, 'Not set'],
+    ['an object with no kind', { a: 1 }, '{"a":1}'],
+  ])('valueText_UnsetOrUnknownKind: %s', (_case, value, text) => {
+    expect(valueText(value, undefined)).toBe(text);
   });
 });

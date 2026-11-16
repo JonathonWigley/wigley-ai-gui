@@ -58,6 +58,7 @@ function context(
     settingsLayer: unread,
     keymapLayer: () => layer,
     matcher: fakeFuzzyMatcher,
+    controlKind: unread,
     openBox: unread,
     closeBox: unread,
     boxProblem: unread,

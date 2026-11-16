@@ -43,7 +43,10 @@ export interface SettingRowInput {
   isSet: boolean;
   // The default as text, shown after the `Set` tag; null when the row draws no default.
   defaultText: string | null;
-  control: 'number' | 'string' | 'boolean' | 'choice' | 'theme' | 'json';
+  // The id of the row's control kind: number, string, boolean, choice, theme,
+  // json, or a kind a plugin registers. A layout that does not know the kind
+  // draws the row as any other.
+  control: string;
 }
 // One plugin's row in the Plugins section.
 export interface PluginRowInput {
