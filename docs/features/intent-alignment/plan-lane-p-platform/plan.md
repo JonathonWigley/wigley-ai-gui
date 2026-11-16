@@ -1,7 +1,7 @@
 # Lane P: platform — plan
 
 Feature: intent-alignment (Lane P of `../master-plan.md`) · Implements: none · Ticket: none
-Target: main · Written: 2026-11-09
+Target: main · Written: 2026-11-09 · Revised: 2026-11-16 (audio picker joins 02 and 03; one detached start)
 
 REQUIRED SUB-SKILL: Use wigley:make to implement this plan
 
@@ -18,8 +18,9 @@ Platform record, with no `process.platform` checks in features:
 3. **Round store through Files** — the saved-form store and sessions' endpoint files go through `Files`; the
    atomic write retries a held rename on Windows.
 4. **Per-platform program lookup and spawning** — `ProcessRunner` gains `spawn` (a handle) and `resolveProgram`
-   (per-OS candidates, one core Python setting), finds `.cmd`/`.bat` shims and PATHEXT names; the Claude adapter and
-   the session host client stop importing `node:child_process`; `claude` is looked up on PATH with the installer's
+   (per-OS candidates, one core Python setting), and its `startDetached` takes an optional log and extra environment;
+   every start finds `.cmd`/`.bat` shims and PATHEXT names; the Claude adapter and the session host client stop
+   importing `node:child_process`; `claude` is looked up on PATH with the installer's
    spot as fallback.
 
 ## Architecture
@@ -32,9 +33,9 @@ Systems touched:
   readers (`src/shared/chord-notation.ts`, `key-notation.ts`, `key-hints.ts`, `keymap-checks.ts`, the drive's
   `page-driver.ts`, settings' `leader-menu-view.ts`).
 - **Alerts** (`src/contracts/alerts.ts`, `src/main/alerts/`, `src/shared/plugin-service-views.ts`, the agent-form
-  channel presenter).
-- **Files adapter** (`src/main/files/node-files.ts`) and the **agent-form store** (`src/shared/agent-forms/`), forms'
-  and primer's main starts, sessions' relay endpoint files.
+  channel presenter and its three callers: forms, primer, audio picker).
+- **Files adapter** (`src/main/files/node-files.ts`) and the **agent-form store** (`src/shared/agent-forms/`), the
+  main starts of the three agent-form types (forms, primer, audio picker), sessions' relay endpoint files.
 - **Processes** (`src/contracts/processes.ts`, `src/main/processes/`, `src/shared/fake-processes.ts`), docs' index
   runner, unity-pool's CLI, the core settings, the Claude adapter (`src/main/claude-code/`), the session host client
   and `src/main/main.ts`.
@@ -67,6 +68,9 @@ and the gate check again before Wave 4. A `\|` in a command is the table's escap
 | The form store uses sync `node:fs` | `grep -n "from 'node:fs'" src/shared/agent-forms/form-store.ts` | one line |
 | The endpoint files write with sync `node:fs` | `grep -n -E "mkdirSync\|writeFileSync\|renameSync" src/plugins/sessions/main/relay/endpoint.ts` | at least three lines |
 | Forms' and primer's folders are inline | `grep -n -E "'wigley-forms', 'rounds'\|'wigley-primer', 'primers'" src/plugins/forms/main/start.ts src/plugins/primer/main/start.ts` | one line each |
+| The audio picker is a third agent-form type with an inline folder, a prune and its own alert source (checked 2026-11-16) | `grep -n -E "'wigley-audio-picker'\|store.prune\|source: 'audio-picker'" src/plugins/audio-picker/main/start.ts` | three lines |
+| `startDetached` exists with a required `logPath` and no `setEnv` (d49a34e6d; checked 2026-11-16) | `grep -n -E "logPath: string\|setEnv" src/contracts/processes.ts` | `logPath: string;` and the `run` option's `setEnv?` only |
+| The session host starts through Node's `spawn` dep | `grep -n "spawn: SessionHostSpawn" src/main/session-host/session-host-client.ts` | one line |
 | Docs runs a literal `python3` | `grep -n "processes.run('python3'" src/plugins/docs/main/index-sources.ts` | one line |
 | Unity-pool has its own `pythonCommand` setting | `grep -n "pythonCommand: 'python3'" src/plugins/unity-pool/manifest.ts` | one line |
 | `main.ts` imports Node's `spawn` | `grep -n "import { spawn } from 'node:child_process'" src/main/main.ts` | one line (gone once Lane H's registry moves the harness construction; then grep `src/plugins/` for the harness plugin's import) |
@@ -110,7 +114,7 @@ Chords (01)
           ─► key-notation / key-hints / keymap-checks / page-driver / leader-menu-view
 
 Alerts (02)
-  forms / primer presenter ─► alerts.setOpenCount(source, count, { singular, plural })
+  forms / primer / audio-picker presenter ─► alerts.setOpenCount(source, count, { singular, plural })
           ─► trackedAlerts (zeroes a stopped plugin's sources)
           ─► open-counts: { total, parts[] in first-count order }
           ─► mac: badge = total · windows: overlay text = parts joined ", " · linux: none
@@ -127,9 +131,10 @@ Programs (04, 05)
           ─► core setting programs.python, else platform.programs.python candidates in order
           ─► program-lookup: PATH × PATHEXT search over Files ─► { command, args } | null
   Claude adapter ─► processes.spawn(command, args, options) ─► ProcessHandle (stdin, stdout, stderr, exit, kill)
-  session host client ─► processes.spawn(execPath, …, { detached: true })
+  session host client ─► processes.startDetached(execPath, …, { setEnv: { ELECTRON_RUN_AS_NODE } })  (no log)
+  app-update installer ─► processes.startDetached(command, args, { cwd, logPath })  (unchanged call)
   session processes (claude per session) ─► the session host process's own adapters, unchanged (Out of scope)
-  node adapter: .cmd/.bat ─► cmd.exe /d /s /c "<quoted>" (one pure quoting function)
+  node adapter (run, spawn, startDetached): .cmd/.bat ─► cmd.exe /d /s /c "<quoted>" (one pure quoting function)
   claude.command empty ─► resolveProgram('claude'): `claude` on PATH, else ~/.local/bin/claude
                           (Windows: `claude.exe` only, so no shim reaches the session host)
 ```
@@ -138,9 +143,9 @@ Programs (04, 05)
 
 - **Spawn handle**: a new `ProcessRunner.spawn(command, args, options)` returning a handle; `run` unchanged for
   every other caller.
-- **Session host start too**: the session host client starts the host through the same `spawn` (`detached`), so no
-  main-process code outside `src/main/processes/` spawns a program. The session host process's own adapters
-  (`src/session-host/`) stay as they are.
+- **Session host start too**: the session host client starts the host through `ProcessRunner` (revised 2026-11-16:
+  through `startDetached`, below), so no main-process code outside `src/main/processes/` spawns a program. The
+  session host process's own adapters (`src/session-host/`) stay as they are.
 - **Python**: one core setting `programs.python`, empty by default; when set it wins, else the OS's candidate order
   from the Platform record (Windows `py -3` → `python` → `python3`; macOS and Linux `python3` → `python`).
   Unity-pool's `pythonCommand` setting is removed; docs and unity-pool both ask `resolveProgram('python')`.
@@ -159,10 +164,20 @@ Programs (04, 05)
 - **AltGr**: a press with AltGr down is typing, never a chord, where the Platform record says so (Windows, Linux);
   other Ctrl+Alt binds keep working.
 
+Decisions (round of 2026-11-16, after the refresh against `main` at 83305ac31; the user took both recommendations):
+
+- **Audio picker joins 02 and 03**: the audio picker is a third agent-form type. It gets its own alert noun
+  (`open audio picker` / `open audio pickers`), a `SAVED_PICKERS_FOLDER` constant holding today's path, the load
+  gate (`afterLoad`) in place of `prune()`, and a stop that returns `store.flushed()`, as forms and the primer do.
+- **One detached start**: `spawn` always has its pipes; `startDetached` (in the tree since d49a34e6d, used by
+  app-update) is the only way to start a program that outlives the app. Its options gain `setEnv` and an optional
+  `logPath`, it gets the Windows PATHEXT lookup and shim handling (04), and the session host starts through it with
+  no log (05). `abortableProcesses` kills every spawned handle with no detached exception.
+
 Decided by the agent (shown as Decided notices):
 
 - `.cmd`/`.bat` start through `cmd.exe /d /s /c` inside the node adapter, with the quoting in one pure function;
-  PATHEXT and shim handling apply to every `run` and `spawn` of a bare name, git's included.
+  PATHEXT and shim handling apply to every `run`, `spawn` and `startDetached` of a bare name, git's included.
 - Program lookup is a pure module over `Files`, an env record and the OS's path rules.
 - The rename retry on `EPERM`/`EBUSY` lives in `Files.write` and `writeBytes` (node adapter), for every caller.
 - A failed `markReturned` retries through the adapter, logs, and the index still holds the form returned.
@@ -234,8 +249,11 @@ Shared by more than one task (the only cross-part names; each task document pins
   export type ProgramName = keyof PlatformPrograms;
   ```
 
-- `src/contracts/processes.ts` — task 04 adds `ProcessRunner.spawn(…)`, `ProcessHandle`, `ProcessSpawnOptions` and
-  `resolveProgram(name: ProgramName): Promise<ProgramCandidate | null>`; task 05 consumes them.
+- `src/contracts/processes.ts` — task 04 adds `ProcessRunner.spawn(…)`, `ProcessHandle`, `ProcessSpawnOptions` (no
+  `detached` member) and `resolveProgram(name: ProgramName): Promise<ProgramCandidate | null>`, and widens
+  `DetachedStartOptions` to `{ cwd?: string; logPath?: string; setEnv?: Readonly<Record<string, string>> }`; task 05
+  consumes them (`spawn` for the Claude adapter, `startDetached` for the session host client).
+- `SAVED_ROUNDS_FOLDER`, `SAVED_PRIMERS_FOLDER`, `SAVED_PICKERS_FOLDER` — task 03, one per form type's contract.
 - `src/contracts/files.ts` — task 03 adds `deleteFile(path: string): Promise<void>` (the store's prune; no other
   task uses it).
 - `docs/features/intent-alignment/master-plan.md` and `docs/features/followups.md` — tasks 01, 02, 03 and 05 (each

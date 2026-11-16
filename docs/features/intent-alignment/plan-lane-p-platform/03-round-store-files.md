@@ -23,13 +23,15 @@ Files:
   · test `src/plugins/forms/main/round-type.test.ts`
 - modify `src/plugins/primer/contract.ts` · `src/plugins/primer/main/start.ts` · test
   `src/plugins/primer/main/start.test.ts`
+- modify `src/plugins/audio-picker/contract.ts` · `src/plugins/audio-picker/main/start.ts` · test
+  `src/plugins/audio-picker/main/start.test.ts` (the third agent-form type; round of 2026-11-16)
 - modify `src/plugins/sessions/main/relay/endpoint.ts` · test `src/plugins/sessions/main/relay/endpoint.test.ts`
 - modify `src/plugins/sessions/main/start.ts` · test `src/plugins/sessions/main/start.test.ts`
 - modify `AGENTS.md` (§ Architecture, the `files/` line) · `docs/features/intent-alignment/master-plan.md` ·
   `docs/features/followups.md`
 
 Consumes: none from 02's Produces. 02 adds the `alertNoun` dep to the same `createAgentFormChannelPresenter` calls in
-forms' and primer's `start.ts`; keep it.
+forms', primer's and audio-picker's `start.ts`; keep it.
 
 Produces:
 - `src/contracts/files.ts`, `Files` gains:
@@ -82,6 +84,11 @@ Produces:
   // The saved-primer folder under the home.
   export const SAVED_PRIMERS_FOLDER = '.agents/wigley-primer/primers';
   ```
+- `src/plugins/audio-picker/contract.ts`, beside `AUDIO_PICKER_ERROR_NAME`:
+  ```ts
+  // The saved-picker folder under the home.
+  export const SAVED_PICKERS_FOLDER = '.agents/wigley-audio-picker/pickers';
+  ```
 - `src/plugins/sessions/main/relay/endpoint.ts`:
   ```ts
   export interface EndpointWriter {
@@ -100,10 +107,10 @@ Callers of each changed contract (checked with grep at plan time; each list is c
 | Contract | Callers and implementers |
 |---|---|
 | `Files` gains `deleteFile` | full implementers: `src/main/files/node-files.ts`, `src/shared/memory-files.ts`, `src/shared/scoped-files.ts` (`scopedFiles`), `src/shared/plugin-part-harness.test-support.ts` (`countingWatches`). Every other `Files` literal spreads a base (`...memory`, `...files`) or is a `Pick`/`as Files` cast, and needs no edit. Caller: `form-store.ts` prune |
-| `createFolderFormStore` | `src/plugins/forms/main/start.ts:75`, `src/plugins/primer/main/start.ts:83`, `form-store.test.ts:34`, `form-service.test.ts:156`, `round-type.test.ts:189` |
-| `AgentFormStore.saveBody`, `load`, `flushed`, `prune` | implementers `form-store.ts`, `memory-form-store.ts`; `saveBody` caller `form-service.ts:476`; `prune` callers `forms/main/start.ts:82`, `primer/main/start.ts:90`, `form-store.test.ts:374,398`, `memory-form-store.test.ts:139` |
+| `createFolderFormStore` | `src/plugins/forms/main/start.ts:75`, `src/plugins/primer/main/start.ts:83`, `src/plugins/audio-picker/main/start.ts:100`, `form-store.test.ts:34`, `form-service.test.ts:156`, `round-type.test.ts:189` |
+| `AgentFormStore.saveBody`, `load`, `flushed`, `prune` | implementers `form-store.ts`, `memory-form-store.ts`; `saveBody` caller `form-service.ts:476`; `prune` callers `forms/main/start.ts:82`, `primer/main/start.ts:90`, `audio-picker/main/start.ts:112`, `form-store.test.ts:374,398`, `memory-form-store.test.ts:139` |
 | `AgentFormListener.draft` | implementer `form-service.ts` `formListener`; callers `channel-presenter.ts:86`, `scripted-presenter.ts:39`; test fakes `channel-presenter.test.ts:100,330,377,397` |
-| `AgentFormInvoke.draft` | handler `channel-presenter.ts:80`; page invokes `src/plugins/forms/page/start.ts:206`, `src/plugins/primer/page/start.ts:221` (they already use the returned promise; no edit) |
+| `AgentFormInvoke.draft` | handler `channel-presenter.ts:80`; page invokes `src/plugins/forms/page/start.ts:206`, `src/plugins/primer/page/start.ts:221`, `src/plugins/audio-picker/page/start.ts:223` (they already use the returned promise; no edit) |
 | `writeEndpointFiles` | `src/plugins/sessions/main/start.ts:272`, `endpoint.test.ts` |
 
 Decisions:
@@ -184,7 +191,12 @@ Decisions:
     `store.recentArgs`. `createForms` also returns `flushed: () => store.flushed()`, and forms' `dispose` returns
     `Promise.all([layouts.dispose(), flushed()])` settled to `void`. The primer: the same store with
     `SAVED_PRIMERS_FOLDER`; `const primer = afterLoad(loaded, createAgentFormService({...}))`; its `dispose`
-    returns `store.flushed()`. Both files drop `import path from 'node:path'`. Each memory store gets
+    returns `store.flushed()`. The audio picker (`audioPickerMainPart.start`, round of 2026-11-16): the same store
+    with `SAVED_PICKERS_FOLDER`; `const loaded = store.load()` where it called `store.prune()`; `const service =
+    afterLoad(loaded, createAgentFormService({...}))`, so `contributeTools` and the quit's `service.detach()` use the
+    wrapped service; `previewService` keeps its memory store and no `afterLoad`; `dispose` keeps its steps
+    (`isDisposed`, `service.detach()` on a quit, `preview.dispose()`) and then returns `store.flushed()`. All three
+    files drop `import path from 'node:path'` (the audio picker's only `path.` use is the store's folder). Each memory store gets
     `load: () => Promise.resolve()`, `flushed: () => Promise.resolve()` and `saveBody` returning
     `Promise.resolve()`.
 12. **Folder constants** (plan.md Decided, "Each form type names its saved-forms folder as a constant in its own
@@ -312,6 +324,13 @@ Tests (rows go into the test that owns each rule; `wigley:make` owns when they r
   does not wait for the queued write). The folder path is `posixPaths.join(homeDir, SAVED_ROUNDS_FOLDER)` /
   `posixPaths.join(homeDir, SAVED_PRIMERS_FOLDER)`, since the harness serves `paths: posixPaths`
   (`plugin-part-harness.test-support.ts:1005`) and the part joins its folder with it.
+- `src/plugins/audio-picker/main/start.test.ts`, `'a quit leaves the open picker open on disk and on the page, for the
+  agent to send again'` (line 353 on 2026-11-16): the same change, over `posixPaths.join(homeDir,
+  SAVED_PICKERS_FOLDER)` through `harness.files`; still expects `['open']` (break: the quit does not wait for the
+  queued write). The `describe`'s comment "the picker store writes real files there" (line 179) becomes untrue,
+  since the harness serves memory files: drop that clause. Drop the `readdirSync`/`readFileSync` imports; keep the
+  temp `homeDir` and `mkdtempSync`/`rmSync` only while another test in the file still reads the real disk (`grep -n
+  "Sync(" src/plugins/audio-picker/main/start.test.ts` after the edit).
 - `src/plugins/sessions/main/relay/endpoint.test.ts`: `describe('createEndpointWriter')` over `createMemoryFiles()`
   replaces `describe('writeEndpointFiles')`: the two existing tests keep their assertions (both files in a folder
   it makes; a second write replaces both, and `files.list(dir)` is exactly `endpoint.json` and `tools.json`) after
@@ -329,9 +348,11 @@ Tests (rows go into the test that owns each rule; `wigley:make` owns when they r
 Done when: `npm run typecheck` and `npm run lint` (the layer check included) pass; the tests above pass in the test
 gate; `grep -n -E "from 'node:fs'|mkdirSync|writeFileSync|renameSync" src/shared/agent-forms/form-store.ts
 src/plugins/sessions/main/relay/endpoint.ts` finds nothing; `grep -n -E "'wigley-forms', 'rounds'|'wigley-primer',
-'primers'" src/plugins/forms/main/start.ts src/plugins/primer/main/start.ts` finds nothing;
-`grep -n "SAVED_ROUNDS_FOLDER\|SAVED_PRIMERS_FOLDER" src/plugins/forms/contract.ts src/plugins/primer/contract.ts`
-finds one line each; `grep -n "prune" src/shared/agent-forms/form-store.ts` finds no `prune(): void` member; the
+'primers'|'wigley-audio-picker'" src/plugins/forms/main/start.ts src/plugins/primer/main/start.ts
+src/plugins/audio-picker/main/start.ts` finds nothing; `grep -n
+"SAVED_ROUNDS_FOLDER\|SAVED_PRIMERS_FOLDER\|SAVED_PICKERS_FOLDER" src/plugins/forms/contract.ts
+src/plugins/primer/contract.ts src/plugins/audio-picker/contract.ts` finds one line each; `grep -rn "store.prune"
+src/plugins` finds nothing; `grep -n "prune" src/shared/agent-forms/form-store.ts` finds no `prune(): void` member; the
 `AGENTS.md` `files/` line reads as Decision 15; in `docs/features/intent-alignment/master-plan.md` § Lane P the line
 reads `- [x] Round store through Files [ready]`; the `**Round store through Files**` entry (five lines) is gone from
 `docs/features/followups.md` § Platform and packaging; live checks: 07 — Final verification.

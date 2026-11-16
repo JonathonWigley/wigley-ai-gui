@@ -43,7 +43,7 @@ the real CLI; name it in the report.
    every session (tasks 04, 05).
 8. **Expected** — after the run's session host is killed (its pid is in the `host-v<protocol>.<pid>.children.json` file name in `<run>/user-data/session-host/`,
    `docs/features/session-host/design.md`), the next session start
-   cold-starts the host detached, and the session answers (task 05: the host start moved onto `spawn`).
+   cold-starts the host detached, and the session answers (task 05: the host start moved onto `startDetached`).
 9. **Expected** — after a `restart` of the run (a plain `quit` deletes the run's home and the saved round with it), a re-sent round prefills its draft from the
    saved file: `load()` ran before the call (task 03).
 10. **Low-confidence** — after launch, the run's `endpoint.json` and `tools.json` list every contributed tool: the

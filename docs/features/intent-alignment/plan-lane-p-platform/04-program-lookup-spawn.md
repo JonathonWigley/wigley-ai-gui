@@ -31,7 +31,9 @@ Files:
 Every `ProcessRunner` implementer in the tree, checked on 2026-11-09 with `grep -rn "ProcessRunner"`:
 `createNodeProcesses` (node adapter), `limitRuns`, `abortableProcesses`, `FakeProcesses`, and the test literals in
 `limited-processes.test.ts` (two). Each one gains `spawn` and `resolveProgram`. All of them already carry
-`startDetached` (its only production caller is `src/plugins/app-update/main/start.ts`). Every
+`startDetached` (commit d49a34e6d; its only production caller today is `src/plugins/app-update/main/start.ts`, and
+task 05 adds the session host client). Only the node adapter's `startDetached` changes (§ Decisions › One detached
+start); the wrappers and `FakeProcesses` forward or record the wider options unchanged. Every
 other `ProcessRunner` user only calls `run` and does not change: `process-git.ts`, `system-stats/*`,
 `drive-run.ts`, `frame-recorder.ts`, backlog's and practice's self-test scripts, `practice/main/judge.ts`,
 `contracts/plugin.ts` (`MainServices.processes`), `main/processes/required-stdout.ts`,
@@ -57,7 +59,7 @@ export interface PlatformPrograms {
 export type ProgramName = keyof PlatformPrograms;
 ```
 
-`src/contracts/processes.ts` — adds:
+`src/contracts/processes.ts` — adds, and widens `DetachedStartOptions`:
 
 ```ts
 // How one `ProcessRunner.spawn` starts its program.
@@ -65,9 +67,15 @@ export interface ProcessSpawnOptions {
   cwd?: string;
   // The child's whole environment, in place of the app's. Unset, the child gets the app's environment.
   env?: Readonly<Record<string, string>>;
-  // The program starts in its own process group with stdin, stdout and stderr ignored, the app does not wait on
-  // it, and it outlives the app.
-  detached?: boolean;
+}
+// `DetachedStartOptions` (in the tree since d49a34e6d) becomes, replacing its comment:
+// How one `ProcessRunner.startDetached` starts its program.
+export interface DetachedStartOptions {
+  cwd?: string;
+  // The full path of the file its stdout and stderr are appended to, made when missing. Unset, both are dropped.
+  logPath?: string;
+  // Names set for this start over the app's environment, as `run`'s `setEnv`.
+  setEnv?: Readonly<Record<string, string>>;
 }
 // How a spawned program ended: its exit code, or the signal that ended it; `error` is set only when it did not start.
 export interface ProcessExit {
@@ -136,7 +144,6 @@ export interface FakeSpawn {
   args: string[];
   cwd: string | undefined;
   env: Readonly<Record<string, string>> | undefined;
-  detached: boolean;
   handle: FakeProcessHandle;
 }
 export class FakeProcessHandle implements ProcessHandle {
@@ -231,17 +238,18 @@ on any machine):
 `envVariable(env, name, os)`: on Windows, the value of the first key equal to `name` without case (`Path` answers
 `PATH`), since a copied environment record loses Windows' case-insensitive names. Elsewhere, `env[name]`.
 
-Lookup and shims in `run` and `spawn` (plan.md § Decided by the agent: "PATHEXT and shim handling apply to every
-`run` and `spawn` of a bare name, git's included"):
+Lookup and shims in `run`, `spawn` and `startDetached` (plan.md § Decided by the agent: "PATHEXT and shim handling
+apply to every `run`, `spawn` and `startDetached` of a bare name, git's included"; `startDetached` joined in the
+round of 2026-11-16):
 
 - On Windows only: before starting, the adapter runs `findProgram(command, search, files)`. `search` reads `PATH`
   and `PATHEXT` with `envVariable` from the child's environment: `options.env` when given, else the app's
-  environment after `unsetEnv` and `setEnv`. A found path is the target, else `command` as given (so Node's
+  environment after `unsetEnv` and `setEnv` (`startDetached`: after its `setEnv`). A found path is the target, else `command` as given (so Node's
   `ENOENT` text stays). Then `shimLaunch(target, args, 'windows', comSpec)` gives what Node spawns, with
   `comSpec = envVariable(process.env, 'ComSpec', 'windows') ?? 'cmd.exe'`, as Node's own `shell` option picks it.
 - Off Windows: no lookup. `command` and `args` pass to Node unchanged, since Node's own PATH search
   (`execvp`) already finds the name. This keeps git's runs on macOS free of extra `stat` calls.
-- Cache (agent's decision): the Windows lookup in `run` and `spawn` keeps each found path, keyed by `command`, PATH
+- Cache (agent's decision): the Windows lookup in `run`, `spawn` and `startDetached` keeps each found path, keyed by `command`, PATH
   and PATHEXT, for the adapter's life. A miss is not kept. An entry is dropped when a start of its path fails, so
   the next run looks again. `resolveProgram` does not read or write the cache, so a newly installed Python is found.
 - `run` keeps every behaviour its contract comment gives. Its `timeoutMs` counts from the child's start, after the
@@ -268,12 +276,13 @@ and keeps the rest as typed.
   4. every META character gets a leading `^`, the wrapping quotes included.
 - No second (double) escape. cross-spawn adds one only for `node_modules\.bin\*.cmd` shims, and this app runs none.
 - An argument holding `\r` or `\n` cannot pass through `cmd.exe`. `shimLaunch` throws
-  `an argument holds a line break, which cmd.exe cannot pass`. `run` rejects with `Could not run <command>: <that>`.
+  `an argument holds a line break, which cmd.exe cannot pass`. `run` and `startDetached` reject with `Could not run <command>: <that>`.
   `spawn`'s handle exits with that text as `error`.
 
-`spawn(command, args, options)` (node adapter; plan.md § Decisions › Spawn handle):
+`spawn(command, args, options)` (node adapter; plan.md § Decisions › Spawn handle). A handle always has its pipes:
+a program that outlives the app starts through `startDetached` (below), never through `spawn`.
 
-- With pipes (no `detached`): stdio `['pipe', 'pipe', 'pipe']`, `windowsHide: true`, `cwd`, and `env` when given.
+- stdio `['pipe', 'pipe', 'pipe']`, `windowsHide: true`, `cwd`, and `env` when given.
   stdout and stderr are decoded as UTF-8 with `setEncoding('utf8')`, so a character split across chunks arrives
   whole. Each chunk goes to every listener added so far. Output that arrives while a stream has no listener is
   dropped, so a caller adds its listeners in the same tick as `spawn`.
@@ -287,12 +296,27 @@ and keeps the rest as typed.
   that exit on a microtask. Disposing a listener stops only that listener.
 - `kill(signal = 'SIGTERM')` sends the signal while the child runs, and does nothing after the exit. A grandchild
   (cmd.exe's child under a shim) is not killed, the same as `run` today.
-- `detached: true`: `detached: true`, `stdio: 'ignore'`, `windowsHide: true`, then `child.unref()`. `write` and
-  `end` do nothing, and the stdout and stderr listeners never fire. `onExit` still hears a start failure, or the
-  exit while the app runs.
 - On Windows the child starts after the async lookup. `write` and `end` calls made before the start are queued and
   applied in order once stdin exists. A `kill` before the start starts nothing, and the exit reports
   `{ code: null, signal: <the signal>, error: null }`. Off Windows the child starts inside the `spawn` call.
+
+One detached start (round of 2026-11-16: `startDetached` is the only way to start a program that outlives the app;
+the session host start moves onto it in task 05):
+
+- `ProcessRunner.startDetached`'s signature stays `(command, args, options: DetachedStartOptions): Promise<void>`;
+  only the options widen (§ Produces). Its contract comment changes: "its stdout and stderr appended to `logPath`"
+  becomes "its stdout and stderr appended to `logPath` when one is given, dropped otherwise"; "in the app's
+  environment" becomes "in the app's environment with `setEnv`'s names set"; "rejects … when it cannot start or
+  `logPath` cannot be opened" keeps its words. The rest of the comment stands.
+- Node adapter: with no `logPath`, nothing is opened and stdio is `'ignore'`; with one, today's `mkdirSync`,
+  `openSync(…, 'a')` and `closeSync` stay. `env` is `runEnv(undefined, options.setEnv)`, so an unset `setEnv` passes
+  the app's environment as today. `detached: true`, `windowsHide: true`, the `unref` on `spawn` and the
+  `startFailureMessage` rejection stay.
+- On Windows the Windows lookup and `shimLaunch` above run before the start, through the injected `start` (§ Tests);
+  the log file is opened after the lookup. `windowsVerbatimArguments` passes through from `shimLaunch`. App-update's
+  Windows line starts `powershell.exe`, a bare name, so it now goes through the lookup.
+- `limitRuns`, `abortableProcesses` and `FakeProcesses` keep their `startDetached` as it is: each forwards or records
+  `options` whole.
 
 `limitRuns` (agent's decision): `spawn` and `resolveProgram` forward to the inner runner at once. They do not count
 toward `maxRunning`, because a handle has no end the limiter can wait on. The function comment says so.
@@ -300,7 +324,8 @@ toward `maxRunning`, because a handle has no end the limiter can wait on. The fu
 `abortableProcesses` (per-plugin view; AGENTS.md § An ambient service: a stopped plugin's processes are aborted):
 
 - It keeps each handle from `spawn` until that handle's exit. Disposing the view calls `kill('SIGKILL')` on every
-  kept handle that is not detached. A detached handle is meant to outlive the app, so it outlives the plugin too.
+  kept handle. `startDetached` still passes through untracked, as today: what it starts is meant to outlive the
+  plugin and the app.
 - A `spawn` after dispose starts nothing. It returns a handle whose exit, on a microtask, is
   `{ code: null, signal: null, error: 'Stopped <command>' }`, as `run` rejects with `Stopped <command>` then.
 - `resolveProgram` forwards unchanged. The function comment names handles beside runs.
@@ -311,7 +336,7 @@ toward `maxRunning`, because a handle has no end the limiter can wait on. The fu
 `FakeProcesses` (tests' double):
 
 - `spawn` records a `FakeSpawn` with a new `FakeProcessHandle` and returns that handle. It needs no script. The
-  test drives the handle from `spawns[i].handle`. `detached` records `options?.detached ?? false`.
+  test drives the handle from `spawns[i].handle`.
 - `resolveProgram(name)` answers what `scriptProgram` set for `name`. Unscripted, `python` answers
   `{ command: 'python3', args: [] }` and `claude` answers `{ command: 'claude', args: [] }`, so every existing test
   that scripts `'python3'` keeps passing unchanged. The class comment states both defaults.
@@ -352,8 +377,10 @@ Callers of `resolveProgram('python')` (plan.md § Decisions › Python):
   it returns `{ command: <that path>, args: [] }`. With `py` found, it returns `{ command: <py path>, args: ['-3'] }`.
 - GIVEN `programs.python` is `~/py/python` WHEN `resolveProgram('python')` runs THEN it returns
   `{ command: '<home>/py/python', args: [] }` without a lookup.
-- GIVEN a `.cmd` target on Windows WHEN `run` or `spawn` starts it THEN Node spawns `<ComSpec>` with
+- GIVEN a `.cmd` target on Windows WHEN `run`, `spawn` or `startDetached` starts it THEN Node spawns `<ComSpec>` with
   `['/d', '/s', '/c', <line>]` and `windowsVerbatimArguments: true`.
+- GIVEN `startDetached` with `setEnv: { X: '1' }` and no `logPath` WHEN the program starts THEN it sees `X=1` beside
+  the app's environment, and no log file is made.
 - GIVEN no Python on PATH WHEN docs indexes THEN the view shows `Python was not found on PATH; set programs.python`,
   the log has one `not run` line, and no run starts.
 - GIVEN a plugin with a running spawned handle WHEN the plugin stops THEN the handle gets `SIGKILL`.
@@ -363,8 +390,9 @@ Callers of `resolveProgram('python')` (plan.md § Decisions › Python):
 - The node adapter's Windows branch is tested on every OS: `NodeProcessesDeps` also gains `start` (Node's `spawn` by
   default), so `src/main/processes/node-processes.test.ts` runs `os: 'windows'` with a `stat`
   double and a fake child. One table pins, per row: the file and args Node is handed and the verbatim flag (`.exe`
-  direct; `.cmd` through `<ComSpec> /d /s /c <line>`, verbatim true); the lookup reading PATH from `options.env`
-  when given; a second run of the same command asking no `stat` (cache) and a failed start dropping the entry; an
+  direct; `.cmd` through `<ComSpec> /d /s /c <line>`, verbatim true), with a row each for `run`, `spawn` and
+  `startDetached` (whose row also expects `detached: true`); the lookup reading PATH from `options.env`
+  when given, and from `setEnv` for `startDetached`; a second run of the same command asking no `stat` (cache) and a failed start dropping the entry; an
   abort during the lookup rejecting `Stopped <command>` with nothing started; `write`/`end` before the start
   reaching the child in order; `kill` before the start exiting with that signal and nothing started.
 - `src/shared/program-lookup.test.ts` (new). Each `findProgram` row builds a `stat` double over a list of present
@@ -427,8 +455,10 @@ Callers of `resolveProgram('python')` (plan.md § Decisions › Python):
   - `spawn_ListenerAddedAfterExit_HearsTheExit`: after the exit, a new `onExit` listener hears the same exit.
   - `spawn_Env_IsTheWholeEnvironment`: `process.env.SPAWN_ENV_TEST_APP = '1'`; spawn with
     `env: { SPAWN_ENV_TEST_ONLY: '1' }`. The child sees `[true, false]` for `[ONLY, APP]`.
-  - `spawn_Detached_RunsWithoutPipes`: a detached child writes `ran` to a temp file. `vi.waitFor` sees the file
-    hold `ran`.
+  - `startDetached_NoLogPath_StartsWithTheSetEnv` (beside the three `startDetached_*` tests d49a34e6d added, which
+    keep passing): with `setEnv: { DETACHED_ENV_TEST: 'yes' }` and no `logPath`, the child writes
+    `process.env.DETACHED_ENV_TEST` to a temp file named in its args. The start resolves, and `vi.waitFor` sees the
+    file hold `yes` (break: `setEnv` dropped, or an unset `logPath` opened as a file).
   - `resolveProgram` table: `programSetting` gives `'~/py'` with homeDir `/h`, which gives
     `{ command: '/h/py', args: [] }` (posixPaths). `programSetting` `''` with `programs.python` =
     `[{ command: 'wigley-no-such-python', args: [] }]` gives `null`. `programs.python` =
@@ -467,12 +497,13 @@ Live checks: 07 — Final verification.
 ## Docs
 
 - `AGENTS.md` source-tree `processes/` line: state that it runs a program to its end (as today) or spawns one as a
-  handle (stdin, stdout and stderr text, exit, kill; `detached` with no pipes); that `resolveProgram` finds a
+  handle (stdin, stdout and stderr text, exit, kill), or starts one detached, its output appended to a log file when
+  one is given, so it outlives the app's quit (today's words, widened); that `resolveProgram` finds a
   program from the core `programs.python` setting or the Platform record's per-OS candidates; that on Windows a bare
   name is looked up over PATH × PATHEXT and a `.cmd`/`.bat` starts through `cmd.exe /d /s /c`
   (`src/shared/program-lookup.ts`); and that `limitRuns` caps runs, not spawns.
 - `AGENTS.md` § An ambient service: "aborts its running processes" becomes aborts its running processes and kills
-  its spawned ones (the detached ones excepted).
+  its spawned ones (a detached start outlives it).
 - `AGENTS.md` § A setting and the user config folder bullet: no edit. Neither names unity-pool's `pythonCommand`.
   Check with `grep -n pythonCommand AGENTS.md` (expected: no output).
 - `docs/features/docs-browser/design.md` line 103 ("`python3 -X utf8` runs it"): the Python

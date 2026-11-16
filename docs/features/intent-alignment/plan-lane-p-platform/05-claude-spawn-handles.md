@@ -13,7 +13,6 @@ manifest), and `permissionTool` (out of the harness deps).
 Files:
 - modify `src/main/claude-code/claude-code-harness.ts` · test `src/main/claude-code/claude-code-harness.test.ts`
 - create `src/main/claude-code/pending-pipe.ts` · test `src/main/claude-code/pending-pipe.test.ts`
-- create `src/shared/defined-env.ts` (`definedEnv` moved out of `claude-code-harness.ts`, unchanged)
 - modify `src/main/session-host/session-host-client.ts` · test `src/main/session-host/session-host-client.test.ts`
 - modify `src/main/main.ts`
 - modify `src/contracts/settings.ts` (the `claude` comment) · `src/config/settings.ts` (default and `settingInfo`)
@@ -30,6 +29,8 @@ Consumes, from 04, word for word:
 - `FakeProcesses.spawns: FakeSpawn[]`, `FakeProcessHandle` (`written`, `kills`, `isEnded`, `stdout`, `stderr`,
   `exit`) (`src/shared/fake-processes.ts`)
 - `defaultSettingsFor(): Settings` with `claude.command` `'~/.local/bin/claude'` (`src/config/settings.ts`)
+- `DetachedStartOptions.setEnv` and the optional `logPath` on `startDetached` (`src/contracts/processes.ts`; the
+  method and `FakeProcesses.detachedStarts` / `failDetachedStarts` are in the tree since d49a34e6d)
 
 ## Produces
 
@@ -65,12 +66,10 @@ export interface PendingPipe {
 export function createPendingPipe(id: string): PendingPipe;
 ```
 
-`src/main/session-host/session-host-client.ts`: `SessionHostClientDeps.spawn: SessionHostSpawn` becomes
-`processes: Pick<ProcessRunner, 'spawn'>`. The `SessionHostSpawn` type and the `import type { SpawnOptions } from
-'node:child_process'` are gone.
-
-`src/shared/defined-env.ts`: `export function definedEnv(env: NodeJS.ProcessEnv): Record<string, string>`, moved
-as it is today.
+`src/main/session-host/session-host-client.ts`: `SessionHostClientDeps.spawn: SessionHostSpawn` and
+`SessionHostClientDeps.env` become one `processes: Pick<ProcessRunner, 'startDetached'>` (round of 2026-11-16: the
+host starts through the one detached start). The `SessionHostSpawn` type and the `import type { SpawnOptions } from
+'node:child_process'` are gone. `definedEnv` stays in `claude-code-harness.ts`, its only user.
 
 ## Decisions
 
@@ -149,14 +148,17 @@ One-shots (`spawnCli`, `runCli`, `startLogIn`):
   spawns. `onExit` with `error` ends with `cliSpawnError(error, command)`. `onExit` without `error` runs today's
   `close` logic with `exit.code` and `exit.signal`.
 
-Session host start (plan.md § Decisions › Session host start too):
-- `startHost` calls `deps.processes.spawn(deps.execPath, [deps.hostScript, deps.folder, deps.channel], { detached:
-  true, env: { ...definedEnv(deps.env), ELECTRON_RUN_AS_NODE: '1' } })`. `stdio: 'ignore'`, `windowsHide` and
-  `unref` are now the adapter's work for `detached` (task 04).
-- `handle.onExit(exit)`: when `exit.error === null` it does nothing, since a host that later exits is found by the
-  next connect. Else, when `started.ended`, it logs `host spawn error: <error>`. Otherwise it calls
-  `failAttempt(started, exit.error)`. The `try`/`catch` goes, since `spawn` never throws (task 04).
-- `main.ts` passes `processes` in place of `spawn` to `createSessionHostClient`.
+Session host start (plan.md § Decisions › Session host start too, as the round of 2026-11-16 revised it):
+- `startHost` calls `deps.processes.startDetached(deps.execPath, [deps.hostScript, deps.folder, deps.channel], {
+  setEnv: { ELECTRON_RUN_AS_NODE: '1' } })`, with no `logPath`, so the host's output is dropped as today. The app's
+  environment is what `deps.env` passed (`process.env`, `main.ts`), so `setEnv` over it starts the host in the same
+  environment. Process group, `stdio: 'ignore'`, `windowsHide` and `unref` are the adapter's work (task 04).
+- A resolve does nothing, since a host that later exits is found by the next connect. A rejection with `error`:
+  when `started.ended`, it logs `host spawn error: <errorText(error)>`; otherwise it calls `failAttempt(started,
+  errorText(error))`. The reason now carries the adapter's prefix (`Could not run <execPath>: …`). The `try`/`catch`
+  goes, since a throw inside the adapter becomes the rejection.
+- `main.ts` passes `processes` (the composition root's runner) in place of `spawn` and `env` to
+  `createSessionHostClient`.
 
 ## Behaviour
 
@@ -165,8 +167,8 @@ Session host start (plan.md § Decisions › Session host start too):
 - GIVEN `claude.command` is `''` and no `claude` is on PATH or in `~/.local/bin` WHEN a session starts THEN it ends
   with `claude was not found on PATH or in ~/.local/bin; set claude.command`, and the host spawns nothing.
 - GIVEN `claude.command` is `~/bin/claude` WHEN `accountStatus` runs THEN `processes.spawn` gets `<home>/bin/claude`.
-- GIVEN no session host answers WHEN the client connects THEN `processes.spawn` gets the exec path with `detached:
-  true` and `ELECTRON_RUN_AS_NODE: '1'` in `env`.
+- GIVEN no session host answers WHEN the client connects THEN `processes.startDetached` gets the exec path with
+  `setEnv: { ELECTRON_RUN_AS_NODE: '1' }` and no `logPath`.
 
 ## Tests
 
@@ -207,17 +209,17 @@ Session host start (plan.md § Decisions › Session host start too):
   - The session tests that emit on the fake child in the tick after `started()` (`spawnNotFound_EndsWithHint` at
     `:1467` today; find the rest by running the file) await `settle()` first, because `host.spawn` now runs after
     `deps.command()` resolves.
-- `src/main/session-host/session-host-client.test.ts`: `clientRig` swaps `SessionHostSpawn` for a `FakeProcesses`
-  wrapped as `{ spawn: (c, a, o) => { const handle = fake.spawn(c, a, o); spawned(handle); return handle; } }`. The
-  `spawned` hook now gets the `FakeProcessHandle`. `unrefs` goes.
-  - `create_SpawnEmitsError_FailsAtOnce`: the hook calls `handle.exit({ code: null, signal: null, error: 'Could not
-    run /app/binary: spawn x ENOENT' })` on a microtask. The error heard is
-    `the session host did not start: Could not run /app/binary: spawn x ENOENT`.
-  - `create_NoHost_SpawnsTheHostDetachedThenConnects`: `fake.spawns` maps to `[{ command: '/app/binary', args:
-    ['/build/session-host.js', rig.folder, channel], cwd: undefined, env: { KEPT: 'yes', ELECTRON_RUN_AS_NODE:
-    '1' }, detached: true }]`, without the `handle` field.
-  - New `create_HostExitsAfterStart_LogsNothing`: `handle.exit({ code: 0, signal: null, error: null })` after the
-    connect adds no log line.
+- `src/main/session-host/session-host-client.test.ts`: `clientRig` swaps its `SessionHostSpawn` for a
+  `FakeProcesses` wrapped as `{ startDetached: (c, a, o) => { const started = fake.startDetached(c, a, o);
+  spawned(); return started; } }`, so the `spawned` hook (now `() => void`) still starts the scripted host. The rig
+  drops `env`, `unrefs` and the `SpawnCall` type; `spawnCalls` becomes `fake.detachedStarts`.
+  - `create_SpawnEmitsError_FailsAtOnce`: `fake.failDetachedStarts(new Error('Could not run /app/binary: spawn x
+    ENOENT'))` before `create`. The error heard is `the session host did not start: Could not run /app/binary: spawn
+    x ENOENT` (break: a rejected start not reaching `failAttempt`).
+  - `create_NoHost_SpawnsTheHostDetachedThenConnects`: `fake.detachedStarts` is `[{ command: '/app/binary', args:
+    ['/build/session-host.js', rig.folder, channel], options: { setEnv: { ELECTRON_RUN_AS_NODE: '1' } } }]`; the
+    `unrefs` assertion goes.
+  - The other tests that read `rig.spawnCalls` (lengths and `[]`) keep their assertions over `fake.detachedStarts`.
 
 Live checks: 07 — Final verification.
 
@@ -227,7 +229,7 @@ Live checks: 07 — Final verification.
   one-shots (`claude auth`, `claude -p /usage`) start through `ProcessRunner.spawn`, and that an empty
   `claude.command` looks `claude` up on PATH, then in `~/.local/bin`.
 - `AGENTS.md` source-tree `session-host/` line: "starts the host when none answers" gains: through
-  `ProcessRunner.spawn`, detached.
+  `ProcessRunner.startDetached`.
 - `AGENTS.md`, every other line naming how the app starts `claude` or the host: run
   `grep -n "spawn\|claude.command\|.local/bin" AGENTS.md` and fix each untrue line. At plan time, lines 63, 330,
   873 and 1213 hold `spawn`, and none of them is untrue after this task.

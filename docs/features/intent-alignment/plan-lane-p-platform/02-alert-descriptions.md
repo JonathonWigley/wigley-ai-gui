@@ -16,6 +16,8 @@ Files:
 - modify `src/shared/agent-forms/channel-presenter.ts` · test `src/shared/agent-forms/channel-presenter.test.ts`
 - modify `src/plugins/forms/main/start.ts` (the `createAgentFormChannelPresenter` call in `createForms`)
 - modify `src/plugins/primer/main/start.ts` (the `createAgentFormChannelPresenter` call in `start`)
+- modify `src/plugins/audio-picker/main/start.ts` (the `createAgentFormChannelPresenter` call in `start`, line 114 on
+  2026-11-16; the audio picker is the third agent-form type, round of 2026-11-16)
 - modify `docs/features/primer/design.md` (line 160, § Alerts) · `docs/features/intent-alignment/master-plan.md` ·
   `docs/features/followups.md`
 
@@ -57,6 +59,7 @@ Every caller and implementer of `Alerts.setOpenCount` (checked with grep at plan
 | `src/main/alerts/silent-alerts.ts` | implementer | none |
 | `src/shared/plugin-service-views.ts` `trackedAlerts` | wrapper | keeps each source's last noun; the zeroing call passes it |
 | `src/shared/agent-forms/channel-presenter.ts` | the only production caller | passes `deps.alertNoun` |
+| `createAgentFormChannelPresenter` calls in `src/plugins/forms/main/start.ts`, `src/plugins/primer/main/start.ts`, `src/plugins/audio-picker/main/start.ts` | the presenter's callers | pass `alertNoun` (Decision 8) |
 | `src/main/plugins/main-api.test.ts` `fakeAlerts` (line 159) and calls at lines 337, 620, 621 | fake and calls | record and pass the noun |
 | `src/shared/agent-forms/channel-presenter.test.ts` `fakeAlerts` (line 54) | fake | records the noun |
 | `src/plugins/forms/main/start.test.ts` lines 182, 223, 251, 284 `src/plugins/primer/main/start.test.ts` lines 117, 148, 181 and `src/plugins/audio-picker/main/start.test.ts` line 71 | `{ setOpenCount() {} }` | none (fewer parameters still fit) |
@@ -85,9 +88,12 @@ Decisions:
 8. **Nouns** (pinned; the brief's example `2 open agent forms, 1 open feature primer`):
    - forms: `alertNoun: { singular: 'open agent form', plural: 'open agent forms' }` — today's overlay words.
    - primer: `alertNoun: { singular: 'open feature primer', plural: 'open feature primers' }`.
+   - audio picker: `alertNoun: { singular: 'open audio picker', plural: 'open audio pickers' }` (round of
+     2026-11-16: the audio picker joins this task).
    - The presenter's existing `noun` dep stays as it is: forms passes `roundType.noun` (`'round'`,
-     `src/plugins/forms/main/round-type.ts:84`) and the primer passes `primerType.noun` (`'primer'`,
-     `src/plugins/primer/main/primer-type.ts:25`). That `noun` names one form in the close refusal
+     `src/plugins/forms/main/round-type.ts:84`), the primer passes `primerType.noun` (`'primer'`,
+     `src/plugins/primer/main/primer-type.ts:25`) and the audio picker passes `type.noun` (`'audio picker'`,
+     `src/plugins/audio-picker/main/picker-type.ts:36`). That `noun` names one form in the close refusal
      (`Finish or cancel <label>'s primer first`) and never reaches the alert. The presenter's comment changes:
      `source` names the alert open count and `alertNoun` what it counts.
 9. **No doc line changes**: `AGENTS.md` § Architecture's `alerts/` line ("the badge sums the open counts each source
@@ -147,7 +153,8 @@ Tests (rows go into the test that owns each rule; `wigley:make` owns when they r
 
 Done when: `npm run typecheck` and `npm run lint` pass; the tests above pass in the test gate;
 `grep -n "open agent form" src/main/alerts/windows-alerts.ts` finds nothing;
-`grep -n "alertNoun" src/plugins/forms/main/start.ts src/plugins/primer/main/start.ts` finds one line each; in
+`grep -n "alertNoun" src/plugins/forms/main/start.ts src/plugins/primer/main/start.ts
+src/plugins/audio-picker/main/start.ts` finds one line each; in
 `docs/features/intent-alignment/master-plan.md` § Lane P the line reads `- [x] Per-source alert descriptions [ready]`;
 the `**Per-source alert descriptions**` entry (three lines) is gone from `docs/features/followups.md` § Platform and
 packaging; live checks: 07 — Final verification.
