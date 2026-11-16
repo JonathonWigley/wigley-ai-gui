@@ -1,6 +1,6 @@
 # 05 — Layout name picker in Settings mode
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -180,3 +180,5 @@ each owner's names from UserConfigRead.layoutNames, fresh on each add or remove"
   `namesChanged`.
 
 ## Proof
+
+Commit 65797937e · proof: diff read: every Produces present (UserConfigRead.layoutNames, LayoutService.namesByOwner, LayoutServiceDeps.namesChanged, UserConfigDeps.layoutNames/onLayoutNamesChanged, layout kind 7th in BUILT_IN_CONTROL_KINDS); 29/29 manifests carry settingControls { layout: 'layout' }; shell.layout in core map; typecheck + lint pass · concerns: no test covers the no-launch-churn ruling (first set of default alone tells nothing); folder-added test row waits on one send; onChanged dispose test relies on store listener order; contracts/user-config.ts SettingControl comment line runs past the file's wrap
