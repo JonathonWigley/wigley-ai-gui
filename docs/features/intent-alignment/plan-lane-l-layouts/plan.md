@@ -1,7 +1,7 @@
 # Lane L: layouts everywhere — plan
 
 Feature: intent-alignment · Implements: none · Ticket: none
-Target: main · Written: 2026-11-09
+Target: main · Written: 2026-11-09 · Revised: 2026-11-16 (Backlog rebuilt, the audio picker joins; § Decisions, round 2)
 
 REQUIRED SUB-SKILL: Use wigley:make to implement this plan
 
@@ -11,7 +11,7 @@ Every surface Lane L names in `docs/features/intent-alignment/master-plan.md` §
 layout, so a layout file changes its look with no rebuild, and a layout reload keeps the user's place:
 
 - toasts through the shell layout, with the shell layout swap failure tests
-- every dialog's frame through its opener's layout, and the forms and primer cancel confirms' bodies
+- every dialog's frame through its opener's layout, and the forms, primer and audio picker cancel confirms' bodies
 - forms' and the primer's column chrome (rail head, item pager, rail foot; column heads, tasks foot, card edge strip,
   review footer)
 - fixed texts in layout slots: backlog's and docs' status text, every cursor-row prompt (backlog, docs, settings,
@@ -27,8 +27,8 @@ confirm prompt (`src/shared/page/ui/dialog.ts`, `src/shared/page/confirm-prompt.
 (`src/shared/page/layout-host/kit.d.ts`), the shared editor boxes (`src/shared/page/editor-boxes.ts`), the layout
 registry and loader (`src/shared/layouts/layout-registry.ts`, `src/contracts/layouts.ts`,
 `src/shared/page/layout-host/layout-loader.ts`), and the layout contracts, `default` layouts, readers and views of
-the owners shell, sessions, chat, docs, notes, practice, backlog, keys, session-stash, gallery, settings, primer and
-forms.
+the owners shell, sessions, chat, docs, notes, practice, backlog, keys, session-stash, gallery, settings, primer,
+audio-picker and forms.
 
 Every change follows one rule the codebase already holds for the sessions popup: the layout draws a surface's frame
 and contents, and the app keeps its lifecycle (show and hide, keys and scope, focus, timing, removal) and the state
@@ -67,7 +67,16 @@ Re-run by `wigley:make` before the first dispatch (`<repo>` is the wigley-ai-gui
 4. `createStatusLine` has two callers, forms' `round-view.ts` and the primer's `primer-view.ts`:
    `command grep -rlw 'createStatusLine' <repo>/src --include='*.ts' | command grep -v '\.test\.ts'` prints those two
    and `status-line.ts`.
-5. Gate for Wave 5 only: the command in § Gate prints three lines.
+5. `createConfirmPrompt` has four callers, forms' `forms-view.ts`, the primer's `primer-view.ts`, practice's
+   `problem-workspace.ts` and the audio picker's `picker-view.ts` (measured 2026-11-16, re-verify):
+   `command grep -rlw 'createConfirmPrompt' <repo>/src --include='*.ts' | command grep -v '\.test\.ts'` prints those
+   four and `confirm-prompt.ts`. A new caller outside forms joins task 07 as a row.
+6. Editor boxes have four owners, forms, the primer, practice and the audio picker (measured 2026-11-16, re-verify):
+   `command grep -rlE 'createEditorBoxes|boxes\.mount\(' <repo>/src/plugins --include='*.ts' | command grep -v '\.test\.ts'`
+   prints `forms/page/start.ts`, `forms/page/round-view.ts`, `primer/page/start.ts`,
+   `primer/page/layout/primer-kit.ts`, `practice/page/problem-workspace.ts`, `audio-picker/page/start.ts` and
+   `audio-picker/page/layout/picker-kit.ts`. A new owner outside forms joins task 10 as a section.
+7. Gate for Wave 5 only: the command in § Gate prints three lines.
 
 ## Docs written ahead
 
@@ -147,7 +156,7 @@ Headless picks (the user handed the session over in round 1's note; listed in th
 
 - **A reload keeps boxes, not snapshots.** Editor boxes own each box's frame and move it into the redrawn part, as
   chat's composer does, keeping cursor, vim mode and undo for every box; `TextEditor` gains no `snapshot`/`restore`.
-  It covers every `keepFocusedBox` caller: forms, primer, backlog, practice.
+  It covers every `keepFocusedBox` caller: forms, primer, practice, audio picker (round 2).
 - **A style-only save re-links with no redraw**: the registry raises a separate `styleRevision` when only
   `layout.css` changed; the loader keys the stylesheet by it and the module by `revision`.
 - **Per-part redraw by pick compare**; `LayoutSet.changed`, unread outside tests, is removed from the contract.
@@ -166,7 +175,7 @@ Drafting picks (headless; each drafter's open question, settled on its recommend
   that redraw on a move (backlog, docs, sessions, chat's picker) take `prompt` on their row input (task 08).
 - **Notes' dimmed hint**: `NotesPromptActionInput extends PromptActionInput { hasTarget: boolean }`; the layout adds
   `is-no-target`, keeping today's look (task 08).
-- **Removed kit members** (`cursorActions`, `cursorPrompt`, `cursorEnd`, backlog's `homes(parent, kit)` shape): a user
+- **Removed kit members** (`cursorActions`, `cursorPrompt`, `cursorEnd`): a user
   layout calling one throws and that part falls back to `default`, the host's per-part rule (task 08).
 - **Strip inputs** carry the app's strings and raw counts; button copy is the default layout's (tasks 09, 12). A head
   that leaves out `saveStatus` still gets it, placed where its default draws it (`placeIfLeftOut`). A primer column
@@ -185,6 +194,25 @@ Design review (headless):
 - `createToasts` takes its draw (`drawToast`) and a `log` as parameters, so it names no layout, logs a draw that throws, and tests hand it fakes.
 - Out of scope, tracked elsewhere: Lane E's kind registrations and open unions (they reshape the forms files the gated
   tasks touch); the Layout name picker (Lane E).
+
+Round 2, 2026-11-16 (a refresh against main found two owners changed under the plan; both recommendations taken):
+
+- **Backlog stays, redesigned.** Its rebuild (ai commit `ba762a069`) left it no dialogs, confirm prompts or editor
+  boxes, so it leaves tasks 06, 07, 10 and 15's dialog and box work; its status text and cursor-row prompt still draw
+  through its layout (task 08's backlog row, rewritten).
+- **The audio picker joins the ungated waves.** Its cancel confirm's frame and body draw through its layout (task 07,
+  Wave 2) and its notes boxes are kept across a reload (task 10, Wave 4), so task 11's required `drawFrame` and task
+  13's deletion of `mount` hold. Tasks 06, 13 and 15 name it. Its code is outside `src/plugins/forms/`, so it does
+  not wait on the gate.
+
+Decided in the revision:
+
+- Backlog's prompt is row input, not a `cursorPrompt` part: its rows draw again on every render. (The round's notice
+  said the rows were kept across a cursor move; the code says otherwise.)
+- Backlog's status is a `tableStatus` part drawn into a slot the app keeps, as docs' `treeStatus`.
+- `EditorBoxes.setText` is dropped from task 06: its only caller was backlog's tags picker, which the rebuild removed.
+- The audio picker's prompt parts draw with a `createConfirmKit` beside `createPickerKit`, scope
+  `audio-picker.confirm`; its `confirmBody` returns `PickerLayoutPart`, the shape every audio picker part returns.
 
 ### Out of scope
 
@@ -217,7 +245,7 @@ Shared names more than one task uses (each task's Produces gives the exact signa
   `dialogFrame?(parent: HTMLElement, input: DialogFrameInput, kit: <Owner>Kit): DialogFramePart`
 - `src/shared/page/editor-boxes.ts` (task 06): `EditorBoxes.place(parent: HTMLElement, box: Box, text: string): HTMLElement`
   and `EditorBoxes.release(box: Box): void`, `destroyReleased(formId: string): void` (ends the boxes a redraw left
-  out; `keepFocusedBox` runs it) and `setText(box: Box, text: string): void`; `mount` stays until task 13 deletes it
+  out; `keepFocusedBox` runs it); `mount` stays until task 13 deletes it
   (task 06 gives the full contract; tasks 10 and 13 consume it)
 - `src/contracts/list-picker.ts` (task 08): `DrawRowInput.isCursor: boolean`, set by `list-picker.ts` `drawRowAt`
 - the save status (tasks 09, 12): a per-owner kit member `saveStatus(parent): HTMLElement` (primer
@@ -253,7 +281,7 @@ every part its contract adds.
 - [ ] [Primer column chrome and cursor prompt](09-primer-chrome.md) — after 04, 07
 
 ### Wave 4
-- [ ] [Primer, backlog and practice keep their boxes](10-boxes-kept-primer-backlog-practice.md) — after 06, 08, 09
+- [ ] [Primer, practice and the audio picker keep their boxes](10-boxes-kept-primer-practice-audio-picker.md) — after 06, 08, 09
 
 ### Wave 5 — gate: Lane E's forms chain (§ Gate)
 - [ ] [Forms dialog frame and cancel confirm](11-forms-dialog-confirm.md) — after 07, 10

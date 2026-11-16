@@ -51,7 +51,7 @@ Style-only reload (task 05):
 Dialog frames (tasks 04, 07, 11):
 - **expected** Each dialog looks as before under `default` (capture each and compare against `DESIGN.md`'s **Dialog** primitive):
   chat sign-in, deny and end-session; docs path box and Trash; sessions rename; notes Note and discard; practice
-  import and Solution confirm; backlog delete and discard; keys help; session-stash; primer cancel; the gallery
+  import and Solution confirm; keys help; session-stash; primer cancel; audio picker cancel; the gallery
   Dialog sample. (Block B adds forms' cancel round and reruns this list once task 11 has deleted the code frame.)
 - **expected** Edit a `default` `dialogFrame` while a dialog with a focused plain input is open (sessions rename,
   session-stash, practice import, docs path box): the dialog redraws and keeps the input's text and focus.
@@ -66,7 +66,7 @@ Fixed texts (task 08):
 - **expected** Each owner's cursor row shows its prompt keys in the same place and look as before (backlog, docs,
   settings and its Leader menu, notes, sessions, chat's resume picker), and the hints hide out of their scope.
 - **low** No `[keys] unplaced` line. An action is now drawn only on a row that shows it: settings' key-row
-  actions, backlog's follow-up actions, docs' `toggleStar` in All pages, sessions' up and down on a favorite
+  actions, backlog's row actions in each chunk state, docs' `toggleStar` in All pages, sessions' up and down on a favorite
   project's row, the Leader menu's item actions. Run `npm run selftest -- --plugin <id>` for backlog, docs,
   settings, notes, sessions and chat, and name in § Proof the step that reaches each action. A whole self-test run
   needs the user's ask; without it, record which actions the filtered runs reached.
@@ -89,8 +89,8 @@ Primer chrome (task 09):
   `span.ui-key-edge` (`kit.edge`) in place of the loose chevron and key spans.
 
 Kept boxes (tasks 06, 10):
-- **expected** Insert mode, cursor, undo and the box's scroll survive a `layout.js` save in a primer box, the backlog
-  follow-up editor and practice notes; focus returns to the box after the redraw.
+- **expected** Insert mode, cursor, undo and the box's scroll survive a `layout.js` save in a primer box, practice notes and
+  an audio picker notes box (open one with the preview, `Space z l m`); focus returns to the box after the redraw.
 - **low** Vim visual mode and its selection survive the same save in a primer box. Whether
   `@replit/codemirror-vim` leaves visual mode on blur is outside this repo's code. If it is lost, the behaviour is
   accepted (task 06 § Decisions) and the docs are reworded to "insert mode, cursor and undo" in a doc fix commit.

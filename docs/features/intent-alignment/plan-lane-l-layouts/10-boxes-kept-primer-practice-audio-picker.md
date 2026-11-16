@@ -1,4 +1,4 @@
-# 10 — Primer, backlog and practice keep their boxes
+# 10 — Primer, practice and the audio picker keep their boxes
 
 Status: not started
 Type: Batch
@@ -6,23 +6,25 @@ Wave: 4 · Depends on: 06, 08, 09
 Plan: [plan.md](plan.md)
 
 Files:     modify `src/plugins/primer/page/layout/primer-kit.ts` · modify `src/plugins/primer/page/primer-view.ts` ·
-           modify `src/plugins/backlog/page/followup-editor.ts` · modify `src/plugins/backlog/page/backlog-view.ts` ·
            modify `src/plugins/practice/page/problem-workspace.ts` ·
+           modify `src/plugins/audio-picker/page/layout/picker-kit.ts` ·
+           modify `src/plugins/audio-picker/page/picker-view.ts` ·
+           modify `src/plugins/audio-picker/layouts/layout.d.ts` ·
            modify `docs/features/followups.md` · modify `docs/features/intent-alignment/master-plan.md` ·
-           test `src/plugins/primer/page/primer-view.test.ts` · test `src/plugins/backlog/page/backlog-view.test.ts` ·
-           test `src/plugins/practice/page/start.test.ts`
+           test `src/plugins/primer/page/primer-view.test.ts` · test `src/plugins/practice/page/start.test.ts` ·
+           test `src/plugins/audio-picker/page/layout/picker-kit.test.ts` ·
+           test `src/plugins/audio-picker/page/picker-view.test.ts`
 
 Consumes:  `EditorBoxes.place(parent: HTMLElement, box: Box, text: string): HTMLElement` ← 06 ·
-           `EditorBoxes.release(box: Box): void` ← 06 · `EditorBoxes.setText(box: Box, text: string): void` ← 06 ·
+           `EditorBoxes.release(box: Box): void` ← 06 ·
            `keepFocusedBox` (it now sweeps with `destroyReleased` and refocuses with `{ insert: true }`) ← 06 ·
            `destroyBox` as a no-op for a key no editor holds ← 06
 
-Produces:  in `src/plugins/backlog/page/followup-editor.ts`, on `interface FollowupEditor`:
-           `place(field: EditorField, parent: HTMLElement, text: string): HTMLElement` (replaces `mount`)
-           `release(field: EditorField): void`
+Produces:  no new member; each owner's boxes move from `mount` to `place`, so task 13 can delete `mount`.
 
-Tasks 08 and 09 edited `primer-view.ts`, `primer-kit.ts` and `backlog-view.ts` before this task: line numbers
-below are from plan time. Find each member by name.
+Tasks 07, 08 and 09 edited `primer-view.ts`, `primer-kit.ts`, `problem-workspace.ts`, `picker-view.ts` and the audio
+picker's `layout.d.ts` before this task: line numbers below are from plan time (2026-11-16 for the audio picker).
+Find each member by name.
 
 ## Shared rule (task 06)
 
@@ -50,33 +52,11 @@ dropping `keepFocusedBox`; it stays, because the refocus and the sweep must run 
 - The doc comment of `createPrimerFormView` (~L564: "its boxes destroyed and mounted again") says after: the
   card's boxes move into the new card, and a box the new card leaves out is destroyed.
 
-## Backlog
-
-- `FollowupEditor.mount(field, frame, text)` becomes `place(field, parent, text)`: it calls
-  `boxes.place(parent, field, text)`, keeps the returned frame in `frames` (the frame is now the same element for
-  the box's life, so the `fieldHint` move on `activated` is unchanged), and returns it. New `release(field)` calls
-  `boxes.release(field)`. `isMounted` reads "placed". `destroy()` and `forget()` stay.
-- `FollowupEditor.setText(field, text)` now destroys and remounts the box in its frame. After: it calls
-  `boxes.setText(field, text)`: no `changed`, focus and vim mode kept, the replace joins undo. Its doc comment and
-  the interface comment ("`setText` replaces one box's text, reporting no change") say so; the comment on
-  `FollowupEditor` ("mounted into the frames the editor pane places; it builds no DOM") says after: editor boxes
-  make each box's frame, and the editor pane places it.
-- `backlog-view.ts` `textBoxFor` (~L517): replace `appended(parent, inputFrame())` and `followupEditor.mount` with
-  `followupEditor.place(field, parent, texts[field])`, add `backlog-editor-box` and `backlog-editor-box--<field>` to
-  the frame, and record `rollback.recordBox(() => followupEditor.release(field))`. Drop the `isMounted` guard: a
-  release of a released box is a no-op.
-- `drawEditorPane` (~L534): remove its `followupEditor.destroy()` call. `closeEditorPane` still destroys and
-  forgets, and `syncEditor` draws the pane only while `editorDraw` is null, which follows a close or the first
-  open. A `setLayouts` redraw then keeps the boxes: `editorDraw?.dispose()` releases them, the new draw places them
-  again, and the left-out loop (`!followupEditor.isMounted(field)`) still finds a box the user layout leaves out.
-- `setLayouts` (~L1432) keeps its `keepFocusedBox` call.
-- `inputFrame` and `appended` imports go when no other use remains in `backlog-view.ts` (grep first).
-
 ## Practice
 
 - `textBoxSlot` (~L524): after, `boxes.place(parent, id, store.get().drafts[id].text)`, add `practice-box` and
   `practice-box--<id>` to the frame, and record `rollback.recordBox(() => boxes.release(id))`.
-- **A replaced draft still mounts anew.** `place` would only `setText` a kept editor, which keeps its undo history,
+- **A replaced draft still mounts anew.** `place` would only set a kept editor's text, which keeps its undo history,
   so a box must not be kept across a new problem or a draft replaced from disk: those start a fresh editor.
   `problem-workspace.ts` keeps `placedFor: Record<BoxId, string | null>` (starts `{ notes: null, customCases: null
   }`): the key the box was last placed for. The key is the file's existing tab key data read through the store's open
@@ -91,6 +71,28 @@ dropping `keepFocusedBox`; it stays, because the refocus and the sweep must run 
   `drawnProblemKey` stay as they are: they still make the tab draw again on a replace.
 - `drawBoxTab`'s left-out check (`!boxes.isMounted(id)`) stays: `disposeDraws` releases before the draw.
 - `dispose`'s `boxes.destroyForm(FORM_ID)` stays.
+
+## Audio picker
+
+- `PickerPartKitDeps.boxes` (`picker-kit.ts` ~L49) becomes `Pick<EditorBoxes<PickerBox>, 'place' | 'release'>`;
+  `picker-view.ts` still passes `deps.boxes` (~L407).
+- `appendNotesField` (~L145) now: makes `inputFrame()` with `audio-picker-notes-box`, appends it and the `box-keys`
+  `boxHint` to the field, appends the field to `parent`, mounts into the frame, records `destroyBox`. After, in this
+  order: build `field`, `parent.append(field)`, call `deps.boxes.place(field, box, text)` (it appends the frame to
+  the field), add `audio-picker-notes-box` to the frame, append the `boxHint` after it, and record
+  `rollback.recordBox(() => deps.boxes.release(box))`. The DOM order in the field is unchanged: frame, keys. The
+  `inputFrame` import goes when no other use remains in `picker-kit.ts` (grep first).
+- `createNotesKit`'s `isMounted` flag and `appendUnmountedBox` stay: they guard one `textBox` call per draw, and a
+  part that leaves the box out still gets it at its end.
+- `picker-view.ts`'s stale-part redraw (~L418–432) keeps its `keepFocusedBox(deps.boxes, formId, redraw)` call around
+  a redraw that holds a `notes` part. Redrawing a `notes` part disposes its old draw first (its box is released), the
+  new draw places the same box again, and the sweep ends a box no new draw placed. The picker's close keeps its
+  `boxes.destroyForm(formId)` and `boxes.forgetForm(formId)` (~L257).
+- The notes text comes from the picker's draft, which the box itself writes; `place` sets a held editor's text only
+  when the draft's text differs, so a redraw touches no text the user is typing.
+- `layouts/layout.d.ts`: the header line "A `notes` part drawn again keeps its box's text, and its focus while the
+  box had it." says after: "A `notes` part drawn again keeps its box, with its text, cursor, vim mode and undo, and
+  its focus while the box had it." `NotesKit.textBox`'s comment says "places" for "mounts".
 
 ## Bookkeeping (this task's commit)
 
@@ -111,12 +113,6 @@ THEN the new card holds the same editor in the same frame, and that editor gets 
 GIVEN a task with 19 items and the add-item box holding text WHEN the 20th item lands THEN the add-item box's
 editor is destroyed (the new card leaves it out)
 
-GIVEN the backlog editor open with the title box focused in insert mode WHEN `setLayouts` runs THEN the title box
-is the same editor and its last focus option is `{ insert: true }`; a box the user layout leaves out is appended
-
-GIVEN the backlog editor open WHEN the tags picker sets the tags THEN the tags box's editor gets `setText` with the
-joined tags, and no editor is created or destroyed
-
 GIVEN practice's notes tab shown with the notes box focused WHEN `setLayouts` runs THEN the notes box is the same
 editor and it holds focus
 
@@ -129,6 +125,13 @@ notes editor is destroyed and a new one mounts with the new problem's notes
 GIVEN a primer task card whose add-item box shows typed text WHEN `addItem` lands the item and clears the text THEN
 the add-item box shows `''` and its editor is the same one
 
+GIVEN an open audio picker with moment 1's notes box focused in insert mode WHEN `setLayouts` picks a new `notes`
+layout THEN the notes box is the same editor in the same frame, it gets one `focus({ insert: true })`, and the host
+created no editor
+
+GIVEN an open audio picker WHEN `setLayouts` picks a new `candidate` layout only THEN no notes box is released or
+placed again (the stale-part redraw leaves the `notes` parts alone)
+
 ## Tests
 
 - `primer-view.test.ts`: `rebuilds the shown card on setLayouts with a new pick and keeps the focused box` also
@@ -137,11 +140,6 @@ the add-item box shows `''` and its editor is the same one
   editor for `taskComment1` (the failed attempt's editor is kept by the fallback, not made twice), not destroyed.
   `leaves the card once the 20th item lands, focusing the task comment box on nextBox` stays as is (its
   `isMounted(newItem1)` false holds through the sweep).
-- `backlog-view.test.ts`: `a layout reload keeps the open editor draft and focused box` changes: `remounted` is
-  `title` (the same editor), and its last focus option is `{ insert: true }`. New
-  `tagsPicker_EditorOpen_SetsTheTagsBoxText` — the tags box's editor records one `setText` with the joined tags,
-  and the live editor count for `tags` stays 1. `a box the editor pane leaves out is appended` and
-  `followupEditor_DropAfterRedraw_GoesToTheBoxUsedLast` stay as they are.
 - `start.test.ts` (practice): new `layoutChange_FocusedNotesBox_KeepsItsEditor` — the notes editor before and after
   `setLayouts` is the same, and it is the active box. New `refreshedDraft_ShownNotesBox_MountsANewEditor` — after
   a `refreshed` with a new notes text, the earlier notes editor is destroyed and the live one was created with the
@@ -149,14 +147,23 @@ the add-item box shows `''` and its editor is the same one
   notes editor is destroyed and the live one was created with the new problem's notes.
 - `primer-view.test.ts`: new `addItem_AddItemBoxHeldEditor_ShowsTheClearedText` — after the item lands and the card
   redraws with the same card key, the add-item editor is the same one and its `text()` is `''`.
+- `picker-kit.test.ts`: the `fakeDeps` boxes fake moves from `mount`/`destroyBox` to `place` (returning a fresh
+  `div` it records with its parent, box and text) and `release`. `createNotesKit_TextBox_MountsTheMomentsBoxOnce`
+  asserts one `place` with the field, the box and `'softer'`, the frame carrying `audio-picker-notes-box` followed by
+  the `box-keys` hint inside the field, and a rollback that calls `release` with the box;
+  `createNotesKit_NoTextBoxCall_AppendUnmountedBoxMountsAtThePartsEnd` asserts the same through `place`.
+- `picker-view.test.ts`: `mountPickerPopups_NotesRedraw_KeepsTheFocusedBox` also expects the host created no editor
+  during the redraw and the focused editor's last focus option is `{ insert: true }` (the fake editor in insert
+  mode). New `mountPickerPopups_CandidateOnlyRedraw_LeavesTheNotesBoxesPlaced` — the second audio picker GIVEN: no
+  editor is destroyed or created, and each notes frame keeps its parent.
 
-Live check: task 15 (the primer, backlog and practice boxes keep the cursor, a visual mode and undo across a layout
-save).
+Live check: task 15 (the primer, practice and audio picker boxes keep the cursor, a visual mode and undo across a
+layout save).
 
-Done when: `npm run lint` and the typecheck pass; the test gate runs `primer-view.test.ts`, `backlog-view.test.ts`,
-`followup-editor` tests if any exist (none at plan time), and `src/plugins/practice/page/start.test.ts`.
+Done when: `npm run lint` and the typecheck pass; the test gate runs `primer-view.test.ts`,
+`src/plugins/practice/page/start.test.ts`, `picker-kit.test.ts` and `picker-view.test.ts`.
 
-Commit: one commit for the group — the eight source and test paths in Files, `docs/features/followups.md`,
+Commit: one commit for the group — the ten source and test paths in Files, `docs/features/followups.md`,
 `docs/features/intent-alignment/master-plan.md`.
 
 ## Proof

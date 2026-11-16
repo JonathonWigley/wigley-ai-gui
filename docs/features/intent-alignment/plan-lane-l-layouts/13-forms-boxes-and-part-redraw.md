@@ -94,7 +94,7 @@ Produces:  in `src/plugins/forms/page/layout/layout-resolver.ts`:
   where the item changed. A contributed card part reaches every
   card; a review column reaches the review pane: redrawing all of them covers both.
 - **Round close** still destroys: `forms-view.ts` `destroyRoundView` calls `destroyForm` and `forgetForm`.
-- **`EditorBoxes.mount`** has no caller after this task (primer, backlog and practice moved in task 10; grep
+- **`EditorBoxes.mount`** has no caller after this task (primer, practice and the audio picker moved in task 10; grep
   `\.mount(` over `src/plugins src/shared` to confirm). Delete it from the interface and `createEditorBoxes`, and
   delete `place`'s and `release`'s `mounted without a frame` throws with it. `editor-boxes.test.ts`'s `setup` and
   `keepSetup` and every `mount` call in it move to `place` with `document.createElement('div')` parents under the

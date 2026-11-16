@@ -21,13 +21,18 @@ Produces:  in each owner's `layouts/layout.d.ts` (owners in § Rows), inside its
            in `src/plugins/primer/layouts/layout.d.ts`: `export interface ConfirmBodyInput { body: string }`,
            `export interface ConfirmBodyKit extends PrimerKit, ConfirmButtonsKit {}`, and
            `confirmBody?(parent: HTMLElement, input: ConfirmBodyInput, kit: ConfirmBodyKit): HTMLElement`
-           in `src/plugins/backlog/layouts/layout.d.ts` and `src/plugins/practice/layouts/layout.d.ts`:
-           `export interface ConfirmBodyKit extends <Owner>Kit, ConfirmButtonsKit {}`
+           in `src/plugins/practice/layouts/layout.d.ts`:
+           `export interface ConfirmBodyKit extends PracticeKit, ConfirmButtonsKit {}`
+           in `src/plugins/audio-picker/layouts/layout.d.ts`: `export interface ConfirmBodyInput { body: string }`,
+           `export interface ConfirmBodyKit extends PickerKit, ConfirmButtonsKit {}`, and
+           `confirmBody?(parent: HTMLElement, input: ConfirmBodyInput, kit: ConfirmBodyKit): PickerLayoutPart`
+           in `src/plugins/audio-picker/page/layout/picker-kit.ts`:
+           `export function createConfirmKit(deps: PickerKitDeps, rollback: RollbackDeps): PickerKit`
 
 The owner list is plan.md Precondition 3's command, run at plan time. It printed the eleven calls the plan names
 (chat 1, gallery 1, docs 2, sessions 1, notes 2, keys 1, practice 1, session-stash 1, `confirm-prompt.ts` 1). The
-confirm prompt's callers outside forms are backlog (two prompts), practice (one) and the primer (one). Forms (one
-confirm prompt) is task 11. Run the command again before the first row; a new caller becomes a row written to the
+confirm prompt's callers outside forms are practice (one), the primer (one) and the audio picker (one), plan.md
+Precondition 5; backlog has none since its rebuild (ai commit `ba762a069`). Forms (one confirm prompt) is task 11. Run the command again before the first row; a new caller becomes a row written to the
 reference.
 
 ## Reference: one owner's frame
@@ -198,22 +203,6 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
 - Test: `redraw_ChangedLayout_DrawsTheFrameAndKeepsTheBox` in `import-box.test.ts` — as the sessions row's test, with
   a fake `drawFrame` that records each draw.
 
-### backlog
-
-- Files: modify `src/plugins/backlog/layouts/layout.d.ts` · `src/plugins/backlog/layouts/default/layout.js` ·
-  `src/plugins/backlog/page/layout/read-layout.ts` · `src/plugins/backlog/page/backlog-view.ts` · test
-  `src/plugins/backlog/page/backlog-view.test.ts`
-- Part: `dialogFrame?(parent, input: DialogFrameInput, kit: BacklogKit): DialogFramePart`. Comment's dialogs: "the
-  delete and discard confirms". `ConfirmBodyKit` becomes `extends BacklogKit, ConfirmButtonsKit {}`, its members and
-  comment removed.
-- View: beside `drawConfirmBody(kind)`, a `drawConfirmFrame(kind)` returning a `DrawDialogFrame` through
-  `parts.redraw('dialogFrame', parent, build, \`dialogFrame:${kind}\`)`, kit `kitFor('confirm', rollback)`; each prompt
-  passes `drawFrame: drawConfirmFrame(kind)`. `setLayouts` already calls `deletePrompt.redraw()` and
-  `discardPrompt.redraw()`.
-- Test: `setLayouts_ChangedFrameLayout_RedrawsTheDeletePromptFrame` — a user layout defining only `dialogFrame`;
-  after `setLayouts`, the delete prompt's panel carries the user name and its actions row holds `Keep it` and
-  `Delete` (the test at line 514 shows how it finds them).
-
 ### keys
 
 - Files: modify `src/plugins/keys/layouts/layout.d.ts` · `src/plugins/keys/layouts/default/layout.js` ·
@@ -293,7 +282,7 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
   `src/plugins/primer/page/layout/read-primer-layout.ts` · `src/plugins/primer/page/primer-view.ts` · test
   `src/plugins/primer/page/primer-view.test.ts`
 - Parts: `confirmBody?(parent, input: ConfirmBodyInput, kit: ConfirmBodyKit): HTMLElement` and
-  `dialogFrame?(parent, input: DialogFrameInput, kit: PrimerKit): DialogFramePart`, as backlog's and practice's.
+  `dialogFrame?(parent, input: DialogFrameInput, kit: PrimerKit): DialogFramePart`, as practice's.
   Comment for `confirmBody`: "The cancel confirm's body, scope `primer.confirm`: `input.body` and the prompt's two
   buttons. A button the part leaves out goes at the end of the frame's actions row." Reader: `PANE_PARTS` in
   `read-primer-layout.ts` gains `confirmBody: true` and `dialogFrame: true`.
@@ -307,11 +296,47 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
   `drawBody(body, promptParts)` and `drawFrame(parent, input)`, each through `drawPart({ owner: 'primer', pick:
   pickPart(shownLayouts, (layout) => layout.<part>), defaultLayout, … })` with kit
   `createPrimerKit(kitDeps, 'confirm', rollback)` (the body's kit adds `keepButton` and `confirmButton` from
-  `promptParts`, as backlog's does); keep the last draw of each and dispose it after the next. `setLayouts` runs
+  `promptParts`, as practice's does); keep the last draw of each and dispose it after the next. `setLayouts` runs
   `shownLayouts = shown; confirm.redraw(); render();`.
 - Test: `setLayouts_ChangedLayout_RedrawsTheCancelConfirmBodyAndFrame` — a user layout defining `confirmBody` and
   `dialogFrame`, each marking its root; after `setLayouts`, the prompt's panel and body root carry the user name and
   both buttons are inside the panel.
+
+### audio-picker
+
+Added 2026-11-16 (plan.md § Decisions, round 2); line numbers from that day.
+
+- Files: modify `src/plugins/audio-picker/layouts/layout.d.ts` · `src/plugins/audio-picker/layouts/default/layout.js` ·
+  `src/plugins/audio-picker/page/layout/read-picker-layout.ts` · `src/plugins/audio-picker/page/layout/picker-kit.ts` ·
+  `src/plugins/audio-picker/page/picker-view.ts` · test `src/plugins/audio-picker/page/picker-view.test.ts`
+- Parts: `confirmBody?(parent, input: ConfirmBodyInput, kit: ConfirmBodyKit): PickerLayoutPart` and
+  `dialogFrame?(parent, input: DialogFrameInput, kit: PickerKit): DialogFramePart`, as the primer's; `confirmBody`
+  returns `PickerLayoutPart` because every audio picker part does. `CompleteAudioPickerLayout` gains both as
+  required. Comment's dialogs for `dialogFrame`: "the cancel prompt". Comment for `confirmBody`: "The cancel
+  prompt's body, scope `audio-picker.confirm`: `input.body` and the prompt's two buttons. A button the part leaves
+  out goes at the end of the frame's actions row." Reader: `PARTS` in `read-picker-layout.ts` gains
+  `confirmBody: true` and `dialogFrame: true`.
+- Comment: the header's list of what the app keeps (line 13–14, "the footer (…), the cancel prompt, scrolling and the
+  notes boxes themselves") says "the cancel prompt's scrim, keys and focus" for "the cancel prompt", and the
+  paragraph gains: "`dialogFrame` and `confirmBody` draw the cancel prompt's panel, title, body and buttons."
+- Kit: `picker-kit.ts` gains `createConfirmKit(deps, rollback)`, `createPickerKit`'s twin in scope `confirm`
+  (`ownerBaseKitDeps(audioPickerManifest, deps, 'confirm', rollback)`), the scope the prompt's keys already use
+  (`audioPickerScope('confirm')`). Both prompt parts draw with it; the body's kit adds `keepButton` and
+  `confirmButton` from the prompt's parts, as the primer's does.
+- Default: `confirmBody` returns `{ element: kit.el(parent, 'p', '', input.body) }`. It leaves both buttons out, so
+  the prompt appends them to the frame's actions row, and the DOM matches today's prompt-drawn body. `dialogFrame` is
+  the reference frame.
+- View: the audio picker draws with `drawPart` and `pickPart(shownLayouts, name)`, with no `LayoutParts`
+  (`PartName` is `keyof AudioPickerLayout`, so the two parts join it). In `mountPickerPopups`, move the
+  `let shownLayouts` declaration (~L246, after the prompt) above `createConfirmPrompt` (~L225): the prompt draws its
+  body while it is made, and the draw reads `shownLayouts`. Pass `drawBody(body, promptParts)` and
+  `drawFrame(parent, input)`, each through `drawPart({ owner: 'audio-picker', pick: pickPart(shownLayouts, '<part>'),
+  defaultLayout, … })` with kit `createConfirmKit`; the frame's build returns `requireDialogFrame(…)`. Keep the last
+  draw of each and dispose it after the next. `setLayouts` (~L345) runs `shownLayouts = shown; confirm.redraw();
+  render();`. The stale-part loop (~L418) draws only the picker's own rows and leaves the two prompt parts alone.
+- Test: `setLayouts_ChangedLayout_RedrawsTheCancelConfirmBodyAndFrame` in `picker-view.test.ts`, as the primer row's —
+  a user layout defining `confirmBody` and `dialogFrame`, each marking its root; after `setLayouts`, the prompt's
+  panel and body root carry the user name and both buttons are inside the panel.
 
 ## Done when
 
@@ -325,7 +350,7 @@ kit.d.ts` passes for every changed contract, and the test gate runs each row's t
 One commit for the group, its pathspecs every row's Files: `git commit -- src/plugins/chat/layouts
 src/plugins/chat/page src/plugins/docs/layouts src/plugins/docs/page src/plugins/sessions/layouts
 src/plugins/sessions/page src/plugins/notes/layouts src/plugins/notes/page src/plugins/practice/layouts
-src/plugins/practice/page src/plugins/backlog/layouts src/plugins/backlog/page src/plugins/keys/layouts
+src/plugins/practice/page src/plugins/audio-picker/layouts src/plugins/audio-picker/page src/plugins/keys/layouts
 src/plugins/keys/page src/plugins/session-stash/layouts src/plugins/session-stash/page src/plugins/gallery/layouts
 src/plugins/gallery/page src/plugins/primer/layouts src/plugins/primer/page`. Stage only the files the rows name:
 another session may hold changes in those folders.

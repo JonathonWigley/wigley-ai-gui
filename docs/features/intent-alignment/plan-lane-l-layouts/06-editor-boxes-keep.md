@@ -15,7 +15,6 @@ Produces:  in `src/shared/page/editor-boxes.ts`, on `interface EditorBoxes<Box>`
            `place(parent: HTMLElement, box: Box, text: string): HTMLElement`
            `release(box: Box): void`
            `destroyReleased(formId: string): void`
-           `setText(box: Box, text: string): void`
            and the changed `keepFocusedBox<Box>(boxes: Pick<EditorBoxes<Box>, 'active' | 'activeMode' | 'focus' | 'isMounted' | 'formIdOf' | 'destroyReleased'>, formId: string, rebuild: () => void): void`
 
 ## What a box is after this task
@@ -49,9 +48,9 @@ whether the sweep already ended it. No test asserts the old throw (checked at pl
   `release` between also moves the frame and does not throw; each kit already refuses a box placed twice in one
   draw (forms' `card.mounted`, the primer's card `mounted` set, forms' `isNoteMounted`).
 - **The frame's classes.** `place` adds only `ui-input`. The owner adds its own classes to the frame `place`
-  returns (`primer-box`, `backlog-editor-box`, `practice-box`, forms' `box`), on every call; `classList.add` repeats
-  safely. The owner appends nothing into the frame except the editor's DOM, which the host makes, and one element it
-  moves between frames (backlog's `fieldHint`): a node a draw put in the frame would stay in it across draws.
+  returns (`primer-box`, `practice-box`, `audio-picker-notes-box`, forms' `box`), on every call; `classList.add`
+  repeats safely. The owner appends nothing into the frame except the editor's DOM, which the host makes: a node a
+  draw put in the frame would stay in it across draws.
 - **The scroll position.** Detaching a scrolled element resets its `scrollTop`. `release` saves the `scrollTop` of
   the editor's scroller (`frame.querySelector('.cm-scroller')`, skipped when none is found) with the box, and `place`
   on a held editor restores it after the frame is reattached. Evidence that moving a live view is safe: chat's
@@ -83,25 +82,26 @@ whether the sweep already ended it. No test asserts the old throw (checked at pl
   attach it last, and `focus()` on a detached editor does nothing.
 - **`isMounted(box)`** is true while the box is placed (through `place`, or mounted through `mount`) and false
   when it is released, destroyed or never mounted. Each owner reads it as "the current draw shows this box"
-  (backlog's and practice's left-out checks, `keepFocusedBox`).
+  (practice's left-out check, `keepFocusedBox`).
 - **`focus(box)`** throws `No box is mounted as <key>` for a released box, as for a box never mounted. **`active()`**
   never returns a released box (release clears it), and `activeMode()` is null after a release.
 - **`fileEditor(formId, isShown)`** skips released boxes: the last-activated box counts only while placed, and the
   first-mount fallback picks only among placed boxes. `firstMounts` and `lastActivated` still outlive a release
   and a destroy, as today.
-- **`setText(box, text)`** calls the held editor's `setText(text)` (no `changed`, focus and vim mode kept, the
-  replace joins undo), placed or released. It throws `No box is mounted as <key>` when no editor holds the key.
-  It is the route for an owner that replaces a box's text from outside the box (backlog's tags picker, task 10).
+- **No `EditorBoxes.setText`.** Its one planned caller, backlog's tags picker, left with backlog's rebuild (ai
+  commit `ba762a069`); no owner replaces a box's text from outside the box, and `place` sets a held editor's text
+  itself.
 - **`mount` stays in this task.** It keeps today's behaviour: the editor is created in the caller's `parent` and
   editor boxes own no frame for it. `place` on a key `mount` made throws `Box <key> is mounted without a frame`;
   `release` on such a key throws the same; `destroyReleased` never reaches one (it is never released). `mount` on a
   key `place` made throws `Box <key> is already mounted`, as today. Callers of `mount` at plan time (grep
   `boxes\.mount\|\.mount(` over `src`): `src/plugins/primer/page/layout/primer-kit.ts` `appendField` (~L459),
   `src/plugins/practice/page/problem-workspace.ts` `textBoxSlot` (~L529), `src/plugins/forms/page/round-view.ts`
-  `buildRoundParts`' `mountBox` (~L299), and the tests `editor-boxes.test.ts`, `primer-view.test.ts`,
-  `round-view.test.ts`, `forms-view.test.ts` through those owners. Chat, notes, docs and settings do not use
+  `buildRoundParts`' `mountBox` (~L299), `src/plugins/audio-picker/page/layout/picker-kit.ts` `appendNotesField`
+  (~L161, measured 2026-11-16), and the tests `editor-boxes.test.ts`, `primer-view.test.ts`, `round-view.test.ts`,
+  `forms-view.test.ts`, `picker-kit.test.ts`, `picker-view.test.ts` through those owners. Chat, notes, docs and settings do not use
   `createEditorBoxes`: chat's composer box and the docs, settings and practice slot boxes go through `appSlot`.
-  Task 10 moves primer, backlog and practice to `place`; task 13 moves forms and then deletes `mount` (no caller
+  Task 10 moves primer, practice and the audio picker to `place`; task 13 moves forms and then deletes `mount` (no caller
   remains).
 - **The `EditorBoxes` doc comment** says after: "One editor per text box, created the first time its form places
   it and kept across redraws until its form or the box is destroyed." The `keepFocusedBox` comment states the
@@ -159,13 +159,10 @@ boxes install the fake DOM (`installFakeDom(vi.stubGlobal)` from `src/shared/pag
 - `destroyReleased_DestroysOnlyTheFormsReleasedBoxes` — the case in Behaviour.
 - `destroy_PlacedBox_RemovesItsFrame` — table over `destroyBox(notes)`, `destroyForm('f1')`, and `release(notes)`
   then `destroyReleased('f1')`: the editor is destroyed and the frame's `parentNode` is null.
-- `setText_HeldBox_ReplacesItsEditorsText` — `setText` on a placed and on a released box reaches the editor's
-  `setText` with the text; the events report no `changed`.
 - `destroyBox_KeyNoEditorHolds_DoesNothing` — `destroyBox` of a never-mounted key and of a key already destroyed does not throw and tells the listeners
   nothing.
 - Rows added to `refuses a box mounted twice, and focusing a box never mounted`: `place` on a key `mount` made and
-  `release` on it throw `/mounted without a frame/`; `focus` on a released box throws `/f1\/notes/`; `setText` on a
-  key no editor holds throws `/f1\/notes/`.
+  `release` on it throw `/mounted without a frame/`; `focus` on a released box throws `/f1\/notes/`.
 - Row added to `fileEditor_PicksLastUsedElseFirst`: steps `destroyBox(reason), place reason, focus reason, release
   reason` — expected `notes` (a released box is never the file editor).
 - `keepFocusedBox` describe: the test `brings a box in insert mode back in insert mode at its end` becomes

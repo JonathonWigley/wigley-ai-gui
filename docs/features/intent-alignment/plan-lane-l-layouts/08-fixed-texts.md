@@ -70,61 +70,76 @@ keeps stays in the page CSS.
 
 ### backlog
 
+Rewritten 2026-11-16 for the rebuilt Backlog page (ai commit `ba762a069`: one table of follow-ups, a review pane, a
+chunk strip; plan.md § Decisions, round 2). Line numbers from that day.
+
 Files: modify `src/plugins/backlog/page/backlog-view.ts` · `src/plugins/backlog/layouts/layout.d.ts` ·
 `src/plugins/backlog/layouts/default/layout.js` · `src/plugins/backlog/layouts/default/layout.css` ·
-`src/plugins/backlog/page/backlog.css` · `src/plugins/backlog/main/selftest-script.ts` (only if a step is missing) ·
-test `src/plugins/backlog/page/backlog-view.test.ts`. The reader `src/plugins/backlog/page/layout/read-layout.ts`
-gains no part (`homes` is there).
+`src/plugins/backlog/page/backlog.css` · `src/plugins/backlog/page/layout/read-layout.ts` ·
+`src/plugins/backlog/main/selftest-script.ts` (only if a step is missing) · test
+`src/plugins/backlog/page/backlog-view.test.ts`.
 
 Produces, in `src/plugins/backlog/layouts/layout.d.ts`:
-- `export interface HomesInput { status: string | null }`
-- `homes?(parent: HTMLElement, input: HomesInput, kit: HomesKit): BacklogPane;` (was `homes?(parent, kit)`)
-- `HomesKit` loses `status`; `RowKit` loses `cursorActions` (`export interface RowKit extends BacklogKit {}`)
-- `prompt: readonly PromptActionInput[]` on `FollowupRowInput`, `PlanRowInput`, `FeatureRowInput`, `TaskRowInput`
+- `TableRowInput.prompt: readonly PromptActionInput[]`
+- `RowKit` loses `cursorActions` (`export interface RowKit extends BacklogKit {}`)
+- `export interface TableStatusInput { text: string | null }`
+- in `BacklogLayout`, beside `empty`: `tableStatus?(parent: HTMLElement, input: TableStatusInput, kit: BacklogKit): HTMLElement;`
+- `TableKit.status` now places `div.backlog-status-slot`, the slot the app draws `tableStatus` into
 
 Decisions:
-- Prompt actions: `cursorCommands(row)` (`backlog-state.ts`) still decides which show and their order. Labels, as
-  today's `cursorHints` map gives them: `edit` → `edit`, `delete` → `delete`, `toggleAgentReady` → `agent-ready`,
-  `pickTag` → `tag`, `openInDocs` → `docs`. Commands are `backlog.<command>`.
-- The prompt goes on the row where `shown.key === state.selectedKey` (today's `placeCursorPrompt` target); every
-  other row gets `[]`.
-- Scope: the row kit is `kitFor('list', …)`, scope `backlog.list`, the old anchors' scope (`anchored(…, 'list', …)`).
-- Delete in `backlog-view.ts`: `cursorPrompt`, `cursorHints`, `placeCursorPrompt`, `cursorActionsSlot`, the
-  `actions` parameter of `drawRow` and the `withActions` slot code, and the `status` element.
-- Status: `drawHomes` computes `statusText` as today (`state.message ??` `'No features homes found'` when loaded with
-  no homes, else null). Extract the `homes` branch of `drawPanes` into `drawHomesPane()`, which keeps
-  `homesList.scrollTop` as `drawPanes` does and passes `{ status: homesStatus }`. `drawHomes` calls
-  `drawHomesPane()` only when `statusText` differs from the `homesStatus` last drawn. Order inside `drawHomes`: the
-  status check and `drawHomesPane()` run first (it takes `homesList.scrollTop` before it redraws the pane), then the
-  list clears and the rows draw. `drawPanes` (a layout change) draws the homes pane with the current `homesStatus`.
-- Default `homes`: when `input.status !== null`, `kit.el(root, 'div', 'backlog-status', input.status)` with `title`
-  set to the same text, where `kit.status(root)` sits now. Default row parts: where `kit.cursorActions(row)` sits now,
-  a `span.backlog-row-actions` holding one `kit.keyHint` per action with `className: 'backlog-hint'`, drawn only when
-  `input.prompt` is not empty.
-- CSS: `.backlog-status` and `.backlog-row-actions` move to the default `layout.css`; the rule
-  `.ui-row-trailing + .backlog-row-actions-slot > .backlog-row-actions` becomes
-  `.ui-row-trailing + .backlog-row-actions`; `.backlog-row-actions-slot` is deleted.
-- Update the layout.d.ts header comment: drop the `status` and `cursorActions` slot lines and the "cursor prompt with
-  no `cursorActions`" line; say the `homes` pane draws its status from input and each row draws its prompt from
-  input.
+- **Rows draw again on every render** (`render` → `drawRows`, which empties `rowsList` and draws each visible row), so
+  the prompt is row input, as docs' and sessions' are.
+- Prompt actions: `cursorCommands(shown)` (`backlog-state.ts`) still decides which show and their order. Each label is
+  today's `CURSOR_LABELS` entry (`activate` → `session`, `mark` → `mark`, `addToChunk` → `chunk`, `removeFromChunk`
+  → `unchunk`, `startChunk` → `start`, `toggleHeadless` → `headless`, `renameChunk` → `rename`, `toggleCommits` →
+  `commits`); each `command` is `backlog.<command>`. The row where `shown.key === state.selectedKey` (today's
+  `placeCursorPrompt` target) gets the list; every other row gets `[]`.
+- Scope: `tableRow` draws with `kitFor('table', …)`, scope `backlog.table`, the old anchors' scope
+  (`anchored(command, 'table', …)`).
+- Delete in `backlog-view.ts`: `cursorPrompt`, `cursorHints`, `placeCursorPrompt`, the `actions` parameter of
+  `drawRow` with its `actionsSlot` and `placeIfLeftOut`, the `selected` tracking and the per-row
+  `backlog-row-actions-slot` element in `drawRows`, and `anchored` once nothing else calls it (grep first).
+- **Status, a small part drawn into a slot the app keeps**, as docs' `treeStatus`: a load message can arrive while the
+  filter box holds focus, and the `table` pane (filter bar, filter box, rows) must not draw again for it. The `status`
+  element becomes `element('div', 'backlog-status-slot')`, still placed by the `table` pane through `TableKit.status`.
+  `drawStatus` (~L461) computes the text as today (`state.message ??` `'No features homes found'` when loaded with no
+  homes, else null) and, only when it differs from the text last drawn, disposes the last `tableStatus` draw and
+  draws `tableStatus` into the slot with `{ text }`. `drawPanes` (a layout change) draws `tableStatus` again with the
+  last text after the `table` pane draws. The view's dispose disposes the drawn status part. The first render draws
+  it once, with `{ text: null }` when there is no status.
+- `read-layout.ts`: `LAYOUT_PARTS` gains `tableStatus: true`. Its kit is `kitFor('table', …)`.
+- Default `tableStatus`: `kit.el(parent, 'div', 'backlog-status', input.text ?? '')`, its `title` the same text,
+  `hidden` when `input.text` is null. Default `tableRow`: where `kit.cursorActions(row)` sits now (~L202), a
+  `span.backlog-row-actions` holding one `kit.keyHint(span, action.command, { label: action.label, className:
+  'backlog-hint' })` per action, drawn only when `input.prompt` is not empty. Default `table` keeps `kit.status(root)`.
+- CSS: `.backlog-status` and `.backlog-row-actions` move from `backlog.css` to the default `layout.css` (beside its
+  `.backlog-table-row .backlog-row-actions` rule); `.ui-row-trailing + .backlog-row-actions-slot > .backlog-row-actions`
+  becomes `.ui-row-trailing + .backlog-row-actions`; `.backlog-row-actions-slot` is deleted; `backlog.css` gains
+  `.backlog-status-slot { display: contents; }`.
+- `layout.d.ts` header comment: the `status` line says the slot is `div.backlog-status-slot`, which the app draws
+  `tableStatus` into; the `cursorActions` slot line, its name in the "each place once per draw" list and the line "the
+  cursor prompt with no `cursorActions` goes at the end of the row root" go. The parts paragraph names `tableStatus`
+  with the parts drawn on every render that changes its text, in scope `backlog.table`, and says each `tableRow` draws
+  its prompt from input.
 
-GIVEN a follow-up row selected WHEN the rows draw THEN that row's input `prompt` is the five actions in
-`cursorCommands` order with the labels above, every other row's is `[]`, and each drawn hint's anchor has scope
-`backlog.list`
-GIVEN a plan row selected WHEN the rows draw THEN its `prompt` is `[{ command: 'backlog.openInDocs', label: 'docs' }]`
-GIVEN loaded state with no homes WHEN it renders THEN the homes pane input `status` is `'No features homes found'`;
-GIVEN the same status again WHEN it renders THEN the homes pane does not draw again
+GIVEN a follow-up row selected WHEN the rows draw THEN that row's input `prompt` is its `cursorCommands` in order with
+the labels above, every other row's is `[]`, and each drawn hint's anchor has scope `backlog.table`
+GIVEN the filter box open and focused WHEN a load message sets `state.message` THEN `tableStatus` draws with that
+text, the `table` part does not draw again, and the filter input keeps focus; GIVEN the same text on the next render
+THEN `tableStatus` does not draw again
 
 Tests:
-- `'a partial layout draws its own rows and default for the rest'` — the user `followupRow` drops
-  `kit.cursorActions(row)`; the assertion on the slot becomes: the first user row's recorded input `prompt` lists the
-  five follow-up actions, and the default plan rows hold no `backlog-row-actions` while unselected.
-- New `cursorPrompt_SelectedRow_ListsItsActionsInListScope` — `it.each` over `{ case: 'a follow-up' }` and
-  `{ case: 'a plan', select: listBottom }`: the selected row's `prompt` equals the pinned list, each live recorded
-  anchor for a prompt command has scope `backlog.list`, and other rows' `prompt` is `[]`.
-- New `homesStatus_ChangesOnly_RedrawTheHomesPane` — a user `homes` part counting its calls: no homes loaded draws
-  `status: 'No features homes found'`; a second render with the same status adds no call; a `state.message` render
-  draws once more with that message; a layout change after it draws the user `homes` with that same `status`.
+- `'a partial layout draws its own rows and default for the rest'` (~L473) — the user `tableRow` drops
+  `kit.cursorActions(row)`; the assertions on the slot become: the first user row's recorded input `prompt` is the
+  selected row's action list, and no row but the selected one holds a `backlog-row-actions`.
+- New `cursorPrompt_SelectedRow_ListsItsActionsInTableScope` — `it.each` over a follow-up in no chunk and one in an
+  unstarted chunk, each case's list read from `backlog-state.test.ts`'s `cursorCommands_ByChunkState` table: the
+  selected row's `prompt` equals the pinned list with the labels above, each live recorded anchor for a prompt command
+  has scope `backlog.table`, and other rows' `prompt` is `[]`.
+- New `tableStatus_Changes_DrawOnlyTheStatusPart` — a user `tableStatus` and `table` each counting their calls: no
+  homes loaded draws `text: 'No features homes found'`; a second render with the same status adds no `tableStatus`
+  call; a `state.message` render draws once more with that message, the `table` count unchanged and the filter input
+  still `document.activeElement`; a layout change after it draws the user `tableStatus` with that same text.
 
 ### docs
 
