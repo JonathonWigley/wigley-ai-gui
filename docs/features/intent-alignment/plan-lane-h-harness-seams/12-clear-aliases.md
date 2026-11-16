@@ -132,6 +132,7 @@ Docs:
 - Same file, § Flow, "Clear": replace `` `/clear`, `/reset` and `/new` (registered by the page's
   `clear-commands.ts`, `` with `` `/clear` and each harness's clear aliases (registered by the page's
   `clear-commands.ts` from `core.agentHarnesses`; an alias clears any session, whatever its harness), ``.
+- Line breaks in the file: the Terms sentence wraps after `Claude's` (a newline and two spaces before `names for it`), and the Clear bullet is one line. The old texts above are quoted on one line.
 
 Done when: `npm run lint` and `npm run typecheck` pass; `grep -rn "'reset'\|'new'" src/plugins/chat/page --include='*.ts' | grep -v '\.test\.'` prints
 no hit in `clear-commands.ts`; the test gate runs `clear-commands.test.ts`, `slash-commands.test.ts`, `start.test.ts` in

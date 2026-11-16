@@ -128,8 +128,8 @@ Tests:
   `error`.
 - `claude-code-harness.test.ts` › `setControl_EffortWhileWorking_Throws`: expects
   `The agent is working; change Effort when the turn ends`.
-- `claude-code-harness.test.ts`: the test near line 1960 (measured at plan time, re-verify) expects
-  `The agent is working; compact when the turn ends`; the `killNotice` constant near line 1389 becomes
+- `claude-code-harness.test.ts`: the test near line 1972 (measured at plan time, re-verify) expects
+  `The agent is working; compact when the turn ends`; the `killNotice` constant near line 1401 becomes
   `Interrupted again; ending the agent process.`; the grace notice constant near line 343 becomes
   `The agent did not stop within 5 s; showing the session idle.`
 - `session-fold.test.ts`: the grace notice constant near line 30 becomes

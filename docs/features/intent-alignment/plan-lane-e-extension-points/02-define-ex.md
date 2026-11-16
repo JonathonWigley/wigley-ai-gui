@@ -17,8 +17,8 @@ Files:
 - test `src/shared/plugin-part-harness.test.ts`
 - test `src/renderer/plugins/page-api.test.ts`
 - test `src/shared/page/editor-boxes.test.ts`, `src/plugins/forms/page/round-view.test.ts`,
-  `src/plugins/forms/page/forms-view.test.ts`, `src/plugins/primer/page/primer-view.test.ts` (their `EditorHost`
-  literals only)
+  `src/plugins/forms/page/forms-view.test.ts`, `src/plugins/primer/page/primer-view.test.ts`, `src/plugins/audio-picker/page/picker-view.test.ts` (their
+  `EditorHost` literals only)
 
 The three document-editor consumers do not change: `src/plugins/docs/page/doc-view.ts`,
 `src/plugins/practice/page/problem-workspace.ts` and `src/plugins/settings/page/row-box.ts` keep their `write`,
@@ -114,8 +114,9 @@ Settled in this plan:
   `DocumentEditorEvents` stays true; do not change it.
 - **Test fakes.** Every literal the compiler types as `EditorHost` that lacks `defineEx` gets
   `defineEx: () => ({ dispose() {} })`. At plan time these were `src/shared/page/editor-boxes.test.ts` (near line 34),
-  `src/plugins/forms/page/round-view.test.ts` (near line 39), `src/plugins/forms/page/forms-view.test.ts` (near line 33)
-  and `src/plugins/primer/page/primer-view.test.ts` (near line 58) (measured at plan time, re-verify with
+  `src/plugins/forms/page/round-view.test.ts` (near line 39), `src/plugins/forms/page/forms-view.test.ts` (near line 33),
+  `src/plugins/primer/page/primer-view.test.ts` (near line 58) and `src/plugins/audio-picker/page/picker-view.test.ts`
+  (`fakeHost`, near line 51) (measured at plan time, re-verify with
   `npm run typecheck`). Fakes cast with `as unknown as EditorHost` need no change. In `countingEditors`, `defineEx`
   adds 1 to a live count and returns a handle whose first `dispose` takes 1 away; `exCommands()` reads the count.
 

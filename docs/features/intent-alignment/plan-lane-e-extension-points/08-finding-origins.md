@@ -162,8 +162,8 @@ New proof text:
   distinct `a ${words.kind}` of those origins, `PROOF_TITLES` the distinct `words.proof` of those origins, each
   joined with `orList`.
 - The ask_round description's sentence `A card shows the finding and a brief proof, then a verdict: the origin and
-  severity and the impact.` becomes `A card shows the finding, then a verdict: the origin and severity and the impact;
-  a Nit also shows its proof.` (`a ${orList(PROOF card kinds)}`; the clause is left out when no registered origin
+  severity and the impact.` becomes `A card opens on a verdict: the origin and severity and the impact; then it shows the finding, and a Nit also
+  its proof.` (`a ${orList(PROOF card kinds)}`; the clause is left out when no registered origin
   requires proof).
 - The parser's missing-field error becomes `` `${where}missing ${missing}. Every finding needs ${FINDING_FIELDS}; a
   ${SEVERITY_ORIGINS} finding also needs severity, and a ${PROOF_ORIGINS} finding also needs proof.` `` —

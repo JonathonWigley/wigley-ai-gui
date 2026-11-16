@@ -96,9 +96,8 @@ whether the sweep already ended it. No test asserts the old throw (checked at pl
   editor boxes own no frame for it. `place` on a key `mount` made throws `Box <key> is mounted without a frame`;
   `release` on such a key throws the same; `destroyReleased` never reaches one (it is never released). `mount` on a
   key `place` made throws `Box <key> is already mounted`, as today. Callers of `mount` at plan time (grep
-  `boxes\.mount\|\.mount(` over `src`): `src/plugins/primer/page/layout/primer-kit.ts` `appendField` (~L439),
-  `src/plugins/backlog/page/followup-editor.ts` `mount` and `setText` (~L100, ~L133),
-  `src/plugins/practice/page/problem-workspace.ts` `textBoxSlot` (~L497), `src/plugins/forms/page/round-view.ts`
+  `boxes\.mount\|\.mount(` over `src`): `src/plugins/primer/page/layout/primer-kit.ts` `appendField` (~L459),
+  `src/plugins/practice/page/problem-workspace.ts` `textBoxSlot` (~L529), `src/plugins/forms/page/round-view.ts`
   `buildRoundParts`' `mountBox` (~L299), and the tests `editor-boxes.test.ts`, `primer-view.test.ts`,
   `round-view.test.ts`, `forms-view.test.ts` through those owners. Chat, notes, docs and settings do not use
   `createEditorBoxes`: chat's composer box and the docs, settings and practice slot boxes go through `appSlot`.

@@ -155,8 +155,8 @@ Settled in this plan:
   `addBlock: () => ({ dispose: () => undefined })`, its type becomes
   `Pick<MarkdownRenderer, 'addFence' | 'fence' | 'addBlock'>`, and its comment says it registers no fence and no
   block. Every literal the compiler types as `MarkdownRenderer` that lacks `addBlock` gets the same no-op. At plan time
-  these were `src/plugins/forms/page/round-view.test.ts` (near line 280), `src/plugins/docs/page/doc-view.test.ts`
-  (`docViewOver`'s default and near line 3390) and `src/shared/page/layout-host/base-kit.test.ts` (near line 668)
+  these were `src/plugins/forms/page/round-view.test.ts` (near line 285), `src/plugins/docs/page/doc-view.test.ts`
+  (`docViewOver`'s default and near line 3397) and `src/shared/page/layout-host/base-kit.test.ts` (near line 673)
   (measured at plan time, re-verify with `npm run typecheck`). In the part harness, `fakeMarkdown` fakes `addBlock` as
   it fakes `addFence`: it pushes onto a new `world.blocks`, throws `block <name> is already registered` on a name it
   holds, and returns a counted handle. The harness exposes the list as `blocks`, beside `fences`, and the comment above

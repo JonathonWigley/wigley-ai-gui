@@ -92,7 +92,7 @@ Produces:
   }
   export function createEndpointWriter(files: Files, dir: string, log: PluginLog): EndpointWriter;
   ```
-  `writeEndpointFiles` goes (its only callers are `sessions/main/start.ts:271` and `endpoint.test.ts`).
+  `writeEndpointFiles` goes (its only callers are `sessions/main/start.ts:272` and `endpoint.test.ts`).
   `endedDriveRunLaunch` is unchanged; the file keeps `node:path` for it and for `path.join`, and imports no `node:fs`.
 
 Callers of each changed contract (checked with grep at plan time; each list is complete):
@@ -104,7 +104,7 @@ Callers of each changed contract (checked with grep at plan time; each list is c
 | `AgentFormStore.saveBody`, `load`, `flushed`, `prune` | implementers `form-store.ts`, `memory-form-store.ts`; `saveBody` caller `form-service.ts:476`; `prune` callers `forms/main/start.ts:82`, `primer/main/start.ts:90`, `form-store.test.ts:374,398`, `memory-form-store.test.ts:139` |
 | `AgentFormListener.draft` | implementer `form-service.ts` `formListener`; callers `channel-presenter.ts:86`, `scripted-presenter.ts:39`; test fakes `channel-presenter.test.ts:100,330,377,397` |
 | `AgentFormInvoke.draft` | handler `channel-presenter.ts:80`; page invokes `src/plugins/forms/page/start.ts:206`, `src/plugins/primer/page/start.ts:221` (they already use the returned promise; no edit) |
-| `writeEndpointFiles` | `src/plugins/sessions/main/start.ts:271`, `endpoint.test.ts` |
+| `writeEndpointFiles` | `src/plugins/sessions/main/start.ts:272`, `endpoint.test.ts` |
 
 Decisions:
 
@@ -127,8 +127,9 @@ Decisions:
    the rest of the run.
 4. **One ordered queue** (plan.md Decisions, "Round store": "every other write runs in order behind it"). Every disk
    step of a store runs in one queue, in call order, one at a time: the writes, the load scan, the prune, each
-   watch-reported re-read and each rescan. Follow the `queued` closure of `src/plugins/notes/main/draft-store.ts`
-   (a `last` promise chained with `.then`, its failure caught so the next step still runs). A write's text is
+   watch-reported re-read and each rescan. Use `createSerialQueue` from `src/shared/serial-queue.ts` (as
+   `src/plugins/notes/main/draft-store.ts` does): a rejection reaches only its own caller, so the next step still runs.
+   `flushed()` is its `settled()`. A write's text is
    `JSON.stringify(record)` taken when the write is queued, written with `files.write(paths.join(dir, `${id}.json`),
    text)`.
 5. **Failures**. `saveBody`'s promise settles with its own write: it rejects with
@@ -192,7 +193,7 @@ Decisions:
     field order, the same fields and `updated` stamping (`form-store.ts` lines 21 and 32–53 name retro as the
     reader). Only the temp file's name changes, to `Files`' `.<id>.json.<8 hex>.tmp`, which retro never reads.
 14. **Endpoint files** (plan.md Decided, "Endpoint files write through `Files` behind one ordered writer;
-    `contributeTools` stays sync"). `createEndpointWriter` queues each `write` (the `queued` closure of Decision 4);
+    `contributeTools` stays sync"). `createEndpointWriter` queues each `write` (the same `createSerialQueue`, Decision 4);
     a step writes `endpoint.json` then `tools.json` through `files.write(path.join(dir, …),
     `${JSON.stringify(value, null, 2)}\n`)` (today's text; `tools.json` holds `{ tools }`); `files.write` makes the
     folder. A failed step logs `endpoint files not written: <reason>` (today's text) and the next write still runs.
@@ -204,12 +205,12 @@ Decisions:
     relays read the file on connect and the queued write starts in the same tick chain. Sessions' `dispose` awaits
     `endpointWriter.flushed()` after `opened?.relay.close()`, inside the existing `finally`. The self-test still
     writes nothing (`opened` is null).
-15. **Doc line** (`AGENTS.md` § Architecture, the `files/` line at line 207). It lists `Files`' members, so it
+15. **Doc line** (`AGENTS.md` § Architecture, the `files/` line at line 211). It lists `Files`' members, so it
     becomes incomplete. It reads after the change: `files/         file reads (whole as text or bytes, or the first
     bytes), modified times, atomic writes (a rename EPERM or EBUSY holds is tried again), append, rename, trash, file
     deletes, folder lists and watching, behind Files; …` with the rest of the line unchanged. No other `AGENTS.md`
-    line is made untrue: line 132 ("the saved-form folder and memory stores"), line 826 ("the saved-form files") and
-    lines 835–842 (`endpoint.json`, `tools.json`) stay true.
+    line is made untrue: line 134 ("the saved-form folder and memory stores"), line 889 ("the saved-form files") and
+    lines 898–905 (`endpoint.json`, `tools.json`) stay true.
 
 GIVEN a rename that fails with `EPERM` twice WHEN `Files.write` runs THEN the file holds the new text, no temp file is
 left, and the waits were 10 and 20 ms.
@@ -310,7 +311,7 @@ Tests (rows go into the test that owns each rule; `wigley:make` owns when they r
   and `harness.files.read(...)` in place of `readdirSync`/`readFileSync`; still expect `['open']` (break: the quit
   does not wait for the queued write). The folder path is `posixPaths.join(homeDir, SAVED_ROUNDS_FOLDER)` /
   `posixPaths.join(homeDir, SAVED_PRIMERS_FOLDER)`, since the harness serves `paths: posixPaths`
-  (`plugin-part-harness.test-support.ts:1003`) and the part joins its folder with it.
+  (`plugin-part-harness.test-support.ts:1005`) and the part joins its folder with it.
 - `src/plugins/sessions/main/relay/endpoint.test.ts`: `describe('createEndpointWriter')` over `createMemoryFiles()`
   replaces `describe('writeEndpointFiles')`: the two existing tests keep their assertions (both files in a folder
   it makes; a second write replaces both, and `files.list(dir)` is exactly `endpoint.json` and `tools.json`) after

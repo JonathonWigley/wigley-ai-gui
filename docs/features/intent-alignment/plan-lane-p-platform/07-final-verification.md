@@ -36,7 +36,7 @@ the real CLI; name it in the report.
 5. **Low-confidence** — with a scratch `keymap.json` in the run's temp home binding `<C-?>`, `<F5>` and `<A-Up>` to
    commands that log, pressing each fires its command: `<C-?>` rests on Electron adding Shift and sending key `?`
    (unproven); `<F5>` and `<A-Up>` are expected, since Electron documents those key names.
-6. Dropped at the cold read: drive runs use `silentAlerts` (`main.ts:345`), which records no count; the
+6. Dropped at the cold read: drive runs use `silentAlerts` (`main.ts:391`), which records no count; the
    `open-counts` and presenter tests pin the badge sum and the overlay text (task 02).
 7. **Expected** — with `claude.command` empty, `start --harness claude` starts a chat session and the usage panel's
    `claude -p /usage` one-shot answers: the default command now comes from the lookup, and the pending pipe sits under

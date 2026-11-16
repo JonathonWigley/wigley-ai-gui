@@ -16,7 +16,7 @@ Files:
 - modify `src/shared/agent-forms/channel-presenter.ts` · test `src/shared/agent-forms/channel-presenter.test.ts`
 - modify `src/plugins/forms/main/start.ts` (the `createAgentFormChannelPresenter` call in `createForms`)
 - modify `src/plugins/primer/main/start.ts` (the `createAgentFormChannelPresenter` call in `start`)
-- modify `docs/features/primer/design.md` (line 154, § Alerts) · `docs/features/intent-alignment/master-plan.md` ·
+- modify `docs/features/primer/design.md` (line 160, § Alerts) · `docs/features/intent-alignment/master-plan.md` ·
   `docs/features/followups.md`
 
 Consumes: none.
@@ -59,9 +59,9 @@ Every caller and implementer of `Alerts.setOpenCount` (checked with grep at plan
 | `src/shared/agent-forms/channel-presenter.ts` | the only production caller | passes `deps.alertNoun` |
 | `src/main/plugins/main-api.test.ts` `fakeAlerts` (line 159) and calls at lines 337, 620, 621 | fake and calls | record and pass the noun |
 | `src/shared/agent-forms/channel-presenter.test.ts` `fakeAlerts` (line 54) | fake | records the noun |
-| `src/plugins/forms/main/start.test.ts` lines 182, 223, 251, 284 and `src/plugins/primer/main/start.test.ts` lines 117, 148, 181 | `{ setOpenCount() {} }` | none (fewer parameters still fit) |
-| `src/shared/plugin-part-harness.test-support.ts` line 1037 | `trackedAlerts(replaced.alerts ?? notFaked<Alerts>('alerts'), …)` | none |
-| `src/main/main.ts` `alertsFor` (line 293) and the offscreen `alerts: silentAlerts` (line 345) | composition | none |
+| `src/plugins/forms/main/start.test.ts` lines 182, 223, 251, 284 `src/plugins/primer/main/start.test.ts` lines 117, 148, 181 and `src/plugins/audio-picker/main/start.test.ts` line 71 | `{ setOpenCount() {} }` | none (fewer parameters still fit) |
+| `src/shared/plugin-part-harness.test-support.ts` line 1041 | `trackedAlerts(replaced.alerts ?? notFaked<Alerts>('alerts'), …)` | none |
+| `src/main/main.ts` `alertsFor` (line 306) and the offscreen `alerts: silentAlerts` (line 391) | composition | none |
 
 Decisions:
 
@@ -92,7 +92,7 @@ Decisions:
      `source` names the alert open count and `alertNoun` what it counts.
 9. **No doc line changes**: `AGENTS.md` § Architecture's `alerts/` line ("the badge sums the open counts each source
    sets") stays true, and no other `AGENTS.md` line names `setOpenCount`'s parameters (checked with grep).
-   `docs/features/primer/design.md:154` writes `Alerts.setOpenCount(source, count)`: it becomes
+   `docs/features/primer/design.md:160` writes `Alerts.setOpenCount(source, count)`: it becomes
    `Alerts.setOpenCount(source, count, noun)`, with the primer's noun named. Run
    `grep -rn "setOpenCount" docs` before committing and fix any other line it shows.
 

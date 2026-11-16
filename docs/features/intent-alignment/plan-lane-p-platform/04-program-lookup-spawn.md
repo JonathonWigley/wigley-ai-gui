@@ -22,7 +22,7 @@ Files:
 - modify `src/plugins/docs/main/index-sources.ts` · test `src/plugins/docs/main/index-sources.test.ts`
 - modify `src/plugins/unity-pool/manifest.ts` · `src/plugins/unity-pool/main/pool-cli.ts` ·
   `src/plugins/unity-pool/main/start.ts` · test `src/plugins/unity-pool/main/pool-cli.test.ts`
-- modify (compile only) `src/plugins/practice/main/judge.test.ts` (its `scriptedRunner` literal) and each full
+- modify (compile only) each full
   `Settings` literal the compiler flags: `src/main/selftest-config.test.ts:155`,
   `src/main/config/config-store.test.ts:33`, `src/main/config/user-config.test.ts:27`,
   `src/main/config/user-settings.test.ts:11`
@@ -30,10 +30,13 @@ Files:
 
 Every `ProcessRunner` implementer in the tree, checked on 2026-11-09 with `grep -rn "ProcessRunner"`:
 `createNodeProcesses` (node adapter), `limitRuns`, `abortableProcesses`, `FakeProcesses`, and the test literals in
-`limited-processes.test.ts` (two) and `judge.test.ts` (one). Each one gains `spawn` and `resolveProgram`. Every
+`limited-processes.test.ts` (two). Each one gains `spawn` and `resolveProgram`. All of them already carry
+`startDetached` (its only production caller is `src/plugins/app-update/main/start.ts`). Every
 other `ProcessRunner` user only calls `run` and does not change: `process-git.ts`, `system-stats/*`,
 `drive-run.ts`, `frame-recorder.ts`, backlog's and practice's self-test scripts, `practice/main/judge.ts`,
-`contracts/plugin.ts` (`MainServices.processes`).
+`contracts/plugin.ts` (`MainServices.processes`), `main/processes/required-stdout.ts`,
+`main/screen-capture/mac-window-list.ts` and `windows-window-list.ts`. `judge.test.ts`'s `scriptedRunner` is typed
+`Pick<ProcessRunner, 'run'>`, so it does not change.
 
 Consumes: `PlatformKeys` and `Platform.keys` ← 01 (same file, `src/contracts/platform.ts`; this task keeps them).
 `Files.stat`, `Paths.expandTilde`, `Paths.join` (in the tree).
@@ -322,7 +325,8 @@ Callers of `resolveProgram('python')` (plan.md § Decisions › Python):
 - Both `resolveProgram` calls below sit inside the caller's existing `try`, so an unexpected rejection becomes
   `cli-failed` (unity-pool) or the shown message (docs), as a failed run does today.
 - Docs, `runScript` in `index-sources.ts`: after `locateScript` finds the script, it calls
-  `deps.processes.resolveProgram('python')`. On null, it logs `docs_index.py <command> not run: <message>`, runs
+  `deps.processes.resolveProgram('python')`; `deps.processes` (line 36) widens from `Pick<ProcessRunner, 'run'>` to
+  `Pick<ProcessRunner, 'run' | 'resolveProgram'>`. On null, it logs `docs_index.py <command> not run: <message>`, runs
   nothing, and returns the message to show. On a candidate, it runs `candidate.command` with
   `[...candidate.args, '-X', 'utf8', script, command, ...args]`. The function comment drops "python3" and names
   the resolved Python. `ScriptOutcome`'s `isScriptMissing` is renamed `isUnrunnable`: true when no
@@ -335,7 +339,7 @@ Callers of `resolveProgram('python')` (plan.md § Decisions › Python):
   candidate, it runs `candidate.command` with `[...candidate.args, ...poolCommandArgs(script, action, pool, clone)]`,
   with the same `timeoutMs` and `unsetEnv`. The `-X utf8` args stay after the candidate's own args.
   `start.ts`'s `cliDeps` stops reading `pythonCommand`. The comments on `runPoolCommand`, `CliDeps` and
-  `contract.ts:107` (`no-cli` and `cli-failed`) add `no-python`.
+  `contract.ts:112` (`no-cli` and `cli-failed`) add `no-python`.
 
 ## Behaviour
 
@@ -473,7 +477,7 @@ Live checks: 07 — Final verification.
   Check with `grep -n pythonCommand AGENTS.md` (expected: no output).
 - `docs/features/docs-browser/design.md` line 103 ("`python3 -X utf8` runs it"): the Python
   `resolveProgram('python')` gives runs it with `-X utf8`.
-- `docs/features/unity-pool/design.md` line 114: the Python is the one `resolveProgram('python')` gives (the core
+- `docs/features/unity-pool/design.md` lines 120–121: the Python is the one `resolveProgram('python')` gives (the core
   `programs.python` setting, else `py -3`, `python`, `python3` on Windows and `python3`, `python` elsewhere), and a
   missing Python answers `no-python`.
 - No edit to `docs/features/intent-alignment/master-plan.md` or `docs/features/followups.md`. Task 05 ticks the box

@@ -26,7 +26,6 @@ Files:     move `src/main/claude-code/*.ts` (18 sources and 16 tests, measured a
            test `src/main/config/config-store.test.ts` ·
            test `src/main/config/user-config.test.ts` · test `src/main/config/user-settings.test.ts` ·
            test `src/main/selftest-config.test.ts` ·
-           test `src/plugins/practice/main/judge.test.ts` · test `src/plugins/docs/main/index-sources.test.ts` ·
            modify `scripts/check-layers.mts` ·
            modify `docs/features/settings/design.md` · modify `docs/features/agent-chat/design.md` ·
            modify `docs/features/agent-chat/claude-stream.md` · modify `docs/features/agent-tower/design.md` ·
@@ -107,7 +106,7 @@ Decisions:
     called exactly once, on the first of the program's exit and its failure to start or run. A failure sets
     `startError` with the OS's message as it is and `notFound: true` for `ENOENT` (a missing program or `cwd`), and
     `code` and `signal` null. `kill()` sends `SIGTERM`. A `write`, `endInput` or `kill` after `closed` does nothing.
-    An error on stdin (`EPIPE` after the exit) is dropped. Node's adapter passes `windowsHide: true`, as `run` does.
+    An error on stdin (`EPIPE` after the exit) is dropped. Node's adapter passes `windowsHide: true`, as `run` does. `createNodeProcesses()` returns `{ run, startDetached, spawn }`.
     (drafter)
   - The adapter no longer logs a stdin error (it logs one through `child.stdin.on('error')` today), since the spawn
     drops it. (drafter)
@@ -115,9 +114,9 @@ Decisions:
     registrations are disposed, as an abort kills a `run` with `SIGKILL` in `node-processes.ts`. A spawn after the
     dispose starts no program; its `closed` is called on a microtask with `{ code: null, signal: null, startError: {
     message: 'Stopped <command>', notFound: false } }`, the same words a stopped `run` rejects with. A process leaves
-    the view's live set at its `closed`. (drafter)
+    the view's live set at its `closed`. The view already forwards `startDetached` untracked, since a detached start outlives the plugin; its comment gains a line saying `spawn` is the tracked path. (drafter)
   - `limitRuns` passes `spawn` straight to its runner and counts it against no limit: the limit is git's, and git
-    only calls `run`. (drafter)
+    only calls `run`. `spawn` goes beside the `startDetached` forward it already has. (drafter)
   - The adapter's dep `spawn: ClaudeSpawn` becomes `processes: ProcessRunner`, called as `deps.processes.spawn(…)`,
     so a class runner such as `FakeProcesses` keeps its `this`. `ClaudeSpawn` and the `node:child_process` import
     leave the adapter. `cliSpawnError` reads `exit.startError.notFound` in place of `NodeJS.ErrnoException.code`.
@@ -225,7 +224,7 @@ Tests:
     throws and whose `spawn` wraps the next fake child, recording `{ args, options }`, wiring `stdout`/`stderr`
     `data` (encoding `utf8`) to the events, the emitter's first `close` (code, signal) or `error` to one `closed`
     (`error.code === 'ENOENT'` → `notFound: true`), and `write`/`endInput`/`kill(signal = 'SIGTERM')` to the child.
-    The `childHost` session fake keeps its streams. Rows changed: the `it.each` row `SpawnNotFound` (about line 3072)
+    The `childHost` session fake keeps its streams. Rows changed: the `it.each` row `SpawnNotFound` (about line 3074)
     expects `reason: 'claude was not found at /bin/claude; set claude-code.command'`; `spawnNotFound_EndsWithHint`
     expects `error: expect.stringMatching(/\/bin\/claude.*\/proj.*set claude-code\.command$/)`. Every other test
     passes unchanged in what it asserts.
@@ -270,12 +269,10 @@ Tests:
     `started.indexOf('usage')`, and not `-1`.
   - `config-store.test.ts`, `user-config.test.ts`, `user-settings.test.ts`, `selftest-config.test.ts`: the `claude: {
     command: 'claude' }` member leaves each `Settings` fixture.
-  - `src/plugins/practice/main/judge.test.ts` `scriptedRunner` and the `processes: { run … }` literal in
-    `src/plugins/docs/main/index-sources.test.ts` gain a `spawn` that throws `not spawned in this test`.
   - `npm run lint` (`check-layers.mts`) passes: the composition-root check finds `./claude-code/main/start` in
     `mainParts` and `./claude-code/manifest` in `builtInManifests`.
 Approach:
-  - `FakeProcesses.spawn` (shared): records a `FakeSpawn` in `spawns` and returns it as the `SpawnedProcess`. A
+  - `FakeProcesses.spawn` (shared): records a `FakeSpawn` in `spawns`, beside `detachedStarts`, and returns it as the `SpawnedProcess`. A
     `FakeSpawn` holds `command`, `args`, `cwd`, `env`, `written: string[]`, `isInputEnded: boolean`, `kills:
     SpawnSignal[]` (`kill()` records `'SIGTERM'`, and kill closes nothing), and the test's drivers `stdout(text)`,
     `stderr(text)` and `close(exit)`, which call the spawn's events; a second `close` does nothing. Nothing is
@@ -283,7 +280,7 @@ Approach:
   - `plugin-part-harness.test-support.ts`: the default services gain `agentEnvironment: {}` and `agentHomeDir:
     '/home'` (the harness's `homeDir`).
   - `main.ts`: `ModeServicesContext`, `liveServices`, `offscreenRunServices` and `driveHarness` keep only what 01
-    and the fake need. The mode services return `agentHomeDir` (`os.homedir()` for a drive run on Claude, else the
+    and the fake need. The mode services, which already return `screenCapture`, return `agentHomeDir` (`os.homedir()` for a drive run on Claude, else the
     context's `homeDir`). The comments on `liveServices` and `endpointEnv` stop naming Claude Code: the
     relays of "the agent sessions this app starts".
 Done when: compiles (`npm run lint` and `npm run typecheck`); the test gate runs the tests above; `test -d

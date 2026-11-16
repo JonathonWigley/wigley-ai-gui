@@ -20,7 +20,7 @@ Files:
 - create `src/shared/page/chord-press.ts` (`isChordPress`) · test `src/shared/page/chord-press.test.ts`
 - modify `src/shared/page/text-box.ts` · `src/renderer/fabric/fabric-markup-editor.ts` (their `isChord` guards)
 - modify comments only: `src/contracts/keymap.ts` (the `PageBind` comment) ·
-  `src/renderer/codemirror-vim/prefix-completion.ts` (line 124's comment)
+  `src/renderer/codemirror-vim/prefix-completion.ts` (the comment on lines 123–125)
 - modify `docs/keymap.md` · `AGENTS.md` · `docs/features/intent-alignment/master-plan.md` · `docs/features/followups.md`
 
 Consumes: none.
@@ -159,7 +159,7 @@ flags, never `os === …`"):
     menu refuses and hold no Ctrl, Alt or Cmd.
 11. **Popup keys stay.** `popupActionOf` (`src/renderer/codemirror-vim/prefix-completion.ts`) keeps matching
     Ctrl+N and Ctrl+P on `code`, and `takesChordKey`'s contract is unchanged: it reads the event, not the notation.
-    Its line-124 comment ("The Ctrl forms read the physical key and exact modifiers, as the page's chords do") is
+    Its comment on lines 123–125 ("The Ctrl forms read the physical key and exact modifiers, as the page's chords do") is
     reworded to say the popup keeps the physical key on purpose, since page chords no longer do.
 12. **AltGr in text boxes too.** The two guards that keep typed keys away from the page — `textBoxInput`
     (`src/shared/page/text-box.ts:16`) and `keepTextKeysFromPage` (`fabric-markup-editor.ts:301`) — test
@@ -172,7 +172,7 @@ flags, never `os === …`"):
     symbols; every other typed character (`é`, `ö`, `ß`, Cyrillic) goes to the US code table at step 6. The
     `docs/keymap.md` and `AGENTS.md` lines say "not an ASCII letter, digit or symbol", not "non-Latin". Test: one
     `key-sequences.test.ts` matcher row, press `{ key: 'é', code: 'Digit2', ctrl }` runs `<C-2>`.
-14. **Comments the notation makes untrue.** The `PageBind` comment in `src/contracts/keymap.ts` (lines 62–67: "one
+14. **Comments the notation makes untrue.** The `PageBind` comment in `src/contracts/keymap.ts` (lines 61–66: "one
     lowercase letter, one digit, `;`, `'`, or Enter … matched on the physical key") becomes one line pointing at
     `CHORD_NOTATION_RULE` in `src/shared/chord-notation.ts` and saying a chord matches the typed character.
 15. **A Shift-digit bind becomes malformed.** `<C-S-1>` and `<A-S-;>` were valid and now make

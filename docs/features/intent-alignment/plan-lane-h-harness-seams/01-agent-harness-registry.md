@@ -33,7 +33,7 @@ Files:
   `src/plugins/sessions/main/session-list.test.ts` · test `src/plugins/sessions/main/relay/relay-server.test.ts` · test
   `src/plugins/agent-form-drive.test.ts`
 - modify `src/plugins/session-log/main/session-event-log.ts`
-- modify forms and primer: `src/shared/agent-forms/drive-actions.ts` · `src/plugins/forms/main/start.ts` ·
+- modify forms, primer and audio-picker: `src/plugins/audio-picker/main/start.ts` · `src/shared/agent-forms/drive-actions.ts` · `src/plugins/forms/main/start.ts` ·
   `src/plugins/forms/main/selftest-script.ts` · `src/plugins/primer/main/start.ts`
 - modify workflow: `src/plugins/workflow/main/level-selftest-script.ts` · `src/plugins/workflow-large/main/selftest-script.ts`
   · `src/plugins/workflow-large/main/start.ts` · `src/plugins/workflow-small/main/start.ts` ·
@@ -88,7 +88,7 @@ Decisions:
   harness in `src/shared/plugin-part-harness.test-support.ts` wraps its registry the same way, as it wraps
   `trackedFiles`.
 - Composition root (drafter): `ModeServices.forWindow` stops returning `agentHarnesses`. It returns
-  `harnesses: readonly AgentHarness[]` beside `alerts`, `window`, `openExternal` and `systemStats`: `liveServices`
+  `harnesses: readonly AgentHarness[]` beside `alerts`, `window`, `openExternal`, `systemStats` and `screenCapture`: `liveServices`
   returns `[claudeHarness(…)]`, `offscreenRunServices` returns `[harness(context)]`. In `main.ts` after the
   `forWindow` call: destructure `harnesses` out, build
   `const agentHarnesses = createAgentHarnessRegistry(slots.publish(coreAgentHarnessesSlot))`, call `register` for each
@@ -110,9 +110,9 @@ Decisions:
 - Consumer deps (drafter): every deps field named `harnesses` typed `readonly AgentHarness[]` becomes
   `AgentHarnessRegistry`, and each reader calls `list()` or `get()` at use, not at start: `ChatDriveDeps.harnesses`
   (`chat/main/start.ts`), `ChatSessionsDeps.harnesses` (`chat/main/chat-sessions.ts:102`), the chat self-test deps
-  (`chat/main/selftest-script.ts:76`), `UsageDriveDeps.harnesses`, `LevelSelfTestDeps.harnesses`, the workflow-large
+  (`chat/main/selftest-script.ts:77`), `UsageDriveDeps.harnesses`, `LevelSelfTestDeps.harnesses`, the workflow-large
   and notes self-test deps. `markRun(harnesses: readonly AgentHarness[])` keeps its signature; callers pass
-  `harnesses.list()`. `harnesses.find(isFakeAgentHarness)` becomes `harnesses.list().find(isFakeAgentHarness)`.
+  `harnesses.list()`. `harnesses.find(isFakeAgentHarness)` becomes `harnesses.list().find(isFakeAgentHarness)`. `usage/main/start.ts:165` `services.agentHarnesses.filter(isFakeAgentHarness)` becomes `.list().filter(isFakeAgentHarness)`.
 - Lookups: `requireChatHarness(harnesses: AgentHarnessRegistry)` reads `harnesses.get(CHAT_HARNESS_ID)` and keeps its
   error `no agent harness "claude"`. Usage's lookup (`usage/main/start.ts:122`) becomes
   `services.agentHarnesses.get(CHAT_HARNESS_ID)`, its `undefined` checks become `null` checks, and its log line
@@ -123,7 +123,7 @@ Decisions:
   typed `{ projectDir: string; harness: string }`. Every `Harness` becomes `string`: `SessionInfo.harness`,
   `SessionRow.harness`, `NoteSession.harness`, `session-event-log.ts:70`, `forms/main/selftest-script.ts:1341`,
   `preview.ts` `sampleRow`, `session-list.test.ts:37`. `addAgentFormDriveActions` and its two interfaces drop the
-  `Harness` type parameter and use `string`; forms' and primer's calls drop `<Harness>`.
+  `Harness` type parameter and use `string`; forms', primer's and audio-picker's calls drop `<Harness>`.
   `AgentFormDriveSessionDefaults` loses `harnesses`.
 - Relay hello (drafter, follows the open id): `harnessOf` goes; `sessionInfo` sets `harness: hello.harness ?? null`.
   The comments on `SessionInfo.harness` and `RelayHello.harness` read "Null when the relay did not say." and
@@ -161,7 +161,7 @@ Decisions:
   reads installed plugins in those two formats alone until task 07. Only the labels change: chips read
   `Claude Code <state>` and `codex <state>`. `docs-view.ts:495`, `doc-files.ts:312`/`:357` and `index-sources.ts:258`
   still compare ids; task 07 removes the format switches.
-- Contract comment: the `MainServices` comment in `src/contracts/plugin.ts:1043` changes from "`agentHarnesses` lists
+- Contract comment: the `MainServices` comment in `src/contracts/plugin.ts:1051` changes from "`agentHarnesses` lists
   every harness adapter the app runs, found by `id`" to "`agentHarnesses` is the harness registry: a harness plugin
   registers its adapter there, and stopping the plugin disposes its registrations".
 - Test double (drafter): `harnessRegistryOf(harnesses: readonly AgentHarness[]): AgentHarnessRegistry` in

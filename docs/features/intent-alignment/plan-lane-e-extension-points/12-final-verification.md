@@ -22,8 +22,8 @@ checks and the tests the fix touches).
 
 Run the tests every task added or edited, by file, with `npm test -- <files>` (the run log's Test gate lists them per
 group; re-read each group's diff to pick, per `wigley:writing-tests` § Picking tests for a gate). Then
-`npm run lint` and the type check once over the tree. In the marketplace: `python3 -m pytest
-plugins/wigley/scripts/retro` and `python3 scripts/check_manifests.py` (09).
+`npm run lint` and the type check once over the tree. In the marketplace: `(cd plugins/wigley/scripts/retro && python3
+-m unittest discover)` and `python3 scripts/check_manifests.py` (09).
 
 ## Filtered self-tests
 

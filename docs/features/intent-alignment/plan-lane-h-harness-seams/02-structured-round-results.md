@@ -67,7 +67,7 @@ Decisions:
   scope of the grep is drafter).
 - `needs_manual_open` leaves `Outcome` in `src/plugins/forms/contract.ts` and `PrimerOutcome` in
   `src/plugins/primer/contract.ts`. No TypeScript type replaces it. The marketplace relay produces it
-  (`relay.py` about line 236) and no code in this repo produces or reads it. The two tool descriptions keep their
+  (`relay.py` lines 249–254, the `needs_manual_open` payload builder) and no code in this repo produces or reads it. The two tool descriptions keep their
   sentence about it, since that sentence is wire text the agent reads from this app's tool list (drafter).
 - `RoundErrorPath` is a closed union (drafter):
   ```ts

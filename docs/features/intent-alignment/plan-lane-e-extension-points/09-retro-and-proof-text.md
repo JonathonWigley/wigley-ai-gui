@@ -65,7 +65,7 @@ AGENTS:
   `.get()`. An unknown `args` or `body` key is ignored and raises nothing (checked at plan time in `_answers`,
   `_notice_comments`, `round_lines` and `_listing_block`). Task 06 needs no change here; one test row pins it.
 - **Version.** `MKT/AGENTS.md` § Changing a plugin: every change to a plugin bumps `version` in both manifests, in the
-  same commit. `2.3.3` at plan time → `2.3.4`; when `origin/main` holds a newer version at landing, bump one patch
+  same commit. `2.12.3` at 2026-11-16 → `2.12.4`; when `origin/main` holds a newer version at landing, bump one patch
   above it.
 - **Landing order.** The marketplace and `forms.md` text tells agents to leave `proof` out off a Nit, which the tool
   before 08 refuses. Land 09 only after 08's commit is on the `ai` repo's `main`. The user's installed app (Auri) still
@@ -113,8 +113,7 @@ The sentence after it ("A finding missing a field its origin requires …") stay
 § Saved rounds — the fingerprint paragraph, after "and `recommend` only when sent.": `` `proof` is hashed only when
 sent and not blank; every file saved while the tool required `proof` carries it, so its hash stays. ``
 
-`skills/review/triage.md` § Building a round — the bullet "`impact`, `finding` and `proof`; for a `nit`, `proof` says
-why it cannot happen, and for every other origin it is one short line the default card does not draw" becomes:
+`skills/review/triage.md` § Building a round — the bullet "`impact`, `finding` and `proof`, the last one short line the default card does not draw" becomes:
 
 > - `impact` and `finding`; and on a `nit` alone, `proof`, which says why it cannot happen. Every other origin leaves
 >   `proof` out: the default card does not draw it.
@@ -184,7 +183,7 @@ are task 12's ("Final verification").
 One commit per folder, all in the one `ai` worktree:
 
 - MKT: `Retro reads each finding answer's action_label; proof is required on a Nit alone in the forms README, triage and
-  make; bump to 2.3.4` — the version bump rides this commit.
+  make; bump to 2.12.4` — the version bump rides this commit.
 - AGENTS: `forms.md: a finding's proof goes on a Nit alone`.
 
 ## Rulings from the plan's cold read

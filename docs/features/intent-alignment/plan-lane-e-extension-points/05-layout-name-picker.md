@@ -13,8 +13,8 @@ Files:
     `read()`, `onChanged`)
   - modify `src/main/main.ts` (the relay between the layout service and the user config)
   - modify `src/config/settings.ts` (`settingControls` gains `'shell.layout': 'layout'`)
-- The 25 manifests that declare a top-level `layout` setting, each gaining `settingControls: { layout: 'layout' }`
-  (counted at plan time, 2026-11-09, with `grep -c "layout: 'default'" src/plugins/*/manifest.ts`; re-verify):
+- The 29 manifests that declare a top-level `layout` setting, each gaining `settingControls: { layout: 'layout' }`
+  (recounted 2026-11-16, 29 against 25 at plan time, with `grep -c "layout: 'default'" src/plugins/*/manifest.ts`; re-verify):
   `src/plugins/agent-lines/manifest.ts`, `src/plugins/agent-skills/manifest.ts`, `src/plugins/agent-strip/manifest.ts`,
   `src/plugins/auto-retro/manifest.ts`, `src/plugins/backlog/manifest.ts`, `src/plugins/chat/manifest.ts`,
   `src/plugins/context-sources/manifest.ts`, `src/plugins/docs/manifest.ts`, `src/plugins/forms/manifest.ts`,
@@ -23,7 +23,7 @@ Files:
   `src/plugins/sessions/manifest.ts`, `src/plugins/settings/manifest.ts`, `src/plugins/system-stats/manifest.ts`,
   `src/plugins/unity-pool/manifest.ts`, `src/plugins/usage/manifest.ts`, `src/plugins/visual/manifest.ts`,
   `src/plugins/workflow-large/manifest.ts`, `src/plugins/workflow-medium/manifest.ts`,
-  `src/plugins/workflow-small/manifest.ts`, `src/plugins/workflow-spike/manifest.ts`
+  `src/plugins/workflow-small/manifest.ts`, `src/plugins/workflow-spike/manifest.ts`, `src/plugins/audio-picker/manifest.ts`, `src/plugins/app-update/manifest.ts`, `src/plugins/live-view/manifest.ts`, `src/plugins/scoped-agents/manifest.ts`
 - Settings plugin:
   - modify `src/plugins/settings/page/built-in-control-kinds.ts` (the `layout` kind)
   - modify `src/plugins/settings/main/selftest-script.ts` (the `layout picker` group)
@@ -63,7 +63,7 @@ Decisions:
 - **The picker is the kind `layout`.** The settings page registers it with the six built-in kinds, through the same
   `controlKinds.add` call. It is the seventh entry of `BUILT_IN_CONTROL_KINDS`, after `json`.
 - **Which settings declare it.** Every `<owner>.layout` setting and the core `shell.layout` (settled design). The core
-  map in `src/config/settings.ts` becomes `{ 'shell.layout': 'layout' }`. Each of the 25 manifests above adds
+  map in `src/config/settings.ts` becomes `{ 'shell.layout': 'layout' }`. Each of the 29 manifests above adds
   `settingControls: { layout: 'layout' }`. `src/plugins/workflow/manifest.ts` declares no `layout` setting (its four
   workflow plugins each declare their own), so it does not change.
 - **The owner is the setting path's first segment** (`leaf.path.split('.')[0]`). This holds for every case, checked
@@ -150,7 +150,7 @@ Tests:
   by the JSON kind of its `'default'` default, and reads no layout folder.
 
 Done when: `npm run typecheck` and `npm run lint` pass;
-`grep -L "settingControls: { layout: 'layout' }" <the 25 manifests>` prints nothing;
+`grep -L "settingControls: { layout: 'layout' }" <the 29 manifests>` prints nothing;
 `grep -n "'shell.layout': 'layout'" src/config/settings.ts` prints one line; the test gate runs the tests above.
 The self-test group runs in `12-final-verification.md`.
 
@@ -162,7 +162,7 @@ Doc lines this task makes stale (task 11 fixes them):
   names.
 - `docs/features/layouts/design.md` lines 62–63: the owner's setting is picked in Settings mode from the owner's
   layout names.
-- `AGENTS.md` § "A layout" (line 892 on): the layout setting has the `layout` picker in Settings mode.
+- `AGENTS.md` § "A layout" (line 955 on): the layout setting has the `layout` picker in Settings mode.
 - The `settingInfo` descriptions of the layout settings (for example `src/plugins/settings/manifest.ts`: "a folder
   name in settings' layouts folder, or default") stay true.
 

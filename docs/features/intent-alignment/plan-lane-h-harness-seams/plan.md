@@ -81,7 +81,7 @@ Every implementer:
 
 - `AGENTS.md` § Intent, § Architecture: "A plugin", "A registration", "A plugin talks", "A slot", "An MCP tool", "An
   agent harness", "A session control", "A setting", "An ambient service", and the `npm run lint` layer paragraph. It
-  is about 23k tokens whole; read the whole file only when a task's Mandatory line says so.
+  is about 34k tokens whole; read the whole file only when a task's Mandatory line says so.
 - `docs/features/agent-harnesses/design.md` — whole.
 - `wigley:writing-code`, `wigley:codebase-design`, `wigley:writing-tests` (read from the marketplace clone,
   `~/Documents/ai/wigley-ai-marketplace/plugins/wigley/skills/<skill>/SKILL.md`).

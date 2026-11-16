@@ -104,7 +104,7 @@ Tests:
 - The list of every `ComposerControlInput` literal (measured at plan time by `grep -rn "enabled: \(true\|false\)"
   src/plugins/chat src/shared --include='*.ts'`): `composer-kit.test.ts`, `layout.test.ts` and `session-part.test.ts`
   above, and `composer-input.test.ts`, whose `chipOf` copies `role` (above). `src/shared/fake-agent-harness.ts:401`
-  builds a `SessionControl`, not a `ComposerControlInput`. `npm run typecheck` fails on any literal left without
+  is the usage fixture's `extraUsage: { enabled: true, … }`, not a control: the fake's `SessionControl` literals (`startingControls`) carry no `enabled`. `npm run typecheck` fails on any literal left without
   `role`.
 - `chat-sessions.test.ts` › `restart_StartCarriesHeldModeAndConfirmedPicks`: the reported controls gain a role from a
   table `REPORTED_ROLES = { mode: 'permissionMode', approval: 'permissionMode', model: 'model', effort: 'effort' }`
@@ -124,7 +124,7 @@ Approach:
 - `composer-input.ts`: `composerInputOf` maps `role: control.role ?? null` into each `ComposerControlInput`.
   `pairModelAndEffort` finds by `controlCommand(control.role)`. `chipKeyCommands` reads `control.role`.
 - `composer-kit.ts` `controlChip`: `controlCommand(control.role)`. The index lookup by `held.id === control.id` stays.
-- `chat-sessions.ts` `controlValuesOf` (lines 571–585 at plan time): the held mode is the control whose role is
+- `chat-sessions.ts` `controlValuesOf` (lines 574–585): the held mode is the control whose role is
   `CONTROL_ROLES.permissionMode`, stored under that control's id. The function's test becomes `control.role ===
   CONTROL_ROLES.permissionMode ? control.value : confirmedPicks.get(control.id)`; `MODE_CONTROL_ID` and the comment
   over it (`A held mode narrows nothing…`) move onto the function's own comment, naming the role in place of the id.

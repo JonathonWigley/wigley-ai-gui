@@ -7,7 +7,7 @@ Plan: [plan.md](plan.md)
 
 Files:
 - modify `src/contracts/platform.ts` — `PlatformRelay` gains `serverName`
-- modify `src/shared/platform.ts` — `platformFor` sets `relay.serverName`
+- modify `src/shared/platform.ts` — `platformRecord` sets `relay.serverName`
 - test `src/shared/platform.test.ts`
 - modify `src/plugins/sessions/main/mcp/mcp-server.ts` — `TOOL_USE_ID_META_KEY`, `toolUseId()` and the name in `SERVER_INFO` go; `serveMcp` takes them as options
 - test `src/plugins/sessions/main/mcp/mcp-server.test.ts`
@@ -55,7 +55,7 @@ GIVEN a session whose hello named a registered harness WHEN a call arrives THEN 
 GIVEN a session whose hello named no harness, or a harness id with no registered adapter WHEN a call arrives THEN the tool-use id is null.
 
 Tests:
-- `src/shared/platform.test.ts` › `platformFor_Inputs_LaunchIsLaunchCommand` — a row added to the existing test: `expect(relay.serverName).toBe('wigley-forms')` for each OS.
+- `src/shared/platform.test.ts` › `platformFor_Inputs_RelayCarriesLaunchAndPid` — a row added to the existing test: `expect(relay.serverName).toBe('wigley-forms')` for each OS.
 - `src/plugins/sessions/main/mcp/mcp-server.test.ts` — the `connect` helper passes `{ serverName: 'test-forms', toolUseIdOf }`, where `toolUseIdOf` records each `meta` it receives and answers `'toolu_01'` when `meta` is not null, else null.
   - `initialize_ServerName_RepliesWithGivenName` — the `initialize` reply's `result.serverInfo.name` is `'test-forms'`.
   - `calls the session with the tool name, arguments and tool-use id` (existing) — the call sends `_meta: { 'claudecode/toolUseId': 'toolu_01' }`; it now also asserts `toolUseIdOf` received exactly `{ 'claudecode/toolUseId': 'toolu_01' }`, and `context.toolUseId` is `'toolu_01'`.
@@ -72,7 +72,7 @@ Tests:
 Approach:
 - `openRelay` in `src/plugins/sessions/main/start.ts` passes `serve: (streams, session) => serveMcp(streams, session, list, { serverName: api.services.platform.relay.serverName, toolUseIdOf: (meta) => harnessToolUseId(api.services.agentHarnesses, session.session.info, meta) })`.
 - `mcp-server.ts` passes `meta ?? null` from `request.params._meta` to `options.toolUseIdOf`. The SDK types `_meta` as `Record<string, unknown> | undefined`.
-- `platformFor` writes `serverName: RELAY_SERVER_NAME` beside `username` and `launch`. `fakePlatform` (`src/shared/platform.test-support.ts`) calls `platformFor`, so it needs no edit.
+- `platformRecord` (called by `createMacPlatform`, `createWindowsPlatform` and `createLinuxPlatform`; `platformFor` only dispatches) writes `serverName: RELAY_SERVER_NAME` beside `username`, `pid` and `launch`. `fakePlatform` (`src/shared/platform.test-support.ts`) calls `platformFor`, so it needs no edit.
 
 Done when: compiles (`npm run lint` and `npm run typecheck`); the test gate runs `src/shared/platform.test.ts`, `src/plugins/sessions/main/mcp/mcp-server.test.ts` and `src/plugins/sessions/main/start.test.ts`; `grep -rn --exclude='*.test.ts' 'claudecode/toolUseId\|wigley-forms' src/plugins/sessions` prints nothing (the test keeps `'claudecode/toolUseId'` as sample `_meta` data).
 

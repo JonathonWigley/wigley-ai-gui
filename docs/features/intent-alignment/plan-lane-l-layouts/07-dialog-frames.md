@@ -138,7 +138,7 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
 
 - Files: modify `src/plugins/sessions/layouts/layout.d.ts` · `src/plugins/sessions/layouts/default/layout.js` ·
   `src/plugins/sessions/page/layout/read-sessions-layout.ts` · `src/plugins/sessions/page/layout/sessions-parts.ts` ·
-  `src/plugins/sessions/page/rename-dialog.ts` · test `src/plugins/sessions/page/rename-dialog.test.ts`
+  `src/plugins/sessions/page/sessions-view.ts` · `src/plugins/sessions/page/rename-dialog.ts` · test `src/plugins/sessions/page/rename-dialog.test.ts`
 - Part: `dialogFrame?(parent, input: DialogFrameInput, kit: SessionsKit): DialogFramePart`. Comment's dialogs: "the
   rename dialog".
 - Comment: line 61 "Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's
@@ -147,7 +147,7 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
 - Parts: `SessionsParts.dialogFrame(parent: HTMLElement, input: DialogFrameInput): DrawnPart<DialogFramePart>` through
   `parts.redraw('dialogFrame', parent, build)` (slot `dialogFrame`), kit `sessionsKit(rollback)`.
 - View: `RenameDialogDeps.parts` becomes `Pick<SessionsParts, 'renameDialog' | 'dialogFrame'>`; `createDialog('Rename
-  session', { hasActions: false, drawFrame })`. `redraw()` runs `dialog.redrawFrame()` always, then `drawBody()` while
+  session', { hasActions: false, drawFrame })`. `start.ts` passes `view.parts`, so `SessionsView.parts` (`sessions-view.ts`, task 03) widens to `Pick<SessionsParts, 'renameDialog' | 'pickerRow' | 'dialogFrame'>`. `redraw()` runs `dialog.redrawFrame()` always, then `drawBody()` while
   renaming. `start.ts`'s `setLayouts` already calls `renameDialog.redraw()` after `view.setLayouts(shown)`.
   `drawBody` already reads `dialog.body` on each call.
 - Test: `redraw_ChangedLayout_DrawsTheFrameAndKeepsTheBox` — dialog open with typed text; a user layout defining
@@ -185,7 +185,7 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
 - Part: `dialogFrame?(parent, input: DialogFrameInput, kit: PracticeKit): DialogFramePart`. Comment's dialogs: "the
   import dialog and the Solution confirm". `ConfirmBodyKit` becomes `extends PracticeKit, ConfirmButtonsKit {}`, its
   two members and their comment removed (`ConfirmButtonsKit` carries them). Import `ConfirmButtonsKit` from the kit.
-- Comment: line 203 "(the Dialog primitive's scrim, panel and title stay the app's)" becomes "(`dialogFrame` draws the
+- Comment: line 190 "(the Dialog primitive's scrim, panel and title stay the app's)" becomes "(`dialogFrame` draws the
   dialog's panel and title; the app keeps its scrim, keys and focus)".
 - Parts: practice has no parts module; the two views each hold a `LayoutParts`. Import box: `ImportBoxDeps` gains
   `drawFrame: DrawDialogFrame`; `practice-view.ts` passes `(parent, input) => parts.redraw('dialogFrame', parent,
@@ -238,7 +238,7 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
   goes. `scroller` becomes a getter returning `dialog.panel`. `layoutsChanged()` runs `dialog.redrawFrame()` with
   `draw()` while shown; when hidden it sets `isStale`, and `show()` runs `dialog.redrawFrame()` and `draw()` when
   stale. `start.ts`: remove `closeHint` and its `keys.anchor` (lines 95–98), the two arguments, and
-  `closeHelpCommand` (line 94): `closeHelp` (about line 112) does not use it, so it is unused once the arguments go.
+  `closeHelpCommand` (line 94): `closeHelp` (about line 115) does not use it, so it is unused once the arguments go.
   Remove the `qualify` import (line 17) too, since nothing else in the file uses it; `element` stays (line 140).
 - Comment: `layouts/layout.d.ts` lines 2–4 "The app keeps the help dialog (its title, scrim and Close button), the
   which-key panel's placement and timers," becomes "The app keeps the help dialog's scrim, keys and focus (its
@@ -262,7 +262,7 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
   through `parts.redraw('dialogFrame', parent, build)`, kit
   `createBaseKit(ownerBaseKitDeps(sessionStashManifest, deps, null, rollback))`, as `noteDialog`'s.
 - View: `NoteDialogDeps.parts` becomes `Pick<SessionStashParts, 'noteDialog' | 'dialogFrame'>`; `redraw()` runs
-  `dialog.redrawFrame()` always, then the body while stashing. `start.ts` line 85 already calls `noteDialog.redraw()`.
+  `dialog.redrawFrame()` always, then the body while stashing. `start.ts` line 87 already calls `noteDialog.redraw()`.
 - Test: add to `redraw_ChangedLayout_KeepsOneBodyAndTheTypedNote` its layout defining `dialogFrame`, and assert the
   scrim holds one panel, carrying the user name, with the body inside it. Both assertions check the same redraw.
 
@@ -297,11 +297,11 @@ Leave out `drawFrame` nowhere outside forms: task 11 makes it required.
   Comment for `confirmBody`: "The cancel confirm's body, scope `primer.confirm`: `input.body` and the prompt's two
   buttons. A button the part leaves out goes at the end of the frame's actions row." Reader: `PANE_PARTS` in
   `read-primer-layout.ts` gains `confirmBody: true` and `dialogFrame: true`.
-- Default `confirmBody`: as backlog's default (`backlog/layouts/default/layout.js` line 253):
+- Default `confirmBody`: as practice's default (`practice/layouts/default/layout.js` line 244, `confirmBody(parent, input, kit)`):
   `return kit.el(parent, 'p', '', input.body);`. It leaves both buttons out, so the prompt appends them to the
   frame's actions row, and the DOM matches today's prompt-drawn body.
 - View: primer draws with `drawPart` and `pickPart(shownLayouts, part)`, with no `LayoutParts`. In
-  `mountPrimerPopups`, move the `let shownLayouts` declaration (now after the prompt, line 346) above
+  `mountPrimerPopups`, move the `let shownLayouts` declaration (now after the prompt, line 347) above
   `createConfirmPrompt`: the prompt draws its body while it is made, and the draw reads `shownLayouts`. Build one
   `PrimerKitDeps` from `deps` as `createPrimerFormView` builds `partDeps` (line 614). Pass
   `drawBody(body, promptParts)` and `drawFrame(parent, input)`, each through `drawPart({ owner: 'primer', pick:

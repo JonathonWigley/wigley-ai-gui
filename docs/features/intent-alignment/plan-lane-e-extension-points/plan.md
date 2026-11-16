@@ -63,7 +63,7 @@ wigley-ai-gui folder of the clone or worktree the run works in; `MKT` is `/Users
    `grep -n "FormsMainExports\|formsMainKey" GUI/src/plugins/forms/contract.ts` and
    `grep -n "SettingsPageExports\|settingsPageKey" GUI/src/plugins/settings/contract.ts` print nothing.
 9. Retro keeps its own action table: `grep -n "ORIGIN_ACTION_LABELS" MKT/plugins/wigley/scripts/retro/answers.py`
-   prints its definition and its two reads.
+   prints its definition (line 48), its two reads (266, 284) and the docstring mention (line 10).
 10. Two types share the name `FormsView`: the union in `src/plugins/forms/contract.ts` and the interface in
     `src/plugins/forms/page/forms-view.ts`; `viewChanged` has no listener outside forms:
     `grep -rn "viewChanged" GUI/src --include='*.ts' | grep -v "plugins/forms/"` prints nothing.

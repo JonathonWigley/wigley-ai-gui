@@ -142,7 +142,7 @@ the four test files above and `src/main/config/user-keymap.test.ts` and `src/mai
 Doc lines this task makes stale (task 11 fixes them):
 - `docs/keymap.md` lines 19–21: "the optional manifest `keys` is for a plugin from outside the repo" — add that
   `keys` takes `remaps` in the user keymap's shape and layers them by dependency order.
-- `AGENTS.md` § "A key" (line 639 on): the layer sentence names binds and `unbind`; add that a manifest's `keys`
+- `AGENTS.md` § "A key" (line 697 on): the layer sentence names binds and `unbind`; add that a manifest's `keys`
   takes `remaps`, layered the same way.
 - `docs/features/plugin-framework/design.md` line 380 (Plugin remaps): re-read against the code; add that a
   disabled plugin's remaps leave the served keymap and a paused plugin's stay.

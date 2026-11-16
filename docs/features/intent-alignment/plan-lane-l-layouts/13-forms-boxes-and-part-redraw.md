@@ -76,7 +76,7 @@ Produces:  in `src/plugins/forms/page/layout/layout-resolver.ts`:
 - **What a part's dispose reaches.** Today each anchor and markdown mount a part makes is recorded twice: in the
   round's `anchors` list and in the draw's rollback. A part drawn again alone disposes its own through its draw;
   the round's `dispose` disposes each part's draw and then the round's own list. An anchor disposed twice is safe
-  (`key-anchors.ts` `dispose` returns at once when `live.delete` finds nothing); a markdown mount disposed twice must
+  (`src/renderer/key-anchors.ts` `dispose` returns at once when `live.delete` finds nothing); a markdown mount disposed twice must
   also be safe: read its dispose in `src/shared/page/markdown-mount.ts`, and when it is not safe, record a part's
   mounts only in its draw's rollback.
 - **`setLayouts(nextShown, current)`** picks again, computes `changedPicks(picks, nextPicks)`, sets `picks`, and

@@ -74,11 +74,11 @@ Decisions:
 - A return re-attaches through `attach`, the path an app relaunch takes (design doc § A harness reloading). For each
   held row waiting on the id: the waiting state lifts and the waiting notice goes. A row whose profile its harness no
   longer declares rests with the missing-profile notice, and nothing attaches. That notice is `missingProfileText(name)`
-  in `chat-sessions.ts` (near line 548, called near line 2945 at plan time). Neither task 05 nor task 10 rewrites it,
+  in `chat-sessions.ts` (line 551, called at line 2982). Neither task 05 nor task 10 rewrites it,
   so it still reads `Profile <name> is not in chat's profiles setting; add it back to resume this session.`, naming a
   setting that no longer exists. This task rewrites it to
   `` `Profile ${name} is not declared by ${harnessLabel}; add it back to resume this session.` `` and gives the
-  function a second parameter `harnessLabel: string` (the call near line 2945 passes `deps.harnessLabelOf(record.harness)`). A row with no
+  function a second parameter `harnessLabel: string` (the call at line 2982 passes `deps.harnessLabelOf(record.harness)`). A row with no
   `unheldProcessId` changes nothing more. Any other row replaces its entries with `[]`, sets `historyPending` to its
   `sent` and `historyBefore` to null, and runs `settleUnheld`, which lists the host:
   - its process runs here: `attachProcess` replays it (`historyBefore` becomes the process's `startedAt`);

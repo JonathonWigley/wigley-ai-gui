@@ -202,7 +202,7 @@ Tests:
   and `'[docs] closed the editor on installed_plugins.json'` now pass through the fake's `listedAt`, and every docs
   index step through `locateScript` finding the stand-in script by the fake's installs.
 Approach:
-- `docs/features/docs-browser/design.md`: line 103 says the script is found through the wigley install each
+- `docs/features/docs-browser/design.md`: lines 102–103 say the script is found through the wigley install each
   registered harness profile lists (`installedPlugins`); line 131 says one load-state chip per registered harness, in
   registration order, with the adapter's label; lines 150–153 say each registered profile's config folder,
   `~/.agents` and `~/wigley-agents`, and the adapter's plugin caches; line 240's rollup example reads

@@ -221,10 +221,10 @@ prints nothing; `grep -rn "pickerItems\|parseBoxText" src/plugins/settings` prin
 tests above. Runtime and visual checks are in `12-final-verification.md`.
 
 Doc lines this task makes stale (task 11 fixes them):
-- `AGENTS.md` § "A setting" (line 861 on): add that a setting's control kind is a string id that `settingControls`
+- `AGENTS.md` § "A setting" (line 924 on): add that a setting's control kind is a string id that `settingControls`
   (manifest, or `src/config/settings.ts` for the core) binds by path, and that the settings page registers each
   kind through `SettingsPageExports.addControlKind`.
-- `AGENTS.md` § "A plugin" (line 446): the list of what `manifest.ts` declares gains the setting control bindings.
+- `AGENTS.md` § "A plugin" (line 502): the list of what `manifest.ts` declares gains the setting control bindings.
 - `docs/features/settings/design.md` lines 54–60 ("Controls by kind"): the closed list becomes the built-in kinds;
   a plugin registers more; a row with an unknown kind draws and resets only.
 - `docs/features/settings/design.md` line 179: "each leaf's declaration (label, description, control, default)" —

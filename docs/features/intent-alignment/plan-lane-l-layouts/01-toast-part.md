@@ -99,7 +99,7 @@ Commit:    one commit for the group: `src/renderer/shell/layouts/layout.d.ts`
   build (`floatingPanel`, `TOAST_DOTS`, `statusDot`, `element`) and their imports. Keep `TOAST_MS = 4000` and the
   `toasts.css` import. Rewrite the function comment to say the shell layout draws each toast and the core keeps the
   marks, the fade, the timing and the removal.
-- **Wiring** (`renderer.ts`, at the `createToasts(toastLayer, timers)` call, about line 281). Pass
+- **Wiring** (`renderer.ts`, at the `createToasts(toastLayer, timers)` call, about line 282). Pass
   `(parent, input) => chrome.drawToast(parent, input)` as the third argument and `(message) => log('toasts', message)` as
   the fourth. `chrome` is already built above that line.
 - No doc edit: `docs/features/layouts/design.md` (the shell Adopters row, § What a layout draws) and `AGENTS.md` were

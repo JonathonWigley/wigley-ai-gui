@@ -110,8 +110,8 @@ Every `entry.kind` site and what it does for a harness kind (measured at plan ti
 | `chat/page/chat-kit.ts` 102, 110, 124 (`permissionActions`, `images`, update) | `permissionActions` and `images` throw as for any other kind |
 | `chat/page/chat-state.ts` 33 (waiting permission) | matches none |
 | `chat/page/chat-view.ts` `toastedKinds` | holds harness kinds too |
-| `chat/main/chat-sessions.ts` 1715 (Bash calls' worktrees) | skipped |
-| `chat/main/chat-sessions.ts` 2140 (older-host notice filter) | kept |
+| `chat/main/chat-sessions.ts` 1745 (Bash calls' worktrees) | skipped |
+| `chat/main/chat-sessions.ts` 2171 (older-host notice filter) | kept |
 | `chat/main/chat-sessions.ts` `rowEntryOf`, `chat/main/chat-slots.ts` `putEntry` | stored and sent as any entry |
 | `chat/main/preview/preview-session.ts` | gains the `preview:sample` entry |
 | `chat/main/preview/chat-preview.ts` 108 | builds a notice; unchanged |

@@ -205,7 +205,7 @@ Session host start (plan.md § Decisions › Session host start too):
     `command: async () => ({ command: '/bin/claude', args: ['--x'] })`, the hosted request's `args[0]` is `'--x'`,
     followed by the launch args.
   - The session tests that emit on the fake child in the tick after `started()` (`spawnNotFound_EndsWithHint` at
-    `:1455` today; find the rest by running the file) await `settle()` first, because `host.spawn` now runs after
+    `:1467` today; find the rest by running the file) await `settle()` first, because `host.spawn` now runs after
     `deps.command()` resolves.
 - `src/main/session-host/session-host-client.test.ts`: `clientRig` swaps `SessionHostSpawn` for a `FakeProcesses`
   wrapped as `{ spawn: (c, a, o) => { const handle = fake.spawn(c, a, o); spawned(handle); return handle; } }`. The
@@ -229,15 +229,15 @@ Live checks: 07 — Final verification.
 - `AGENTS.md` source-tree `session-host/` line: "starts the host when none answers" gains: through
   `ProcessRunner.spawn`, detached.
 - `AGENTS.md`, every other line naming how the app starts `claude` or the host: run
-  `grep -n "spawn\|claude.command\|.local/bin" AGENTS.md` and fix each untrue line. At plan time, lines 63, 206,
-  811 and 1137 hold `spawn`, and none of them is untrue after this task.
+  `grep -n "spawn\|claude.command\|.local/bin" AGENTS.md` and fix each untrue line. At plan time, lines 63, 330,
+  873 and 1213 hold `spawn`, and none of them is untrue after this task.
 - `docs/features/agent-chat/design.md` line 111: "an app started from the Dock has no shell `PATH` or
   `CLAUDE_CONFIG_DIR`" is untrue for `PATH`. State that an empty `claude.command` looks `claude` up on the
   login-shell PATH, then in `~/.local/bin`, and keep the `CLAUDE_CONFIG_DIR` reason for the profiles setting.
 - `docs/features/intent-alignment/master-plan.md` § Lane P: tick `- [ ] Per-platform program lookup and spawning
   [ready]` to `- [x]`.
 - `docs/features/followups.md` § Platform and packaging: remove the `**Per-platform program lookup and
-  spawning**` entry (5 lines, starting at `:351` at plan time). In its place, add one *needs a feature plan* entry,
+  spawning**` entry (5 lines, starting at `:353` on 2026-11-16). In its place, add one *needs a feature plan* entry,
   **Session host starts a claude shim on Windows**: the session host process's own spawn starts `claude` unwrapped,
   so a `claude.command` set to an npm `claude.cmd` cannot start a session, and the PATH lookup looks only for
   `claude.exe`; the fix puts the session host's adapters (`src/session-host/`) behind the same shim handling, then

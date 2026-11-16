@@ -31,8 +31,8 @@ Files:
   `src/plugins/docs/main/selftest-fixture.test.ts` · `src/plugins/chat/main/chat-slots.test.ts`
 - test, `harness` added to each `ChatSessionInfo` or `ChatSessionState` literal (measured at plan time, re-verify
   with `npm run typecheck`): `src/plugins/chat/main/chat-slots.test.ts` (`STATE`, line 42),
-  `src/plugins/chat/main/chat-sessions.test.ts` (`keptSessionInfo`, line 316; the `sessionStarted` expectation at
-  line 870, a runtime `toEqual`), `src/plugins/chat/page/chat-view.test.ts` (`stateOf`, line 105),
+  `src/plugins/chat/main/chat-sessions.test.ts` (`keptSessionInfo`, line 317; the `sessionStarted` expectation at
+  line 878, a runtime `toEqual`), `src/plugins/chat/page/chat-view.test.ts` (`stateOf`, line 105),
   `src/plugins/chat/page/chat-commands.test.ts` (`state`, line 128), `src/plugins/chat/page/start.test.ts`
   (`SESSION`, line 43), `src/plugins/auto-retro/main/start.test.ts` (`sessionInfo`, line 62),
   `src/plugins/auto-retro/main/retro-done.test.ts` (line 14), `src/plugins/workflow/main/start.test.ts`
@@ -98,7 +98,7 @@ Decisions:
   update type in `src/plugins/chat/main/chat-slots.ts` (line 36 at plan time) becomes
   `Partial<Omit<ChatSessionInfo, 'sessionId' | 'projectDir' | 'profile' | 'harness'>>`, so no update changes it.
   `info()` (line 106) returns the slot value as it is and needs no edit. The `deps.slots.open` states in
-  `chat-sessions.ts` (line 1557 at plan time) and `preview/chat-preview.ts` (line 71) gain `harness`: the row's
+  `chat-sessions.ts` (line 1587) and `preview/chat-preview.ts` (line 71) gain `harness`: the row's
   harness, and `FAKE_HARNESS_ID` in the preview.
 - The start prompt opens nothing when `defaultHarness` names no harness in `core.agentHarnesses`: it logs and toasts
   (tone `error`) `No agent harness "<id>" is registered. Set chat's defaultHarness to a registered harness.` (drafter:
@@ -137,15 +137,14 @@ Decisions:
   (`src/contracts/plugin.ts`, `SelfTestScript.settings`: "main parts have already started on their defaults"). So
   `main.ts` lays `{ chat: { defaultHarness: FAKE_HARNESS_ID } }` over the plugin settings in the self-test and in a
   drive run whose `environment.harness` is `'fake'`, at three reads (lines at plan time): the `pluginSettings`
-  reader handed to `createMainApi` (line 931), the `onPluginSettingsChanged` listener's argument (line 933), and
-  `served()` (line 1197, before `applySelfTestConfig`).
+  reader handed to `createMainApi` (line 981), the `onPluginSettingsChanged` listener's argument (line 983), and
+  `served()` (line 1252; its `applySelfTestConfig` call, line 1254, sits inside `withAppliedList`).
 - One helper does it, so the three reads cannot drift: `fakeRunPluginSettings(pluginSettings, environment)` in
   `src/main/selftest-config.ts`, beside `applySelfTestConfig`, which already imports `overrideSettings`. It returns
   `overrideSettings(pluginSettings, { chat: { defaultHarness: FAKE_HARNESS_ID } })` when `environment.mode` is
   `'selfTest'`, or is `'drive'` with `environment.harness` `'fake'`, and `Object.hasOwn(pluginSettings, 'chat')`;
   else it returns `pluginSettings` itself. The `chat` check is needed because `overrideSettings` throws
-  `Settings override names no plugin "chat"` on an absent plugin. `main.ts` passes `runEnvironment` (line 212 at
-  plan time): `pluginSettings: () => fakeRunPluginSettings(store.current().pluginSettings, runEnvironment)`, the
+  `Settings override names no plugin "chat"` on an absent plugin. `main.ts` passes `runEnvironment` (line 220): `pluginSettings: () => fakeRunPluginSettings(store.current().pluginSettings, runEnvironment)`, the
   listener gets `fakeRunPluginSettings(config.pluginSettings, runEnvironment)`, and `served()` hands
   `applySelfTestConfig` `{ ...store.current(), pluginSettings: fakeRunPluginSettings(store.current().pluginSettings,
   runEnvironment) }`. Its comment: "`pluginSettings` as a fake run reads them: chat's `defaultHarness` is the fake's
@@ -155,7 +154,7 @@ Decisions:
   registered id, matched by equality (task 07), and a fake run registers `fake`, not `claude`. So
   `src/plugins/docs/main/selftest-fixture.ts` writes its load states and its plugin entry under `FAKE_HARNESS_ID`:
   the `state(primary, codex?)` helper (line 248 at plan time) returns `{ [FAKE_HARNESS_ID]: primary }`, plus
-  `codex` when given, typed `Partial<Record<string, LoadStateRecord>>`; the plugin entry's `meta.harness` (line 430)
+  `codex` when given, typed `Partial<Record<string, LoadStateRecord>>`; the plugin entry's `meta.harness` (line 432)
   is `FAKE_HARNESS_ID`. The fixture's `codex` records stay: no `codex` harness registers, so they draw no chip.
   Without this change the docs self-test's `i` step on the plugin (`'[docs] editing installed_plugins.json'`) breaks:
   `pluginConfigFile(key, 'claude')` finds no install, since the fake's installs are listed under `fake`.
@@ -223,7 +222,7 @@ Tests:
   `harness: 'gone'`: the row opens resting, its last entry is the error notice
   `No agent harness "gone" is registered; turn its plugin on to resume this session.`, and no harness `attach` runs.
 - `src/plugins/chat/main/chat-sessions.test.ts` › every existing expectation of `harness: 'claude'` on a row that runs
-  on `createFakeAgentHarness` becomes `FAKE_HARNESS_ID` (measured at plan time, re-verify: lines 577, 667, 853, 1084),
+  on `createFakeAgentHarness` becomes `FAKE_HARNESS_ID` (measured at plan time, re-verify: lines 578, 668, 861, 1092),
   and `setUp` passes `defaultHarness: () => FAKE_HARNESS_ID`.
 - `src/plugins/chat/main/open-sessions.test.ts` › `load_FileShape_ReadsOrRejects`: add a row `a record with no
   harness` whose record loads with `harness: 'claude'`; the `TWO_SESSIONS` fixture records gain `harness` (one

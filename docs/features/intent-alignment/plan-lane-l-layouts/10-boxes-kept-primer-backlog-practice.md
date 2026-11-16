@@ -35,7 +35,7 @@ dropping `keepFocusedBox`; it stays, because the refocus and the sweep must run 
 ## Primer
 
 - `PrimerPartKitDeps.boxes` becomes `Pick<EditorBoxes<PrimerBox>, 'place' | 'release'>`.
-- `appendField` (~L416) now: makes `inputFrame()`, mounts into it, records `destroyBox`. After, in this order: build
+- `appendField` (~L435) now: makes `inputFrame()`, mounts into it, records `destroyBox`. After, in this order: build
   `field` with its section header, `parent.append(field)`, call `deps.boxes.place(field, primerBox, boxText(primer,
   box.target))` (it appends the frame after the header), add `primer-box` to the frame, append the `boxHint` keys
   after it, and record `rollback.recordBox(() => deps.boxes.release(primerBox))`. The field is attached before the
@@ -47,7 +47,7 @@ dropping `keepFocusedBox`; it stays, because the refocus and the sweep must run 
 - `primer-view.ts` `rebuildCard` (~L631) keeps its `keepFocusedBox` call; `card.dispose()` now releases the card's
   boxes, and the sweep ends a box the new card leaves out (the add-item box once its task holds 20 items).
 - `destroyPrimerView`'s `destroyForm` and `forgetForm` stay.
-- The doc comment of `createPrimerFormView` (~L565: "its boxes destroyed and mounted again") says after: the
+- The doc comment of `createPrimerFormView` (~L564: "its boxes destroyed and mounted again") says after: the
   card's boxes move into the new card, and a box the new card leaves out is destroyed.
 
 ## Backlog
@@ -74,7 +74,7 @@ dropping `keepFocusedBox`; it stays, because the refocus and the sweep must run 
 
 ## Practice
 
-- `textBoxSlot` (~L492): after, `boxes.place(parent, id, store.get().drafts[id].text)`, add `practice-box` and
+- `textBoxSlot` (~L524): after, `boxes.place(parent, id, store.get().drafts[id].text)`, add `practice-box` and
   `practice-box--<id>` to the frame, and record `rollback.recordBox(() => boxes.release(id))`.
 - **A replaced draft still mounts anew.** `place` would only `setText` a kept editor, which keeps its undo history,
   so a box must not be kept across a new problem or a draft replaced from disk: those start a fresh editor.
@@ -87,7 +87,7 @@ dropping `keepFocusedBox`; it stays, because the refocus and the sweep must run 
   (a no-op when the sweep already ended the box), then places, then sets `placedFor[id]`. A tab switch, a
   `drawBodies` redraw for the same problem and a `setLayouts` keep the box while it stays shown; a box on a tab that
   is no longer shown is released and the sweep ends it, as its destroy does today.
-- `drawBodies` (~L808) and `setLayouts` (~L1247) keep their `keepFocusedBox` calls. `boxReplaces` and
+- `drawBodies` (~L833) and `setLayouts` (~L1280) keep their `keepFocusedBox` calls. `boxReplaces` and
   `drawnProblemKey` stay as they are: they still make the tab draw again on a replace.
 - `drawBoxTab`'s left-out check (`!boxes.isMounted(id)`) stays: `disposeDraws` releases before the draw.
 - `dispose`'s `boxes.destroyForm(FORM_ID)` stays.
