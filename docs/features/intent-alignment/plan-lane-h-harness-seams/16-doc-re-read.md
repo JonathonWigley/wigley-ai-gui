@@ -11,7 +11,7 @@ Files:     modify `docs/features/agent-harnesses/design.md` · modify `AGENTS.md
            (each only where the landed code disagrees with it)
 Consumes:  the landed code of tasks 01–15
 Produces:  no code; each doc agrees with the landed code
-Decisions: The docs were written ahead of the code (commits 627525d9 and a5f09f26), so each is a hypothesis until this
+Decisions: The docs were written ahead of the code (commits `6da8397b8` and `8b85b743f`), so each is a hypothesis until this
            task reads it against the code (plan.md § Docs written ahead; `wigley:writing-for-agents` § Doctrine before
            code). The code wins over the doc, except where the code breaks a settled decision in plan.md: then the
            code is the bug, and the task reports it to the lead instead of rewriting the doc.

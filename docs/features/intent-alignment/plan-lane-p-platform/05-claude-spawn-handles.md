@@ -5,7 +5,7 @@ Type: Task
 Wave: 5 · Depends on: 04
 Plan: [plan.md](plan.md)
 
-Lane H marks: this task is written against the tree at `8cd4caaf`. Each step that Lane H's three items move is marked
+Lane H marks: this task is written against `main` as of 2026-11-09. Each step that Lane H's three items move is marked
 **[Lane H]**. At Wave 5 start, apply the step to the landed home that the mark names: the harness construction (out of
 `main.ts` into the Claude harness plugin, which takes `api.services.processes`), `claude.command` (into that plugin's
 manifest), and `permissionTool` (out of the harness deps).

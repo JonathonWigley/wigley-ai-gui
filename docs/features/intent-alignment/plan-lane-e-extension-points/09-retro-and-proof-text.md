@@ -68,11 +68,11 @@ AGENTS:
   same commit. `2.3.3` at plan time → `2.3.4`; when `origin/main` holds a newer version at landing, bump one patch
   above it.
 - **Landing order.** The marketplace and `forms.md` text tells agents to leave `proof` out off a Nit, which the tool
-  before 08 refuses. Land 09 only after 08's commit is on wigley-ai-gui `main`. The user's installed app (Auri) still
+  before 08 refuses. Land 09 only after 08's commit is on the `ai` repo's `main`. The user's installed app (Auri) still
   runs the tool before 08 until the user installs a ref that holds 08 (the `install` skill): the run's wrap-up names
   that install.
-- **`forms.md` is the user's file in `~/wigley-agents`.** The plan settled this edit with the user. Commit it in its
-  own repo, through § Landing.
+- **`forms.md` is the user's file in `~/wigley-agents`.** The plan settled this edit with the user. Commit it as its
+  own commit, in the same worktree, through § Landing.
 - **Stale line found.** `triage.md`'s `nit` bullet says a nitpick goes as a `caused` or `pre_existing` finding with
   `recommend_action` `fix_now` "(Fix anyway)". On a Defect card `fix_now` reads "Fix now"; "Fix anyway" is the Nit
   card's word. The line changes to "(Fix now)".
@@ -181,7 +181,7 @@ are task 12's ("Final verification").
 
 ## Commit
 
-One commit per repo:
+One commit per folder, all in the one `ai` worktree:
 
 - MKT: `Retro reads each finding answer's action_label; proof is required on a Nit alone in the forms README, triage and
   make; bump to 2.3.4` — the version bump rides this commit.

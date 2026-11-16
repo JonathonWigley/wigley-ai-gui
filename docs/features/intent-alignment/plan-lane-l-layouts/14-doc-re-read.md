@@ -7,7 +7,7 @@ Plan: [plan.md](plan.md)
 
 Files:     modify (only where a line is stale) `AGENTS.md` · `DESIGN.md` · `docs/features/layouts/design.md`
 Consumes:  the landed code of tasks 01–13
-Produces:  every doc written ahead (commit `2b872f58`) and every doc line tasks 11–13 edited, true to the landed code
+Produces:  every doc written ahead (commit `204d990b5`) and every doc line tasks 11–13 edited, true to the landed code
 Decisions: the docs were written before the code (plan.md § Docs written ahead), so each is a hypothesis checked line
            by line (`wigley:writing-for-agents` § Doctrine before code) · a fix states what the code does, never what
            the plan intended

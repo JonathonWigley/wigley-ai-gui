@@ -5,7 +5,7 @@ Type: Task
 Wave: 4 · Depends on: 03 and the Lane H gate (plan.md § Cross-lane gate)
 Plan: [plan.md](plan.md)
 
-Lane H marks: this task is written against the tree at `8cd4caaf`. Each step that Lane H's three items move is marked
+Lane H marks: this task is written against `main` as of 2026-11-09. Each step that Lane H's three items move is marked
 **[Lane H]**. At Wave 4 start, apply the step to the landed home that the mark names.
 
 Files:
@@ -28,7 +28,7 @@ Files:
   `src/main/config/user-settings.test.ts:11`
 - modify docs `AGENTS.md` · `docs/features/unity-pool/design.md`
 
-Every `ProcessRunner` implementer in the tree, checked at `8cd4caaf` with `grep -rn "ProcessRunner"`:
+Every `ProcessRunner` implementer in the tree, checked on 2026-11-09 with `grep -rn "ProcessRunner"`:
 `createNodeProcesses` (node adapter), `limitRuns`, `abortableProcesses`, `FakeProcesses`, and the test literals in
 `limited-processes.test.ts` (two) and `judge.test.ts` (one). Each one gains `spawn` and `resolveProgram`. Every
 other `ProcessRunner` user only calls `run` and does not change: `process-git.ts`, `system-stats/*`,

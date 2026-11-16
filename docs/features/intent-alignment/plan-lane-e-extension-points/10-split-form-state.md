@@ -8,7 +8,7 @@ Plan: [plan.md](plan.md)
 A pure refactor. No behaviour changes. The risks are a lost export and an import cycle.
 
 Paths below are relative to `src/plugins/forms/`. Facts below were measured at plan time (2026-11-09, tip
-`4db26eee`), before 07 and 08 landed. Re-verify each one before the first edit.
+`cdc8e91ff`), before 07 and 08 landed. Re-verify each one before the first edit.
 
 **Before the first edit.** Read the 07 and 08 commits on `page/form-state.ts`
 (`git log --oneline -- src/plugins/forms/page/form-state.ts`). Then list today's exports
@@ -85,7 +85,7 @@ Decisions:
 - **`form-state.ts` keeps its name.** It keeps the session state, so the importers of `apply`, `initialState`,
   `FormsState`, `FormsAction`, `FormsStore` and `roundPlace` do not change.
 - **No barrel.** `form-state.ts` re-exports nothing. Every importer imports each member from the module that holds
-  it. This follows the autosave split (`0f412323`): the shared lifecycle moved to `src/shared/page/session-forms.ts`
+  it. This follows the autosave split (`e6fda171e`, then `9f0bebd19`): the shared lifecycle moved to `src/shared/page/session-forms.ts`
   and `src/shared/page/autosave.ts`, and importers (`form-state.test.ts` reads `saveState` and `activeForm` there)
   import from them directly. At plan time no file in `src/plugins/forms/page` has an `export … from`.
 - **`applyItemAction` splits by responsibility.** `form-state.ts` keeps its switch for the navigation and notice
@@ -145,7 +145,7 @@ Tests (moves only; describe counts measured at plan time, 25 blocks and 117 `it`
 Done when:
 - `npm run typecheck` passes; `npm run lint` passes (the layer check included).
 - The moved tests and every forms page test pass: `npm test -- src/plugins/forms` (`wigley:make`'s gate runs it).
-- The whole-tree checks, each run from the repo root:
+- The whole-tree checks, each run from the wigley-ai-gui folder:
   - `grep -rn "form-state'" src` lists only importers of the `form-state.ts` Produces members.
   - `grep -rn "\bFormsView\b" src --include='*.ts'` prints only the two `page/forms-view.ts` lines that name the
     page interface (its definition and `mountFormsView`'s return type, 111 and 128 at plan time).

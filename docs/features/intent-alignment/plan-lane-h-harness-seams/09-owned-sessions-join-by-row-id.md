@@ -192,8 +192,8 @@ Approach:
 
 Done when: compiles (`npm run lint` and `npm run typecheck`); the test gate runs the wigley-ai-gui tests above; from the marketplace root, `(cd plugins/wigley/scripts/forms && python3 -m unittest discover)`, `python3 scripts/check_manifests.py`, `python3 scripts/check_manifests.py --against origin/main`, `python3 scripts/check_pointers.py` and `claude plugin validate .` pass.
 
-Commit: two commits, one per repo.
+Commit: two commits in the one `ai` worktree, one per folder.
 - wigley-ai-gui: one commit for the group. It also removes the "Owned sessions join by an adapter key" item from `docs/features/followups.md` § Harness seams, and ticks `- [ ] Owned sessions join by an adapter key [plan]` in `docs/features/intent-alignment/master-plan.md` § Lane H.
-- wigley-ai-marketplace: one commit holding `relay.py`, `test_relay.py`, the README and the version bump in both manifests, landed per `~/wigley-agents/WigleyRepos.md` § Landing (its own worktree, merged into `main`, pushed).
+- wigley-ai-marketplace: one commit holding `relay.py`, `test_relay.py`, the README and the version bump in both manifests, landed per `~/wigley-agents/WigleyRepos.md` § Landing (the same worktree as the wigley-ai-gui commit, fast-forwarded into `main`, pushed).
 
 ## Proof

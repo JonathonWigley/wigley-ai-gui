@@ -53,7 +53,7 @@ first re-reads its Files against the tree and follows Lane E's names; the decisi
 
 ## Preconditions
 
-Re-run by `wigley:make` before the first dispatch (`<repo>` is the clone or worktree the run works in):
+Re-run by `wigley:make` before the first dispatch (`<repo>` is the wigley-ai-gui folder of the clone or worktree the run works in):
 
 1. The docs written ahead are on the target: `git -C <repo> log --oneline --grep 'Lane L docs ahead' main` prints
    one line.
@@ -71,7 +71,7 @@ Re-run by `wigley:make` before the first dispatch (`<repo>` is the clone or work
 
 ## Docs written ahead
 
-Commit `2b872f58` ("Lane L docs ahead: …"): `AGENTS.md` (the shell line in Architecture), `DESIGN.md` (the Dialog
+Commit `204d990b5` ("Lane L docs ahead: …"): `AGENTS.md` (the shell line in Architecture), `DESIGN.md` (the Dialog
 primitive), `docs/features/layouts/design.md` (§ Live defaults Reload, § What a layout draws, the shell and sessions
 Adopters rows, § The primer's columns, § Decisions: a reload keeps the user's place, a dialog follows its opener).
 
@@ -81,13 +81,13 @@ cannot land before Lane E's chain, so `main` keeps describing forms as it is unt
 
 ## Mandatory Reads
 
-- `AGENTS.md` (repo root) — every implementer reads § Intent, § Architecture's bullets **A layout**, **A key**,
+- `AGENTS.md` (the wigley-ai-gui folder's) — every implementer reads § Intent, § Architecture's bullets **A layout**, **A key**,
   **Key hints**, **A list picker draws a layout's rows**, `npm run lint`'s layer check, § Review and § Running and
   testing; the forms tasks also **A forms layout** and **An item kind**.
 - `DESIGN.md` — § Keys and focus and the primitive the task touches.
 - `docs/features/layouts/design.md` — whole.
 - `docs/keymap.md` — only for task 07's keys help Close and any task that anchors a new key.
-- No `CLAUDE*.md` or `.claude/rules/*.md` exists in the repo (`find <repo> -maxdepth 1 -name 'CLAUDE*.md'` and `ls -d <repo>/.claude/rules` find none,
+- No `CLAUDE*.md` or `.claude/rules/*.md` exists in the wigley-ai-gui folder (`find <repo> -maxdepth 1 -name 'CLAUDE*.md'` and `ls -d <repo>/.claude/rules` find none,
   checked at plan time).
 
 ## Design Overview

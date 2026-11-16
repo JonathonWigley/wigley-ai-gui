@@ -12,7 +12,7 @@ commit, and closes the lane's follow-ups. It writes no code. Task 09 already lan
 
 Run `wigley:writing-for-agents` on every edit. Each line below names what is stale; the wording is the implementer's,
 written against the code as it landed (read the code, not the task documents, where the two differ). Line numbers were
-measured at plan time on `8cd4caaf`; find each passage by its heading or text.
+measured at plan time (2026-11-09); find each passage by its heading or text.
 
 Files:
 - modify `AGENTS.md`
@@ -67,7 +67,7 @@ no registration holds draws its value as text and offers reset only (04).
 
 `docs/features/visuals/design.md` line 63 ("One fence registry in the core"): blocks register beside fences (01).
 
-`docs/features/plugin-framework/design.md` § Extension points (Lane E), written ahead in `4db26eee`: re-read it
+`docs/features/plugin-framework/design.md` § Extension points (Lane E), written ahead in `cdc8e91ff`: re-read it
 against the landed code and fix each line the code proved wrong. Known at plan time:
 - The setting-kinds bullet that says the kit draws the registered kind's editor: the app draws the row box and the
   list picker; no kit member was added (04).

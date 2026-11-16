@@ -36,7 +36,7 @@ Every wigley repo lands through `~/wigley-agents/WigleyRepos.md` § Landing: one
 ## Preconditions
 
 `make` re-runs each command before the first dispatch, and the gate commands before the group they gate. `GUI` is the
-wigley-ai-gui checkout the run works in; `MKT` is `/Users/jonathonwigley/Documents/ai/wigley-ai-marketplace`.
+wigley-ai-gui folder of the clone or worktree the run works in; `MKT` is `/Users/jonathonwigley/Documents/ai/wigley-ai-marketplace`.
 
 1. Wave 1 step 1 (disposable registrations) has landed:
    `grep -n "\[x\] Disposable registrations, disposed per plugin" GUI/docs/features/intent-alignment/master-plan.md`
@@ -70,7 +70,7 @@ wigley-ai-gui checkout the run works in; `MKT` is `/Users/jonathonwigley/Documen
 
 ## Docs written ahead
 
-- `docs/features/plugin-framework/design.md` § Extension points (Lane E), commit `4db26eee`.
+- `docs/features/plugin-framework/design.md` § Extension points (Lane E), commit `cdc8e91ff`.
 
 Every other doc — `AGENTS.md`, `docs/keymap.md`, the settings, visuals and layouts design docs, the marketplace's
 forms README and `triage.md`, and `~/wigley-agents/forms.md` — is written by the task that lands its behaviour
@@ -80,7 +80,7 @@ describe registrations and a tool contract that do not exist yet.
 
 ## Mandatory Reads
 
-- `AGENTS.md` (repo root), sections by task: § Intent and § Architecture for every task; "A registration", "A plugin",
+- `AGENTS.md` (the wigley-ai-gui folder's), sections by task: § Intent and § Architecture for every task; "A registration", "A plugin",
   "A plugin talks", "A disabled plugin" and the `npm run lint` layer rules for every task; "A key" for 03; "A setting",
   "The user config folder" and "A layout" for 04 and 05; "An item kind", "A finding origin", "A forms layout" and "An
   MCP tool" for 06–10; § Running and testing for 12.
@@ -91,7 +91,7 @@ describe registrations and a tool contract that do not exist yet.
 - `docs/features/settings/design.md` for 04, 05.
 - `docs/features/visuals/design.md` (fence registry) for 01.
 - `MKT/AGENTS.md` and `MKT/plugins/wigley/scripts/forms/README.md` for 08 and 09.
-- The repo has no `.claude/rules/` folder and no `CLAUDE*.md` (checked at plan time).
+- The wigley-ai-gui folder has no `.claude/rules/` folder and no `CLAUDE*.md` (checked at plan time).
 
 ## Design Overview
 

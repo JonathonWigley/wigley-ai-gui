@@ -55,7 +55,7 @@ its landed home. The decisions in 04 and 05 are written against today's names, w
 
 ## Preconditions
 
-Each verified at plan time (2026-11-09, `main` at `8cd4caaf`); `wigley:make` re-runs them before the first dispatch,
+Each verified at plan time (2026-11-09, on that day's `main`); `wigley:make` re-runs them before the first dispatch,
 and the gate check again before Wave 4. A `\|` in a command is the table's escape for `|`.
 
 | Claim | Command | Expected |
@@ -88,11 +88,11 @@ neither file). Task 05 also adds the follow-up its known Windows limit leaves (0
 
 ## Mandatory Reads
 
-- `AGENTS.md` (repo root), through its last line: § Intent, § Architecture (the source tree; A key; An ambient
+- `AGENTS.md` (the wigley-ai-gui folder's), through its last line: § Intent, § Architecture (the source tree; A key; An ambient
   service; A setting; A third-party tool; the layer check), § Running and testing, § Dev quirks (login-shell PATH).
 - `docs/keymap.md` — task 01 (the chord rules and the `Cmd+,` note).
 - `wigley:codebase-design`, `wigley:writing-code`, `wigley:writing-tests` (TypeScript: `typescript-vitest.md`).
-- No `CLAUDE*.md`, nested `AGENTS*.md` or `.claude/rules/` exist in the repo (checked with `find` at plan time).
+- No `CLAUDE*.md`, nested `AGENTS*.md` or `.claude/rules/` exist in the wigley-ai-gui folder (checked with `find` at plan time).
 
 ## Design Overview
 

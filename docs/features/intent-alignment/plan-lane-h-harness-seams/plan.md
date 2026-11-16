@@ -50,7 +50,7 @@ Each task that ticks a master-plan box says so; the run checks these gates by re
 
 ## Preconditions
 
-Run each from the repo root before the first dispatch. Each must print what its line says.
+Run each from the wigley-ai-gui folder of the clone or worktree the run works in, before the first dispatch. Each must print what its line says.
 
 | Claim | Command | Expect |
 |---|---|---|
@@ -66,7 +66,7 @@ Run each from the repo root before the first dispatch. Each must print what its 
 
 ## Docs written ahead
 
-Committed on `main` in 627525d9 and a5f09f26 (the plan branch `plan-lane-h`, merged to `main` with this plan):
+Committed on `main` in `6da8397b8` and `8b85b743f` (the plan branch `plan-lane-h`, merged to `main` with this plan):
 
 - `docs/features/agent-harnesses/design.md` — new: the lane's design and the reasons behind it.
 - `AGENTS.md` — the `claude-code` plugin entry, `src/main/claude-code/` removed from the tree, the relay join by row
@@ -96,7 +96,7 @@ Per task, as its document lists:
 - `docs/features/docs-browser/design.md` — task 07.
 - The marketplace's `plugins/wigley/scripts/forms/README.md` — tasks 02, 09.
 
-No `.claude/rules/` folder and no nested `AGENTS.md` exist in the repo (measured at plan time).
+No `.claude/rules/` folder and no nested `AGENTS.md` exist in the wigley-ai-gui folder (measured at plan time).
 
 ## Design Overview
 

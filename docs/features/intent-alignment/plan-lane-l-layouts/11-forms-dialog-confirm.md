@@ -10,7 +10,7 @@ stood at plan time. Before the first edit, re-read every file in Files against t
 the renamed `FormsView` union, the kind registrations, and the layout unions opened to strings. The decisions below
 hold as written.
 
-Paths below are relative to the repo root. `F` is `src/plugins/forms`.
+Paths below are relative to the wigley-ai-gui folder. `F` is `src/plugins/forms`.
 
 Files:
 - modify `F/layouts/layout.d.ts` · `F/layouts/default/layout.js`

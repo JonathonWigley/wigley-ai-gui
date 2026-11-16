@@ -5,7 +5,7 @@ Type: Task
 Wave: 3 · Depends on: 04, 07
 Plan: [plan.md](plan.md)
 
-Paths below are relative to the repo root. `P` is `src/plugins/primer`.
+Paths below are relative to the wigley-ai-gui folder. `P` is `src/plugins/primer`.
 
 Files:
 - modify `P/layouts/layout.d.ts` · `P/layouts/default/layout.js` · `P/layouts/default/layout.css`
