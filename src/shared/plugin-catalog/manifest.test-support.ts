@@ -36,6 +36,7 @@ export function validManifest(): RawManifest {
         { accelerator: 'CommandOrControl+Alt+N', command: 'sync', arg: 3 },
       ],
       intercept: [{ key: 'n', meta: true, shift: false, command: 'sync' }],
+      remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
     },
     settings: { view: { width: 320 }, filter: null },
     optionalSettings: { filter: 'string' },

@@ -417,7 +417,8 @@ function keymapLayer(
 export type DefaultKeyLayer = Omit<UserKeymap, 'leader' | 'unbind'>;
 
 // One plugin's default keys, their commands and scopes qualified as
-// `<pluginId>.<short>`; the `any` scope stays unqualified.
+// `<pluginId>.<short>`; the `any` scope stays unqualified. A remap names no
+// command or scope, so it stays as declared.
 function pluginKeys(manifest: PluginManifest): DefaultKeyLayer {
   const keys = manifest.keys ?? {};
   const qualifyCommand = <Bind extends { command: string }>(bind: Bind) => ({
@@ -433,6 +434,7 @@ function pluginKeys(manifest: PluginManifest): DefaultKeyLayer {
     app: (keys.app ?? []).map(qualifyCommand),
     intercept: (keys.intercept ?? []).map(qualifyCommand),
     global: (keys.global ?? []).map(qualifyCommand),
+    remaps: [...(keys.remaps ?? [])],
   };
 }
 
@@ -721,6 +723,33 @@ export function defaultKeyLayers(
     ...dependencyOrder(manifests).map(pluginKeys),
     ...(runtime === undefined ? [] : [runtime]),
   ];
+}
+
+// The editor remaps main serves: the remaps of `defaults`, then of each
+// manifest in `dependencyOrder` whose plugin `disabled` does not name, then
+// `userRemaps`, layered as `mergeKeymap` layers them under `leader`. A disabled
+// plugin's remaps leave, and the remap of an earlier layer on the same mode and
+// keys shows through again; the merged keymap cannot tell which remaps to
+// drop, as a remap names no command.
+export function appliedRemaps(
+  defaults: DefaultKeymap,
+  manifests: readonly PluginManifest[],
+  disabled: readonly string[],
+  userRemaps: readonly EditorRemap[],
+  leader: string,
+): EditorRemap[] {
+  const same = bindIdentities(leader);
+  const enabled = dependencyOrder(manifests).filter(
+    (manifest) => !disabled.includes(manifest.id),
+  );
+  const layers = [
+    ...defaultKeyLayers(defaults, enabled).map((keys) => keys.remaps ?? []),
+    userRemaps,
+  ];
+  return layers.reduce<EditorRemap[]>(
+    (merged, layer) => layerOver(merged, layer, same.remaps),
+    [],
+  );
 }
 
 // `defaults` without each bind whose command `commands` does not hold, runs in

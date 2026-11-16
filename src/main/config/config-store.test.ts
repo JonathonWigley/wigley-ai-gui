@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Files } from '../../contracts/files';
 import type { RuntimeCatalog } from '../../contracts/core-state';
-import type { DefaultKeymap, KeyBind } from '../../contracts/keymap';
+import type {
+  DefaultKeymap,
+  EditorRemap,
+  KeyBind,
+} from '../../contracts/keymap';
 import type { CommandInfo, PluginManifest } from '../../contracts/plugin';
 import type { CatalogEntry } from '../../contracts/plugin-catalog';
 import type { AppConfig, Settings } from '../../contracts/settings';
@@ -525,6 +529,22 @@ describe('loadConfigStore', () => {
     );
 
     expect(pageCommands(store.current())).toEqual(['k p.up']);
+  });
+
+  it.each<{ name: string; keymap: string | null; expected: EditorRemap[] }>([
+    {
+      name: "the user keymap's remaps",
+      keymap: '{"remaps":[{"mode":"normal","keys":"Y","to":"y$"}]}',
+      expected: [{ mode: 'normal', keys: 'Y', to: 'y$' }],
+    },
+    { name: 'none with no user keymap', keymap: null, expected: [] },
+  ])('userRemaps returns $name', async ({ keymap, expected }) => {
+    const store =
+      keymap === null
+        ? await load(createMemoryFiles())
+        : await loadWithKeymap(keymap);
+
+    expect(store.userRemaps()).toEqual(expected);
   });
 
   it.each([

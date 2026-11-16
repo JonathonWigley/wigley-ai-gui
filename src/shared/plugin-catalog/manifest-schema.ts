@@ -85,6 +85,19 @@ const KEYS = {
       shift: BOOLEAN,
       meta: BOOLEAN,
     }),
+    remaps: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['mode', 'keys', 'to'],
+        properties: {
+          mode: { enum: EDITOR_MODES },
+          keys: { type: 'string', minLength: 1 },
+          to: STRING,
+        },
+        additionalProperties: false,
+      },
+    },
   },
   additionalProperties: false,
 };

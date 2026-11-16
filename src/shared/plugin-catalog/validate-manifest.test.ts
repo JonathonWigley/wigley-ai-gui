@@ -232,6 +232,42 @@ describe('validateManifest', () => {
         m.keys.groups['<Leader>n'] = 1;
       },
     ],
+    [
+      'keys.remaps must be an array',
+      (m) => {
+        m.keys.remaps = {};
+      },
+    ],
+    [
+      '"keys.remaps[0]" must be an object, not a string.',
+      (m) => {
+        m.keys.remaps[0] = 'jk';
+      },
+    ],
+    [
+      '"keys.remaps[0].when" is not a field of an editor remap.',
+      (m) => {
+        m.keys.remaps[0].when = 'x';
+      },
+    ],
+    [
+      '"keys.remaps[0].to" is missing.',
+      (m) => {
+        delete m.keys.remaps[0].to;
+      },
+    ],
+    [
+      '"keys.remaps[0].mode" must be one of normal, insert, not "visual".',
+      (m) => {
+        m.keys.remaps[0].mode = 'visual';
+      },
+    ],
+    [
+      '"keys.remaps[0].keys" is empty.',
+      (m) => {
+        m.keys.remaps[0].keys = '';
+      },
+    ],
     ...keyLists.flatMap((list): [string, Fault][] => [
       [
         `keys.${list} must be an array`,

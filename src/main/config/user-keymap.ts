@@ -3,8 +3,6 @@ import { UNBOUND_INSERT_KEYS } from '../../contracts/editor';
 import type {
   AcceleratorBind,
   BindWhere,
-  EditorMode,
-  EditorRemap,
   InterceptBind,
   KeyBind,
   KeyGroups,
@@ -22,6 +20,7 @@ import {
 } from '../../shared/accelerator';
 import { checkCommandArg } from '../../shared/command-args';
 import { errorText } from '../../shared/error-text';
+import { jsonKind } from '../../shared/json';
 import { vimTokens } from '../../shared/key-hints';
 import {
   isChordKeys,
@@ -29,11 +28,16 @@ import {
   vimTokenForPageKey,
 } from '../../shared/key-notation';
 import {
-  BIND_WHERES,
-  EDITOR_MODES,
-  expandBind,
-} from '../../shared/plugin-manifests';
-import { jsonKind, parseJsonObject } from './config-json';
+  type EntryShape,
+  readEditorRemap,
+  requireFields,
+  requireKeysString,
+  requireMode,
+  requireObject,
+  requireString,
+} from '../../shared/keymap-entries';
+import { BIND_WHERES, expandBind } from '../../shared/plugin-manifests';
+import { parseJsonObject } from './config-json';
 
 // The commands and scopes a user bind may name, by qualified id, the ids of
 // the loaded plugins, and the default keymap's leader, which a bind's checks
@@ -64,22 +68,10 @@ const LEADER_PROBLEM =
   '"leader" must be one key that is not a chord or Tab, such as "<Space>" or ",".';
 const MODIFIERS = ['control', 'alt', 'shift', 'meta'] as const;
 
-// The fields one kind of entry holds, and the noun a problem names it by.
-interface EntryShape {
-  noun: string;
-  required: readonly string[];
-  optional: readonly string[];
-}
-
 const BIND: EntryShape = {
   noun: 'a bind',
   required: ['keys', 'scope', 'command'],
   optional: ['where', 'mode', 'arg'],
-};
-const EDITOR_REMAP: EntryShape = {
-  noun: 'an editor remap',
-  required: ['mode', 'keys', 'to'],
-  optional: [],
 };
 const INTERCEPT_CHORD = {
   required: ['key'],
@@ -107,36 +99,12 @@ function unbindShape(kind: (typeof UNBIND_KINDS)[number]): EntryShape {
   }
 }
 
-function requireObject(path: string, value: unknown): Record<string, unknown> {
-  const kind = jsonKind(value);
-  if (kind !== 'an object') {
-    throw new Error(`"${path}" must be an object, not ${kind}.`);
-  }
-  return value as Record<string, unknown>;
-}
-
 function requireArray(path: string, value: unknown): unknown[] {
   const kind = jsonKind(value);
   if (kind !== 'an array') {
     throw new Error(`"${path}" must be an array, not ${kind}.`);
   }
   return value as unknown[];
-}
-
-function requireString(path: string, value: unknown): string {
-  const kind = jsonKind(value);
-  if (kind !== 'a string') {
-    throw new Error(`"${path}" must be a string, not ${kind}.`);
-  }
-  return value as string;
-}
-
-function requireKeysString(path: string, value: unknown): string {
-  const keys = requireString(path, value);
-  if (keys === '') {
-    throw new Error(`"${path}" is empty.`);
-  }
-  return keys;
 }
 
 function requireAccelerator(path: string, value: unknown): string {
@@ -156,38 +124,6 @@ function requireWhere(path: string, value: unknown): BindWhere {
     );
   }
   return value as BindWhere;
-}
-
-function requireMode(path: string, value: unknown): EditorMode {
-  const isMode = EDITOR_MODES.some((mode) => mode === value);
-  if (!isMode) {
-    throw new Error(
-      `"${path}" must be one of ${EDITOR_MODES.join(', ')}, not ${JSON.stringify(value)}.`,
-    );
-  }
-  return value as EditorMode;
-}
-
-// The entry at `path` as an object holding only `shape`'s fields and every
-// one it requires.
-function requireFields(
-  path: string,
-  value: unknown,
-  shape: EntryShape,
-): Record<string, unknown> {
-  const entry = requireObject(path, value);
-  const known = [...shape.required, ...shape.optional];
-  for (const field of Object.keys(entry)) {
-    if (!known.includes(field)) {
-      throw new Error(`"${path}.${field}" is not a field of ${shape.noun}.`);
-    }
-  }
-  for (const field of shape.required) {
-    if (!Object.hasOwn(entry, field)) {
-      throw new Error(`"${path}.${field}" is missing.`);
-    }
-  }
-  return entry;
 }
 
 function commandInfoOf(id: CommandId, names: KeymapNames) {
@@ -366,15 +302,6 @@ function readBind(
     requireUnboundInsertKey(`${path}.keys`, bind.keys);
   }
   return bind;
-}
-
-function readRemap(path: string, value: unknown): EditorRemap {
-  const entry = requireFields(path, value, EDITOR_REMAP);
-  return {
-    mode: requireMode(`${path}.mode`, entry.mode),
-    keys: requireKeysString(`${path}.keys`, entry.keys),
-    to: requireString(`${path}.to`, entry.to),
-  };
 }
 
 function readAcceleratorBind(
@@ -588,7 +515,7 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
     );
   }
   if (Object.hasOwn(file, 'remaps')) {
-    keymap.remaps = readList('remaps', file.remaps, readRemap);
+    keymap.remaps = readList('remaps', file.remaps, readEditorRemap);
   }
   if (Object.hasOwn(file, 'app')) {
     keymap.app = readList('app', file.app, (path, entry) =>

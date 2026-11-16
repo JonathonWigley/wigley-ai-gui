@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PLUGIN_ID_PATTERN } from '../define-plugin';
+import { EDITOR_MODES } from '../plugin-manifests';
 import { validManifest } from './manifest.test-support';
 import { manifestSchema } from './manifest-schema';
 import { SHORT_ID_PATTERN, TOKEN_KINDS } from './validate-manifest';
@@ -11,6 +12,11 @@ interface SchemaParts {
     id: { pattern: string };
     commands: { propertyNames: { pattern: string } };
     scopes: { propertyNames: { pattern: string } };
+    keys: {
+      properties: Record<string, unknown> & {
+        remaps: { items: { properties: { mode: { enum: string[] } } } };
+      };
+    };
     themeTokens: {
       additionalProperties: { properties: { kind: { enum: string[] } } };
     };
@@ -48,5 +54,11 @@ describe('manifestSchema', () => {
     expect(
       schema.properties.themeTokens.additionalProperties.properties.kind.enum,
     ).toEqual(TOKEN_KINDS);
+    expect(new Set(Object.keys(schema.properties.keys.properties))).toEqual(
+      new Set(['binds', 'groups', 'app', 'global', 'intercept', 'remaps']),
+    );
+    expect(
+      schema.properties.keys.properties.remaps.items.properties.mode.enum,
+    ).toEqual(EDITOR_MODES);
   });
 });

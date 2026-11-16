@@ -1,7 +1,7 @@
 import type { AppInstance } from '../../contracts/app-instance';
 import type { Disposable } from '../../contracts/disposable';
 import type { Files, FileWatch } from '../../contracts/files';
-import type { UserKeymap } from '../../contracts/keymap';
+import type { EditorRemap, UserKeymap } from '../../contracts/keymap';
 import type { Log } from '../../contracts/log';
 import type { Platform } from '../../contracts/platform';
 import type { PluginManifest, RunMode } from '../../contracts/plugin';
@@ -87,6 +87,9 @@ export interface ConfigStore extends Disposable {
   setPluginProblems(problems: readonly CatalogProblem[]): void;
   // The check deps and schema over the admitted entries, for user-config.
   checks(): { deps: ConfigCheckDeps; schema: ConfigSchema };
+  // The remaps of the user keymap layer the store keeps, for main to layer
+  // the served remaps again over the plugins it serves (`appliedRemaps`).
+  userRemaps(): readonly EditorRemap[];
 }
 
 // The check deps every admission shares; each admission adds its manifests
@@ -717,6 +720,7 @@ export async function loadConfigStore(
       }
     },
     checks: () => ({ deps: admission.deps, schema: admission.schema }),
+    userRemaps: () => slices.keptKeymap.remaps ?? [],
     onChanged(listener) {
       const registration = (config: AppConfig) => listener(config);
       listeners.add(registration);

@@ -6,6 +6,35 @@ export function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// A value's JSON kind as a problem message names it.
+export type JsonKind =
+  | 'an object'
+  | 'an array'
+  | 'a string'
+  | 'a number'
+  | 'a boolean'
+  | 'null';
+
+// The JSON kind of a value `JSON.parse` returned.
+export function jsonKind(value: unknown): JsonKind {
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return 'an array';
+  }
+  switch (typeof value) {
+    case 'string':
+      return 'a string';
+    case 'number':
+      return 'a number';
+    case 'boolean':
+      return 'a boolean';
+    default:
+      return 'an object';
+  }
+}
+
 // Whether `value` is an array holding only strings.
 export function isStringArray(value: unknown): value is string[] {
   return (

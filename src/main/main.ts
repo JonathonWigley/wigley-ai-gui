@@ -81,6 +81,7 @@ import { osPlatform } from '../shared/os-platform';
 import { platformFor } from '../shared/platform';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
+  appliedRemaps,
   commandLabel,
   qualify,
   withAppliedList,
@@ -1246,9 +1247,12 @@ function createWindow(
   };
 
   // Read at each request, so a page reload after a config edit starts on the
-  // current config.
-  const served = () =>
-    withAppliedList(
+  // current config. Its remaps are layered again without the disabled
+  // plugins' (`appliedRemaps`); a paused plugin keeps its remaps, as they have
+  // no handler.
+  const served = () => {
+    const disabled = applied.disabled();
+    const config = withAppliedList(
       applySelfTestConfig(
         {
           ...store.current(),
@@ -1259,9 +1263,25 @@ function createWindow(
         },
         selfTestConfig,
       ),
-      applied.disabled(),
+      disabled,
       applied.paused(),
     );
+    const { deps } = store.checks();
+    const remaps = appliedRemaps(
+      deps.defaultKeymap,
+      deps.manifests,
+      disabled,
+      store.userRemaps(),
+      config.keymap.editor.leader,
+    );
+    return {
+      ...config,
+      keymap: {
+        ...config.keymap,
+        editor: { ...config.keymap.editor, remaps },
+      },
+    };
+  };
   const startServed = served();
   ipcMain.handle(BRIDGE_CHANNELS.config, () => served());
   serveUiState(inputs.uiStatePath, log);

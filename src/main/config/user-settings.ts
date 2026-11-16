@@ -1,7 +1,7 @@
 import type { Settings } from '../../contracts/settings';
 import { PLUGIN_ID_PATTERN } from '../../shared/define-plugin';
-import { isJsonObject } from '../../shared/json';
-import { jsonKind, parseJsonObject } from './config-json';
+import { isJsonObject, jsonKind } from '../../shared/json';
+import { parseJsonObject } from './config-json';
 
 // What a `settings.json` may set: the core settings with their defaults, each
 // plugin's settings under its id, the JSON kind of each setting (core or

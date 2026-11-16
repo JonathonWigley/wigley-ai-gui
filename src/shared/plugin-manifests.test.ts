@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 import type {
   AcceleratorBind,
   DefaultKeymap,
+  EditorRemap,
   KeyBind,
   Keymap,
   PageBind,
+  UserKeymap,
 } from '../contracts/keymap';
 import type { CommandInfo, PluginManifest } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { requireUnambiguousKeymap } from './keymap-checks';
 import {
+  appliedRemaps,
   commandInfos,
   defaultBindLines,
   defaultBindStanding,
@@ -72,6 +75,18 @@ function defaultKeymap(overrides: Partial<DefaultKeymap> = {}): DefaultKeymap {
 // A default keymap holding only `binds`.
 function bindsOnly(...binds: KeyBind[]): DefaultKeymap {
   return defaultKeymap({ binds });
+}
+
+// A plugin declaring only `remaps`, depending in main on `dependsOn`.
+function remapper(
+  id: string,
+  remaps: EditorRemap[],
+  dependsOn: string[] = [],
+): PluginManifest {
+  return manifest(id, {
+    dependsOn: { main: dependsOn, page: [] },
+    keys: { remaps },
+  });
 }
 
 const p = manifest('p', {
@@ -371,6 +386,51 @@ describe('mergeKeymap', () => {
       '<Leader>m': 'motions',
     });
   });
+
+  // `defaultKeymap()` remaps `jk` in insert mode to `<Esc>`.
+  const toEsc: EditorRemap = { mode: 'insert', keys: 'jk', to: '<Esc>' };
+  const toBracket: EditorRemap = { mode: 'insert', keys: 'jk', to: '<C-[>' };
+  const toCtrlC: EditorRemap = { mode: 'insert', keys: 'jk', to: '<C-c>' };
+  const normalJk: EditorRemap = { mode: 'normal', keys: 'jk', to: 'gg' };
+
+  it.each<{
+    case: string;
+    manifests: PluginManifest[];
+    user: UserKeymap;
+    expected: EditorRemap[];
+  }>([
+    {
+      case: 'plugin replaces the default on the same mode and keys',
+      manifests: [remapper('p', [toBracket])],
+      user: {},
+      expected: [toBracket],
+    },
+    {
+      case: 'a dependent plugin replaces its dependency',
+      manifests: [remapper('a', [toCtrlC], ['b']), remapper('b', [toBracket])],
+      user: {},
+      expected: [toCtrlC],
+    },
+    {
+      case: "the user's remap replaces the plugin's",
+      manifests: [remapper('p', [toBracket])],
+      user: { remaps: [toEsc] },
+      expected: [toEsc],
+    },
+    {
+      case: 'another mode appends',
+      manifests: [remapper('p', [normalJk])],
+      user: {},
+      expected: [toEsc, normalJk],
+    },
+  ])(
+    'mergeKeymap_ManifestRemap_LayersBetweenDefaultAndUser: $case',
+    ({ manifests, user, expected }) => {
+      const merged = mergeKeymap(defaultKeymap(), manifests, user);
+
+      expect(merged.editor.remaps).toEqual(expected);
+    },
+  );
 });
 
 describe('expandBind', () => {
@@ -943,6 +1003,46 @@ describe('withAppliedList', () => {
       commands: Object.keys(served.commands),
       scopes: served.scopes.map((info) => info.id),
     }).toEqual(expected);
+  });
+});
+
+describe('appliedRemaps', () => {
+  const defaults = defaultKeymap({
+    remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
+  });
+  const manifests = [
+    remapper('p', [{ mode: 'insert', keys: 'jk', to: '<C-[>' }]),
+    remapper('q', [{ mode: 'normal', keys: 'Y', to: 'y$' }]),
+  ];
+  const userRemaps: EditorRemap[] = [{ mode: 'normal', keys: 'Y', to: 'yy' }];
+
+  it.each<{ case: string; disabled: string[]; expected: EditorRemap[] }>([
+    {
+      case: 'Disabled_TheLayerUnderShowsThrough',
+      disabled: ['p'],
+      expected: [
+        { mode: 'insert', keys: 'jk', to: '<Esc>' },
+        { mode: 'normal', keys: 'Y', to: 'yy' },
+      ],
+    },
+    {
+      case: 'NoneDisabled_EveryLayerApplies',
+      disabled: [],
+      expected: [
+        { mode: 'insert', keys: 'jk', to: '<C-[>' },
+        { mode: 'normal', keys: 'Y', to: 'yy' },
+      ],
+    },
+  ])('appliedRemaps_$case', ({ disabled, expected }) => {
+    const remaps = appliedRemaps(
+      defaults,
+      manifests,
+      disabled,
+      userRemaps,
+      defaults.leader,
+    );
+
+    expect(remaps).toEqual(expected);
   });
 });
 

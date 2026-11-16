@@ -8,6 +8,7 @@ import type { TokenKind } from '../../contracts/theme';
 import { pluginIdProblem } from '../define-plugin';
 import { errorText } from '../error-text';
 import { isJsonObject, isStringArray, type JsonObject } from '../json';
+import { readEditorRemap } from '../keymap-entries';
 import {
   BIND_WHERES,
   EDITOR_MODES,
@@ -78,7 +79,7 @@ const MANIFEST_FIELDS = membersOf({
 
 const SCHEMA_FIELD = '$schema';
 const COMMAND_FIELDS = ['label', 'group', 'runsIn', 'arg'];
-const KEYS_FIELDS = ['binds', 'groups', 'app', 'global', 'intercept'];
+const KEYS_FIELDS = ['binds', 'groups', 'app', 'global', 'intercept', 'remaps'];
 const SETTING_INFO_FIELDS = ['label', 'description'];
 const TOKEN_FIELDS = ['kind', 'default'];
 const MODIFIER_FIELDS = ['control', 'alt', 'shift', 'meta'];
@@ -355,6 +356,25 @@ function addKeysProblems(keys: unknown, commands: unknown, problems: string[]) {
       ),
     );
   }
+  addRemapsProblems(keys.remaps, problems);
+}
+
+// Checks `keys.remaps`, each item as the user keymap checks a remap.
+function addRemapsProblems(remaps: unknown, problems: string[]) {
+  if (remaps === undefined) {
+    return;
+  }
+  if (!Array.isArray(remaps)) {
+    problems.push('keys.remaps must be an array');
+    return;
+  }
+  remaps.forEach((item, index) => {
+    try {
+      readEditorRemap(`keys.remaps[${index}]`, item);
+    } catch (error) {
+      problems.push(errorText(error));
+    }
+  });
 }
 
 // Checks one item of a key list, named `name` in each problem.

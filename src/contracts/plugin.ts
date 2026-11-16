@@ -19,6 +19,7 @@ import type { Git } from './git';
 import type { ImageEncoder } from './images';
 import type {
   AnchorOptions,
+  EditorRemap,
   HintWhere,
   InterceptBind,
   KeyBind,
@@ -149,8 +150,9 @@ export interface ScopeInfo {
 
 // A plugin's default keys, naming its scopes `S` and its short command ids:
 // binds name commands `PageC`, run in the page; app, global and intercept keys
-// name commands `MainC`, run in main. Binds and groups take the default
-// keymap's shape. The built-in plugins keep their keys in the default keymap
+// name commands `MainC`, run in main. Binds, groups and remaps take the default
+// keymap's shape; a remap acts in every editor and names no command or scope.
+// The built-in plugins keep their keys in the default keymap
 // and declare none; a plugin from outside the app brings its own here.
 export interface PluginKeys<
   PageC extends string,
@@ -165,6 +167,7 @@ export interface PluginKeys<
   app?: { accelerator: string; command: MainC; arg?: CommandArg }[];
   global?: { accelerator: string; command: MainC; arg?: CommandArg }[];
   intercept?: (Omit<InterceptBind, 'command'> & { command: MainC })[];
+  remaps?: readonly EditorRemap[];
 }
 
 // The JSON kind a setting takes when its default cannot show it: the default
