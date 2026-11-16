@@ -5,6 +5,7 @@ import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { PLUGIN_ID_PATTERN } from '../../shared/define-plugin';
 import { errorText } from '../../shared/error-text';
+import { isSameJson } from '../../shared/json';
 import {
   type LayoutRegistry,
   startLayoutRegistry,
@@ -26,6 +27,9 @@ export interface LayoutServiceDeps {
   // The text of `src/shared/page/layout-host/kit.d.ts`.
   kitTypes: string;
   send(owner: LayoutOwner, set: LayoutSet): void;
+  // Runs when a set an owner sends holds other layout names than the last it
+  // sent, and when a registration is disposed; not on `register` or `dispose`.
+  namesChanged(): void;
   log: Log;
 }
 
@@ -44,8 +48,9 @@ export interface LayoutServiceDeps {
 // the owner; disposing it again, or after `dispose`, does nothing. `names` reads `['default']` and `read` resolves null for an
 // owner not registered or not yet listed. `defaultFolderPath` is the absolute
 // default folder of a registered owner, listed or not; null for an owner not
-// registered, or for one that is no user plugin with no `repoDir`. `dispose`
-// drops every owner.
+// registered, or for one that is no user plugin with no `repoDir`.
+// `namesByOwner` holds `names` of every registered owner, listed or not.
+// `dispose` drops every owner.
 export interface LayoutService {
   register(
     owner: LayoutOwner,
@@ -53,6 +58,7 @@ export interface LayoutService {
     defaultFolder: string,
   ): Disposable;
   names(owner: LayoutOwner): string[];
+  namesByOwner(): Record<LayoutOwner, string[]>;
   defaultFolderPath(owner: LayoutOwner): string | null;
   read(owner: LayoutOwner): Promise<LayoutSet | null>;
   dispose(): void;
@@ -66,11 +72,13 @@ const DEFAULT_NAME = 'default';
 const LOG_SOURCE = 'layouts';
 
 // One owner's registration: its registry once it has listed, until disposed,
-// and its absolute default folder, null for a built-in with no clone.
+// its absolute default folder, null for a built-in with no clone, and the
+// layout names of the last set it sent, `default` alone before the first.
 interface Registration {
   registry: LayoutRegistry | null;
   isDisposed: boolean;
   defaultFolderPath: string | null;
+  toldNames: readonly string[];
 }
 
 // Writes `kitTypes` to `<folder>/kit.d.ts` at once; a failed write is logged
@@ -85,14 +93,30 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
       log(LOG_SOURCE, `${kitPath} not written: ${errorText(error)}`),
     );
 
-  const disposeRegistration = (owner: LayoutOwner, held: Registration) => {
+  // Whether this call disposed `held`: false when it already was.
+  const disposeRegistration = (
+    owner: LayoutOwner,
+    held: Registration,
+  ): boolean => {
     if (held.isDisposed) {
-      return;
+      return false;
     }
     held.isDisposed = true;
     held.registry?.dispose();
     if (registrations.get(owner) === held) {
       registrations.delete(owner);
+    }
+    return true;
+  };
+
+  // Sends `set`, telling `namesChanged` when its names differ from the last
+  // set `held` sent.
+  const sendSet = (owner: LayoutOwner, held: Registration, set: LayoutSet) => {
+    deps.send(owner, set);
+    const names = set.layouts.map((entry) => entry.name);
+    if (!isSameJson(names, held.toldNames)) {
+      held.toldNames = names;
+      deps.namesChanged();
     }
   };
 
@@ -118,6 +142,7 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
         registry: null,
         isDisposed: false,
         defaultFolderPath,
+        toldNames: [DEFAULT_NAME],
       };
       registrations.set(owner, held);
       // The registry leaves a default folder missing at its start unwatched,
@@ -140,7 +165,7 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
               : scopedFiles(files, defaultFolderPath, paths),
           send: (set) => {
             if (!held.isDisposed) {
-              deps.send(owner, set);
+              sendSet(owner, held, set);
             }
           },
           log,
@@ -155,15 +180,28 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
             return;
           }
           held.registry = registry;
-          deps.send(owner, registry.current());
+          sendSet(owner, held, registry.current());
         },
         (error: unknown) =>
           log(owner, `layouts not started: ${errorText(error)}`),
       );
-      return { dispose: () => disposeRegistration(owner, held) };
+      return {
+        dispose: () => {
+          if (disposeRegistration(owner, held)) {
+            deps.namesChanged();
+          }
+        },
+      };
     },
     names: (owner) =>
       registrations.get(owner)?.registry?.names() ?? [DEFAULT_NAME],
+    namesByOwner() {
+      const byOwner: Record<LayoutOwner, string[]> = {};
+      for (const [owner, held] of registrations) {
+        byOwner[owner] = held.registry?.names() ?? [DEFAULT_NAME];
+      }
+      return byOwner;
+    },
     defaultFolderPath: (owner) =>
       registrations.get(owner)?.defaultFolderPath ?? null,
     read: async (owner) =>

@@ -51,6 +51,7 @@ export const keysManifest = definePlugin({
     layout: 'default',
   },
   optionalSettings: { whichKeyTimeoutMs: 'number' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     whichKeyDelayMs: {
       label: 'Which-key delay',

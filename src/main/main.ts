@@ -78,6 +78,7 @@ import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { createFakeScreenCapture } from '../shared/fake-screen-capture';
 import { createFakeSystemStats } from '../shared/fake-system-stats';
 import { isSameJson } from '../shared/json';
+import { createListeners } from '../shared/listeners';
 import { osPlatform } from '../shared/os-platform';
 import { platformFor } from '../shared/platform';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
@@ -460,6 +461,9 @@ let isQuitting = false;
 // The window's layouts service, which the `wigley-layout:` scheme asks for
 // each owner's default folder; null until the window makes it.
 let layoutService: LayoutService | null = null;
+// Told each time the layouts service's layout names change; the user config,
+// made before the service, hears it.
+const layoutNamesChanged = createListeners<void>();
 
 // The work the app does as it quits, started in the order it was added.
 const quitTasks: (() => unknown)[] = [];
@@ -821,6 +825,9 @@ async function loadConfig(
       settingInfo,
       settingControls,
       applied,
+      layoutNames: () => layoutService?.namesByOwner() ?? {},
+      onLayoutNamesChanged: (listener) =>
+        layoutNamesChanged.add(() => listener()),
     }),
     applied,
   };
@@ -909,6 +916,7 @@ function serveLayouts(
     kitTypes,
     send: (owner, set) =>
       livePage(window)?.send(BRIDGE_CHANNELS.layoutsChanged, owner, set),
+    namesChanged: () => layoutNamesChanged.tell(),
     log,
   });
   ipcMain.handle(BRIDGE_CHANNELS.layoutsRead, (_event, owner: string) =>

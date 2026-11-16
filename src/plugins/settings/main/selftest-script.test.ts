@@ -19,6 +19,7 @@ function fakeUserConfig(settings: object, keymap: UserKeymap) {
     settings: layerRead<Record<string, unknown>>({ ...settings }),
     keymap: layerRead(keymap),
     themes: [],
+    layoutNames: {},
   };
   const listeners = new Set<() => void>();
   const set = (next: { settings?: object; keymap?: UserKeymap }) => {

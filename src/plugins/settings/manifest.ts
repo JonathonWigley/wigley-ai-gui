@@ -85,6 +85,7 @@ export const settingsManifest = definePlugin({
     picker: 'In a settings list',
   },
   settings: { layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Layout',

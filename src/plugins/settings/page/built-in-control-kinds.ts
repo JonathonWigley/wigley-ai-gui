@@ -28,7 +28,9 @@ function parseJson(text: string): SettingBoxValue {
 
 // The kinds the settings page registers itself, in this order: a number or
 // string in a line box, a boolean, a closed choice or a theme in the list
-// picker, and an array or other structured value as JSON in a document box.
+// picker, an array or other structured value as JSON in a document box, and a
+// layout name in the list picker over the names of the owner its path starts
+// with.
 export const BUILT_IN_CONTROL_KINDS: readonly SettingControlKind[] = [
   {
     id: 'number',
@@ -71,6 +73,16 @@ export const BUILT_IN_CONTROL_KINDS: readonly SettingControlKind[] = [
       box: 'document',
       text: (value) => JSON.stringify(value, null, 2),
       parse: parseJson,
+    },
+  },
+  {
+    id: 'layout',
+    text: String,
+    edit: {
+      type: 'picker',
+      items: ({ leaf, config }) =>
+        config.layoutNames[leaf.path.split('.')[0]] ?? ['default'],
+      label: String,
     },
   },
 ];

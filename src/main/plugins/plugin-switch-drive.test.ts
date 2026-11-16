@@ -28,6 +28,7 @@ function setup(
         settings: { state: 'ok', layer, text },
         keymap: { state: 'ok', layer: null, text: null },
         themes: [],
+        layoutNames: {},
       }),
       async writeSettings(written, expectedText) {
         writes.push([written, expectedText]);

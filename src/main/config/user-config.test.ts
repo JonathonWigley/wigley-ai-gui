@@ -4,6 +4,7 @@ import type { Settings } from '../../contracts/settings';
 import type { SettingControl, UserConfig } from '../../contracts/user-config';
 import { definePlugin } from '../../shared/define-plugin';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
+import { createListeners } from '../../shared/listeners';
 import { EMPTY_RUNTIME_CATALOG } from '../../shared/runtime-commands';
 import { fakePlatform } from '../../shared/platform.test-support';
 import { resolveTheme } from '../themes/theme-loader';
@@ -129,6 +130,15 @@ const CORE_INFO = {
 // An applied list that switches no plugin off.
 const NONE_APPLIED: UserConfigDeps['applied'] = { disabled: () => [] };
 
+// Layout names with no owner registered, which never change.
+const NO_LAYOUT_NAMES: Pick<
+  UserConfigDeps,
+  'layoutNames' | 'onLayoutNamesChanged'
+> = {
+  layoutNames: () => ({}),
+  onLayoutNamesChanged: () => ({ dispose: () => undefined }),
+};
+
 // The catalog entries of `manifests` as built-in plugins.
 function builtInEntries(
   manifests: readonly PluginManifest[],
@@ -180,6 +190,7 @@ async function create(
     settingInfo: CORE_INFO,
     settingControls: {},
     applied,
+    ...NO_LAYOUT_NAMES,
   });
 }
 
@@ -675,6 +686,7 @@ describe('createUserConfig', () => {
       settingInfo: {},
       settingControls: {},
       applied: NONE_APPLIED,
+      ...NO_LAYOUT_NAMES,
     }).schema();
 
     const controls = schema.sections
@@ -709,6 +721,13 @@ describe('createUserConfig', () => {
       'fonts.ui',
       { kind: 'font', choices: null },
     ],
+    [
+      'the core layout setting',
+      MANIFESTS,
+      { 'shell.layout': 'layout' },
+      'shell.layout',
+      { kind: 'layout', choices: null },
+    ],
   ])(
     'schema_SettingControls_NameTheKindBeforeTheDefaultRules: %s',
     async (_case, manifests, settingControls, path, control) => {
@@ -719,9 +738,13 @@ describe('createUserConfig', () => {
         files,
         folder: FOLDER,
         store,
-        settingInfo: CORE_INFO,
+        settingInfo: {
+          ...CORE_INFO,
+          'shell.layout': { label: 'Shell layout', description: 'A layout.' },
+        },
         settingControls,
         applied: NONE_APPLIED,
+        ...NO_LAYOUT_NAMES,
       }).schema();
 
       const leaf = schema.sections
@@ -777,6 +800,7 @@ describe('createUserConfig', () => {
       settingInfo: {},
       settingControls: {},
       applied: NONE_APPLIED,
+      ...NO_LAYOUT_NAMES,
     }).schema();
 
     expect(schema.defaultAccelerators.app).toEqual([
@@ -843,6 +867,7 @@ describe('createUserConfig', () => {
         settingInfo: {},
         settingControls: {},
         applied: NONE_APPLIED,
+        ...NO_LAYOUT_NAMES,
       }).schema();
 
       expect(schema.defaultGroups).toEqual(groups);
@@ -890,6 +915,57 @@ describe('createUserConfig', () => {
     const schema = userConfig.schema();
     expect(schema.sections.map((section) => section.id)).toContain('added');
     expect(Object.keys(schema.commands)).toContain('added.go');
+  });
+
+  it('read_LayoutNames_ComeFromTheSource', async () => {
+    const files = createMemoryFiles();
+    const userConfig = createUserConfig({
+      files,
+      folder: FOLDER,
+      store: await storeOver(files),
+      settingInfo: CORE_INFO,
+      settingControls: {},
+      applied: NONE_APPLIED,
+      ...NO_LAYOUT_NAMES,
+      layoutNames: () => ({ shell: ['default', 'compact'] }),
+    });
+
+    expect((await userConfig.read()).layoutNames).toEqual({
+      shell: ['default', 'compact'],
+    });
+  });
+
+  it('onChanged_LayoutNamesChange_FiresUntilDisposed', async () => {
+    const files = createMemoryFiles();
+    const store = await storeOver(files);
+    const namesChanged = createListeners<void>();
+    const userConfig = createUserConfig({
+      files,
+      folder: FOLDER,
+      store,
+      settingInfo: CORE_INFO,
+      settingControls: {},
+      applied: NONE_APPLIED,
+      layoutNames: () => ({}),
+      onLayoutNamesChanged: (listener) => namesChanged.add(() => listener()),
+    });
+    let heard = 0;
+    const listening = userConfig.onChanged(() => heard++);
+
+    namesChanged.tell();
+    expect(heard).toBe(1);
+
+    listening.dispose();
+    const served = new Promise<void>((resolve) => {
+      store.onChanged(() => resolve());
+    });
+    namesChanged.tell();
+    await files.write(
+      `${FOLDER}/settings.json`,
+      '{"keySequenceTimeoutMs": 500}',
+    );
+    await served;
+    expect(heard).toBe(1);
   });
 
   it('tells its listener when a hand edit changes the served config', async () => {

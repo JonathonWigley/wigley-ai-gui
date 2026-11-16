@@ -47,6 +47,7 @@ export const unityPoolManifest = definePlugin({
   },
   scopes: { panel: 'In the Unity pool panel' },
   settings: { scriptPath: '', pythonCommand: 'python3', layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     scriptPath: {
       label: 'unity-pool command',

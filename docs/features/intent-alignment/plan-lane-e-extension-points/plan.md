@@ -233,7 +233,7 @@ Names and types more than one task uses. A task's own internals are its document
 - [ ] [Forms item kinds register in main](06-forms-kinds-main.md) — gated: Lane H's Structured round results
 
 ### Wave 2
-- [ ] [Setting control kinds as registrations](04-setting-control-kinds.md) — after 03
+- [x] [Setting control kinds as registrations](04-setting-control-kinds.md) — after 03
 - [ ] [Forms item kinds register on the page, Part A](07-forms-kinds-page.md) — after 06; Part A as its rulings
   define it (the tree compiles after it)
 
@@ -262,6 +262,7 @@ Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 ### Groups
 - 01 · hard · 109860c7e · diff read: every Produces present (addBlock, BlockContribution, MarkdownBlock, BlockHelpers, trackedMarkdown addBlock, harness blocks, manifest, page part, three blocks); wave typecheck and lint pass · concerns: md.block.parse of a render's non-body block() text is unbounded by maxNesting, so a render nesting its own opener recurses to a stack overflow; CSS now loads from the plugin (source order vs markdown.css changed, no specificity clash found); throwing render drops the closer line; > insert before a self-closing tag
 - 03 · hard · 17b32869b · diff read: PluginKeys.remaps, readEditorRemap and the moved checks, jsonKind in shared/json.ts, appliedRemaps in served(); wave typecheck and lint pass after the lead ran oxfmt on validate-manifest.ts (KEYS_FIELDS fits one line) · concerns: served() pairs store.checks() admission with store.current() config, set in one rebuild; the user-wins merge row uses <Esc> like the default, so only the first row tells plugin-dropped apart
+- 04 · hard · 30d911ed3 · diff read: every Produces present (SettingControl {kind; choices}, settingControls on manifest/definePlugin/schema/validate, pluginSettingControls, SettingControlKind/SettingsPageExports/settingsPageKey, control-kinds registry, BUILT_IN_CONTROL_KINDS, controlKindsChanged); typecheck + lint pass after one same-rung compile fix (controlKind missing from RowContext literals in keymap-view.test.ts and leader-menu-view.test.ts) · concerns: core settingControls Partial<Record<SettingPath,string>> passed as Record<string,string> (typecheck accepts); controlKindsChanged before load relies on drawRows' early return; its before-load test row proves only harmlessness
 ### Contract changes
 - appliedRemaps(defaults): Keymap → DefaultKeymap · why: the defaults served() has (checks().deps.defaultKeymap) are a DefaultKeymap; the merged Keymap already holds plugin remaps · consumers: 03, 11, 12 · group 03
 ### Rulings
@@ -271,5 +272,6 @@ Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 - The block rule is named contributed_blocks; the :::changes header row sits in markdown-blocks.test.ts — none — group 01 · group 01
 - appliedRemaps orders all manifests by dependencyOrder, drops the disabled, then lays defaultKeyLayers — matches mergeKeymap's order — group 03 · group 03
 - ConfigStore.userRemaps() returns the kept keymap slice's remaps — a broken keymap.json serves its last good remaps, as binds do — group 03 · group 03
+- 04: controlKindsChanged redraws the open section and relies on drawRows' early return before load; the onChanged listener in start.ts is not filed with api (the registry goes with the part) · group 04
 ### Review rounds
 ### Test gate

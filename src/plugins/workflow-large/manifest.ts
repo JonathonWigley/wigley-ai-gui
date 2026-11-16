@@ -23,6 +23,7 @@ export const workflowLargeManifest = definePlugin({
     autoClearAndMake: false,
     autoStartSeconds: 10,
   },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Large workflow layout',

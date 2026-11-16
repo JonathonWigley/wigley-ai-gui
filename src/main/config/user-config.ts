@@ -1,3 +1,4 @@
+import type { Disposable } from '../../contracts/disposable';
 import type { Files } from '../../contracts/files';
 import type { UserKeymap } from '../../contracts/keymap';
 import type { SettingInfo } from '../../contracts/plugin';
@@ -41,7 +42,9 @@ import { settingsFileDefaults } from './user-settings';
 // declares each core setting by its dotted path; `settingControls` binds a core
 // setting, by its dotted path, to a control kind id; the schema lists no command
 // or scope of a plugin in `applied`'s list. Every check reads `store.checks()`
-// at its call, so it follows the plugins the store admits.
+// at its call, so it follows the plugins the store admits. `layoutNames` serves
+// every registered layout owner's names now, and `onLayoutNamesChanged` hears
+// each change to them.
 export interface UserConfigDeps {
   files: Files;
   folder: string;
@@ -49,6 +52,8 @@ export interface UserConfigDeps {
   settingInfo: Readonly<Record<string, SettingInfo>>;
   settingControls: Readonly<Record<string, string>>;
   applied: { disabled(): readonly string[] };
+  layoutNames(): Readonly<Record<string, readonly string[]>>;
+  onLayoutNamesChanged(listener: () => void): Disposable;
 }
 
 // A file's check: the problem that refuses the text, or null when it passes.
@@ -166,6 +171,7 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
           userThemes,
         ),
         themes: themeNames(deps.store.checks().deps.builtInThemes, userThemes),
+        layoutNames: deps.layoutNames(),
       };
     },
     writeSettings: (layer, expectedText) =>
@@ -176,7 +182,16 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
       afterLastWrite(() =>
         writeLayer(KEYMAP_FILE, layer, expectedText, checkKeymap),
       ),
-    onChanged: (listener) => deps.store.onChanged(() => listener()),
+    onChanged(listener) {
+      const served = deps.store.onChanged(() => listener());
+      const named = deps.onLayoutNamesChanged(listener);
+      return {
+        dispose: () => {
+          served.dispose();
+          named.dispose();
+        },
+      };
+    },
   };
 }
 

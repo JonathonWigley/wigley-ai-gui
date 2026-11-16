@@ -39,6 +39,7 @@ export const visualManifest = definePlugin({
   },
   scopes: { overlay: 'In the visual overlay' },
   settings: { layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Visual layout',

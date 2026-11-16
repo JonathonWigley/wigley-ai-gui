@@ -119,6 +119,7 @@ export const notesManifest = definePlugin({
     autosaveDelayMs: 400,
     layout: 'default',
   },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     launchBrief: {
       label: 'Launch brief',

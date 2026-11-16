@@ -20,6 +20,7 @@ export const workflowSpikeManifest = definePlugin({
   settings: {
     layout: 'default',
   },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Spike workflow layout',

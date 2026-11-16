@@ -16,6 +16,7 @@ export const agentLinesManifest = definePlugin({
   commands: {},
   scopes: {},
   settings: { layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Layout',

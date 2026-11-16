@@ -1,6 +1,6 @@
 # 05 — Layout name picker in Settings mode
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 04
 Plan: [plan.md](plan.md)

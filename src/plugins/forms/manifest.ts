@@ -193,6 +193,7 @@ export const formsManifest = definePlugin({
     idle: 'With no round open',
   },
   settings: { autosaveDelayMs: 400, deadlineSeconds: 240, layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     autosaveDelayMs: {
       label: 'Autosave delay',

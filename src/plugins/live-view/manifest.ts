@@ -23,6 +23,7 @@ export const liveViewManifest = definePlugin({
   },
   scopes: {},
   settings: { frameRate: 30, layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     frameRate: {
       label: 'Frame rate',

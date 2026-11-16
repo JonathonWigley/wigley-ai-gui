@@ -143,6 +143,7 @@ export const backlogManifest = definePlugin({
       'Work these follow-ups in this session. First check each one against the code as it is now: remove an item whose work has landed, and rewrite an item the code has moved past. Then work the rest under your workflow, and report what you did with each item.',
     repoFolders: [] as RepoFolderSetting[],
   },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     tags: {
       label: 'Tags',

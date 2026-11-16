@@ -24,16 +24,31 @@ function leafWith(choices: readonly string[] | null): SettingLeaf {
   };
 }
 
-function configWith(themes: readonly string[]): UserConfigRead {
+// A layout setting's leaf at `path`.
+function layoutLeaf(path: string): SettingLeaf {
+  return {
+    path,
+    label: 'Layout',
+    description: 'A layout',
+    control: { kind: 'layout', choices: null },
+    fallback: { value: 'default' },
+  };
+}
+
+function configWith(
+  themes: readonly string[],
+  layoutNames: UserConfigRead['layoutNames'] = {},
+): UserConfigRead {
   return {
     settings: { state: 'ok', layer: null, text: null },
     keymap: { state: 'ok', layer: null, text: null },
     themes,
+    layoutNames,
   };
 }
 
 describe('BUILT_IN_CONTROL_KINDS', () => {
-  it('builtInControlKinds_Ids_AreTheSixInOrder', () => {
+  it('builtInControlKinds_Ids_AreTheBuiltInsInOrder', () => {
     expect(BUILT_IN_CONTROL_KINDS.map((kind) => kind.id)).toEqual([
       'number',
       'string',
@@ -41,6 +56,7 @@ describe('BUILT_IN_CONTROL_KINDS', () => {
       'choice',
       'theme',
       'json',
+      'layout',
     ]);
   });
 
@@ -87,6 +103,33 @@ describe('BUILT_IN_CONTROL_KINDS', () => {
     ['choice', 'choice', leafWith(['a', 'b']), configWith([]), ['a', 'b']],
     ['choice with no choices', 'choice', leafWith(null), configWith([]), []],
     ['theme', 'theme', leafWith(null), configWith(['mocha']), ['mocha']],
+    [
+      'layout of a listed owner',
+      'layout',
+      layoutLeaf('docs.layout'),
+      configWith([], {
+        docs: ['default', 'wide'],
+        shell: ['default', 'compact'],
+      }),
+      ['default', 'wide'],
+    ],
+    [
+      'layout of an owner with no names',
+      'layout',
+      layoutLeaf('docs.layout'),
+      configWith([]),
+      ['default'],
+    ],
+    [
+      'core shell layout',
+      'layout',
+      layoutLeaf('shell.layout'),
+      configWith([], {
+        docs: ['default', 'wide'],
+        shell: ['default', 'compact'],
+      }),
+      ['default', 'compact'],
+    ],
   ])(
     'builtInControlKind_PickerItems_ReadTheLeafAndTheConfig: %s',
     (_case, id, leaf, config, items) => {

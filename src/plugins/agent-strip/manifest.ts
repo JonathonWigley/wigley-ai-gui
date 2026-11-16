@@ -66,6 +66,7 @@ export const agentStripManifest = definePlugin({
   },
   scopes: { strip: 'In the agent strip' },
   settings: { layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Layout',

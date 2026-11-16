@@ -119,6 +119,7 @@ export const primerManifest = definePlugin({
     idle: 'With no primer open',
   },
   settings: { autosaveDelayMs: 400, deadlineSeconds: 240, layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     autosaveDelayMs: {
       label: 'Autosave delay',

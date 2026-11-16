@@ -20,6 +20,7 @@ export const sessionStashManifest = definePlugin({
   },
   scopes: { note: 'In the stash dialog' },
   settings: { layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Layout',

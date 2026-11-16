@@ -87,6 +87,7 @@ function fakeChannel(
     settings: { state: 'ok', layer: settingsLayer, text: null },
     keymap: keymapRead ?? { state: 'ok', layer: keymap, text: null },
     themes: [],
+    layoutNames: {},
   };
   const invoke = async (method: string, ...args: unknown[]) => {
     switch (method) {

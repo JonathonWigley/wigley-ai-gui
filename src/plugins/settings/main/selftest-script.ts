@@ -136,6 +136,19 @@ const THEME_PICKER_STEPS: SelfTestStep[] = [
   },
 ];
 
+const LAYOUT_PICKER_STEPS: SelfTestStep[] = [
+  {
+    keys: ['Escape', '/', ...'shelllayout', 'Enter'],
+    expect: '[settings] filter "shelllayout" first row shell.layout',
+    why: 'Esc closes the theme picker; / selects the old filter text, so the typed text replaces it.',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[settings] picker shown: Shell layout',
+    screenshot: 'layout-picker',
+  },
+];
+
 const KEYMAP_STEPS: SelfTestStep[] = [
   {
     keys: ['Escape', '<A-h>', 'G', 'k', 'Enter'],
@@ -369,6 +382,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'theme picker',
     why: 'Filtering Core to the Theme row, Enter shows the theme picker. The picker takes the shared list keys: j, G, gg, / and Esc back to the list.',
     steps: THEME_PICKER_STEPS,
+  },
+  {
+    name: 'layout picker',
+    why: "Filtering Core to the Shell layout row, Enter shows the layout picker, which lists the shell's layout names.",
+    steps: LAYOUT_PICKER_STEPS,
   },
   {
     name: 'plugin switch',

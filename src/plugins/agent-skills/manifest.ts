@@ -16,6 +16,7 @@ export const agentSkillsManifest = definePlugin({
   commands: {},
   scopes: {},
   settings: { layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Layout',

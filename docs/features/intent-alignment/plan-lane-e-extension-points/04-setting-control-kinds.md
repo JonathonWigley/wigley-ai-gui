@@ -1,6 +1,6 @@
 # 04 — Setting control kinds as registrations
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -242,3 +242,5 @@ settings page registers each kind, the six built-ins included, through addContro
   `controlKindsChanged_RedrawsTheOpenSection` pins the call made before `load()` resolves.
 
 ## Proof
+
+Commit 30d911ed3 · proof: diff read: every Produces present (SettingControl {kind; choices}, settingControls on manifest/definePlugin/schema/validate, pluginSettingControls, SettingControlKind/SettingsPageExports/settingsPageKey, control-kinds registry, BUILT_IN_CONTROL_KINDS, controlKindsChanged); typecheck + lint pass after one same-rung compile fix (controlKind missing from RowContext literals in keymap-view.test.ts and leader-menu-view.test.ts) · concerns: core settingControls Partial<Record<SettingPath,string>> passed as Record<string,string> (typecheck accepts); controlKindsChanged before load relies on drawRows' early return; its before-load test row proves only harmlessness

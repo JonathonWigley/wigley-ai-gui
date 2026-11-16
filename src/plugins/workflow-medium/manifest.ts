@@ -20,6 +20,7 @@ export const workflowMediumManifest = definePlugin({
   settings: {
     layout: 'default',
   },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Medium workflow layout',

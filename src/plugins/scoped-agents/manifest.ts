@@ -18,6 +18,7 @@ export const scopedAgentsManifest = definePlugin({
   },
   scopes: { ask: 'In a scoped agent ask box' },
   settings: { layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Layout',

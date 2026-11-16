@@ -40,6 +40,7 @@ export const galleryManifest = definePlugin({
   },
   scopes: { gallery: 'In the gallery' },
   settings: { layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Layout',

@@ -11,7 +11,7 @@ import type { CommandInfo, ScopeInfo } from './plugin';
 
 // How a row edits a leaf setting. `kind` is the id of a control kind the
 // settings page registers: a built-in (`number`, `string`, `boolean`,
-// `choice`, `theme`, `json`) or a plugin's. `choices` holds the only strings
+// `choice`, `theme`, `json`, `layout`) or a plugin's. `choices` holds the only strings
 // a closed setting takes, null for any other.
 export interface SettingControl {
   kind: string;
@@ -66,6 +66,9 @@ export interface UserConfigRead {
   settings: ConfigFileRead<Record<string, unknown>>;
   keymap: ConfigFileRead<UserKeymap>;
   themes: readonly string[];
+  // Every registered layout owner's layout names, default first, by owner (a
+  // plugin id or shell); an owner with no registration is absent.
+  layoutNames: Readonly<Record<string, readonly string[]>>;
 }
 
 export type ConfigWriteResult =
@@ -76,7 +79,8 @@ export type ConfigWriteResult =
 // The user's own layers of settings.json and keymap.json. A write runs the
 // ConfigStore's check of that file on `layer` and refuses one that fails; it
 // refuses as `changedOnDisk` when the file's text is no longer `expectedText`
-// (null: no file). `onChanged` hears each config the ConfigStore serves.
+// (null: no file). `onChanged` hears each config the ConfigStore serves and
+// each change to the layout names `read` serves.
 export interface UserConfig {
   schema(): UserConfigSchema;
   read(): Promise<UserConfigRead>;

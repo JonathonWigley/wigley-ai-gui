@@ -171,6 +171,7 @@ export const sessionsManifest = definePlugin({
     rename: 'In the rename dialog',
   },
   settings: { layout: 'default', titleMaxLength: 30 },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Layout',

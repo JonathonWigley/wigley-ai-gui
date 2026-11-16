@@ -15,6 +15,7 @@ function fakeUserConfig(settings: object, keymap: UserKeymap) {
     settings: layerRead<Record<string, unknown>>({ ...settings }),
     keymap: layerRead(keymap),
     themes: [],
+    layoutNames: {},
   };
   const writeSettings = async (
     layer: Record<string, unknown>,

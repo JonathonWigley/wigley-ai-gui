@@ -15,6 +15,7 @@ export const autoRetroManifest = definePlugin({
   commands: {},
   scopes: {},
   settings: { folder: '~/wigley-agents', layout: 'default', settleSeconds: 5 },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     folder: {
       label: 'Retro folder',

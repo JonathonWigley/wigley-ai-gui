@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Disposable } from '../../contracts/disposable';
 import type { LayoutOwner, LayoutSet } from '../../contracts/layouts';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
@@ -24,6 +25,7 @@ beforeEach(() => {
 function createService(
   repoDir: string | null = null,
   userFolder: string | null = null,
+  namesChanged: () => void = () => undefined,
 ): LayoutService {
   return createLayoutService({
     files,
@@ -33,6 +35,7 @@ function createService(
     userPluginFolder: () => userFolder,
     kitTypes: KIT_TYPES,
     send: (owner, set) => sent.push([owner, set]),
+    namesChanged,
     log: () => undefined,
   });
 }
@@ -340,4 +343,75 @@ describe('createLayoutService', () => {
       service.register('forms', '', defaultFolderOf('forms')),
     ).not.toThrow();
   });
+
+  it('namesByOwner_ListsEveryRegisteredOwner', async () => {
+    await files.write(`${FOLDER}/shell/compact/layout.js`, '// compact');
+    await files.write(`${FOLDER}/docs/wide/layout.js`, '// wide');
+    const service = createService();
+    await registered(service, 'shell');
+
+    service.register('docs', '', defaultFolderOf('docs'));
+
+    expect(service.namesByOwner()).toEqual({
+      shell: ['default', 'compact'],
+      docs: ['default'],
+    });
+  });
+
+  // Breaks if a revision of a held layout tells, if an add or remove does not,
+  // or if a dispose by the service tells as a registration's dispose does.
+  it.each<{
+    event: string;
+    act: (registration: Disposable, service: LayoutService) => unknown;
+    sends: boolean;
+    calls: number;
+  }>([
+    {
+      event: 'a layout folder added',
+      act: () => files.write(`${FOLDER}/docs/tall/layout.js`, '// tall'),
+      sends: true,
+      calls: 1,
+    },
+    {
+      event: 'a new revision of a held layout',
+      act: () => files.write(`${FOLDER}/docs/wide/layout.js`, '// wide 2'),
+      sends: true,
+      calls: 0,
+    },
+    {
+      event: 'a layout removed',
+      act: () => files.remove(`${FOLDER}/docs/wide/layout.js`),
+      sends: true,
+      calls: 1,
+    },
+    {
+      event: 'the registration disposed',
+      act: (registration) => registration.dispose(),
+      sends: false,
+      calls: 1,
+    },
+    {
+      event: 'the service disposed',
+      act: (_registration, service) => service.dispose(),
+      sends: false,
+      calls: 0,
+    },
+  ])(
+    'namesChanged_TellsOnAddRemoveAndDisposeOnly: $event',
+    async ({ act, sends, calls }) => {
+      await files.write(`${FOLDER}/docs/wide/layout.js`, '// wide');
+      let told = 0;
+      const service = createService(null, null, () => told++);
+      const registration = await registered(service, 'docs');
+      told = 0;
+      sent = [];
+
+      await act(registration, service);
+
+      if (sends) {
+        await vi.waitFor(() => expect(sent).toHaveLength(1));
+      }
+      expect(told).toBe(calls);
+    },
+  );
 });

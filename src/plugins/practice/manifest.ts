@@ -129,6 +129,7 @@ export const practiceManifest = definePlugin({
     reviewSteps: [1, 3, 7, 14, 30, 60],
     layout: 'default',
   },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     folder: {
       label: 'Practice folder',

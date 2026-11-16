@@ -24,6 +24,7 @@ export const usageManifest = definePlugin({
   },
   scopes: {},
   settings: { pollIntervalSeconds: 300, layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     pollIntervalSeconds: {
       label: 'Plan usage poll',

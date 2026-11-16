@@ -30,6 +30,7 @@ export const systemStatsManifest = definePlugin({
   },
   scopes: { panel: 'In the system stats panel' },
   settings: { refreshSeconds: 2, processRows: 5, layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     refreshSeconds: {
       label: 'System stats refresh',

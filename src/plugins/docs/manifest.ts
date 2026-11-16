@@ -205,6 +205,7 @@ export const docsManifest = definePlugin({
     aside: "In the doc's right column",
   },
   settings: { scriptPath: '', layout: 'default', recentChangesLimit: 10 },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     scriptPath: {
       label: 'Docs index script',

@@ -276,6 +276,7 @@ export const chatManifest = definePlugin({
     completionDescriptions: true,
     defaultHarness: 'claude',
   },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     projects: {
       label: 'Projects',

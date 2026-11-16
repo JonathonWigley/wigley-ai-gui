@@ -49,6 +49,7 @@ const EMPTY_READ: UserConfigRead = {
   settings: { state: 'ok', layer: null, text: null },
   keymap: { state: 'ok', layer: null, text: null },
   themes: [],
+  layoutNames: {},
 };
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));

@@ -18,6 +18,7 @@ export const workflowSmallManifest = definePlugin({
   settings: {
     layout: 'default',
   },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     layout: {
       label: 'Small workflow layout',

@@ -80,6 +80,7 @@ export const audioPickerManifest = definePlugin({
     idle: 'With no audio picker open',
   },
   settings: { autosaveDelayMs: 400, deadlineSeconds: 240, layout: 'default' },
+  settingControls: { layout: 'layout' },
   settingInfo: {
     autosaveDelayMs: {
       label: 'Autosave delay',
