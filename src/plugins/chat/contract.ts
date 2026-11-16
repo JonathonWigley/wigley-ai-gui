@@ -218,8 +218,6 @@ export interface ReturnedMessage extends UserMessage {
 // deleted at once.
 export interface ChatSessionInfo {
   sessionId: string;
-  // A pool project's row moves once, from the pool's lowest clone to the
-  // claimed one, before its process starts.
   projectDir: string;
   profile: string;
   activity: ProcessActivity;
