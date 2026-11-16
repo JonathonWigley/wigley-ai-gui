@@ -1,6 +1,6 @@
 # 03 — Plugin editor remaps
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -151,3 +151,5 @@ Commit: one commit for the group: "Plugin remaps: manifest keys.remaps layer und
 shape check moves to src/shared/keymap-entries.ts and serves the user keymap and validateManifest".
 
 ## Proof
+
+Commit 17b32869b · proof: diff read: PluginKeys.remaps, readEditorRemap and the moved checks, jsonKind in shared/json.ts, appliedRemaps in served(); wave typecheck and lint pass after the lead ran oxfmt on validate-manifest.ts (KEYS_FIELDS fits one line) · concerns: served() pairs store.checks() admission with store.current() config, set in one rebuild; the user-wins merge row uses <Esc> like the default, so only the first row tells plugin-dropped apart

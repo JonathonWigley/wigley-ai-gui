@@ -228,8 +228,8 @@ Names and types more than one task uses. A task's own internals are its document
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Markdown block contributions](01-markdown-blocks.md)
-- [ ] [Plugin editor remaps](03-plugin-remaps.md)
+- [x] [Markdown block contributions](01-markdown-blocks.md)
+- [x] [Plugin editor remaps](03-plugin-remaps.md)
 - [ ] [Forms item kinds register in main](06-forms-kinds-main.md) — gated: Lane H's Structured round results
 
 ### Wave 2
@@ -257,10 +257,19 @@ Names and types more than one task uses. A task's own internals are its document
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 
 ### Groups
+- 01 · hard · 109860c7e · diff read: every Produces present (addBlock, BlockContribution, MarkdownBlock, BlockHelpers, trackedMarkdown addBlock, harness blocks, manifest, page part, three blocks); wave typecheck and lint pass · concerns: md.block.parse of a render's non-body block() text is unbounded by maxNesting, so a render nesting its own opener recurses to a stack overflow; CSS now loads from the plugin (source order vs markdown.css changed, no specificity clash found); throwing render drops the closer line; > insert before a self-closing tag
+- 03 · hard · 17b32869b · diff read: PluginKeys.remaps, readEditorRemap and the moved checks, jsonKind in shared/json.ts, appliedRemaps in served(); wave typecheck and lint pass after the lead ran oxfmt on validate-manifest.ts (KEYS_FIELDS fits one line) · concerns: served() pairs store.checks() admission with store.current() config, set in one rebuild; the user-wins merge row uses <Esc> like the default, so only the first row tells plugin-dropped apart
 ### Contract changes
+- appliedRemaps(defaults): Keymap → DefaultKeymap · why: the defaults served() has (checks().deps.defaultKeymap) are a DefaultKeymap; the merged Keymap already holds plugin remaps · consumers: 03, 11, 12 · group 03
 ### Rulings
+- FindingOriginSpec.words.finding stays in the spec, the register check and FindingCard.words, though the default layout (since 360fec02a) draws the finding text unlabelled — the user chose it (round 2026-11-16): the layout contract carries it and user layouts may draw it — one unused string per origin · user
+- A throwing render draws one md_block_html of escaped <p> lines from the opener to before the close line, with no line marks — an inline token would render markdown — group 01 · group 01
+- Markers split on the NUL string, not a regex (oxlint no-control-regex) — a stray NUL in render HTML would misalign parts — group 01 · group 01
+- The block rule is named contributed_blocks; the :::changes header row sits in markdown-blocks.test.ts — none — group 01 · group 01
+- appliedRemaps orders all manifests by dependencyOrder, drops the disabled, then lays defaultKeyLayers — matches mergeKeymap's order — group 03 · group 03
+- ConfigStore.userRemaps() returns the kept keymap slice's remaps — a broken keymap.json serves its last good remaps, as binds do — group 03 · group 03
 ### Review rounds
 ### Test gate

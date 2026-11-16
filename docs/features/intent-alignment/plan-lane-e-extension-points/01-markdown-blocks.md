@@ -1,6 +1,6 @@
 # 01 — Markdown block contributions
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -304,3 +304,4 @@ Commit: one commit for the group. Message:
 
 ## Proof
 
+Commit 109860c7e · proof: diff read: every Produces present (addBlock, BlockContribution, MarkdownBlock, BlockHelpers, trackedMarkdown addBlock, harness blocks, manifest, page part, three blocks); wave typecheck and lint pass · concerns: md.block.parse of a render's non-body block() text is unbounded by maxNesting, so a render nesting its own opener recurses to a stack overflow; CSS now loads from the plugin (source order vs markdown.css changed, no specificity clash found); throwing render drops the closer line; > insert before a self-closing tag
