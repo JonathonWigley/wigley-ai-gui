@@ -17,6 +17,7 @@ import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
 import { liveViewManifest } from './live-view/manifest';
+import { markdownBlocksManifest } from './markdown-blocks/manifest';
 import { notesManifest } from './notes/manifest';
 import { practiceManifest } from './practice/manifest';
 import { primerManifest } from './primer/manifest';
@@ -79,6 +80,7 @@ export const builtInManifests = [
   unityPoolManifest,
   systemStatsManifest,
   visualManifest,
+  markdownBlocksManifest,
   windowManifest,
   appUpdateManifest,
 ] as const;

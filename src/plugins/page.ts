@@ -15,6 +15,7 @@ import { docsSessionTabPagePart } from './docs-session-tab/page/start';
 import { formsPagePart } from './forms/page/start';
 import { galleryPagePart } from './gallery/page/start';
 import { keysPagePart } from './keys/page/start';
+import { markdownBlocksPagePart } from './markdown-blocks/page/start';
 import { notesPagePart } from './notes/page/start';
 import { practicePagePart } from './practice/page/start';
 import { primerPagePart } from './primer/page/start';
@@ -35,9 +36,11 @@ import { workflowSpikePagePart } from './workflow-spike/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise. `keys` starts first, so its Keys button contributes to the title
-// bar's end ahead of every other plugin's.
+// bar's end ahead of every other plugin's; `markdown-blocks` next, so its
+// blocks are registered before any markdown owner draws.
 export const pageParts: readonly PagePart[] = [
   keysPagePart,
+  markdownBlocksPagePart,
   sessionsPagePart,
   sessionStashPagePart,
   chatPagePart,

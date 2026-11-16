@@ -19,6 +19,7 @@ import type { Git } from '../contracts/git';
 import type { ImageEncoder } from '../contracts/images';
 import type { AnchorOptions, HintWhere, Keymap } from '../contracts/keymap';
 import type {
+  BlockContribution,
   FenceContribution,
   MarkdownRenderer,
 } from '../contracts/markdown';
@@ -197,8 +198,8 @@ export interface HarnessAnchor {
 
 // `send` tells the channel listeners of the part under test. `fireWindow` calls
 // each live `window` listener of `type` in added order, with `{ type }` when
-// `event` is left out. `fences` holds the fences live through the default
-// `services.markdown`. `anchors` holds each anchor named through the fake
+// `event` is left out. `fences` and `blocks` hold the fences and markdown blocks
+// live through the default `services.markdown`. `anchors` holds each anchor named through the fake
 // `keys.anchor`, disposed ones included; `setWhere` moves the fake box focus and
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
 // `pressCapture` hands `keys`, in vim notation, to the capture `keys.captureKey`
@@ -226,6 +227,7 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   pushKeymap(keymap: Keymap): void;
   pushSettings(settings: M['settings']): void;
   readonly fences: readonly FenceContribution[];
+  readonly blocks: readonly BlockContribution[];
   readonly anchors: readonly HarnessAnchor[];
   readonly picked: readonly string[];
   readonly restores: readonly Promise<unknown>[];
@@ -1173,6 +1175,7 @@ interface PageWorld extends HarnessWorld {
   // The outer panes `panes.setOuterPanes` set last.
   outerPanes: OuterPanes | null;
   fences: FenceContribution[];
+  blocks: BlockContribution[];
   anchors: HarnessAnchor[];
   where: HintWhere;
   whereListeners: Listeners<HintWhere>;
@@ -1236,6 +1239,7 @@ function createPageWorld(
     isSideBarShown: false,
     outerPanes: null,
     fences: [],
+    blocks: [],
     anchors: [],
     where: 'page',
     whereListeners: createListeners(),
@@ -1372,7 +1376,7 @@ function fakeMarkdown(
   counts: PartCounts,
   registrations: Registrations,
 ): MarkdownRenderer {
-  const fences = notFaked<MarkdownRenderer>('markdown', {
+  const registries = notFaked<MarkdownRenderer>('markdown', {
     addFence(fence) {
       const key = fenceKey(fence);
       if (world.fences.some((live) => fenceKey(live) === key)) {
@@ -1388,10 +1392,24 @@ function fakeMarkdown(
         counts,
       );
     },
+    addBlock(block) {
+      if (world.blocks.some((live) => live.name === block.name)) {
+        throw new Error(`block ${block.name} is already registered`);
+      }
+      world.blocks.push(block);
+      return countedHandle(
+        {
+          dispose() {
+            world.blocks.splice(world.blocks.indexOf(block), 1);
+          },
+        },
+        counts,
+      );
+    },
   });
   return notFaked<MarkdownRenderer>(
     'markdown',
-    trackedMarkdown(fences, registrations),
+    trackedMarkdown(registries, registrations),
   );
 }
 
@@ -1825,6 +1843,7 @@ export function startPagePart<M extends PluginManifest>(
       return lifecycle.restart();
     },
     fences: world.fences,
+    blocks: world.blocks,
     anchors: world.anchors,
     picked: world.picked,
     restores: world.restores,

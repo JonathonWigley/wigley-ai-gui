@@ -7,7 +7,7 @@ export const chatManifest = definePlugin({
   label: 'Chat',
   description:
     'Runs agent sessions in the Chat tab, with the transcript, the composer and the start prompt.',
-  dependsOn: { main: ['sessions'], page: ['sessions'] },
+  dependsOn: { main: ['sessions'], page: ['sessions', 'markdown-blocks'] },
   reads: { main: [], page: [] },
   commands: {
     newSession: { label: 'new session', group: 'sessions', runsIn: 'page' },

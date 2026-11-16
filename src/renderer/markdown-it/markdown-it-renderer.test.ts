@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CodeHighlighter } from '../../contracts/highlight';
-import type { FenceContribution } from '../../contracts/markdown';
+import type {
+  BlockContribution,
+  FenceContribution,
+} from '../../contracts/markdown';
 import { createMarkdownItRenderer } from './markdown-it-renderer';
 
 // A live `html` contribution that is never mounted here.
@@ -23,7 +26,37 @@ const highlighter: CodeHighlighter = {
   },
 };
 
+// Its header escaped into an attribute, its body drawn as block markdown.
+const noteBlock: BlockContribution = {
+  name: 'note',
+  render: ({ header, body }, helpers) =>
+    `<div class="note" data-header="${helpers.escape(header)}">${helpers.block(body.join('\n'))}</div>\n`,
+};
+
+// One item per body line, each drawn as inline markdown.
+const linesBlock: BlockContribution = {
+  name: 'lines',
+  render: ({ body }, helpers) =>
+    `<ol class="lines">${body.map((line) => `<li>${helpers.inline(line)}</li>`).join('')}</ol>\n`,
+};
+
+// Draws `para`, which no body line holds.
+const fixedBlock: BlockContribution = {
+  name: 'fixed',
+  render: (_block, helpers) => helpers.block('para'),
+};
+
+const brokenBlock: BlockContribution = {
+  name: 'broken',
+  render: () => {
+    throw new Error('a plugin bug');
+  },
+};
+
 const markdown = createMarkdownItRenderer(highlighter);
+for (const contribution of [noteBlock, linesBlock, fixedBlock, brokenBlock]) {
+  markdown.addBlock(contribution);
+}
 
 // The marks `data-md-lines` carries are pinned once, in `cursor block marks`;
 // every other row compares the markup without them.
@@ -169,12 +202,11 @@ describe('cursor block marks', () => {
       tags: ['<blockquote data-md-lines="0,3">'],
     },
     {
-      name: 'wigley blocks once each, from opener to the line after the closer',
-      text: ':::details S\nbody\n\n- item\n:::\n\n:::changes\n+ a\n:::\n\n:::tree\nroot\n  child\n:::',
+      name: 'a contributed block once, from opener to the line after the closer',
+      text: ':::note S\nbody\n\n- item\n:::\n\n:::lines\na\n:::',
       tags: [
-        '<details class="md-details" data-md-lines="0,5">',
-        '<ul class="md-changes" data-md-lines="6,9">',
-        '<ul class="md-tree" data-md-lines="10,14">',
+        '<div class="note" data-header="S" data-md-lines="0,5">',
+        '<ol class="lines" data-md-lines="6,9">',
       ],
     },
   ])('block_marksCursorBlocks: $name', ({ text, tags }) => {
@@ -338,170 +370,120 @@ describe('fence contributions', () => {
   });
 });
 
-describe(':::changes', () => {
-  it('renders one pill per marker and escapes markup', () => {
-    const html = block(':::changes\n+ add <x>\n~ edit\nx drop\n:::');
-    expect(html).toBe(
-      '<ul class="md-changes">' +
-        '<li class="md-change added"><span class="md-pill">added</span><span class="md-change-text">add &lt;x&gt;</span></li>' +
-        '<li class="md-change changed"><span class="md-pill">changed</span><span class="md-change-text">edit</span></li>' +
-        '<li class="md-change removed"><span class="md-pill">removed</span><span class="md-change-text">drop</span></li>' +
-        '</ul>\n',
-    );
-  });
-
-  it('draws a dash or star bullet as plain text', () => {
-    expect(block(':::changes\n- a fact\n* another\n:::')).toBe(
-      '<ul class="md-changes">' +
-        '<li class="md-change"><span class="md-change-text">a fact</span></li>' +
-        '<li class="md-change"><span class="md-change-text">another</span></li>' +
-        '</ul>\n',
-    );
-  });
-
-  it('renders inline markdown in a change line', () => {
-    expect(block(':::changes\n+ **bold** `code`\n:::')).toContain(
-      '<span class="md-change-text"><strong>bold</strong> <code>code</code></span>',
-    );
-  });
-
-  it('skips blank lines and runs to the end when unclosed', () => {
-    expect(block(':::changes\n+ a\n\n+ b')).toBe(
-      '<ul class="md-changes">' +
-        '<li class="md-change added"><span class="md-pill">added</span><span class="md-change-text">a</span></li>' +
-        '<li class="md-change added"><span class="md-pill">added</span><span class="md-change-text">b</span></li>' +
-        '</ul>\n',
-    );
-  });
-
-  it('ends the paragraph before it', () => {
-    expect(block('Intro\n:::changes\n+ a\n:::')).toContain(
-      '<p>Intro</p>\n<ul class="md-changes">',
-    );
-  });
-
-  it('leaves a bare closer with no open block as text', () => {
-    expect(block(':::')).toBe('<p>:::</p>\n');
-  });
-});
-
-describe(':::tree', () => {
-  it('nests by two-space indent and returns to a shallower level', () => {
-    expect(block(':::tree\nroot\n  child\n    leaf\n  other\nlast\n:::')).toBe(
-      '<ul class="md-tree">' +
-        '<li class="md-change"><span class="md-change-text">root</span>' +
-        '<ul><li class="md-change"><span class="md-change-text">child</span>' +
-        '<ul><li class="md-change"><span class="md-change-text">leaf</span></li></ul></li>' +
-        '<li class="md-change"><span class="md-change-text">other</span></li></ul></li>' +
-        '<li class="md-change"><span class="md-change-text">last</span></li>' +
-        '</ul>\n',
-    );
-  });
-
-  it('gives a line without a marker no pill', () => {
-    const html = block(':::tree\nplain\n  + added\n:::');
-    expect(html).toContain(
-      '<li class="md-change"><span class="md-change-text">plain</span>',
-    );
-    expect(html).toContain(
-      '<li class="md-change added"><span class="md-pill">added</span>',
-    );
-    expect(html.split('<span class="md-pill">').length - 1).toBe(1);
-  });
-
-  it('measures levels from the first line’s indent', () => {
-    expect(block(':::tree\n  ~ a\n  ~ b\n    ~ c\n:::')).toBe(
-      '<ul class="md-tree">' +
-        '<li class="md-change changed"><span class="md-pill">changed</span><span class="md-change-text">a</span></li>' +
-        '<li class="md-change changed"><span class="md-pill">changed</span><span class="md-change-text">b</span>' +
-        '<ul><li class="md-change changed"><span class="md-pill">changed</span><span class="md-change-text">c</span></li></ul></li>' +
-        '</ul>\n',
-    );
-  });
-
-  it('clamps a line less indented than the first to the root', () => {
-    expect(block(':::tree\n    a\n  b\n:::')).not.toContain('<ul>');
-  });
-
-  it('nests a line at most one level below the line before it', () => {
-    const html = block(':::tree\nroot\n      deep\n:::');
-    expect(html.split('<ul>').length - 1).toBe(1);
-  });
-});
-
-describe(':::details', () => {
-  it('renders its body as markdown and escapes once', () => {
-    const html = block(':::details Sum\nbody **bold** a<b\n:::');
-    expect(html).toContain(
-      '<details class="md-details"><summary>Sum</summary>',
-    );
-    expect(html).toContain('<strong>bold</strong>');
-    expect(html).toContain('a&lt;b');
-    expect(html).not.toContain('&amp;lt;');
-  });
-
-  it('defaults the summary to Details', () => {
-    expect(block(':::details\nbody\n:::')).toBe(
-      '<details class="md-details"><summary>Details</summary>\n<p>body</p>\n</details>\n',
-    );
-  });
-
-  it('renders inline markdown in the summary and escapes HTML there', () => {
-    expect(block(':::details Why **this**\nx\n:::')).toContain(
-      '<summary>Why <strong>this</strong></summary>',
-    );
-    expect(block(':::details <b>\nx\n:::')).toContain(
-      '<summary>&lt;b&gt;</summary>',
-    );
-  });
-
-  it('runs to the end when unclosed', () => {
-    expect(block(':::details S\nbody')).toBe(
-      '<details class="md-details"><summary>S</summary>\n<p>body</p>\n</details>\n',
-    );
-  });
-
-  it('closes nested details innermost first', () => {
-    expect(
-      block(':::details Outer\n:::details Inner\nin\n:::\nmid\n:::\nout'),
-    ).toBe(
-      '<details class="md-details"><summary>Outer</summary>\n' +
-        '<details class="md-details"><summary>Inner</summary>\n<p>in</p>\n</details>\n' +
-        '<p>mid</p>\n</details>\n<p>out</p>\n',
-    );
-  });
-
-  it('keeps a change block inside the disclosure', () => {
-    const html = block(':::details Full\n:::changes\n+ a\n:::\nmore text\n:::');
-    expect(
-      html.startsWith('<details class="md-details"><summary>Full</summary>'),
-    ).toBe(true);
-    expect(html).toContain('<ul class="md-changes">');
-    expect(html.endsWith('<p>more text</p>\n</details>\n')).toBe(true);
-    expect(html).not.toContain(':::');
-  });
-
-  it('keeps a tree block inside the disclosure', () => {
-    const html = block(
-      ':::details Full\n:::tree\nroot\n:::\nafter\n:::\noutside',
-    );
-    expect(html).toContain('<p>after</p>\n</details>\n<p>outside</p>');
-    expect(html).not.toContain(':::');
-  });
-
+describe('block contributions', () => {
   it.each([
-    { fence: '```', line: ':::' },
-    { fence: '```', line: ':::details X' },
-    { fence: '~~~', line: ':::' },
-  ])('keeps $line inside a $fence fence as code', ({ fence, line }) => {
-    expect(
-      block(
-        `:::details Full\n${fence}\n${line}\n${fence}\nafter\n:::\noutside`,
-      ),
-    ).toBe(
-      '<details class="md-details"><summary>Full</summary>\n' +
-        `<pre><code>${line}\n</code></pre>\n<p>after</p>\n</details>\n<p>outside</p>\n`,
+    {
+      name: 'the header and the body lines reach render, indent rebuilt from columns and a blank line as empty',
+      text: ':::lines\na\n  b\n\nc\n:::',
+      html: '<ol class="lines"><li>a</li><li>  b</li><li></li><li>c</li></ol>\n',
+    },
+    {
+      name: 'an empty header is empty',
+      text: ':::note\nx\n:::',
+      html: '<div class="note" data-header=""><p>x</p>\n</div>\n',
+    },
+    {
+      name: 'the header is escaped through escape',
+      text: ':::note <b>\nx\n:::',
+      html: '<div class="note" data-header="&lt;b&gt;"><p>x</p>\n</div>\n',
+    },
+    {
+      name: 'an inline request renders inline markdown and escapes HTML',
+      text: ':::lines\n**b** <i>\n:::',
+      html: '<ol class="lines"><li><strong>b</strong> &lt;i&gt;</li></ol>\n',
+    },
+    {
+      name: 'an unregistered name is text',
+      text: ':::other\nx\n:::',
+      html: '<p>:::other\nx\n:::</p>\n',
+    },
+    {
+      name: 'an opener ends the paragraph before it',
+      text: 'Intro\n:::note\nx\n:::',
+      html: '<p>Intro</p>\n<div class="note" data-header=""><p>x</p>\n</div>\n',
+    },
+    {
+      name: 'an opener indented four spaces is code',
+      text: '    :::note\n    x\n    :::',
+      html: '<pre><code>:::note\nx\n:::\n</code></pre>\n',
+    },
+    {
+      name: 'nested blocks close innermost first',
+      text: ':::note A\n:::note B\nin\n:::\nmid\n:::\nout',
+      html:
+        '<div class="note" data-header="A">' +
+        '<div class="note" data-header="B"><p>in</p>\n</div>\n' +
+        '<p>mid</p>\n</div>\n<p>out</p>\n',
+    },
+    {
+      name: 'a fenced closer inside a body stays code',
+      text: ':::note S\n```\n:::\n```\nafter\n:::\nout',
+      html:
+        '<div class="note" data-header="S"><pre><code>:::\n</code></pre>\n' +
+        '<p>after</p>\n</div>\n<p>out</p>\n',
+    },
+    {
+      name: 'a fenced opener inside a body stays code',
+      text: ':::note S\n```\n:::note X\n```\nafter\n:::\nout',
+      html:
+        '<div class="note" data-header="S"><pre><code>:::note X\n</code></pre>\n' +
+        '<p>after</p>\n</div>\n<p>out</p>\n',
+    },
+    {
+      name: 'a closer inside a tilde fence stays code',
+      text: ':::note S\n~~~\n:::\n~~~\nafter\n:::\nout',
+      html:
+        '<div class="note" data-header="S"><pre><code>:::\n</code></pre>\n' +
+        '<p>after</p>\n</div>\n<p>out</p>\n',
+    },
+    {
+      name: 'an unclosed block runs to the end',
+      text: ':::note S\nbody',
+      html: '<div class="note" data-header="S"><p>body</p>\n</div>\n',
+    },
+    {
+      name: 'a nested opener in a lines body moves only the close line',
+      text: ':::lines\n:::note\nx\n:::\ny\n:::\nafter',
+      html:
+        '<ol class="lines"><li>:::note</li><li>x</li><li>:::</li><li>y</li></ol>\n' +
+        '<p>after</p>\n',
+    },
+    {
+      name: 'a bare closer with no open block is text',
+      text: ':::',
+      html: '<p>:::</p>\n',
+    },
+    {
+      name: 'a block whose render throws draws its opener and body as text',
+      text: ':::broken H\na <b>\n\n:::\nafter',
+      html: '<p>:::broken H</p>\n<p>a &lt;b&gt;</p>\n<p>after</p>\n',
+    },
+  ])('block_drawsContributedBlocks: $name', ({ text, html }) => {
+    expect(block(text)).toBe(html);
+  });
+
+  it('blocks_BlockTextNotInBody_RendersWithoutMarks', async () => {
+    expect(await markdown.document(':::fixed\nx\n:::')).toBe('<p>para</p>\n');
+  });
+
+  it('addBlock_SecondOfAName_Throws_DisposeUnregisters', () => {
+    const renderer = createMarkdownItRenderer(highlighter);
+    const bold: BlockContribution = { name: 'x', render: () => '<b>x</b>\n' };
+    const first = renderer.addBlock(bold);
+
+    expect(() => renderer.addBlock({ ...bold })).toThrow(
+      'block x is already registered',
     );
+    expect(() => renderer.addBlock({ ...bold, name: 'X' })).toThrow(
+      'block name "X" must match [a-z][a-z0-9-]*',
+    );
+    expect(withoutLineMarks(renderer.block(':::x'))).toBe('<b>x</b>\n');
+    first.dispose();
+    expect(withoutLineMarks(renderer.block(':::x'))).toBe('<p>:::x</p>\n');
+    const italic: BlockContribution = { name: 'x', render: () => '<i>y</i>\n' };
+    renderer.addBlock(italic);
+    first.dispose();
+    expect(withoutLineMarks(renderer.block(':::x'))).toBe('<i>y</i>\n');
   });
 });
 
@@ -619,8 +601,8 @@ describe('document()', () => {
     expect(highlightCalls).toEqual([{ code: 'const\n', language: 'ts' }]);
   });
 
-  it('highlights a fence inside details', async () => {
-    const html = await render(':::details S\n```ts\nx\n```\n:::');
+  it('highlights a fence inside a block', async () => {
+    const html = await render(':::note S\n```ts\nx\n```\n:::');
     expect(html).toContain(
       '<pre data-source-line="2"><code class="language-ts"><span class="tok-keyword">x\n</span></code></pre>',
     );
@@ -634,14 +616,14 @@ describe('document()', () => {
 
   it('holds no cursor block mark', async () => {
     const html = await render(
-      '# T\n\npara\n\n- a\n\n```ts\nx\n```\n\n:::details S\nbody\n:::',
+      '# T\n\npara\n\n- a\n\n```ts\nx\n```\n\n:::note S\nbody\n:::',
     );
     expect(html).not.toContain('data-md-lines');
   });
 
   it('marks blocks, list items and tables with their source line', async () => {
     const html = await render(
-      '# T\n\npara\n\n- a\n- b\n\n| a | b |\n| --- | --- |\n| one | two |\n\n:::details S\nbody\n:::\n\n:::changes\n+ a\n:::\n\n:::tree\nroot\n:::',
+      '# T\n\npara\n\n- a\n- b\n\n| a | b |\n| --- | --- |\n| one | two |\n\n:::note S\nbody\n:::\n\n:::lines\n+ a\n:::\n\n:::lines\nroot\n:::',
     );
     for (const tag of [
       '<h1 data-anchor="t" data-source-line="1">',
@@ -650,9 +632,9 @@ describe('document()', () => {
       '<li data-source-line="5">',
       '<li data-source-line="6">',
       '<table data-source-line="8">',
-      '<details class="md-details" data-source-line="12">',
-      '<ul class="md-changes" data-source-line="16">',
-      '<ul class="md-tree" data-source-line="20">',
+      '<div class="note" data-header="S" data-source-line="12">',
+      '<ol class="lines" data-source-line="16">',
+      '<ol class="lines" data-source-line="20">',
     ]) {
       expect(html).toContain(tag);
     }

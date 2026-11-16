@@ -1,13 +1,19 @@
 import type { MarkdownRenderer } from '../../contracts/markdown';
 import { FakeElement, installFakeDom } from './test-dom';
 
-// The fence registry of a MarkdownRenderer fake that registers nothing.
-export const NO_FENCES: Pick<MarkdownRenderer, 'addFence' | 'fence'> = {
+// The fence and block registries of a MarkdownRenderer fake that registers no
+// fence and no block.
+export const NO_FENCES: Pick<
+  MarkdownRenderer,
+  'addFence' | 'fence' | 'addBlock'
+> = {
   addFence: () => ({ dispose: () => undefined }),
   fence: () => undefined,
+  addBlock: () => ({ dispose: () => undefined }),
 };
 
-// A renderer that hands every text back as it is and registers no fence.
+// A renderer that hands every text back as it is and registers no fence and
+// no block.
 export const PLAIN_MARKDOWN: MarkdownRenderer = {
   block: (text) => text,
   inline: (text) => text,

@@ -1,0 +1,87 @@
+/* The :::changes, :::tree and :::details blocks (class names from
+   change-blocks.ts and details-block.ts) */
+.md-changes,
+.md-tree {
+  list-style: none;
+  padding-left: 0;
+}
+
+.md-change {
+  border-left: var(--wg-indicator-width) solid var(--wg-border-default);
+  margin: var(--wg-space-0_5) 0;
+  padding: var(--wg-space-0_5) var(--wg-space-2);
+}
+
+.md-change.added {
+  border-left-color: var(--wg-diff-inserted-mark);
+}
+
+.md-change.changed {
+  border-left-color: var(--wg-diff-changed-mark);
+}
+
+.md-change.removed {
+  border-left-color: var(--wg-diff-removed-mark);
+}
+
+.md-pill {
+  background: var(--wg-border-strong);
+  border-radius: var(--wg-radius-sm);
+  color: var(--wg-fg);
+  display: inline-block;
+  font-size: var(--wg-text-11);
+  font-weight: var(--wg-weight-medium);
+  margin-right: var(--wg-space-2);
+  padding: 0 var(--wg-space-1);
+}
+
+/* A change pill's mark fill is light, so it takes dark text. */
+.md-change:is(.added, .changed, .removed) > .md-pill {
+  color: var(--wg-fg-on-accent);
+}
+
+.md-change.added > .md-pill {
+  background: var(--wg-diff-inserted-mark);
+}
+
+.md-change.changed > .md-pill {
+  background: var(--wg-diff-changed-mark);
+}
+
+.md-change.removed > .md-pill {
+  background: var(--wg-diff-removed-mark);
+}
+
+.md-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: var(--wg-space-4);
+}
+
+.md-tree ul > li {
+  position: relative;
+}
+
+.md-tree ul > li::before {
+  border-bottom: 1px solid var(--wg-border-default);
+  border-left: 1px solid var(--wg-border-default);
+  content: '';
+  height: var(--wg-space-3);
+  left: calc(var(--wg-space-3) * -1);
+  position: absolute;
+  top: 0;
+  width: var(--wg-space-2);
+}
+
+.md-details {
+  border: 1px solid var(--wg-border-default);
+  border-radius: var(--wg-radius-md);
+  margin: var(--wg-space-2) 0;
+  padding: var(--wg-space-1_5) var(--wg-space-3);
+}
+
+.md-details > summary {
+  color: var(--wg-accent);
+  cursor: pointer;
+  font-weight: var(--wg-weight-semibold);
+}

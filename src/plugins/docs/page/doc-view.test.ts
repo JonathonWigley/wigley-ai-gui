@@ -3423,6 +3423,7 @@ describe('createDocView fences', () => {
         document: async () => fencePlaceholder('html', true, 'x'),
         addFence: () => ({ dispose: () => undefined }),
         fence: (language: string) => (language === 'html' ? html : undefined),
+        addBlock: () => ({ dispose: () => undefined }),
       },
     );
     return { view, counts };

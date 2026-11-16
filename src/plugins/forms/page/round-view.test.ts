@@ -284,6 +284,7 @@ describe('round view fences', () => {
         document: async (text) => text,
         addFence: () => ({ dispose: () => undefined }),
         fence: (language) => (language === 'html' ? html : undefined),
+        addBlock: () => ({ dispose: () => undefined }),
       },
     );
 

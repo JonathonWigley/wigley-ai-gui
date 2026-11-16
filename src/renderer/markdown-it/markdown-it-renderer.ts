@@ -1,6 +1,8 @@
 import MarkdownIt from 'markdown-it';
 import type { CodeHighlighter } from '../../contracts/highlight';
 import type {
+  BlockContribution,
+  BlockHelpers,
   FenceContribution,
   MarkdownRenderer,
 } from '../../contracts/markdown';
@@ -15,6 +17,8 @@ type UnescapeAll = (text: string) => string;
 // The registered fence contributions, keyed by their language trimmed and
 // lowercased.
 type Fences = Map<string, FenceContribution>;
+// The registered block contributions, keyed by their exact name.
+type Blocks = Map<string, BlockContribution>;
 
 // Per-render state of one `document` call.
 type DocumentEnv = {
@@ -22,25 +26,27 @@ type DocumentEnv = {
   highlighted: Map<Token, string | null>;
 };
 
-type ChangeKind = 'added' | 'changed' | 'removed';
+// A line that opens a registered block, and the header after its name.
+interface BlockOpener {
+  contribution: BlockContribution;
+  header: string;
+}
 
-interface ChangeLine {
-  indent: number;
-  kind: ChangeKind | null;
+// What one `helpers.block` or `helpers.inline` call asked `render` to draw.
+interface BlockRequest {
+  kind: 'block' | 'inline';
   text: string;
 }
 
-const LIST_OPENER = /^:::(changes|tree)$/;
-const DETAILS_OPENER = /^:::details(?:\s+(.*))?$/;
+const BLOCK_OPENER = /^:::([a-z][a-z0-9-]*)(?:\s+(.*))?$/;
+const BLOCK_NAME = /^[a-z][a-z0-9-]*$/;
 const CLOSER = ':::';
-const CHANGE_MARK = /^([+~x])\s+(.*)$/;
-const CHANGE_BULLET = /^[-*]\s+/;
+// A request's marker is its index between two of these. markdown-it's
+// normalize step turns every NUL in the source into U+FFFD, so no source text
+// holds one.
+const MARKER_EDGE = '\u0000';
+const OPENS_WITH_TAG = /^<[A-Za-z]/;
 const FENCE_MARK = /^(`{3,}|~{3,})/;
-const CHANGE_KINDS: Record<string, ChangeKind> = {
-  '+': 'added',
-  '~': 'changed',
-  x: 'removed',
-};
 const DIFF_CLASSES: Record<string, string | undefined> = {
   '+': 'md-diff-add',
   '-': 'md-diff-del',
@@ -61,12 +67,13 @@ export function createMarkdownItRenderer(
   highlighter: CodeHighlighter,
 ): MarkdownRenderer {
   const fences: Fences = new Map();
-  const md = createWigleyMarkdown();
+  const blocks: Blocks = new Map();
+  const md = createWigleyMarkdown(blocks);
   md.disable(['reference']);
   md.validateLink = isWebLink;
   md.core.ruler.after('linkify', 'web_links_only', dropNonWebLinks);
   installBlockRules(md, fences);
-  const documentMd = createWigleyMarkdown();
+  const documentMd = createWigleyMarkdown(blocks);
   installDocumentRules(documentMd, fences);
   const renderer: MarkdownRenderer = {
     block: (text) => renderBlock(md, text),
@@ -74,6 +81,7 @@ export function createMarkdownItRenderer(
     document: (text) => renderDocument(documentMd, highlighter, fences, text),
     addFence: (fence) => addFence(fences, fence),
     fence: (language) => fences.get(fenceKey(language)),
+    addBlock: (block) => addBlock(blocks, block),
   };
   renderer.addFence(diffFence(md.utils.escapeHtml));
   return renderer;
@@ -99,6 +107,25 @@ function addFence(fences: Fences, fence: FenceContribution) {
   };
 }
 
+// Its Disposable removes `block` only while it is still the one registered.
+function addBlock(blocks: Blocks, block: BlockContribution) {
+  const { name } = block;
+  if (!BLOCK_NAME.test(name)) {
+    throw new Error(`block name "${name}" must match [a-z][a-z0-9-]*`);
+  }
+  if (blocks.has(name)) {
+    throw new Error(`block ${name} is already registered`);
+  }
+  blocks.set(name, block);
+  return {
+    dispose() {
+      if (blocks.get(name) === block) {
+        blocks.delete(name);
+      }
+    },
+  };
+}
+
 // The built-in `diff` contribution: a `pre.md-diff` colouring its `+`, `-`
 // and `~` lines.
 function diffFence(escapeHtml: EscapeHtml): FenceContribution {
@@ -115,12 +142,14 @@ function diffFence(escapeHtml: EscapeHtml): FenceContribution {
 }
 
 // Raw HTML escaped, bare URLs with a scheme linked, links and images drawn as
-// the views expect, with the wigley blocks, table alignment classes and the
-// fence's closed flag.
-function createWigleyMarkdown(): Md {
+// the views expect, with each block in `blocks` as it holds them at parse time,
+// table alignment classes and the fence's closed flag.
+function createWigleyMarkdown(blocks: Blocks): Md {
   const md = new MarkdownIt({ html: false, linkify: true });
   md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
-  md.block.ruler.before('fence', 'wigley_blocks', wigleyBlock, {
+  const blockRule: BlockRule = (state, startLine, endLine, silent) =>
+    contributedBlock(blocks, state, startLine, endLine, silent);
+  md.block.ruler.before('fence', 'contributed_blocks', blockRule, {
     alt: FENCE_ALT,
   });
   installClosedFlag(md);
@@ -286,49 +315,96 @@ function fenceLanguage(token: Token, unescapeAll: UnescapeAll): string {
   return unescapeAll(token.info).trim().split(/\s+/)[0];
 }
 
-// `:::changes`, `:::tree` and `:::details Summary`; a bare `:::` closes the innermost open block.
-function wigleyBlock(
+// A registered `:::name header` block, from its opener to the bare `:::` that
+// closes it, or to `endLine`. Its `render` runs once, here at parse time; the
+// tokens its HTML and helper requests make are pushed in the HTML's order.
+function contributedBlock(
+  blocks: Blocks,
   state: StateBlock,
   startLine: number,
   endLine: number,
   silent: boolean,
 ): boolean {
-  const isIndentedCode = state.sCount[startLine] - state.blkIndent >= 4;
-  if (isIndentedCode) {
+  const opener = blockOpener(blocks, state, startLine);
+  if (opener === null) {
     return false;
   }
-  const text = lineText(state, startLine);
-  const list = LIST_OPENER.exec(text);
-  if (list) {
-    if (!silent) {
-      const closeLine = listCloseLine(state, startLine, endLine);
-      const nextLine = Math.min(closeLine + 1, endLine);
-      pushChangeBlock(
-        state,
-        list[1],
-        changeLines(state, startLine + 1, closeLine),
-        [startLine, nextLine],
-      );
-      state.line = nextLine;
-    }
+  if (silent) {
     return true;
   }
-  const details = DETAILS_OPENER.exec(text);
-  if (details) {
-    if (!silent) {
-      const closeLine = detailsCloseLine(state, startLine, endLine);
-      const nextLine = Math.min(closeLine + 1, endLine);
-      pushDetails(
-        state,
-        details[1] ?? 'Details',
-        [startLine, nextLine],
-        closeLine,
-      );
-      state.line = nextLine;
-    }
-    return true;
+  const closeLine = blockCloseLine(blocks, state, startLine, endLine);
+  const nextLine = Math.min(closeLine + 1, endLine);
+  const map: [number, number] = [startLine, nextLine];
+  const body = bodyLines(state, startLine + 1, closeLine);
+  const requests: BlockRequest[] = [];
+  const helpers: BlockHelpers = {
+    block: (text) => requestMarker(requests, 'block', text),
+    inline: (text) => requestMarker(requests, 'inline', text),
+    escape: (text) => state.md.utils.escapeHtml(text),
+  };
+  const html = renderedOrNull(opener, body, helpers);
+  if (html === null) {
+    pushBlockAsText(state, startLine, closeLine);
+  } else {
+    pushBlockTokens(state, html, map, requests, (request) =>
+      pushRequest(state, request, body, startLine + 1),
+    );
   }
-  return false;
+  state.line = nextLine;
+  return true;
+}
+
+// Null when the contribution's `render` throws: a plugin's bug draws its block
+// as text rather than failing the whole render.
+function renderedOrNull(
+  opener: BlockOpener,
+  body: readonly string[],
+  helpers: BlockHelpers,
+): string | null {
+  try {
+    return opener.contribution.render({ header: opener.header, body }, helpers);
+  } catch {
+    return null;
+  }
+}
+
+// Indented code (four columns past the block indent) opens nothing, and nor
+// does a name no block registered.
+function blockOpener(
+  blocks: Blocks,
+  state: StateBlock,
+  line: number,
+): BlockOpener | null {
+  const isIndentedCode = state.sCount[line] - state.blkIndent >= 4;
+  if (isIndentedCode) {
+    return null;
+  }
+  const match = BLOCK_OPENER.exec(lineText(state, line));
+  const contribution = match === null ? undefined : blocks.get(match[1]);
+  if (match === null || contribution === undefined) {
+    return null;
+  }
+  return { contribution, header: (match[2] ?? '').trim() };
+}
+
+function requestMarker(
+  requests: BlockRequest[],
+  kind: BlockRequest['kind'],
+  text: string,
+): string {
+  const index = requests.push({ kind, text }) - 1;
+  return `${MARKER_EDGE}${index}${MARKER_EDGE}`;
+}
+
+// Each line's trimmed text behind one space per column past the block indent.
+function bodyLines(state: StateBlock, from: number, to: number): string[] {
+  const lines: string[] = [];
+  for (let line = from; line < to; line++) {
+    const text = lineText(state, line);
+    const indent = Math.max(0, state.sCount[line] - state.blkIndent);
+    lines.push(text === '' ? '' : ' '.repeat(indent) + text);
+  }
+  return lines;
 }
 
 function lineText(state: StateBlock, line: number): string {
@@ -337,22 +413,10 @@ function lineText(state: StateBlock, line: number): string {
     .trim();
 }
 
-// A change or tree block holds plain lines, so its first bare `:::` closes it.
-function listCloseLine(
-  state: StateBlock,
-  startLine: number,
-  endLine: number,
-): number {
-  for (let line = startLine + 1; line < endLine; line++) {
-    if (lineText(state, line) === CLOSER) {
-      return line;
-    }
-  }
-  return endLine;
-}
-
-// Every block opener nests one level; fenced code opens and closes nothing.
-function detailsCloseLine(
+// Every block opener nests one level and a bare `:::` closes the innermost;
+// fenced code opens and closes nothing. `endLine` when no line closes it.
+function blockCloseLine(
+  blocks: Blocks,
   state: StateBlock,
   startLine: number,
   endLine: number,
@@ -368,7 +432,7 @@ function detailsCloseLine(
       }
     } else if (mark !== null) {
       fence = mark;
-    } else if (LIST_OPENER.test(text) || DETAILS_OPENER.test(text)) {
+    } else if (blockOpener(blocks, state, line) !== null) {
       depth += 1;
     } else if (text === CLOSER) {
       depth -= 1;
@@ -393,101 +457,119 @@ function closesFence(
   );
 }
 
-function changeLines(
+// `md_block_open` holds the HTML before the first marker and `md_block_close`
+// the HTML after the last; between two markers an `md_block_html` holds the
+// HTML between them. Each marker pushes its request's tokens, a marker that
+// names no request nothing.
+function pushBlockTokens(
   state: StateBlock,
-  from: number,
-  to: number,
-): ChangeLine[] {
-  const lines: ChangeLine[] = [];
-  for (let line = from; line < to; line++) {
-    const text = lineText(state, line);
-    if (text !== '') {
-      lines.push(parseChangeLine(text, state.sCount[line]));
-    }
-  }
-  return lines;
-}
-
-function parseChangeLine(text: string, indent: number): ChangeLine {
-  const mark = CHANGE_MARK.exec(text);
-  if (mark) {
-    return { indent, kind: CHANGE_KINDS[mark[1]], text: mark[2] };
-  }
-  return { indent, kind: null, text: text.replace(CHANGE_BULLET, '') };
-}
-
-function pushChangeBlock(
-  state: StateBlock,
-  form: string,
-  lines: ChangeLine[],
+  html: string,
   map: [number, number],
+  requests: readonly BlockRequest[],
+  pushRequest: (request: BlockRequest) => void,
 ): void {
-  if (form === 'tree') {
-    state.push('md_tree_open', 'ul', 1).map = map;
-    pushTreeItems(state, lines);
-  } else {
-    state.push('md_changes_open', 'ul', 1).map = map;
-    for (const line of lines) {
-      pushChangeItem(state, line);
-      state.push('md_change_close', 'li', -1);
+  // Each marker's index lands at an odd place, its HTML around it.
+  const parts = html.split(MARKER_EDGE);
+  const open = state.push('md_block_open', '', 1);
+  open.content = parts[0];
+  open.map = map;
+  for (let place = 1; place < parts.length; place += 2) {
+    const request = requests[Number(parts[place])];
+    if (request !== undefined) {
+      pushRequest(request);
+    }
+    const isLastHtml = place + 1 === parts.length - 1;
+    if (!isLastHtml) {
+      state.push('md_block_html', '', 0).content = parts[place + 1];
     }
   }
-  state.push('md_list_close', 'ul', -1);
+  state.push('md_block_close', '', -1).content = parts[parts.length - 1];
 }
 
-// Two spaces per level, relative to the first line; a line nests at most one level below the last.
-function pushTreeItems(state: StateBlock, lines: ChangeLine[]): void {
-  if (lines.length === 0) {
+// A `block` request for a run of whole body lines tokenizes those source lines
+// in place, so each token keeps its source line; any other text parses on its
+// own, with no source lines.
+function pushRequest(
+  state: StateBlock,
+  request: BlockRequest,
+  body: readonly string[],
+  firstBodyLine: number,
+): void {
+  if (request.kind === 'inline') {
+    pushInline(state, request.text);
     return;
   }
-  const baseIndent = lines[0].indent;
-  let depth = 0;
-  pushChangeItem(state, lines[0]);
-  for (const line of lines.slice(1)) {
-    const indentLevel = Math.floor(Math.max(0, line.indent - baseIndent) / 2);
-    const level = Math.min(indentLevel, depth + 1);
-    if (level > depth) {
-      state.push('md_branch_open', 'ul', 1);
-    } else {
-      closeTreeItem(state, depth - level);
+  if (request.text === '') {
+    return;
+  }
+  const run = bodyRun(body, request.text);
+  if (run === null) {
+    pushParsedBlock(state, request.text);
+  } else {
+    pushLinesInPlace(state, firstBodyLine + run[0], firstBodyLine + run[1]);
+  }
+}
+
+// The smallest `from`, then the smallest `to`, for which `body`'s lines
+// `from` up to `to` joined by newlines are `text`; null when none are.
+function bodyRun(
+  body: readonly string[],
+  text: string,
+): [number, number] | null {
+  for (let from = 0; from < body.length; from++) {
+    let joined = body[from];
+    for (let to = from + 1; to <= body.length; to++) {
+      if (joined === text) {
+        return [from, to];
+      }
+      if (to === body.length || joined.length >= text.length) {
+        break;
+      }
+      joined += `\n${body[to]}`;
     }
-    pushChangeItem(state, line);
-    depth = level;
   }
-  closeTreeItem(state, depth);
+  return null;
 }
 
-// Closes the open item, then `levelsUp` enclosing branches and their items.
-function closeTreeItem(state: StateBlock, levelsUp: number): void {
-  state.push('md_change_close', 'li', -1);
-  for (let level = 0; level < levelsUp; level++) {
-    state.push('md_branch_close', 'ul', -1);
-    state.push('md_change_close', 'li', -1);
+// markdown-it 15.0.3: `ParserBlock.tokenize(state, startLine, endLine)` runs
+// the block rules over the state's own lines, pushing onto its tokens.
+function pushLinesInPlace(state: StateBlock, from: number, to: number): void {
+  const lineMax = state.lineMax;
+  // Stops a paragraph or list in the run from running past its last line.
+  state.lineMax = to;
+  state.md.block.tokenize(state, from, to);
+  state.lineMax = lineMax;
+}
+
+// markdown-it 15.0.3: `ParserBlock.parse(src, md, env, outTokens)` runs the
+// block rules alone over a new state, so each inline token's children stay
+// empty for the core inline pass to fill once.
+function pushParsedBlock(state: StateBlock, text: string): void {
+  const tokens: Token[] = [];
+  state.md.block.parse(text, state.md, state.env, tokens);
+  for (const token of tokens) {
+    token.map = null;
+    token.level += state.level;
+    state.tokens.push(token);
   }
 }
 
-function pushChangeItem(state: StateBlock, line: ChangeLine): void {
-  state.push('md_change_open', 'li', 1).meta = { kind: line.kind };
-  pushInline(state, line.text);
-  state.push('md_change_text_close', 'span', 0);
-}
-
-function pushDetails(
+// What a block whose `render` threw draws: each non-blank line from its opener
+// up to its close line as an escaped paragraph.
+function pushBlockAsText(
   state: StateBlock,
-  summary: string,
-  map: [number, number],
+  startLine: number,
   closeLine: number,
 ): void {
-  state.push('md_details_open', 'details', 1).map = map;
-  state.push('md_summary_open', 'summary', 1);
-  pushInline(state, summary);
-  state.push('md_summary_close', 'summary', -1);
-  const lineMax = state.lineMax;
-  // Stops a paragraph or list in the body from running past the closer.
-  state.lineMax = closeLine;
-  state.md.block.tokenize(state, map[0] + 1, closeLine);
-  state.lineMax = lineMax;
-  state.push('md_details_close', 'details', -1);
+  const { escapeHtml } = state.md.utils;
+  let html = '';
+  for (let line = startLine; line < closeLine; line++) {
+    const text = lineText(state, line);
+    if (text !== '') {
+      html += `<p>${escapeHtml(text)}</p>\n`;
+    }
+  }
+  state.push('md_block_html', '', 0).content = html;
 }
 
 // markdown-it's core inline rule parses every `inline` token's content later.
@@ -519,25 +601,22 @@ function installSharedRules(
   };
   rules.th_open = alignedCell;
   rules.td_open = alignedCell;
-  rules.md_changes_open = openTagWithAttrs('<ul class="md-changes"');
-  rules.md_tree_open = openTagWithAttrs('<ul class="md-tree"');
-  rules.md_list_close = () => '</ul>\n';
-  rules.md_branch_open = () => '<ul>';
-  rules.md_branch_close = () => '</ul>';
-  rules.md_change_open = (tokens, idx) => changeItemOpen(tokens[idx].meta);
-  rules.md_change_text_close = () => '</span>';
-  rules.md_change_close = () => '</li>';
-  rules.md_details_open = openTagWithAttrs('<details class="md-details"');
-  rules.md_summary_open = () => '<summary>';
-  rules.md_summary_close = () => '</summary>\n';
-  rules.md_details_close = () => '</details>\n';
+  rules.md_block_open = blockOpenWithAttrs;
+  rules.md_block_html = (tokens, idx) => tokens[idx].content;
+  rules.md_block_close = (tokens, idx) => tokens[idx].content;
 }
 
-// `tagStart` is the open tag up to its token's attributes and closing `>`.
-function openTagWithAttrs(tagStart: string): RenderRule {
-  return (tokens, idx, _options, _env, self) =>
-    `${tagStart}${self.renderAttrs(tokens[idx])}>`;
-}
+// A block's HTML before its first marker, with the token's attributes put in
+// front of the first `>` when it opens with a tag.
+const blockOpenWithAttrs: RenderRule = (tokens, idx, _options, _env, self) => {
+  const token = tokens[idx];
+  const html = token.content;
+  const tagEnd = html.indexOf('>');
+  if (!OPENS_WITH_TAG.test(html) || tagEnd === -1) {
+    return html;
+  }
+  return `${html.slice(0, tagEnd)}${self.renderAttrs(token)}${html.slice(tagEnd)}`;
+};
 
 function installBlockRules(md: Md, fences: Fences): void {
   const rules = md.renderer.rules;
@@ -633,15 +712,6 @@ function uniqueSlug(slug: string, taken: Set<string>): string {
   }
   taken.add(unique);
   return unique;
-}
-
-function changeItemOpen(meta: Record<string, unknown> | null): string {
-  const kind = meta?.kind;
-  const text = '<span class="md-change-text">';
-  if (typeof kind !== 'string') {
-    return `<li class="md-change">${text}`;
-  }
-  return `<li class="md-change ${kind}"><span class="md-pill">${kind}</span>${text}`;
 }
 
 // markdown-it aligns a cell with `style="text-align:…"`; this swaps it for an `md-…` class.

@@ -180,7 +180,7 @@ export function trackedEditor(
 }
 
 // One plugin's view of `markdown`: `registrations` disposing it removes every
-// fence the plugin added.
+// fence and block the plugin added.
 export function trackedMarkdown(
   markdown: MarkdownRenderer,
   registrations: Registrations,
@@ -188,5 +188,6 @@ export function trackedMarkdown(
   return {
     ...markdown,
     addFence: (fence) => registrations.track(markdown.addFence(fence)),
+    addBlock: (block) => registrations.track(markdown.addBlock(block)),
   };
 }

@@ -100,6 +100,8 @@ const sampleFence = {
   mount: () => ({ element, dispose() {} }),
 };
 
+const sampleBlock = { name: 'sample', render: () => '' };
+
 const mainSample: MainPart<typeof mainManifest> = {
   manifest: mainManifest,
   start(api) {
@@ -477,6 +479,23 @@ describe('plugin part harness', () => {
     expect(harness.fences).toEqual([]);
   });
 
+  it('counts the markdown block a page part adds', async () => {
+    const part = pagePart((api) => {
+      api.services.markdown.addBlock(sampleBlock);
+      return { commands: { run() {} } };
+    });
+    const harness = startPagePart(part);
+
+    // The block and the command.
+    expect(harness.counts().registrations).toBe(2);
+    expect(harness.blocks).toEqual([sampleBlock]);
+
+    await harness.stop();
+
+    expect(harness.counts().registrations).toBe(0);
+    expect(harness.blocks).toEqual([]);
+  });
+
   it("knows the commands every real part declares, and no fake dependency's", () => {
     const pageDepKey: DependencyKey<object, 'page', 'pen'> = {
       id: 'pen',
@@ -644,6 +663,14 @@ describe('plugin part harness', () => {
         markdown.addFence({ ...sampleFence, language: ' Sample ' });
       },
       message: 'fence sample is already registered',
+    },
+    {
+      member: 'markdown.addBlock',
+      misuse({ services: { markdown } }) {
+        markdown.addBlock(sampleBlock);
+        markdown.addBlock({ ...sampleBlock });
+      },
+      message: 'block sample is already registered',
     },
     {
       member: 'ModeHandle.toggleSideBar',
@@ -893,9 +920,11 @@ describe('plugin part harness', () => {
   it('ends what a part left of a replaced editor and markdown at its stop', async () => {
     const editors = countingEditors();
     const fenceDisposed = vi.fn();
+    const blockDisposed = vi.fn();
     const part = pagePart((api) => {
       api.services.editor.create(element, 'text', {} as EditorEvents);
       api.services.markdown.addFence(sampleFence);
+      api.services.markdown.addBlock(sampleBlock);
       return { commands: { run() {} } };
     });
     const harness = startPagePart(part, {
@@ -903,16 +932,19 @@ describe('plugin part harness', () => {
         editor: editors.host,
         markdown: {
           addFence: () => ({ dispose: fenceDisposed }),
+          addBlock: () => ({ dispose: blockDisposed }),
         } as unknown as MarkdownRenderer,
       },
     });
     expect(editors.live()).toBe(1);
     expect(fenceDisposed).not.toHaveBeenCalled();
+    expect(blockDisposed).not.toHaveBeenCalled();
 
     await harness.stop();
 
     expect(editors.live()).toBe(0);
     expect(fenceDisposed).toHaveBeenCalledTimes(1);
+    expect(blockDisposed).toHaveBeenCalledTimes(1);
   });
 
   it('throws from invoke once the part stopped', async () => {

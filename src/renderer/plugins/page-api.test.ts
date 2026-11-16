@@ -11,6 +11,7 @@ import type {
   TextEditor,
 } from '../../contracts/editor';
 import type {
+  BlockContribution,
   FenceContribution,
   MarkdownRenderer,
 } from '../../contracts/markdown';
@@ -752,6 +753,15 @@ const RECORDED_ROWS: RecordedRow[] = [
       } as PageApiDeps['services'],
     }),
     register: (api) => api.services.markdown.addFence({} as FenceContribution),
+  },
+  {
+    member: 'services.markdown.addBlock',
+    dep: (handle) => ({
+      services: {
+        markdown: { addBlock: () => handle } as unknown as MarkdownRenderer,
+      } as PageApiDeps['services'],
+    }),
+    register: (api) => api.services.markdown.addBlock({} as BlockContribution),
   },
   {
     member: 'services.editor.onPendingKeys',

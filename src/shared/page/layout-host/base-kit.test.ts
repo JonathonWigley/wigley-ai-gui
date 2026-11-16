@@ -673,6 +673,7 @@ function liveFence() {
       addFence: () => ({ dispose: () => undefined }),
       fence: (language: string) =>
         language === 'html' ? contribution : undefined,
+      addBlock: () => ({ dispose: () => undefined }),
     },
   };
 }

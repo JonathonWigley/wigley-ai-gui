@@ -154,6 +154,19 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  'markdown-blocks': {
+    sublayers: {
+      // Pins each block's bytes through the real adapter's markers and body parse.
+      'src/plugins/markdown-blocks/page/markdown-blocks.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/plugins/markdown-blocks/page',
+          'src/renderer/markdown-it',
+        ],
+        packages: [],
+      },
+    },
+  },
   // Its self-test script builds a PNG with `node:zlib`.
   notes: { main: NODE_ONLY },
   primer: {

@@ -9,6 +9,8 @@ import type { Disposable } from './disposable';
 // `document` emit a placeholder for each fence whose language has a
 // contribution, `document` highlighting a live one's code inside it; the
 // markdown mount (`src/shared/page/markdown-mount.ts`) hydrates it. `block`
+// and `document` draw each registered `:::name` block, from its opener to its
+// bare `:::` close line, or to the end of the text when none closes it. `block`
 // also marks each top-level block and top-level list item with
 // `data-md-lines="<start>,<end>"`: zero-based source lines, `end` exclusive.
 export interface MarkdownRenderer {
@@ -18,6 +20,34 @@ export interface MarkdownRenderer {
   // Throws on a language already registered.
   addFence(fence: FenceContribution): Disposable;
   fence(language: string): FenceContribution | undefined;
+  // Throws on a name already registered, or one not matching `[a-z][a-z0-9-]*`.
+  addBlock(block: BlockContribution): Disposable;
+}
+
+// A `:::name header` block. `render` returns the block's HTML, which the
+// renderer trusts; a `render` that throws draws the block's opener and body as
+// escaped text, one paragraph per line.
+export interface BlockContribution {
+  name: string;
+  render(block: MarkdownBlock, helpers: BlockHelpers): string;
+}
+
+// `header` is the opener's text after the name, trimmed, or `''`. `body` holds
+// one string per source line between the opener and its close line: the line's
+// trimmed text behind one space per column of indent, a blank line as `''`.
+export interface MarkdownBlock {
+  header: string;
+  body: readonly string[];
+}
+
+// `block` and `inline` return a marker that stands in `render`'s HTML for the
+// markdown they draw. `block` given a run of whole body lines draws them in
+// place, keeping their source lines; any other text draws with no line marks.
+// `escape` escapes text for HTML.
+export interface BlockHelpers {
+  block(text: string): string;
+  inline(text: string): string;
+  escape(text: string): string;
 }
 
 export interface FenceView {
