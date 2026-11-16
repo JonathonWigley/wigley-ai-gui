@@ -142,6 +142,10 @@ Decisions: - The shapes in plan.md § File Structure are word for word: `Harness
              `spendUsd` is "the process's spend so far in USD, cumulative across its turns". Claude already computes
              the per-turn share (`stream-decoder.ts`, `lastTotalCost`), so no code changes for cost (plan.md, Decided
              by the agent).
+           - `SendOptions.now` in `src/contracts/agent.ts`: its comment, and the `now` sentence in `send`'s comment,
+             gain "chat passes `now` only to a harness whose `capabilities.midTurnSend` is true; to any other it writes
+             the message plainly". Chat's check lands in task 10 (the user, refresh round). No code changes here: both
+             adapters declare `midTurnSend: true`.
            - Not in this task: the harness-minted session id (task 09); chat, sessions, docs and usage reading any new
              member (tasks 06, 07, 10–14); `profiles` on `AgentHarnessInfo` (task 05).
 Mandatory: AGENTS.md § Architecture: "An agent harness", "A session control", "A registration", and the `npm run lint`

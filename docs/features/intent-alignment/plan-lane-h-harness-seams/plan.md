@@ -61,6 +61,7 @@ Run each from the wigley-ai-gui folder of the clone or worktree the run works in
 | The relay's hello has no row id yet | `grep -c row_id ~/Documents/ai/wigley-ai-marketplace/plugins/wigley/scripts/forms/relay.py` | `0` |
 | Lane E's forms chain and Lane P's program lookup have not started | `grep -c '\[ \] Forms item kinds as registrations\|\[ \] Per-platform program lookup' docs/features/intent-alignment/master-plan.md` | `2` |
 | `RoundError` throw sites (measured at plan time, re-verify) | `grep -rn 'new RoundError(' src/plugins/forms src/plugins/primer src/shared/agent-forms --include='*.ts' \| grep -vc test` | `46` |
+| The audio picker still names its args error | `grep -c 'argsErrorName: AUDIO_PICKER_ERROR_NAME' src/plugins/audio-picker/main/picker-type.ts` | `1` |
 | Chat still pins Claude | `grep -c "CHAT_HARNESS_ID = 'claude'" src/plugins/chat/contract.ts` | `1` |
 | Sessions still reads Claude's `_meta` key | `grep -c "TOOL_USE_ID_META_KEY = 'claudecode/toolUseId'" src/plugins/sessions/main/mcp/mcp-server.ts` | `1` |
 
@@ -149,6 +150,10 @@ Settled with the user in the interview:
 - Docs' guard and lookups read every registered profile's folder; the docs index file keeps `claudeConfigDirs`.
 - Each adapter declares its config and plugin-cache roots and offers `installedPlugins`; docs parses no harness file.
 - When a harness leaves the registry, chat detaches its sessions and re-attaches them when it registers again.
+- Refresh round, against `main` at 83305ac31: the audio picker drops `needs_manual_open` from its outcome type as
+  forms and the primer do (task 02); a row waiting on its harness refuses Send now with the "not loaded" text, while
+  pull back and the headless switch work and interrupt does nothing (task 15); chat sends `now` only to a harness that
+  declares `midTurnSend` (contract line in task 04, check in task 10).
 
 Decided by the agent (shown as Decided notices):
 
@@ -167,6 +172,7 @@ Decided by the agent (shown as Decided notices):
 - Structured results: round wording goes to a forms MCP wording module; generic lines stay in the shared tool session
   over the form type's noun and tool names; `RoundError.problem` is free text with a `path`; `needs_manual_open`
   leaves forms' and primer's `Outcome`.
+- Every form type gets `argsErrorText`, the audio picker's included, with its error text unchanged.
 - Unknown entry kinds join no activity run.
 - Plugin id `claude-code`, harness id `claude`; the setting `claude.command` becomes `claude-code.command`. The
   user's `settings.json` sets neither `claude.command` nor `chat.profiles` (measured at plan time), so no edit there.

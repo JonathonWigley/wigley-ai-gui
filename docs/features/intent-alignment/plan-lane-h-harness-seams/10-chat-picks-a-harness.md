@@ -46,6 +46,7 @@ Consumes:
 - `harnessLabel(infos: ReadonlyMap<string, AgentHarnessInfo>, id: string): string` in
   `src/shared/agent-harness-label.ts` ← 01
 - `AgentHarness.info(): AgentHarnessInfo` with `label` ← 01 and `profiles: readonly HarnessProfile[]` ← 05
+- `AgentHarnessInfo.capabilities.midTurnSend: boolean` ← 04
 - `HarnessProfile { name: string; configDir: string }` ← 05; chat's `profiles` setting and `ChatProfile` are gone ← 05
 - `CLAUDE_HARNESS_ID = 'claude'` in `src/plugins/claude-code/main/claude-code-harness.ts` ← 03 (chat does not import
   it; the setting default is the literal `'claude'`)
@@ -123,6 +124,11 @@ Decisions:
   registered harness's profile names in registration order. A relay session the app did not start runs
   `start_session` on `defaultHarness`, not on its own `info.harness`, since that harness may have no adapter (a Codex
   terminal session today).
+- Send now follows the row's harness (the user, refresh round): `writeRowNow`'s `isNow` in `chat-sessions.ts` gains
+  one more condition, `deps.harnesses.get(<row's harness>)?.info().capabilities.midTurnSend === true`. A harness that
+  declares false, or is not registered, gets a plain write, and the message waits for the turn's end, as during a
+  compaction. `sendAllNow` writes through `writeRowNow`, so it follows too. The comment over `writeRowNow` names the
+  flag beside its other plain-write cases.
 - Task 09's chat self-test literal `harness: 'claude'` in `openSessions` (`src/plugins/chat/main/selftest-script.ts`,
   the relay's `sessions.connect` args) becomes `harness: FAKE_HARNESS_ID`. The session's harness is `fake` in the
   self-test now, and the relay's hello names the harness of its row, so `registry.get` finds the fake.
@@ -218,6 +224,11 @@ Tests:
 - `src/plugins/chat/main/chat-sessions.test.ts` › `resume_NoHarnessInTheRequest_RunsOnTheProfilesHarness` — two
   harnesses (`claude` declaring `work`, `fake` declaring `spare`); `resume({ projectDir, profile: 'spare',
   hostSessionId, title })` starts its process on `fake` only.
+- `src/plugins/chat/main/chat-sessions.test.ts` › `sendNow_HarnessWithoutMidTurnSend_WritesPlainly` — a registry
+  double whose `fake` wraps the fake harness, its `info()` returning the fake's info with `capabilities.midTurnSend`
+  false; a turn running and one message queued: `sendNow` records a fake `send` call with no `now`, and the queued
+  row's `sentEntryId` is set. Over the plain fake the same steps record `now: true`; when an existing send-now test
+  already holds that case, the false case is a row added to it.
 - `src/plugins/chat/main/chat-sessions.test.ts` › `restore_HarnessNotRegistered_RestsWithTheNotice` — a record with
   `harness: 'gone'`: the row opens resting, its last entry is the error notice
   `No agent harness "gone" is registered; turn its plugin on to resume this session.`, and no harness `attach` runs.

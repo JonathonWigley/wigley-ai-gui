@@ -18,13 +18,15 @@ Files:
 - modify `src/plugins/forms/main/kinds/item-format.ts` · `kinds/fields.ts` · `kinds/formats.ts` (comment only) ·
   `kinds/notice/notice-format.ts` · `kinds/question/question-format.ts` · `kinds/finding/finding-format.ts` (all under
   `src/plugins/forms/main/`)
-- modify `src/plugins/forms/contract.ts` · `src/plugins/primer/contract.ts` · `src/plugins/primer/main/primer-type.ts`
+- modify `src/plugins/forms/contract.ts` · `src/plugins/primer/contract.ts` · `src/plugins/primer/main/primer-type.ts` ·
+  `src/plugins/audio-picker/contract.ts` · `src/plugins/audio-picker/main/picker-type.ts`
 - modify `src/contracts/agent-forms.ts` · `src/shared/agent-forms/tool-session.ts` ·
   `src/shared/agent-forms/form-service.ts` · `src/shared/agent-forms/test-form-type.ts` (the test double)
 - test `src/plugins/forms/main/round.test.ts` · `round-type.test.ts` · `kinds/fields.test.ts` ·
   `kinds/notice/notice-format.test.ts` · `kinds/question/question-format.test.ts` ·
   `kinds/finding/finding-format.test.ts` (all under `src/plugins/forms/main/`) ·
-  `src/plugins/primer/main/primer-type.test.ts` · `src/shared/agent-forms/tool-session.test.ts` ·
+  `src/plugins/primer/main/primer-type.test.ts` · `src/plugins/audio-picker/main/picker-type.test.ts` ·
+  `src/shared/agent-forms/tool-session.test.ts` ·
   `src/shared/agent-forms/form-service.test.ts`
 - modify `AGENTS.md` (one sentence, step 5) · `docs/features/followups.md` · `docs/features/intent-alignment/master-plan.md`
 
@@ -55,7 +57,7 @@ Produces:
 
 Decisions:
 - Wire text stays byte-identical: every tool result text and error text of `ask_round` and `collect_last_round`, the
-  `FORMS_TOOLS` list, and the primer's error text. Tests pin the exact strings (plan.md, Decisions).
+  `FORMS_TOOLS` list, and the primer's and the audio picker's error texts. Tests pin the exact strings (plan.md, Decisions).
 - `RoundError` holds `path`, `problem` and `detail`. `problem` is free text. `detail` is `''` when there is none
   (plan.md, Decided by the agent).
 - Payloads become an outcome plus a reason: round logic builds a `RoundResult`, and `roundPayload` words it (plan.md).
@@ -65,9 +67,10 @@ Decisions:
 - After this task, these files hold no `ask_round` or `collect_last_round`, comments included:
   `round-error.ts`, `round.ts`, `round-type.ts`, and every non-test file under `src/plugins/forms/main/kinds/` (the
   scope of the grep is drafter).
-- `needs_manual_open` leaves `Outcome` in `src/plugins/forms/contract.ts` and `PrimerOutcome` in
-  `src/plugins/primer/contract.ts`. No TypeScript type replaces it. The marketplace relay produces it
-  (`relay.py` lines 249–254, the `needs_manual_open` payload builder) and no code in this repo produces or reads it. The two tool descriptions keep their
+- `needs_manual_open` leaves `Outcome` in `src/plugins/forms/contract.ts`, `PrimerOutcome` in
+  `src/plugins/primer/contract.ts` and `AudioPickerOutcome` in `src/plugins/audio-picker/contract.ts` (the audio picker
+  by the user, refresh round: it landed after the plan and takes the same treatment). No TypeScript type replaces it. The marketplace relay produces it
+  (`relay.py` lines 249–254, the `needs_manual_open` payload builder) and no code in this repo produces or reads it. The three tool descriptions keep their
   sentence about it, since that sentence is wire text the agent reads from this app's tool list (drafter).
 - `RoundErrorPath` is a closed union (drafter):
   ```ts
@@ -113,6 +116,11 @@ Decisions:
   - `roundType.argsErrorText`: `roundErrorText(error)` when `error instanceof RoundError`, else `null`.
   - `primerType.argsErrorText`: `error.message` when `error instanceof PrimerError`, else `null`. The primer's text
     does not change.
+  - The audio picker type (`createAudioPickerType` in `src/plugins/audio-picker/main/picker-type.ts`):
+    `argsErrorText` is `error.message` when `error instanceof AudioPickerError` (`main/picker-error.ts`), else `null`.
+    Its text does not change. `AUDIO_PICKER_ERROR_NAME` stays: `picker-error.ts` names the class with it, and
+    `audio-reads.ts` (line 123 at refresh time) checks it on its own reads, which this task leaves as they are (refresh,
+    Decided).
   - `TEST_FORM_TYPE.argsErrorText`: `` `Bad form: ${error.message}` `` when `error` is an `Error` named
     `TEST_FORM_ERROR_NAME`, else `null`. The prefix makes the tests prove the shared code uses the type's text.
   - The prefix reaches only the two texts `argsErrorText` words: the tool session's error result and the
@@ -242,6 +250,11 @@ Tests:
   text'`: `createAgentFormToolSession(session, primerType)` over a fake session whose `open` runs
   `primerType.parse(args)`, args `{ feature: SAMPLE_PRIMER_ARGS.feature, entries: [] }`; the result is
   `{ content: [{ type: 'text', text: "'entries' must be a non-empty array: the primer rows, then the standing tasks." }], isError: true }`.
+- `src/plugins/audio-picker/main/picker-type.test.ts` — new: `'returns a malformed open_audio_picker's message as its
+  tool error text'`: `createAgentFormToolSession(session, createAudioPickerType(paths))` over a fake session whose
+  `open` runs the type's `parse(args)`, args `'nope'`; the result is `{ content: [{ type: 'text', text: <the message
+  parseAudioPicker('nope', paths) throws> }], isError: true }`. The existing `'rejects a malformed open_audio_picker
+  with its AudioPickerError and shows nothing'` test stays as it is.
 - `round-type.test.ts`, `tool-definitions.test.ts`, `start.test.ts`: no change; they must still pass.
 - Self-test: no new step. The task adds no behaviour. The forms self-test already checks the fixture round's
   `summary` string and the unknown-layout refusal's text (`src/plugins/forms/main/selftest-script.ts`,
@@ -267,10 +280,11 @@ Approach — the five steps, in order:
    `type.argsErrorText(error)` as the error text when it is not `null`, else rethrows; its `AgentFormTools` pick
    names `argsErrorText`. `form-service.ts`'s `formFromRecord` uses `session.type.argsErrorText(error)`, and
    `unreadableFormError` takes that text in place of the cause `Error`, writing it where `cause.message` is today.
-   Fill the member in `roundType`, `primerType` and `TEST_FORM_TYPE`.
+   Fill the member in `roundType`, `primerType`, the audio picker type and `TEST_FORM_TYPE`.
 5. **Schema and outcomes.** Turn `arraySchema` into `describe()` in the three formats; `tool-definitions.ts` calls
-   `FORMATS[kind].describe()` and uses the tool-name constants. Remove `'needs_manual_open'` from `Outcome` and
-   `PrimerOutcome`; the primer comment `` // `no_primer` and `needs_manual_open` carry no `feature` and no `entries`. ``
+   `FORMATS[kind].describe()` and uses the tool-name constants. Remove `'needs_manual_open'` from `Outcome`,
+   `PrimerOutcome` and `AudioPickerOutcome`, and delete the audio picker contract's two-line comment over it
+   (`Only the wigley-forms relay returns …`); the primer comment `` // `no_primer` and `needs_manual_open` carry no `feature` and no `entries`. ``
    becomes `` // `no_primer` carries no `feature` and no `entries`. ``. Reword the comments that name `ask_round` or
    `collect_last_round` in the files the grep in Decisions covers; `fixtures.ts`'s comment may keep `ask_round`.
    In `AGENTS.md` § Architecture "An item kind", change `` `round.ts`'s fixed keys (`parseRound`, `readFormBody`, the
@@ -282,8 +296,9 @@ Done when:
 - compiles: `npm run lint` and `npm run typecheck` pass.
 - the test gate runs every test file in Tests.
 - `grep -rn 'ask_round\|collect_last_round' src/plugins/forms/main/round-error.ts src/plugins/forms/main/round.ts src/plugins/forms/main/round-type.ts src/plugins/forms/main/kinds --include='*.ts' | grep -v '\.test\.ts'` prints nothing.
-- `grep -rn needs_manual_open src --include='*.ts'` prints only the two tool-definitions description lines
-  (`src/plugins/forms/main/tool-definitions.ts`, `src/plugins/primer/main/tool-definitions.ts`).
+- `grep -rn needs_manual_open src --include='*.ts'` prints only the three tool-definitions description lines
+  (`src/plugins/forms/main/tool-definitions.ts`, `src/plugins/primer/main/tool-definitions.ts`,
+  `src/plugins/audio-picker/main/tool-definitions.ts`).
 - `grep -rn argsErrorName src` prints nothing.
 - Proof holds step 1's passing run on the untouched tree, and states that no literal in `mcp-wording.test.ts` and
   nothing in `forms-tools.golden.txt` changed after it.

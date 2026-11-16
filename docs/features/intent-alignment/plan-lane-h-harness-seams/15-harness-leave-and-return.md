@@ -62,7 +62,11 @@ Decisions:
   and the chat gains an info notice `<label> is not loaded. This session waits for it to load again.` A send to it
   (`send`, `sendAllNow`, the export `send`) rejects before anything queues, with
   `<label> is not loaded. Send again once it is.`; the page shows it as `Message not sent: <text>` and puts the
-  message back in the box (today's `refused` path). `clear` and `setControl` throw the same text. `loadHistory`
+  message back in the box (today's `refused` path). `clear`, `setControl` and `sendNow` throw the same text (`sendNow` writes to the process, which a waiting
+  row lacks). `pullBack` and `setHeadless` work as on any row: neither touches the process, and pull back is how the
+  user takes back a message queued before the leave (the rest leaves `chat.queued` as it was; measured at refresh
+  time, `restAfterFailedAttach` touches no queue). `interrupt` does nothing, as on any resting row: `liveFor` logs and
+  returns (the user, refresh round). `loadHistory`
   reads nothing, and a later call tries again. `<label>` is `harnessLabelOf(id)`.
 - Every held row on that harness waits, resting rows with no process included. The waiting state is not saved: a
   relaunch restores by the registry as it stands then.
@@ -112,6 +116,8 @@ GIVEN a row on harness `fake` whose process runs WHEN the `fake` key leaves `cor
 `Fake is not loaded. This session waits for it to load again.`
 GIVEN a row waiting on `fake` WHEN the user sends THEN the send rejects with `Fake is not loaded. Send again once it
 is.`, nothing queues, and no process starts.
+GIVEN a row waiting on `fake` WHEN the user presses Send now on a queued message THEN it throws that text and writes
+nothing; pull back and the headless switch work as on any row, and interrupt changes nothing.
 GIVEN a row waiting on `fake` whose process the host still runs WHEN `fake` registers again THEN chat attaches the
 row through `fake`'s `attach` with the row's process id, the notice goes, and the row runs again.
 GIVEN a row waiting on `fake` whose process ended meanwhile WHEN `fake` registers again THEN no attach runs, the row
@@ -129,7 +135,12 @@ Tests:
   `Fake is not loaded. This session waits for it to load again.`; `sessionRested` was sent with `error: null`.
 - `src/plugins/chat/main/chat-sessions.test.ts` › `send_HarnessLeft_RejectsNamingTheLabel` — after the leave, `send`
   rejects with `Fake is not loaded. Send again once it is.`; `chat.queued` is `[]`; the fake holds one process.
-  Rows in the same `it.each`: `sendAllNow` rejects, `clear` throws, `setControl` throws, each with that text.
+  Rows in the same `it.each`: `sendAllNow` rejects, `clear` throws, `setControl` throws, `sendNow` throws, each with
+  that text.
+- `src/plugins/chat/main/chat-sessions.test.ts` › `harnessLeft_PullBackHeadlessInterrupt_WorkAsOnAnyRestingRow` — a
+  running row with one message queued behind its turn; after `harnessLeft('fake')`: `pullBack` moves that message
+  into `chat.returned`, `setHeadless(id, true)` sets `headless: true` in `chat.session`, and `interrupt` adds no entry
+  and records no fake call.
 - `src/plugins/chat/main/chat-sessions.test.ts` › `harnessLeft_AttachingRow_DetachesOnceTheAttachSettles` — a
   restored row whose attach is held: the leave runs, then the attach resolves a process: that process gets `detach`,
   and the row rests waiting.
@@ -187,8 +198,8 @@ Tests:
   - `harness return: no resumed process started on Fake return` when no later record's request has `resume: true`.
 
 Approach:
-- `HeldSession` gains the id of the harness the row waits on, null when none (drafter). The send, clear and control
-  refusals read it before any other step.
+- `HeldSession` gains the id of the harness the row waits on, null when none (drafter). The send, send-now, clear and
+  control refusals read it before any other step.
 - `harnessReturned` reads the harness with `deps.harnesses.get(id)`. When it returns null (the key and the list
   disagree), chat logs `harness <id> set in core.agentHarnesses but not registered` and changes nothing.
 - `selftest-script.ts`: `ChatSelfTestDeps` gains the registry and the fixture fake; `start.ts` builds the fixture with
