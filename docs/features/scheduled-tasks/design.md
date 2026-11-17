@@ -158,13 +158,13 @@ schedule is read, since it would never fire.
   now press at once, else a catch-up at once, else the next occurrence. A paused task and a spent one-time task get
   none. The app sends the whole list with `setPending`, which replaces what it sent before. With the app closed, a
   task fires once and then waits until the app opens and plans again.
-- **Re-plans** happen on app start, on each task edit, on each task-file change, on a plugin reload, after each
-  run is adopted, and when chat's session instructions change (`chat.onInstructionsChanged`), which also prepares
+- **Re-plans** happen on app start, on each task edit, on each task-file change, on each Run now press, on a plugin
+  reload, after each run is adopted, after the app connects to a new host, and when chat's session instructions change (`chat.onInstructionsChanged`), which also prepares
   every pending run again. The `claude.command` path and chat's profiles and projects, which a prepared run also
   holds, have no change signal: a change reaches a pending run at its next re-prepare, the next app start, edit of
   that task, task-file change or plugin reload.
-- **Catch-up.** The planner looks back from now to the later of the task's `updatedAt` and its latest history
-  occurrence. When that window holds a missed occurrence, it queues one run, at once, for the latest; older missed
+- **Catch-up.** The planner looks back from now to the latest of the task's `updatedAt`, its latest history
+  occurrence and, in a start whose `history.json` could not be read, that start's time. When that window holds a missed occurrence, it queues one run, at once, for the latest; older missed
   times are dropped. So a task resumed or edited after a gap does not catch up times from before the change. A task
   written by hand with an `updatedAt` older than its latest occurrence, and no history, catches up once at the next
   plan. In a start whose `history.json` could not be read, no task catches up (the window starts at that start),
@@ -177,6 +177,8 @@ schedule is read, since it would never fire.
   once its time has come, and a spawn the host could not make (`exit.error`). A prepare that fails before the run's
   time queues nothing for the task and tries again at that time, since a folder missing now may exist then.
 - **A one-time task** stays listed after its run, with no next run, until the user edits or removes it.
+- **Switching the plugin off** (the part's stop is `end`, for a switch-off or a removal) empties the host's queue and removes the login start. A
+  quit or a restart of the app leaves both in place.
 
 ## The environment of a run
 
@@ -202,8 +204,10 @@ tool's contribution declares its answer and whether it replays, through `contrib
 | Tool | Answer | Replays |
 |---|---|---|
 | `ask_round` | no round shown: take each item's recommended pick, list each pick as a Decided notice | no |
-| `collect_last_round`, `open_primer`, `collect_last_primer` | did not run | no |
+| `open_audio_picker` | no picker shown: take each moment's recommended candidate, list each pick as a Decided notice | no |
+| `collect_last_round`, `open_primer`, `collect_last_primer`, `collect_last_audio_picker` | did not run | no |
 | `permission_prompt` | a deny: the run's permission mode does not allow this tool | no |
+| `show_live_view`, `hide_live_view` | no stream: carry on without it | no |
 | `start_session`, `add_practice_problem`, `read_practice_state` | did not run | no |
 | `set_headless` | the session stays headless | no |
 | `set_workflow_step`, `set_workflow_checklist`, `set_workflow_plan` | recorded, applied when the app opens, then `HEADLESS_NOTE` | yes |
@@ -264,9 +268,9 @@ would, and exits; so the host's folder and channel are worked out in one place a
 started this way reads its pending table and runs record at start. `LoginStart` (`src/contracts/login-start.ts`) is a platform seam; `set` resolves to a
 `LoginStartStatus` (`on`, `off`, `needsApproval` or `unsupported`, with a `detail` line) that Schedules mode shows.
 
-- **macOS** has two adapters in `src/main/login-start/`, label `wigley-ai-gui.session-host`. `main.ts` picks between
-  them, by which the login item spike (the plan's first task) recorded as working on this Mac; the other stays for a
-  Mac where it works.
+- **macOS** has two adapters in `src/main/login-start/`, label `wigley-ai-gui.session-host`. `main.ts` uses the
+  login-item service in the live stable app, since a spike found it works on the user's Mac. The LaunchAgent adapter is
+  built and tested, and `main.ts` does not import it: it stays for a Mac where the login item does not work.
   - The login-item service (`createAgentServiceLoginStart`): Electron's `setLoginItemSettings` with type
     `agentService`, over a plist inside the bundle.
   - A LaunchAgent file (`createLaunchAgentLoginStart`): `~/Library/LaunchAgents/wigley-ai-gui.session-host.plist`,
@@ -285,7 +289,7 @@ started this way reads its pending table and runs record at start. `LoginStart` 
   side shows the selected task: project, schedule, permission mode and prompt, with Edit, Pause or Resume, Run now and
   Remove. The editor offers chat's profiles and projects and the harness's start controls (`editorChoices`).
 - **The mode's keys**: `j`/`k` move, `a` makes a task, `i` edits the selected one, `p` pauses or resumes it, `r` runs
-  it now, `d` removes it after a confirm; in the details, `j`/`k` move through the history and `<CR>` opens a run's
+  it now, `d` removes it after a confirm; in the details, `j`/`k` move through the history and `<CR>` or `l` opens a run's
   row. `src/plugins/keymap.ts` holds the full list.
 - **The mode's notices**, at the top of the details: the task file's parse error while one stands; in the dev app,
   that it never fires; where the app fires, the login start's state when it needs the user (approval, a failure, or
@@ -297,7 +301,9 @@ started this way reads its pending table and runs record at start. `LoginStart` 
 - **The Scheduled runs section** in the Sessions side bar, registered through sessions' `addSection`, claims every
   open run row (`SchedulingState.runRows`).
 - **The finished mark.** A run is finished at its row's first `chat.turnFinished`, at adoption by the rule in
-  § Adoption, or when its row closes. A finished run stays unviewed until `sessions.selection` names its row; a run that finishes while its row is
+  § Adoption, when its row closes, or, after chat has restored its rows, when its row is not open or its session
+  does not run. A run row that chat restores under a new row id stops counting as a run row: its history entry names
+  the old id, so no section claims the new row and no mark or badge count stands for it. A finished run stays unviewed until `sessions.selection` names its row; a run that finishes while its row is
   selected is viewed at once. The mark is the history entry's `viewed` flag, so it survives an app restart. The page
   sets row activity
   `done` with emphasis `raised` on each unviewed run row, and main sets the `services.alerts` open count `scheduling`
@@ -356,9 +362,10 @@ until the user views a finished run's row.
   marked after an app restart.
 - **One login entry in the app.** Both login starts run the app with `--start-session-host`, so the host command is
   built by the same `sessionHostLaunch` the app uses, and an app update needs no plist change for a new host path.
-- **Live starts keep their full env.** A live start passes its whole launch env as the overlay, with `unsetEnv`
-  naming what the adapter drops, so a live start's child env does not change; a prepared run passes the carried names
-  only.
+- **Live starts keep their full env.** A live start sets `inheritEnv` false, so its child env is exactly its launch
+  env and does not change; a prepared run sets `inheritEnv` true and passes the carried names as an overlay on the
+  host's env, less `unsetEnv`. The host outlives the app that started it, so its own env can hold names the current
+  app's lacks.
 - **Catch-up window from the last edit or run.** A resumed or edited task does not catch up times from before the
   change, as Hermes does for a paused job.
 - **Finished means the first turn ended.** A run row is done once its first turn ends, and it stays marked until the
@@ -369,5 +376,5 @@ until the user views a finished run's row.
   numeric fields, and a pure parser on the injected clock tests by table, DST cases included.
 - **No system notification.** The app raises none: a finished run marks its row and the Dock badge, as a finished
   turn or an open form does.
-- **Both login adapters are built.** `main.ts` picks the one the spike recorded as working on this Mac; the other
-  stays for a Mac where it works.
+- **Both login adapters are built.** `main.ts` uses the login-item service, which works on the user's Mac; the
+  LaunchAgent adapter stays for a Mac where it does not.

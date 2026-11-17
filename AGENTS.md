@@ -97,7 +97,8 @@ src/config/      core commands and scopes, default settings, the core token regi
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `plugin-url.ts`: the `wigley-plugin:` URLs of a user plugin's files and the path each
-                 serves from, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
+                 serves from, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-login-start.ts`: the
+                 login start's test double, `permission-cap.ts`: `capPermission`, which lowers a permission control to a cap over a harness's order, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
                  `platform.ts`: one builder of the `Platform` record per OS,
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
                  `command-router.ts`: the run and intercept chain each process builds its commands on, over
@@ -223,8 +224,9 @@ src/main/        core main process; main.ts is its composition root
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
   login-start/   the adapters behind LoginStart, which start the session host at login: Electron's `agentService`
-                 login item and a LaunchAgent file on macOS, and a no-op for every other platform and run; `main.ts`
-                 picks one
+                 login item, which `main.ts` uses in the live stable app on macOS; a LaunchAgent file, built and tested
+                 but not wired in, for a Mac where the login item does not work; and a no-op for every other platform
+                 and run
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
                  upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
@@ -275,7 +277,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `sessions.activity` and `sessions.place` slots, the last holding each session's selected tab, selection
                  count and hidden popups, `followRows`, and the row's `owner`: the plugin a row with no place in the side bar belongs to), session-title.ts (the title rules main and page share), main/ (the
                  session list — rows, their titles and project names (a registered namer's, chat's projects, else the origin repo's), the selected session, written to the `rows` and `selection` slots, tool routing — the
-                 `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
+                 `set_session_title` tool, relay, endpoint files, the offline table for the closed app (`offlineEnv`, the relay's offline env; `replayCalls`, the calls the relay logged while the app was closed), `holdConnects` (relay connects wait on a promise), MCP adapter → the only @modelcontextprotocol import),
                  page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections, then
                  the sections other plugins register through `addSection`, each claiming its own rows —
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
@@ -314,9 +316,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section
                  through sessions' `addSection`, its header's queued count), layouts/ (its Layout contract and `default`
                  layout); `docs/features/auto-retro/design.md`
-  scheduling/    scheduled tasks: the task file, the schedule parser, the run planner and history, the host's pending
-                 queue, adoption of each run as a row, the four task tools, Schedules mode and the Scheduled runs
-                 section; `docs/features/scheduled-tasks/design.md`
+  scheduling/    scheduled tasks: the task file and the schedule parser at the root; main/ (the task and history stores,
+                 the run planner, preparing each planned run through chat and queueing it in the session host, adopting
+                 each run the host started as a row, the four task tools, the self-test script); page/ (Schedules mode
+                 and the Scheduled runs section through sessions' `addSection`); layouts/ (its Layout contract and
+                 `default` layout); `docs/features/scheduled-tasks/design.md`
   auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
                  registers the send gate that compacts a cold-cache session before a message when its context is above
                  the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction; reads
@@ -405,7 +409,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
-                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to scoped-agents, `launch` and `defaultProfile` to practice (its import session), `launch`, `defaultProfile`, `profileOf` and `restored` (settles once chat's restore of saved sessions has run) to backlog, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to scoped-agents, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
+                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to scoped-agents, `launch` and `defaultProfile` to practice (its import session), `launch`, `defaultProfile`, `profileOf` and `restored` (settles once chat's restore of saved sessions has run) to backlog, `prepareLaunch` (a launch the session host starts later), `adopt` (opens the row of a run the host started), `projects`, `profiles`, `profileOf`, `defaultProfile`, `restored` and `onInstructionsChanged` (an `addInstructions` registration or disposal) to scheduling, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to scoped-agents, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the leader search (`leader-search.ts`), the title bar's Keys button, and the placement check over the core's anchors), layouts/
@@ -875,7 +879,10 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   (the `claude-code` plugin registers Claude's); the registry publishes each harness's label and declarations in
   `core.agentHarnesses`, and no code outside a harness's plugin names its CLI, files, environment or ids
   (`docs/features/agent-harnesses/design.md`). The fake in `src/shared/`, registered by the composition root under
-  the id `fake`, drives the tests and the self-test. The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
+  the id `fake`, drives the tests and the self-test. A harness also prepares a run the session host starts later
+  (`prepareRun`, pure: the spawn with its opening stdin lines, carried env and unset names), declares the controls a
+  new session starts from (`startControls`) and lowers a task's controls to the calling session's (`capControls`).
+  The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
   events and `at`, the time it first appeared (stamped through the injected `Clock`, or read from the transcript for
   history), so a chat layout can show any field and the chat never parses a harness's JSON. The Claude adapter's
   readings of the CLI (`docs/features/agent-chat/claude-stream.md`): it reports permission mode `manual` as
@@ -915,7 +922,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool. Before it runs a call, sessions asks each **tool-call guard** (`addToolCallGuard`, beside
   `addCloseGuard`), so a rule over calls is one registration. A contribution marks its tools main-agent-only with `{ mainAgentOnly: true }` (the
-  workflow tools and `set_session_title`); chat's guard, which it registers through `addToolCallGuard`, answers a subagent's call of such a tool with a success that
+  workflow tools, `set_session_title` and the four scheduling tools); chat's guard, which it registers through `addToolCallGuard`, answers a subagent's call of such a tool with a success that
   changes nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. A contribution also declares each tool's answer while the app is closed, and
@@ -923,7 +930,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   writes them to `offline.json` for the relay, and a tool left out answers that it did not run
   (`docs/features/scheduled-tasks/design.md` § With the app closed). Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), starting the session host at login (`loginStart`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
   watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is

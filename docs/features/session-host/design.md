@@ -175,7 +175,9 @@ harness.
   process that stays alive does not block the entry.
 - **A run** is `{ id, record, startedAt, skipped, exit }`: `id` is the entry's `spawn.id`, `startedAt` when the host
   spawned or skipped it, `exit` null while it runs and filled when it closes. A spawn that fails is a run whose `exit`
-  holds `error`.
+  holds `error`. A run with `exit` null that a starting host loads, or imports from an older file, belongs to a host
+  that is gone and took its process with it: the host sets its `exit.error` to `the session host that started it
+  exited`.
 - **`runStarted`** is pushed to every connected client when the host starts or skips an entry.
 - **`listRuns`** answers every run the host started or skipped that no `forgetRuns` dropped, oldest first, and rejects
   as `list` does.
@@ -259,8 +261,9 @@ and the app adopts it like any other.
 - Windows: a running exe locks its folder, so `install-app` installs each build in its own folder under
   `%LOCALAPPDATA%\Programs\wigley-ai-gui\` and points the Start menu shortcut at the newest. An older folder is
   deleted once no host runs from it. The relay's `start_app` picks the newest folder.
-- Login start: while any scheduled task is active, the host starts when the user logs in on macOS, through a login
-  item or a LaunchAgent behind the `LoginStart` seam (`src/contracts/login-start.ts`), so pending runs fire after a
+- Login start: while any scheduled task is active, the host starts when the user logs in on macOS, through the
+  login item service behind the `LoginStart` seam (`src/contracts/login-start.ts`; a LaunchAgent adapter is built for a
+  Mac where the login item does not work), so pending runs fire after a
   restart with no app open. On Windows the host starts only with the app.
 
 ## Rejected approaches
