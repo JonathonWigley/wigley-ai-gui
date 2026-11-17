@@ -44,16 +44,16 @@ drives, and knows nothing of a particular project.
 
 - **Open:** a Bash call of any agent of the session, the lead or a subagent (a subagent's calls arrive under the
   lead's row), whose command runs `unity command editor_play` or `capture.py start`, seen when the call starts. A
-  chained command counts (`cd <dir> && unity command editor_play`); text inside quotes, another `unity command`, and
+  chained command counts (`cd <dir> && unity command editor_play --project-path <dir>`); text inside quotes, another `unity command`, and
   `capture.py stop` do not.
 - **Live calls only:** a replayed or restored entry never opens it. The watch reads the call's full command from
   chat's `chat.entries` list, since a `toolStarted` event's summary is cut to 80 characters, and counts the entry as
   live only when chat's `agentEvent` `toolStarted` for its `toolUseId` came with `replayed: false`. A restore writes
   the list whole and fires no `toolStarted`.
-- **Project folder:** the command's `--project-path <dir>` when it names one; else the unity-pool clone whose claim
-  is this session's row (the `unity-pool.snapshot` slot; the first such clone in the snapshot's order); else the
-  session's project folder (`chat.session`). With no editor found there (no `Library/EditorInstance.json` with a
-  `process_id`), or no editor window, the watch writes no pick and logs a line.
+- **Project folder:** only the command's `--project-path <dir>`. The agent names its editor in the command that
+  starts the playtest, as the `wigley:unity-playtest` skill does; the app guesses no folder. A trigger command with no
+  `--project-path`, a folder with no editor (no `Library/EditorInstance.json` with a `process_id`), or no editor
+  window writes no pick, only a log line.
 - **What streams:** the whole editor window, `Editor · <project folder>`, as `show_live_view` with no `gameRect`
   does. The agent's later `show_live_view` with the Game View rect crops it, as the `wigley:unity-playtest` skill
   already calls it. With Screen Recording off, the section shows that line and its button, as for the agent's call.
@@ -64,9 +64,6 @@ drives, and knows nothing of a particular project.
   still waiting on the window list writes nothing when a pick, a hide, an `editor_stop` or the session's end came
   first.
 - No setting turns it off.
-
-live-view's main part lists `unity-pool` in its manifest's `reads`, so with that plugin off the pool slot reads
-`undefined` and the watch goes on to the session's folder.
 
 ## Finding the window
 
@@ -144,6 +141,8 @@ section with no Unity editor and no Screen Recording grant.
 - **Pick window and Stop buttons for the user** — the user wants the agent, and the app on a session's playtest
   commands, to start and stop Live, never a button.
 - **A setting to turn the playtest watch off** — the user wants none.
+- **Guessing the playtest's project folder** from the session's unity-pool clone or its project folder — a Unity
+  project can sit in a subfolder of its clone; the agent names the folder in the command instead.
 - **A Live tab beside the Chat tab** — the user wants the stream beside the agent's work, not a tab away.
 - **Finding the editor by its window title** (`[<folder> …`) — a floating Game View has its own title; the editor's
   process finds every window it owns.
