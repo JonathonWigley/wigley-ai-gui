@@ -187,7 +187,7 @@ export function keyRunner(
 export function runLogged(
   id: CommandId,
   log: PluginLog,
-  run: () => Promise<void>,
+  run: () => Promise<unknown>,
 ): void {
   try {
     void run();

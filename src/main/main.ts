@@ -68,6 +68,7 @@ import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
 import { manifests, withoutRealHarnessPlugins } from '../plugins/manifests';
 import { appEndpointDir } from '../shared/app-endpoint-dir';
+import { commandHopOf } from '../shared/command-args';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
@@ -1151,9 +1152,13 @@ function createWindow(
     leader: () => store.current().keymap.editor.leader,
     remote: pageCommands.run,
   });
+  // The hop comes from the page, so only its typed fields are read.
   ipcMain.handle(
     BRIDGE_CHANNELS.commandRun,
-    (_event, id: string, arg: unknown) => commands.router.run(id, arg),
+    (_event, id: string, arg: unknown, hop: unknown) => {
+      const { reportErrors, ...sessions } = commandHopOf(hop);
+      return commands.router.run(id, arg, sessions, { reportErrors });
+    },
   );
   const { harnesses, ...windowServices } = modeServices.forWindow({
     window,

@@ -1,35 +1,47 @@
 import type {
+  CommandHop,
   CommandId,
   CommandKey,
+  CommandOutcome,
   CommandRunContext,
+  CommandRunOptions,
 } from '../contracts/commands';
 import type { Disposable } from '../contracts/disposable';
 import type { Log } from '../contracts/log';
 import type { CommandInfo, ProcessName } from '../contracts/plugin';
-import { checkCommandArg, commandTarget } from './command-args';
+import { checkCommandArg, commandHopOf, commandTarget } from './command-args';
 import type { CommandRegistry } from './command-registry';
 
 // `infoOf` reads the freshest catalog the process has. `remote` sends a run to the
-// other process and resolves once it settles.
+// other process with `hop`, its sessions and whether it reports, and settles as
+// that run does there: it resolves the outcome, and rejects with the failure only
+// for a hop with `reportErrors`.
 export interface CommandRouterDeps<Context extends { arg: unknown }> {
   process: ProcessName;
   registry: CommandRegistry<Context>;
   infoOf(id: CommandId): CommandInfo | undefined;
-  remote(id: CommandId, arg: unknown): Promise<void>;
+  remote(
+    id: CommandId,
+    arg: unknown,
+    hop: CommandHop,
+  ): Promise<CommandOutcome>;
 }
 
 // The one path a run takes. `run` throws at the call for an unknown id, for a bad
 // argument and for this process's command with no handler; otherwise it starts the
-// handler here before it returns, or hands the run to `remote`, and resolves once
-// the run settles. `intercept` wraps a run here, and throws for a command the
-// catalog knows as the other process's; an id it does not know yet is accepted. A
-// wrap has the limit `CommandRegistry.intercept` states.
+// handler here with `extras` before it returns, or hands the run to `remote` with
+// the sessions of `extras`, and resolves the outcome once the run settles. With
+// `options.reportErrors` the run rejects with its failure, as
+// `CommandRegistry.run` states. `intercept` wraps a run here, and throws for a
+// command the catalog knows as the other process's; an id it does not know yet is
+// accepted. A wrap has the limit `CommandRegistry.intercept` states.
 export interface CommandRouter<Context extends { arg: unknown }> {
   run(
     command: CommandId | CommandKey<unknown>,
     arg: unknown,
     extras?: Omit<Context, 'arg'>,
-  ): Promise<void>;
+    options?: CommandRunOptions,
+  ): Promise<CommandOutcome>;
   intercept(
     id: CommandId,
     wrap: (
@@ -81,7 +93,7 @@ export function createCommandRouter<Context extends { arg: unknown }>(
   deps: CommandRouterDeps<Context>,
 ): CommandRouter<Context> {
   return {
-    run(command, arg, extras) {
+    run(command, arg, extras, options) {
       const id = typeof command === 'string' ? command : command.id;
       const info = deps.infoOf(id);
       if (info === undefined) {
@@ -92,9 +104,13 @@ export function createCommandRouter<Context extends { arg: unknown }>(
         throw new Error(problem);
       }
       if (info.runsIn !== deps.process) {
-        return deps.remote(id, arg);
+        const hop = commandHopOf({
+          ...extras,
+          reportErrors: options?.reportErrors,
+        });
+        return deps.remote(id, arg, hop);
       }
-      return deps.registry.run(id, { ...extras, arg } as Context);
+      return deps.registry.run(id, { ...extras, arg } as Context, options);
     },
     intercept(id, wrap, owner) {
       const info = deps.infoOf(id);

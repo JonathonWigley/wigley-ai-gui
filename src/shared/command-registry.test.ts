@@ -55,24 +55,40 @@ describe('CommandRegistry', () => {
     expect(started).toBe(true);
   });
 
+  it('run_HandlerRunsAndResolves_ResolvesRan', async () => {
+    const { commands } = setup();
+    commands.register('p.go', async () => {}, 'p');
+
+    await expect(
+      commands.run('p.go', NO_ARG, { reportErrors: true }),
+    ).resolves.toBe('ran');
+  });
+
+  const throwsBoom = () => {
+    throw new Error('boom');
+  };
+  const rejectsBoom = () => Promise.reject(new Error('boom'));
+
   it.each([
-    {
-      case: 'throws',
-      handler() {
-        throw new Error('boom');
-      },
-    },
-    { case: 'rejects', handler: () => Promise.reject(new Error('boom')) },
-  ])(
+    { case: 'throws', handler: throwsBoom, reportErrors: undefined },
+    { case: 'rejects', handler: rejectsBoom, reportErrors: undefined },
+    { case: 'throws, reporting', handler: throwsBoom, reportErrors: true },
+    { case: 'rejects, reporting', handler: rejectsBoom, reportErrors: true },
+  ] as const)(
     'run_HandlerThrowsOrRejects_LogsUnderOwnerAndResolves: $case',
-    async ({ handler }) => {
+    async ({ handler, reportErrors }) => {
       const { commands, logs } = setup();
       const heard: string[] = [];
       commands.register('p.go', handler, 'owner');
       commands.onDidRun((id) => heard.push(id), 'q');
 
-      await expect(commands.run('p.go', NO_ARG)).resolves.toBeUndefined();
+      const run = commands.run('p.go', NO_ARG, { reportErrors });
 
+      if (reportErrors) {
+        await expect(run).rejects.toThrow(/^boom$/);
+      } else {
+        await expect(run).resolves.toBe('skipped');
+      }
       expect(logs).toEqual(['owner: command p.go failed: boom']);
       expect(heard).toEqual([]);
     },
@@ -123,7 +139,9 @@ describe('CommandRegistry', () => {
     commands.onDidRun((id) => ran.push(`did ${id}`), 'q');
     commands.intercept('p.go', () => {}, 'a');
 
-    await commands.run('p.go', NO_ARG);
+    await expect(
+      commands.run('p.go', NO_ARG, { reportErrors: true }),
+    ).resolves.toBe('skipped');
 
     expect(ran).toEqual([]);
   });
@@ -152,24 +170,52 @@ describe('CommandRegistry', () => {
     expect(runs).toBe(1);
   });
 
-  it('intercept_WrapThrows_LogsUnderTheWrapOwnerAndResolves', async () => {
-    const { commands, logs } = setup();
-    const heard: string[] = [];
-    commands.register('p.go', () => {}, 'p');
-    commands.onDidRun((id) => heard.push(id), 'q');
+  it.each([
+    { case: 'plain', reportErrors: undefined },
+    { case: 'reporting', reportErrors: true },
+  ] as const)(
+    'intercept_WrapThrows_LogsUnderTheWrapOwnerAndResolves: $case',
+    async ({ reportErrors }) => {
+      const { commands, logs } = setup();
+      const heard: string[] = [];
+      commands.register('p.go', () => {}, 'p');
+      commands.onDidRun((id) => heard.push(id), 'q');
+      commands.intercept(
+        'p.go',
+        async (next) => {
+          await next();
+          throw new Error('boom');
+        },
+        'wrapper',
+      );
+
+      const run = commands.run('p.go', NO_ARG, { reportErrors });
+
+      if (reportErrors) {
+        await expect(run).rejects.toThrow(/^boom$/);
+      } else {
+        await expect(run).resolves.toBe('skipped');
+      }
+      expect(logs).toEqual(['wrapper: intercept of p.go failed: boom']);
+      expect(heard).toEqual([]);
+    },
+  );
+
+  it('run_HandlerThenWrapFail_RejectsWithTheFirstFailure', async () => {
+    const { commands } = setup();
+    commands.register('p.go', () => Promise.reject(new Error('first')), 'p');
     commands.intercept(
       'p.go',
       async (next) => {
         await next();
-        throw new Error('boom');
+        throw new Error('second');
       },
       'wrapper',
     );
 
-    await expect(commands.run('p.go', NO_ARG)).resolves.toBeUndefined();
-
-    expect(logs).toEqual(['wrapper: intercept of p.go failed: boom']);
-    expect(heard).toEqual([]);
+    await expect(
+      commands.run('p.go', NO_ARG, { reportErrors: true }),
+    ).rejects.toThrow(/^first$/);
   });
 
   it('intercept_WrapDoesNotAwaitNext_RunWaitsForTheHandler', async () => {

@@ -29,6 +29,7 @@ import { createRegistrations } from '../../shared/registrations';
 import {
   createRuntimeCommands,
   EMPTY_RUNTIME_CATALOG,
+  type RuntimeCommandsDeps,
 } from '../../shared/runtime-commands';
 import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import type { LayoutService } from '../layouts/layout-service';
@@ -88,7 +89,9 @@ function liveSettings(initial: Record<string, object>) {
 // Main's commands over `state`, sending remote runs to `remote`.
 function mainCommandsOver(
   state: SlotStore,
-  remote: (id: string, arg: unknown) => Promise<void> = () => Promise.resolve(),
+  remote: RuntimeCommandsDeps<
+    MainCommandContext<any>
+  >['remote'] = async () => 'ran',
 ) {
   return createRuntimeCommands<MainCommandContext<any>>({
     process: 'main',
@@ -743,6 +746,7 @@ describe('createMainApi commands', () => {
     const remoteRuns: [string, unknown][] = [];
     const commands = mainCommandsOver(state, async (id, arg) => {
       remoteRuns.push([id, arg]);
+      return 'ran';
     });
     const { api, registrations } = apiOver(
       liveSettings({ p: {} }),

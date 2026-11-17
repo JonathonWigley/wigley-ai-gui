@@ -16,8 +16,14 @@ export function validManifest(): RawManifest {
         group: 'Notes',
         runsIn: 'page',
         arg: 'string',
+        targets: true,
       },
-      sync: { label: 'Sync notes', group: 'Notes', runsIn: 'main' },
+      sync: {
+        label: 'Sync notes',
+        group: 'Notes',
+        runsIn: 'main',
+        risky: true,
+      },
     },
     scopes: { list: 'In the notes list' },
     keys: {

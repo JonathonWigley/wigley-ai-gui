@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { Alerts } from '../contracts/alerts';
 import type { AppInstance } from '../contracts/app-instance';
-import type { CommandId } from '../contracts/commands';
+import type { CommandHop, CommandId } from '../contracts/commands';
 import {
   coreModeSlot,
   coreRuntimeMainSlot,
@@ -137,9 +137,11 @@ export const noCounts: Readonly<PartCounts> = {
   frames: 0,
 };
 
+// `hop` holds the run's sessions and whether it reports.
 export interface HarnessCommandRun {
   id: CommandId;
   arg: unknown;
+  hop: CommandHop;
 }
 
 // `started` throws while the part is stopped. `ready` calls every started
@@ -158,7 +160,8 @@ export interface HarnessCommandRun {
 // held until the writer's `dispose` and `counts` does not hold it, so a test
 // publishes each key once and disposes the writer of a key the part under test
 // publishes before that part starts. `commandRuns` holds each run sent to the
-// other process, in order, under its qualified id.
+// other process, in order, under its qualified id with its hop; each resolves
+// `ran`.
 export interface PartHarness<Started> {
   started(): Started;
   ready(): void;
@@ -466,7 +469,7 @@ function lazyCatalogWriter(
 
 // What every part of the harness runs commands on: a real registry and router over
 // the commands `manifests` declare and the catalog slots. A run sent to the other
-// process joins `commandRuns`.
+// process joins `commandRuns` with its hop, and resolves `ran`.
 function createWorld(
   state: SlotStore | undefined,
   process: ProcessName,
@@ -500,9 +503,9 @@ function createWorld(
       other: store.read(otherKey, 'core'),
       served: () => declared,
       leader: () => ' ',
-      remote(id, arg) {
-        commandRuns.push({ id, arg });
-        return Promise.resolve();
+      async remote(id, arg, hop) {
+        commandRuns.push({ id, arg, hop });
+        return 'ran';
       },
     }),
   };

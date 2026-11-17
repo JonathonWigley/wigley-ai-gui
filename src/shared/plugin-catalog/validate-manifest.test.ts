@@ -185,6 +185,30 @@ describe('validateManifest', () => {
       },
     ],
     [
+      'command "open" risky must be true',
+      (m) => {
+        m.commands.open.risky = false;
+      },
+    ],
+    [
+      'command "sync" risky must be true',
+      (m) => {
+        m.commands.sync.risky = 'yes';
+      },
+    ],
+    [
+      'command "open" targets must be true',
+      (m) => {
+        m.commands.open.targets = false;
+      },
+    ],
+    [
+      'command "sync" targets must be true',
+      (m) => {
+        m.commands.sync.targets = 1;
+      },
+    ],
+    [
       'scopes must be an object',
       (m) => {
         m.scopes = 'list';
