@@ -410,6 +410,24 @@ const SAVED_REPLY_LINE = JSON.stringify({
 });
 
 describe('createClaudeCodeHarness', () => {
+  it('info_Label_ClaudeCode', () => {
+    const harness = createClaudeCodeHarness({
+      command: () => '/bin/claude',
+      permissionTool: 'tool',
+      env: {},
+      log: () => {},
+      host: createFakeSessionHost(clock),
+      spawn: () => fakeChild().child,
+      files: createMemoryFiles(),
+      homeDir: '/Users/u',
+      paths: posixPaths,
+      clock,
+      randomUuid: () => 'uuid-1',
+    });
+
+    expect(harness.info().label).toBe('Claude Code');
+  });
+
   it('start_EmitsLaunchedControlsThenIdle', async () => {
     const run = started();
     expect(run.heard).toEqual([]);

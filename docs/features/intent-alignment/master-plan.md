@@ -126,7 +126,7 @@ Checkpoint, after the items above:
 Start after Wave 1 step 2: both edit the same dependency call sites. The chat pass edits chat files that Wave 2's
 conversion of chat to slots and its chat events also edited; that conversion has landed.
 
-1. [ ] AgentHarnessRegistry [ready]
+1. [x] AgentHarnessRegistry [ready]
 2. [ ] AgentHarness grows what a second harness needs [ready]
 3. Then ∥:
    - [ ] Harness settings with the harness, then [ ] Docs reads harness config roots from the adapter

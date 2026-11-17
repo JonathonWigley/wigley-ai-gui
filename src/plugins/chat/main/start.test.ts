@@ -9,6 +9,7 @@ import type { Files } from '../../../contracts/files';
 import type { PartStop } from '../../../contracts/plugin';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import type { KeyedSlotKey } from '../../../contracts/state';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
@@ -95,7 +96,7 @@ function chatDriveActions(
     profileNames: () => ['default'],
     chat,
     sessions: { activate },
-    harnesses,
+    harnesses: harnessRegistryOf(harnesses),
   });
   return drive;
 }
@@ -403,7 +404,7 @@ function startChatPart(
     },
     services: {
       log: (line: string) => logged.push(line),
-      agentHarnesses: [harness],
+      agentHarnesses: harnessRegistryOf([harness as unknown as AgentHarness]),
       randomUuid: () => 'host-1',
       clock,
       timers,
@@ -1344,7 +1345,7 @@ function startChatOnHarness() {
   } as unknown as AgentHarness;
   const harness = startMainPart(chatMainPart, {
     services: {
-      agentHarnesses: [agentHarness],
+      agentHarnesses: harnessRegistryOf([agentHarness]),
       sessionHost: createFakeSessionHost({ now: () => 0 }),
       git: {
         topLevel: () => Promise.resolve(null),

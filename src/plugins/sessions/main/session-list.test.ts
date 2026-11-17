@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../../contracts/disposable';
+import { harnessLabel } from '../../../shared/agent-harness-label';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentSession,
   type ConnectedSession,
   type GuardedToolCall,
-  type Harness,
   type MarkOptions,
   type OwnedSession,
   type ProjectNamer,
@@ -34,7 +35,7 @@ const RESULT: ToolResult = { content: [{ type: 'text', text: 'done' }] };
 
 function info(
   projectDir: string | null,
-  harness: Harness | null = null,
+  harness: string | null = null,
 ): SessionInfo {
   return { sessionId: null, projectDir, harness };
 }
@@ -134,6 +135,14 @@ function setUp(
     projectName,
     hostSessionName,
     configFolder: resolvedFolder,
+    harnessLabel: (id) =>
+      harnessLabel(
+        new Map([
+          ['claude', harnessInfo({ label: 'Claude Code' })],
+          ['codex', harnessInfo({ label: 'Codex' })],
+        ]),
+        id,
+      ),
   });
   states.length = 0;
   selections.length = 0;
@@ -733,7 +742,7 @@ describe('createSessionList', () => {
     expect(labels(list.state())).toEqual(['session', 'session 2']);
   });
 
-  it('labels a codex session with no project folder Codex session', () => {
+  it('labels a session with no project folder by its harness label', () => {
     const { list } = setUp();
 
     connectWithRow(list, info(null, 'codex'));
@@ -743,7 +752,7 @@ describe('createSessionList', () => {
     expect(labels(list.state())).toEqual([
       'Codex session',
       'Codex session 2',
-      'session',
+      'Claude Code session',
     ]);
     expect(list.state().rows.map((row) => row.harness)).toEqual([
       'codex',
@@ -1439,6 +1448,7 @@ describe('createSessionList', () => {
       projectName: async () => null,
       hostSessionName: async () => null,
       configFolder: () => null,
+      harnessLabel: (id) => id,
     });
 
     expect(written).toEqual(writes);

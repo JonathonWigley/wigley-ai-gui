@@ -5,6 +5,7 @@ import type {
   UsageAgentEvent,
 } from '../../../contracts/agent';
 import type { QualifiedEvents } from '../../../contracts/plugin';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
@@ -127,7 +128,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
         },
         clear: (id: number) => pendingTimers.delete(id),
       },
-      agentHarnesses: harnesses,
+      agentHarnesses: harnessRegistryOf(harnesses as AgentHarness[]),
       selfTest: { run: () => undefined },
     },
     drive: drive.host,
@@ -472,9 +473,9 @@ function startOnHarness(read: () => Promise<PlanUsage>) {
       ),
     ],
     services: {
-      agentHarnesses: [
+      agentHarnesses: harnessRegistryOf([
         { id: 'claude', planUsage: read } as unknown as AgentHarness,
-      ],
+      ]),
     },
   });
   harness.state.publish(sessionsSelectionSlot).set(SELECTED);

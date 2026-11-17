@@ -166,7 +166,7 @@ export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
   let opens = 0;
   drive.add('seed', {
     description:
-      'Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states; indexDelayMs makes the stand-in docs_index.py wait that many milliseconds before answering, so a docs index run outlasts the Docs tree\'s "Claude pending" chip (default 0). Returns the home\'s real path.',
+      "Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states; indexDelayMs makes the stand-in docs_index.py wait that many milliseconds before answering, so a docs index run outlasts the Docs tree's pending chips (default 0). Returns the home's real path.",
     args: '{ loadStates?: boolean, indexDelayMs?: number }',
     async run(rawArgs) {
       await started;

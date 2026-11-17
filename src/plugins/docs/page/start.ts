@@ -1,7 +1,10 @@
 import '../../../shared/page/markdown.css';
 import './docs.css';
 import type { CommandId } from '../../../contracts/commands';
-import { coreModeSlot } from '../../../contracts/core-state';
+import {
+  coreAgentHarnessesSlot,
+  coreModeSlot,
+} from '../../../contracts/core-state';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type {
   PageApi,
@@ -123,6 +126,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const { services } = api;
     const { log } = services;
     const rows = api.state.read(sessionsRowsSlot);
+    const harnesses = api.state.read(coreAgentHarnessesSlot);
     const placeWriter = api.state.publish(docsPlaceSlot);
     // A session source whose row ended while no page ran leaves a place no
     // view takes; the prune waits for the restore window to settle, so the
@@ -216,6 +220,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         matcher: services.fuzzy,
         picker: docsPicker.forView(viewId),
         paths: services.paths,
+        harnesses: () => harnesses.all(),
         toast: services.toast,
         openExternal: services.openExternal,
         runKey: keyRunner(api.commands, log),

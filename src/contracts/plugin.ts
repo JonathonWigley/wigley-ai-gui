@@ -1,4 +1,4 @@
-import type { AgentHarness } from './agent';
+import type { AgentHarnessRegistry } from './agent';
 import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { AppBuild, AppInstance } from './app-instance';
@@ -1048,8 +1048,9 @@ export interface DriveHost {
 // the user's attention, and stopping the plugin zeroes the open counts it set.
 // Stopping the plugin also clears its pending `timers`, disposes its live
 // `files` watches and stops its running `processes`, each of which then rejects
-// with `Stopped <command>`. `agentHarnesses` lists every
-// harness adapter the app runs, found by `id`. `window.summon` brings the app
+// with `Stopped <command>`. `agentHarnesses` is the harness registry: a harness
+// plugin registers its adapter there, and stopping the plugin disposes its
+// registrations. `window.summon` brings the app
 // forward from behind another app and returns whether the window came forward.
 // `window.chooseFolder` opens the native folder dialog over the window and
 // resolves to null when the user cancels; `window.isFocused` is true while the app's window has focus;
@@ -1088,7 +1089,7 @@ export interface MainServices {
   images: ImageEncoder;
   systemStats: SystemStats;
   screenCapture: ScreenCapture;
-  agentHarnesses: readonly AgentHarness[];
+  agentHarnesses: AgentHarnessRegistry;
   sessionHost: SessionHost;
   window: {
     show(): void;

@@ -2,13 +2,12 @@
 
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
 import type { SlotKey } from '../../contracts/state';
-import type { Harness } from '../sessions/contract';
 
 // The session a note names. `sessionId` is the sessions plugin's row id;
 // `hostSessionId` the harness's own id.
 export interface NoteSession {
   sessionId: string;
-  harness: Harness | null;
+  harness: string | null;
   hostSessionId: string;
   projectDir: string | null;
 }

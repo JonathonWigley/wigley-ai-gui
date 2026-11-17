@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentHarness } from '../../../contracts/agent';
+import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type { Registrations } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type {
@@ -127,7 +127,7 @@ interface ChatDriveDeps {
     | 'permissionToolSession'
   >;
   sessions: Pick<SessionsMainExports, 'activate'>;
-  harnesses: readonly AgentHarness[];
+  harnesses: AgentHarnessRegistry;
 }
 
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
@@ -139,7 +139,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
   const { services, profileNames, chat, sessions, harnesses } = deps;
   const permissions = new Map<string, DrivePermission>();
   const fakeHarness = () => {
-    const fake = harnesses.find(isFakeAgentHarness);
+    const fake = harnesses.list().find(isFakeAgentHarness);
     if (fake === undefined) {
       throw new Error('chat runs on no fake harness');
     }

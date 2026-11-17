@@ -1,5 +1,4 @@
 import type {
-  Harness,
   MarkOptions,
   SessionRow,
   SessionsPlace,
@@ -153,18 +152,6 @@ export function tabsAfterRestoredAdd(
   return isSavedTab && isUnpickedSinceSaved
     ? tabsWithSelected(tabs, tabId)
     : tabs;
-}
-
-// The harness as a row shows it; nothing when the relay did not say.
-export function harnessText(harness: Harness | null): string {
-  switch (harness) {
-    case 'claude':
-      return 'Claude';
-    case 'codex':
-      return 'Codex';
-    case null:
-      return '';
-  }
 }
 
 // The toast for a mark that selected its row while Sessions mode is hidden;

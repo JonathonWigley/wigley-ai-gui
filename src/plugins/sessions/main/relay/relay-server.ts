@@ -9,10 +9,8 @@ import {
 import { listenOnChannel } from '../../../../shared/local-channel/local-channel';
 import {
   type ConnectedSession,
-  HARNESSES,
   RELAY_PROTOCOL,
   type RelayHello,
-  type Harness,
   type RelayHelloReply,
   type SessionInfo,
 } from '../../contract';
@@ -74,11 +72,6 @@ function mistypedHelloField(hello: RelayHello): string | null {
   return null;
 }
 
-// A harness the app does not know reads as none.
-function harnessOf(value: string | null | undefined): Harness | null {
-  return HARNESSES.find((harness) => harness === value) ?? null;
-}
-
 // The hello fields sessions reads; every other is the host's own.
 const SESSIONS_HELLO_FIELDS: ReadonlySet<string> = new Set([
   'protocol',
@@ -92,7 +85,7 @@ function sessionInfo(hello: RelayHello): SessionInfo {
   const info: SessionInfo = {
     sessionId: hello.session_id ?? null,
     projectDir: hello.project_dir ?? null,
-    harness: harnessOf(hello.harness),
+    harness: hello.harness ?? null,
     profileDir: hello.config_dir ?? undefined,
   };
   const hostFields = Object.entries(hello).filter(

@@ -34,23 +34,11 @@ export const sessionsFavoriteProjectAtCommand: CommandKey<
   'sessions.favoriteProjectAt'
 > = { id: 'sessions.favoriteProjectAt' };
 
-// Every agent harness a session can run in; the relay hello's parse reads a
-// harness missing from this list as none.
-export const HARNESSES = ['claude', 'codex'] as const;
-
-// The agent harness a session runs in.
-export type Harness = (typeof HARNESSES)[number];
-
 // What a drive action connects a fixture session with when its caller leaves
-// a field out, and the harnesses its caller may name.
-export const DRIVE_SESSION_DEFAULTS = {
-  harnesses: HARNESSES,
+// a field out.
+export const DRIVE_SESSION_DEFAULTS: { projectDir: string; harness: string } = {
   projectDir: 'drive',
   harness: 'claude',
-} as const satisfies {
-  harnesses: readonly Harness[];
-  projectDir: string;
-  harness: Harness;
 };
 
 // Every source a session title comes from, in the order the row prefers them:
@@ -72,8 +60,8 @@ export function editableTitle(titles: SessionTitles): string {
 export interface SessionInfo {
   sessionId: string | null;
   projectDir: string | null;
-  // Null when the relay did not say, or named a harness the app does not know.
-  harness: Harness | null;
+  // The agent harness's id. Null when the relay did not say.
+  harness: string | null;
   // The session's harness config folder, as `AgentStart` holds one, which a form
   // source has no use for; absent for the harness default.
   profileDir?: string;
@@ -99,7 +87,7 @@ export interface RelayHello {
   protocol: number;
   session_id: string | null;
   project_dir: string | null;
-  // Absent reads as null, as does a harness the app does not know.
+  // Absent reads as null.
   harness?: string | null;
   // Absent reads as null.
   config_dir?: string | null;
@@ -374,7 +362,7 @@ export interface SessionRow {
   // no-folder label. Re-asked at each namer's `changed()` and `dispose()` and
   // at the lookup's landing.
   project: string;
-  harness: Harness | null;
+  harness: string | null;
   marked: boolean;
   markToast: MarkOptions | null;
   projectDir: string | null;

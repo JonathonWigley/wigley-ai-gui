@@ -40,6 +40,7 @@ import type {
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import { CORE_RELOAD_PLUGIN } from '../contracts/commands';
 import {
+  coreAgentHarnessesSlot,
   corePluginsSlot,
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
@@ -95,6 +96,7 @@ import { scopedFiles } from '../shared/scoped-files';
 import type { SlotStore } from '../shared/state/slot-store';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
 import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
+import { createAgentHarnessRegistry } from './agent-harness-registry';
 import { createMacAlerts } from './alerts/mac-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createWindowsAlerts } from './alerts/windows-alerts';
@@ -239,20 +241,16 @@ const loginShellEnv = shouldReadLoginShellEnv({
 
 // The services that differ by run mode. `trashItem` backs the files service,
 // which loads the config before the window exists; `forWindow` builds the
-// rest once the window is created.
+// rest once the window is created, `harnesses` being the adapters the
+// composition root registers in `services.agentHarnesses`.
 interface ModeServices {
   trashItem(file: string): Promise<void>;
-  forWindow(
-    context: ModeServicesContext,
-  ): Pick<
+  forWindow(context: ModeServicesContext): Pick<
     MainServices,
-    | 'alerts'
-    | 'agentHarnesses'
-    | 'window'
-    | 'openExternal'
-    | 'systemStats'
-    | 'screenCapture'
-  >;
+    'alerts' | 'window' | 'openExternal' | 'systemStats' | 'screenCapture'
+  > & {
+    harnesses: readonly AgentHarness[];
+  };
 }
 
 interface ModeServicesContext {
@@ -361,7 +359,7 @@ function liveServices(): ModeServices {
     trashItem: (file) => shell.trashItem(file),
     forWindow: ({ window, store, homeDir, log, sessionHost }) => ({
       alerts: alertsFor(platform.os, window),
-      agentHarnesses: [
+      harnesses: [
         claudeHarness(store, homeDir, endpointEnv(homeDir), log, sessionHost),
       ],
       window: windowService(window),
@@ -389,7 +387,7 @@ function offscreenRunServices(
     trashItem: (file) => rm(file, { recursive: true }),
     forWindow: (context) => ({
       alerts: silentAlerts,
-      agentHarnesses: [harness(context)],
+      harnesses: [harness(context)],
       window: offscreenWindowService(context.window, runName, context.log),
       openExternal: gateExternalLinks(async (url) =>
         context.log('main', `external link not opened in ${runName}: ${url}`),
@@ -1156,13 +1154,21 @@ function createWindow(
     BRIDGE_CHANNELS.commandRun,
     (_event, id: string, arg: unknown) => commands.router.run(id, arg),
   );
-  const windowServices = modeServices.forWindow({
+  const { harnesses, ...windowServices } = modeServices.forWindow({
     window,
     store,
     homeDir: inputs.homeDir,
     log,
     sessionHost,
   });
+  // Registered before the main parts start, so every part and page finds them;
+  // the registrations live as long as the window, as the shell layout's does.
+  const agentHarnesses = createAgentHarnessRegistry(
+    slots.publish(coreAgentHarnessesSlot),
+  );
+  for (const harness of harnesses) {
+    agentHarnesses.register(harness);
+  }
   // Main parts reach the switch through this forwarder, made before they start.
   let pluginSwitch: PluginSwitch | null = null;
   let isLaunchStartDone = false;
@@ -1194,6 +1200,7 @@ function createWindow(
         runMode === 'live',
       ),
       sessionHost,
+      agentHarnesses,
       pluginSwitch: {
         mayDisable: (id) =>
           pluginSwitch === null

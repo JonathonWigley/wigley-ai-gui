@@ -44,7 +44,8 @@ export type LoadState =
   | 'shadowed'
   | 'not-loaded';
 
-export type IndexHarness = 'claude' | 'codex';
+// A harness's id; one no adapter registered shows as itself.
+export type IndexHarness = string;
 
 export interface LoadStateRecord {
   state: LoadState;

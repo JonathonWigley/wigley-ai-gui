@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OwnedSession } from '../../sessions/contract';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { NoteDraft } from '../contract';
 import { notesSelfTestScript } from './selftest-script';
@@ -40,7 +41,7 @@ function setUp(holdsFolder: boolean) {
       },
       activate: () => undefined,
     },
-    harnesses: [],
+    harnesses: harnessRegistryOf([]),
     store: {
       clear: () => Promise.resolve(draft),
       addImage(png) {

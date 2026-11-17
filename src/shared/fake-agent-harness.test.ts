@@ -1585,6 +1585,16 @@ describe('createFakeAgentHarness', () => {
     ).toBe(true);
     expect(isFakeAgentHarness(other)).toBe(false);
   });
+
+  it('info_Label_Fake', () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+
+    expect(harness.info().label).toBe('Fake');
+  });
 });
 
 describe('createFakeAgentHarness compaction', () => {

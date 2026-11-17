@@ -1,4 +1,7 @@
-import type { AgentHarness } from '../../../contracts/agent';
+import type {
+  AgentHarness,
+  AgentHarnessRegistry,
+} from '../../../contracts/agent';
 import { CHAT_HARNESS_ID, type ChatProfile } from '../contract';
 
 // The profile named `name`; throws naming it when chat has none.
@@ -13,14 +16,12 @@ export function requireProfile(
   return profile;
 }
 
-// The harness chat runs its sessions on.
+// The harness chat runs its sessions on, as the registry holds it now.
 export function requireChatHarness(
-  harnesses: readonly AgentHarness[],
+  harnesses: AgentHarnessRegistry,
 ): AgentHarness {
-  const harness = harnesses.find(
-    (candidate) => candidate.id === CHAT_HARNESS_ID,
-  );
-  if (!harness) {
+  const harness = harnesses.get(CHAT_HARNESS_ID);
+  if (harness === null) {
     throw new Error(`no agent harness "${CHAT_HARNESS_ID}"`);
   }
   return harness;

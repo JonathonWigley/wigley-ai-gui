@@ -1,3 +1,5 @@
+import type { Disposable } from './disposable';
+
 // The MCP tool that answers a harness's permission prompts, served to every
 // session by the app's MCP server. Claude Code names a plugin's MCP tool
 // `mcp__plugin_<plugin>_<server>__<tool>`: the server is `wigley-forms` in the
@@ -491,8 +493,15 @@ export interface ProjectFolder {
   modified: number;
 }
 
+// The declarations a harness publishes in `core.agentHarnesses`; JSON-safe. `label` names the harness to the user.
+export interface AgentHarnessInfo {
+  label: string;
+}
+
 export interface AgentHarness {
-  id: string;
+  readonly id: string;
+  // The harness's declarations as they stand now; the registry publishes them at `register` and at each `refresh`.
+  info(): AgentHarnessInfo;
   start(request: AgentStart, events: AgentProcessEvents): AgentProcess;
   // Attaches to the hosted process `request.processId`. Every event it fires before its promise resolves is replayed,
   // except what a process that exited during the attach fires for that exit, its `sessionEnded` and `ended` included.
@@ -544,4 +553,20 @@ export interface AgentHarness {
   listProjects(profileDir: string | null): Promise<ProjectFolder[]>;
   // Runs one poll of `profileDir`'s plan usage, or rejects with the reason.
   planUsage(profileDir: string | null): Promise<PlanUsage>;
+}
+
+// One harness's place in the registry. `refresh` publishes the adapter's `info()` again after its declarations
+// change, and does nothing after `dispose`; a second `dispose` does nothing.
+export interface AgentHarnessRegistration extends Disposable {
+  refresh(): void;
+}
+
+// Every harness the app runs, behind `services.agentHarnesses`. `register` throws when a live registration holds the
+// harness's id, and changes nothing then. `list` is in registration order; `get` is null for an id no live
+// registration holds. A harness is in `list` and `get` before the registry sets its `core.agentHarnesses` key, and
+// out of them before it deletes that key.
+export interface AgentHarnessRegistry {
+  register(harness: AgentHarness): AgentHarnessRegistration;
+  list(): readonly AgentHarness[];
+  get(id: string): AgentHarness | null;
 }

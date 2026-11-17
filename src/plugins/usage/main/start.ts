@@ -119,15 +119,13 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     events.on('sessions.ended', ({ sessionId }) =>
       apply(withoutSession(currentState(), sessionId)),
     );
-    const harness = services.agentHarnesses.find(
-      (candidate) => candidate.id === CHAT_HARNESS_ID,
-    );
+    const harness = services.agentHarnesses.get(CHAT_HARNESS_ID);
     const noHarness = `no agent harness "${CHAT_HARNESS_ID}"`;
-    if (harness === undefined) {
+    if (harness === null) {
       services.log(`${noHarness}: plan usage is not read`);
     }
     let poller: PlanPoller | null =
-      harness === undefined
+      harness === null
         ? null
         : createPlanPoller({
             timers: services.timers,
@@ -162,7 +160,9 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     };
     api.onSettingsChanged(() => poller?.reschedule());
     poller?.start();
-    const fakeHarnesses = services.agentHarnesses.filter(isFakeAgentHarness);
+    const fakeHarnesses = services.agentHarnesses
+      .list()
+      .filter(isFakeAgentHarness);
     services.selfTest?.run(
       usageSelfTestScript({
         homeDir: services.homeDir,

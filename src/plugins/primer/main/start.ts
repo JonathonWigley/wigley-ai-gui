@@ -18,7 +18,6 @@ import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-ses
 import { chatMainKey } from '../../chat/contract';
 import {
   DRIVE_SESSION_DEFAULTS,
-  type Harness,
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
@@ -47,7 +46,7 @@ export function addDriveActions(
   sessions: Pick<SessionsMainExports, 'connect'>,
   onSessionEnded: (listener: (rowId: string) => void) => void,
 ): void {
-  addAgentFormDriveActions<Harness>({
+  addAgentFormDriveActions({
     host,
     sessions,
     sessionDefaults: DRIVE_SESSION_DEFAULTS,

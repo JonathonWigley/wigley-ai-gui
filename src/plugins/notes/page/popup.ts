@@ -1,3 +1,4 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
@@ -118,6 +119,8 @@ export interface NotePopupDeps {
   restoresSettled(): boolean;
   // Hears the place after each change to the popup's open state or cursors.
   placeChanged(place: NotesPlace): void;
+  // Each registered harness's info by id, read at each draw of a session chip.
+  harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
 }
 
 export interface NotePopup {
@@ -388,7 +391,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       slot('session'),
       {
         text:
-          session === null ? null : sessionChipText(session, paths, homeDir),
+          session === null
+            ? null
+            : sessionChipText(session, deps.harnesses(), paths, homeDir),
       },
       session?.sessionId ?? null,
     );
@@ -1084,7 +1089,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     pick(
       'Session',
       options,
-      (session) => sessionChipText(session, paths, homeDir),
+      (session) => sessionChipText(session, deps.harnesses(), paths, homeDir),
       0,
       (session) => {
         dispatch({

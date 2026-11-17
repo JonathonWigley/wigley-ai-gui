@@ -1129,6 +1129,7 @@ export function createClaudeCodeHarness(
 ): AgentHarness {
   return {
     id: 'claude',
+    info: () => ({ label: 'Claude Code' }),
     start: (request, events) => startClaudeProcess(deps, request, events),
     attach: (request, events) => attachClaudeProcess(deps, request, events),
     listSessions: (projectDir, profileDir) =>

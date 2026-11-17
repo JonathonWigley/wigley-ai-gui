@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
-import type { AgentHarness } from '../../../contracts/agent';
+import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
@@ -10,6 +10,10 @@ import {
   markRun,
   type RunMark,
 } from '../../../shared/fake-agent-harness';
+import {
+  harnessLabel,
+  registeredInfos,
+} from '../../../shared/agent-harness-label';
 import { base64LengthOf, MAX_IMAGE_BASE64 } from '../../../shared/image-types';
 import type {
   OwnedSession,
@@ -23,7 +27,7 @@ export interface NotesSelfTestDeps {
   files: Pick<Files, 'read' | 'realPath' | 'makeFolder'>;
   paths: Paths;
   sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
-  harnesses: readonly AgentHarness[];
+  harnesses: AgentHarnessRegistry;
   store: Pick<DraftStore, 'clear' | 'addImage'>;
   // Resolves at the next send to a new session that main reports sent.
   nextSessionSend(): Promise<void>;
@@ -39,6 +43,9 @@ interface NotesSelfTestResult {
   sends: LaunchedSend[];
   // The base64 length of the over-cap PNG the fixture put in the draft.
   overCapBase64: number;
+  // The session line a note names the fixture session with, its harness
+  // labelled as the registry labels it.
+  sessionLine: string;
 }
 
 interface LaunchedSend {
@@ -54,7 +61,14 @@ const REPO = 'selftest-repo';
 // note's follow-up first.
 const TITLE_TOKEN = 'qxnotesnit';
 const TITLE = `Notes selftest ${TITLE_TOKEN}`;
-const SESSION_LINE = `Source session: Claude Code ${SESSION_ID} in ~/dev/${REPO}`;
+// The fixture session's harness.
+const SESSION_HARNESS = 'claude';
+
+// The line a note names the fixture session with, the harness shown as
+// `label`.
+function sessionLineOf(label: string): string {
+  return `Source session: ${label} ${SESSION_ID} in ~/dev/${REPO}`;
+}
 const LAUNCH_BRIEF =
   'A nitpick to fix, noted while working. Make the change, then report.';
 
@@ -244,7 +258,7 @@ function countOf(text: string, part: string): number {
   return text.split(part).length - 1;
 }
 
-function followupProblems(followups: string): string[] {
+function followupProblems(followups: string, sessionLine: string): string[] {
   const problems: string[] = [];
   if (!followups.includes(`**${TITLE}**`)) {
     problems.push(`follow-up "${TITLE}" missing`);
@@ -255,7 +269,7 @@ function followupProblems(followups: string): string[] {
   if (!holdsBody) {
     problems.push('note body missing');
   }
-  const sessionLines = countOf(followups, SESSION_LINE);
+  const sessionLines = countOf(followups, sessionLine);
   if (sessionLines !== 2) {
     problems.push(`session line count ${String(sessionLines)}, expected 2`);
   }
@@ -275,7 +289,11 @@ function followupProblems(followups: string): string[] {
   return problems;
 }
 
-function sendProblems({ folder, sends }: NotesSelfTestResult): string[] {
+function sendProblems({
+  folder,
+  sends,
+  sessionLine,
+}: NotesSelfTestResult): string[] {
   const send = sends.at(0);
   if (send === undefined) {
     return [`no session launched in ${folder}`];
@@ -284,7 +302,7 @@ function sendProblems({ folder, sends }: NotesSelfTestResult): string[] {
   const holdsNote =
     send.text.startsWith(LAUNCH_BRIEF) &&
     send.text.includes('Launch me.') &&
-    send.text.includes(SESSION_LINE);
+    send.text.includes(sessionLine);
   if (!holdsNote) {
     problems.push(`launched message ${send.text}`);
   }
@@ -353,13 +371,13 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
       {
         sessionId: SESSION_ID,
         projectDir: folder,
-        harness: 'claude',
+        harness: SESSION_HARNESS,
       },
       { select: false },
     );
     previous = opened;
     sessions.activate(opened.session.id);
-    const marks = markRun(harnesses);
+    const marks = markRun(harnesses.list());
     await sent;
     if (isReplaced()) {
       return new Promise<never>(() => {});
@@ -377,6 +395,9 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
       followups,
       sends: launchedSends(marks, folder, paths),
       overCapBase64: base64LengthOf(overCapPng.length),
+      sessionLine: sessionLineOf(
+        harnessLabel(registeredInfos(harnesses), SESSION_HARNESS),
+      ),
     };
   }
 
@@ -395,7 +416,7 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
     problems: (result) => {
       const ran = result as NotesSelfTestResult;
       return [
-        ...followupProblems(ran.followups),
+        ...followupProblems(ran.followups, ran.sessionLine),
         ...sendProblems(ran),
         ...shrunkSendProblems(ran),
       ];

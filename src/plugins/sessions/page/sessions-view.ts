@@ -1,3 +1,4 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import {
   PANE_DIRECTIONS,
@@ -103,6 +104,8 @@ export interface SessionsViewDeps extends Omit<
   activities: KeyedSlotWriter<RowActivitySource[]>;
   // Holds `sessionsPlaceSlot`, each session's place.
   places: KeyedSlotWriter<SessionsPlace>;
+  // Each registered harness's info by id, which a row's harness label reads.
+  harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
 }
 
 // The Sessions list: the side bar's rows as a keyboard pane, its cursor a
@@ -264,6 +267,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     parts,
     deps.timers,
     deps.keys.anchor,
+    deps.harnesses,
   );
   let state: SessionsState | null = null;
   // The list cursor while the list holds the keys; out of the list it has no

@@ -7,10 +7,12 @@
 // the read-only reasons, the plugin-source status texts and the tree's
 // rollups.
 
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
+import { harnessLabel } from '../../../shared/agent-harness-label';
 import { matchesSubstring } from '../../../shared/matches-substring';
 import { codeUnitOrder } from '../code-unit-order';
 import {
@@ -356,31 +358,27 @@ export interface Chip {
   state: LoadState | 'none' | 'pending';
 }
 
-const HARNESS_NAMES: Record<IndexHarness, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-};
-
 const PENDING_TOOLTIP = 'Changed since the last build';
 
+// Each chip names its harness by its label in `harnesses`, else its id.
 export function chips(
   context: IndexContext | null,
   entryId: string,
   isPending: boolean,
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>,
 ): { claude: Chip; codex: Chip } {
   const states = context?.states[entryId] ?? {};
   return {
-    claude: chip('claude', states.claude, isPending),
-    codex: chip('codex', states.codex, isPending),
+    claude: chip(harnessLabel(harnesses, 'claude'), states.claude, isPending),
+    codex: chip(harnessLabel(harnesses, 'codex'), states.codex, isPending),
   };
 }
 
 function chip(
-  harness: IndexHarness,
+  name: string,
   record: LoadStateRecord | undefined,
   isPending: boolean,
 ): Chip {
-  const name = HARNESS_NAMES[harness];
   if (isPending) {
     return {
       text: `${name} pending`,
@@ -879,11 +877,13 @@ export function settlePending(
 const NO_VALUE = '—';
 
 // The field table a hook or plugin entry shows in place of a body; [] for
-// any other kind.
+// any other kind. A plugin's harness shows by its label in `harnesses`, else
+// its id.
 export function detailFields(
   entry: IndexEntry,
   homeDir: string,
   paths: Paths,
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>,
 ): [string, string][] {
   if (entry.kind === 'hook') {
     return [
@@ -898,12 +898,7 @@ export function detailFields(
   const harness = metaString(entry, 'harness');
   const enabled = entry.meta.enabled;
   return [
-    [
-      'Harness',
-      harness === 'claude' || harness === 'codex'
-        ? HARNESS_NAMES[harness]
-        : NO_VALUE,
-    ],
+    ['Harness', harness === null ? NO_VALUE : harnessLabel(harnesses, harness)],
     ['Version', metaString(entry, 'version') ?? NO_VALUE],
     [
       'Enabled',
@@ -944,11 +939,13 @@ export function fileStatuses(
   return merged;
 }
 
-// The status chips' texts for `entry`, in their fixed order.
+// The status chips' texts for `entry`, in their fixed order, each harness
+// named by its label in `harnesses`, else its id.
 export function statusTexts(
   entry: IndexEntry,
   status: FileStatus | undefined,
   loadedPlugins: Readonly<Record<string, string>>,
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>,
 ): string[] {
   const texts: string[] = [];
   if (status?.uncommitted === true) {
@@ -959,7 +956,7 @@ export function statusTexts(
   }
   for (const harness of INDEX_HARNESSES) {
     if (status?.notInstalled.includes(harness) === true) {
-      texts.push(`Not installed · ${HARNESS_NAMES[harness]}`);
+      texts.push(`Not installed · ${harnessLabel(harnesses, harness)}`);
     }
   }
   if (isSessionStale(entry, loadedPlugins)) {
@@ -994,14 +991,18 @@ export interface StatusCounts {
 }
 
 // `<n> uncommitted · <n> unpushed · <n> not installed for <harness>`, each
-// part only when its count is above 0; null when every count is 0.
-export function rollupText(counts: StatusCounts): string | null {
+// part only when its count is above 0, each harness named by its label in
+// `harnesses`, else its id; null when every count is 0.
+export function rollupText(
+  counts: StatusCounts,
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>,
+): string | null {
   const parts: [number, string][] = [
     [counts.uncommitted, 'uncommitted'],
     [counts.unpushed, 'unpushed'],
     ...INDEX_HARNESSES.map((harness): [number, string] => [
       counts.notInstalled[harness],
-      `not installed for ${HARNESS_NAMES[harness]}`,
+      `not installed for ${harnessLabel(harnesses, harness)}`,
     ]),
   ];
   const shown = parts
@@ -1038,6 +1039,7 @@ export function treeRowStatus(
   clones: readonly CloneStatus[],
   formatTime: (iso: string) => string,
   paths: Paths,
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>,
 ): TreeRowStatus {
   if (node.type === 'entry') {
     const texts = textsOf(node.entryId);
@@ -1060,7 +1062,7 @@ export function treeRowStatus(
       ? undefined
       : clones.find((each) => paths.samePath(each.root, cloneRoot));
   const parts = [
-    rollupText(statusCounts(node, files)),
+    rollupText(statusCounts(node, files), harnesses),
     clone === undefined ? null : fetchText(clone, formatTime),
   ].filter((part) => part !== null);
   return { mark: null, detail: parts.length === 0 ? null : parts.join(' · ') };

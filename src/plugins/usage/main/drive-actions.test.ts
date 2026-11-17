@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentHarness } from '../../../contracts/agent';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
@@ -25,7 +26,7 @@ function setUp(
     snapshot: () => ({ plans: [], sessions: [] }),
     seed: (snapshot) => seeded.push(snapshot),
     pollNow: () => Promise.resolve(),
-    harnesses: [],
+    harnesses: harnessRegistryOf([]),
     ...deps,
   });
   return { drive, seeded };
@@ -105,7 +106,9 @@ describe('usage drive actions', () => {
       createMemoryFiles(),
       FAKE_MICROTASK_TIMERS,
     );
-    const { drive } = setUp({ harnesses: [realHarness, fake] });
+    const { drive } = setUp({
+      harnesses: harnessRegistryOf([realHarness, fake]),
+    });
 
     expect(await drive.run('failNextPoll', args)).toEqual({});
 
@@ -114,7 +117,9 @@ describe('usage drive actions', () => {
   });
 
   it('failNextPoll_NoFakeHarness_Throws', async () => {
-    const { drive } = setUp({ harnesses: [{ id: 'claude' } as AgentHarness] });
+    const { drive } = setUp({
+      harnesses: harnessRegistryOf([{ id: 'claude' } as AgentHarness]),
+    });
 
     await expect(drive.run('failNextPoll')).rejects.toThrow(
       'usage.failNextPoll needs the fake harness',

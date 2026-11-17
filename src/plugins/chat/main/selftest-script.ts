@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { AgentHarness } from '../../../contracts/agent';
+import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
 import type {
   SelfTestGroup,
@@ -74,7 +74,7 @@ export interface ChatSelfTestDeps {
     | 'interrupt'
   >;
   sessions: Pick<SessionsMainExports, 'activate' | 'connect'>;
-  harnesses: readonly AgentHarness[];
+  harnesses: AgentHarnessRegistry;
 }
 
 interface ChatSelfTestResult {
@@ -1461,7 +1461,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     if (!followsCold) {
       return null;
     }
-    harnesses.find(isFakeAgentHarness)?.holdCompactions();
+    harnesses.list().find(isFakeAgentHarness)?.holdCompactions();
     return { action: 'compact', reason: FIXTURE_HOLD_REASON };
   });
 
@@ -1572,7 +1572,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     settings: {},
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
-      marks = markRun(harnesses);
+      marks = markRun(harnesses.list());
       for (const mark of marks) {
         mark.harness.askPermissionsWith(fakePermissionAsk(chat));
       }
@@ -1599,7 +1599,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     },
     groups: GROUPS,
     problems: (result) => {
-      harnesses.find(isFakeAgentHarness)?.releaseCompactions();
+      harnesses.list().find(isFakeAgentHarness)?.releaseCompactions();
       return [
         ...archiveResetFailures,
         ...runProblems(result as ChatSelfTestResult),

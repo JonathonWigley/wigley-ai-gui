@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ImageEncoder } from '../../../contracts/images';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { MAX_IMAGE_BASE64 } from '../../../shared/image-types';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
@@ -98,6 +99,8 @@ async function setUp(options: {
     homeDir: Promise.resolve(HOME),
     log: () => undefined,
     emit: (event, data) => emitted.push([event, data]),
+    harnesses: () =>
+      new Map([['claude', harnessInfo({ label: 'Claude Code' })]]),
   });
   const saved = async () => parseDraft(await files.read('draft.json'));
   return { store, sender, filed, launched, saved, emitted };

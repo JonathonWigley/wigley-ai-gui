@@ -383,10 +383,12 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Waves 2, 4 and 5 keep their pairs despite the wave check's clashes on followups.md, master-plan.md and drive SKILL.md: the plan's boundary rules put the two groups in disjoint hunks of those files; workers edit only their own hunk, and the group that commits first leaves the shared doc to the second group's commit, which carries both hunks and says so — the check's clash rule cannot see hunks — a mislabelled hunk in one commit if wrong · lead
+- Run works in worktree ~/Documents/.worktrees/ai-lane-h-harness-seams (branch lane-h-harness-seams) per WigleyRepos.md § Landing; Lane E's worktree is paused at its forms gate (waits on task 02) and its unmerged commits stay its own; peers on the main clone make every commit pathspec-scoped — a merge conflict at landing if Lane E or P lands first · lead
 ### Review rounds
 ### Test gate

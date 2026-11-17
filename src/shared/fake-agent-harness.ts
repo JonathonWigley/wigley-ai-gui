@@ -1944,6 +1944,7 @@ export function createFakeAgentHarness(
 
   const harness: FakeAgentHarness = {
     id: 'claude',
+    info: () => ({ label: 'Fake' }),
     processes,
     attachCalls,
     pastSessionCalls,

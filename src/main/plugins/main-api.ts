@@ -15,6 +15,7 @@ import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { pluginLog } from '../../shared/plugin-log';
 import {
   abortableProcesses,
+  trackedAgentHarnesses,
   trackedAlerts,
   trackedFiles,
   trackedUserConfig,
@@ -112,6 +113,10 @@ export function createMainApi(
       files,
       processes: abortableProcesses(deps.services.processes, registrations),
       alerts: trackedAlerts(deps.services.alerts, registrations),
+      agentHarnesses: trackedAgentHarnesses(
+        deps.services.agentHarnesses,
+        registrations,
+      ),
       timers: trackedTimers(deps.services.timers, registrations),
       userConfig: trackedUserConfig(deps.services.userConfig, registrations),
       selfTest: deps.selfTestFor(manifest.id),

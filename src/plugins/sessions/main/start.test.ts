@@ -5,6 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { describe, expect, it, vi } from 'vitest';
+import type { AgentHarness, AgentHarnessInfo } from '../../../contracts/agent';
+import {
+  harnessInfo,
+  harnessRegistryOf,
+} from '../../../shared/agent-harness-registry.test-support';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import {
   dataEmitted,
@@ -129,7 +134,7 @@ describe('sessions drive actions', () => {
     expect(sessions.connectedInfo[0]?.projectDir).toBeNull();
   });
 
-  it('connect rejects a field of the wrong type and an unknown harness', async () => {
+  it('connect rejects a field of the wrong type and takes any harness id', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
     addDriveActions(drive.host, sessions, fakeEndedEvent().on);
@@ -137,10 +142,12 @@ describe('sessions drive actions', () => {
     await expect(drive.run('connect', { sessionId: 7 })).rejects.toThrow(
       /sessionId/,
     );
-    await expect(drive.run('connect', { harness: 'gpt' })).rejects.toThrow(
-      /"gpt"/,
+    await expect(drive.run('connect', { harness: 7 })).rejects.toThrow(
+      /harness/,
     );
-    expect(sessions.connectedInfo).toEqual([]);
+    await drive.run('connect', { harness: 'gpt' });
+
+    expect(sessions.connectedInfo.map((info) => info.harness)).toEqual(['gpt']);
   });
 
   it('activate and end reject missing args instead of passing undefined on', async () => {
@@ -216,6 +223,7 @@ function startSessionsPart(
     originRepoName?: (projectDir: string) => Promise<string | null>;
     agentHarnesses?: {
       id: string;
+      info(): AgentHarnessInfo;
       sessionName: unknown;
       configFolder: unknown;
     }[];
@@ -238,7 +246,9 @@ function startSessionsPart(
       selfTest: null,
       git: { originRepoName },
       platform,
-      agentHarnesses,
+      agentHarnesses: harnessRegistryOf(
+        agentHarnesses as unknown as AgentHarness[],
+      ),
     },
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
@@ -316,7 +326,12 @@ describe('sessions main part', () => {
       const exports = viewOf(
         startSessionsPart(30, {
           agentHarnesses: [
-            { id: 'claude', sessionName, configFolder: () => '/resolved' },
+            {
+              id: 'claude',
+              info: () => harnessInfo({ label: 'Claude Code' }),
+              sessionName,
+              configFolder: () => '/resolved',
+            },
           ],
         }),
       );

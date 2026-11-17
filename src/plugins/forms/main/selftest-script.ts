@@ -4,11 +4,7 @@ import type { OsName } from '../../../contracts/platform';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type { UserConfig } from '../../../contracts/user-config';
 import { emptyUserFiles } from '../../../shared/empty-user-files';
-import type {
-  Harness,
-  SessionsMainExports,
-  ToolResult,
-} from '../../sessions/contract';
+import type { SessionsMainExports, ToolResult } from '../../sessions/contract';
 import type { AnswersPayload } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import { askFixtureRound } from './fixtures';
@@ -754,7 +750,7 @@ const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
   stepToRow('<A-S-i>', 'Layout preview'),
   {
     keys: ['<D-w>'],
-    expect: '[sessions] activated Codex session',
+    expect: '[sessions] activated codex session',
     alsoExpect: [/^\[forms\] closing the session cancels Layout preview$/],
     checksFit: true,
     why: "The close key cancels the open round and closes the session at once, which selects its left neighbour in main's rows, the Codex session with no folder.",
@@ -766,7 +762,7 @@ const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
   },
   {
     keys: ['<A-o>'],
-    expect: '[sessions] no other tab in Codex session',
+    expect: '[sessions] no other tab in codex session',
     why: 'Its Docs tab is its only tab.',
   },
   stepToRow('<A-S-o>', 'selftest'),
@@ -1338,7 +1334,7 @@ export function formsSelfTestScript(
   const connect = (
     sessionId: string,
     projectDir: string | null,
-    harness: Harness,
+    harness: string,
   ) =>
     sessions.connect({
       sessionId,

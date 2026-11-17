@@ -247,13 +247,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 - **The drive `wait-log` misses lines logged before it starts** — *agent-ready*: a driver waiting on a line a page
   start already logged never sees it. Read earlier lines back with `drive log`, or let `wait-log` scan the log it
   already holds.
-- **AgentHarnessRegistry** — *agent-ready*: an `AgentHarnessRegistry` service (`register`, `list`, `get`,
-  `onChanged`), so a harness plugin registers its adapter instead of `main.ts` building a fixed array. Harness ids
-  become open strings with a declared `label`; sessions' `HARNESSES`, `harnessText`, `groupOf`'s "Codex session",
-  docs' `IndexHarness`, notes' `HARNESS_LABELS` (`src/plugins/notes/session-ref.ts`, a third label map beside
-  `harnessText`), the fake's `id: 'claude'`, and `sessionArgs`' hardcoded `"claude" | "codex"`
-  (`src/plugins/sessions/main/start.ts`; `sessionArgsText` in `src/shared/agent-forms/drive-actions.ts` already
-  derives it) stop switching on ids.
 - **AgentHarness grows what a second harness needs** — *agent-ready*: `label`, `capabilities` (interrupt, resume,
   images, mid-turn send), `controls()` readable before start with `AgentStart.initialControls` (model chosen at
   start), a harness-minted session id (`events.sessionId` or returned from `start`), resume listing, and `costUsd`

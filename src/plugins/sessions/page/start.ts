@@ -1,4 +1,5 @@
 import './sessions.css';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { PaneDirection } from '../../../contracts/panes';
 import type {
   PageApi,
@@ -273,6 +274,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const { uiState } = api.services;
     const rows = api.state.read(sessionsRowsSlot);
     const selection = api.state.read(sessionsSelectionSlot);
+    const harnesses = api.state.read(coreAgentHarnessesSlot);
     const active = api.state.publish(sessionsActiveSlot);
     active.set(null);
     const activities = api.state.publish(sessionsActivitySlot);
@@ -541,6 +543,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       keys: api.keys,
       timers: api.services.timers,
+      harnesses: () => harnesses.all(),
       panesChanged() {
         waiting = liveWaits(waiting, view.panes.sessions());
         savePanes();

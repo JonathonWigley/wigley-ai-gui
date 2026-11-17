@@ -301,7 +301,7 @@ describe('startRelayServer', () => {
       expected: {
         sessionId: 'session-1',
         projectDir: '/work/project',
-        harness: null,
+        harness: 'gemini',
         host: { deadline_seconds: 300 },
       },
     },

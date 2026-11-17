@@ -10,6 +10,7 @@ import {
   type RuntimeCatalog,
 } from '../contracts/core-state';
 import type { Disposable, Registrations } from '../contracts/disposable';
+import { harnessRegistryOf } from './agent-harness-registry.test-support';
 import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
 import type { FuzzyMatcher } from '../contracts/fuzzy';
@@ -82,6 +83,7 @@ import {
 } from './plugin-manifests';
 import {
   abortableProcesses,
+  trackedAgentHarnesses,
   trackedAlerts,
   trackedEditor,
   trackedFiles,
@@ -245,7 +247,7 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
 }
 
 // `services` replaces the named default services, and a replaced service counts
-// nothing. A replaced `files`, `processes`, `alerts` or `userConfig` still runs
+// nothing. A replaced `files`, `processes`, `alerts`, `agentHarnesses` or `userConfig` still runs
 // through its per-plugin view, as `createMainApi` does. `parts` holds real
 // providers, started before the part in listed order and stopped after it.
 // `state` replaces the harness's own slot store, to seed a slot before the start.
@@ -1017,7 +1019,6 @@ function fakeMainApi(
           Promise.reject(new Error('part harness: no window to capture')),
       },
       openExternal: gateExternalLinks(async () => undefined),
-      agentHarnesses: [],
       git: notFaked<Git>('git'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
@@ -1040,6 +1041,10 @@ function fakeMainApi(
       ),
       alerts: trackedAlerts(
         replaced.alerts ?? notFaked<Alerts>('alerts'),
+        context.registrations,
+      ),
+      agentHarnesses: trackedAgentHarnesses(
+        replaced.agentHarnesses ?? harnessRegistryOf([]),
         context.registrations,
       ),
       log: common.log,

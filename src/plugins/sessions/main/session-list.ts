@@ -45,6 +45,9 @@ export interface SessionListDeps {
   // The session's config folder as its harness resolves it; null when the app
   // runs no such harness.
   configFolder(info: SessionInfo): string | null;
+  // The label the harness `harness` shows as; its id when no adapter
+  // registered it.
+  harnessLabel(harness: string): string;
 }
 
 // The session list and its rows. `tools` lists every contributed tool in
@@ -90,8 +93,8 @@ interface Contribution {
 interface SessionEntry {
   session: AgentSession;
   // Set at connect: the `label` override, else the
-  // project folder's last segment, else `Codex session` for a Codex session or
-  // `session`.
+  // project folder's last segment, else `<harness label> session` for a
+  // session that names its harness, or `session`.
   group: string;
   // Set at connect; 1 for the first of its group,
   // which reads without a number.
@@ -132,14 +135,20 @@ export const RESELECT_WINDOW_MS = 30_000;
 export const KEPT_SESSION_MS = 30_000;
 
 const NO_FOLDER_LABEL = 'session';
-const CODEX_NO_FOLDER_LABEL = 'Codex session';
 
-function groupOf(info: SessionInfo): string {
+// A session with no folder groups as `<harness label> session`, or `session`
+// when it names no harness.
+function groupOf(
+  info: SessionInfo,
+  harnessLabel: (harness: string) => string,
+): string {
   if (info.label !== undefined) {
     return info.label;
   }
   const noFolderLabel =
-    info.harness === 'codex' ? CODEX_NO_FOLDER_LABEL : NO_FOLDER_LABEL;
+    info.harness === null
+      ? NO_FOLDER_LABEL
+      : `${harnessLabel(info.harness)} ${NO_FOLDER_LABEL}`;
   return info.projectDir === null
     ? noFolderLabel
     : path.basename(info.projectDir) || noFolderLabel;
@@ -514,7 +523,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     id: string = deps.randomHex(),
   ): SessionEntry => {
     const session: AgentSession = { id, info };
-    const group = groupOf(info);
+    const group = groupOf(info, deps.harnessLabel);
     const namedProject = namedProjectOf(info.projectDir);
     const entry: SessionEntry = {
       session,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentHarness, AgentHarnessRegistry } from '../../contracts/agent';
 import type { Alerts } from '../../contracts/alerts';
 import type { Timers } from '../../contracts/ambient';
 import type { Disposable } from '../../contracts/disposable';
@@ -236,6 +237,21 @@ const RETURNED_HANDLE_ROWS: {
       } as MainApiServices,
     }),
     register: (api) => api.services.userConfig.onChanged(() => undefined),
+  },
+  {
+    member: 'services.agentHarnesses.register',
+    deps: (handle) => ({
+      services: {
+        paths: posixPaths,
+        agentHarnesses: {
+          register: () => handle,
+        } as unknown as AgentHarnessRegistry,
+      } as MainApiServices,
+    }),
+    register: (api) =>
+      api.services.agentHarnesses.register({
+        id: 'h',
+      } as unknown as AgentHarness),
   },
   {
     member: 'state.publish',

@@ -1,3 +1,4 @@
+import type { AgentHarnessInfo } from './agent';
 import type {
   AcceleratorBind,
   InterceptBind,
@@ -6,7 +7,7 @@ import type {
 } from './keymap';
 import type { CommandInfo } from './plugin';
 import type { PluginOrigin } from './plugin-catalog';
-import type { SlotKey } from './state';
+import type { KeyedSlotKey, SlotKey } from './state';
 
 // The shown mode's qualified id, written at each change of the shown mode, the
 // first mode's `add` included. `''` means no mode shows: the page has added none
@@ -84,3 +85,11 @@ export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
     process: 'main',
     kind: 'value',
   };
+
+// Each registered harness's label and declarations, keyed by harness id. The
+// agent harness registry writes it at each register, refresh and dispose.
+export const coreAgentHarnessesSlot: KeyedSlotKey<
+  AgentHarnessInfo,
+  'main',
+  'core'
+> = { id: 'core.agentHarnesses', process: 'main', kind: 'keyed' };

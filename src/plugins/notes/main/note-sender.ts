@@ -1,4 +1,4 @@
-import type { ChatImage } from '../../../contracts/agent';
+import type { AgentHarnessInfo, ChatImage } from '../../../contracts/agent';
 import type { EncodableImage, ImageEncoder } from '../../../contracts/images';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
@@ -35,6 +35,8 @@ export interface NoteSenderDeps {
   homeDir: Promise<string>;
   log: PluginLog;
   emit: PluginEvents<NotesMainEvents>['emit'];
+  // Each registered harness's info by id, which the session line's label reads.
+  harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
 }
 
 // Sends the kept draft, clears it once the send succeeded and emits the send's
@@ -159,7 +161,7 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
   async function lineOf(draft: NoteDraft): Promise<string | null> {
     return draft.session === null
       ? null
-      : sessionLine(draft.session, paths, await deps.homeDir);
+      : sessionLine(draft.session, deps.harnesses(), paths, await deps.homeDir);
   }
 
   return {

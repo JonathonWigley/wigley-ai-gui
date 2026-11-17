@@ -4,13 +4,16 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import {
+  harnessLabel,
+  registeredInfos,
+} from '../../../shared/agent-harness-label';
 import { appEndpointDir } from '../../../shared/app-endpoint-dir';
 import { errorText } from '../../../shared/error-text';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import {
   argsObject,
   nullableStringOr,
-  optionalOneOf,
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
@@ -54,10 +57,11 @@ async function hostSessionName(
   info: SessionInfo,
 ): Promise<string | null> {
   const { sessionId, projectDir } = info;
-  const harness = api.services.agentHarnesses.find(
-    (candidate) => candidate.id === info.harness,
-  );
-  if (harness === undefined || sessionId === null || projectDir === null) {
+  const harness =
+    info.harness === null
+      ? null
+      : api.services.agentHarnesses.get(info.harness);
+  if (harness === null || sessionId === null || projectDir === null) {
     return null;
   }
   return harness.sessionName(sessionId, projectDir, info.profileDir ?? null);
@@ -66,9 +70,10 @@ async function hostSessionName(
 // The session's config folder as its harness resolves it; null when the app
 // runs no such harness.
 function configFolder(api: SessionsApi, info: SessionInfo): string | null {
-  const harness = api.services.agentHarnesses.find(
-    (candidate) => candidate.id === info.harness,
-  );
+  const harness =
+    info.harness === null
+      ? null
+      : api.services.agentHarnesses.get(info.harness);
   return harness?.configFolder(info.profileDir ?? null) ?? null;
 }
 
@@ -85,6 +90,8 @@ function createList(api: SessionsApi): SessionList {
     projectName: createOriginRepoNames(api.services.git),
     hostSessionName: (info) => hostSessionName(api, info),
     configFolder: (info) => configFolder(api, info),
+    harnessLabel: (harness) =>
+      harnessLabel(registeredInfos(api.services.agentHarnesses), harness),
   });
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
   api.channel.handle('closeSession', (sessionId, atOnce) =>
@@ -141,9 +148,7 @@ function driveSessionInfo(args: JsonObject, sessionId: string): SessionInfo {
       'projectDir',
       DRIVE_SESSION_DEFAULTS.projectDir,
     ),
-    harness:
-      optionalOneOf(args, 'harness', DRIVE_SESSION_DEFAULTS.harnesses) ??
-      DRIVE_SESSION_DEFAULTS.harness,
+    harness: optionalString(args, 'harness') ?? DRIVE_SESSION_DEFAULTS.harness,
   };
   const { host } = args;
   if (host === undefined) {
@@ -181,7 +186,7 @@ export function addDriveActions(
     }
   });
   const sessionArgs =
-    '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", host?: object }';
+    '{ sessionId?: string, projectDir?: string | null, harness?: string, host?: object }';
   // Reads the args, then starts the session `start` makes from them.
   const startSession = (
     rawArgs: unknown,

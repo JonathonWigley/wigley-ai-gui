@@ -7,6 +7,7 @@ import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { KeyedSlotWriter } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type SessionPart,
@@ -117,6 +118,8 @@ export function sessionsViewSetup(
   const runs: [string, unknown][] = [];
   const view = mountSessionsView({
     ...services,
+    harnesses: () =>
+      new Map([['claude', harnessInfo({ label: 'Claude Code' })]]),
     activate(sessionId) {
       runs.push(['sessions.selectRow', sessionId]);
       activated.push(sessionId);

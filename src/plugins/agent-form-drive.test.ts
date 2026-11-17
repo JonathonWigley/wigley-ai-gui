@@ -36,6 +36,7 @@ function sessionList() {
     projectName: async () => null,
     hostSessionName: async () => null,
     configFolder: () => null,
+    harnessLabel: (harness) => harness,
   });
   for (const name of ['ask_round', 'open_primer']) {
     list.contributeTools(

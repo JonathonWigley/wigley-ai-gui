@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
 import type { SlotChange } from '../../../contracts/state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentCommand,
@@ -518,7 +519,7 @@ function setUp(
     },
   };
   const chat = createChatSessions({
-    harnesses,
+    harnesses: harnessRegistryOf(harnesses),
     sessions,
     selectedSessionId: () => selectedSessionId,
     profiles: () => profiles,

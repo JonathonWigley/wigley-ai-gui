@@ -1,6 +1,8 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { KeyHints } from '../../../contracts/plugin';
+import { harnessLabel } from '../../../shared/agent-harness-label';
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import {
@@ -32,7 +34,7 @@ import {
   type SidebarGroup,
   type SidebarSections,
 } from './sidebar-order';
-import { harnessText, hasOtherSession } from './tabs';
+import { hasOtherSession } from './tabs';
 
 // What a row draws beside its session: its shown title and its activity, each
 // null for none, its row parts' tooltips, read at each draw and each time the
@@ -148,12 +150,14 @@ const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
 // click, which activates its session, its tooltip, the selected row's mark, the
 // cursor's ring and prompt (`s favorite  r rename  d close`, with `K up  J down`
 // on a favorite project's row, named with `anchor`), each star's click and each
-// header's tooltip and drag.
+// header's tooltip and drag. A row names its harness by the label in
+// `harnesses`, read at each draw.
 export function mountSidebarView(
   events: SidebarEvents,
   parts: SessionsParts,
   timers: Timers,
   anchor: KeyHints['anchor'],
+  harnesses: () => ReadonlyMap<string, AgentHarnessInfo>,
 ): SidebarView {
   const host = element('div', 'session-side-host');
   host.style.display = 'contents';
@@ -265,6 +269,7 @@ export function mountSidebarView(
           null,
           events.activate,
           promptOf(cursor, session, isFavorite),
+          harnesses,
         ),
       );
     }
@@ -333,6 +338,7 @@ export function mountSidebarView(
           section.id,
           events.activate,
           promptOf(cursor, session, shownFavorites.includes(session.project)),
+          harnesses,
         ),
       );
     }
@@ -414,6 +420,7 @@ function drawRow(
   section: string | null,
   activate: (sessionId: string) => void,
   { isPrompted, prompt }: { isPrompted: boolean; prompt: HTMLElement },
+  harnesses: () => ReadonlyMap<string, AgentHarnessInfo>,
 ): DrawnPart<SessionsPart> {
   const drawn = parts.row(
     list,
@@ -421,7 +428,10 @@ function drawRow(
       sessionId: session.sessionId,
       title,
       label: session.label,
-      harness: harnessText(session.harness),
+      harness:
+        session.harness === null
+          ? ''
+          : harnessLabel(harnesses(), session.harness),
       marked: session.marked && !isSelected,
       activity:
         activity === null

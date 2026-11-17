@@ -1,3 +1,4 @@
+import type { AgentHarnessRegistry } from '../contracts/agent';
 import type { Alerts } from '../contracts/alerts';
 import type { Registrations } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
@@ -43,6 +44,20 @@ export function abortableProcesses(
             ? stopping.signal
             : AbortSignal.any([options.signal, stopping.signal]),
       }),
+  };
+}
+
+// One plugin's view of `agentHarnesses`: `registrations` disposing it disposes
+// every harness registration the plugin made, so a stopped harness plugin's
+// adapter leaves the registry.
+export function trackedAgentHarnesses(
+  registry: AgentHarnessRegistry,
+  registrations: Registrations,
+): AgentHarnessRegistry {
+  return {
+    register: (harness) => registrations.track(registry.register(harness)),
+    list: () => registry.list(),
+    get: (id) => registry.get(id),
   };
 }
 

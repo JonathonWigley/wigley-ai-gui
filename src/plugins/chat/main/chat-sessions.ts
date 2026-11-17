@@ -3,6 +3,7 @@ import type { ActiveTime } from '../../../contracts/active-time';
 import type {
   AgentEvent,
   AgentHarness,
+  AgentHarnessRegistry,
   AgentProcess,
   AgentProcessEvents,
   ChatEntry,
@@ -99,7 +100,7 @@ import {
 } from './worktree-name';
 
 export interface ChatSessionsDeps {
-  harnesses: readonly AgentHarness[];
+  harnesses: AgentHarnessRegistry;
   sessions: Pick<
     SessionsMainExports,
     'open' | 'mark' | 'activate' | 'setTitle' | 'titles' | 'label'
