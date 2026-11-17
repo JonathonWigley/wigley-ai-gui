@@ -1,6 +1,6 @@
 # 13 — Harness-neutral UI copy
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 10 · Depends on: 12
 Plan: [plan.md](plan.md)
@@ -167,3 +167,5 @@ and ticks `[ ] Harness-neutral UI copy` to `[x] Harness-neutral UI copy` in
 `docs/features/intent-alignment/master-plan.md` (the chat-pass line, line 134 at plan time).
 
 ## Proof
+
+Commit abb65711e · proof: diff read: exitNoticeText(harnessLabel, code, error), processEvents takes the harness label, Claude wording replaced in chat-sessions, session-fold, claude-code-harness and setting descriptions; wave compile (typecheck, lint) passes; oxfmt · concerns: src/main/drive/drive-commands.ts:67 still says 'hosted Claude processes' (outside Files); done-when grep keeps four new hits judged harness-specific (main.ts:43, lookups.ts:8, defaultHarness description, sessions-view-fakes.ts); comments in chat/main/start.ts, usage/main/start.ts, docs layout.d.ts already neutral from earlier groups

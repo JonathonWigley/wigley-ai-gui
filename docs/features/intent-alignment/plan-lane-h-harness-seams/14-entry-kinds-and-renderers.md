@@ -1,6 +1,6 @@
 # 14 — Open chat entry kinds and entry renderers
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 11 · Depends on: 13
 Plan: [plan.md](plan.md)

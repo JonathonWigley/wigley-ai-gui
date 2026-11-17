@@ -367,7 +367,7 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 - [x] [Clear aliases from the adapter](12-clear-aliases.md) — after 11
 
 ### Wave 10
-- [ ] [Harness-neutral UI copy](13-harness-neutral-copy.md) — after 12
+- [x] [Harness-neutral UI copy](13-harness-neutral-copy.md) — after 12
 
 ### Wave 11
 - [ ] [Open chat entry kinds and entry renderers](14-entry-kinds-and-renderers.md) — after 13
@@ -398,6 +398,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 10 · hard · eeb2e337e · diff read: chat defaultHarness setting, FAKE_HARNESS_ID = 'fake', composition-root override in selftest-config, CHAT_HARNESS_ID gone, lookups harness resolution present; wave compile passes after one same-rung fix (harness on RecentFolder test literals) and oxfmt · concerns: restore with an unregistered harness now rests with a notice; two start.test restore tests now throw through an artificial infoFails stub; chat-sessions.test setUp patches the fake's info() in place; docs self-test i step still opens its session as 'claude' (docs only tells codex apart)
 - 11 · hard · 2728bd986 · diff read: ROLE_COMMANDS replaces CONTROL_IDS, role lookups in controlCommand/chipKeyCommands/composerInputOf/controlChip/pickControlOf, MODE_CONTROL_ID gone, ComposerControlInput.role, preview-session roles; wave compile (typecheck, lint) passes · concerns: none beyond formatting left to oxfmt
 - 12 · hard · 4eb8decc2 · diff read: addClearCommands returns one Disposable, aliases from core.agentHarnesses re-registered on slot change, SlashCommands.addAlias present; self-test clear step sends /reset; wave compile (typecheck, lint) passes, oxfmt clean · concerns: clear aliases register app-wide from every harness, not per the session's harness; it.each row typed never[] (compiled clean)
+- 13 · hard · abb65711e · diff read: exitNoticeText(harnessLabel, code, error), processEvents takes the harness label, Claude wording replaced in chat-sessions, session-fold, claude-code-harness and setting descriptions; wave compile (typecheck, lint) passes; oxfmt · concerns: src/main/drive/drive-commands.ts:67 still says 'hosted Claude processes' (outside Files); done-when grep keeps four new hits judged harness-specific (main.ts:43, lookups.ts:8, defaultHarness description, sessions-view-fakes.ts); comments in chat/main/start.ts, usage/main/start.ts, docs layout.d.ts already neutral from earlier groups
 ### Contract changes
 - IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
 - docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01
@@ -440,5 +441,6 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - UNRECORDED_HARNESS_ID = 'claude' is the harness of a record or recent folder saved without one · group 10
 - ComposerControlInput.role is left out of the fixture object when null (verbosity has no role) · group 11
 - Aliases are recomputed only when the distinct list changes; a command that takes a dropped alias's name moves to the end of list() · group 12
+- The Claude adapter's own fold texts say 'the agent' too, since chat shows them for the session · group 13
 ### Review rounds
 ### Test gate
