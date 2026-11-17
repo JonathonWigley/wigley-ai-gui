@@ -10,6 +10,7 @@ import { agentsPagePart } from './agents/page/start';
 import { autoRetroPagePart } from './auto-retro/page/start';
 import { backlogPagePart } from './backlog/page/start';
 import { chatPagePart } from './chat/page/start';
+import { chatroomPagePart } from './chatroom/page/start';
 import { docsPagePart } from './docs/page/start';
 import { docsSessionTabPagePart } from './docs-session-tab/page/start';
 import { formsPagePart } from './forms/page/start';
@@ -65,6 +66,7 @@ export const pageParts: readonly PagePart[] = [
   scopedAgentsPagePart,
   backlogPagePart,
   practicePagePart,
+  chatroomPagePart,
   notesPagePart,
   usagePagePart,
   usageTabLinePagePart,

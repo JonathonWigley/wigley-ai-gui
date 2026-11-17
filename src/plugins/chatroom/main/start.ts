@@ -31,6 +31,7 @@ import {
   HOOK_PRE,
   SYSTEM_PARTICIPANT,
 } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { chatroomManifest } from '../manifest';
 import { createAgentEntries } from './agent-entries';
 import { createTouchTracker } from './board';
@@ -54,7 +55,7 @@ type ChatroomApi = MainApi<
 export const STANDING_NOTE =
   "This app runs a chatroom for each project's sessions: the wigley-forms tools chatroom_post, chatroom_read, chatroom_board, chatroom_claim and chatroom_release. Follow the wigley:chatroom skill for when to read and what to post. Call chatroom_read at the start of a turn when the hook or the app says a message waits for you.";
 
-// Keeps one room per project in plugin data; contributes the five
+// Registers the chatroom layouts. Keeps one room per project in plugin data; contributes the five
 // `chatroom_*` tools to every session, subagents included; answers the
 // `chatroom.pre` and `chatroom.post` hooks; wakes an idle app-run agent a
 // message is for; writes a session's `joined` and `left` entries and its
@@ -63,6 +64,7 @@ export const STANDING_NOTE =
 export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
   manifest: chatroomManifest,
   start(api: ChatroomApi) {
+    api.layouts.register({ layoutTypes });
     const { services } = api;
     const { log } = services;
     const sessions = api.dependency(sessionsMainKey);

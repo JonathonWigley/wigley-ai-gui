@@ -1,6 +1,6 @@
 import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
-import type { KeyedSlotKey } from '../../contracts/state';
+import type { KeyedSlotKey, SlotKey } from '../../contracts/state';
 
 // What an agent posts in a room.
 export type PostKind =
@@ -288,3 +288,16 @@ export interface ChatroomChannel extends ChannelShape {
   };
   messages: Record<never, never>;
 }
+
+// The room and thread Chatroom mode shows, each null for none, so a page
+// reload opens the same thread again.
+export interface ChatroomPlace {
+  room: string | null;
+  thread: string | null;
+}
+
+export const chatroomPlaceSlot: SlotKey<ChatroomPlace, 'page', 'chatroom'> = {
+  id: 'chatroom.place',
+  process: 'page',
+  kind: 'value',
+};
