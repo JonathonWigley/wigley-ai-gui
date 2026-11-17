@@ -116,6 +116,12 @@ function showLayouts<L>(
     for (const entry of result.loaded) {
       log(owner, `layout ${entry.name} shown (revision ${entry.revision})`);
     }
+    for (const entry of result.restyled) {
+      log(
+        owner,
+        `layout ${entry.name} restyled (style revision ${entry.styleRevision})`,
+      );
+    }
     for (const { entry, error } of result.failed) {
       log(owner, `layout ${entry.name} failed: ${errorText(error)}`);
       toast(`Layout ${entry.name} failed: ${errorText(error)}`, 'error');

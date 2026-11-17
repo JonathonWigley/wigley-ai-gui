@@ -6,7 +6,8 @@ import type {
 import { isRecord } from './read-layout-module';
 
 // `layoutUrl` is the URL of the file at `path` in the owner's layout `name`, at
-// `revision`. `owner` marks each stylesheet link. `defaultLayout` is the
+// `revision`: the entry's `revision` for its script, its `styleRevision` for
+// its stylesheet. `owner` marks each stylesheet link. `defaultLayout` is the
 // bundled default and `defaultStylesheet` the bundled URL of its CSS, null for
 // an owner with no default CSS.
 export interface LayoutLoaderDeps<L> {
@@ -23,12 +24,15 @@ export interface LayoutLoaderDeps<L> {
 
 // One load's outcome: `default`, every layout with a good version among the
 // names asked for, and every other layout the set lists whose good version is
-// at the set's revision; the entries this load imported and read; and the
-// entries whose import, read or part check failed in this load.
+// at the set's revision; the entries this load imported and read; the entries
+// whose import, read or part check failed in this load; and, in the set's
+// order, the entries in `layouts` whose stylesheet link this load moved, added
+// or removed without importing their script, a built-in `default` left out.
 export interface LayoutLoad<L> {
   layouts: ReadonlyMap<string, L>;
   loaded: LayoutEntry[];
   failed: { entry: LayoutEntry; error: unknown }[];
+  restyled: LayoutEntry[];
 }
 
 // `dispose` removes every stylesheet link the loader added, the default's
@@ -40,7 +44,8 @@ export interface LayoutLoader<L> {
 
 const DEFAULT_NAME = 'default';
 
-// The URLs of a layout's files, at its revision.
+// The URLs of a layout's files: its script at its revision, its stylesheet at
+// its style revision.
 function layoutUrls(
   entry: LayoutEntry,
   layoutUrl: LayoutLoaderDeps<unknown>['layoutUrl'],
@@ -48,7 +53,7 @@ function layoutUrls(
   return {
     script: layoutUrl(entry.name, entry.revision, 'layout.js'),
     style: entry.hasCss
-      ? layoutUrl(entry.name, entry.revision, 'layout.css')
+      ? layoutUrl(entry.name, entry.styleRevision, 'layout.css')
       : null,
   };
 }
@@ -64,15 +69,19 @@ type Attempt<L> =
   | { entry: LayoutEntry; layout: L }
   | { entry: LayoutEntry; error: unknown };
 
-// The default's stylesheet link, made once, and whether it is in `head`.
-interface DefaultLink {
+// A stylesheet link and the href the loader last set on it; a browser
+// resolves `element.href` to an absolute URL, so it is never compared. The
+// default's link, made once, is in `head` while `href` is not null.
+interface StyleLink {
   element: HTMLLinkElement;
-  isAttached: boolean;
+  href: string | null;
 }
 
 // Loads the named layouts the set lists, and `default` on every load, each
-// cached by name and revision: a revision that loaded, or failed, is not
-// imported again. A built-in entry is never imported. A live `default` (an
+// module cached by name and revision: a revision that loaded, or failed, is
+// not imported again; each stylesheet link's URL holds the version's
+// `styleRevision`, so a change of style alone moves the link and imports
+// nothing. A built-in entry is never imported. A live `default` (an
 // entry not built in) is read with the owner's reader and must define every
 // part the bundled default defines. A failed name keeps its last good
 // version; `default` without one, or built in, is the bundled default. A name
@@ -84,18 +93,20 @@ interface DefaultLink {
 // `data-layout-owner="<owner>"`, and one `default` link before them: the live
 // default's CSS while a live default is in the load's layouts, else
 // `defaultStylesheet`; with no such CSS the default link is detached. A link
-// moves only once its name's script has loaded and read, so a failed reload
-// keeps the last good look whole, and a layout that drops out loses its link.
+// follows the set entry while its name's good version is at the entry's
+// revision, and moves to a new revision only once that script has loaded and
+// read, so a failed reload keeps the last good look whole; a layout that drops
+// out loses its link.
 // The default link is in `head` from creation when `defaultStylesheet` is set.
 export function createLayoutLoader<L>(
   deps: LayoutLoaderDeps<L>,
 ): LayoutLoader<L> {
   const good = new Map<string, GoodVersion<L>>();
   const failedRevisions = new Map<string, number>();
-  const links = new Map<string, HTMLLinkElement>();
-  const defaultLink: DefaultLink = {
+  const links = new Map<string, StyleLink>();
+  const defaultLink: StyleLink = {
     element: createLink(DEFAULT_NAME, deps),
-    isAttached: false,
+    href: null,
   };
   placeDefaultLink(deps.defaultStylesheet, defaultLink, links, deps.head);
 
@@ -135,6 +146,7 @@ export function createLayoutLoader<L>(
           loaded.push(settled.entry);
         }
       }
+      followSetEntries(set, good);
       const layouts = new Map<string, L>([[DEFAULT_NAME, deps.defaultLayout]]);
       const shownVersions: GoodVersion<L>[] = [];
       for (const entry of set.layouts) {
@@ -146,22 +158,33 @@ export function createLayoutLoader<L>(
           shownVersions.push(version);
         }
       }
-      syncStylesheets(shownVersions, links, deps);
-      placeDefaultLink(
+      const relinked = syncStylesheets(shownVersions, links, deps);
+      const isDefaultRelinked = placeDefaultLink(
         defaultStylesheetHref(shownVersions, deps),
         defaultLink,
         links,
         deps.head,
       );
-      return { layouts, loaded, failed };
+      if (isDefaultRelinked) {
+        relinked.add(DEFAULT_NAME);
+      }
+      const imported = new Set(toImport.map((entry) => entry.name));
+      const restyled = set.layouts.filter(
+        (entry) =>
+          relinked.has(entry.name) &&
+          !imported.has(entry.name) &&
+          !entry.builtIn &&
+          layouts.has(entry.name),
+      );
+      return { layouts, loaded, failed, restyled };
     },
     dispose() {
       for (const link of links.values()) {
-        link.remove();
+        link.element.remove();
       }
       links.clear();
       defaultLink.element.remove();
-      defaultLink.isAttached = false;
+      defaultLink.href = null;
     },
   };
 }
@@ -214,28 +237,32 @@ function defaultStylesheetHref<L>(
 
 // Detaches the default link when `href` is null; else sets its href and, when
 // detached, puts it back before the first user layout's link, else at the end
-// of `head`.
+// of `head`. True when `href` differs from the one it held.
 function placeDefaultLink(
   href: string | null,
-  defaultLink: DefaultLink,
-  links: Map<string, HTMLLinkElement>,
+  defaultLink: StyleLink,
+  links: Map<string, StyleLink>,
   head: HTMLElement,
-): void {
+): boolean {
+  const wasAttached = defaultLink.href !== null;
+  if (href === defaultLink.href) {
+    return false;
+  }
+  defaultLink.href = href;
   if (href === null) {
     defaultLink.element.remove();
-    defaultLink.isAttached = false;
-    return;
+    return true;
   }
   defaultLink.element.href = href;
-  if (!defaultLink.isAttached) {
+  if (!wasAttached) {
     const firstUserLink = links.values().next().value;
     if (firstUserLink === undefined) {
       head.append(defaultLink.element);
     } else {
-      head.insertBefore(defaultLink.element, firstUserLink);
+      head.insertBefore(defaultLink.element, firstUserLink.element);
     }
-    defaultLink.isAttached = true;
   }
+  return true;
 }
 
 // A stylesheet link marked with the layout `name` and the owner.
@@ -250,14 +277,33 @@ function createLink(
   return link;
 }
 
+// Stores each set entry on its name's good version while that version is at
+// the entry's revision, so its stylesheet follows the entry's `styleRevision`
+// and `hasCss`. A good version at an older revision keeps its own entry.
+function followSetEntries<L>(
+  set: LayoutSet,
+  good: Map<string, GoodVersion<L>>,
+): void {
+  for (const entry of set.layouts) {
+    const version = good.get(entry.name);
+    const isCurrent =
+      !entry.builtIn && version?.entry.revision === entry.revision;
+    if (version !== undefined && isCurrent) {
+      good.set(entry.name, { layout: version.layout, entry });
+    }
+  }
+}
+
 // Leaves `head` holding one stylesheet link per user layout version with CSS,
-// its href at that version's revision, and removes every other user layout's
-// link. The default's link is placed apart.
+// its href at that version's style revision, and removes every other user
+// layout's link. The default's link is placed apart. Returns the names whose
+// link it added, moved or removed.
 function syncStylesheets<L>(
   versions: GoodVersion<L>[],
-  links: Map<string, HTMLLinkElement>,
+  links: Map<string, StyleLink>,
   deps: Pick<LayoutLoaderDeps<L>, 'owner' | 'layoutUrl' | 'head'>,
-): void {
+): Set<string> {
+  const relinked = new Set<string>();
   const styled = new Map<string, string>();
   for (const { entry } of versions) {
     const { style } = layoutUrls(entry, deps.layoutUrl);
@@ -267,17 +313,23 @@ function syncStylesheets<L>(
   }
   for (const [name, link] of links) {
     if (!styled.has(name)) {
-      link.remove();
+      link.element.remove();
       links.delete(name);
+      relinked.add(name);
     }
   }
   for (const [name, href] of styled) {
     let link = links.get(name);
     if (link === undefined) {
-      link = createLink(name, deps);
-      deps.head.append(link);
+      link = { element: createLink(name, deps), href: null };
+      deps.head.append(link.element);
       links.set(name, link);
     }
-    link.href = href;
+    if (link.href !== href) {
+      link.element.href = href;
+      link.href = href;
+      relinked.add(name);
+    }
   }
+  return relinked;
 }
