@@ -617,8 +617,8 @@ export interface SessionsPageExports {
   // popup or main kept it, or the ask to main failed (logged).
   closeSession(sessionId: string): Promise<boolean>;
   // The focused pane's session while Sessions mode shows, the session the
-  // close and rename keys act on; null while the mode is hidden or the pane is
-  // empty.
+  // close, rename, stash and workflow keys act on; null while the mode is
+  // hidden or the pane is empty.
   shownSessionId(): string | null;
   setActivity(
     sessionId: string,

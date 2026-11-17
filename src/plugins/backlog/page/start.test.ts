@@ -145,6 +145,7 @@ describe('backlog page part lifecycle', () => {
     const harness = startBacklogPage();
     await settle();
     const commands = harness.started().commands;
+    commands.showMode({ arg: undefined });
     commands.listDown({ arg: undefined });
     commands.mark({ arg: undefined });
     commands.toggleDone({ arg: undefined });

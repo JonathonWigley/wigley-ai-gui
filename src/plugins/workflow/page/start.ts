@@ -179,10 +179,12 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     };
 
     const runKey = keyRunner(api.commands, log);
+    // Acts on the session Sessions mode shows: in any other mode the key
+    // belongs to that mode, so it does nothing.
     const runOnSelected = (command: SessionCommand) => () => {
-      const sessionId = active.get() ?? null;
+      const sessionId = sessions.shownSessionId();
       if (sessionId === null) {
-        log(`no selected session for ${command}`);
+        log(`no shown session for ${command}`);
         return;
       }
       runKey(workflowStageActionCommand, { sessionId, action: command });

@@ -365,10 +365,6 @@ async function backlogSetup(options: SetupOptions = {}) {
     run: () => undefined,
     runKey: (key, arg) => runs.push([key.id, arg]),
     isShown: () => mode.isShown,
-    showMode: () => {
-      events.push('showMode');
-      show();
-    },
     addAgentPane: (spec) => fakeAgentPane(pane, spec),
     setContext: (detail) => contexts.push(detail),
     savedPlace: options.savedPlace ?? null,
@@ -1191,12 +1187,24 @@ describe('backlog restore, mode and reads', () => {
     );
   });
 
-  it('pickRepo_BacklogHidden_ShowsModeFirst', async () => {
+  it.each([
+    'pickRepo',
+    'toggleAssistant',
+    'toggleDone',
+    'toggleAgentReadyOnly',
+    'toggleChunkedHidden',
+    'toggleStaleFirst',
+  ] as const)('%s_BacklogHidden_DoesNothing', async (command) => {
     const setup = await backlogSetup({ isShown: false });
+    const logsBefore = setup.logs.length;
 
-    setup.view.commands.pickRepo();
+    setup.view.commands[command]();
 
-    expect(setup.events).toEqual(['showMode', 'push picker']);
+    expect(setup.events).toEqual([]);
+    expect(setup.pane.calls).not.toContain('toggle');
+    expect(setup.logs.slice(logsBefore)).toEqual([
+      `${command} ignored: Backlog is hidden`,
+    ]);
   });
 
   it('setContext_AtStart_AllRepos', async () => {

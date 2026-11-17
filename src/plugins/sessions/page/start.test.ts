@@ -1079,19 +1079,20 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
-  it('togglePopup_ModeHidden_ShowsTheModeThenActs', async () => {
+  it('togglePopup_ModeHidden_DoesNothing', async () => {
     const setup = await startApplied(['s1'], 's1', fakeUiState(), {
       withOtherMode: true,
     });
-    const { handle } = setup.addPopup('s1');
+    setup.addPopup('s1');
     expect(setup.exports.shownSessionId()).toBeNull();
     const logged = setup.harness.logs.length;
 
     setup.togglePopup();
 
-    expect(setup.exports.shownSessionId()).toBe('s1');
-    expect(setup.logsSince(logged)).toContain('hid Popup popup in label s1');
-    expect(handle.isVisible()).toBe(false);
+    expect(setup.exports.shownSessionId()).toBeNull();
+    expect(setup.logsSince(logged)).toEqual([
+      'popup key ignored: Sessions mode is hidden',
+    ]);
     await setup.harness.stop();
   });
 

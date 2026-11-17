@@ -133,8 +133,6 @@ export interface PracticeViewDeps {
   setFocusTarget(target: FocusTarget | null): void;
   pushScope(scope: 'box' | 'confirm' | 'import'): PushedScope;
   isShown(): boolean;
-  // Shows Practice mode.
-  showMode(): void;
   // Sets the panes around the column, the interviewer's pane's, while
   // Practice shows; null as it hides.
   setOuterPanes(panes: OuterPanes | null): void;
@@ -841,15 +839,14 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     interviewer.toggle();
   };
   const interviewerCommands: Record<InterviewerCommand, () => void> = {
+    // Bound everywhere (`Space v i`), it acts on Practice alone: in another
+    // mode the key belongs to that mode.
     toggleInterviewer() {
-      if (deps.isShown()) {
-        toggleInterviewerKeys();
+      if (!deps.isShown()) {
+        deps.log('toggleInterviewer ignored: practice hidden');
         return;
       }
-      deps.showMode();
-      if (store.get().focus !== 'interviewer') {
-        toggleInterviewerKeys();
-      }
+      toggleInterviewerKeys();
     },
     importStart: () => importBox.open(),
     importAccept: () => importBox.accept(),

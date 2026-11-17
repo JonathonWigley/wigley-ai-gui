@@ -858,9 +858,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
 
     // Steps the focused pane, in drawn order, over the sessions no other pane
-    // shows.
+    // shows; a key pressed in another mode belongs to that mode, so it does
+    // nothing there.
     const stepToSession = (by: 1 | -1) => {
-      mode.show();
+      if (!mode.isShown()) {
+        log('session keys ignored: Sessions mode is hidden');
+        return;
+      }
       if (view.isPreviewShown()) {
         view.stepPreview(by);
         return;
@@ -880,12 +884,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
-    // The shown mode steps its own tabs first; one with none shows Sessions.
+    // The shown mode steps its own tabs first; in any other mode but Sessions
+    // the keys do nothing.
     const stepToTab = (by: 1 | -1) => {
       if (api.modes.stepTab(by)) {
         return;
       }
-      mode.show();
+      if (!mode.isShown()) {
+        log('tab keys ignored: the shown mode has no tabs');
+        return;
+      }
       const sessionId = view.panes.focusedSessionId();
       if (sessionId === null) {
         return;
@@ -907,9 +915,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
 
     // Hides the focused pane's session's open popup, else opens the one it hid
-    // last, showing the mode first.
+    // last; nothing while Sessions mode is hidden.
     const togglePopup = () => {
-      mode.show();
+      if (!mode.isShown()) {
+        log('popup key ignored: Sessions mode is hidden');
+        return;
+      }
       const sessionId = view.panes.focusedSessionId();
       if (sessionId === null) {
         log('no popup: no session shown');

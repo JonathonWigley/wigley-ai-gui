@@ -187,8 +187,6 @@ export interface BacklogViewDeps {
   // `backlog.selectRow` and a chunk card's `backlog.selectChunk`.
   runKey<A>(key: CommandKey<A>, arg: A): void;
   isShown(): boolean;
-  // Shows Backlog mode.
-  showMode(): void;
   // Adds scoped-agents' pane for the assistant.
   addAgentPane(spec: AgentPaneSpec): AgentPane;
   // The title bar's detail: the repo filter, or `All repos`.
@@ -1085,9 +1083,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const pickRepo = () => {
-    if (!deps.isShown()) {
-      deps.showMode();
-    }
     const state = store.get();
     const choices: (string | null)[] = [null, ...repos(state)];
     picker.open({
@@ -1135,15 +1130,18 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const toggleAssistant = () => {
-    if (deps.isShown()) {
-      pane.toggle();
-    } else {
-      deps.showMode();
-      if (!pane.isShown()) {
-        pane.toggle();
-      }
-    }
+    pane.toggle();
     deps.log(pane.isShown() ? 'assistant shown' : 'assistant hidden');
+  };
+
+  // The view keys bound everywhere (`Space v …`) act on Backlog alone: in
+  // another mode the key belongs to that mode, so they do nothing there.
+  const whileShown = (command: BacklogCommand, run: () => void) => () => {
+    if (!deps.isShown()) {
+      deps.log(`${command} ignored: Backlog is hidden`);
+      return;
+    }
+    run();
   };
 
   const commands: Record<BacklogCommand, () => void> = {
@@ -1247,26 +1245,26 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         (error: unknown) => failed('sweep', error, true),
       );
     },
-    toggleDone() {
+    toggleDone: whileShown('toggleDone', () => {
       dispatch({ type: 'toggleDone' });
       deps.log(store.get().isDoneShown ? 'done shown' : 'done hidden');
-    },
-    toggleAgentReadyOnly() {
+    }),
+    toggleAgentReadyOnly: whileShown('toggleAgentReadyOnly', () => {
       dispatch({ type: 'toggleReadyOnly' });
       deps.log(`agent-ready only ${store.get().isReadyOnly ? 'on' : 'off'}`);
-    },
-    toggleAssistant,
-    pickRepo,
-    toggleChunkedHidden() {
+    }),
+    toggleAssistant: whileShown('toggleAssistant', toggleAssistant),
+    pickRepo: whileShown('pickRepo', pickRepo),
+    toggleChunkedHidden: whileShown('toggleChunkedHidden', () => {
       dispatch({ type: 'toggleChunkedHidden' });
       deps.log(
         store.get().isChunkedHidden ? 'chunked hidden' : 'chunked shown',
       );
-    },
-    toggleStaleFirst() {
+    }),
+    toggleStaleFirst: whileShown('toggleStaleFirst', () => {
       dispatch({ type: 'toggleStaleFirst' });
       deps.log(`stale first ${store.get().isStaleFirst ? 'on' : 'off'}`);
-    },
+    }),
     openInDocs() {
       const row = selectedRow(store.get(), matcher);
       if (row !== null) {

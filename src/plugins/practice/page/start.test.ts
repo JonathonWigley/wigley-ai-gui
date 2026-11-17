@@ -721,15 +721,6 @@ describe('practicePagePart', () => {
       toggles: [],
     },
     {
-      case: 'no open problem, Practice hidden',
-      start: 'hidden',
-      refusals: [
-        'toast info: Open a problem first',
-        'interviewer needs an open problem',
-      ],
-      toggles: [],
-    },
-    {
       case: 'a problem open',
       start: 'open',
       refusals: [],
@@ -758,6 +749,19 @@ describe('practicePagePart', () => {
     ).toEqual(refusals);
     expect(pane.calls.filter((call) => call === 'toggle')).toEqual(toggles);
     expect(messagesOf(harness)).toContain('shown');
+  });
+
+  it('toggleInterviewer: Practice hidden does nothing', async () => {
+    const { harness, pane } = startPracticePage();
+    await settle();
+
+    harness.started().commands.toggleInterviewer({ arg: undefined });
+
+    expect(messagesOf(harness)).toContain(
+      'toggleInterviewer ignored: practice hidden',
+    );
+    expect(messagesOf(harness)).not.toContain('shown');
+    expect(pane.calls.filter((call) => call === 'toggle')).toEqual([]);
   });
 
   it('the outer panes take down only from the console', async () => {

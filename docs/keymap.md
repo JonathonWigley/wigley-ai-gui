@@ -133,9 +133,15 @@ hjkl is the direction in every layer; the modifier picks the verb.
   **Alt+w** closes the focused chat pane and leaves its session in the side bar
   (`docs/features/chat-panes/design.md`).
 - **Alt+o / Alt+i** next and previous tab: the shown mode's own tabs when it has them (Practice's problem pane or
-  console, through the mode's `stepTab`), else the session tabs, showing Sessions; **Alt+Shift+o / Alt+Shift+i** next
+  console, through the mode's `stepTab`), else the session tabs in Sessions mode; **Alt+Shift+o / Alt+Shift+i** next
   and previous session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
   user (forms' unanswered items).
+- **A key bound in every scope acts on the shown mode only.** A session key (`Alt+o`/`Alt+i` with no mode tabs,
+  `Alt+Shift+o`/`Alt+Shift+i`, the pane keys, `<Leader>bp`, `br`, `bd`, `bs`, `;`, `'`, and the `<Leader>w` and
+  `<Leader>p` keys) does nothing outside Sessions mode, and a mode's
+  view key (Backlog's and Practice's `<Leader>v` keys) does nothing while that mode is hidden: in another mode the key
+  belongs to that mode, never jumping the user away. Only keys that move focus on purpose switch modes or areas:
+  `<Leader>k` and `Alt+hjkl`.
 - **Cmd** is for OS-convention app actions only: `Cmd+Enter` send or submit, `Cmd+w` close, the
   summon chord, `Cmd+,` Settings. Nothing else takes Cmd, but Practice's `Cmd+'` Run, which
   matches LeetCode's own key, beside its `Cmd+Enter` Submit. The two

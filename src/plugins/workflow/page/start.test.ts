@@ -98,6 +98,8 @@ function startWorkflow() {
               holdsPart(consumer, rowParts, part),
             addTab: noHandle(consumer),
             setActivity: () => undefined,
+            shownSessionId: () =>
+              harness.state.read(sessionsActiveSlot, 'test').get() ?? null,
           }) as unknown as SessionsPageExports,
       ),
       fakeDependency(
