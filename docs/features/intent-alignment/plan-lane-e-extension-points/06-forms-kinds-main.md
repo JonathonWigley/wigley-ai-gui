@@ -5,12 +5,31 @@ Type: Task
 Wave: 1 · Depends on: none in this plan · Gated: Lane H's Structured round results (plan.md precondition 2)
 Plan: [plan.md](plan.md)
 
-**Read first.** This document was written against the tree before Lane H's Structured round results landed. That
-work rewrites `main/round.ts`, `main/round-type.ts`, `main/kinds/*` and `contract.ts`'s `Outcome` and `RoundError`.
-Before the first edit, read its commits
-(`git log --oneline -- src/plugins/forms/main/round.ts src/plugins/forms/main/kinds src/plugins/forms/contract.ts`).
-The decisions below name responsibilities and members, not lines. Report as a concern each Produces item that the
-Lane H work moved, renamed or made impossible, and each member below that no longer exists.
+**Read first.** This document was refreshed on 2026-11-17 against Lane H's Structured round results (branch
+`lane-h-harness-seams` at `7e20f1cf9`) and `main` at `3f3a61f7b`. Lane H's task moved these members:
+
+- `RoundError` takes `{ path, problem, detail }` and lives in `main/round-error.ts` with `RoundErrorPath` and
+  `RoundItemPath`. The agent's error text is `roundErrorText(error)` in `main/mcp-wording.ts`, not the message.
+- `AgentFormType.argsErrorName` became `argsErrorText(error: unknown): string | null`.
+- `ItemFormat.arraySchema` became the method `describe()`; `ItemFormat.parse(raw, where)` became
+  `parse(raw, at: RoundItemPath)`. `requireText`, `parseLayoutField` and `parseRecommend` in `kinds/fields.ts` take
+  `at: RoundErrorPath`.
+- Round logic builds a `RoundResult` (`answersResult`, `handedBackResult`, `notShownResult`, `noRoundResult` in
+  `main/round.ts`). `roundPayload(result)` in `main/mcp-wording.ts` words it as the `AnswersPayload`, with the summary
+  and next texts. `autoAnsweredPayload` moved to `main/round-type.ts`. `answersPayload`, `handedBackPayload` and
+  `noRoundPayload` are gone.
+- The tool names are `ROUND_OPEN_TOOL` and `ROUND_COLLECT_TOOL` in `main/mcp-wording.ts`.
+- `main/mcp-wording.test.ts` pins every wire text, and `main/forms-tools.golden.txt` pins the tool list.
+
+Three points wait on a ruling from the lead before this task starts. Each is marked **Open** where it applies:
+
+- **Open A**: how a registered kind's `parse` reports a malformed item.
+- **Open B**: how `RoundResult` and `roundPayload` carry a registered kind's results.
+- **Open C**: where `roundErrorText` reads a registered kind's noun for the `Poll 1: ` prefix.
+
+Before the first edit, read the forms commits after the refresh:
+`git log --oneline --since=2026-11-17 -- src/plugins/forms src/shared/agent-forms src/contracts/agent-forms.ts`.
+Report as a concern each Produces item that a later commit moved, renamed or made impossible.
 
 ## What this task does
 
@@ -52,18 +71,23 @@ these contract shapes compiling for the page:
   `answerResult`, `addNotesAndDontAsk`, the answer entry reader)
 - modify `src/plugins/forms/main/round.ts` · test `src/plugins/forms/main/round.test.ts`
 - modify `src/plugins/forms/main/round-type.ts` · test `src/plugins/forms/main/round-type.test.ts`
+- modify `src/plugins/forms/main/mcp-wording.ts` (`errorPrefix` and the summary read `FORMATS` and
+  `ANSWERABLE_KINDS`) · test `src/plugins/forms/main/mcp-wording.test.ts` (calls only; its literals and
+  `main/forms-tools.golden.txt` do not change)
+- modify `src/plugins/forms/main/round-error.ts` (`RoundItemPath.kind` is the closed `ItemKind`; see Open A)
 - modify `src/plugins/forms/main/tool-definitions.ts` · test `src/plugins/forms/main/tool-definitions.test.ts`
 - create `src/plugins/forms/main/tool-contribution.ts` · test `src/plugins/forms/main/tool-contribution.test.ts`
 - modify `src/plugins/forms/main/start.ts` · test `src/plugins/forms/main/start.test.ts`
 - modify `src/plugins/forms/main/preview/layout-preview.ts` · test `layout-preview.test.ts`,
   `preview/preview-round.test.ts` (each passes the built-in kinds)
-- modify `src/plugins/forms/main/fixtures.ts` (tool name from `ROUND_TOOLS`)
+- modify `src/plugins/forms/main/fixtures.ts` (tool name from `ROUND_OPEN_TOOL`, since the module const `roundType`
+  leaves)
 - modify the kind format tests (`notice-format.test.ts`, `finding-format.test.ts`, `question-format.test.ts`) only
   where they import a renamed const
 
 No file under `src/plugins/forms/page/`, `src/plugins/forms/layouts/`, `src/plugins/sessions/` or
-`src/shared/agent-forms/` changes. Counts and names in this list were measured at plan time; re-verify after the
-Lane H commits.
+`src/shared/agent-forms/` changes. Counts and names in this list were re-measured on 2026-11-17 against Lane H's
+branch; re-verify on the tree you start from.
 
 ## Consumes
 
@@ -75,6 +99,16 @@ Lane H commits.
   tool session ends its forms session, which closes the session's open round.
 - `Registrations.track` in `src/contracts/disposable.ts`; `MainStart.exports?(consumer: Registrations): unknown` in
   `src/contracts/plugin.ts` (the tree holds both).
+- From Lane H's Structured round results (on Lane H's branch at the refresh):
+  - `AgentFormType.argsErrorText(error: unknown): string | null` in `src/contracts/agent-forms.ts`;
+    `createAgentFormToolSession` reads `type.openTool`, `type.collectTool` and `type.argsErrorText`.
+  - `RoundError` (`constructor(fields: { path: RoundErrorPath; problem: string; detail?: string })`),
+    `RoundErrorPath` and `RoundItemPath` in `main/round-error.ts`.
+  - `ItemFormat.describe()` and `ItemFormat.parse(raw, at: RoundItemPath)` in `main/kinds/item-format.ts`.
+  - `RoundReason`, `RoundResult`, `answersResult`, `handedBackResult`, `notShownResult` and `noRoundResult` in
+    `main/round.ts`.
+  - `ROUND_OPEN_TOOL`, `ROUND_COLLECT_TOOL`, `roundErrorText(error)` and `roundPayload(result)` in
+    `main/mcp-wording.ts`; `autoAnsweredPayload(round, body)` and `roundType` in `main/round-type.ts`.
 
 ## Produces
 
@@ -105,8 +139,8 @@ export interface ItemKindSpec {
 export interface MainItemKind<Item = unknown, Entry = unknown, Result = unknown> {
   readonly spec: ItemKindSpec;
   readonly noun: string;
-  readonly arraySchema: Readonly<Record<string, unknown>>;
-  parse(raw: unknown, where: string): Item;
+  describe(): Readonly<Record<string, unknown>>;
+  parse(raw: unknown, where: string): Item; // Open A: Lane H's ItemFormat takes `at: RoundItemPath`
   layout(item: Item): string | null;
   fingerprintContent(item: Item): PythonJsonValue;
   readEntry(index: number, saved: Readonly<Record<string, unknown>>): Entry;
@@ -129,8 +163,14 @@ export const formsMainKey: DependencyKey<FormsMainExports, 'main', 'forms'> = {
 Member meanings (write each as the comment over the member):
 
 - `noun`: singular, lower case; the error prefix (`Notice 2: `) and the summary count (`2 notices`).
-- `arraySchema`: the JSON Schema of the `ask_round` field `spec.argsKey`.
-- `parse`: throws an `Error` whose `name` is `ROUND_ERROR_NAME` and whose message starts with `where`.
+- `describe`: the JSON Schema of the `ask_round` field `spec.argsKey`, built on each call (Lane H's
+  `ItemFormat.describe()`, renamed from `arraySchema`).
+- `parse`: throws an `Error` whose `name` is `ROUND_ERROR_NAME` and whose message starts with `where`. **Open A**:
+  since Lane H, the tool error text is `roundErrorText(error)`, and `roundType.argsErrorText` words only an
+  `error instanceof RoundError`. `RoundError` and `RoundItemPath` live in `main/round-error.ts`, which another
+  plugin cannot import, and `RoundItemPath.kind` is the closed `ItemKind`. A plugin's `Error` named
+  `ROUND_ERROR_NAME` now rejects the call instead of returning a tool error. The lead rules how a registered kind
+  reports a malformed item before this task starts.
 - `layout`: the layout the item names, null for none.
 - `readEntry`: never throws; `saved` is the saved entry with that 1-based index, `{}` when the body holds none.
 - `recommendedEntry`: the entry a headless session answers the item with.
@@ -180,14 +220,20 @@ export function noRoundPayload(kinds: readonly MainItemKind[]): AnswersPayload;
 export function fingerprint(kinds: readonly MainItemKind[], round: KindRound): string;
 ```
 
+**Open B.** Lane H removed `answersPayload`, `handedBackPayload`, `autoAnsweredPayload` (now in `round-type.ts`) and
+`noRoundPayload` from `round.ts`. In their place are `answersResult`, `handedBackResult`, `notShownResult` and
+`noRoundResult`, which return a `RoundResult` with the fixed lists `answers`, `findings` and `notices`.
+`roundPayload(result)` in `mcp-wording.ts` writes those lists and counts the summary over `ANSWERABLE_KINDS` and
+`FORMATS`. The four payload lines above (`answersPayload`, `handedBackPayload`, `autoAnsweredPayload`,
+`noRoundPayload`) wait on the lead's ruling on how `RoundResult` and `roundPayload` carry a
+registered kind's results. `parseRound`, `requireKnownLayouts`, `readFormBody`, `recommendedBody` and `fingerprint`
+stand as written.
+
 In `src/plugins/forms/main/round-type.ts`:
 
 ```ts
-export const ROUND_TOOLS = {
-  openTool: 'ask_round',
-  collectTool: 'collect_last_round',
-  argsErrorName: ROUND_ERROR_NAME,
-} as const;
+// The round type over the registered kinds. Its `openTool` is ROUND_OPEN_TOOL and its `collectTool`
+// ROUND_COLLECT_TOOL (main/mcp-wording.ts); its `argsErrorText` words a RoundError with roundErrorText (Open C).
 export function createRoundType(
   kinds: () => readonly MainItemKind[],
 ): AgentFormType<KindRound, FormBody, AnswersPayload>;
@@ -208,9 +254,15 @@ export function contributeFormsTools(deps: {
   sessions: Pick<SessionsMainExports, 'contributeTools'>;
   tools: () => ToolDefinition[];
   startSession: (session: AgentSession) => FormsSession;
-  type: Pick<AgentFormType<unknown, unknown, unknown>, 'openTool' | 'collectTool' | 'argsErrorName'>;
+  type: Pick<AgentFormType<unknown, unknown, unknown>, 'openTool' | 'collectTool' | 'argsErrorText'>;
 }): { refresh(): void } & Disposable;
 ```
+
+`type` is the shared round type instance from `createRoundType` (see the rulings), since `argsErrorText` is no
+longer a constant.
+
+`ROUND_TOOLS` is not made: Lane H's `ROUND_OPEN_TOOL` and `ROUND_COLLECT_TOOL` in `main/mcp-wording.ts` name the
+tools, and `fixtures.ts` imports `ROUND_OPEN_TOOL`. The module const `roundType` leaves `round-type.ts`.
 
 In `src/plugins/forms/main/start.ts`: `formsMainPart.start` returns `exports: (consumer) => FormsMainExports`.
 
@@ -254,7 +306,8 @@ each later kind. Each use reads it as follows:
 - Reverse order: the keys of a written `FormBody` after `note`, and the result lists of an `AnswersPayload` after
   `next`. Today's saved body is `note, answers, finding_answers, notice_comments` and today's payload is
   `outcome, summary, next, answers, findings, notices`, which is the reverse of the parse order. Reverse order keeps
-  both byte-identical. A later kind's key comes before `answers`.
+  both byte-identical. A later kind's key comes before `answers`. Since Lane H, `roundPayload` in `mcp-wording.ts`
+  writes the payload's keys; `mcp-wording.test.ts` pins today's payload texts.
 - The fingerprint does not depend on order: `pythonJsonDumps` sorts object keys. A kind joins
   `content[spec.argsKey]` when `fingerprintJoinsWhenEmpty` is true or its list is not empty.
 
@@ -268,7 +321,8 @@ each later kind. Each use reads it as follows:
   helper, which is the one place main narrows body entries. `readFormBody` reads `body.note` and each registered
   kind's saved list with today's `entriesByIndex` rule, then calls `readEntry(i + 1, saved ?? {})` per item.
 - `AnswersPayload`: the payload edge. `answersPayload` builds each kind's results with `kind.result(item, entry)` and
-  writes them at `spec.resultKey`. `noRoundPayload` writes `[]` at each registered `resultKey`.
+  writes them at `spec.resultKey`. `noRoundPayload` writes `[]` at each registered `resultKey`. **Open B**: since
+  Lane H, `answersResult` builds the results and `roundPayload` writes them; the rule stands, and the ruling places it.
 - A kind registered after a round parsed has no entry in `items` and reads as an empty list. A list in `items`
   whose kind is no longer registered is left out of the body, the payload and the fingerprint.
 
@@ -282,15 +336,17 @@ each later kind. Each use reads it as follows:
 | `readFormBody`'s three lists, `readAnswerEntry`, `readFindingAnswerEntry`, `oldFileNotes` | `kind.readEntry`; question and finding share the answer entry reader in `answer-results.ts` |
 | `recommendedBody`'s three lists | `kind.recommendedEntry` |
 | `answerResult`, `findingResult`, `noticeResult`, `addNotesAndDontAsk` | `kind.result`; question and finding share `answerResult` and `addNotesAndDontAsk` in `answer-results.ts` |
-| `summarise`'s `results` record and `ANSWERABLE_KINDS` | answerable kinds in registration order, statuses from `kind.status` |
+| `summarise`'s `results` record and `ANSWERABLE_KINDS` (mcp-wording.ts since Lane H; `summaryOf` passes `{ finding, question }`) | answerable kinds in registration order, statuses from `kind.status` (Open B) |
+| `errorPrefix`'s `FORMATS[path.kind].noun` (mcp-wording.ts) | the registered kind's `noun` (Open C) |
 | `ANSWER_LISTS` and `withoutDontAsk` (round-type.ts) | `kind.finishedEntry` on question and finding |
-| `FORMATS`, `ITEM_KINDS`, `ANSWERABLE_KINDS` (kinds/formats.ts) | `BUILT_IN_KINDS` and the registry |
+| `FORMATS`, `ITEM_KINDS`, `ANSWERABLE_KINDS` (kinds/formats.ts; read by round.ts, mcp-wording.ts and tool-definitions.ts) | `BUILT_IN_KINDS` and the registry |
+| `FORMATS[kind].describe()` in `FORMS_TOOLS` (tool-definitions.ts) | `kind.describe()` in `formsTools(kinds)` |
 | `ITEM_FIELDS`, `ROUND_FIELDS` constants (round.ts) | computed from the kinds at each parse |
 
 The summary text does not change. When no answerable kind has items, the count text is `0 questions`, as today.
 
 **Tool schema and live sessions.** `formsTools(kinds)` builds today's two tools; `ask_round`'s item properties come
-from each kind's `spec.argsKey` and `arraySchema`, in forward order. `contributeFormsTools` makes the contribution:
+from each kind's `spec.argsKey` and `describe()`, in forward order. `contributeFormsTools` makes the contribution:
 
 - It keeps one forms session per agent session id across contributions.
 - `refresh()` disposes the current contribution, then calls `contributeTools` again with `tools()`. While that
@@ -324,8 +380,11 @@ sessions has no way to replace a contribution's tools.
   and `refresh()` after the contribution's `dispose` does nothing, so a registrant disposed after forms stops adds no
   tools.
 - **The round type instance.** `start.ts` builds `createRoundType(() => registry.kinds())` once and shares it between
-  the agents' forms service and the preview service, as the const `roundType` is shared today; `noun` and `openTool`
-  are read from that instance. `ROUND_TOOLS` serves only `fixtures.ts` and the contribution.
+  the agents' forms service, the preview service and the tool contribution, as the const `roundType` is shared
+  today; `noun` and `openTool` are read from that instance. `fixtures.ts` names the tool with `ROUND_OPEN_TOOL`.
+  `start.ts` on `main` also wraps the agents' service in `afterLoad(loaded, …)` and its presenter in
+  `withShownWaits` (commits `8908d175a`, `1075e87cd`, `3ec00a3d7`); those wrappers stay as they are.
+  `autoAnsweredPayload`, which `start.ts` hands the headless answer, reads the kinds too (Open B).
 - **A saved round naming an unregistered kind** fails `parseRound` with its unknown-field `RoundError`, so it reads
   as a round saved in a shape this app no longer accepts, as any rejected shape does; `layout-preview` skips it.
   No new code; one `round.test.ts` row pins the error.
@@ -342,8 +401,9 @@ forms sessions and re-contributes the previous list, and a `refresh` after `disp
   registered WHEN `ask_round` gets `{ heading: 'H', overview: 'O', polls: [<one poll>] }` THEN `parseRound` accepts it;
   `readFormBody` returns keys `note, poll_answers, answers, finding_answers, notice_comments` in that order; the
   payload's keys after `next` are `polls, answers, findings, notices`.
-- GIVEN that `poll` registration is disposed WHEN the same args are parsed THEN `parseRound` throws
-  `ask_round got unknown field(s): polls. It takes ...`, and the `ask_round` schema has no `polls` property.
+- GIVEN that `poll` registration is disposed WHEN the same args are parsed THEN `parseRound` throws a `RoundError`
+  whose `roundErrorText` is `ask_round got unknown field(s): polls. It takes ...`, and the `ask_round` schema has no
+  `polls` property.
 - GIVEN a body saved today WHEN `readFormBody` reads it with the built-ins THEN `JSON.stringify` of the result equals
   the saved text byte for byte.
 - GIVEN a live session with an open round WHEN a kind registers THEN the session's forms session is not ended and the
@@ -390,14 +450,22 @@ as a concern; today's code is the source of truth.
   `polls`; the unknown-field error lists `polls` after `questions`; the empty-round error reads
   `ask_round needs at least one notice, finding, question or poll.`; body key order and payload key order as in
   Behaviour; the summary counts polls after questions; after dispose, `polls` is an unknown field and a parsed
-  round's poll list is left out of the body and payload.
+  round's poll list is left out of the body and payload. The error rows assert `roundErrorText` of the thrown error,
+  as `round.test.ts`'s `roundError` helper does since Lane H.
 - Every existing `round.test.ts` and `round-type.test.ts` call passes `BUILT_IN_KINDS` (or `() => BUILT_IN_KINDS`);
-  their expected values do not change. A changed expected value is a behaviour change: report it.
+  their expected values do not change. A changed expected value is a behaviour change: report it. Since Lane H the
+  payload rows call `roundType.payload`, `roundType.handedBackPayload` and `roundType.noFormPayload`; they call the
+  same members of `createRoundType(() => BUILT_IN_KINDS)`.
+- `mcp-wording.test.ts` — the golden test of every wire text. Convert its calls only: `parseRound(BUILT_IN_KINDS, …)`,
+  `readFormBody(BUILT_IN_KINDS, …)`, `recommendedBody(BUILT_IN_KINDS, …)`, `createRoundType(() => BUILT_IN_KINDS)` in
+  place of `roundType`, and `formsTools(BUILT_IN_KINDS)` in place of `FORMS_TOOLS` in the
+  `publishes the round tools as today` row. Its literals and `forms-tools.golden.txt` do not change; a changed
+  golden is a wire text change: report it.
 - `registry.test.ts` — one `it.each` over the throw rules in Decisions › Registration (each row: the spec change and
   the message start); plus registration order, dispose removes, a second dispose does nothing, `onChanged` fires
   once per register and per first dispose.
 - `tool-definitions.test.ts` § `FORMS_TOOLS ask_round schema` — rename the describe to `formsTools ask_round schema`;
-  new row: a registered `poll` kind adds `polls` with its `arraySchema` after `questions`. The existing per-argsKey
+  new row: a registered `poll` kind adds `polls` with its `describe()` schema after `questions`. The existing per-argsKey
   rows run over `BUILT_IN_KINDS`.
 - `tool-contribution.test.ts` — with a recording `contributeTools` fake: `refresh` disposes the old contribution and
   contributes `tools()` again; across a refresh the agent session keeps the same forms session and its `end` is not

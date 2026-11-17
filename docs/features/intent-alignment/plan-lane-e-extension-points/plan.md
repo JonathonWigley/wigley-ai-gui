@@ -41,12 +41,20 @@ wigley-ai-gui folder of the clone or worktree the run works in; `MKT` is `/Users
 1. Wave 1 step 1 (disposable registrations) has landed:
    `grep -n "\[x\] Disposable registrations, disposed per plugin" GUI/docs/features/intent-alignment/master-plan.md`
    prints one line.
-2. **Gate for task 06 and every forms task after it.** Lane H's Structured round results has landed:
-   `grep -n "\[x\] Structured round results" GUI/docs/features/intent-alignment/master-plan.md` prints one line. Until
-   it does, tasks 06–10 wait, and so does 02 (it runs after 07 Part A); tasks 01, 03, 04 and 05 may run. At plan time (2026-11-09) it had not landed. When it lands, the
-   forms task documents were written against the tree before it: each forms implementer reads the Structured round
-   results commits (`git log --oneline -- src/plugins/forms/main/round.ts src/plugins/forms/main/kinds`) first and
-   reports any Produces it moved as a concern.
+2. **Gate for task 06 and every forms task after it.** Lane H's Structured round results has landed on `main`:
+   `git show main:wigley-ai-gui/docs/features/intent-alignment/master-plan.md | grep -n "\[x\] Structured round results"`
+   prints one line, and `git show main:wigley-ai-gui/src/plugins/forms/main/mcp-wording.ts | grep -n "export function roundPayload"`
+   prints one line. Until both do, tasks 06–10 wait, and so does 02 (it runs after 07 Part A); tasks 01, 03, 04 and
+   05 have run. Then:
+   - Bring the branch up to `main` (merge or rebase), so the forms tasks start from Lane H's code.
+   - The forms task documents (06–10, and the forms lines of 11) were refreshed on 2026-11-17 against Lane H's branch
+     `lane-h-harness-seams` at `7e20f1cf9` and `main` at `3f3a61f7b`. Each forms implementer reads the forms commits
+     after the refresh first
+     (`git log --oneline --since=2026-11-17 -- src/plugins/forms src/shared/agent-forms src/contracts/agent-forms.ts`)
+     and reports any Produces they moved as a concern.
+   - 06 holds three points marked **Open** (A: how a registered kind's `parse` reports a malformed item; B: how
+     `RoundResult` and `roundPayload` carry a registered kind's results; C: where `roundErrorText` reads a registered
+     kind's noun). The lead rules each and writes the ruling into 06 before 06 starts.
 3. **Order against Lane L.** Lane L's forms items (dialog confirms, forms and primer column chrome, layout hot reload's
    forms redraw) have not started on the forms files: `git log --oneline main -- src/plugins/forms/page/round-view.ts
    src/plugins/forms/layouts` shows no Lane L commit after this plan's first commit. Lane L waits for task 10.

@@ -38,22 +38,25 @@ Consumes: the landed code of 01–10, and each task's Proof in its document.
   to it; the settings page registers each kind through `SettingsPageExports.addControlKind`; main still checks values
   by the default's shape (04). The layout picker kind `layout` (05).
 - "A layout" (near line 955): the `<owner>.layout` and `shell.layout` rows pick from the owner's layout names (05).
-- "An item kind" (near lines 823–837): replace the checklist of closed tables (`FORMATS`, `ItemOf`, `ROUND_ITEMS`,
-  `ANSWER_ARRAYS`, `PICK_ANSWERS`, `RECOMMENDED_PICKS`, `ANSWERABLE_ORDER`, `ROUND_ITEM_LISTS`, `FINGERPRINT_LISTS`,
-  `ANSWER_LISTS`, the named arrays in `Round`/`FormBody`/`AnswersPayload`, the `formats.test.ts` sentence) with the
+- "An item kind" (near lines 823–837; near line 830 on `main` at the 2026-11-17 refresh): replace the checklist of
+  closed tables (`FORMATS`, `ItemOf`, `ROUND_ITEMS`, `ANSWER_ARRAYS`, `PICK_ANSWERS`, `RECOMMENDED_PICKS`,
+  `ANSWERABLE_ORDER`, `ROUND_ITEM_LISTS`, `FINGERPRINT_LISTS`, `ANSWER_LISTS`, the named arrays in
+  `Round`/`FormBody`/`AnswersPayload`, `round.ts`'s fixed keys and "the answers result", `mcp-wording.ts`'s answers
+  payload (both named there by Lane H's Structured round results), the `formats.test.ts` sentence) with the
   two registrations: a `MainItemKind` through `FormsMainExports.registerKind` and a `PageKind` through
   `FormsPageExports.registerKind`, tied by the `ItemKindSpec` id; built-ins register the same way; where each built-in
   module now lives after 10's split (06, 07, 10).
-- "A finding origin" (near lines 838–858): replace the checklist with one `FindingOriginSpec` registered through
+- "A finding origin" (near lines 838–858; near line 845 on `main` at the refresh): replace the checklist with one `FindingOriginSpec` registered through
   `registerFindingOrigin` in both processes; `proof` is required on `nit` alone; saved finding answers carry
   `action_label` and `recommend_action_label` (08).
-- "A forms layout" (near line 1002): the three named cards plus `cards.kinds` and `cards.other`; card, origin, action
+- "A forms layout" (near line 1002; near line 1009 on `main` at the refresh): the three named cards plus `cards.kinds` and `cards.other`; card, origin, action
   and severity are strings (07, 08).
 - "Other plugins reach the forms view…": `FormsPageExports` lists `registerKind` and `registerFindingOrigin`, and
   `FormsMainExports` exists (06–08).
 - "An MCP tool": add one line if forms' re-contribution on a kind or origin change is a pattern another plugin would
   copy; else leave it (06).
-- Every mention of the forms screen union says `FormsScreen` (10); near line 726 "(forms' view)" stays true.
+- Every mention of the forms screen union says `FormsScreen` (10); near line 726 "(forms' view)" (near line 733 on
+  `main` at the refresh) stays true.
 
 `docs/keymap.md` lines 19–21: the manifest's `keys` takes `remaps` and layers them by dependency order (03).
 

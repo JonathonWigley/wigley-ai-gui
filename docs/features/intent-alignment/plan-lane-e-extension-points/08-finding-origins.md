@@ -6,9 +6,19 @@ Wave: 4 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
 
 All paths are under `src/plugins/forms/` unless they start with `src/`. Tree facts were read at plan time (2026-11-09)
-on `main`. Lane H's Structured round results lands before this task (plan.md Precondition 2): read
-`git log --oneline -- src/plugins/forms/main/round.ts src/plugins/forms/main/kinds` first, and report a moved member
-as a concern.
+on `main`. The main-side facts were refreshed on 2026-11-17 against Lane H's Structured round results (branch
+`lane-h-harness-seams` at `7e20f1cf9`), which lands before this task (plan.md Precondition 2). Since Lane H:
+
+- A malformed item throws `new RoundError({ path: at, problem, detail? })` (`main/round-error.ts`); `at` is the
+  item's `RoundItemPath`. The agent reads `roundErrorText(error)` (`main/mcp-wording.ts`): the `Finding 1: ` prefix,
+  then `problem`, then `detail`. The field helpers in `main/kinds/fields.ts` take `at` in place of `where`.
+- A kind's schema is the method `describe()`, built on each call.
+- `main/mcp-wording.test.ts` pins every tool text and error text, and `main/forms-tools.golden.txt` pins the tool
+  list. This task changes some of those texts on purpose (see Pinned values).
+
+Read `git log --oneline --since=2026-11-17 -- src/plugins/forms src/shared/agent-forms` first, and report a member
+that moved after the refresh as a concern. 06 carries three rulings (its Open A, B and C) that this task builds on:
+read them in 06's document as the lead settled them.
 
 ## Files
 
@@ -23,6 +33,10 @@ as a concern.
 - modify `main/round.ts` — `readFormBody` and `recommendedBody` write `action_label`
 - modify `main/start.ts` — registers the built-ins, exports `registerFindingOrigin`, rebuilds the tool on a change
 - modify `main/selftest-script.ts`, `main/preview/preview-round.ts` — proof only on a `nit`
+- modify `main/forms-tools.golden.txt` — the `ask_round` description sentence, the `proof` description and the
+  findings items' `required` list, as pinned below; no other line of the file changes
+- modify `main/mcp-wording.test.ts` — the `a finding missing fields` row's expected text, as pinned below; add rows
+  for the two new proof errors
 - modify `page/kinds/finding/verdict.ts`, `page/kinds/finding/finding-card.ts` — read the spec; `originToken`
 - modify `page/form-state.ts` — `findingActionWord` reads the spec (the page writes no action labels: see the rulings)
 - modify `page/layout/card-kit.ts` — chip colour from `originToken`; `actionLabelOf` fallback
@@ -35,7 +49,7 @@ as a concern.
   `main/round.test.ts`, `main/tool-definitions.test.ts`, `page/kinds/finding/verdict.test.ts`,
   `page/kinds/card-input.test.ts`, `page/layout/card-kit.test.ts`, `page/form-state.test.ts`, `page/start.test.ts`,
   and each other test file whose run reaches an origin lookup (add `useBuiltInFindingOrigins()`; at plan time:
-  `main/round-type.test.ts`, `main/preview/layout-preview.test.ts`,
+  `main/round-type.test.ts`, `main/mcp-wording.test.ts`, `main/preview/layout-preview.test.ts`,
   `main/preview/preview-round.test.ts`, `page/boxes.test.ts`, `page/forms-commands.test.ts`,
   `page/layout/card-answer.test.ts`, `page/layout/layout-cards.test.ts`, `page/layout/layout-panes.test.ts`,
   `page/layout/layout-resolver.test.ts`, `page/view-model.test.ts`, `page/round-view.test.ts`,
@@ -57,8 +71,9 @@ Not this task's: `AGENTS.md` "A finding origin" (task 11), the marketplace and `
 - `FormsPageExports.registerKind(kind: PageKind): Disposable` and the finding `PageKind`'s `cardInput` ← 07 (in
   `page/kinds/finding/finding-card.ts` at plan time).
 - Members the tree holds: `MAX_ENTRIES`, `FINDING_ACTIONS`, `FindingAction`, `Severity`, `SEVERITIES` in
-  `contract.ts`; `themeVariable(token: string): string` in `src/shared/theme-variables.ts`; `requireText`,
-  `quotedList` in `main/kinds/fields.ts`; `completeFindingPick` in `finding-pick.ts`; `contributions.onChanged(() =>
+  `contract.ts`; `themeVariable(token: string): string` in `src/shared/theme-variables.ts`;
+  `requireText(value, field, at: RoundErrorPath)` and `quotedList` in `main/kinds/fields.ts`; `RoundError` and
+  `RoundItemPath` in `main/round-error.ts`; `completeFindingPick` in `finding-pick.ts`; `contributions.onChanged(() =>
   view.rebuild())` in `page/start.ts` as the redraw pattern.
 
 ## Produces
@@ -165,10 +180,18 @@ New proof text:
   severity and the impact.` becomes `A card opens on a verdict: the origin and severity and the impact; then it shows the finding, and a Nit also
   its proof.` (`a ${orList(PROOF card kinds)}`; the clause is left out when no registered origin
   requires proof).
-- The parser's missing-field error becomes `` `${where}missing ${missing}. Every finding needs ${FINDING_FIELDS}; a
-  ${SEVERITY_ORIGINS} finding also needs severity, and a ${PROOF_ORIGINS} finding also needs proof.` `` —
-  `FINDING_FIELDS` no longer holds `proof`: `title, origin, impact, finding, choices, recommend_action`.
-- A `requiresProof` origin missing proof fails with `` `${where}a ${origin} finding needs proof.` ``.
+- The parser's missing-field error keeps its `problem` `` `missing ${missing}.` ``, and its `detail` becomes
+  `` `Every finding needs ${FINDING_FIELDS}; a ${SEVERITY_ORIGINS} finding also needs severity, and a
+  ${PROOF_ORIGINS} finding also needs proof.` `` — `FINDING_FIELDS` no longer holds `proof`:
+  `title, origin, impact, finding, choices, recommend_action`. For the built-ins, the `mcp-wording.test.ts` row
+  `a finding missing fields` (`{ title: 'T' }`) then expects `Finding 1: missing choices, finding, impact, origin,
+  recommend_action. Every finding needs title, origin, impact, finding, choices, recommend_action; a caused or
+  pre_existing finding also needs severity, and a nit finding also needs proof.`
+- A `requiresProof` origin missing proof fails with `` new RoundError({ path: at, problem: `a ${origin} finding needs
+  proof.` }) ``, worded `Finding 1: a nit finding needs proof.`
+- `forms-tools.golden.txt` changes in exactly three places: the `ask_round` description's proof sentence (below),
+  the `proof` property's description (`PROOF_DESCRIPTION` above), and `proof` leaving the findings items' `required`
+  list. Rewrite the golden to the new text and check that its diff holds those three changes and no other.
 
 Chip colour: `page/forms.css` replaces the four `.badge-origin[data-origin=…]` rules with one:
 
@@ -218,9 +241,9 @@ invalid, and the rule's fallback applies. The three `.badge-severity` rules stay
 - **One `Finding`.** `severity` is `null` on an origin that does not require it; `'severity' in finding` checks become
   `finding.severity !== null`. The `SameType` and `_severityOriginsAreDefectOrigins` compile check is removed with the
   union. The fingerprint keeps severity out when it is `null`, as today.
-- **Proof.** On a `requiresProof` origin, `requireText(item.proof, 'proof', where)` as today. On every other origin,
-  an absent, `null` or blank proof reads as `''`; a non-string fails `` `${where}proof must be a string.` ``; any other
-  string is kept as sent. The schema's `required` drops `proof`; its property stays. `fingerprintContent` adds
+- **Proof.** On a `requiresProof` origin, `requireText(item.proof, 'proof', at)` as today. On every other origin,
+  an absent, `null` or blank proof reads as `''`; a non-string fails with
+  `new RoundError({ path: at, problem: 'proof must be a string.' })`; any other string is kept as sent. The schema's `required` drops `proof`; its property stays. `fingerprintContent` adds
   `proof` only when `finding.proof !== ''`. Proof that the old hashes stay: today `parseFinding` runs
   `requireText(item.proof, …)`, which refuses an absent or blank proof, so every round ever opened, and every saved
   file, carries a non-blank proof, which still joins the hash. Saved `args` stay as sent.
@@ -243,11 +266,12 @@ invalid, and the rule's fallback applies. The three `.badge-severity` rules stay
   branch). An unknown severity draws a neutral tag: no `.badge-severity` rule matches it. `data-origin` and
   `data-severity` stay on the chips.
 - **Test rounds send proof only on a Nit.** `page/test-rounds.ts` `finding()` and `decision()` set `proof: ''` and
-  `severity` (`null` on `decision()` and `nit()`); `nit()` keeps `` `${title} proof` ``. The self-test findings at
-  `main/selftest-script.ts` (the `caused` and `design` findings near lines 1001–1040) and the preview round's
-  `caused` and `design` findings (`main/preview/preview-round.ts` near lines 39 and 67) drop `proof`; every `nit`
-  keeps it. No self-test step reads a finding's proof (checked at plan time: `grep -n proof
-  main/selftest-script.ts` finds only the four senders).
+  `severity` (`null` on `decision()` and `nit()`); `nit()` keeps `` `${title} proof` ``. The self-test's `caused` and
+  `design` findings in `main/selftest-script.ts` and the preview round's `caused` and `design` findings
+  (`main/preview/preview-round.ts`, near lines 39 and 67) drop `proof`; every `nit` keeps it. Find the self-test's
+  with `grep -n "origin: '\|proof" main/selftest-script.ts`: one `caused`, one `design` and two `nit` findings (near
+  lines 1020–1050 on `main` at the 2026-11-17 refresh; Lane H's and main's edits to the file move them). No self-test
+  step reads a finding's proof (checked at plan time and again at the refresh: the grep finds only the four senders).
 
 ## Behaviour
 
@@ -255,7 +279,8 @@ invalid, and the rule's fallback applies. The three `.badge-severity` rules stay
   now, Follow-up, Leave it), a Decision (design; actions Decide now, Plan it, Drop it) or a Nit (nit; actions Fix
   anyway, Leave it)`.
 - GIVEN a `caused` finding with no proof WHEN `parseRound` runs THEN it parses with `proof` `''`.
-- GIVEN a `nit` finding with no proof WHEN `parseRound` runs THEN it fails with `Finding 1: a nit finding needs proof.`
+- GIVEN a `nit` finding with no proof WHEN `parseRound` runs THEN it throws a `RoundError` whose `roundErrorText` is
+  `Finding 1: a nit finding needs proof.`
 - GIVEN a `design` finding with `proof: null` or `proof: '  '` WHEN it parses THEN `proof` is `''`, and its
   fingerprint equals the same finding with no proof.
 - GIVEN the finding that `round.test.ts` hashes to `fc3a3a26e21f0c6e85e8ad1f4d000380e032b3b52e3bc6b2ffae5226034e77b1`
@@ -339,9 +364,11 @@ Where the text above and these differ, these win.
   through `type.readBody`), and `recommendedBody` sets both. A finding entry's key order is `index, choice,
   not_applicable, notes, dont_ask, dont_ask_reason, action, action_label, recommend_action_label`. 06's byte-for-byte
   `readFormBody` row changes its fixture to that labelled shape in this task.
-- **The schema follows the registry.** `findingKind.arraySchema` becomes a getter rebuilt on each read, and
-  `formsTools(kinds)` builds the `ask_round` description inside the call (the origin, severity, proof, choices and
-  action-word texts with it), since 06's `refresh()` calls `tools()` each time.
+- **The schema follows the registry.** `findingKind.describe()` (a method since Lane H) builds the schema from the
+  registry on each call, and `formsTools(kinds)` builds the `ask_round` description inside the call (the origin,
+  severity, proof, choices and action-word texts with it), since 06's `refresh()` calls `tools()` each time. The
+  description constants in `finding-format.ts` that read origin data (`ORIGIN_DESCRIPTION`, `SEVERITY_ORIGINS`,
+  `CHOICES_DESCRIPTION` and the others) become functions called from `describe()`.
 - **Republish order.** Forms' main start subscribes the republish listener to `findingOrigins.onChanged` after the
   four built-ins register, and its `dispose` unsubscribes before disposing them, so start and stop each publish once.
 - **A saved open round naming a plugin origin** whose plugin has not registered yet fails `parseRound` on restore and
@@ -352,7 +379,8 @@ Where the text above and these differ, these win.
 - **No origin requires proof** (only reachable with `nit` disposed): the proof sentence is left out whole from the
   `ask_round` description, the `proof` schema description and the parser's missing-field error.
 - **More rows:** in `main/round.test.ts`, a round whose origin spec was disposed still reads its body and payload
-  (`findingEntries`, `readFormBody`, `answersPayload`) as before the dispose; the `readFormBody` and
+  (`findingEntries`, `readFormBody`, and the round type's `payload`, which Lane H builds through `answersResult`) as
+  before the dispose; the `readFormBody` and
   `recommendedBody` rows assert `recommend_action_label` (`'Decide now'` on a Decision recommending `fix_now`,
   whatever the pick, a saved value ignored).
 

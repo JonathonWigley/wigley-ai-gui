@@ -20,7 +20,8 @@ Files:
 - A · modify `src/plugins/forms/contract.ts` — `ItemKind` widened, `Round.items`, `Round.bodyKeys`,
   `PageKind` and the types it references, `ItemAnswer` moved in, `FormsPageExports.registerKind`, `FormsItemRef.kind`
 - A · modify `src/plugins/forms/main/round.ts`, `main/round-type.ts` — `KindRound` folded into `Round`,
-  `parseRound` fills `Round.bodyKeys` (not hashed) · test `main/round.test.ts`, `main/round-type.test.ts`
+  `parseRound` fills `Round.bodyKeys` (not hashed) · test `main/round.test.ts`, `main/round-type.test.ts`; and
+  `main/mcp-wording.ts` with its test when they name `KindRound` after 06 (see the second item below)
 - A · create `src/plugins/forms/page/kinds/page-kinds.ts` — the registry and the kind table
 - A · test `src/plugins/forms/page/kinds/page-kinds.test.ts` (create)
 - A · modify `src/plugins/forms/page/kinds/formats.ts` — `FORMATS` becomes `BUILT_IN_PAGE_KINDS`; `itemLabel`
@@ -59,7 +60,9 @@ This task finishes what 06 left closed (06 kept the page compiling on the old sh
   unknown[]>>` and drops `questions`, `notices` and `findings`. Main's `KindRound` goes: `parseRound` returns
   `Round`, and 06's copy of the built-ins into the named lists is deleted. Every main file that names `KindRound`
   changes to `Round` (measured at plan time from 06's document: `main/round.ts`, `main/round-type.ts` and their
-  tests; re-verify with `grep -rn KindRound src`). A kind with no items may have no key; the page reads
+  tests; since Lane H's Structured round results, also `main/mcp-wording.ts` and `main/mcp-wording.test.ts` when
+  06's ruling on its Open B passes a `KindRound` there; re-verify with `grep -rn KindRound src`).
+  `main/mcp-wording.test.ts` and `main/forms-tools.golden.txt` pin every wire text: they keep their literals. A kind with no items may have no key; the page reads
   `round.items[kind] ?? []`. The built-in items keep their types (`Question`, `Notice`, `Finding`).
 - **Draft entries by `bodyKey`.** The page reads a kind's saved entries as `body[kind.spec.bodyKey]` and
   `buildBody` writes each kind's `restore.encode` result there, with `note` first and the keys in the order 06's
@@ -320,7 +323,8 @@ Decisions:
   `layout <name>: cards.kinds is not an object`; `layout <name>: cards.kinds.<id> is not a function`.
 - `contributions.cardParts(kind)` and `FormsCardPart.kinds` take any kind id; a plugin kind's card gets its parts.
 - If `AnswerableKind` is still in `contract.ts` after 06, delete it and use `ItemKind`; if a main file still imports
-  it, leave it and report a concern.
+  it, leave it and report a concern. On Lane H's branch (2026-11-17), `main/round-type.ts` (`ANSWER_LISTS`, which 06
+  removes) and `main/mcp-wording.ts` (`summarise`, which 06's Open B ruling settles) import it.
 
 GIVEN the three built-in kinds registered WHEN a round with findings, questions and notices shows THEN the rail,
 review rows, boxes, card inputs and saved body equal today's.

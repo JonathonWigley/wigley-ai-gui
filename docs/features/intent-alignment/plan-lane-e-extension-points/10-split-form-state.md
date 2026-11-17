@@ -32,9 +32,11 @@ Files:
     `page/round-view.test.ts`, `page/layout/card-answer.test.ts`, `page/layout/card-kit.test.ts`,
     `page/layout/layout-panes.test.ts`, `page/layout/layout-cards.test.ts`. These three import only `form-state.ts`
     members and do not change: `page/autosave.test.ts`, `page/boxes.test.ts`, `page/forms-view.test.ts`.
-- modify the users of the union `FormsView` (plan time): `contract.ts` (324, 363), `page/forms-commands.ts` (26, 643),
-  `page/view-model.ts` (12, 292, 325), `page/round-view.ts` (13, 115, 184), `page/layout/layout-panes.ts`
-  (31, 110, 349, 439), `page/view-model.test.ts` (3, 591), `page/forms-commands.test.ts` (17, 1194)
+- modify the users of the union `FormsView` (measured on `main` at the 2026-11-17 refresh; 06–08 move the lines):
+  `contract.ts` (327, 366 on `main`; one line less after Lane H, which drops `needs_manual_open` above it),
+  `page/forms-commands.ts` (26, 643), `page/view-model.ts` (12, 292, 325), `page/round-view.ts` (13, 117, 186),
+  `page/layout/layout-panes.ts` (31, 110, 349, 439), `page/view-model.test.ts` (3, 591),
+  `page/forms-commands.test.ts` (17, 1194)
 - test: modify `page/form-state.test.ts` · create `page/round-model.test.ts` · `page/round-answers.test.ts` ·
   `page/round-draft.test.ts` · `page/form-state.test-support.ts`
 
