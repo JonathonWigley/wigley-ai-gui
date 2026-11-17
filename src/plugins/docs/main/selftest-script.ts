@@ -63,7 +63,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       keys: ['R'],
-      expect: '[docs] machine index rebuilt: 19 entries',
+      expect: '[docs] machine index rebuilt: 21 entries',
       why: "Docs mode's first show built the index during an earlier plugin's steps, before this script rewrote the fixture.",
     },
     {
@@ -403,7 +403,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
     {
       keys: ['R'],
-      expect: '[docs] machine index rebuilt: 19 entries',
+      expect: '[docs] machine index rebuilt: 21 entries',
       why: "The stand-in lists the fixture's entry again, with its title.",
     },
     { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows All pages' },
@@ -434,7 +434,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       keys: ['R'],
-      expect: '[docs] machine index rebuilt: 19 entries',
+      expect: '[docs] machine index rebuilt: 21 entries',
       why: "The stand-in lists the fixture's entry again, with its title.",
     },
     {
@@ -722,7 +722,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       checksFit: true,
     },
     { keys: ['y'], expect: '[docs] moved fresh.md to the Trash' },
-    { keys: ['R'], expect: '[docs] machine index rebuilt: 20 entries' },
+    { keys: ['R'], expect: '[docs] machine index rebuilt: 22 entries' },
   ];
   const treeFilter: SelfTestStep[] = [
     {
