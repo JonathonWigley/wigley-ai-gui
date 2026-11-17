@@ -200,8 +200,8 @@ Boundary rules:
 Critical path: 01 → 06 → 08 → 09
 
 ### Wave 1
-- [ ] [Command run context](01-command-run-context.md)
-- [ ] [Forms confirm export](02-forms-confirm.md)
+- [x] [Command run context](01-command-run-context.md)
+- [x] [Forms confirm export](02-forms-confirm.md)
 
 ### Wave 2
 - [ ] [Read any slot](03-read-any-slot.md) — after 01
@@ -222,8 +222,17 @@ Critical path: 01 → 06 → 08 → 09
 Review base: 8d829c42c
 
 ### Groups
+- 01 · deep (compile error → same-rung fix dispatch) · fa8146889 · diff read: every Produces present (contracts/commands.ts, plugin.ts, bridge.ts, registry, router, page-commands, harness hop); wave-1 typecheck passes after 6b-fix commit · concerns: runFor casts sessions as Omit<Context,'arg'>; commandHopOf has no direct test (only the router row); edits outside Files: test fakes resolve 'ran', base-kit runLogged takes Promise<unknown>
+- 02 · deep · db66ef045 · diff read: ConfirmRequest, FormsMainExports, formsMainKey in forms/contract.ts; confirmRoundArgs, confirmAllowed, askConfirm in forms/main/confirm.ts; wave-1 typecheck passes · concerns: start tests fake the sessions part; an empty title fails the round parser so confirm rejects (08 keeps titles non-empty); test nonces share the id counter
 ### Contract changes
+- 01 adds `commandHopOf(value: unknown): CommandHop` in `src/shared/command-args.ts`: it reads a hop the other process sent, keeping only the two session-id strings and `reportErrors: true`. Consumers: none outside 01.
 ### Rulings
 - Preflight: the relay hello now carries row_id (Lane H, 6fb763cb3, merged after plan time), so the plan-time precondition "no row id" is stale; nothing in 01-08 rests on it, and 09 checks AGENTS.md § Architecture relay paragraph against the row-id join — lead
+- 01: plugin-facing PluginCommands.run still resolves Promise<void> (~15 call sites pass it as () => Promise<void>); the outcome comes from runFor · group 01
+- 01: a run resolves 'ran' only when onDidRun would fire; a failed run that does not report resolves 'skipped' · group 01
+- 01: pageGone logs every waiting run, reporting runs included · group 01
+- 02: an answer marked dont_ask counts as a denial even on choice 1 · group 02
+- 02: a newer tool session of the same app id replaces the map entry; the older one's end only removes its own entry · group 02
+- 02: askConfirm returns true for this round's Allow even when the signal aborted after; 08 checks signal.aborted before running a risky command · group 02
 ### Review rounds
 ### Test gate

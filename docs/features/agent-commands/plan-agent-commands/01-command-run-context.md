@@ -1,6 +1,6 @@
 # 01 — Command run context: target, caller, reporting runs, the list and the two flags
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · crosses the main and page processes through async IPC, and every later task consumes its contract
 Wave: 1 · Depends on: none
@@ -162,3 +162,7 @@ Tests:
 Done when: `npm run typecheck` passes; the test gate runs the tests above. The renderer and `main.ts` wiring is checked
 live by 10 (Final verification).
 Commit:    one commit for the group
+
+## Proof
+
+Commit fa8146889 · proof: diff read: every Produces present (contracts/commands.ts, plugin.ts, bridge.ts, registry, router, page-commands, harness hop); wave-1 typecheck passes after 6b-fix commit · concerns: runFor casts sessions as Omit<Context,'arg'>; commandHopOf has no direct test (only the router row); edits outside Files: test fakes resolve 'ran', base-kit runLogged takes Promise<unknown>

@@ -1,6 +1,6 @@
 # 02 — Forms confirm export
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · async form lifecycle, queue, replay and abort rules that gate risky commands
 Wave: 1 · Depends on: none
@@ -95,3 +95,7 @@ Tests:
 Done when: `npm run typecheck` passes; the test gate runs the tests above. The popup over the tabs and the marked
 terminal row are checked live by 10 (Final verification).
 Commit:    one commit for the group
+
+## Proof
+
+Commit db66ef045 · proof: diff read: ConfirmRequest, FormsMainExports, formsMainKey in forms/contract.ts; confirmRoundArgs, confirmAllowed, askConfirm in forms/main/confirm.ts; wave-1 typecheck passes · concerns: start tests fake the sessions part; an empty title fails the round parser so confirm rejects (08 keeps titles non-empty); test nonces share the id counter
