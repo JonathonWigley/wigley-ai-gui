@@ -33,6 +33,7 @@ import {
 } from '../../../shared/active-time';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
+import { readAgentFrame } from '../agent-frame';
 import { refusalOf } from '../image-rules';
 import { isWorkRunning } from '../session-work';
 import {
@@ -156,6 +157,8 @@ export interface ChatSessions {
   activeTimeOf(sessionId: string): ActiveTime | null;
   // Whether the held session is headless; false for a row chat does not hold.
   isHeadless(sessionId: string): boolean;
+  // Whether the held session is unattended; false for a row chat does not hold.
+  isUnattended(sessionId: string): boolean;
   // Whether the held session's last process start carried the headless note;
   // the saved flag until its first start in this app run. False for a row
   // chat does not hold.
@@ -784,11 +787,14 @@ function savedSessionOf(
 
 // The first-message title held for a message: a pasted wall of text stays out
 // of every state, and the row cuts it further. Leading whitespace goes before
-// the cap, so a message opening on a wall of blanks still keeps its text.
+// the cap, so a message opening on a wall of blanks still keeps its text. A
+// message from another session's agent is titled from the text after its frame
+// line.
 const FIRST_MESSAGE_TITLE_CAP = 200;
 
 function firstMessageTitleOf(text: string): string {
-  return [...text.trimStart()].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
+  const titled = readAgentFrame(text)?.body ?? text;
+  return [...titled.trimStart()].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
 }
 
 // A row's owner as a resume's rejection names it.
@@ -3977,6 +3983,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     activeTimeOf: (sessionId) =>
       held.get(sessionId)?.slots.info().activeTime ?? null,
     isHeadless: (sessionId) => held.get(sessionId)?.headless ?? false,
+    isUnattended: (sessionId) => held.get(sessionId)?.unattended ?? false,
     launchedHeadless: (sessionId) =>
       held.get(sessionId)?.launchHeadless ?? false,
     setHeadless(sessionId, headless) {

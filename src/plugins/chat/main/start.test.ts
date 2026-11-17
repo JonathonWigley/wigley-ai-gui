@@ -4,6 +4,7 @@ import type {
   AgentHarness,
   AgentStart,
   PermissionRequest,
+  ProcessActivity,
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
@@ -284,7 +285,8 @@ describe('chat drive actions', () => {
 // a data folder that cannot be read; sessions open rows `row-1`, `row-2`, …,
 // and an owned session's end emits `sessions.ended`, recorded in `ended`,
 // and its `keep` is recorded in `kept`;
-// each row holds its titles as sessions would, starting with none.
+// each row holds its titles as sessions would, starting with none, in
+// `titles`, and its side-bar label as `labels` holds it, else none.
 // `options.profiles` replaces the profiles the harness `claude` declares (and
 // of its `core.agentHarnesses` entry); null registers no harness.
 // `options.publishedProfiles` replaces the entry's profiles alone, as the
@@ -346,6 +348,7 @@ function startChatPart(
     sessionId: (id: string) => void;
     ended: (exit: { code: number; error: string | null }) => void;
     agentEvent: (event: AgentEvent) => void;
+    activity: (activity: ProcessActivity) => void;
   }[] = [];
   let processEnd = Promise.resolve();
   const holdProcessEnds = () => {
@@ -414,6 +417,7 @@ function startChatPart(
   const kept: string[] = [];
   let rows = 0;
   const titles = new Map<string, SessionTitles>();
+  const labels = new Map<string, string>();
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
@@ -473,6 +477,7 @@ function startChatPart(
       const held = titles.get(sessionId);
       return held === undefined ? null : { ...held };
     },
+    label: (sessionId: string) => labels.get(sessionId) ?? null,
   };
   const startSettings = {
     keepIdleMinutes: 60,
@@ -593,6 +598,8 @@ function startChatPart(
       settingsListener({ ...startSettings, ...settings }),
     namers,
     namerChanges,
+    titles,
+    labels,
   };
 }
 
@@ -781,6 +788,128 @@ describe('chat main part', () => {
 
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
   });
+
+  // Rows `row-1` (the caller) and `row-2` (the target) are open; `relay-row`
+  // stands for a terminal row, which chat does not hold.
+  it.each<{
+    given: string;
+    callerSessionId?: string;
+    callerTitle?: string;
+    callerLabel?: string;
+    target: string;
+    text: string;
+    isTargetRunning?: true;
+    sent?: string;
+    error?: string;
+  }>([
+    {
+      given: 'a titled caller',
+      callerSessionId: 'row-1',
+      callerTitle: 'Planner',
+      callerLabel: 'alpha 2',
+      target: 'row-2',
+      text: 'go',
+      sent: '[Message from the agent in session "Planner" — not typed by the user]\ngo',
+    },
+    {
+      given: 'an untitled caller',
+      callerSessionId: 'row-1',
+      callerLabel: 'alpha 2',
+      target: 'row-2',
+      text: 'go',
+      sent: '[Message from the agent in session "alpha 2" — not typed by the user]\ngo',
+    },
+    { given: 'no caller', target: 'row-2', text: ' go ', sent: ' go ' },
+    {
+      given: 'no caller and a slash text',
+      target: 'row-2',
+      text: '/clear',
+      sent: '/clear',
+    },
+    {
+      given: 'a running target',
+      callerSessionId: 'row-1',
+      callerTitle: 'Planner',
+      target: 'row-2',
+      text: 'go',
+      isTargetRunning: true,
+      sent: '[Message from the agent in session "Planner" — not typed by the user]\ngo',
+    },
+    {
+      given: 'a self-send',
+      callerSessionId: 'row-2',
+      target: 'row-2',
+      text: 'go',
+      error: 'chat.sendTo: a session cannot send to itself',
+    },
+    {
+      given: 'blank text',
+      callerSessionId: 'row-1',
+      target: 'row-2',
+      text: ' \n ',
+      error: 'chat.sendTo: no text',
+    },
+    {
+      given: 'blank text to an unknown target',
+      callerSessionId: 'row-1',
+      target: 'row-9',
+      text: '',
+      error: 'chat.sendTo: no text',
+    },
+    {
+      given: "a terminal row's id",
+      callerSessionId: 'row-1',
+      target: 'relay-row',
+      text: 'go',
+      error: 'chat.sendTo: no chat session relay-row',
+    },
+  ])(
+    'sendTo sends the framed text to the target or refuses: $given',
+    async (row) => {
+      const chat = startChatPart();
+      for (let opened = 0; opened < 2; opened++) {
+        chat.invoke('start', {
+          projectDir: '/p',
+          harness: 'claude',
+          profile: 'work',
+        });
+      }
+      await flushMicrotasks();
+      const callerTitles = chat.titles.get('row-1');
+      if (callerTitles !== undefined && row.callerTitle !== undefined) {
+        callerTitles.agent = row.callerTitle;
+      }
+      if (row.callerLabel !== undefined) {
+        chat.labels.set('row-1', row.callerLabel);
+      }
+      if (row.isTargetRunning === true) {
+        chat.processEvents[1].activity('working');
+      }
+
+      const run = Promise.resolve(
+        chat.part.commands.sendTo({
+          arg: { sessionId: row.target, text: row.text },
+          callerSessionId: row.callerSessionId,
+        }),
+      );
+
+      if (row.error !== undefined) {
+        await expect(run).rejects.toThrow(row.error);
+        expect(chat.processSends).not.toHaveBeenCalled();
+        return;
+      }
+      await run;
+      if (row.isTargetRunning === true) {
+        expect(chat.processSends).not.toHaveBeenCalled();
+        chat.processEvents[1].activity('idle');
+      }
+      expect(chat.processSends).toHaveBeenCalledExactlyOnceWith({
+        text: row.sent,
+        images: [],
+      });
+      expect(chat.starts.count).toBe(2);
+    },
+  );
 
   it.each([
     {
