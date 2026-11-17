@@ -306,11 +306,7 @@ function claudeHarness(
 function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    [APP_ENDPOINT_ENV]: appEndpointDir(
-      paths,
-      endpointHome,
-      appInstance.id,
-    ),
+    [APP_ENDPOINT_ENV]: appEndpointDir(paths, endpointHome, appInstance.id),
   };
 }
 

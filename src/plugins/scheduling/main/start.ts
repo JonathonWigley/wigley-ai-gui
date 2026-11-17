@@ -44,11 +44,7 @@ import {
   type ScheduledRunRecord,
 } from './run-records';
 import { createTaskStore } from './task-store';
-import {
-  startTaskTools,
-  TASK_TOOLS,
-  type TaskToolsDeps,
-} from './task-tools';
+import { startTaskTools, TASK_TOOLS, type TaskToolsDeps } from './task-tools';
 
 type SchedulingApi = MainApi<
   typeof schedulingManifest,
@@ -360,7 +356,8 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         hasDueFailure: false,
       };
       for (const run of planned) {
-        const task = tasks.find((each) => each.id === run.taskId);
+        // planRuns plans only from `tasks`, so every run's task is in it.
+        const task = tasks.find((each) => each.id === run.taskId)!;
         queue.nextRuns.set(run.taskId, run.at);
         const key = preparedKey(run, task);
         let launch = prepares.get(key) ?? kept.get(key);
@@ -633,9 +630,10 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
           .map((control) => control.id),
       sessionControls: (sessionId) =>
         Object.fromEntries(
-          (controlsSlot.get(sessionId) ?? [])
-            .filter((control) => control.value !== null)
-            .map((control) => [control.id, control.value]),
+          (controlsSlot.get(sessionId) ?? []).flatMap(
+            (control): [string, string][] =>
+              control.value === null ? [] : [[control.id, control.value]],
+          ),
         ),
       capControls: (controls, cap) => chatHarness().capControls(controls, cap),
       isAbsolute: (path) => services.paths.isAbsolute(path),

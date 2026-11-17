@@ -425,10 +425,7 @@ function startPart(options: StartOptions = {}) {
     adoptedRowId: null as string | null,
     answerAdopt(run: AdoptRequest): Promise<string> {
       const rowId = part.adoptedRowId ?? run.rowId;
-      rows.set(
-        rowId,
-        sessionRow(rowId, { hostSessionId: run.hostSessionId }),
-      );
+      rows.set(rowId, sessionRow(rowId, { hostSessionId: run.hostSessionId }));
       if (part.session !== null) {
         chatSessions.set(rowId, sessionInfo(rowId, part.session));
       }
@@ -441,7 +438,7 @@ function startPart(options: StartOptions = {}) {
       isPushHeld = isHeld;
     },
     changeInstructions() {
-      for (const listener of [...instructionsListeners]) {
+      for (const listener of instructionsListeners) {
         listener();
       }
     },
@@ -761,9 +758,7 @@ describe('schedulingMainPart', () => {
     }
     await settle();
 
-    expect(part.adopts).toHaveLength(
-      run.skipped || run.exit !== null ? 0 : 1,
-    );
+    expect(part.adopts).toHaveLength(run.skipped || run.exit !== null ? 0 : 1);
     expect(await part.historyFile()).toEqual(row.expected);
     expect(part.host.forgotten).toEqual(row.forgets ? [run.id] : []);
     if (row.log !== undefined) {
@@ -960,28 +955,26 @@ describe('schedulingMainPart', () => {
     });
   });
 
-  it.each<{ case: string; options: StartOptions; id: string; text: string }>(
-    [
-      {
-        case: 'the dev app',
-        options: { isDev: true },
-        id: TASK_ID,
-        text: NEVER_FIRES,
-      },
-      {
-        case: 'an unknown id',
-        options: {},
-        id: 'ffffffff',
-        text: 'No scheduled task ffffffff.',
-      },
-      {
-        case: 'a paused task',
-        options: { tasks: [task({ paused: true })] },
-        id: TASK_ID,
-        text: 'Morning triage is paused.',
-      },
-    ],
-  )('runNow_Refused_Throws: $case', async ({ options, id, text }) => {
+  it.each<{ case: string; options: StartOptions; id: string; text: string }>([
+    {
+      case: 'the dev app',
+      options: { isDev: true },
+      id: TASK_ID,
+      text: NEVER_FIRES,
+    },
+    {
+      case: 'an unknown id',
+      options: {},
+      id: 'ffffffff',
+      text: 'No scheduled task ffffffff.',
+    },
+    {
+      case: 'a paused task',
+      options: { tasks: [task({ paused: true })] },
+      id: TASK_ID,
+      text: 'Morning triage is paused.',
+    },
+  ])('runNow_Refused_Throws: $case', async ({ options, id, text }) => {
     const part = startPart(options);
     await settle();
 
