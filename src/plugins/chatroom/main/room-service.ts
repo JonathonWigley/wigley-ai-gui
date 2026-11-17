@@ -628,9 +628,7 @@ function askedTarget(target: ClaimTarget): ClaimTarget {
     return target;
   }
   return {
-    paths: target.paths
-      .map(normalizeClaimPath)
-      .filter((path) => path !== null),
+    paths: target.paths.map(normalizeClaimPath).filter((path) => path !== null),
   };
 }
 
@@ -961,13 +959,7 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
       return checked;
     }
     const hold = guarded
-      ? guardHold(
-          senderKey,
-          request.body,
-          messages,
-          now,
-          limits.postsPerMinute,
-        )
+      ? guardHold(senderKey, request.body, messages, now, limits.postsPerMinute)
       : null;
     if (hold !== null) {
       return refused(hold);
@@ -1103,9 +1095,7 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
       }),
     async read(room, reader, query) {
       if (query.kind === 'unread') {
-        const items = await inRoomTurn(room, () =>
-          unreadInTurn(room, reader),
-        );
+        const items = await inRoomTurn(room, () => unreadInTurn(room, reader));
         return { ok: true, items };
       }
       const messages = await deps.store.read(room, 0);

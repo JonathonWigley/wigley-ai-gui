@@ -588,9 +588,7 @@ describe('createRoomService', () => {
     accepted(await service.post(postBy(shopRevamp, { body: 'same' })));
     now += afterMs;
 
-    const result = await service.post(
-      postBy(second.by, { body: second.body }),
-    );
+    const result = await service.post(postBy(second.by, { body: second.body }));
 
     if (dropped) {
       expect(reasonOf(result)).toContain('dropped');
@@ -613,8 +611,7 @@ describe('createRoomService', () => {
     for (let second = 0; second < 10; second += 1) {
       now = START + second * 1000;
       results.push(
-        (await service.post(postBy(shopRevamp, { body: `post ${second}` })))
-          .ok,
+        (await service.post(postBy(shopRevamp, { body: `post ${second}` }))).ok,
       );
     }
     now = START + 10_000;
@@ -746,9 +743,7 @@ describe('createRoomService', () => {
     await service.addEntry({ ...entryBy(shopRevamp, 'go'), thread: 'plan-x' });
     const afterEntry = await service.threads(ROOM);
     accepted(
-      await service.post(
-        postBy(docsFix, { thread: 'plan-x', body: 'reopen' }),
-      ),
+      await service.post(postBy(docsFix, { thread: 'plan-x', body: 'reopen' })),
     );
     const afterPost = await service.threads(ROOM);
 
@@ -974,9 +969,7 @@ describe('createRoomService', () => {
       await step();
     }
 
-    const addressed = idsOf(
-      await service.unreadAddressed(ROOM, shopRevamp),
-    );
+    const addressed = idsOf(await service.unreadAddressed(ROOM, shopRevamp));
     const again = idsOf(await service.unreadAddressed(ROOM, shopRevamp));
     const unread = await unreadIds(shopRevamp);
 
@@ -1252,9 +1245,7 @@ describe('createRoomService', () => {
 
       const result = await service.claim(claimBy(asker, asked));
 
-      expect(result.ok && result.overlaps).toEqual(
-        listed ? [holderClaim] : [],
-      );
+      expect(result.ok && result.overlaps).toEqual(listed ? [holderClaim] : []);
     },
   );
 
@@ -1266,9 +1257,7 @@ describe('createRoomService', () => {
       const touching = await service.claimsTouching(ROOM, asked, asker);
 
       expect(touching).toEqual(listed ? [holderClaim] : []);
-      expect(await service.claims(ROOM)).toEqual(
-        expired ? [] : [holderClaim],
-      );
+      expect(await service.claims(ROOM)).toEqual(expired ? [] : [holderClaim]);
     },
   );
 
@@ -1305,35 +1294,32 @@ describe('createRoomService', () => {
       left: [0, 1, 2],
       refusal: 'no claim ffffffff',
     },
-  ])(
-    'release: $row',
-    async ({ releaser, pick, released, left, refusal }) => {
-      const held = [
-        await claimed(service, claimBy(shopRevamp, { paths: ['a.ts'] })),
-        await claimed(service, claimBy(shopRevamp, { branch: 'main' })),
-        await claimed(service, claimBy(docsFix, { resource: 'selftest' })),
-      ];
-      const elsewhere = await claimed(service, {
-        ...claimBy(shopRevamp, { paths: ['a.ts'] }),
-        room: 'elsewhere',
+  ])('release: $row', async ({ releaser, pick, released, left, refusal }) => {
+    const held = [
+      await claimed(service, claimBy(shopRevamp, { paths: ['a.ts'] })),
+      await claimed(service, claimBy(shopRevamp, { branch: 'main' })),
+      await claimed(service, claimBy(docsFix, { resource: 'selftest' })),
+    ];
+    const elsewhere = await claimed(service, {
+      ...claimBy(shopRevamp, { paths: ['a.ts'] }),
+      room: 'elsewhere',
+    });
+
+    const result = await service.release(ROOM, releaser, pick(held));
+
+    if (refusal === null) {
+      expect(result).toEqual({
+        ok: true,
+        released: released.map((index) => held[index]),
       });
-
-      const result = await service.release(ROOM, releaser, pick(held));
-
-      if (refusal === null) {
-        expect(result).toEqual({
-          ok: true,
-          released: released.map((index) => held[index]),
-        });
-      } else {
-        expect(reasonOf(result)).toContain(refusal);
-      }
-      expect(await service.claims(ROOM)).toEqual(
-        left.map((index) => held[index]),
-      );
-      expect(await service.claims('elsewhere')).toEqual([elsewhere]);
-    },
-  );
+    } else {
+      expect(reasonOf(result)).toContain(refusal);
+    }
+    expect(await service.claims(ROOM)).toEqual(
+      left.map((index) => held[index]),
+    );
+    expect(await service.claims('elsewhere')).toEqual([elsewhere]);
+  });
 
   it('endClaimsOf_EndsEveryRoom', async () => {
     const here = await claimed(
@@ -1379,17 +1365,24 @@ describe('createRoomService', () => {
 
   it.each(
     SAVED_FILES.flatMap((file) =>
-      ['{', 'null', '"x"', '{"room": 5}', file === 'claims.json' ? '{}' : '[]'].map(
-        (text) => ({ file, text }),
-      ),
+      [
+        '{',
+        'null',
+        '"x"',
+        '{"room": 5}',
+        file === 'claims.json' ? '{}' : '[]',
+      ].map((text) => ({ file, text })),
     ),
-  )('files_Unreadable_StartEmpty: $file holding $text', async ({ file, text }) => {
-    await files.write(file, text);
+  )(
+    'files_Unreadable_StartEmpty: $file holding $text',
+    async ({ file, text }) => {
+      await files.write(file, text);
 
-    await exercise(serviceOver());
+      await exercise(serviceOver());
 
-    expect(logged).toEqual([`${file} unreadable, starting empty`]);
-  });
+      expect(logged).toEqual([`${file} unreadable, starting empty`]);
+    },
+  );
 
   it('files_Unreadable_StartEmpty: keeps the whole claims of claims.json', async () => {
     const whole: Claim = {
