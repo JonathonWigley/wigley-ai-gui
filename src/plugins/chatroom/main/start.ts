@@ -3,6 +3,7 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { argsObject, optionalString } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import {
   createSerialQueue,
@@ -43,6 +44,11 @@ import { createJsonlRoomStore } from './jsonl-room-store';
 import { createRoomService } from './room-service';
 import { buildRoomView } from './room-views';
 import { createRoster } from './roster';
+import {
+  type ChatroomFixtureDeps,
+  seedChatroomFixture,
+} from './selftest-fixture';
+import { chatroomSelfTestScript } from './selftest-script';
 
 type ChatroomApi = MainApi<
   typeof chatroomManifest,
@@ -52,6 +58,9 @@ type ChatroomApi = MainApi<
     QualifiedEvents<'chat', ChatMainEvents>
 >;
 
+// A drive run's default project folder for `chatroom.seed`, below its home.
+const DRIVE_PROJECT_FOLDER = ['dev', 'chatroom-drive'];
+
 export const STANDING_NOTE =
   "This app runs a chatroom for each project's sessions: the wigley-forms tools chatroom_post, chatroom_read, chatroom_board, chatroom_claim and chatroom_release. Follow the wigley:chatroom skill for when to read and what to post. Call chatroom_read at the start of a turn when the hook or the app says a message waits for you.";
 
@@ -60,7 +69,8 @@ export const STANDING_NOTE =
 // `chatroom.pre` and `chatroom.post` hooks; wakes an idle app-run agent a
 // message is for; writes a session's `joined` and `left` entries and its
 // subagents' `dispatch` and `hand-back` entries; and writes each room's view
-// and board to `chatroom.rooms`, rebuilt one at a time per room.
+// and board to `chatroom.rooms`, rebuilt one at a time per room. Hands the
+// self-test its script and offers a drive run the `seed` fixture.
 export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
   manifest: chatroomManifest,
   start(api: ChatroomApi) {
@@ -372,6 +382,36 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
     api.channel.handle('markUserRead', async (roomName, thread, upToId) => {
       await room.markUserRead(roomName, thread, upToId);
       rewriteRoom(roomName);
+    });
+
+    const fixtureDeps: ChatroomFixtureDeps = {
+      files: services.files,
+      clock: services.clock,
+      timers: services.timers,
+      chat,
+      rows: rowsSlot,
+      rooms: (roomName) => roomsSlot.get(roomName),
+      room,
+    };
+    services.selfTest?.run(
+      chatroomSelfTestScript({
+        ...fixtureDeps,
+        homeDir: services.homeDir,
+        files: services.files,
+        paths: services.paths,
+        sessions,
+      }),
+    );
+    api.drive?.add('seed', {
+      description:
+        "Seeds a chatroom in the project folder (default <home>/dev/chatroom-drive): launches two sessions on profile work, titled chatroom lead and chatroom peer, waits for their rows and board rows, then posts as them through the room service: in thread plan-demo the lead's heads-up, the peer's question to you and the lead's result with a commit ref, the lead's progress in its session thread, and the lead's claim on src/**. Throws on a refused post or claim. Returns { room, rowIds, titles, thread, questionId }, the lead first in rowIds and titles.",
+      args: '{ projectDir?: string }',
+      run(rawArgs) {
+        const projectDir =
+          optionalString(argsObject(rawArgs), 'projectDir') ??
+          services.paths.join(services.homeDir, ...DRIVE_PROJECT_FOLDER);
+        return seedChatroomFixture(fixtureDeps, projectDir);
+      },
     });
 
     return {
