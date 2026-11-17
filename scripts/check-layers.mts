@@ -691,6 +691,13 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
     packages: ['node:'],
   },
+  // The login-start adapters: files through `Files`, programs through
+  // `ProcessRunner`, Electron's `app` handed in by `main.ts` as a structural
+  // type; no `node:` or `electron` import.
+  'src/main/login-start': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
   // The session host process: no electron import (`docs/features/session-host/design.md`).
   'src/session-host': {
     layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
@@ -719,6 +726,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/drive',
       // Starts the session host client.
       'src/main/session-host',
+      'src/main/login-start',
       'src/plugins/main.ts',
       'src/plugins/manifests.ts',
       'src/plugins/keymap.ts',

@@ -63,6 +63,7 @@ import { CommandRegistry } from './command-registry';
 import { dataUrl } from './data-url';
 import { createEventBus, type EventBus, pluginEvents } from './event-bus';
 import { gateExternalLinks } from './external-links';
+import { createFakeLoginStart } from './fake-login-start';
 import { FakeProcesses } from './fake-processes';
 import { fakeDriveHost } from './fake-drive-host';
 import { createListeners, type Listeners } from './listeners';
@@ -1026,6 +1027,7 @@ function fakeMainApi(
       screenCapture: notFaked<ScreenCapture>('screenCapture'),
       // Refuses no switch-off.
       pluginSwitch: { mayDisable: async () => null },
+      loginStart: createFakeLoginStart(),
       ...replaced,
       files:
         replaced.files === undefined

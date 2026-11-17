@@ -35,6 +35,7 @@ import type { MarkdownRenderer } from './markdown';
 import type { MarkupEditor } from './markup';
 import type { FocusTarget, OuterPanes, ResizeTarget } from './panes';
 import type { Paths } from './paths';
+import type { LoginStart } from './login-start';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
 import type { ScreenCapture } from './screen-capture';
@@ -1069,6 +1070,8 @@ export interface DriveHost {
 // can stream, each with its owner's pid and bounds, and opens the OS's screen
 // capture settings. `sessionHost` owns every agent process, so a
 // process outlives the app (`docs/features/session-host/design.md`).
+// `loginStart` starts the session host when the user logs in, and answers
+// `unsupported` where the app does not (`src/contracts/login-start.ts`).
 // `pluginSwitch` tells whether a plugin may switch off now.
 export interface MainServices {
   files: Files;
@@ -1090,6 +1093,7 @@ export interface MainServices {
   screenCapture: ScreenCapture;
   agentHarnesses: readonly AgentHarness[];
   sessionHost: SessionHost;
+  loginStart: LoginStart;
   window: {
     show(): void;
     summon(): boolean;

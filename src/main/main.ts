@@ -126,6 +126,7 @@ import {
   createLayoutService,
   type LayoutService,
 } from './layouts/layout-service';
+import { createNoLoginStart } from './login-start/no-login-start';
 import { resolveCloneDir } from './resolve-clone-dir';
 import { wireRuntime } from './runtime-wiring';
 import { createSlotHolder, type SlotHolder } from './state/slot-holder';
@@ -1194,6 +1195,7 @@ function createWindow(
         runMode === 'live',
       ),
       sessionHost,
+      loginStart: createNoLoginStart(),
       pluginSwitch: {
         mayDisable: (id) =>
           pluginSwitch === null
