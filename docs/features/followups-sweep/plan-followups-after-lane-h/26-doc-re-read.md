@@ -16,9 +16,8 @@ Decisions:
 - Each landed group's follow-up items leave `followups.md` (the file's rule: remove an item when its work lands). Go by
   item title, never by line number. A group struck by a ruling leaves its items in place, with the item text corrected
   if the ruling found it untrue.
-- Items per group, 37 in all (the 36 this plan's groups fix and one `plan-followups-now` landed), by their exact
-  bold titles. Find each with `grep -n -F '**<title>**' docs/features/followups.md`; line numbers drift, so none are
-  given:
+- Items per group, 36 in all, by their exact bold titles. Find each with
+  `grep -n -F '**<title>**' docs/features/followups.md`; line numbers drift, so none are given:
   - 01 "Docs keeps only the first tree view's place", "Narrowing leaves the docs filter holding keys", "Selection lost
     on an outside rename or trash", "One newest-wins open rule"
   - 02 "ownsRoot helper"
@@ -51,9 +50,6 @@ Decisions:
   - 24 "Sends and draws after a plugin stops", "A page's invoke after its plugin's main part stopped", "A throwing
     teardown step skips the rest"
   - 25 "Every view's dispose against what it drew"
-  - `../plan-followups-now/` 01 "A restored chat's first step header reads hundreds of thousands of hours": that plan
-    landed it (commit `cc4f72119`) and left the item in place, because Lane H rewrites a line inside it; it is removed
-    here, after Lane H merges
 - Every doc line a group added or changed is read line by line against the landed code. A stale line is fixed.
 
 GIVEN every group landed WHEN this task runs THEN `grep -c -F '**<title>**' docs/features/followups.md` is `0` for each

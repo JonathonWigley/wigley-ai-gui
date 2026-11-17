@@ -70,15 +70,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   reads it once per session in `startSession` (`src/shared/agent-forms/form-service.ts`), starts after the join. Add a
   row to the session-list join tests: GIVEN an owned row opened with no host record WHEN a relay joins with a
   `deadline_seconds` of 300 THEN the session's `info.host` holds 300.
-- **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
-  restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
-  (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
-  (`src/plugins/claude-code/main/transcripts.ts`, `let lastAt = 0` at line 174, a second copy at 214) stamps every entry
-  before the transcript's first timestamped line with `at` 0, raw entries from unparsed or untimed lines included,
-  and those are steps; `listRows` (`src/plugins/chat/page/activity-runs.ts:86`, `startedAt: previousAt ?? steps[0].at`)
-  opens a run at 0 and closes it at the next timed entry. Fix: have `listRows` treat `at` 0 as unknown and draw no
-  duration (check `working-turn.ts:39,81` too), since `transcripts.test.ts:284-313,329,477` pin `at: 0` for those
-  entries; leave `transcripts.ts` as it is. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
 - **Chat self-test fails the minimum-width fit on the session tab bar** — *needs a feature plan*:
   `npm run selftest -- --plugin chat` fails 8 steps with `<keys> fits the minimum width: nav.ui-tabs.session-tabs
   holds 120px in 99px` (groups: permission round Cmd+Enter, transcript focus Enter twice, controls e and Escape,
@@ -868,9 +859,6 @@ because the earlier items rewrite many of these tests anyway.
   nothing refocuses the box and the next keys go to the page until `i`. To decide: whether a cancelled step hands focus
   back to the box. Pre-existing since 80edb99c. Source session: Claude Code a65d02f6-eab9-453b-be96-34ac71d33876 in
   wigley-ai-gui.
-- **Agent-lines row overflows at the side bar's least width** — *agent-ready*: `npm run selftest -- --plugin agent-lines`,
-  group `working line`, fails `session-row holds 156px in 149px`: row content needs 156px at the side bar's 160px least
-  width, and the header breaks `Sessions` beside its hints. The same on the base of plan-commands-and-state.
 - **`[chat] session <id> closed (code 0)` after a session's close** — *needs a decision*: main's record of the turn it
   ended logs after `[chat] session closed: <label>`, by id, since the row is gone. To decide: keep it as main's record, or
   name the session from what main still holds.
