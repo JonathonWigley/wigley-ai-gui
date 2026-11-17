@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Wave: 3 · Depends on: 05, 08, 11
+Wave: 3 · Depends on: 05 (contributes tools through 05's options), 08, 11
 Plan: [plan.md](plan.md)
 
 Files:     create `src/plugins/scheduling/main/task-tools.ts` · test `src/plugins/scheduling/main/task-tools.test.ts`

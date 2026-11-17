@@ -1,7 +1,7 @@
 # Scheduled tasks — plan
 
 Feature: Scheduled tasks · Implements: none · Ticket: none
-Target: `main` in wigley-ai-gui and `main` in wigley-ai-marketplace · Written: 2026-11-09
+Target: `main` of the `ai` repo (folders wigley-ai-gui and wigley-ai-marketplace) · Written: 2026-11-09
 
 REQUIRED SUB-SKILL: Use wigley:make to implement this plan
 
@@ -46,14 +46,13 @@ The work touches these systems:
 
 ## Preconditions
 
-`<gui>` is the clone or worktree `wigley:make` runs in. `<market>` is
-`/Users/jonathonwigley/Documents/ai-dev/wigley-ai-marketplace`. Each command ran at plan time with the result shown.
+`<gui>` is the `wigley-ai-gui` folder of the worktree `wigley:make` runs in, `/Users/jonathonwigley/Documents/.worktrees/ai-scheduled-tasks`; `<market>` is its
+`wigley-ai-marketplace` folder, in the same `ai` repo and on the same branch. Each command ran at plan time with the result shown.
 Re-run each one before the first dispatch.
 
 | Claim | Command | Result at plan time |
 |---|---|---|
-| The gui base is origin's `main` | `git -C <gui> fetch -q origin && git -C <gui> rev-parse HEAD origin/main` | `origin/main` `48f4fec5` (rebased onto it after the cold read; HEAD carries the three docs commits and the plan commit on top) |
-| The marketplace is origin's `main` | `git -C <market> fetch -q origin && git -C <market> rev-parse HEAD origin/main` | both `234d36eab947…` |
+| The `ai` base is origin's `main` (both folders) | `git -C <gui> fetch -q origin && git -C <gui> rev-parse HEAD origin/main` | `origin/main` `48f4fec5` (rebased onto it after the cold read; HEAD carries the three docs commits and the plan commit on top) |
 | The host protocol is 3 | `grep -n 'SESSION_HOST_PROTOCOL = ' <gui>/src/contracts/session-host-protocol.ts` | `5:export const SESSION_HOST_PROTOCOL = 3;` |
 | `HostedSpawn` has no `stdin`, `unsetEnv` or `inheritEnv` | `grep -cE '^\s+(stdin\|unsetEnv\|inheritEnv):' <gui>/src/contracts/session-host.ts` | `0` |
 | `AgentHarness` has no prepare, start-controls or cap member | `grep -c 'prepareRun\|startControls\|capControls' <gui>/src/contracts/agent.ts` | `0` |
@@ -78,7 +77,7 @@ Each doc below is a hypothesis until task 20 re-reads it against the landed code
 | `docs/features/session-host/design.md` | `<gui>`, `scheduled-tasks-plan` | `8bc35160`, `53afbfcb`, `45f219cd` |
 | `docs/features/layouts/design.md` (the `scheduling` Adopters row) | `<gui>`, `scheduled-tasks-plan` | `53afbfcb` |
 | `AGENTS.md`, `docs/features/followups.md`, `src/plugins/chat/contract.ts` (a comment) | `<gui>`, `scheduled-tasks-plan` | `8bc35160` |
-| `plugins/wigley/scripts/forms/README.md` | `<market>`, `scheduled-tasks-relay-docs` (worktree `/Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-scheduled-tasks-relay-docs`) | `738f47d`, `0f812b1`, `7abcbb7` |
+| `plugins/wigley/scripts/forms/README.md` | `<market>`, on this worktree's branch | `e934b8a73`, `e0f4d6458`, `c2d3a6dcc` |
 
 `docs/keymap.md` and `DESIGN.md` are not written ahead: task 12 edits them with the binds and the look it builds.
 
@@ -92,11 +91,12 @@ Every task reads these first:
 
 By area:
 
-- Session host tasks (02, 07, 13, 18): `<gui>/docs/features/session-host/design.md`.
+- Session host tasks (02, 07, 13, 18, 24, 25): `<gui>/docs/features/session-host/design.md`; 25 also reads
+  `<gui>/docs/features/agent-chat/claude-stream.md` § Message lifecycle, § Interrupt and § Subagents.
 - UI tasks (12, 16, 19): `<gui>/DESIGN.md`, `<gui>/docs/keymap.md`, `<gui>/docs/features/layouts/design.md`.
 - Scheduling plugin tasks (03, 10, 11, 15, 17, 19): `<gui>/docs/features/scheduled-tasks/design.md` (written ahead)
   and `<gui>/docs/features/auto-retro/design.md`, the template plugin.
-- Relay task (04): `<market>/AGENTS.md` (the only `AGENTS*.md` or `CLAUDE*.md` in the marketplace repo; it has no
+- Relay task (04): `<market>/AGENTS.md` (the only `AGENTS*.md` or `CLAUDE*.md` in the marketplace folder; it has no
   `.claude/rules/`) and `<market>/plugins/wigley/scripts/forms/README.md` § The relay and § Boundary rules.
 - Login tasks (01, 06, 18): `<gui>/.agents/skills/install/SKILL.md`.
 
@@ -150,6 +150,8 @@ By area:
 - Task expiry, repeat counts, a global pause switch, more than one prepared run per task, firing from the dev app.
 - A third-party cron or date library. The parser is in-house.
 - Waking the machine or keeping it awake.
+- Per-platform program lookup and spawning for `claude` (follow-up :353). Lane P owns it
+  (`docs/features/intent-alignment/plan-lane-p-platform/` tasks 04–05).
 
 ### Decisions
 
@@ -242,7 +244,7 @@ Decided by the agent while planning (implementation shape; each with its reason)
   listed run when its process is gone or its row reads idle after the attach replay, a pushed run only when its
   process is gone (17). A finished run stays unviewed until `sessions.selection` names its row; the mark is
   the history entry's `viewed` flag, so it survives an app restart. The page sets row activity `done` (emphasis
-  `raised`) on unviewed run rows; main sets `services.alerts` open count `scheduling` to their number.
+  `raised`) on unviewed run rows; main sets `services.alerts` open count `scheduling` to their number, with the noun `finished scheduled run` / `finished scheduled runs`.
 - **One-time task after its run.** It stays in the list with no next run until the user edits or removes it.
 - **Cron dialect.** Five numeric fields; `*`, lists, ranges and `/` steps; day of week 0–7 with 0 and 7 as Sunday;
   when day of month and day of week are both restricted, either matches (vixie cron). No names, no `L`, `W` or `?`.
@@ -253,6 +255,12 @@ Decided by the agent while planning (implementation shape; each with its reason)
   `node_modules` linked from the clone, so no other wave-1 edit enters its package and nothing is installed.
 - **Both login adapters are built.** `main.ts` picks the one task 01 recorded as working on this Mac; the other stays
   for a Mac where it works.
+- **Only background subagents hold a hosted process busy (25).** The user picked it: `background_tasks_changed` entries of
+  kind `local_agent` count as busy and `local_bash` does not. A background Bash ends with its process at the keep
+  window, so a drain stays bounded and a task's next run is not blocked by a build left in a shell.
+- **Per-platform program lookup stays with Lane P.** The user settled it: the `claude` lookup and spawning on each
+  platform (follow-up :353) belongs to `docs/features/intent-alignment/plan-lane-p-platform/` tasks 04–05 and is not
+  done here.
 
 ### Architecture
 
@@ -293,7 +301,7 @@ Decided by the agent while planning (implementation shape; each with its reason)
 | `src/plugins/sessions/contract.ts` | `OfflineAnswer`, `ContributeToolsOptions.offline`, `offlineEnv`, `replayCalls` | 05 |
 | `src/plugins/sessions/main/start.ts` | writes `offline.json`; the two exports (05); `set_session_title`'s offline answer (09) | 05, 09 |
 | `src/plugins/sessions/main/session-list.ts` | keeps each contribution's offline answers; `offlineTable()`; replay through the call path | 05 |
-| `src/plugins/sessions/main/relay/endpoint.ts` | `writeEndpointFiles` also writes `offline.json` | 05 |
+| `src/plugins/sessions/main/relay/endpoint.ts` | `EndpointWriter.write` also writes `offline.json` | 05 |
 | `src/contracts/login-start.ts` | created by 03 with the three types; 06 modifies it only where the seam needs; `LOGIN_START_FLAG`, `LOGIN_START_LABEL` (18) | 06, 18 |
 | `src/contracts/plugin.ts` | `MainServices.loginStart` | 06 |
 | `src/main/plugins/main-api.ts` | hands `loginStart` to each part (checked; edited only on a typecheck gap) | 06 |
@@ -311,7 +319,9 @@ Decided by the agent while planning (implementation shape; each with its reason)
 | `src/plugins/workflow/contract.ts` | `WORKFLOW_OFFLINE_ANSWER` | 09 |
 | `src/plugins/sessions/main/title-tool.ts` | `SET_SESSION_TITLE_OFFLINE` | 09 |
 | `src/plugins/forms/main/start.ts`, `workflow/main/start.ts`, `workflow-large/main/start.ts` | offline answers | 09 |
-| `src/plugins/agent-form-fakes.test-support.ts` | the sessions fake records `contributeTools` options | 09 |
+| `src/plugins/audio-picker/main/tool-definitions.ts`, `audio-picker/main/start.ts` | `OPEN_AUDIO_PICKER_OFFLINE` and its contribution | 09 |
+| `src/plugins/live-view/main/live-tools.ts`, `live-view/main/start.ts` | `LIVE_VIEW_OFFLINE` and its contribution | 09 |
+| `src/plugins/agent-form-fakes.test-support.ts` | the shared sessions fake (`previewSessions()`) records `contributeTools` options | 09 |
 | `src/plugins/keymap.ts` | Schedules mode keys | 12 |
 | `src/plugins/page.ts` | lists `schedulingPagePart` | 12 |
 | `docs/keymap.md`, `DESIGN.md` | the `kt` row; the Schedules surface bullet | 12 |
@@ -324,6 +334,16 @@ Decided by the agent while planning (implementation shape; each with its reason)
 | `forge.config.mts` | the bundle's agent plist, only when task 01 records `agentService` as working | 18 |
 | `<market>/plugins/wigley/scripts/forms/relay.py`, `tests/test_relay.py`, the two wigley plugin manifests | offline mode; the version bump | 04 |
 | `<market>/plugins/wigley/scripts/forms/README.md` | written ahead (§ Docs written ahead); 04 edits a line only where the code proves it wrong | 04 |
+| `src/main/files/node-files.ts` (+ `.test.ts`), `src/contracts/files.ts` (comment) | a temp-name event reports the write's target | 22 |
+| `src/plugins/workflow-large/main/plan-watch.ts`, `plan-reports.ts`, `src/plugins/unity-pool/main/pool-watch.ts`, `src/plugins/docs/main/doc-files.ts`, `src/plugins/practice/main/problem-store.ts` (+ each `.test.ts`) | `onMissed` rescans | 22 |
+| `src/plugins/sessions/contract.ts`, `sessions/main/session-list.ts`, `sessions/main/start.ts` (+ `session-list.test.ts`) | `sessionsClaimedSlot`; the post-close pick skips claimed rows; a relay join keeps its host fields | 23 (after 05, 09) |
+| `src/plugins/sessions/page/sessions-view.ts`, `sessions/page/start.ts` (+ `start.test.ts`) | writes `sessions.claimed` at each side bar draw | 23 |
+| `src/shared/agent-forms/form-service.ts` (+ `.test.ts`) | reads a session's deadline at each use | 23 |
+| `src/shared/local-channel/local-channel.ts` (+ `.test.ts`) | `<channel>.lock` held for the server's life | 24 |
+| `src/session-host/host-server.ts` (+ `.test.ts`) | `shutDown` removes the record only when it holds its own pid | 24 (after 02, 07) |
+| `src/contracts/session-host.ts`, `src/session-host/process-table.ts` (+ `.test.ts`), `src/main/claude-code/claude-launch.ts` (+ `.test.ts`), the `IdleRule` literals in `session-host-test-doubles.ts`, `host-server.test.ts`, `session-host-client.test.ts`, `fake-session-host.test.ts`, `claude-code-harness.test.ts` | `IdleRule` gains `sideKey`, `messageIdKey`, `messageEnd`, `turnEndIdsKey`, `background`; busy from open messages, a main turn and background work | 25 (after 02, 07, 08, 13) |
+| `docs/features/session-host/design.md` | § The host: the lock (24); the busy rule (25) | 24, 25 |
+| `docs/features/followups.md` | each task removes the entries it lands | 22, 23, 24, 25 |
 
 ### New files
 
@@ -335,7 +355,7 @@ Decided by the agent while planning (implementation shape; each with its reason)
 | `src/plugins/scheduling/task-file.ts` (+ `.test.ts`) | the pure task-file reader and writer; main and the MCP tools share it | 03 |
 | `src/contracts/login-start.ts` | the login-start seam's three types, so the wave-1 scheduling contract typechecks | 03 (06 and 18 modify it) |
 | `docs/features/scheduled-tasks/plan-scheduled-tasks/01-login-item-result.md` | the spike's result, whose `Pick:` line task 18 reads | 01 |
-| `src/plugins/sessions/main/offline-calls.ts` (+ `.test.ts`) | reads, routes and deletes a session's calls file; a deep module behind `replayCalls` | 05 |
+| `src/plugins/sessions/main/offline-calls.ts` (+ `.test.ts`) | reads, routes and deletes a session's calls file through `Files`; a deep module behind `replayCalls` | 05 |
 | `src/shared/permission-cap.ts` (+ `.test.ts`) | `capPermission`, the one cap rule both harness adapters call | 08 |
 | `src/shared/fake-login-start.ts` (+ `.test.ts`) | the fake adapter for tests | 06 |
 | `src/main/login-start/no-login-start.ts` (+ `.test.ts`) | the adapter for Windows, Linux, the dev app, the self-test and drive runs | 06 |
@@ -360,11 +380,9 @@ Decided by the agent while planning (implementation shape; each with its reason)
 - `src/main/session-host/` imports only `src/contracts`, `src/shared`, `src/shared/local-channel` and `node:`.
 - `src/main/login-start/` imports only `src/contracts` and `src/shared`, with no `electron` and no `node:` import.
   `main.ts` passes Electron's `app` to the `agentService` adapter as the structural `LoginItems` type. The LaunchAgent
-  adapter writes its file through `Files`, deletes it with `/bin/rm -f` through `ProcessRunner`, and runs no
+  adapter writes its file through `Files`, deletes it with `files.deleteFile`, and runs no
   `launchctl`. Only `main.ts` imports an adapter.
-- Sessions' `main/offline-calls.ts` deletes a calls file with `node:fs/promises` `rm`: sessions' `PLUGIN_EXTRAS` entry
-  in `scripts/check-layers.mts` already admits `node:` for its main part (as `relay/endpoint.ts` uses `node:fs`), and
-  the `Files` service has no delete, only `trash`.
+- Sessions' `main/offline-calls.ts` reads, renames and deletes a calls file through `Files` (`deleteFile`, `rename`) and imports no `node:` module.
 - Plugins reach each other only through contracts: the scheduling plugin imports `src/contracts`, `src/shared`, its
   own folder and the `contract.ts` of `chat` and `sessions` (its manifest's `dependsOn`). Its `page/` imports the
   page kits. It needs no `PLUGIN_EXTRAS` entry; a need for one is a concern to report.
@@ -638,12 +656,15 @@ export interface SessionsMainExports {
 | Tool | Answer text (pinned) | Replay |
 |---|---|---|
 | `ask_round` | `The app is closed, so no round was shown. Take each item's recommended pick and list every pick as a Decided notice in your reply.` | no |
-| `collect_last_round`, `open_primer`, `collect_last_primer` | left out (did not run) | no |
+| `collect_last_round`, `open_primer`, `collect_last_primer`, `collect_last_audio_picker` | left out (did not run) | no |
 | `permission_prompt` | one text block `{"behavior":"deny","message":"The app is closed: this run's permission mode does not allow this tool, so it was denied."}` | no |
-| `start_session`, `add_practice_problem`, `read_practice_state` | left out (did not run) | no |
+| `start_session`, `add_practice_problem`, `read_practice_state`, `read_backlog_state`, `set_backlog_chunks` | left out (did not run) | no |
 | `set_headless` | `The app is closed: the session stays headless.` | no |
 | `set_workflow_step`, `set_workflow_checklist`, `set_workflow_plan` | `Recorded. The app applies it when it opens.` followed by a blank line and `HEADLESS_NOTE` | yes |
 | `set_session_title` | `Title recorded. The app applies it when it opens.` | yes |
+| `open_audio_picker` | `The app is closed, so no audio picker was shown. Take each moment's recommended candidate, wire it as its play, volume and pitch say, and list every pick as a Decided notice in your reply.` | no |
+| `show_live_view` | `The app is closed, so no Live section streams. Carry on without the stream.` | no |
+| `hide_live_view` | `The app is closed: no Live section was streaming.` | no |
 | the four scheduling tools | left out (did not run) | no |
 
 **Login start, `src/contracts/login-start.ts`** (03 writes the three types; 06, 17, 18 consume them; 18 adds the two
@@ -671,7 +692,7 @@ export const LOGIN_START_LABEL = 'wigley-ai-gui.session-host';
 ```
 
 `MainServices.loginStart: LoginStart` (06). Adapters: `createNoLoginStart()` (`unsupported`, 06),
-`createAgentServiceLoginStart(loginItems: LoginItems)` and `createLaunchAgentLoginStart({ files, processes, homeDir,
+`createAgentServiceLoginStart(loginItems: LoginItems)` and `createLaunchAgentLoginStart({ files, homeDir,
 programArguments })` (18); fake `createFakeLoginStart()` in `src/shared/fake-login-start.ts` (06), recording each
 `set` and answering a state the test sets. LaunchAgent path `~/Library/LaunchAgents/wigley-ai-gui.session-host.plist`.
 
@@ -881,6 +902,7 @@ is the task's name, or its id when the task is gone.
 - [ ] [Scheduling skeleton, schedule and task file](03-scheduling-skeleton.md)
 - [ ] [Relay offline mode (marketplace)](04-relay-offline-mode.md)
 - [ ] [Sessions offline tools](05-sessions-offline-tools.md)
+- [ ] [File watch reliability](22-file-watch-reliability.md)
 
 ### Wave 2
 - [ ] [Login-start seam](06-login-start-seam.md) — after 03 (modifies its `login-start.ts`)
@@ -896,13 +918,16 @@ is the task's name, or its id when the task is gone.
 - [ ] [Chat prepare and adopt](14-chat-prepare-and-adopt.md) — after 08, 09
 - [ ] [Scheduling MCP tools](15-task-tools.md) — after 05, 08, 11
 - [ ] [Scheduled runs section](16-scheduled-runs-section.md) — after 12
+- [ ] [Session list fixes](23-session-list-fixes.md) — after 05, 09
 
 ### Wave 4
 - [ ] [Scheduling main part](17-scheduling-main-part.md) — after 05, 06, 10, 11, 12, 13, 14, 15
 - [ ] [Login-start adapters](18-login-start-adapters.md) — after 01, 06, 08, 13
+- [ ] [One host per channel](24-one-host-per-channel.md) — after 02, 07
 
 ### Wave 5
 - [ ] [Scheduling self-test](19-scheduling-selftest.md) — after 12, 16, 17
+- [ ] [Hosted turn state](25-turn-state-rule.md) — after 02, 07, 08, 13, 24
 
 ### Wave 6
 - [ ] [Doc re-read](20-doc-re-read.md) — after every task above

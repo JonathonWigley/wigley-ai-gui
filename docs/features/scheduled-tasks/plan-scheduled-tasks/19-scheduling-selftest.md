@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Wave: 5 · Depends on: 12, 16, 17
+Wave: 5 · Depends on: 12 (drives 12's mode), 16 (drives 16's section), 17
 Plan: [plan.md](plan.md)
 
 Read first, beyond plan.md § Mandatory Reads: `src/plugins/session-stash/main/selftest-script.ts` and

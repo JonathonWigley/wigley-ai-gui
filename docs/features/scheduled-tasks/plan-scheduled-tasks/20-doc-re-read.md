@@ -2,18 +2,16 @@
 
 Status: not started
 Type: Task
-Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
+Wave: 6 · Depends on: 01–19 (re-reads every task's docs), 22–25 (re-reads every task's docs)
 Plan: [plan.md](plan.md)
 
 Files:     modify, where a line is stale: `docs/features/scheduled-tasks/design.md` ·
            `docs/features/session-host/design.md` · `AGENTS.md` · `docs/features/followups.md` ·
            `src/plugins/chat/contract.ts` (the `ChatSessionInfo.projectDir` comment) ·
            `docs/features/layouts/design.md` (the `scheduling` Adopters row) — all in `<gui>` ·
-           `plugins/wigley/scripts/forms/README.md` in the marketplace worktree
-           `/Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-scheduled-tasks-relay-docs`
-           (branch `scheduled-tasks-relay-docs`; `<market wt>` below)
-Consumes:  the landed code of tasks 01–19 · the docs commit plan.md § Docs written ahead names
-Produces:  no code; each doc above true to the landed code; at most one fix commit per repo
+           `<market>/plugins/wigley/scripts/forms/README.md` (the relay README, in this same worktree)
+Consumes:  the landed code of tasks 01–19 and 22–25 · the docs commit plan.md § Docs written ahead names
+Produces:  no code; each doc above true to the landed code; at most one fix commit per folder
 
 ## Decisions
 
@@ -59,6 +57,12 @@ Produces:  no code; each doc above true to the landed code; at most one fix comm
     4 against 07 and `session-host-protocol.ts`; the drain dropping pending and freezing the runs file, and the new
     host's import of older runs files at load and before each `listRuns`, against 07; the re-send on connect after the
     drain, and `onConnected`, against 13; the login start platforms and the `--start-session-host` entry against 18.
+  - `session-host/design.md`, again for tasks 24 and 25, which edit it: the one-host lock (`<channel>.lock`, its pid, the
+    stale-lock takeover, `shutDown` removing the record only when it holds its own pid) against 24, the two "known
+    limits" bullets it rewrote, and the turn-state rule (open stdin messages, an open main turn, `local_agent`
+    background work, `isIdle`) against `process-table.ts` and `claude-launch.ts` (25).
+  - `src/contracts/files.ts`'s `watch` comment: the temp-name rule (a `.<name>.<8hex>.tmp` event debounced under its
+    target, the target reported only when it exists at the end of the quiet window) against 22.
   - `layouts/design.md`: the `scheduling` Adopters row against `src/plugins/scheduling/layouts/layout.d.ts` (12).
   - `AGENTS.md`: the tree lines for `src/plugins/scheduling/`, `src/main/login-start/` and
     `src/session-host/pending-queue.ts` against the files on disk; the MCP tool bullet's `offline` option against
@@ -73,18 +77,17 @@ Produces:  no code; each doc above true to the landed code; at most one fix comm
   - `followups.md`: the Windows login start item is present once, in the file's item shape.
   - `chat/contract.ts`: the `projectDir` comment says what is true; `grep -n 'row moves once'
     src/plugins/chat/contract.ts` finds nothing.
-  - `<market wt>` README § The relay › Offline mode: the env var, the `offline.json` shape, the calls-file line shape,
+  - `<market>` README § The relay › Offline mode: the env var, the `offline.json` shape, the calls-file line shape,
     the error text `The app is closed: <tool> did not run.`, the deny for a left-out `permission_prompt`, a missing or
     unreadable `offline.json`, a null hello `session_id`, and the reconnect against `relay.py` (04); § Boundary rules
     still true. Also the three other places the written-ahead commits changed: the Starting the app sentence ("in
     offline mode it answers from the app's table instead"), the App gone mid-call sentence (the relay starts no app at
     the end of the 30 s), and the test-suite list, each against `relay.py` and `tests/test_relay.py`. Read and fix the
-    README in `<market wt>`, not in `<market>`: until task 21's landing, the README commits and 04's code are only on
-    that branch.
+    README in `<market>`: it sits in this worktree, on the branch task 21 lands.
 - **A fix** rewrites the stale line to what the code does, in the doc's own present tense, and keeps the doc's
   shape. When the code is wrong and the doc is right, do not change the doc: report it to the lead as a concern.
-- **Commits.** One commit in `<gui>` for its doc fixes, and one in `<market wt>` on `scheduled-tasks-relay-docs` for
-  the README (task 21 lands that branch), each by pathspec. A repo
+- **Commits.** One commit for the `<gui>` doc fixes and one for the `<market>` README, each by pathspec on this
+  worktree's branch (task 21 lands it). A folder
   with no fix gets no commit. The commit message lists each fixed doc and what was stale.
 
 GIVEN the docs written ahead and the landed code WHEN this task ends THEN every claim listed above matches the code,
@@ -96,7 +99,7 @@ None: a doc change no test can check. The re-read is the check.
 
 Done when: every check above is done; `grep -n 'row moves once' <gui>/src/plugins/chat/contract.ts` finds nothing;
 the task file example in `scheduled-tasks/design.md` meets every `readTaskFile` rule in 03's Decisions, read field
-by field; each repo's fix is committed.
-Commit:    one commit per repo with a fix
+by field; each folder's fix is committed.
+Commit:    one commit per folder with a fix
 
 ## Proof

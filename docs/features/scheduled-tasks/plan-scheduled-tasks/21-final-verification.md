@@ -20,7 +20,7 @@ Produces:  a check report in the Proof section: each check below with its result
   paths no task's test covers (`wigley:writing-tests` § What earns a live run instead). The planner rules, the cron
   dialect, the skip rule, the offline table, the cap and the dev app's no-fire rule are each pinned by a test in tasks
   03–17 and get no live check.
-- **Real Claude.** Checks 3–5 start with `--harness claude`: the fake harness starts no process in the session host,
+- **Real Claude.** Checks 3–5, 10 and 11 start with `--harness claude`: the fake harness starts no process in the session host,
   so only real Claude fires a host run. It spends tokens of the user's plan; each run's prompt is one short reply, and
   the report names this spend.
 - **Run folder.** One run, `--run sched-check`, with the user's chat profiles (only a profile logged in to Claude
@@ -57,18 +57,18 @@ Produces:  a check report in the Proof section: each check below with its result
 
 ## Precondition
 
-The relay that real Claude runs is the one in the profile's installed wigley plugin, not the marketplace clone. So
-before checks 3–5 (the real-Claude checks), land task 04's marketplace work and update the plugin:
+The relay that real Claude runs is the one in the profile's installed wigley plugin, not the worktree's marketplace
+folder. So before checks 3–5, 10 and 11 (the real-Claude checks), land the branch, which holds task 04's work and its plugin
+version bump, and update the plugin:
 
-1. In the marketplace folder `/Users/jonathonwigley/Documents/.worktrees/ai-scheduled-tasks/wigley-ai-marketplace`
-   (the monorepo worktree and branch the whole plan runs on: the README commits written ahead, then 04's code and
-   version-bump commit),
-   run `~/wigley-agents/WigleyRepos.md` § Landing steps 2–5 for that branch: rebase onto `main` and fast-forward
-   `main` (step 2, polling while `main` is unavailable), remove the worktree and the branch (step 3), push `main`
-   (step 4 as written: § Syncing makes a push of one wigley repo a push of all four, each with its committed work;
-   the user's standing yes in § Landing covers it), and update the plugin for every Claude Code profile (step 5).
-   Read § Landing and § Syncing before the first step. Before the push, write one chat line naming it, for example
-   `Pushing main of the four wigley repos per WigleyRepos.md § Landing step 4 (standing yes; bypasses main's PR
+1. Both folders, `wigley-ai-gui` and `wigley-ai-marketplace`, are one commit range on one branch of the `ai` repo, in
+   the worktree `/Users/jonathonwigley/Documents/.worktrees/ai-scheduled-tasks` (the README commits written ahead,
+   then 04's code and version-bump commit, then every other task's). Land that branch per
+   `~/wigley-agents/WigleyRepos.md` § Landing steps 2–5: rebase onto `main` and fast-forward `main` (step 2, polling
+   while `main` is unavailable), remove the worktree and the branch (step 3), push `ai`'s `main` (step 4, per
+   § Syncing; the user's standing yes in § Landing covers it), and update the plugin for every Claude Code profile
+   (step 5). Read § Landing and § Syncing before the first step. Before the push, write one chat line naming it, for
+   example `Pushing main of the ai repo per WigleyRepos.md § Landing step 4 (standing yes; bypasses main's PR
    protection).`: the auto-mode classifier reads chat, not forms (`~/wigley-agents/ClaudeCode.md` § Harness).
 2. Confirm the installed relay holds offline mode in the config folder real Claude uses in the run: the folder of
    the first profile in chat's `profiles` setting (the profile `chat.start` uses), read from the run home's copied
@@ -77,7 +77,7 @@ before checks 3–5 (the real-Claude checks), land task 04's marketplace work an
    for the wigley plugin; that version equals 04's bump.
 
 When a landing step is refused, or no installed relay holds `WIGLEY_FORMS_OFFLINE` after it, stop before check 3 and
-report to the lead with the step and its output. Checks 1, 2 and 6–9 run either way.
+report to the lead with the step and its output. Checks 1, 2, 6–9 and 12 run either way.
 
 ## Checks
 
@@ -162,6 +162,21 @@ report to the lead with the step and its output. Checks 1, 2 and 6–9 run eithe
    that folder appears (`pgrep -fl session-host`, polled with the Monitor tool's until-loop); and that host, with no
    client and an empty queue, exits by itself within a minute. A host left alive is a finding, reported as in check
    7.
+10. **A chat row's forms round shows a 300 s deadline** — low confidence: 23's deadline read crosses forms, sessions
+    and the relay. `npm run drive -- do chat.start '{"projectDir":"<run>/home/dev/drive-project"}'`, then send a prompt
+    that makes the agent call `ask_round` with one item. Pass: the round shows a 300 s deadline, not 240 s. Screenshot
+    it, then answer or close the round.
+11. **An interrupted background-subagent session ends at the keep window, and the host exits after** — low
+    confidence: 25's turn-state rule has no test against real Claude. On a `--harness claude` row, ask the agent to
+    start one background subagent that waits (for example `Start a background subagent that sleeps 120 seconds, then
+    reply done.`), interrupt the row, then quit the app with `--keep-sessions`. Pass: the session's process ends
+    at the keep window (`pgrep -fl` for its pid), and the host exits after it, with no client and an empty queue
+    (`pgrep -fl session-host` names no process for `<run>/user-data`). A process or host left alive is a finding,
+    reported as in check 7.
+12. **Two hosts started together leave one listener** — optional, low confidence: 24's lock has only tests. Start
+    two session hosts with the same arguments at once (the command line check 4 reads), and wait ten seconds. Pass:
+    `lsof -U` or `pgrep -fl session-host` shows one host holding the channel; the other has exited. Stop the
+    survivor as in check 7.
 
 GIVEN the landed run WHEN the checks above run THEN each passes, or its failure is reported with its captures
 
@@ -170,7 +185,7 @@ GIVEN the landed run WHEN the checks above run THEN each passes, or its failure 
 None added: this task runs live checks only.
 
 Done when: each check has a result in the Proof section with its capture paths; the drive run is quit; checks 7, 8
-and 9 report nothing left, or the lead has the report; the marketplace landing ran, or the lead has the refused step.
+and 9 report nothing left, or the lead has the report; the landing of the `ai` branch ran, or the lead has the refused step.
 Commit:    none (the Proof section rides in the lead's next commit)
 
 ## Proof
