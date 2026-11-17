@@ -323,8 +323,7 @@ export function createHarnessFollower(
 // `chat.sendTo`, which sends to a session it holds, framed when an agent asks,
 // and exports to other plugins a background launch, a send, clear, active time,
 // headless, unattended and sender-name reads on the sessions it holds, a close
-// of every session in a folder or of one
-// session, a registration of
+// of every session in a folder or of one session, a registration of
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, one of the resume
 // sections the start prompt lists, and one of the pool provider a pool

@@ -1370,6 +1370,32 @@ describe('default chat layout queuedMessage', () => {
       'div.chat-queued-label:pending · 2 images',
       'div.chat-queued-text:and the lint',
     ]);
+
+    for (const from of ['Planner', null, 'Planner']) {
+      view.update?.({
+        from,
+        text: 'go',
+        imageCount: 0,
+        sent: false,
+        holdReason: null,
+        skipKey: '⌃C',
+      });
+
+      const children = describeChildren(asFake(row));
+      expect(view.element).toBe(row);
+      expect(children).toEqual(
+        from === null
+          ? ['div.chat-queued-label:pending', 'div.chat-queued-text:go']
+          : [
+              'div.chat-queued-label:pending',
+              'tag:from Planner:neutral',
+              'div.chat-queued-text:go',
+            ],
+      );
+      expect(children.filter((child) => child.startsWith('tag:'))).toHaveLength(
+        from === null ? 0 : 1,
+      );
+    }
   });
 });
 

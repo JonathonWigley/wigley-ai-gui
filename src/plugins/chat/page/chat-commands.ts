@@ -594,8 +594,9 @@ function refused(
 
 // Puts messages, oldest first, back into their session's box, ahead of
 // anything typed or attached since: each text, a framed message's body without
-// its frame line, on its own line above the box's text, the oldest at the top, and their images in order before the attached
-// ones. A session closed since takes nothing back; whether the box took them.
+// its frame line, on its own line above the box's text, the oldest at the top,
+// and their images in order before the attached ones. A session closed since
+// takes nothing back; whether the box took them.
 export function putBack(
   deps: Pick<ChatCommandDeps, 'tabs'>,
   session: ChatSession,

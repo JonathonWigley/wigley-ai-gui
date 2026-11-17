@@ -2660,6 +2660,15 @@ describe('block stops', () => {
       source: { text: 'text of q1', blockCount: 1 },
     },
     {
+      case: 'a pending framed row gives its message without its frame line',
+      puts: [userText('u', 'ask')],
+      queued: [
+        { ...queued('q1'), text: frameAgentMessage('Planner', 'ask') },
+      ],
+      act: () => undefined,
+      source: { text: 'ask', blockCount: 1 },
+    },
+    {
       case: 'a permission card gives nothing, and leaves a range its parts',
       puts: [userText('u', 'ask'), permission('p')],
       act: (list) => {
