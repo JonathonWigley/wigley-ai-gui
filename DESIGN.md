@@ -458,8 +458,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Tag for the play format. The chosen row takes `accent-tint`, and the recommended row carries the accent mark, since
   Cmd+Enter accepts it. A playing row shows a `status-running` mark. Each section ends in a None of these row and a
   notes box in an InputFrame.
-- **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
-  the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
+- **Chat:** user turns are a `card-background` block, not a bubble. A user turn another session's agent sent opens
+  with a neutral Tag, `from <session>`, over its text (planned in `plan-agent-commands`, not built yet). Assistant
+  prose is markdown on the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
   (tool calls, thinking, raw events) show in the **session hub**'s **activity dock**. The hub is
   a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
   under `640px` and by `Space b h`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
