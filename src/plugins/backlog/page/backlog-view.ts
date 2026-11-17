@@ -355,6 +355,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     | { kind: 'filter'; scope: PushedScope }
     | { kind: 'rename'; scope: PushedScope; chunkId: string }
     | null = null;
+  // The input the open box types into.
+  const openBoxInput = (box: NonNullable<typeof openBox>) =>
+    box.kind === 'filter' ? filterBox : renameBox;
   let loadCount = 0;
   let loadedCount = 0;
   // The saved place's assistant pane waits to open: at the end of the first
@@ -812,16 +815,22 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   // A focus that lands inside a pane the keys are not on, a click on its
-  // contents, hands that pane the keys and leaves the click's DOM focus. A
-  // pane the reducer refuses (the review with no row selected) leaves the
-  // keys where they were, so the DOM focus goes back to that pane.
+  // contents, hands that pane the keys and leaves the click's DOM focus. The
+  // open box's input takes the focus without the keys moving: the rename box
+  // sits in the strip while the table may hold them. A pane the reducer
+  // refuses (the review with no row selected) leaves the keys where they
+  // were, so the DOM focus goes back to the pane that holds them, the
+  // assistant's included.
   for (const [paneElement, focus] of [
     [tablePane, 'table'],
     [reviewPane, 'review'],
     [stripPane, 'strip'],
   ] as const) {
-    paneElement.addEventListener('focusin', () => {
-      if (store.get().focus === focus) {
+    paneElement.addEventListener('focusin', (event) => {
+      const isHeldPane = store.get().focus === focus;
+      const isOpenBoxInput =
+        openBox !== null && event.target === openBoxInput(openBox);
+      if (isHeldPane || isOpenBoxInput) {
         return;
       }
       isFocusFromClick = true;
@@ -830,7 +839,10 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       } finally {
         isFocusFromClick = false;
       }
-      if (store.get().focus !== focus) {
+      const heldFocus = store.get().focus;
+      if (heldFocus === 'assistant') {
+        pane.element.focus();
+      } else if (heldFocus !== focus) {
         syncFocus(store.get(), true);
       }
     });
@@ -1349,10 +1361,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       parts.setLayouts(next);
       drawPanes();
       render(true);
-      if (openBox?.kind === 'filter') {
-        filterBox.focus();
-      } else if (openBox?.kind === 'rename') {
-        renameBox.focus();
+      if (openBox !== null) {
+        openBoxInput(openBox).focus();
       }
       picker.redraw();
       pane.redraw();

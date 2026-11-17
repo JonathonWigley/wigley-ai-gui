@@ -726,20 +726,46 @@ describe('backlog pane targets', () => {
     expect(lastScope(setup)).toBe('review');
   });
 
-  it('a click into the review with no row selected leaves the keys and the focus on the table', async () => {
-    const setup = await backlogSetup({
-      answers: { load: async () => ({ homes: [], message: null }) },
-    });
-    const [body] = findAll(setup.sheet, 'backlog-review-body');
-    const [table] = findAll(setup.sheet, 'backlog-table');
+  // `holder` is the pane holding the keys before the click; `focused` finds
+  // the element that holds the DOM focus after it. The assistant sets no
+  // scope, so the scope stays the table's in both.
+  it.each<{
+    holder: 'table' | 'assistant';
+    focused: (setup: Setup) => FakeElement;
+  }>([
+    {
+      holder: 'table',
+      focused: (setup) => findAll(setup.sheet, 'backlog-table')[0],
+    },
+    {
+      holder: 'assistant',
+      focused: (setup) =>
+        findAll(setup.sheet, 'backlog-assistant')[0].children[0],
+    },
+  ])(
+    'a click into the review with no row selected leaves the keys and the focus on the pane that holds them: $holder',
+    async ({ holder, focused }) => {
+      const setup = await backlogSetup({
+        answers: { load: async () => ({ homes: [], message: null }) },
+      });
+      if (holder === 'assistant') {
+        setup.view.commands.toggleAssistant();
+      }
+      const [body] = findAll(setup.sheet, 'backlog-review-body');
 
-    focusIn(body);
+      focusIn(body);
 
-    expect({
-      scope: lastScope(setup),
-      isTableFocused: fakeDocument.activeElement === table,
-    }).toEqual({ scope: 'table', isTableFocused: true });
-  });
+      expect({
+        scope: lastScope(setup),
+        keys: setup.logs.filter((line) => line.endsWith(' focused')).at(-1),
+        isHolderFocused: fakeDocument.activeElement === focused(setup),
+      }).toEqual({
+        scope: 'table',
+        keys: `${holder} focused`,
+        isHolderFocused: true,
+      });
+    },
+  );
 
   // `to` is the scope the move sets; false for a move the view turns down.
   it.each<{
@@ -994,6 +1020,20 @@ describe('backlog chunk commands', () => {
     ]);
     expect(setup.logs).toContain('renaming Fixes');
     expect(setup.logs).toContain('renamed Better fixes');
+  });
+
+  it('a focus landing in the rename box opened from the table keeps the box open and the keys on the table', async () => {
+    const setup = await renameSetup('Fixes');
+    const [input] = findAll(setup.sheet, 'backlog-rename-input');
+    const [frame] = findAll(setup.sheet, 'backlog-rename');
+
+    focusIn(input);
+
+    expect({
+      scope: lastScope(setup),
+      isOpen: !frame.hidden,
+      isInputFocused: fakeDocument.activeElement === input,
+    }).toEqual({ scope: 'table', isOpen: true, isInputFocused: true });
   });
 
   it('rename_EmptyText_SendsNothing', async () => {
