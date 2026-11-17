@@ -6,16 +6,15 @@ import {
 } from '../../../shared/page/autosave';
 import type { DotStatus } from '../../../shared/page/ui/status-dot';
 import type {
-  AnswerableKind,
   AnswerStatus,
+  Finding,
   FindingAction,
   FormsView,
-  Round,
+  ItemKind,
+  PageKind,
 } from '../contract';
 import { activeForm, formById } from '../../../shared/page/session-forms';
-import { findingSolution } from '../finding-pick';
 import {
-  type AnswerableItem,
   answerableItems,
   answerStatus,
   findingActionOf,
@@ -23,7 +22,9 @@ import {
   type FormsAction,
   type FormsState,
   focusedItem,
+  isNoticesStop,
   itemAnswer,
+  kindItems,
   pickIsComplete,
   pickNumber,
   type Progress,
@@ -31,16 +32,17 @@ import {
   type RailItem,
   railItems,
   railPosition,
+  type RoundItem,
   type RoundState,
   unansweredItem,
 } from './form-state';
-import { FORMATS, itemLabel } from './kinds/formats';
+import { itemLabel } from './kinds/formats';
 
-// One question or finding as the review lists it.
+// One item of an answerable kind as the review lists it.
 export interface ReviewRow {
   // 0-based, as `reviewJump` takes it.
   row: number;
-  kind: AnswerableKind;
+  kind: ItemKind;
   // 1-based within its kind.
   number: number;
   label: string;
@@ -52,18 +54,16 @@ export interface ReviewRow {
   // The finding card's word for `action`; '' with no action.
   actionLabel: string;
   // The pick's 1-based number down the card while the item's pick is
-  // complete and it applies, else 0: a question's choice, a finding's entry.
+  // complete and it applies, else 0: the kind's `pick.number`.
   entry: number;
   // The choice the agent gets while the item's pick is complete and it
-  // applies, else 0: on a finding, the solution findingSolution gives, 0 for
-  // an action's header.
+  // applies, else 0: the kind's `pick.choice`.
   choice: number;
   choiceText: string;
   tookRecommendation: boolean;
   tookActionRecommendation: boolean;
-  // Whether the row earns its Recommended badge: a question whose choice is
-  // its recommend; a finding whose pick is its recommend_action with its
-  // recommend, or that action's header when recommend is null.
+  // Whether the row earns its Recommended badge: a complete pick the kind's
+  // `pick.isRecommended` accepts.
   recommended: boolean;
   notes: string;
   dontAsk: boolean;
@@ -71,43 +71,41 @@ export interface ReviewRow {
   isCursor: boolean;
 }
 
-// Findings, then questions, as answerableItems orders them.
+// The answerable kinds' items, as answerableItems orders them.
 export function reviewRows(round: RoundState): ReviewRow[] {
-  return answerableItems(round.round).map((item, row): ReviewRow => {
-    const format = FORMATS[item.kind];
+  return answerableItems(round).map((item, row): ReviewRow => {
+    const kind = requireKind(round, item);
+    const pick = kind.reduce.pick;
+    if (pick === undefined) {
+      throw new Error(`page kind ${item.kind} takes no answer`);
+    }
+    const kindItem = kindItems(round.round, item.kind)[item.index - 1];
     const answer = itemAnswer(round, item);
     const status = answerStatus(round, item);
     const isApplicable = status !== 'not_applicable';
     const pickCounts = isApplicable && pickIsComplete(round, item);
     const action = pickCounts ? findingActionOf(round, item) : '';
-    const choice = pickCounts ? pickedChoice(round, item) : 0;
-    const recommend = format.recommend(round.round, item.index);
+    const choice = pickCounts ? pick.choice(kindItem, answer) : 0;
+    const recommend = pick.recommend(kindItem);
     const tookRecommendation = choice > 0 && choice === recommend;
     const tookActionRecommendation =
-      action !== '' &&
-      action === round.round.findings[item.index - 1].recommend_action;
+      action !== '' && action === (kindItem as Finding).recommend_action;
     return {
       row,
       kind: item.kind,
       number: item.index,
-      label: itemLabel(item),
-      title: format.title(round.round, item.index),
+      label: itemLabel(round.kinds, item),
+      title: kind.cardInput.title(kindItem),
       status,
       entry: pickCounts ? pickNumber(round, item) : 0,
       action,
       actionLabel:
         action === '' ? '' : (findingActionWord(round, item, action) ?? ''),
       choice,
-      choiceText:
-        choice > 0
-          ? format.choiceTexts(round.round, item.index)[choice - 1]
-          : '',
+      choiceText: choice > 0 ? pick.choiceText(kindItem, choice) : '',
       tookRecommendation,
       tookActionRecommendation,
-      recommended:
-        action === ''
-          ? item.kind === 'question' && tookRecommendation
-          : tookActionRecommendation && choice === recommend,
+      recommended: pickCounts && pick.isRecommended(kindItem, answer),
       notes: answer.notes,
       dontAsk: answer.dontAsk,
       dontAskReason: answer.dontAskReason,
@@ -116,22 +114,21 @@ export function reviewRows(round: RoundState): ReviewRow[] {
   });
 }
 
-// The choice the agent gets for an item whose pick is complete: a question's
-// choice, or a finding's solution.
-function pickedChoice(round: RoundState, item: AnswerableItem): number {
-  if (item.kind === 'question') {
-    return round.answers[item.index - 1].choice;
+// The item's kind as the round was derived with it; throws for a kind the
+// round has no registration for.
+export function requireKind(round: RoundState, item: RoundItem): PageKind {
+  const kind = round.kinds.get(item.kind);
+  if (kind === undefined) {
+    throw new Error(`round ${round.formId} has no page kind ${item.kind}`);
   }
-  const answer = round.findingAnswers[item.index - 1];
-  const finding = round.round.findings[item.index - 1];
-  return findingSolution(finding, answer.choice, answer.action);
+  return kind;
 }
 
 // The dot a rail entry shows for its item's status: answered is success, an
 // untouched item the review flags is warning, and every other item, the
-// notices stop included, is idle.
+// notices stop and a stop of a kind with no answer (`none`) included, is idle.
 export function railDotStatus(
-  status: AnswerStatus | 'notices',
+  status: AnswerStatus | 'notices' | 'none',
   isFlagged: boolean,
 ): DotStatus {
   if (status === 'answered') {
@@ -173,7 +170,7 @@ export function railHeadText(counts: Progress): string {
 // the unanswered keys need.
 export function hasOtherUnanswered(round: RoundState): boolean {
   const item = unansweredItem(round, 1);
-  return item !== null && railPosition(round.round, item) !== round.focus;
+  return item !== null && railPosition(round, item) !== round.focus;
 }
 
 // The item pager's text: the focused stop's rail label of the rail's stop
@@ -182,20 +179,25 @@ export function pagerText(round: RoundState): string {
   const focused = focusedItem(round);
   return focused === null
     ? ''
-    : `${railEntryLabel(focused)} of ${railItems(round.round).length}`;
+    : `${railEntryLabel(round, focused)} of ${railItems(round).length}`;
 }
 
-// The rail entry's label: an item's number, `N` for the notices stop.
-export function railEntryLabel(item: RailItem): string {
-  return item.kind === 'notices' ? FORMATS.notice.railPrefix : itemLabel(item);
+// The rail entry's label: an item's number, the notice kind's rail prefix
+// (`N`) for the notices stop.
+export function railEntryLabel(round: RoundState, item: RailItem): string {
+  return isNoticesStop(item)
+    ? requireKind(round, { kind: 'notice', index: 1 }).cardInput.railPrefix
+    : itemLabel(round.kinds, item);
 }
 
 // The rail entry's title: an item's title, `Notices · <count>` for the
 // notices stop.
-export function railEntryTitle(round: Round, item: RailItem): string {
-  return item.kind === 'notices'
-    ? `Notices · ${round.notices.length}`
-    : FORMATS[item.kind].title(round, item.index);
+export function railEntryTitle(round: RoundState, item: RailItem): string {
+  if (isNoticesStop(item)) {
+    return `Notices · ${kindItems(round.round, 'notice').length}`;
+  }
+  const kindItem = kindItems(round.round, item.kind)[item.index - 1];
+  return requireKind(round, item).cardInput.title(kindItem);
 }
 
 // The rail header's save text: `Sending…` while the round's finish is with
@@ -213,8 +215,8 @@ export function roundSaveState(round: RoundState): SaveState | null {
 }
 
 // Whether the review's rows differ from those drawn from `drawn`: a row reads
-// only the round, its answers, its finding answers and the review cursor.
-// Null `drawn` is nothing drawn yet.
+// only the round, its kinds, their answers and the review cursor. Null
+// `drawn` is nothing drawn yet.
 export function reviewRowsChanged(
   drawn: RoundState | null,
   current: RoundState,
@@ -224,15 +226,15 @@ export function reviewRowsChanged(
   }
   return (
     drawn.round !== current.round ||
-    drawn.answers !== current.answers ||
-    drawn.findingAnswers !== current.findingAnswers ||
+    drawn.kinds !== current.kinds ||
+    drawn.itemAnswers !== current.itemAnswers ||
     drawn.reviewRow !== current.reviewRow
   );
 }
 
 // How a log line names a rail stop, e.g. `finding 2`, or `notices`.
 export function itemName(item: RailItem): string {
-  return item.kind === 'notices' ? 'notices' : `${item.kind} ${item.index}`;
+  return isNoticesStop(item) ? 'notices' : `${item.kind} ${item.index}`;
 }
 
 // The log line a jump to `item` writes, by key or by rail click.
@@ -305,14 +307,14 @@ export function pickRailItem(
   }
 }
 
-// Each rail position's review row; undefined at the notices stop, which has
-// none.
+// Each rail position's review row; undefined at the notices stop and at a
+// stop of a kind with no answer, which have none.
 export function reviewRowsByRailPosition(
   round: RoundState,
 ): (number | undefined)[] {
   const rows: (number | undefined)[] = [];
-  answerableItems(round.round).forEach((item, row) => {
-    rows[railPosition(round.round, item)] = row;
+  answerableItems(round).forEach((item, row) => {
+    rows[railPosition(round, item)] = row;
   });
   return rows;
 }

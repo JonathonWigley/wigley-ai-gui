@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   type AnswerEntry,
   type AnswersPayload,
+  type Finding,
   type FindingAnswerEntry,
   type FormBody,
   type MainItemKind,
+  type Notice,
+  type Question,
   RoundError,
 } from '../contract';
 import { BUILT_IN_KINDS } from './kinds/formats';
@@ -141,9 +144,37 @@ function roundError(args: unknown): string {
   throw new Error('parseRound accepted the round');
 }
 
+// A round of the built-in kinds parsed, with each kind's items as its own list.
+function parseBuiltIn(args: unknown) {
+  const round = parseRound(BUILT_IN_KINDS, args);
+  return {
+    ...round,
+    questions: (round.items.question ?? []) as Question[],
+    notices: (round.items.notice ?? []) as Notice[],
+    findings: (round.items.finding ?? []) as Finding[],
+  };
+}
+
 describe('parseRound', () => {
+  it("fills each registered kind's items and bodyKey by its id", () => {
+    const kinds = [...BUILT_IN_KINDS, pollKind];
+    const round = parseRound(kinds, {
+      heading: 'H',
+      polls: [],
+      questions: [question()],
+    });
+
+    expect(Object.keys(round.items)).toEqual(kinds.map((kind) => kind.spec.id));
+    expect(round.items.notice).toEqual([]);
+    expect(round.bodyKeys).toEqual(
+      Object.fromEntries(
+        kinds.map((kind) => [kind.spec.id, kind.spec.bodyKey]),
+      ),
+    );
+  });
+
   it('keeps a valid two-question round in order', () => {
-    const round = parseRound(BUILT_IN_KINDS, {
+    const round = parseBuiltIn({
       heading: 'Naming decisions',
       questions: [
         question({ title: 'First', summary: 'Pick the first name.' }),
@@ -162,12 +193,11 @@ describe('parseRound', () => {
   });
 
   it('reads an absent or null layout as null on the round', () => {
+    expect(parseBuiltIn({ heading: 'H', questions: [question()] }).layout).toBe(
+      null,
+    );
     expect(
-      parseRound(BUILT_IN_KINDS, { heading: 'H', questions: [question()] })
-        .layout,
-    ).toBe(null);
-    expect(
-      parseRound(BUILT_IN_KINDS, {
+      parseBuiltIn({
         heading: 'H',
         layout: null,
         questions: [question()],
@@ -177,7 +207,7 @@ describe('parseRound', () => {
 
   it('keeps a round layout as sent', () => {
     expect(
-      parseRound(BUILT_IN_KINDS, {
+      parseBuiltIn({
         heading: 'H',
         layout: ' compact',
         questions: [question()],
@@ -219,7 +249,7 @@ describe('parseRound', () => {
   });
 
   it('keeps the overview stripped', () => {
-    const round = parseRound(BUILT_IN_KINDS, {
+    const round = parseBuiltIn({
       heading: 'H',
       overview: '  Refactoring X. This round: names.  ',
       questions: [question()],
@@ -230,8 +260,7 @@ describe('parseRound', () => {
 
   it('parses a round with no overview, so older saved rounds rebuild', () => {
     expect(
-      parseRound(BUILT_IN_KINDS, { heading: 'H', questions: [question()] })
-        .overview,
+      parseBuiltIn({ heading: 'H', questions: [question()] }).overview,
     ).toBe('');
   });
 
@@ -255,7 +284,7 @@ describe('parseRound', () => {
 
 describe('parseRound with notices', () => {
   it('parses notices alone, with no questions', () => {
-    const round = parseRound(BUILT_IN_KINDS, {
+    const round = parseBuiltIn({
       heading: 'H',
       notices: [notice()],
     });
@@ -267,7 +296,7 @@ describe('parseRound with notices', () => {
   });
 
   it('parses notices and questions together', () => {
-    const round = parseRound(BUILT_IN_KINDS, {
+    const round = parseBuiltIn({
       heading: 'H',
       questions: [question()],
       notices: [notice(), notice({ title: 'Second fix' })],
@@ -279,11 +308,10 @@ describe('parseRound with notices', () => {
 
   it('reads omitted or null notices and questions as none', () => {
     expect(
-      parseRound(BUILT_IN_KINDS, { heading: 'H', questions: [question()] })
-        .notices,
+      parseBuiltIn({ heading: 'H', questions: [question()] }).notices,
     ).toEqual([]);
     expect(
-      parseRound(BUILT_IN_KINDS, {
+      parseBuiltIn({
         heading: 'H',
         questions: null,
         notices: [notice()],
@@ -300,7 +328,7 @@ describe('parseRound with notices', () => {
   });
 
   it.each(['Dispatched', 'Decided'])('accepts the %s badge', (badge) => {
-    const round = parseRound(BUILT_IN_KINDS, {
+    const round = parseBuiltIn({
       heading: 'H',
       notices: [notice({ badge })],
     });
@@ -311,7 +339,7 @@ describe('parseRound with notices', () => {
 
 describe('parseRound with findings', () => {
   it('parses findings beside questions and notices, in their own array', () => {
-    const round = parseRound(BUILT_IN_KINDS, {
+    const round = parseBuiltIn({
       heading: 'H',
       questions: [question()],
       findings: [finding()],
@@ -332,7 +360,7 @@ describe('parseRound with findings', () => {
   });
 
   it('parses findings alone', () => {
-    const round = parseRound(BUILT_IN_KINDS, {
+    const round = parseBuiltIn({
       heading: 'H',
       findings: [finding()],
     });
@@ -344,11 +372,10 @@ describe('parseRound with findings', () => {
 
   it('reads omitted or null findings as none', () => {
     expect(
-      parseRound(BUILT_IN_KINDS, { heading: 'H', questions: [question()] })
-        .findings,
+      parseBuiltIn({ heading: 'H', questions: [question()] }).findings,
     ).toEqual([]);
     expect(
-      parseRound(BUILT_IN_KINDS, {
+      parseBuiltIn({
         heading: 'H',
         questions: [question()],
         findings: null,

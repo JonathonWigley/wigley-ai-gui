@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../shared/page/session-forms';
 import type { Finding, FormsView } from '../contract';
+import type {
+  FormsAction,
+  FormsState,
+  RoundState,
+  TextTarget,
+} from './form-state';
+import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import {
   apply,
-  type FormsAction,
-  type FormsState,
-  initialState,
-  type RoundState,
-  type TextTarget,
-} from './form-state';
-import {
   decision,
   finding,
+  formsWith,
+  initialState,
   notice,
   presentedRound,
   question,
@@ -94,6 +96,39 @@ function stateAfter(...actions: FormsAction[]): FormsState {
 }
 
 describe('reviewRows', () => {
+  it("reads an answerable plugin kind's row from its kind", () => {
+    const forms = formsWith([pollPageKind('poll')]);
+    const start = forms.initialState(
+      [
+        presentedRound('r1', {
+          questions: [],
+          items: { poll: [poll('Lunch', { options: ['soup', 'salad'] })] },
+          bodyKeys: { poll: 'poll_answers' },
+        }),
+      ],
+      'r1-session',
+    );
+    const actions: FormsAction[] = [
+      { type: 'focusItem', item: 0 },
+      { type: 'choose', number: 1 },
+    ];
+    const state = actions.reduce(forms.apply, start);
+
+    expect(reviewRows(activeOf(state))).toEqual([
+      expect.objectContaining({
+        kind: 'poll',
+        label: 'P1',
+        title: 'Lunch',
+        status: 'answered',
+        choice: 1,
+        choiceText: 'soup',
+        tookRecommendation: true,
+        recommended: true,
+        action: '',
+      }),
+    ]);
+  });
+
   it('lists an answered question with its choice text', () => {
     const [alpha] = reviewRows(roundAfter({ type: 'choose', number: 2 }));
     expect(alpha).toMatchObject({
@@ -368,17 +403,22 @@ describe('railDotStatus', () => {
     expect(railDotStatus('untouched', false)).toBe('idle');
   });
 
-  it('shows the notices stop as idle', () => {
+  it('shows the notices stop and a stop of a kind with no answer as idle', () => {
     expect(railDotStatus('notices', true)).toBe('idle');
+    expect(railDotStatus('none', true)).toBe('idle');
   });
 });
 
 describe('rail entries', () => {
-  const round = presentedRound('r1', {
+  const presented = presentedRound('r1', {
     findings: [finding('Leak')],
     questions: [question('Alpha'), question('Beta')],
     notices: [notice('Heads up'), notice('Also')],
-  }).round;
+  });
+  const round = apply(initialState([], presented.sessionId), {
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
 
   it.each([
     {
@@ -400,7 +440,7 @@ describe('rail entries', () => {
       title: 'Notices · 2',
     },
   ])('railEntryLabel and railEntryTitle: $case', ({ item, label, title }) => {
-    expect(railEntryLabel(item)).toBe(label);
+    expect(railEntryLabel(round, item)).toBe(label);
     expect(railEntryTitle(round, item)).toBe(title);
   });
 });

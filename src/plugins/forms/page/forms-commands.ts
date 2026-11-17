@@ -41,6 +41,8 @@ import {
   type FormsState,
   type FormsStore,
   type ItemAnswer,
+  isAnswerable,
+  isNoticesStop,
   itemAnswer,
   answerableItems,
   pickNumber,
@@ -318,16 +320,19 @@ function activePickNumber(state: FormsState, item: AnswerableItem): number {
   return round === null ? 0 : pickNumber(round, item);
 }
 
+// The focused item's answer; null off a stop of an answerable kind.
 function focusedAnswer(
   state: FormsState,
 ): { item: AnswerableItem; answer: ItemAnswer } | null {
   const round = activeForm(state);
   const focused = round === null ? null : focusedItem(round);
-  if (round === null || focused === null || focused.kind === 'notices') {
+  if (round === null || focused === null || isNoticesStop(focused)) {
     return null;
   }
   const item = { kind: focused.kind, index: focused.index };
-  return { item, answer: itemAnswer(round, item) };
+  return isAnswerable(round, item)
+    ? { item, answer: itemAnswer(round, item) }
+    : null;
 }
 
 // The log line of a pick of `number`: the number the item now holds, or the
@@ -389,7 +394,7 @@ function railItemAt(
   if (round === null) {
     return null;
   }
-  const item = railItems(round.round)[position];
+  const item = railItems(round)[position];
   if (item === undefined) {
     deps.log(`no rail item at ${position}`);
     return null;
@@ -469,7 +474,7 @@ function jumpToReviewRow(deps: FormsCommandDeps, row: number) {
   if (round === null) {
     return;
   }
-  if (answerableItems(round.round)[row] === undefined) {
+  if (answerableItems(round)[row] === undefined) {
     deps.log(`no review row ${row}`);
     return;
   }
@@ -559,10 +564,9 @@ function moveLine(
 // The active round while the forms view shows its notices stop, else null.
 function noticesStop(state: FormsState): RoundState | null {
   const round = activeForm(state);
+  const focused = round === null ? null : focusedItem(round);
   const isOnNoticesStop =
-    state.view === 'forms' &&
-    round !== null &&
-    focusedItem(round)?.kind === 'notices';
+    state.view === 'forms' && focused !== null && isNoticesStop(focused);
   return isOnNoticesStop ? round : null;
 }
 
@@ -592,7 +596,10 @@ function focusCursorLineBox(
   deps.boxes.focus(
     {
       roundId: stop.formId,
-      target: { field: 'comment', notice: stop.noticeLine },
+      target: {
+        field: 'comment',
+        item: { kind: 'notice', index: stop.noticeLine },
+      },
     },
     options,
   );
@@ -615,14 +622,14 @@ function jumpToUnanswered(
     deps.log('no unanswered item');
     return;
   }
-  const isFocusedItem = railPosition(round.round, item) === round.focus;
+  const isFocusedItem = railPosition(round, item) === round.focus;
   if (isFocusedItem) {
     deps.log('no other unanswered item');
     return;
   }
   moveItem(deps, context, {
     type: 'focusItem',
-    item: railPosition(round.round, item),
+    item: railPosition(round, item),
   });
   if (jumpMoved(state, deps.store.get())) {
     deps.log(jumpedToLine(item));

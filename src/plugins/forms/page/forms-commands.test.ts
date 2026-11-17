@@ -21,11 +21,9 @@ import type {
 } from '../contract';
 import type { BoxRef } from './boxes';
 import {
-  apply,
   buildBody,
   focusedItem,
   type FormsAction,
-  initialState,
   type ItemAnswer,
 } from './form-state';
 import {
@@ -34,7 +32,15 @@ import {
   mayCloseRound,
 } from './forms-commands';
 import { type FormsPageEvent, startFormsEvents } from './forms-events';
-import { finding, notice, presentedRound, question } from './test-rounds';
+import {
+  apply,
+  finding,
+  initialState,
+  notice,
+  presentedRound,
+  questionAnswers,
+  question,
+} from './test-rounds';
 
 type FormsCommand = keyof ReturnType<typeof formsCommandHandlers>;
 
@@ -198,7 +204,7 @@ const reason2: BoxRef = {
 };
 const commentOn = (notice: number): BoxRef => ({
   roundId: 'r1',
-  target: { field: 'comment', notice },
+  target: { field: 'comment', item: { kind: 'notice', index: notice } },
 });
 
 const twoNotices = [notice('Heads up'), notice('Also')];
@@ -302,7 +308,7 @@ describe('formsCommandHandlers', () => {
     run('choose', { arg: 1, editor: editorOf(notes2) });
 
     expect(round().focus).toBe(1);
-    expect(round().answers[1].choice).toBe(1);
+    expect(questionAnswers(round())[1].choice).toBe(1);
   });
 
   it("focuses the reason box when Don't ask turns on", () => {
@@ -883,7 +889,7 @@ describe('formsCommandHandlers', () => {
       expect.stringContaining('round r1 has no question 3'),
     );
     expect(round().sending).toBeNull();
-    expect(round().answers[0].choice).toBe(3);
+    expect(questionAnswers(round())[0].choice).toBe(3);
     expect(store.get().view).toBe('review');
     run('submit');
     expect(finished).toHaveLength(2);
@@ -1073,15 +1079,15 @@ describe('formsCommandHandlers', () => {
         store.dispatch(action);
       }
       store.dispatch({ type: 'focusItem', item: 0 });
-      const untouched = round().answers[0];
+      const untouched = questionAnswers(round())[0];
       setActive(notes1);
       logs.length = 0;
 
       run(command, { arg });
 
       expect(round().focus).toBe(1);
-      expect(round().answers[1]).toMatchObject(answer);
-      expect(round().answers[0]).toBe(untouched);
+      expect(questionAnswers(round())[1]).toMatchObject(answer);
+      expect(questionAnswers(round())[0]).toBe(untouched);
       expect(logs).toEqual(expected);
     },
   );
@@ -1173,7 +1179,9 @@ describe('formsCommandHandlers', () => {
       'cleared the choice on question 2',
     ]);
     expect(byClick.logs).toEqual(byKey.logs);
-    expect(byClick.round().answers).toEqual(byKey.round().answers);
+    expect(questionAnswers(byClick.round())).toEqual(
+      questionAnswers(byKey.round()),
+    );
   });
 
   it('toggleDontAskAt_TurnsOn_FocusesReasonBox', () => {

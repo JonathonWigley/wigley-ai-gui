@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { Round } from '../../contract';
 import type { Layout, LayoutCard, LayoutPane } from '../../layouts/layout';
-import { finding, notice, question } from '../test-rounds';
+import type { RoundState } from '../form-state';
+import {
+  apply,
+  finding,
+  initialState,
+  notice,
+  presentedRound,
+  question,
+  type RoundParts,
+} from '../test-rounds';
 import {
   itemLayout,
   layoutChain,
@@ -18,16 +26,17 @@ function allCards(): Layout {
   return { cards: { question: card, finding: card, notice: card } };
 }
 
-function round(parts: Partial<Round>): Round {
-  return {
-    heading: 'h',
-    overview: '',
-    layout: null,
-    questions: [],
-    notices: [],
-    findings: [],
-    ...parts,
-  };
+// The shown round of `parts`, with no questions unless they name some, and
+// the round's own layout.
+function round(
+  parts: RoundParts & { layout?: string | null } = {},
+): RoundState {
+  const presented = presentedRound('r', { questions: [], ...parts });
+  presented.round = { ...presented.round, layout: parts.layout ?? null };
+  return apply(initialState([], presented.sessionId), {
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
 }
 
 describe('layoutChain', () => {

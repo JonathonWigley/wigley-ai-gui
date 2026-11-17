@@ -4,6 +4,7 @@ import {
   type FormBody,
   type FormsService,
   type MainItemKind,
+  type Round,
   RoundError,
 } from '../contract';
 import {
@@ -17,7 +18,6 @@ import {
   bodyEntries,
   fingerprint,
   handedBackResult,
-  type KindRound,
   noRoundResult,
   notShownResult,
   parseRound,
@@ -62,7 +62,7 @@ function savedHeading(args: unknown): string | null {
 // called.
 export function createRoundType(
   kinds: () => readonly MainItemKind[],
-): AgentFormType<KindRound, FormBody, AnswersPayload> {
+): AgentFormType<Round, FormBody, AnswersPayload> {
   return {
     openTool: ROUND_OPEN_TOOL,
     collectTool: ROUND_COLLECT_TOOL,
@@ -89,7 +89,7 @@ export function createRoundType(
 // A round the app answered with `body` and never showed.
 export function autoAnsweredPayload(
   kinds: readonly MainItemKind[],
-  round: KindRound,
+  round: Round,
   body: FormBody,
 ): AnswersPayload {
   return roundPayload(

@@ -23,6 +23,7 @@ import {
   type RoundPlace,
 } from '../contract';
 import { formsPagePart } from './start';
+import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import { presentedRound, question } from './test-rounds';
 
 // Lets a settled read's `then` run.
@@ -414,6 +415,10 @@ describe('forms page part', () => {
       add: (view) =>
         view.addReviewColumn({ id: PROBE_ID, title: 'Probe', cell: () => '' }),
     },
+    {
+      member: 'registerKind',
+      add: (view) => view.registerKind(pollPageKind(PROBE_ID)),
+    },
   ])(
     "a dependent's contribution leaves when the dependent stops ($member)",
     async ({ add }) => {
@@ -435,4 +440,36 @@ describe('forms page part', () => {
       await harness.stop();
     },
   );
+
+  // The toast when a kind leaves is round-kinds-watch.test's: until task
+  // 07's Part B gives `default` an `other` card, a drawn plugin kind's card
+  // has no builder.
+  it('logs a round holding a kind with no page kind, and toasts nothing', async () => {
+    const round = presentedRound('r2', {
+      questions: [question('One')],
+      items: { poll: [poll('P1')], vote: [poll('V1'), poll('V2')] },
+      bodyKeys: { poll: 'poll_answers', vote: 'vote_answers' },
+    });
+    const { harness } = await startOverOpenRounds({
+      forms: [
+        threeQuestionForm('r1'),
+        {
+          formId: round.roundId,
+          sessionId: round.sessionId,
+          label: round.label,
+          form: round.round,
+          draft: round.draft,
+        },
+      ],
+    });
+    const messages = () => harness.logs.map((line) => line.message);
+    expect(messages()).toContain(
+      'round r2 holds 1 poll items with no page kind',
+    );
+    expect(messages()).toContain(
+      'round r2 holds 2 vote items with no page kind',
+    );
+    expect(messages().filter((line) => line.startsWith('toast'))).toEqual([]);
+    await harness.stop();
+  });
 });

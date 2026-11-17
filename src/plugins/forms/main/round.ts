@@ -1,13 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
-  type BuiltInItemKind,
-  type Finding,
   type FormBody,
   type MainItemKind,
-  type Notice,
   type Outcome,
   type PythonJsonValue,
-  type Question,
   type Round,
   RoundError,
   type RoundEnd,
@@ -40,12 +36,6 @@ export type RoundReason =
   | { kind: 'handedBack'; heading: string } // an earlier round's answers
   | { kind: 'notShown'; heading: string; blockingHeading: string | null }
   | { kind: 'noRound' };
-
-// A parsed round: every registered kind's items by kind id, and the built-ins'
-// lists the page reads.
-export interface KindRound extends Round {
-  readonly items: Readonly<Record<string, readonly unknown[]>>;
-}
 
 // A round call's result as records. `results` holds each registered kind's
 // results by kind id, index-parallel with that kind's items; a kind with no
@@ -87,18 +77,9 @@ function parseItems(kind: MainItemKind, raw: unknown): unknown[] {
   );
 }
 
-// The page's view of a built-in kind's items: the one place main narrows a
-// kind's items to a built-in item type.
-function builtInItems<Item>(
-  items: Readonly<Record<string, readonly unknown[]>>,
-  id: BuiltInItemKind,
-): Item[] {
-  return (items[id] ?? []) as Item[];
-}
-
 // The kind's items in the round; a kind registered after the round parsed has
 // none.
-function itemsOf(round: KindRound, kind: MainItemKind): readonly unknown[] {
+function itemsOf(round: Round, kind: MainItemKind): readonly unknown[] {
   return round.items[kind.spec.id] ?? [];
 }
 
@@ -116,7 +97,7 @@ export function bodyEntries(
 export function parseRound(
   kinds: readonly MainItemKind[],
   args: unknown,
-): KindRound {
+): Round {
   const fields = roundFields(kinds);
   if (!isJsonObject(args)) {
     throw new RoundError({
@@ -148,10 +129,12 @@ export function parseRound(
   }
   const layout = parseLayoutField(args, LAYOUT_PATH);
   const items: Record<string, unknown[]> = {};
+  const bodyKeys: Record<string, string> = {};
   let itemCount = 0;
   for (const kind of kinds) {
     const parsed = parseItems(kind, args[kind.spec.argsKey] ?? []);
     items[kind.spec.id] = parsed;
+    bodyKeys[kind.spec.id] = kind.spec.bodyKey;
     itemCount += parsed.length;
   }
   if (itemCount === 0) {
@@ -165,10 +148,8 @@ export function parseRound(
     heading,
     overview: overview.trim(),
     layout,
-    questions: builtInItems<Question>(items, 'question'),
-    notices: builtInItems<Notice>(items, 'notice'),
-    findings: builtInItems<Finding>(items, 'finding'),
     items,
+    bodyKeys,
   };
 }
 
@@ -194,7 +175,7 @@ function requireKnownLayout(
 // left the folder.
 export function requireKnownLayouts(
   kinds: readonly MainItemKind[],
-  round: KindRound,
+  round: Round,
   layoutNames: readonly string[],
 ): void {
   requireKnownLayout(round.layout, LAYOUT_PATH, layoutNames);
@@ -242,7 +223,7 @@ function bodyOf(
 // the wrong type reads as its empty value.
 export function readFormBody(
   kinds: readonly MainItemKind[],
-  round: KindRound,
+  round: Round,
   raw: unknown,
 ): FormBody {
   const body = isJsonObject(raw) ? raw : {};
@@ -257,7 +238,7 @@ export function readFormBody(
 // The result for a round that ran, its reason read from `outcome`.
 export function answersResult(
   kinds: readonly MainItemKind[],
-  round: KindRound,
+  round: Round,
   outcome: RoundOutcome,
   body: FormBody,
 ): RoundResult {
@@ -281,7 +262,7 @@ export function answersResult(
 // open its own round.
 export function handedBackResult(
   kinds: readonly MainItemKind[],
-  round: KindRound,
+  round: Round,
   outcome: FinishedOutcome,
   body: FormBody,
 ): RoundResult {
@@ -295,7 +276,7 @@ export function handedBackResult(
 // open round it waited behind, when one is open.
 export function notShownResult(
   kinds: readonly MainItemKind[],
-  round: KindRound,
+  round: Round,
   blockingHeading: string | null,
 ): RoundResult {
   return {
@@ -318,7 +299,7 @@ export function noRoundResult(kinds: readonly MainItemKind[]): RoundResult {
 // headless session's round is answered with.
 export function recommendedBody(
   kinds: readonly MainItemKind[],
-  round: KindRound,
+  round: Round,
 ): FormBody {
   return bodyOf(kinds, '', (kind) =>
     itemsOf(round, kind).map((item, i) => kind.recommendedEntry(item, i + 1)),
@@ -351,7 +332,7 @@ function pythonJsonDumps(value: PythonJsonValue): string {
 // questions hashes the same and its saved rounds match.
 export function fingerprint(
   kinds: readonly MainItemKind[],
-  round: KindRound,
+  round: Round,
 ): string {
   const content: Record<string, PythonJsonValue> = {};
   for (const kind of kinds) {

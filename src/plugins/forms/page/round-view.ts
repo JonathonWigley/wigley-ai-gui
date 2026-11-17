@@ -36,6 +36,7 @@ import { createSplit, type Split } from '../../../shared/page/ui/split';
 import type { FormsContributions } from './contributions';
 import type { BoxRef } from './boxes';
 import {
+  isNoticesStop,
   progress,
   railItems,
   type RoundState,
@@ -100,7 +101,10 @@ export interface RoundViewDeps {
 }
 
 // `update` draws the round for the view whose pane shows: under the cancel
-// prompt, the view keeping the round returns to. `rebuild` rebuilds the
+// prompt, the view keeping the round returns to. A round whose page kinds
+// differ from those the view was built with picks its layouts again and
+// rebuilds before it updates, so a card of a kind that left is dropped and
+// one that arrived is drawn. `rebuild` rebuilds the
 // view's children from `round` with the layouts it picked, remounting every
 // box from the round's answers; the round's focused box takes focus again,
 // and the main column keeps its scroll while the round shows the same item.
@@ -187,12 +191,24 @@ export function createRoundView(
   let shownFocus = -1;
   const build = (current: RoundState, roundPicks: RoundPicks) =>
     buildRoundParts(split, current, roundPicks, deps);
-  let picks = pickRoundLayouts(round.round, shown.user, shown.layouts);
+  let shownLayouts = shown;
+  let picks = pickRoundLayouts(round, shown.user, shown.layouts);
+  let builtKinds = round.kinds;
   let parts = build(round, picks);
 
   const view: RoundView = {
     element: root,
     update(current, viewName) {
+      if (current.kinds !== builtKinds) {
+        shownView = viewName;
+        picks = pickRoundLayouts(
+          current,
+          shownLayouts.user,
+          shownLayouts.layouts,
+        );
+        view.rebuild(current);
+        return;
+      }
       // Every round's rail shares one stored width, and the view is updated
       // each time it is shown, so this picks up another round's drag.
       split.reloadWidth();
@@ -233,6 +249,7 @@ export function createRoundView(
         parts.dispose();
         split.start.replaceChildren();
         split.end.replaceChildren();
+        builtKinds = current.kinds;
         parts = build(current, picks);
         shownFocus = -1;
         view.update(current, shownView);
@@ -242,8 +259,9 @@ export function createRoundView(
       });
     },
     setLayouts(nextShown, current) {
+      shownLayouts = nextShown;
       const nextPicks = pickRoundLayouts(
-        current.round,
+        current,
         nextShown.user,
         nextShown.layouts,
       );
@@ -296,7 +314,7 @@ function buildRoundParts(
   const anchors: Disposable[] = [];
   const headAnchors: Disposable[] = [];
   const keys = recordingKeys(deps.keys, anchors);
-  const items = railItems(round.round);
+  const items = railItems(round);
   const mountBox = (parent: HTMLElement, target: TextTarget, text: string) =>
     deps.boxes.mount(parent, { roundId: round.formId, target }, text);
   const destroyBox = (target: TextTarget) =>
@@ -357,7 +375,7 @@ function buildRoundParts(
     recordMount: (mount) => anchors.push(mount),
   };
   const itemCards = items.map((item, position) =>
-    item.kind === 'notices'
+    isNoticesStop(item)
       ? buildNoticesPane(
           picks.panes.notices,
           picks.noticeCards,
@@ -473,7 +491,7 @@ function buildItemPager(parent: HTMLElement, keys: AnchorKeys): ItemPager {
     element: pager,
     update(round) {
       text.textContent = pagerText(round);
-      const hasNoOtherItem = railItems(round.round).length < 2;
+      const hasNoOtherItem = railItems(round).length < 2;
       start.classList.toggle('is-no-target', hasNoOtherItem);
       end.classList.toggle('is-no-target', hasNoOtherItem);
     },

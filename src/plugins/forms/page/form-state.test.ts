@@ -5,28 +5,42 @@ import type {
   FindingAnswerEntry,
   FormBody,
   Notice,
+  PageKind,
   PresentedRound,
   Question,
-  Round,
   RoundPlace,
 } from '../contract';
 import { saveState } from '../../../shared/page/autosave';
 import {
+  answerableItems,
   answerStatus,
-  apply,
   buildBody,
+  createFormsState,
   focusedItem,
-  initialState,
   progress,
   railItems,
   railPosition,
   roundPlace,
   type FormsAction,
+  type FormsReducer,
   type FormsState,
   type RoundState,
   unansweredItem,
 } from './form-state';
-import { finding, nit } from './test-rounds';
+import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
+import { createPageKinds, pageKindTable } from './kinds/page-kinds';
+import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
+import {
+  apply,
+  finding,
+  findingAnswers,
+  initialState,
+  nit,
+  noticeComments,
+  questionAnswers,
+  roundOf,
+  type RoundParts,
+} from './test-rounds';
 
 function question(title: string, choiceCount = 3): Question {
   return {
@@ -54,7 +68,7 @@ function notice(title: string): Notice {
 
 function presented(
   roundId: string,
-  parts: Partial<Round> = {},
+  parts: RoundParts = {},
   draft: FormBody | null = null,
 ): PresentedRound {
   return {
@@ -62,13 +76,11 @@ function presented(
     sessionId: `${roundId}-session`,
     label: `project · ${roundId}`,
     round: {
+      ...roundOf(roundId, {
+        questions: [question('Q1'), question('Q2')],
+        ...parts,
+      }),
       heading: roundId,
-      overview: '',
-      layout: null,
-      questions: [question('Q1'), question('Q2')],
-      notices: [],
-      findings: [],
-      ...parts,
     },
     draft,
   };
@@ -157,7 +169,7 @@ function twoFixRound(): FormsState {
 
 // Focuses the round's notices stop.
 function onNotices(state: FormsState): FormsState {
-  const item = railPosition(active(state).round, { kind: 'notices' });
+  const item = railPosition(active(state), { kind: 'notices' });
   return apply(state, { type: 'focusItem', item });
 }
 
@@ -245,15 +257,17 @@ describe('railItems', () => {
       ],
     },
   ])('lists $case', ({ notices, expected }) => {
-    const round: Round = {
-      heading: 'h',
-      overview: '',
-      layout: null,
-      questions: [question('Q1')],
-      notices,
-      findings: [finding('F1'), finding('F2')],
-    };
-    expect(railItems(round)).toEqual(expected);
+    const state = initialState(
+      [
+        presented('r1', {
+          questions: [question('Q1')],
+          notices,
+          findings: [finding('F1'), finding('F2')],
+        }),
+      ],
+      'r1-session',
+    );
+    expect(railItems(active(state))).toEqual(expected);
   });
 });
 
@@ -275,15 +289,15 @@ describe('restoring a draft', () => {
         }),
       ),
     );
-    expect(round.answers[0]).toEqual(untouched);
-    expect(round.answers[1]).toEqual({
+    expect(questionAnswers(round)[0]).toEqual(untouched);
+    expect(questionAnswers(round)[1]).toEqual({
       choice: 3,
       notApplicable: false,
       notes: 'own answer',
       dontAsk: true,
       dontAskReason: 'settled',
     });
-    expect(round.noticeComments).toEqual(['look again']);
+    expect(noticeComments(round)).toEqual(['look again']);
     expect(round.note).toBe('overall');
   });
 
@@ -320,15 +334,15 @@ describe('restoring a draft', () => {
         draft({ answers: [entry(1, { choice: 2, not_applicable: true })] }),
       ),
     );
-    expect(round.answers[0].choice).toBe(2);
-    expect(round.answers[0].notApplicable).toBe(true);
+    expect(questionAnswers(round)[0].choice).toBe(2);
+    expect(questionAnswers(round)[0].notApplicable).toBe(true);
   });
 
   it('drops a choice beyond the question’s choices', () => {
     const round = active(
       mixedRound(draft({ answers: [entry(1, { choice: 4 })] })),
     );
-    expect(round.answers[0].choice).toBe(0);
+    expect(questionAnswers(round)[0].choice).toBe(0);
   });
 
   it("restores a finding's answer from finding_answers", () => {
@@ -341,12 +355,12 @@ describe('restoring a draft', () => {
         }),
       ),
     );
-    expect(round.findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(round)[0]).toMatchObject({
       choice: 3,
       notes: 'seen',
       action: 'fix_now',
     });
-    expect(round.answers).toEqual([untouched, untouched]);
+    expect(questionAnswers(round)).toEqual([untouched, untouched]);
   });
 
   it("drops a choice beyond the finding's choices", () => {
@@ -358,12 +372,12 @@ describe('restoring a draft', () => {
         }),
       ),
     );
-    expect(round.findingAnswers[0]).toMatchObject({ choice: 0, action: '' });
+    expect(findingAnswers(round)[0]).toMatchObject({ choice: 0, action: '' });
   });
 
   it('starts a finding with no draft entry with no pick', () => {
     const round = active(findingRound());
-    expect(round.findingAnswers[0]).toMatchObject({ choice: 0, action: '' });
+    expect(findingAnswers(round)[0]).toMatchObject({ choice: 0, action: '' });
     expect(answerStatus(round, { kind: 'finding', index: 1 })).toBe(
       'untouched',
     );
@@ -379,7 +393,7 @@ describe('restoring a draft', () => {
         }),
       ),
     );
-    expect(round.findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(round)[0]).toMatchObject({
       choice: 0,
       action: 'follow_up',
     });
@@ -401,7 +415,7 @@ describe('restoring a draft', () => {
         }),
       ),
     );
-    expect(round.findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(round)[0]).toMatchObject({
       choice: 0,
       action: '',
       notes: 'kept',
@@ -417,7 +431,7 @@ describe('restoring a draft', () => {
         draft({ finding_answers: [saved as unknown as FindingAnswerEntry] }),
       ),
     );
-    expect(round.findingAnswers[0].action).toBe('');
+    expect(findingAnswers(round)[0].action).toBe('');
   });
 
   it("restores an action the finding's origin does not offer as none", () => {
@@ -435,7 +449,7 @@ describe('restoring a draft', () => {
       ],
       'r1-session',
     );
-    expect(active(state).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(state))[0]).toMatchObject({
       action: '',
       choice: 0,
     });
@@ -445,7 +459,7 @@ describe('restoring a draft', () => {
     const round = active(
       mixedRound(draft({ answers: [entry(5, { choice: 1 })] })),
     );
-    expect(round.answers).toEqual([untouched, untouched]);
+    expect(questionAnswers(round)).toEqual([untouched, untouched]);
   });
 
   it('starts saved', () => {
@@ -458,12 +472,12 @@ describe('choose', () => {
 
   it('picks the numbered choice on the focused question', () => {
     const state = apply(onQ1, { type: 'choose', number: 2 });
-    expect(active(state).answers[0].choice).toBe(2);
+    expect(questionAnswers(active(state))[0].choice).toBe(2);
   });
 
   it('picks the numbered entry, setting choice and action', () => {
     const state = apply(twoFixRound(), { type: 'choose', number: 2 });
-    expect(active(state).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(state))[0]).toMatchObject({
       choice: 2,
       action: 'fix_now',
     });
@@ -472,7 +486,7 @@ describe('choose', () => {
 
   it('picks a bare header as choice 0', () => {
     const state = apply(twoFixRound(), { type: 'choose', number: 4 });
-    expect(active(state).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(state))[0]).toMatchObject({
       choice: 0,
       action: 'leave_it',
     });
@@ -484,7 +498,7 @@ describe('choose', () => {
       { type: 'choose', number: 3 },
       { type: 'choose', number: 3 },
     );
-    expect(active(state).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(state))[0]).toMatchObject({
       choice: 0,
       action: '',
     });
@@ -506,7 +520,7 @@ describe('choose', () => {
       { type: 'choose', number: 2 },
       { type: 'choose', number: 2 },
     );
-    expect(active(state).answers[0].choice).toBe(0);
+    expect(questionAnswers(active(state))[0].choice).toBe(0);
   });
 
   it('switches to another number', () => {
@@ -515,7 +529,7 @@ describe('choose', () => {
       { type: 'choose', number: 2 },
       { type: 'choose', number: 3 },
     );
-    expect(active(state).answers[0].choice).toBe(3);
+    expect(questionAnswers(active(state))[0].choice).toBe(3);
   });
 
   it('does nothing on the notices stop', () => {
@@ -543,7 +557,7 @@ describe('clearChoice', () => {
 
   it('clears the focused question’s choice', () => {
     const state = apply(chosen, { type: 'clearChoice' });
-    expect(active(state).answers[0].choice).toBe(0);
+    expect(questionAnswers(active(state))[0].choice).toBe(0);
   });
 
   it('keeps the choice of a question marked not applicable', () => {
@@ -557,7 +571,7 @@ describe('clearChoice', () => {
       { type: 'choose', number: 2 },
       { type: 'clearChoice' },
     );
-    expect(active(state).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(state))[0]).toMatchObject({
       choice: 0,
       action: '',
     });
@@ -576,13 +590,13 @@ describe('acceptRecommendation', () => {
       'r1-session',
     );
     const accepted = apply(state, { type: 'acceptRecommendation' });
-    expect(active(accepted).answers[0].choice).toBe(2);
+    expect(questionAnswers(active(accepted))[0].choice).toBe(2);
   });
 
   it('sets the recommended choice and action as one pick', () => {
     // F1 recommends choice 2 with fix_now.
     const accepted = apply(twoFixRound(), { type: 'acceptRecommendation' });
-    expect(active(accepted).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(accepted))[0]).toMatchObject({
       action: 'fix_now',
       choice: 2,
     });
@@ -601,7 +615,7 @@ describe('acceptRecommendation', () => {
       'r1-session',
     );
     const accepted = apply(state, { type: 'acceptRecommendation' });
-    expect(active(accepted).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(accepted))[0]).toMatchObject({
       choice: 0,
       action: 'leave_it',
     });
@@ -634,7 +648,7 @@ describe('answerStatus', () => {
   it('answers a finding with a header pick', () => {
     // Entry 4 is follow_up's header: F1's three choices sit under fix_now.
     const state = apply(onF1, { type: 'choose', number: 4 });
-    expect(active(state).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(state))[0]).toMatchObject({
       choice: 0,
       action: 'follow_up',
     });
@@ -660,7 +674,7 @@ describe('toggleNotApplicable', () => {
       { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
     );
-    expect(active(marked).answers[0]).toMatchObject({
+    expect(questionAnswers(active(marked))[0]).toMatchObject({
       choice: 2,
       notApplicable: true,
     });
@@ -677,7 +691,7 @@ describe('toggleNotApplicable', () => {
       { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
     );
-    expect(active(state).findingAnswers[0]).toMatchObject({
+    expect(findingAnswers(active(state))[0]).toMatchObject({
       choice: 2,
       notApplicable: true,
     });
@@ -706,12 +720,13 @@ describe('toggleDontAsk', () => {
       },
       { type: 'toggleDontAsk' },
     );
-    expect(active(state).answers[1]).toMatchObject({
+    expect(questionAnswers(active(state))[1]).toMatchObject({
       dontAsk: false,
       dontAskReason: 'settled',
     });
     expect(
-      active(apply(state, { type: 'toggleDontAsk' })).answers[1].dontAsk,
+      questionAnswers(active(apply(state, { type: 'toggleDontAsk' })))[1]
+        .dontAsk,
     ).toBe(true);
   });
 
@@ -722,7 +737,7 @@ describe('toggleDontAsk', () => {
       { type: 'toggleNotApplicable' },
       { type: 'toggleDontAsk' },
     );
-    expect(active(state).answers[0].dontAsk).toBe(true);
+    expect(questionAnswers(active(state))[0].dontAsk).toBe(true);
   });
 
   it('does nothing on the notices stop', () => {
@@ -745,20 +760,25 @@ describe('setText', () => {
 
   it('writes each text field to the item it names', () => {
     expect(
-      edit({ field: 'notes', item: { kind: 'question', index: 2 } }).answers[1]
-        .notes,
+      questionAnswers(
+        edit({ field: 'notes', item: { kind: 'question', index: 2 } }),
+      )[1].notes,
     ).toBe('typed');
     expect(
-      edit({ field: 'notes', item: { kind: 'finding', index: 1 } })
-        .findingAnswers[0].notes,
+      findingAnswers(
+        edit({ field: 'notes', item: { kind: 'finding', index: 1 } }),
+      )[0].notes,
     ).toBe('typed');
     expect(
-      edit({ field: 'dontAskReason', item: { kind: 'question', index: 1 } })
-        .answers[0].dontAskReason,
+      questionAnswers(
+        edit({ field: 'dontAskReason', item: { kind: 'question', index: 1 } }),
+      )[0].dontAskReason,
     ).toBe('typed');
-    expect(edit({ field: 'comment', notice: 1 }).noticeComments).toEqual([
-      'typed',
-    ]);
+    expect(
+      noticeComments(
+        edit({ field: 'comment', item: { kind: 'notice', index: 1 } }),
+      ),
+    ).toEqual(['typed']);
     expect(edit({ field: 'note' }).note).toBe('typed');
   });
 
@@ -1012,12 +1032,12 @@ describe('sessionActivated', () => {
       { type: 'choose', number: 2 },
       { type: 'sessionActivated', sessionId: 'r2-session' },
     );
-    expect(active(state).answers[0].choice).toBe(0);
+    expect(questionAnswers(active(state))[0].choice).toBe(0);
     const back = apply(state, {
       type: 'sessionActivated',
       sessionId: 'r1-session',
     });
-    expect(active(back).answers[0].choice).toBe(2);
+    expect(questionAnswers(active(back))[0].choice).toBe(2);
   });
 });
 
@@ -1237,7 +1257,7 @@ describe('sending', () => {
     );
     expect(state.activeFormId).toBe('r2');
     expect(state.view).toBe('review');
-    expect(active(state).answers[0].choice).toBe(2);
+    expect(questionAnswers(active(state))[0].choice).toBe(2);
   });
 
   it('ignores the keys again once the sending round is shown again', () => {
@@ -1283,7 +1303,7 @@ describe('sending', () => {
     );
     expect(active(state).sending).toBeNull();
     expect(state.view).toBe('review');
-    expect(active(state).answers[0].choice).toBe(2);
+    expect(questionAnswers(active(state))[0].choice).toBe(2);
   });
 
   it('a sending round closes on formClosed', () => {
@@ -1649,7 +1669,7 @@ describe('buildBody', () => {
       {
         type: 'setText',
         formId: 'r1',
-        target: { field: 'comment', notice: 1 },
+        target: { field: 'comment', item: { kind: 'notice', index: 1 } },
         value: 'check this',
       },
       {
@@ -1726,12 +1746,19 @@ describe('buildBody', () => {
 
 describe('apply', () => {
   it('leaves the state it was given unchanged', () => {
+    // A round's kinds table holds functions, which structuredClone refuses.
+    const cloneable = (of: FormsState) => ({
+      ...of,
+      forms: of.forms.map((round) => ({ ...round, kinds: null })),
+    });
     const state = apply(mixedRound(), { type: 'focusItem', item: 0 });
-    const before = structuredClone(state);
+    const kinds = state.forms[0].kinds;
+    const before = structuredClone(cloneable(state));
     apply(state, { type: 'choose', number: 1 });
     apply(state, { type: 'nextItem' });
     apply(state, { type: 'formClosed', formId: 'r1' });
-    expect(state).toEqual(before);
+    expect(cloneable(state)).toEqual(before);
+    expect(state.forms[0].kinds).toBe(kinds);
   });
 });
 
@@ -1820,3 +1847,346 @@ describe('placeRestored', () => {
     });
   });
 });
+
+// A round over the built-in kinds and `extra`, registered after them, with
+// `polls` under the poll kind's id `poll`.
+function kindsState(
+  extra: PageKind[],
+  parts: RoundParts = {},
+  body: FormBody | null = null,
+): { state: FormsState; apply: FormsReducer } {
+  const forms = createFormsState(() =>
+    pageKindTable([...BUILT_IN_PAGE_KINDS, ...extra]),
+  );
+  return {
+    state: forms.initialState([presented('r1', parts, body)], 'r1-session'),
+    apply: forms.apply,
+  };
+}
+
+const POLL_PARTS: RoundParts = {
+  findings: [finding('F1')],
+  questions: [question('Q1')],
+  items: { poll: [poll('P1')] },
+  bodyKeys: { poll: 'poll_answers' },
+};
+
+describe('saved shapes', () => {
+  const body: FormBody = {
+    note: 'overall',
+    answers: [
+      {
+        index: 1,
+        choice: 2,
+        not_applicable: false,
+        notes: 'q notes',
+        dont_ask: true,
+        dont_ask_reason: 'settled',
+      },
+    ],
+    finding_answers: [
+      {
+        index: 1,
+        choice: 1,
+        not_applicable: false,
+        notes: 'f notes',
+        dont_ask: false,
+        dont_ask_reason: '',
+        action: 'fix_now',
+      },
+    ],
+    notice_comments: [{ index: 1, comment: 'look again' }],
+  };
+
+  it('restores a draft in the saved shapes of before kinds registered', () => {
+    const round = active(
+      initialState(
+        [
+          presented(
+            'r1',
+            {
+              questions: [question('Q1')],
+              findings: [finding('F1')],
+              notices: [notice('N1')],
+            },
+            body,
+          ),
+        ],
+        'r1-session',
+      ),
+    );
+
+    expect(questionAnswers(round)).toEqual([
+      {
+        choice: 2,
+        notApplicable: false,
+        notes: 'q notes',
+        dontAsk: true,
+        dontAskReason: 'settled',
+      },
+    ]);
+    expect(findingAnswers(round)[0]).toMatchObject({
+      choice: 1,
+      action: 'fix_now',
+      notes: 'f notes',
+    });
+    expect(noticeComments(round)).toEqual(['look again']);
+    expect(round.note).toBe('overall');
+  });
+
+  it('buildBody returns those entries unchanged, in key order', () => {
+    const round = active(
+      initialState(
+        [
+          presented(
+            'r1',
+            {
+              questions: [question('Q1')],
+              findings: [finding('F1')],
+              notices: [notice('N1')],
+            },
+            body,
+          ),
+        ],
+        'r1-session',
+      ),
+    );
+
+    const built = buildBody(round);
+
+    expect(built).toEqual(body);
+    expect(Object.keys(built)).toEqual([
+      'note',
+      'answers',
+      'finding_answers',
+      'notice_comments',
+    ]);
+    expect(Object.keys(built.answers[0])).toEqual([
+      'index',
+      'choice',
+      'not_applicable',
+      'notes',
+      'dont_ask',
+      'dont_ask_reason',
+    ]);
+    expect(Object.keys(built.finding_answers[0])).toEqual([
+      'index',
+      'choice',
+      'not_applicable',
+      'notes',
+      'dont_ask',
+      'dont_ask_reason',
+      'action',
+    ]);
+  });
+});
+
+describe('plugin kinds on the rail', () => {
+  it('puts a kind at rail order 15 between the findings and the questions', () => {
+    const { state } = kindsState([pollPageKind('poll')], POLL_PARTS);
+    const round = active(state);
+
+    expect(railItems(round)).toEqual([
+      { kind: 'finding', index: 1 },
+      { kind: 'poll', index: 1 },
+      { kind: 'question', index: 1 },
+    ]);
+    expect(answerableItems(round)).toEqual(railItems(round));
+    expect(progress(round).total).toBe(3);
+  });
+
+  it('gives a kind that takes no answer stops and no review row or count', () => {
+    const { state } = kindsState(
+      [pollPageKind('poll', { answerable: false })],
+      POLL_PARTS,
+    );
+    const round = active(state);
+
+    expect(railItems(round)).toContainEqual({ kind: 'poll', index: 1 });
+    expect(answerableItems(round)).toEqual([
+      { kind: 'finding', index: 1 },
+      { kind: 'question', index: 1 },
+    ]);
+    expect(progress(round).total).toBe(2);
+  });
+
+  it('gives a kind with no registration no stop, and writes its entries back', () => {
+    const entries = [{ index: 1, choice: 2 }];
+    const { state } = kindsState([], POLL_PARTS, {
+      ...draft({}),
+      poll_answers: entries,
+    });
+    const round = active(state);
+
+    expect(railItems(round)).not.toContainEqual({ kind: 'poll', index: 1 });
+    expect(buildBody(round).poll_answers).toEqual(entries);
+  });
+
+  it.each([
+    { type: 'choose', number: 1 },
+    { type: 'clearChoice' },
+    { type: 'acceptRecommendation' },
+    { type: 'toggleNotApplicable' },
+    { type: 'toggleDontAsk' },
+  ] as FormsAction[])(
+    'changes nothing on a kind that takes no answer: $type',
+    (action) => {
+      const kinds = kindsState(
+        [pollPageKind('poll', { answerable: false })],
+        POLL_PARTS,
+      );
+      const state = kinds.apply(kinds.state, { type: 'focusItem', item: 1 });
+
+      expect(kinds.apply(state, action)).toBe(state);
+    },
+  );
+
+  it.each([
+    {
+      case: 'choose',
+      actions: [{ type: 'choose', number: 2 }],
+      answer: { choice: 2, notApplicable: false },
+    },
+    {
+      case: 'clearChoice',
+      actions: [{ type: 'choose', number: 2 }, { type: 'clearChoice' }],
+      answer: { choice: 0 },
+    },
+    {
+      case: 'acceptRecommendation',
+      actions: [{ type: 'acceptRecommendation' }],
+      answer: { choice: 1 },
+    },
+    {
+      case: 'toggleNotApplicable',
+      actions: [{ type: 'toggleNotApplicable' }],
+      answer: { notApplicable: true },
+    },
+  ] as { case: string; actions: FormsAction[]; answer: object }[])(
+    'answers an answerable plugin kind: $case',
+    ({ actions, answer }) => {
+      const kinds = kindsState([pollPageKind('poll')], POLL_PARTS);
+      const state = [
+        { type: 'focusItem', item: 1 } as FormsAction,
+        ...actions,
+      ].reduce(kinds.apply, kinds.state);
+
+      expect(active(state).itemAnswers.poll[0]).toMatchObject(answer);
+    },
+  );
+});
+
+describe('kindsChanged', () => {
+  // A round of one finding, one poll and two questions, with the poll
+  // answered and the second question focused.
+  function answeredRound() {
+    const kinds = createPageKinds();
+    for (const kind of BUILT_IN_PAGE_KINDS) {
+      kinds.register(kind);
+    }
+    const pollRegistration = kinds.register(pollPageKind('poll'));
+    const forms = createFormsState(() => kinds.table());
+    let state = forms.initialState(
+      [
+        presented('r1', {
+          ...POLL_PARTS,
+          questions: [question('Q1'), question('Q2')],
+        }),
+      ],
+      'r1-session',
+    );
+    state = runWith(
+      forms.apply,
+      state,
+      { type: 'focusItem', item: 1 },
+      { type: 'choose', number: 2 },
+      { type: 'focusItem', item: 3 },
+    );
+    const changed = (current: FormsState) =>
+      forms.apply(current, { type: 'kindsChanged', kinds: kinds.table() });
+    return { kinds, pollRegistration, state, changed };
+  }
+
+  it('drops a kind that left from the rail and keeps its entries in the body', () => {
+    const { pollRegistration, state, changed } = answeredRound();
+    const before = active(state);
+
+    pollRegistration.dispose();
+    const after = active(changed(state));
+
+    expect(railItems(after)).not.toContainEqual({ kind: 'poll', index: 1 });
+    expect(buildBody(after).poll_answers).toEqual(
+      buildBody(before).poll_answers,
+    );
+    expect(after.revision).toBe(before.revision);
+  });
+
+  it('restores the answers of a kind that returns', () => {
+    const { kinds, pollRegistration, state, changed } = answeredRound();
+
+    pollRegistration.dispose();
+    const left = changed(state);
+    kinds.register(pollPageKind('poll'));
+    const back = active(changed(left));
+
+    expect(back.itemAnswers.poll[0]).toMatchObject({ choice: 2 });
+    expect(back.revision).toBe(active(state).revision);
+  });
+
+  it('encodes with the old kind and decodes with the new under the same id', () => {
+    const { kinds, pollRegistration, state, changed } = answeredRound();
+    const replacement = pollPageKind('poll');
+
+    pollRegistration.dispose();
+    kinds.register(replacement);
+    const after = active(changed(state));
+
+    expect(after.kinds.get('poll')).toBe(replacement);
+    expect(after.itemAnswers.poll[0]).toMatchObject({ choice: 2 });
+  });
+
+  it('keeps focus on the same item when kinds arrive ahead of it', () => {
+    const { kinds, state, changed } = answeredRound();
+    expect(focusedItem(active(state))).toEqual({ kind: 'question', index: 2 });
+
+    kinds.register(pollPageKind('vote', { railOrder: 15 }));
+    kinds.register(pollPageKind('early', { railOrder: 5 }));
+    const withItems = {
+      ...state,
+      forms: state.forms.map((round) => ({
+        ...round,
+        round: {
+          ...round.round,
+          items: {
+            ...round.round.items,
+            vote: [poll('V1')],
+            early: [poll('E1')],
+          },
+        },
+      })),
+    };
+    const after = active(changed(withItems));
+
+    expect(focusedItem(after)).toEqual({ kind: 'question', index: 2 });
+    expect(after.focus).toBe(5);
+  });
+
+  it('clamps focus to the last stop when the focused item left', () => {
+    const { pollRegistration, state, changed } = answeredRound();
+    const onPoll = apply(state, { type: 'focusItem', item: 1 });
+
+    pollRegistration.dispose();
+    const after = active(changed(onPoll));
+
+    expect(after.focus).toBe(1);
+    expect(focusedItem(after)).toEqual({ kind: 'question', index: 1 });
+  });
+});
+
+function runWith(
+  reducer: FormsReducer,
+  state: FormsState,
+  ...actions: FormsAction[]
+): FormsState {
+  return actions.reduce(reducer, state);
+}

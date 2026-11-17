@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/page/markdown-mount';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag as tagPart } from '../../../../shared/page/ui/tag';
-import type { ItemKind } from '../../contract';
+import type { KindBox, PageKind } from '../../contract';
 import {
   type FormsCommandName,
   formsCommand,
@@ -33,6 +33,7 @@ import {
   type AnswerableItem,
   answerStatus,
   itemAnswer,
+  kindAnswer,
   pickNumber,
   type RoundItem,
   type RoundState,
@@ -47,33 +48,40 @@ import {
   buildItemHead,
   statusLabel,
 } from '../kinds/card-parts';
-import type { CardDeps, CardInputs, CardKits } from '../kinds/item-format';
+import type {
+  BuiltInCard,
+  CardDeps,
+  CardInputs,
+  CardKits,
+} from '../kinds/item-format';
 import type { KeyHints } from '../../../../contracts/plugin';
 
-type TextBoxField = Parameters<Kit['textBox']>[1];
 type ReasonsMode = Parameters<FindingKit['choiceGroups']>[1];
 
-// One of the item's text boxes, with the text it opens on.
+// One of the item's text boxes: its caption, the target it edits, and the
+// text it opens on.
 interface ItemTextBox {
+  caption: KindBox;
   target: TextTarget;
   text: string;
 }
 
-// What every part of one card's kit shares: the item and its round, its
-// deps, the base kit's deps and the anchor over the forms view's keys, the
-// markdown mount its own parts draw through, its boxes, the updaters the
-// parts that show answer state register, and the contributed parts once
+// What every part of one card's kit shares: the item, its kind and its round,
+// its deps, the base kit's deps and the anchor over the forms view's keys, the
+// markdown mount its own parts draw through, its boxes by field, the updaters
+// the parts that show answer state register, and the contributed parts once
 // placed, null before.
 interface CardContext {
   roundId: string;
   item: RoundItem;
+  kind: PageKind;
   position: number;
   deps: CardDeps;
   kitDeps: BaseKitDeps;
   anchor: ScopedAnchor;
   mount: MarkdownMount;
-  boxes: Map<TextBoxField, ItemTextBox>;
-  mounted: Set<TextBoxField>;
+  boxes: Map<string, ItemTextBox>;
+  mounted: Set<string>;
   updaters: ((round: RoundState) => void)[];
   placedParts: PlacedPart[] | null;
 }
@@ -114,7 +122,7 @@ interface DrawnPick {
 }
 
 // A card's kit, and what the card host does with it.
-export interface CardKit<K extends ItemKind> {
+export interface CardKit<K extends BuiltInCard> {
   kit: CardKits[K];
   // Runs every part's updater with the round's current state.
   update(round: RoundState): void;
@@ -128,39 +136,8 @@ export interface CardKit<K extends ItemKind> {
   appendUnplacedParts(card: HTMLElement): void;
 }
 
-// Each box field's caption; `command` is the one its label shows the keys of,
-// null for none.
-const FIELD_CAPTIONS: Record<
-  TextBoxField,
-  {
-    className: string;
-    label: string;
-    hint: string;
-    command: FormsCommandName | null;
-  }
-> = {
-  notes: {
-    className: 'field-notes',
-    label: 'Notes',
-    hint: 'Optional. Your own answer or your reasoning, sent to the agent.',
-    command: 'editNotes',
-  },
-  dontAskReason: {
-    className: 'field-reason',
-    label: 'Why not ask this',
-    hint: 'Optional. Sent to the agent with your answer.',
-    command: null,
-  },
-  comment: {
-    className: 'field-comment',
-    label: 'Comment',
-    hint: 'Optional. Say if this needs a second look.',
-    command: 'editNotes',
-  },
-};
-
 const KIT_BUILDERS: {
-  [K in ItemKind]: (card: CardContext, input: CardInputs[K]) => CardKits[K];
+  [K in BuiltInCard]: (card: CardContext, input: CardInputs[K]) => CardKits[K];
 } = {
   notice: (card) => buildBaseKit(card),
   question: (card, input) => {
@@ -228,11 +205,6 @@ function actionReasonOf(
   return text === undefined || text.trim() === '' ? null : text;
 }
 
-// The item as an answerable one; null for a notice, which takes no answer.
-export function answerableOf(item: RoundItem): AnswerableItem | null {
-  return item.kind === 'notice' ? null : { kind: item.kind, index: item.index };
-}
-
 // The base kit's deps for a card or pane whose keys fire in `scope`, its short
 // command names being forms commands, its markdown mount recorded through
 // `deps.recordMount`.
@@ -298,8 +270,8 @@ export function scopedAnchor(
 }
 
 // The kit for the card of `kind` item `index` at rail `position`, built
-// from its card input.
-export function createCardKit<K extends ItemKind>(
+// from its card input. Throws for a kind the round has no registration for.
+export function createCardKit<K extends BuiltInCard>(
   kind: K,
   index: number,
   input: CardInputs[K],
@@ -308,17 +280,22 @@ export function createCardKit<K extends ItemKind>(
   deps: CardDeps,
 ): CardKit<K> {
   const item = { kind, index };
+  const pageKind = round.kinds.get(kind);
+  if (pageKind === undefined) {
+    throw new Error(`round ${round.formId} has no page kind ${kind}`);
+  }
   const mount = createMarkdownMount(deps.markdown, deps.log);
   deps.recordMount(mount);
   const card: CardContext = {
     roundId: round.formId,
     item,
+    kind: pageKind,
     position,
     deps,
     kitDeps: baseKitDepsFor(deps, formsScope('forms')),
     anchor: scopedAnchor(deps.keys, formsScope('forms')),
     mount,
-    boxes: itemTextBoxes(round, item),
+    boxes: itemTextBoxes(round, item, pageKind),
     mounted: new Set(),
     updaters: [],
     placedParts: null,
@@ -399,45 +376,32 @@ function updateContributedPart(part: PlacedPart, deps: CardDeps) {
   }
 }
 
-// The item's text boxes in their default order, each with its current text.
+// The item's text boxes, its kind's `boxes.fields` in their default order,
+// each with its current text from `reduce.text`.
 function itemTextBoxes(
   round: RoundState,
   item: RoundItem,
-): Map<TextBoxField, ItemTextBox> {
-  const answerable = answerableOf(item);
-  if (answerable === null) {
-    return new Map([
-      [
-        'comment',
-        {
-          target: { field: 'comment', notice: item.index },
-          text: round.noticeComments[item.index - 1],
-        },
-      ],
-    ]);
-  }
-  const answer = itemAnswer(round, answerable);
-  return new Map([
-    [
-      'notes',
-      { target: { field: 'notes', item: answerable }, text: answer.notes },
-    ],
-    [
-      'dontAskReason',
+  kind: PageKind,
+): Map<string, ItemTextBox> {
+  const answer = kindAnswer(round, item);
+  return new Map(
+    kind.boxes.fields.map((caption) => [
+      caption.field,
       {
-        target: { field: 'dontAskReason', item: answerable },
-        text: answer.dontAskReason,
+        caption,
+        target: { field: caption.field, item },
+        text: kind.reduce.text(answer, caption.field),
       },
-    ],
-  ]);
+    ]),
+  );
 }
 
-// Mounts the item's box for `field` in its default field; the reason field
-// hides while Don't ask is off.
+// Mounts the item's box for `field` in its default field; the field hides
+// while it is not in the kind's `boxes.shown` for the item's answer.
 function mountTextBox(
   card: CardContext,
   parent: HTMLElement,
-  field: TextBoxField,
+  field: string,
 ): HTMLElement {
   const box = card.boxes.get(field);
   if (box === undefined) {
@@ -446,26 +410,23 @@ function mountTextBox(
   if (card.mounted.has(field)) {
     throw new Error(`${card.item.kind} card mounted ${field} twice`);
   }
-  const caption = FIELD_CAPTIONS[field];
+  const { caption } = box;
   const { anchor } = card;
   const built = buildField(
     parent,
     caption.className,
     caption.label,
     caption.hint,
-    caption.command === null
-      ? null
-      : { command: formsCommand(caption.command), anchor },
+    caption.keys === null ? null : { command: caption.keys, anchor },
   );
   card.deps.mountBox(built.box, box.target, box.text);
   appendBoxKeys(built, anchor);
   card.mounted.add(field);
-  const { target } = box;
-  if (target.field === 'dontAskReason') {
-    card.updaters.push((current) => {
-      built.element.hidden = !itemAnswer(current, target.item).dontAsk;
-    });
-  }
+  const { item, kind } = card;
+  card.updaters.push((current) => {
+    const shown = kind.boxes.shown(kindAnswer(current, item));
+    built.element.hidden = !shown.includes(field);
+  });
   return built.element;
 }
 
@@ -517,10 +478,9 @@ function buildBaseKit(card: CardContext): Kit {
     ...createFormsBaseKit(card.kitDeps),
     itemHead(parent, kind) {
       const { header, status } = buildItemHead(parent, kind);
-      const answerable = answerableOf(card.item);
-      if (answerable !== null) {
+      if (card.kind.spec.answerable) {
         card.updaters.push((current) => {
-          const itemStatus = answerStatus(current, answerable);
+          const itemStatus = answerStatus(current, card.item);
           status.textContent =
             itemStatus === 'untouched' ? '' : statusLabel(itemStatus);
         });

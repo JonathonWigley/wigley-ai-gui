@@ -5,17 +5,18 @@ import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
-import {
-  apply,
-  initialState,
-  type RoundState,
-  type TextTarget,
-} from '../form-state';
+import type { RoundState, TextTarget } from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
 import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../../manifest';
 import defaultLayout from '../../layouts/default/layout.js';
-import { finding, notice, presentedRound } from '../test-rounds';
+import {
+  apply,
+  finding,
+  initialState,
+  notice,
+  presentedRound,
+} from '../test-rounds';
 import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
 import { buildLayoutCard, recordingDeps } from './layout-cards';
 import {
@@ -195,7 +196,7 @@ describe('buildLayoutCard', () => {
     expect(deps.destroyBox).toHaveBeenCalledTimes(1);
     expect(deps.destroyBox).toHaveBeenCalledWith({
       field: 'comment',
-      notice: 1,
+      item: { kind: 'notice', index: 1 },
     });
   });
 

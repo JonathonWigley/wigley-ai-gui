@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cardInputOf,
   decision,
   finding,
   notice,
   presentedRound,
   question,
 } from '../test-rounds';
-import { findingFormat } from './finding/finding-card';
-import { noticeFormat } from './notice/notice-card';
-import { questionFormat } from './question/question-card';
+import { findingPageKind } from './finding/finding-card';
+import { noticePageKind } from './notice/notice-card';
+import { questionPageKind } from './question/question-card';
 
 describe('cardInput', () => {
   it('questionCardInput_CarriesSummaryRationaleAndRound', () => {
@@ -24,7 +25,7 @@ describe('cardInput', () => {
     });
     round.overview = 'the overview';
 
-    const input = questionFormat.cardInput(round, 2);
+    const input = cardInputOf(questionPageKind, round, 2);
 
     expect(input.label).toBe('2');
     expect(input.summary).toBe('Beta summary');
@@ -42,7 +43,7 @@ describe('cardInput', () => {
       findings: [finding('Delta'), decision('Epsilon')],
     });
 
-    const input = findingFormat.cardInput(round, 2);
+    const input = cardInputOf(findingPageKind, round, 2);
 
     expect(input.label).toBe('F2');
     expect(input.card).toBe('decision');
@@ -60,7 +61,7 @@ describe('cardInput', () => {
       findings: [finding('Delta', { severity: 'critical' })],
     });
 
-    const input = findingFormat.cardInput(round, 1);
+    const input = cardInputOf(findingPageKind, round, 1);
 
     expect(input.card).toBe('defect');
     expect(input.severity).toBe('critical');
@@ -79,7 +80,7 @@ describe('cardInput', () => {
       ],
     });
 
-    const input = findingFormat.cardInput(round, 1);
+    const input = cardInputOf(findingPageKind, round, 1);
 
     expect(input.entries).toEqual([
       { number: 1, action: 'fix_now', choice: 2 },
@@ -103,7 +104,7 @@ describe('cardInput', () => {
       ],
     });
 
-    const input = findingFormat.cardInput(round, 1);
+    const input = cardInputOf(findingPageKind, round, 1);
 
     expect(input.actionReasons).toEqual({ follow_up: 'Needs a spike first' });
     expect(input.recommend).toBeNull();
@@ -114,7 +115,7 @@ describe('cardInput', () => {
       notices: [notice('Zeta'), { ...notice('Eta'), badge: 'Dispatched' }],
     });
 
-    const input = noticeFormat.cardInput(round, 2);
+    const input = cardInputOf(noticePageKind, round, 2);
 
     expect(input.index).toBe(2);
     expect(input.label).toBe('N2');

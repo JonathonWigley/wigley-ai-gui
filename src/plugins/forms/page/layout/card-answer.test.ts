@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../../shared/page/session-forms';
+import type { FormsAction, RoundState } from '../form-state';
 import {
   apply,
-  type FormsAction,
+  finding,
   initialState,
-  type RoundState,
-} from '../form-state';
-import { finding, presentedRound, question } from '../test-rounds';
+  presentedRound,
+  question,
+} from '../test-rounds';
 import { cardAnswer } from './layout-cards';
 
 // Finding Delta at rail position 0, question Alpha at 1. Delta's entries:

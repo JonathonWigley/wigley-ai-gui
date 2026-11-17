@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  apply,
   buildBody,
   type FormsAction,
   type FormsState,
   type FormsStore,
-  initialState,
 } from './form-state';
 import {
   createFormsEventLog,
@@ -13,7 +11,11 @@ import {
   formsEventsBetween,
   startFormsEvents,
 } from './forms-events';
-import { presentedRound } from './test-rounds';
+import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
+import { createPageKinds } from './kinds/page-kinds';
+import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
+import { createFormsState } from './form-state';
+import { apply, initialState, presentedRound } from './test-rounds';
 
 const presented = presentedRound('r1');
 
@@ -173,6 +175,77 @@ describe('formsEventsBetween', () => {
     expect(formsEventsBetween(before, after)).toEqual([
       { name: 'viewChanged', data: { view: 'review', roundId: 'r1' } },
     ]);
+  });
+});
+
+describe('formsEventsBetween across a kind change', () => {
+  // Round r1 with two questions and one answered poll, the poll's kind
+  // registered as `registration`.
+  function pollRound() {
+    const kinds = createPageKinds();
+    for (const kind of BUILT_IN_PAGE_KINDS) {
+      kinds.register(kind);
+    }
+    let registration = kinds.register(pollPageKind('poll'));
+    const forms = createFormsState(() => kinds.table());
+    const shown = forms.initialState(
+      [
+        presentedRound('r1', {
+          items: { poll: [poll('P1')] },
+          bodyKeys: { poll: 'poll_answers' },
+        }),
+      ],
+      'r1-session',
+    );
+    const answered = [
+      { type: 'focusItem', item: 0 },
+      { type: 'choose', number: 1 },
+    ].reduce(
+      (state, action) => forms.apply(state, action as FormsAction),
+      shown,
+    );
+    return {
+      state: answered,
+      changed: (state: FormsState) =>
+        forms.apply(state, { type: 'kindsChanged', kinds: kinds.table() }),
+      leave: () => registration.dispose(),
+      register: () => {
+        registration = kinds.register(pollPageKind('poll'));
+      },
+    };
+  }
+
+  it.each([
+    {
+      case: 'a kind leaves',
+      change: (round: ReturnType<typeof pollRound>) => round.leave(),
+    },
+    {
+      case: 'a kind arrives',
+      change: (round: ReturnType<typeof pollRound>) => {
+        round.leave();
+        round.state = round.changed(round.state);
+        round.register();
+      },
+    },
+    {
+      case: 'a kind is replaced under the same id',
+      change: (round: ReturnType<typeof pollRound>) => {
+        round.leave();
+        round.register();
+      },
+    },
+  ])('formsEventsBetween_KindsChanged_NoAnswerChanged: $case', ({ change }) => {
+    const round = pollRound();
+    change(round);
+    const before = round.state;
+
+    const after = round.changed(before);
+
+    expect(after).not.toBe(before);
+    expect(names(formsEventsBetween(before, after))).not.toContain(
+      'answerChanged',
+    );
   });
 });
 

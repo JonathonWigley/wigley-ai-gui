@@ -6,16 +6,19 @@ import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
-import {
-  apply,
-  type FormsState,
-  initialState,
-  type RoundState,
-} from '../form-state';
+import type { FormsState, RoundState } from '../form-state';
 import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../../manifest';
 import type { CardDeps } from '../kinds/item-format';
-import { notice, presentedRound, question } from '../test-rounds';
+import {
+  apply,
+  formsWith,
+  initialState,
+  notice,
+  presentedRound,
+  question,
+} from '../test-rounds';
+import { poll, pollPageKind } from '../kinds/plugin-page-kind.test-support';
 import {
   buildNoticesPane,
   buildRailPane,
@@ -428,6 +431,41 @@ describe('panes', () => {
     );
   });
 
+  it('railEntry_KindWithNoAnswer_CarriesItsKindAndStatusNone', () => {
+    const inputs: RailInput[] = [];
+    const forms = formsWith([pollPageKind('poll', { answerable: false })]);
+    const presented = presentedRound('r1', {
+      questions: [question('Alpha')],
+      items: { poll: [poll('Lunch')] },
+      bodyKeys: { poll: 'poll_answers' },
+    });
+    const state = forms.initialState([presented], presented.sessionId);
+
+    const { pane } = drawPane(
+      buildRailPane,
+      {
+        rail(parent, input, kit) {
+          inputs.push(input);
+          const nav = kit.el(parent, 'nav', 'rail');
+          kit.entry(nav, 0);
+          return { element: nav };
+        },
+      },
+      state,
+    );
+    (pane as ReturnType<typeof buildRailPane>).update(state.forms[0], 'review');
+
+    expect(inputs[0].items[0]).toEqual({
+      position: 0,
+      kind: 'poll',
+      label: 'P1',
+      title: 'Lunch',
+    });
+    const [entry] = findAll(asFake(pane.element), 'rail-entry');
+    expect(entry.dataset.status).toBe('none');
+    expect(entry.classList.contains('is-flagged')).toBe(false);
+  });
+
   it('railEntry_Click_RunsPickRailItem', () => {
     const { pane, run } = drawPane(buildRailPane, {
       rail(parent, _input, kit) {
@@ -547,7 +585,7 @@ describe('notices pane', () => {
     expect(deps.destroyBox).toHaveBeenCalledTimes(1);
     expect(deps.destroyBox).toHaveBeenCalledWith({
       field: 'comment',
-      notice: 1,
+      item: { kind: 'notice', index: 1 },
     });
     expect(log).toHaveBeenCalledWith('layout test notices failed: boom');
     expect(pane.element.dataset.layout).toBe('default');
@@ -555,7 +593,7 @@ describe('notices pane', () => {
     for (const target of [1, 2]) {
       expect(deps.mountBox).toHaveBeenCalledWith(
         expect.anything(),
-        { field: 'comment', notice: target },
+        { field: 'comment', item: { kind: 'notice', index: target } },
         expect.any(String),
       );
     }
@@ -580,7 +618,7 @@ describe('notices pane', () => {
     expect([title?.textContent, title?.title]).toEqual(['Also', 'Also']);
     expect(deps.mountBox).toHaveBeenCalledWith(
       expect.anything(),
-      { field: 'comment', notice: 2 },
+      { field: 'comment', item: { kind: 'notice', index: 2 } },
       expect.any(String),
     );
   });

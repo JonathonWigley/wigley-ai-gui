@@ -5,8 +5,8 @@ import { saveState } from '../../../shared/page/autosave';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import type { FormBody } from '../contract';
 import { startRoundAutosave } from './autosave';
-import { apply, type FormsStore, initialState } from './form-state';
-import { presentedRound } from './test-rounds';
+import type { FormsStore } from './form-state';
+import { apply, initialState, presentedRound } from './test-rounds';
 
 const DELAY_MS = 400;
 

@@ -9,13 +9,17 @@ import {
   shownBox,
   shownBoxes,
 } from './boxes';
+import type { FormsAction, FormsState } from './form-state';
+import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import {
   apply,
-  type FormsAction,
-  type FormsState,
+  finding,
+  formsWith,
   initialState,
-} from './form-state';
-import { finding, notice, presentedRound, question } from './test-rounds';
+  notice,
+  presentedRound,
+  question,
+} from './test-rounds';
 
 // A finding, questions Alpha and Beta, then the notices stop: rail positions
 // 0 to 3.
@@ -58,7 +62,7 @@ const openLine = (notice: number): FormsAction => ({
 const note: BoxRef = { roundId: 'r1', target: { field: 'note' } };
 const commentOn = (notice: number): BoxRef => ({
   roundId: 'r1',
-  target: { field: 'comment', notice },
+  target: { field: 'comment', item: { kind: 'notice', index: notice } },
 });
 const comment = commentOn(1);
 const notes1: BoxRef = {
@@ -72,6 +76,10 @@ const reason1: BoxRef = {
 const findingNotes: BoxRef = {
   roundId: 'r1',
   target: { field: 'notes', item: { kind: 'finding', index: 1 } },
+};
+const pollNotes: BoxRef = {
+  roundId: 'r1',
+  target: { field: 'notes', item: { kind: 'poll', index: 1 } },
 };
 
 describe('shownBoxes', () => {
@@ -108,6 +116,24 @@ describe('shownBoxes', () => {
 
   it('shows no box with no round open', () => {
     expect(shownBoxes(initialState([], null))).toEqual([]);
+  });
+
+  it("shows a plugin kind's boxes by its boxes.shown", () => {
+    // The poll takes no answer and shows only its notes box.
+    const forms = formsWith([pollPageKind('poll', { answerable: false })]);
+    const start = forms.initialState(
+      [
+        presentedRound('r1', {
+          questions: [],
+          items: { poll: [poll('P1')] },
+          bodyKeys: { poll: 'poll_answers' },
+        }),
+      ],
+      'r1-session',
+    );
+    const state = forms.apply(start, { type: 'focusItem', item: 0 });
+
+    expect(shownBoxes(state)).toEqual([pollNotes]);
   });
 });
 
@@ -261,5 +287,11 @@ describe('boxKey', () => {
     expect(boxKey(notes1)).not.toBe(
       boxKey({ roundId: 'r2', target: notes1.target }),
     );
+  });
+
+  it("tells a plugin kind's box from a built-in one", () => {
+    expect(boxKey(pollNotes)).toBe('r1/poll/1/notes');
+    expect(boxKey(pollNotes)).not.toBe(boxKey(notes1));
+    expect(boxKey(comment)).toBe('r1/notice/1/comment');
   });
 });

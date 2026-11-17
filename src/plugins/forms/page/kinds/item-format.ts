@@ -4,7 +4,6 @@ import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { OsName } from '../../../../contracts/platform';
 import type { KeyHints } from '../../../../contracts/plugin';
 import type { LayoutState } from '../../../../contracts/state';
-import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
 import type { FormsContributions } from '../contributions';
 import type { RoundState, TextTarget } from '../form-state';
@@ -39,32 +38,15 @@ export interface CardDeps {
   recordMount(mount: MarkdownMount): void;
 }
 
-// Each kind's card input and kit, as the layout's card builder takes them.
+// The built-in cards' names: the kinds with a card of their own in the Layout
+// contract.
+export type BuiltInCard = keyof LayoutCards;
+
+// Each built-in card's input and kit, as the layout's card builder takes
+// them.
 export type CardInputs = {
-  [K in keyof LayoutCards]: Parameters<LayoutCards[K]>[1];
+  [K in BuiltInCard]: Parameters<LayoutCards[K]>[1];
 };
 export type CardKits = {
-  [K in keyof LayoutCards]: Parameters<LayoutCards[K]>[2];
-};
-
-// How the page shows one kind of item. `index` is 1-based within the kind.
-export interface ItemFormat<Input> {
-  railPrefix: string;
-  title(round: Round, index: number): string;
-  // The data a layout builds the item's card from.
-  cardInput(round: Round, index: number): Input;
-}
-
-export interface AnswerableFormat<Input> extends ItemFormat<Input> {
-  choiceTexts(round: Round, index: number): string[];
-  // 1-based.
-  recommend(round: Round, index: number): number;
-}
-
-// Indexing CardInputs by ItemKind stops compiling when a kind has no card in
-// the Layout contract.
-export type PageFormats = {
-  [K in ItemKind]: K extends AnswerableKind
-    ? AnswerableFormat<CardInputs[K]>
-    : ItemFormat<CardInputs[K]>;
+  [K in BuiltInCard]: Parameters<LayoutCards[K]>[2];
 };

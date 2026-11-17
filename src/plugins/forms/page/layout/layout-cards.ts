@@ -7,46 +7,43 @@ import {
 } from '../../../../shared/page/layout-host/draw-part';
 import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
 import type { KeyHints } from '../../../../contracts/plugin';
-import type { ItemKind } from '../../contract';
+import { isBuiltInItemKind } from '../../item-kinds';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { CardAnswer, LayoutCard } from '../../layouts/layout';
 import {
   type AnswerableItem,
   answerStatus,
   findingActionOf,
+  isAnswerable,
   itemAnswer,
+  kindItems,
   type RoundItem,
   type RoundState,
   type TextTarget,
 } from '../form-state';
-import { FORMATS } from '../kinds/formats';
 import type {
+  BuiltInCard,
   CardDeps,
   CardInputs,
   CardKits,
   ItemCard,
-  ItemFormat,
 } from '../kinds/item-format';
-import { answerableOf, type CardKit, createCardKit } from './card-kit';
+import { type CardKit, createCardKit } from './card-kit';
 import type { LayoutPick } from './layout-resolver';
 
 type CardBuilders = {
-  [K in ItemKind]: (
+  [K in BuiltInCard]: (
     parent: HTMLElement,
     input: CardInputs[K],
     kit: CardKits[K],
   ) => LayoutCard;
 };
 
-// FORMATS as a table of card inputs, which keeps each kind's input tied to
-// its kind.
-const CARD_INPUTS: { [K in ItemKind]: ItemFormat<CardInputs[K]> } = FORMATS;
-
 // A card a layout built, its element, and the kit it built it from.
 interface BuiltCard {
   element: HTMLElement;
   card: LayoutCard;
-  kit: CardKit<ItemKind>;
+  kit: CardKit<BuiltInCard>;
 }
 
 // The item's answer as a layout card's `update` receives it.
@@ -85,12 +82,12 @@ export function buildLayoutCard(
     parent,
     pick,
     defaultLayout,
-    part: (layout): CardBuilders[ItemKind] | undefined =>
-      layout.cards?.[item.kind],
+    part: (layout): CardBuilders[BuiltInCard] | undefined =>
+      isBuiltInItemKind(item.kind) ? layout.cards?.[item.kind] : undefined,
     build: (cardBuilder, cardParent, rollback) =>
       buildCard(
         cardBuilder,
-        item,
+        item as { kind: BuiltInCard; index: number },
         cardParent,
         round,
         position,
@@ -100,7 +97,7 @@ export function buildLayoutCard(
     partName: `${item.kind} card`,
   });
   rollback?.recordBox(dispose);
-  return hostCard(built, layoutName, item, deps);
+  return hostCard(built, layoutName, item, isAnswerable(round, item), deps);
 }
 
 // What a layout's card or pane mounts its text boxes and anchors its keys
@@ -148,8 +145,9 @@ export function recordingDeps<D extends MountingDeps>(
 
 // Builds the item's card through `build`, checks its element, then mounts the
 // boxes the card left unmounted and places the contributed parts it left
-// unplaced, in that order, at the end of its element.
-function buildCard<K extends ItemKind>(
+// unplaced, in that order, at the end of its element. The input comes from
+// the item's kind's `cardInput.input`.
+function buildCard<K extends BuiltInCard>(
   build: CardBuilders[K],
   item: { kind: K; index: number },
   parent: HTMLElement,
@@ -157,7 +155,16 @@ function buildCard<K extends ItemKind>(
   position: number,
   deps: CardDeps,
 ): BuiltCard {
-  const input = CARD_INPUTS[item.kind].cardInput(round.round, item.index);
+  const kind = round.kinds.get(item.kind);
+  if (kind === undefined) {
+    throw new Error(`round ${round.formId} has no page kind ${item.kind}`);
+  }
+  const kindItem = kindItems(round.round, item.kind)[item.index - 1];
+  const input = kind.cardInput.input(
+    kindItem,
+    item.index,
+    round.round,
+  ) as CardInputs[K];
   const kit = createCardKit(
     item.kind,
     item.index,
@@ -174,32 +181,32 @@ function buildCard<K extends ItemKind>(
   );
   kit.appendUnmountedBoxes(element);
   kit.appendUnplacedParts(element);
-  return { element, card, kit };
+  return { element, card, kit: kit as CardKit<BuiltInCard> };
 }
 
 // The ItemCard over a built card: `update` runs the kit's updaters, then, on
-// an answerable item, shows its status on the card's element, runs the card's
-// own `update`, whose first throw is logged, and then each contributed part's
-// update.
+// an item of an answerable kind, shows its status on the card's element, runs
+// the card's own `update`, whose first throw is logged, and then each
+// contributed part's update.
 function hostCard(
   built: BuiltCard,
   layoutName: string,
   item: RoundItem,
+  answerable: boolean,
   deps: CardDeps,
 ): ItemCard {
   const { card, kit } = built;
-  const answerable = answerableOf(item);
   let isUpdateFailureLogged = false;
   return {
     element: card.element,
     update(round) {
       kit.update(round);
-      if (answerable === null) {
+      if (!answerable) {
         return;
       }
-      card.element.dataset.status = answerStatus(round, answerable);
+      card.element.dataset.status = answerStatus(round, item);
       try {
-        card.update?.(cardAnswer(round, answerable));
+        card.update?.(cardAnswer(round, item));
       } catch (error) {
         if (!isUpdateFailureLogged) {
           isUpdateFailureLogged = true;

@@ -8,7 +8,8 @@ import {
   buildBody,
   type FormsState,
   type FormsStore,
-  itemAnswer,
+  isAnswerable,
+  kindAnswer,
   pickNumber,
   type RoundState,
 } from './form-state';
@@ -20,8 +21,8 @@ export type FormsPageEvent = {
 
 // The events one change from `previous` to `next` makes, in this order: a
 // `roundShown` per round `next` adds, in `next.forms` order; an
-// `answerChanged` per question or finding, in rail order, of a round in both
-// whose answer differs in any field; a `roundFinished` per round `next`
+// `answerChanged` per item of an answerable kind, in rail order, of a round in
+// both whose answer differs in any field; a `roundFinished` per round `next`
 // drops, with the answers it left with; and one `viewChanged` when the view
 // or the active round differs.
 export function formsEventsBetween(
@@ -74,7 +75,7 @@ export function startFormsEvents(
 // <roundId or none>`. An `answerChanged` logs only when the item's status or
 // pick, read from `getState` as the event fires, differs from what its round
 // showed with or last logged, so a notes edit that changes neither logs
-// nothing.
+// nothing; nor does an item whose kind left before the event fires.
 export function createFormsEventLog(
   getState: () => FormsState,
   log: PluginLog,
@@ -86,7 +87,7 @@ export function createFormsEventLog(
       case 'roundShown': {
         const round = formById(getState(), event.data.roundId);
         if (round !== undefined) {
-          for (const item of answerableItems(round.round)) {
+          for (const item of answerableItems(round)) {
             shown.set(itemKey(round.formId, item), statusAndPick(round, item));
           }
         }
@@ -97,9 +98,12 @@ export function createFormsEventLog(
         const { roundId, item } = event.data;
         const round = formById(getState(), roundId);
         const key = itemKey(roundId, item);
-        // Undefined only when a listener's own dispatch already closed it.
+        // Undefined when a listener's own dispatch already closed the round
+        // or took the item's kind away.
         const now =
-          round === undefined ? undefined : statusAndPick(round, item);
+          round === undefined || !hasAnswer(round, item)
+            ? undefined
+            : statusAndPick(round, item);
         if (now === undefined || shown.get(key) === now) {
           return;
         }
@@ -142,14 +146,17 @@ export function openRoundOf(round: RoundState): OpenRound {
   };
 }
 
-// An `answerChanged` per item, in rail order, whose answer differs between
-// the two states of one round.
+// An `answerChanged` per item, in rail order, answered in both states of one
+// round, whose answer differs between them: a kind arriving, leaving or
+// replaced under its id changes no answer.
 function answerChanges(
   before: RoundState,
   after: RoundState,
 ): FormsPageEvent[] {
-  return answerableItems(after.round)
-    .filter((item) => answersDiffer(before, after, item))
+  return answerableItems(after)
+    .filter(
+      (item) => hasAnswer(before, item) && answersDiffer(before, after, item),
+    )
     .map((item) => ({
       name: 'answerChanged',
       data: {
@@ -160,15 +167,33 @@ function answerChanges(
     }));
 }
 
-// Whether any field of the item's answer differs; answers hold only
-// primitives.
+// Whether the round holds an answer for the item: its kind registered and
+// answerable, and the item within its answers.
+function hasAnswer(round: RoundState, item: AnswerableItem): boolean {
+  const answers = round.itemAnswers[item.kind];
+  return (
+    isAnswerable(round, item) &&
+    answers !== undefined &&
+    item.index >= 1 &&
+    item.index <= answers.length
+  );
+}
+
+// Whether any field of the item's answer differs; a kind's answers hold only
+// primitives (PageKind).
 function answersDiffer(
   before: RoundState,
   after: RoundState,
   item: AnswerableItem,
 ): boolean {
-  const was: Record<string, unknown> = { ...itemAnswer(before, item) };
-  const is: Record<string, unknown> = { ...itemAnswer(after, item) };
+  const was = { ...(kindAnswer(before, item) as object) } as Record<
+    string,
+    unknown
+  >;
+  const is = { ...(kindAnswer(after, item) as object) } as Record<
+    string,
+    unknown
+  >;
   return Object.keys(is).some((field) => was[field] !== is[field]);
 }
 

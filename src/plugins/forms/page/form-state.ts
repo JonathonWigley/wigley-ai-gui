@@ -1,12 +1,12 @@
 import type {
-  AnswerableKind,
-  AnswerEntry,
   AnswerStatus,
   FindingAction,
   Finding,
-  FindingAnswerEntry,
   FormBody,
+  ItemAnswer,
   ItemKind,
+  KindPick,
+  PageKind,
   PresentedRound,
   Round,
   RoundPlace,
@@ -22,32 +22,28 @@ import {
   updateForm,
 } from '../../../shared/page/session-forms';
 import { actionLabel } from '../finding-origins';
-import {
-  findingEntries,
-  findingEntryNumber,
-  findingPickIsComplete,
-  isFindingAction,
-} from '../finding-pick';
+import { findingEntries } from '../finding-pick';
 import { isResponded } from '../item-response';
+import type { PageKindTable } from './kinds/page-kinds';
+
+export type { ItemAnswer } from '../contract';
 
 // Any one item of a round, by kind. `index` is 1-based within its kind, as
 // the forms contract numbers items.
 export type RoundItem = { kind: ItemKind; index: number };
 
-export type AnswerableItem = { kind: AnswerableKind; index: number };
+// An item of a kind whose `spec.answerable` is true.
+export type AnswerableItem = RoundItem;
 
-// A stop on the rail: one finding or question, or the notices stop, which
-// holds every notice of the round.
-export type RailItem = AnswerableItem | { kind: 'notices' };
+// The rail stop that holds every notice of the round.
+export type NoticesStop = { kind: 'notices' };
 
-// A question's or a finding's answer.
-export interface ItemAnswer {
-  // 1-based, 0 for none; kept while not applicable.
-  choice: number;
-  notApplicable: boolean;
-  notes: string;
-  dontAsk: boolean;
-  dontAskReason: string;
+// A stop on the rail: one item of a kind with a rail order, or the notices
+// stop.
+export type RailItem = RoundItem | NoticesStop;
+
+export function isNoticesStop(item: RailItem): item is NoticesStop {
+  return item.kind === 'notices';
 }
 
 // `choice` and `action` are one pick, one of the finding's numbered entries
@@ -57,15 +53,27 @@ export interface FindingAnswer extends ItemAnswer {
   action: FindingAction | '';
 }
 
+// A notice's answer: the user's comment on it.
+export interface NoticeAnswer {
+  comment: string;
+}
+
+// The draft entries of a kind the page has no registration for, kept as main
+// sent them, and the body key they write back to.
+export interface HeldEntries {
+  bodyKey: string;
+  entries: readonly unknown[];
+}
+
 // `formId` is the round's id.
 export interface RoundState extends SessionForm {
   round: Round;
-  // One per question, in order.
-  answers: ItemAnswer[];
-  // One per finding, in order.
-  findingAnswers: FindingAnswer[];
-  // One per notice, in order.
-  noticeComments: string[];
+  // The kinds the round was derived with.
+  kinds: PageKindTable;
+  // Each registered kind's answers, one per item, in order.
+  itemAnswers: Readonly<Record<ItemKind, readonly unknown[]>>;
+  // Each unregistered kind's draft entries, unchanged.
+  heldEntries: Readonly<Record<ItemKind, HeldEntries>>;
   // One per notice, in order: whether its line is open on the notices stop.
   openNotices: boolean[];
   // The 1-based notice under the notices stop's line cursor; 0 when the round
@@ -90,11 +98,8 @@ export interface Progress {
   total: number;
 }
 
-// `item.index` and `notice` are 1-based.
-export type TextTarget =
-  | { field: 'notes' | 'dontAskReason'; item: AnswerableItem }
-  | { field: 'comment'; notice: number }
-  | { field: 'note' };
+// The round note, or one of an item's text boxes by its kind's box field.
+export type TextTarget = { field: 'note' } | { field: string; item: RoundItem };
 
 // Acts on the active round: its focused item, or the notice an action names.
 export type ItemAction =
@@ -104,15 +109,12 @@ export type ItemAction =
   | { type: 'lastItem' }
   // `item` is a rail position.
   | { type: 'focusItem'; item: number }
-  // `number` is 1-based: a question's choice, or a finding's entry down its
-  // card, which sets choice and action together. Picking the held number
-  // again clears the pick; a number past the last changes nothing.
+  // `number` is 1-based down the card: the kind's `pick.choose`. A number
+  // past the last changes nothing.
   | { type: 'choose'; number: number }
-  // Clears a question's choice, or a finding's whole pick.
+  // The kind's `pick.clear`.
   | { type: 'clearChoice' }
-  // Sets the recommended choice on a question, or the recommended entry on a
-  // finding: its recommend_action with its recommend, or that action's header
-  // when recommend is null.
+  // The kind's `pick.recommended`.
   | { type: 'acceptRecommendation' }
   | { type: 'toggleNotApplicable' }
   | { type: 'toggleDontAsk' }
@@ -140,95 +142,59 @@ type FormsOwnAction =
   | { type: 'setText'; formId: string; target: TextTarget; value: string }
   // Puts round `formId` back where the last page left it; the view applies only
   // while the round is active.
-  | { type: 'placeRestored'; formId: string; place: RoundPlace };
+  | { type: 'placeRestored'; formId: string; place: RoundPlace }
+  // Re-derives every open round with `kinds`; not an edit.
+  | { type: 'kindsChanged'; kinds: PageKindTable };
 
 export type FormsAction = SessionFormsAction<PresentedRound> | FormsOwnAction;
 
-const UNTOUCHED: ItemAnswer = {
-  choice: 0,
-  notApplicable: false,
-  notes: '',
-  dontAsk: false,
-  dontAskReason: '',
-};
-
-// A finding answer's pick alone.
-type FindingPick = Pick<FindingAnswer, 'choice' | 'action'>;
-
-const NO_PICK: FindingPick = { choice: 0, action: '' };
-
-const UNTOUCHED_FINDING: FindingAnswer = { ...UNTOUCHED, ...NO_PICK };
-
-const ANSWERABLE_ORDER: AnswerableKind[] = ['finding', 'question'];
-
-// Each kind's items in a round, in order.
-export const ROUND_ITEMS = {
-  notice: (round) => round.notices,
-  finding: (round) => round.findings,
-  question: (round) => round.questions,
-} satisfies Record<ItemKind, (round: Round) => unknown[]>;
-
-// The answer each answerable kind holds.
-interface AnswerOf {
-  question: ItemAnswer;
-  finding: FindingAnswer;
-}
-
-// An answerable item of one kind.
-type KindItem<K extends AnswerableKind> = { kind: K; index: number };
-
-// Reads and replaces one kind's answers in a round.
-interface AnswerArray<Answer> {
-  read(round: RoundState): Answer[];
-  write(round: RoundState, answers: Answer[]): RoundState;
-}
-
-// Keeps every answer's own kind, so a finding's action survives.
-type AnswerChange = <Answer extends ItemAnswer>(
-  answer: Answer,
-  choiceCount: number,
-) => Answer;
-
-// A mapped type, not `satisfies`: indexing it by a generic kind keeps the
-// kind's answer type.
-const ANSWER_ARRAYS: { [K in AnswerableKind]: AnswerArray<AnswerOf[K]> } = {
-  question: {
-    read: (round) => round.answers,
-    write: (round, answers) => ({ ...round, answers }),
-  },
-  finding: {
-    read: (round) => round.findingAnswers,
-    write: (round, findingAnswers) => ({ ...round, findingAnswers }),
-  },
-};
-
-export function initialState(
-  rounds: PresentedRound[],
-  activeSessionId: string | null,
-): FormsState {
-  return rounds.reduce(
-    (state, round) => apply(state, { type: 'formShown', form: round }),
-    emptySessionForms<RoundState, 'forms'>(activeSessionId),
-  );
-}
-
-// The forms page's store, over `apply`.
-export type FormsStore = ReducerStore<FormsState, FormsAction>;
-
 // Returns `state` itself when the action changes nothing. Item actions apply
 // only in the forms view. While the active round is sending, only the
-// lifecycle's sending actions and the editors' text apply.
-export const apply = createSessionFormsReducer<
-  RoundState,
-  'forms',
-  PresentedRound,
-  FormsOwnAction
->({
-  formView: 'forms',
-  restore: restoreRound,
-  sendingActions: new Set(['setText']),
-  applyOwn,
-});
+// lifecycle's sending actions, the editors' text and kind changes apply.
+export type FormsReducer = (
+  state: FormsState,
+  action: FormsAction,
+) => FormsState;
+
+// A finding answer's pick alone.
+export type FindingPick = Pick<FindingAnswer, 'choice' | 'action'>;
+
+export const NO_PICK: FindingPick = { choice: 0, action: '' };
+
+const NOTICE_KIND: ItemKind = 'notice';
+
+// The reducer over the kinds `kinds()` returns as each round shows, and the
+// state it starts from: `rounds` shown in order.
+export function createFormsState(kinds: () => PageKindTable): {
+  apply: FormsReducer;
+  initialState(
+    rounds: PresentedRound[],
+    activeSessionId: string | null,
+  ): FormsState;
+} {
+  const apply: FormsReducer = createSessionFormsReducer<
+    RoundState,
+    'forms',
+    PresentedRound,
+    FormsOwnAction
+  >({
+    formView: 'forms',
+    restore: (presented) => restoreRound(presented, kinds()),
+    sendingActions: new Set(['setText', 'kindsChanged']),
+    applyOwn,
+  });
+  return {
+    apply,
+    initialState: (rounds, activeSessionId) =>
+      rounds.reduce(
+        (state, round) => apply(state, { type: 'formShown', form: round }),
+        emptySessionForms<RoundState, 'forms'>(activeSessionId),
+      ),
+  };
+}
+
+// The forms page's store, over a `FormsReducer`.
+export type FormsStore = ReducerStore<FormsState, FormsAction>;
 
 function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
   switch (action.type) {
@@ -252,6 +218,8 @@ function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
       );
     case 'placeRestored':
       return restorePlace(state, action.formId, action.place);
+    case 'kindsChanged':
+      return changeKinds(state, action.kinds);
     default:
       return state.view === 'forms'
         ? updateForm(state, state.activeFormId, (round) =>
@@ -283,59 +251,124 @@ export function roundPlace(state: FormsState, round: RoundState): RoundPlace {
   };
 }
 
-// The answerable items, then the notices stop when the round has notices.
-export function railItems(round: Round): RailItem[] {
-  const items: RailItem[] = answerableItems(round);
-  return round.notices.length > 0 ? [...items, { kind: 'notices' }] : items;
+// The kind's items in the round, in order; none for a kind the round lacks.
+export function kindItems(round: Round, kind: ItemKind): readonly unknown[] {
+  return round.items[kind] ?? [];
 }
 
-// The findings, then the questions, in rail order.
-export function answerableItems(round: Round): AnswerableItem[] {
-  return ANSWERABLE_ORDER.flatMap((kind) =>
-    ROUND_ITEMS[kind](round).map((_, i): AnswerableItem => ({
-      kind,
-      index: i + 1,
-    })),
+// The item's answer as its kind holds it. Throws when the round has no such
+// item of a registered kind.
+export function kindAnswer(round: RoundState, item: RoundItem): unknown {
+  const answers = round.itemAnswers[item.kind];
+  const isItem =
+    answers !== undefined && item.index >= 1 && item.index <= answers.length;
+  if (!isItem) {
+    throw new Error(`round ${round.formId} has no ${item.kind} ${item.index}`);
+  }
+  return answers[item.index - 1];
+}
+
+// The kinds the round holds items of with no registration, in the round's
+// kind order, with their item counts.
+export function unregisteredKinds(
+  round: RoundState,
+): { kind: ItemKind; count: number }[] {
+  return Object.entries(round.round.items).flatMap(([kind, items]) =>
+    round.kinds.get(kind) === undefined && items.length > 0
+      ? [{ kind, count: items.length }]
+      : [],
   );
 }
 
+// The stops of each kind with a rail order, by rail order, then the notices
+// stop when the round has notices.
+export function railItems(round: RoundState): RailItem[] {
+  const items: RailItem[] = round.kinds.railKinds.flatMap((kind) =>
+    kindStops(round, kind),
+  );
+  return noticeCount(round) > 0 ? [...items, { kind: 'notices' }] : items;
+}
+
+// The stops of the answerable kinds, in rail order: the review's rows.
+export function answerableItems(round: RoundState): AnswerableItem[] {
+  return round.kinds.railKinds
+    .filter((kind) => kind.spec.answerable)
+    .flatMap((kind) => kindStops(round, kind));
+}
+
+function kindStops(round: RoundState, kind: PageKind): RoundItem[] {
+  const { id } = kind.spec;
+  return kindItems(round.round, id).map((_, i) => ({ kind: id, index: i + 1 }));
+}
+
+// The notices the notices stop holds: none while `notice` has no
+// registration.
+function noticeCount(round: RoundState): number {
+  return round.kinds.get(NOTICE_KIND) === undefined
+    ? 0
+    : kindItems(round.round, NOTICE_KIND).length;
+}
+
 // The item's position in railItems(round), or -1 when the round lacks it.
-export function railPosition(round: Round, item: RailItem): number {
+export function railPosition(round: RoundState, item: RailItem): number {
   return railItems(round).findIndex((candidate) =>
     sameRailItem(candidate, item),
   );
 }
 
 function sameRailItem(a: RailItem, b: RailItem): boolean {
-  if (a.kind === 'notices' || b.kind === 'notices') {
+  if (isNoticesStop(a) || isNoticesStop(b)) {
     return a.kind === b.kind;
   }
   return a.kind === b.kind && a.index === b.index;
 }
 
 export function focusedItem(round: RoundState): RailItem | null {
-  return railItems(round.round)[round.focus] ?? null;
+  return railItems(round)[round.focus] ?? null;
 }
 
-// Throws when the round has no such item.
-export function itemAnswer<K extends AnswerableKind>(
+// Whether the item's kind is registered and takes an answer.
+export function isAnswerable(round: RoundState, item: RoundItem): boolean {
+  return round.kinds.get(item.kind)?.spec.answerable === true;
+}
+
+// An answerable item's kind and its pick rules.
+interface AnswerableKindOf {
+  kind: PageKind;
+  pick: KindPick<unknown, unknown>;
+}
+
+// Throws when the item's kind is unregistered or takes no answer.
+function answerableKindOf(
   round: RoundState,
-  item: KindItem<K>,
-): AnswerOf[K] {
-  if (!hasItem(round, item)) {
-    throw new Error(`round ${round.formId} has no ${item.kind} ${item.index}`);
+  item: RoundItem,
+): AnswerableKindOf {
+  const kind = round.kinds.get(item.kind);
+  const pick = kind?.reduce.pick;
+  if (kind === undefined || pick === undefined) {
+    throw new Error(`round ${round.formId}: ${item.kind} takes no answer`);
   }
-  const answers: AnswerArray<AnswerOf[K]> = ANSWER_ARRAYS[item.kind];
-  return answers.read(round)[item.index - 1];
+  return { kind, pick };
 }
 
-// The action picked on a finding; '' on a question.
+function kindItem(round: RoundState, item: RoundItem): unknown {
+  return kindItems(round.round, item.kind)[item.index - 1];
+}
+
+// An answerable item's answer. Throws when the round has no such item, or its
+// kind takes no answer.
+export function itemAnswer(round: RoundState, item: RoundItem): ItemAnswer {
+  answerableKindOf(round, item);
+  return kindAnswer(round, item) as ItemAnswer;
+}
+
+// The action picked on a finding; '' on any other kind.
 export function findingActionOf(
   round: RoundState,
   item: AnswerableItem,
 ): FindingAction | '' {
   return item.kind === 'finding'
-    ? round.findingAnswers[item.index - 1].action
+    ? (kindAnswer(round, item) as FindingAnswer).action
     : '';
 }
 
@@ -346,39 +379,25 @@ export function findingActionWord(
   item: AnswerableItem,
   action: FindingAction,
 ): string | null {
-  return actionLabel(round.round.findings[item.index - 1].origin, action);
+  const finding = kindItem(round, item) as Finding;
+  return actionLabel(finding.origin, action);
 }
 
-const PICK_ANSWERS = {
-  question: (round, index) => round.answers[index - 1].choice >= 1,
-  finding: (round, index) => {
-    const answer = round.findingAnswers[index - 1];
-    const finding = round.round.findings[index - 1];
-    return findingPickIsComplete(finding, answer.choice, answer.action);
-  },
-} satisfies Record<
-  AnswerableKind,
-  (round: RoundState, index: number) => boolean
->;
-
-// Whether the item's picks alone answer it, notes aside: a choice on a
-// question, one of its numbered entries on a finding.
+// Whether the item's picks alone answer it, notes aside: the kind's
+// `pick.isComplete`.
 export function pickIsComplete(
   round: RoundState,
   item: AnswerableItem,
 ): boolean {
-  return PICK_ANSWERS[item.kind](round, item.index);
+  const { pick } = answerableKindOf(round, item);
+  return pick.isComplete(kindItem(round, item), kindAnswer(round, item));
 }
 
-// The 1-based number the item's pick has down its card: a question's choice,
-// a finding's entry (`findingEntries`); 0 for no pick.
+// The 1-based number the item's pick has down its card, 0 for no pick: the
+// kind's `pick.number`.
 export function pickNumber(round: RoundState, item: AnswerableItem): number {
-  if (item.kind === 'question') {
-    return round.answers[item.index - 1].choice;
-  }
-  const answer = round.findingAnswers[item.index - 1];
-  const finding = round.round.findings[item.index - 1];
-  return findingEntryNumber(finding, answer.choice, answer.action);
+  const { pick } = answerableKindOf(round, item);
+  return pick.number(kindItem(round, item), kindAnswer(round, item));
 }
 
 // The item's status as the page counts it: `answered` once the item is
@@ -407,15 +426,16 @@ export function unansweredItem(
   round: RoundState,
   step: 1 | -1,
 ): AnswerableItem | null {
-  const items = answerableItems(round.round);
+  const items = answerableItems(round);
   const count = items.length;
   const focused = focusedItem(round);
   const position =
     focused === null
       ? -1
       : items.findIndex((item) => sameRailItem(item, focused));
-  // With the notices stop focused the search starts just outside the items,
-  // so forward runs from the first and backward from the last.
+  // With the notices stop or a stop with no answer focused, the search
+  // starts just outside the items, so forward runs from the first and
+  // backward from the last.
   const outside = step === 1 ? -1 : count;
   const start = position < 0 ? outside : position;
   for (let offset = 1; offset <= count; offset++) {
@@ -428,7 +448,7 @@ export function unansweredItem(
 }
 
 export function progress(round: RoundState): Progress {
-  const statuses = answerableItems(round.round).map((item) =>
+  const statuses = answerableItems(round).map((item) =>
     answerStatus(round, item),
   );
   const count = (status: AnswerStatus) =>
@@ -441,64 +461,74 @@ export function progress(round: RoundState): Progress {
   };
 }
 
-// The saved-round body; a not-applicable answer keeps its choice.
+// The saved-round body: `note`, then each registered kind's `restore.encode`
+// at main's bodyKey for it, in reverse registration order, then each held
+// kind's entries unchanged, in main's kind order. A registered kind main gave
+// no bodyKey for has no items and writes nothing.
 export function buildBody(round: RoundState): FormBody {
-  return {
-    note: round.note,
-    answers: round.answers.map(answerEntry),
-    finding_answers: round.findingAnswers.map(findingAnswerEntry),
-    notice_comments: round.noticeComments.map((comment, i) => ({
-      index: i + 1,
-      comment,
-    })),
-  };
+  const body: Record<string, unknown> = { note: round.note };
+  for (const kind of round.kinds.kinds().toReversed()) {
+    const { id } = kind.spec;
+    const bodyKey = round.round.bodyKeys[id];
+    if (bodyKey !== undefined) {
+      body[bodyKey] = kind.restore.encode(round.itemAnswers[id]);
+    }
+  }
+  for (const id of Object.keys(round.round.bodyKeys)) {
+    const held = round.heldEntries[id];
+    if (held !== undefined) {
+      body[held.bodyKey] = held.entries;
+    }
+  }
+  return body as FormBody;
 }
 
-// `i` is the answer's 0-based position.
-function answerEntry(answer: ItemAnswer, i: number): AnswerEntry {
-  return {
-    index: i + 1,
-    choice: answer.choice,
-    not_applicable: answer.notApplicable,
-    notes: answer.notes,
-    dont_ask: answer.dontAsk,
-    dont_ask_reason: answer.dontAskReason,
-  };
+// The entries a body holds at `bodyKey`; none for a missing or malformed key.
+function draftEntries(
+  draft: FormBody | null,
+  bodyKey: string | undefined,
+): readonly unknown[] {
+  const entries = bodyKey === undefined ? undefined : draft?.[bodyKey];
+  return Array.isArray(entries) ? entries : [];
 }
 
-// `i` is the answer's 0-based position.
-function findingAnswerEntry(
-  answer: FindingAnswer,
-  i: number,
-): FindingAnswerEntry {
-  return { ...answerEntry(answer, i), action: answer.action };
-}
-
-function restoreRound(presented: PresentedRound): RoundState {
+// Each registered kind's answers restore from main's bodyKey for it, its own
+// spec's when main gave none; each kind main gave a bodyKey and the page no
+// registration holds its entries.
+function restoreRound(
+  presented: PresentedRound,
+  kinds: PageKindTable,
+): RoundState {
   const { roundId, sessionId, label, round, draft } = presented;
-  const noticeComments = round.notices.map(
-    (_, i) =>
-      draft?.notice_comments.find((comment) => comment.index === i + 1)
-        ?.comment ?? '',
-  );
+  const itemAnswers: Record<ItemKind, readonly unknown[]> = {};
+  for (const kind of kinds.kinds()) {
+    const { id, bodyKey } = kind.spec;
+    itemAnswers[id] = kind.restore.decode(
+      kindItems(round, id),
+      draftEntries(draft, round.bodyKeys[id] ?? bodyKey),
+    );
+  }
+  const heldEntries: Record<ItemKind, HeldEntries> = {};
+  for (const [id, bodyKey] of Object.entries(round.bodyKeys)) {
+    if (kinds.get(id) === undefined) {
+      heldEntries[id] = { bodyKey, entries: draftEntries(draft, bodyKey) };
+    }
+  }
+  const notices = (itemAnswers[NOTICE_KIND] ?? []) as readonly NoticeAnswer[];
+  const noticeTotal = kindItems(round, NOTICE_KIND).length;
   return {
     formId: roundId,
     sessionId,
     label,
     round,
-    answers: restoreAnswers(
-      round.questions,
-      draft?.answers ?? [],
-      (entry, question) => restoreAnswer(entry, question.choices.length),
+    kinds,
+    itemAnswers,
+    heldEntries,
+    openNotices: Array.from(
+      { length: noticeTotal },
+      (_, i) => (notices[i]?.comment ?? '') !== '',
     ),
-    findingAnswers: restoreAnswers(
-      round.findings,
-      draft?.finding_answers ?? [],
-      restoreFindingAnswer,
-    ),
-    noticeComments,
-    openNotices: noticeComments.map((comment) => comment !== ''),
-    noticeLine: round.notices.length > 0 ? 1 : 0,
+    noticeLine: noticeTotal > 0 ? 1 : 0,
     note: draft?.note ?? '',
     focus: 0,
     reviewRow: 0,
@@ -510,53 +540,84 @@ function restoreRound(presented: PresentedRound): RoundState {
   };
 }
 
-// One answer per item, from the entry carrying its 1-based index.
-function restoreAnswers<Item, Entry extends AnswerEntry, Answer>(
-  items: Item[],
-  entries: Entry[],
-  restore: (entry: Entry | undefined, item: Item) => Answer,
-): Answer[] {
-  return items.map((item, i) =>
-    restore(
-      entries.find((entry) => entry.index === i + 1),
-      item,
-    ),
-  );
+// Every open round re-derived with `kinds`; `state` itself when every round
+// already holds it.
+function changeKinds(state: FormsState, kinds: PageKindTable): FormsState {
+  const forms = state.forms.map((round) => rederiveRound(round, kinds));
+  const isUnchanged = forms.every((round, i) => round === state.forms[i]);
+  return isUnchanged ? state : { ...state, forms };
 }
 
-// A finding with no draft entry starts with no pick. A draft's pick restores
-// only when it is one of the finding's entries; any other restores as no
-// pick, keeping the entry's notes, Not applicable and Don't ask.
-function restoreFindingAnswer(
-  entry: FindingAnswerEntry | undefined,
-  finding: Finding,
-): FindingAnswer {
-  if (entry === undefined) {
-    return UNTOUCHED_FINDING;
+// The round with `next` in place of the kinds it was derived with: a kind that
+// left encodes its answers into `heldEntries`, a kind that arrived decodes its
+// held entries, and a kind replaced under its id encodes with the old and
+// decodes with the new. Focus and the review cursor stay on their item while
+// it is still there, else clamp to the last stop or row. Not an edit.
+function rederiveRound(round: RoundState, next: PageKindTable): RoundState {
+  if (round.kinds === next) {
+    return round;
   }
-  const answer = restoreAnswer(entry, finding.choices.length);
-  const action = isFindingAction(entry.action) ? entry.action : '';
-  const isEntry = findingEntryNumber(finding, entry.choice, action) > 0;
-  return isEntry
-    ? { ...answer, choice: entry.choice, action }
-    : { ...answer, choice: 0, action: '' };
-}
-
-function restoreAnswer(
-  entry: AnswerEntry | undefined,
-  choiceCount: number,
-): ItemAnswer {
-  if (entry === undefined) {
-    return UNTOUCHED;
+  const itemAnswers: Record<ItemKind, readonly unknown[]> = {};
+  const heldEntries: Record<ItemKind, HeldEntries> = { ...round.heldEntries };
+  for (const old of round.kinds.kinds()) {
+    const { id } = old.spec;
+    const now = next.get(id);
+    const answers = round.itemAnswers[id];
+    if (now === old) {
+      itemAnswers[id] = answers;
+      continue;
+    }
+    const entries = old.restore.encode(answers);
+    const bodyKey = round.round.bodyKeys[id];
+    if (now !== undefined) {
+      itemAnswers[id] = now.restore.decode(kindItems(round.round, id), entries);
+    } else if (bodyKey !== undefined) {
+      heldEntries[id] = { bodyKey, entries };
+    }
   }
-  const isChoiceInRange = entry.choice >= 1 && entry.choice <= choiceCount;
-  return {
-    choice: isChoiceInRange ? entry.choice : 0,
-    notApplicable: entry.not_applicable,
-    notes: entry.notes,
-    dontAsk: entry.dont_ask,
-    dontAskReason: entry.dont_ask_reason,
+  for (const kind of next.kinds()) {
+    const { id } = kind.spec;
+    if (itemAnswers[id] === undefined) {
+      itemAnswers[id] = kind.restore.decode(
+        kindItems(round.round, id),
+        heldEntries[id]?.entries ?? [],
+      );
+      delete heldEntries[id];
+    }
+  }
+  const derived: RoundState = {
+    ...round,
+    kinds: next,
+    itemAnswers,
+    heldEntries,
   };
+  return {
+    ...derived,
+    focus: keptPosition(
+      railItems(derived),
+      railItems(round)[round.focus],
+      round.focus,
+    ),
+    reviewRow: keptPosition(
+      answerableItems(derived),
+      answerableItems(round)[round.reviewRow],
+      round.reviewRow,
+    ),
+  };
+}
+
+// The position of `item` in `items`; when absent, `position` held to the last
+// one.
+function keptPosition<Item extends RailItem>(
+  items: readonly Item[],
+  item: Item | undefined,
+  position: number,
+): number {
+  const kept =
+    item === undefined
+      ? -1
+      : items.findIndex((candidate) => sameRailItem(candidate, item));
+  return kept >= 0 ? kept : Math.min(position, Math.max(items.length - 1, 0));
 }
 
 function restorePlace(
@@ -622,7 +683,7 @@ function placeReviewRow(
     return state;
   }
   return updateForm(state, state.activeFormId, (round) => {
-    const lastRow = Math.max(answerableItems(round.round).length - 1, 0);
+    const lastRow = Math.max(answerableItems(round).length - 1, 0);
     const row = pick(round.reviewRow, lastRow);
     return row === round.reviewRow ? round : { ...round, reviewRow: row };
   });
@@ -637,14 +698,14 @@ function jumpToReviewRow(
     return state;
   }
   const target = row ?? round.reviewRow;
-  const item = answerableItems(round.round)[target];
+  const item = answerableItems(round)[target];
   if (item === undefined) {
     return state;
   }
   const jumped = updateForm(state, round.formId, (current) => ({
     ...current,
     reviewRow: target,
-    focus: railPosition(current.round, item),
+    focus: railPosition(current, item),
   }));
   return { ...jumped, view: 'forms' };
 }
@@ -656,7 +717,7 @@ function jumpToRailItem(state: FormsState, item: number): FormsState {
   if (state.view !== 'review' || round === null) {
     return state;
   }
-  const isRailPosition = item >= 0 && item < railItems(round.round).length;
+  const isRailPosition = item >= 0 && item < railItems(round).length;
   if (!isRailPosition) {
     return state;
   }
@@ -675,29 +736,21 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
     case 'firstItem':
       return focusAt(round, 0);
     case 'lastItem':
-      return focusAt(round, railItems(round.round).length - 1);
+      return focusAt(round, railItems(round).length - 1);
     case 'focusItem':
       return focusAt(round, action.item);
     case 'choose':
-      if (focusedItem(round)?.kind === 'finding') {
-        return updateFocusedFinding(round, (answer, finding) =>
-          chooseEntry(answer, finding, action.number),
-        );
-      }
-      return updateFocusedAnswer(round, (answer, choiceCount) =>
-        choose(answer, choiceCount, action.number),
+      return updateFocusedPick(round, (pick, item, answer) =>
+        pick.choose(item, answer, action.number),
       );
     case 'clearChoice':
-      if (focusedItem(round)?.kind === 'finding') {
-        return updateFocusedFinding(round, clearFindingPick);
-      }
-      return updateFocusedAnswer(round, (answer) =>
-        answer.notApplicable || answer.choice === 0
-          ? answer
-          : { ...answer, choice: 0 },
+      return updateFocusedPick(round, (pick, item, answer) =>
+        pick.clear(item, answer),
       );
     case 'acceptRecommendation':
-      return acceptRecommendation(round);
+      return updateFocusedPick(round, (pick, item, answer) =>
+        pick.recommended(item, answer),
+      );
     case 'toggleNotApplicable':
       return updateFocusedAnswer(round, (answer) => ({
         ...answer,
@@ -737,7 +790,8 @@ function toggleNotice(round: RoundState, notice: number): RoundState {
 // A no-op at either end of the lines, or off the notices stop.
 function moveNoticeLine(round: RoundState, delta: 1 | -1): RoundState {
   const line = round.noticeLine + delta;
-  const isOnNoticesStop = focusedItem(round)?.kind === 'notices';
+  const focused = focusedItem(round);
+  const isOnNoticesStop = focused !== null && isNoticesStop(focused);
   if (!isOnNoticesStop || !isNoticeInRange(round, line)) {
     return round;
   }
@@ -745,45 +799,32 @@ function moveNoticeLine(round: RoundState, delta: 1 | -1): RoundState {
 }
 
 function focusNotice(round: RoundState, notice: number): RoundState {
-  if (!isNoticeInRange(round, notice)) {
+  const focus = railPosition(round, { kind: 'notices' });
+  if (!isNoticeInRange(round, notice) || focus < 0) {
     return round;
   }
-  const focus = railPosition(round.round, { kind: 'notices' });
   return focus === round.focus && notice === round.noticeLine
     ? round
     : { ...round, focus, noticeLine: notice };
 }
 
 function moveFocus(round: RoundState, step: number): RoundState {
-  const lastItem = Math.max(railItems(round.round).length - 1, 0);
+  const lastItem = Math.max(railItems(round).length - 1, 0);
   const focus = Math.min(Math.max(round.focus + step, 0), lastItem);
   return focus === round.focus ? round : { ...round, focus };
 }
 
 function focusAt(round: RoundState, item: number): RoundState {
-  const isRailPosition = item >= 0 && item < railItems(round.round).length;
+  const isRailPosition = item >= 0 && item < railItems(round).length;
   return isRailPosition && item !== round.focus
     ? { ...round, focus: item }
     : round;
 }
 
-// Same number again clears; locked while not applicable.
-function choose<Answer extends ItemAnswer>(
-  answer: Answer,
-  choiceCount: number,
-  choice: number,
-): Answer {
-  const isChoiceInRange = choice >= 1 && choice <= choiceCount;
-  if (answer.notApplicable || !isChoiceInRange) {
-    return answer;
-  }
-  return { ...answer, choice: answer.choice === choice ? 0 : choice };
-}
-
 // Picks the finding's entry `number` (1-based), choice and action together;
 // the held entry again clears to no pick. Locked while not applicable, and a
 // number past the last entry changes nothing.
-function chooseEntry(
+export function chooseEntry(
   answer: FindingAnswer,
   finding: Finding,
   number: number,
@@ -799,173 +840,114 @@ function chooseEntry(
 }
 
 // Locked while not applicable; a no-op on a finding with no pick.
-function clearFindingPick(answer: FindingAnswer): FindingAnswer {
+export function clearFindingPick(answer: FindingAnswer): FindingAnswer {
   if (answer.notApplicable || holdsPick(answer, NO_PICK)) {
     return answer;
   }
   return { ...answer, ...NO_PICK };
 }
 
-function holdsPick(answer: FindingAnswer, pick: FindingPick): boolean {
+export function holdsPick(answer: FindingAnswer, pick: FindingPick): boolean {
   return answer.choice === pick.choice && answer.action === pick.action;
 }
 
-// A no-op unless a finding is focused, or when `change` returns the answer
-// it was given.
-function updateFocusedFinding(
-  round: RoundState,
-  change: (answer: FindingAnswer, finding: Finding) => FindingAnswer,
-): RoundState {
+// The focused stop as an answerable item; null on the notices stop, a kind
+// with no answer, or no stop.
+function focusedAnswerable(round: RoundState): AnswerableItem | null {
   const focused = focusedItem(round);
-  if (focused === null || focused.kind !== 'finding') {
+  if (focused === null || isNoticesStop(focused)) {
+    return null;
+  }
+  return isAnswerable(round, focused)
+    ? { kind: focused.kind, index: focused.index }
+    : null;
+}
+
+// Applies `change` through the focused kind's pick rules while its answer
+// applies; a no-op off an answerable stop, while not applicable, or when
+// `change` returns the answer it was given.
+function updateFocusedPick(
+  round: RoundState,
+  change: (
+    pick: KindPick<unknown, unknown>,
+    item: unknown,
+    answer: unknown,
+  ) => unknown,
+): RoundState {
+  const focused = focusedAnswerable(round);
+  if (focused === null) {
     return round;
   }
-  const finding = ROUND_ITEMS.finding(round.round)[focused.index - 1];
-  return updateItemAnswer(
-    round,
-    { kind: 'finding', index: focused.index },
-    (answer) => change(answer, finding),
-  );
-}
-
-// Writes the recommended pick onto an answer, or returns the answer itself
-// when it already holds that pick. `index` is 1-based.
-type RecommendedPick<K extends AnswerableKind> = (
-  round: RoundState,
-  index: number,
-  answer: AnswerOf[K],
-) => AnswerOf[K];
-
-// A mapped type, not `satisfies`: indexing it by a generic kind keeps the
-// kind's answer type. A finding's recommended pick is its recommend_action
-// with its recommend, or that action's header when recommend is null.
-const RECOMMENDED_PICKS: { [K in AnswerableKind]: RecommendedPick<K> } = {
-  question: (round, index, answer) => {
-    const { recommend } = round.round.questions[index - 1];
-    return answer.choice === recommend
-      ? answer
-      : { ...answer, choice: recommend };
-  },
-  finding: (round, index, answer) => {
-    const finding = round.round.findings[index - 1];
-    const recommended: FindingPick = {
-      choice: finding.recommend ?? 0,
-      action: finding.recommend_action,
-    };
-    return holdsPick(answer, recommended)
-      ? answer
-      : { ...answer, ...recommended };
-  },
-};
-
-// A no-op on the notices stop, while not applicable, or when the focused
-// answer already holds the recommended pick.
-function acceptRecommendation(round: RoundState): RoundState {
-  const focused = focusedItem(round);
-  if (focused === null || focused.kind === 'notices') {
+  const { pick } = answerableKindOf(round, focused);
+  const answer = kindAnswer(round, focused);
+  if ((answer as ItemAnswer).notApplicable) {
     return round;
   }
-  return acceptRecommendationOn(round, {
-    kind: focused.kind,
-    index: focused.index,
-  });
+  const next = change(pick, kindItem(round, focused), answer);
+  return next === answer ? round : withItemAnswer(round, focused, next);
 }
 
-function acceptRecommendationOn<K extends AnswerableKind>(
-  round: RoundState,
-  item: KindItem<K>,
-): RoundState {
-  const pick: RecommendedPick<K> = RECOMMENDED_PICKS[item.kind];
-  return updateItemAnswer(round, item, (answer) =>
-    answer.notApplicable ? answer : pick(round, item.index, answer),
-  );
-}
-
-// A no-op when the notices stop is focused or `change` returns the answer it
-// was given.
+// A no-op off an answerable stop or when `change` returns the answer it was
+// given; `change` keeps the answer's own fields, so a finding's action
+// survives.
 function updateFocusedAnswer(
   round: RoundState,
-  change: AnswerChange,
+  change: <Answer extends ItemAnswer>(answer: Answer) => Answer,
 ): RoundState {
-  const focused = focusedItem(round);
-  if (focused === null || focused.kind === 'notices') {
+  const focused = focusedAnswerable(round);
+  if (focused === null) {
     return round;
   }
-  return updateItemAnswer(
-    round,
-    { kind: focused.kind, index: focused.index },
-    change,
-  );
+  const answer = itemAnswer(round, focused);
+  const next = change(answer);
+  return next === answer ? round : withItemAnswer(round, focused, next);
 }
 
-// A no-op when `change` returns the answer it was given. Throws when the
-// round has no such item.
-function updateItemAnswer<K extends AnswerableKind>(
+function withItemAnswer(
   round: RoundState,
-  item: KindItem<K>,
-  change: (answer: AnswerOf[K], choiceCount: number) => AnswerOf[K],
+  item: RoundItem,
+  answer: unknown,
 ): RoundState {
-  const choiceCount = ROUND_ITEMS[item.kind](round.round)[item.index - 1]
-    .choices.length;
-  const answer = itemAnswer(round, item);
-  const next = change(answer, choiceCount);
-  return next === answer ? round : withItemAnswer(round, item, next);
-}
-
-function hasItem(round: RoundState, item: AnswerableItem): boolean {
-  const count = ANSWER_ARRAYS[item.kind].read(round).length;
-  return item.index >= 1 && item.index <= count;
-}
-
-function withItemAnswer<K extends AnswerableKind>(
-  round: RoundState,
-  item: KindItem<K>,
-  answer: AnswerOf[K],
-): RoundState {
-  const answers: AnswerArray<AnswerOf[K]> = ANSWER_ARRAYS[item.kind];
-  const written = answers.write(
-    round,
-    answers
-      .read(round)
-      .map((current, i) => (i === item.index - 1 ? answer : current)),
+  const answers = round.itemAnswers[item.kind].map((current, i) =>
+    i === item.index - 1 ? answer : current,
   );
-  return { ...written, revision: round.revision + 1 };
+  return {
+    ...round,
+    itemAnswers: { ...round.itemAnswers, [item.kind]: answers },
+    revision: round.revision + 1,
+  };
 }
 
+// The round note, or an item box's text through its kind's `reduce.withText`;
+// a no-op for an item the round lacks or a kind with no registration.
 function setText(
   round: RoundState,
   target: TextTarget,
   value: string,
 ): RoundState {
-  switch (target.field) {
-    case 'note':
-      return value === round.note
-        ? round
-        : { ...round, note: value, revision: round.revision + 1 };
-    case 'comment': {
-      const position = target.notice - 1;
-      const isNotice = position >= 0 && position < round.noticeComments.length;
-      if (!isNotice || round.noticeComments[position] === value) {
-        return round;
-      }
-      return {
-        ...round,
-        noticeComments: round.noticeComments.map((comment, i) =>
-          i === position ? value : comment,
-        ),
-        revision: round.revision + 1,
-      };
-    }
-    default: {
-      const { item, field } = target;
-      if (!hasItem(round, item) || itemAnswer(round, item)[field] === value) {
-        return round;
-      }
-      const writeField: AnswerChange = (answer) => ({
-        ...answer,
-        [field]: value,
-      });
-      return updateItemAnswer(round, item, writeField);
-    }
+  if (!('item' in target)) {
+    return value === round.note
+      ? round
+      : { ...round, note: value, revision: round.revision + 1 };
   }
+  const { item, field } = target;
+  const kind = round.kinds.get(item.kind);
+  const answers = round.itemAnswers[item.kind];
+  const isItem =
+    kind !== undefined &&
+    answers !== undefined &&
+    item.index >= 1 &&
+    item.index <= answers.length;
+  if (!isItem) {
+    return round;
+  }
+  const answer = answers[item.index - 1];
+  if (kind.reduce.text(answer, field) === value) {
+    return round;
+  }
+  return withItemAnswer(
+    round,
+    item,
+    kind.reduce.withText(answer, field, value),
+  );
 }

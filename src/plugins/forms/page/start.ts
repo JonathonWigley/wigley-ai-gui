@@ -39,10 +39,9 @@ import { startRoundAutosave } from './autosave';
 import { type BoxRef, FORMS_BOX_IDENTITY, focusActionFor } from './boxes';
 import { createFormsContributions } from './contributions';
 import {
-  apply,
   buildBody,
+  createFormsState,
   type FormsStore,
-  initialState,
   roundPlace,
 } from './form-state';
 import {
@@ -56,9 +55,12 @@ import {
   startFormsEvents,
 } from './forms-events';
 import { mountFormsView } from './forms-view';
+import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
+import { createPageKinds } from './kinds/page-kinds';
 import { readLayout } from './layout/read-layout';
 import { roundLayoutNames } from './layout/layout-resolver';
 import { presentedRoundOf } from './presented-round';
+import { watchRoundKinds } from './round-kinds-watch';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
 type FormsApi = PageApi<typeof formsManifest, FormsChannel, FormsPageEvents>;
@@ -150,16 +152,27 @@ function listenForRounds(
 // open rounds change. Every store change emits the forms page events it makes,
 // each logged as it goes; other plugins read the open rounds and add card parts
 // and review columns through the exports, each add or removal rebuilding the
-// open rounds. Each open round's place (`formsPlaceSlot`) and its unsaved
-// answers, saved at once on page hide, outlive a page reload.
+// open rounds. Each item kind draws through its registered page kind: the
+// built-in kinds register first, and a dependent registers its own through
+// `registerKind`; each register or removal re-derives the open rounds. Each
+// open round's place (`formsPlaceSlot`) and its unsaved answers, saved at
+// once on page hide, outlive a page reload.
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const { services } = api;
     const sessions = api.dependency(sessionsPageKey);
+    const kinds = createPageKinds();
+    const builtInKinds = BUILT_IN_PAGE_KINDS.map((kind) =>
+      kinds.register(kind),
+    );
+    const { apply, initialState } = createFormsState(() => kinds.table());
     const store = createReducerStore(
       initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
       apply,
+    );
+    const kindsChange = kinds.onChanged(() =>
+      store.dispatch({ type: 'kindsChanged', kinds: kinds.table() }),
     );
     const boxes = createBoxes(api, store);
     const places = followSessionFormPlaces({
@@ -215,6 +228,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
+    const kindsWatch = watchRoundKinds(store, services.log, services.toast);
     const roundsRead = listenForRounds(api, store, places);
     const layoutShow = api.layouts.show<Layout>({
       defaultLayout,
@@ -222,7 +236,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       read: readLayout,
       userLayout: () => api.settings().layout,
       namesInUse: () =>
-        store.get().forms.flatMap((round) => roundLayoutNames(round.round)),
+        store.get().forms.flatMap((round) => roundLayoutNames(round)),
       setLayouts: (shown) => view.setLayouts(shown),
     });
     const layoutRefresh = store.subscribe(() => layoutShow.refresh());
@@ -239,13 +253,21 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         addCardPart: (part) => consumer.track(contributions.addCardPart(part)),
         addReviewColumn: (column) =>
           consumer.track(contributions.addReviewColumn(column)),
+        registerKind: (kind) => consumer.track(kinds.register(kind)),
       }),
+      // The kinds listener goes first, so removing the built-in kinds after
+      // the view re-derives no round.
       dispose() {
+        kindsChange.dispose();
+        kindsWatch.dispose();
         roundsRead.dispose();
         places.dispose();
         autosave.dispose();
         layoutRefresh.dispose();
         view.dispose();
+        for (const registration of builtInKinds) {
+          registration.dispose();
+        }
       },
       commands: formsCommandHandlers({
         store,

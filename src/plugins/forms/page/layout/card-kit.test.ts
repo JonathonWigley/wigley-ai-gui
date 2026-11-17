@@ -10,13 +10,21 @@ import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
-import { apply, initialState, type RoundState } from '../form-state';
-import { findingFormat } from '../kinds/finding/finding-card';
-import { questionFormat } from '../kinds/question/question-card';
+import type { RoundState } from '../form-state';
+import { findingPageKind } from '../kinds/finding/finding-card';
+import { questionPageKind } from '../kinds/question/question-card';
 import type { CardDeps } from '../kinds/item-format';
 import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../../manifest';
-import { finding, notice, presentedRound, question } from '../test-rounds';
+import {
+  apply,
+  cardInputOf,
+  finding,
+  initialState,
+  notice,
+  presentedRound,
+  question,
+} from '../test-rounds';
 import {
   baseKitDepsFor,
   choiceGroupsOf,
@@ -42,7 +50,7 @@ function cardOf(overrides: Partial<DefectFinding>) {
   const { round } = presentedRound('r1', {
     findings: [finding('Delta', overrides)],
   });
-  return findingFormat.cardInput(round, 1);
+  return cardInputOf(findingPageKind, round, 1);
 }
 
 describe('choiceGroupsOf', () => {
@@ -190,7 +198,7 @@ function fakeCardDeps(contributions: FormsContributions) {
 
 function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
   const round = findingRound(overrides);
-  const input = findingFormat.cardInput(round.round, 1);
+  const input = cardInputOf(findingPageKind, round.round, 1);
   return createCardKit('finding', 1, input, round, 0, deps);
 }
 
@@ -211,7 +219,7 @@ function laterFindingKit(deps: CardDeps) {
     type: 'formShown',
     form: presented,
   }).forms[0];
-  const input = findingFormat.cardInput(round.round, 3);
+  const input = cardInputOf(findingPageKind, round.round, 3);
   return createCardKit('finding', 3, input, round, 2, deps);
 }
 
@@ -226,7 +234,7 @@ function questionKit(deps: CardDeps, recommend = 1) {
     type: 'formShown',
     form: presented,
   }).forms[0];
-  const input = questionFormat.cardInput(round.round, 1);
+  const input = cardInputOf(questionPageKind, round.round, 1);
   return createCardKit('question', 1, input, round, 1, deps);
 }
 

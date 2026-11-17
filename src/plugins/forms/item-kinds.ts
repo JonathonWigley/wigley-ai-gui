@@ -30,3 +30,7 @@ export const BUILT_IN_KIND_SPECS: Readonly<
     answerable: true,
   },
 };
+
+export function isBuiltInItemKind(kind: string): kind is BuiltInItemKind {
+  return Object.hasOwn(BUILT_IN_KIND_SPECS, kind);
+}

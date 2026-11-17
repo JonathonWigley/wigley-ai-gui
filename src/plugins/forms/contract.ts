@@ -1,4 +1,4 @@
-import type { CommandKey } from '../../contracts/commands';
+import type { CommandId, CommandKey } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   AgentFormEnd,
@@ -19,11 +19,8 @@ export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
 
 // The kinds forms itself registers.
 export type BuiltInItemKind = 'notice' | 'finding' | 'question';
-// The kinds the page draws. A registered kind's id is any string
-// (ItemKindSpec.id).
-export type ItemKind = BuiltInItemKind;
-// The built-in kinds the user answers with a choice.
-export type AnswerableKind = Exclude<BuiltInItemKind, 'notice'>;
+// A registered kind's id (ItemKindSpec.id), a built-in's or a plugin's.
+export type ItemKind = string;
 
 // The values Python's json.dumps writes for a fingerprint.
 export type PythonJsonValue =
@@ -211,9 +208,14 @@ export interface Round {
   // The layout that draws this round's panes and the cards no item's own
   // layout draws; null for none.
   layout: string | null;
-  questions: Question[];
-  notices: Notice[];
-  findings: Finding[];
+  // Each kind's items by kind id, as main's registered kinds parsed them; a
+  // kind with no items may have no key. The built-ins' items are `Question`,
+  // `Notice` and `Finding`.
+  items: Readonly<Record<ItemKind, readonly unknown[]>>;
+  // Each kind's bodyKey as main registered it, so the page writes back the
+  // entries of a kind it has no registration for; outside the fingerprint and
+  // the body.
+  bodyKeys: Readonly<Record<ItemKind, string>>;
 }
 
 // One question's or finding's answer as last saved; field names are the
@@ -388,6 +390,97 @@ export interface MainItemKind<
   status?(result: Result): AnswerStatus;
 }
 
+// An answerable kind's answer, the part forms itself reads and toggles.
+export interface ItemAnswer {
+  // 1-based, 0 for none; kept while not applicable.
+  choice: number;
+  notApplicable: boolean;
+  notes: string;
+  dontAsk: boolean;
+  dontAskReason: string;
+}
+
+// One text box an item's card mounts. `keys` is the command whose keys the
+// field's label shows; null for none.
+export interface KindBox {
+  field: string;
+  label: string;
+  hint: string;
+  className: string;
+  keys: CommandId | null;
+}
+
+// A kind's answers to and from the saved body's entries at its bodyKey.
+export interface KindDraftCodec<Item, Answer> {
+  // One answer per item: from the entry whose 1-based `index` names it, else
+  // `reduce.untouched(item)`.
+  decode(items: readonly Item[], entries: readonly unknown[]): Answer[];
+  // One saved entry per answer, `index` 1-based, in the shape `decode` reads.
+  encode(answers: readonly Answer[]): unknown[];
+}
+
+// Called only while the answer is applicable: forms checks `notApplicable`
+// first. Each returns `answer` itself when nothing changes. `number` is
+// 1-based down the card.
+export interface KindPick<Item, Answer> {
+  choose(item: Item, answer: Answer, number: number): Answer;
+  clear(item: Item, answer: Answer): Answer;
+  recommended(item: Item, answer: Answer): Answer;
+  isComplete(item: Item, answer: Answer): boolean;
+  number(item: Item, answer: Answer): number;
+  // The choice the agent gets for a complete pick; 0 for a pick with no
+  // choice.
+  choice(item: Item, answer: Answer): number;
+  choiceText(item: Item, choice: number): string;
+  // The recommended choice, 1-based; 0 when the recommendation has no choice.
+  recommend(item: Item): number;
+  // Whether a complete pick earns the review's Recommended badge.
+  isRecommended(item: Item, answer: Answer): boolean;
+}
+
+// How a kind's answers change. Each returns `answer` itself when nothing
+// changes.
+export interface KindReduce<Item, Answer> {
+  untouched(item: Item): Answer;
+  text(answer: Answer, field: string): string;
+  withText(answer: Answer, field: string, value: string): Answer;
+  // Given exactly when `spec.answerable`; then `Answer` extends `ItemAnswer`.
+  pick?: KindPick<Item, Answer>;
+}
+
+export interface KindBoxes<Answer> {
+  // Every box an item's card mounts, in default order.
+  fields: readonly KindBox[];
+  // The fields of `fields` the user can reach now, in Tab order.
+  shown(answer: Answer): readonly string[];
+}
+
+export interface KindCardInput<Item, Input> {
+  // The item number's prefix on its card head, the rail and the review.
+  railPrefix: string;
+  title(item: Item): string;
+  // The layout the item names; null for none.
+  layout(item: Item): string | null;
+  // The data a layout builds the item's card from. `index` is 1-based within
+  // the kind.
+  input(item: Item, index: number, round: Round): Input;
+}
+
+// One item kind as forms' page registers it: how its saved entries restore,
+// how its answers change, the boxes its cards mount, its card's data, and its
+// place on the rail. `Answer` holds primitives only, compared field by field
+// for `answerChanged`.
+export interface PageKind<Item = unknown, Answer = unknown, Input = unknown> {
+  spec: ItemKindSpec;
+  restore: KindDraftCodec<Item, Answer>;
+  reduce: KindReduce<Item, Answer>;
+  boxes: KindBoxes<Answer>;
+  cardInput: KindCardInput<Item, Input>;
+  // The kind's place among rail stops, ascending, ties in registration order;
+  // null only for `notice`, whose items draw on the notices stop.
+  railOrder: number | null;
+}
+
 // Round sources (MCP now, the wigley harness next) reach round logic only here.
 export type FormsService = AgentFormService<AnswersPayload>;
 
@@ -442,9 +535,10 @@ export interface OpenRound {
   round: Round;
 }
 
-// A question or finding in a round; `index` is 1-based in its kind's array.
+// An item of an answerable kind in a round; `index` is 1-based in its kind's
+// items.
 export interface FormsItemRef {
-  kind: AnswerableKind;
+  kind: ItemKind;
   index: number;
 }
 
@@ -454,9 +548,9 @@ export type RoundFinishOutcome = 'submitted' | 'cancelled' | 'closed';
 
 // `roundShown` fires once when a round joins the page, the rounds open at
 // page load included; a restored draft emits no `answerChanged`.
-// `answerChanged` fires on each change to a question's or finding's answer,
-// its notes and reason text included, never for a notice comment or the round
-// note; its `status` is the page's, `answered` once the item is responded
+// `answerChanged` fires on each change to an answerable kind's answer, its
+// notes and reason text included, never for a notice comment, the round note
+// or a kind registering or leaving; its `status` is the page's, `answered` once the item is responded
 // (`isResponded`), notes alone included. `roundFinished` fires once when a
 // round leaves the page, for every reason, with the answers it left with.
 // `viewChanged` fires when the view or the active round changes. In one store
@@ -474,7 +568,8 @@ export interface FormsPageEvents extends EventShape {
   viewChanged: { view: FormsView; roundId: string | null };
 }
 
-// The card a part draws on; `index` is 1-based in its kind's array.
+// The card a part draws on, of any registered kind; `index` is 1-based in its
+// kind's items.
 export interface FormsCardPartItem {
   roundId: string;
   kind: ItemKind;
@@ -505,12 +600,18 @@ export interface FormsReviewColumn {
 // round's answers as its saved body, null for a round the page does not hold.
 // `addCardPart` and `addReviewColumn` throw on an id already added; each
 // `Disposable` removes its part or column, and adding or removing one redraws
-// every open round, keeping its answers.
+// every open round, keeping its answers. `registerKind` throws, registering
+// nothing, on an id already registered, the id `notices`, a null `railOrder`
+// on any id but `notice`, or a `reduce.pick` given when `spec.answerable` is
+// false or missing when it is true; its `Disposable` removes the kind, and
+// each change re-derives every open round, keeping a departed kind's draft
+// entries in its body.
 export interface FormsPageExports {
   activeRound(): OpenRound | null;
   answers(roundId: string): FormBody | null;
   addCardPart(part: FormsCardPart): Disposable;
   addReviewColumn(column: FormsReviewColumn): Disposable;
+  registerKind(kind: PageKind): Disposable;
 }
 
 export const formsPageKey: DependencyKey<FormsPageExports, 'page', 'forms'> = {

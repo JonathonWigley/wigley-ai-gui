@@ -28,7 +28,7 @@ import { row as rowPart } from '../../../../shared/page/ui/row';
 import { setDotStatus, statusDot } from '../../../../shared/page/ui/status-dot';
 import { tag } from '../../../../shared/page/ui/tag';
 import type { KeyHints } from '../../../../contracts/plugin';
-import type { FormsItemRef, FormsView } from '../../contract';
+import type { FormsItemRef, FormsView, Notice } from '../../contract';
 import { type FormsCommandName, formsCommand, formsScope } from '../../ids';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
@@ -37,14 +37,19 @@ import type {
   LayoutPane,
   NoticesInput,
   NoticesKit,
+  RailEntryInput,
   RailInput,
   RailKit,
   ReviewInput,
   ReviewKit,
+  ReviewRowInput,
 } from '../../layouts/layout';
 import {
   answerableItems,
   answerStatus,
+  isAnswerable,
+  isNoticesStop,
+  kindItems,
   progress,
   type RailItem,
   railItems,
@@ -57,13 +62,14 @@ import {
   roundInfo,
   statusLabel,
 } from '../kinds/card-parts';
-import { FORMATS, itemLabel } from '../kinds/formats';
+import { itemLabel } from '../kinds/formats';
 import type { CardDeps, ItemCard } from '../kinds/item-format';
 import {
   progressText,
   railDotStatus,
   railEntryLabel,
   railEntryTitle,
+  requireKind,
   type ReviewRow,
   reviewRows,
   reviewRowsChanged,
@@ -230,12 +236,13 @@ interface NoticeLine {
 }
 
 function drawNotices(
-  notices: CompleteLayout['notices'],
+  pane: CompleteLayout['notices'],
   parent: HTMLElement,
   draw: NoticesDraw,
 ): ItemCard {
   const { round, deps } = draw;
-  const count = round.round.notices.length;
+  const notices = kindItems(round.round, 'notice') as readonly Notice[];
+  const count = notices.length;
   const lines = new Map<number, NoticeLine>();
   // The cursor line's prompt, which each update moves to that line's head.
   const togglePrompt = element('span', 'notice-line-prompt');
@@ -257,16 +264,16 @@ function drawNotices(
   };
   const input: NoticesInput = {
     round: roundInfo(round.round),
-    notices: round.round.notices.map((notice, i) => ({
+    notices: notices.map((notice, i) => ({
       index: i + 1,
-      label: itemLabel({ kind: 'notice', index: i + 1 }),
+      label: itemLabel(round.kinds, { kind: 'notice', index: i + 1 }),
       title: notice.title,
       badge: notice.badge,
     })),
   };
   const paneElement = requireElementIn(
     parent,
-    (notices(parent, input, kit) as LayoutPane | undefined)?.element,
+    (pane(parent, input, kit) as LayoutPane | undefined)?.element,
     'notices',
   );
   for (const notice of input.notices) {
@@ -343,7 +350,7 @@ function drawRail(
   round: RoundState,
   deps: PaneDeps,
 ): RailPane {
-  const items = railItems(round.round);
+  const items = railItems(round);
   const updaters: Updater[] = [];
   const entries = new Map<number, HTMLElement>();
   let shownView: FormsView = 'forms';
@@ -372,11 +379,13 @@ function drawRail(
   };
   const input: RailInput = {
     round: roundInfo(round.round),
+    // A plugin kind's stop carries its own kind id, which the Layout
+    // contract's union does not name yet.
     items: items.map((item, position) => ({
       position,
-      kind: item.kind,
-      label: railEntryLabel(item),
-      title: railEntryTitle(round.round, item),
+      kind: item.kind as RailEntryInput['kind'],
+      label: railEntryLabel(round, item),
+      title: railEntryTitle(round, item),
     })),
   };
   const paneElement = requireElementIn(
@@ -412,10 +421,13 @@ function buildRailEntry(
   item: RailItem,
   onClick: () => void,
 ): RailEntry {
-  const title = railEntryTitle(round.round, item);
+  const title = railEntryTitle(round, item);
   const dot = statusDot('idle');
   const leading = element('span', 'rail-lead');
-  leading.append(dot, element('span', 'rail-number', railEntryLabel(item)));
+  leading.append(
+    dot,
+    element('span', 'rail-number', railEntryLabel(round, item)),
+  );
   const entry = rowPart({
     density: 'list',
     tag: 'li',
@@ -430,7 +442,7 @@ function buildRailEntry(
 }
 
 // The focused item's row is selected; while the review shows, untouched
-// items are flagged.
+// items are flagged. A stop of a kind with no answer shows `none`.
 function updateRailEntry(
   entry: RailEntry,
   round: RoundState,
@@ -438,16 +450,23 @@ function updateRailEntry(
   position: number,
   view: FormsView,
 ) {
-  const status =
-    item.kind === 'notices'
-      ? 'notices'
-      : answerStatus(round, { kind: item.kind, index: item.index });
+  const status = railStatus(round, item);
   const isReview = view === 'review';
   const isFlagged = isReview && status === 'untouched';
   entry.element.dataset.status = status;
   entry.element.classList.toggle('is-selected', position === round.focus);
   entry.element.classList.toggle('is-flagged', isFlagged);
   setDotStatus(entry.dot, railDotStatus(status, isFlagged));
+}
+
+function railStatus(
+  round: RoundState,
+  item: RailItem,
+): ReturnType<typeof answerStatus> | 'notices' | 'none' {
+  if (isNoticesStop(item)) {
+    return 'notices';
+  }
+  return isAnswerable(round, item) ? answerStatus(round, item) : 'none';
 }
 
 function drawReview(
@@ -470,11 +489,13 @@ function drawReview(
   let isNoteMounted = false;
   const input: ReviewInput = {
     round: roundInfo(round.round),
-    rows: answerableItems(round.round).map((item, row) => ({
+    rows: answerableItems(round).map((item, row) => ({
       row,
-      kind: item.kind,
-      label: itemLabel(item),
-      title: FORMATS[item.kind].title(round.round, item.index),
+      kind: item.kind as ReviewRowInput['kind'],
+      label: itemLabel(round.kinds, item),
+      title: requireKind(round, item).cardInput.title(
+        kindItems(round.round, item.kind)[item.index - 1],
+      ),
     })),
   };
   const base = createFormsBaseKit(baseKitDepsFor(deps, formsScope('review')));

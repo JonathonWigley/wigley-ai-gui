@@ -47,7 +47,7 @@ import { createKindRegistry } from './kinds/registry';
 import { ROUND_OPEN_TOOL } from './mcp-wording';
 import { createLayoutPreview } from './preview/layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
-import { type KindRound, recommendedBody } from './round';
+import { recommendedBody } from './round';
 import {
   autoAnsweredPayload,
   createRoundType,
@@ -87,7 +87,7 @@ function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
   chat: ChatMainExports,
-  roundType: AgentFormType<KindRound, FormBody, AnswersPayload>,
+  roundType: AgentFormType<Round, FormBody, AnswersPayload>,
   kinds: () => readonly MainItemKind[],
   layoutNames: () => readonly string[],
 ): {
@@ -129,8 +129,8 @@ function createForms(
     timers: services.timers,
     autoAnswer: {
       isOn: (sessionId) => chat.isHeadless(sessionId),
-      body: (round: KindRound) => recommendedBody(kinds(), round),
-      payload: (round: KindRound, body: FormBody) =>
+      body: (round: Round) => recommendedBody(kinds(), round),
+      payload: (round: Round, body: FormBody) =>
         autoAnsweredPayload(kinds(), round, body),
     },
   });

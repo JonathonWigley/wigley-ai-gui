@@ -15,12 +15,20 @@ import type { Layout } from '../layouts/layout';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
-import { apply, initialState, type RoundState } from './form-state';
+import type { RoundState } from './form-state';
 import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
 import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../manifest';
+import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
+import { pageKindTable } from './kinds/page-kinds';
 import { createRoundView } from './round-view';
-import { notice, presentedRound, question } from './test-rounds';
+import {
+  apply,
+  initialState,
+  notice,
+  presentedRound,
+  question,
+} from './test-rounds';
 import {
   fencePlaceholder,
   installMarkdownDom,
@@ -150,6 +158,26 @@ describe('round view rebuild', () => {
     vi.unstubAllGlobals();
   });
 
+  it('update_KindLeavesWhileItsCardShows_RebuildsWithoutItsCards', () => {
+    const presented = presentedRound('r1');
+    const { view } = roundViewSetup(bareLayout, undefined, presented);
+    expect(findAll(asFake(view.element), 'bare')).toHaveLength(2);
+    const withoutQuestions = pageKindTable(
+      BUILT_IN_PAGE_KINDS.filter((kind) => kind.spec.id !== 'question'),
+    );
+    const shown = apply(initialState([], presented.sessionId), {
+      type: 'formShown',
+      form: presented,
+    });
+    const left = apply(shown, {
+      type: 'kindsChanged',
+      kinds: withoutQuestions,
+    }).forms[0];
+
+    expect(() => view.update(left, 'forms')).not.toThrow();
+    expect(findAll(asFake(view.element), 'bare')).toHaveLength(0);
+  });
+
   it('keeps the main column scroll while the round shows the same item', () => {
     const { round, view, main } = roundViewSetup();
     main.scrollTop = 120;
@@ -203,7 +231,7 @@ describe('round view rebuild', () => {
     );
     const comment: BoxRef = {
       roundId: 'r1',
-      target: { field: 'comment', notice: 2 },
+      target: { field: 'comment', item: { kind: 'notice', index: 2 } },
     };
     boxes.focus(comment);
 

@@ -8,8 +8,10 @@ import {
   focusedItem,
   type FormsAction,
   type FormsState,
-  itemAnswer,
+  isNoticesStop,
+  kindAnswer,
   railPosition,
+  type RoundItem,
   type RoundState,
   type TextTarget,
 } from './form-state';
@@ -22,29 +24,23 @@ export interface BoxRef {
 
 export type BoxField = TextTarget['field'];
 
+// `<roundId>/note`, or `<roundId>/<kind>/<index>/<field>` for an item's box.
 export function boxKey(box: BoxRef): string {
   const { roundId, target } = box;
-  switch (target.field) {
-    case 'note':
-      return `${roundId}/note`;
-    case 'comment':
-      return `${roundId}/comment/${target.notice}`;
-    default:
-      return `${roundId}/${target.field}/${target.item.kind}/${target.item.index}`;
+  if (!('item' in target)) {
+    return `${roundId}/note`;
   }
+  const { item, field } = target;
+  return `${roundId}/${item.kind}/${item.index}/${field}`;
 }
 
 // How the log names a box, e.g. `notes on finding 2`.
 export function boxDescription(box: BoxRef): string {
   const { target } = box;
-  switch (target.field) {
-    case 'note':
-      return 'note on the round';
-    case 'comment':
-      return `comment on notice ${target.notice}`;
-    default:
-      return `${target.field} on ${target.item.kind} ${target.item.index}`;
+  if (!('item' in target)) {
+    return 'note on the round';
   }
+  return `${target.field} on ${target.item.kind} ${target.item.index}`;
 }
 
 // Forms' boxes, one round's boxes to a form.
@@ -73,8 +69,8 @@ export function roundViewBoxes(state: FormsState, roundId: string): BoxRef[] {
     : boxesInView(round, sessionPaneView(state, round.sessionId, 'forms'));
 }
 
-// The forms view shows the focused item's boxes, or on the notices stop the
-// open lines' comment boxes; the review only the round note.
+// The forms view shows the focused item's shown boxes, or on the notices stop
+// the open lines' shown boxes; the review only the round note.
 function boxesInView(round: RoundState, view: FormsState['view']): BoxRef[] {
   switch (view) {
     case 'forms':
@@ -87,25 +83,28 @@ function boxesInView(round: RoundState, view: FormsState['view']): BoxRef[] {
 }
 
 function itemBoxes(round: RoundState): BoxRef[] {
-  const item = focusedItem(round);
-  const roundId = round.formId;
-  if (item === null) {
+  const focused = focusedItem(round);
+  if (focused === null) {
     return [];
   }
-  if (item.kind === 'notices') {
-    return round.openNotices.flatMap((isOpen, i): BoxRef[] =>
-      isOpen ? [{ roundId, target: { field: 'comment', notice: i + 1 } }] : [],
+  if (isNoticesStop(focused)) {
+    return round.openNotices.flatMap((isOpen, i) =>
+      isOpen ? shownItemBoxes(round, { kind: 'notice', index: i + 1 }) : [],
     );
   }
-  const answerable = { kind: item.kind, index: item.index };
-  const notes: BoxRef = {
-    roundId,
-    target: { field: 'notes', item: answerable },
-  };
-  const isDontAskOn = itemAnswer(round, answerable).dontAsk;
-  return isDontAskOn
-    ? [notes, { roundId, target: { field: 'dontAskReason', item: answerable } }]
-    : [notes];
+  return shownItemBoxes(round, focused);
+}
+
+// The item's boxes its kind's `boxes.shown` gives for its answer; none for a
+// kind with no registration.
+function shownItemBoxes(round: RoundState, item: RoundItem): BoxRef[] {
+  const kind = round.kinds.get(item.kind);
+  if (kind === undefined) {
+    return [];
+  }
+  return kind.boxes
+    .shown(kindAnswer(round, item))
+    .map((field) => ({ roundId: round.formId, target: { field, item } }));
 }
 
 export function isBoxShown(state: FormsState, box: BoxRef): boolean {
@@ -130,9 +129,9 @@ export function shownBox(state: FormsState, fields: BoxField[]): BoxRef | null {
   );
 }
 
-// Focuses the box's item in the active round, or for a comment box puts the
-// notices stop's line cursor on its notice; null for the round note, a box of
-// another round, or an item the round lacks.
+// Focuses the box's item in the active round, or for a box of a kind with no
+// rail order (`notice`) puts the notices stop's line cursor on its item; null
+// for the round note, a box of another round, or an item the round lacks.
 export function focusActionFor(
   state: FormsState,
   box: BoxRef,
@@ -142,14 +141,18 @@ export function focusActionFor(
   if (round === null || round.formId !== box.roundId) {
     return null;
   }
-  if (target.field === 'note') {
+  if (!('item' in target)) {
     return null;
   }
-  if (target.field === 'comment') {
-    const isNotice =
-      target.notice >= 1 && target.notice <= round.round.notices.length;
-    return isNotice ? { type: 'focusNotice', notice: target.notice } : null;
+  const kind = round.kinds.get(target.item.kind);
+  if (kind === undefined) {
+    return null;
   }
-  const item = railPosition(round.round, target.item);
+  if (kind.railOrder === null) {
+    const { index } = target.item;
+    const isNotice = index >= 1 && index <= round.openNotices.length;
+    return isNotice ? { type: 'focusNotice', notice: index } : null;
+  }
+  const item = railPosition(round, target.item);
   return item < 0 ? null : { type: 'focusItem', item };
 }
