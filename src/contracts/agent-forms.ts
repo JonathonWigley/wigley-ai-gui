@@ -42,9 +42,9 @@ export interface PresentedAgentForm<Form, Body> {
 }
 
 export interface AgentFormListener<Body> {
-  // Throws an Error with the reason when the draft could not be saved; a form
-  // no longer open ignores the draft.
-  draft(body: Body): void;
+  // Rejects with an Error naming the reason when the draft could not be saved;
+  // a form no longer open ignores the draft and resolves.
+  draft(body: Body): Promise<void>;
   // Throws an Error with the reason when the answers cannot be read; the form
   // then stays open.
   finish(end: AgentFormEnd<Body>): void;
@@ -80,7 +80,7 @@ export interface AgentFormClosed {
 // Type aliases, not interfaces: ChannelShape needs index signatures an interface lacks.
 export type AgentFormInvoke<Form, Body> = {
   openForms(): PresentedAgentForm<Form, Body>[];
-  draft(formId: string, body: Body): void;
+  draft(formId: string, body: Body): Promise<void>;
   finish(formId: string, end: AgentFormEnd<Body>): void;
 };
 export type AgentFormMessages<Form, Body> = {

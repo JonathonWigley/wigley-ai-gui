@@ -102,7 +102,10 @@ function fakeListener() {
   const finishes: TestEnd[] = [];
   let cancels = 0;
   const listener: AgentFormListener<TestBody> = {
-    draft: (body) => drafts.push(body),
+    draft: (body) => {
+      drafts.push(body);
+      return Promise.resolve();
+    },
     finish: (end) => finishes.push(end),
     cancel: () => {
       cancels++;
@@ -329,25 +332,25 @@ describe('createAgentFormChannelPresenter', () => {
     expect(openForms()).toEqual([{ ...FORM, draft: BODY }]);
   });
 
-  it("throws a draft's failed save out of the handler, so the page's invoke rejects", () => {
+  // Breaks if the handler drops the listener's promise.
+  it("throws a draft's failed save out of the handler, so the page's invoke rejects", async () => {
     const { presenter, saveDraft } = setUp();
     presenter.show(FORM, {
       cancel: () => {},
-      draft: () => {
-        throw new Error('could not save form form-1: EACCES');
-      },
+      draft: () =>
+        Promise.reject(new Error('could not save form form-1: EACCES')),
       finish: () => {},
     });
 
-    expect(() => saveDraft('form-1', BODY)).toThrow(
+    await expect(saveDraft('form-1', BODY)).rejects.toThrow(
       'could not save form form-1: EACCES',
     );
   });
 
-  it('answers a draft for a form no longer open without passing it on', () => {
+  it('answers a draft for a form no longer open without passing it on', async () => {
     const { saveDraft } = setUp();
 
-    expect(saveDraft('form-gone', BODY)).toBeUndefined();
+    expect(await saveDraft('form-gone', BODY)).toBeUndefined();
   });
 
   it('ends a form the page finishes and drops what arrives after', () => {
@@ -380,7 +383,7 @@ describe('createAgentFormChannelPresenter', () => {
     const { page, attention, refusal, presenter, openForms, finish } = setUp();
     presenter.show(FORM, {
       cancel: () => {},
-      draft: () => {},
+      draft: () => Promise.resolve(),
       finish: () => {
         throw new Error('form form-1 has no item 3');
       },
@@ -400,7 +403,7 @@ describe('createAgentFormChannelPresenter', () => {
     const end: TestEnd = { kind: 'cancelled', body: BODY };
     presenter.show(FORM, {
       cancel: () => {},
-      draft: () => {},
+      draft: () => Promise.resolve(),
       finish: () => presenter.close('form-1'),
     });
 

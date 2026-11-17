@@ -469,11 +469,12 @@ function formListener<Form, Body, Payload>(
   return {
     draft: (body) => {
       if (open.end !== null || open.closed) {
-        return;
+        return Promise.resolve();
       }
       open.latestBody = session.type.readBody(open.form, body);
-      // Throws when the disk write fails, so the page shows the draft unsaved.
-      session.store.saveBody(open.record, open.latestBody);
+      // Rejects when the disk write fails, so the page shows the draft
+      // unsaved; the reply still carries it.
+      return session.store.saveBody(open.record, open.latestBody);
     },
     finish: (end) => {
       if (open.end !== null || open.closed) {
@@ -1079,5 +1080,26 @@ export function createAgentFormService<Form, Body, Payload>(
     detach: () => {
       detach.detached = true;
     },
+  };
+}
+
+// `service` whose sessions' `open` and `collect` run once `loaded` settles;
+// `end` and `detach` run at once.
+export function afterLoad<Payload>(
+  loaded: Promise<void>,
+  service: AgentFormService<Payload>,
+): AgentFormService<Payload> {
+  return {
+    startSession: (owner) => {
+      const session = service.startSession(owner);
+      return {
+        open: (args, toolUseId, signal) =>
+          loaded.then(() => session.open(args, toolUseId, signal)),
+        collect: (wait, signal) =>
+          loaded.then(() => session.collect(wait, signal)),
+        end: () => session.end(),
+      };
+    },
+    detach: () => service.detach(),
   };
 }

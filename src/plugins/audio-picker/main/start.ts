@@ -1,4 +1,3 @@
-import path from 'node:path';
 import type {
   DriveHost,
   MainApi,
@@ -11,7 +10,10 @@ import {
   NO_FORM_WAKE,
 } from '../../../shared/agent-forms/chat-wake';
 import { addAgentFormDriveActions } from '../../../shared/agent-forms/drive-actions';
-import { createAgentFormService } from '../../../shared/agent-forms/form-service';
+import {
+  afterLoad,
+  createAgentFormService,
+} from '../../../shared/agent-forms/form-service';
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
@@ -28,6 +30,7 @@ import {
   type AudioPickerChannel,
   MAX_AUDIO_BYTES,
   OPEN_AUDIO_PICKER_TOOL,
+  SAVED_PICKERS_FOLDER,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { audioPickerManifest } from '../manifest';
@@ -81,7 +84,8 @@ export function addDriveActions(
 }
 
 // Serves open_audio_picker and collect_last_audio_picker to every agent
-// session, checking each listed file exists before a picker opens; saves each
+// session once the picker folder's first read settles, checking each listed
+// file exists before a picker opens; saves each
 // picker in the picker folder and shows it on the page; serves the page the
 // bytes of the files an open picker lists; wakes a picker's chat session when
 // the picker finishes with no call waiting; answers a headless chat session's
@@ -98,18 +102,14 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const store = createFolderFormStore({
-      dir: path.join(
-        services.homeDir,
-        '.agents',
-        'wigley-audio-picker',
-        'pickers',
-      ),
+      files: services.files,
+      dir: services.paths.join(services.homeDir, SAVED_PICKERS_FOLDER),
       clock: services.clock,
       randomHex: services.randomHex,
       paths: services.paths,
       log: services.log,
     });
-    store.prune();
+    const loaded = store.load();
     const type = createAudioPickerType(services.paths);
     const presenter = createAgentFormChannelPresenter({
       channel: api.channel,
@@ -130,15 +130,18 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
       maxBytes: MAX_AUDIO_BYTES,
     });
     const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
-    const service = createAgentFormService({
-      type,
-      presenter: reads.watch(presenter),
-      store,
-      wake: createChatFormWake(chat, services.log),
-      defaultDeadlineSeconds,
-      timers: services.timers,
-      autoAnswer: audioPickerAutoAnswer((id) => chat.isHeadless(id)),
-    });
+    const service = afterLoad(
+      loaded,
+      createAgentFormService({
+        type,
+        presenter: reads.watch(presenter),
+        store,
+        wake: createChatFormWake(chat, services.log),
+        defaultDeadlineSeconds,
+        timers: services.timers,
+        autoAnswer: audioPickerAutoAnswer((id) => chat.isHeadless(id)),
+      }),
+    );
     const soundsDir = sampleSoundsDir(api.dataFolder, services.paths);
     const writeSounds = () => writeSampleSounds(api.data);
     const previewService = createAgentFormService({
@@ -210,6 +213,7 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
           service.detach();
         }
         preview.dispose();
+        return store.flushed();
       },
     };
   },

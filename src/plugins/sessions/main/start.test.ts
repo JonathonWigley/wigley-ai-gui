@@ -1,11 +1,13 @@
 import { once } from 'node:events';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { describe, expect, it, vi } from 'vitest';
+import type { Files } from '../../../contracts/files';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import { createMemoryFiles } from '../../../shared/memory-files';
 import {
   dataEmitted,
   noCounts,
@@ -13,6 +15,7 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { channelPath } from '../../../shared/local-channel/channel-path';
 import { osPlatform } from '../../../shared/os-platform';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import { fakePlatform } from '../../../shared/platform.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
@@ -197,12 +200,13 @@ function fakeAskStart() {
 
 // Sessions' main part started over a fake `MainApi` with no drive and no
 // self-test script, its titles limited to `titleMaxLength`. It opens no relay
-// unless `runMode` says so, with its files under `homeDir`.
+// unless `runMode` says so, with its files under `homeDir` in `files`.
 function startSessionsPart(
   titleMaxLength: number,
   {
     runMode = 'selfTest',
     homeDir = '/home',
+    files = createMemoryFiles(),
     log = () => undefined,
     send = () => undefined,
     originRepoName = () => Promise.resolve(null),
@@ -211,6 +215,7 @@ function startSessionsPart(
   }: {
     runMode?: 'selfTest' | 'live';
     homeDir?: string;
+    files?: Files;
     log?: (message: string) => void;
     send?: (message: string, payload: unknown) => void;
     originRepoName?: (projectDir: string) => Promise<string | null>;
@@ -234,6 +239,7 @@ function startSessionsPart(
       runMode,
       paths: { join: (...parts: string[]) => parts.join('/') },
       homeDir,
+      files,
       appInstance: { id: 'app', isDev: false },
       selfTest: null,
       git: { originRepoName },
@@ -491,26 +497,37 @@ describe('sessions main part', () => {
   it('keeps a contribution live when the endpoint files cannot be written', async () => {
     const homeDir = mkdtempSync(path.join(os.tmpdir(), 'sessions-start-'));
     const logged: string[] = [];
+    const memory = createMemoryFiles();
+    let isRefusing = false;
     const started = startSessionsPart(10, {
       runMode: 'live',
       homeDir,
+      files: {
+        ...memory,
+        write: (file, text) =>
+          isRefusing
+            ? Promise.reject(new Error('EACCES'))
+            : memory.write(file, text),
+      },
       log: (message) => logged.push(message),
     });
     try {
       const view = viewOf(started);
       const connected = view.connect(hostInfo('host-1'));
-      const endpointDir = path.join(homeDir, '.agents', 'app');
-      rmSync(endpointDir, { recursive: true });
-      writeFileSync(endpointDir, 'not a folder');
+      // Lets the write the start queued land before the disk refuses.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      isRefusing = true;
 
       view.contributeTools([ASK_TOOL], fakeAskStart().start);
 
       await expect(connected.call('ask', {}, CONTEXT)).resolves.toBe(
         ASK_RESULT,
       );
-      expect(logged.filter((line) => line.includes('endpoint files'))).toEqual([
-        expect.stringContaining('endpoint files not written'),
-      ]);
+      await vi.waitFor(() =>
+        expect(
+          logged.filter((line) => line.includes('endpoint files')),
+        ).toEqual([expect.stringContaining('endpoint files not written')]),
+      );
     } finally {
       await started.dispose?.('end');
       rmSync(homeDir, { recursive: true });
@@ -599,9 +616,8 @@ describe('sessions main part', () => {
       expect(connected).toHaveLength(1);
       expect(ended).toEqual(connected);
       const endpoint: unknown = JSON.parse(
-        readFileSync(
-          path.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
-          'utf8',
+        await harness.files.read(
+          posixPaths.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
         ),
       );
       expect(endpoint).toMatchObject({

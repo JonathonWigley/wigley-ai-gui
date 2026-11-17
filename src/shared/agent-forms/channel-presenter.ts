@@ -79,14 +79,15 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
   channel.handle('openForms', () =>
     [...open.values()].map((entry) => entry.form),
   );
-  // A failed write throws out of the listener, which rejects the page's invoke.
+  // A failed write rejects the listener's promise, which rejects the page's
+  // invoke.
   channel.handle('draft', (formId, body) => {
     const entry = open.get(formId);
     if (!entry) {
-      return;
+      return Promise.resolve();
     }
     entry.form = { ...entry.form, draft: body };
-    entry.listener.draft(body);
+    return entry.listener.draft(body);
   });
   // A listener that throws leaves the form open and rejects the page's invoke.
   // The close this finish makes reaches the page marked `byFinish`.

@@ -227,6 +227,9 @@ export interface NoticeComment {
   comment: string;
 }
 
+// The saved-round folder under the home, which the marketplace's retro reads.
+export const SAVED_ROUNDS_FOLDER = '.agents/wigley-forms/rounds';
+
 export interface FormBody {
   note: string;
   answers: AnswerEntry[];

@@ -355,11 +355,6 @@ What Windows support and installers need.
   → `python3`) for docs' index script (`index-sources.ts` runs `python3`), a PATH lookup for the `claude` command
   instead of `~/.local/bin/claude`, and spawn/kill handles so the Claude adapter stops importing
   `node:child_process`.
-- **Round store through Files** — *agent-ready*: forms' round store (`src/shared/agent-forms/form-store.ts`) and
-  sessions' endpoint files (`relay/endpoint.ts`) go through the `Files` service instead of sync `node:fs`, and its
-  atomic write retries `rename` on Windows `EPERM`/`EBUSY`; today a held file makes a draft show unsaved and
-  `returned` silently stay false. The store goes async with an in-memory index refreshed by `files.watch`, and the
-  `~/.agents/wigley-forms/rounds` location becomes one named constant beside `SavedRound`.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
   `packagerConfig`, no makers).
 - **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`

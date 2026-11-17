@@ -72,6 +72,8 @@ export const MAX_VARIANT_FILES = 8;
 export const MAX_PITCH_SEMITONES = 12;
 
 export const AUDIO_PICKER_ERROR_NAME = 'AudioPickerError';
+// The saved-picker folder under the home.
+export const SAVED_PICKERS_FOLDER = '.agents/wigley-audio-picker/pickers';
 export const OPEN_AUDIO_PICKER_TOOL = 'open_audio_picker';
 export const COLLECT_AUDIO_PICKER_TOOL = 'collect_last_audio_picker';
 

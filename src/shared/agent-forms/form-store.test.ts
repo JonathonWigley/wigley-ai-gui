@@ -1,16 +1,7 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Files, WatchOptions } from '../../contracts/files';
 import type { Paths } from '../../contracts/paths';
+import { createMemoryFiles, type MemoryFiles } from '../memory-files';
 import { posixPaths } from '../paths/posix-paths';
 import { windowsPaths } from '../paths/windows-paths';
 import {
@@ -18,20 +9,26 @@ import {
   type AgentFormStore,
   createFolderFormStore,
   RETENTION_SECONDS,
+  type SavedAgentForm,
 } from './form-store';
 
 const MINE: AgentFormOwnerRef = { sessionId: 's1', projectDir: '/p' };
 const ARGS = { heading: 'h' };
 const NONE: ReadonlySet<string> = new Set();
+const formsDir = '/forms';
 
-let root: string;
-let formsDir: string;
+let files: MemoryFiles;
 let nowMs: number;
 let hexCount: number;
 let logLines: string[];
 
-function storeIn(dir: string, paths: Paths = posixPaths): AgentFormStore {
+function storeIn(
+  dir: string,
+  paths: Paths = posixPaths,
+  through: Files = files,
+): AgentFormStore {
   return createFolderFormStore({
+    files: through,
     dir,
     clock: { now: () => nowMs },
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
@@ -44,50 +41,107 @@ function withNote(note: string): { note: string } {
   return { note };
 }
 
-function formFiles(): string[] {
-  return readdirSync(formsDir)
+function formPath(id: string): string {
+  return `${formsDir}/${id}.json`;
+}
+
+async function formFiles(): Promise<string[]> {
+  return (await files.list(formsDir))
+    .map((entry) => entry.path)
     .filter((name) => name.endsWith('.json'))
     .sort();
 }
 
+async function savedForm(id: string): Promise<SavedAgentForm> {
+  return JSON.parse(await files.read(formPath(id))) as SavedAgentForm;
+}
+
+// A form another app saved, open and mine.
+function foreignForm(id: string, fingerprint: string): SavedAgentForm {
+  return {
+    id,
+    fingerprint,
+    args: ARGS,
+    body: {},
+    outcome: 'open',
+    returned: false,
+    auto_answered: false,
+    session_id: 's1',
+    project_dir: '/p',
+    tool_use_id: null,
+    created: 9,
+    updated: 9,
+  };
+}
+
+function waitForQueuedWork(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// The memory files with every `write` rejecting.
+function unwritable(): Files {
+  return { ...files, write: () => Promise.reject(new Error('EACCES')) };
+}
+
+// The memory files whose `write` calls each wait for `held` before writing,
+// counting the calls made.
+function heldWrites(held: Promise<void>): {
+  files: Files;
+  calls: () => number;
+} {
+  let calls = 0;
+  return {
+    files: {
+      ...files,
+      write: async (path, text) => {
+        calls += 1;
+        await held;
+        await files.write(path, text);
+      },
+    },
+    calls: () => calls,
+  };
+}
+
+// `through` with a `watch` that keeps its options' `onMissed` for the test to
+// call and passes on no change it reports, so only a rescan finds a change.
+function missingWatch(through: Files): { files: Files; missed: () => void } {
+  let options: WatchOptions | undefined;
+  return {
+    files: {
+      ...through,
+      watch: (folder, _onChange, watchOptions) => {
+        options = watchOptions;
+        return files.watch(folder, () => undefined, watchOptions);
+      },
+    },
+    missed: () => options?.onMissed?.(),
+  };
+}
+
 beforeEach(() => {
-  root = mkdtempSync(path.join(tmpdir(), 'wigley-form-store-'));
-  formsDir = path.join(root, 'forms');
   nowMs = 1_000_000;
+  files = createMemoryFiles({ now: () => nowMs });
   hexCount = 0;
   logLines = [];
 });
 
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
-});
-
 describe('createFolderFormStore', () => {
-  it('writes one file per form, named by its <epoch seconds>-<8 hex> id', () => {
-    const record = storeIn(formsDir).create(
-      MINE,
-      'fp',
-      ARGS,
-      withNote('n'),
-      null,
-    );
+  it('writes one file per form, named by its <epoch seconds>-<8 hex> id', async () => {
+    const store = storeIn(formsDir);
+    const record = store.create(MINE, 'fp', ARGS, withNote('n'), null);
+    await store.flushed();
 
     expect(record.id).toBe('1000-00000001');
-    expect(formFiles()).toEqual(['1000-00000001.json']);
+    expect(await formFiles()).toEqual(['1000-00000001.json']);
   });
 
-  it('writes the saved-form fields retro reads', () => {
-    const record = storeIn(formsDir).create(
-      MINE,
-      'fp',
-      ARGS,
-      withNote('n'),
-      'toolu_1',
-    );
+  it('writes the saved-form fields retro reads', async () => {
+    const store = storeIn(formsDir);
+    const record = store.create(MINE, 'fp', ARGS, withNote('n'), 'toolu_1');
+    await store.flushed();
 
-    const saved = JSON.parse(
-      readFileSync(path.join(formsDir, `${record.id}.json`), 'utf8'),
-    );
+    const saved = await savedForm(record.id);
 
     expect(saved).toEqual({
       id: '1000-00000001',
@@ -105,20 +159,20 @@ describe('createFolderFormStore', () => {
     });
   });
 
-  it('createAutoAnswered_WritesOneSubmittedReturnedAutoAnsweredFile', () => {
-    const record = storeIn(formsDir).createAutoAnswered(
+  it('createAutoAnswered_WritesOneSubmittedReturnedAutoAnsweredFile', async () => {
+    const store = storeIn(formsDir);
+    const record = store.createAutoAnswered(
       MINE,
       'fp',
       ARGS,
       withNote('picked'),
       'toolu_1',
     );
+    await store.flushed();
 
-    const saved = JSON.parse(
-      readFileSync(path.join(formsDir, `${record.id}.json`), 'utf8'),
-    );
+    const saved = await savedForm(record.id);
 
-    expect(formFiles()).toEqual([`${record.id}.json`]);
+    expect(await formFiles()).toEqual([`${record.id}.json`]);
     expect(saved).toMatchObject({
       fingerprint: 'fp',
       args: ARGS,
@@ -165,26 +219,32 @@ describe('createFolderFormStore', () => {
     expect(store.newestFor('fp')?.body).toEqual({});
   });
 
-  it('rewrites the file on a draft and on the finish', () => {
+  it('rewrites the file on a draft and on the finish', async () => {
     const store = storeIn(formsDir);
     const record = store.create(MINE, 'fp', ARGS, null, null);
 
-    store.saveBody(record, withNote('half'));
+    await store.saveBody(record, withNote('half'));
     expect(store.newestFor('fp')?.body).toEqual(withNote('half'));
+    expect((await savedForm(record.id)).body).toEqual(withNote('half'));
 
     store.finish(record, 'submitted', withNote('done'));
+    await store.flushed();
     expect(store.newestFor('fp')).toMatchObject({
+      outcome: 'submitted',
+      body: withNote('done'),
+    });
+    expect(await savedForm(record.id)).toMatchObject({
       outcome: 'submitted',
       body: withNote('done'),
     });
   });
 
-  it('keeps the finished body when a draft arrives after the finish', () => {
+  it('keeps the finished body when a draft arrives after the finish', async () => {
     const store = storeIn(formsDir);
     const record = store.create(MINE, 'fp', ARGS, null, null);
     store.finish(record, 'submitted', withNote('done'));
 
-    store.saveBody(record, withNote('late draft'));
+    await store.saveBody(record, withNote('late draft'));
 
     expect(store.newestFor('fp')).toMatchObject({
       outcome: 'submitted',
@@ -192,13 +252,13 @@ describe('createFolderFormStore', () => {
     });
   });
 
-  it('finds the form with this fingerprint updated last', () => {
+  it('finds the form with this fingerprint updated last', async () => {
     const store = storeIn(formsDir);
     const older = store.create(MINE, 'fp', ARGS, withNote('older'), null);
     nowMs = 2_000_000;
     store.create(MINE, 'fp', ARGS, withNote('newer'), null);
     nowMs = 3_000_000;
-    store.saveBody(older, withNote('touched last'));
+    await store.saveBody(older, withNote('touched last'));
 
     expect(store.newestFor('fp')?.body).toEqual(withNote('touched last'));
   });
@@ -217,10 +277,12 @@ describe('createFolderFormStore', () => {
     ]);
   });
 
-  it('recentArgs_SkipsUnreadableFile', () => {
+  it('recentArgs_SkipsUnreadableFile', async () => {
     const store = storeIn(formsDir);
     store.create(MINE, 'fp', ARGS, null, null);
-    writeFileSync(path.join(formsDir, 'broken.json'), '{not json', 'utf8');
+    await files.write(formPath('broken'), '{not json');
+
+    await store.load();
 
     expect(store.recentArgs(5)).toEqual([ARGS]);
   });
@@ -353,27 +415,22 @@ describe('createFolderFormStore', () => {
     expect(store.newestFor('fp')?.id).toBe(record.id);
   });
 
-  it('prunes only files last written before the retention window', () => {
+  it('prunes only files last written before the retention window', async () => {
+    const writer = storeIn(formsDir);
+    nowMs = 2_000_000_000_000 - (RETENTION_SECONDS + 60) * 1000;
+    writer.create(MINE, 'old', ARGS, null, null);
+    await writer.flushed();
     nowMs = 2_000_000_000_000;
+    const recent = writer.create(MINE, 'recent', ARGS, null, null);
+    await writer.flushed();
     const store = storeIn(formsDir);
-    const old = store.create(MINE, 'old', ARGS, null, null);
-    const recent = store.create(MINE, 'recent', ARGS, null, null);
-    const nowSeconds = nowMs / 1000;
-    const staleSeconds = nowSeconds - RETENTION_SECONDS - 60;
-    utimesSync(
-      path.join(formsDir, `${old.id}.json`),
-      staleSeconds,
-      staleSeconds,
-    );
-    utimesSync(
-      path.join(formsDir, `${recent.id}.json`),
-      nowSeconds,
-      nowSeconds,
-    );
 
-    store.prune();
+    await store.load();
+    await store.flushed();
 
-    expect(formFiles()).toEqual([`${recent.id}.json`]);
+    expect(await formFiles()).toEqual([`${recent.id}.json`]);
+    expect(store.newestFor('old')).toBeNull();
+    expect(store.newestFor('recent')?.id).toBe(recent.id);
   });
 
   it('retains saved forms for at least the 90 days retro backfills', () => {
@@ -382,78 +439,86 @@ describe('createFolderFormStore', () => {
     expect(RETENTION_SECONDS).toBeGreaterThanOrEqual(90 * 24 * 60 * 60);
   });
 
-  it('prunes a temp file a crash left, by the same age rule', () => {
+  it('prunes a temp file a crash left, by the same age rule', async () => {
+    nowMs = 2_000_000_000_000 - (RETENTION_SECONDS + 60) * 1000;
+    await files.write(`${formsDir}/stale.json.tmp`, '{');
+    await files.write(`${formsDir}/.stale.json.0000abcd.tmp`, '{');
     nowMs = 2_000_000_000_000;
+    await files.write(`${formsDir}/fresh.json.tmp`, '{');
+    await files.write(`${formsDir}/.fresh.json.0000abcd.tmp`, '{');
     const store = storeIn(formsDir);
-    store.create(MINE, 'fp', ARGS, null, null);
-    const nowSeconds = nowMs / 1000;
-    const staleSeconds = nowSeconds - RETENTION_SECONDS - 60;
-    const staleTemp = path.join(formsDir, 'stale.json.tmp');
-    const freshTemp = path.join(formsDir, 'fresh.json.tmp');
-    writeFileSync(staleTemp, '{', 'utf8');
-    writeFileSync(freshTemp, '{', 'utf8');
-    utimesSync(staleTemp, staleSeconds, staleSeconds);
-    utimesSync(freshTemp, nowSeconds, nowSeconds);
 
-    store.prune();
+    await store.load();
+    await store.flushed();
 
-    expect(readdirSync(formsDir).filter((n) => n.endsWith('.tmp'))).toEqual([
-      'fresh.json.tmp',
-    ]);
+    expect(
+      (await files.list(formsDir))
+        .map((entry) => entry.path)
+        .filter((name) => name.endsWith('.tmp'))
+        .sort(),
+    ).toEqual(['.fresh.json.0000abcd.tmp', 'fresh.json.tmp']);
   });
 
-  it('skips a corrupt file and a file that is not an object', () => {
+  it('skips a corrupt file and a file that is not an object', async () => {
+    const writer = storeIn(formsDir);
+    const record = writer.create(MINE, 'fp', ARGS, null, null);
+    await writer.flushed();
+    await files.write(formPath('broken'), '{not json');
+    await files.write(formPath('list'), '[1, 2]');
     const store = storeIn(formsDir);
-    const record = store.create(MINE, 'fp', ARGS, null, null);
-    writeFileSync(path.join(formsDir, 'broken.json'), '{not json', 'utf8');
-    writeFileSync(path.join(formsDir, 'list.json'), '[1, 2]', 'utf8');
+
+    await store.load();
 
     expect(store.newestFor('fp')?.id).toBe(record.id);
   });
 
-  it('never reads a leftover temp file as a form', () => {
-    const store = storeIn(formsDir);
-    const record = store.create(MINE, 'fp', ARGS, null, null);
+  it('never reads a leftover temp file as a form', async () => {
+    const writer = storeIn(formsDir);
+    const record = writer.create(MINE, 'fp', ARGS, null, null);
+    await writer.flushed();
     const leftover = { ...record, id: 'leftover', updated: 9_999_999 };
-    writeFileSync(
-      path.join(formsDir, 'leftover.json.tmp'),
+    await files.write(
+      `${formsDir}/leftover.json.tmp`,
       JSON.stringify(leftover),
-      'utf8',
     );
-
-    expect(store.newestFor('fp')?.id).toBe(record.id);
-  });
-
-  it('loads a file holding a field this version does not know', () => {
     const store = storeIn(formsDir);
-    const record = store.create(MINE, 'fp', ARGS, null, null);
-    const filePath = path.join(formsDir, `${record.id}.json`);
-    const data = JSON.parse(readFileSync(filePath, 'utf8'));
-    writeFileSync(
-      filePath,
-      JSON.stringify({ ...data, added_later: true }),
-      'utf8',
-    );
+
+    await store.load();
 
     expect(store.newestFor('fp')?.id).toBe(record.id);
   });
 
-  it('loads a file the Python forms server wrote', () => {
-    mkdirSync(formsDir, { recursive: true });
-    writeFileSync(
-      path.join(formsDir, '1700000000-0a1b2c3d.json'),
+  it('loads a file holding a field this version does not know', async () => {
+    const writer = storeIn(formsDir);
+    const record = writer.create(MINE, 'fp', ARGS, null, null);
+    await writer.flushed();
+    const data = await savedForm(record.id);
+    await files.write(
+      formPath(record.id),
+      JSON.stringify({ ...data, added_later: true }),
+    );
+    const store = storeIn(formsDir);
+
+    await store.load();
+
+    expect(store.newestFor('fp')?.id).toBe(record.id);
+  });
+
+  it('loads a file the Python forms server wrote', async () => {
+    await files.write(
+      formPath('1700000000-0a1b2c3d'),
       '{"id": "1700000000-0a1b2c3d", "fingerprint": "fp-python", ' +
         '"args": {"heading": "h"}, "body": {"note": "caf\\u00e9", ' +
         '"answers": [{"index": 1, "choice": 2, "not_applicable": false, ' +
         '"what": "", "why": ""}]}, "outcome": "submitted", "returned": false, ' +
         '"session_id": "s1", "project_dir": "/p", "tool_use_id": null, ' +
         '"created": 1700000000.25, "updated": 1700000001.5}',
-      'utf8',
     );
+    const store = storeIn(formsDir);
 
-    expect(
-      storeIn(formsDir).newestUnreturnedFinished(MINE, NONE),
-    ).toMatchObject({
+    await store.load();
+
+    expect(store.newestUnreturnedFinished(MINE, NONE)).toMatchObject({
       id: '1700000000-0a1b2c3d',
       fingerprint: 'fp-python',
       outcome: 'submitted',
@@ -463,10 +528,8 @@ describe('createFolderFormStore', () => {
     });
   });
 
-  it('logs and throws nothing when the folder cannot be written', () => {
-    const blocker = path.join(root, 'blocker');
-    writeFileSync(blocker, 'a file where the folder should be', 'utf8');
-    const store = storeIn(path.join(blocker, 'forms'));
+  it('logs and throws nothing when the folder cannot be written', async () => {
+    const store = storeIn(formsDir, posixPaths, unwritable());
 
     const record = store.create(MINE, 'fp', ARGS, null, null);
     store.finish(record, 'submitted', withNote(''));
@@ -477,19 +540,184 @@ describe('createFolderFormStore', () => {
       null,
       null,
     );
+    await store.flushed();
 
     expect(logLines.some((line) => line.includes(record.id))).toBe(true);
     expect(logLines.some((line) => line.includes(autoAnswered.id))).toBe(true);
     expect(autoAnswered).toMatchObject({ outcome: 'submitted' });
+    expect(store.newestFor('fp')?.id).toBe(record.id);
+  });
+
+  it("throws a draft's failed write with the disk's reason", async () => {
+    const store = storeIn(formsDir, posixPaths, unwritable());
+    const record = store.create(MINE, 'fp', ARGS, null, null);
+
+    await expect(store.saveBody(record, withNote('half'))).rejects.toThrow(
+      record.id,
+    );
+  });
+
+  // Breaks if the watch is not opened, or its change is not merged.
+  it('finds a form another app writes after load', async () => {
+    const store = storeIn(formsDir);
+    await store.load();
+
+    await files.write(
+      formPath('9-0000000a'),
+      JSON.stringify(foreignForm('9-0000000a', 'other')),
+    );
+    await store.flushed();
+
+    expect(store.newestFor('other')?.id).toBe('9-0000000a');
+  });
+
+  it('drops a form another app deletes', async () => {
+    const store = storeIn(formsDir);
+    await store.load();
+    const record = store.create(MINE, 'fp', ARGS, null, null);
+    await store.flushed();
+
+    files.remove(formPath(record.id));
+    await store.flushed();
+
     expect(store.newestFor('fp')).toBeNull();
   });
 
-  it("throws a draft's failed write with the disk's reason", () => {
-    const blocker = path.join(root, 'blocker');
-    writeFileSync(blocker, 'a file where the folder should be', 'utf8');
-    const store = storeIn(path.join(blocker, 'forms'));
-    const record = store.create(MINE, 'fp', ARGS, null, null);
+  // Breaks if any reported copy replaces the entry.
+  it.each([
+    { case: 'an older copy', offsetSeconds: -1, keepsOwn: true },
+    { case: 'an equal copy', offsetSeconds: 0, keepsOwn: true },
+    { case: 'a newer copy', offsetSeconds: 1, keepsOwn: false },
+  ])(
+    'keeps the newer of its own record and a reported copy: $case',
+    async ({ offsetSeconds, keepsOwn }) => {
+      const store = storeIn(formsDir);
+      await store.load();
+      const record = store.create(MINE, 'fp', ARGS, withNote('own'), null);
+      await store.flushed();
 
-    expect(() => store.saveBody(record, withNote('half'))).toThrow(record.id);
+      await files.write(
+        formPath(record.id),
+        JSON.stringify({
+          ...record,
+          body: withNote('copy'),
+          updated: record.updated + offsetSeconds,
+        }),
+      );
+      await store.flushed();
+
+      if (keepsOwn) {
+        expect(store.newestFor('fp')).toBe(record);
+      } else {
+        expect(store.newestFor('fp')?.body).toEqual(withNote('copy'));
+      }
+    },
+  );
+
+  // Breaks if a rescan drops an id whose write is still queued. A held write
+  // of another form holds the queue, so the rescan runs while the form's own
+  // write waits behind it; the watch passes on no change, so nothing re-adds
+  // the form once its write lands.
+  it('keeps a form whose write is still queued when a rescan misses its file', async () => {
+    const held = Promise.withResolvers<void>();
+    const watched = missingWatch(heldWrites(held.promise).files);
+    const store = storeIn(formsDir, posixPaths, watched.files);
+    await store.load();
+    store.create(MINE, 'first', ARGS, null, null);
+
+    watched.missed();
+    const record = store.create(MINE, 'fp', ARGS, null, null);
+    held.resolve();
+    await store.flushed();
+
+    expect(store.newestFor('fp')?.id).toBe(record.id);
+  });
+
+  // Breaks if a rescan drops an id whose last write failed.
+  it('keeps a form whose write failed when a rescan misses its file', async () => {
+    const watched = missingWatch(unwritable());
+    const store = storeIn(formsDir, posixPaths, watched.files);
+    await store.load();
+    const record = store.create(MINE, 'fp', ARGS, null, null);
+    await store.flushed();
+
+    watched.missed();
+    await store.flushed();
+
+    expect(store.newestFor('fp')?.id).toBe(record.id);
+  });
+
+  // Breaks if `onMissed` is ignored.
+  it('rescans the folder when the watch may have missed changes', async () => {
+    const watched = missingWatch(files);
+    const store = storeIn(formsDir, posixPaths, watched.files);
+    await store.load();
+    await files.write(
+      formPath('9-0000000a'),
+      JSON.stringify(foreignForm('9-0000000a', 'other')),
+    );
+    await store.flushed();
+    expect(store.newestFor('other')).toBeNull();
+
+    watched.missed();
+    await store.flushed();
+
+    expect(store.newestFor('other')?.id).toBe('9-0000000a');
+  });
+
+  // Breaks if writes run in parallel.
+  it('writes in call order behind a held write', async () => {
+    const held = Promise.withResolvers<void>();
+    const holding = heldWrites(held.promise);
+    const store = storeIn(formsDir, posixPaths, holding.files);
+
+    const record = store.create(MINE, 'fp', ARGS, null, null);
+    store.finish(record, 'submitted', withNote('done'));
+    await waitForQueuedWork();
+    expect(holding.calls()).toBe(1);
+
+    held.resolve();
+    await store.flushed();
+
+    expect(holding.calls()).toBe(2);
+    expect((await savedForm(record.id)).body).toEqual(withNote('done'));
+  });
+
+  it('logs a failed markReturned and still holds the form returned', async () => {
+    let isFailing = false;
+    const store = storeIn(formsDir, posixPaths, {
+      ...files,
+      write: (path, text) =>
+        isFailing
+          ? Promise.reject(new Error('EBUSY'))
+          : files.write(path, text),
+    });
+    const record = store.create(MINE, 'fp', ARGS, null, null);
+    store.finish(record, 'submitted', withNote('done'));
+    await store.flushed();
+
+    isFailing = true;
+    store.markReturned(record);
+    await store.flushed();
+
+    expect(store.newestUnreturnedFinished(MINE, NONE)).toBeNull();
+    expect(logLines.some((line) => line.includes(record.id))).toBe(true);
+  });
+
+  it('finds a saved form after load when the folder cannot be watched', async () => {
+    const writer = storeIn(formsDir);
+    const record = writer.create(MINE, 'fp', ARGS, null, null);
+    await writer.flushed();
+    const store = storeIn(formsDir, posixPaths, {
+      ...files,
+      watch: () => {
+        throw new Error('EMFILE');
+      },
+    });
+
+    await store.load();
+
+    expect(store.newestFor('fp')?.id).toBe(record.id);
+    expect(logLines).toContain('form folder not watched: EMFILE');
   });
 });

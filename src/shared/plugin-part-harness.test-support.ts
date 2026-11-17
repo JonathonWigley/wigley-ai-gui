@@ -879,6 +879,7 @@ function countingWatches(files: Files, counts: PartCounts): Files {
     makeFolder: (...args) => files.makeFolder(...args),
     rename: (...args) => files.rename(...args),
     trash: (...args) => files.trash(...args),
+    deleteFile: (...args) => files.deleteFile(...args),
     watch: (...args) => countedHandle(files.watch(...args), counts),
   };
 }

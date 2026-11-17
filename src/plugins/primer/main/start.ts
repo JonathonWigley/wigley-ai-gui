@@ -1,4 +1,3 @@
-import path from 'node:path';
 import type {
   DriveHost,
   MainApi,
@@ -11,7 +10,10 @@ import {
   NO_FORM_WAKE,
 } from '../../../shared/agent-forms/chat-wake';
 import { addAgentFormDriveActions } from '../../../shared/agent-forms/drive-actions';
-import { createAgentFormService } from '../../../shared/agent-forms/form-service';
+import {
+  afterLoad,
+  createAgentFormService,
+} from '../../../shared/agent-forms/form-service';
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
@@ -23,7 +25,7 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
 } from '../../sessions/contract';
-import type { PrimerChannel } from '../contract';
+import { type PrimerChannel, SAVED_PRIMERS_FOLDER } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { primerManifest } from '../manifest';
 import { SAMPLE_PRIMER_ARGS } from './fixtures';
@@ -66,8 +68,9 @@ export function addDriveActions(
   });
 }
 
-// Serves open_primer and collect_last_primer to every agent session, saves
-// each primer in the primer folder and shows it on the page, wakes a primer's
+// Serves open_primer and collect_last_primer to every agent session once the
+// primer folder's first read settles, saves each primer in the primer folder
+// and shows it on the page, wakes a primer's
 // chat session when the primer finishes with no call waiting, registers the
 // primer layouts, and opens the layout preview on the page's ask over a
 // service of its own whose store is in memory and whose primers go through the
@@ -81,13 +84,14 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const store = createFolderFormStore({
-      dir: path.join(services.homeDir, '.agents', 'wigley-primer', 'primers'),
+      files: services.files,
+      dir: services.paths.join(services.homeDir, SAVED_PRIMERS_FOLDER),
       clock: services.clock,
       randomHex: services.randomHex,
       paths: services.paths,
       log: services.log,
     });
-    store.prune();
+    const loaded = store.load();
     const presenter = createAgentFormChannelPresenter({
       channel: api.channel,
       alerts: services.alerts,
@@ -103,14 +107,17 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       sessions,
     });
     const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
-    const primer = createAgentFormService({
-      type: primerType,
-      presenter,
-      store,
-      wake: createChatFormWake(chat, services.log),
-      defaultDeadlineSeconds,
-      timers: services.timers,
-    });
+    const primer = afterLoad(
+      loaded,
+      createAgentFormService({
+        type: primerType,
+        presenter,
+        store,
+        wake: createChatFormWake(chat, services.log),
+        defaultDeadlineSeconds,
+        timers: services.timers,
+      }),
+    );
     const previewService = createAgentFormService({
       type: primerType,
       presenter: presenter.quiet,
@@ -147,6 +154,7 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
           primer.detach();
         }
         preview.dispose();
+        return store.flushed();
       },
     };
   },

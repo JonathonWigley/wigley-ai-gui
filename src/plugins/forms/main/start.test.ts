@@ -1,10 +1,8 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { MainPart } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   noCounts,
   startMainPart,
@@ -18,6 +16,7 @@ import {
 } from '../../agent-form-fakes.test-support';
 import { sessionsMainKey } from '../../sessions/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
+import { SAVED_ROUNDS_FOLDER } from '../contract';
 import type { formsManifest } from '../manifest';
 import { addDriveActions, formsMainPart, registerLayoutsAfter } from './start';
 
@@ -152,7 +151,7 @@ describe('forms main part', () => {
   });
 
   it('stop closes each open round, releases its row and settles its call with the error', async () => {
-    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-stop-'));
+    const homeDir = '/home/user';
     const released: string[] = [];
     const spied: MainPart<typeof formsManifest> = {
       manifest: formsMainPart.manifest,
@@ -186,6 +185,7 @@ describe('forms main part', () => {
     const answers = harness.drive?.actions.get('answers');
     await harness.drive?.run('openRound', { sessionId: 'a' });
     await harness.drive?.run('openRound', { sessionId: 'b' });
+    await flush();
     const shown = harness.sent
       .filter((sent) => sent.message === 'formShown')
       .map((sent) => sent.data as { formId: string; sessionId: string });
@@ -209,11 +209,11 @@ describe('forms main part', () => {
     expect([...(harness.drive?.actions.keys() ?? [])]).toEqual([]);
     await expect(answers?.run({ sessionId: 'a' })).rejects.toThrow(/ask_round/);
     await expect(answers?.run({ sessionId: 'b' })).rejects.toThrow(/ask_round/);
-    rmSync(homeDir, { recursive: true, force: true });
   });
 
+  // Breaks if the quit does not wait for the queued write.
   it('a quit leaves each open round open on disk and in the window, for the relay to send again', async () => {
-    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-quit-'));
+    const homeDir = '/home/user';
     const harness = startMainPart(formsMainPart, {
       parts: [sessionsMainPart],
       dependencies: [fakeChat()],
@@ -225,23 +225,27 @@ describe('forms main part', () => {
       },
     });
     await harness.drive?.run('openRound', { sessionId: 'a' });
-    const roundsDir = path.join(homeDir, '.agents', 'wigley-forms', 'rounds');
+    await flush();
+    const roundsDir = posixPaths.join(homeDir, SAVED_ROUNDS_FOLDER);
 
     await harness.stop('quit');
 
-    const outcomes = readdirSync(roundsDir).map(
-      (name) =>
-        JSON.parse(readFileSync(path.join(roundsDir, name), 'utf8')).outcome,
+    const outcomes = await Promise.all(
+      (await harness.files.list(roundsDir)).map(
+        async (entry) =>
+          JSON.parse(
+            await harness.files.read(posixPaths.join(roundsDir, entry.path)),
+          ).outcome,
+      ),
     );
     expect(outcomes).toEqual(['open']);
     expect(
       harness.sent.filter((sent) => sent.message === 'formClosed'),
     ).toEqual([]);
-    rmSync(homeDir, { recursive: true, force: true });
   });
 
   it('mayStop names the open round until it resolves', async () => {
-    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-may-stop-'));
+    const homeDir = '/home/user';
     const harness = startMainPart(formsMainPart, {
       parts: [sessionsMainPart],
       dependencies: [fakeChat()],
@@ -253,6 +257,7 @@ describe('forms main part', () => {
       },
     });
     await harness.drive?.run('openRound', { sessionId: 'a' });
+    await flush();
     const [shown] = harness.sent
       .filter((sent) => sent.message === 'formShown')
       .map((sent) => sent.data as { formId: string; label: string });
@@ -264,11 +269,10 @@ describe('forms main part', () => {
     expect(harness.started().mayStop?.()).toBeNull();
 
     await harness.stop();
-    rmSync(homeDir, { recursive: true, force: true });
   });
 
   it("headlessChat_AutoAnswersItsSessionsRounds_ButNotThePreview's", async () => {
-    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-headless-'));
+    const homeDir = '/home/user';
     const asked: string[] = [];
     const harness = startMainPart(formsMainPart, {
       parts: [sessionsMainPart],
@@ -308,7 +312,6 @@ describe('forms main part', () => {
     expect(shownCount()).toBe(1);
     expect(asked).toEqual([opened.rowId]);
     await harness.stop();
-    rmSync(homeDir, { recursive: true, force: true });
   });
 
   it('stop before the fixture write lands registers no layout', async () => {

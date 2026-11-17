@@ -33,7 +33,7 @@ import { sessionsManifest } from '../manifest';
 import { titleLimit } from '../session-title';
 import { sessionsMainView } from './consumer-view';
 import { serveMcp } from './mcp/mcp-server';
-import { endedDriveRunLaunch, writeEndpointFiles } from './relay/endpoint';
+import { createEndpointWriter, endedDriveRunLaunch } from './relay/endpoint';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
@@ -243,10 +243,11 @@ export function addDriveActions(
 // plugins contribute for them and its own `set_session_title`, their sidebar
 // rows and the project each row groups under, from the namers other plugins
 // register, and the sessions layouts.
-// A contribution reaches every live session, and each one added rewrites the
-// endpoint files, so a relay that starts the app finds every tool listed. A
-// disposal and a stop leave the files, which a relay serves while the app is
-// away. A failed write is logged and keeps the contribution. Each dependent gets
+// A contribution reaches every live session, and each one added queues a
+// rewrite of the endpoint files, so a relay that starts the app finds every
+// tool listed. A disposal and a stop leave the files, which a relay serves
+// while the app is away; a stop waits for the queued writes. A failed write is
+// logged and keeps the contribution. Each dependent gets
 // its own view of the exports, which files its registrations under it. In the
 // self-test it opens no relay and writes
 // no file, and hands its pane keys' script; a drive run opens it in the run's
@@ -259,20 +260,27 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
     const hold = createConnectHold(api.services.timers, api.services.log);
     const opened =
       api.services.runMode === 'selfTest' ? null : openRelay(api, list, hold);
-    const endpointDir = appEndpointDir(
-      api.services.paths,
-      api.services.homeDir,
-      api.services.appInstance.id,
+    const endpointWriter = createEndpointWriter(
+      api.services.files,
+      appEndpointDir(
+        api.services.paths,
+        api.services.homeDir,
+        api.services.appInstance.id,
+      ),
+      api.services.log,
     );
     const exports: SessionsMainExports = {
       contributeTools(tools, start, options) {
         const contribution = list.contributeTools(tools, start, options);
         if (opened !== null) {
+          let listed;
           try {
-            writeEndpointFiles(endpointDir, opened.endpoint, list.tools());
+            listed = list.tools();
           } catch (error) {
             api.services.log(`endpoint files not written: ${errorText(error)}`);
+            return contribution;
           }
+          endpointWriter.write(opened.endpoint, listed);
         }
         return contribution;
       },
@@ -318,6 +326,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
           list.endAll();
         } finally {
           await opened?.relay.close();
+          await endpointWriter.flushed();
         }
       },
     };

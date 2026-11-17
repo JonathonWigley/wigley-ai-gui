@@ -1,22 +1,14 @@
-import {
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
-import path from 'node:path';
 import type {
   AgentFormEndKind,
   AgentFormOwnerInfo,
 } from '../../contracts/agent-forms';
 import type { Clock, RandomHex } from '../../contracts/ambient';
+import { type Files, readIfPresent } from '../../contracts/files';
 import type { PluginLog } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { errorText } from '../error-text';
 import { isJsonObject } from '../json';
+import { createSerialQueue } from '../serial-queue';
 
 // retro's backfill reaches back 90 days (scripts/retro/ledger.py STALE_DAYS).
 export const RETENTION_SECONDS = 90 * 24 * 60 * 60;
@@ -59,8 +51,13 @@ export type FinishedSavedAgentForm = SavedAgentForm & {
 // Where a form's answers are kept: every draft and every finish. The
 // folder store (createFolderFormStore) keeps them on disk, so they outlive a
 // deadline, the next form and an app restart; the memory store
-// (createMemoryFormStore) keeps them in memory only.
+// (createMemoryFormStore) keeps them in memory only. Every write changes the
+// record at once and every read answers at once; the folder store's disk
+// steps follow in call order.
 export interface AgentFormStore {
+  // Reads the folder into the index and starts watching it. Never rejects: a
+  // failure is logged. A second call returns the first call's promise.
+  load(): Promise<void>;
   create(
     owner: AgentFormOwnerRef,
     fingerprint: string,
@@ -77,9 +74,10 @@ export interface AgentFormStore {
     body: unknown,
     toolUseId: string | null,
   ): SavedAgentForm;
-  // A finished form keeps the body it finished with: a late draft is dropped.
-  // Throws an Error naming the form and the disk's reason when the write fails.
-  saveBody(record: SavedAgentForm, body: unknown): void;
+  // A finished form keeps the body it finished with: a late draft is dropped and
+  // the promise resolves. Rejects with an Error naming the form and the disk's
+  // reason when the write fails.
+  saveBody(record: SavedAgentForm, body: unknown): Promise<void>;
   finish(
     record: SavedAgentForm,
     outcome: AgentFormEndKind,
@@ -100,13 +98,13 @@ export interface AgentFormStore {
   // The args of the newest forms by `updated` that were not auto-answered,
   // newest first: one per fingerprint, at most `limit`.
   recentArgs(limit: number): unknown[];
-  // Deletes every form file, and any temp file a crash left, last written more
-  // than RETENTION_SECONDS ago.
-  prune(): void;
+  // Settles once every disk step queued before the call has settled.
+  flushed(): Promise<void>;
 }
 
 const FORM_FILE_SUFFIX = '.json';
-// What a crash between the write and the rename leaves behind.
+// What a crash between the write and the rename leaves behind: a legacy
+// `<id>.json.tmp`, or the `Files` temp `.<id>.json.<8 hex>.tmp`.
 const TEMPORARY_FILE_SUFFIX = '.tmp';
 
 export function isFinished(
@@ -180,32 +178,19 @@ function savedFormFrom(data: unknown): SavedAgentForm | null {
   };
 }
 
-function formFileNames(dir: string): string[] {
-  try {
-    return readdirSync(dir).filter((name) => name.endsWith(FORM_FILE_SUFFIX));
-  } catch {
-    return [];
-  }
+// Whether `name`, an entry of the folder, is a form file: `<id>.json`, never a
+// dotfile such as a `Files` temp file.
+function isFormFileName(name: string): boolean {
+  return name.endsWith(FORM_FILE_SUFFIX) && !name.startsWith('.');
 }
 
-function readSavedForm(filePath: string): SavedAgentForm | null {
+// The form `text` holds; null when it does not parse or holds no form.
+function parsedForm(text: string): SavedAgentForm | null {
   try {
-    return savedFormFrom(JSON.parse(readFileSync(filePath, 'utf8')));
+    return savedFormFrom(JSON.parse(text));
   } catch {
-    // A corrupt or unreadable file is skipped, never fatal.
     return null;
   }
-}
-
-function readAllForms(dir: string): SavedAgentForm[] {
-  const records: SavedAgentForm[] = [];
-  for (const name of formFileNames(dir)) {
-    const record = readSavedForm(path.join(dir, name));
-    if (record !== null) {
-      records.push(record);
-    }
-  }
-  return records;
 }
 
 function newestUpdated<T extends SavedAgentForm>(records: T[]): T | null {
@@ -310,76 +295,187 @@ export function autoAnsweredRecord(record: SavedAgentForm): SavedAgentForm {
   };
 }
 
-// Rewrites the whole file through a temp file and a rename, so a crash
-// mid-write leaves the previous file intact. Throws when the write fails.
-function writeRecord(dir: string, record: SavedAgentForm, clock: Clock): void {
-  record.updated = clock.now() / 1000;
-  const filePath = path.join(dir, `${record.id}${FORM_FILE_SUFFIX}`);
-  const temporaryPath = `${filePath}${TEMPORARY_FILE_SUFFIX}`;
-  try {
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(temporaryPath, JSON.stringify(record), 'utf8');
-    renameSync(temporaryPath, filePath);
-  } catch (error) {
-    throw new Error(`could not save form ${record.id}: ${errorText(error)}`, {
-      cause: error,
-    });
-  }
-}
-
-function writeRecordOrLog(
-  dir: string,
-  record: SavedAgentForm,
-  clock: Clock,
-  log: PluginLog,
-): void {
-  try {
-    writeRecord(dir, record, clock);
-  } catch (error) {
-    log(errorText(error));
-  }
-}
-
-function pruneFileNames(dir: string): string[] {
-  try {
-    return readdirSync(dir).filter(
-      (name) =>
-        name.endsWith(FORM_FILE_SUFFIX) ||
-        name.endsWith(`${FORM_FILE_SUFFIX}${TEMPORARY_FILE_SUFFIX}`),
-    );
-  } catch {
-    return [];
-  }
-}
-
-function pruneOlderThan(dir: string, cutoffMs: number, log: PluginLog): void {
-  for (const name of pruneFileNames(dir)) {
-    try {
-      const filePath = path.join(dir, name);
-      if (statSync(filePath).mtimeMs < cutoffMs) {
-        unlinkSync(filePath);
-      }
-    } catch (error) {
-      log(`could not prune ${name}: ${errorText(error)}`);
-    }
-  }
-}
-
-// The saved-form folder `dir`; `log` takes its lines.
-// A disk failure is logged and never thrown, losing the copy must not cost
-// the live form — except a draft's, which saveBody throws so the page can
-// show it unsaved. A file that does not parse is skipped by every read.
+// The saved-form folder `dir`, read and written through `files`; `log` takes
+// its lines. Every read answers from an index of the folder's forms, which
+// `load` fills and a watch of the folder keeps current. Every write changes
+// the record and the index at once and queues the disk write; every disk
+// step (write, scan, re-read, prune) runs in one queue in call order. A
+// failed write is logged and never thrown, since losing the copy must not
+// cost the live form — except a draft's, which saveBody rejects with so the
+// page can show it unsaved — and the index keeps the record. A file that does
+// not parse is skipped.
 export function createFolderFormStore(deps: {
+  files: Files;
   dir: string;
   clock: Clock;
   randomHex: RandomHex;
   paths: Paths;
   log: PluginLog;
 }): AgentFormStore {
-  const { dir, clock, randomHex, paths, log } = deps;
-  const write = (record: SavedAgentForm) =>
-    writeRecordOrLog(dir, record, clock, log);
+  const { files, dir, clock, randomHex, paths, log } = deps;
+  const index = new Map<string, SavedAgentForm>();
+  const queue = createSerialQueue();
+  // Writes queued and not yet settled, per id, and the ids whose last write
+  // failed: a file missing for either is the disk lagging the index.
+  const queuedWrites = new Map<string, number>();
+  const failedWrites = new Set<string>();
+  let loading: Promise<void> | null = null;
+  let isRescanQueued = false;
+
+  const fileOf = (name: string) => paths.join(dir, name);
+  const idOf = (name: string) => name.slice(0, -FORM_FILE_SUFFIX.length);
+  const isAheadOfDisk = (id: string) =>
+    (queuedWrites.get(id) ?? 0) > 0 || failedWrites.has(id);
+  const dropUnlessAheadOfDisk = (id: string) => {
+    if (!isAheadOfDisk(id)) {
+      index.delete(id);
+    }
+  };
+
+  // Stamps the record, indexes it and queues its write, which settles the
+  // promise returned.
+  const save = (record: SavedAgentForm): Promise<void> => {
+    record.updated = clock.now() / 1000;
+    index.set(record.id, record);
+    const { id } = record;
+    const text = JSON.stringify(record);
+    queuedWrites.set(id, (queuedWrites.get(id) ?? 0) + 1);
+    return queue.run(async () => {
+      try {
+        await files.write(fileOf(`${id}${FORM_FILE_SUFFIX}`), text);
+        failedWrites.delete(id);
+      } catch (error) {
+        failedWrites.add(id);
+        throw new Error(`could not save form ${id}: ${errorText(error)}`, {
+          cause: error,
+        });
+      } finally {
+        queuedWrites.set(id, (queuedWrites.get(id) ?? 1) - 1);
+      }
+    });
+  };
+  const saveOrLog = (record: SavedAgentForm) => {
+    save(record).catch((error: unknown) => log(errorText(error)));
+  };
+
+  // Reads the form file `name` into the index: a newer copy replaces the
+  // entry, an older or equal one keeps it, and a missing or corrupt file
+  // drops it. Returns the id the file holds, or null when it holds none.
+  const merge = async (name: string): Promise<string | null> => {
+    let text: string | null;
+    try {
+      text = await readIfPresent(files, fileOf(name));
+    } catch (error) {
+      log(`could not read ${name}: ${errorText(error)}`);
+      return idOf(name);
+    }
+    const record = text === null ? null : parsedForm(text);
+    if (record === null) {
+      dropUnlessAheadOfDisk(idOf(name));
+      return null;
+    }
+    const entry = index.get(record.id);
+    if (entry === undefined || record.updated > entry.updated) {
+      index.set(record.id, record);
+    }
+    return record.id;
+  };
+
+  // Lists the folder, merges every form file and drops each entry whose file
+  // is gone.
+  const scan = async () => {
+    let names: string[];
+    try {
+      names = (await files.list(dir))
+        .filter((entry) => entry.kind === 'file')
+        .map((entry) => entry.path);
+    } catch (error) {
+      log(`could not list ${dir}: ${errorText(error)}`);
+      return;
+    }
+    const found = new Set<string>();
+    for (const name of names.filter(isFormFileName)) {
+      const id = await merge(name);
+      if (id !== null) {
+        found.add(id);
+      }
+    }
+    // Deleting the entry iterated now is safe in a Map.
+    for (const id of index.keys()) {
+      if (!found.has(id)) {
+        dropUnlessAheadOfDisk(id);
+      }
+    }
+  };
+
+  // Deletes every form file, and any temp file a crash left, last written more
+  // than RETENTION_SECONDS ago.
+  const prune = async () => {
+    const cutoffMs = clock.now() - RETENTION_SECONDS * 1000;
+    let names: string[];
+    try {
+      names = (await files.list(dir)).map((entry) => entry.path);
+    } catch (error) {
+      log(`could not list ${dir}: ${errorText(error)}`);
+      return;
+    }
+    const prunable = names.filter(
+      (name) =>
+        name.endsWith(FORM_FILE_SUFFIX) || name.endsWith(TEMPORARY_FILE_SUFFIX),
+    );
+    for (const name of prunable) {
+      try {
+        if ((await files.modified(fileOf(name))) < cutoffMs) {
+          await files.deleteFile(fileOf(name));
+          if (isFormFileName(name)) {
+            dropUnlessAheadOfDisk(idOf(name));
+          }
+        }
+      } catch (error) {
+        log(`could not prune ${name}: ${errorText(error)}`);
+      }
+    }
+  };
+
+  const rescan = () => {
+    if (isRescanQueued) {
+      return;
+    }
+    isRescanQueued = true;
+    void queue.run(async () => {
+      isRescanQueued = false;
+      await scan();
+    });
+  };
+
+  const startLoad = async () => {
+    try {
+      files.watch(
+        dir,
+        (name) => {
+          if (isFormFileName(name)) {
+            void queue.run(() => merge(name));
+          }
+        },
+        {
+          recursive: false,
+          onMissed: rescan,
+          onError: (error) =>
+            log(`form folder watch failed: ${errorText(error)}`),
+        },
+      );
+    } catch (error) {
+      log(`form folder not watched: ${errorText(error)}`);
+    }
+    await queue.run(scan);
+    void queue.run(prune);
+  };
+
   return {
+    load: () => {
+      loading ??= startLoad();
+      return loading;
+    },
     create: (owner, fingerprint, args, body, toolUseId) => {
       const record = openRecord(
         owner,
@@ -390,34 +486,33 @@ export function createFolderFormStore(deps: {
         clock,
         randomHex,
       );
-      write(record);
+      saveOrLog(record);
       return record;
     },
     createAutoAnswered: (owner, fingerprint, args, body, toolUseId) => {
       const record = autoAnsweredRecord(
         openRecord(owner, fingerprint, args, body, toolUseId, clock, randomHex),
       );
-      write(record);
+      saveOrLog(record);
       return record;
     },
     saveBody: (record, body) => {
       if (isFinished(record)) {
-        return;
+        return Promise.resolve();
       }
       record.body = body;
-      writeRecord(dir, record, clock);
+      return save(record);
     },
     finish: (record, outcome, body) => {
       record.body = body;
       record.outcome = outcome;
-      write(record);
+      saveOrLog(record);
     },
     markReturned: (record) => {
       record.returned = true;
-      write(record);
+      saveOrLog(record);
     },
-    ...formQueries(() => readAllForms(dir), paths),
-    prune: () =>
-      pruneOlderThan(dir, clock.now() - RETENTION_SECONDS * 1000, log),
+    ...formQueries(() => [...index.values()], paths),
+    flushed: () => queue.settled(),
   };
 }

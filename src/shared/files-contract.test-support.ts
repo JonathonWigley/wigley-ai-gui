@@ -309,5 +309,33 @@ export function describeFilesContract(current: () => FilesUnderTest): void {
       expect(await files.read(at('a.md'))).toBe('one');
       expect(await files.read(at('f'))).toBe('file');
     });
+
+    it('deleteFile_File_DeletesItAndKeepsItsFolder', async () => {
+      const { files, at } = current();
+      await files.write(at('s/a.md'), 'one');
+
+      await files.deleteFile(at('s/a.md'));
+
+      expect(await files.stat(at('s/a.md'))).toBeNull();
+      expect(await files.list(at('s'))).toEqual([]);
+    });
+
+    it('deleteFile_Missing_Resolves', async () => {
+      const { files, at } = current();
+
+      await expect(files.deleteFile(at('none.md'))).resolves.toBeUndefined();
+    });
+
+    // Breaks on a recursive delete.
+    it('deleteFile_Folder_RejectsAndKeepsIt', async () => {
+      const { files, at } = current();
+      await files.makeFolder(at('top/e'));
+
+      await rejectionOf(files.deleteFile(at('top/e')));
+
+      expect(await files.list(at('top'))).toEqual([
+        { path: 'e', kind: 'folder' },
+      ]);
+    });
   });
 }

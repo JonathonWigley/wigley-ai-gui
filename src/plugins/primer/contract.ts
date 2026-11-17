@@ -84,6 +84,8 @@ export interface PrimerPayload {
 }
 
 export const PRIMER_ERROR_NAME = 'PrimerError';
+// The saved-primer folder under the home.
+export const SAVED_PRIMERS_FOLDER = '.agents/wigley-primer/primers';
 export const PRIMER_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 export const MAX_PRIMER_ENTRIES = 60;
 export const MAX_PRIMER_ITEMS = 20;

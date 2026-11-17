@@ -51,7 +51,7 @@ const PICKER_ARGS = {
 };
 
 const LISTENER: AgentFormListener<AudioPickerBody> = {
-  draft() {},
+  draft: () => Promise.resolve(),
   finish() {},
   cancel() {},
 };

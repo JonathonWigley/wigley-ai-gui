@@ -74,7 +74,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/sessions/contract.ts',
           'src/plugins/sessions/main',
         ],
-        packages: ['node:'],
+        packages: [],
       },
       // Starts the real sessions page, whose exports the picker files under.
       'src/plugins/audio-picker/page/start.test.ts': {
@@ -120,18 +120,20 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     main: { layers: ['src/shared/agent-forms'], packages: ['node:'] },
     sublayers: {
       // Starts the real sessions main, which refuses a tool name contributed twice;
-      // a real home folder holds what the stop rows open.
+      // reads the saved-round folder through the harness's files.
       'src/plugins/forms/main/start.test.ts': {
         layers: [
           'src/contracts',
           'src/shared',
+          'src/shared/paths',
           'src/plugins/agent-form-fakes.test-support.ts',
           'src/plugins/forms',
+          'src/plugins/forms/contract.ts',
           'src/plugins/forms/main',
           'src/plugins/sessions/contract.ts',
           'src/plugins/sessions/main',
         ],
-        packages: ['node:'],
+        packages: [],
       },
       // Starts the real sessions page, whose exports forms files under.
       'src/plugins/forms/page/start.test.ts': {
@@ -155,16 +157,18 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     main: { layers: ['src/shared/agent-forms'], packages: ['node:'] },
     sublayers: {
       // Starts the real sessions main, which refuses a tool name contributed twice;
-      // a real home folder holds what the stop rows open.
+      // reads the saved-primer folder through the harness's files.
       'src/plugins/primer/main/start.test.ts': {
         layers: [
           'src/shared',
+          'src/shared/paths',
           'src/plugins/agent-form-fakes.test-support.ts',
+          'src/plugins/primer/contract.ts',
           'src/plugins/primer/main',
           'src/plugins/sessions/contract.ts',
           'src/plugins/sessions/main',
         ],
-        packages: ['node:'],
+        packages: [],
       },
       // Starts the real sessions page, whose exports primer files under.
       'src/plugins/primer/page/start.test.ts': {

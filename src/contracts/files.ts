@@ -47,10 +47,13 @@ export interface Files {
   // naming the path.
   readStart(path: string, maxBytes: number): Promise<string>;
   // Atomic: writes a temp file `.<name>.<8 hex>.tmp` beside the target and
-  // renames it over the target, creating missing parent folders first.
+  // renames it over the target, creating missing parent folders first. The
+  // Node adapter tries a rename that fails with EPERM or EBUSY (a file another
+  // process holds open, as on Windows) again, up to 4 more times, 10, 20, 40
+  // and 80 ms apart, then rejects with the last error.
   write(path: string, text: string): Promise<void>;
-  // `write` for bytes: atomic through the same temp file, creating missing
-  // parent folders first.
+  // `write` for bytes: atomic through the same temp file, its rename tried
+  // again as `write`'s is, creating missing parent folders first.
   writeBytes(path: string, bytes: Uint8Array): Promise<void>;
   // Appends `text` to the file, creating it (and its folders, as `write` does)
   // when missing. Not atomic: two appends to one file not awaited in turn may
@@ -82,6 +85,9 @@ export interface Files {
   // Moves a file or a folder to the OS Trash (under the self-test the Node
   // adapter deletes it for good).
   trash(path: string): Promise<void>;
+  // Deletes the file at `path` for good; nothing there is no error. Rejects for a
+  // folder, keeping it.
+  deleteFile(path: string): Promise<void>;
   // Watches `folder`, and every folder under it unless `recursive` is false,
   // calling `onChange` with the changed path relative to `folder`, joined with
   // `/`; with `recursive: false` it reports only entries directly in

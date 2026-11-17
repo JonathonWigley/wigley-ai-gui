@@ -1,6 +1,3 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentFormAutoAnswer,
@@ -9,8 +6,9 @@ import type {
   AgentFormWake,
 } from '../../contracts/agent-forms';
 import type { Timers } from '../../contracts/ambient';
+import { createMemoryFiles, type MemoryFiles } from '../memory-files';
 import { posixPaths } from '../paths/posix-paths';
-import { createAgentFormService } from './form-service';
+import { afterLoad, createAgentFormService } from './form-service';
 import {
   type AgentFormOwnerRef,
   type AgentFormStore,
@@ -59,7 +57,8 @@ function fingerprintOf(args: unknown): string {
   return TEST_FORM_TYPE.fingerprint(parse(args));
 }
 
-let formsDir: string;
+const formsDir = '/forms';
+let files: MemoryFiles;
 let nowMs: number;
 let hexCount: number;
 let presenter: ScriptedFormPresenter<TestForm, TestBody>;
@@ -97,10 +96,10 @@ function live(): AbortSignal {
   return new AbortController().signal;
 }
 
-function savedFile(formId: string): Record<string, unknown> {
-  return JSON.parse(
-    readFileSync(path.join(formsDir, `${formId}.json`), 'utf8'),
-  );
+// The form's file once every queued write has landed.
+async function savedFile(formId: string): Promise<Record<string, unknown>> {
+  await store.flushed();
+  return JSON.parse(await files.read(`${formsDir}/${formId}.json`));
 }
 
 // The newest saved file for a form, which the test expects to exist.
@@ -148,12 +147,13 @@ function watch(pending: Promise<TestPayload>): { settled: boolean } {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  formsDir = mkdtempSync(path.join(tmpdir(), 'wigley-form-service-'));
   nowMs = 1_000_000;
+  files = createMemoryFiles({ now: () => nowMs });
   hexCount = 0;
   wakes = [];
   presenter = new ScriptedFormPresenter();
   store = createFolderFormStore({
+    files,
     dir: formsDir,
     clock: { now: () => nowMs },
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
@@ -164,7 +164,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-  rmSync(formsDir, { recursive: true, force: true });
 });
 
 describe('open', () => {
@@ -196,15 +195,15 @@ describe('open', () => {
     expect(presenter.latest().label).toBe('Naming decisions');
   });
 
-  it("saves a new form's file with its calling tool use id, or null without one", () => {
+  it("saves a new form's file with its calling tool use id, or null without one", async () => {
     const session = startSession();
     void session.open(NAMING_ARGS, 'toolu_first', live());
     const first = presenter.latest().formId;
     void startSession().open(PLACEMENT_ARGS, null, live());
     const second = presenter.latest().formId;
 
-    expect(savedFile(first).tool_use_id).toBe('toolu_first');
-    expect(savedFile(second).tool_use_id).toBeNull();
+    expect((await savedFile(first)).tool_use_id).toBe('toolu_first');
+    expect((await savedFile(second)).tool_use_id).toBeNull();
   });
 
   it("opens a second call's form only once the user finishes the first", async () => {
@@ -478,7 +477,7 @@ describe('a call the host cancels', () => {
     await asking;
 
     expect(presenter.closed).toEqual([naming.formId]);
-    expect(savedFile(naming.formId)).toMatchObject({
+    expect(await savedFile(naming.formId)).toMatchObject({
       outcome: 'open',
       body: { note: 'half' },
     });
@@ -615,7 +614,7 @@ describe('a call the host cancels', () => {
     host.abort();
 
     expect((await asking).outcome).toBe('submitted');
-    expect(savedFile(naming.formId).returned).toBe(true);
+    expect((await savedFile(naming.formId)).returned).toBe(true);
   });
 
   it('leaves the open form be when a call queued behind it is cancelled', async () => {
@@ -641,7 +640,7 @@ describe('a call the host cancels', () => {
     expect((await resent).outcome).toBe('draft');
 
     expect(presenter.closed).toEqual([]);
-    expect(savedFile(naming.formId).outcome).toBe('open');
+    expect((await savedFile(naming.formId)).outcome).toBe('open');
   });
 });
 
@@ -662,7 +661,7 @@ describe('re-sending a form', () => {
 
     expect((await second).outcome).toBe('submitted');
     expect(presenter.shown).toHaveLength(1);
-    expect(savedFile(shown.formId).tool_use_id).toBe('toolu_first');
+    expect((await savedFile(shown.formId)).tool_use_id).toBe('toolu_first');
   });
 
   it('replays the form just submitted', async () => {
@@ -887,7 +886,7 @@ describe('a call made while another form is open', () => {
     expect(watch(queued).settled).toBe(false);
     expect(presenter.shown).toHaveLength(1);
     expect(presenter.closed).toEqual([]);
-    expect(savedFile(naming.formId).outcome).toBe('open');
+    expect((await savedFile(naming.formId)).outcome).toBe('open');
   });
 
   it('returns a draft at its own deadline without opening its form or replacing the open one', async () => {
@@ -910,7 +909,7 @@ describe('a call made while another form is open', () => {
     const stillOpen = await session.collect(false, live());
     expect(stillOpen.outcome).toBe('draft');
     expect(stillOpen.heading).toBe('Naming decisions');
-    expect(savedFile(naming.formId).outcome).toBe('open');
+    expect((await savedFile(naming.formId)).outcome).toBe('open');
   });
 
   // The placement call's not-shown draft, returned at its own deadline.
@@ -992,7 +991,7 @@ describe('a call made while another form is open', () => {
       expect(settled.settled).toBe(false);
       expect(presenter.shown).toHaveLength(1);
       expect(presenter.closed).toEqual([]);
-      expect(savedFile(naming.formId).outcome).toBe('open');
+      expect((await savedFile(naming.formId)).outcome).toBe('open');
       await expireDeadline();
       const payload = await waiting;
       expect(payload.outcome).toBe('draft');
@@ -1000,7 +999,7 @@ describe('a call made while another form is open', () => {
       expect(presenter.shown).toHaveLength(1);
       expect(presenter.closed).toEqual([]);
       expect(store.newestFor(PLACEMENT_FINGERPRINT)).toBeNull();
-      expect(savedFile(naming.formId).outcome).toBe('open');
+      expect((await savedFile(naming.formId)).outcome).toBe('open');
     },
   );
 
@@ -1015,7 +1014,7 @@ describe('a call made while another form is open', () => {
     expect(handed.outcome).toBe('submitted');
     expect(handed.earlier_heading).toBe('Naming decisions');
     expect(presenter.shown).toHaveLength(1);
-    expect(savedFile(naming.formId).returned).toBe(true);
+    expect((await savedFile(naming.formId)).returned).toBe(true);
     void session.open(PLACEMENT_ARGS, null, live());
     expect(presenter.shown).toHaveLength(2);
     expect(presenter.latest().form).toEqual(parse(PLACEMENT_ARGS));
@@ -1065,7 +1064,7 @@ describe('a call made while another form is open', () => {
     expect(presenter.shown).toHaveLength(2);
     expect(presenter.latest().form).toEqual(parse(PLACEMENT_ARGS));
     expect(testingCall.settled).toBe(false);
-    expect(savedFile(naming.formId).returned).toBe(true);
+    expect((await savedFile(naming.formId)).returned).toBe(true);
     presenter.submit(presenter.latest().formId, body('choice 2'));
     expect((await placement).note).toBe('choice 2');
     await vi.advanceTimersByTimeAsync(0);
@@ -1095,7 +1094,7 @@ describe('a call made while another form is open', () => {
     expect(settled.settled).toBe(false);
     expect(presenter.shown).toHaveLength(1);
     expect(presenter.closed).toEqual([]);
-    expect(savedFile(naming.formId).outcome).toBe('open');
+    expect((await savedFile(naming.formId)).outcome).toBe('open');
     await expireDeadline();
     expect((await resent).notShown).toBe(true);
     expect(presenter.closed).toEqual([]);
@@ -1147,14 +1146,14 @@ describe('a call made while another form is open', () => {
 });
 
 describe('saved forms from an earlier app run', () => {
-  it('pre-fills a re-sent form from its saved draft', () => {
+  it('pre-fills a re-sent form from its saved draft', async () => {
     saveEarlier(NAMING_ARGS, 'open', HALF_BODY);
 
     void startSession().open(NAMING_ARGS, null, live());
     const shown = presenter.latest();
 
     expect(shown.draft).toEqual(HALF_BODY);
-    expect(savedFile(shown.formId).body).toEqual(HALF_BODY);
+    expect((await savedFile(shown.formId)).body).toEqual(HALF_BODY);
   });
 
   it('pre-fills a fresh form from an older form already returned', () => {
@@ -1249,7 +1248,7 @@ describe('saved forms from an earlier app run', () => {
     await expect(failed).rejects.toThrow(
       'items must be a non-empty array of strings',
     );
-    expect(savedFile(record.id).returned).toBe(false);
+    expect((await savedFile(record.id)).returned).toBe(false);
   });
 
   it('passes over a reported unparseable form on the next call, still unreturned', async () => {
@@ -1260,7 +1259,7 @@ describe('saved forms from an earlier app run', () => {
     const payload = await session.collect(true, live());
 
     expect(payload.outcome).toBe('no_form');
-    expect(savedFile(record.id).returned).toBe(false);
+    expect((await savedFile(record.id)).returned).toBe(false);
   });
 
   it('returns an older readable form behind a reported unparseable one', async () => {
@@ -1274,8 +1273,8 @@ describe('saved forms from an earlier app run', () => {
 
     expect(payload.outcome).toBe('submitted');
     expect(payload.note).toBe('half done');
-    expect(savedFile(older.id).returned).toBe(true);
-    expect(savedFile(unreadable.id).returned).toBe(false);
+    expect((await savedFile(older.id)).returned).toBe(true);
+    expect((await savedFile(unreadable.id)).returned).toBe(false);
   });
 
   it('reports an unparseable saved form to a new form, which opens once re-sent', async () => {
@@ -1289,7 +1288,7 @@ describe('saved forms from an earlier app run', () => {
     void session.open(NAMING_ARGS, null, live());
 
     expect(presenter.shown).toHaveLength(1);
-    expect(savedFile(record.id).returned).toBe(false);
+    expect((await savedFile(record.id)).returned).toBe(false);
   });
 });
 
@@ -1318,20 +1317,20 @@ describe("the user's answers on disk", () => {
     await first;
 
     presenter.draft(shown.formId, body('half'));
-    expect(savedFile(shown.formId)).toMatchObject({
+    expect(await savedFile(shown.formId)).toMatchObject({
       outcome: 'open',
       body: { note: 'half' },
     });
 
     presenter.submit(shown.formId, body('done'));
-    expect(savedFile(shown.formId)).toMatchObject({
+    expect(await savedFile(shown.formId)).toMatchObject({
       outcome: 'submitted',
       returned: false,
       body: { note: 'done' },
     });
 
     await session.collect(true, live());
-    expect(savedFile(shown.formId).returned).toBe(true);
+    expect((await savedFile(shown.formId)).returned).toBe(true);
   });
 
   it('keeps the first finish in both the answer and the file', async () => {
@@ -1343,7 +1342,7 @@ describe("the user's answers on disk", () => {
     const payload = await pending;
 
     expect(payload).toMatchObject({ outcome: 'submitted', note: 'submit' });
-    expect(savedFile(shown.formId)).toMatchObject({
+    expect(await savedFile(shown.formId)).toMatchObject({
       outcome: 'submitted',
       body: { note: 'submit' },
     });
@@ -1353,11 +1352,11 @@ describe("the user's answers on disk", () => {
   it("throws a draft's failed write to the caller and keeps the draft for the reply", async () => {
     const pending = startSession().open(NAMING_ARGS, null, live());
     const shown = presenter.latest();
-    vi.spyOn(store, 'saveBody').mockImplementation(() => {
-      throw new Error('could not save form r: EACCES');
-    });
+    vi.spyOn(store, 'saveBody').mockRejectedValue(
+      new Error('could not save form r: EACCES'),
+    );
 
-    expect(() => presenter.draft(shown.formId, body('half'))).toThrow(
+    await expect(presenter.draft(shown.formId, body('half'))).rejects.toThrow(
       'could not save form r: EACCES',
     );
     await expireDeadline();
@@ -1373,7 +1372,7 @@ describe("the user's answers on disk", () => {
 
     presenter.draft(shown.formId, body('late'));
 
-    expect(savedFile(shown.formId)).toMatchObject({
+    expect(await savedFile(shown.formId)).toMatchObject({
       outcome: 'submitted',
       body: { note: 'done' },
     });
@@ -1409,7 +1408,7 @@ describe('a session that ends', () => {
       await expect(waiting).rejects.toThrow(/open_form/);
       await settledOpening;
       expect(vi.getTimerCount()).toBe(0);
-      expect(savedFile(shown.formId)).toMatchObject({
+      expect(await savedFile(shown.formId)).toMatchObject({
         outcome: 'open',
         body: { note: 'half' },
       });
@@ -1501,7 +1500,7 @@ describe('a session moved to a new host id', () => {
       const collected = await session.collect(false, live());
 
       expect(collected.outcome).toBe('no_form');
-      expect(savedFile(shown.formId)).toMatchObject({
+      expect(await savedFile(shown.formId)).toMatchObject({
         outcome: 'submitted',
         returned: finishBeforeMove,
         session_id: 'session-1',
@@ -1521,11 +1520,11 @@ describe('a session moved to a new host id', () => {
     expect((await asking).outcome).toBe('draft');
     await vi.advanceTimersByTimeAsync(0);
     expect(presenter.closed).toEqual([old.formId]);
-    expect(savedFile(old.formId)).toMatchObject({
+    expect(await savedFile(old.formId)).toMatchObject({
       outcome: 'open',
       session_id: 'session-1',
     });
-    expect(savedFile(presenter.latest().formId)).toMatchObject({
+    expect(await savedFile(presenter.latest().formId)).toMatchObject({
       fingerprint: fingerprintOf(PLACEMENT_ARGS),
       session_id: 'session-2',
     });
@@ -1594,12 +1593,16 @@ describe('auto-answer', () => {
     return autoAnswer.payload(form, autoAnswer.body(form));
   }
 
-  // Every saved form file, in id order.
-  function savedFiles(): Record<string, unknown>[] {
-    return readdirSync(formsDir)
+  // Every saved form file, in id order, once every queued write has landed.
+  async function savedFiles(): Promise<Record<string, unknown>[]> {
+    await store.flushed();
+    const names = (await files.list(formsDir))
+      .map((entry) => entry.path)
       .filter((name) => name.endsWith('.json'))
-      .sort()
-      .map((name) => savedFile(name.slice(0, -'.json'.length)));
+      .sort();
+    return Promise.all(
+      names.map((name) => savedFile(name.slice(0, -'.json'.length))),
+    );
   }
 
   beforeEach(() => {
@@ -1613,7 +1616,7 @@ describe('auto-answer', () => {
 
     expect(payload).toEqual(autoAnswered(NAMING_ARGS));
     expect(presenter.shown).toEqual([]);
-    expect(savedFiles()).toEqual([
+    expect(await savedFiles()).toEqual([
       expect.objectContaining({
         fingerprint: fingerprintOf(NAMING_ARGS),
         body: body('recommended for Naming decisions'),
@@ -1631,7 +1634,7 @@ describe('auto-answer', () => {
     await expect(
       session.open({ heading: 'H' }, null, live()),
     ).rejects.toMatchObject({ name: TEST_FORM_ERROR_NAME });
-    expect(savedFiles()).toEqual([]);
+    expect(await savedFiles()).toEqual([]);
   });
 
   it('replays the auto-answered payload to collect, and to a re-send of the same form without a second file', async () => {
@@ -1643,7 +1646,7 @@ describe('auto-answer', () => {
 
     expect(collected).toEqual(autoAnswered(NAMING_ARGS));
     expect(resent).toEqual(autoAnswered(NAMING_ARGS));
-    expect(savedFiles()).toHaveLength(1);
+    expect(await savedFiles()).toHaveLength(1);
   });
 
   it('opens the form for a re-send once auto-answer is off', async () => {
@@ -1776,7 +1779,7 @@ describe('auto-answer', () => {
       const payload = await session.open(args, null, live());
 
       expect(payload).toEqual(expected);
-      expect(savedFiles()).not.toContainEqual(
+      expect(await savedFiles()).not.toContainEqual(
         expect.objectContaining({ auto_answered: true }),
       );
     },
@@ -1815,7 +1818,7 @@ describe('auto-answer', () => {
     );
     expect(presenter.shown).toHaveLength(1);
     expect(closedBeforeSubmit).toEqual([]);
-    expect(savedFiles()).not.toContainEqual(
+    expect(await savedFiles()).not.toContainEqual(
       expect.objectContaining({ auto_answered: true }),
     );
   });
@@ -1828,7 +1831,7 @@ describe('auto-answer', () => {
     const payload = await session.open(NAMING_ARGS, null, live());
 
     expect(payload).toEqual(autoAnswered(NAMING_ARGS));
-    expect(savedFiles()).toEqual([
+    expect(await savedFiles()).toEqual([
       expect.objectContaining({ auto_answered: true, session_id: 'session-1' }),
       expect.objectContaining({ auto_answered: true, session_id: 'session-2' }),
     ]);
@@ -1858,7 +1861,7 @@ describe('auto-answer', () => {
       const { session } = startAutoSession();
 
       await expect(call(session)).rejects.toThrow(error);
-      expect(savedFiles()).toEqual([]);
+      expect(await savedFiles()).toEqual([]);
     },
   );
 });
@@ -1876,7 +1879,7 @@ describe('a collect after an app quit', () => {
     expect(shown.draft).toEqual(HALF_BODY);
     expect(payload.outcome).toBe('submitted');
     expect(payload.note).toBe('choice 1');
-    expect(savedFile(earlier.id).returned).toBe(true);
+    expect((await savedFile(earlier.id)).returned).toBe(true);
   });
 
   it('with wait false shows the form and returns its draft at once', async () => {
@@ -1961,7 +1964,7 @@ describe('the detach at an app quit', () => {
 
     expect(pending.settled).toBe(false);
     expect(presenter.closed).toEqual([]);
-    expect(savedFile(formId).outcome).toBe('open');
+    expect((await savedFile(formId)).outcome).toBe('open');
   });
 
   it('leaves unanswered a call the host cancels after it, closing nothing', async () => {
@@ -1987,6 +1990,46 @@ describe('the detach at an app quit', () => {
 
     expect(opened.settled).toBe(false);
     expect(collected.settled).toBe(false);
+    expect(presenter.shown).toEqual([]);
+  });
+});
+
+describe('afterLoad', () => {
+  function startLoadingSession(loaded: Promise<void>) {
+    return afterLoad(loaded, newService()).startSession({
+      id: 'app-1',
+      info: SESSION,
+    });
+  }
+
+  // Breaks if the gate is missing, so a call at start misses the saved forms.
+  it('opens no form until the load settles', async () => {
+    const loaded = Promise.withResolvers<void>();
+    const session = startLoadingSession(loaded.promise);
+
+    void session.open(NAMING_ARGS, null, live());
+    await Promise.resolve();
+    expect(presenter.shown).toEqual([]);
+
+    loaded.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(presenter.shown).toHaveLength(1);
+  });
+
+  // Breaks if `end` waits behind the load, so the form shows in an ended
+  // session.
+  it('ends a session at once while the load is pending', async () => {
+    const loaded = Promise.withResolvers<void>();
+    const session = startLoadingSession(loaded.promise);
+
+    const pending = session.open(NAMING_ARGS, null, live());
+    session.end();
+    loaded.resolve();
+
+    await expect(pending).rejects.toThrow(
+      'The session ended before this open_form ran.',
+    );
     expect(presenter.shown).toEqual([]);
   });
 });
