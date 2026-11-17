@@ -124,6 +124,15 @@ const GATHERED_SYSTEM_SUBTYPES: ReadonlySet<string> = new Set([
   'thinking_tokens',
 ]);
 
+// Line types that carry a turn's content; a system line outside
+// `GATHERED_SYSTEM_SUBTYPES` does too.
+const TURN_CONTENT_TYPES: ReadonlySet<string> = new Set([
+  'assistant',
+  'stream_event',
+  'user',
+  'tool_progress',
+]);
+
 // The `origin.kind` of a `result` Claude ran on its own: a subagent's
 // hand-back and the task notification after it.
 const UNREQUESTED_ORIGINS: ReadonlySet<string> = new Set([
@@ -218,6 +227,13 @@ function compactionOf(event: Json): CompactionLine | null {
     return { phase: 'started' };
   }
   return event.compact_result === 'failed' ? { phase: 'failed' } : null;
+}
+
+function isTurnContent(event: Json): boolean {
+  if (event.type === 'system') {
+    return !GATHERED_SYSTEM_SUBTYPES.has(asString(event.subtype));
+  }
+  return TURN_CONTENT_TYPES.has(asString(event.type));
 }
 
 // A copy the decoder's later changes cannot reach.
@@ -360,9 +376,10 @@ export function createStreamDecoder(
   let turnCount = 0;
   // The events entry gathered events join: the first gathered event opens the
   // first one (the start hooks, ahead of the first init), and each later
-  // turn's `system/init`, which starts every turn, opens that turn's. From a
-  // result to the next init it stays the ended turn's, so an event with no
-  // turn running joins the turn before.
+  // turn's `system/init`, which starts every turn, opens that turn's, except
+  // the empty follow-up's after a hand-back (`heldEvents`). From a result to
+  // the next init it stays the ended turn's, so an event with no turn running
+  // joins the turn before.
   let turnEvents: RawEntry | null = null;
   // True from a result until the next turn's init.
   let betweenTurns = false;
@@ -370,6 +387,11 @@ export function createStreamDecoder(
   // Claude may run after it, an empty one as measured, has its init and its
   // empty result join the hand-back turn's events entry.
   let isAfterHandback = false;
+  // The init after a hand-back and the events-entry lines after it, held in
+  // wire order until the turn shows whether it is the empty follow-up: its
+  // result joins them to the hand-back turn's events entry, and any other
+  // result or a line of turn content opens a new events entry with them.
+  let heldEvents: Json[] | null = null;
   // True from a compaction's boundary to the next result, while its
   // `<local-command-stdout>` replay, which the compaction entry stands for, may
   // come.
@@ -401,6 +423,40 @@ export function createStreamDecoder(
     }
     entry.raw.push(event);
     return snapshot(entry);
+  }
+
+  // `event` joins the held lines while any are held, else the events entry.
+  function gatherOrHold(event: Json, out: DecodedLine, startsTurn = false) {
+    if (heldEvents !== null) {
+      heldEvents.push(event);
+      return;
+    }
+    out.entries.push(gathered(event, startsTurn));
+  }
+
+  // The held lines join the events entry, the first opening a new one when
+  // `opensTurn`, and the entry is sent once with them all.
+  function releaseHeld(out: DecodedLine, opensTurn: boolean) {
+    if (heldEvents === null) {
+      return;
+    }
+    const [first, ...rest] = heldEvents;
+    heldEvents = null;
+    let entry = gathered(first, opensTurn);
+    for (const event of rest) {
+      entry = gathered(event);
+    }
+    out.entries.push(entry);
+  }
+
+  // The turn Claude runs after a hand-back with nothing in it, as measured.
+  function isEmptyFollowUp(event: Json): boolean {
+    return (
+      isAfterHandback &&
+      asJson(event.origin).kind === 'task-notification' &&
+      event.result === '' &&
+      event.num_turns === 0
+    );
   }
 
   // Every block still open, closed and re-sent: an interrupt can end a block
@@ -965,11 +1021,14 @@ export function createStreamDecoder(
       openThinking.raw.push(event);
       return;
     }
-    out.entries.push(
-      GATHERED_SYSTEM_SUBTYPES.has(asString(event.subtype))
-        ? gathered(event, event.subtype === 'init' && !isAfterHandback)
-        : rawEntry(event),
-    );
+    const isInit = event.subtype === 'init';
+    if (!GATHERED_SYSTEM_SUBTYPES.has(asString(event.subtype))) {
+      out.entries.push(rawEntry(event));
+    } else if (isInit && isAfterHandback && heldEvents === null) {
+      heldEvents = [event];
+    } else {
+      gatherOrHold(event, out, isInit);
+    }
     const error = event.compact_error;
     const isErrorShown =
       out.compaction?.phase === 'failed' &&
@@ -1202,8 +1261,9 @@ export function createStreamDecoder(
   // included, and teaches the windows its `modelUsage` names; a hand-back's
   // result also ends its subagent, and every result ends the subagents late
   // lines listed again. The empty result after a hand-back's draws no divider:
-  // it joins the events entry.
+  // it joins the hand-back turn's events entry.
   function decodeResult(event: Json, out: DecodedLine) {
+    const isEmptyAfterHandback = isEmptyFollowUp(event);
     closeOpenBlocks(out);
     failPendingAgents(out);
     finishByHandback(event, out);
@@ -1235,13 +1295,8 @@ export function createStreamDecoder(
       costUsd = totalCost - lastTotalCost;
       lastTotalCost = totalCost;
     }
-    const isEmptyFollowUp =
-      isAfterHandback &&
-      origin.kind === 'task-notification' &&
-      event.result === '' &&
-      event.num_turns === 0;
     isAfterHandback = origin.kind === 'peer' && origin.handback === true;
-    if (isEmptyFollowUp) {
+    if (isEmptyAfterHandback) {
       out.entries.push(gathered(event));
     } else {
       resultCount += 1;
@@ -1270,7 +1325,7 @@ export function createStreamDecoder(
       response: asJson(response.response),
     };
     if (!isKeptOut(requestId)) {
-      out.entries.push(gathered(event));
+      gatherOrHold(event, out);
     }
   }
 
@@ -1279,7 +1334,7 @@ export function createStreamDecoder(
       requestId: asString(event.request_id),
       subtype: asString(asJson(event.request).subtype),
     };
-    out.entries.push(gathered(event));
+    gatherOrHold(event, out);
   }
 
   // A heartbeat's `parent_tool_use_id` is the pending call's id, not a
@@ -1296,7 +1351,7 @@ export function createStreamDecoder(
 
   function decodeRateLimit(event: Json, out: DecodedLine) {
     out.planRows = rateLimitRows(asJson(event.rate_limit_info));
-    out.entries.push(gathered(event));
+    gatherOrHold(event, out);
   }
 
   function decodeLifecycle(event: Json, out: DecodedLine) {
@@ -1304,7 +1359,7 @@ export function createStreamDecoder(
     if (uuid !== '') {
       out.lifecycle = { uuid, state: asString(event.state) };
     }
-    out.entries.push(gathered(event));
+    gatherOrHold(event, out);
   }
 
   const DECODERS: Readonly<
@@ -1340,6 +1395,11 @@ export function createStreamDecoder(
       if (decoder === undefined) {
         out.entries.push(rawEntry(json.value));
         return out;
+      }
+      if (event.type === 'result') {
+        releaseHeld(out, !isEmptyFollowUp(event));
+      } else if (isTurnContent(event)) {
+        releaseHeld(out, true);
       }
       decoder(event, out);
       return out;

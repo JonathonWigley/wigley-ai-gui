@@ -426,8 +426,9 @@ reply as on a running turn and nothing follows it:
 
 So the plain interrupt cannot tell idle from busy, and a client that waits for a `result` after it waits forever. A
 named interrupt can tell them apart (§ Message lifecycle). The adapter sends the plain one and does not wait for a
-`result`: the reply (success or error) closes every open message when no turn is open, and an interrupt that neither
-a `result` nor such a reply answers within 5 s drops the turn state (design.md § Agent harness seam, Interrupt).
+`result`: the reply (success or error) closes every open message not yet `started` when no turn is open, and an
+interrupt that neither a `result` nor such a reply answers within 5 s drops the turn state (design.md § Agent harness
+seam, Interrupt).
 
 ## Mode change
 
