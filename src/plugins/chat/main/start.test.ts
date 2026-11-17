@@ -833,7 +833,12 @@ describe('chat main part', () => {
     const result = await contribution
       ?.start({
         id: 'row-1',
-        info: { sessionId: 'host-1', projectDir: '/p', harness: 'claude', rowId: null },
+        info: {
+          sessionId: 'host-1',
+          projectDir: '/p',
+          harness: 'claude',
+          rowId: null,
+        },
       })
       .call(
         'set_headless',
@@ -1439,17 +1444,17 @@ function startChatOnHarness() {
   const startedProcess = (events: {
     ended(exit: { code: number; error: string | null }): void;
   }) => ({
-      send: () => undefined,
-      end: () => Promise.resolve(),
-      interrupt: () => undefined,
-      detach() {
-        stops.detaches += 1;
-      },
-      kill() {
-        stops.kills += 1;
-        events.ended({ code: 0, error: null });
-      },
-    });
+    send: () => undefined,
+    end: () => Promise.resolve(),
+    interrupt: () => undefined,
+    detach() {
+      stops.detaches += 1;
+    },
+    kill() {
+      stops.kills += 1;
+      events.ended({ code: 0, error: null });
+    },
+  });
   const harness = startMainPart(chatMainPart, {
     services: {
       agentHarnesses: harnessRegistryOf([agentHarness]),

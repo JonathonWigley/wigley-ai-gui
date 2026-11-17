@@ -788,9 +788,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           ],
     );
     const selectedHostSessionId =
-      selectedRowId === null
-        ? null
-        : (held.get(selectedRowId)?.hostId ?? null);
+      selectedRowId === null ? null : (held.get(selectedRowId)?.hostId ?? null);
     return {
       sessions: [...records, ...skippedRecords],
       selectedHostSessionId,

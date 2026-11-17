@@ -2099,8 +2099,7 @@ export function createFakeAgentHarness(
       }
       const record: FakeAgentProcessRecord = {
         request,
-        sessionId:
-          request.sessionId ?? `fake-session-${++mintedSessionIds}`,
+        sessionId: request.sessionId ?? `fake-session-${++mintedSessionIds}`,
         events,
         calls: [],
         ended: false,

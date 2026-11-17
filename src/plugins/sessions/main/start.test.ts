@@ -219,6 +219,7 @@ describe('harnessToolUseId', () => {
         sessionId: 'host-1',
         projectDir: null,
         harness,
+        rowId: null,
       };
 
       const toolUseId = harnessToolUseId(harnessRegistryOf([claude]), info, {
@@ -242,6 +243,7 @@ function hostInfo(sessionId: string): SessionInfo {
     sessionId,
     projectDir: null,
     harness: 'claude',
+    rowId: null,
   };
 }
 

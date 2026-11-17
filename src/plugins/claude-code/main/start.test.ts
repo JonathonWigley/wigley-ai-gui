@@ -150,7 +150,12 @@ describe('claudeCodeMainPart', () => {
     const reply = await contributed[0]
       .start({
         id: 'row-1',
-        info: { sessionId: 's-1', projectDir: '/p', harness: 'claude', rowId: null },
+        info: {
+          sessionId: 's-1',
+          projectDir: '/p',
+          harness: 'claude',
+          rowId: null,
+        },
       })
       .call(
         'permission_prompt',

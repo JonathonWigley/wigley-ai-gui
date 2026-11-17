@@ -3547,9 +3547,7 @@ describe('createClaudeCodeHarness on the session host', () => {
     const flagAt = args.indexOf('--session-id');
     expect(args.slice(flagAt, flagAt + 2)).toEqual(['--session-id', expected]);
     expect(sequence[0]).toEqual(['sessionId', expected]);
-    expect(
-      sequence.filter(([name]) => name === 'sessionId'),
-    ).toHaveLength(1);
+    expect(sequence.filter(([name]) => name === 'sessionId')).toHaveLength(1);
   });
 
   it('attach_NullSessionId_Rejects', async () => {
@@ -3605,7 +3603,12 @@ describe('createClaudeCodeHarness on the session host', () => {
   };
   const rowSession: AgentSession = {
     id: 'row-1',
-    info: { sessionId: 's-1', projectDir: '/proj', harness: 'claude', rowId: null },
+    info: {
+      sessionId: 's-1',
+      projectDir: '/proj',
+      harness: 'claude',
+      rowId: null,
+    },
   };
   const callContext = (signal = new AbortController().signal) => ({
     toolUseId: 'toolu_1',

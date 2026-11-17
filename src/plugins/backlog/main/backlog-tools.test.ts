@@ -22,7 +22,12 @@ import type { BacklogRow } from './rows';
 const FOLLOWUPS = '/dev/r/docs/features/followups.md';
 const SESSION: AgentSession = {
   id: 'row-1',
-  info: { sessionId: 'h-1', projectDir: '/home/me', harness: null, rowId: null },
+  info: {
+    sessionId: 'h-1',
+    projectDir: '/home/me',
+    harness: null,
+    rowId: null,
+  },
 };
 const CONTEXT = { toolUseId: null, signal: new AbortController().signal };
 

@@ -370,8 +370,18 @@ describe('docs main part', () => {
   }>([
     {
       event: 'sessions.hostSessionChanged',
-      info: { sessionId: 'old-host', projectDir: '/p', harness: 'claude', rowId: null },
-      changed: { sessionId: 'new-host', projectDir: '/p', harness: 'claude', rowId: null },
+      info: {
+        sessionId: 'old-host',
+        projectDir: '/p',
+        harness: 'claude',
+        rowId: null,
+      },
+      changed: {
+        sessionId: 'new-host',
+        projectDir: '/p',
+        harness: 'claude',
+        rowId: null,
+      },
       oldRun: ['session', 'old-host'],
       oldPath: '/p/old.md',
       newRun: ['session', 'new-host'],
