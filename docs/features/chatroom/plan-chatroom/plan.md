@@ -28,25 +28,25 @@ The full design is `wigley-ai-gui/docs/features/chatroom/design.md`. Read it bef
 
 Re-run each before the first dispatch; a different result stops the run for the lead.
 
-- `git -C /Users/jonathonwigley/Documents/ai rev-parse --verify 35f0b1524` — the docs-ahead commit exists.
+- `git -C /Users/jonathonwigley/Documents/ai rev-parse --verify d5074678f` — the docs-ahead commit exists (it was `35f0b1524` before the rebase onto Lane H).
 - `test ! -e /Users/jonathonwigley/Documents/ai/wigley-ai-gui/src/plugins/chatroom` — no chatroom plugin yet.
 - `test ! -e /Users/jonathonwigley/Documents/ai/wigley-ai-marketplace/plugins/wigley/hooks` — the wigley plugin has
   no hooks yet.
 - `grep -n "contributeTools\|addToolCallGuard" /Users/jonathonwigley/Documents/ai/wigley-ai-gui/src/plugins/sessions/contract.ts`
-  — prints lines 238 and 310 (measured at plan time, re-verify).
+  — prints lines 233 and 311 (re-measured after Lane H).
 - `grep -n "CLAUDE_CODE_SESSION_ID" /Users/jonathonwigley/Documents/ai/wigley-ai-marketplace/plugins/wigley/scripts/forms/relay.py`
   — the hello reads the session id at about line 230 (measured at plan time, re-verify).
-- `test ! -e /Users/jonathonwigley/Documents/ai/wigley-ai-gui/src/plugins/claude-code` — the Claude adapter lives in
-  `src/main/claude-code/`, which task 04's doc fix rests on.
+- `test -e /Users/jonathonwigley/Documents/ai/wigley-ai-gui/src/plugins/claude-code` — Lane H moved the Claude adapter
+  into the `claude-code` plugin (task 04 was struck for it).
 
 ## Docs written ahead
 
-Commit `35f0b1524` on branch `chatroom` (worktree `/Users/jonathonwigley/Documents/.worktrees/ai-chatroom`):
+Commit `d5074678f` (was `35f0b1524`; now on main) on branch `chatroom` (worktree `/Users/jonathonwigley/Documents/.worktrees/ai-chatroom`):
 
 - `wigley-ai-gui/docs/features/chatroom/design.md`
 - `wigley-ai-marketplace/plugins/wigley/skills/chatroom/SKILL.md`
 - `wigley-agents/AGENTS.md` § Subagents (progress posts) and § Communication (the chatroom pointer)
-- wigley plugin version 2.13.0 in both manifests
+- wigley plugin version 2.13.0 in both manifests (main has since pushed 2.16.0; task 03 bumps this run's series past origin/main's version)
 
 Each marks its behaviour "planned in `plan-chatroom`, not built yet". Task 11 drops those marks.
 
@@ -108,8 +108,8 @@ Decisions settled in the interview (round numbers):
 
 New plugin `wigley-ai-gui/src/plugins/chatroom/`:
 
-- `manifest.ts` — `definePlugin({ id: 'chatroom', dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
-  reads: { main: ['workflow', 'unity-pool'], page: [] }, settings: { bodyCap: 1500, postsPerMinute: 10,
+- `manifest.ts` — `definePlugin({ id: 'chatroom', dependsOn: { main: ['sessions', 'chat', 'workflow'], page: ['sessions'] },
+  reads: { main: ['unity-pool'], page: [] }, settings: { bodyCap: 1500, postsPerMinute: 10,
   claimMinutes: 30, layout: 'default' } … })`. Task 08 writes it; task 09 adds its page commands and scope.
 - `contract.ts` — the shared records and keys below. Task 01 writes it; later tasks add to it only where named.
 - `main/` — `room-store.ts`, `jsonl-room-store.ts`, `memory-room-store.ts`, `room-store.test-support.ts` (01);
@@ -201,7 +201,7 @@ lookup and channel open that `relay.py` has today, imported by `relay.py` and `h
 
 Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads` contracts (the layer check). Only
 `room-service.ts` writes through `RoomStore`. Only `sessions` touches the relay socket. No code outside
-`src/main/claude-code/` names Claude's hook or env fields; the hook's request carries neutral fields (`tool`,
+`src/plugins/claude-code/` names Claude's hook or env fields; the hook's request carries neutral fields (`tool`,
 `paths`, `agentId`).
 
 ## Tasks
@@ -244,6 +244,8 @@ Review base: 7c3eb9665
 - 05 · deep · e467c8144 · diff read: every Produces export present; typecheck passes; oxfmt applied (7ae838a7a) · concerns: isParticipant and ref types copied from jsonl-room-store.ts (private there); a store.read rejection inside post/unread rejects rather than returning ok:false; it.each tables mixing row shapes
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
+- 02 Produces: SessionList.sessionOfHost(hostId) → sessionOf(info: SessionInfo); createHookRoutes takes sessionOf · why: row-id-first lookup (Lane H's connect order) · consumers: 02 only (08 consumes the routes, not the lookup) · lead, before dispatch
+- 06 BoardRow.harness / BoardSession.harness and 08 RosterSession.harness: Harness | null → string | null · why: Lane H removed the Harness type; the field holds the harness id · consumers: 08, 09 · lead, before dispatch
 ### Rulings
 - Task 04 struck: its cause (Lane H not started) no longer holds; Lane H runs and rewrites the same passages — a stale-doc window stays until Lane H lands — lead
 - Order agreed with the Lane H session: Lane H lands on main first (several hours; it bumps wigley to 2.13.1 and adds row_id to relay.py's hello); this run builds only new files (01, 05, 06) until Lane H's landed-sha notice, then rebases onto main and re-checks 02, 03, 07 and 08 against Lane H's code before dispatch — a wrong order would mean merge conflicts across sessions, relay and chat — lead
@@ -253,5 +255,12 @@ Review base: 7c3eb9665
 - Character counts (body cap, thread 1-80, entry cut, read line 200) use code points — group 05 · group 05
 - unreadAddressed returns the user's word to a thread only while that thread is open, so it stays a subset of unread — group 05 · group 05
 - An expired claim drops in memory; claims.json is rewritten only when a claim changes; a state file read failing for any reason but missing rejects and caches nothing — group 05 · group 05
+- Lane H landed on main (e23142c0e); chatroom rebased onto it cleanly; two readers rechecked 02, 03, 06–12 and plan.md against Lane H's code, and every stale line was edited (reports recheck-A.md, recheck-B.md) — lead
+- 02's hook route finds its session in connect's order (row id first, then host id): a host-id-only lookup misses an app-run row before chat adopts the host id and after /clear or resume — lead
+- 03 sends the relay's codex- id only when WIGLEY_SESSION_ROW is unset: an app-run Codex row joins by row_id, and a codex- host id would lose its tools at the adapter's first host-id move; no change for terminal Codex today — lead
+- Version: main pushed 2.16.0 since the docs-ahead commit, so 03 bumps both wigley manifests one minor past origin/main (2.17.0 today) and 07/11 ride that series; re-checked at landing — lead
+- 08's manifest moves workflow from reads to dependsOn.main: 08 calls workflow exports (flowOf, flows, stageFinishes) and api.dependency takes only dependsOn ids; chatroom now needs the workflow plugin enabled (on by default) — lead
+- 09's mode icon is 'organization', not 'comment-discussion', which the Sessions mode already uses — lead
+- 06 released from its hold and dispatched with 02 and 03: it now consumes SessionInfo.harness as string | null, and ChatSessionInfo as Lane H left it — lead
 ### Review rounds
 ### Test gate

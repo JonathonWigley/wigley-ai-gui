@@ -9,8 +9,8 @@ Plan: [plan.md](plan.md)
 Files:     create `src/plugins/chatroom/main/selftest-fixture.ts` · create `src/plugins/chatroom/main/selftest-script.ts` · modify `src/plugins/chatroom/main/start.ts`
 Consumes:
 - the one `RoomService` that 08's `main/start.ts` builds (pass it to the script and the fixture from start), and its
-  calls `post(request: PostRequest): Promise<PostResult>` (a `PostRequest` names `from`, `kind`, `body`, `to` as
-  names, `thread`, `refs`, `replyTo`) and `claim(request: ClaimRequest): Promise<ClaimResult>` (`room`, `holder`,
+  calls `post(request: PostRequest): Promise<PostResult>` (a `PostRequest` names `room`, `from`, `kind`, `body`, `to` as
+  names, `thread`, `refs`, `replyTo`, `answerBy`, `onNoAnswer`, `key`; the fixture passes null for the last three) and `claim(request: ClaimRequest): Promise<ClaimResult>` (`room`, `holder`,
   `target`, `reason`, `minutes`) ← 05, 08. `post` refuses a `to` name the room does not hold, so the fixture posts
   to the titles of sessions it started.
 - `chatroomRoomsSlot` (`chatroom.rooms`) and `RoomView` ← 08 (read only: the fixture waits until the room's value holds
@@ -34,7 +34,7 @@ Decisions:
      a drive run).
   2. Launch the lead through `chat.launch` on profile `work`, first message `chatroom lead`. Wait for its launch to
      resolve. Then launch the peer the same way, first message `chatroom peer`. A first message gives the row its
-     title, as unity-pool's fixture does. The launch order fixes the row labels: both rows share one folder, and
+     title, as unity-pool's self-test script does (`unity-pool/main/selftest-script.ts`, its `open`). The launch order fixes the row labels: both rows share one folder, and
      `SessionRow.label` is the folder's last segment with a counter. Pin them as constants:
      `LEAD_LABEL = 'chatroom-selftest'` and `PEER_LABEL = 'chatroom-selftest 2'`. Every `badge in` and `activity in`
      line below names the peer by `PEER_LABEL`, not by its title.

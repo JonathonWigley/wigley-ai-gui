@@ -18,7 +18,9 @@ Decisions:
   `/Users/jonathonwigley/Documents/.worktrees/ai-chatroom/wigley-ai-gui` unless the check names another folder.
   Shell: zsh with BSD tools. Use absolute paths, and quote globs.
 - The real-Claude round trip runs in a drive run started with `--harness claude`, not in the user's dev app. The
-  drive run is the dev build, offscreen, on its own temp home and endpoint. The agent can drive its keys and read
+  drive run is the dev build, offscreen, on its own temp home and endpoint; under `--harness claude` the Claude
+  sessions it starts run as the user's real home (`agentHomeDir`, `src/contracts/plugin.ts`), so they load the user's
+  Claude config and installed plugins, while the rooms stay in the run's plugin data. The agent can drive its keys and read
   its log, and its rooms never reach the user's data. It spends tokens on the user's Claude login (drive skill
   § Real Claude). Name that in the report.
 

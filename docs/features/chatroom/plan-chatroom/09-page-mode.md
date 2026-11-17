@@ -67,7 +67,7 @@ Produces:
 - the page log lines below, which 10's self-test waits on
 Decisions:
 - **Mode** (pattern: `src/plugins/practice/page/start.ts`): `api.modes.add({ id: 'main', title: 'Chatroom', icon:
-  'comment-discussion', element, sideBar, shown, hidden, sideBarHidden, sideBarOpenedOver, focusSideBar, focusMain })`.
+  'organization', element, sideBar, shown, hidden, sideBarHidden, sideBarOpenedOver, focusSideBar, focusMain })`.
   `showMode` shows the mode, or toggles its side bar while it shows. The title bar context is `Chatroom` with the
   shown thread as `detail`.
 - **Side bar**: one group per room in `chatroom.rooms`, sorted by name. Under each room, its open threads sorted by

@@ -3,7 +3,7 @@
 Status: not started
 Type: Task
 Rung: standard · doc-only: a re-read of the docs written ahead against the landed code
-Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
+Wave: 6 · Depends on: 01, 02, 03, 05, 06, 07, 08, 09, 10 (04 struck)
 Plan: [plan.md](plan.md)
 
 Files (wigley-ai-gui):         modify `docs/features/chatroom/design.md` · modify `AGENTS.md`
@@ -63,7 +63,7 @@ Decisions:
   - § Running and testing, the self-test script list: add
     `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer.
   - § Architecture, Debug and testing keys: add the chatroom preview `Space z l r` to the layout previews list.
-  - Any line that 04 fixed and 01–10 made untrue again.
+  - Any line Lane H's landing wrote about the relay, harnesses or sessions (the passages task 04 was struck for) that 01–10 made untrue.
 - Keep each doc's own style. Write fixes in ASD-STE100 Simplified Technical English where the doc uses it.
 - Commit message: describe which docs changed and which planned marks were removed.
 GIVEN the landed chatroom code WHEN an agent reads any of the docs above THEN each statement agrees with the code,
@@ -74,8 +74,8 @@ Done when: the `plan-chatroom` grep, run as `grep -rn "plan-chatroom" wigley-ai-
            `wigley-ai-marketplace/plugins/wigley/skills/chatroom/SKILL.md:16`, and `wigley-agents/AGENTS.md:206` and
            `:219`. Each of the four is a mark this task removes. Every doc above is re-read and fixed; the
            marketplace Done checks `python3 scripts/check_pointers.py` and both `check_manifests.py` lines pass,
-           run from the `wigley-ai-marketplace/` folder (the skill edits are in plugin version
-           2.13.0, which is already bumped). Report each doc changed, each line fixed that is not a mark removal,
+           run from the `wigley-ai-marketplace/` folder (the skill edits ride the one version bump this run's series makes past
+           origin/main's wigley version, which task 03 makes; check it still exceeds origin/main's). Report each doc changed, each line fixed that is not a mark removal,
            and each concern.
 Commit:    one commit for the group
 
