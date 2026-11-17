@@ -11,7 +11,12 @@ import {
 import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { CommandHandler } from '../../../contracts/plugin';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
-import type { EditorHost, TextEditor } from '../../../contracts/editor';
+import type {
+  EditorEvents,
+  EditorHost,
+  FocusOptions,
+  TextEditor,
+} from '../../../contracts/editor';
 import type { AnchorOptions } from '../../../contracts/keymap';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import type { ShownLayouts } from '../../../contracts/plugin';
@@ -53,22 +58,47 @@ interface Inserted {
   text: string;
 }
 
-// An editor host whose editors record each insert into `inserted`; every
-// cursor sits after an `x`.
-function fakeHost(inserted: Inserted[]): EditorHost {
+// One editor the fake host made: its events, the options of each focus it
+// took, and whether it was destroyed.
+interface CreatedEditor {
+  editor: TextEditor;
+  events: EditorEvents;
+  focuses: (FocusOptions | undefined)[];
+  isDestroyed: boolean;
+}
+
+// An editor host whose editors record each insert into `inserted` and which
+// records every editor it makes in `created`; every cursor sits after an `x`.
+function fakeHost(inserted: Inserted[], created: CreatedEditor[]): EditorHost {
   return {
     create: (_parent, doc, events) => {
+      let text = doc;
+      const focuses: (FocusOptions | undefined)[] = [];
       const editor: TextEditor = {
-        text: () => doc,
-        setText: () => undefined,
-        insert: (text) => {
-          inserted.push({ editor, text });
+        text: () => text,
+        setText: (value) => {
+          text = value;
+        },
+        insert: (inserting) => {
+          inserted.push({ editor, text: inserting });
         },
         charBeforeCursor: () => 'x',
-        focus: () => events.focused(),
+        focus: (options) => {
+          focuses.push(options);
+          events.focused();
+        },
         blur: () => events.blurred(),
-        destroy: () => undefined,
+        destroy: () => {
+          made.isDestroyed = true;
+        },
       };
+      const made: CreatedEditor = {
+        editor,
+        events,
+        focuses,
+        isDestroyed: false,
+      };
+      created.push(made);
       return editor;
     },
     createDocument: () => {
@@ -116,8 +146,9 @@ interface NamedAnchor {
 // `resizeTargets` every split handed to the resize keys, `focusTargets` every
 // target handed to the focus keys, `uiWrites` every
 // uiState write over the values `uiState` starts with, `targets` every drop
-// target the view registered, `inserted` every insert into a box's editor, and
-// `activities` every row activity the view set.
+// target the view registered, `inserted` every insert into a box's editor,
+// `created` every editor the host made, and `activities` every row activity
+// the view set.
 function primerPopupSetup(
   parts: {
     entries?: PrimerEntry[];
@@ -137,8 +168,9 @@ function primerPopupSetup(
   const log = (message: string) => logs.push(message);
   const targets: RegisteredTarget[] = [];
   const inserted: Inserted[] = [];
+  const created: CreatedEditor[] = [];
   const boxes = createEditorBoxes(
-    fakeHost(inserted),
+    fakeHost(inserted, created),
     {
       changed: (box, value) =>
         store.dispatch({
@@ -289,6 +321,19 @@ function primerPopupSetup(
     uiWrites,
     targets,
     inserted,
+    created,
+    // The live editor `box` is placed with.
+    editorOf: (box: PrimerBox): CreatedEditor => {
+      const key = boxKey(box);
+      const made = created.find((candidate) => {
+        const held = boxes.boxOf(candidate.editor);
+        return held !== undefined && boxKey(held) === key;
+      });
+      if (made === undefined) {
+        throw new Error(`no editor is placed as ${key}`);
+      }
+      return made;
+    },
     activities,
     sessionId: presented.sessionId,
     popup,
@@ -759,6 +804,20 @@ describe('primer add-item box', () => {
     expect(setup.boxes.active()).toBeNull();
   });
 
+  it('addItem_AddItemBoxHeldEditor_ShowsTheClearedText', () => {
+    const setup = primerPopupSetup();
+    typeNewItem(setup, 'Test the store');
+    const held = setup.editorOf(newItem1);
+    held.editor.setText('Test the store');
+    setup.run('leaveBox');
+
+    setup.view.setLayouts(withUser<PrimerLayout>(defaultLayout, BARE_TASK));
+
+    expect(itemCount(setup)).toBe(3);
+    expect(setup.editorOf(newItem1)).toBe(held);
+    expect(held.editor.text()).toBe('');
+  });
+
   it('adds the item once on a focus move to the items', () => {
     const setup = primerPopupSetup();
     typeNewItem(setup, 'Test the store');
@@ -1203,7 +1262,8 @@ describe('primer layout', () => {
   });
 
   it('falls back to default when a user card throws after mounting a box, mounting each box once', () => {
-    const { store, popup, view, boxes, logs } = primerPopupSetup();
+    const { store, popup, view, boxes, logs, created, editorOf } =
+      primerPopupSetup();
     view.setLayouts(
       withUser<PrimerLayout>(defaultLayout, {
         cards: {
@@ -1214,9 +1274,14 @@ describe('primer layout', () => {
         },
       }),
     );
+    const editorsBefore = created.length;
 
     store.dispatch({ type: 'selectTask', row: 1 });
 
+    const taskEditors = created.slice(editorsBefore);
+    expect(taskEditors).toHaveLength(2);
+    expect(taskEditors).toContain(editorOf(taskComment1));
+    expect(taskEditors.filter((made) => made.isDestroyed)).toEqual([]);
     const card = partIn(popup, 'primer-card');
     expect(card.dataset.layout).toBe('default');
     expect(logs).toContainEqual(
@@ -1251,9 +1316,14 @@ describe('primer layout', () => {
   });
 
   it('rebuilds the shown card on setLayouts with a new pick and keeps the focused box', () => {
-    const { store, popup, view, boxes } = primerPopupSetup();
+    const { store, popup, view, boxes, created, editorOf } =
+      primerPopupSetup();
     store.dispatch({ type: 'selectTask', row: 1 });
     boxes.focus(taskComment1);
+    const comment = editorOf(taskComment1);
+    comment.events.modeChanged({ mode: 'visual', subMode: '' });
+    const focusesBefore = comment.focuses.length;
+    const editorsBefore = created.length;
     const before = partIn(popup, 'primer-card');
 
     view.setLayouts(withUser<PrimerLayout>(defaultLayout, BARE_TASK));
@@ -1263,6 +1333,9 @@ describe('primer layout', () => {
     expect(after.dataset.layout).toBe(USER_LAYOUT);
     const active = boxes.active();
     expect(active === null ? null : boxKey(active)).toBe('p1/task/1/comment');
+    expect(created).toHaveLength(editorsBefore);
+    expect(editorOf(taskComment1)).toBe(comment);
+    expect(comment.focuses.slice(focusesBefore)).toEqual([undefined]);
   });
 
   it("runs the item card's update on a toggle without a rebuild", () => {

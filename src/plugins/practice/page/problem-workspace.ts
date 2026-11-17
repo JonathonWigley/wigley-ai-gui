@@ -53,7 +53,6 @@ import { createMarkdownMount } from '../../../shared/page/markdown-mount';
 import { onPageHide } from '../../../shared/page/page-hide';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textButton } from '../../../shared/page/ui/button';
-import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { rowAction } from '../../../shared/page/ui/row';
 import { createSplit } from '../../../shared/page/ui/split';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
@@ -520,19 +519,24 @@ export function createProblemWorkspace(
       return node;
     };
 
-  // A box kit's `textBox`: the box's frame appended to `parent`, its vim box
-  // mounted with the draft's text, destroyed with the draw.
+  // A box kit's `textBox`: the box's frame placed in `parent` with the
+  // draft's text, released with the draw. A box placed for another problem or
+  // an earlier draft is destroyed first, so a fresh editor holds the new text.
   const textBoxSlot =
     (id: BoxId, rollback: RollbackDeps) =>
     (parent: HTMLElement): HTMLElement => {
-      const frame = appended(parent, inputFrame());
+      const { problem, drafts } = store.get();
+      if (problem === null) {
+        throw new Error(`the ${id} box draws with no problem open`);
+      }
+      const placeKey = boxTabKey(id, problem.summary.slug);
+      if (placeKey !== placedFor[id]) {
+        boxes.destroyBox(id);
+      }
+      const frame = boxes.place(parent, id, drafts[id].text);
+      placedFor[id] = placeKey;
       frame.classList.add('practice-box', `practice-box--${id}`);
-      boxes.mount(frame, id, store.get().drafts[id].text);
-      rollback.recordBox(() => {
-        if (boxes.isMounted(id)) {
-          boxes.destroyBox(id);
-        }
-      });
+      rollback.recordBox(() => boxes.release(id));
       return frame;
     };
 
@@ -544,6 +548,17 @@ export function createProblemWorkspace(
   let drawnConsoleKey: string | null = null;
   // Counts each replace of a box's text from disk, so its tab draws again.
   const boxReplaces: Record<BoxId, number> = { notes: 0, customCases: 0 };
+  // The box tab key each box was last placed for; null before its first place.
+  const placedFor: Record<BoxId, string | null> = {
+    notes: null,
+    customCases: null,
+  };
+  // What a box's tab draws from, as text: a new problem or a draft replaced
+  // from disk changes it.
+  const boxTabKey = (id: BoxId, slug: string): string =>
+    id === 'notes'
+      ? JSON.stringify(['notes', slug, boxReplaces.notes])
+      : JSON.stringify(['testcase', slug, boxReplaces.customCases]);
   let loggedProblemTab: ProblemTab = store.get().problemTab;
   let isPromptShown = false;
 
@@ -621,7 +636,7 @@ export function createProblemWorkspace(
         ]);
       }
       case 'notes':
-        return JSON.stringify(['notes', slug, boxReplaces.notes]);
+        return boxTabKey('notes', slug);
       case 'solution':
         return JSON.stringify([
           'solution',
@@ -639,7 +654,7 @@ export function createProblemWorkspace(
   ): string => {
     const slug = problem.summary.slug;
     return state.consoleTab === 'testcase'
-      ? JSON.stringify(['testcase', slug, boxReplaces.customCases])
+      ? boxTabKey('customCases', slug)
       : JSON.stringify(['result', slug, state.judge]);
   };
 

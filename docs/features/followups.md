@@ -410,10 +410,10 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   not break a user settings layout. The layout name picker (Features) is then one such kind.
 - **Layout hot reload keeps the user's place** — *agent-ready*: `round-view.ts` `rebuild` (run by `setLayouts` when a
   reload changes a layout it draws with, and by a card part or review column added or disposed) destroys and
-  remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it
-  was inserting, and keeps the main column's scroll, but loses the cursor, a visual mode and undo. Add
-  `snapshot`/`restore` to `TextEditor`, restore them in `keepFocusedBox`, and swap a CSS-only change without a
-  rebuild. Redraw only the cards a changed layout draws, reading `LayoutSet.changed` (kept unread for this, by the
+  remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's start when
+  it was inserting, and keeps the main column's scroll, but loses the cursor, a visual mode and undo. Move its boxes
+  to `EditorBoxes.place` and `release` (`src/shared/page/editor-boxes.ts`), as the primer, practice and the audio
+  picker do, so a redraw keeps each box's editor. Redraw only the cards a changed layout draws, reading `LayoutSet.changed` (kept unread for this, by the
   user's ruling). Forms is the owner this covers: chat's composer keeps its box and draft across a redraw, and docs'
   doc pane redraws its frame only after the editor closes.
 
@@ -515,14 +515,6 @@ Duplication and drift with no user-visible defect.
   `.notes-title` (`notes/page/notes.css`) and the sessions rename dialog's box. Move it into the primitive (a rule on
   `.ui-input > input` in `src/shared/page/ui/input-frame.css`, or a class `textBoxInput` adds) and delete the five
   copies, checking each box's look in a drive capture.
-- **Sessions split picker rows through the sessions layout** — *agent-ready*: the split's "Show session" picker
-  (`openSplitPicker`, `src/plugins/sessions/page/start.ts`) passes no `drawRow` to the picker's `open`, so its rows do
-  not draw through `sessions.layout`, against `docs/features/layouts/design.md`'s "a dialog follows its opener". Add a
-  picker-row part to the sessions layout contract and `default` layout, as docs, chat, settings, notes and backlog
-  do.
-- **Toasts through the shell layout** — *agent-ready*: `createToasts` (`src/renderer/toasts.ts`) builds every toast
-  in code, and the shell layout contract has no toast part, so no layout file restyles one. Add a `toast` part to
-  the shell contract and its `default` layout; the core keeps the layer, timing and removal.
 - **Dialog frames and confirms through the opener's layout** — *agent-ready*: `createDialog`
   (`src/shared/page/ui/dialog.ts`) draws every dialog's frame and title in code, the keys help dialog's Close button
   included, and the forms and primer cancel confirms pass no `drawBody` to `createConfirmPrompt`
@@ -535,10 +527,6 @@ Duplication and drift with no user-visible defect.
   `src/shared/page/status-line.ts`) are built in code. Add their parts to the forms and primer layout contracts and
   `default` layouts. Then drop the carve-outs for status lines and column strips from
   `docs/features/layouts/design.md` (§ What a layout draws, § The primer's columns).
-- **Fixed texts in layout slots** — *agent-ready*: the layout places a slot and the app writes fixed text or
-  elements into it: backlog's and docs' status text (`backlog/page/backlog-view.ts`, `docs/page/tree-view.ts`), the
-  cursor-row action prompts (backlog, docs, settings, primer and notes), and the settings edit-box message
-  (`settings/page/row-box.ts`). Pass each as part input so the layout draws it.
 - **Info tone for the on-demand tag** — *agent-ready*: the `on-demand` load-state tag uses the accent tone
   (`CHIP_TONES`, `src/plugins/docs/layouts/default/layout.js`), against DESIGN.md's rule that colour at rest means a
   status; it was `status-info` before docs-browser plan C, and `listed` now reads the same as `not-loaded`. Needs an
@@ -796,10 +784,6 @@ because the earlier items rewrite many of these tests anyway.
   non-running session, which can drop the sessions row and reach `leaveRow` before the step. Fix: add a row for that
   path to the table test `sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone` in
   `src/plugins/auto-retro/main/start.test.ts`, and read the capture afresh for correctness.
-- **Shell layout swap failure tests** — *agent-ready*: `mountShell`'s rollback when a layout throws or misses an area,
-  and the generation-guarded restore after a later `setLayout` (`src/renderer/shell/shell.ts`), are untested. Plan
-  B's gallery `Space z s` covers only a good swap and its restore; a throwing test layout and a second swap would
-  cover the rest.
 - **Primer tests on a full task's add-item box** — *agent-ready*: `src/plugins/primer/page/primer-commands.test.ts`
   (the two tests at "from a task holding 20 items" and "from an add-item box on a task holding 20 items") mounts an
   add-item box on a full task. The page no longer reaches that state, since a full task shows no add-item box

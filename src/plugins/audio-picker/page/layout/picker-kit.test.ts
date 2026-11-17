@@ -19,12 +19,19 @@ import {
 } from './picker-kit';
 
 // Kit deps whose commands are the audio picker's, each run recorded, whose
-// anchors draw nothing, and whose boxes record each mount and destroy.
+// anchors draw nothing, and whose boxes record each place and release; a
+// place appends a fresh `div` frame to its parent and returns it.
 function fakeDeps() {
   const run = vi.fn();
   const boxes = {
-    mount: vi.fn<(parent: HTMLElement, box: PickerBox, text: string) => void>(),
-    destroyBox: vi.fn<(box: PickerBox) => void>(),
+    place: vi.fn(
+      (parent: HTMLElement, _box: PickerBox, _text: string): HTMLElement => {
+        const frame = asHtml(new FakeElement('div'));
+        parent.append(frame);
+        return frame;
+      },
+    ),
+    release: vi.fn<(box: PickerBox) => void>(),
   };
   const deps: PickerPartKitDeps = {
     markdown: PLAIN_MARKDOWN,
@@ -40,14 +47,14 @@ function fakeDeps() {
   return { deps, run, boxes };
 }
 
-// A rollback that records each box destroy and anchor.
+// A rollback that records each box's undo and anchor.
 function recordingRollback() {
-  const destroys: (() => void)[] = [];
+  const undos: (() => void)[] = [];
   const anchors: Disposable[] = [];
   return {
-    destroys,
+    undos,
     rollback: {
-      recordBox: (destroy: () => void) => destroys.push(destroy),
+      recordBox: (undo: () => void) => undos.push(undo),
       recordAnchor: (anchor: Disposable) => anchors.push(anchor),
     },
   };
@@ -185,21 +192,25 @@ describe('picker kit', () => {
 
   it('createNotesKit_TextBox_MountsTheMomentsBoxOnce', () => {
     const { deps, boxes } = fakeDeps();
-    const { destroys, rollback } = recordingRollback();
+    const { undos, rollback } = recordingRollback();
     const box = { formId: 'f1', moment: 2 };
     const drawn = createNotesKit(deps, box, 'softer', rollback);
     const part = newParent();
 
-    drawn.kit.textBox(part);
+    const field = drawn.kit.textBox(part);
 
-    expect(boxes.mount).toHaveBeenCalledTimes(1);
-    expect(boxes.mount).toHaveBeenCalledWith(expect.anything(), box, 'softer');
-    expect(destroys).toHaveLength(1);
-    destroys[0]();
-    expect(boxes.destroyBox).toHaveBeenCalledWith(box);
+    expect(boxes.place).toHaveBeenCalledTimes(1);
+    expect(boxes.place).toHaveBeenCalledWith(field, box, 'softer');
+    const [frame, keys] = asFake(field).children;
+    expect(frame).toBe(asFake(boxes.place.mock.results[0].value));
+    expect(frame.classList.contains('audio-picker-notes-box')).toBe(true);
+    expect(keys.classList.contains('box-keys')).toBe(true);
+    expect(undos).toHaveLength(1);
+    undos[0]();
+    expect(boxes.release).toHaveBeenCalledWith(box);
     expect(() => drawn.kit.textBox(part)).toThrow(/already on the part/);
     drawn.appendUnmountedBox(part);
-    expect(boxes.mount).toHaveBeenCalledTimes(1);
+    expect(boxes.place).toHaveBeenCalledTimes(1);
   });
 
   it('createNotesKit_NoTextBoxCall_AppendUnmountedBoxMountsAtThePartsEnd', () => {
@@ -216,10 +227,10 @@ describe('picker kit', () => {
 
     drawn.appendUnmountedBox(asHtml(part));
 
-    expect(boxes.mount).toHaveBeenCalledTimes(1);
-    const [frame, mounted, text] = boxes.mount.mock.calls[0];
-    expect(part.lastElementChild?.contains(frame)).toBe(true);
-    expect(mounted).toEqual(box);
+    expect(boxes.place).toHaveBeenCalledTimes(1);
+    const [field, placed, text] = boxes.place.mock.calls[0];
+    expect(part.lastElementChild).toBe(asFake(field));
+    expect(placed).toEqual(box);
     expect(text).toBe('softer');
   });
 });

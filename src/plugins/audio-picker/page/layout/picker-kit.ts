@@ -10,7 +10,6 @@ import {
 } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
 import { iconButton } from '../../../../shared/page/ui/icon-button';
-import { inputFrame } from '../../../../shared/page/ui/input-frame';
 import { boxHint } from '../../../../shared/page/ui/key-anchors';
 import {
   type AudioPickerCommandName,
@@ -46,7 +45,7 @@ export type PickerKitDeps = OwnerKitServices;
 
 // What the notes kit acts through besides: the text boxes.
 export interface PickerPartKitDeps extends PickerKitDeps {
-  boxes: Pick<EditorBoxes<PickerBox>, 'mount' | 'destroyBox'>;
+  boxes: Pick<EditorBoxes<PickerBox>, 'place' | 'release'>;
 }
 
 // The base kit for one part draw in scope `audio-picker.list`, each anchor it
@@ -99,7 +98,7 @@ export function createCandidateKit(
   };
 }
 
-// The notes kit of `box`, its box mounting with `text`, and what the app does
+// The notes kit of `box`, its box placed with `text`, and what the app does
 // around the layout's part: append the box at the part's end when the part
 // left it out.
 export function createNotesKit(
@@ -149,8 +148,8 @@ function waveform(peaks: readonly number[] | null): HTMLElement {
 }
 
 // The notes field: the box's input frame, then its `⇧⇥ ⇥` keys, which show on
-// the frame's bottom edge while the box has focus. The box mounts once the
-// field is appended to `parent`, its destroy recorded in `rollback`.
+// the frame's bottom edge while the box has focus. The box is placed once the
+// field is appended to `parent`, its release recorded in `rollback`.
 function appendNotesField(
   deps: PickerPartKitDeps,
   rollback: RollbackDeps,
@@ -159,18 +158,16 @@ function appendNotesField(
   text: string,
 ): HTMLElement {
   const field = element('div', 'audio-picker-notes-field');
-  const frame = inputFrame();
+  parent.append(field);
+  const frame = deps.boxes.place(field, box, text);
   frame.classList.add('audio-picker-notes-box');
   field.append(
-    frame,
     boxHint('box-keys', [
       anchoredSpan(deps, rollback, 'audio-picker-box-key', 'prevBox'),
       anchoredSpan(deps, rollback, 'audio-picker-box-key', 'nextBox'),
     ]),
   );
-  parent.append(field);
-  deps.boxes.mount(frame, box, text);
-  rollback.recordBox(() => deps.boxes.destroyBox(box));
+  rollback.recordBox(() => deps.boxes.release(box));
   return field;
 }
 

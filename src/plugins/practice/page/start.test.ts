@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { EditorHost } from '../../../contracts/editor';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
@@ -128,13 +129,59 @@ function fakeAgentPane(pane: FakePane): AgentPane {
   };
 }
 
+// One editor the page made for a text box: the frame it was made in, the text
+// it was made with, and whether it was destroyed.
+interface BoxEditor {
+  frame: FakeElement;
+  doc: string;
+  isDestroyed: boolean;
+}
+
+// `editors`' host, recording each box editor it makes in `boxEditors` and
+// each focus of one in `boxFocuses`.
+function recordingHost(
+  editors: ReturnType<typeof countingEditors>,
+  boxEditors: BoxEditor[],
+  boxFocuses: BoxEditor[],
+): EditorHost {
+  return {
+    ...editors.host,
+    create(parent, doc, events) {
+      const editor = editors.host.create(parent, doc, events);
+      const made: BoxEditor = { frame: asFake(parent), doc, isDestroyed: false };
+      boxEditors.push(made);
+      return {
+        ...editor,
+        focus(options) {
+          boxFocuses.push(made);
+          editor.focus(options);
+        },
+        destroy() {
+          made.isDestroyed = true;
+          editor.destroy();
+        },
+      };
+    },
+  };
+}
+
+// The editors made for box `id`, in the order they were made.
+function editorsOf(boxEditors: readonly BoxEditor[], id: string): BoxEditor[] {
+  return boxEditors.filter((made) =>
+    made.frame.classList.contains(`practice-box--${id}`),
+  );
+}
+
 // A Practice page whose `list` reads both problems, whose `open` opens the
 // slug asked for and whose judge accepts, unless `held` answers first; `calls`
 // holds each invoke, `place` the last page's place, `editors` the code editor
-// and boxes it made, `pane` the interviewer's fake pane.
+// and boxes it made, `boxEditors` each box editor and `boxFocuses` each focus
+// of one, `pane` the interviewer's fake pane.
 function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
   installFocusFakeDom(vi.stubGlobal);
   const editors = countingEditors();
+  const boxEditors: BoxEditor[] = [];
+  const boxFocuses: BoxEditor[] = [];
   const calls: { method: string; args: unknown[] }[] = [];
   const pane: FakePane = { spec: null, calls: [] };
   const state = createSlotStore(() => undefined);
@@ -155,7 +202,7 @@ function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
       })),
     ],
     services: {
-      editor: editors.host,
+      editor: recordingHost(editors, boxEditors, boxFocuses),
       markdown: {
         block: (text) => text,
         inline: (text) => text,
@@ -184,7 +231,7 @@ function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
       return undefined;
     },
   });
-  return { harness, calls, editors, pane };
+  return { harness, calls, editors, boxEditors, boxFocuses, pane };
 }
 
 // A Practice page, shown, with `SECOND` open in the workspace.
@@ -763,6 +810,66 @@ describe('practicePagePart', () => {
         'submit ignored: practice hidden',
       ]),
     );
+  });
+
+  it('layoutChange_FocusedNotesBox_KeepsItsEditor', async () => {
+    const { harness, commands, boxEditors, boxFocuses } =
+      await startWithProblemOpen();
+    commands.showTab({ arg: 'notes' });
+    commands.editBox({ arg: undefined });
+    const [notes] = editorsOf(boxEditors, 'notes');
+    const focusesBefore = boxFocuses.length;
+
+    harness.showLayouts(
+      withUser(defaultLayout, defaultLayout) as Parameters<
+        typeof harness.showLayouts
+      >[0],
+    );
+
+    expect(editorsOf(boxEditors, 'notes')).toEqual([notes]);
+    expect(notes.isDestroyed).toBe(false);
+    expect(boxFocuses.length).toBeGreaterThan(focusesBefore);
+    expect(boxFocuses.at(-1)).toBe(notes);
+  });
+
+  it('refreshedDraft_ShownNotesBox_MountsANewEditor', async () => {
+    let notesOnDisk = '';
+    const { harness, commands, boxEditors } = await startWithProblemOpen(
+      (method, args) =>
+        method === 'open' && args[0] === SECOND
+          ? Promise.resolve({ ...opened(HARD), notes: notesOnDisk })
+          : undefined,
+    );
+    commands.showTab({ arg: 'notes' });
+    notesOnDisk = 'Two pointers';
+
+    harness.send('changed', { slug: SECOND });
+    await settle();
+    await settle();
+
+    const [earlier, live, ...rest] = editorsOf(boxEditors, 'notes');
+    expect(rest).toEqual([]);
+    expect(earlier.isDestroyed).toBe(true);
+    expect(live).toMatchObject({ doc: 'Two pointers', isDestroyed: false });
+  });
+
+  it('problemChange_ShownCustomCasesBox_MountsANewEditor', async () => {
+    const { commands, boxEditors } = await startWithProblemOpen(
+      (method, args) =>
+        method === 'open' && args[0] === EASY.slug
+          ? Promise.resolve({ ...opened(EASY), customCases: '[1, 2]' })
+          : undefined,
+    );
+
+    commands.listUp({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    await settle();
+
+    const [earlier, live, ...rest] = editorsOf(boxEditors, 'customCases');
+    expect(rest).toEqual([]);
+    expect(earlier.isDestroyed).toBe(true);
+    expect(live).toMatchObject({ doc: '[1, 2]', isDestroyed: false });
   });
 
   it('stops with nothing live', async () => {

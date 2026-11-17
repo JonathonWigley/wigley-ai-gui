@@ -196,7 +196,7 @@ export interface PrimerPopups {
 // keeping the primer returns to. `resizeTarget` is the split the resize keys
 // move while `pane` has focus: the outer split for the tasks column, the inner
 // split for the items column and the card. `dispose` disposes every anchor it
-// named and both splits, and destroys every box its parts mounted.
+// named and both splits, and releases every box its parts placed.
 interface PrimerFormView {
   element: HTMLElement;
   update(primer: OpenPrimer, view: PrimerView): void;
@@ -225,7 +225,7 @@ interface DrawnColumn {
 }
 
 // A drawn card: the pick it was drawn from, `update` redraws what changes
-// without a rebuild, and `dispose` disposes its anchors and destroys its
+// without a rebuild, and `dispose` disposes its anchors and releases its
 // boxes.
 interface DrawnCard {
   pick: PartPick<PrimerLayout>;
@@ -656,13 +656,13 @@ function destroyPrimerView(
 // draws and, for the tasks column, its foot's slot; its body is drawn again
 // whenever the primer changes. Each chrome strip draws into its slot on the
 // first update and again when its input or pick changed (`updateStrips`).
-// The card is drawn again, its boxes destroyed and mounted again and its
-// anchors disposed, only when `cardKeyOf` changes or the layout picked for its
-// part changes; the review body is drawn again while it shows, when the
-// primer (its review cursor included) or the review's pick changed, over the
-// review footer's slot, and a moved cursor's task scrolled into sight. `attach`
-// places the root in the page once, before any editor mounts. `shown` reads
-// the layouts the parts are picked from now.
+// The card is drawn again, its boxes moving into the new card, a box the new
+// card leaves out destroyed, and its anchors disposed, only when `cardKeyOf`
+// changes or the layout picked for its part changes; the review body is drawn
+// again while it shows, when the primer (its review cursor included) or the
+// review's pick changed, over the review footer's slot, and a moved cursor's
+// task scrolled into sight. `attach` places the root in the page once, before
+// any editor mounts. `shown` reads the layouts the parts are picked from now.
 function createPrimerFormView(
   attach: (root: HTMLElement) => void,
   primer: OpenPrimer,

@@ -13,7 +13,6 @@ import {
   keyEdge,
   keyStack,
 } from '../../../../shared/page/ui/key-anchors';
-import { inputFrame } from '../../../../shared/page/ui/input-frame';
 import { row } from '../../../../shared/page/ui/row';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import {
@@ -70,7 +69,7 @@ export type PrimerKitDeps = OwnerKitServices;
 // What the card and column kits act through besides: the text boxes. Every
 // click runs a primer command through `commands`.
 export interface PrimerPartKitDeps extends PrimerKitDeps {
-  boxes: Pick<EditorBoxes<PrimerBox>, 'mount' | 'destroyBox'>;
+  boxes: Pick<EditorBoxes<PrimerBox>, 'place' | 'release'>;
 }
 
 // A card's kit and what the app does around the layout's card: append the
@@ -558,20 +557,22 @@ function appendField(
   const hint =
     box.command === null ? null : anchored('primer-field-hint', box.command);
   const field = element('div', 'primer-field');
-  const frame = inputFrame();
+  field.append(sectionHeader(box.label, hint));
+  parent.append(field);
+  const primerBox: PrimerBox = { primerId: primer.formId, target: box.target };
+  const frame = deps.boxes.place(
+    field,
+    primerBox,
+    boxText(primer, box.target),
+  );
   frame.classList.add('primer-box');
   field.append(
-    sectionHeader(box.label, hint),
-    frame,
     boxHint('box-keys', [
       anchored('primer-box-key', 'prevBox'),
       anchored('primer-box-key', 'nextBox'),
     ]),
   );
-  parent.append(field);
-  const primerBox: PrimerBox = { primerId: primer.formId, target: box.target };
-  deps.boxes.mount(frame, primerBox, boxText(primer, box.target));
-  rollback.recordBox(() => deps.boxes.destroyBox(primerBox));
+  rollback.recordBox(() => deps.boxes.release(primerBox));
   return field;
 }
 

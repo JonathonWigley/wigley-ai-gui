@@ -155,12 +155,12 @@ All ∥, any time. Its forms items run after Lane E's forms chain (§ Intent, Si
 forms files. A layout
 item draws a button through `kit.button`, which runs a command, and no closure button.
 
-- [ ] Toasts through the shell layout, with Shell layout swap failure tests (the same contract)
+- [x] Toasts through the shell layout, with Shell layout swap failure tests (the same contract)
 - [ ] Dialog frames and confirms through the opener's layout, then [ ] Forms and primer column chrome through their
   layouts: both edit the forms and primer views. Each drops its carve-out from AGENTS.md or
   `docs/features/layouts/design.md`.
-- [ ] Fixed texts in layout slots
-- [ ] Sessions split picker rows through the sessions layout
+- [x] Fixed texts in layout slots
+- [x] Sessions split picker rows through the sessions layout
 - [ ] Layout hot reload keeps the user's place
 
 ## Lane E: extension points

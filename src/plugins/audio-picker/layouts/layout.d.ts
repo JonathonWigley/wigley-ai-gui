@@ -20,7 +20,8 @@ import type {
 // `confirmBody` draw the cancel prompt's panel, title, body and buttons.
 //
 // The app draws a part again only when its input changes, so moving the cursor redraws two rows; a layout keeps no
-// state between draws. A `notes` part drawn again keeps its box's text, and its focus while the box had it.
+// state between draws. A `notes` part drawn again keeps its box, with its text, cursor, vim mode and undo, and its
+// focus while the box had it.
 
 export type PlayMode = 'one-shot' | 'loop' | 'variants';
 
@@ -112,7 +113,7 @@ export interface ConfirmBodyKit extends PickerKit, ConfirmButtonsKit {}
 
 export interface NotesKit extends PickerKit {
   // The moment's notes box in its field (`div.audio-picker-notes-field`), with its `⇧⇥ ⇥` box keys on the frame. It
-  // mounts once per draw; asking for it again throws. When a part leaves it out, the app appends it at the part's end,
+  // places once per draw; asking for it again throws. When a part leaves it out, the app appends it at the part's end,
   // so the box keys always reach it.
   textBox(parent: HTMLElement): HTMLElement;
 }
