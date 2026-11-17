@@ -121,9 +121,7 @@ function isOneOf(value: unknown, values: readonly string[]): boolean {
 
 function isTurnStateBusy(state: TurnState): boolean {
   return (
-    state.isTurnOpen ||
-    state.openMessages.size > 0 ||
-    state.backgroundCount > 0
+    state.isTurnOpen || state.openMessages.size > 0 || state.backgroundCount > 0
   );
 }
 
