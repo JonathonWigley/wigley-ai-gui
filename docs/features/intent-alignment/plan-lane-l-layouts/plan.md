@@ -281,7 +281,7 @@ every part its contract adds.
 - [x] [Primer column chrome and cursor prompt](09-primer-chrome.md) — after 04, 07
 
 ### Wave 4
-- [ ] [Primer, practice and the audio picker keep their boxes](10-boxes-kept-primer-practice-audio-picker.md) — after 06, 08, 09
+- [x] [Primer, practice and the audio picker keep their boxes](10-boxes-kept-primer-practice-audio-picker.md) — after 06, 08, 09
 
 ### Wave 5 — gate: Lane E's forms chain (§ Gate)
 - [ ] [Forms dialog frame and cancel confirm](11-forms-dialog-confirm.md) — after 07, 10
@@ -312,6 +312,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 07 · standard · 1936ca16c · diff read of all ten rows + wave 2 compile (typecheck, lint clean after 501d3d31d) · concerns: chat dialog parts take parent as a getter (frame redraw replaces the body), composer-kit tests followed; keys moved its Close button and help width into the default layout and dropped the closeHint anchor; gallery adds no redrawFrame (setLayouts rebuilds the sample); docs frameDrawer casts drawn.built; several new tests unrun (fake-DOM dataset/contains/ui-button assumptions); six row workers ran at once for a short spell (one over the limit)
 - 08 · standard · 7e3bbdbec · diff read of the six rows + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: self-test steps: backlog activate has no fixture with a started chunk (Enter is a vim key, no anchor needed); docs actions mapped to existing groups by name, cursor-on-leaf at load unchecked; notes, sessions, settings, chat use existing steps; chat .chat-picker-key CSS now matches the wrapper span, not the hint; backlog openInDocs keeps label docs; out-of-Files edits: docs-view.ts (anchor arg), sessions-view.ts (anchor arg), settings start.ts (anchor dep), chat layout.test.ts (cursorEnd fake); settings LeaderMenuView gained dispose() and row-prompt exports samePromptActions
 - 09 · hard · 6cab7ba59 · diff read + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: row pair keeps class primer-column-key; cancel prompt anchors are not disposed by view.dispose() (outside the task); keys-fake empty asserted only for strip slots
+- 10 · hard · ca910ef9e · Diff read: primer appendField and audio-picker appendNotesField place/release through EditorBoxes (Pick 'place'|'release'); practice textBoxSlot places with placedFor/boxTabKey, destroying on a changed key. Wave 4 typecheck clean; lint clean after oxfmt (ff9075cae). Tests written in primer-view, picker-kit, picker-view, practice start tests; run at the test gate. · concerns: Practice problem-change test drives customCases (opening a problem resets the problem tab to Description, so Notes cannot stay shown); primer and practice layout.d.ts still say 'mounts' (lines 65/189, 29) outside Files, for task 14's doc pass; after addItem the add-item box shows '' only on the next card redraw (card key unchanged), as before — check in task 15 live run; followups hot-reload item rewritten (text's start; fix now names place/release).
 ### Contract changes
 ### Rulings
 - 01: the ToastTone equality test lives in src/renderer/shell/toast-tone.test-d.ts, not layouts/layout.test-d.ts — the layer check bars layouts from importing src/contracts · group 01

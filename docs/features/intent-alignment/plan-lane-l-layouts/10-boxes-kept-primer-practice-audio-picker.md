@@ -1,6 +1,6 @@
 # 10 — Primer, practice and the audio picker keep their boxes
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 06, 08, 09
 Plan: [plan.md](plan.md)
@@ -167,3 +167,5 @@ Commit: one commit for the group — the ten source and test paths in Files, `do
 `docs/features/intent-alignment/master-plan.md`.
 
 ## Proof
+
+Commit ca910ef9e · proof: Diff read: primer appendField and audio-picker appendNotesField place/release through EditorBoxes (Pick 'place'|'release'); practice textBoxSlot places with placedFor/boxTabKey, destroying on a changed key. Wave 4 typecheck clean; lint clean after oxfmt (ff9075cae). Tests written in primer-view, picker-kit, picker-view, practice start tests; run at the test gate. · concerns: Practice problem-change test drives customCases (opening a problem resets the problem tab to Description, so Notes cannot stay shown); primer and practice layout.d.ts still say 'mounts' (lines 65/189, 29) outside Files, for task 14's doc pass; after addItem the add-item box shows '' only on the next card redraw (card key unchanged), as before — check in task 15 live run; followups hot-reload item rewritten (text's start; fix now names place/release).
