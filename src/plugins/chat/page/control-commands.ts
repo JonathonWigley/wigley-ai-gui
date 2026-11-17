@@ -1,19 +1,21 @@
+import { CONTROL_ROLES } from '../../../contracts/agent';
 import type { ChatCommandName } from '../ids';
 
-// The control ids the pick keys reach, by command.
-export const CONTROL_IDS = {
-  pickMode: 'mode',
-  pickEffort: 'effort',
-  pickModel: 'model',
+// The control roles the pick keys reach, by command.
+export const ROLE_COMMANDS = {
+  pickMode: CONTROL_ROLES.permissionMode,
+  pickEffort: CONTROL_ROLES.effort,
+  pickModel: CONTROL_ROLES.model,
 } as const;
 
-type KeyedCommand = keyof typeof CONTROL_IDS;
+type KeyedCommand = keyof typeof ROLE_COMMANDS;
 
-// The command that opens `controlId`'s picker: its own pick command, or
-// `pickControl` (the list of every control) for a control with none.
-export function controlCommand(controlId: string): ChatCommandName {
-  const keyed = (Object.keys(CONTROL_IDS) as KeyedCommand[]).find(
-    (command) => CONTROL_IDS[command] === controlId,
+// The command that opens the picker of a control with `role`: its role's own
+// pick command, or `pickControl` (the list of every control) for a control
+// with no role or a role no key binds.
+export function controlCommand(role: string | null): ChatCommandName {
+  const keyed = (Object.keys(ROLE_COMMANDS) as KeyedCommand[]).find(
+    (command) => ROLE_COMMANDS[command] === role,
   );
   return keyed ?? 'pickControl';
 }

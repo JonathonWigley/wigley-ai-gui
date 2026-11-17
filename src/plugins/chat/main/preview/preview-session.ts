@@ -1,4 +1,5 @@
 import {
+  CONTROL_ROLES,
   type ChatEntry,
   MAIN_AGENT_ID,
   type SessionControl,
@@ -220,6 +221,7 @@ export function previewControls(): SessionControl[] {
     {
       id: 'mode',
       label: 'Mode',
+      role: CONTROL_ROLES.permissionMode,
       choices: [
         { value: 'default', label: 'Manual' },
         { value: 'auto', label: 'Auto' },
@@ -230,6 +232,7 @@ export function previewControls(): SessionControl[] {
     {
       id: 'effort',
       label: 'Effort',
+      role: CONTROL_ROLES.effort,
       choices: [
         { value: 'low', label: 'Low' },
         { value: 'medium', label: 'Medium' },
@@ -240,6 +243,7 @@ export function previewControls(): SessionControl[] {
     {
       id: 'model',
       label: 'Model',
+      role: CONTROL_ROLES.model,
       choices: [
         { value: 'sonnet', label: 'Sonnet' },
         { value: 'opus', label: 'Opus' },

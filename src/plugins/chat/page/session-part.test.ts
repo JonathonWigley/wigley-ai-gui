@@ -20,7 +20,7 @@ import { createSessionPart, sessionFactsOf } from './session-part';
 const HOME = '/Users/u';
 
 function control(id: string, value: string) {
-  return { id, label: id, value, enabled: true };
+  return { id, label: id, value, enabled: true, role: null };
 }
 
 function composerInput(

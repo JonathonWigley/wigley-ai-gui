@@ -1367,12 +1367,19 @@ describe('default chat layout surfaces', () => {
     vi.unstubAllGlobals();
   });
 
-  const model = { id: 'model', label: 'Model', value: 'Small', enabled: true };
+  const model = {
+    id: 'model',
+    label: 'Model',
+    value: 'Small',
+    enabled: true,
+    role: 'model',
+  };
   const effort = {
     id: 'effort',
     label: 'Effort',
     value: 'High',
     enabled: true,
+    role: 'effort',
   };
   const composerInput: ComposerInput = {
     session: 'repo',
@@ -1382,7 +1389,15 @@ describe('default chat layout surfaces', () => {
     running: true,
     working: false,
     modelEffort: { model, effort },
-    controls: [{ id: 'mode', label: 'Mode', value: 'Auto', enabled: true }],
+    controls: [
+      {
+        id: 'mode',
+        label: 'Mode',
+        value: 'Auto',
+        enabled: true,
+        role: 'permissionMode',
+      },
+    ],
   };
 
   it('rowClock_Default_UpdateChangesTextAndRunningInPlace', () => {

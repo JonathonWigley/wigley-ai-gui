@@ -1,4 +1,3 @@
-import type { SessionControl } from '../../../contracts/agent';
 import type { ChatSessionState } from '../contract';
 import type { ChatCommandName } from '../ids';
 import type {
@@ -26,6 +25,7 @@ export function composerInputOf(tab: {
     label: control.label,
     value: valueLabel(control),
     enabled: running,
+    role: control.role ?? null,
   }));
   const { modelEffort, others } = pairModelAndEffort(controls);
   return {
@@ -54,13 +54,13 @@ function pairModelAndEffort(controls: readonly ComposerControlInput[]): {
   others: ComposerControlInput[];
 } {
   const model = controls.find(
-    (control) => controlCommand(control.id) === 'pickModel',
+    (control) => controlCommand(control.role) === 'pickModel',
   );
   if (model === undefined) {
     return { modelEffort: null, others: [...controls] };
   }
   const effort =
-    controls.find((control) => controlCommand(control.id) === 'pickEffort') ??
+    controls.find((control) => controlCommand(control.role) === 'pickEffort') ??
     null;
   return {
     modelEffort: { model, effort },
@@ -70,15 +70,14 @@ function pairModelAndEffort(controls: readonly ComposerControlInput[]): {
   };
 }
 
-// Per control, the pick command whose keys its chip holds: the command that
-// opens its picker, or null when an earlier chip already holds that
-// command's keys.
+// Per control, the pick command whose keys its chip holds: the command its
+// role opens, or null when an earlier chip already holds that command's keys.
 export function chipKeyCommands(
-  controls: readonly Pick<SessionControl, 'id'>[],
+  controls: readonly { role: string | null }[],
 ): (ChatCommandName | null)[] {
   const held = new Set<ChatCommandName>();
   return controls.map((control) => {
-    const command = controlCommand(control.id);
+    const command = controlCommand(control.role);
     if (held.has(command)) {
       return null;
     }

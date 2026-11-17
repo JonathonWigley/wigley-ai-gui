@@ -1,18 +1,19 @@
 import path from 'node:path';
 import type { ActiveTime } from '../../../contracts/active-time';
-import type {
-  AgentEvent,
-  AgentHarness,
-  AgentHarnessRegistry,
-  AgentProcess,
-  AgentProcessEvents,
-  ChatEntry,
-  HarnessProfile,
-  PermissionDecision,
-  ProcessActivity,
-  SessionControl,
-  UsageAgentEvent,
-  UserMessage,
+import {
+  type AgentEvent,
+  type AgentHarness,
+  type AgentHarnessRegistry,
+  type AgentProcess,
+  type AgentProcessEvents,
+  CONTROL_ROLES,
+  type ChatEntry,
+  type HarnessProfile,
+  type PermissionDecision,
+  type ProcessActivity,
+  type SessionControl,
+  type UsageAgentEvent,
+  type UserMessage,
 } from '../../../contracts/agent';
 import type { Clock } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
@@ -595,11 +596,10 @@ function rowEntryOf(entry: ChatEntry, processStart: number): ChatEntry {
   return { ...entry, id: rowEntryId(entry.id, processStart) };
 }
 
-// A held mode narrows nothing, so a start passes it whoever set it.
-const MODE_CONTROL_ID = 'mode';
-
-// The launch values a process starts with: the held mode, and each other
-// control's confirmed pick.
+// The launch values a process starts with, keyed by control id: the held
+// value of the control whose role is `permissionMode` (a held mode narrows
+// nothing, so a start passes it whoever set it), and each other control's
+// confirmed pick.
 function controlValuesOf(
   controls: readonly SessionControl[],
   confirmedPicks: ReadonlyMap<string, string>,
@@ -607,7 +607,7 @@ function controlValuesOf(
   const values: Record<string, string> = {};
   for (const control of controls) {
     const value =
-      control.id === MODE_CONTROL_ID
+      control.role === CONTROL_ROLES.permissionMode
         ? control.value
         : confirmedPicks.get(control.id);
     if (value !== null && value !== undefined) {

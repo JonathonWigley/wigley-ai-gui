@@ -3,20 +3,28 @@ import type { ProcessActivity, SessionControl } from '../../../contracts/agent';
 import type { SessionCompaction } from '../contract';
 import { chipKeyCommands, composerInputOf } from './composer-input';
 
-// A control with one choice, picked, whose label is `<label> value`.
-function control(id: string, label: string): SessionControl {
+// A control with one choice, picked, whose label is `<label> value`; a null
+// `role` leaves the control's role out.
+function control(
+  id: string,
+  label: string,
+  role: string | null,
+): SessionControl {
   return {
     id,
     label,
     choices: [{ value: `${id}-value`, label: `${label} value` }],
     value: `${id}-value`,
+    ...(role === null ? {} : { role }),
   };
 }
 
-const MODE = control('mode', 'Mode');
-const EFFORT = control('effort', 'Effort');
-const MODEL = control('model', 'Model');
-const VERBOSITY = control('verbosity', 'Verbosity');
+const MODE = control('mode', 'Mode', 'permissionMode');
+const EFFORT = control('effort', 'Effort', 'effort');
+const MODEL = control('model', 'Model', 'model');
+const VERBOSITY = control('verbosity', 'Verbosity', null);
+const LLM = control('llm', 'Model', 'model');
+const DEPTH = control('depth', 'Effort', 'effort');
 const APP_COMPACTION: SessionCompaction = {
   trigger: 'app',
   reason: 'auto · cache cold · 182k',
@@ -30,6 +38,7 @@ function chipOf(held: SessionControl) {
     label: held.label,
     value: `${held.label} value`,
     enabled: true,
+    role: held.role ?? null,
   };
 }
 
@@ -115,7 +124,13 @@ describe('composerInputOf', () => {
         working,
         modelEffort: null,
         controls: [
-          { id: 'effort', label: 'Effort', value: 'Effort value', enabled },
+          {
+            id: 'effort',
+            label: 'Effort',
+            value: 'Effort value',
+            enabled,
+            role: 'effort',
+          },
         ],
       });
     },
@@ -139,6 +154,12 @@ describe('composerInputOf', () => {
       controls: [MODEL, MODE],
       modelEffort: { model: chipOf(MODEL), effort: null },
       others: [chipOf(MODE)],
+    },
+    {
+      case: 'roles on other ids',
+      controls: [LLM, DEPTH, VERBOSITY],
+      modelEffort: { model: chipOf(LLM), effort: chipOf(DEPTH) },
+      others: [chipOf(VERBOSITY)],
     },
   ])(
     'composerInputOf_Controls_PairsModelAndEffort ($case)',
@@ -164,9 +185,9 @@ describe('composerInputOf', () => {
 
 describe('chipKeyCommands', () => {
   it('chipKeyCommands_Controls_KeysOnFirstChipPerCommand', () => {
-    const ids = ['mode', 'sandbox', 'effort', 'verbosity'];
+    const roles = ['permissionMode', 'sandbox', 'effort', null];
 
-    expect(chipKeyCommands(ids.map((id) => ({ id })))).toEqual([
+    expect(chipKeyCommands(roles.map((role) => ({ role })))).toEqual([
       'pickMode',
       'pickControl',
       'pickEffort',

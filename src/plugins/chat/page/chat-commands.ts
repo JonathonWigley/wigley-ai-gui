@@ -35,7 +35,7 @@ import type {
   PermissionActions,
   SessionRef,
 } from './chat-view';
-import { CONTROL_IDS } from './control-commands';
+import { ROLE_COMMANDS } from './control-commands';
 import type { ImageViewer } from './image-viewer';
 import type { Picker } from './picker';
 import { choiceRowInput, controlRowInput } from './picker-row';
@@ -182,11 +182,13 @@ export function chatCommandHandlers(
       }
       act(session);
     });
-  const pickControlOf = (id: string) =>
+  const pickControlOf = (role: string) =>
     inRunningSession((session) => {
-      const control = session.state.controls.find((held) => held.id === id);
+      const control = session.state.controls.find(
+        (held) => held.role === role,
+      );
       if (control === undefined) {
-        log(`${session.name} has no ${id} control`);
+        log(`${session.name} has no ${role} control`);
         return;
       }
       openChoices(deps, session, control);
@@ -364,9 +366,9 @@ export function chatCommandHandlers(
     }),
     submitReason: () => deps.reasonBox.submit(),
     cancelReason: () => deps.reasonBox.cancel(),
-    pickMode: pickControlOf(CONTROL_IDS.pickMode),
-    pickEffort: pickControlOf(CONTROL_IDS.pickEffort),
-    pickModel: pickControlOf(CONTROL_IDS.pickModel),
+    pickMode: pickControlOf(ROLE_COMMANDS.pickMode),
+    pickEffort: pickControlOf(ROLE_COMMANDS.pickEffort),
+    pickModel: pickControlOf(ROLE_COMMANDS.pickModel),
     pickControl: inRunningSession((session) => {
       const { controls } = session.state;
       if (controls.length === 0) {

@@ -312,12 +312,14 @@ export interface PartView<I> {
 }
 
 // A session control as its chip shows it: `value` is the choice's label, else the raw value, else `unset`; `enabled`
-// holds while the session's process runs.
+// holds while the session's process runs; `role` is the control's role (`model`, `permissionMode`, `effort` or another
+// the harness declares), null when it declares none.
 export interface ComposerControlInput {
   id: string;
   label: string;
   value: string;
   enabled: boolean;
+  role: string | null;
 }
 // The session's model control and its effort control, which the status line shows as one chip; `effort` is null when
 // the session declares no effort control.

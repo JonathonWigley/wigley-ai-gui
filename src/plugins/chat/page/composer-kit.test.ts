@@ -101,7 +101,15 @@ function composerInput(
     running: true,
     working,
     modelEffort,
-    controls: [{ id: 'mode', label: 'Mode', value: 'Auto', enabled: true }],
+    controls: [
+      {
+        id: 'mode',
+        label: 'Mode',
+        value: 'Auto',
+        enabled: true,
+        role: 'permissionMode',
+      },
+    ],
   };
 }
 
@@ -397,7 +405,15 @@ describe('composer surface parts', () => {
     {
       case: 'control value',
       next: {
-        controls: [{ id: 'mode', label: 'Mode', value: 'Plan', enabled: true }],
+        controls: [
+          {
+            id: 'mode',
+            label: 'Mode',
+            value: 'Plan',
+            enabled: true,
+            role: 'permissionMode',
+          },
+        ],
       },
       isRebuilt: true,
     },
@@ -405,7 +421,13 @@ describe('composer surface parts', () => {
       case: 'model and effort',
       next: {
         modelEffort: {
-          model: { id: 'model', label: 'Model', value: 'Big', enabled: true },
+          model: {
+            id: 'model',
+            label: 'Model',
+            value: 'Big',
+            enabled: true,
+            role: 'model',
+          },
           effort: null,
         },
       },
@@ -519,7 +541,13 @@ describe('composer surface parts', () => {
   it.each([
     {
       case: 'model and effort',
-      effort: { id: 'effort', label: 'Effort', value: 'Medium', enabled: true },
+      effort: {
+        id: 'effort',
+        label: 'Effort',
+        value: 'Medium',
+        enabled: true,
+        role: 'effort',
+      },
       enabled: true,
       value: 'Small · Medium',
       keys: ['pickModel', 'pickEffort'] as ChatCommandName[],
@@ -538,6 +566,7 @@ describe('composer surface parts', () => {
         label: 'Effort',
         value: 'Medium',
         enabled: false,
+        role: 'effort',
       },
       enabled: false,
       value: 'Small · Medium',
@@ -561,7 +590,13 @@ describe('composer surface parts', () => {
         box: asHtml(boxWithEditor()),
         removeImage: () => undefined,
       });
-      const model = { id: 'model', label: 'Model', value: 'Small', enabled };
+      const model = {
+        id: 'model',
+        label: 'Model',
+        value: 'Small',
+        enabled,
+        role: 'model',
+      };
       surface.drawStatusLine(composerInput(false, { model, effort }));
       const modelEffortChip = drawn as HTMLButtonElement | null;
       if (modelEffortChip === null) {

@@ -1847,6 +1847,14 @@ describe('createChatSessions', () => {
     ]);
   });
 
+  // The role each reported control declares, by id.
+  const REPORTED_ROLES: Readonly<Record<string, string>> = {
+    mode: 'permissionMode',
+    approval: 'permissionMode',
+    model: 'model',
+    effort: 'effort',
+  };
+
   // `opus` is the alias Claude's `claude-opus-5-5[1m]` shows as. A row whose
   // pick the process never confirms has its own reports dropped meanwhile.
   it.each([
@@ -1902,6 +1910,14 @@ describe('createChatSessions', () => {
       reported: { mode: 'plan', model: 'opus', effort: 'high' },
       controls: { mode: 'plan' },
     },
+    {
+      case: 'ModeHeldByRoleNotId',
+      picks: [],
+      confirms: true,
+      clears: false,
+      reported: { approval: 'plan', model: 'opus', effort: 'high' },
+      controls: { approval: 'plan' },
+    },
   ])(
     'restart_StartCarriesHeldModeAndConfirmedPicks ($case)',
     async ({ picks, confirms, clears, reported, later, controls }) => {
@@ -1928,6 +1944,7 @@ describe('createChatSessions', () => {
           Object.entries(report).map(([id, value]) => ({
             id,
             label: id,
+            role: REPORTED_ROLES[id],
             choices: [],
             value,
           })),

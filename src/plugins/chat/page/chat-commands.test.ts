@@ -45,6 +45,7 @@ import { createSlashCommands, type SlashCommands } from './slash-commands';
 const mode: SessionControl = {
   id: 'mode',
   label: 'Mode',
+  role: 'permissionMode',
   choices: [
     { value: 'auto', label: 'Auto' },
     { value: 'plan', label: 'Plan' },
@@ -457,6 +458,39 @@ describe('chat commands', () => {
     expect(request.sessionBound).toBe(true);
     expect(run.invoked).toEqual([['setControl', 'row-1', 'mode', 'plan']]);
   });
+
+  it('pickMode_ControlFoundByRole_SetsTheControlById', () => {
+    const approval = { ...mode, id: 'approval' };
+    const run = setUp(session(true, undefined, { controls: [approval] }));
+
+    run.handlers.pickMode({ arg: undefined });
+    run.opened[0].picked(approval.choices[1]);
+
+    expect(run.invoked).toEqual([['setControl', 'row-1', 'approval', 'plan']]);
+  });
+
+  it.each([
+    {
+      command: 'pickModel',
+      controls: [mode],
+      log: 'app has no model control',
+    },
+    {
+      command: 'pickMode',
+      controls: [{ ...mode, id: 'llm', label: 'Model', role: 'model' }],
+      log: 'app has no permissionMode control',
+    },
+  ] as const)(
+    'pickControlKey_NoControlOfTheRole_LogsAndOpensNothing ($command)',
+    ({ command, controls, log }) => {
+      const run = setUp(session(true, undefined, { controls: [...controls] }));
+
+      run.handlers[command]({ arg: undefined });
+
+      expect(run.opened).toEqual([]);
+      expect(run.logs).toEqual([log]);
+    },
+  );
 
   it('pickMode_mainApplies_logsTheChangeOnceMainAnswers', async () => {
     const run = setUp(session(true));
