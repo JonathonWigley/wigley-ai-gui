@@ -7,6 +7,7 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
+import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { stashPartsSetup } from './layout/session-stash-parts.test-support';
 import { createNoteDialog } from './note-dialog';

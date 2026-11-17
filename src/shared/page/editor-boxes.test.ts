@@ -391,22 +391,19 @@ describe('createEditorBoxes', () => {
       },
       scrollTop: 70,
     },
-  ])(
-    'place_AfterRelease_RestoresTheScroll: $steps',
-    ({ act, scrollTop }) => {
-      const { boxes } = emptySetup();
-      const frame = boxes.place(div(), notes, 'a');
-      // Stands for the scroller the host's editor DOM holds.
-      const scroller = div();
-      scroller.className = 'cm-scroller';
-      frame.append(scroller);
-      scroller.scrollTop = 40;
+  ])('place_AfterRelease_RestoresTheScroll: $steps', ({ act, scrollTop }) => {
+    const { boxes } = emptySetup();
+    const frame = boxes.place(div(), notes, 'a');
+    // Stands for the scroller the host's editor DOM holds.
+    const scroller = div();
+    scroller.className = 'cm-scroller';
+    frame.append(scroller);
+    scroller.scrollTop = 40;
 
-      act(boxes, scroller);
+    act(boxes, scroller);
 
-      expect(scroller.scrollTop).toBe(scrollTop);
-    },
-  );
+    expect(scroller.scrollTop).toBe(scrollTop);
+  });
 
   it('release_FocusedBox_DetachesItsFrameAndClearsTheFocus', () => {
     const { boxes, created } = emptySetup();
