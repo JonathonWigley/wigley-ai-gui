@@ -224,7 +224,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 - [x] [Main part: tools, hooks, delivery, entries](08-main-part.md) — after 01, 02, 05, 06
 
 ### Wave 4
-- [ ] [Chatroom mode, row badge and layouts](09-page-mode.md) — after 08
+- [x] [Chatroom mode, row badge and layouts](09-page-mode.md) — after 08
 
 ### Wave 5
 - [ ] [Self-test script and drive fixture](10-selftest.md) — after 08, 09
@@ -247,6 +247,7 @@ Review base: 7c3eb9665
 - 06 · hard · b94a871b2 · diff read: BoardState, BoardClone, BoardFile, BoardRow in contract.ts; BoardSession, GitFolderState, Touch, BoardInputs, buildBoard, readGitFolder, TouchTracker, createTouchTracker in board.ts; wave typecheck passes; oxfmt applied · concerns: the stale-touch test copies 08's forgetting rule (a staleTouchPaths export would be the deeper seam); the spec's 'other root' touch /r/o/d.ts sat under root /r, so the test uses /o/d.ts
 - 07 · deep · d8a9fe6e7 · diff read: every Produces present in hook.py (HOOK_DEADLINE_SECONDS, GIT_TIMEOUT_SECONDS, git_runner, request_from_input, commit_paths, ask_app, output_for, main); hooks.json parses; py_compile passes; unittests and plugin validate wait for the test gate · concerns: the Bash matcher also fires on Monitor commands and starts python3 on every Bash call; python3 may be missing on Windows; a git add -A earlier on the line adds no paths; AGENTS.md wording differs slightly from the spec's dictated text; low-confidence (a) MultiEdit, (a2) notebook_path, (a4) additionalContext delivery, (b), (c) still need task 12's live probe
 - 08 · deep · f53249933 · diff read: every Produces present (manifest, chatroomMainPart, roster, tools, hook handlers, delivery, agent entries, room views, board feed, contract additions, chat.toolCaller, workflow.stageFinishes); typecheck passes; layer check now passes; oxfmt applied; oxlint one warning (no-useless-spread, board-feed.ts:400) · concerns: rebuilds_InOrder passes without the per-room chain (loads cached); 01/05 keep private ref-type lists beside MESSAGE_REF_TYPES; stale-touch rule sits in board-feed.ts, not board.ts; board-feed.test copies board.test fixtures; AGENTS.md plugin folder map lacks chatroom/; a repeated sessions.connected for a tracked row does not refresh; oxlint no-useless-spread warning
+- 09 · hard · c8d08397f · diff read: mode, side bar, board, log, composer, row badge, asks-you activity, chatroom.place, layouts and zlr preview present; typecheck and lint clean (one prior 08 warning); tests wait for the test gate · concerns: nothing run before the gate; start.test.ts leans on harness assumptions (mode element, disposed writer value persists, default layout drawn before showLayouts); composer tests find the box by class through kit.textBox; i/r hints sit in the board part for want of a log-header part; main/start.ts top comment line runs long; AGENTS.md lacks chatroom/ in the folder map and zlr in Space z l (task 11)
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 - 02 Produces: SessionList.sessionOfHost(hostId) → sessionOf(info: SessionInfo); createHookRoutes takes sessionOf · why: row-id-first lookup (Lane H's connect order) · consumers: 02 only (08 consumes the routes, not the lookup) · lead, before dispatch
@@ -285,5 +286,8 @@ Review base: 7c3eb9665
 - A rested turnFinished keeps a row's pending wakes until a later idle finish — group 08 · group 08
 - Arg error texts the spec left open are written in chatroom-tools.ts (report 08-1.md); null counts as absent; an empty thread read succeeds with 'No messages in thread <thread>.' — group 08 · group 08
 - Dispose: stopped flag, boardFeed.stop, delivery.dispose, then awaits rebuild chains and room.settled() so queued cursor and claim writes finish — group 08 · group 08
+- 09: composer Enter/Esc are plain page binds in chatroom.composer, not mode insert, since the box is a plain input · group 09
+- 09: layout contract adds ComposerKit.textBox; page/chatroom.css holds only the app containers, outside Files · group 09
+- 09: asks-you activity reads every room's userAsks by from.rowId; the badge counts only the row's own project room · group 09
 ### Review rounds
 ### Test gate

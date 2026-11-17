@@ -1,6 +1,6 @@
 # 09 — Chatroom mode, row badge and layouts
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · new mode with its own key scopes, a composer, a place slot and a layout contract that 10 drives; it follows existing patterns but leaves many view choices to the worker
 Wave: 4 · Depends on: 08
@@ -190,3 +190,5 @@ Done when: compiles; `npm run lint` passes (layers and styles); the tests above 
 Commit:    one commit for the group
 
 ## Proof
+
+Commit c8d08397f · proof: diff read: mode, side bar, board, log, composer, row badge, asks-you activity, chatroom.place, layouts and zlr preview present; typecheck and lint clean (one prior 08 warning); tests wait for the test gate · concerns: nothing run before the gate; start.test.ts leans on harness assumptions (mode element, disposed writer value persists, default layout drawn before showLayouts); composer tests find the box by class through kit.textBox; i/r hints sit in the board part for want of a log-header part; main/start.ts top comment line runs long; AGENTS.md lacks chatroom/ in the folder map and zlr in Space z l (task 11)

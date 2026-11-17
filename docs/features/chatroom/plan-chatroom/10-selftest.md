@@ -1,6 +1,6 @@
 # 10 — Self-test script and drive fixture
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `chatroom.seed` drive action and its result, which 12 drives; the fixture waits on rows, titles and the board, which settle asynchronously. It follows `src/plugins/unity-pool/main/selftest-script.ts` and `selftest-fixture.ts`, and practice's `writeFixture` drive action
 Wave: 5 · Depends on: 08, 09
