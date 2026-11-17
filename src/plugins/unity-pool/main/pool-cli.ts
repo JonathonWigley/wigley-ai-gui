@@ -117,14 +117,23 @@ export async function runPoolCommand(
   }
 }
 
-// The script the deps name with `~` expanded, or `no-cli` when no file is there.
+// The script the deps name with `~` expanded, `no-cli` when no file is there, or `cli-failed` when the stat itself
+// fails.
 async function findScript(deps: CliDeps): Promise<string | CliFailure> {
   const script = deps.paths.expandTilde(deps.scriptPath, deps.homeDir);
-  if ((await deps.files.stat(script)) === null) {
+  try {
+    if ((await deps.files.stat(script)) === null) {
+      return {
+        ok: false,
+        error: 'no-cli',
+        message: `unity-pool not found at ${script}`,
+      };
+    }
+  } catch (error) {
     return {
       ok: false,
-      error: 'no-cli',
-      message: `unity-pool not found at ${script}`,
+      error: 'cli-failed',
+      message: `unity-pool could not be checked at ${script}: ${errorText(error)}`,
     };
   }
   return script;

@@ -138,6 +138,23 @@ describe('runPoolCommand', () => {
     expect(run.processes.runs).toEqual([]);
   });
 
+  it('answers cli-failed and runs nothing when the stat of the script rejects', async () => {
+    const run = deps(['/s/unity-pool'], '/s/unity-pool');
+    run.deps.files.stat = async () => {
+      throw new Error('permission denied');
+    };
+
+    const result = await runPoolCommand(run.deps, 'hold', 'p', 3);
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'cli-failed',
+      message:
+        'unity-pool could not be checked at /s/unity-pool: permission denied',
+    });
+    expect(run.processes.runs).toEqual([]);
+  });
+
   it.each(['python3', 'py'])(
     'runPoolCommand_TildeScript_ExpandsAndRunsThePythonWithoutSessionIdentity: %s',
     async (pythonCommand) => {
