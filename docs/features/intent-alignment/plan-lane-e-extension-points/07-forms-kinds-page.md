@@ -1,6 +1,6 @@
 # 07 — Forms item kinds register on the page
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 (Part A) and 3 (Part B) · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -443,3 +443,4 @@ Where the text above and these differ, these win.
 
 ## Proof
 
+Commits 5a249a44d (Part A), b28a89d2b (Part B) · proof: diff reads: every Produces present (Part A: Round {items, bodyKeys}, ItemKind string, ItemAnswer, PageKind and its member types, FormsItemRef.kind, FormsPageExports.registerKind, page-kinds registry, built-in PageKinds, createFormsState/kindsChanged; Part B: OtherCard, KindKit, KindCardBuilder, cards.kinds, cards.other, string kinds in rail, review and textBox, default other card, resolver chain kinds[id] then other, readLayout kinds checks, layout-panes casts dropped); typecheck, lint and forms tests (884) pass · concerns: AGENTS.md 'An item kind' and 'A forms layout' still describe the closed tables (task 11); readLayout accepts an array as cards.kinds, as it does for cards
