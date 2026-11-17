@@ -1316,8 +1316,7 @@ describe('primer layout', () => {
   });
 
   it('rebuilds the shown card on setLayouts with a new pick and keeps the focused box', () => {
-    const { store, popup, view, boxes, created, editorOf } =
-      primerPopupSetup();
+    const { store, popup, view, boxes, created, editorOf } = primerPopupSetup();
     store.dispatch({ type: 'selectTask', row: 1 });
     boxes.focus(taskComment1);
     const comment = editorOf(taskComment1);

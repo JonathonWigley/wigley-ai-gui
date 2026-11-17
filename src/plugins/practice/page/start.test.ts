@@ -148,7 +148,11 @@ function recordingHost(
     ...editors.host,
     create(parent, doc, events) {
       const editor = editors.host.create(parent, doc, events);
-      const made: BoxEditor = { frame: asFake(parent), doc, isDestroyed: false };
+      const made: BoxEditor = {
+        frame: asFake(parent),
+        doc,
+        isDestroyed: false,
+      };
       boxEditors.push(made);
       return {
         ...editor,

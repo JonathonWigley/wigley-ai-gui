@@ -560,11 +560,7 @@ function appendField(
   field.append(sectionHeader(box.label, hint));
   parent.append(field);
   const primerBox: PrimerBox = { primerId: primer.formId, target: box.target };
-  const frame = deps.boxes.place(
-    field,
-    primerBox,
-    boxText(primer, box.target),
-  );
+  const frame = deps.boxes.place(field, primerBox, boxText(primer, box.target));
   frame.classList.add('primer-box');
   field.append(
     boxHint('box-keys', [
