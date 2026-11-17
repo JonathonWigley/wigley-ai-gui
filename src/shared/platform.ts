@@ -17,6 +17,9 @@ export interface PlatformInputs {
 
 const DEFAULT_PROGRAMS: PlatformPrograms = { claude: '~/.local/bin/claude' };
 
+// The server key of the marketplace plugin's `.mcp.json`.
+export const RELAY_SERVER_NAME = 'wigley-forms';
+
 // How a relay starts the app: `npm start` from the repo when this is the dev
 // app and npm started this run, else the running executable, so a stable app
 // started from under `npm run` still records its own executable.
@@ -51,6 +54,7 @@ function platformRecord(
         inputs.cwd,
         inputs.isDev,
       ),
+      serverName: RELAY_SERVER_NAME,
     },
   };
 }

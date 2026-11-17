@@ -37,7 +37,11 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../contract';
-import { addDriveActions, sessionsMainPart } from './start';
+import {
+  addDriveActions,
+  harnessToolUseId,
+  sessionsMainPart,
+} from './start';
 import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
 
 function fakeSessions() {
@@ -176,7 +180,35 @@ describe('sessions drive actions', () => {
   });
 });
 
-const CONTEXT = { toolUseId: null, signal: new AbortController().signal };
+describe('harnessToolUseId', () => {
+  it.each([
+    { harness: 'claude', expected: 'toolu_01', asked: [{ k: 'v' }] },
+    { harness: null, expected: null, asked: [] },
+    { harness: 'codex', expected: null, asked: [] },
+  ])(
+    'harnessToolUseId_ByHelloHarness_AsksThatAdapter: $harness',
+    ({ harness, expected, asked }) => {
+      const metas: (Readonly<Record<string, unknown>> | null)[] = [];
+      const claude = {
+        id: 'claude',
+        toolUseIdOf(meta: Readonly<Record<string, unknown>> | null) {
+          metas.push(meta);
+          return 'toolu_01';
+        },
+      } as unknown as AgentHarness;
+      const info: SessionInfo = { sessionId: 'host-1', projectDir: null, harness };
+
+      const toolUseId = harnessToolUseId(harnessRegistryOf([claude]), info, {
+        k: 'v',
+      });
+
+      expect(toolUseId).toBe(expected);
+      expect(metas).toEqual(asked);
+    },
+  );
+});
+
+const CONTEXT ={ toolUseId: null, signal: new AbortController().signal };
 
 const ASK_TOOL = { name: 'ask', description: 'Ask.', inputSchema: {} };
 

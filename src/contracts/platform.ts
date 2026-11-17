@@ -26,6 +26,8 @@ export interface PlatformRelay {
     readonly command: readonly string[];
     readonly cwd: string;
   };
+  // The name the relay's MCP server gives itself, which agents' tool names embed.
+  readonly serverName: string;
 }
 
 // What differs by the OS the app runs on, as JSON: main serves it in the config,

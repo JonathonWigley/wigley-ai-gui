@@ -1,3 +1,4 @@
+import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type {
   DriveHost,
   MainApi,
@@ -77,6 +78,18 @@ function configFolder(api: SessionsApi, info: SessionInfo): string | null {
   return harness?.configFolder(info.profileDir ?? null) ?? null;
 }
 
+// The tool-use id the session's harness reads from a call's raw `_meta`, looked
+// up at each call; null when the session names no harness or the app runs no
+// such harness.
+export function harnessToolUseId(
+  harnesses: Pick<AgentHarnessRegistry, 'get'>,
+  info: SessionInfo,
+  meta: Readonly<Record<string, unknown>> | null,
+): string | null {
+  const harness = info.harness === null ? null : harnesses.get(info.harness);
+  return harness?.toolUseIdOf(meta) ?? null;
+}
+
 function createList(api: SessionsApi): SessionList {
   const list = createSessionList({
     randomHex: api.services.randomHex,
@@ -108,7 +121,8 @@ function createList(api: SessionsApi): SessionList {
 }
 
 // Opens the channel relay.py connects to, each relay connecting one session
-// served the live tool list. A relay that finds the app gone starts
+// served the live tool list under the platform's relay server name, its calls'
+// tool-use ids read by its harness. A relay that finds the app gone starts
 // it again, except a drive run's, which stays ended and names the run's home.
 function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
   const channel = channelPath(
@@ -122,7 +136,16 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
     channel,
     ready: () => hold.ready(),
     connect: (info) => list.connect(info),
-    serve: (streams, session) => serveMcp(streams, session, list),
+    serve: (streams, session) =>
+      serveMcp(streams, session, list, {
+        serverName: api.services.platform.relay.serverName,
+        toolUseIdOf: (meta) =>
+          harnessToolUseId(
+            api.services.agentHarnesses,
+            session.session.info,
+            meta,
+          ),
+      }),
     log: api.services.log,
   });
   const endpoint: RelayEndpoint = {

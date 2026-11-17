@@ -25,6 +25,7 @@ describe('platformFor', () => {
       );
       expect(relay.username).toBe('tester');
       expect(relay.pid).toBe(4242);
+      expect(relay.serverName).toBe('wigley-forms');
     },
   );
 });
