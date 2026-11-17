@@ -174,7 +174,9 @@ export function createPermissionRoute(): PermissionRoute {
             if (target === null) {
               return errorResult(NO_PROCESS_TEXT);
             }
-            return textResult(await target.ask({ ...call, args }, abort.signal));
+            return textResult(
+              await target.ask({ ...call, args }, abort.signal),
+            );
           } finally {
             waiting.delete(abort);
             signal.removeEventListener('abort', onAbort);

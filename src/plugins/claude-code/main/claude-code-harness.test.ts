@@ -3587,7 +3587,15 @@ describe('createClaudeCodeHarness on the session host', () => {
         reply = result;
       });
     await settle();
-    return { ...recorded, host, agent, tools, abort, logged, reply: () => reply };
+    return {
+      ...recorded,
+      host,
+      agent,
+      tools,
+      abort,
+      logged,
+      reply: () => reply,
+    };
   }
 
   const permissionEntries = (heard: [string, unknown][]) =>
@@ -3603,7 +3611,10 @@ describe('createClaudeCodeHarness on the session host', () => {
 
     expect(run.heard.filter(([name]) => name === 'permission')).toEqual([
       ['permission', { entry: permissionEntry(null) }],
-      ['permission', { entry: { ...permissionEntry(null), id: 'permission-2' } }],
+      [
+        'permission',
+        { entry: { ...permissionEntry(null), id: 'permission-2' } },
+      ],
     ]);
     expect(permissionEntries(run.heard)).toEqual([]);
     expect(run.reply()).toBe('pending');
@@ -3694,7 +3705,10 @@ describe('createClaudeCodeHarness on the session host', () => {
       if (name === 'entry' && (payload as ChatEntry).kind === 'permission') {
         return ['answered'];
       }
-      if (name === 'agentEvent' && (payload as AgentEvent).type === 'sessionEnded') {
+      if (
+        name === 'agentEvent' &&
+        (payload as AgentEvent).type === 'sessionEnded'
+      ) {
         return ['sessionEnded'];
       }
       return name === 'ended' ? ['ended'] : [];

@@ -122,13 +122,7 @@ interface ChatDriveDeps {
   // The names of the profiles of chat's harness, in its settings order, read
   // at each `chat.start`.
   profileNames: () => string[];
-  chat: Pick<
-    ChatSessions,
-    | 'start'
-    | 'hostSessionIdOf'
-    | 'closed'
-    | 'sessions'
-  >;
+  chat: Pick<ChatSessions, 'start' | 'hostSessionIdOf' | 'closed' | 'sessions'>;
   sessions: Pick<SessionsMainExports, 'activate'>;
   harnesses: AgentHarnessRegistry;
 }

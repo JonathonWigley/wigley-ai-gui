@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentHarnessInfo, InstalledPlugin } from '../../../contracts/agent';
+import type {
+  AgentHarnessInfo,
+  InstalledPlugin,
+} from '../../../contracts/agent';
 import {
   harnessInfo,
   harnessRegistryOf,

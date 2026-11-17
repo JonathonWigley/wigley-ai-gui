@@ -2242,8 +2242,7 @@ export function createFakeAgentHarness(
     },
     askPermission(rowId, call) {
       const record = processes.findLast(
-        (each) =>
-          each.request.rowId === rowId && !each.ended && !each.detached,
+        (each) => each.request.rowId === rowId && !each.ended && !each.detached,
       );
       const raise =
         record === undefined ? undefined : permissionRaisers.get(record);

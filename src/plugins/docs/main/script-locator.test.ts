@@ -77,7 +77,10 @@ describe('locateScript', () => {
       files,
       HOME,
       '',
-      foldersListing([WIGLEY_PLUGIN_KEY, missing], [WIGLEY_PLUGIN_KEY, present]),
+      foldersListing(
+        [WIGLEY_PLUGIN_KEY, missing],
+        [WIGLEY_PLUGIN_KEY, present],
+      ),
       posixPaths,
     );
 

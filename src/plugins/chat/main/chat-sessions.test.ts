@@ -3089,9 +3089,9 @@ describe('createChatSessions', () => {
       const settled = await askBash(test);
 
       expect(settled()).toEqual(decision);
-      expect(
-        permissionAnswers(process).map((call) => call.decision),
-      ).toEqual(answers);
+      expect(permissionAnswers(process).map((call) => call.decision)).toEqual(
+        answers,
+      );
       expect(
         test.sent('entry').filter((sent) => sent.entry.kind === 'permission'),
       ).toEqual(
@@ -6523,7 +6523,6 @@ describe('createChatSessions attaching', () => {
     expect(startsOf(test)).toEqual([]);
     expect(attachedOf(test)[0].calls).toEqual([sendCall(message)]);
   });
-
 });
 
 describe('createChatSessions unheld processes', () => {

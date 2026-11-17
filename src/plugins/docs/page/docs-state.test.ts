@@ -1948,9 +1948,10 @@ describe('detailFields', () => {
       meta: { harness: 'codex' },
     });
 
-    expect(detailFields(plugin, '/Users/u', posixPaths, HARNESSES)[0]).toEqual(
-      ['Harness', 'codex'],
-    );
+    expect(detailFields(plugin, '/Users/u', posixPaths, HARNESSES)[0]).toEqual([
+      'Harness',
+      'codex',
+    ]);
   });
 });
 
