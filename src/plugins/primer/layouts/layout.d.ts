@@ -62,7 +62,7 @@ export interface ItemCardInput {
   added: boolean;
 }
 
-// `element` is the card's own node, appended to `parent` before the card mounts a text box. `update` runs with the
+// `element` is the card's own node, appended to `parent` before the card places a text box. `update` runs with the
 // card's current input on each primer change while the card shows; a throw from it is logged once and the card stays.
 // The app rebuilds the card when it shows another row, and a task card when its add-item box comes or goes.
 export interface PrimerLayoutCard<Input> {
@@ -186,9 +186,10 @@ export interface PrimerKit extends BaseKit {
 }
 
 // A text box in its labelled field (`div.primer-field`), with its key hint beside the label and its `⇧⇥ ⇥` box keys
-// on the frame. Each box mounts once per card; asking for it again, or for a box the card does not have, throws. The
-// app appends each box a card leaves out at the card's end, in its field, so the box keys always reach it; `⇥` and
-// `⇧⇥` step through the boxes in the app's order, whatever their place on the card.
+// on the frame. Each box is placed once per card; asking for it again, or for a box the card does not have, throws.
+// A box's editor is made once and moved between card draws, keeping its cursor and undo. The app appends each
+// box a card leaves out at the card's end, in its field, so the box keys always reach it; `⇥` and `⇧⇥` step through
+// the boxes in the app's order, whatever their place on the card.
 export interface FeatureKit extends PrimerKit {
   textBox(
     parent: HTMLElement,

@@ -502,6 +502,8 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
     },
     dispose() {
       statusPart.dispose();
+      drawnBody?.dispose();
+      drawnFrame?.dispose();
       storeSubscription.dispose();
       for (const primerId of primerViews.keys()) {
         destroyPrimerView(primerId, shownPrimers, deps);

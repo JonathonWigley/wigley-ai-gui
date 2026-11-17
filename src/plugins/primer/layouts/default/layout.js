@@ -1,7 +1,8 @@
 // @ts-check
 
 // The built-in primer look. Every card and pane appends its element to
-// `parent` first, so the text boxes mount into an attached element.
+// `parent` first, so the text boxes are placed in an attached element. A
+// box's editor is made once and moved between card draws.
 //
 // What a user layout may leave out of a part it defines, and what the app
 // does then:
