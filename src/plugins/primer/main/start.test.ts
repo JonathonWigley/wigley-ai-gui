@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
@@ -154,11 +154,26 @@ describe('primer main part', () => {
         git: { originRepoName: () => Promise.resolve(null) } as never,
       },
     });
+    const primersDir = posixPaths.join(homeDir, SAVED_PRIMERS_FOLDER);
+    const held = Promise.withResolvers<void>();
+    const write = harness.files.write;
+    vi.spyOn(harness.files, 'write').mockImplementation(async (path, text) => {
+      if (path.startsWith(primersDir)) {
+        await held.promise;
+      }
+      await write(path, text);
+    });
     await harness.drive?.run('openPrimer', { sessionId: 'a' });
     await flush();
-    const primersDir = posixPaths.join(homeDir, SAVED_PRIMERS_FOLDER);
 
-    await harness.stop('quit');
+    let isStopped = false;
+    const stopped = harness.stop('quit').then(() => {
+      isStopped = true;
+    });
+    await flush();
+    expect(isStopped).toBe(false);
+    held.resolve();
+    await stopped;
 
     const outcomes = await Promise.all(
       (await harness.files.list(primersDir)).map(

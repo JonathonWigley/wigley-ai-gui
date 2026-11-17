@@ -83,18 +83,18 @@ export function addDriveActions(
   });
 }
 
-// Serves open_audio_picker and collect_last_audio_picker to every agent
-// session once the picker folder's first read settles, checking each listed
-// file exists before a picker opens; saves each
-// picker in the picker folder and shows it on the page; serves the page the
-// bytes of the files an open picker lists; wakes a picker's chat session when
-// the picker finishes with no call waiting; answers a headless chat session's
-// pickers with their recommendations; registers the picker layouts; opens the
-// layout preview on the page's ask over a service of its own whose store is in
-// memory and whose pickers go through the presenter's quiet view; refuses a
-// switch-off while an agent's picker is open. Outside a live run it writes the
-// sample sounds into the plugin's data folder first; once written, the
-// self-test gets its picker and a drive run gets its drive actions.
+// Serves open_audio_picker and collect_last_audio_picker to every agent session
+// once the picker folder's first read settles, checking each listed file exists
+// before a picker opens; saves each picker in the picker folder and shows it on
+// the page; serves the page the bytes of the files an open picker lists; wakes
+// a picker's chat session when the picker finishes with no call waiting;
+// answers a headless chat session's pickers with their recommendations;
+// registers the picker layouts; opens the layout preview on the page's ask over
+// a service of its own whose store is in memory and whose pickers go through
+// the presenter's quiet view; refuses a switch-off while an agent's picker is
+// open. Outside a live run it writes the sample sounds into the plugin's data
+// folder first; once written, the self-test gets its picker and a drive run
+// gets its drive actions.
 export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
   manifest: audioPickerManifest,
   start(api: AudioPickerApi) {

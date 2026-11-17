@@ -1,3 +1,4 @@
+import type { AgentFormPresenter } from '../../../contracts/agent-forms';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   DriveHost,
@@ -60,15 +61,17 @@ type FormsApi = MainApi<
 // How many saved rounds the preview cycles through.
 const PREVIEW_SAVED_ROUNDS = 20;
 
-// The agents' FormsService over the saved-round folder, its calls waiting
-// for the folder's first read, and the layout preview over a FormsService of its own whose store is in memory, with the
-// presenter they share, which owns the channel's `finish` and `draft`
-// handlers; the preview's rounds go through its quiet view. The agents'
-// service wakes the round's chat session when a round finishes with no call
-// waiting, and answers a headless chat session's rounds with their
-// recommendations; the preview's wakes nothing and answers none. Both
-// services and the preview read `layoutNames` for the layouts a round may
+// The agents' FormsService over the saved-round folder, its calls waiting for
+// the folder's first read, and the layout preview over a FormsService of its
+// own whose store is in memory, with the presenter they share, which owns the
+// channel's `finish` and `draft` handlers; the preview's rounds go through its
+// quiet view. The agents' service wakes the round's chat session when a round
+// finishes with no call waiting, and answers a headless chat session's rounds
+// with their recommendations; the preview's wakes nothing and answers none.
+// Both services and the preview read `layoutNames` for the layouts a round may
 // name. `flushed` settles once every saved-round write queued before it has.
+// `shown` settles once the agents' service shows a round of the session, by
+// its app id, after the call.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -79,6 +82,7 @@ function createForms(
   preview: { open(): void } & Disposable;
   presenter: AgentFormChannelPresenter<Round, FormBody>;
   flushed(): Promise<void>;
+  shown(sessionId: string): Promise<void>;
 } {
   const { services } = api;
   const store = createFolderFormStore({
@@ -102,9 +106,10 @@ function createForms(
     sessions,
   });
   const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
+  const agentsShows = withShownWaits(presenter);
   const agentsService = createAgentFormService({
     type: roundType,
-    presenter,
+    presenter: agentsShows.presenter,
     store,
     wake: createChatFormWake(chat, services.log),
     defaultDeadlineSeconds,
@@ -139,6 +144,34 @@ function createForms(
     preview,
     presenter,
     flushed: () => store.flushed(),
+    shown: agentsShows.shown,
+  };
+}
+
+// `presenter` with `shown`, which settles once `presenter` shows a form of the
+// session, by its app id, after the call.
+function withShownWaits<Form, Body>(
+  presenter: AgentFormPresenter<Form, Body>,
+): {
+  presenter: AgentFormPresenter<Form, Body>;
+  shown(sessionId: string): Promise<void>;
+} {
+  const waiters = new Map<string, (() => void)[]>();
+  return {
+    presenter: {
+      show: (form, listener) => {
+        presenter.show(form, listener);
+        for (const resolve of waiters.get(form.sessionId) ?? []) {
+          resolve();
+        }
+        waiters.delete(form.sessionId);
+      },
+      close: (formId) => presenter.close(formId),
+    },
+    shown: (sessionId) =>
+      new Promise((resolve) => {
+        waiters.set(sessionId, [...(waiters.get(sessionId) ?? []), resolve]);
+      }),
   };
 }
 
@@ -218,7 +251,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const layoutNames = () => api.layouts.names();
-    const { forms, preview, presenter, flushed } = createForms(
+    const { forms, preview, presenter, flushed, shown } = createForms(
       api,
       sessions,
       chat,
@@ -245,6 +278,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
         sessions,
         api.services.userConfig,
         api.services.platform.os,
+        shown,
       ),
     );
     if (api.drive !== null) {

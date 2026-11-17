@@ -333,7 +333,7 @@ describe('createAgentFormChannelPresenter', () => {
   });
 
   // Breaks if the handler drops the listener's promise.
-  it("throws a draft's failed save out of the handler, so the page's invoke rejects", async () => {
+  it("rejects the handler with a draft's failed save, so the page's invoke rejects", async () => {
     const { presenter, saveDraft } = setUp();
     presenter.show(FORM, {
       cancel: () => {},

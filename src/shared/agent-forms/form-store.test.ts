@@ -415,7 +415,9 @@ describe('createFolderFormStore', () => {
     expect(store.newestFor('fp')?.id).toBe(record.id);
   });
 
-  it('prunes only files last written before the retention window', async () => {
+  // Breaks if `load` settles before the prune has run, so a call waiting on
+  // it still finds an expired form.
+  it('prunes only files last written before the retention window, before load settles', async () => {
     const writer = storeIn(formsDir);
     nowMs = 2_000_000_000_000 - (RETENTION_SECONDS + 60) * 1000;
     writer.create(MINE, 'old', ARGS, null, null);
@@ -426,7 +428,6 @@ describe('createFolderFormStore', () => {
     const store = storeIn(formsDir);
 
     await store.load();
-    await store.flushed();
 
     expect(await formFiles()).toEqual([`${recent.id}.json`]);
     expect(store.newestFor('old')).toBeNull();
@@ -548,7 +549,7 @@ describe('createFolderFormStore', () => {
     expect(store.newestFor('fp')?.id).toBe(record.id);
   });
 
-  it("throws a draft's failed write with the disk's reason", async () => {
+  it("rejects with a draft's failed write and the disk's reason", async () => {
     const store = storeIn(formsDir, posixPaths, unwritable());
     const record = store.create(MINE, 'fp', ARGS, null, null);
 
@@ -645,6 +646,27 @@ describe('createFolderFormStore', () => {
     await store.flushed();
 
     expect(store.newestFor('fp')?.id).toBe(record.id);
+  });
+
+  // Breaks if a rescan drops an id whose file it could not read.
+  it('keeps a form and logs when a rescan cannot read its file', async () => {
+    let isFailing = false;
+    const watched = missingWatch({
+      ...files,
+      read: (path) =>
+        isFailing ? Promise.reject(new Error('EIO')) : files.read(path),
+    });
+    const store = storeIn(formsDir, posixPaths, watched.files);
+    await store.load();
+    const record = store.create(MINE, 'fp', ARGS, null, null);
+    await store.flushed();
+
+    isFailing = true;
+    watched.missed();
+    await store.flushed();
+
+    expect(store.newestFor('fp')?.id).toBe(record.id);
+    expect(logLines).toContain(`could not read ${record.id}.json: EIO`);
   });
 
   // Breaks if `onMissed` is ignored.

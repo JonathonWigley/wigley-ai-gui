@@ -345,10 +345,25 @@ describe('audio-picker main part', () => {
   // Breaks if the quit does not wait for the queued write.
   it('a quit leaves the open picker open on disk and on the page, for the agent to send again', async () => {
     const harness = startWithSessions({ homeDir });
-    await openedPicker(harness);
     const pickersDir = posixPaths.join(homeDir, SAVED_PICKERS_FOLDER);
+    const held = Promise.withResolvers<void>();
+    const write = harness.files.write;
+    vi.spyOn(harness.files, 'write').mockImplementation(async (path, text) => {
+      if (path.startsWith(pickersDir)) {
+        await held.promise;
+      }
+      await write(path, text);
+    });
+    await openedPicker(harness);
 
-    await harness.stop('quit');
+    let isStopped = false;
+    const stopped = harness.stop('quit').then(() => {
+      isStopped = true;
+    });
+    await flush();
+    expect(isStopped).toBe(false);
+    held.resolve();
+    await stopped;
 
     const outcomes = await Promise.all(
       (await harness.files.list(pickersDir)).map(

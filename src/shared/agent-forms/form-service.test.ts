@@ -1349,7 +1349,7 @@ describe("the user's answers on disk", () => {
     expect(presenter.closed).toEqual([shown.formId]);
   });
 
-  it("throws a draft's failed write to the caller and keeps the draft for the reply", async () => {
+  it("rejects the caller with a draft's failed write and keeps the draft for the reply", async () => {
     const pending = startSession().open(NAMING_ARGS, null, live());
     const shown = presenter.latest();
     vi.spyOn(store, 'saveBody').mockRejectedValue(

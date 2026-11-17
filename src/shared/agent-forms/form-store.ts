@@ -55,8 +55,9 @@ export type FinishedSavedAgentForm = SavedAgentForm & {
 // record at once and every read answers at once; the folder store's disk
 // steps follow in call order.
 export interface AgentFormStore {
-  // Reads the folder into the index and starts watching it. Never rejects: a
-  // failure is logged. A second call returns the first call's promise.
+  // Reads the folder into the index, starts watching it and prunes the forms
+  // past retention, settling once the read and the prune have. Never rejects:
+  // a failure is logged. A second call returns the first call's promise.
   load(): Promise<void>;
   create(
     owner: AgentFormOwnerRef,
@@ -74,9 +75,9 @@ export interface AgentFormStore {
     body: unknown,
     toolUseId: string | null,
   ): SavedAgentForm;
-  // A finished form keeps the body it finished with: a late draft is dropped and
-  // the promise resolves. Rejects with an Error naming the form and the disk's
-  // reason when the write fails.
+  // A finished form keeps the body it finished with: a late draft is dropped
+  // and the promise resolves. Rejects with an Error naming the form and the
+  // disk's reason when the write fails.
   saveBody(record: SavedAgentForm, body: unknown): Promise<void>;
   finish(
     record: SavedAgentForm,
@@ -468,7 +469,7 @@ export function createFolderFormStore(deps: {
       log(`form folder not watched: ${errorText(error)}`);
     }
     await queue.run(scan);
-    void queue.run(prune);
+    await queue.run(prune);
   };
 
   return {
