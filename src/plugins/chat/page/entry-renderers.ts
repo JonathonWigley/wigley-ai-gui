@@ -12,8 +12,9 @@ export const ENTRY_RENDERER_NAME = 'entry renderer';
 // The entry renderers plugins added. `pick` walks them latest first and
 // returns the first whose `kind` equals the input's and whose `match`, when
 // given, returns true, as a one-kind layout named `entry renderer`; null when
-// none does. A `match` that throws is logged and counts as false. `onChanged`
-// hears each add and each first `dispose` of one.
+// none does. A `match` that throws counts as false, and is logged only the
+// first time it throws for that renderer, since a pick runs on every update.
+// `onChanged` hears each add and each first `dispose` of one.
 export interface EntryRenderers {
   add<K extends AnyEntryKind>(renderer: ChatEntryRenderer<K>): Disposable;
   pick(input: EntryInput<AnyEntryKind>): PartPick<ChatLayout> | null;
@@ -21,10 +22,12 @@ export interface EntryRenderers {
 }
 
 // One added renderer and the layout it draws through, made once at `add` so
-// the page host logs a failure once per renderer.
+// the page host logs a failure once per renderer. `matchFailed` holds once its
+// `match` has thrown and been logged.
 interface HeldRenderer {
   renderer: ChatEntryRenderer;
   layout: ChatLayout;
+  matchFailed: boolean;
 }
 
 export function createEntryRenderers(log: PluginLog): EntryRenderers {
@@ -46,6 +49,7 @@ export function createEntryRenderers(log: PluginLog): EntryRenderers {
         layout: {
           entries: { [renderer.kind]: renderer.build },
         } as ChatLayout,
+        matchFailed: false,
       };
       held = [holder, ...held];
       changed();
@@ -60,9 +64,7 @@ export function createEntryRenderers(log: PluginLog): EntryRenderers {
       };
     },
     pick(input) {
-      const picked = held.find(({ renderer }) =>
-        drawsInput(renderer, input, log),
-      );
+      const picked = held.find((holder) => drawsInput(holder, input, log));
       return picked === undefined
         ? null
         : { name: ENTRY_RENDERER_NAME, layout: picked.layout };
@@ -74,12 +76,14 @@ export function createEntryRenderers(log: PluginLog): EntryRenderers {
   };
 }
 
-// Whether `renderer` draws `input`: its kind, and its `match` when given.
+// Whether `holder`'s renderer draws `input`: its kind, and its `match` when
+// given. A `match` that throws is logged only the first time.
 function drawsInput(
-  renderer: ChatEntryRenderer,
+  holder: HeldRenderer,
   input: EntryInput<AnyEntryKind>,
   log: PluginLog,
 ): boolean {
+  const { renderer } = holder;
   if (renderer.kind !== input.kind) {
     return false;
   }
@@ -89,7 +93,10 @@ function drawsInput(
   try {
     return renderer.match(input);
   } catch (error) {
-    log(`entry renderer ${renderer.kind} match failed: ${errorText(error)}`);
+    if (!holder.matchFailed) {
+      holder.matchFailed = true;
+      log(`entry renderer ${renderer.kind} match failed: ${errorText(error)}`);
+    }
     return false;
   }
 }

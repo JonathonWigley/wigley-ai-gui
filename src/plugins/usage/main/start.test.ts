@@ -94,12 +94,12 @@ function usageEvent(agentId: string): UsageAgentEvent {
 }
 
 // Usage's main part started over a fake `MainApi` whose `core.agentHarnesses`
-// holds `PERSONAL` as the one profile of each of `harnesses` (a list without
-// `claude` publishes none, so no poll runs), registered, a real store for its slots and a drive host
-// whose `run` runs an added action; `emit` calls the listeners of a qualified
-// event, `sent` records every write of the slot after the start, `snapshot` reads
-// the slot, `armed` records every timer set and `pendingTimers` the ids set and
-// not yet cleared. The clock reads `NOW` and sessions' selected session is
+// holds one entry per id in `harnesses`, each with `PERSONAL` as its one
+// profile (an empty list holds none, so no poll runs), registered, a real
+// store for its slots and a drive host whose `run` runs an added action;
+// `emit` calls the listeners of a qualified event, `sent` records every write
+// of the slot after the start, `snapshot` reads the slot, `armed` records
+// every timer set and `pendingTimers` the ids set and not yet cleared. The clock reads `NOW` and sessions' selected session is
 // `SELECTED`.
 function startUsagePart(harnesses: Partial<AgentHarness>[]) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();

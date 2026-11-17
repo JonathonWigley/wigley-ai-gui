@@ -45,8 +45,8 @@ export interface SessionListDeps {
   // The session's config folder as its harness resolves it; null when the app
   // runs no such harness.
   configFolder(info: SessionInfo): string | null;
-  // The label the harness `harness` shows as; its id when no adapter
-  // registered it.
+  // The label the harness `harness` shows as; when no adapter registered it,
+  // `harnessLabel`'s stand-in label, else its id.
   harnessLabel(harness: string): string;
 }
 

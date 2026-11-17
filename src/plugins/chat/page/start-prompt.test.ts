@@ -784,11 +784,20 @@ describe('start prompt', () => {
     ]);
   });
 
-  it('noProfiles_toastsAndOpensNothing', async () => {
-    const run = setUp({ profiles: [] });
+  it('noProfiles_toastsTheHarnessLabelAndOpensNothing', async () => {
+    const run = setUp({
+      harnesses: new Map([
+        ['claude', harnessInfo({ label: 'Claude Code', profiles: [] })],
+      ]),
+    });
     await flush();
     expect(run.opened).toEqual([]);
-    expect(run.toasts).toEqual([{ text: expect.any(String), tone: 'error' }]);
+    expect(run.toasts).toEqual([
+      {
+        text: "Add a profile to Claude Code's profiles setting first",
+        tone: 'error',
+      },
+    ]);
   });
 
   it('recentFoldersRejects_toastsAndOpensNothing', async () => {

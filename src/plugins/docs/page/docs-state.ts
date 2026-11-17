@@ -880,7 +880,7 @@ const NO_VALUE = '—';
 
 // The field table a hook or plugin entry shows in place of a body; [] for
 // any other kind. A plugin's harness shows by its label in `harnesses`, else
-// its id.
+// `harnessLabel`'s stand-in label, else its id.
 export function detailFields(
   entry: IndexEntry,
   homeDir: string,

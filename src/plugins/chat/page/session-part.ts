@@ -32,8 +32,8 @@ interface DrawnFacts {
 
 // The Session facts, from chat's own state: the repo, the branch when there is
 // one, the folder with the home folder as `~`, the worktrees the agents wrote
-// in, the harness's id and its label in `harnesses` (the raw id when it is not
-// registered), and the model and effort when the session declares a model
+// in, the harness's id and its label in `harnesses` (when it is not
+// registered, `harnessLabel`'s stand-in label, else the id), and the model and effort when the session declares a model
 // control.
 export function sessionFactsOf(
   input: ComposerInput,

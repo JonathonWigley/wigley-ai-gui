@@ -353,6 +353,33 @@ const rows: Row[] = [
     disposedAnchors: [],
   },
   {
+    // The third put finds the slot drawing with default after the second's
+    // update threw; a `match` run then would log its throw.
+    name: 'slot drawing with default runs no renderer match',
+    shown: 'default',
+    renderers: [
+      {
+        kind: 'fake:card',
+        match: (input) => {
+          if (input.raw.length === 2) {
+            throw new Error('match ran');
+          }
+          return true;
+        },
+        build: updateThrows,
+      },
+    ],
+    puts: [
+      harness('fake:card', 'h1'),
+      { ...harness('fake:card', 'h1'), raw: ['second'] },
+      { ...harness('fake:card', 'h1'), raw: ['second', 'third'] },
+    ],
+    slots: [['chat-entry chat-raw@default']],
+    logs: ['layout entry renderer fake:card entry update failed: broken update'],
+    toasts: ['Chat entry renderer: fake:card entries drawn with default'],
+    disposedAnchors: [],
+  },
+  {
     name: 'renderer throws',
     shown: 'default',
     renderers: [

@@ -241,8 +241,8 @@ export interface SideSectionInput {
 
 // The session hub's Session facts: `folder` shows the home folder as `~`; `worktrees` are the names of the worktrees
 // the agents wrote in, empty for none; `harness` is the harness's id and `harnessLabel` its label (for a harness
-// no adapter registered, the shared `harnessLabel` helper's stand-in label, else the id); `branch` is null outside a git repo and `modelEffort` (`Opus 5 · high`) null
-// when the harness declares no model control.
+// no adapter registered, the shared `harnessLabel` helper's stand-in label, else the id); `branch` is null outside
+// a git repo and `modelEffort` (`Opus 5 · high`) null when the harness declares no model control.
 export interface SessionFactsInput {
   repo: string;
   branch: string | null;

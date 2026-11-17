@@ -2,6 +2,7 @@ import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
+import { harnessLabel } from '../../../shared/agent-harness-label';
 import { errorText } from '../../../shared/error-text';
 import {
   type RegisteredProfile,
@@ -159,10 +160,10 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     });
 
   // Logs and toasts that the harness has no profiles to start under, the
-  // toast naming it by its label, else its id.
+  // toast naming it by `harnessLabel`.
   const reportNoProfiles = (harness: string) => {
     log(`harness ${harness} has no profiles`);
-    const label = deps.harnesses().get(harness)?.label ?? harness;
+    const label = harnessLabel(deps.harnesses(), harness);
     deps.toast(`Add a profile to ${label}'s profiles setting first`, 'error');
   };
 

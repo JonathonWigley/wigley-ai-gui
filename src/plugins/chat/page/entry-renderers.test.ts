@@ -31,6 +31,8 @@ describe('entry renderers', () => {
     added: { label: string; match?: () => boolean }[];
     disposeAll?: boolean;
     kind: HarnessEntryKind;
+    // How many times the input is picked; 1 when not given.
+    picks?: number;
     expected: string | null;
     logs: string[];
   }>([
@@ -63,7 +65,7 @@ describe('entry renderers', () => {
       logs: [],
     },
     {
-      name: "the later's match throws",
+      name: "the later's match throws on every pick, logged once",
       added: [
         { label: 'a' },
         {
@@ -74,6 +76,7 @@ describe('entry renderers', () => {
         },
       ],
       kind: 'fake:card',
+      picks: 3,
       expected: 'a',
       logs: ['entry renderer fake:card match failed: boom'],
     },
@@ -94,7 +97,7 @@ describe('entry renderers', () => {
     },
   ])(
     'pick_Renderers_LatestMatchingFirst: $name',
-    ({ added, disposeAll, kind, expected, logs }) => {
+    ({ added, disposeAll, kind, picks = 1, expected, logs }) => {
       const logged: string[] = [];
       const renderers = createEntryRenderers((text) => logged.push(text));
       const labels = new Map<unknown, string>();
@@ -105,7 +108,10 @@ describe('entry renderers', () => {
         handles.forEach((handle) => handle.dispose());
       }
 
-      const picked = renderers.pick(harnessInput(kind));
+      let picked = renderers.pick(harnessInput(kind));
+      for (let pick = 1; pick < picks; pick++) {
+        picked = renderers.pick(harnessInput(kind));
+      }
 
       const build = picked?.layout.entries?.[kind];
       expect(picked === null ? null : labels.get(build)).toEqual(expected);
