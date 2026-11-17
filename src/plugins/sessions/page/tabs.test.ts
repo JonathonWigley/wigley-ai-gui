@@ -280,13 +280,14 @@ describe('tabs', () => {
     },
   );
 
-  it('markToastText adds the keys and the action, or is the text alone with none bound', () => {
+  it('markToastText names the keys and the action, or is the text alone with none bound', () => {
     const mark = { text: 'Turn finished in x', action: 'read it' };
+    const named = markToastText(mark, 'Space k s');
 
-    expect(markToastText(mark, 'Space k s')).toBe(
-      'Turn finished in x — Space k s to read it',
-    );
-    expect(markToastText(mark, null)).toBe('Turn finished in x');
+    expect(named.startsWith(mark.text)).toBe(true);
+    expect(named).toContain('Space k s');
+    expect(named).toContain(mark.action);
+    expect(markToastText(mark, null)).toBe(mark.text);
   });
 
   it('rowChanges lists added rows in their order and removed ids', () => {

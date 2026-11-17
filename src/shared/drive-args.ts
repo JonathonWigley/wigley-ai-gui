@@ -1,4 +1,4 @@
-import { isJsonObject, type JsonObject } from './json';
+import { isJsonObject, isStringArray, type JsonObject } from './json';
 
 // Readers for a drive command's or drive action's args. Each throws naming
 // the field when the value there is of the wrong type; an `optional` reader
@@ -95,9 +95,7 @@ export function nullableNumberOr(
 
 export function stringList(args: JsonObject, name: string): string[] {
   const value = args[name];
-  const isStringList =
-    Array.isArray(value) && value.every((item) => typeof item === 'string');
-  if (!isStringList) {
+  if (!isStringArray(value)) {
     throw new Error(`${name} must be a list of strings`);
   }
   return value;
