@@ -9,6 +9,7 @@ import {
 import {
   asFake,
   type FakeElement,
+  type FocusFakeDocument,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import {
@@ -141,7 +142,8 @@ interface BoxEditor {
 }
 
 // `editors`' host, recording each box editor it makes in `boxEditors` and
-// each focus of one in `boxFocuses`.
+// each focus of one in `boxFocuses`; a box editor's focus and blur move the
+// fake DOM focus to and from its frame, as a real editor's content does.
 function recordingHost(
   editors: ReturnType<typeof countingEditors>,
   boxEditors: BoxEditor[],
@@ -161,7 +163,12 @@ function recordingHost(
         ...editor,
         focus(options) {
           boxFocuses.push(made);
+          asFocusable(made.frame).focus();
           editor.focus(options);
+        },
+        blur() {
+          asFocusable(made.frame).blur();
+          editor.blur();
         },
         destroy() {
           made.isDestroyed = true;
@@ -266,10 +273,17 @@ const messagesOf = (harness: ReturnType<typeof startPracticePage>['harness']) =>
 const placeOf = (harness: ReturnType<typeof startPracticePage>['harness']) =>
   harness.state.read(practicePlaceSlot, 'test').get();
 
+const asFocusable = (target: FakeElement) =>
+  target as unknown as { focus(): void; blur(): void };
+
+// The fake document's focused element.
+const focusedElement = () =>
+  (document as unknown as FocusFakeDocument).activeElement;
+
 // Focuses `target` as a click does, its `focusin` reaching it and each
 // element over it.
 function focusIn(target: FakeElement) {
-  (target as unknown as { focus(): void }).focus();
+  asFocusable(target).focus();
   for (let node: FakeElement | null = target; node; node = node.parentNode) {
     node.fire('focusin', { target });
   }
@@ -837,6 +851,45 @@ describe('practicePagePart', () => {
     expect(notes.isDestroyed).toBe(false);
     expect(boxFocuses.length).toBeGreaterThan(focusesBefore);
     expect(boxFocuses.at(-1)).toBe(notes);
+  });
+
+  // A layout change leaves the DOM focus where the keys were: an open dialog
+  // and a focused box keep it, and a pane the redraw moved takes it back.
+  it.each<{
+    case: string;
+    act: (
+      commands: Awaited<ReturnType<typeof startWithProblemOpen>>['commands'],
+    ) => void;
+  }>([
+    {
+      case: 'ImportBoxInput',
+      act: (commands) => commands.importStart({ arg: undefined }),
+    },
+    {
+      case: 'NotesBox',
+      act: (commands) => {
+        commands.showTab({ arg: 'notes' });
+        commands.editBox({ arg: undefined });
+      },
+    },
+    { case: 'ProblemPaneBody', act: () => undefined },
+    {
+      case: 'FilterBox',
+      act: (commands) => commands.filter({ arg: undefined }),
+    },
+  ])('layoutChange_FocusOn$case_KeepsIt', async ({ act }) => {
+    const { harness, commands } = await startWithProblemOpen();
+    act(commands);
+    const focused = focusedElement();
+
+    harness.showLayouts(
+      withUser(defaultLayout, defaultLayout) as Parameters<
+        typeof harness.showLayouts
+      >[0],
+    );
+
+    expect(focused).not.toBeNull();
+    expect(focusedElement()).toBe(focused);
   });
 
   it('layoutChange_UserNotesTabPlacingTheBoxTwice_DrawsWithDefault', async () => {

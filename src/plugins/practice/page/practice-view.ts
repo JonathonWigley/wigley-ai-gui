@@ -207,7 +207,9 @@ export interface PracticeView {
   // and focus leaving `interviewer` tells the pane first.
   setFocus(focus: PracticeFocus): void;
   // Draws the list pane, the rows and the column's part again with `shown`,
-  // keeping an open filter, the selection and the focus.
+  // keeping an open filter, the selection and the focus: an open dialog or
+  // a focused box keeps it, and focus the redraw dropped goes back to the
+  // pane holding the keys.
   setLayouts(shown: ShownLayouts<PracticeLayout>): void;
   // Disposes every part draw the view keeps.
   dispose(): void;
@@ -915,8 +917,13 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       drawMain(true);
       workspace.setLayouts(next);
       importBox.redraw();
-      render(true);
-      if (filterScope !== null) {
+      // The import box and the workspace's boxes keep their focus; focus
+      // the redraw dropped goes back to the pane holding the keys.
+      const isFocusLost =
+        document.activeElement === null ||
+        document.activeElement === document.body;
+      render(isFocusLost);
+      if (isFocusLost && filterScope !== null) {
         filterBox.focus();
       }
     },
