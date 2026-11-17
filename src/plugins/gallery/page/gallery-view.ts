@@ -556,7 +556,7 @@ function waveformCells(): SampleCell[][] {
   return [
     [
       cell(waveform(peaks), 'Peaks'),
-      cell(waveform(new Array<number>(32).fill(0)), 'Silence'),
+      cell(waveform(Array.from({ length: 32 }, () => 0)), 'Silence'),
       cell(waveform(null), 'Loading'),
     ],
   ];

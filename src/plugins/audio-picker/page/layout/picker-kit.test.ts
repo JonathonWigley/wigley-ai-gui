@@ -146,11 +146,11 @@ describe('picker kit', () => {
         peaks,
         recordingRollback().rollback,
       );
-      const parent = asFake(newParent());
+      const parent = newParent();
 
       const waveform = asFake(kit.waveform(parent));
 
-      expect(parent.children.at(-1)).toBe(waveform);
+      expect(asFake(parent).children.at(-1)).toBe(waveform);
       expect(waveform.classList.contains('ui-waveform')).toBe(true);
       expect(waveform.classList.contains('audio-picker-waveform')).toBe(true);
       expect(waveform.classList.contains('is-loading')).toBe(isLoading);
