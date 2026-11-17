@@ -3,11 +3,7 @@ import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import type { PartPick } from '../../../shared/page/layout-host/draw-part';
 import type { ChatEntryRenderer } from '../contract';
-import type {
-  AnyEntryKind,
-  ChatLayout,
-  EntryInput,
-} from '../layouts/layout';
+import type { AnyEntryKind, ChatLayout, EntryInput } from '../layouts/layout';
 
 // The name a renderer's draw goes by: its root's `data-layout`, and its
 // failure's log line (`layout entry renderer <kind> entry failed: …`).

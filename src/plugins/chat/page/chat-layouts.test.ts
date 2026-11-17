@@ -39,7 +39,11 @@ describe('chat layouts', () => {
   );
 
   it.each([
-    { case: 'names it', mine: { entries: { 'fake:card': builder } }, expected: 'mine' },
+    {
+      case: 'names it',
+      mine: { entries: { 'fake:card': builder } },
+      expected: 'mine',
+    },
     { case: 'leaves it out', mine: { entries: {} }, expected: 'default' },
   ] as { case: string; mine: ChatLayout; expected: string }[])(
     'pickEntry_HarnessKindTheUserNames_PicksTheUserLayout ($case)',

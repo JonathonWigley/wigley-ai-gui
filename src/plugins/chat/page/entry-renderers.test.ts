@@ -34,7 +34,13 @@ describe('entry renderers', () => {
     expected: string | null;
     logs: string[];
   }>([
-    { name: 'none added', added: [], kind: 'fake:card', expected: null, logs: [] },
+    {
+      name: 'none added',
+      added: [],
+      kind: 'fake:card',
+      expected: null,
+      logs: [],
+    },
     {
       name: 'one renderer of the kind',
       added: [{ label: 'a' }],

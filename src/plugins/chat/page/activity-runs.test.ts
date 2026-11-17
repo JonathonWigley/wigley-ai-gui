@@ -74,11 +74,7 @@ function entries(...specs: string[]): ChatEntry[] {
   return specs.map((spec) => {
     const [kindAndId, at] = spec.split('@');
     const [kind, id] = kindAndId.split(':');
-    return entry(
-      kind as EntryKind,
-      id,
-      at === undefined ? 1000 : Number(at),
-    );
+    return entry(kind as EntryKind, id, at === undefined ? 1000 : Number(at));
   });
 }
 

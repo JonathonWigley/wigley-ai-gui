@@ -1544,7 +1544,9 @@ function drawEntry(
   const drawn = buildEntry(slot, entry, input, deps, draw);
   const { name } = picked.pick;
   const source =
-    name === ENTRY_RENDERER_NAME ? 'Chat entry renderer' : `Chat layout ${name}`;
+    name === ENTRY_RENDERER_NAME
+      ? 'Chat entry renderer'
+      : `Chat layout ${name}`;
   const isFallback = name !== DEFAULT_ENTRY_PICK.name && drawn.isDefaultView;
   if (drawn.isBareLine) {
     toastKindOnce(

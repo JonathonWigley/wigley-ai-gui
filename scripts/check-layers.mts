@@ -94,6 +94,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its contract's records hold the follow-up file module's types.
   backlog: { contract: { layers: ['src/shared/followups'] } },
   chat: {
+    // Its contract names the layouts' entry types, for `addEntryRenderer`.
+    contract: { layers: ['src/plugins/chat/layouts'] },
     // Its main joins paths with `node:path`.
     main: NODE_ONLY,
     sublayers: {

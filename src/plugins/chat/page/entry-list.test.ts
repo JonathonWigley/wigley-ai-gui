@@ -47,7 +47,7 @@ type AnyBuilder = (
   parent: HTMLElement,
   input: EntryInput<AnyEntryKind>,
   kit: ChatKit,
-) => EntryView;
+) => EntryView<AnyEntryKind>;
 
 const KINDS: EntryKind[] = [
   'user',

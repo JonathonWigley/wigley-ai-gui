@@ -173,7 +173,9 @@ function draw<K extends EntryKind>(
   kit: ChatKit,
 ): EntryView<K> {
   const parent = new FakeElement('li');
-  const builder = layout.entries[input.kind] as AnyBuilder;
+  // `EntryInput<K>` is conditional over the harness kinds, so its `kind` reads
+  // wider than `K`.
+  const builder = layout.entries[input.kind as EntryKind] as AnyBuilder;
   const view = builder(asHtml(parent), input, kit);
   expect(parent.children).toEqual([asFake(view.element)]);
   return view as EntryView<K>;
