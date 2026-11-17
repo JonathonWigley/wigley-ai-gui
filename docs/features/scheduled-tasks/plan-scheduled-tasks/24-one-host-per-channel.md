@@ -1,6 +1,6 @@
 # 24 — One host per channel: a listen lock, and a shutdown that touches only its own record
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 07
 Rung: deep · concurrency between two host processes racing for one Unix socket, over the host's start and shutdown
@@ -88,3 +88,4 @@ Commit:    one commit for the group: "Session host: one listener per channel thr
 
 ## Proof
 
+Commit 1c8af15c3 · proof: diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4 · concerns: pid reuse after a kill -9 can lock a channel out until that process ends (lock survives reboot); put-back branch untested; stale-socket row is the one that catches the old bug

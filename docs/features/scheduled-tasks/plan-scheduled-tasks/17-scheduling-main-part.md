@@ -1,6 +1,6 @@
 # 17 — Scheduling main part
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05, 06, 10, 11, 12, 13, 14, 15
 Plan: [plan.md](plan.md)
@@ -336,3 +336,5 @@ checks are task 21's.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 5042267b0 · proof: diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4 · concerns: quit may wait on an in-flight adopt (stop order unchecked); adoptRun unused until 19

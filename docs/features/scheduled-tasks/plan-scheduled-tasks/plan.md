@@ -921,9 +921,9 @@ is the task's name, or its id when the task is gone.
 - [x] [Session list fixes](23-session-list-fixes.md) — after 05, 09
 
 ### Wave 4
-- [ ] [Scheduling main part](17-scheduling-main-part.md) — after 05, 06, 10, 11, 12, 13, 14, 15
-- [ ] [Login-start adapters](18-login-start-adapters.md) — after 01, 06, 08, 13
-- [ ] [One host per channel](24-one-host-per-channel.md) — after 02, 07
+- [x] [Scheduling main part](17-scheduling-main-part.md) — after 05, 06, 10, 11, 12, 13, 14, 15
+- [x] [Login-start adapters](18-login-start-adapters.md) — after 01, 06, 08, 13
+- [x] [One host per channel](24-one-host-per-channel.md) — after 02, 07
 
 ### Wave 5
 - [ ] [Scheduling self-test](19-scheduling-selftest.md) — after 12, 16, 17
@@ -964,6 +964,9 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - 15 · hard · 759c6353d · diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: remove's description makes no claim about a run in progress
 - 16 · hard · 4a75e0fc9 · diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: section cleanup done by both the part and sessions' tracking (harmless)
 - 23 · hard; compile fix 29482b015 · fb012319f · diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: edited agent-form-drive.test.ts and sessions-view-fakes.ts for the new required claimed member; a deadline setting change now reaches live sessions
+- 17 · hard; compile fix a2e4f76f4 · 5042267b0 · diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4 · concerns: quit may wait on an in-flight adopt (stop order unchecked); adoptRun unused until 19
+- 18 · hard · aea7ed142 · diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4; app fits LoginItems type · concerns: login entry exits before ready: task 21 checks exit 0 and no Dock icon
+- 24 · deep · 1c8af15c3 · diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4 · concerns: pid reuse after a kill -9 can lock a channel out until that process ends (lock survives reboot); put-back branch untested; stale-socket row is the one that catches the old bug
 ### Contract changes
 ### Rulings
 - Waves keep 05 beside 04 and 15 beside 14: both dependencies are on plan-pinned formats or injected deps, with no code wait — 05 writes offline.json to the plan's shape, 15 reaches projects through a dep 17 fills — if wrong, a worker finds a missing name and reports BLOCKED · lead
@@ -977,5 +980,7 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - Task store runs watch reads, onMissed reads, load and every mutation on one queue — its own write then emits one change — none · group 11 · group 11
 - setPending while adopt waits on its drain only stores the list; adopt sends the latest once the drain settles — two hosts never hold the queue at once — a list set mid-drain goes out late · group 13 · group 13
 - An update giving folder or project without profile takes the new project's own profile, else keeps the old — follows schedule_task's default — a project switch can keep a profile the user did not expect · group 15 · group 15
+- No plan is sent until a listRuns read has succeeded; a failed read turns sending off until the 10 s retry succeeds — runs the host fired unseen must be adopted before re-planning — a host that cannot list keeps its old queue · group 17 · group 17
+- After chat.restored(), a running entry is finished when its row is not open, as well as when its session reads not running — a closed row cannot finish later — none · group 17 · group 17
 ### Review rounds
 ### Test gate

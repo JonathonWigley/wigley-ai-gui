@@ -1,6 +1,6 @@
 # 18 — Login-start adapters
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 06, 08, 13
 Plan: [plan.md](plan.md)
@@ -188,3 +188,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit aea7ed142 · proof: diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4; app fits LoginItems type · concerns: login entry exits before ready: task 21 checks exit 0 and no Dock icon

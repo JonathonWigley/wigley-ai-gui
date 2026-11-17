@@ -1,6 +1,6 @@
 # 19 — Scheduling self-test
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 12 (drives 12's mode), 16 (drives 16's section), 17
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 25 — Hosted turn state: busy from open messages, a main turn and background work
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 02, 07, 08, 13, 24
 Rung: deep · changes the host's busy read, which the keep window, the drain, the exit rule and `skipWhileBusy` all rest on, and the `IdleRule` wire shape
