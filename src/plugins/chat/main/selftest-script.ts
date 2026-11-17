@@ -119,6 +119,10 @@ interface HarnessReturnRun {
 interface ChatSelfTestResult {
   // The self-test project's folder.
   selftest: string;
+  // The harness id of the self-test project's row as it opened; null when chat
+  // held no such row. Read then, since the steps close the row before problems
+  // reads the run.
+  harness: string | null;
   // The fixture's permission decision; null when no fake process was found to
   // ask it through.
   permission: PermissionDecision | null;
@@ -271,11 +275,13 @@ const RESTING_SESSION_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
 
-// A host id: the self-test's sessions carry random ones.
-const HOST_ID = '[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}';
+// A host id the fake harness mints for a start with none
+// (`FakeAgentProcessRecord.sessionId`), its count depending on the starts
+// before it.
+const HOST_ID = 'fake-session-[0-9]+';
 
-// The notes page's line for its row moving to the random host id a clear
-// gives it.
+// The notes page's line for its row moving to the new host id a clear's fresh
+// process reports.
 const NOTES_MOVED_TO_NEW_HOST = new RegExp(
   `^\\[notes\\] session moved to ${HOST_ID}$`,
 );
@@ -1284,10 +1290,10 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'interrupt' },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
-  { method: 'send', text: 'row now', imageCount: 0 },
+  { method: 'send', text: 'row now', imageCount: 0, now: true },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
-  { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
-  { method: 'send', text: 'box now', imageCount: 0 },
+  { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0, now: true },
+  { method: 'send', text: 'box now', imageCount: 0, now: true },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'interrupt' },
   { method: 'send', text: 'pending one\npending two', imageCount: 0 },
@@ -1354,13 +1360,10 @@ function selftestProcess(
   return records.at(-1) ?? null;
 }
 
-// `harness` is the harness id of the self-test project's row; null when chat
-// holds none.
 function fixtureProblems(
-  { permission, round }: ChatSelfTestResult,
+  { harness, permission, round }: ChatSelfTestResult,
   process: FakeAgentProcessRecord | null,
   projectDir: string,
-  harness: string | null,
 ): string[] {
   const problems: string[] = [];
   if (harness !== FAKE_HARNESS_ID) {
@@ -1661,6 +1664,8 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       profile: 'work',
     });
     const id = chat.start({ projectDir: selftest, harness, profile: 'work' });
+    const rowHarness =
+      chat.sessions().find((held) => held.sessionId === id)?.harness ?? null;
     await attachImages(imagesId);
     sessions.activate(id);
     const process = selftestProcess(marks, selftest, false);
@@ -1679,7 +1684,13 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
           });
     return permission.then(async (decision): Promise<ChatSelfTestResult> => {
       if (process === null) {
-        return { selftest, permission: decision, round: null, harnessReturn };
+        return {
+          selftest,
+          harness: rowHarness,
+          permission: decision,
+          round: null,
+          harnessReturn,
+        };
       }
       const relay = sessions.connect({
         sessionId: null,
@@ -1693,7 +1704,13 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         chatRound(run),
         toolCallContext(),
       );
-      return { selftest, permission: decision, round, harnessReturn };
+      return {
+        selftest,
+        harness: rowHarness,
+        permission: decision,
+        round,
+        harnessReturn,
+      };
     });
   }
 
@@ -1704,8 +1721,6 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         result,
         selftestProcess(marks, selftest, false),
         selftest,
-        chat.sessions().find((held) => held.projectDir === selftest)?.harness ??
-          null,
       ),
       ...resumedProblems(selftestProcess(marks, selftest, true), selftest),
       ...pastSessionProblems(marks, selftest),
