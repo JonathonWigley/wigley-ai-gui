@@ -1,6 +1,6 @@
 # 15 — Chat follows a harness leaving and returning
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 12 · Depends on: 14
 Plan: [plan.md](plan.md)
@@ -212,3 +212,5 @@ Done when: `npm run lint` and `npm run typecheck` pass; the test gate runs the t
 Commit: one commit. No follow-up to remove and no master-plan box to tick (settled in round 2).
 
 ## Proof
+
+Commit f7b3afb8d · proof: Diff read: harnessLeft, harnessReturned, harnessLabelOf, FakeHarnessIdentity and createFakeAgentHarness identity param present; typecheck and lint pass first time · concerns: resume's prefix match (09) still misses new-scheme process ids — return path uses settleUnheld's exact id match instead; a row whose harness leaves before its host id is reported fails its re-attach on return (attach rejects a null sessionId); self-test history read adds a harmless error notice to the return fixture row; hostSessionIdSettled waiters still pending after detachAll
