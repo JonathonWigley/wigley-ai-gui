@@ -595,6 +595,11 @@ because the earlier items rewrite many of these tests anyway.
   startup loop (`src/renderer/renderer.ts`) skips Y while X is withheld. When X later starts, main's
   `pageStart([X])` names only X, so Y's page part stays unstarted. No built-in has such a dependency today.
   Pre-existing: the runtime loader did not introduce it.
+- **A confirm prompt's scrim and anchors outlive the part that opened it** — *agent-ready*: `ConfirmPrompt` has no
+  `dispose`, and primer discards the Disposable its overlay contribution returns
+  (`src/plugins/primer/page/primer-view.ts`, the cancel prompt). When the primer part stops with the prompt open, the scrim and the Keep/Cancel key anchors stay.
+  Give `ConfirmPrompt` a `dispose` and have each of its 4 callers (forms among them) dispose it, and the overlay
+  contribution, with the part. Pre-existing: found by the Lane L review (#30).
 - **A reload can stop a main part as a `restart` that never restarts** — *needs a feature plan*: `reloadRunning`
   (`src/main/plugins/plugin-switch.ts`) picks each stop's `PartStop` before it knows whether a start follows.
   `removeMain(id, 'restart')` stops the old main part as a `restart` even when the new version has no main part. The
