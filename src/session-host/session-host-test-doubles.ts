@@ -23,6 +23,9 @@ export function spawnRequest(id: string): HostedSpawn {
     args: [],
     cwd: '/work',
     env: {},
+    inheritEnv: false,
+    unsetEnv: [],
+    stdin: [],
     idleRule: IDLE_RULE,
     droppedOutKeys: [],
   };

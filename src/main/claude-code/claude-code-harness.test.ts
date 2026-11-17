@@ -25,6 +25,7 @@ import {
 } from '../../shared/fake-session-host';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
+import { NESTED_SESSION_ENV } from '../../shared/session-env';
 import type { Files } from '../../contracts/files';
 import type { Paths } from '../../contracts/paths';
 import {
@@ -34,6 +35,7 @@ import {
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, userMessage } from './claude-controls';
+import { claudeEnv, claudeLaunch } from './claude-launch';
 import {
   appCommandUuid,
   createSessionFoldState,
@@ -3246,6 +3248,13 @@ describe('createClaudeCodeHarness on the session host', () => {
       ],
       cwd: '/proj',
       env: { WIGLEY_SESSION_ROW: 'row-1' },
+      inheritEnv: false,
+      unsetEnv: [
+        ...NESTED_SESSION_ENV,
+        'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS',
+        'WIGLEY_SESSION_ROW',
+      ],
+      stdin: [],
       idleRule: {
         key: 'type',
         value: 'result',
@@ -3261,6 +3270,53 @@ describe('createClaudeCodeHarness on the session host', () => {
       JSON.stringify(initializeRequest('wigley-1')),
     );
   });
+
+  it.each([
+    { label: 'no profile', profileDir: null, unsetsConfigDir: false },
+    {
+      label: 'the default folder',
+      profileDir: '~/.claude',
+      unsetsConfigDir: true,
+    },
+    { label: 'another folder', profileDir: '/p', unsetsConfigDir: false },
+  ])(
+    'claudeLaunch_UnsetEnv_NamesWhatClaudeEnvRemoves: $label',
+    ({ profileDir, unsetsConfigDir }) => {
+      const appNames = [
+        'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS',
+        'WIGLEY_SESSION_ROW',
+      ];
+      const everyName = [
+        ...NESTED_SESSION_ENV,
+        ...appNames,
+        'CLAUDE_CONFIG_DIR',
+      ];
+      const inherited = Object.fromEntries(
+        everyName.map((name) => [name, 'inherited']),
+      );
+
+      const launch = claudeLaunch(
+        { ...request, profileDir, idleCompactMinTokens: 5000 },
+        'tool',
+        inherited,
+        '/h',
+        posixPaths,
+      );
+      const cleaned = claudeEnv(inherited, profileDir, '/h', posixPaths);
+
+      expect(launch.unsetEnv).toEqual([
+        ...NESTED_SESSION_ENV,
+        ...appNames,
+        ...(unsetsConfigDir ? ['CLAUDE_CONFIG_DIR'] : []),
+      ]);
+      expect(launch.unsetEnv.filter((name) => name in cleaned)).toEqual([]);
+      expect(launch.unsetEnv.filter((name) => name in launch.env)).toEqual(
+        appNames,
+      );
+      expect(launch.env.WIGLEY_SESSION_ROW).toBe('row-1');
+      expect(launch.env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS).toBe('5000');
+    },
+  );
 
   it('idleRule_LinesBetweenTurns_AreNotBusy', () => {
     // `user` on stdout: a `set_model` acknowledgement prints one with no turn.

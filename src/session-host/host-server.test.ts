@@ -84,29 +84,33 @@ function tempFolder() {
 function host(
   existing?: { folder: string; channel: string },
   endLeftovers: () => Promise<void> = () => Promise.resolve(),
+  env: NodeJS.ProcessEnv = {},
 ) {
   const { folder, channel } = existing ?? tempFolder();
   const time = manualTime();
   const spawned: FakeChild[] = [];
+  const childEnvs: NodeJS.ProcessEnv[] = [];
   const exits: number[] = [];
   const started = startSessionHost({
     folder,
     channel,
     pid: 4242,
     children: {
-      spawn: () => {
+      spawn: (_command, _args, options) => {
         const fake = fakeChild();
         spawned.push(fake);
+        childEnvs.push(options.env);
         return fake.child;
       },
       endLeftovers,
       killAll: () => {},
     },
+    env,
     clock: time.clock,
     timers: time.timers,
     exit: (code) => exits.push(code),
   });
-  return { folder, channel, time, spawned, exits, started };
+  return { folder, channel, time, spawned, childEnvs, exits, started };
 }
 
 type Host = ReturnType<typeof host>;
@@ -129,8 +133,9 @@ async function stopHost(running: Host) {
 async function runningHost(
   existing?: { folder: string; channel: string },
   endLeftovers?: () => Promise<void>,
+  env?: NodeJS.ProcessEnv,
 ) {
-  const running = host(existing, endLeftovers);
+  const running = host(existing, endLeftovers, env);
   cleanups.push(() => stopHost(running));
   await vi.waitFor(() =>
     expect(
@@ -277,6 +282,21 @@ describe('host protocol', () => {
       }
     },
   );
+
+  it('spawn_HostEnv_ReachesTheProcessTable', async () => {
+    const running = await runningHost(undefined, undefined, {
+      A: '1',
+      ELECTRON_RUN_AS_NODE: '1',
+    });
+    const connection = await client(running.channel);
+
+    connection.send({
+      type: 'spawn',
+      request: { ...spawnRequest('a'), inheritEnv: true },
+    });
+
+    await vi.waitFor(() => expect(running.childEnvs).toEqual([{ A: '1' }]));
+  });
 
   it('spawned_GoesToTheSpawnerOnly_AndTheSubscribeReplyCarriesThePid', async () => {
     const running = await runningHost();

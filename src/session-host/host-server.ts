@@ -65,6 +65,8 @@ export interface SessionHostDeps {
   channel: string;
   pid: number;
   children: HostChildren;
+  // The host's own environment, which a prepared run's child inherits under its overlay.
+  env: NodeJS.ProcessEnv;
   clock: Clock;
   timers: Timers;
   exit(code: number): void;
@@ -180,6 +182,7 @@ async function sweepLogs(
 
 interface ConnectionsDeps {
   spawn: HostSpawn;
+  env: NodeJS.ProcessEnv;
   clock: Clock;
   timers: Timers;
   logsFolder: string;
@@ -197,6 +200,7 @@ function createConnections(deps: ConnectionsDeps) {
   const heldMessages: (() => void)[] = [];
   const table = createProcessTable({
     spawn: deps.spawn,
+    env: deps.env,
     clock: deps.clock,
     timers: deps.timers,
     logsFolder: deps.logsFolder,
@@ -368,6 +372,7 @@ export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
   let shuttingDown = false;
   const connections = createConnections({
     spawn: deps.children.spawn,
+    env: deps.env,
     clock,
     timers,
     logsFolder,

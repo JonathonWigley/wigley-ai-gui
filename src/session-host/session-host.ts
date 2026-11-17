@@ -40,6 +40,7 @@ void startSessionHost({
   channel,
   pid: process.pid,
   children,
+  env: process.env,
   clock,
   timers,
   exit: (code) => process.exit(code),

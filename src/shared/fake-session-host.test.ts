@@ -17,6 +17,9 @@ function spawnRequest(id: string): HostedSpawn {
     args: [],
     cwd: '/p',
     env: {},
+    inheritEnv: false,
+    unsetEnv: [],
+    stdin: [],
     idleRule: {
       key: 'type',
       value: 'result',
@@ -47,16 +50,20 @@ describe('createFakeSessionHost', () => {
     const host = createFakeSessionHost(clock);
     const heard = recordingEvents();
 
-    const process = host.spawn(spawnRequest('a'), heard.events);
+    const process = host.spawn(
+      { ...spawnRequest('a'), stdin: ['opening'] },
+      heard.events,
+    );
     process.write('hi');
     host.output('a', 'out', 'ok');
 
     expect(host.processes[0].log).toEqual([
-      { seq: 1, dir: 'in', at: 1000, text: 'hi' },
-      { seq: 2, dir: 'out', at: 1000, text: 'ok' },
+      { seq: 1, dir: 'in', at: 1000, text: 'opening' },
+      { seq: 2, dir: 'in', at: 1000, text: 'hi' },
+      { seq: 3, dir: 'out', at: 1000, text: 'ok' },
     ]);
-    expect(heard.lines.map((line) => line.seq)).toEqual([2]);
-    expect(host.processes[0].writes).toEqual(['hi']);
+    expect(heard.lines.map((line) => line.seq)).toEqual([3]);
+    expect(host.processes[0].writes).toEqual(['opening', 'hi']);
   });
 
   it('output_AfterAddedLog_ContinuesPastItsLastSeq', () => {

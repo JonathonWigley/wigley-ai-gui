@@ -11,7 +11,8 @@ import type {
 } from '../contracts/session-host';
 
 // An in-memory `SessionHost` for the tests. `output`, `close` and `spawned` call a record's
-// events at once; `spawn` and `attach` call nothing during the call.
+// events at once; `spawn` and `attach` call nothing during the call. `spawn` takes the request's
+// `stdin` lines as writes, as the real host does.
 
 export interface FakeHostedProcessRecord {
   request: HostedSpawn | null; // null for a process added with addRunning
@@ -159,6 +160,10 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
         closed: null,
       };
       processes.push(record);
+      for (const line of request.stdin) {
+        record.writes.push(line);
+        appendLine(record, 'in', line, clock);
+      }
       if (nextSpawnError !== null) {
         const error = nextSpawnError;
         nextSpawnError = null;

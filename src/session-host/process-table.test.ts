@@ -35,7 +35,11 @@ afterEach(() => {
   }
 });
 
-function setUp(start = 0, spawnOverride?: HostSpawn) {
+function setUp(
+  start = 0,
+  spawnOverride?: HostSpawn,
+  env: NodeJS.ProcessEnv = {},
+) {
   const folder = mkdtempSync(path.join(tmpdir(), 'process-table-'));
   folders.push(folder);
   const logsFolder = path.join(folder, 'logs');
@@ -50,6 +54,7 @@ function setUp(start = 0, spawnOverride?: HostSpawn) {
   const diagnosticLines: string[] = [];
   const table = createProcessTable({
     spawn: spawnOverride ?? spawn,
+    env,
     clock: time.clock,
     timers: time.timers,
     logsFolder,
@@ -154,6 +159,126 @@ describe('process table', () => {
       const logged = JSON.parse(logRecords('a.jsonl')) as { text: string };
       expect(logged.text).toBe(delivered);
       expect(lines.map((line) => line.text)).toEqual([delivered]);
+    },
+  );
+
+  const HOST_ENV = {
+    KEEP: 'a',
+    DROP: 'b',
+    ELECTRON_RUN_AS_NODE: '1',
+    BOTH: 'host',
+  };
+
+  it.each([
+    {
+      label: 'unset names under an overlay',
+      hostEnv: HOST_ENV,
+      inheritEnv: true,
+      unsetEnv: ['DROP', 'BOTH'],
+      env: { BOTH: 'spawn', NEW: 'c' },
+      childEnv: { KEEP: 'a', BOTH: 'spawn', NEW: 'c' },
+    },
+    {
+      label: 'no unset names and an empty overlay',
+      hostEnv: HOST_ENV,
+      inheritEnv: true,
+      unsetEnv: [],
+      env: {},
+      childEnv: { KEEP: 'a', DROP: 'b', BOTH: 'host' },
+    },
+    {
+      label: 'an overlay that sets ELECTRON_RUN_AS_NODE',
+      hostEnv: HOST_ENV,
+      inheritEnv: true,
+      unsetEnv: [],
+      env: { ELECTRON_RUN_AS_NODE: '2' },
+      childEnv: {
+        KEEP: 'a',
+        DROP: 'b',
+        BOTH: 'host',
+        ELECTRON_RUN_AS_NODE: '2',
+      },
+    },
+    {
+      label: 'a host value undefined',
+      hostEnv: { KEEP: 'a', GONE: undefined },
+      inheritEnv: true,
+      unsetEnv: [],
+      env: { NEW: 'c' },
+      childEnv: { KEEP: 'a', NEW: 'c' },
+    },
+    {
+      label: 'a live start',
+      hostEnv: HOST_ENV,
+      inheritEnv: false,
+      unsetEnv: ['DROP'],
+      env: { NEW: 'c' },
+      childEnv: { NEW: 'c' },
+    },
+  ])(
+    'spawn_ChildEnv_HostEnvLessUnsetNamesUnderTheOverlay: $label',
+    ({ hostEnv, inheritEnv, unsetEnv, env, childEnv }) => {
+      const childEnvs: NodeJS.ProcessEnv[] = [];
+      const { table } = setUp(
+        0,
+        (_command, _args, options) => {
+          childEnvs.push(options.env);
+          return fakeChild().child;
+        },
+        hostEnv,
+      );
+
+      table.spawn(
+        { ...spawnRequest('a'), inheritEnv, unsetEnv, env },
+        recordingSubscriber().subscriber,
+      );
+
+      expect(childEnvs).toStrictEqual([childEnv]);
+    },
+  );
+
+  it.each([
+    {
+      label: 'a child that ran',
+      ran: true,
+      logged: [
+        { seq: 1, dir: 'in', at: 0, text: USER },
+        { seq: 2, dir: 'in', at: 0, text: 'x' },
+      ],
+      stdinText: `${USER}\nx\n`,
+      busy: true,
+    },
+    {
+      label: 'a child that never ran',
+      ran: false,
+      logged: [],
+      stdinText: '',
+      busy: false,
+    },
+  ])(
+    'spawn_StdinLines_LoggedAsInThenWrittenInOrder: $label',
+    async ({ ran, logged, stdinText, busy }) => {
+      const fake = fakeChild(ran);
+      const { table, time, logRecords } = setUp(0, () => fake.child);
+
+      table.spawn(
+        { ...spawnRequest('a'), stdin: [USER, 'x'] },
+        recordingSubscriber().subscriber,
+      );
+      const written: string[] = [];
+      fake.stdin.on('data', (chunk: Buffer) =>
+        written.push(chunk.toString()),
+      );
+      await streamsDelivered();
+
+      const records = logRecords('a.jsonl')
+        .split('\n')
+        .filter(Boolean)
+        .map((record) => JSON.parse(record) as unknown);
+      expect(records).toEqual(logged);
+      expect(written.join('')).toBe(stdinText);
+      time.advanceTo(2 * HOUR_MS);
+      expect(fake.stdin.writableEnded).toBe(!busy);
     },
   );
 
@@ -653,6 +778,30 @@ describe('process table', () => {
       spawnFails: () => fakeChild().child,
       request: { ...spawnRequest('a'), droppedOutKeys: [[]] },
       error: 'dropped keys',
+    },
+    {
+      label: 'an unset name is not a string',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), unsetEnv: [1] as never },
+      error: 'process a has no well-formed unset names',
+    },
+    {
+      label: 'the stdin lines are not an array',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), stdin: 'x' as never },
+      error: 'process a has no well-formed stdin lines',
+    },
+    {
+      label: 'an env value is not a string',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), env: { A: 1 } as never },
+      error: 'process a has no well-formed env',
+    },
+    {
+      label: 'inheritEnv is missing',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), inheritEnv: undefined as never },
+      error: 'process a has no well-formed inheritEnv',
     },
   ])(
     'spawn_Throws_ClosesWithTheMessageAndKeepsNoEntry: $label',

@@ -22,7 +22,17 @@ export interface HostedSpawn {
   command: string;
   args: readonly string[];
   cwd: string;
+  // With `inheritEnv` true: laid over the host's own environment, after the host drops `ELECTRON_RUN_AS_NODE` and
+  // every name in `unsetEnv` from it; a name in both `unsetEnv` and `env` takes `env`'s value. With `inheritEnv`
+  // false: the child's whole environment.
   env: Readonly<Record<string, string>>;
+  // True for a spawn the host starts later (a prepared run), whose child takes the host's environment under `env`.
+  // False for a live start, whose child environment is exactly `env`.
+  inheritEnv: boolean;
+  // Names the harness says the child must not inherit from the host's environment. Read only when `inheritEnv`.
+  unsetEnv: readonly string[];
+  // Lines written to stdin right after the spawn, in order, each logged as `in` like a `write`.
+  stdin: readonly string[];
   idleRule: IdleRule;
   // Dropped from each stdout line before the host logs or delivers it, so a replay reads what a live subscriber read.
   // A line holding none of them, or not JSON, passes byte for byte; a key is matched as `JSON.stringify` writes it.

@@ -35,6 +35,8 @@ export interface ProcessSubscriber {
 
 export interface ProcessTableDeps {
   spawn: HostSpawn;
+  // The host's own environment, which a spawn with `inheritEnv` lays its `env` over.
+  env: NodeJS.ProcessEnv;
   clock: Clock;
   timers: Timers;
   logsFolder: string;
@@ -44,8 +46,9 @@ export interface ProcessTableDeps {
 }
 
 export interface ProcessTable {
-  // Subscribes `subscriber`, and calls its `spawned` before returning when the OS started the process. A refused or
-  // failed spawn calls its `closed`, with no other process touched.
+  // Subscribes `subscriber`, and calls its `spawned` before returning when the OS started the process, then writes
+  // the spawn's `stdin` lines as `write` does. A refused or failed spawn calls its `closed`, with no other process
+  // touched.
   spawn(request: HostedSpawn, subscriber: ProcessSubscriber): void;
   // `write`, `endInput` and `kill` do nothing for an id the table does not hold.
   write(id: string, text: string): void;
@@ -133,6 +136,62 @@ function requireDroppedOutKeys({ id, droppedOutKeys }: HostedSpawn) {
   if (!isWellFormed) {
     throw new Error(`process ${id} has no well-formed dropped keys`);
   }
+}
+
+function isStringArray(value: unknown): boolean {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'string')
+  );
+}
+
+// A bad one would otherwise build the child's environment, or write its stdin, from a field nothing checked.
+function requireSpawnShape({
+  id,
+  env,
+  inheritEnv,
+  unsetEnv,
+  stdin,
+}: HostedSpawn) {
+  const isEnvWellFormed =
+    typeof env === 'object' &&
+    env !== null &&
+    !Array.isArray(env) &&
+    Object.values(env).every((value) => typeof value === 'string');
+  if (!isEnvWellFormed) {
+    throw new Error(`process ${id} has no well-formed env`);
+  }
+  if (typeof inheritEnv !== 'boolean') {
+    throw new Error(`process ${id} has no well-formed inheritEnv`);
+  }
+  if (!isStringArray(unsetEnv)) {
+    throw new Error(`process ${id} has no well-formed unset names`);
+  }
+  if (!isStringArray(stdin)) {
+    throw new Error(`process ${id} has no well-formed stdin lines`);
+  }
+}
+
+// With `inheritEnv`: `hostEnv` less `ELECTRON_RUN_AS_NODE` and the unset names, under the spawn's `env`. Without it:
+// the spawn's `env` alone.
+function childEnvOf(
+  { env, inheritEnv, unsetEnv }: HostedSpawn,
+  hostEnv: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  if (!inheritEnv) {
+    return { ...env };
+  }
+  const childEnv: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(hostEnv)) {
+    if (value !== undefined) {
+      childEnv[name] = value;
+    }
+  }
+  // The host runs as Node through this name; a child Electron binary would too.
+  delete childEnv.ELECTRON_RUN_AS_NODE;
+  for (const name of unsetEnv) {
+    delete childEnv[name];
+  }
+  return { ...childEnv, ...env };
 }
 
 function droppedKeysOf(paths: readonly KeyPath[]): DroppedKey[] {
@@ -344,6 +403,16 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     });
   }
 
+  // Logs `text` as `in`, reads the idle rule's busy values on it, then writes it with its newline.
+  function writeLine(hosted: TableProcess, text: string) {
+    hosted.log.append('in', text);
+    const value = valueAtKey(text, hosted.idleRule.key);
+    if (isBusyValue(value, hosted.idleRule.busyStdinValues)) {
+      turnBusy(hosted);
+    }
+    hosted.child.stdin.write(`${text}\n`);
+  }
+
   function refusalOf(id: string): string | null {
     if (draining) {
       return 'the session host is draining';
@@ -364,12 +433,13 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       try {
         requireIdleRule(request);
         requireDroppedOutKeys(request);
+        requireSpawnShape(request);
         log = createPipeLog(deps.logsFolder, request.id, clock, (message) =>
           diagnostics.append(message),
         );
         const child = deps.spawn(request.command, request.args, {
           cwd: request.cwd,
-          env: request.env,
+          env: childEnvOf(request, deps.env),
         });
         const startedAt = clock.now();
         const hosted: TableProcess = {
@@ -393,6 +463,9 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         // Node sets `pid` at once when the OS started the child; a child with none never ran, and its `error` follows.
         if (hosted.pid !== null) {
           subscriber.spawned(request.id, hosted.pid);
+          for (const line of request.stdin) {
+            writeLine(hosted, line);
+          }
         }
       } catch (error) {
         log?.remove();
@@ -401,15 +474,9 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     },
     write(id, text) {
       const hosted = processes.get(id);
-      if (hosted === undefined) {
-        return;
+      if (hosted !== undefined) {
+        writeLine(hosted, text);
       }
-      hosted.log.append('in', text);
-      const value = valueAtKey(text, hosted.idleRule.key);
-      if (isBusyValue(value, hosted.idleRule.busyStdinValues)) {
-        turnBusy(hosted);
-      }
-      hosted.child.stdin.write(`${text}\n`);
     },
     endInput(id) {
       processes.get(id)?.child.stdin.end();
