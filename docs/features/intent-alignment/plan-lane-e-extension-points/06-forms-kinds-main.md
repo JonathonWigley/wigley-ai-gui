@@ -1,6 +1,6 @@
 # 06 — Forms item kinds register in main
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none in this plan · Gated: Lane H's Structured round results (plan.md precondition 2)
 Plan: [plan.md](plan.md)
