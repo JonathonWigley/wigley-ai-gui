@@ -184,9 +184,7 @@ export function chatCommandHandlers(
     });
   const pickControlOf = (role: string) =>
     inRunningSession((session) => {
-      const control = session.state.controls.find(
-        (held) => held.role === role,
-      );
+      const control = session.state.controls.find((held) => held.role === role);
       if (control === undefined) {
         log(`${session.name} has no ${role} control`);
         return;
