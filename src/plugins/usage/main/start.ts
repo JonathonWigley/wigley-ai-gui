@@ -1,4 +1,5 @@
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   MainApi,
@@ -7,10 +8,11 @@ import type {
 } from '../../../contracts/plugin';
 import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
 import {
-  CHAT_HARNESS_ID,
-  type ChatMainEvents,
-  chatMainKey,
-} from '../../chat/contract';
+  type RegisteredProfile,
+  registeredProfiles,
+} from '../../../shared/harness-profiles';
+import { isSameJson } from '../../../shared/json';
+import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
 import {
   type SessionsMainEvents,
   sessionsMainKey,
@@ -42,8 +44,9 @@ type UsageApi = MainApi<
 >;
 
 // Registers usage's layouts. Writes the usage snapshot to `usage.snapshot` at
-// start when the slot holds none, and on every change. Seeds a plan per chat profile, polls each through the Claude
-// harness every `pollIntervalSeconds` (rescheduled on a settings change), and
+// start when the slot holds none, and on every change. Seeds a plan per registered harness profile, polls each
+// through its own harness every `pollIntervalSeconds` (rescheduled on a settings change), runs a round at once when
+// `core.agentHarnesses` changes the profiles the last round read, and
 // hears `chat.planUsage` (live rows), `chat.sessionOpened` (a session's
 // profile), `chat.agentEvent` (the main agent's `usage`, and each compaction's
 // start and end) and `sessions.ended`. It hands the self-test its script, and
@@ -93,7 +96,9 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     if (writer.get() === undefined) {
       writer.set(EMPTY_USAGE_STATE.snapshot);
     }
-    apply(withProfiles(currentState(), chat.profiles()));
+    const harnessSlot = api.state.read(coreAgentHarnessesSlot);
+    const profiles = () => registeredProfiles(harnessSlot.all());
+    apply(withProfiles(currentState(), profiles()));
     events.on('chat.planUsage', ({ profileDir, update }) =>
       apply(withLiveRows(currentState(), profileDir, update)),
     );
@@ -119,47 +124,50 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     events.on('sessions.ended', ({ sessionId }) =>
       apply(withoutSession(currentState(), sessionId)),
     );
-    const harness = services.agentHarnesses.get(CHAT_HARNESS_ID);
-    const noHarness = `no agent harness "${CHAT_HARNESS_ID}"`;
-    if (harness === null) {
-      services.log(`${noHarness}: plan usage is not read`);
-    }
-    let poller: PlanPoller | null =
-      harness === null
-        ? null
-        : createPlanPoller({
-            timers: services.timers,
-            clock: services.clock,
-            profiles: () => chat.profiles(),
-            intervalSeconds: () => api.settings().pollIntervalSeconds,
-            planUsage: (profileDir) => harness.planUsage(profileDir),
-            roundStarted: (profiles) =>
-              apply(withProfiles(currentState(), profiles)),
-            polled: (profile, result) => {
-              if (!result.ok) {
-                services.log(`poll ${profile.name} failed: ${result.error}`);
-              }
-              apply(withPollResult(currentState(), profile.configDir, result));
-            },
-          });
-    let seeded = false;
+    // The profiles the last round read, from its `roundStarted`.
+    let lastRoundProfiles: readonly RegisteredProfile[] = [];
+    let poller: PlanPoller | null = createPlanPoller({
+      timers: services.timers,
+      clock: services.clock,
+      profiles,
+      intervalSeconds: () => api.settings().pollIntervalSeconds,
+      planUsage: (profile) => {
+        const harness = services.agentHarnesses.get(profile.harnessId);
+        return harness === null
+          ? Promise.reject(
+              new Error(`no agent harness "${profile.harnessId}"`),
+            )
+          : harness.planUsage(profile.configDir);
+      },
+      roundStarted: (roundProfiles) => {
+        lastRoundProfiles = roundProfiles;
+        apply(withProfiles(currentState(), roundProfiles));
+      },
+      polled: (profile, result) => {
+        if (!result.ok) {
+          services.log(`poll ${profile.name} failed: ${result.error}`);
+        }
+        apply(withPollResult(currentState(), profile.configDir, result));
+      },
+    });
     const seed = (fixture: UsageSnapshot) => {
-      seeded = true;
       poller?.dispose();
       poller = null;
       apply({ snapshot: fixture, held: [] });
     };
-    const pollNow = () => {
-      if (poller === null) {
-        const reason = seeded
-          ? 'usage.seed stopped the poller for this run'
-          : noHarness;
-        return Promise.reject(new Error(reason));
-      }
-      return poller.pollNow();
-    };
+    const pollNow = () =>
+      poller === null
+        ? Promise.reject(
+            new Error('usage.seed stopped the poller for this run'),
+          )
+        : poller.pollNow();
     api.onSettingsChanged(() => poller?.reschedule());
-    poller?.start();
+    harnessSlot.on(() => {
+      if (poller !== null && !isSameJson(profiles(), lastRoundProfiles)) {
+        void poller.pollNow();
+      }
+    });
+    poller.start();
     const fakeHarnesses = services.agentHarnesses
       .list()
       .filter(isFakeAgentHarness);

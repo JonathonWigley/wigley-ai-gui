@@ -27,7 +27,7 @@ export const EMPTY_QUEUE: RetroQueue = {
   launched: [],
 };
 
-// `started` carries the names of chat's profiles at the part's start; `restoreMissed` is a running retro whose row
+// `started` carries the names of every registered harness's profiles at the part's start; `restoreMissed` is a running retro whose row
 // did not come back after a start.
 export type QueueEvent =
   | {

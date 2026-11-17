@@ -1,3 +1,4 @@
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
@@ -8,6 +9,7 @@ import type {
 import { activeMsAt } from '../../../shared/active-time';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
+import { registeredProfiles } from '../../../shared/harness-profiles';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import {
   type ChatMainEvents,
@@ -84,6 +86,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const rows = api.state.read(sessionsRowsSlot);
     const chatSessions = api.state.read(chatSessionSlot);
+    const harnesses = api.state.read(coreAgentHarnessesSlot);
     const workflows = createStageList<MainWorkflow>();
     const store = createFlowStore({
       flows: api.state.publish(workflowFlowsSlot),
@@ -317,11 +320,13 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     };
 
     // A start while chat runs hears no `sessionOpened` for the rows it already
-    // holds, so each row chat holds under a profile in its settings opens here
+    // holds, so each row chat holds under a registered harness's profile opens here
     // under its row's host id, as that event would have opened it. A row an
     // event opened first is left.
     const openRowsAlreadyOpen = () => {
-      const profileNames = new Set(chat.profiles().map(({ name }) => name));
+      const profileNames = new Set(
+        registeredProfiles(harnesses.all()).map(({ name }) => name),
+      );
       for (const [sessionId, info] of chatSessions.all()) {
         const row = rows.get(sessionId);
         const hostSessionId = row?.hostSessionId ?? null;

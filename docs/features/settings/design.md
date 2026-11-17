@@ -49,7 +49,7 @@ plan is written from them. A decision here stands unless the user changes it.
 - Every setting declares a label and a one-line description by its dotted path: core settings in
   `src/config/settings.ts` (`settingInfo`), a plugin's in its manifest (`settingInfo`). The type derives every leaf
   path from the settings type, so a missing or misspelled path fails the build. An array is one leaf
-  (`chat.profiles`), and so is an optional member (`fonts.ui`).
+  (`claude-code.profiles`), and so is an optional member (`fonts.ui`).
 - One row per leaf: label, description, the value in force, and its control. A row the user set shows a "Set" tag and
   the default in `fg-tertiary`; `r` resets it, removing the key from `settings.json` (an object left empty drops too).
 - Controls by kind, opened by Enter or `i` on the row:

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AccountStatus } from '../../../contracts/agent';
+import type { AccountStatus, HarnessProfile } from '../../../contracts/agent';
 import type { ToastTone } from '../../../contracts/plugin';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import {
@@ -8,7 +8,6 @@ import {
 } from '../../../shared/page/list-picker-state';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
-  ChatProfile,
   ChatProject,
   PastSessionRow,
   ProjectPastSessionRow,
@@ -37,8 +36,8 @@ import {
 
 const HOME = '/Users/u';
 
-const work: ChatProfile = { name: 'work', configDir: '~/.claude' };
-const personal: ChatProfile = {
+const work: HarnessProfile = { name: 'work', configDir: '~/.claude' };
+const personal: HarnessProfile = {
   name: 'personal',
   configDir: '~/.claude-personal',
 };
@@ -83,7 +82,7 @@ async function flush() {
 
 function setUp(
   options: {
-    profiles?: ChatProfile[];
+    profiles?: HarnessProfile[];
     recent?: RecentFolder[];
     answers?: Partial<Answers>;
   } = {},
@@ -340,7 +339,7 @@ const AI_DEV_LABEL = 'Wigley AI Dev · ~/Documents/ai-dev';
 // The prompt opened with New Games and Wigley AI Dev in the settings.
 function setUpWithProjects(
   answers: Partial<Answers> = {},
-  options: { profiles?: ChatProfile[]; recent?: RecentFolder[] } = {},
+  options: { profiles?: HarnessProfile[]; recent?: RecentFolder[] } = {},
 ) {
   return setUp({
     ...options,
@@ -1161,7 +1160,7 @@ describe('start prompt', () => {
       statusAsked: [],
       toasts: [
         {
-          text: "Profile gone of New Games is not in chat's profiles setting",
+          text: "Profile gone of New Games is not in the harness's profiles setting",
           tone: 'error',
         },
       ],

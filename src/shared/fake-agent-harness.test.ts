@@ -27,6 +27,7 @@ import {
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   FAKE_PERMISSION_TEXT,
+  FAKE_PROFILES,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
   FAKE_STEPS_TEXT,
@@ -1619,6 +1620,7 @@ describe('createFakeAgentHarness', () => {
       },
       clearAliases: ['reset'],
       projectConfigFolder: '.claude',
+      profiles: FAKE_PROFILES,
     });
     expect(harness.toolUseIdOf({ 'fake/toolUseId': 'u' })).toBe('u');
     expect(harness.toolUseIdOf(null)).toBeNull();
@@ -1632,6 +1634,16 @@ describe('createFakeAgentHarness', () => {
 
     expect(await harness.installedPlugins('~/p')).toEqual([plugin]);
     expect(await harness.installedPlugins(null)).toEqual([]);
+  });
+
+  it('info_Profiles_FakeProfiles', () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+
+    expect(harness.info().profiles).toEqual(FAKE_PROFILES);
   });
 });
 

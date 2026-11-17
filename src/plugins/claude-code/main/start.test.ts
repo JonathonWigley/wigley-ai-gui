@@ -4,6 +4,7 @@ import type {
   AgentHarnessRegistry,
 } from '../../../contracts/agent';
 import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import { claudeCodeManifest, DEFAULT_PROFILES } from '../manifest';
 import { claudeCodeMainPart, claudeCommand } from './start';
 
 // A registry that records: `register` adds the harness and returns a handle
@@ -32,7 +33,7 @@ function recordingRegistry() {
 
 function started(
   overrides: {
-    settings?: { command: string };
+    settings?: typeof claudeCodeManifest.settings;
     agentHomeDir?: string;
     agentEnvironment?: Readonly<Record<string, string>>;
   } = {},
@@ -83,14 +84,14 @@ describe('claudeCodeMainPart', () => {
 
   it('accountStatus_CommandSetting_SpawnsItInTheAgentHomeWithTheAgentEnvironment', () => {
     const { harness, harnesses } = started({
-      settings: { command: '~/bin/claude' },
+      settings: { command: '~/bin/claude', profiles: DEFAULT_PROFILES },
       agentHomeDir: '/Users/u',
       agentEnvironment: { PATH: '/bin', WIGLEY_AI_GUI_ENDPOINT_DIR: '/e' },
     });
     const [registered] = harnesses;
 
     void registered.accountStatus(null);
-    harness.pushSettings({ command: '' });
+    harness.pushSettings({ command: '', profiles: DEFAULT_PROFILES });
     void registered.accountStatus(null);
 
     expect(harness.processes.spawns[0]).toMatchObject({
@@ -102,5 +103,17 @@ describe('claudeCodeMainPart', () => {
     expect(harness.processes.spawns[1].command).toBe(
       '/Users/u/.local/bin/claude',
     );
+  });
+
+  it('settingsChanged_Profiles_RefreshesTheRegistration', () => {
+    const { harness, harnesses, counts } = started();
+    const [registered] = harnesses;
+    expect(registered.info().profiles).toEqual(DEFAULT_PROFILES);
+    const lab = [{ name: 'lab', configDir: '~/.lab' }];
+
+    harness.pushSettings({ command: '', profiles: lab });
+
+    expect(counts.refreshes).toBe(1);
+    expect(registered.info().profiles).toEqual(lab);
   });
 });

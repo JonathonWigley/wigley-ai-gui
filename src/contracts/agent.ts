@@ -165,8 +165,9 @@ export type ChatEntry =
 export type ChatEntryKind = ChatEntry['kind'];
 
 // `sessionId` is the host's session id: fresh for a new session, the old one when `resume` is true.
-// `profileDir` is the harness's config folder (Claude's `CLAUDE_CONFIG_DIR`) as the profile writes it, which the
-// adapter resolves (`~` against the home the adapter was built with); null for the harness default.
+// `profileDir` is the config folder of the profile the session runs under, as that harness's profiles setting writes
+// it (`HarnessProfile.configDir`), which the adapter resolves (`~` against the home the adapter was built with); null
+// for the harness default.
 // `controls` maps a control id to the value the row holds, for the row's mode and for each model or effort the user
 // picked in the row once the process confirmed the pick, leaving out a null `value`; the adapter starts with each value
 // it knows and ignores an id it does not declare.
@@ -521,12 +522,22 @@ export interface HarnessCapabilities {
 
 // The declarations a harness publishes in `core.agentHarnesses`; JSON-safe. `label` names the harness to the user;
 // `clearAliases` are the names typed after `/` that clear the session beside the app's own `clear`;
-// `projectConfigFolder` is the folder name the harness reads in a project (`.claude` for Claude).
+// `projectConfigFolder` is the folder name the harness reads in a project (`.claude` for Claude); `profiles` are the
+// profiles a session can run under, in the harness's settings order; the registry's slot entry leaves out each name
+// an earlier registered harness holds.
 export interface AgentHarnessInfo {
   label: string;
   capabilities: HarnessCapabilities;
   clearAliases: readonly string[];
   projectConfigFolder: string;
+  profiles: readonly HarnessProfile[];
+}
+
+// A profile a session can run under: `name` is unique across harnesses, `configDir` the harness's config folder as
+// its profiles setting writes it, `~/` unexpanded.
+export interface HarnessProfile {
+  name: string;
+  configDir: string;
 }
 
 // A profile's config folder (as `AgentHarness.configFolder` resolves it) and the folders the harness caches its

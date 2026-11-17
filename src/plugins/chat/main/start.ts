@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { AgentHarnessRegistry } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type {
@@ -26,6 +27,7 @@ import {
   type ToolResult,
 } from '../../sessions/contract';
 import {
+  CHAT_HARNESS_ID,
   type ChatChannel,
   chatCommandsSlot,
   chatControlsSlot,
@@ -116,7 +118,8 @@ interface ChatDriveDeps {
   services: Pick<MainServices, 'homeDir' | 'randomUuid' | 'log'> & {
     files: Pick<Files, 'makeFolder'>;
   };
-  // Chat's profiles' names, in settings order, read at each `chat.start`.
+  // The names of the profiles of chat's harness, in its settings order, read
+  // at each `chat.start`.
   profileNames: () => string[];
   chat: Pick<
     ChatSessions,
@@ -147,7 +150,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
   };
   drive.add('start', {
     description:
-      'Starts a chat session in projectDir (default <home>/dev/drive-project, made if missing) under profile (default the first of chat\'s profiles) and selects its row. Under the fake harness a message of "fake: tool" runs a tool turn, "fake: hold" a turn that waits for an interrupt, "fake: steps" six tools and a thought in a turn that waits for an interrupt, "fake: agents" two subagents that run until an interrupt, the next message or the session\'s end, "fake: end" one that ends the session, "fake: workflow feature" a wigley:feature turn that writes a three-task plan, "fake: workflow step" the next make step of that plan, after /wigley:make <its folder>, "fake: visual" a reply holding a UI mockup and a flowchart whose second html block stays open for 1.5 s, "fake: blocks" a reply of three paragraphs, a two-item list and a ts code block, "fake: cold" an echo whose usage reads 200k of context with the cache already cold, so with auto-compact on the next message is held for a compaction, "fake: compact" a turn that runs an autocompact, and anything else an echo. Returns { sessionId, hostSessionId }: hostSessionId is the id forms.openRound and primer.openPrimer take to open a form in this session.',
+      'Starts a chat session in projectDir (default <home>/dev/drive-project, made if missing) under profile (default the first profile of chat\'s harness) and selects its row. Under the fake harness a message of "fake: tool" runs a tool turn, "fake: hold" a turn that waits for an interrupt, "fake: steps" six tools and a thought in a turn that waits for an interrupt, "fake: agents" two subagents that run until an interrupt, the next message or the session\'s end, "fake: end" one that ends the session, "fake: workflow feature" a wigley:feature turn that writes a three-task plan, "fake: workflow step" the next make step of that plan, after /wigley:make <its folder>, "fake: visual" a reply holding a UI mockup and a flowchart whose second html block stays open for 1.5 s, "fake: blocks" a reply of three paragraphs, a two-item list and a ts code block, "fake: cold" an echo whose usage reads 200k of context with the cache already cold, so with auto-compact on the next message is held for a compaction, "fake: compact" a turn that runs an autocompact, and anything else an echo. Returns { sessionId, hostSessionId }: hostSessionId is the id forms.openRound and primer.openPrimer take to open a form in this session.',
     args: '{ projectDir?: string; profile?: string }',
     async run(rawArgs) {
       const args = argsObject(rawArgs);
@@ -288,7 +291,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       log: services.log,
     });
     const harness = () => requireChatHarness(services.agentHarnesses);
-    const profiles = () => api.settings().profiles;
+    const harnessSlot = api.state.read(coreAgentHarnessesSlot);
+    const profiles = () => harnessSlot.get(CHAT_HARNESS_ID)?.profiles ?? [];
     const profileNames = () => profiles().map((profile) => profile.name);
     const folderChoices = createFolderChoices({
       recent,
@@ -575,7 +579,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const exports = (consumer: Registrations): ChatMainExports => ({
       launch: async (request) => chat.launch(request),
       resume: (request) => chat.resume(request),
-      profiles,
       profileOf,
       activeTime: (sessionId) => chat.activeTimeOf(sessionId),
       isHeadless: (sessionId) => chat.isHeadless(sessionId),

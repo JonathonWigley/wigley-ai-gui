@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanUsage } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
-import type { ChatProfile } from '../../chat/contract';
+import type { RegisteredProfile } from '../../../shared/harness-profiles';
 import { createPlanPoller, MIN_POLL_SECONDS } from './plan-poller';
 import type { PollResult } from './usage-store';
 
-const DEFAULT: ChatProfile = { name: 'default', configDir: '~/.claude' };
-const PERSONAL: ChatProfile = {
+const DEFAULT: RegisteredProfile = {
+  harnessId: 'claude',
+  name: 'default',
+  configDir: '~/.claude',
+};
+const PERSONAL: RegisteredProfile = {
+  harnessId: 'claude',
   name: 'personal',
   configDir: '~/.claude-personal',
 };
@@ -44,10 +49,10 @@ function setup(intervalSeconds = 300) {
     clock,
     profiles: () => [DEFAULT, PERSONAL],
     intervalSeconds: () => settings.intervalSeconds,
-    planUsage: (profileDir) => {
-      calls.push(profileDir);
+    planUsage: ({ configDir }) => {
+      calls.push(configDir);
       return new Promise((resolve, reject) => {
-        pending.set(profileDir, { resolve, reject });
+        pending.set(configDir, { resolve, reject });
       });
     },
     roundStarted: (profiles) =>

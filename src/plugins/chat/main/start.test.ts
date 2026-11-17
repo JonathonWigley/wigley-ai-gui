@@ -5,11 +5,15 @@ import type {
   AgentStart,
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { Files } from '../../../contracts/files';
 import type { PartStop } from '../../../contracts/plugin';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import type { KeyedSlotKey } from '../../../contracts/state';
-import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
+import {
+  harnessInfo,
+  harnessRegistryOf,
+} from '../../../shared/agent-harness-registry.test-support';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
@@ -213,7 +217,8 @@ describe('chat drive actions', () => {
 // and an owned session's end emits `sessions.ended`, recorded in `ended`,
 // and its `keep` is recorded in `kept`;
 // each row holds its titles as sessions would, starting with none.
-// `options.profiles` replaces the profiles.
+// `options.profiles` replaces the profiles of the `claude` entry of
+// `core.agentHarnesses`; null leaves that entry out.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
 // process starts, `startInstructions` each start's instructions and
@@ -236,7 +241,7 @@ function startChatPart(
     list?: () => Promise<HostedProcessInfo[]>;
     data?: Files;
     harnessId?: string;
-    profiles?: { name: string; configDir: string }[];
+    profiles?: { name: string; configDir: string }[] | null;
     projects?: ProjectSetting[];
   } = {},
 ) {
@@ -246,6 +251,15 @@ function startChatPart(
   const processDetach = vi.fn<() => void>();
   const processKill = vi.fn<() => void>();
   const store = createSlotStore(() => undefined);
+  const profiles =
+    options.profiles === undefined
+      ? [{ name: 'work', configDir: '/work' }]
+      : options.profiles;
+  if (profiles !== null) {
+    store
+      .publish(coreAgentHarnessesSlot)
+      .set('claude', harnessInfo({ profiles }));
+  }
   const sent: { message: string; data: unknown }[] = [];
   const emitted: { event: string; data: unknown }[] = [];
   const logged: string[] = [];
@@ -376,7 +390,6 @@ function startChatPart(
     },
   };
   const startSettings = {
-    profiles: options.profiles ?? [{ name: 'work', configDir: '/work' }],
     keepIdleMinutes: 60,
     projects: options.projects ?? [],
   };
@@ -628,6 +641,12 @@ describe('chat main part', () => {
     expect(chat.exports.activeTime('none')).toBeNull();
   });
 
+  it('exports_HaveNoProfiles', () => {
+    const chat = startChatPart();
+
+    expect('profiles' in chat.exports).toBe(false);
+  });
+
   it('exports_Send_WritesToTheProcess', async () => {
     const chat = startChatPart();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
@@ -663,13 +682,20 @@ describe('chat main part', () => {
       sessionId: null,
       expected: null,
     },
+    {
+      given: 'no chat harness registered',
+      profiles: null,
+      sessionId: null,
+      expected: null,
+    },
   ])(
     'exports_DefaultProfile_given $given',
     ({ profiles, sessionId, expected }) => {
       const chat = startChatPart({
-        profiles: profiles.map((name) => ({ name, configDir: `/${name}` })),
+        profiles:
+          profiles?.map((name) => ({ name, configDir: `/${name}` })) ?? null,
       });
-      if (profiles.length > 0) {
+      if (profiles !== null && profiles.length > 0) {
         chat.invoke('start', { projectDir: '/p', profile: 'second' });
       }
 

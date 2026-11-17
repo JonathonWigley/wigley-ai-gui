@@ -1170,6 +1170,7 @@ function createWindow(
   // the registrations live as long as the window, as the shell layout's does.
   const agentHarnesses = createAgentHarnessRegistry(
     slots.publish(coreAgentHarnessesSlot),
+    (message) => log('agent-harnesses', message),
   );
   for (const harness of harnesses) {
     agentHarnesses.register(harness);

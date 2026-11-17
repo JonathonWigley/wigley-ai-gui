@@ -10,6 +10,7 @@ import {
   type ChatEntry,
   type ChatImage,
   type CompactionTrigger,
+  type HarnessProfile,
   type ContextBreakdownAgentEvent,
   type InstalledPlugin,
   type LogInEvents,
@@ -266,6 +267,13 @@ export interface FakeAgentHarness extends AgentHarness {
 
 // The `_meta` key the fake reads a tool call's id under.
 export const FAKE_TOOL_USE_ID_META_KEY = 'fake/toolUseId';
+
+// The fake's profiles, named and foldered as the `claude-code` plugin's
+// default, since a run on the fake leaves that plugin out.
+export const FAKE_PROFILES: readonly HarnessProfile[] = [
+  { name: 'work', configDir: '~/.claude' },
+  { name: 'personal', configDir: '~/.claude-personal' },
+];
 
 // Timers for tests that never look at a fake's hold: each `set` runs its `run`
 // in a microtask, whatever its `ms`, unless `clear` took its handle first.
@@ -1974,6 +1982,7 @@ export function createFakeAgentHarness(
       },
       clearAliases: ['reset'],
       projectConfigFolder: '.claude',
+      profiles: FAKE_PROFILES,
     }),
     controls: () => startingControls({}),
     toolUseIdOf(meta) {

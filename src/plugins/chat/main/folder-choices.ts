@@ -1,9 +1,13 @@
-import type { AgentHarness, ProjectFolder } from '../../../contracts/agent';
+import type {
+  AgentHarness,
+  HarnessProfile,
+  ProjectFolder,
+} from '../../../contracts/agent';
 import type { Files, FileStat } from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
-import type { ChatProfile, RecentFolder } from '../contract';
+import type { RecentFolder } from '../contract';
 import { MAX_RECENT_FOLDERS, type RecentFolders } from './recent-folders';
 
 export const MAX_FOLDER_CHOICES = MAX_RECENT_FOLDERS * 2;
@@ -59,7 +63,7 @@ export interface FolderChoices {
 export function createFolderChoices(deps: {
   recent: RecentFolders;
   harness(): AgentHarness;
-  profiles(): readonly ChatProfile[];
+  profiles(): readonly HarnessProfile[];
   files: Pick<Files, 'stat'>;
   paths: Paths;
   tempFolders: readonly string[];
@@ -69,7 +73,7 @@ export function createFolderChoices(deps: {
 
   async function profileProjects(
     harness: AgentHarness,
-    profile: ChatProfile,
+    profile: HarnessProfile,
   ): Promise<ListedProject[]> {
     try {
       const folders = await harness.listProjects(profile.configDir);

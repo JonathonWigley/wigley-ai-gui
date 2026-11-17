@@ -19,7 +19,7 @@ const IDLE_COMPACT_ENV = 'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS';
 // `settings.json` `env` still reaches the child.
 const APP_LAUNCH_ENV: readonly string[] = [IDLE_COMPACT_ENV, SESSION_ROW_ENV];
 
-// The environment every `claude` run for `profileDir` gets: a copy of `env`
+// The environment every `claude` run for `profileDir` (`AgentStart.profileDir`, Claude's `CLAUDE_CONFIG_DIR`) gets: a copy of `env`
 // without the nested-session variables and the app's own values, with `CLAUDE_CONFIG_DIR` set to
 // `profileDir` resolved against `homeDir` when one is given, and removed when
 // that folder is the default `<homeDir>/.claude`.

@@ -1,12 +1,13 @@
 import type {
   AccountStatus,
   AgentHarness,
+  HarnessProfile,
   LogInEvents,
   LogInProcess,
 } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
-import type { ChatChannel, ChatProfile } from '../contract';
+import type { ChatChannel } from '../contract';
 import { requireProfile } from './lookups';
 
 // Each profile's sign-in, by profile name. One sign-in runs at a time, named
@@ -39,7 +40,7 @@ interface RunningLogIn {
 // missing.
 export function createAccounts(deps: {
   harness(): AgentHarness;
-  profiles(): readonly ChatProfile[];
+  profiles(): readonly HarnessProfile[];
   send: MainChannel<ChatChannel>['send'];
   log: PluginLog;
 }): Accounts {

@@ -21,8 +21,8 @@ import type {
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
 import type { SessionTitles } from '../sessions/contract';
 
-// The `id` of the agent harness chat runs its sessions on: chat's profiles are
-// that harness's config folders.
+// The `id` of the agent harness chat runs its sessions on: a new session starts
+// under one of the profiles of chat's harness.
 export const CHAT_HARNESS_ID = 'claude';
 
 // The layout preview's row host session id; no harness holds a session by it.
@@ -39,11 +39,6 @@ export const HEADLESS_NOTE =
   'needs in the reply and end the turn.';
 export const HEADLESS_OFF_NOTE =
   'This session is no longer headless: send each round to the form again.';
-
-export interface ChatProfile {
-  name: string;
-  configDir: string;
-}
 
 export interface RecentFolder {
   projectDir: string;
@@ -526,11 +521,11 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // process a clear or a failed attach let go.
 // `planUsage`: the plan rows one of those sessions saw. Both carry the
 // `profileDir` of the profile the row opened under: its `configDir` as the
-// `profiles` setting writes it, unexpanded; null is the harness default, which
-// chat never sends.
+// harness's profiles setting writes it, unexpanded; null is the harness
+// default, which chat never sends.
 // `sessionOpened`: a session chat now owns, with the profile it opened under,
 // its host id and folder, and how it came to open; a row whose profile is not
-// in chat's profiles setting fires none. It fires before the session's slots
+// among the profiles of chat's harness fires none. It fires before the session's slots
 // exist and before chat's exports know the row. A pool project's row fires it
 // when its claim lands instead, with the clone as `projectDir` and after its
 // slots exist; it fires none, nor `sessionClosed`, when its claim fails or the
@@ -618,10 +613,6 @@ export interface ChatMainExports {
   // `instructions` and `owner` are as `launch` has them, and a resume with
   // `owner` opens its row unselected.
   resume(request: ResumeRequest): Promise<string>;
-  // Chat's profiles, in settings order, read at each call. The first profile
-  // is the one a drive `chat.start` takes when it names none, and the only
-  // choice the start prompt skips to.
-  profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;
   // The clock of a session chat owns; null for any other session id.
@@ -635,7 +626,8 @@ export interface ChatMainExports {
   // changes, since a running process keeps the instructions it started with.
   launchedHeadless(sessionId: string): boolean;
   // The profile a launch takes when its caller names none: the profile of a
-  // session chat owns, else chat's first; null when chat has no profiles.
+  // session chat owns, else the first profile of chat's harness; null when
+  // chat's harness is not registered or has no profiles.
   // `sessionId` is null when the launch comes from no session.
   defaultProfile(sessionId: string | null): string | null;
   // Settles once main's restore of the saved rows ends, a failed one

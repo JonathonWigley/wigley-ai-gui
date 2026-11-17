@@ -9,6 +9,7 @@ import type {
   AgentProcessEvents,
   AgentStart,
   ChatEntry,
+  HarnessProfile,
   LogInEvents,
 } from '../../../contracts/agent';
 import type { Clock } from '../../../contracts/ambient';
@@ -338,6 +339,7 @@ function started(
   const harness = createClaudeCodeHarness({
     command: () => '/bin/claude',
     permissionTool: 'tool',
+    profiles: () => [],
     env: {},
     log,
     host: childHost(fake, harnessClock, log),
@@ -488,10 +490,12 @@ function idleHarness(
   homeDir = '/Users/u',
   files: Files = createMemoryFiles(),
   log: Log = () => {},
+  profiles: () => readonly HarnessProfile[] = () => [],
 ) {
   return createClaudeCodeHarness({
     command: () => '/bin/claude',
     permissionTool: 'tool',
+    profiles,
     env: { CLAUDE_CONFIG_DIR: '/c' },
     log,
     host: createFakeSessionHost(clock),
@@ -506,7 +510,10 @@ function idleHarness(
 
 describe('createClaudeCodeHarness declarations', () => {
   it('info_DeclaresCapabilitiesAliasesAndProjectFolder', () => {
-    expect(idleHarness().info()).toEqual({
+    const work = [{ name: 'work', configDir: '~/.claude' }];
+    const harness = idleHarness(undefined, undefined, undefined, () => work);
+
+    expect(harness.info()).toEqual({
       label: 'Claude Code',
       capabilities: {
         interrupt: true,
@@ -516,7 +523,20 @@ describe('createClaudeCodeHarness declarations', () => {
       },
       clearAliases: ['reset', 'new'],
       projectConfigFolder: '.claude',
+      profiles: [{ name: 'work', configDir: '~/.claude' }],
     });
+  });
+
+  it('info_Profiles_ReadAtEachCall', () => {
+    let profiles: readonly HarnessProfile[] = [];
+    const harness = idleHarness(undefined, undefined, undefined, () => profiles);
+    expect(harness.info().profiles).toEqual([]);
+
+    profiles = [{ name: 'lab', configDir: '~/.lab' }];
+
+    expect(harness.info().profiles).toEqual([
+      { name: 'lab', configDir: '~/.lab' },
+    ]);
   });
 
   it('controls_BeforeStart_DeclaresClaudesControls', () => {
@@ -2855,6 +2875,7 @@ describe('createClaudeCodeHarness past sessions', () => {
     const harness = createClaudeCodeHarness({
       command: () => '/bin/claude',
       permissionTool: 'tool',
+      profiles: () => [],
       env,
       log: () => {},
       host: createFakeSessionHost(clock),
@@ -2895,6 +2916,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       const harness = createClaudeCodeHarness({
         command: () => '/bin/claude',
         permissionTool: 'tool',
+        profiles: () => [],
         env: { CLAUDE_CONFIG_DIR: '/c' },
         log: () => {},
         host: createFakeSessionHost(clock),
@@ -2963,6 +2985,7 @@ describe('createClaudeCodeHarness accounts', () => {
     const harness = createClaudeCodeHarness({
       command: () => '/bin/claude',
       permissionTool: 'tool',
+      profiles: () => [],
       env: { HOME: '/Users/u', CLAUDECODE: '1' },
       log: () => {},
       host: createFakeSessionHost(harnessClock),
@@ -3370,6 +3393,7 @@ describe('createClaudeCodeHarness on the session host', () => {
     return createClaudeCodeHarness({
       command: () => '/bin/claude',
       permissionTool: 'tool',
+      profiles: () => [],
       env: overrides.env ?? {},
       log: () => {},
       host,

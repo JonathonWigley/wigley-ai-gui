@@ -44,6 +44,7 @@ export function harnessInfo(
     },
     clearAliases: [],
     projectConfigFolder: '.claude',
+    profiles: [],
     ...overrides,
   };
 }

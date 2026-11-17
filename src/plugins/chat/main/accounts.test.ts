@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { HarnessProfile } from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
   FAKE_SIGN_IN_CODE,
@@ -6,7 +7,7 @@ import {
   FAKE_MICROTASK_TIMERS,
 } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
-import type { ChatChannel, ChatProfile } from '../contract';
+import type { ChatChannel } from '../contract';
 import { createAccounts } from './accounts';
 
 type Message = {
@@ -16,7 +17,7 @@ type Message = {
   };
 }[keyof ChatChannel['messages']];
 
-const PROFILES: ChatProfile[] = [
+const PROFILES: HarnessProfile[] = [
   { name: 'work', configDir: '~/.claude' },
   { name: 'personal', configDir: '~/.claude-personal' },
 ];

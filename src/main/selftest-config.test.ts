@@ -66,12 +66,12 @@ describe('mergeSelfTestConfigs', () => {
 
     const merged = mergeSelfTestConfigs([
       handed('forms', [formsBind], { forms: { previewDelayMs: 5 } }),
-      handed('chat', [chatBind], { chat: { profiles: [] } }),
+      handed('chat', [chatBind], { chat: { keepIdleMinutes: 5 } }),
     ]);
 
     expect(merged).toEqual({
       pageBinds: [formsBind, chatBind],
-      settings: { forms: { previewDelayMs: 5 }, chat: { profiles: [] } },
+      settings: { forms: { previewDelayMs: 5 }, chat: { keepIdleMinutes: 5 } },
     });
   });
 

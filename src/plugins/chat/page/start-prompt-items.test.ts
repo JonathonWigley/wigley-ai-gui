@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
+import type { HarnessProfile } from '../../../contracts/agent';
 import type {
-  ChatProfile,
   ChatProject,
   RecentFolder,
   ResumeSectionRow,
@@ -60,7 +60,7 @@ const aiDev: ChatProject = {
   profile: null,
 };
 
-const profiles: ChatProfile[] = [
+const profiles: HarnessProfile[] = [
   { name: 'work', configDir: '~/.claude' },
   { name: 'personal', configDir: '~/.claude-personal' },
 ];

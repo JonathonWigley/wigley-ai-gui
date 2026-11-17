@@ -7,6 +7,7 @@ import type {
   AgentProcess,
   AgentProcessEvents,
   ChatEntry,
+  HarnessProfile,
   ProcessActivity,
   SessionControl,
   UsageAgentEvent,
@@ -49,7 +50,6 @@ import {
   CHAT_HARNESS_ID,
   type ChatChannel,
   type ChatMainEvents,
-  type ChatProfile,
   type ChatProject,
   type ChatSessionState,
   HEADLESS_NOTE,
@@ -106,8 +106,8 @@ export interface ChatSessionsDeps {
     'open' | 'mark' | 'activate' | 'setTitle' | 'titles' | 'label'
   >;
   selectedSessionId(): string | null;
-  // Read at each session start.
-  profiles(): readonly ChatProfile[];
+  // The profiles of chat's harness, read at each session start.
+  profiles(): readonly HarnessProfile[];
   // Read at each start and past-session read naming a project.
   projects(): readonly ChatProject[];
   // The newest registered pool provider, null with none; read at each pool
@@ -550,7 +550,7 @@ function commandOf(input: unknown): string | null {
 }
 
 function missingProfileText(name: string): string {
-  return `Profile ${name} is not in chat's profiles setting; add it back to resume this session.`;
+  return `Profile ${name} is not in the harness's profiles setting; add it back to resume this session.`;
 }
 
 function exitNoticeText(code: number | null, error: string | null): string {
@@ -1518,13 +1518,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const profileNamed = (name: string) => requireProfile(deps.profiles(), name);
   const requireHarness = () => requireChatHarness(deps.harnesses);
 
-  function profileDirOf(profile: ChatProfile): string {
+  function profileDirOf(profile: HarnessProfile): string {
     return profile.configDir;
   }
 
   // Opens the row for `opening.hostId` as `options` says, gives it each title
   // `opening.titles` holds, and holds its state, resting, with `entries`.
-  // `profileDir` is null when the profile is not in chat's profiles setting;
+  // `profileDir` is null when the profile is not among the profiles of chat's
+  // harness;
   // such a row emits no `sessionOpened`.
   function openRow(
     projectDir: string,
@@ -1897,7 +1898,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   function startProcess(
     session: HeldSession,
     harness: AgentHarness,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     resume: boolean,
   ) {
     const { sessionId, projectDir } = session.slots.info();
@@ -1977,7 +1978,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   function attachProcess(
     session: HeldSession,
     harness: AgentHarness,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     hosted: HostedProcessInfo,
     busy: boolean,
   ): Promise<string | null> {
@@ -2085,7 +2086,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // row that ended during the replay or closed is only logged.
   function restAfterFailedAttach(
     session: HeldSession,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     reason: string,
     busy: boolean,
   ) {
@@ -2129,7 +2130,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   async function runUnheldStep(
     session: HeldSession,
     harness: AgentHarness,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     unheldId: string,
   ): Promise<UnheldSettled> {
     let listed: readonly HostedProcessInfo[];
@@ -2182,7 +2183,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   async function settleUnheld(
     session: HeldSession,
     harness: AgentHarness,
-    profile: ChatProfile,
+    profile: HarnessProfile,
   ): Promise<UnheldSettled> {
     while (session.unheldSettling !== null) {
       await session.unheldSettling;
@@ -2215,7 +2216,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // it throws and opens nothing.
   function openAndStart(
     harness: AgentHarness,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     projectDir: string,
     opening: {
       hostId: string;
@@ -2285,7 +2286,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // opening's headless flag as the launch's.
   function openAndAttach(
     harness: AgentHarness,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     projectDir: string,
     opening: {
       hostId: string;
@@ -2987,7 +2988,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
-  function restoreSavedUsageOrLog(session: HeldSession, profile: ChatProfile) {
+  function restoreSavedUsageOrLog(session: HeldSession, profile: HarnessProfile) {
     const { hostId } = session;
     restoreSavedUsage(session, profile).catch((error: unknown) =>
       log(`saved usage of ${hostId} not read: ${errorText(error)}`),
@@ -2996,7 +2997,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Emits the session's saved usage as its row's `agentEvent`, unless the row
   // closed or cleared, or chat stopped, while it was read.
-  async function restoreSavedUsage(session: HeldSession, profile: ChatProfile) {
+  async function restoreSavedUsage(session: HeldSession, profile: HarnessProfile) {
     const { sessionId } = session;
     const { hostId } = session;
     const profileDir = profileDirOf(profile);
@@ -3104,7 +3105,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // pends no more; returns the read while it runs, or null when none does.
   function historyReadOf(
     session: HeldSession,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     harness: AgentHarness,
   ): Promise<void> | null {
     if (session.historyPending) {
@@ -3130,7 +3131,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   async function prependHistory(
     session: HeldSession,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     harness: AgentHarness,
   ) {
     const { sessionId } = session;

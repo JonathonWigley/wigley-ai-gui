@@ -2,8 +2,9 @@ import { definePlugin } from '../../shared/define-plugin';
 
 // Auto retro: each conversation the user ends, by closing its session or a /clear, after it sent a message, queues
 // a background `/wigley:retro auto` run, launched one at a time as an unattended chat row in the retro folder, shown in the side bar's Retro section and
-// closed once its work ends. It names `chat` for the close and clear events, the launch, the profiles, the session
-// state and the close, and `sessions` for the rows, their titles and the Retro section.
+// closed once its work ends. It names `chat` for the close and clear events, the launch, the session state and the
+// close, and `sessions` for the rows, their titles and the Retro section; it reads the profiles from
+// `core.agentHarnesses`.
 export const autoRetroManifest = definePlugin({
   id: 'auto-retro',
   label: 'Auto retro',

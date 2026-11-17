@@ -60,7 +60,7 @@ export interface StatusLineProfileInput extends StatusLinePlanInput {
   name: string;
 }
 // The status-bar plan line: the shown plan, `profileName` its profile (null when there is no profile at all), and
-// every profile's plan in chat's profile order in `profiles`.
+// every profile's plan in `profiles`, in harness registration order then each harness's profile order.
 export interface StatusLineInput extends StatusLinePlanInput {
   profileName: string | null;
   profiles: readonly StatusLineProfileInput[];
@@ -92,7 +92,7 @@ export interface DetailsSessionInput {
   cache: string;
   spend: string;
 }
-// Every profile in chat's profile order, and the shown session, null while no session with usage shows.
+// Every profile in plan order, and the shown session, null while no session with usage shows.
 export interface DetailsInput {
   profiles: readonly DetailsProfileInput[];
   session: DetailsSessionInput | null;

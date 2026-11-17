@@ -142,12 +142,10 @@ function startWorkflowPart(
     | 'addInstructions'
     | 'isHeadless'
     | 'launchedHeadless'
-    | 'profiles'
   > = {
     activeTime: () => activeTime,
     isHeadless: () => headless,
     launchedHeadless: () => launchedHeadless,
-    profiles: () => [],
     addInstructions: (text) => {
       instructions.push(text);
       return { dispose: () => undefined };

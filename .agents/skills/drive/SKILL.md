@@ -33,8 +33,9 @@ start one whenever a check needs it.
    the home's config stays: `start` prints that it skipped the copy.
 2. Seed what the check needs: `npm run drive -- actions` lists every plugin's drive actions, and
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
-   `chat.start` uses the first profile in chat's `profiles` setting, and only a profile logged in
-   to Claude reaches it under `--harness claude`; `{"profile":"<name>"}` picks another. It
+   `chat.start` uses the first profile of the run's harness: the first in the `claude-code.profiles`
+   setting under `--harness claude`, where only a profile logged in to Claude reaches it, and the
+   fake's `work` under the fake; `{"profile":"<name>"}` picks another. It
    returns `{ sessionId, hostSessionId }`: pass `hostSessionId` as the open actions' `sessionId`
    to open a form in that chat session.
    `forms.openRound` and `primer.openPrimer` open their form in the live session their own

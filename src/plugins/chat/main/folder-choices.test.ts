@@ -1,19 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentHarness, ProjectFolder } from '../../../contracts/agent';
+import type {
+  AgentHarness,
+  HarnessProfile,
+  ProjectFolder,
+} from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
 } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type { ChatProfile, RecentFolder } from '../contract';
+import type { RecentFolder } from '../contract';
 import {
   createFolderChoices,
   MAX_FOLDER_CHOICES,
   mergeFolderChoices,
 } from './folder-choices';
 
-const PROFILES: ChatProfile[] = [
+const PROFILES: HarnessProfile[] = [
   { name: 'work', configDir: '~/.claude' },
   { name: 'personal', configDir: '~/.claude-personal' },
 ];

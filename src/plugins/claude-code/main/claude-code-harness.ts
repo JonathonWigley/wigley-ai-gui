@@ -7,6 +7,7 @@ import {
   type AgentStart,
   type ChatEntry,
   type HarnessConfigRoots,
+  type HarnessProfile,
   type InstalledPlugin,
   type LogInEvents,
   type LogInProcess,
@@ -105,9 +106,10 @@ export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 // which stamps the entries and agent events the line folds to; `randomUuid`
 // gives each stdin user message its `uuid`. `files` also
 // reads the profile's `settings.json` and the agent definitions at each session
-// start.
+// start. `profiles` reads the harness's profiles at each `info()` call.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
+  profiles(): readonly HarnessProfile[];
   permissionTool: string;
   env: Readonly<Record<string, string>>;
   log: Log;
@@ -1194,6 +1196,7 @@ export function createClaudeCodeHarness(
       },
       clearAliases: CLAUDE_CLEAR_ALIASES,
       projectConfigFolder: '.claude',
+      profiles: deps.profiles(),
     }),
     controls: () => startingControls({}),
     toolUseIdOf,

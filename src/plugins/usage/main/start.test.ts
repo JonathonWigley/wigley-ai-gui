@@ -1,13 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentHarness,
+  HarnessProfile,
   PlanUsage,
   UsageAgentEvent,
 } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { QualifiedEvents } from '../../../contracts/plugin';
-import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
+import {
+  harnessInfo,
+  harnessRegistryOf,
+} from '../../../shared/agent-harness-registry.test-support';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import { createSlotStore } from '../../../shared/state/slot-store';
+import {
+  createSlotStore,
+  type SlotStore,
+} from '../../../shared/state/slot-store';
 import {
   fakeDependency,
   noCounts,
@@ -17,7 +25,6 @@ import {
   type ChatMainEvents,
   type ChatMainExports,
   chatMainKey,
-  type ChatProfile,
 } from '../../chat/contract';
 import {
   type SessionsMainEvents,
@@ -44,10 +51,11 @@ vi.mock('./selftest-script', async (importOriginal) => {
   };
 });
 
-const PERSONAL: ChatProfile = {
+const PERSONAL: HarnessProfile = {
   name: 'personal',
   configDir: '~/.claude-personal',
 };
+const LAB: HarnessProfile = { name: 'lab', configDir: '/lab' };
 
 const NOW = 5_000_000;
 const SELECTED = 's-selected';
@@ -85,8 +93,9 @@ function usageEvent(agentId: string): UsageAgentEvent {
   };
 }
 
-// Usage's main part started over a fake `MainApi` holding `PERSONAL` as
-// chat's one profile, `harnesses`, a real store for its slot and a drive host
+// Usage's main part started over a fake `MainApi` whose `core.agentHarnesses`
+// holds `PERSONAL` as the `claude` entry's one profile, with `harnesses`
+// registered, a real store for its slots and a drive host
 // whose `run` runs an added action; `emit` calls the listeners of a qualified
 // event, `sent` records every write of the slot after the start, `snapshot` reads
 // the slot, `armed` records every timer set and `pendingTimers` the ids set and
@@ -96,14 +105,15 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const sent: UsageSnapshot[] = [];
   const store = createSlotStore(() => undefined);
+  store
+    .publish(coreAgentHarnessesSlot)
+    .set('claude', harnessInfo({ profiles: [PERSONAL] }));
   const reader = store.read(usageSnapshotSlot, 'test');
   const logs: string[] = [];
   const armed: number[] = [];
   const pendingTimers = new Set<number>();
   const drive = fakeDriveHost();
-  const chat: Pick<ChatMainExports, 'profiles'> = {
-    profiles: () => [PERSONAL],
-  };
+  const chat = {};
   const api = {
     events: {
       emit: () => undefined,
@@ -113,7 +123,10 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
     },
     state: {
       publish: () => store.publish(usageSnapshotSlot),
-      read: () => ({ get: () => SELECTED }),
+      read: (key: { id: string }) =>
+        key.id === coreAgentHarnessesSlot.id
+          ? store.read(coreAgentHarnessesSlot, 'usage')
+          : { get: () => SELECTED },
     },
     settings: () => ({ pollIntervalSeconds: 300, layout: 'default' }),
     onSettingsChanged: () => ({ dispose: () => undefined }),
@@ -294,42 +307,56 @@ describe('usageMainPart', () => {
     ]);
   });
 
-  it('usageMainPart_NoHarness_SeedsPlansWithoutPolling', () => {
-    const usage = startUsagePart([]);
+  it('usageMainPart_NoHarness_NoPlansAndNoLog', async () => {
+    const usage = startOverSlot(createSlotStore(() => undefined), []);
+    await settled();
 
-    usage.emit('chat.agentEvent', {
-      sessionId: 's1',
-      profileDir: '~/.claude-personal',
-      hostSessionId: 'h1',
-      event: usageEvent('main'),
-      replayed: false,
+    expect(usage.logs).toEqual([]);
+    expect(planNames(usage)).toEqual([]);
+  });
+
+  it('usageMainPart_TwoHarnesses_PollsEachProfileThroughItsHarness', async () => {
+    const state = createSlotStore(() => undefined);
+    const harnesses = state.publish(coreAgentHarnessesSlot);
+    harnesses.set('claude', harnessInfo({ profiles: [PERSONAL] }));
+    harnesses.set('lab', harnessInfo({ profiles: [LAB] }));
+    const heard: Record<string, (string | null)[]> = { claude: [], lab: [] };
+    const recording = (id: string): Partial<AgentHarness> => ({
+      id,
+      planUsage: (profileDir) => {
+        heard[id].push(profileDir);
+        return Promise.resolve(POLLED);
+      },
     });
 
-    expect(usage.logs).toEqual([
-      'no agent harness "claude": plan usage is not read',
+    const usage = startOverSlot(state, [recording('claude'), recording('lab')]);
+    await settled();
+
+    expect(heard).toEqual({ claude: ['~/.claude-personal'], lab: ['/lab'] });
+    expect(planNames(usage)).toEqual([
+      { name: 'personal', isDefault: true },
+      { name: 'lab', isDefault: false },
     ]);
-    expect(usage.armed).toEqual([]);
-    expect(usage.snapshot()).toEqual({
-      plans: [
-        {
-          name: 'personal',
-          profileDir: '~/.claude-personal',
-          isDefault: true,
-          usage: null,
-          lastGoodAt: null,
-          error: null,
-          stale: false,
+  });
+
+  it('usageMainPart_HarnessRegistersAfterStart_PollsItsProfiles', async () => {
+    const state = createSlotStore(() => undefined);
+    const harnesses = state.publish(coreAgentHarnessesSlot);
+    const heard: (string | null)[] = [];
+    startOverSlot(state, [
+      {
+        id: 'claude',
+        planUsage: (profileDir) => {
+          heard.push(profileDir);
+          return Promise.resolve(POLLED);
         },
-      ],
-      sessions: [
-        {
-          sessionId: 's1',
-          profileDir: '~/.claude-personal',
-          usage: usageEvent('main'),
-          compaction: null,
-        },
-      ],
-    });
+      },
+    ]);
+
+    harnesses.set('claude', harnessInfo({ profiles: [PERSONAL] }));
+    await settled();
+
+    expect(heard).toEqual(['~/.claude-personal']);
   });
 
   it('usageMainPart_Seed_StopsThePollerAndWritesTheFixture', async () => {
@@ -372,10 +399,7 @@ describe('usageMainPart', () => {
   it('start_WritesTheEmptySnapshot', () => {
     const harness = startMainPart(usageMainPart, {
       dependencies: [
-        fakeDependency(
-          chatMainKey,
-          () => ({ profiles: () => [] }) as unknown as ChatMainExports,
-        ),
+        fakeDependency(chatMainKey, () => ({}) as unknown as ChatMainExports),
       ],
     });
 
@@ -385,6 +409,30 @@ describe('usageMainPart', () => {
     });
   });
 });
+
+// Usage's main part started over `state`, whose `core.agentHarnesses` the test
+// seeds, with `harnesses` registered.
+function startOverSlot(state: SlotStore, harnesses: Partial<AgentHarness>[]) {
+  return startMainPart(usageMainPart, {
+    state,
+    dependencies: [
+      fakeDependency(chatMainKey, () => ({}) as unknown as ChatMainExports),
+    ],
+    services: {
+      agentHarnesses: harnessRegistryOf(harnesses as AgentHarness[]),
+    },
+  });
+}
+
+// The name and default flag of each plan in the snapshot `usage` wrote.
+function planNames(usage: ReturnType<typeof startOverSlot>) {
+  return (
+    usage.state
+      .read(usageSnapshotSlot, 'test')
+      .get()
+      ?.plans.map(({ name, isDefault }) => ({ name, isDefault })) ?? []
+  );
+}
 
 // The deps the last start handed the script; throws when none was handed.
 function scriptDeps(): UsageSelfTestDeps {
@@ -464,13 +512,15 @@ describe('sessionUsage', () => {
 // Usage's main part on the harness in a drive run, its one harness's `planUsage`
 // answering with `read`.
 function startOnHarness(read: () => Promise<PlanUsage>) {
+  const state = createSlotStore(() => undefined);
+  state
+    .publish(coreAgentHarnessesSlot)
+    .set('claude', harnessInfo({ profiles: [PERSONAL] }));
   const harness = startMainPart(usageMainPart, {
     drive: true,
+    state,
     dependencies: [
-      fakeDependency(
-        chatMainKey,
-        () => ({ profiles: () => [PERSONAL] }) as unknown as ChatMainExports,
-      ),
+      fakeDependency(chatMainKey, () => ({}) as unknown as ChatMainExports),
     ],
     services: {
       agentHarnesses: harnessRegistryOf([

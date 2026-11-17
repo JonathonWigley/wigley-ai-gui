@@ -15,7 +15,8 @@ export function claudeCommand(
 
 // Registers the Claude Code adapter, run as `services.agentHomeDir`: its
 // command, read at each spawn, and its profile folders expand `~` against that
-// home.
+// home. A settings change refreshes the registration, so the registry re-reads
+// the `profiles` setting.
 export const claudeCodeMainPart: MainPart<typeof claudeCodeManifest> = {
   manifest: claudeCodeManifest,
   start(api) {
@@ -36,8 +37,10 @@ export const claudeCodeMainPart: MainPart<typeof claudeCodeManifest> = {
       paths: services.paths,
       clock: services.clock,
       randomUuid: services.randomUuid,
+      profiles: () => api.settings().profiles,
     });
     const registration = services.agentHarnesses.register(harness);
+    api.onSettingsChanged(() => registration.refresh());
     return { commands: {}, dispose: () => registration.dispose() };
   },
 };

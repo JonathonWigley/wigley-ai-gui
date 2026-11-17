@@ -10,6 +10,7 @@ import {
   type AgentProcessEvents,
   type ChatEntry,
   type CompactionTrigger,
+  type HarnessProfile,
   MAIN_AGENT_ID,
   type ProcessActivity,
   type SessionControl,
@@ -46,7 +47,6 @@ import {
   chatControlsSlot,
   chatEntriesSlot,
   type ChatMainEvents,
-  type ChatProfile,
   type ChatProject,
   chatQueuedSlot,
   chatReturnedSlot,
@@ -61,7 +61,6 @@ import {
   type SendGateInput,
   type SessionCompaction,
 } from '../contract';
-import { DEFAULT_PROFILES } from '../manifest';
 import {
   ARCHIVED_SESSIONS_FILE,
   createArchivedSessions,
@@ -79,6 +78,11 @@ import type {
 import { CANCELLED_REASON, UNATTENDED_REASON } from './permission-tool';
 import { createRecentFolders, RECENT_FOLDERS_FILE } from './recent-folders';
 import { createChatSlots } from './chat-slots';
+
+const PROFILES: HarnessProfile[] = [
+  { name: 'work', configDir: '~/.claude' },
+  { name: 'personal', configDir: '~/.claude-personal' },
+];
 
 // What one recorded slot change, or `sessionRested`, told the page: named by the
 // value it changed in the slot, each `chat.session` write by the fields that
@@ -467,7 +471,7 @@ function setUp(
   const refusedOpens = new Set<string>();
   const heldRowIds = new Set<string>();
   let onOwnedEnd = () => {};
-  let profiles: readonly ChatProfile[] = DEFAULT_PROFILES;
+  let profiles: readonly HarnessProfile[] = PROFILES;
   const archived = createArchivedSessions(data);
   const saved = fakeOpenSessions();
   // Every `setTitle` call, and the titles of each row opened.
@@ -626,7 +630,7 @@ function setUp(
     setOnOwnedEnd: (act: () => void) => {
       onOwnedEnd = act;
     },
-    setProfiles: (next: readonly ChatProfile[]) => {
+    setProfiles: (next: readonly HarnessProfile[]) => {
       profiles = next;
     },
     sent: <K extends Message['message']>(message: K) =>
@@ -1609,7 +1613,7 @@ describe('createChatSessions', () => {
 
       const sessionId = test.chat.launch({
         projectDir: PROJECT_DIR,
-        profile: DEFAULT_PROFILES[0].name,
+        profile: PROFILES[0].name,
         message: { text: 'fix the chip', images: [] },
         ...owner,
       });
@@ -1634,7 +1638,7 @@ describe('createChatSessions', () => {
     expect(() =>
       test.chat.launch({
         projectDir: PROJECT_DIR,
-        profile: DEFAULT_PROFILES[0].name,
+        profile: PROFILES[0].name,
         message: { text: 'fix the chip', images: [oversized] },
       }),
     ).toThrow(/5 MB/);
@@ -1888,7 +1892,7 @@ describe('createChatSessions', () => {
       const test = setUp();
       const sessionId = test.chat.launch({
         projectDir: PROJECT_DIR,
-        profile: DEFAULT_PROFILES[0].name,
+        profile: PROFILES[0].name,
         message: { text: 'go', images: [] },
         ...flag,
       });
@@ -3083,7 +3087,7 @@ describe('createChatSessions', () => {
       const test = setUp();
       test.chat.launch({
         projectDir: PROJECT_DIR,
-        profile: DEFAULT_PROFILES[0].name,
+        profile: PROFILES[0].name,
         message: { text: 'go', images: [] },
         ...flag,
       });
@@ -4362,7 +4366,7 @@ describe('createChatSessions saved sessions', () => {
     await test.chat.loadHistory(ROW_ID);
     const callsWhileMissing = historyCalls().length;
     test.setProfiles([
-      ...DEFAULT_PROFILES,
+      ...PROFILES,
       { name: 'gone', configDir: '/Users/u/.claude-gone' },
     ]);
     await test.chat.loadHistory(ROW_ID);
@@ -6701,7 +6705,7 @@ describe('createChatSessions unheld processes', () => {
         hostedP1(),
       ]);
       test.setProfiles([
-        ...DEFAULT_PROFILES,
+        ...PROFILES,
         { name: 'gone', configDir: '/gone' },
       ]);
     } else {

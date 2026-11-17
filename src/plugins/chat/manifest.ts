@@ -1,13 +1,6 @@
 import { definePlugin } from '../../shared/define-plugin';
 import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
-import type { ChatProfile, ProjectSetting } from './contract';
-
-// Each profile names a Claude config folder; a leading `~/` means the home
-// folder.
-export const DEFAULT_PROFILES: ChatProfile[] = [
-  { name: 'work', configDir: '~/.claude' },
-  { name: 'personal', configDir: '~/.claude-personal' },
-];
+import type { ProjectSetting } from './contract';
 
 export const chatManifest = definePlugin({
   id: 'chat',
@@ -277,18 +270,12 @@ export const chatManifest = definePlugin({
     hub: 'In the session hub',
   },
   settings: {
-    profiles: DEFAULT_PROFILES,
     projects: [] as ProjectSetting[],
     layout: 'default',
     keepIdleMinutes: 60,
     completionDescriptions: true,
   },
   settingInfo: {
-    profiles: {
-      label: 'Profiles',
-      description:
-        'The Claude profiles a new session can start in: a name and its config folder each.',
-    },
     projects: {
       label: 'Projects',
       description:

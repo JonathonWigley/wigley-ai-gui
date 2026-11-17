@@ -257,11 +257,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   `AgentProcess.answerPermission(id, decision)`; the adapter mints the entry and owns the reply JSON, and the MCP
   `permission_prompt` route becomes the Claude adapter's private wiring. `CLAUDE_PERMISSION_TOOL` leaves
   `src/contracts/agent.ts` for `src/plugins/claude-code/main/`.
-- **Harness settings with the harness** — *agent-ready*: `claude.command` leaves core `Settings`
-  (`src/config/settings.ts`) for the Claude harness plugin's manifest; `AgentStart.profileDir` is reworded
-  harness-neutral; profiles become `{ harness, name, configDir }` owned by the harness plugin, so chat's profiles and
-  docs' `claudeConfigDirs` stop being two sources of truth, and docs' write guard allows every registered harness's
-  config folders.
 - **Docs reads harness config roots from the adapter** — *agent-ready*: docs knows each harness's config layout
   itself: `installedPluginsFile` under Claude's config dirs or `~/.codex/config.toml` with TOML key quoting
   (`src/plugins/docs/main/doc-files.ts`), the `~/.codex` and `~/.codex/plugins/cache` index roots, the closed
@@ -272,9 +267,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout names them. Chat page
   exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default. A partial
   chat layout already falls back to `default` per entry kind (`pickEntry` in `src/plugins/chat/page/chat-layouts.ts`).
-- **Sessions stops naming Claude** — *agent-ready*: the MCP server name comes from configuration rather than
-  `wigley-forms`, and the tool-use id comes through a raw `_meta` on `ToolCallContext` or a per-harness reader, not
-  `claudecode/toolUseId` (`src/plugins/sessions/main/mcp/mcp-server.ts`).
 - **Owned sessions join by an adapter key** — *needs a feature plan*: owned sessions join by a key the harness adapter
   supplies, settable after start, or a token passed in the spawn environment, rather than requiring a host session
   id before spawning (`session-list.ts` `connect`).

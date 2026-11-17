@@ -1,10 +1,10 @@
+import type { HarnessProfile } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type {
   ChatChannel,
-  ChatProfile,
   ChatProject,
   ProjectPastSessionRow,
   RecentFolder,
@@ -50,7 +50,7 @@ export interface StartPromptDeps {
   signIn: Pick<SignInDialog, 'open'>;
   channel: Pick<PageChannel<ChatChannel>, 'invoke'>;
   chooseFolder(): Promise<string | null>;
-  profiles(): readonly ChatProfile[];
+  profiles(): readonly HarnessProfile[];
   reveal(sessionId: string): void;
   paths: Paths;
   homeDir: string;
@@ -89,7 +89,7 @@ type PromptTarget =
 interface SessionStep {
   context: PromptContext;
   target: PromptTarget;
-  profile: ChatProfile;
+  profile: HarnessProfile;
   rows: ProjectPastSessionRow[];
   showArchived: boolean;
   items: SessionItem<ProjectPastSessionRow>[];
@@ -108,7 +108,7 @@ interface PromptContext {
   recent: readonly RecentFolder[];
   sections: readonly ResumeSectionRows[];
   projects: readonly ChatProject[];
-  profiles: readonly ChatProfile[];
+  profiles: readonly HarnessProfile[];
 }
 
 export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
@@ -165,8 +165,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         }
         const profiles = deps.profiles();
         if (profiles.length === 0) {
-          log('no profiles in the chat settings');
-          deps.toast("Add a profile to chat's profiles setting first", 'error');
+          log("chat's harness has no profiles");
+          deps.toast("Add a profile to the harness's profiles setting first", 'error');
           return;
         }
         for (const { title, rows } of sections) {
@@ -319,7 +319,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       checkProfile(context, target, profiles[0]);
       return;
     }
-    deps.picker.open<ChatProfile>({
+    deps.picker.open<HarnessProfile>({
       title: 'Profile',
       items: profiles,
       label: profileLabel,
@@ -335,7 +335,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const fixedProfileOrReport = (
     context: PromptContext,
     project: ChatProject,
-  ): ChatProfile | null | false => {
+  ): HarnessProfile | null | false => {
     if (project.profile === null) {
       return null;
     }
@@ -343,7 +343,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     if (fixed !== undefined) {
       return fixed;
     }
-    const text = `Profile ${project.profile} of ${project.name} is not in chat's profiles setting`;
+    const text = `Profile ${project.profile} of ${project.name} is not in the harness's profiles setting`;
     log(text);
     deps.toast(text, 'error');
     return false;
@@ -376,7 +376,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const checkProfile = (
     context: PromptContext,
     target: PromptTarget,
-    profile: ChatProfile,
+    profile: HarnessProfile,
   ) => {
     checkAccount(context, profile, () => {
       if (context.offersSavedSessions) {
@@ -393,7 +393,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // again.
   const checkAccount = (
     context: PromptContext,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     goOn: () => void,
   ) => {
     void channel.invoke('accountStatus', profile.name).then(
@@ -432,7 +432,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const openSessionStepOn = (
     context: PromptContext,
     target: PromptTarget,
-    profile: ChatProfile,
+    profile: HarnessProfile,
     rows: ProjectPastSessionRow[],
   ) => {
     if (rows.length === 0) {
@@ -462,7 +462,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const listSessions = (
     context: PromptContext,
     target: PromptTarget,
-    profile: ChatProfile,
+    profile: HarnessProfile,
   ) => {
     const openWith = (rows: ProjectPastSessionRow[]) =>
       openSessionStepOn(context, target, profile, rows);
@@ -487,7 +487,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // The target's saved sessions, each with the folder it ran in.
   const readSavedSessions = (
     target: PromptTarget,
-    profile: ChatProfile,
+    profile: HarnessProfile,
   ): Promise<ProjectPastSessionRow[]> => {
     if (target.kind === 'project') {
       return channel.invoke(
@@ -666,7 +666,7 @@ function resumeSession(
 function startSession(
   context: PromptContext,
   target: PromptTarget,
-  profile: ChatProfile,
+  profile: HarnessProfile,
 ) {
   const { deps } = context;
   deps.log(

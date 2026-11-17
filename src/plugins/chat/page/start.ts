@@ -1,9 +1,13 @@
 import '../../../shared/page/markdown.css';
 import './chat.css';
-import { coreScopeSlot } from '../../../contracts/core-state';
+import {
+  coreAgentHarnessesSlot,
+  coreScopeSlot,
+} from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { registeredProfiles } from '../../../shared/harness-profiles';
 import type { ChatImage } from '../../../contracts/agent';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import {
@@ -19,6 +23,7 @@ import {
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
+  CHAT_HARNESS_ID,
   type ChatChannel,
   chatCommandsSlot,
   type ChatComposerPart,
@@ -331,18 +336,19 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       hasSavedPlace: (sessionId) => savedPlaceIds.has(sessionId),
     });
     sessions.addRowPart(rowClock.part);
+    const harnessSlot = api.state.read(coreAgentHarnessesSlot);
     const rowProfile = createRowProfile({
       layouts,
       kit: partDeps,
       paths: services.paths,
       homeDir: services.homeDir,
       log: services.log,
-      profiles: () => api.settings().profiles,
+      profiles: () => registeredProfiles(harnessSlot.all()),
       heldProfile: (sessionId) => chatSessions.get(sessionId)?.profile ?? null,
       profileDirOf: (sessionId) => rows.get(sessionId)?.profileDir ?? null,
     });
     sessions.addRowPart(rowProfile.part);
-    api.onSettingsChanged(() => rowProfile.profilesChanged());
+    harnessSlot.on(() => rowProfile.profilesChanged());
     chatSessions.on((sessionId) => rowProfile.changed(sessionId));
     sideParts.add(
       createMainAgentPart({
@@ -367,7 +373,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       signIn,
       channel: api.channel,
       chooseFolder: services.chooseFolder,
-      profiles: () => api.settings().profiles,
+      profiles: () => harnessSlot.get(CHAT_HARNESS_ID)?.profiles ?? [],
       reveal: (sessionId) => view.reveal(sessionId),
       paths: services.paths,
       homeDir: services.homeDir,

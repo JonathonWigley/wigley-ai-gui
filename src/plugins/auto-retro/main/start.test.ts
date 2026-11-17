@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessActivity } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import { readIfPresent } from '../../../contracts/files';
 import type { RunMode } from '../../../contracts/plugin';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   fakeDependency,
   startMainPart,
@@ -98,8 +101,18 @@ function startPart(
     layout: 'default',
     settleSeconds: DEFAULT_SETTLE_SECONDS,
   };
+  const state = createSlotStore(() => undefined);
+  state
+    .publish(coreAgentHarnessesSlot)
+    .set(
+      'claude',
+      harnessInfo({
+        profiles: [{ name: 'work', configDir: '~/.claude-work' }],
+      }),
+    );
   const harness = startMainPart(autoRetroMainPart, {
     settings,
+    state,
     services: { runMode: options.runMode ?? 'live', homeDir: '/home/me' },
     dependencies: [
       fakeDependency(
@@ -110,7 +123,6 @@ function startPart(
               launches.push(request);
               return part.answerLaunch(request);
             },
-            profiles: () => [{ name: 'work', configDir: '~/.claude-work' }],
             close(sessionId: string, reason: SessionCloseReason) {
               closes.push([sessionId, reason]);
               return Promise.resolve();

@@ -108,7 +108,7 @@ interview on 2026-10-23; this file is the record of both.
   (`docs/features/session-host/design.md`) spawns it. It runs the installed CLI,
   one long-lived process per session, in stream-json mode, with the user's own login, plugins, skills and hooks. It
   is the built-in `claude-code` plugin, which registers the adapter through `services.agentHarnesses`. The `claude`
-  path is that plugin's `claude-code.command` setting and the profiles a chat setting: an app started from the Dock
+  path and the profiles are that plugin's settings (`claude-code.command`, `claude-code.profiles`): an app started from the Dock
   has no shell `PATH` or `CLAUDE_CONFIG_DIR`.
 - A fake adapter in `src/shared/` plays scripted entries for the tests and the self-test, so the seam has two
   adapters now.

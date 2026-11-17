@@ -206,8 +206,8 @@ export interface RowClockInput {
   isRunning: boolean;
 }
 
-// `name` is the session's profile: the name chat's profiles setting gives its config folder, else the folder's last
-// segment.
+// `name` is the session's profile: the name a registered harness's profiles give its config folder, else the folder's
+// last segment.
 export interface RowProfileInput {
   name: string;
 }
@@ -618,7 +618,7 @@ export interface ChatLayout {
     kit: BaseKit,
   ): PartView<RowClockInput>;
   // The session's profile, drawn into the session row's `chat.rowProfile` wrapper; the app orders the wrapper among the
-  // row's parts. The app draws the part again when the layouts or chat's profiles change, and draws nothing for a
+  // row's parts. The app draws the part again when the layouts or a harness's profiles change, and draws nothing for a
   // session with no config folder.
   rowProfile?(
     parent: HTMLElement,

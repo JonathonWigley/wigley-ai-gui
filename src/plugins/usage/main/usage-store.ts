@@ -1,4 +1,5 @@
 import type {
+  HarnessProfile,
   PlanRow,
   PlanRowPatch,
   PlanRowUpdate,
@@ -6,7 +7,6 @@ import type {
   UsageAgentEvent,
 } from '../../../contracts/agent';
 import { replacesUsage } from '../../../shared/replaces-usage';
-import type { ChatProfile } from '../../chat/contract';
 import type { ProfilePlan, SessionUsage, UsageSnapshot } from '../contract';
 
 // The pure fold behind usage main: each `with…` returns the same state object
@@ -42,7 +42,7 @@ export const EMPTY_USAGE_STATE: UsageState = {
 // poll state; a removed profile's held patches go with it.
 export function withProfiles(
   state: UsageState,
-  profiles: readonly ChatProfile[],
+  profiles: readonly HarnessProfile[],
 ): UsageState {
   const { plans } = state.snapshot;
   const unchanged =
@@ -224,7 +224,7 @@ function sameCompaction(
 
 function planFor(
   plans: readonly ProfilePlan[],
-  profile: ChatProfile,
+  profile: HarnessProfile,
   isDefault: boolean,
 ): ProfilePlan {
   const matched = plans.find((plan) => plan.profileDir === profile.configDir);
