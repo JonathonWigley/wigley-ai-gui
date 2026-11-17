@@ -375,7 +375,9 @@ const rows: Row[] = [
       { ...harness('fake:card', 'h1'), raw: ['second', 'third'] },
     ],
     slots: [['chat-entry chat-raw@default']],
-    logs: ['layout entry renderer fake:card entry update failed: broken update'],
+    logs: [
+      'layout entry renderer fake:card entry update failed: broken update',
+    ],
     toasts: ['Chat entry renderer: fake:card entries drawn with default'],
     disposedAnchors: [],
   },
