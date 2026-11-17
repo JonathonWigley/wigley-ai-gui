@@ -321,4 +321,5 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 08 docs/sessions/settings: TreeViewDeps.anchor, mountSidebarView's anchor and SettingsViewDeps.anchor removed with their callers' arguments, per the task's unused-parameter rule · group 08
 - 08 settings: SettingsView has no dispose, so the cursor prompt and Leader prompts dispose with disposeEntries on each redraw · group 08
 ### Review rounds
+- Round 1 fixes 6ed1fba05..6a18f4615: Medium — behaviour changes in shared EditorBoxes (setText, editorOf, keepFocusedBox caret, place scrollTop) and the layout-loader restyled filter; re-review correctness only.
 ### Test gate
