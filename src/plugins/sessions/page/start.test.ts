@@ -879,20 +879,32 @@ describe('sessions page part', () => {
   // Breaks: a targeted run stopped by the hidden mode's guard, or acting on
   // the focused pane's session instead of the target. An accept with the box
   // left empty clears the user title of the dialog's session, so its line
-  // names the row the dialog opened for.
+  // names the row the dialog opened for. Breaks: a targeted close of a busy
+  // target asking its end-session confirm, a second ask after the Allow; the
+  // busy target's tab refuses any close that is not at once.
   it.each<{
     case: string;
     command: 'closeSession' | 'renameSession';
     targetSessionId?: string;
+    busyTarget?: boolean;
     closes: unknown[][];
     logged: string[];
     isShown: boolean;
   }>([
     {
-      case: 'closeSession closes the target',
+      case: 'closeSession closes the target at once',
       command: 'closeSession',
       targetSessionId: 's2',
-      closes: [['s2', false]],
+      closes: [['s2', true]],
+      logged: [],
+      isShown: false,
+    },
+    {
+      case: 'closeSession closes a busy target with no second confirm',
+      command: 'closeSession',
+      targetSessionId: 's2',
+      busyTarget: true,
+      closes: [['s2', true]],
       logged: [],
       isShown: false,
     },
@@ -921,10 +933,27 @@ describe('sessions page part', () => {
     },
   ])(
     'a target passes the hidden mode guard: $case',
-    async ({ command, targetSessionId, closes, logged, isShown }) => {
+    async ({
+      command,
+      targetSessionId,
+      busyTarget,
+      closes,
+      logged,
+      isShown,
+    }) => {
       const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
         withOtherMode: true,
       });
+      if (busyTarget) {
+        setup.exports.addTab('s2', {
+          id: 'chat',
+          title: 'Chat',
+          icon: 'book',
+          element: document.createElement('div'),
+          beforeClose: (atOnce) => atOnce,
+          shown: () => undefined,
+        });
+      }
       const { commands } = setup.harness.started();
       const before = setup.harness.logs.length;
 

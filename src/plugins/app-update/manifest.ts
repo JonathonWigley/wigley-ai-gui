@@ -31,6 +31,7 @@ export const appUpdateManifest = definePlugin({
       label: 'press the update button',
       group: 'app',
       runsIn: 'page',
+      risky: true,
     },
   },
   scopes: {},

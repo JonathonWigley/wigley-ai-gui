@@ -155,8 +155,9 @@ type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
 
 // Asks the session's tabs in order, then its popups, then main, to close it,
 // resolving to whether the row closed; `atOnce` says the close key found a tab
-// or popup asking for an instant close, so main cancels what its guards hold
-// first. Main's refusal is logged and toasted, and a failed ask logged.
+// or popup asking for an instant close, or the run named a target, so main
+// cancels what its guards hold first. Main's refusal is logged and toasted,
+// and a failed ask logged.
 async function closeSession(
   api: SessionsApi,
   view: SessionsView,
@@ -1149,7 +1150,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         togglePopup,
         // Acts on the run's target when it names one, shown or not; else on the
         // focused pane's session, whichever box the key fired in, and never on
-        // a row the user cannot see.
+        // a row the user cannot see. A targeted run closes at once, since only
+        // an agent's run names a target and the user's Allow confirmed it.
         closeSession: ({ targetSessionId }: PageCommandContext) => {
           if (targetSessionId === undefined && !mode.isShown()) {
             log('close ignored: Sessions mode is hidden');
@@ -1157,10 +1159,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           }
           const sessionId = targetSessionId ?? view.panes.focusedSessionId();
           if (sessionId !== null) {
-            const atOnce = closesAtOnce([
-              ...view.tabs.tabsOf(sessionId),
-              ...view.tabs.popupsOf(sessionId),
-            ]);
+            const atOnce =
+              targetSessionId !== undefined ||
+              closesAtOnce([
+                ...view.tabs.tabsOf(sessionId),
+                ...view.tabs.popupsOf(sessionId),
+              ]);
             void closeSession(api, view, labelOf, sessionId, atOnce);
           }
         },

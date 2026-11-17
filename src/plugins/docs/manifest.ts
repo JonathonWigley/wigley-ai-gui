@@ -153,6 +153,7 @@ export const docsManifest = definePlugin({
       label: 'overwrite the disk',
       group: 'conflict',
       runsIn: 'page',
+      risky: true,
     },
     conflictCancel: {
       label: 'keep editing',
@@ -200,6 +201,7 @@ export const docsManifest = definePlugin({
       group: 'confirm',
       runsIn: 'page',
       arg: { viewId: 'string', answer: 'string' },
+      risky: true,
     },
   },
   scopes: {

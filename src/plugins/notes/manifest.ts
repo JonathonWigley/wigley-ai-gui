@@ -105,6 +105,7 @@ export const notesManifest = definePlugin({
       group: 'images',
       runsIn: 'page',
       arg: 'number',
+      risky: true,
     },
     removeSession: {
       label: 'remove this session',
