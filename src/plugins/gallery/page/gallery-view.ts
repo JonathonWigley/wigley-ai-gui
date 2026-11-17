@@ -444,6 +444,7 @@ function tagCells(): SampleCell[][] {
   const tags: [string, TagTone][] = [
     ['Nit', 'neutral'],
     ['Recommended', 'accent'],
+    ['On demand', 'info'],
     ['Running', 'running'],
     ['Applied', 'success'],
     ['Minor', 'warning'],

@@ -123,7 +123,7 @@ means something.
 | Lines                  | `border-subtle`, `border-default`, `border-strong`                      | Hairlines on L1 edges; gutters elsewhere                                                                            |
 | Text                   | `fg`, `fg-secondary`, `fg-tertiary`, `fg-disabled`                      | Primary, labels and metadata, hints, disabled and placeholder                                                       |
 | **Accent (the one)**   | `accent`, `accent-tint`, `accent-tint-strong`, `focus-border`           | Focus ring, selection, the primary button, the active tab and activity mark, the active row, the recommended choice |
-| Links and info         | `fg-link`, `status-info`                                                |                                                                                                                     |
+| Links and info         | `fg-link`, `status-info`, `status-info-tint`                            | Links; an informational Tag (the `info` tone: docs' `on-demand` load state)                                         |
 | Running                | `status-running` (sapphire)                                             | An agent working, a tool running                                                                                    |
 | Success / added        | `status-success`                                                        |                                                                                                                     |
 | Warning                | `status-warning`                                                        |                                                                                                                     |
@@ -288,8 +288,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
-- **Tag** (`tag`): a small static label in a tone. The workflow strip's Headless chip is the one Tag drawn as a
-  toggle button (`button.ui-tag`, its `data-state` and `aria-pressed` carrying on or off).
+- **Tag** (`tag`): a small static label in a tone (`neutral`, `accent`, `info`, `running`, `success`, `warning`,
+  `attention`, `error`). The workflow strip's Headless chip is the one Tag drawn as a toggle button
+  (`button.ui-tag`, its `data-state` and `aria-pressed` carrying on or off).
 - **File chip**: a file's path drawn inside a vim box as a pill: `block-background`, `radius-sm`, `space-1` padding
   on the sides only so the box keeps its line height, `font-mono`, a file Codicon in `fg-secondary`, then the file's
   name. The CodeMirror adapter draws it; it is not a builder
