@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  AnswerEntry,
-  AnswersPayload,
-  FindingAnswerEntry,
-  FormBody,
+import {
+  type AnswerEntry,
+  type AnswersPayload,
+  type FindingAnswerEntry,
+  type FormBody,
+  type MainItemKind,
+  RoundError,
 } from '../contract';
-import { roundErrorText } from './mcp-wording';
+import { BUILT_IN_KINDS } from './kinds/formats';
+import { POLL, pollKind } from './kinds/poll-kind.test-support';
+import { createKindRegistry } from './kinds/registry';
+import { roundErrorText, roundPayload } from './mcp-wording';
 import {
   answersResult,
   fingerprint,
@@ -17,8 +22,9 @@ import {
   recommendedBody,
   requireKnownLayouts,
 } from './round';
-import { RoundError } from './round-error';
-import { autoAnsweredPayload, roundType } from './round-type';
+import { autoAnsweredPayload, createRoundType } from './round-type';
+
+const roundType = createRoundType(() => BUILT_IN_KINDS);
 
 function question(overrides: Record<string, unknown> = {}) {
   return {
@@ -85,19 +91,50 @@ function body(answers: AnswerEntry[], extra: Partial<FormBody> = {}): FormBody {
 }
 
 function roundOf(count: number, overrides: Record<string, unknown> = {}) {
-  return parseRound({
+  return parseRound(BUILT_IN_KINDS, {
     heading: 'H',
     questions: Array.from({ length: count }, () => question(overrides)),
   });
 }
 
+// A round of every built-in kind with every field explicit, so no default
+// joins its fingerprint.
+const ALL_KINDS_ARGS = {
+  heading: 'Ignored',
+  overview: 'Ignored',
+  notices: [{ title: 'Renamed', context: 'done', badge: 'Applied' }],
+  findings: [
+    {
+      title: 'Leak',
+      origin: 'caused',
+      severity: 'important',
+      impact: 'Memory grows.',
+      finding: 'The cache never empties.',
+      proof: '- cache.ts:10',
+      choices: [{ text: 'Clear the cache on close', reason: 'Frees memory.' }],
+      recommend: 1,
+      recommend_action: 'fix_now',
+    },
+  ],
+  questions: [
+    {
+      title: 'Naming',
+      summary: 'Which name?',
+      context: 'ctx',
+      choices: ['a', 'b'],
+      recommend: 1,
+      rationale: 'r',
+    },
+  ],
+};
+
 // The tool error text of the RoundError parseRound throws for these args.
 function roundError(args: unknown): string {
   try {
-    parseRound(args);
+    parseRound(BUILT_IN_KINDS, args);
   } catch (error) {
     if (error instanceof RoundError) {
-      return roundErrorText(error);
+      return roundErrorText(BUILT_IN_KINDS, error);
     }
     throw error;
   }
@@ -106,7 +143,7 @@ function roundError(args: unknown): string {
 
 describe('parseRound', () => {
   it('keeps a valid two-question round in order', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'Naming decisions',
       questions: [
         question({ title: 'First', summary: 'Pick the first name.' }),
@@ -125,19 +162,26 @@ describe('parseRound', () => {
   });
 
   it('reads an absent or null layout as null on the round', () => {
-    expect(parseRound({ heading: 'H', questions: [question()] }).layout).toBe(
-      null,
-    );
     expect(
-      parseRound({ heading: 'H', layout: null, questions: [question()] })
+      parseRound(BUILT_IN_KINDS, { heading: 'H', questions: [question()] })
         .layout,
+    ).toBe(null);
+    expect(
+      parseRound(BUILT_IN_KINDS, {
+        heading: 'H',
+        layout: null,
+        questions: [question()],
+      }).layout,
     ).toBe(null);
   });
 
   it('keeps a round layout as sent', () => {
     expect(
-      parseRound({ heading: 'H', layout: ' compact', questions: [question()] })
-        .layout,
+      parseRound(BUILT_IN_KINDS, {
+        heading: 'H',
+        layout: ' compact',
+        questions: [question()],
+      }).layout,
     ).toBe(' compact');
   });
 
@@ -175,7 +219,7 @@ describe('parseRound', () => {
   });
 
   it('keeps the overview stripped', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       overview: '  Refactoring X. This round: names.  ',
       questions: [question()],
@@ -185,9 +229,10 @@ describe('parseRound', () => {
   });
 
   it('parses a round with no overview, so older saved rounds rebuild', () => {
-    expect(parseRound({ heading: 'H', questions: [question()] }).overview).toBe(
-      '',
-    );
+    expect(
+      parseRound(BUILT_IN_KINDS, { heading: 'H', questions: [question()] })
+        .overview,
+    ).toBe('');
   });
 
   it('refuses a non-string overview', () => {
@@ -210,7 +255,10 @@ describe('parseRound', () => {
 
 describe('parseRound with notices', () => {
   it('parses notices alone, with no questions', () => {
-    const round = parseRound({ heading: 'H', notices: [notice()] });
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      notices: [notice()],
+    });
 
     expect(round.questions).toEqual([]);
     expect(round.notices.map((each) => each.title)).toEqual([
@@ -219,7 +267,7 @@ describe('parseRound with notices', () => {
   });
 
   it('parses notices and questions together', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       questions: [question()],
       notices: [notice(), notice({ title: 'Second fix' })],
@@ -231,11 +279,15 @@ describe('parseRound with notices', () => {
 
   it('reads omitted or null notices and questions as none', () => {
     expect(
-      parseRound({ heading: 'H', questions: [question()] }).notices,
+      parseRound(BUILT_IN_KINDS, { heading: 'H', questions: [question()] })
+        .notices,
     ).toEqual([]);
     expect(
-      parseRound({ heading: 'H', questions: null, notices: [notice()] })
-        .questions,
+      parseRound(BUILT_IN_KINDS, {
+        heading: 'H',
+        questions: null,
+        notices: [notice()],
+      }).questions,
     ).toEqual([]);
   });
 
@@ -248,7 +300,10 @@ describe('parseRound with notices', () => {
   });
 
   it.each(['Dispatched', 'Decided'])('accepts the %s badge', (badge) => {
-    const round = parseRound({ heading: 'H', notices: [notice({ badge })] });
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      notices: [notice({ badge })],
+    });
 
     expect(round.notices[0].badge).toBe(badge);
   });
@@ -256,7 +311,7 @@ describe('parseRound with notices', () => {
 
 describe('parseRound with findings', () => {
   it('parses findings beside questions and notices, in their own array', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       questions: [question()],
       findings: [finding()],
@@ -277,7 +332,10 @@ describe('parseRound with findings', () => {
   });
 
   it('parses findings alone', () => {
-    const round = parseRound({ heading: 'H', findings: [finding()] });
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      findings: [finding()],
+    });
 
     expect(round.findings).toHaveLength(1);
     expect(round.questions).toEqual([]);
@@ -286,11 +344,15 @@ describe('parseRound with findings', () => {
 
   it('reads omitted or null findings as none', () => {
     expect(
-      parseRound({ heading: 'H', questions: [question()] }).findings,
+      parseRound(BUILT_IN_KINDS, { heading: 'H', questions: [question()] })
+        .findings,
     ).toEqual([]);
     expect(
-      parseRound({ heading: 'H', questions: [question()], findings: null })
-        .findings,
+      parseRound(BUILT_IN_KINDS, {
+        heading: 'H',
+        questions: [question()],
+        findings: null,
+      }).findings,
     ).toEqual([]);
   });
 
@@ -311,10 +373,14 @@ describe('requireKnownLayouts', () => {
   // these args.
   function layoutError(args: unknown): string {
     try {
-      requireKnownLayouts(parseRound(args), LAYOUTS);
+      requireKnownLayouts(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, args),
+        LAYOUTS,
+      );
     } catch (error) {
       if (error instanceof RoundError) {
-        return roundErrorText(error);
+        return roundErrorText(BUILT_IN_KINDS, error);
       }
       throw error;
     }
@@ -322,7 +388,7 @@ describe('requireKnownLayouts', () => {
   }
 
   it('passes a round whose every layout the folder holds', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       layout: 'compact',
       questions: [question({ layout: 'default' })],
@@ -330,7 +396,9 @@ describe('requireKnownLayouts', () => {
       notices: [notice()],
     });
 
-    expect(() => requireKnownLayouts(round, LAYOUTS)).not.toThrow();
+    expect(() =>
+      requireKnownLayouts(BUILT_IN_KINDS, round, LAYOUTS),
+    ).not.toThrow();
   });
 
   it("refuses an unknown round layout, listing the folder's layouts", () => {
@@ -363,7 +431,7 @@ describe('readFormBody', () => {
   it('reads one entry per question by index, with defaults where none was saved', () => {
     const round = roundOf(2);
 
-    const read = readFormBody(round, {
+    const read = readFormBody(BUILT_IN_KINDS, round, {
       note: 'n',
       answers: [{ index: 2, choice: 1, notes: 'w' }],
     });
@@ -379,7 +447,7 @@ describe('readFormBody', () => {
   });
 
   it("joins an old file's what and why as notes, with a blank line", () => {
-    const read = readFormBody(roundOf(1), {
+    const read = readFormBody(BUILT_IN_KINDS, roundOf(1), {
       answers: [{ index: 1, what: 'mine', why: 'because' }],
     });
 
@@ -388,15 +456,16 @@ describe('readFormBody', () => {
 
   it("reads an old file's lone what or lone why as notes", () => {
     const lone = (entry: Record<string, unknown>) =>
-      readFormBody(roundOf(1), { answers: [{ index: 1, ...entry }] }).answers[0]
-        .notes;
+      readFormBody(BUILT_IN_KINDS, roundOf(1), {
+        answers: [{ index: 1, ...entry }],
+      }).answers[0].notes;
 
     expect(lone({ what: 'mine', why: '' })).toBe('mine');
     expect(lone({ why: 'because' })).toBe('because');
   });
 
   it('prefers a notes key over what and why, even when empty', () => {
-    const read = readFormBody(roundOf(1), {
+    const read = readFormBody(BUILT_IN_KINDS, roundOf(1), {
       answers: [{ index: 1, notes: '', what: 'old' }],
     });
 
@@ -404,12 +473,12 @@ describe('readFormBody', () => {
   });
 
   it('reads one finding answer per finding by index', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       findings: [finding(), finding({ title: 'Dead branch' })],
     });
 
-    const read = readFormBody(round, {
+    const read = readFormBody(BUILT_IN_KINDS, round, {
       finding_answers: [{ index: 2, choice: 1, notes: 'n' }],
     });
 
@@ -420,17 +489,23 @@ describe('readFormBody', () => {
   });
 
   it('reads a body with no finding_answers as untouched findings', () => {
-    const round = parseRound({ heading: 'H', findings: [finding()] });
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      findings: [finding()],
+    });
 
-    expect(readFormBody(round, {}).finding_answers).toEqual([
+    expect(readFormBody(BUILT_IN_KINDS, round, {}).finding_answers).toEqual([
       findingAnswer({ index: 1 }),
     ]);
   });
 
   it("keeps a finding's saved action", () => {
-    const round = parseRound({ heading: 'H', findings: [finding()] });
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      findings: [finding()],
+    });
 
-    const read = readFormBody(round, {
+    const read = readFormBody(BUILT_IN_KINDS, round, {
       finding_answers: [{ index: 1, choice: 2, action: 'follow_up' }],
     });
 
@@ -438,12 +513,12 @@ describe('readFormBody', () => {
   });
 
   it('reads a finding entry with no action, or an unknown one, as none', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       findings: [finding(), finding({ title: 'Dead branch' })],
     });
 
-    const read = readFormBody(round, {
+    const read = readFormBody(BUILT_IN_KINDS, round, {
       finding_answers: [
         { index: 1, choice: 2 },
         { index: 2, choice: 1, action: 'Fix now' },
@@ -454,7 +529,7 @@ describe('readFormBody', () => {
   });
 
   it('keeps a pressed answer with its reason', () => {
-    const read = readFormBody(roundOf(1), {
+    const read = readFormBody(BUILT_IN_KINDS, roundOf(1), {
       answers: [
         { index: 1, choice: 2, dont_ask: true, dont_ask_reason: 'settle it' },
       ],
@@ -466,7 +541,7 @@ describe('readFormBody', () => {
   });
 
   it('reads a non-boolean press and a non-string reason as unpressed', () => {
-    const read = readFormBody(roundOf(1), {
+    const read = readFormBody(BUILT_IN_KINDS, roundOf(1), {
       answers: [{ index: 1, choice: 1, dont_ask: 'true', dont_ask_reason: 7 }],
     });
 
@@ -474,7 +549,7 @@ describe('readFormBody', () => {
   });
 
   it('keeps the choice number of a not-applicable answer', () => {
-    const read = readFormBody(roundOf(1), {
+    const read = readFormBody(BUILT_IN_KINDS, roundOf(1), {
       answers: [{ index: 1, choice: 2, not_applicable: true }],
     });
 
@@ -484,7 +559,7 @@ describe('readFormBody', () => {
   it.each([[true], ['2'], [1.5]])(
     'reads a choice of %j as no choice',
     (choice) => {
-      const read = readFormBody(roundOf(1), {
+      const read = readFormBody(BUILT_IN_KINDS, roundOf(1), {
         answers: [{ index: 1, choice }],
       });
 
@@ -493,12 +568,12 @@ describe('readFormBody', () => {
   );
 
   it('reads notice comments by index and gives an absent one an empty comment', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       notices: [notice(), notice({ title: 'Second' })],
     });
 
-    const read = readFormBody(round, {
+    const read = readFormBody(BUILT_IN_KINDS, round, {
       notice_comments: [{ index: 2, comment: 'check this' }],
     });
 
@@ -509,13 +584,31 @@ describe('readFormBody', () => {
   });
 
   it('reads a body that is not an object as untouched', () => {
-    expect(readFormBody(roundOf(1), 'junk')).toEqual(body([answer({})]));
+    expect(readFormBody(BUILT_IN_KINDS, roundOf(1), 'junk')).toEqual(
+      body([answer({})]),
+    );
+  });
+
+  // Breaks if the key order or an entry's fields drift, so a saved file read
+  // back and saved again would change.
+  it('writes a saved body back byte for byte', () => {
+    const round = parseRound(BUILT_IN_KINDS, ALL_KINDS_ARGS);
+    const text =
+      '{"note":"n","answers":[{"index":1,"choice":2,"not_applicable":false,' +
+      '"notes":"","dont_ask":false,"dont_ask_reason":""}],' +
+      '"finding_answers":[{"index":1,"choice":1,"not_applicable":false,' +
+      '"notes":"","dont_ask":false,"dont_ask_reason":"","action":"fix_now"}],' +
+      '"notice_comments":[{"index":1,"comment":"ok"}]}';
+
+    expect(
+      JSON.stringify(readFormBody(BUILT_IN_KINDS, round, JSON.parse(text))),
+    ).toBe(text);
   });
 });
 
 describe('roundType.payload', () => {
   it('builds the whole payload for a submitted round', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'Interview architecture',
       questions: [
         question({ title: 'Alpha', choices: ['a', 'b', 'c'], recommend: 1 }),
@@ -674,7 +767,10 @@ describe('roundType.payload', () => {
   });
 
   it('sends notes with no pick as untouched, carrying the notes', () => {
-    const round = parseRound({ heading: 'H', findings: [finding()] });
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      findings: [finding()],
+    });
 
     const payload = roundType.payload(
       round,
@@ -717,7 +813,7 @@ describe('roundType.payload', () => {
 
 describe('roundType.payload findings', () => {
   it('returns finding answers in their own array, index-parallel with the findings', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       questions: [question()],
       findings: [
@@ -779,7 +875,10 @@ describe('roundType.payload findings', () => {
   });
 
   it("carries a Don't ask press on a finding answer", () => {
-    const round = parseRound({ heading: 'H', findings: [finding()] });
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      findings: [finding()],
+    });
 
     const payload = roundType.payload(
       round,
@@ -857,7 +956,7 @@ describe('roundType.payload findings', () => {
     'summarises $shape',
     ({ args, outcome, answers, findingAnswers, summary }) => {
       const payload = roundType.payload(
-        parseRound(args),
+        parseRound(BUILT_IN_KINDS, args),
         outcome,
         body([...answers], { finding_answers: [...findingAnswers] }),
       );
@@ -884,7 +983,7 @@ describe('roundType.payload finding actions', () => {
     entry: Partial<FindingAnswerEntry>,
     raw: Record<string, unknown> = TWO_ACTIONS,
   ) {
-    const round = parseRound({ heading: 'H', findings: [raw] });
+    const round = parseRound(BUILT_IN_KINDS, { heading: 'H', findings: [raw] });
     const payload = roundType.payload(
       round,
       'submitted',
@@ -1006,7 +1105,7 @@ describe('roundType.payload finding actions', () => {
 
 describe('roundType.payload notices', () => {
   function roundWithNotices(noticeCount: number) {
-    return parseRound({
+    return parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       questions: [question()],
       notices: Array.from({ length: noticeCount }, (_, n) =>
@@ -1047,7 +1146,7 @@ describe('roundType.payload notices', () => {
   });
 
   it('echoes a Decided badge', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'H',
       notices: [notice({ title: 'Kept it in config', badge: 'Decided' })],
     });
@@ -1073,7 +1172,10 @@ describe('roundType.payload notices', () => {
   });
 
   it('submits a notices-alone round with an empty answers list', () => {
-    const round = parseRound({ heading: 'H', notices: [notice()] });
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      notices: [notice()],
+    });
 
     const payload = roundType.payload(round, 'submitted', body([]));
 
@@ -1152,10 +1254,23 @@ describe('fingerprint', () => {
   }
 
   it('ignores the heading and the overview', () => {
-    const base = fingerprint(parseRound(args()));
+    const base = fingerprint(
+      BUILT_IN_KINDS,
+      parseRound(BUILT_IN_KINDS, args()),
+    );
 
-    expect(fingerprint(parseRound(args({ heading: 'Other' })))).toBe(base);
-    expect(fingerprint(parseRound(args({ overview: 'Other' })))).toBe(base);
+    expect(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, args({ heading: 'Other' })),
+      ),
+    ).toBe(base);
+    expect(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, args({ overview: 'Other' })),
+      ),
+    ).toBe(base);
   });
 
   it('changes with the summary', () => {
@@ -1163,42 +1278,54 @@ describe('fingerprint', () => {
       questions: [question({ ...BASE_QUESTION, summary: 'Which name loses?' })],
     });
 
-    expect(fingerprint(parseRound(reworded))).not.toBe(
-      fingerprint(parseRound(args())),
-    );
+    expect(
+      fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, reworded)),
+    ).not.toBe(fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, args())));
   });
 
   it("hashes a legacy question's `question` as its summary twin", () => {
     const { summary, ...rest } = question(BASE_QUESTION);
     const legacy = args({ questions: [{ ...rest, question: summary }] });
 
-    expect(fingerprint(parseRound(legacy))).toBe(
-      fingerprint(parseRound(args())),
-    );
+    expect(
+      fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, legacy)),
+    ).toBe(fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, args())));
   });
 
   it('hashes a round with no findings with no findings key', () => {
-    expect(fingerprint(parseRound(args({ notices: [] })))).toBe(
-      '56624f6db3c22a5e6fb81207c85d247e1ec9e920364a03263f46d2d6afc00ffb',
-    );
+    expect(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, args({ notices: [] })),
+      ),
+    ).toBe('56624f6db3c22a5e6fb81207c85d247e1ec9e920364a03263f46d2d6afc00ffb');
   });
 
   it('hashes a finding with no choice actions or action_reasons as it did before they existed', () => {
     expect(
-      fingerprint(parseRound({ heading: 'H', findings: [finding()] })),
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, { heading: 'H', findings: [finding()] }),
+      ),
     ).toBe('fc3a3a26e21f0c6e85e8ad1f4d000380e032b3b52e3bc6b2ffae5226034e77b1');
   });
 
   it('ignores an empty findings list', () => {
-    expect(fingerprint(parseRound(args({ findings: [] })))).toBe(
-      fingerprint(parseRound(args())),
-    );
+    expect(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, args({ findings: [] })),
+      ),
+    ).toBe(fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, args())));
   });
 
   it('counts the findings', () => {
-    expect(fingerprint(parseRound(args({ findings: [finding()] })))).not.toBe(
-      fingerprint(parseRound(args())),
-    );
+    expect(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, args({ findings: [finding()] })),
+      ),
+    ).not.toBe(fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, args())));
   });
 
   it('ignores the round layout and item layouts', () => {
@@ -1210,8 +1337,10 @@ describe('fingerprint', () => {
       findings: [finding({ layout: 'compact' })],
     });
 
-    expect(fingerprint(parseRound(laidOut))).toBe(
-      fingerprint(parseRound(withFinding)),
+    expect(
+      fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, laidOut)),
+    ).toBe(
+      fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, withFinding)),
     );
   });
 
@@ -1228,8 +1357,16 @@ describe('fingerprint', () => {
         ],
       });
 
-    expect(fingerprint(parseRound(withAction('fix_now')))).not.toBe(
-      fingerprint(parseRound(withAction('leave_it'))),
+    expect(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, withAction('fix_now')),
+      ),
+    ).not.toBe(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, withAction('leave_it')),
+      ),
     );
   });
 
@@ -1246,19 +1383,30 @@ describe('fingerprint', () => {
         ],
       });
 
-    expect(fingerprint(parseRound(withReason('Reloads are rare.')))).not.toBe(
-      fingerprint(parseRound(withReason('Nobody reloads.'))),
+    expect(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, withReason('Reloads are rare.')),
+      ),
+    ).not.toBe(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, withReason('Nobody reloads.')),
+      ),
     );
   });
 
   it('counts the notices', () => {
-    expect(fingerprint(parseRound(args({ notices: [] })))).not.toBe(
-      fingerprint(parseRound(args())),
-    );
+    expect(
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, args({ notices: [] })),
+      ),
+    ).not.toBe(fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, args())));
   });
 
   it("equals Python's json.dumps hash for the same round", () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'Ignored heading',
       overview: 'Ignored overview',
       questions: [
@@ -1278,8 +1426,43 @@ describe('fingerprint', () => {
       ],
     });
 
-    expect(fingerprint(round)).toBe(
+    expect(fingerprint(BUILT_IN_KINDS, round)).toBe(
       '58960c3e13b904b5bdbb945f76fd021f79b7c68c104678715b269021f13677a7',
+    );
+  });
+
+  // Breaks when a kind's fingerprint keys, content or join rule drift, so
+  // saved files would stop matching their re-sends.
+  it.each([
+    {
+      case: 'as written',
+      overrides: {},
+      hash: '9d2a6bcc16872111817bb133ca6884d80cac3374686004c367e408207b52b598',
+    },
+    {
+      case: 'with no findings',
+      overrides: { findings: [] },
+      hash: '11c9cd9ef9ccd6280164980a1ef91d1e45f8bf2cc27cf035526c83b6bb911412',
+    },
+  ])(
+    'pins a round of all three kinds to the hash saved files hold ($case)',
+    ({ overrides, hash }) => {
+      const round = parseRound(BUILT_IN_KINDS, {
+        ...ALL_KINDS_ARGS,
+        ...overrides,
+      });
+
+      expect(fingerprint(BUILT_IN_KINDS, round)).toBe(hash);
+    },
+  );
+
+  // Breaks if the hash came to depend on the order the kinds registered in.
+  it('hashes the same whatever order the built-ins register in', () => {
+    const reordered = BUILT_IN_KINDS.toReversed();
+    const round = parseRound(reordered, ALL_KINDS_ARGS);
+
+    expect(fingerprint(reordered, round)).toBe(
+      '9d2a6bcc16872111817bb133ca6884d80cac3374686004c367e408207b52b598',
     );
   });
 });
@@ -1345,9 +1528,13 @@ describe('autoAnsweredPayload', () => {
   ])(
     "takes every item's recommendation ($name)",
     ({ args, item, expected }) => {
-      const round = parseRound({ heading: 'H', ...args });
+      const round = parseRound(BUILT_IN_KINDS, { heading: 'H', ...args });
 
-      const payload = autoAnsweredPayload(round, recommendedBody(round));
+      const payload = autoAnsweredPayload(
+        BUILT_IN_KINDS,
+        round,
+        recommendedBody(BUILT_IN_KINDS, round),
+      );
 
       expect(payload.outcome).toBe('auto_answered');
       expect(payload.next).toBe(
@@ -1378,7 +1565,7 @@ describe('roundType.noFormPayload', () => {
 
 describe('roundType.handedBackPayload', () => {
   it('names the earlier round and says to send the new one again', () => {
-    const round = parseRound({
+    const round = parseRound(BUILT_IN_KINDS, {
       heading: 'Earlier round',
       questions: [question()],
     });
@@ -1395,46 +1582,202 @@ describe('roundType.handedBackPayload', () => {
 });
 
 describe('round results', () => {
-  const round = parseRound({ heading: 'H', questions: [question()] });
-  const blank = readFormBody(round, {});
+  const round = parseRound(BUILT_IN_KINDS, {
+    heading: 'H',
+    questions: [question()],
+  });
+  const blank = readFormBody(BUILT_IN_KINDS, round, {});
 
   it.each([
     {
       name: 'draft',
-      result: () => answersResult(round, 'draft', blank),
+      result: () => answersResult(BUILT_IN_KINDS, round, 'draft', blank),
       reason: { kind: 'stillOpen' },
     },
     {
       name: 'submitted',
-      result: () => answersResult(round, 'submitted', blank),
+      result: () => answersResult(BUILT_IN_KINDS, round, 'submitted', blank),
       reason: { kind: 'finished' },
     },
     {
       name: 'cancelled',
-      result: () => answersResult(round, 'cancelled', blank),
+      result: () => answersResult(BUILT_IN_KINDS, round, 'cancelled', blank),
       reason: { kind: 'finished' },
     },
     {
       name: 'auto_answered',
-      result: () => answersResult(round, 'auto_answered', blank),
+      result: () =>
+        answersResult(BUILT_IN_KINDS, round, 'auto_answered', blank),
       reason: { kind: 'autoAnswered' },
     },
     {
       name: 'handed-back',
-      result: () => handedBackResult(round, 'submitted', blank),
+      result: () => handedBackResult(BUILT_IN_KINDS, round, 'submitted', blank),
       reason: { kind: 'handedBack', heading: 'H' },
     },
     {
       name: 'not-shown',
-      result: () => notShownResult(round, 'Other'),
+      result: () => notShownResult(BUILT_IN_KINDS, round, 'Other'),
       reason: { kind: 'notShown', heading: 'H', blockingHeading: 'Other' },
     },
     {
       name: 'no-round',
-      result: () => noRoundResult(),
+      result: () => noRoundResult(BUILT_IN_KINDS),
       reason: { kind: 'noRound' },
     },
   ])('gives a $name result the reason $reason.kind', ({ result, reason }) => {
     expect(result().reason).toEqual(reason);
+  });
+});
+
+describe('a registered kind', () => {
+  const kinds = [...BUILT_IN_KINDS, pollKind];
+  const args = { heading: 'H', overview: 'O', polls: [POLL] };
+
+  // The tool error text of the RoundError parseRound throws for these args
+  // under `known`.
+  function errorUnder(known: readonly MainItemKind[], raw: unknown): string {
+    try {
+      parseRound(known, raw);
+    } catch (error) {
+      if (error instanceof RoundError) {
+        return roundErrorText(known, error);
+      }
+      throw error;
+    }
+    throw new Error('parseRound accepted the round');
+  }
+
+  it('parses its list from its argsKey', () => {
+    expect(parseRound(kinds, args).items.poll).toEqual([POLL]);
+  });
+
+  it('lists its argsKey after questions in the unknown-field error', () => {
+    expect(errorUnder(kinds, { ...args, extra: 1 })).toBe(
+      "ask_round got unknown field(s): extra. It takes 'heading', " +
+        "'overview', 'layout', 'notices', 'findings', 'questions', and " +
+        "'polls'.",
+    );
+  });
+
+  it('names its noun last in the empty-round error', () => {
+    expect(errorUnder(kinds, { heading: 'H' })).toBe(
+      'ask_round needs at least one notice, finding, question or poll.',
+    );
+  });
+
+  it("words its parse error with its noun and the item's number", () => {
+    expect(errorUnder(kinds, { heading: 'H', polls: [{}] })).toBe(
+      'Poll 1: each poll needs a title.',
+    );
+  });
+
+  it('writes its body key first, then the built-ins in saved order', () => {
+    const round = parseRound(kinds, args);
+
+    expect(Object.keys(readFormBody(kinds, round, {}))).toEqual([
+      'note',
+      'poll_answers',
+      'answers',
+      'finding_answers',
+      'notice_comments',
+    ]);
+  });
+
+  it('writes its result key first after next, then the built-ins', () => {
+    const round = parseRound(kinds, args);
+    const result = answersResult(
+      kinds,
+      round,
+      'submitted',
+      recommendedBody(kinds, round),
+    );
+
+    expect(Object.keys(roundPayload(kinds, result))).toEqual([
+      'outcome',
+      'summary',
+      'next',
+      'polls',
+      'answers',
+      'findings',
+      'notices',
+    ]);
+  });
+
+  it('holds its results at its kind id', () => {
+    const round = parseRound(kinds, args);
+    const result = answersResult(
+      kinds,
+      round,
+      'submitted',
+      recommendedBody(kinds, round),
+    );
+
+    expect(result.results.poll).toEqual([
+      { index: 1, title: 'Lunch', status: 'answered', vote: 1 },
+    ]);
+  });
+
+  it('counts its items after the questions in the summary', () => {
+    const round = parseRound(kinds, { ...args, questions: [question()] });
+    const result = answersResult(
+      kinds,
+      round,
+      'submitted',
+      recommendedBody(kinds, round),
+    );
+
+    expect(roundPayload(kinds, result).summary).toBe(
+      '1 question, 1 poll: 2 answered, 0 not applicable, 0 untouched.',
+    );
+  });
+
+  it('writes an empty list for it in a round with none', () => {
+    const round = parseRound(kinds, { heading: 'H', questions: [question()] });
+    const result = answersResult(
+      kinds,
+      round,
+      'submitted',
+      readFormBody(kinds, round, {}),
+    );
+
+    expect(readFormBody(kinds, round, {}).poll_answers).toEqual([]);
+    expect(roundPayload(kinds, result).polls).toEqual([]);
+  });
+
+  it('holds an empty list for every registered kind in a no-round result', () => {
+    expect(noRoundResult(kinds).results).toEqual({
+      notice: [],
+      finding: [],
+      question: [],
+      poll: [],
+    });
+  });
+
+  it('is an unknown field once disposed', () => {
+    const registry = createKindRegistry();
+    for (const kind of BUILT_IN_KINDS) {
+      registry.register(kind);
+    }
+    registry.register(pollKind).dispose();
+
+    expect(errorUnder(registry.kinds(), args)).toMatch(
+      /^ask_round got unknown field\(s\): polls\. It takes /,
+    );
+  });
+
+  it("leaves a disposed kind's list in a parsed round out of the body and payload", () => {
+    const round = parseRound(kinds, { ...args, questions: [question()] });
+    const result = answersResult(
+      BUILT_IN_KINDS,
+      round,
+      'submitted',
+      readFormBody(BUILT_IN_KINDS, round, {}),
+    );
+
+    expect(readFormBody(BUILT_IN_KINDS, round, {})).not.toHaveProperty(
+      'poll_answers',
+    );
+    expect(roundPayload(BUILT_IN_KINDS, result)).not.toHaveProperty('polls');
   });
 });

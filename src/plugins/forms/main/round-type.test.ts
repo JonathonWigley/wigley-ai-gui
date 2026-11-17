@@ -15,16 +15,19 @@ import {
   type MemoryFiles,
 } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type {
-  AnswerEntry,
-  AnswersPayload,
-  FormBody,
-  FormsSession,
-  Round,
+import {
+  type AnswerEntry,
+  type AnswersPayload,
+  type FormBody,
+  type FormsSession,
+  type Round,
+  RoundError,
 } from '../contract';
+import { BUILT_IN_KINDS } from './kinds/formats';
 import { fingerprint, parseRound } from './round';
-import { RoundError } from './round-error';
-import { roundType, withKnownLayouts } from './round-type';
+import { createRoundType, withKnownLayouts } from './round-type';
+
+const roundType = createRoundType(() => BUILT_IN_KINDS);
 
 const DEFAULT_DEADLINE_SECONDS = 240;
 
@@ -127,6 +130,7 @@ function startSession(info: Partial<AgentFormOwnerInfo> = {}): FormsSession {
       defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
       timers: globalTimers,
     }),
+    () => BUILT_IN_KINDS,
     () => layoutNames,
   ).startSession({ id: 'app-1', info: { ...SESSION, ...info } });
 }
@@ -156,7 +160,7 @@ function saveEarlier(
 ): SavedAgentForm {
   const record = store.create(
     SESSION,
-    fingerprint(parseRound(args)),
+    fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, args)),
     args,
     body,
     null,
@@ -205,7 +209,7 @@ afterEach(() => {
 describe('roundType', () => {
   it('notShownPayload names the blocking round', () => {
     const payload = roundType.notShownPayload(
-      parseRound(PLACEMENT_ARGS),
+      parseRound(BUILT_IN_KINDS, PLACEMENT_ARGS),
       'Naming decisions',
     );
 
@@ -218,7 +222,10 @@ describe('roundType', () => {
   });
 
   it('notShownPayload names another round when none blocks', () => {
-    const payload = roundType.notShownPayload(parseRound(PLACEMENT_ARGS), null);
+    const payload = roundType.notShownPayload(
+      parseRound(BUILT_IN_KINDS, PLACEMENT_ARGS),
+      null,
+    );
 
     expect(payload.summary).toContain(
       'another round is still open in the app.',

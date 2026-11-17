@@ -10,6 +10,7 @@ import type {
   FormsSession,
   Outcome,
 } from '../../contract';
+import { BUILT_IN_KINDS } from '../kinds/formats';
 import { createLayoutPreview } from './layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
@@ -99,6 +100,7 @@ function preview() {
     },
     forms: fakeForms,
     savedArgs: () => saved,
+    kinds: () => BUILT_IN_KINDS,
     layoutNames: () => layoutNames,
     log: (message: string) => logLines.push(message),
   });

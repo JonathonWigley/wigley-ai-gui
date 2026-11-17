@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { BUILT_IN_KINDS } from '../kinds/formats';
 import { parseRound } from '../round';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
 describe('PREVIEW_ROUND_ARGS', () => {
   it('parses, and holds every card kind, every notice badge, grouped choices and action reasons', () => {
-    const round = parseRound(PREVIEW_ROUND_ARGS);
+    const round = parseRound(BUILT_IN_KINDS, PREVIEW_ROUND_ARGS);
     const { findings } = round;
 
     const groupsAChoiceOutsideFixNow = findings.some((finding) =>

@@ -3,6 +3,7 @@ import type {
   AgentFormListener,
   AgentFormPresenter,
 } from '../../../contracts/agent-forms';
+import type { Disposable, Registrations } from '../../../contracts/disposable';
 import type { MainPart } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
@@ -18,10 +19,11 @@ import {
   previewSessions,
   SUBMITTED,
 } from '../../agent-form-fakes.test-support';
-import { sessionsMainKey } from '../../sessions/contract';
+import { sessionsMainKey, type ToolDefinition } from '../../sessions/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
-import { SAVED_ROUNDS_FOLDER } from '../contract';
+import { type FormsMainExports, SAVED_ROUNDS_FOLDER } from '../contract';
 import type { formsManifest } from '../manifest';
+import { pollKind } from './kinds/poll-kind.test-support';
 import {
   addDriveActions,
   formsMainPart,
@@ -336,6 +338,60 @@ describe('forms main part', () => {
 
     expect(shownCount()).toBe(1);
     expect(asked).toEqual([opened.rowId]);
+    await harness.stop();
+  });
+
+  it("puts a kind registered through its exports in the ask_round schema, and takes it out with the consumer's registrations", async () => {
+    const contributed: ToolDefinition[][] = [];
+    const spied: MainPart<typeof formsManifest> = {
+      manifest: formsMainPart.manifest,
+      start: (api) =>
+        formsMainPart.start({
+          ...api,
+          dependency: ((key: typeof sessionsMainKey) => {
+            const provided = api.dependency(key);
+            return key === sessionsMainKey
+              ? {
+                  ...provided,
+                  contributeTools(
+                    ...args: Parameters<typeof provided.contributeTools>
+                  ) {
+                    contributed.push(args[0]);
+                    return provided.contributeTools(...args);
+                  },
+                }
+              : provided;
+          }) as typeof api.dependency,
+        }),
+    };
+    const harness = startMainPart(spied, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat()],
+    });
+    const handles: Disposable[] = [];
+    const consumer: Registrations = {
+      track: (handle) => {
+        handles.push(handle);
+        return handle;
+      },
+    };
+    const askRoundFields = () => {
+      const askRound = contributed
+        .at(-1)
+        ?.find((each) => each.name === 'ask_round');
+      return Object.keys(
+        askRound?.inputSchema.properties as Record<string, unknown>,
+      );
+    };
+    const exports = harness.started().exports?.(consumer) as FormsMainExports;
+
+    exports.registerKind(pollKind);
+    expect(askRoundFields()).toContain('polls');
+
+    for (const handle of handles) {
+      handle.dispose();
+    }
+    expect(askRoundFields()).not.toContain('polls');
     await harness.stop();
   });
 

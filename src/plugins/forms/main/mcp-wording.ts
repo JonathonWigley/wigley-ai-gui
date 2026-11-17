@@ -1,12 +1,11 @@
 import type {
-  AnswerableKind,
-  AnswerResult,
   AnswersPayload,
   AnswerStatus,
+  MainItemKind,
+  RoundError,
+  RoundErrorPath,
 } from '../contract';
-import { ANSWERABLE_KINDS, FORMATS } from './kinds/formats';
 import type { RoundReason, RoundResult } from './round';
-import type { RoundError, RoundErrorPath } from './round-error';
 import { capitalised } from '../../../shared/capitalised';
 
 // The round's MCP wording: its tool names, the text of a malformed call, and
@@ -33,43 +32,72 @@ const NEXT_ON_NO_ROUND =
   `same round again with ${ROUND_OPEN_TOOL}: the user's saved answers fill ` +
   'in. Do not move the questions into the reply.';
 
+// The noun the count names when no answerable kind has items.
+const EMPTY_COUNT_NOUN = 'question';
+
+// The item's noun, capitalised; the kind id itself when no registered kind
+// has it.
+function itemName(kinds: readonly MainItemKind[], id: string): string {
+  const kind = kinds.find((each) => each.spec.id === id);
+  return kind === undefined ? id : capitalised(kind.noun);
+}
+
 // What comes before an error's problem: the call, the round's field, or the
 // item. The heading's message has no prefix.
-function errorPrefix(path: RoundErrorPath): string {
+function errorPrefix(
+  kinds: readonly MainItemKind[],
+  path: RoundErrorPath,
+): string {
   switch (path.at) {
     case 'call':
       return `${ROUND_OPEN_TOOL} `;
     case 'field':
       return path.field === 'heading' ? '' : `${ROUND_OPEN_TOOL}'s `;
     case 'item':
-      return `${capitalised(FORMATS[path.kind].noun)} ${path.number}: `;
+      return `${itemName(kinds, path.kind)} ${path.number}: `;
   }
 }
 
 // The tool error text of a malformed round call.
-export function roundErrorText(error: RoundError): string {
+export function roundErrorText(
+  kinds: readonly MainItemKind[],
+  error: RoundError,
+): string {
   const text =
     error.detail === '' ? error.problem : `${error.problem} ${error.detail}`;
-  return `${errorPrefix(error.path)}${text}`;
+  return `${errorPrefix(kinds, error.path)}${text}`;
 }
 
 function countOf(n: number, noun: string): string {
   return `${n} ${noun}${n !== 1 ? 's' : ''}`;
 }
 
-// Counted from the same statuses the answers carry, so the two never disagree.
+// The kind's results' statuses; a kind with no `status` takes no answer.
+function statusesOf(
+  kind: MainItemKind,
+  results: readonly unknown[],
+): AnswerStatus[] {
+  const { status } = kind;
+  return status === undefined ? [] : results.map((result) => status(result));
+}
+
+// Counted from the same statuses the answers carry, so the two never
+// disagree; the answerable kinds count in registration order.
 function summarise(
-  results: Record<AnswerableKind, AnswerResult[]>,
+  kinds: readonly MainItemKind[],
+  result: RoundResult,
   stillOpen: boolean,
 ): string {
-  const counted = ANSWERABLE_KINDS.filter((kind) => results[kind].length > 0);
-  const parts = counted.map((kind) =>
-    countOf(results[kind].length, FORMATS[kind].noun),
-  );
+  const answerable = kinds
+    .filter((kind) => kind.spec.answerable)
+    .map((kind) => ({ kind, results: result.results[kind.spec.id] ?? [] }));
+  const parts = answerable
+    .filter(({ results }) => results.length > 0)
+    .map(({ kind, results }) => countOf(results.length, kind.noun));
   const items =
-    parts.length > 0 ? parts.join(', ') : countOf(0, FORMATS.question.noun);
-  const statuses = ANSWERABLE_KINDS.flatMap((kind) =>
-    results[kind].map((result) => result.status),
+    parts.length > 0 ? parts.join(', ') : countOf(0, EMPTY_COUNT_NOUN);
+  const statuses = answerable.flatMap(({ kind, results }) =>
+    statusesOf(kind, results),
   );
   const count = (status: AnswerStatus) =>
     statuses.filter((each) => each === status).length;
@@ -86,16 +114,18 @@ function blockingRound(blockingHeading: string | null): string {
     : `the round '${blockingHeading}'`;
 }
 
-function summaryOf(result: RoundResult): string {
+function summaryOf(
+  kinds: readonly MainItemKind[],
+  result: RoundResult,
+): string {
   const { reason } = result;
-  const counts = { finding: result.findings, question: result.answers };
   switch (reason.kind) {
     case 'stillOpen':
-      return summarise(counts, true);
+      return summarise(kinds, result, true);
     case 'finished':
     case 'autoAnswered':
     case 'handedBack':
-      return summarise(counts, false);
+      return summarise(kinds, result, false);
     case 'notShown':
       return (
         `This round, '${reason.heading}', was not shown: ` +
@@ -139,22 +169,28 @@ function nextOf(reason: RoundReason): string {
 }
 
 // The tool result for a round result. Its keys keep this order, since the
-// tool text is the payload's JSON: `note` only when the user wrote one,
-// `earlier_heading` only on an earlier round's answers.
-export function roundPayload(result: RoundResult): AnswersPayload {
-  const payload: AnswersPayload = {
+// tool text is the payload's JSON: each registered kind's results at its
+// resultKey in reverse registration order, so a payload of the built-ins
+// alone reads `answers, findings, notices`; `note` only when the user wrote
+// one, `earlier_heading` only on an earlier round's answers. The one place
+// main builds an AnswersPayload.
+export function roundPayload(
+  kinds: readonly MainItemKind[],
+  result: RoundResult,
+): AnswersPayload {
+  const payload: Record<string, unknown> = {
     outcome: result.outcome,
-    summary: summaryOf(result),
+    summary: summaryOf(kinds, result),
     next: nextOf(result.reason),
-    answers: result.answers,
-    findings: result.findings,
-    notices: result.notices,
   };
+  for (const kind of kinds.toReversed()) {
+    payload[kind.spec.resultKey] = result.results[kind.spec.id] ?? [];
+  }
   if (result.note !== '') {
     payload.note = result.note;
   }
   if (result.reason.kind === 'handedBack') {
     payload.earlier_heading = result.reason.heading;
   }
-  return payload;
+  return payload as AnswersPayload;
 }

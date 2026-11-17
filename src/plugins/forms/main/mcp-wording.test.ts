@@ -4,15 +4,25 @@ import type {
   AgentFormToolResult,
 } from '../../../contracts/agent-forms';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
-import { MAX_ENTRIES, type AnswersPayload, type FormBody } from '../contract';
+import {
+  MAX_ENTRIES,
+  type AnswersPayload,
+  type FormBody,
+  RoundError,
+} from '../contract';
+import { BUILT_IN_KINDS } from './kinds/formats';
+import { pollKind } from './kinds/poll-kind.test-support';
+import { roundErrorText } from './mcp-wording';
 import {
   parseRound,
   readFormBody,
   recommendedBody,
   requireKnownLayouts,
 } from './round';
-import { autoAnsweredPayload, roundType } from './round-type';
-import { FORMS_TOOLS } from './tool-definitions';
+import { autoAnsweredPayload, createRoundType } from './round-type';
+import { formsTools } from './tool-definitions';
+
+const roundType = createRoundType(() => BUILT_IN_KINDS);
 
 // The text an agent reads from ask_round and collect_last_round, pinned
 // byte for byte: the expected values were captured from the tree before the
@@ -498,7 +508,7 @@ const ERROR_ROWS: ErrorRow[] = [
   },
 ];
 
-const ROUND = parseRound({
+const ROUND = parseRound(BUILT_IN_KINDS, {
   heading: 'Cache review',
   overview: 'Reviewing the cache.',
   notices: [notice()],
@@ -540,7 +550,10 @@ const ANSWERED: FormBody = {
   notice_comments: [{ index: 1, comment: 'looks right' }],
 };
 
-const NOTICES_ROUND = parseRound({ heading: 'Notes', notices: [notice()] });
+const NOTICES_ROUND = parseRound(BUILT_IN_KINDS, {
+  heading: 'Notes',
+  notices: [notice()],
+});
 
 const NOTICE_RESULT = {
   index: 1,
@@ -676,7 +689,12 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   },
   {
     name: 'a draft',
-    payload: () => roundType.payload(ROUND, 'draft', readFormBody(ROUND, {})),
+    payload: () =>
+      roundType.payload(
+        ROUND,
+        'draft',
+        readFormBody(BUILT_IN_KINDS, ROUND, {}),
+      ),
     expected: {
       outcome: 'draft',
       summary: DRAFT_SUMMARY,
@@ -744,7 +762,12 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   },
   {
     name: 'an auto-answered round',
-    payload: () => autoAnsweredPayload(ROUND, recommendedBody(ROUND)),
+    payload: () =>
+      autoAnsweredPayload(
+        BUILT_IN_KINDS,
+        ROUND,
+        recommendedBody(BUILT_IN_KINDS, ROUND),
+      ),
     expected: {
       outcome: 'auto_answered',
       summary:
@@ -796,7 +819,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
       roundType.payload(
         NOTICES_ROUND,
         'submitted',
-        readFormBody(NOTICES_ROUND, {}),
+        readFormBody(BUILT_IN_KINDS, NOTICES_ROUND, {}),
       ),
     expected: {
       outcome: 'submitted',
@@ -812,7 +835,11 @@ const PAYLOAD_ROWS: PayloadRow[] = [
 describe('round wire text', () => {
   it.each(ERROR_ROWS)('words $name as today', async ({ args, expected }) => {
     const result = await callOpen(async () => {
-      requireKnownLayouts(parseRound(args), LAYOUT_NAMES);
+      requireKnownLayouts(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, args),
+        LAYOUT_NAMES,
+      );
       throw new Error('the round parsed');
     });
 
@@ -830,8 +857,41 @@ describe('round wire text', () => {
   );
 
   it('publishes the round tools as today', async () => {
-    await expect(JSON.stringify(FORMS_TOOLS, null, 2)).toMatchFileSnapshot(
-      './forms-tools.golden.txt',
-    );
+    await expect(
+      JSON.stringify(formsTools(BUILT_IN_KINDS), null, 2),
+    ).toMatchFileSnapshot('./forms-tools.golden.txt');
+  });
+
+  it('words an item of a kind no registered kind has by its id', () => {
+    const error = new RoundError({
+      path: { at: 'item', kind: 'gone', number: 1 },
+      problem: 'is malformed.',
+    });
+
+    expect(roundErrorText(BUILT_IN_KINDS, error)).toBe('gone 1: is malformed.');
+  });
+
+  // Breaks if a registered kind's RoundError rejected the call instead of
+  // reaching the agent as its repair text.
+  it("returns a registered kind's malformed item as an error result", async () => {
+    const kinds = [...BUILT_IN_KINDS, pollKind];
+    const session: AgentFormSession<AnswersPayload> = {
+      open: async (args) => {
+        parseRound(kinds, args);
+        throw new Error('the round parsed');
+      },
+      collect: () => Promise.reject(new Error('collect is not called here')),
+      end: () => {},
+    };
+
+    const result = await createAgentFormToolSession(
+      session,
+      createRoundType(() => kinds),
+    ).call('ask_round', { heading: 'H', polls: [{}] }, context());
+
+    expect(result).toEqual({
+      content: [{ type: 'text', text: 'Poll 1: each poll needs a title.' }],
+      isError: true,
+    });
   });
 });

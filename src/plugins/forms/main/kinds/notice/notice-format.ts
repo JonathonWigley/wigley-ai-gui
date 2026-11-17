@@ -1,13 +1,21 @@
-import type { Notice, NoticeBadge } from '../../../contract';
-import { RoundError, type RoundItemPath } from '../../round-error';
+import {
+  type MainItemKind,
+  type Notice,
+  type NoticeBadge,
+  type NoticeComment,
+  type NoticeResult,
+  RoundError,
+  type RoundItemPath,
+} from '../../../contract';
+import { BUILT_IN_KIND_SPECS } from '../../../item-kinds';
 import {
   fieldsMissing,
   fieldsOutside,
   ITEM_LAYOUT_SCHEMA,
   parseLayoutField,
   requireText,
+  textOrEmpty,
 } from '../fields';
-import type { ItemFormat } from '../item-format';
 import { isJsonObject } from '../../../../../shared/json';
 
 const NOTICE_BADGES: readonly NoticeBadge[] = [
@@ -112,8 +120,8 @@ function parseNotice(item: unknown, at: RoundItemPath): Notice {
   return { title, context, badge, layout };
 }
 
-export const noticeFormat: ItemFormat<Notice> = {
-  argsKey: 'notices',
+export const noticeKind: MainItemKind<Notice, NoticeComment, NoticeResult> = {
+  spec: BUILT_IN_KIND_SPECS.notice,
   noun: 'notice',
   describe: () => ({
     type: 'array',
@@ -139,9 +147,24 @@ export const noticeFormat: ItemFormat<Notice> = {
     description: NOTICES_DESCRIPTION,
   }),
   parse: parseNotice,
+  layout: (notice) => notice.layout,
   fingerprintContent: (notice) => ({
     title: notice.title,
     context: notice.context,
     badge: notice.badge,
   }),
+  readEntry: (index, saved) => ({ index, comment: textOrEmpty(saved.comment) }),
+  recommendedEntry: (_notice, index) => ({ index, comment: '' }),
+  // The comment appears only when the user wrote one.
+  result: (notice, entry) => {
+    const result: NoticeResult = {
+      index: entry.index,
+      title: notice.title,
+      badge: notice.badge,
+    };
+    if (entry.comment) {
+      result.comment = entry.comment;
+    }
+    return result;
+  },
 };

@@ -1,41 +1,31 @@
 import { createHash } from 'node:crypto';
-import type {
-  AnswerEntry,
-  AnswerResult,
-  AnswerStatus,
-  Finding,
-  FindingAnswerEntry,
-  FindingResult,
-  FormBody,
-  ItemKind,
-  Notice,
-  NoticeResult,
-  Outcome,
-  Round,
-  RoundEnd,
+import {
+  type BuiltInItemKind,
+  type Finding,
+  type FormBody,
+  type MainItemKind,
+  type Notice,
+  type Outcome,
+  type PythonJsonValue,
+  type Question,
+  type Round,
+  RoundError,
+  type RoundEnd,
+  type RoundErrorPath,
 } from '../contract';
-import { completeFindingPick, isFindingAction } from '../finding-pick';
-import { isAnswered } from '../item-response';
 import {
   fieldsOutside,
   parseLayoutField,
   quotedList,
   requireText,
+  textOrEmpty,
 } from './kinds/fields';
-import { FORMATS, ITEM_KINDS } from './kinds/formats';
-import type {
-  AnswerSubject,
-  ItemFormat,
-  ItemOf,
-  PythonJsonValue,
-} from './kinds/item-format';
-import { RoundError, type RoundErrorPath } from './round-error';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
 
-const ITEM_FIELDS = ITEM_KINDS.map((kind) => FORMATS[kind].argsKey);
-const ROUND_FIELDS = ['heading', 'overview', 'layout', ...ITEM_FIELDS];
-
 const LAYOUT_PATH: RoundErrorPath = { at: 'field', field: 'layout' };
+
+// The round's own fields, before the kinds' lists.
+const ROUND_OWN_FIELDS = ['heading', 'overview', 'layout'];
 
 export type FinishedOutcome = RoundEnd['kind'];
 
@@ -51,15 +41,19 @@ export type RoundReason =
   | { kind: 'notShown'; heading: string; blockingHeading: string | null }
   | { kind: 'noRound' };
 
-// A round call's result as records. `answers`, `findings` and `notices` are
-// index-parallel with the round's questions, findings and notices; notes
-// appear only when the user wrote some; `dont_ask` only on a pressed answer.
+// A parsed round: every registered kind's items by kind id, and the built-ins'
+// lists the page reads.
+export interface KindRound extends Round {
+  readonly items: Readonly<Record<string, readonly unknown[]>>;
+}
+
+// A round call's result as records. `results` holds each registered kind's
+// results by kind id, index-parallel with that kind's items; a kind with no
+// items holds [].
 export interface RoundResult {
   outcome: Outcome;
   reason: RoundReason;
-  answers: AnswerResult[];
-  findings: FindingResult[];
-  notices: NoticeResult[];
+  results: Readonly<Record<string, readonly unknown[]>>;
   // '' when the user wrote none.
   note: string;
 }
@@ -76,38 +70,67 @@ function eitherList(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
 }
 
-function parseItems<Item>(
-  kind: ItemKind,
-  format: ItemFormat<Item>,
-  raw: unknown,
-): Item[] {
+function roundFields(kinds: readonly MainItemKind[]): string[] {
+  return [...ROUND_OWN_FIELDS, ...kinds.map((kind) => kind.spec.argsKey)];
+}
+
+function parseItems(kind: MainItemKind, raw: unknown): unknown[] {
+  const { id, argsKey } = kind.spec;
   if (!Array.isArray(raw)) {
     throw new RoundError({
-      path: { at: 'field', field: format.argsKey },
-      problem: `${format.argsKey} must be a list of objects.`,
+      path: { at: 'field', field: argsKey },
+      problem: `${argsKey} must be a list of objects.`,
     });
   }
   return raw.map((item, i) =>
-    format.parse(item, { at: 'item', kind, number: i + 1 }),
+    kind.parse(item, { at: 'item', kind: id, number: i + 1 }),
   );
+}
+
+// The page's view of a built-in kind's items: the one place main narrows a
+// kind's items to a built-in item type.
+function builtInItems<Item>(
+  items: Readonly<Record<string, readonly unknown[]>>,
+  id: BuiltInItemKind,
+): Item[] {
+  return (items[id] ?? []) as Item[];
+}
+
+// The kind's items in the round; a kind registered after the round parsed has
+// none.
+function itemsOf(round: KindRound, kind: MainItemKind): readonly unknown[] {
+  return round.items[kind.spec.id] ?? [];
+}
+
+// The kind's entries in a body: the one place main narrows body entries.
+export function bodyEntries(
+  body: FormBody,
+  kind: MainItemKind,
+): readonly unknown[] {
+  const entries = body[kind.spec.bodyKey];
+  return Array.isArray(entries) ? entries : [];
 }
 
 // Every error fires here, before anything is shown, so a malformed round
 // costs the caller one retry and the user sees nothing.
-export function parseRound(args: unknown): Round {
+export function parseRound(
+  kinds: readonly MainItemKind[],
+  args: unknown,
+): KindRound {
+  const fields = roundFields(kinds);
   if (!isJsonObject(args)) {
     throw new RoundError({
       path: { at: 'call' },
-      problem: `takes an object with ${quotedList(ROUND_FIELDS)}.`,
+      problem: `takes an object with ${quotedList(fields)}.`,
       detail: 'Each list is optional, but the round needs at least one item.',
     });
   }
-  const unknownFields = fieldsOutside(args, ROUND_FIELDS);
+  const unknownFields = fieldsOutside(args, fields);
   if (unknownFields.length > 0) {
     throw new RoundError({
       path: { at: 'call' },
       problem: `got unknown field(s): ${unknownFields.join(', ')}.`,
-      detail: `It takes ${quotedList(ROUND_FIELDS)}.`,
+      detail: `It takes ${quotedList(fields)}.`,
     });
   }
   const heading = requireText(args.heading, 'heading', {
@@ -124,23 +147,15 @@ export function parseRound(args: unknown): Round {
     });
   }
   const layout = parseLayoutField(args, LAYOUT_PATH);
-  const notices = parseItems(
-    'notice',
-    FORMATS.notice,
-    args[FORMATS.notice.argsKey] ?? [],
-  );
-  const findings = parseItems(
-    'finding',
-    FORMATS.finding,
-    args[FORMATS.finding.argsKey] ?? [],
-  );
-  const questions = parseItems(
-    'question',
-    FORMATS.question,
-    args[FORMATS.question.argsKey] ?? [],
-  );
-  if (notices.length + findings.length + questions.length === 0) {
-    const nouns = ITEM_KINDS.map((kind) => FORMATS[kind].noun);
+  const items: Record<string, unknown[]> = {};
+  let itemCount = 0;
+  for (const kind of kinds) {
+    const parsed = parseItems(kind, args[kind.spec.argsKey] ?? []);
+    items[kind.spec.id] = parsed;
+    itemCount += parsed.length;
+  }
+  if (itemCount === 0) {
+    const nouns = kinds.map((kind) => kind.noun);
     throw new RoundError({
       path: { at: 'call' },
       problem: `needs at least one ${eitherList(nouns)}.`,
@@ -150,20 +165,12 @@ export function parseRound(args: unknown): Round {
     heading,
     overview: overview.trim(),
     layout,
-    questions,
-    notices,
-    findings,
+    questions: builtInItems<Question>(items, 'question'),
+    notices: builtInItems<Notice>(items, 'notice'),
+    findings: builtInItems<Finding>(items, 'finding'),
+    items,
   };
 }
-
-// Each kind's items in a round.
-const ROUND_ITEM_LISTS: {
-  readonly [Kind in ItemKind]: (round: Round) => ItemOf[Kind][];
-} = {
-  notice: (round) => round.notices,
-  finding: (round) => round.findings,
-  question: (round) => round.questions,
-};
 
 function requireKnownLayout(
   name: string | null,
@@ -182,27 +189,24 @@ function requireKnownLayout(
 }
 
 // Throws a RoundError for the first layout the round names that is not in
-// `layoutNames`: the round's own, then each item's in ITEM_KINDS order. Kept
+// `layoutNames`: the round's own, then each item's in the kinds' order. Kept
 // apart from parseRound, so a saved round still parses once its layout has
 // left the folder.
 export function requireKnownLayouts(
-  round: Round,
+  kinds: readonly MainItemKind[],
+  round: KindRound,
   layoutNames: readonly string[],
 ): void {
   requireKnownLayout(round.layout, LAYOUT_PATH, layoutNames);
-  for (const kind of ITEM_KINDS) {
-    ROUND_ITEM_LISTS[kind](round).forEach((item, i) =>
+  for (const kind of kinds) {
+    itemsOf(round, kind).forEach((item, i) =>
       requireKnownLayout(
-        item.layout,
-        { at: 'item', kind, number: i + 1 },
+        kind.layout(item),
+        { at: 'item', kind: kind.spec.id, number: i + 1 },
         layoutNames,
       ),
     );
   }
-}
-
-function textOrEmpty(value: unknown): string {
-  return typeof value === 'string' ? value : '';
 }
 
 function entriesByIndex(list: unknown): Map<number, JsonObject> {
@@ -218,187 +222,57 @@ function entriesByIndex(list: unknown): Map<number, JsonObject> {
   return byIndex;
 }
 
-// A file written before the Notes box held its text in 'what' and 'why'.
-function oldFileNotes(entry: JsonObject): string {
-  return [textOrEmpty(entry.what), textOrEmpty(entry.why)]
-    .filter((text) => text !== '')
-    .join('\n\n');
-}
-
-function readAnswerEntry(index: number, entry: JsonObject): AnswerEntry {
-  return {
-    index,
-    choice: Number.isInteger(entry.choice) ? (entry.choice as number) : 0,
-    not_applicable: entry.not_applicable === true,
-    notes: Object.hasOwn(entry, 'notes')
-      ? textOrEmpty(entry.notes)
-      : oldFileNotes(entry),
-    dont_ask: entry.dont_ask === true,
-    dont_ask_reason: textOrEmpty(entry.dont_ask_reason),
-  };
-}
-
-// A saved action outside the three, or none, reads as no action.
-function readFindingAnswerEntry(
-  index: number,
-  entry: JsonObject,
-): FindingAnswerEntry {
-  return {
-    ...readAnswerEntry(index, entry),
-    action: isFindingAction(entry.action) ? entry.action : '',
-  };
-}
-
-function readAnswerEntries<Entry>(
-  items: readonly unknown[],
-  saved: unknown,
-  readEntry: (index: number, entry: JsonObject) => Entry,
-): Entry[] {
-  const entries = entriesByIndex(saved);
-  return items.map((_, i) => readEntry(i + 1, entries.get(i + 1) ?? {}));
+// A body of `note` and each kind's entries at its bodyKey, in reverse
+// registration order, so a body the built-ins alone wrote keeps its saved key
+// order. The one place main builds a FormBody.
+function bodyOf(
+  kinds: readonly MainItemKind[],
+  note: string,
+  entriesOf: (kind: MainItemKind) => unknown[],
+): FormBody {
+  const body: Record<string, unknown> = { note };
+  for (const kind of kinds.toReversed()) {
+    body[kind.spec.bodyKey] = entriesOf(kind);
+  }
+  return body as FormBody;
 }
 
 // Any body — from the window or from a file another version wrote — as one
-// answer per question and per finding and one comment per notice, in order.
-// Never throws: a field of the wrong type reads as its empty value.
-export function readFormBody(round: Round, raw: unknown): FormBody {
+// entry per item of each registered kind, in order. Never throws: a field of
+// the wrong type reads as its empty value.
+export function readFormBody(
+  kinds: readonly MainItemKind[],
+  round: KindRound,
+  raw: unknown,
+): FormBody {
   const body = isJsonObject(raw) ? raw : {};
-  const comments = entriesByIndex(body.notice_comments);
-  return {
-    note: textOrEmpty(body.note),
-    answers: readAnswerEntries(round.questions, body.answers, readAnswerEntry),
-    finding_answers: readAnswerEntries(
-      round.findings,
-      body.finding_answers,
-      readFindingAnswerEntry,
-    ),
-    notice_comments: round.notices.map((_, i) => ({
-      index: i + 1,
-      comment: textOrEmpty(comments.get(i + 1)?.comment),
-    })),
-  };
-}
-
-function answerResult(
-  subject: AnswerSubject,
-  entry: AnswerEntry,
-): AnswerResult {
-  const choiceIsInRange =
-    entry.choice >= 1 && entry.choice <= subject.choiceTexts.length;
-  const answered = isAnswered({
-    notApplicable: entry.not_applicable,
-    pickIsComplete: choiceIsInRange,
+  return bodyOf(kinds, textOrEmpty(body.note), (kind) => {
+    const saved = entriesByIndex(body[kind.spec.bodyKey]);
+    return itemsOf(round, kind).map((_, i) =>
+      kind.readEntry(i + 1, saved.get(i + 1) ?? {}),
+    );
   });
-  let status: AnswerStatus = 'untouched';
-  if (entry.not_applicable) {
-    status = 'not_applicable';
-  } else if (answered) {
-    status = 'answered';
-  }
-  const result: AnswerResult = {
-    index: entry.index,
-    title: subject.title,
-    status,
-    choice: answered ? entry.choice : 0,
-    choice_text: answered ? subject.choiceTexts[entry.choice - 1] : '',
-    took_recommendation: answered && entry.choice === subject.recommend,
-  };
-  addNotesAndDontAsk(result, entry);
-  return result;
-}
-
-// A finding is answered (`isAnswered`) once its entry holds one of the card's
-// numbered picks (`findingEntries`): a choice with the action it sits under,
-// or the header of an action with no choices, whose `choice` is 0; notes alone
-// leave it untouched. The recommendation is taken whole when the pick is the
-// recommended choice, or the recommended header, under recommend_action.
-function findingResult(
-  finding: Finding,
-  entry: FindingAnswerEntry,
-): FindingResult {
-  const subject = FORMATS.finding.answerSubject(finding);
-  const completePick = completeFindingPick(finding, entry.choice, entry.action);
-  const answered = isAnswered({
-    notApplicable: entry.not_applicable,
-    pickIsComplete: completePick !== null,
-  });
-  const pick = answered ? completePick : null;
-  let status: AnswerStatus = 'untouched';
-  if (entry.not_applicable) {
-    status = 'not_applicable';
-  } else if (answered) {
-    status = 'answered';
-  }
-  const choice = pick?.choice ?? 0;
-  const tookActionRecommendation =
-    pick !== null && pick.action === finding.recommend_action;
-  const result: FindingResult = {
-    index: entry.index,
-    title: subject.title,
-    status,
-    choice,
-    choice_text: choice > 0 ? subject.choiceTexts[choice - 1] : '',
-    took_recommendation:
-      tookActionRecommendation && pick.choice === subject.recommend,
-    action: pick?.action ?? '',
-    took_action_recommendation: tookActionRecommendation,
-  };
-  addNotesAndDontAsk(result, entry);
-  return result;
-}
-
-// Notes appear only when the user wrote some; `dont_ask` only on a pressed
-// answer, with its reason when the box held text.
-function addNotesAndDontAsk(result: AnswerResult, entry: AnswerEntry): void {
-  if (entry.notes) {
-    result.notes = entry.notes;
-  }
-  if (entry.dont_ask) {
-    result.dont_ask = true;
-    if (entry.dont_ask_reason) {
-      result.dont_ask_reason = entry.dont_ask_reason;
-    }
-  }
-}
-
-function noticeResult(
-  notice: Notice,
-  index: number,
-  comment: string,
-): NoticeResult {
-  const result: NoticeResult = {
-    index,
-    title: notice.title,
-    badge: notice.badge,
-  };
-  if (comment) {
-    result.comment = comment;
-  }
-  return result;
 }
 
 // The result for a round that ran, its reason read from `outcome`.
 export function answersResult(
-  round: Round,
+  kinds: readonly MainItemKind[],
+  round: KindRound,
   outcome: RoundOutcome,
   body: FormBody,
 ): RoundResult {
-  const read = readFormBody(round, body);
-  const answers = round.questions.map((question, i) =>
-    answerResult(FORMATS.question.answerSubject(question), read.answers[i]),
-  );
-  const findings = round.findings.map((finding, i) =>
-    findingResult(finding, read.finding_answers[i]),
-  );
-  const notices = round.notices.map((notice, i) =>
-    noticeResult(notice, i + 1, read.notice_comments[i].comment),
-  );
+  const read = readFormBody(kinds, round, body);
+  const results: Record<string, unknown[]> = {};
+  for (const kind of kinds) {
+    const entries = bodyEntries(read, kind);
+    results[kind.spec.id] = itemsOf(round, kind).map((item, i) =>
+      kind.result(item, entries[i]),
+    );
+  }
   return {
     outcome,
     reason: REASON_OF_OUTCOME[outcome],
-    answers,
-    findings,
-    notices,
+    results,
     note: read.note,
   };
 }
@@ -406,12 +280,13 @@ export function answersResult(
 // An earlier round's finished answers, returned by an open call that did not
 // open its own round.
 export function handedBackResult(
-  round: Round,
+  kinds: readonly MainItemKind[],
+  round: KindRound,
   outcome: FinishedOutcome,
   body: FormBody,
 ): RoundResult {
   return {
-    ...answersResult(round, outcome, body),
+    ...answersResult(kinds, round, outcome, body),
     reason: { kind: 'handedBack', heading: round.heading },
   };
 }
@@ -419,52 +294,35 @@ export function handedBackResult(
 // A round never shown, so its answers are blank; `blockingHeading` names the
 // open round it waited behind, when one is open.
 export function notShownResult(
-  round: Round,
+  kinds: readonly MainItemKind[],
+  round: KindRound,
   blockingHeading: string | null,
 ): RoundResult {
   return {
-    ...answersResult(round, 'draft', readFormBody(round, {})),
+    ...answersResult(kinds, round, 'draft', readFormBody(kinds, round, {})),
     reason: { kind: 'notShown', heading: round.heading, blockingHeading },
   };
 }
 
 // A collect call with nothing to collect: a normal result, not an error.
-export function noRoundResult(): RoundResult {
+export function noRoundResult(kinds: readonly MainItemKind[]): RoundResult {
   return {
     outcome: 'no_round',
     reason: { kind: 'noRound' },
-    answers: [],
-    findings: [],
-    notices: [],
+    results: Object.fromEntries(kinds.map((kind) => [kind.spec.id, []])),
     note: '',
   };
 }
 
-// Every question and finding on its recommendation, every note and comment
-// empty: the body a headless session's round is answered with.
-export function recommendedBody(round: Round): FormBody {
-  const recommended = (index: number, choice: number): AnswerEntry => ({
-    index,
-    choice,
-    not_applicable: false,
-    notes: '',
-    dont_ask: false,
-    dont_ask_reason: '',
-  });
-  return {
-    note: '',
-    answers: round.questions.map((question, i) =>
-      recommended(i + 1, question.recommend),
-    ),
-    finding_answers: round.findings.map((finding, i) => ({
-      ...recommended(i + 1, finding.recommend ?? 0),
-      action: finding.recommend_action,
-    })),
-    notice_comments: round.notices.map((_, i) => ({
-      index: i + 1,
-      comment: '',
-    })),
-  };
+// Every item on its kind's recommended entry, the note empty: the body a
+// headless session's round is answered with.
+export function recommendedBody(
+  kinds: readonly MainItemKind[],
+  round: KindRound,
+): FormBody {
+  return bodyOf(kinds, '', (kind) =>
+    itemsOf(round, kind).map((item, i) => kind.recommendedEntry(item, i + 1)),
+  );
 }
 
 // Python's json.dumps(value, sort_keys=True, ensure_ascii=False) for the
@@ -485,47 +343,23 @@ function pythonJsonDumps(value: PythonJsonValue): string {
   return `{${members.join(', ')}}`;
 }
 
-interface FingerprintList {
-  // The Python server's fingerprint holds this list even when it is empty.
-  joinsWhenEmpty: boolean;
-  content(round: Round): PythonJsonValue[];
-}
-
-const FINGERPRINT_LISTS = {
-  notice: {
-    joinsWhenEmpty: true,
-    content: (round) =>
-      round.notices.map((notice) => FORMATS.notice.fingerprintContent(notice)),
-  },
-  finding: {
-    joinsWhenEmpty: false,
-    content: (round) =>
-      round.findings.map((finding) =>
-        FORMATS.finding.fingerprintContent(finding),
-      ),
-  },
-  question: {
-    joinsWhenEmpty: true,
-    content: (round) =>
-      round.questions.map((question) =>
-        FORMATS.question.fingerprintContent(question),
-      ),
-  },
-} satisfies Record<ItemKind, FingerprintList>;
-
 // What a re-sent round is matched on: every field of its items but their
 // layouts, keyed by each kind's round field, never the heading, overview
 // or round layout, which a re-send may change and still match the open round.
-// An empty list joins only for a kind the Python server's fingerprint holds,
-// so a round it could send with no questions hashes the same and its saved
-// rounds match.
-export function fingerprint(round: Round): string {
+// An empty list joins only for a kind whose spec says so (the kinds the
+// Python server's fingerprint held), so a round it could send with no
+// questions hashes the same and its saved rounds match.
+export function fingerprint(
+  kinds: readonly MainItemKind[],
+  round: KindRound,
+): string {
   const content: Record<string, PythonJsonValue> = {};
-  for (const kind of ITEM_KINDS) {
-    const list = FINGERPRINT_LISTS[kind];
-    const items = list.content(round);
-    if (list.joinsWhenEmpty || items.length > 0) {
-      content[FORMATS[kind].argsKey] = items;
+  for (const kind of kinds) {
+    const items = itemsOf(round, kind).map((item) =>
+      kind.fingerprintContent(item),
+    );
+    if (kind.spec.fingerprintJoinsWhenEmpty || items.length > 0) {
+      content[kind.spec.argsKey] = items;
     }
   }
   const text = pythonJsonDumps(content);

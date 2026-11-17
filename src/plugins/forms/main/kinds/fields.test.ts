@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { parseLayoutField, quotedList } from './fields';
 import { roundErrorText } from '../mcp-wording';
-import { RoundError, type RoundItemPath } from '../round-error';
+import { RoundError, type RoundItemPath } from '../../contract';
+import { BUILT_IN_KINDS } from './formats';
 
 const QUESTION_1: RoundItemPath = { at: 'item', kind: 'question', number: 1 };
 
@@ -34,7 +35,7 @@ describe('parseLayoutField', () => {
         thrown = error;
       }
       expect(thrown).toBeInstanceOf(RoundError);
-      expect(roundErrorText(thrown as RoundError)).toMatch(
+      expect(roundErrorText(BUILT_IN_KINDS, thrown as RoundError)).toMatch(
         /^Question 1: .*layout/,
       );
     }

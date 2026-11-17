@@ -1,5 +1,19 @@
-import { MAX_ENTRIES, type Question } from '../../../contract';
-import { RoundError, type RoundItemPath } from '../../round-error';
+import {
+  type AnswerEntry,
+  type AnswerResult,
+  MAX_ENTRIES,
+  type MainItemKind,
+  type Question,
+  RoundError,
+  type RoundItemPath,
+} from '../../../contract';
+import { BUILT_IN_KIND_SPECS } from '../../../item-kinds';
+import {
+  answerResult,
+  readAnswerEntry,
+  recommendedAnswerEntry,
+  withoutDontAsk,
+} from '../answer-results';
 import {
   fieldsMissing,
   fieldsOutside,
@@ -9,7 +23,7 @@ import {
   parseRecommend,
   requireText,
 } from '../fields';
-import type { AnswerableFormat } from '../item-format';
+import type { AnswerSubject } from '../item-format';
 import { isJsonObject } from '../../../../../shared/json';
 
 const QUESTION_FIELDS = [
@@ -135,8 +149,17 @@ function parseQuestion(item: unknown, at: RoundItemPath): Question {
   return { title, summary, context, choices, recommend, rationale, layout };
 }
 
-export const questionFormat: AnswerableFormat<Question> = {
-  argsKey: 'questions',
+// What the answer result reads of a question.
+export function questionAnswerSubject(question: Question): AnswerSubject {
+  return {
+    title: question.title,
+    choiceTexts: question.choices,
+    recommend: question.recommend,
+  };
+}
+
+export const questionKind: MainItemKind<Question, AnswerEntry, AnswerResult> = {
+  spec: BUILT_IN_KIND_SPECS.question,
   noun: 'question',
   describe: () => ({
     type: 'array',
@@ -187,6 +210,7 @@ export const questionFormat: AnswerableFormat<Question> = {
     description: QUESTIONS_DESCRIPTION,
   }),
   parse: parseQuestion,
+  layout: (question) => question.layout,
   fingerprintContent: (question) => ({
     title: question.title,
     summary: question.summary,
@@ -195,9 +219,11 @@ export const questionFormat: AnswerableFormat<Question> = {
     recommend: question.recommend,
     rationale: question.rationale,
   }),
-  answerSubject: (question) => ({
-    title: question.title,
-    choiceTexts: question.choices,
-    recommend: question.recommend,
-  }),
+  readEntry: readAnswerEntry,
+  recommendedEntry: (question, index) =>
+    recommendedAnswerEntry(index, question.recommend),
+  finishedEntry: withoutDontAsk,
+  result: (question, entry) =>
+    answerResult(questionAnswerSubject(question), entry),
+  status: (result) => result.status,
 };

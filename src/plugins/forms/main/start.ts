@@ -21,7 +21,6 @@ import {
 } from '../../../shared/agent-forms/form-service';
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
-import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
 import { errorText } from '../../../shared/error-text';
 import { chatMainKey, type ChatMainExports } from '../../chat/contract';
 import {
@@ -30,25 +29,37 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
 } from '../../sessions/contract';
+import type { AgentFormType } from '../../../contracts/agent-forms';
 import {
+  type AnswersPayload,
   type FormBody,
   type FormsChannel,
+  type FormsMainExports,
   type FormsService,
+  type MainItemKind,
   type Round,
   SAVED_ROUNDS_FOLDER,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
+import { BUILT_IN_KINDS } from './kinds/formats';
+import { createKindRegistry } from './kinds/registry';
+import { ROUND_OPEN_TOOL } from './mcp-wording';
 import { createLayoutPreview } from './preview/layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
-import { recommendedBody } from './round';
-import { autoAnsweredPayload, roundType, withKnownLayouts } from './round-type';
+import { type KindRound, recommendedBody } from './round';
+import {
+  autoAnsweredPayload,
+  createRoundType,
+  withKnownLayouts,
+} from './round-type';
 import {
   FORMS_LAYOUTS_FOLDER,
   formsSelfTestScript,
   SELFTEST_LAYOUTS,
 } from './selftest-script';
-import { FORMS_TOOLS } from './tool-definitions';
+import { contributeFormsTools } from './tool-contribution';
+import { formsTools } from './tool-definitions';
 
 type FormsApi = MainApi<
   typeof formsManifest,
@@ -67,14 +78,17 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // quiet view. The agents' service wakes the round's chat session when a round
 // finishes with no call waiting, and answers a headless chat session's rounds
 // with their recommendations; the preview's wakes nothing and answers none.
-// Both services and the preview read `layoutNames` for the layouts a round may
-// name. `flushed` settles once every saved-round write queued before it has.
-// `shown` settles once the agents' service shows a round of the session, by
-// its app id, after the call, until `signal` aborts.
+// Both services and the preview read `kinds` for the registered item kinds
+// and `layoutNames` for the layouts a round may name; both services share
+// `roundType`. `flushed` settles once every saved-round write queued before
+// it has. `shown` settles once the agents' service shows a round of the
+// session, by its app id, after the call, until `signal` aborts.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
   chat: ChatMainExports,
+  roundType: AgentFormType<KindRound, FormBody, AnswersPayload>,
+  kinds: () => readonly MainItemKind[],
   layoutNames: () => readonly string[],
 ): {
   forms: FormsService;
@@ -115,8 +129,9 @@ function createForms(
     timers: services.timers,
     autoAnswer: {
       isOn: (sessionId) => chat.isHeadless(sessionId),
-      body: recommendedBody,
-      payload: autoAnsweredPayload,
+      body: (round: KindRound) => recommendedBody(kinds(), round),
+      payload: (round: KindRound, body: FormBody) =>
+        autoAnsweredPayload(kinds(), round, body),
     },
   });
   const previewService = createAgentFormService({
@@ -133,13 +148,18 @@ function createForms(
   });
   const preview = createLayoutPreview({
     sessions,
-    forms: withKnownLayouts(previewService, layoutNames),
+    forms: withKnownLayouts(previewService, kinds, layoutNames),
     savedArgs: () => store.recentArgs(PREVIEW_SAVED_ROUNDS),
+    kinds,
     layoutNames,
     log: services.log,
   });
   return {
-    forms: withKnownLayouts(afterLoad(loaded, agentsService), layoutNames),
+    forms: withKnownLayouts(
+      afterLoad(loaded, agentsService),
+      kinds,
+      layoutNames,
+    ),
     preview,
     presenter,
     flushed: () => store.flushed(),
@@ -244,7 +264,7 @@ export function addDriveActions(
       openAction: 'openRound',
       formArg: 'round',
       defaultForm: PREVIEW_ROUND_ARGS,
-      openTool: roundType.openTool,
+      openTool: ROUND_OPEN_TOOL,
       openDescription:
         'Asks a round in the session sessionId names without waiting for its answers: the live one forms opened before under that id, else the owned session holding it (one sessions.open opened), else a new one; the default round shows every card kind.',
       answersDescription:
@@ -253,28 +273,43 @@ export function addDriveActions(
   });
 }
 
-// Serves its two tools to every agent session, shows each session's rounds on
-// the page, wakes a round's chat session when the round finishes with no call
-// waiting, registers its layouts and opens the layout preview on the page's
-// ask, and refuses a switch-off while an agent's round is open; in the
-// self-test it writes the fixture layouts and hands the driver its script, and
-// in a drive run it adds the drive actions.
+// Registers the built-in item kinds and serves its two tools, their schema
+// following the registered kinds, to every agent session; shows each
+// session's rounds on the page, wakes a round's chat session when the round
+// finishes with no call waiting, registers its layouts and opens the layout
+// preview on the page's ask, and refuses a switch-off while an agent's round
+// is open; in the self-test it writes the fixture layouts and hands the driver
+// its script, and in a drive run it adds the drive actions. Its exports
+// register a dependent's item kinds.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const layoutNames = () => api.layouts.names();
+    const registry = createKindRegistry();
+    for (const kind of BUILT_IN_KINDS) {
+      registry.register(kind);
+    }
+    const kinds = () => registry.kinds();
+    const roundType = createRoundType(kinds);
     const { forms, preview, presenter, flushed, shown } = createForms(
       api,
       sessions,
       chat,
+      roundType,
+      kinds,
       layoutNames,
     );
     api.channel.handle('openPreview', () => preview.open());
-    sessions.contributeTools(FORMS_TOOLS, (session) =>
-      createAgentFormToolSession(forms.startSession(session), roundType),
-    );
+    const tools = contributeFormsTools({
+      sessions,
+      tools: () => formsTools(kinds()),
+      startSession: (session) => forms.startSession(session),
+      type: roundType,
+      log: api.services.log,
+    });
+    const kindsChanged = registry.onChanged(() => tools.refresh());
     const { selfTest } = api.services;
     // Written before forms registers, so its first set lists every self-test
     // layout.
@@ -303,10 +338,15 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     return {
       commands: {},
       mayStop: () => presenter.mayStop(),
+      exports: (consumer): FormsMainExports => ({
+        registerKind: (kind) => consumer.track(registry.register(kind)),
+      }),
       dispose: (stop) => {
         if (stop === 'quit') {
           forms.detach();
         }
+        kindsChanged.dispose();
+        tools.dispose();
         preview.dispose();
         return Promise.all([layouts.dispose(), flushed()]).then(
           () => undefined,

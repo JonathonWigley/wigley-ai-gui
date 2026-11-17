@@ -1,24 +1,12 @@
-import type { AnswerableKind, ItemKind } from '../../contract';
-import { findingFormat } from './finding/finding-format';
-import type { FormatTable } from './item-format';
-import { noticeFormat } from './notice/notice-format';
-import { questionFormat } from './question/question-format';
+import type { MainItemKind } from '../../contract';
+import { findingKind } from './finding/finding-format';
+import { noticeKind } from './notice/notice-format';
+import { questionKind } from './question/question-format';
 
-export const FORMATS: FormatTable = {
-  notice: noticeFormat,
-  finding: findingFormat,
-  question: questionFormat,
-};
-
-// The order a round's lists parse and the schema lists them in.
-export const ITEM_KINDS: readonly ItemKind[] = [
-  'notice',
-  'finding',
-  'question',
-];
-
-// The order the summary counts the answered kinds in.
-export const ANSWERABLE_KINDS: readonly AnswerableKind[] = [
-  'finding',
-  'question',
+// The kinds forms' main start registers, in the order they register: the
+// order a round's lists parse and the schema lists them in.
+export const BUILT_IN_KINDS: readonly MainItemKind[] = [
+  noticeKind,
+  findingKind,
+  questionKind,
 ];

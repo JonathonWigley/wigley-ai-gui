@@ -1,7 +1,6 @@
 import type { ToolDefinition } from '../../sessions/contract';
-import { MAX_ENTRIES } from '../contract';
+import { MAX_ENTRIES, type MainItemKind } from '../contract';
 import { findingCardsText } from './kinds/finding/finding-text';
-import { FORMATS, ITEM_KINDS } from './kinds/formats';
 import { ROUND_COLLECT_TOOL, ROUND_OPEN_TOOL } from './mcp-wording';
 
 const ASK_ROUND_DESCRIPTION =
@@ -86,53 +85,52 @@ const COLLECT_LAST_ROUND_DESCRIPTION =
   'again.';
 
 // The two wigley-forms tools as MCP tools/list publishes them. ask_round's item
-// lists come from the same formats parseRound validates with, so the schema
-// and the validator agree, but for one case: the validator still reads a
-// question's legacy `question` as its summary.
-export const FORMS_TOOLS: ToolDefinition[] = [
-  {
-    name: ROUND_OPEN_TOOL,
-    description: ASK_ROUND_DESCRIPTION,
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['heading', 'overview'],
-      properties: {
-        heading: {
-          type: 'string',
-          description: 'One line naming what this round settles.',
-        },
-        overview: {
-          type: 'string',
-          description:
-            'One or two short sentences, low detail, shown under the ' +
-            'heading: the work underway, then what this round focuses on. ' +
-            'Inline markdown only.',
-        },
-        layout: { type: 'string', description: ROUND_LAYOUT_DESCRIPTION },
-        ...Object.fromEntries(
-          ITEM_KINDS.map((kind) => [
-            FORMATS[kind].argsKey,
-            FORMATS[kind].describe(),
-          ]),
-        ),
-      },
-    },
-  },
-  {
-    name: ROUND_COLLECT_TOOL,
-    description: COLLECT_LAST_ROUND_DESCRIPTION,
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        wait: {
-          type: 'boolean',
-          default: true,
-          description:
-            'false returns the current draft at once instead of waiting.',
+// lists come from the same kinds parseRound validates with, in their order, so
+// the schema and the validator agree, but for one case: the validator still
+// reads a question's legacy `question` as its summary.
+export function formsTools(kinds: readonly MainItemKind[]): ToolDefinition[] {
+  return [
+    {
+      name: ROUND_OPEN_TOOL,
+      description: ASK_ROUND_DESCRIPTION,
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['heading', 'overview'],
+        properties: {
+          heading: {
+            type: 'string',
+            description: 'One line naming what this round settles.',
+          },
+          overview: {
+            type: 'string',
+            description:
+              'One or two short sentences, low detail, shown under the ' +
+              'heading: the work underway, then what this round focuses on. ' +
+              'Inline markdown only.',
+          },
+          layout: { type: 'string', description: ROUND_LAYOUT_DESCRIPTION },
+          ...Object.fromEntries(
+            kinds.map((kind) => [kind.spec.argsKey, kind.describe()]),
+          ),
         },
       },
     },
-  },
-];
+    {
+      name: ROUND_COLLECT_TOOL,
+      description: COLLECT_LAST_ROUND_DESCRIPTION,
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          wait: {
+            type: 'boolean',
+            default: true,
+            description:
+              'false returns the current draft at once instead of waiting.',
+          },
+        },
+      },
+    },
+  ];
+}

@@ -1,7 +1,12 @@
-import { RoundError, type RoundErrorPath } from '../round-error';
+import { RoundError, type RoundErrorPath } from '../../contract';
 import type { JsonObject } from '../../../../shared/json';
 
 export const MIN_CHOICES = 2;
+
+// A saved field's text, '' when it is not a string.
+export function textOrEmpty(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
 
 export function requireText(
   value: unknown,

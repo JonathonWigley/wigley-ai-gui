@@ -17,9 +17,20 @@ import { NUMBER_KEY_COUNT } from './manifest';
 
 export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
 
-export type ItemKind = 'notice' | 'finding' | 'question';
-// The kinds the user answers with a choice.
-export type AnswerableKind = Exclude<ItemKind, 'notice'>;
+// The kinds forms itself registers.
+export type BuiltInItemKind = 'notice' | 'finding' | 'question';
+// The kinds the page draws. A registered kind's id is any string
+// (ItemKindSpec.id).
+export type ItemKind = BuiltInItemKind;
+// The built-in kinds the user answers with a choice.
+export type AnswerableKind = Exclude<BuiltInItemKind, 'notice'>;
+
+// The values Python's json.dumps writes for a fingerprint.
+export type PythonJsonValue =
+  | string
+  | number
+  | PythonJsonValue[]
+  | { [key: string]: PythonJsonValue };
 
 export interface Question {
   title: string;
@@ -235,6 +246,8 @@ export interface FormBody {
   answers: AnswerEntry[];
   finding_answers: FindingAnswerEntry[];
   notice_comments: NoticeComment[];
+  // A registered kind's entries sit at its bodyKey.
+  readonly [bodyKey: string]: unknown;
 }
 
 export type Outcome =
@@ -283,6 +296,8 @@ export interface AnswersPayload {
   notices: NoticeResult[];
   note?: string;
   earlier_heading?: string;
+  // A registered kind's results sit at its resultKey.
+  readonly [resultKey: string]: unknown;
 }
 
 // One connected session's round calls: `open` is ask_round, `collect`
@@ -292,6 +307,86 @@ export type FormsSession = AgentFormSession<AnswersPayload>;
 // The `name` of the error `open` rejects with for a malformed call; the tool
 // error text is its `roundErrorText`, not its message.
 export const ROUND_ERROR_NAME = 'RoundError';
+
+// Where a malformed round call is wrong.
+export type RoundErrorPath =
+  | { at: 'call' } // the round call as a whole
+  | { at: 'field'; field: string } // one of the round's own fields
+  | { at: 'item'; kind: string; number: number }; // one item of the kind with that id, `number` 1-based
+
+export type RoundItemPath = Extract<RoundErrorPath, { at: 'item' }>;
+
+// A malformed round call, thrown by every kind's `parse`, built-in or
+// registered: where it is wrong, what is wrong, and the repair when `problem`
+// alone does not name it. It is the calling model's only repair signal,
+// worded by main's `roundErrorText`; `message` is for logs.
+export class RoundError extends Error {
+  readonly path: RoundErrorPath;
+  readonly problem: string;
+  // '' when there is none.
+  readonly detail: string;
+
+  constructor(fields: {
+    path: RoundErrorPath;
+    problem: string;
+    detail?: string;
+  }) {
+    const detail = fields.detail ?? '';
+    super(detail === '' ? fields.problem : `${fields.problem} ${detail}`);
+    this.name = ROUND_ERROR_NAME;
+    this.path = fields.path;
+    this.problem = fields.problem;
+    this.detail = detail;
+  }
+}
+
+// One item kind's wire keys: data both processes register under `id`.
+export interface ItemKindSpec {
+  id: string;
+  // The kind's list in an ask_round call.
+  argsKey: string;
+  // The kind's entries in a saved body.
+  bodyKey: string;
+  // The kind's results in a tool result.
+  resultKey: string;
+  // The fingerprint holds the kind's list even when it is empty.
+  fingerprintJoinsWhenEmpty: boolean;
+  // The user answers the kind's items with a choice.
+  answerable: boolean;
+}
+
+// One item kind as forms' main registers it: its part of the tool schema, its
+// validation, what a re-sent round is matched on, and its body entries and
+// results.
+export interface MainItemKind<
+  Item = unknown,
+  Entry = unknown,
+  Result = unknown,
+> {
+  readonly spec: ItemKindSpec;
+  // Singular, lower case: the error prefix (`Notice 2: `) and the summary
+  // count (`2 notices`).
+  readonly noun: string;
+  // The JSON Schema of the ask_round field `spec.argsKey`, built on each call.
+  describe(): Readonly<Record<string, unknown>>;
+  // Throws a RoundError whose `path` is `at` for a malformed item. Any other
+  // throw rejects the tool call.
+  parse(raw: unknown, at: RoundItemPath): Item;
+  // The layout the item names, null for none.
+  layout(item: Item): string | null;
+  fingerprintContent(item: Item): PythonJsonValue;
+  // Never throws; `saved` is the saved entry with that 1-based index, `{}`
+  // when the body holds none.
+  readEntry(index: number, saved: Readonly<Record<string, unknown>>): Entry;
+  // The entry a headless session answers the item with.
+  recommendedEntry(item: Item, index: number): Entry;
+  // The entry a finished round's saved copy hands a re-sent round's draft;
+  // absent keeps the entry whole.
+  finishedEntry?(entry: Entry): Entry;
+  result(item: Item, entry: Entry): Result;
+  // Present exactly when `spec.answerable` is true.
+  status?(result: Result): AnswerStatus;
+}
 
 // Round sources (MCP now, the wigley harness next) reach round logic only here.
 export type FormsService = AgentFormService<AnswersPayload>;
@@ -318,6 +413,20 @@ export interface FormsChannel extends ChannelShape {
   };
   messages: AgentFormMessages<Round, FormBody>;
 }
+
+// The main part's exports. `registerKind` throws, registering nothing, on a
+// kind whose id or wire key another registered kind holds, a wire key a round
+// field holds, a `status` that disagrees with `spec.answerable`, or a
+// `fingerprintJoinsWhenEmpty` on a kind forms does not build in; its
+// `Disposable` removes the kind, and each change re-contributes the tools.
+export interface FormsMainExports {
+  registerKind(kind: MainItemKind): Disposable;
+}
+
+export const formsMainKey: DependencyKey<FormsMainExports, 'main', 'forms'> = {
+  id: 'forms',
+  process: 'main',
+};
 
 // The page part's exports and events.
 

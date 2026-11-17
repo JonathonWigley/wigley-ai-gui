@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { roundErrorText } from '../../mcp-wording';
-import { RoundError, type RoundItemPath } from '../../round-error';
-import { questionFormat } from './question-format';
+import { RoundError, type RoundItemPath } from '../../../contract';
+import { BUILT_IN_KINDS } from '../formats';
+import { questionAnswerSubject, questionKind } from './question-format';
 
 const QUESTION_1: RoundItemPath = { at: 'item', kind: 'question', number: 1 };
 
@@ -32,17 +33,17 @@ function withFields(fields: Record<string, unknown>) {
 // item.
 function parseError(raw: unknown): string {
   try {
-    questionFormat.parse(raw, QUESTION_1);
+    questionKind.parse(raw, QUESTION_1);
   } catch (error) {
     if (error instanceof RoundError) {
-      return roundErrorText(error);
+      return roundErrorText(BUILT_IN_KINDS, error);
     }
     throw error;
   }
   throw new Error('the question format accepted the question');
 }
 
-describe('questionFormat.parse', () => {
+describe('questionKind.parse', () => {
   it.each([
     { deleted: ['context', 'rationale'], names: 'context, rationale' },
     { deleted: ['summary'], names: 'summary.' },
@@ -69,7 +70,7 @@ describe('questionFormat.parse', () => {
   ])(
     "reads the summary from summary, or from a saved round's question: $summary",
     ({ fields, summary }) => {
-      expect(questionFormat.parse(withFields(fields), QUESTION_1).summary).toBe(
+      expect(questionKind.parse(withFields(fields), QUESTION_1).summary).toBe(
         summary,
       );
     },
@@ -136,9 +137,9 @@ describe('questionFormat.parse', () => {
 
   it('accepts an optional layout', () => {
     expect(
-      questionFormat.parse(question({ layout: 'compact' }), QUESTION_1).layout,
+      questionKind.parse(question({ layout: 'compact' }), QUESTION_1).layout,
     ).toBe('compact');
-    expect(questionFormat.parse(question(), QUESTION_1).layout).toBeNull();
+    expect(questionKind.parse(question(), QUESTION_1).layout).toBeNull();
   });
 
   it('refuses a fractional recommend', () => {
@@ -148,14 +149,14 @@ describe('questionFormat.parse', () => {
   });
 });
 
-describe('questionFormat.answerSubject', () => {
+describe('questionKind.answerSubject', () => {
   it('gives the result builder its title, choices and recommend', () => {
-    const parsed = questionFormat.parse(
+    const parsed = questionKind.parse(
       question({ choices: ['a', 'b'], recommend: 2 }),
       QUESTION_1,
     );
 
-    expect(questionFormat.answerSubject(parsed)).toEqual({
+    expect(questionAnswerSubject(parsed)).toEqual({
       title: 'Naming',
       choiceTexts: ['a', 'b'],
       recommend: 2,

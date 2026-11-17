@@ -1,11 +1,10 @@
 import type { AgentFormType } from '../../../contracts/agent-forms';
-import type {
-  AnswerableKind,
-  AnswerEntry,
-  AnswersPayload,
-  FormBody,
-  FormsService,
-  Round,
+import {
+  type AnswersPayload,
+  type FormBody,
+  type FormsService,
+  type MainItemKind,
+  RoundError,
 } from '../contract';
 import {
   ROUND_COLLECT_TOOL,
@@ -15,40 +14,41 @@ import {
 } from './mcp-wording';
 import {
   answersResult,
+  bodyEntries,
   fingerprint,
   handedBackResult,
+  type KindRound,
   noRoundResult,
   notShownResult,
   parseRound,
   readFormBody,
   requireKnownLayouts,
 } from './round';
-import { RoundError } from './round-error';
 
-function withoutDontAsk<Entry extends AnswerEntry>(answer: Entry): Entry {
-  return { ...answer, dont_ask: false, dont_ask_reason: '' };
-}
-
-// Each answerable kind's answer list in a body, its Don't ask me this
-// presses dropped and its entries keeping their own type.
-const ANSWER_LISTS = {
-  question: (body) => ({ answers: body.answers.map(withoutDontAsk) }),
-  finding: (body) => ({
-    finding_answers: body.finding_answers.map(withoutDontAsk),
-  }),
-} satisfies Record<AnswerableKind, (body: FormBody) => Partial<FormBody>>;
-
-// A press belongs to the round it was made in, so a finished round's copy
-// drops it; an open draft's copy keeps it, since retro reads finished rounds only.
-function prefillDraft(body: FormBody, finished: boolean): FormBody {
+// A finished round's copy holds each kind's `finishedEntry` of its entries
+// (a press belongs to the round it was made in); an open draft's copy keeps
+// them whole, since retro reads finished rounds only.
+function prefillDraft(
+  kinds: readonly MainItemKind[],
+  body: FormBody,
+  finished: boolean,
+): FormBody {
   if (!finished) {
     return body;
   }
-  const stripped: FormBody = { ...body };
-  for (const listWithoutDontAsk of Object.values(ANSWER_LISTS)) {
-    Object.assign(stripped, listWithoutDontAsk(body));
+  let prefilled = body;
+  for (const kind of kinds) {
+    const { finishedEntry } = kind;
+    if (finishedEntry !== undefined) {
+      prefilled = {
+        ...prefilled,
+        [kind.spec.bodyKey]: bodyEntries(body, kind).map((entry) =>
+          finishedEntry(entry),
+        ),
+      };
+    }
   }
-  return stripped;
+  return prefilled;
 }
 
 function savedHeading(args: unknown): string | null {
@@ -56,41 +56,53 @@ function savedHeading(args: unknown): string | null {
   return typeof heading === 'string' && heading.trim() !== '' ? heading : null;
 }
 
-// Forms' review round as an agent form type, the round logic's results worded
-// by the MCP wording: `ROUND_OPEN_TOOL` opens one and `ROUND_COLLECT_TOOL`
-// collects it.
-export const roundType: AgentFormType<Round, FormBody, AnswersPayload> = {
-  openTool: ROUND_OPEN_TOOL,
-  collectTool: ROUND_COLLECT_TOOL,
-  noun: 'round',
-  argsErrorText: (error) =>
-    error instanceof RoundError ? roundErrorText(error) : null,
-  parse: parseRound,
-  fingerprint,
-  heading: (round) => round.heading,
-  savedHeading,
-  readBody: readFormBody,
-  prefill: (_round, saved, finished) => prefillDraft(saved, finished),
-  payload: (round, outcome, body) =>
-    roundPayload(answersResult(round, outcome, body)),
-  handedBackPayload: (round, outcome, body) =>
-    roundPayload(handedBackResult(round, outcome, body)),
-  noFormPayload: () => roundPayload(noRoundResult()),
-  notShownPayload: (round, blockingHeading) =>
-    roundPayload(notShownResult(round, blockingHeading)),
-};
+// Forms' review round over the registered kinds as an agent form type, the
+// round logic's results worded by the MCP wording: `ROUND_OPEN_TOOL` opens one
+// and `ROUND_COLLECT_TOOL` collects it. Each member reads `kinds()` when
+// called.
+export function createRoundType(
+  kinds: () => readonly MainItemKind[],
+): AgentFormType<KindRound, FormBody, AnswersPayload> {
+  return {
+    openTool: ROUND_OPEN_TOOL,
+    collectTool: ROUND_COLLECT_TOOL,
+    noun: 'round',
+    argsErrorText: (error) =>
+      error instanceof RoundError ? roundErrorText(kinds(), error) : null,
+    parse: (args) => parseRound(kinds(), args),
+    fingerprint: (round) => fingerprint(kinds(), round),
+    heading: (round) => round.heading,
+    savedHeading,
+    readBody: (round, raw) => readFormBody(kinds(), round, raw),
+    prefill: (_round, saved, finished) =>
+      prefillDraft(kinds(), saved, finished),
+    payload: (round, outcome, body) =>
+      roundPayload(kinds(), answersResult(kinds(), round, outcome, body)),
+    handedBackPayload: (round, outcome, body) =>
+      roundPayload(kinds(), handedBackResult(kinds(), round, outcome, body)),
+    noFormPayload: () => roundPayload(kinds(), noRoundResult(kinds())),
+    notShownPayload: (round, blockingHeading) =>
+      roundPayload(kinds(), notShownResult(kinds(), round, blockingHeading)),
+  };
+}
 
 // A round the app answered with `body` and never showed.
 export function autoAnsweredPayload(
-  round: Round,
+  kinds: readonly MainItemKind[],
+  round: KindRound,
   body: FormBody,
 ): AnswersPayload {
-  return roundPayload(answersResult(round, 'auto_answered', body));
+  return roundPayload(
+    kinds,
+    answersResult(kinds, round, 'auto_answered', body),
+  );
 }
 
-// Rejects, before the service sees the call, an open whose round names a layout `layoutNames()` lacks.
+// Rejects, before the service sees the call, an open whose round names a
+// layout `layoutNames()` lacks.
 export function withKnownLayouts(
   service: FormsService,
+  kinds: () => readonly MainItemKind[],
   layoutNames: () => readonly string[],
 ): FormsService {
   return {
@@ -99,7 +111,8 @@ export function withKnownLayouts(
       return {
         open: (args, toolUseId, signal) => {
           try {
-            requireKnownLayouts(parseRound(args), layoutNames());
+            const known = kinds();
+            requireKnownLayouts(known, parseRound(known, args), layoutNames());
           } catch (error) {
             return Promise.reject(error);
           }

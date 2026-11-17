@@ -6,10 +6,13 @@ import type {
   SessionInfo,
   SessionsMainExports,
 } from '../../../sessions/contract';
-import type { FormsService } from '../../contract';
+import {
+  type FormsService,
+  type MainItemKind,
+  RoundError,
+} from '../../contract';
 import { roundErrorText } from '../mcp-wording';
 import { parseRound, requireKnownLayouts } from '../round';
-import { RoundError } from '../round-error';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
 // No project, so the row and its title bar carry the label alone.
@@ -25,22 +28,25 @@ const PREVIEW_SESSION: SessionInfo = {
 const SAMPLE = -1;
 
 // The sample when `cursor` is past the last saved round, else the first saved
-// round after `cursor` that parses and names only layouts in `layoutNames`,
-// logging each one skipped.
+// round after `cursor` that parses with `kinds` and names only layouts in
+// `layoutNames`, logging each one skipped.
 function nextRound(
   cursor: number,
   saved: unknown[],
+  kinds: readonly MainItemKind[],
   layoutNames: readonly string[],
   log: PluginLog,
 ): { cursor: number; args: unknown } {
   for (let index = cursor + 1; index < saved.length; index++) {
     try {
-      requireKnownLayouts(parseRound(saved[index]), layoutNames);
+      requireKnownLayouts(kinds, parseRound(kinds, saved[index]), layoutNames);
       return { cursor: index, args: saved[index] };
     } catch (error) {
       // A RoundError's message drops the item location its round text names.
       const text =
-        error instanceof RoundError ? roundErrorText(error) : errorText(error);
+        error instanceof RoundError
+          ? roundErrorText(kinds, error)
+          : errorText(error);
       log(`preview skipped a saved round: ${text}`);
     }
   }
@@ -55,6 +61,8 @@ export function createLayoutPreview(deps: {
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
   forms: FormsService;
   savedArgs(): unknown[];
+  // The registered item kinds now.
+  kinds(): readonly MainItemKind[];
   // The layouts folder's layout names now.
   layoutNames(): readonly string[];
   log: PluginLog;
@@ -77,6 +85,7 @@ export function createLayoutPreview(deps: {
       const next = nextRound(
         cursor,
         deps.savedArgs(),
+        deps.kinds(),
         deps.layoutNames(),
         deps.log,
       );

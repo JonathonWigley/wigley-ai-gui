@@ -6,9 +6,14 @@ import {
   type DefectFinding,
   type Finding,
   type FindingAction,
+  type FindingAnswerEntry,
   type FindingCard,
   type FindingChoice,
   type FindingOrigin,
+  type FindingResult,
+  type MainItemKind,
+  RoundError,
+  type RoundItemPath,
   type Severity,
 } from '../../../contract';
 import {
@@ -16,8 +21,20 @@ import {
   FINDING_ORIGIN_RULES,
   isFindingOrigin,
 } from '../../../finding-origins';
-import { findingEntries, isFindingAction } from '../../../finding-pick';
-import { RoundError, type RoundItemPath } from '../../round-error';
+import {
+  completeFindingPick,
+  findingEntries,
+  isFindingAction,
+} from '../../../finding-pick';
+import { isAnswered } from '../../../item-response';
+import { BUILT_IN_KIND_SPECS } from '../../../item-kinds';
+import {
+  addNotesAndDontAsk,
+  answerStatus,
+  readAnswerEntry,
+  recommendedAnswerEntry,
+  withoutDontAsk,
+} from '../answer-results';
 import {
   fieldsMissing,
   fieldsOutside,
@@ -27,7 +44,7 @@ import {
   quotedList,
   requireText,
 } from '../fields';
-import type { AnswerableFormat } from '../item-format';
+import type { AnswerSubject } from '../item-format';
 import {
   actionLabelsText,
   cardChoicesText,
@@ -560,8 +577,67 @@ function actionReasonsContent(
   return content;
 }
 
-export const findingFormat: AnswerableFormat<Finding> = {
-  argsKey: 'findings',
+// What the answer result reads of a finding; recommend 0: no recommended
+// choice, as when recommend_action has none.
+export function findingAnswerSubject(finding: Finding): AnswerSubject {
+  return {
+    title: finding.title,
+    choiceTexts: finding.choices.map((choice) => choice.text),
+    recommend: finding.recommend ?? 0,
+  };
+}
+
+// A saved action outside the three, or none, reads as no action.
+function readFindingAnswerEntry(
+  index: number,
+  saved: Readonly<Record<string, unknown>>,
+): FindingAnswerEntry {
+  return {
+    ...readAnswerEntry(index, saved),
+    action: isFindingAction(saved.action) ? saved.action : '',
+  };
+}
+
+// A finding is answered (`isAnswered`) once its entry holds one of the card's
+// numbered picks (`findingEntries`): a choice with the action it sits under,
+// or the header of an action with no choices, whose `choice` is 0; notes alone
+// leave it untouched. The recommendation is taken whole when the pick is the
+// recommended choice, or the recommended header, under recommend_action.
+function findingResult(
+  finding: Finding,
+  entry: FindingAnswerEntry,
+): FindingResult {
+  const subject = findingAnswerSubject(finding);
+  const completePick = completeFindingPick(finding, entry.choice, entry.action);
+  const answered = isAnswered({
+    notApplicable: entry.not_applicable,
+    pickIsComplete: completePick !== null,
+  });
+  const pick = answered ? completePick : null;
+  const choice = pick?.choice ?? 0;
+  const tookActionRecommendation =
+    pick !== null && pick.action === finding.recommend_action;
+  const result: FindingResult = {
+    index: entry.index,
+    title: subject.title,
+    status: answerStatus(entry, answered),
+    choice,
+    choice_text: choice > 0 ? subject.choiceTexts[choice - 1] : '',
+    took_recommendation:
+      tookActionRecommendation && pick.choice === subject.recommend,
+    action: pick?.action ?? '',
+    took_action_recommendation: tookActionRecommendation,
+  };
+  addNotesAndDontAsk(result, entry);
+  return result;
+}
+
+export const findingKind: MainItemKind<
+  Finding,
+  FindingAnswerEntry,
+  FindingResult
+> = {
+  spec: BUILT_IN_KIND_SPECS.finding,
   noun: 'finding',
   describe: () => ({
     type: 'array',
@@ -651,6 +727,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
     description: FINDINGS_DESCRIPTION,
   }),
   parse: parseFinding,
+  layout: (finding) => finding.layout,
   // A fix_now choice action, a null recommend and empty action_reasons stay
   // out, so a finding using none of them hashes as one sent before they
   // existed; the layout never joins.
@@ -677,10 +754,12 @@ export const findingFormat: AnswerableFormat<Finding> = {
         : {}),
     };
   },
-  // 0: no recommended choice, as when recommend_action has none.
-  answerSubject: (finding) => ({
-    title: finding.title,
-    choiceTexts: finding.choices.map((choice) => choice.text),
-    recommend: finding.recommend ?? 0,
+  readEntry: readFindingAnswerEntry,
+  recommendedEntry: (finding, index) => ({
+    ...recommendedAnswerEntry(index, finding.recommend ?? 0),
+    action: finding.recommend_action,
   }),
+  finishedEntry: withoutDontAsk,
+  result: findingResult,
+  status: (result) => result.status,
 };
