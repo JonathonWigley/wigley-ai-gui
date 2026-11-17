@@ -367,6 +367,39 @@ What Windows support and installers need.
   install wait until `main` is clean of it.
 - **Native window vibrancy** — *needs a feature plan*: macOS `vibrancy` and Windows 11 mica behind a window adapter,
   in place of the CSS backdrop under L1 glass (`docs/features/ui-design/design.md`).
+- **A shareable build without the user's workflow** — *needs a feature plan*: the user wants to give the app to other
+  people with every reusable tool and none of the user's workflow. The workflow is interview, plan, make, review and
+  retro: the plugins `workflow-large`, `workflow-medium`, `workflow-small`, `workflow-spike`, `auto-retro` and
+  `primer`. Being a wigley part does not make a tool part of the workflow. Sessions, chat, unity-pool, the audio
+  picker, live view, usage, system stats, docs, notes, settings and keys all stay. A review of the plugins' `dependsOn`
+  and `reads` found no reusable plugin with a hard dependency on a workflow plugin. The gaps are these:
+  - The agent tools reach the app only through `relay.py`, and only the `wigley` marketplace plugin registers it (as
+    the `wigley-forms` MCP server). That plugin also ships every workflow skill. Without it, chat works but forms,
+    `set_session_title`, `start_session`, the audio picker, live view and the backlog and practice tools are missing.
+    Options: move the relay into its own marketplace plugin, or have the `claude-code` adapter pass `--mcp-config`
+    to the sessions the app starts. Sessions started in a terminal still need a plugin.
+  - `docs` finds `docs_index.py` through the installed `wigley@wigley-ai-marketplace` plugin (`script-locator.ts`). It
+    also fixes the wiki root at `~/wigley-agents/wiki/Main.md` (`doc-files.ts`), and `kinds.ts` fixes the
+    `wigley-agents` folder and the user's file-placement rules. These become settings, and the index script ships
+    with the app or with the relay's plugin.
+  - The `forms` tool text points agents at `~/wigley-agents/forms.md` (`tool-definitions.ts`, `question-format.ts`),
+    which another user does not have.
+  - `notes` lists `backlog` in `dependsOn.main`, so notes cannot run without backlog. Backlog reads the follow-up files
+    that review writes. Decide whether backlog stays. If it goes, invert the link: backlog registers a note target into
+    notes.
+  - `auto-compact` imports `workflow/contract` and reads `workflow.flows`. A disabled `workflow` is safe. A deleted one
+    breaks the build.
+  - `unity-pool` runs `~/wigley-agents/tools/unity-pool/unity-pool`, so the tool ships with the app.
+  - `app-update` installs from the user's clone's `origin/main`. Another user needs a fork of their own.
+  - `src/shared/plan-progress.ts` and `plan-copies.ts` are used only by `workflow-large`. They move into that plugin.
+  - The app lives in the `ai` repo beside `wigley-agents`, and its `AGENTS.md` points at the user's rules and skills.
+    A shared copy needs its own repo and a neutral `AGENTS.md`.
+
+  Decisions for the plan: disable the workflow plugins by default (`plugins.disabled`) or remove them from the build
+  (the folder and its entries in `src/plugins/manifests.ts`, `main.ts`, `page.ts` and `keymap.ts`; `npm run lint`
+  flags a missed entry); whether `workflow` (the engine) and `backlog` stay; and where the relay lives. A build with
+  the workflow folders deleted was not tried. Source session: Claude Code a20096e5-768a-4100-9290-f3696e2c4543 in
+  `~/Documents/ai`.
 ## Plugin extension points
 
 Closed lists that become registrations, so a plugin adds what is hardcoded today.
