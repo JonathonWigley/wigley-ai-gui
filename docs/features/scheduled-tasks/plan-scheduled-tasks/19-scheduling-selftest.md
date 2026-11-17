@@ -1,6 +1,6 @@
 # 19 — Scheduling self-test
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 12 (drives 12's mode), 16 (drives 16's section), 17
 Plan: [plan.md](plan.md)
@@ -121,3 +121,5 @@ Commit: one commit for the group — "Add the scheduling self-test: Schedules mo
 Scheduled runs section over fixture runs".
 
 ## Proof
+
+Commit dae39230b · proof: diff read: Produces present; wave 5 typecheck and lint pass; AGENTS.md self-test list gains the script (lead) · concerns: a failed fixture adopt shows only as missing lines (serial catches); group 4 assumes details keep focus after Escape; scrollsItself [] until the fit check runs

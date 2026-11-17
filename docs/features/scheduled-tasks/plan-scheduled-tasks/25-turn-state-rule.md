@@ -1,6 +1,6 @@
 # 25 — Hosted turn state: busy from open messages, a main turn and background work
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 02, 07, 08, 13, 24
 Rung: deep · changes the host's busy read, which the keep window, the drain, the exit rule and `skipWhileBusy` all rest on, and the `IdleRule` wire shape
@@ -140,3 +140,4 @@ Commit:    one commit for the group: "Session host reads busy from open messages
 
 ## Proof
 
+Commit 144ac8dc0 · proof: diff read: Produces present; wave 5 typecheck and lint pass after formatter pass · concerns: drain ends a process at background_tasks_changed [] and can cut the self-started report turn ~20 ms later (the task's drain test asks for it); touched fake-agent-harness.ts FAKE_IDLE_RULE outside Files for typecheck; dropped-keys pre-filter removed

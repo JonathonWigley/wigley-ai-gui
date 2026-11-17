@@ -926,8 +926,8 @@ is the task's name, or its id when the task is gone.
 - [x] [One host per channel](24-one-host-per-channel.md) — after 02, 07
 
 ### Wave 5
-- [ ] [Scheduling self-test](19-scheduling-selftest.md) — after 12, 16, 17
-- [ ] [Hosted turn state](25-turn-state-rule.md) — after 02, 07, 08, 13, 24
+- [x] [Scheduling self-test](19-scheduling-selftest.md) — after 12, 16, 17
+- [x] [Hosted turn state](25-turn-state-rule.md) — after 02, 07, 08, 13, 24
 
 ### Wave 6
 - [ ] [Doc re-read](20-doc-re-read.md) — after every task above
@@ -967,6 +967,8 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - 17 · hard; compile fix a2e4f76f4 · 5042267b0 · diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4 · concerns: quit may wait on an in-flight adopt (stop order unchecked); adoptRun unused until 19
 - 18 · hard · aea7ed142 · diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4; app fits LoginItems type · concerns: login entry exits before ready: task 21 checks exit 0 and no Dock icon
 - 24 · deep · 1c8af15c3 · diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4 · concerns: pid reuse after a kill -9 can lock a channel out until that process ends (lock survives reboot); put-back branch untested; stale-socket row is the one that catches the old bug
+- 19 · hard · dae39230b · diff read: Produces present; wave 5 typecheck and lint pass; AGENTS.md self-test list gains the script (lead) · concerns: a failed fixture adopt shows only as missing lines (serial catches); group 4 assumes details keep focus after Escape; scrollsItself [] until the fit check runs
+- 25 · deep · 144ac8dc0 · diff read: Produces present; wave 5 typecheck and lint pass after formatter pass · concerns: drain ends a process at background_tasks_changed [] and can cut the self-started report turn ~20 ms later (the task's drain test asks for it); touched fake-agent-harness.ts FAKE_IDLE_RULE outside Files for typecheck; dropped-keys pre-filter removed
 ### Contract changes
 ### Rulings
 - Waves keep 05 beside 04 and 15 beside 14: both dependencies are on plan-pinned formats or injected deps, with no code wait — 05 writes offline.json to the plan's shape, 15 reaches projects through a dep 17 fills — if wrong, a worker finds a missing name and reports BLOCKED · lead
@@ -982,5 +984,6 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - An update giving folder or project without profile takes the new project's own profile, else keeps the old — follows schedule_task's default — a project switch can keep a profile the user did not expect · group 15 · group 15
 - No plan is sent until a listRuns read has succeeded; a failed read turns sending off until the 10 s retry succeeds — runs the host fired unseen must be adopted before re-planning — a host that cannot list keeps its old queue · group 17 · group 17
 - After chat.restored(), a running entry is finished when its row is not open, as well as when its session reads not running — a closed row cannot finish later — none · group 17 · group 17
+- design.md drain wording now 'once it reads idle' · group 25
 ### Review rounds
 ### Test gate

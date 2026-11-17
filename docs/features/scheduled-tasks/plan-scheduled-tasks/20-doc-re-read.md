@@ -1,6 +1,6 @@
 # 20 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 01–19 (re-reads every task's docs), 22–25 (re-reads every task's docs)
 Plan: [plan.md](plan.md)
