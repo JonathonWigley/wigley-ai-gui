@@ -252,9 +252,14 @@ describe('planCopies', () => {
 
   it('planCopies_WorktreesRejects_ReturnsTheNamedCopy', async () => {
     const test = await setUp(THREE_CHECKOUTS);
-    test.git.worktrees.mockRejectedValue(new Error('git worktree exited 128'));
+    const rejection = new Error('git worktree exited 128');
+    test.git.worktrees.mockRejectedValue(rejection);
+    const worktreesFailed =
+      vi.fn<NonNullable<PlanCopyDeps['worktreesFailed']>>();
 
-    expect(await planCopies(`/w1/${PLAN}`, test.deps)).toEqual([
+    expect(
+      await planCopies(`/w1/${PLAN}`, { ...test.deps, worktreesFailed }),
+    ).toEqual([
       {
         planDir: `/w1/${PLAN}`,
         checkout: `/w1/${PLAN}`,
@@ -262,6 +267,7 @@ describe('planCopies', () => {
         isMainTree: true,
       },
     ]);
+    expect(worktreesFailed.mock.calls).toEqual([['/w1', rejection]]);
   });
 
   it('planCopies_FilesFails_Rejects', async () => {

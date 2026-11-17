@@ -107,7 +107,22 @@ export function createPlanWatch(deps: {
   signal(sessionId: string, signal: WorkflowSignal): void;
 }): PlanWatch {
   const { git, files, paths, log } = deps;
-  const copyDeps: PlanCopyDeps = { git, files, paths };
+  // The clone tops whose failing worktree list is logged already.
+  const worktreesFailedTops = new Set<string>();
+  const copyDeps: PlanCopyDeps = {
+    git,
+    files,
+    paths,
+    worktreesFailed: (top, error) => {
+      if (worktreesFailedTops.has(top)) {
+        return;
+      }
+      worktreesFailedTops.add(top);
+      log(
+        `git worktree list failed in ${top}: ${errorText(error)}; reading the plan's own copy only`,
+      );
+    },
+  };
   const watched = new Map<string, Watched>();
   // Bumped each time a session's watch moves or closes: a call started under
   // an earlier generation is dropped.
