@@ -1,3 +1,5 @@
+import type { Disposable } from './disposable';
+
 export type PipeDirection = 'in' | 'out' | 'err';
 // One line a hosted process read on stdin (`in`) or wrote (`out`, `err`), without its newline.
 // `seq` counts from 1 per process; `at` is epoch ms.
@@ -105,4 +107,16 @@ export interface SessionHost {
   // Never rejects. Resolves once the current host has stopped every process, or could not be reached, or its reply
   // limit ran out.
   stopAll(): Promise<void>;
+  // Replaces every pending entry this app sent before. The client keeps the last list and sends it again on each
+  // connect, so a new host takes it over.
+  setPending(entries: readonly PendingSpawn[]): void;
+  // Every run the current host started or skipped that no `forgetRuns` dropped, oldest first. Rejects as `list` does.
+  listRuns(): Promise<HostedRun[]>;
+  // Drops the runs with these ids from the host's runs record.
+  forgetRuns(ids: readonly string[]): void;
+  // Hears each run the host starts or skips while this app is connected.
+  onRunStarted(listener: (run: HostedRun) => void): Disposable;
+  // Hears each time the client connects to a host after its first connect: a new host after a host death, an update
+  // or a login start. Runs the host started while no app was connected reach the app only through `listRuns`.
+  onConnected(listener: () => void): Disposable;
 }

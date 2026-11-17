@@ -1,6 +1,7 @@
 import type { Socket } from 'node:net';
 import type { Timers } from '../../contracts/ambient';
 import type { Log } from '../../contracts/log';
+import type { HostedRun } from '../../contracts/session-host';
 import type {
   ClientMessage,
   ClosedEvent,
@@ -15,7 +16,7 @@ import {
 import { jsonLine, readLines } from '../../shared/local-channel/line-framing';
 
 export const LOG_SOURCE = 'session-host';
-// How long a `hello`, a `list` and a `subscribe` wait for their reply.
+// How long a `hello`, a `list`, a `listRuns` and a `subscribe` wait for their reply.
 export const HOST_REPLY_LIMIT_MS = 1000;
 
 // One connection to a session host.
@@ -37,6 +38,7 @@ export interface HostLinkDeps {
   timers: Timers;
   log: Log;
   pushed(message: LineEvent | ClosedEvent | SpawnedEvent): void;
+  runStarted(run: HostedRun): void;
   disconnected(link: HostLink): void;
 }
 
@@ -69,8 +71,8 @@ function createHostLink(socket: Socket, deps: HostLinkDeps): HostLink {
       deps.pushed(message);
       return;
     }
-    // Routed by the runStarted dependency task 13 adds.
     if (message.type === 'runStarted') {
+      deps.runStarted(message.run);
       return;
     }
     pending.get(message.requestId)?.settle(message);

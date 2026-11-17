@@ -14,8 +14,11 @@ import type { Timers } from '../../contracts/ambient';
 import type {
   HostedExit,
   HostedProcessEvents,
+  HostedRun,
   HostedSpawn,
+  PendingSpawn,
   PipeLine,
+  SessionHost,
 } from '../../contracts/session-host';
 import {
   type ClientMessage,
@@ -36,6 +39,7 @@ import { osPlatform } from '../../shared/os-platform';
 import {
   createSessionHostClient,
   type SessionHostSpawn,
+  sessionHostLaunch,
 } from './session-host-client';
 
 const POLL_MS = 100;
@@ -111,6 +115,9 @@ interface HostScript {
   processes?: ListedProcess[];
   listAnswered?: boolean;
   stopAllAnswered?: boolean;
+  runs?: HostedRun[]; // what `listRuns` answers
+  runsAnswered?: boolean;
+  heldHello?: Promise<void>; // each `hello` reply waits for it
   subscribed?(message: SubscribeMessage, host: ScriptedHost): void;
 }
 
@@ -146,11 +153,26 @@ async function startScriptedHost(
       return;
     }
     if (message.type === 'hello') {
+      const reply = jsonLine({
+        type: 'hello',
+        requestId: message.requestId,
+        protocol: script.protocol ?? SESSION_HOST_PROTOCOL,
+      });
+      if (script.heldHello === undefined) {
+        socket.write(reply);
+      } else {
+        void script.heldHello.then(() => {
+          if (socket.writable) {
+            socket.write(reply);
+          }
+        });
+      }
+    } else if (message.type === 'listRuns' && script.runsAnswered !== false) {
       socket.write(
         jsonLine({
-          type: 'hello',
+          type: 'listRuns',
           requestId: message.requestId,
-          protocol: script.protocol ?? SESSION_HOST_PROTOCOL,
+          runs: script.runs ?? [],
         }),
       );
     } else if (message.type === 'list' && script.listAnswered !== false) {
@@ -339,6 +361,121 @@ function sentOfType(host: ScriptedHost, type: ClientMessage['type']) {
   return host.got.filter((message) => message.type === type);
 }
 
+function pendingSpawns(...ids: string[]): PendingSpawn[] {
+  return ids.map((id, index) => ({
+    at: 100 * (index + 1),
+    spawn: spawnRequest(id),
+    record: { task: id },
+    skipWhileBusy: null,
+  }));
+}
+
+function hostedRun(id: string): HostedRun {
+  return {
+    id,
+    record: { task: id },
+    startedAt: 7,
+    skipped: false,
+    exit: null,
+  };
+}
+
+// The `setKeepIdle` and `setPending` messages `host` got, in order; a `setPending` as the ids of its entries.
+function queueMessages(host: ScriptedHost): (string | string[])[] {
+  return host.got.flatMap<string | string[]>((message) => {
+    if (message.type === 'setKeepIdle') {
+      return ['keepIdle'];
+    }
+    if (message.type === 'setPending') {
+      return [message.entries.map((entry) => entry.spawn.id)];
+    }
+    return [];
+  });
+}
+
+// Stops `host` and waits until the client has seen its connection drop.
+async function stopAndSeeTheDrop(client: SessionHost, host: ScriptedHost) {
+  const sentinel = recordedEvents();
+  client.spawn(spawnRequest('sentinel'), sentinel.events);
+  await host.stop();
+  await vi.waitFor(() => expect(sentinel.errors()).toEqual([EXITED]));
+}
+
+interface SetPendingRow {
+  name: string;
+  before: PendingSpawn[] | null; // set before the first host answers
+  connected(client: SessionHost, host: ScriptedHost): void | Promise<void>;
+  first: (string | string[])[];
+  second: (string | string[])[];
+}
+
+const SET_PENDING_ROWS: SetPendingRow[] = [
+  {
+    name: 'set before the connect',
+    before: pendingSpawns('a'),
+    connected: () => {},
+    first: ['keepIdle', ['a']],
+    second: ['keepIdle', ['a']],
+  },
+  {
+    name: 'set while connected',
+    before: null,
+    connected: (client) => client.setPending(pendingSpawns('a')),
+    first: ['keepIdle', ['a']],
+    second: ['keepIdle', ['a']],
+  },
+  {
+    name: 'never set',
+    before: null,
+    connected: () => {},
+    first: ['keepIdle'],
+    second: ['keepIdle'],
+  },
+  {
+    name: 'set again: the last list only',
+    before: pendingSpawns('a'),
+    connected: (client) => client.setPending(pendingSpawns('b')),
+    first: ['keepIdle', ['a'], ['b']],
+    second: ['keepIdle', ['b']],
+  },
+  {
+    name: 'a forgotten run',
+    before: pendingSpawns('a', 'b'),
+    connected: (client) => client.forgetRuns(['a']),
+    first: ['keepIdle', ['a', 'b']],
+    second: ['keepIdle', ['b']],
+  },
+  {
+    name: 'a run the host started',
+    before: pendingSpawns('a', 'b'),
+    connected: async (client, host) => {
+      const heard: string[] = [];
+      client.onRunStarted((run) => heard.push(run.id));
+      host.push({ type: 'runStarted', run: hostedRun('b') });
+      await vi.waitFor(() => expect(heard).toEqual(['b']));
+    },
+    first: ['keepIdle', ['a', 'b']],
+    second: ['keepIdle', ['a']],
+  },
+];
+
+describe('sessionHostLaunch', () => {
+  it('sessionHostLaunch_BuildsTheHostCommand', () => {
+    expect(
+      sessionHostLaunch({
+        execPath: '/app/binary',
+        hostScript: '/build/session-host.js',
+        folder: '/data/session-host',
+        channel: '/run/host.sock',
+      }),
+    ).toEqual({
+      command: '/app/binary',
+      args: ['/build/session-host.js', '/data/session-host', '/run/host.sock'],
+      env: { ELECTRON_RUN_AS_NODE: '1' },
+    });
+  });
+});
+
 describe('createSessionHostClient', () => {
   it('create_HostAnswers_ConnectsWithoutSpawning', async () => {
     const dir = tempFolder();
@@ -421,10 +558,16 @@ describe('createSessionHostClient', () => {
     rig.create();
 
     await vi.waitFor(() => expect(rig.timers.pending(POLL_MS)).toBe(1));
+    const launch = sessionHostLaunch({
+      execPath: '/app/binary',
+      hostScript: '/build/session-host.js',
+      folder: rig.folder,
+      channel,
+    });
     expect(rig.spawnCalls).toEqual([
       {
-        command: '/app/binary',
-        args: ['/build/session-host.js', rig.folder, channel],
+        command: launch.command,
+        args: launch.args,
         options: {
           detached: true,
           stdio: 'ignore',
@@ -1108,4 +1251,206 @@ describe('createSessionHostClient', () => {
     ]);
     expect(rig.spawnCalls).toEqual([]);
   });
+
+  it.each(SET_PENDING_ROWS)(
+    'setPending_Connect_Cases: $name',
+    async ({ before, connected, first, second }) => {
+      const dir = tempFolder();
+      const channel = testChannel(dir, '');
+      const firstHost = await startScriptedHost(channel);
+      const rig = clientRig(dir, channel);
+      const client = rig.create();
+      client.onConnected(() => client.forgetRuns(['marker']));
+      if (before !== null) {
+        client.setPending(before);
+      }
+      await client.list();
+      await vi.waitFor(() =>
+        expect(sentOfType(firstHost, 'setPending')).toHaveLength(
+          before === null ? 0 : 1,
+        ),
+      );
+
+      await connected(client, firstHost);
+      await vi.waitFor(() => expect(queueMessages(firstHost)).toEqual(first));
+      await stopAndSeeTheDrop(client, firstHost);
+      const secondHost = await startScriptedHost(channel);
+      await client.list();
+
+      await vi.waitFor(() =>
+        expect(sentOfType(secondHost, 'forgetRuns')).toContainEqual({
+          type: 'forgetRuns',
+          ids: ['marker'],
+        }),
+      );
+      expect(queueMessages(secondHost)).toEqual(second);
+    },
+  );
+
+  it.each([
+    {
+      name: 'the host replies',
+      host: 'answers',
+      outcome: [hostedRun('r1'), hostedRun('r2')],
+    },
+    {
+      name: 'no host started',
+      host: 'none',
+      outcome: 'the session host did not start',
+    },
+    {
+      name: 'the host stays silent past the limit',
+      host: 'silent',
+      outcome: 'the session host did not answer its run list',
+    },
+  ])('listRuns_Cases: $name', async ({ host, outcome }) => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const scripted =
+      host === 'none'
+        ? null
+        : await startScriptedHost(channel, {
+            runs: [hostedRun('r1'), hostedRun('r2')],
+            runsAnswered: host === 'answers',
+          });
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+
+    const listing = client.listRuns();
+    const settled =
+      typeof outcome === 'string'
+        ? expect(listing).rejects.toThrow(outcome)
+        : expect(listing).resolves.toEqual(outcome);
+    if (scripted === null) {
+      await vi.waitFor(() => expect(rig.timers.pending(POLL_MS)).toBe(1));
+      rig.moveClock(START_LIMIT_MS);
+      rig.timers.fire(POLL_MS);
+    } else if (host === 'silent') {
+      await vi.waitFor(() =>
+        expect(sentOfType(scripted, 'listRuns')).toHaveLength(1),
+      );
+      rig.timers.fire(REPLY_LIMIT_MS);
+    }
+
+    await settled;
+  });
+
+  it.each([
+    {
+      name: 'ids sent as one message',
+      ids: ['r1', 'r2'],
+      sent: [{ type: 'forgetRuns', ids: ['r1', 'r2'] }],
+    },
+    { name: 'an empty list sends nothing', ids: [], sent: [] },
+  ])('forgetRuns_Cases: $name', async ({ ids, sent }) => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+
+    client.forgetRuns(ids);
+    await client.list();
+
+    expect(sentOfType(host, 'forgetRuns')).toEqual(sent);
+  });
+
+  it('onRunStarted_Push_ReachesEachLiveListener', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+    const live: HostedRun[] = [];
+    const disposed: HostedRun[] = [];
+    client.onRunStarted((run) => live.push(run));
+    client.onRunStarted((run) => disposed.push(run)).dispose();
+    await client.list();
+
+    host.push({ type: 'runStarted', run: hostedRun('r1') });
+
+    await vi.waitFor(() => expect(live).toEqual([hostedRun('r1')]));
+    expect(disposed).toEqual([]);
+  });
+
+  it.each([
+    { name: 'a new host after a host death', dropsDuringDrain: false },
+    { name: 'the first link drops during its drain wait', dropsDuringDrain: true },
+  ])(
+    'onConnected_Reconnect_FiresAfterTheDrainAndThePendingList: $name',
+    async ({ dropsDuringDrain }) => {
+      const dir = tempFolder();
+      const channel = testChannel(dir, '');
+      const older = testChannel(dir, '-older');
+      let releaseHello = () => {};
+      const heldHello = new Promise<void>((resolve) => {
+        releaseHello = resolve;
+      });
+      const olderHost = await startScriptedHost(older, {
+        protocol: 0,
+        heldHello,
+      });
+      const firstHost = await startScriptedHost(channel);
+      const rig = clientRig(dir, channel);
+      if (dropsDuringDrain) {
+        writeRecord(rig.folder, 0, older);
+      }
+      const client = rig.create();
+      let calls = 0;
+      let disposedCalls = 0;
+      client.onConnected(() => {
+        calls += 1;
+        client.forgetRuns(['marker']);
+      });
+      client
+        .onConnected(() => {
+          disposedCalls += 1;
+        })
+        .dispose();
+      client.setPending(pendingSpawns('a'));
+
+      if (dropsDuringDrain) {
+        // The first connect waits on the older host's held hello.
+        await vi.waitFor(() =>
+          expect(sentOfType(olderHost, 'hello')).toHaveLength(1),
+        );
+      } else {
+        await vi.waitFor(() =>
+          expect(sentOfType(firstHost, 'setPending')).toHaveLength(1),
+        );
+        writeRecord(rig.folder, 0, older);
+      }
+      expect(calls).toBe(0);
+      await stopAndSeeTheDrop(client, firstHost);
+      const secondHost = await startScriptedHost(channel);
+      await client.listRuns();
+      await vi.waitFor(() =>
+        expect(sentOfType(olderHost, 'hello')).toHaveLength(
+          dropsDuringDrain ? 2 : 1,
+        ),
+      );
+      expect(calls).toBe(0);
+      expect(sentOfType(secondHost, 'setPending')).toEqual([]);
+
+      releaseHello();
+
+      await vi.waitFor(() =>
+        expect(sentOfType(secondHost, 'forgetRuns')).toHaveLength(1),
+      );
+      expect(calls).toBe(1);
+      expect(disposedCalls).toBe(0);
+      expect(
+        secondHost.got.filter(
+          (message) =>
+            message.type === 'setPending' || message.type === 'forgetRuns',
+        ),
+      ).toEqual([
+        { type: 'setPending', entries: pendingSpawns('a') },
+        { type: 'forgetRuns', ids: ['marker'] },
+      ]);
+      await vi.waitFor(() =>
+        expect(sentOfType(olderHost, 'drain')).toHaveLength(1),
+      );
+    },
+  );
 });

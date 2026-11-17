@@ -157,6 +157,11 @@ function childHost(
     list: async () => [],
     setKeepIdleMinutes() {},
     stopAll: async () => {},
+    setPending() {},
+    listRuns: async () => [],
+    forgetRuns() {},
+    onRunStarted: () => ({ dispose() {} }),
+    onConnected: () => ({ dispose() {} }),
   };
 }
 

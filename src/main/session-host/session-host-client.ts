@@ -7,6 +7,8 @@ import type {
   HostedProcess,
   HostedProcessEvents,
   HostedProcessInfo,
+  HostedRun,
+  PendingSpawn,
   PipeLine,
   SessionHost,
 } from '../../contracts/session-host';
@@ -139,6 +141,21 @@ function flushBuffer(
   }
 }
 
+// The command that starts the session host the client would start: `execPath` with `hostScript`, `folder` and
+// `channel` as its arguments, and `ELECTRON_RUN_AS_NODE` set to `1`.
+export function sessionHostLaunch(
+  deps: Pick<
+    SessionHostClientDeps,
+    'execPath' | 'hostScript' | 'folder' | 'channel'
+  >,
+): { command: string; args: string[]; env: Record<string, string> } {
+  return {
+    command: deps.execPath,
+    args: [deps.hostScript, deps.folder, deps.channel],
+    env: { ELECTRON_RUN_AS_NODE: '1' },
+  };
+}
+
 // Each `\n`-ended line; a last line with no newline is still being written.
 async function readPipeLog(file: string): Promise<PipeLine[]> {
   const lines = (await readFile(file, 'utf8')).split('\n').slice(0, -1);
@@ -154,6 +171,13 @@ export function createSessionHostClient(
   let attempt: ConnectAttempt | null = null;
   let waiting: ConnectedRun[] = [];
   let keepIdleMinutes = DEFAULT_KEEP_IDLE_MINUTES;
+  // The last `setPending` list, less each entry a `runStarted` or `forgetRuns` named; null until the first `setPending`.
+  let pending: readonly PendingSpawn[] | null = null;
+  // The link whose older hosts were drained and which got the pending list; `setPending` sends straight to it.
+  let queueLink: HostLink | null = null;
+  let connects = 0;
+  const runStartedListeners = new Set<(run: HostedRun) => void>();
+  const connectedListeners = new Set<() => void>();
 
   const pushed = (message: PushedEvent) => {
     const entry = processes.get(message.id);
@@ -196,6 +220,19 @@ export function createSessionHostClient(
     }
   };
 
+  const dropPending = (ids: readonly string[]) => {
+    if (pending !== null) {
+      pending = pending.filter((entry) => !ids.includes(entry.spawn.id));
+    }
+  };
+
+  const runStarted = (run: HostedRun) => {
+    dropPending([run.id]);
+    for (const listener of [...runStartedListeners]) {
+      listener(run);
+    }
+  };
+
   const disconnected = (link: HostLink) => {
     if (current === link) {
       current = null;
@@ -208,6 +245,7 @@ export function createSessionHostClient(
       timers,
       log: deps.log,
       pushed,
+      runStarted,
       disconnected,
     });
 
@@ -253,16 +291,13 @@ export function createSessionHostClient(
 
   const startHost = (started: ConnectAttempt) => {
     try {
-      const host = deps.spawn(
-        deps.execPath,
-        [deps.hostScript, deps.folder, deps.channel],
-        {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true,
-          env: { ...deps.env, ELECTRON_RUN_AS_NODE: '1' },
-        },
-      );
+      const launch = sessionHostLaunch(deps);
+      const host = deps.spawn(launch.command, launch.args, {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+        env: { ...deps.env, ...launch.env },
+      });
       host.on('error', (error) => {
         if (started.ended) {
           deps.log(LOG_SOURCE, `host spawn error: ${error.message}`);
@@ -288,12 +323,28 @@ export function createSessionHostClient(
       };
     });
 
-  const adopt = (started: ConnectAttempt, link: HostLink) => {
+  // The pending list and `onConnected` wait for the drain, so an older host and this one hold the queue together only
+  // until the drain arrives.
+  const adopt = async (started: ConnectAttempt, link: HostLink) => {
+    connects += 1;
+    const isReconnect = connects > 1;
     endAttempt(started);
     current = link;
     link.send({ type: 'setKeepIdle', minutes: keepIdleMinutes });
     runWaiting(link, '');
-    void otherHosts.drainOlder();
+    await otherHosts.drainOlder();
+    if (current !== link) {
+      return;
+    }
+    queueLink = link;
+    if (pending !== null) {
+      link.send({ type: 'setPending', entries: [...pending] });
+    }
+    if (isReconnect) {
+      for (const listener of [...connectedListeners]) {
+        listener();
+      }
+    }
   };
 
   const runAttempt = async (started: ConnectAttempt) => {
@@ -320,7 +371,7 @@ export function createSessionHostClient(
       link.destroy();
       return;
     }
-    adopt(started, link);
+    await adopt(started, link);
   };
 
   const startConnecting = () => {
@@ -474,6 +525,17 @@ export function createSessionHostClient(
     return [...own, ...others];
   };
 
+  const listRunsOver = async (link: HostLink): Promise<HostedRun[]> => {
+    const reply = await link.request(
+      (requestId) => ({ type: 'listRuns', requestId }),
+      HOST_REPLY_LIMIT_MS,
+    );
+    if (reply?.type !== 'listRuns') {
+      throw new Error('the session host did not answer its run list');
+    }
+    return reply.runs;
+  };
+
   startConnecting();
 
   return {
@@ -569,6 +631,48 @@ export function createSessionHostClient(
             });
         });
       });
+    },
+    setPending(entries) {
+      pending = [...entries];
+      if (current === null) {
+        startConnecting();
+      } else if (current === queueLink) {
+        current.send({ type: 'setPending', entries: [...pending] });
+      }
+      // Else `adopt` waits on its drain and sends the list after it.
+    },
+    listRuns() {
+      return new Promise((resolve, reject) => {
+        whenConnected((link, failure) => {
+          if (link === null) {
+            reject(new Error(`the session host did not start: ${failure}`));
+            return;
+          }
+          listRunsOver(link).then(resolve, reject);
+        });
+      });
+    },
+    forgetRuns(ids) {
+      dropPending(ids);
+      if (ids.length > 0) {
+        sendWhenConnected({ type: 'forgetRuns', ids: [...ids] });
+      }
+    },
+    onRunStarted(listener) {
+      runStartedListeners.add(listener);
+      return {
+        dispose() {
+          runStartedListeners.delete(listener);
+        },
+      };
+    },
+    onConnected(listener) {
+      connectedListeners.add(listener);
+      return {
+        dispose() {
+          connectedListeners.delete(listener);
+        },
+      };
     },
   };
 }

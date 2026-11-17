@@ -4,7 +4,9 @@ import type {
   HostedProcess,
   HostedProcessEvents,
   HostedProcessInfo,
+  HostedRun,
   HostedSpawn,
+  PendingSpawn,
   PipeDirection,
   PipeLine,
   SessionHost,
@@ -34,6 +36,10 @@ export interface FakeSessionHost extends SessionHost {
   readonly processes: readonly FakeHostedProcessRecord[];
   readonly keepIdleMinutes: readonly number[];
   readonly stopAllCalls: number;
+  // Every list `setPending` was given, in call order.
+  readonly pendingLists: readonly (readonly PendingSpawn[])[];
+  // Every id `forgetRuns` was given, in call order.
+  readonly forgotten: readonly string[];
   addRunning(process: {
     id: string;
     startedAt: number;
@@ -48,8 +54,12 @@ export interface FakeSessionHost extends SessionHost {
   failNextSpawn(error: string): void;
   // What `list()` resolves from now on; null goes back to listing the records.
   setList(infos: readonly HostedProcessInfo[] | null): void;
-  // What `list()` rejects with from now on, ahead of `setList`; null goes back to resolving.
+  // What `list()` and `listRuns()` reject with from now on, ahead of `setList`; null goes back to resolving.
   failList(error: string | null): void;
+  // Adds `run` to what `listRuns` resolves, then tells every `onRunStarted` listener.
+  startRun(run: HostedRun): void;
+  // Tells every `onConnected` listener, as a reconnect to a new host does.
+  connectAgain(): void;
 }
 
 function appendLine(
@@ -114,6 +124,11 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
   let nextSpawnError: string | null = null;
   let listedInfos: readonly HostedProcessInfo[] | null = null;
   let listError: string | null = null;
+  const pendingLists: (readonly PendingSpawn[])[] = [];
+  const forgotten: string[] = [];
+  const startedRuns: HostedRun[] = [];
+  const runStartedListeners = new Set<(run: HostedRun) => void>();
+  const connectedListeners = new Set<() => void>();
 
   const lastRecordOf = (id: string): FakeHostedProcessRecord | undefined =>
     processes.findLast((record) => record.id === id);
@@ -124,6 +139,8 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
     get stopAllCalls() {
       return stopAllCalls;
     },
+    pendingLists,
+    forgotten,
     spawn(request, events) {
       const { id } = request;
       const holder = lastRecordOf(id);
@@ -213,6 +230,34 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
         closeRecord(record, { code: null, signal: 'SIGTERM', error: null });
       }
     },
+    setPending(entries) {
+      pendingLists.push([...entries]);
+    },
+    async listRuns() {
+      if (listError !== null) {
+        throw new Error(listError);
+      }
+      return startedRuns.filter((run) => !forgotten.includes(run.id));
+    },
+    forgetRuns(ids) {
+      forgotten.push(...ids);
+    },
+    onRunStarted(listener) {
+      runStartedListeners.add(listener);
+      return {
+        dispose() {
+          runStartedListeners.delete(listener);
+        },
+      };
+    },
+    onConnected(listener) {
+      connectedListeners.add(listener);
+      return {
+        dispose() {
+          connectedListeners.delete(listener);
+        },
+      };
+    },
     addRunning({ id, startedAt, current, log, pid }) {
       const record: FakeHostedProcessRecord = {
         request: null,
@@ -266,6 +311,17 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
     },
     failList(error) {
       listError = error;
+    },
+    startRun(run) {
+      startedRuns.push(run);
+      for (const listener of [...runStartedListeners]) {
+        listener(run);
+      }
+    },
+    connectAgain() {
+      for (const listener of [...connectedListeners]) {
+        listener();
+      }
     },
   };
 }
