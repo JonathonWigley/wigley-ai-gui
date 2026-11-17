@@ -1,6 +1,6 @@
 # 10 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -76,3 +76,7 @@ Tests: the drive steps below. Each step records its command and what it showed i
 
 Done when: steps 1–10 pass, each with its result text or screenshot named in the run log.
 Commit:    none (verification only)
+
+## Proof
+
+Commit dfdc1237a · proof: drive run agentcmd-live, fake harness: steps 1-10 PASS; added checks PASS: overview first paragraph only, failing reporting run main and page carry error text, targeted close of a busy B closes with no end-session confirm, from Tag screenshot · concerns: logged-no-op page handlers (unity-pool.hold, practice.showTab, chat.openImage, docs.openNode, sessions.selectRow) answer Ran to a failing run; a connected caller's row is absent from sessions.rows

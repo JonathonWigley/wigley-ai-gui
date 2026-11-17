@@ -215,7 +215,7 @@ Critical path: 01 → 06 → 08 → 09
 
 ### Wave 4
 - [x] [Doc re-read](09-doc-re-read.md) — after 01–08
-- [ ] [Final verification](10-final-verification.md)
+- [x] [Final verification](10-final-verification.md)
 
 ## Run log
 
@@ -231,6 +231,7 @@ Review base: 8d829c42c
 - 07 · standard (compile error → same-rung fix) · 113ffce7a · diff read: from on UserInput and QueuedMessageInput in layout.d.ts; entryInput, queuedInput, stopText, putBack read the frame; layout.js draws the chat-user-from Tag; wave-3 typecheck passes after the read-chat-layout fix · concerns: the worker looked for DESIGN.md under docs/ and read no § Chat (it is at wigley-ai-gui/DESIGN.md); the putBack comment line runs past the wrap width
 - 08 · deep · 0b157af9d · diff read: agentCommandsManifest (readsEverySlot, depends on sessions/chat/forms), agentCommandsMainPart, AGENT_COMMAND_TOOLS and createAgentCommandTools, drive actions call/result; refusal order matches the task; wave-3 typecheck passes · concerns: chat.sendTo is a string literal in tools.ts (no command key in chat's contract); the confirm detail lands in the round's overview, documented as inline markdown, so the fenced JSON argument may render badly (task 10 looks); keyed-slot JSON puts all-digit keys first (Object.fromEntries)
 - 09 · standard · 995d667e9 · diff read: every planned mark for this feature gone; grep -in 'planned|not built yet' has no hit naming it and grep -c plan-agent-commands prints 0 in each of the four docs · concerns: AGENTS.md was read by section, not in full; the edited lines were not re-wrapped to the 120-column prose width
+- 10 · opus-low (drive) · dfdc1237a · drive run agentcmd-live, fake harness: steps 1-10 PASS; added checks PASS: overview first paragraph only, failing reporting run main and page carry error text, targeted close of a busy B closes with no end-session confirm, from Tag screenshot · concerns: logged-no-op page handlers (unity-pool.hold, practice.showTab, chat.openImage, docs.openNode, sessions.selectRow) answer Ran to a failing run; a connected caller's row is absent from sessions.rows
 ### Contract changes
 - 01 adds `commandHopOf(value: unknown): CommandHop` in `src/shared/command-args.ts`: it reads a hop the other process sent, keeping only the two session-id strings and `reportErrors: true`. Consumers: none outside 01.
 ### Rulings
@@ -257,3 +258,4 @@ Review base: 8d829c42c
 - Re-review 1 (fix range 2c29d234f..103c6d76a): every round-1 finding closed; one new Important: the targeted close's atOnce also made main cancel the target's open forms. Fix range 2 is one commit (the CloseAsk split), compile passes. Tier: High, because it fixes a fix that already failed once. Correctness re-review 2 (the last cycle) runs on that commit.
 - Re-review 2 (ae85a9b49): PASS; the round-1 close finding is closed at every site. Its one determined doc finding (SessionTabView atOnce) was lead-applied as a comment only. Tier: None; the compile passes.
 ### Test gate
+- Tier High (IPC boundary, cross-module) over 8d829c42c..dfdc1237a. Picked vitest, 28 files: first run 3 failed of 1810 (test-setup gaps: a defaulted outcome, a missing window fake, a missing focus fake DOM); fixed in dfdc1237a, test files only; rerun 28 passed, 1810 tests passed, typecheck clean.
