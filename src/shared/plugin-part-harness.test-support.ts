@@ -98,6 +98,7 @@ import { scopedFiles } from './scoped-files';
 import {
   createSlotStore,
   layoutState,
+  mainPluginState,
   pluginState,
   type SlotStore,
 } from './state/slot-store';
@@ -1001,7 +1002,7 @@ function fakeMainApi(
       register: () => fakeLayoutsRegister(manifest, record, register),
       names: () => ['default'],
     },
-    state: common.state,
+    state: mainPluginState(world.state, manifest, common.register),
     services: {
       clock: common.clock,
       randomHex: world.randomHex,

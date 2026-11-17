@@ -52,6 +52,7 @@ import type {
   ListSlotWriter,
   SlotKey,
   SlotReader,
+  SlotSnapshot,
   SlotWriter,
 } from './state';
 import type { SystemStats } from './system-stats';
@@ -230,7 +231,8 @@ export type SettingInfos<T> = [SettingPath<T>] extends [never]
 // they start before this plugin's part in that process; each `reads` list names
 // the plugins whose slots that process reads or whose events it hears with no
 // start order, so a disabled or unlisted plugin there is no problem and reads
-// `undefined`.
+// `undefined`; `readsEverySlot` lets the main part read any slot by its id, as
+// `MainPluginState` says.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -257,6 +259,7 @@ export interface PluginManifest<
   optionalSettings?: Readonly<Record<string, SettingKind>>;
   settingInfo: Readonly<Record<string, SettingInfo>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
+  readsEverySlot?: true;
 }
 
 // The plugins whose slots `M`'s part in process `P` may read: itself, its
@@ -289,6 +292,18 @@ export interface PluginState<M extends PluginManifest, P extends ProcessName> {
   read<V extends { readonly id: string }>(
     key: ListSlotKey<V, ProcessName, ReadableOwner<M, P>>,
   ): ListSlotReader<V>;
+}
+
+// A main part's slots: `PluginState`, and for a manifest declaring
+// `readsEverySlot`, any slot main holds, page-owned ones included. `readAny` is a
+// copy of the slot as it is now, with no listener: an unwritten slot's empty
+// snapshot, or `undefined` for an id main holds no slot for. `slotIds` lists every
+// slot id in code-unit order. For any other manifest each throws
+// `Plugin "<id>" does not declare readsEverySlot`.
+export interface MainPluginState<M extends PluginManifest>
+  extends PluginState<M, 'main'> {
+  readAny(id: string): SlotSnapshot | undefined;
+  slotIds(): readonly string[];
 }
 
 // The short ids of the commands in `Cmds` that run in process `P`.
@@ -1161,7 +1176,7 @@ export interface PluginSwitchService {
 // `Disposable`'s `dispose`; it throws for a second registration.
 // `layouts.names` lists the plugin's layouts, `default` first; only `default`
 // before the folder has been listed or while unregistered. `state` is as
-// `PluginState` says. `commands` is as `PluginCommands` says. `keys.bind` adds an
+// `MainPluginState` says. `commands` is as `PluginCommands` says. `keys.bind` adds an
 // app or intercept bind while the part runs, as `PageApi.keys.bind` does a page one.
 export interface MainApi<
   M extends PluginManifest,
@@ -1184,7 +1199,7 @@ export interface MainApi<
     register(options: { layoutTypes: string }): Disposable;
     names(): string[];
   };
-  state: PluginState<M, 'main'>;
+  state: MainPluginState<M>;
   commands: PluginCommands;
   keys: { bind(bind: RuntimeBind<'main'>): Disposable };
 }

@@ -5,6 +5,7 @@ import type {
   ListSlotKey,
   SlotChange,
   SlotKey,
+  SlotSnapshot,
   SlotWriter,
 } from '../../contracts/state';
 import { createSlotStore, pluginState, type SlotStore } from './slot-store';
@@ -548,6 +549,88 @@ describe('snapshot', () => {
     expect(loaded.read(keyedKey, 'q').get('12345678')).toBe(2);
     expect(loaded.read(listKey, 'q').get('s')).toEqual([A1]);
     expect(loaded.isHeld('p.v')).toBe(false);
+  });
+});
+
+describe('snapshotOf and ids', () => {
+  it.each<{
+    case: string;
+    id: string;
+    fill(store: SlotStore): void;
+    expected: SlotSnapshot | undefined;
+  }>([
+    {
+      case: 'value',
+      id: 'p.v',
+      fill: (store) => store.publish(valueKey).set(4),
+      expected: { kind: 'value', value: 4 },
+    },
+    {
+      case: 'keyed',
+      id: 'p.k',
+      fill(store) {
+        const keyed = store.publish(keyedKey);
+        keyed.set('a', 3);
+        keyed.set('b', 5);
+      },
+      expected: {
+        kind: 'keyed',
+        entries: [
+          ['a', 3],
+          ['b', 5],
+        ],
+      },
+    },
+    {
+      case: 'list',
+      id: 'p.l',
+      fill(store) {
+        const list = store.publish(listKey);
+        list.put('y', A1);
+        list.put('x', B2);
+      },
+      expected: {
+        kind: 'list',
+        entries: [
+          ['y', [A1]],
+          ['x', [B2]],
+        ],
+      },
+    },
+    {
+      case: 'created and never written',
+      id: 'p.v',
+      fill: (store) => store.publish(valueKey),
+      expected: { kind: 'value', value: undefined },
+    },
+    {
+      case: 'never created',
+      id: 'p.none',
+      fill: (store) => store.publish(valueKey).set(4),
+      expected: undefined,
+    },
+  ])('snapshotOf_ByKind_CopiesTheSlot: $case', ({ id, fill, expected }) => {
+    const { store } = storeWithLogs();
+    fill(store);
+    const before = store.ids();
+
+    const snapshot = store.snapshotOf(id);
+
+    expect(snapshot).toEqual(expected);
+    expect(store.ids()).toEqual(before);
+    expect(before.includes(id)).toBe(expected !== undefined);
+  });
+
+  it('ids_EverySlotOnce_InCodeUnitOrder', () => {
+    const { store } = storeWithLogs();
+    for (const name of ['B', 'a', 'A']) {
+      store
+        .publish({ id: `p.${name}`, process: 'main', kind: 'value' })
+        .set(1);
+    }
+    store.applyRemote({ id: 'p.a', kind: 'value', value: 2 });
+
+    expect(store.ids()).toEqual(['p.A', 'p.B', 'p.a']);
   });
 });
 

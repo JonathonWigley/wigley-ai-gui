@@ -433,6 +433,18 @@ describe('validateManifest', () => {
       },
     ],
     [
+      'readsEverySlot must be true',
+      (m) => {
+        m.readsEverySlot = false;
+      },
+    ],
+    [
+      'readsEverySlot must be true',
+      (m) => {
+        m.readsEverySlot = 1;
+      },
+    ],
+    [
       'Plugin "notes-plus" declares no scope "other"',
       (m) => {
         m.keys.binds[0].scope = 'other';

@@ -150,6 +150,7 @@ export const manifestSchema: object = {
         additionalProperties: false,
       },
     },
+    readsEverySlot: { const: true },
   },
   additionalProperties: false,
 };

@@ -56,5 +56,6 @@ export function validManifest(): RawManifest {
       },
     },
     themeTokens: { accent: { kind: 'color', default: '#3366ff' } },
+    readsEverySlot: true,
   };
 }

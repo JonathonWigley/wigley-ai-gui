@@ -75,6 +75,7 @@ const MANIFEST_FIELDS = membersOf({
   optionalSettings: true,
   settingInfo: true,
   themeTokens: true,
+  readsEverySlot: true,
 } satisfies Record<keyof PluginManifest, true>);
 
 const SCHEMA_FIELD = '$schema';
@@ -211,6 +212,9 @@ function shapeProblems(raw: JsonObject): string[] {
   addOptionalSettingsProblems(raw.optionalSettings, problems);
   addSettingInfoProblems(raw.settingInfo, problems);
   addThemeTokensProblems(raw.themeTokens, problems);
+  if (raw.readsEverySlot !== undefined && raw.readsEverySlot !== true) {
+    problems.push('readsEverySlot must be true');
+  }
   return problems;
 }
 
