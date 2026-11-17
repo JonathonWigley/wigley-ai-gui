@@ -905,13 +905,13 @@ is the task's name, or its id when the task is gone.
 - [x] [File watch reliability](22-file-watch-reliability.md)
 
 ### Wave 2
-- [ ] [Login-start seam](06-login-start-seam.md) — after 03 (modifies its `login-start.ts`)
-- [ ] [Host pending queue](07-host-pending-queue.md) — after 02
-- [ ] [Harness prepare-a-run](08-harness-prepare-run.md) — after 02
-- [ ] [Offline answers per contributor](09-offline-answers.md) — after 05
-- [ ] [Run planner](10-run-planner.md) — after 03
-- [ ] [Task and history stores](11-task-and-history-stores.md) — after 03
-- [ ] [Schedules mode](12-schedules-mode.md) — after 03
+- [x] [Login-start seam](06-login-start-seam.md) — after 03 (modifies its `login-start.ts`)
+- [x] [Host pending queue](07-host-pending-queue.md) — after 02
+- [x] [Harness prepare-a-run](08-harness-prepare-run.md) — after 02
+- [x] [Offline answers per contributor](09-offline-answers.md) — after 05
+- [x] [Run planner](10-run-planner.md) — after 03
+- [x] [Task and history stores](11-task-and-history-stores.md) — after 03
+- [x] [Schedules mode](12-schedules-mode.md) — after 03
 
 ### Wave 3
 - [ ] [Host client queue](13-host-client-queue.md) — after 07
@@ -952,6 +952,13 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - 05 · hard; compile fix 8b8a40c12 (offlineEnv type) · f12e30333 · diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: added replayed:false to chat test literals (outside Files, typecheck needs them); relay/endpoint.ts imports node:path, the task said none
 - 22 · hard · c781912c2 · diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: kept copy watch may be dead on Linux after folder recreate; it.each options-arg form unchecked; possible rare flake in target-present row
 - 01 · hard · 335b4f459 · result file written; every step 5 cleanup check passed · concerns: no approval was asked, possibly from an earlier grant; a clean Mac may still need it; the detached host survives unregister
+- 06 · hard · b57725856 · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: none
+- 07 · hard; compile fix ba5ff01d8 · 6e4b7e6ad · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: host-link compile gap from RunStartedEvent, patched in ba5ff01d8 until 13
+- 08 · hard; compile fix ba5ff01d8 (test row type) · 617927acd · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: attach-replay test traced by hand only
+- 09 · hard · 072c4d4f2 · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8; lint accepts workflow/contract.ts value imports · concerns: task 05 offline.json test narrowed to tools.ask since set_session_title now adds an entry
+- 10 · hard · f204b9689 · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: a schedule function throw aborts the whole plan; relies on readTaskFile filtering bad schedules
+- 11 · hard · b9e0581be · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: a throwing listener logs a line the plan does not pin
+- 12 · hard; compile fix ba5ff01d8 · 4e7b0a90f · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: layout contract gained RowKit.cursorActions and FieldRowKit.textBox throw; History header and empty line are the app's
 ### Contract changes
 ### Rulings
 - Waves keep 05 beside 04 and 15 beside 14: both dependencies are on plan-pinned formats or injected deps, with no code wait — 05 writes offline.json to the plan's shape, 15 reaches projects through a dep 17 fills — if wrong, a worker finds a missing name and reports BLOCKED · lead
@@ -959,5 +966,9 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - Schedule functions throw on a schedule readSchedule would refuse — callers only pass read schedules — a caller passing raw JSON throws · group 03 · group 03
 - Plugin version 2.16.0, not the plan's 2.4.0: next minor above origin/main's 2.15.0 — re-check at landing if origin moves · group 04 · group 04
 - onMissed handlers never reopen a watch (pool-watch re-reads, plan-watch keeps open copy watches, doc-files compares mtime) — on macOS a reopen sends onMissed to every live watch and loops — a stale watch is not refreshed by onMissed · group 22 · group 22
+- Malformed run records in a runs file are dropped with a diagnostics line — a bad file must not end the host at load — a dropped record loses that run's history · group 07 · group 07
+- A spawn that throws after its run is recorded puts the error in that run's exit, not a second run — one run per pending entry — history shows failed, not two entries · group 07 · group 07
+- skipWhileBusy is set on Run now and catch-up runs too — the overlap rule holds for every run — a Run now pressed while the previous run is busy is skipped by the host · group 10 · group 10
+- Task store runs watch reads, onMissed reads, load and every mutation on one queue — its own write then emits one change — none · group 11 · group 11
 ### Review rounds
 ### Test gate

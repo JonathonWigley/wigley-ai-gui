@@ -1,6 +1,6 @@
 # 14 — Chat prepare and adopt
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 08, 09
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 07 — Host pending queue and run records
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -240,3 +240,4 @@ Commit:    one commit for the group: "Session host keeps a persisted pending que
 
 ## Proof
 
+Commit 6e4b7e6ad · proof: diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: host-link compile gap from RunStartedEvent, patched in ba5ff01d8 until 13

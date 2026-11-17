@@ -1,6 +1,6 @@
 # 15 — Scheduling MCP tools
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 05 (contributes tools through 05's options), 08, 11
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 09 — Offline answers per contributor
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -143,3 +143,5 @@ One commit for the group: "Each tool contributor declares its closed-app answer:
 permission prompts are denied, step, checklist, plan and title reports are recorded for replay."
 
 ## Proof
+
+Commit 072c4d4f2 · proof: diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8; lint accepts workflow/contract.ts value imports · concerns: task 05 offline.json test narrowed to tools.ask since set_session_title now adds an entry

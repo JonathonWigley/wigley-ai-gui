@@ -1,6 +1,6 @@
 # 06 — Login-start seam
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -71,3 +71,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit b57725856 · proof: diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: none

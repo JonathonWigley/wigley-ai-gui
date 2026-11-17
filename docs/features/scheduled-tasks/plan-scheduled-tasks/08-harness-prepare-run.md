@@ -1,6 +1,6 @@
 # 08 — Harness prepare-a-run
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -207,3 +207,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 617927acd · proof: diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: attach-replay test traced by hand only

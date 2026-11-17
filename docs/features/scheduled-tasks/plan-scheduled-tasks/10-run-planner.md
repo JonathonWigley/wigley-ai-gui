@@ -1,6 +1,6 @@
 # 10 — Run planner
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -117,3 +117,5 @@ Done when: compiles; the test gate runs `planner.test.ts`.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f204b9689 · proof: diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: a schedule function throw aborts the whole plan; relies on readTaskFile filtering bad schedules

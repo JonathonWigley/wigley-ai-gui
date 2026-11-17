@@ -1,6 +1,6 @@
 # 12 — Schedules mode
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -292,3 +292,5 @@ Commit: one commit for the group — "Add Schedules mode: task list, details, hi
 scheduling layout".
 
 ## Proof
+
+Commit 4e7b0a90f · proof: diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: layout contract gained RowKit.cursorActions and FieldRowKit.textBox throw; History header and empty line are the app's

@@ -1,6 +1,6 @@
 # 23 — Session list: no selection on a claimed row after a close, and a joined relay's host fields
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 3 · Depends on: 05, 09
 Rung: hard · adds the page-owned `sessionsClaimedSlot` that main reads, and changes when forms reads a deadline

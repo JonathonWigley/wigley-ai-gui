@@ -1,6 +1,6 @@
 # 11 — Task and history stores
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -185,3 +185,5 @@ Done when: compiles; the test gate runs the two test files above.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit b9e0581be · proof: diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: a throwing listener logs a line the plan does not pin
