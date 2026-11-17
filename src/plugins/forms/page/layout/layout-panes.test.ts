@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FormsReviewColumn } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
-import type { Layout, RailInput, ReviewKit } from '../../layouts/layout';
+import type {
+  Layout,
+  RailInput,
+  ReviewInput,
+  ReviewKit,
+} from '../../layouts/layout';
 import {
   createFormsContributions,
   type FormsContributions,
@@ -464,6 +469,33 @@ describe('panes', () => {
     const [entry] = findAll(asFake(pane.element), 'rail-entry');
     expect(entry.dataset.status).toBe('none');
     expect(entry.classList.contains('is-flagged')).toBe(false);
+  });
+
+  it('reviewRow_AnswerableKind_CarriesItsKind', () => {
+    const inputs: ReviewInput[] = [];
+    const forms = formsWith([pollPageKind('poll')]);
+    const presented = presentedRound('r1', {
+      questions: [question('Alpha')],
+      items: { poll: [poll('Lunch')] },
+      bodyKeys: { poll: 'poll_answers' },
+    });
+    const state = forms.initialState([presented], presented.sessionId);
+
+    drawPane(
+      buildReviewPane,
+      {
+        review(parent, input, kit) {
+          inputs.push(input);
+          return { element: kit.el(parent, 'div', 'review') };
+        },
+      },
+      state,
+    );
+
+    expect(inputs[0].rows).toEqual([
+      { row: 0, kind: 'poll', label: 'P1', title: 'Lunch' },
+      { row: 1, kind: 'question', label: '1', title: expect.any(String) },
+    ]);
   });
 
   it('railEntry_Click_RunsPickRailItem', () => {

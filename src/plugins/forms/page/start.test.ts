@@ -441,9 +441,41 @@ describe('forms page part', () => {
     },
   );
 
-  // The toast when a kind leaves is round-kinds-watch.test's: until task
-  // 07's Part B gives `default` an `other` card, a drawn plugin kind's card
-  // has no builder.
+  it('toasts once when a dependent stops while the shown round holds its kind', async () => {
+    const round = presentedRound('r1', {
+      questions: [question('One')],
+      items: { poll: [poll('P1')] },
+      bodyKeys: { poll: 'poll_answers' },
+    });
+    const { harness } = await startOverOpenRounds({
+      forms: [
+        {
+          formId: round.roundId,
+          sessionId: round.sessionId,
+          label: round.label,
+          form: round.round,
+          draft: round.draft,
+        },
+      ],
+    });
+    const dependent = createRegistrations();
+    const view = harness.started().exports?.(dependent) as FormsPageExports;
+    view.registerKind(pollPageKind('poll'));
+    await settle();
+    const toasts = () =>
+      harness.logs
+        .map((line) => line.message)
+        .filter((line) => line.startsWith('toast'));
+
+    expect(() => dependent.dispose()).not.toThrow();
+    await settle();
+
+    expect(toasts()).toEqual([
+      'toast info: 1 poll item in project · r1 waits for the plugin that draws it',
+    ]);
+    await harness.stop();
+  });
+
   it('logs a round holding a kind with no page kind, and toasts nothing', async () => {
     const round = presentedRound('r2', {
       questions: [question('One')],

@@ -37,12 +37,10 @@ import type {
   LayoutPane,
   NoticesInput,
   NoticesKit,
-  RailEntryInput,
   RailInput,
   RailKit,
   ReviewInput,
   ReviewKit,
-  ReviewRowInput,
 } from '../../layouts/layout';
 import {
   answerableItems,
@@ -379,11 +377,9 @@ function drawRail(
   };
   const input: RailInput = {
     round: roundInfo(round.round),
-    // A plugin kind's stop carries its own kind id, which the Layout
-    // contract's union does not name yet.
     items: items.map((item, position) => ({
       position,
-      kind: item.kind as RailEntryInput['kind'],
+      kind: item.kind,
       label: railEntryLabel(round, item),
       title: railEntryTitle(round, item),
     })),
@@ -491,7 +487,7 @@ function drawReview(
     round: roundInfo(round.round),
     rows: answerableItems(round).map((item, row) => ({
       row,
-      kind: item.kind as ReviewRowInput['kind'],
+      kind: item.kind,
       label: itemLabel(round.kinds, item),
       title: requireKind(round, item).cardInput.title(
         kindItems(round.round, item.kind)[item.index - 1],

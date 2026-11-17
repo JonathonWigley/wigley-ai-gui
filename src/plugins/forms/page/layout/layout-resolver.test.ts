@@ -56,11 +56,81 @@ describe('pickLayout', () => {
       ['default', allCards()],
     ]);
 
-    const pick = pickLayout('question', ['mine', 'theirs', 'default'], loaded);
+    const pick = pickLayout(
+      { card: 'question' },
+      ['mine', 'theirs', 'default'],
+      loaded,
+    );
 
     expect(pick.name).toBe('theirs');
     expect(pick.layout).toBe(theirs);
   });
+
+  it('pickLayout_Pane_SkipsALayoutWithOnlyCards', () => {
+    const rail: Layout = { rail: pane };
+    const loaded = new Map<string, Layout>([
+      ['mine', allCards()],
+      ['theirs', rail],
+      ['default', allCards()],
+    ]);
+
+    const pick = pickLayout(
+      { pane: 'rail' },
+      ['mine', 'theirs', 'default'],
+      loaded,
+    );
+
+    expect(pick).toEqual({ name: 'theirs', layout: rail });
+  });
+
+  it('pickCard_PluginKind_KindsBuilderBeatsAnEarlierOther', () => {
+    const byKind: Layout = { cards: { kinds: { poll: card } } };
+    const loaded = new Map<string, Layout>([
+      ['mine', { cards: { other: card, kinds: { vote: card } } }],
+      ['theirs', byKind],
+      ['default', allCards()],
+    ]);
+
+    const pick = pickLayout(
+      { card: 'poll' },
+      ['mine', 'theirs', 'default'],
+      loaded,
+    );
+
+    expect(pick).toEqual({ name: 'theirs', layout: byKind });
+  });
+
+  it.each<{ case: string; mine: Layout; theirs: Layout; picked: string }>([
+    {
+      case: 'the first layout defining other',
+      mine: { cards: { kinds: { vote: card } } },
+      theirs: { cards: { other: card } },
+      picked: 'theirs',
+    },
+    {
+      case: 'default when no layout defines other',
+      mine: { cards: { question: card } },
+      theirs: { rail: pane },
+      picked: 'default',
+    },
+  ])(
+    'pickCard_PluginKind_NoKindsBuilder_TakesFirstOther: $case',
+    ({ mine, theirs, picked }) => {
+      const loaded = new Map<string, Layout>([
+        ['mine', mine],
+        ['theirs', theirs],
+        ['default', allCards()],
+      ]);
+
+      const pick = pickLayout(
+        { card: 'poll' },
+        ['mine', 'theirs', 'default'],
+        loaded,
+      );
+
+      expect(pick.name).toBe(picked);
+    },
+  );
 });
 
 describe('itemLayout', () => {

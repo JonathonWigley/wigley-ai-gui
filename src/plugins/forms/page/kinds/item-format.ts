@@ -4,6 +4,7 @@ import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { OsName } from '../../../../contracts/platform';
 import type { KeyHints } from '../../../../contracts/plugin';
 import type { LayoutState } from '../../../../contracts/state';
+import type { BuiltInItemKind } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
 import type { FormsContributions } from '../contributions';
 import type { RoundState, TextTarget } from '../form-state';
@@ -40,7 +41,7 @@ export interface CardDeps {
 
 // The built-in cards' names: the kinds with a card of their own in the Layout
 // contract.
-export type BuiltInCard = keyof LayoutCards;
+export type BuiltInCard = BuiltInItemKind;
 
 // Each built-in card's input and kit, as the layout's card builder takes
 // them.

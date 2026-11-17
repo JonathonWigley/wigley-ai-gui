@@ -11,6 +11,11 @@
 //   parts are appended after those boxes)
 // - notice card: `textBox` (the comment box is appended at the end) and
 //   `contributedParts` (appended after it)
+// - `other` card and `kinds` cards (a plugin kind's): `itemHead`,
+//   `answerControls` and `textBox` (each box left unmounted is appended at the
+//   end of the card), and `contributedParts` (appended after those boxes); a
+//   layout leaving out `other` has its plugin kinds' cards drawn by the next
+//   layout in the chain defining it
 // - rail: `entry` (a rail without entries scrolls nothing into view)
 // - notices pane: `line` (each line left out is appended at the end of the
 //   pane)
@@ -63,6 +68,18 @@ const layout = {
       const card = kit.el(parent, 'div', 'item notice');
       kit.markdown(card, input.context, 'context-body md');
       kit.textBox(card, 'comment');
+      return { element: card };
+    },
+    // A plugin kind's card when no layout has a `kinds` builder for it: its
+    // kind as the head's tag, its title, and the answer controls when the
+    // kind takes an answer.
+    other(parent, input, kit) {
+      const card = kit.card(parent, 'item other');
+      kit.itemHead(card, input.kind);
+      kit.inlineMarkdown(card, input.title, 'item-summary');
+      if (kit.answerControls !== undefined) {
+        kit.answerControls(card);
+      }
       return { element: card };
     },
   },

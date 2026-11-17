@@ -103,17 +103,15 @@ export interface Kit extends FormsBaseKit {
   // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
   itemHead(parent: HTMLElement, kind: string): HTMLElement;
-  // Mounts the item's text box for `field`. Each box mounts once per card. Any box the card leaves unmounted, the
-  // app appends in its default field at the end of the card, so the box keys always reach it.
-  textBox(
-    parent: HTMLElement,
-    field: 'notes' | 'dontAskReason' | 'comment',
-  ): HTMLElement;
+  // Mounts the item's text box for `field`: `notes`, `dontAskReason` and `comment` on the built-in kinds, a plugin
+  // kind's own fields on its card. Each box mounts once per card. Any box the card leaves unmounted, the app appends
+  // in its default field at the end of the card, so the box keys always reach it.
+  textBox(parent: HTMLElement, field: string): HTMLElement;
   // `div.card-parts`, holding one `div.card-part` (`data-part="<id>"`) per part other plugins added for this card's
   // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
   // leaves it out gets the parts appended at the end of its element, after the boxes it left unmounted. A part that
-  // throws is logged and draws nothing. On a question or finding card, each part updates after the card's own `update`;
-  // a notice card's parts never update.
+  // throws is logged and draws nothing. On the card of a kind that takes an answer, each part updates after the
+  // card's own `update`; on any other card (a notice's included), the parts never update.
   contributedParts(parent: HTMLElement): HTMLElement;
 }
 export interface AnswerKit extends Kit {
@@ -147,12 +145,35 @@ export interface FindingKit extends AnswerKit {
 }
 
 // `element` is the card's own node, appended to `parent` before the card mounts any text box; the app shows, hides and
-// marks that node. On question and finding cards, `update` runs with the item's current answer while the card shows;
-// a notice card's `update` never runs. The kit's parts update themselves.
+// marks that node. On the card of a kind that takes an answer (question, finding, an answerable plugin kind),
+// `update` runs with the item's current answer while the card shows; on any other card it never runs. The kit's parts
+// update themselves.
 export interface LayoutCard {
   element: HTMLElement;
   update?(answer: CardAnswer): void;
 }
+
+// The card of an item whose kind no layout in the chain has a `kinds` builder for. `kind` is the kind's id, `label`
+// the item's number (as the rail shows it) and `title` its title.
+export interface OtherCard {
+  kind: string;
+  label: string;
+  title: string;
+  round: RoundInfo;
+}
+
+// A plugin kind's card kit: `answerControls` is present when the kind takes an answer. It mounts the Not applicable
+// and Don't ask toggles always, and the Notes and reason boxes when the kind has those fields.
+export interface KindKit extends Kit {
+  answerControls?(parent: HTMLElement): HTMLElement;
+}
+
+// A plugin kind's card builder. `input` is the kind's own card input, whose shape its plugin documents.
+export type KindCardBuilder = (
+  parent: HTMLElement,
+  input: unknown,
+  kit: KindKit,
+) => LayoutCard;
 
 // A card builder per item kind. The app sets `data-layout-owner="forms"` and `data-layout="<name>"` on each card's
 // element, `<name>` being the layout that drew it, so `[data-layout-owner="forms"][data-layout="<name>"] …` in a
@@ -167,13 +188,19 @@ export interface LayoutCards {
   // The body of the notice's line on the notices pane, drawn under the line's head, so it need not draw the badge or
   // the title.
   notice(parent: HTMLElement, input: NoticeCard, kit: Kit): LayoutCard;
+  // A card builder per plugin kind, by kind id.
+  kinds?: Readonly<Record<string, KindCardBuilder>>;
+  // The card of a plugin kind no layout in the item's chain has a `kinds` builder for.
+  other(parent: HTMLElement, input: OtherCard, kit: KindKit): LayoutCard;
 }
 
-// One stop as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `label` is
-// its rail number, as `F1`, `2`, or `N` for the notices stop, the last entry when the round has notices.
+// One stop as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `kind` is
+// its item's kind id (`question`, `finding`, a plugin kind's), or `notices` for the notices stop; `label` is its rail
+// number, as `F1`, `2`, a plugin kind's prefix and number, or `N` for the notices stop, the last entry when the round
+// has notices.
 export interface RailEntryInput {
   position: number;
-  kind: 'question' | 'finding' | 'notices';
+  kind: string;
   label: string;
   title: string;
 }
@@ -181,11 +208,11 @@ export interface RailInput {
   round: RoundInfo;
   items: RailEntryInput[];
 }
-// One question or finding as the review lists it. `row` is its 0-based place in the review, which `ReviewKit.row`
-// takes.
+// One item of a kind that takes an answer (question, finding, an answerable plugin kind) as the review lists it, `kind`
+// being its kind id. `row` is its 0-based place in the review, which `ReviewKit.row` takes.
 export interface ReviewRowInput {
   row: number;
-  kind: 'question' | 'finding';
+  kind: string;
   label: string;
   title: string;
 }
@@ -256,9 +283,12 @@ export interface NoticesKit extends FormsBaseKit {
   line(parent: HTMLElement, index: number): HTMLElement;
 }
 
-// A layout defines only the cards and panes it changes. Each card comes from the first layout defining its kind among
-// the item's `layout`, the round's `layout`, the `forms.layout` setting and `default`; each pane the same way without
-// the item. A card or pane that throws, or returns no element appended to `parent`, is drawn by `default` instead.
+// A layout defines only the cards and panes it changes. A built-in kind's card comes from the first layout defining
+// its card (`cards.question`, `cards.finding`, `cards.notice`) among the item's `layout`, the round's `layout`, the
+// `forms.layout` setting and `default`; a plugin kind's from the first layout in that chain defining
+// `cards.kinds[id]`, else from the first defining `cards.other`; each pane the same way without the item. A card or
+// pane that throws, or returns no element appended to `parent`, is drawn by `default` instead (a plugin kind's card by
+// its `other`).
 export interface Layout {
   cards?: Partial<LayoutCards>;
   // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying

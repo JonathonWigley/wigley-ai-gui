@@ -16,6 +16,12 @@ describe('readLayout', () => {
         head: () => undefined,
       },
     },
+    {
+      case: 'an other card and kinds cards',
+      layout: {
+        cards: { other: card, kinds: { poll: card, vote: undefined } },
+      },
+    },
   ])('returns the default export of $case', ({ layout }) => {
     expect(readLayout({ default: layout }, 'mine')).toBe(layout);
   });
@@ -41,6 +47,21 @@ describe('readLayout', () => {
       case: 'a card that is not a function',
       module: { default: { cards: { finding: card, notice: 'plain' } } },
       names: 'cards.notice',
+    },
+    {
+      case: 'an other card that is not a function',
+      module: { default: { cards: { other: 'plain' } } },
+      names: 'cards.other',
+    },
+    {
+      case: 'kinds cards that are not an object',
+      module: { default: { cards: { kinds: 'poll' } } },
+      names: 'cards.kinds is not an object',
+    },
+    {
+      case: 'a kinds card that is not a function',
+      module: { default: { cards: { kinds: { poll: card, vote: 'plain' } } } },
+      names: 'cards.kinds.vote is not a function',
     },
     {
       case: 'a head that is not a function',

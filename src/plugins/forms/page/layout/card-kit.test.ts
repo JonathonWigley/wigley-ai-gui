@@ -5,6 +5,8 @@ import type {
   FindingChoice,
   FormsCardPart,
   ItemKind,
+  KindBox,
+  PageKind,
 } from '../../contract';
 import {
   createFormsContributions,
@@ -20,6 +22,7 @@ import {
   apply,
   cardInputOf,
   finding,
+  formsWith,
   initialState,
   notice,
   presentedRound,
@@ -30,7 +33,9 @@ import {
   choiceGroupsOf,
   createCardKit,
   createFormsBaseKit,
+  createKindKit,
 } from './card-kit';
+import { poll, pollPageKind } from '../kinds/plugin-page-kind.test-support';
 import {
   asFake,
   asHtml,
@@ -621,6 +626,83 @@ describe('card kit', () => {
 
     expect(atBuild).toBe(2);
     expect(checks()).toBe(2);
+  });
+});
+
+// The poll kind with one box of its own, `why`, captioned `Why this poll`,
+// shown while `shown` holds it; answerable when `answerable` is.
+function oneBoxPollKind(answerable: boolean, shown: readonly string[]) {
+  const kind = pollPageKind('poll', { answerable });
+  const why: KindBox = {
+    field: 'why',
+    label: 'Why this poll',
+    hint: 'Say why.',
+    className: 'field-why',
+    keys: null,
+  };
+  return {
+    ...kind,
+    reduce: { ...kind.reduce, text: () => '' },
+    boxes: { fields: [why], shown: () => shown },
+  };
+}
+
+// The kit of the round's one poll item, of `kind`, at rail position 0.
+function pollKit(kind: PageKind, deps: CardDeps) {
+  const forms = formsWith([kind]);
+  const presented = presentedRound('r1', {
+    questions: [],
+    items: { poll: [poll('Lunch')] },
+    bodyKeys: { poll: 'poll_answers' },
+  });
+  const round = forms.apply(forms.initialState([], presented.sessionId), {
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
+  return { kit: createKindKit('poll', 1, round, 0, deps), round };
+}
+
+describe('plugin kind kit', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { shown: ['why'], hidden: false },
+    { shown: [], hidden: true },
+  ])(
+    'kindBox_MountsWithItsCaption_HiddenOutsideShown ($shown)',
+    ({ shown, hidden }) => {
+      const { deps } = fakeCardDeps(createFormsContributions());
+      const { kit, round } = pollKit(oneBoxPollKind(false, shown), deps);
+      const card = new FakeElement('div');
+
+      kit.appendUnmountedBoxes(asHtml(card));
+      kit.update(round);
+
+      const [field] = findAll(card, 'field-why');
+      expect(field.textContent).toContain('Why this poll');
+      expect(field.textContent).toContain('Say why.');
+      expect(field.hidden).toBe(hidden);
+      expect(deps.mountBox).toHaveBeenCalledWith(
+        expect.anything(),
+        { field: 'why', item: { kind: 'poll', index: 1 } },
+        '',
+      );
+    },
+  );
+
+  it('answerControls_KindWithoutNotesOrReason_MountsOnlyTheToggles', () => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+    const { kit } = pollKit(oneBoxPollKind(true, ['why']), deps);
+    const parent = new FakeElement('div');
+
+    kit.kit.answerControls?.(asHtml(parent));
+
+    expect(findAll(parent, 'toggles')).toHaveLength(1);
+    expect(findAll(parent, 'field')).toHaveLength(0);
+    expect(deps.mountBox).not.toHaveBeenCalled();
   });
 });
 

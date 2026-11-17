@@ -11,20 +11,15 @@ import {
   type RoundState,
 } from '../form-state';
 
-// A card kind or a pane of the forms view: what one layout in a chain draws.
-export type LayoutPart =
-  | 'question'
-  | 'finding'
-  | 'notice'
-  | 'head'
-  | 'rail'
-  | 'review'
-  | 'notices';
+// A pane of the forms view.
+export type LayoutPane = 'head' | 'rail' | 'review' | 'notices';
+
+// The card of a kind, or a pane of the forms view: what one layout in a chain
+// draws.
+export type LayoutPart = { card: ItemKind } | { pane: LayoutPane };
 
 // The layout that draws a part, and its name.
 export type LayoutPick = PartPick<Layout>;
-
-type LayoutPane = 'head' | 'rail' | 'review' | 'notices';
 
 // The pick for the card of each stop but the notices stop, in rail order
 // (rail positions 0 to n - 1), for each notice's card, by notice index - 1,
@@ -38,12 +33,9 @@ export interface RoundPicks {
 const DEFAULT_NAME = 'default';
 const PANES: readonly LayoutPane[] = ['head', 'rail', 'review', 'notices'];
 
-// What each part reads from a layout; a layout defines the part when the read
+// What each pane reads from a layout; a layout defines the pane when the read
 // is a function.
-const PART_READS: { [P in LayoutPart]: (layout: Layout) => unknown } = {
-  question: (layout) => layout.cards?.question,
-  finding: (layout) => layout.cards?.finding,
-  notice: (layout) => layout.cards?.notice,
+const PANE_READS: { [P in LayoutPane]: (layout: Layout) => unknown } = {
   head: (layout) => layout.head,
   rail: (layout) => layout.rail,
   review: (layout) => layout.review,
@@ -63,16 +55,41 @@ export function layoutChain(
 
 // The host's pick of the first layout in `chain` that defines `part`, its
 // read being a function; a part `default` lacks resolves to it and draws
-// nothing.
+// nothing. A built-in kind's card reads `cards.<kind>`. A plugin kind's card
+// takes two passes: the first layout whose `cards.kinds[kind]` is a function;
+// when none is, the first whose `cards.other` is.
 export function pickLayout(
   part: LayoutPart,
   chain: readonly string[],
   loaded: ReadonlyMap<string, Layout>,
 ): LayoutPick {
+  if ('pane' in part) {
+    return pickDefining(chain, loaded, PANE_READS[part.pane]);
+  }
+  const kind = part.card;
+  if (isBuiltInItemKind(kind)) {
+    return pickDefining(chain, loaded, (layout) => layout.cards?.[kind]);
+  }
+  const byKind = pickDefining(
+    chain,
+    loaded,
+    (layout) => layout.cards?.kinds?.[kind],
+  );
+  return byKind.name !== DEFAULT_NAME
+    ? byKind
+    : pickDefining(chain, loaded, (layout) => layout.cards?.other);
+}
+
+// The host's pick of the first layout in `chain` whose `read` is a function.
+function pickDefining(
+  chain: readonly string[],
+  loaded: ReadonlyMap<string, Layout>,
+  read: (layout: Layout) => unknown,
+): LayoutPick {
   return pickHostLayout(
     chain,
     loaded,
-    (layout) => typeof PART_READS[part](layout) === 'function',
+    (layout) => typeof read(layout) === 'function',
   );
 }
 
@@ -115,18 +132,6 @@ function cardStops(round: RoundState): RoundItem[] {
   );
 }
 
-// The pick of a built-in kind's card; any other kind's card resolves to
-// `default`.
-function pickCardLayout(
-  kind: ItemKind,
-  chain: readonly string[],
-  loaded: ReadonlyMap<string, Layout>,
-): LayoutPick {
-  return isBuiltInItemKind(kind)
-    ? pickLayout(kind, chain, loaded)
-    : pickHostLayout(chain, loaded, () => false);
-}
-
 // Picks each card's layout through its item's chain, and each pane's through
 // the chain with no item.
 export function pickRoundLayouts(
@@ -136,20 +141,22 @@ export function pickRoundLayouts(
 ): RoundPicks {
   const roundLayout = round.round.layout;
   const pickCard = (item: RoundItem) =>
-    pickCardLayout(
-      item.kind,
+    pickLayout(
+      { card: item.kind },
       layoutChain(itemLayout(round, item), roundLayout, userLayout),
       loaded,
     );
   const paneChain = layoutChain(null, roundLayout, userLayout);
+  const pickPane = (pane: LayoutPane) =>
+    pickLayout({ pane }, paneChain, loaded);
   return {
     cards: cardStops(round).map(pickCard),
     noticeCards: kindItemsOf(round, 'notice').map(pickCard),
     panes: {
-      head: pickLayout('head', paneChain, loaded),
-      rail: pickLayout('rail', paneChain, loaded),
-      review: pickLayout('review', paneChain, loaded),
-      notices: pickLayout('notices', paneChain, loaded),
+      head: pickPane('head'),
+      rail: pickPane('rail'),
+      review: pickPane('review'),
+      notices: pickPane('notices'),
     },
   };
 }

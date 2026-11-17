@@ -1,18 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FormsCardPart } from '../../contract';
-import type { Layout } from '../../layouts/layout';
+import type { KindKit, Layout } from '../../layouts/layout';
 import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
 import type { RoundState, TextTarget } from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
+import { poll, pollPageKind } from '../kinds/plugin-page-kind.test-support';
 import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../../manifest';
 import defaultLayout from '../../layouts/default/layout.js';
 import {
   apply,
   finding,
+  formsWith,
   initialState,
   notice,
   presentedRound,
@@ -23,6 +25,7 @@ import {
   asFake,
   asHtml,
   FakeElement,
+  findAll,
   installFakeDom,
 } from '../../../../shared/page/test-dom';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
@@ -252,5 +255,110 @@ describe('buildLayoutCard', () => {
     );
     expect(parent.children).toEqual([asFake(card.element)]);
     expect(card.element.dataset.layout).toBe('default');
+  });
+});
+
+// A round of one poll item, `Lunch`, after one finding, its poll kind
+// answerable or not, open and active.
+function pollRound(answerable: boolean): RoundState {
+  const forms = formsWith([pollPageKind('poll', { answerable })]);
+  const presented = presentedRound('r1', {
+    questions: [],
+    findings: [finding('Delta')],
+    items: { poll: [poll('Lunch')] },
+    bodyKeys: { poll: 'poll_answers' },
+  });
+  return forms.apply(forms.initialState([], presented.sessionId), {
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
+}
+
+// The card of the poll item at rail position 1, drawn with `layout` as `pick`.
+function buildPollCard(answerable: boolean, layout: Layout, pick = 'mine') {
+  const deps = fakeCardDeps(createFormsContributions());
+  const card = buildLayoutCard(
+    { name: pick, layout },
+    asHtml(new FakeElement('div')),
+    pollRound(answerable),
+    { kind: 'poll', index: 1 },
+    1,
+    deps,
+  );
+  return { card: asFake(card.element), deps };
+}
+
+describe('a plugin kind card', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { answerable: true, toggles: 1 },
+    { answerable: false, toggles: 0 },
+  ])(
+    'pluginKind_NoKindsBuilder_DrawsDefaultsOther (answerable $answerable)',
+    ({ answerable, toggles }) => {
+      const { card } = buildPollCard(answerable, defaultLayout, 'default');
+
+      expect(card.classList.contains('item')).toBe(true);
+      expect(card.classList.contains('other')).toBe(true);
+      expect(card.dataset.layout).toBe('default');
+      expect(findAll(card, 'item-head')[0].textContent).toBe('poll');
+      expect(findAll(card, 'item-summary')[0].innerHTML).toBe('Lunch');
+      expect(findAll(card, 'toggles')).toHaveLength(toggles);
+    },
+  );
+
+  it.each([true, false])(
+    'pluginKind_KindsBuilder_GetsTheKindsInputAndAKit (answerable %s)',
+    (answerable) => {
+      const seen: { input: unknown; kit: KindKit }[] = [];
+      const layout: Layout = {
+        cards: {
+          other: () => {
+            throw new Error('other drew');
+          },
+          kinds: {
+            poll(parent, input, kit) {
+              seen.push({ input, kit });
+              return { element: kit.card(parent, 'poll') };
+            },
+          },
+        },
+      };
+
+      const { card } = buildPollCard(answerable, layout);
+
+      expect(card.dataset.layout).toBe('mine');
+      expect(seen[0].input).toEqual({
+        title: 'Lunch',
+        options: ['Lunch yes', 'Lunch no'],
+        index: 1,
+      });
+      expect(seen[0].kit.answerControls !== undefined).toBe(answerable);
+    },
+  );
+
+  it('pluginKind_KindsBuilderThrows_DefaultsOtherDrawsWithTheOtherCard', () => {
+    const layout: Layout = {
+      cards: {
+        kinds: {
+          poll: () => {
+            throw new Error('poll failed');
+          },
+        },
+      },
+    };
+
+    const { card, deps } = buildPollCard(true, layout);
+
+    expect(deps.log).toHaveBeenCalledWith(
+      'layout mine poll card failed: poll failed',
+    );
+    expect(card.dataset.layout).toBe('default');
+    expect(card.classList.contains('other')).toBe(true);
+    expect(findAll(card, 'item-head')[0].textContent).toBe('poll');
   });
 });

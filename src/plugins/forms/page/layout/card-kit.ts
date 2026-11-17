@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/page/markdown-mount';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag as tagPart } from '../../../../shared/page/ui/tag';
-import type { KindBox, PageKind } from '../../contract';
+import type { ItemKind, KindBox, PageKind } from '../../contract';
 import {
   type FormsCommandName,
   formsCommand,
@@ -26,6 +26,7 @@ import type {
   FindingCard,
   FindingKit,
   FormsBaseKit,
+  KindKit,
   Kit,
   QuestionKit,
 } from '../../layouts/layout';
@@ -122,8 +123,8 @@ interface DrawnPick {
 }
 
 // A card's kit, and what the card host does with it.
-export interface CardKit<K extends BuiltInCard> {
-  kit: CardKits[K];
+export interface CardKit<T extends Kit = Kit> {
+  kit: T;
   // Runs every part's updater with the round's current state.
   update(round: RoundState): void;
   // Runs the update each contributed part returned.
@@ -136,20 +137,16 @@ export interface CardKit<K extends BuiltInCard> {
   appendUnplacedParts(card: HTMLElement): void;
 }
 
-const KIT_BUILDERS: {
+// The built-in cards' kits: the notice's is the base kit; the question's and
+// the finding's add their own parts to the answer kit.
+const BUILT_IN_KITS: {
   [K in BuiltInCard]: (card: CardContext, input: CardInputs[K]) => CardKits[K];
 } = {
   notice: (card) => buildBaseKit(card),
-  question: (card, input) => {
-    const item: AnswerableItem = { kind: 'question', index: card.item.index };
-    const answerKit = buildAnswerKit(card, item, buildBaseKit(card));
-    return buildQuestionKit(card, item, answerKit, input);
-  },
-  finding: (card, input) => {
-    const item: AnswerableItem = { kind: 'finding', index: card.item.index };
-    const answerKit = buildAnswerKit(card, item, buildBaseKit(card));
-    return buildFindingKit(card, item, answerKit, input);
-  },
+  question: (card, input) =>
+    buildQuestionKit(card, card.item, buildAnswerKit(card), input),
+  finding: (card, input) =>
+    buildFindingKit(card, card.item, buildAnswerKit(card), input),
 };
 
 // The finding card's entries as `choiceGroups` draws them: one group per run
@@ -269,8 +266,9 @@ export function scopedAnchor(
   };
 }
 
-// The kit for the card of `kind` item `index` at rail `position`, built
-// from its card input. Throws for a kind the round has no registration for.
+// The kit for the card of built-in `kind` item `index` at rail `position`,
+// built from its card input. Throws for a kind the round has no registration
+// for.
 export function createCardKit<K extends BuiltInCard>(
   kind: K,
   index: number,
@@ -278,15 +276,43 @@ export function createCardKit<K extends BuiltInCard>(
   round: RoundState,
   position: number,
   deps: CardDeps,
-): CardKit<K> {
-  const item = { kind, index };
-  const pageKind = round.kinds.get(kind);
+): CardKit<CardKits[K]> {
+  const card = cardContext({ kind, index }, round, position, deps);
+  return cardKitOver(card, BUILT_IN_KITS[kind](card, input));
+}
+
+// The kit for the card of plugin kind `kind` item `index` at rail `position`:
+// the base kit, with `answerControls` when the kind takes an answer. Throws for
+// a kind the round has no registration for.
+export function createKindKit(
+  kind: ItemKind,
+  index: number,
+  round: RoundState,
+  position: number,
+  deps: CardDeps,
+): CardKit<KindKit> {
+  const card = cardContext({ kind, index }, round, position, deps);
+  const kit = card.kind.spec.answerable
+    ? buildAnswerKit(card)
+    : buildBaseKit(card);
+  return cardKitOver(card, kit);
+}
+
+// What every part of `item`'s card kit shares, its markdown mount recorded
+// through `deps`. Throws for a kind the round has no registration for.
+function cardContext(
+  item: RoundItem,
+  round: RoundState,
+  position: number,
+  deps: CardDeps,
+): CardContext {
+  const pageKind = round.kinds.get(item.kind);
   if (pageKind === undefined) {
-    throw new Error(`round ${round.formId} has no page kind ${kind}`);
+    throw new Error(`round ${round.formId} has no page kind ${item.kind}`);
   }
   const mount = createMarkdownMount(deps.markdown, deps.log);
   deps.recordMount(mount);
-  const card: CardContext = {
+  return {
     roundId: round.formId,
     item,
     kind: pageKind,
@@ -300,7 +326,12 @@ export function createCardKit<K extends BuiltInCard>(
     updaters: [],
     placedParts: null,
   };
-  const kit = KIT_BUILDERS[kind](card, input);
+}
+
+// The card host's handle on `kit`, built over `card`.
+function cardKitOver<T extends Kit>(card: CardContext, kit: T): CardKit<T> {
+  const { deps } = card;
+  const { kind } = card.item;
   return {
     kit,
     update(current) {
@@ -493,16 +524,21 @@ function buildBaseKit(card: CardContext): Kit {
   };
 }
 
-// `answerControls` for answerable `item` over `kit`.
-function buildAnswerKit(
-  card: CardContext,
-  item: AnswerableItem,
-  kit: Kit,
-): AnswerKit {
+// The base kit with `answerControls` for the card's answerable item. The
+// toggles always mount; the Notes and reason boxes only when the item's kind
+// has those fields.
+function buildAnswerKit(card: CardContext): AnswerKit {
+  const { item } = card;
+  const kit = buildBaseKit(card);
+  const mountIfField = (parent: HTMLElement, field: string) => {
+    if (card.boxes.has(field)) {
+      kit.textBox(parent, field);
+    }
+  };
   return {
     ...kit,
     answerControls(parent) {
-      kit.textBox(parent, 'notes');
+      mountIfField(parent, 'notes');
       const toggles = element('div', 'toggles');
       const notApplicable = textButton(
         'Not applicable',
@@ -518,7 +554,7 @@ function buildAnswerKit(
       appendCardKeys(card, dontAsk, formsCommand('toggleDontAsk'));
       toggles.append(notApplicable, dontAsk);
       parent.append(toggles);
-      kit.textBox(parent, 'dontAskReason');
+      mountIfField(parent, 'dontAskReason');
       card.updaters.push((current) => {
         const answer = itemAnswer(current, item);
         showPressed(notApplicable, answer.notApplicable);
