@@ -524,8 +524,8 @@ function partSlot(parent: HTMLElement): PartSlot {
   return { element: slot, drawnKey: null, pick: null, drawn: null };
 }
 
-// Disposes the slot's draw first, then draws it again: a box key still
-// mounted would make the new draw's mount throw.
+// Disposes the slot's draw first, then draws it again: the old draw's release
+// would detach the box the new draw just placed.
 function redrawSlot(draw: PartDraw, pick: PartPick<AudioPickerLayout>) {
   const { slot } = draw;
   slot.drawn?.dispose();
@@ -651,7 +651,7 @@ interface PartSpec<Kit, Input> {
   input: Input;
   kit(rollback: RollbackDeps): {
     kit: Kit;
-    appendUnmountedBox?(part: HTMLElement): void;
+    appendUnplacedBox?(part: HTMLElement): void;
   };
 }
 
@@ -669,14 +669,14 @@ function drawLayoutPart<Kit, Input>(
     defaultLayout,
     part: spec.part,
     build(builder, buildParent, rollback) {
-      const { kit, appendUnmountedBox } = spec.kit(rollback);
+      const { kit, appendUnplacedBox } = spec.kit(rollback);
       const drawn: PickerLayoutPart | null | undefined = builder(
         buildParent,
         spec.input,
         kit,
       );
       const element = requireElementIn(buildParent, drawn?.element, spec.name);
-      appendUnmountedBox?.(element);
+      appendUnplacedBox?.(element);
       return { element };
     },
     log: deps.log,

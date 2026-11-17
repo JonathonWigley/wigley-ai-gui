@@ -106,19 +106,19 @@ export function createNotesKit(
   box: PickerBox,
   text: string,
   rollback: RollbackDeps,
-): { kit: NotesKit; appendUnmountedBox(part: HTMLElement): void } {
-  let isMounted = false;
+): { kit: NotesKit; appendUnplacedBox(part: HTMLElement): void } {
+  let isPlaced = false;
   const textBox = (parent: HTMLElement) => {
-    if (isMounted) {
+    if (isPlaced) {
       throw new Error('the notes box is already on the part');
     }
-    isMounted = true;
+    isPlaced = true;
     return appendNotesField(deps, rollback, parent, box, text);
   };
   return {
     kit: { ...createPickerKit(deps, rollback), textBox },
-    appendUnmountedBox(part) {
-      if (!isMounted) {
+    appendUnplacedBox(part) {
+      if (!isPlaced) {
         textBox(part);
       }
     },

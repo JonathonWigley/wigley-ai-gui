@@ -26,7 +26,7 @@ import type {
 // - `document` → `div.md` holding the rendered markdown (the statement, a submission's code, or the approach and the
 //   reference solution).
 // - `textBox` appends the box's frame (`ui-input practice-box practice-box--notes` or `practice-box--customCases`) to
-//   `parent`, mounts the vim box in it with the draft text, and returns the frame.
+//   `parent`, places the vim box in it with the draft text, and returns the frame.
 // - `failingCase` → `div.practice-failing-case`; the app draws the `caseResult` part into it when a case failed.
 // - `importBox`'s `textBox` places the app's import frame (`ui-input`, holding the request box) and returns it; left
 //   out, the frame is placed first in the part's root.

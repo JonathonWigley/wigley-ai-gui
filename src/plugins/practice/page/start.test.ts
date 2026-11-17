@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EditorHost } from '../../../contracts/editor';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
-import { withUser } from '../../../shared/page/layout-host/test-layouts';
+import {
+  USER_LAYOUT,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   type FakeElement,
@@ -834,6 +837,74 @@ describe('practicePagePart', () => {
     expect(notes.isDestroyed).toBe(false);
     expect(boxFocuses.length).toBeGreaterThan(focusesBefore);
     expect(boxFocuses.at(-1)).toBe(notes);
+  });
+
+  it('layoutChange_UserNotesTabPlacingTheBoxTwice_DrawsWithDefault', async () => {
+    const { harness, commands, boxEditors } = await startWithProblemOpen();
+    commands.showTab({ arg: 'notes' });
+    const userLayout = {
+      ...defaultLayout,
+      notesTab(
+        parent: HTMLElement,
+        kit: Parameters<typeof defaultLayout.notesTab>[1],
+      ) {
+        const root = kit.el(parent, 'div', 'user-notes');
+        kit.textBox(root);
+        kit.textBox(root);
+        return root;
+      },
+    };
+
+    harness.showLayouts(
+      withUser(defaultLayout, userLayout) as Parameters<
+        typeof harness.showLayouts
+      >[0],
+    );
+
+    expect(messagesOf(harness)).toContainEqual(
+      expect.stringMatching(/notesTab failed: .*textBox placed twice/),
+    );
+    const live = editorsOf(boxEditors, 'notes').filter(
+      (made) => !made.isDestroyed,
+    );
+    expect(live).toHaveLength(1);
+  });
+
+  it('layoutChange_UserDialogFrame_BothDialogsCarryItsLayoutOnePanelEach', async () => {
+    const { harness, commands } = await startWithProblemOpen();
+    const panels = new Map<string, HTMLElement[]>();
+    const userLayout = {
+      ...defaultLayout,
+      dialogFrame(
+        parent: HTMLElement,
+        input: Parameters<typeof defaultLayout.dialogFrame>[1],
+        kit: Parameters<typeof defaultLayout.dialogFrame>[2],
+      ) {
+        const frame = defaultLayout.dialogFrame(parent, input, kit);
+        panels.set(input.title, [
+          ...(panels.get(input.title) ?? []),
+          frame.element,
+        ]);
+        return frame;
+      },
+    };
+
+    harness.showLayouts(
+      withUser(defaultLayout, userLayout) as Parameters<
+        typeof harness.showLayouts
+      >[0],
+    );
+    commands.importStart({ arg: undefined });
+    commands.showTab({ arg: 'solution' });
+
+    expect([...panels.keys()].sort()).toEqual([
+      'Import problems',
+      'Open the solution?',
+    ]);
+    for (const [, drawn] of panels) {
+      expect(drawn).toHaveLength(1);
+      expect(drawn[0].dataset.layout).toBe(USER_LAYOUT);
+    }
   });
 
   it('refreshedDraft_ShownNotesBox_MountsANewEditor', async () => {

@@ -190,7 +190,7 @@ describe('picker kit', () => {
     },
   );
 
-  it('createNotesKit_TextBox_MountsTheMomentsBoxOnce', () => {
+  it('createNotesKit_TextBox_PlacesTheMomentsBoxOnce', () => {
     const { deps, boxes } = fakeDeps();
     const { undos, rollback } = recordingRollback();
     const box = { formId: 'f1', moment: 2 };
@@ -209,11 +209,11 @@ describe('picker kit', () => {
     undos[0]();
     expect(boxes.release).toHaveBeenCalledWith(box);
     expect(() => drawn.kit.textBox(part)).toThrow(/already on the part/);
-    drawn.appendUnmountedBox(part);
+    drawn.appendUnplacedBox(part);
     expect(boxes.place).toHaveBeenCalledTimes(1);
   });
 
-  it('createNotesKit_NoTextBoxCall_AppendUnmountedBoxMountsAtThePartsEnd', () => {
+  it('createNotesKit_NoTextBoxCall_AppendUnplacedBoxPlacesAtThePartsEnd', () => {
     const { deps, boxes } = fakeDeps();
     const box = { formId: 'f1', moment: 2 };
     const drawn = createNotesKit(
@@ -225,7 +225,7 @@ describe('picker kit', () => {
     const part = asFake(newParent());
     part.append(new FakeElement('span'));
 
-    drawn.appendUnmountedBox(asHtml(part));
+    drawn.appendUnplacedBox(asHtml(part));
 
     expect(boxes.place).toHaveBeenCalledTimes(1);
     const [field, placed, text] = boxes.place.mock.calls[0];

@@ -522,9 +522,15 @@ export function createProblemWorkspace(
   // A box kit's `textBox`: the box's frame placed in `parent` with the
   // draft's text, released with the draw. A box placed for another problem or
   // an earlier draft is destroyed first, so a fresh editor holds the new text.
-  const textBoxSlot =
-    (id: BoxId, rollback: RollbackDeps) =>
-    (parent: HTMLElement): HTMLElement => {
+  // A second call in one draw throws `textBox placed twice`, so the part draws
+  // with `default`.
+  const textBoxSlot = (id: BoxId, rollback: RollbackDeps) => {
+    let isPlaced = false;
+    return (parent: HTMLElement): HTMLElement => {
+      if (isPlaced) {
+        throw new Error('textBox placed twice');
+      }
+      isPlaced = true;
       const { problem, drafts } = store.get();
       if (problem === null) {
         throw new Error(`the ${id} box draws with no problem open`);
@@ -539,6 +545,7 @@ export function createProblemWorkspace(
       rollback.recordBox(() => boxes.release(id));
       return frame;
     };
+  };
 
   // ── Drawing ────────────────────────────────────────────────────────────
   let problemDraws: DrawnRoot[] = [];
