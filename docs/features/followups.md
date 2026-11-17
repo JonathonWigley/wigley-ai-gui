@@ -568,7 +568,9 @@ Duplication and drift with no user-visible defect.
   once kinds register), finding rules (into `kinds/finding/`) and a draft codec. Two types are named `FormsView` (the
   union in `src/plugins/forms/contract.ts`, the interface in `forms/page/forms-view.ts`): rename the union, which also
   names the key scope.
-- **Forms tool table from one list** — *agent-ready*: forms' tool routing derives `FORMS_TOOLS`
+- **Forms tool table from one list** — *agent-ready*, taken by Lane E's task 06 (`formsTools(kinds)` replaces
+  `FORMS_TOOLS`, and the question and finding results share `kinds/answer-results.ts`); `SAVED_OUTCOMES` rides with
+  it: forms' tool routing derives `FORMS_TOOLS`
   (`src/plugins/forms/main/tool-definitions.ts`) and the dispatch from one list of `{ definition, call }`;
   `isSavedOutcome` (`src/shared/agent-forms/form-store.ts`) derives from a `SAVED_OUTCOMES` const; `answerResult` and
   `findingResult` (`forms/main/round.ts`) share one status ladder on the answerable format.
@@ -880,9 +882,12 @@ because the earlier items rewrite many of these tests anyway.
   `src/plugins/sessions/page/sessions.css` sit at z-index 2 with no inset, while the up and down prompts reserve one.
   In a split the prompt can cover a side pane row while hints show. The choices are an inset, which narrows the pane,
   or moving the prompt. Source session: Claude Code 38d42f6d-8deb-450b-9655-d83e50e050c4 in wigley-ai-gui.
-- **Esc on a new split's Folder picker leaves an empty pane** — *agent-ready*: choosing New session then Esc on the
+- **Esc on a new split's Folder picker leaves an empty pane** — *needs a feature plan*: choosing New session then Esc on the
   Folder picker leaves the split open and empty, while Esc on Show session cancels the split. Seen in a drive run;
-  whether it predates that run's work was not checked. Source session: Claude Code
+  whether it predates that run's work was not checked. `docs/features/chat-panes/design.md` § Splitting, the picker
+  and closing chooses this on purpose (the pane stays empty with "Pick a session", and `Alt+w` closes it), so closing
+  the pane overturns a design choice: the user's call. A drafted fix (chat publishes `chat.startPromptCancelled`;
+  sessions closes the still-empty split pane) was written in the 2026-11-17 follow-ups sweep. Source session: Claude Code
   38d42f6d-8deb-450b-9655-d83e50e050c4 in wigley-ai-gui.
 - **Self-test has no click step** — *agent-ready*: `SelfTestStep` drives keys and file writes only
   (`src/contracts/plugin.ts`, `src/main/selftest-runner.ts`), so a first click in an unfocused pane is proved only by
