@@ -9662,7 +9662,7 @@ describe('createChatSessions host session ids', () => {
       rejects: `session ${ROW_ID} ended before its harness reported a session id`,
     },
     {
-      given: "a cleared row whose fresh process ends before it reports",
+      given: 'a cleared row whose fresh process ends before it reports',
       settle: async (test: ReturnType<typeof setUp>) => {
         test.chat.start(START);
         await flush();
@@ -9888,7 +9888,7 @@ describe('createChatSessions harness leave and return', () => {
       },
     },
     {
-      given: "a cleared row before its fresh process reports",
+      given: 'a cleared row before its fresh process reports',
       arrange: async (test: ReturnType<typeof setUp>) => {
         test.chat.start(START_ON_FAKE);
         await flush();

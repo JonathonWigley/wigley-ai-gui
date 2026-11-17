@@ -329,10 +329,12 @@ function startChatPart(
       ? [{ name: 'work', configDir: '/work' }]
       : options.profiles;
   if (profiles !== null) {
-    store.publish(coreAgentHarnessesSlot).set(
-      'claude',
-      harnessInfo({ profiles: options.publishedProfiles ?? profiles }),
-    );
+    store
+      .publish(coreAgentHarnessesSlot)
+      .set(
+        'claude',
+        harnessInfo({ profiles: options.publishedProfiles ?? profiles }),
+      );
   }
   const sent: { message: string; data: unknown }[] = [];
   const emitted: { event: string; data: unknown }[] = [];

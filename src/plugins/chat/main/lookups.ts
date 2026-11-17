@@ -66,9 +66,7 @@ export function harnessOfProfile(
     harnesses
       .list()
       .find((harness) =>
-        harnesses
-          .profilesOf(harness.id)
-          .some((held) => held.name === profile),
+        harnesses.profilesOf(harness.id).some((held) => held.name === profile),
       ) ?? null
   );
 }
