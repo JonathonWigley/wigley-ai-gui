@@ -21,6 +21,7 @@ import {
 } from '../shared/local-channel/local-channel';
 import { createDiagnosticLog, type DiagnosticLog } from './diagnostic-log';
 import type { HostChildren } from './host-children';
+import { createPendingQueue } from './pending-queue';
 import {
   createProcessTable,
   type HostSpawn,
@@ -46,6 +47,9 @@ const CLIENT_MESSAGE_TYPES: ReadonlySet<unknown> = new Set<
   'unsubscribe',
   'setKeepIdle',
   'stopAll',
+  'setPending',
+  'listRuns',
+  'forgetRuns',
 ]);
 // Another host's probe or an older-host check sends only these, and never counts as a client.
 // Frozen with the messages it names, since an app drains or lists any older host.
@@ -56,9 +60,17 @@ const NON_CLIENT_MESSAGE_TYPES: ReadonlySet<ClientMessage['type']> = new Set([
 ]);
 // Answered while a new host ends what the last one left. The rest wait, in order: each may act on a process whose
 // `spawn` is waiting, and a `drain` or `stopAll` must see it. `list` answers empty even with a `spawn` waiting, so a
-// relaunch inside this hold can rest a row beside a process about to start.
+// relaunch inside this hold can rest a row beside a process about to start. `listRuns` and `forgetRuns` answer from
+// the loaded runs record, since the client's reply limit is shorter than the hold.
 const SERVED_WHILE_ENDING_LEFTOVERS: ReadonlySet<ClientMessage['type']> =
-  new Set(['hello', 'list', 'subscribe', 'setKeepIdle']);
+  new Set([
+    'hello',
+    'list',
+    'subscribe',
+    'setKeepIdle',
+    'listRuns',
+    'forgetRuns',
+  ]);
 
 export interface SessionHostDeps {
   folder: string;
@@ -180,7 +192,14 @@ async function sweepLogs(
   }
 }
 
+function sendTo(socket: Socket, message: HostMessage) {
+  if (!socket.destroyed && socket.writable) {
+    socket.write(jsonLine(message));
+  }
+}
+
 interface ConnectionsDeps {
+  folder: string;
   spawn: HostSpawn;
   env: NodeJS.ProcessEnv;
   clock: Clock;
@@ -190,7 +209,7 @@ interface ConnectionsDeps {
   shutDown(): void;
 }
 
-// The wire protocol over every connection, and the exit rule, which turns on who is connected.
+// The wire protocol over every connection, the pending queue, and the exit rule, which turns on who is connected.
 function createConnections(deps: ConnectionsDeps) {
   const { diagnostics } = deps;
   const clients = new Set<Socket>();
@@ -205,7 +224,24 @@ function createConnections(deps: ConnectionsDeps) {
     timers: deps.timers,
     logsFolder: deps.logsFolder,
     diagnostics,
-    processClosed: () => checkExitRule(),
+    // The queue's own subscriber is replaced once an app attaches, so it hears every close here too.
+    processClosed: (id, exit) => {
+      queue.processClosed(id, exit);
+      checkExitRule();
+    },
+  });
+  const queue = createPendingQueue({
+    folder: deps.folder,
+    clock: deps.clock,
+    timers: deps.timers,
+    diagnostics,
+    spawn: (request, subscriber) => table.spawn(request, subscriber),
+    isBusy: (id) => table.isBusy(id),
+    runStarted(run) {
+      for (const socket of clients) {
+        sendTo(socket, { type: 'runStarted', run });
+      }
+    },
   });
 
   function checkExitRule() {
@@ -213,17 +249,20 @@ function createConnections(deps: ConnectionsDeps) {
       exitRuleWaits = true;
       return;
     }
-    const holdsNoProcess = table.list().length === 0;
-    if (holdsNoProcess && (draining || clients.size === 0)) {
+    const holdsNothing = table.list().length === 0 && queue.isEmpty();
+    const hasNoClientToServe = draining || clients.size === 0;
+    if (holdsNothing && hasNoClientToServe) {
       deps.shutDown();
     }
   }
 
+  // A held `setPending` is newer than the loaded pending file, so the queue starts only after it is served.
   function serveHeldMessages() {
     isEndingLeftovers = false;
     for (const serve of heldMessages.splice(0)) {
       serve();
     }
+    queue.start();
     if (exitRuleWaits) {
       checkExitRule();
     }
@@ -269,6 +308,7 @@ function createConnections(deps: ConnectionsDeps) {
         break;
       case 'drain':
         draining = true;
+        queue.drop();
         table.drain();
         checkExitRule();
         break;
@@ -303,15 +343,27 @@ function createConnections(deps: ConnectionsDeps) {
           push({ type: 'stopAll', requestId: message.requestId }),
         );
         break;
+      case 'setPending':
+        queue.setPending(message.entries);
+        checkExitRule();
+        break;
+      case 'listRuns':
+        queue.importOlder();
+        push({
+          type: 'listRuns',
+          requestId: message.requestId,
+          runs: queue.runs(),
+        });
+        break;
+      case 'forgetRuns':
+        queue.forgetRuns(message.ids);
+        checkExitRule();
+        break;
     }
   }
 
   function connected(socket: Socket) {
-    const push = (message: HostMessage) => {
-      if (!socket.destroyed && socket.writable) {
-        socket.write(jsonLine(message));
-      }
-    };
+    const push = (message: HostMessage) => sendTo(socket, message);
     const subscriber: ProcessSubscriber = {
       line: (id, line) => push({ type: 'line', id, line }),
       closed: (id, exit) => push({ type: 'closed', id, exit }),
@@ -351,12 +403,12 @@ function createConnections(deps: ConnectionsDeps) {
     });
   }
 
-  return { connected, checkExitRule, serveHeldMessages, table };
+  return { connected, checkExitRule, serveHeldMessages, table, queue };
 }
 
 // Runs the start steps. A host that finds the channel owned, or cannot listen, calls `deps.exit` and is done;
-// one that owns the channel ends what the last host left before it serves a `spawn`, and serves until the exit rule
-// calls `deps.exit`. Resolves once the log sweep has finished.
+// one that owns the channel loads its pending queue, ends what the last host left before it serves a `spawn` or starts
+// a pending entry, and serves until the exit rule calls `deps.exit`. Resolves once the log sweep has finished.
 export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
   const { folder, channel, clock, timers } = deps;
   const logsFolder = path.join(folder, HOST_LOGS_FOLDER);
@@ -371,6 +423,7 @@ export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
   const diagnostics = createDiagnosticLog(folder, clock);
   let shuttingDown = false;
   const connections = createConnections({
+    folder,
     spawn: deps.children.spawn,
     env: deps.env,
     clock,
@@ -420,6 +473,7 @@ export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
     channel,
     pid: deps.pid,
   });
+  connections.queue.load();
   timers.set(connections.checkExitRule, FIRST_CLIENT_WAIT_MS);
   await deps.children.endLeftovers();
   connections.serveHeldMessages();

@@ -41,8 +41,8 @@ export interface ProcessTableDeps {
   timers: Timers;
   logsFolder: string;
   diagnostics: DiagnosticLog;
-  // After a process has left the table.
-  processClosed(): void;
+  // After a process has left the table, with the exit its subscriber got.
+  processClosed(id: string, exit: HostedExit): void;
 }
 
 export interface ProcessTable {
@@ -65,6 +65,8 @@ export interface ProcessTable {
   unsubscribe(id: string, subscriber: ProcessSubscriber): void;
   dropSubscriber(subscriber: ProcessSubscriber): void;
   list(): ListedProcess[];
+  // True when the table holds process `id`, it is not ending, and its idle rule reads it busy.
+  isBusy(id: string): boolean;
   // Refuses a value that is not finite, keeping the window it has.
   setKeepIdleMinutes(minutes: number): void;
   // The keep window runs only while this is false, the state the table starts in.
@@ -352,7 +354,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         done();
       }
     }
-    deps.processClosed();
+    deps.processClosed(hosted.id, exit);
   }
 
   function logStreamErrors(
@@ -517,6 +519,10 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         signal: null,
         log: hosted.log.file,
       }));
+    },
+    isBusy(id) {
+      const hosted = processes.get(id);
+      return hosted !== undefined && !hosted.isEnding && !hosted.isIdle;
     },
     setKeepIdleMinutes(minutes) {
       if (!Number.isFinite(minutes)) {

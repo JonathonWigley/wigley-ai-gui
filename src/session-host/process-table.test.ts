@@ -12,8 +12,13 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { HostedExit } from '../contracts/session-host';
 import { HOST_END_GRACE_MS } from '../contracts/session-host-protocol';
-import { createProcessTable, type HostSpawn } from './process-table';
+import {
+  createProcessTable,
+  type HostSpawn,
+  type ProcessTable,
+} from './process-table';
 import {
   type FakeChild,
   fakeChild,
@@ -24,6 +29,7 @@ import {
 } from './session-host-test-doubles';
 
 const HOUR_MS = 3_600_000;
+type ManualTime = ReturnType<typeof manualTime>;
 const USER = '{"type":"user"}';
 const RESULT = '{"type":"result"}';
 const SYSTEM = '{"type":"system"}';
@@ -52,6 +58,7 @@ function setUp(
     return fake.child;
   };
   const diagnosticLines: string[] = [];
+  const closedProcesses: { id: string; exit: HostedExit }[] = [];
   const table = createProcessTable({
     spawn: spawnOverride ?? spawn,
     env,
@@ -62,11 +69,19 @@ function setUp(
       append: (message) => diagnosticLines.push(message),
       setAsidePrevious: () => {},
     },
-    processClosed: () => {},
+    processClosed: (id, exit) => closedProcesses.push({ id, exit }),
   });
   const logFile = (name: string) => path.join(logsFolder, name);
   const logRecords = (name: string) => readFileSync(logFile(name), 'utf8');
-  return { table, time, children, logFile, logRecords, diagnosticLines };
+  return {
+    table,
+    time,
+    children,
+    logFile,
+    logRecords,
+    diagnosticLines,
+    closedProcesses,
+  };
 }
 
 describe('process table', () => {
@@ -632,7 +647,7 @@ describe('process table', () => {
   });
 
   it('close_EndsPendingSignals_AndDeletesTheLog', () => {
-    const { table, time, children, logFile } = setUp();
+    const { table, time, children, logFile, closedProcesses } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
     time.advanceTo(HOUR_MS);
 
@@ -645,6 +660,52 @@ describe('process table', () => {
     expect(children[0].stdout.destroyed).toBe(false);
     expect(existsSync(logFile('a.jsonl'))).toBe(false);
     expect(table.list()).toEqual([]);
+    expect(closedProcesses).toEqual([
+      { id: 'a', exit: { code: 0, signal: null, error: null } },
+    ]);
+  });
+
+  it.each<{
+    label: string;
+    spawns: boolean;
+    setUpProcess(table: ProcessTable, time: ManualTime): void;
+    busy: boolean;
+  }>([
+    {
+      label: 'an unknown id',
+      spawns: false,
+      setUpProcess: () => {},
+      busy: false,
+    },
+    {
+      label: 'an idle process',
+      spawns: true,
+      setUpProcess: () => {},
+      busy: false,
+    },
+    {
+      label: 'busy after a stdin user line',
+      spawns: true,
+      setUpProcess: (table) => table.write('a', USER),
+      busy: true,
+    },
+    {
+      label: 'ending, with a user line after the keep window ended it',
+      spawns: true,
+      setUpProcess: (table, time) => {
+        time.advanceTo(HOUR_MS);
+        table.write('a', USER);
+      },
+      busy: false,
+    },
+  ])('isBusy_Cases: $label', ({ spawns, setUpProcess, busy }) => {
+    const { table, time } = setUp();
+    if (spawns) {
+      table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
+    }
+    setUpProcess(table, time);
+
+    expect(table.isBusy('a')).toBe(busy);
   });
 
   it.skipIf(process.platform === 'win32')(

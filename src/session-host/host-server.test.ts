@@ -11,11 +11,14 @@ import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { HostedRun, PendingSpawn } from '../contracts/session-host';
 import {
   type HostMessage,
   hostLogFile,
   hostRecordFile,
+  pendingFile,
   previousHostLogFile,
+  runsFile,
   SESSION_HOST_PROTOCOL,
 } from '../contracts/session-host-protocol';
 import { channelPath } from '../shared/local-channel/channel-path';
@@ -216,6 +219,52 @@ async function spawned(
   connection.send({ type: 'spawn', request: spawnRequest(id) });
   await vi.waitFor(() => expect(running.spawned.length).toBe(before + 1));
   return running.spawned[before];
+}
+
+function pendingEntry(id: string, at: number): PendingSpawn {
+  return {
+    at,
+    spawn: spawnRequest(id),
+    record: { task: id },
+    skipWhileBusy: null,
+  };
+}
+
+function hostedRun(id: string, startedAt = 0): HostedRun {
+  return {
+    id,
+    record: { task: id },
+    startedAt,
+    skipped: false,
+    exit: { code: 0, signal: null, error: null },
+  };
+}
+
+function writeRuns(folder: string, protocol: number, runs: HostedRun[]) {
+  writeFileSync(path.join(folder, runsFile(protocol)), JSON.stringify(runs));
+}
+
+function writePending(folder: string, entries: PendingSpawn[]) {
+  writeFileSync(
+    path.join(folder, pendingFile(SESSION_HOST_PROTOCOL)),
+    JSON.stringify(entries),
+  );
+}
+
+async function listedRuns(connection: Client) {
+  const reply = await replyTo(connection, {
+    type: 'listRuns',
+    requestId: nextRequestId(),
+  });
+  return reply.type === 'listRuns' ? reply.runs : null;
+}
+
+function leftoversEndedByTest() {
+  let finish = () => {};
+  const ended = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  return { endLeftovers: () => ended, finish };
 }
 
 function liveListener(channel: string, replyProtocol: number | null) {
@@ -606,6 +655,73 @@ describe('host messages with bad fields', () => {
   );
 });
 
+describe('host queue', () => {
+  it('setPending_DueEntry_SpawnsAndPushesRunStartedToEveryClient', async () => {
+    const running = await runningHost();
+    const first = await client(running.channel);
+    const second = await client(running.channel);
+    const probe = await client(running.channel);
+    second.send({ type: 'setKeepIdle', minutes: 60 });
+    await settled(second);
+    await settled(probe);
+
+    first.send({ type: 'setPending', entries: [pendingEntry('a', 0)] });
+
+    const pushed = {
+      type: 'runStarted',
+      run: { ...hostedRun('a'), exit: null },
+    };
+    await vi.waitFor(() => expect(first.received).toContainEqual(pushed));
+    await vi.waitFor(() => expect(second.received).toContainEqual(pushed));
+    expect(running.spawned).toHaveLength(1);
+    await settled(probe);
+    expect(probe.received.map(({ type }) => type)).toEqual(['hello', 'hello']);
+  });
+
+  it('listRuns_RepliesTheRunsOldestFirst', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+    connection.send({ type: 'setPending', entries: [pendingEntry('a', 0)] });
+    await settled(connection);
+    running.time.advanceTo(5);
+    connection.send({ type: 'setPending', entries: [pendingEntry('b', 5)] });
+
+    expect(await listedRuns(connection)).toEqual([
+      { ...hostedRun('a', 0), exit: null },
+      { ...hostedRun('b', 5), exit: null },
+    ]);
+  });
+
+  it('forgetRuns_ThenListRuns_LeavesTheRest', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+    connection.send({
+      type: 'setPending',
+      entries: [pendingEntry('a', 0), pendingEntry('b', 0)],
+    });
+
+    connection.send({ type: 'forgetRuns', ids: ['a'] });
+
+    expect(await listedRuns(connection)).toEqual([
+      { ...hostedRun('b'), exit: null },
+    ]);
+  });
+
+  it('listRuns_OlderRunsFileWrittenAfterLoad_IsImportedFirst', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+    await settled(connection);
+    writeRuns(running.folder, SESSION_HOST_PROTOCOL - 1, [hostedRun('older')]);
+
+    expect(await listedRuns(connection)).toEqual([hostedRun('older')]);
+    expect(
+      existsSync(
+        path.join(running.folder, runsFile(SESSION_HOST_PROTOCOL - 1)),
+      ),
+    ).toBe(false);
+  });
+});
+
 describe('host lifetime', () => {
   it('drain_IdleAndBusy_EndsEachAtTurnEndThenExits', async () => {
     const running = await runningHost();
@@ -634,6 +750,73 @@ describe('host lifetime', () => {
         path.join(running.folder, hostRecordFile(SESSION_HOST_PROTOCOL)),
       ),
     ).toBe(false);
+  });
+
+  it('drain_IdleAndBusy_EndsEachAtTurnEndThenExits: with pending entries and runs', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+    connection.send({
+      type: 'setPending',
+      entries: [pendingEntry('fired', 0), pendingEntry('later', 1e12)],
+    });
+    await settled(connection);
+    const runsPath = path.join(
+      running.folder,
+      runsFile(SESSION_HOST_PROTOCOL),
+    );
+    const runsText = readFileSync(runsPath, 'utf8');
+
+    connection.send({ type: 'drain' });
+    await settled(connection);
+    expect(
+      existsSync(path.join(running.folder, pendingFile(SESSION_HOST_PROTOCOL))),
+    ).toBe(false);
+    expect(running.exits).toEqual([]);
+
+    running.spawned[0].close();
+    await vi.waitFor(() => expect(running.exits).toEqual([0]));
+    expect(readFileSync(runsPath, 'utf8')).toBe(runsText);
+  });
+
+  it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: pending entries and no client', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+    connection.send({
+      type: 'setPending',
+      entries: [pendingEntry('later', 1e12)],
+    });
+    await settled(connection);
+
+    connection.socket.destroy();
+    await vi.waitFor(() => expect(hostSockets[0].destroyed).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(running.exits).toEqual([]);
+  });
+
+  it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: run records and no client', async () => {
+    const seeded = tempFolder();
+    writeRuns(seeded.folder, SESSION_HOST_PROTOCOL, [hostedRun('a')]);
+    const running = await runningHost(seeded);
+
+    running.time.advanceTo(30_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(running.exits).toEqual([]);
+  });
+
+  it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: the last record forgotten and the client leaves', async () => {
+    const seeded = tempFolder();
+    writeRuns(seeded.folder, SESSION_HOST_PROTOCOL, [hostedRun('a')]);
+    const running = await runningHost(seeded);
+    const connection = await client(running.channel);
+    connection.send({ type: 'forgetRuns', ids: ['a'] });
+    await settled(connection);
+    expect(running.exits).toEqual([]);
+
+    connection.socket.destroy();
+
+    await vi.waitFor(() => expect(running.exits).toEqual([0]));
   });
 
   it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: the last client disconnects', async () => {
@@ -851,14 +1034,6 @@ describe('host start', () => {
     );
   });
 
-  function leftoversEndedByTest() {
-    let finish = () => {};
-    const ended = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-    return { endLeftovers: () => ended, finish };
-  }
-
   it('start_EndingLeftovers_HoldsASpawnAndWhatFollowsIt', async () => {
     const seeded = tempFolder();
     seedOldLog(seeded.folder);
@@ -869,6 +1044,10 @@ describe('host start', () => {
 
     connection.send({ type: 'spawn', request: spawnRequest('new') });
     connection.send({ type: 'write', id: 'new', text: 'hi' });
+    connection.send({
+      type: 'setPending',
+      entries: [pendingEntry('queued', 0)],
+    });
     const list = await replyTo(connection, { type: 'list', requestId: 1 });
 
     expect(list).toEqual({ type: 'list', requestId: 1, processes: [] });
@@ -877,7 +1056,7 @@ describe('host start', () => {
     finish();
     await running.started;
 
-    expect(running.spawned).toHaveLength(1);
+    expect(running.spawned).toHaveLength(2);
     const newLog = readFileSync(
       path.join(running.folder, 'logs', 'new.jsonl'),
       'utf8',
@@ -887,6 +1066,45 @@ describe('host start', () => {
     expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
       false,
     );
+  });
+
+  it('start_PendingFileWithNoClient_SpawnsAfterLeftoversAndStaysAlive', async () => {
+    const seeded = tempFolder();
+    writePending(seeded.folder, [pendingEntry('due', 0)]);
+    const { endLeftovers, finish } = leftoversEndedByTest();
+    const running = await runningHost(seeded, endLeftovers);
+    const connection = await client(running.channel);
+
+    expect(await listedRuns(connection)).toEqual([]);
+    expect(running.spawned).toEqual([]);
+    connection.socket.destroy();
+    await vi.waitFor(() => expect(hostSockets[0].destroyed).toBe(true));
+
+    finish();
+    await running.started;
+    expect(running.spawned).toHaveLength(1);
+
+    running.spawned[0].close();
+    running.time.advanceTo(30_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(running.exits).toEqual([]);
+  });
+
+  it('start_HeldSetPending_ServedBeforeTheLoadedQueueStarts', async () => {
+    const seeded = tempFolder();
+    writePending(seeded.folder, [pendingEntry('removed', 0)]);
+    const { endLeftovers, finish } = leftoversEndedByTest();
+    const running = await runningHost(seeded, endLeftovers);
+    const connection = await client(running.channel);
+    connection.send({ type: 'setPending', entries: [] });
+    await settled(connection);
+
+    finish();
+    await running.started;
+    await settled(connection);
+
+    expect(running.spawned).toEqual([]);
+    expect(await listedRuns(connection)).toEqual([]);
   });
 
   it.each([
