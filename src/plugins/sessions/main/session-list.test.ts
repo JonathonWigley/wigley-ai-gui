@@ -107,6 +107,8 @@ function setUp(
   // Each pending timer by handle, with its delay.
   const timers = new Map<number, { run(): void; ms: number }>();
   let timerHandles = 0;
+  // The rows a side bar section claims, as the page last wrote them.
+  const claimed: string[] = [];
   const list = createSessionList({
     timers: {
       set(run, ms) {
@@ -134,6 +136,7 @@ function setUp(
     projectName,
     hostSessionName,
     configFolder: resolvedFolder,
+    claimed: () => claimed,
   });
   states.length = 0;
   selections.length = 0;
@@ -148,6 +151,7 @@ function setUp(
     activated,
     calls,
     selections,
+    claimed,
   };
 }
 
@@ -1016,6 +1020,76 @@ describe('createSessionList', () => {
     expect(list.state()).toEqual({ rows: [], selectedSessionId: null });
   });
 
+  // Each row in order: `plain`, `claimed` by a side bar section, or `owned` by
+  // a plugin; the row at `closing` is selected, then closed.
+  it.each<{
+    case: string;
+    kinds: ('plain' | 'claimed' | 'owned')[];
+    closing: number;
+    selected: number | null;
+  }>([
+    {
+      case: 'claimed rows to the right are skipped',
+      kinds: ['plain', 'claimed', 'claimed', 'plain'],
+      closing: 0,
+      selected: 3,
+    },
+    {
+      case: 'every other row claimed leaves none selected',
+      kinds: ['claimed', 'plain', 'claimed'],
+      closing: 1,
+      selected: null,
+    },
+    {
+      case: 'claimed and owned rows mixed fall to the first plain one',
+      kinds: ['plain', 'owned', 'claimed', 'plain', 'plain'],
+      closing: 0,
+      selected: 3,
+    },
+    {
+      case: 'claimed and owned rows to the left fall to the plain one past them',
+      kinds: ['plain', 'claimed', 'owned', 'plain'],
+      closing: 3,
+      selected: 0,
+    },
+    {
+      case: 'a claimed row closing takes the same pick',
+      kinds: ['plain', 'claimed', 'claimed', 'plain'],
+      closing: 1,
+      selected: 3,
+    },
+    {
+      case: 'nothing claimed keeps the right neighbour',
+      kinds: ['plain', 'plain', 'plain'],
+      closing: 1,
+      selected: 2,
+    },
+  ])(
+    'passes the selection past claimed rows when the selected row closes: $case',
+    ({ kinds, closing, selected }) => {
+      const { list, claimed } = setUp();
+      const ids = kinds.map((kind, index) => {
+        if (kind === 'owned') {
+          const hostId = `host-${index}`;
+          return list.open(owned(hostId), { owner: 'retro' }).session.id;
+        }
+        const { session } = list.connect(info('/work/x'));
+        list.mark(session.id, MARK);
+        if (kind === 'claimed') {
+          claimed.push(session.id);
+        }
+        return session.id;
+      });
+      list.activate(ids[closing]);
+
+      list.closeSession(ids[closing], false);
+
+      expect(list.state().selectedSessionId).toBe(
+        selected === null ? null : ids[selected],
+      );
+    },
+  );
+
   it('ends tool sessions, drops the row and emits ended when a session ends', () => {
     const { list, emitted, states } = setUp();
     const firstContribution = fakeContribution();
@@ -1530,6 +1604,7 @@ describe('createSessionList', () => {
       projectName: async () => null,
       hostSessionName: async () => null,
       configFolder: () => null,
+      claimed: () => [],
     });
 
     expect(written).toEqual(writes);
@@ -1834,6 +1909,22 @@ describe('createSessionList', () => {
     expect(states).toHaveLength(sentBefore);
     expect(emitted.filter(([event]) => event === 'connected')).toHaveLength(1);
     expect(logged).toEqual([expect.stringContaining('00000001')]);
+  });
+
+  it("takes a joining relay's host fields into the owned session's info, and keeps them through a hello with none", () => {
+    const { list } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned('host-1'));
+
+    list.connect({ ...owned('host-1'), host: { deadline_seconds: 300 } });
+    const joined = contribution.startedInfos[0].host;
+    list.connect(owned('host-1'));
+
+    expect([joined, ownedSession.session.info.host]).toEqual([
+      { deadline_seconds: 300 },
+      { deadline_seconds: 300 },
+    ]);
   });
 
   it("routes a joined relay's calls to the owned session's tool sessions", async () => {

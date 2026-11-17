@@ -284,20 +284,30 @@ describe('the soft deadline', () => {
     expect(presenter.closed).toEqual([]);
   });
 
-  it("waits as long as the host record's deadline says", async () => {
-    const pending = startSession({ host: { deadline_seconds: 300 } }).open(
-      NAMING_ARGS,
-      null,
-      live(),
-    );
-    const call = watch(pending);
+  it.each([
+    { case: 'held at start', isSetAfterStart: false },
+    { case: 'set after start, as a relay join does', isSetAfterStart: true },
+  ])(
+    "waits as long as the host record's deadline says: $case",
+    async ({ isSetAfterStart }) => {
+      const host = { deadline_seconds: 300 };
+      const info: AgentFormOwnerInfo = isSetAfterStart
+        ? { ...SESSION }
+        : { ...SESSION, host };
+      const session = newService().startSession({ id: 'app-1', info });
+      if (isSetAfterStart) {
+        info.host = host;
+      }
+      const pending = session.open(NAMING_ARGS, null, live());
+      const call = watch(pending);
 
-    await expireDeadline(DEFAULT_DEADLINE_SECONDS);
-    expect(call.settled).toBe(false);
-    await expireDeadline(300 - DEFAULT_DEADLINE_SECONDS);
+      await expireDeadline(DEFAULT_DEADLINE_SECONDS);
+      expect(call.settled).toBe(false);
+      await expireDeadline(300 - DEFAULT_DEADLINE_SECONDS);
 
-    expect((await pending).outcome).toBe('draft');
-  });
+      expect((await pending).outcome).toBe('draft');
+    },
+  );
 
   it.each([0, -5, '300', null, Number.NaN])(
     'uses the default for a host deadline of %s',

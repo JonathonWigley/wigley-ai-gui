@@ -6,7 +6,7 @@ import {
 } from '../../../contracts/panes';
 import type { PluginLog } from '../../../contracts/log';
 import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
-import type { KeyedSlotWriter } from '../../../contracts/state';
+import type { KeyedSlotWriter, SlotWriter } from '../../../contracts/state';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
@@ -73,7 +73,8 @@ import { harnessText, rowChanges, stepSession } from './tabs';
 // the rows again; `barParts` are the parts each tab bar draws, and adding or
 // removing one draws the tab bars again; `sections` are the side bar sections
 // other plugins registered, and adding or removing one draws the side bar
-// again; `titleMaxLength` reads the setting
+// again; `claimed` holds the rows they claim at the last draw of main's rows;
+// `titleMaxLength` reads the setting
 // each row draw cuts a first-message title to; `recency` and `favorites` order
 // the side bar's rows; the rest is what the sessions layout's kits read.
 export interface SessionsViewDeps extends Omit<
@@ -103,6 +104,9 @@ export interface SessionsViewDeps extends Omit<
   activities: KeyedSlotWriter<RowActivitySource[]>;
   // Holds `sessionsPlaceSlot`, each session's place.
   places: KeyedSlotWriter<SessionsPlace>;
+  // Holds `sessionsClaimedSlot`: each draw of main's rows writes the rows the
+  // sections claim, in drawn order, when they differ from the value it holds.
+  claimed: SlotWriter<readonly string[]>;
 }
 
 // The Sessions list: the side bar's rows as a keyboard pane, its cursor a
@@ -348,10 +352,31 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       (row) => row.sessionId === sessionId,
     ) ?? null;
 
-  // Draws the side bar; while the list holds the keys, a cursor whose row
-  // left moves by `cursorAfterDraw` and reports its new row.
+  // Writes the rows the sections claim, in drawn order, unless `claimed`
+  // already holds that list.
+  const publishClaimed = (
+    sections: SidebarSections<SessionRow, SidebarSection>,
+  ) => {
+    const ids = sections.plugins.flatMap((claimed) =>
+      claimed.rows.map((row) => row.sessionId),
+    );
+    const held = deps.claimed.get() ?? [];
+    const isHeld =
+      ids.length === held.length &&
+      ids.every((sessionId, index) => sessionId === held[index]);
+    if (!isHeld) {
+      deps.claimed.set(ids);
+    }
+  };
+
+  // Draws the side bar, publishing the rows its sections claim unless the
+  // preview shows; while the list holds the keys, a cursor whose row left
+  // moves by `cursorAfterDraw` and reports its new row.
   const drawSidebar = () => {
     const drawn = sidebarDraw();
+    if (preview === null) {
+      publishClaimed(drawn.sections);
+    }
     const rows = drawnRows(drawn.sections);
     const order = rows.map((row) => row.sessionId);
     let movedTo: SessionRow | null | undefined;

@@ -253,7 +253,8 @@ export interface SessionsMainExports {
     options?: ContributeToolsOptions,
   ): Disposable;
   // Connects the session with no row, writing none, or joins the owned
-  // session whose host id the info carries; `mark` or `activate` adds a
+  // session whose host id the info carries, a join taking the info's `host`
+  // into the session's own info when it has one; `mark` or `activate` adds a
   // connected session's row, and `release` closes it. A newer relay for that
   // host id takes the join from an older one still connected; the older
   // handle's `end` then leaves the join alone. Throws for a host id an owned
@@ -607,7 +608,8 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // claim goes to the lower `order`, a tie to the section registered first, and a
 // `claims` that throws counts as false and is logged. The sections that claim
 // a row draw after Recent, by `order`, a tie in registration order; one that
-// claims none draws nothing. Adding a
+// claims none draws nothing. A row a section claims is never where main's
+// selection lands after a close (`sessionsClaimedSlot`). Adding a
 // section and disposing its `Disposable` each redraw the side bar. `header`
 // builds on each side bar draw, so a header whose content changes between
 // draws redraws into its own wrapper itself.
@@ -708,6 +710,19 @@ export const sessionsSelectionSlot: SlotKey<string | null, 'main', 'sessions'> =
 // or the selection reaches readers before the `sessions.active` write it causes.
 export const sessionsActiveSlot: SlotKey<string | null, 'page', 'sessions'> = {
   id: 'sessions.active',
+  process: 'page',
+  kind: 'value',
+};
+
+// The rows a registered side bar section claims, by sessionId, as the side
+// bar's last draw found them; [] before the first draw and at each page start.
+// Main's post-close selection skips them.
+export const sessionsClaimedSlot: SlotKey<
+  readonly string[],
+  'page',
+  'sessions'
+> = {
+  id: 'sessions.claimed',
   process: 'page',
   kind: 'value',
 };

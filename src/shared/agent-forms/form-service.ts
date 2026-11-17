@@ -25,7 +25,7 @@ export interface AgentFormServiceDeps<Form, Body, Payload> {
   store: AgentFormStore;
   // Told when the user finishes a form no call will return.
   wake: AgentFormWake;
-  // Reads the soft deadline when the host names none, once per session.
+  // Reads the soft deadline when the host names none, at each use.
   defaultDeadlineSeconds(): number;
   // A plugin's timers cap a long delay at the longest a timer takes, and its stop
   // clears them with no wake, so its part ends each session before they clear.
@@ -85,7 +85,7 @@ interface SessionContext<Form, Body, Payload> {
   info: AgentFormOwnerInfo;
   // The host id the open and last finished forms were made under.
   formsHostId: string | null;
-  deadlineSeconds: number;
+  defaultDeadlineSeconds: () => number;
   type: AgentFormType<Form, Body, Payload>;
   presenter: AgentFormPresenter<Form, Body>;
   store: AgentFormStore;
@@ -121,6 +121,14 @@ function deadlineSeconds(
     Number.isFinite(hostSeconds) &&
     hostSeconds > 0;
   return hostNamedOne ? hostSeconds : defaultSeconds;
+}
+
+// The session's soft deadline as its info says now: a relay joining after the
+// session started can bring the host's fields.
+function sessionDeadlineSeconds<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+): number {
+  return deadlineSeconds(session.info, session.defaultDeadlineSeconds());
 }
 
 function formLabel(projectDir: string | null, heading: string): string {
@@ -660,7 +668,13 @@ async function openParsedForm<Form, Body, Payload>(
   leaveFormsOfPastHost(session);
   const open = session.open;
   if (open !== null && open.record.fingerprint === formFingerprint) {
-    return presentOpen(session, open, session.deadlineSeconds, signal, host);
+    return presentOpen(
+      session,
+      open,
+      sessionDeadlineSeconds(session),
+      signal,
+      host,
+    );
   }
   const last = session.lastFinished;
   // A cancelled form the agent already received opens again, pre-filled, as
@@ -684,7 +698,13 @@ async function openParsedForm<Form, Body, Payload>(
   session.lastFinished = null;
   const opened = openNewForm(session, form, formFingerprint, args, toolUseId);
   session.open = opened;
-  return presentOpen(session, opened, session.deadlineSeconds, signal, host);
+  return presentOpen(
+    session,
+    opened,
+    sessionDeadlineSeconds(session),
+    signal,
+    host,
+  );
 }
 
 // The form the user is still answering, when it is not this call's own form.
@@ -731,7 +751,7 @@ async function waitForOtherFormToFinish<Form, Body, Payload>(
     await waitForEndOrDeadline(
       session.timers,
       other,
-      session.deadlineSeconds,
+      sessionDeadlineSeconds(session),
       signal,
     );
     other = otherUnfinishedForm(session, formFingerprint);
@@ -772,7 +792,7 @@ async function openFormWhenFree<Form, Body, Payload>(
   const deadline = new AbortController();
   const timer = session.timers.set(
     () => deadline.abort(),
-    session.deadlineSeconds * 1000,
+    sessionDeadlineSeconds(session) * 1000,
   );
   const callSignal = AbortSignal.any([signal, deadline.signal]);
   const resentOpen =
@@ -900,7 +920,7 @@ async function collectLastForm<Form, Body, Payload>(
   leaveFormsOfPastHost(session);
   const open = session.open;
   if (open !== null) {
-    const seconds = wait ? session.deadlineSeconds : 0;
+    const seconds = wait ? sessionDeadlineSeconds(session) : 0;
     return presentOpen(session, open, seconds, signal);
   }
   const last = session.lastFinished;
@@ -919,7 +939,7 @@ async function collectLastForm<Form, Body, Payload>(
   return presentOpen(
     session,
     reopened,
-    wait ? session.deadlineSeconds : 0,
+    wait ? sessionDeadlineSeconds(session) : 0,
     signal,
   );
 }
@@ -1033,7 +1053,7 @@ function startSession<Form, Body, Payload>(
     sessionId: owner.id,
     info,
     formsHostId: info.sessionId,
-    deadlineSeconds: deadlineSeconds(info, deps.defaultDeadlineSeconds()),
+    defaultDeadlineSeconds: () => deps.defaultDeadlineSeconds(),
     type: deps.type,
     presenter: deps.presenter,
     store: deps.store,

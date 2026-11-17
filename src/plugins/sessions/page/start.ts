@@ -27,6 +27,7 @@ import {
   type SessionsChannel,
   sessionsActiveSlot,
   sessionsActivitySlot,
+  sessionsClaimedSlot,
   sessionsPlaceSlot,
   sessionsFavoriteProjectAtCommand,
   type SessionsPageEvents,
@@ -255,7 +256,9 @@ function createExports(
 // `titleMaxLength` setting, drawn again when it changes. The rows group by
 // project under Favorites and Recent, from the favorites and recency stamps in
 // uiState, less the rows a section another plugin registers (`addSection`)
-// claims, which draw in that section after Recent; the session step keys follow
+// claims, which draw in that section after Recent and which each draw writes to
+// `sessions.claimed`, [] at each start, for main's post-close selection to
+// skip; the session step keys follow
 // that drawn order, and the project keys change the focused pane's session's
 // project's favorite. The side bar's rows are the Sessions list, reached by
 // Alt+h past the leftmost pane (`focusSideBar`) or by opening the side bar over
@@ -285,6 +288,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // main does not hold leave once the restore window settles, so the rows
     // chat's restore reopens are in the mirror first.
     const places = api.state.publish(sessionsPlaceSlot);
+    // The old page's claims went with its sections, which register again.
+    const claimed = api.state.publish(sessionsClaimedSlot);
+    claimed.set([]);
     api.restores.onSettled(() =>
       pruneKeys(places, (sessionId) => rows.all().has(sessionId)),
     );
@@ -601,6 +607,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       favorites: createProjectFavorites(uiState),
       activities,
       places,
+      claimed,
     });
     let titleMaxLength = api.settings().titleMaxLength;
     api.onSettingsChanged((settings) => {

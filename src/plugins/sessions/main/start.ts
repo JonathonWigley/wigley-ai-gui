@@ -24,6 +24,7 @@ import {
   type SessionsChannel,
   type SessionsMainEvents,
   type SessionsMainExports,
+  sessionsClaimedSlot,
   sessionsRowsSlot,
   sessionsSelectionSlot,
 } from '../contract';
@@ -81,6 +82,7 @@ function configFolder(api: SessionsApi, info: SessionInfo): string | null {
 }
 
 function createList(api: SessionsApi): SessionList {
+  const claimed = api.state.read(sessionsClaimedSlot);
   const list = createSessionList({
     randomHex: api.services.randomHex,
     clock: api.services.clock,
@@ -93,6 +95,7 @@ function createList(api: SessionsApi): SessionList {
     projectName: createOriginRepoNames(api.services.git),
     hostSessionName: (info) => hostSessionName(api, info),
     configFolder: (info) => configFolder(api, info),
+    claimed: () => claimed.get() ?? [],
   });
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
   api.channel.handle('closeSession', (sessionId, atOnce) =>

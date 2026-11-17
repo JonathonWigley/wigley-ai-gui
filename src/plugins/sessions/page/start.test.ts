@@ -28,6 +28,7 @@ import {
   followRows,
   sessionsActiveSlot,
   sessionsActivitySlot,
+  sessionsClaimedSlot,
   type SessionsPageExports,
   sessionsPageKey,
   type SessionsPlace,
@@ -390,6 +391,21 @@ describe('sessions page part', () => {
     await settle();
 
     expect(claims).not.toHaveBeenCalled();
+    await setup.harness.stop();
+  });
+
+  it('addSection_ClaimsARow_WritesItToClaimed', async () => {
+    const setup = await startApplied(['s1', 's2'], 's1');
+    const claimed = setup.harness.state.read(sessionsClaimedSlot, 'test');
+
+    setup.exports.addSection({
+      id: 'retro',
+      label: 'Retro',
+      order: 0,
+      claims: (row) => row.sessionId === 's2',
+    });
+
+    expect(claimed.get()).toEqual(['s2']);
     await setup.harness.stop();
   });
 

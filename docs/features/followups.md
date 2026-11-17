@@ -67,16 +67,6 @@ Core seams that most items below assume.
 
 Defects seen in a drive run, a transcript or the user's own use.
 
-- **Chat sessions get forms' 240 s deadline, not the relay's 300 s** — *agent-ready*: in a session the app's chat
-  started, a round's draft comes back every 240 s (forms' `deadlineSeconds` default), though the wigley plugin entry
-  sets `WIGLEY_FORMS_DEADLINE_SECONDS` to `300` and `relay.py` sends it in its hello. Cause: chat opens the row with
-  no host record (`src/plugins/chat/main/chat-sessions.ts`, `sessions.open`), and `connect` joining that owned row
-  (`src/plugins/sessions/main/session-list.ts`, `join`) keeps the row's info and drops the hello's host fields, among
-  them `deadline_seconds` (`HOST_DEADLINE_FIELD`, which the form service reads from `info.host`). Fix: a join takes the
-  hello's host fields into the owned session's `info.host`, as the host id is kept; check that the form service, which
-  reads it once per session in `startSession` (`src/shared/agent-forms/form-service.ts`), starts after the join. Add a
-  row to the session-list join tests: GIVEN an owned row opened with no host record WHEN a relay joins with a
-  `deadline_seconds` of 300 THEN the session's `info.host` holds 300.
 - **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
   restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
   (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
@@ -225,14 +215,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   `window.wigley.runCommand("forms.choose", 2)` resolved with no `[forms]` line, with the round's row not the one
   showing, so the run proves nothing either way. The arg is proved through a `binds` entry only. To prove it: open a
   round that shows the row, run the command by `runCommand` from the page and from main, and read the `[forms]` line.
-- **After a close, the selection lands on the new retro row** — *agent-ready*: closing rows fast with the sessions close
-  key moves the selection to the Retro-section row a close just queued, so the next press closes the running retro and
-  its retro is lost (auto-retro logs `retro <id> closed before done; <host ids> not analyzed`). Cause: `removeRow`
-  (`src/plugins/sessions/main/session-list.ts`, the right-then-left neighbour pick) knows nothing of the rows a plugin
-  section claims, and auto-retro claims the retro row (`joinRow` in `src/plugins/auto-retro/main/start.ts`) as the
-  close queues it (`afterClose` in `retro-queue.ts`). Fix: the post-close selection skips rows a plugin section
-  claims, falling to the next row outside a claimed section. Add a row to the session-list tests: GIVEN a selected
-  row with a claimed row beside it WHEN the selected row closes THEN the selection lands on an unclaimed row.
 - **The right bar overlays the main cell at a narrow window** — *agent-ready*: at a narrow window the shell's right
   bar (`.shell-right-bar`, System stats; `src/renderer/shell/shell.css`, `shell-layout.ts`) overlays the mode's main
   cell instead of stacking under it or hiding. At the 420px minimum it covers the right half of Backlog (seen at x 220,

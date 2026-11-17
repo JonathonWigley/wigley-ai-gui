@@ -47,6 +47,9 @@ export interface SessionListDeps {
   // The session's config folder as its harness resolves it; null when the app
   // runs no such harness.
   configFolder(info: SessionInfo): string | null;
+  // The sessionIds of the rows a side bar section claims; a closed selected
+  // row never passes the selection to one of them.
+  claimed(): readonly string[];
 }
 
 // The session list and its rows. `tools` lists every contributed tool in
@@ -283,7 +286,8 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // next mark; an activate clears it. `mark` and
 // `activate` log and ignore a session opened with an
 // `owner`, and a closed selected row passes the selection to the nearest row
-// with no owner, right then left, so main never selects a row with an owner.
+// with no owner that no side bar section claims (`deps.claimed`), right then
+// left, else to none, so main never selects a row with an owner.
 // `mark`, `activate`, `release` and `closeSession` write
 // only what changed; `mark`, `activate`
 // and `closeSession` log and ignore an unknown session, `release` silently
@@ -358,8 +362,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     writeSelection(row.sessionId);
   };
 
-  // The nearest row with no owner to the right takes over from a closed
-  // selected row, else the nearest to the left.
+  // The nearest row to the right with no owner and no section claiming it
+  // takes over from a closed selected row, else the nearest such row to the
+  // left, else none.
   const removeRow = (sessionId: string) => {
     const held = [...rows.all().values()];
     const position = held.findIndex((row) => row.sessionId === sessionId);
@@ -367,10 +372,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     if (sessionId !== selectedSessionId()) {
       return;
     }
-    const hasNoOwner = (row: SessionRow) => row.owner === null;
+    const claimed = new Set(deps.claimed());
+    const isSelectable = (row: SessionRow) =>
+      row.owner === null && !claimed.has(row.sessionId);
     const neighbour =
-      held.slice(position + 1).find(hasNoOwner) ??
-      held.slice(0, position).findLast(hasNoOwner);
+      held.slice(position + 1).find(isSelectable) ??
+      held.slice(0, position).findLast(isSelectable);
     if (neighbour === undefined) {
       writeSelection(null);
     } else {
@@ -759,9 +766,14 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // hello on the new socket before the old one closes. The handle's `end`
   // only clears the join, and only while this handle still holds it; its
   // calls are refused once the session moves off the host id it joined under,
-  // a move during a call's guard wait included.
-  const join = (entry: SessionEntry): ConnectedSession => {
+  // a move during a call's guard wait included. Host fields the hello carries
+  // replace the session's in its one info object, as `setHostSessionId`
+  // changes its id; a hello with none leaves them.
+  const join = (entry: SessionEntry, info: SessionInfo): ConnectedSession => {
     const appId = entry.session.id;
+    if (info.host !== undefined) {
+      entry.session.info.host = info.host;
+    }
     const joinedHostId = entry.session.info.sessionId;
     const handle = Symbol(appId);
     const isTakingOver = entry.joinedBy !== null;
@@ -859,7 +871,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
           ? undefined
           : entriesHolding(hostId).find((entry) => entry.owned);
       if (ownedEntry !== undefined) {
-        return join(ownedEntry);
+        return join(ownedEntry, info);
       }
       const retiringEntry =
         hostId === null
