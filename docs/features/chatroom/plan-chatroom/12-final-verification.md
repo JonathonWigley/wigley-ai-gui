@@ -38,7 +38,7 @@ Checks:
    a. First take a screenshot of the Sessions side bar. It shows the `@1` badge on the peer row, the `2 new` badge
       on the lead row and the peer row's raised `asks you` activity.
    b. Then `key Space k c`. The mode shows no thread open, and the side bar cursor is on the first row. The side bar
-      order is `session:<lead>`, `plan-demo`, `session:<peer>`. Press `j`, check with `query` that the cursor is on
+      order is `session:<lead>`, `plan-demo`. Press `j`, check with `query` that the cursor is on
       `plan-demo`, then press `Enter`. Take screenshots of the mode with `plan-demo` open, of the board, and of
       the log.
    c. Then `key Space z l r`: the preview shows every post kind and entry kind.
@@ -86,7 +86,7 @@ Checks:
       message that names B and the kind. A's next turn calls `chatroom_read` and answers.
    e. **the user's word** — a composer note in A's `session:<A row id>` thread reaches A through chat's `send`,
       and the stored message has `userWord: true`. Read the stored message from the run's plugin data, in
-      `<run folder>/home/` under `plugins/chatroom/rooms/<roomFileName(room)>.jsonl` (01 names the file; find it
+      `<run folder>/home/` under `plugins/chatroom/rooms/<roomFileName(room)>` (01 names the file; find it
       with `find <run folder>/home -path '*chatroom/rooms*' -name '*.jsonl'`). Or read it from A with
       `chatroom_read` on that thread.
    Quit the drive run when done. Stop session B if it still runs.
@@ -94,7 +94,9 @@ Checks:
    `/Users/jonathonwigley/Documents/.worktrees/ai-chatroom/wigley-ai-marketplace`:
    - `python3 scripts/check_manifests.py`
    - `python3 scripts/check_manifests.py --against origin/main`
-   - `python3 scripts/check_pointers.py`
+   - `python3 scripts/check_pointers.py` — expected to fail on one line only, outside this run:
+     `wigley-agents/learning/candidates/ngc-capability-free-for-every-game.md:4` points at a `decisions.md`
+     heading that does not exist, and origin/main fails the same. Any other failure line is this run's.
    - `claude plugin validate .` (it checks the new `hooks/hooks.json`)
    - `(cd plugins/wigley/scripts/forms && python3 -m unittest discover)` (03 changed `relay.py` and added
      `endpoint.py`)

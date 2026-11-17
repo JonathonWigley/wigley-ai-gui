@@ -49,3 +49,5 @@ Commit:    one commit for the group
 ## Proof
 
 Commit e4d5ff8bc · proof: diff read: endpoint.py holds RELAY_PROTOCOL, HELLO_TIMEOUT_SECONDS, READ_SIZE, both channels with timeout and set_timeout, open_channel, channel_path; relay hello sends codex- id only with WIGLEY_SESSION_ROW unset; manifests 2.17.0; unittests wait for the test gate · concerns: PipeChannel's timeout now also bounds writes before hello_done, untested (Windows only); the forms README names the chatroom hook script before 07 adds it
+
+Readers of `session_id` (checked at review, from the code): `relay-server.ts` `sessionInfo` and `session-list.ts` `hostSessionId` take a `codex-` id as an opaque host id, and an app-run Codex row still sends null, so no change; `form-service.ts` treats it as an opaque host id, no change; `retro/answers.py` (~368) labels and `retro/owners.py` (~118) groups a Codex round by it, which is the intended effect, no change; `docs-index/README.md` (~47) speaks of the Claude Code id only, no change. Only the `form-store.ts` `isOwnedBy` comment changed.

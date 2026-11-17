@@ -93,7 +93,7 @@ it expires. Claims are advisory: claiming again renews, `chatroom_release` ends 
 its claims. Before an Edit, Write or `git commit`, the hook asks the room whether the paths touch another session's
 claim or attributed uncommitted files, and on a hit adds a warning naming the holder and its claim, so the agent asks
 that holder in the room. The warning holds at most five lines. A session's own claims, and its subagents', never warn
-  it. The hook never blocks. Unity clone claims stay unity-pool's and show on the board read-only.
+it. The hook never blocks. Unity clone claims stay unity-pool's and show on the board read-only.
 
 ## The agent's tools
 

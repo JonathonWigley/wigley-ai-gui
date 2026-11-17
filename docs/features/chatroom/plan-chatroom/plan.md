@@ -293,5 +293,6 @@ Review base: 7c3eb9665
 - 09: layout contract adds ComposerKit.textBox; page/chatroom.css holds only the app containers, outside Files · group 09
 - 09: asks-you activity reads every room's userAsks by from.rowId; the badge counts only the row's own project room · group 09
 - 10: the fixture polls roomsSlot.get for the board rows rather than subscribing; PEER_LABEL lives in the script and LEAD_LABEL is dropped, since nothing reads it · group 10 · group 10
+- Review range is e23142c0e..0b2771d12, not 7c3eb9665..HEAD: the run rebased onto Lane H's landing (e23142c0e), so the old base would sweep Lane H's 88 commits into the review — lead
 ### Review rounds
 ### Test gate
