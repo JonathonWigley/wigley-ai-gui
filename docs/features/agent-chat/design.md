@@ -138,9 +138,9 @@ interview on 2026-10-23; this file is the record of both.
   Probe 7); the process stays open for the next
   message. A SIGINT would end the process. Ctrl+C always ends the running turn (a message queued behind it still
   runs): when neither the turn's result nor an answer that leaves nothing running arrives within 5 s, the adapter
-  drops its turn state, posts the notice `Claude did not stop within 5 s; showing the session idle.` and shows idle. A
+  drops its turn state, posts the notice `The agent did not stop within 5 s; showing the session idle.` and shows idle. A
   second Ctrl+C while that 5 s grace is pending and the session still works posts `Interrupted again; ending the
-  Claude process.` and ends the `claude` process; the row rests and resumes on the next message.
+  agent process.` and ends the `claude` process; the row rests and resumes on the next message.
 - A result entry's `costUsd` is the difference between consecutive results, since Claude's `total_cost_usd` is
   cumulative for the process; a total below the last one gives `null`.
 - **Locality**: listing a folder's past sessions and reading a transcript into chat entries are adapter
@@ -419,7 +419,7 @@ interview on 2026-10-23; this file is the record of both.
   typed since, with its images ahead of any attached since. A resting row looks like an idle one in the sidebar. A file
   that cannot be read is logged (`open sessions not read`) and restores nothing, and the store refuses every save
   (logged `open sessions not saved: … unreadable`) so the file is never overwritten: it is the user's state. A later
-  clean load lifts the refusal. Closing a row asks the end-session confirmation only while Claude is working, as before;
+  clean load lifts the refusal. Closing a row asks the end-session confirmation only while the agent is working, as before;
   closing removes the row for good but touches no transcript, so the session stays in the start prompt's saved-session
   list, unarchived.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),

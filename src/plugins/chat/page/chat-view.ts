@@ -1610,7 +1610,7 @@ function drawActivity(
   deps.log(`row activity ${tab.name} ${activity?.word ?? 'none'}`);
 }
 
-// A session closes at once unless Claude is still working on it: then the
+// A session closes at once unless the agent is still working on it: then the
 // Chat tab shows and the end-session confirmation answers. A close another
 // tab asked to make at once asks nothing.
 function mayClose(

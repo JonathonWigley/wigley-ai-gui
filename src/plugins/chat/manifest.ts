@@ -290,7 +290,7 @@ export const chatManifest = definePlugin({
     keepIdleMinutes: {
       label: 'Keep idle sessions (minutes)',
       description:
-        "How long a session whose turn has ended keeps its Claude process while the app is closed. Past it the process ends, and the next message resumes the session. The default, 60, is the prompt cache's life.",
+        "How long a session whose turn has ended keeps its agent process while the app is closed. Past it the process ends, and the next message resumes the session. The default, 60, is the prompt cache's life.",
     },
     completionDescriptions: {
       label: 'Completion descriptions',

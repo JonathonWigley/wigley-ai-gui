@@ -1407,7 +1407,7 @@ function endInterruptGrace(
   pushNotice(
     state,
     {
-      text: `Claude did not stop within ${grace}; showing the session idle.`,
+      text: `The agent did not stop within ${grace}; showing the session idle.`,
       tone: 'info',
       raw: null,
       at: deadline,

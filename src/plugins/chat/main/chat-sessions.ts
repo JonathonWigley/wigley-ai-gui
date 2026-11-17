@@ -578,10 +578,14 @@ function missingProfileText(name: string): string {
   return `Profile ${name} is not in the harness's profiles setting; add it back to resume this session.`;
 }
 
-function exitNoticeText(code: number | null, error: string | null): string {
+function exitNoticeText(
+  harnessLabel: string,
+  code: number | null,
+  error: string | null,
+): string {
   const exitCode = code === null ? 'unknown' : String(code);
   const reason = error === null ? '' : `: ${error}`;
-  return `Claude stopped (exit code ${exitCode})${reason}. Your next message resumes this session.`;
+  return `${harnessLabel} stopped (exit code ${exitCode})${reason}. Your next message resumes this session.`;
 }
 
 // A harness numbers entry ids per process, so a row's later processes reuse
@@ -1370,7 +1374,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // The events of the row's `processStart`th process, started or attached under
-  // `profileDir`; `started.process` is that process once the harness's `start`
+  // `profileDir` on the harness labelled `harnessLabel`; `started.process` is that process once the harness's `start`
   // returns or its `attach` settles. While `replay.isReplaying` holds, events
   // show the session's state and act on nothing that already happened. A
   // permission request shows as a waiting card, pending by its row entry id
@@ -1383,6 +1387,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     processStart: number,
     started: { process: AgentProcess | null },
     profileDir: string,
+    harnessLabel: string,
     replay: { isReplaying: boolean },
   ): AgentProcessEvents {
     const { sessionId } = session;
@@ -1563,7 +1568,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         } else {
           addNotice(
             session,
-            exitNoticeText(code, error),
+            exitNoticeText(harnessLabel, code, error),
             isCleanExit ? 'info' : 'error',
           );
         }
@@ -2055,9 +2060,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         idleCompactMinTokens: currentIdleCompactMinTokens(sessionId),
         rowId: sessionId,
       },
-      processEvents(session, session.processStarts, started, profileDir, {
-        isReplaying: false,
-      }),
+      processEvents(
+        session,
+        session.processStarts,
+        started,
+        profileDir,
+        harness.info().label,
+        { isReplaying: false },
+      ),
     );
     started.process = process;
     session.process = process;
@@ -2140,6 +2150,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           session.processStarts,
           started,
           profileDir,
+          harness.info().label,
           replay,
         ),
       )

@@ -1015,7 +1015,7 @@ const layout = {
       el(
         'p',
         'chat-dialog-text',
-        'Optional: tell Claude why. It reads your reason.',
+        'Optional: tell the agent why. It reads your reason.',
       ),
     );
     kit.reasonBox(body);
@@ -1028,7 +1028,7 @@ const layout = {
       el(
         'p',
         'chat-dialog-text',
-        'Claude is still working. Ending the session stops it.',
+        'The agent is still working. Ending the session stops it.',
       ),
     );
     kit.actions(body);

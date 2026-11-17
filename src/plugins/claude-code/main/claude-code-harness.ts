@@ -672,7 +672,7 @@ function createClaudeSession(
           kind: 'notice',
           id: 'control-notice-kill',
           at: deps.clock.now(),
-          text: 'Interrupted again; ending the Claude process.',
+          text: 'Interrupted again; ending the agent process.',
           tone: 'info',
           raw: [null],
         };
@@ -713,7 +713,7 @@ function createClaudeSession(
       }
       if (state.activity === 'working') {
         throw new Error(
-          `Claude is working; change ${control.label} when the turn ends`,
+          `The agent is working; change ${control.label} when the turn ends`,
         );
       }
       writeMessage(
@@ -723,7 +723,7 @@ function createClaudeSession(
     compact() {
       requireRunning();
       if (state.activity !== 'idle') {
-        throw new Error('Claude is working; compact when the turn ends');
+        throw new Error('The agent is working; compact when the turn ends');
       }
       writeMessage(
         userMessage(

@@ -251,9 +251,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout names them. Chat page
   exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default. A partial
   chat layout already falls back to `default` per entry kind (`pickEntry` in `src/plugins/chat/page/chat-layouts.ts`).
-- **Harness-neutral UI copy** — *agent-ready*: UI copy says "the agent" or the harness label rather than Claude
-  (chat's `default` layout's reason box and close confirm, the exit notice in `chat-sessions.ts`, chat's setting
-  descriptions and `start-session-tool.ts`, and the Claude adapter's notices and toasts that reach chat).
 - **Agent settings through an adapter** — *needs a feature plan*: Settings mode edits only the app's own
   `settings.json`, so changing an agent's config (Claude's model, effort, permissions, hooks, env, per profile and per
   user, project and local scope) still needs a terminal: in print mode `/config` takes only `key=value`

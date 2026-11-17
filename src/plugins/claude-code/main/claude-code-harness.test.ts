@@ -435,7 +435,7 @@ const ownTurnResult = {
 };
 
 const GRACE_NOTICE =
-  'Claude did not stop within 5 s; showing the session idle.';
+  'The agent did not stop within 5 s; showing the session idle.';
 
 function noticeTexts(heard: [string, unknown][]) {
   return heard
@@ -950,7 +950,7 @@ describe('createClaudeCodeHarness', () => {
     run.agent.send({ text: 'hi', images: [] });
 
     expect(() => run.agent.setControl('effort', 'high')).toThrow(
-      'Claude is working; change Effort when the turn ends',
+      'The agent is working; change Effort when the turn ends',
     );
   });
 
@@ -1659,7 +1659,7 @@ describe('createClaudeCodeHarness', () => {
       await settle();
 
       expect(run.signals).toEqual(isKilled ? ['SIGTERM'] : []);
-      const killNotice = 'Interrupted again; ending the Claude process.';
+      const killNotice = 'Interrupted again; ending the agent process.';
       expect(noticeTexts(run.heard).includes(killNotice)).toBe(isKilled);
       expect(interruptRequests(run.written)).toHaveLength(isKilled ? 1 : 2);
     },
@@ -2232,7 +2232,7 @@ describe('createClaudeCodeHarness', () => {
       run.agent.send({ text: 'hi', images: [] });
 
       expect(() => run.agent.compact()).toThrow(
-        'Claude is working; compact when the turn ends',
+        'The agent is working; compact when the turn ends',
       );
     });
 

@@ -27,7 +27,7 @@ const request: AgentStart = {
 };
 
 const GRACE_NOTICE =
-  'Claude did not stop within 5 s; showing the session idle.';
+  'The agent did not stop within 5 s; showing the session idle.';
 
 // Measured lines, docs/features/agent-chat/claude-stream.md § Usage and § Other events.
 const RATE_LIMIT_LINE =

@@ -2405,6 +2405,18 @@ describe('createChatSessions', () => {
     },
   );
 
+  it('ended_UncleanExit_NoticeNamesTheHarnessLabel', async () => {
+    const test = await started();
+
+    test.process.events.ended({ code: 3, error: 'boom' });
+
+    expect(test.chat.sessions()[0].entries.at(-1)).toMatchObject({
+      kind: 'notice',
+      tone: 'error',
+      text: `${test.harness.info().label} stopped (exit code 3): boom. Your next message resumes this session.`,
+    });
+  });
+
   it('processExit_WhileWorking_ShowsIdleAndAnnouncesNothing', async () => {
     const test = await started();
     test.setFocused(false);
@@ -6388,7 +6400,7 @@ describe('createChatSessions attaching', () => {
       ownedEnds: 0,
       callsAtOwnedEnd: [],
       resting:
-        'Claude stopped (exit code 0). Your next message resumes this session.',
+        'stopped (exit code 0). Your next message resumes this session.',
     },
   ])(
     'attach_LateResult_DetachesOrEnds given $given',
@@ -6421,7 +6433,9 @@ describe('createChatSessions attaching', () => {
       }
       if (resting !== null) {
         expect(test.chat.sessions()[0].running).toBe(false);
-        expect(noticesOf(test).map((notice) => notice.text)).toEqual([resting]);
+        expect(noticesOf(test).map((notice) => notice.text)).toEqual([
+          `${test.harness.info().label} ${resting}`,
+        ]);
       }
     },
   );

@@ -1287,6 +1287,7 @@ function fakeSurfaceKit() {
     copyButton: (parent: HTMLElement) => part(parent, 'button', 'copy'),
     codeBox: (parent: HTMLElement) => part(parent, 'div', 'codeBox'),
     actions: (parent: HTMLElement) => part(parent, 'div', 'actions'),
+    reasonBox: (parent: HTMLElement) => part(parent, 'textarea', 'reasonBox'),
     keyHint: (parent: HTMLElement, command: string) =>
       part(parent, 'span', `hint:${command}`),
     tag(parent: HTMLElement, text: string, tone = 'neutral') {
@@ -1435,6 +1436,27 @@ describe('default chat layout surfaces', () => {
       'box',
       'statusLine',
     ]);
+  });
+
+  it.each<{ name: SurfacePart; text: string }>([
+    {
+      name: 'reasonBox',
+      text: 'Optional: tell the agent why. It reads your reason.',
+    },
+    {
+      name: 'closeConfirm',
+      text: 'The agent is still working. Ending the session stops it.',
+    },
+  ])('dialogText_Default_NamesTheAgent ($name)', ({ name, text }) => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface(name, {}, kit);
+
+    const dialogText = asFake(view.element).children.find(
+      (child) =>
+        child.tagName === 'P' && child.classList.contains('chat-dialog-text'),
+    );
+    expect(dialogText?.textContent).toBe(text);
   });
 
   it.each([
