@@ -689,13 +689,16 @@ function focusIn(target: FakeElement) {
 }
 
 describe('backlog pane targets', () => {
+  // `target` is what a click focuses. A click in the strip focuses the strip
+  // pane itself: a chunk card is no focus target (its `mousedown` is
+  // prevented), and each render redraws the cards.
   it.each<{
     pane: 'table' | 'review' | 'strip';
     from: 'table' | 'review';
     target: string;
   }>([
     { pane: 'review', from: 'table', target: 'backlog-review-body' },
-    { pane: 'strip', from: 'table', target: 'backlog-chunk' },
+    { pane: 'strip', from: 'table', target: 'backlog-strip' },
     { pane: 'table', from: 'review', target: 'backlog-rows' },
   ])(
     "a click inside a pane hands it the keys and keeps the click's focus: $pane",

@@ -492,6 +492,7 @@ describe('readPlanCopy', () => {
             done: true,
             file: '01-a.md',
             status: 'done',
+            verification: false,
           },
           {
             wave: null,
@@ -499,6 +500,7 @@ describe('readPlanCopy', () => {
             done: false,
             file: '02-b.md',
             status: 'in progress',
+            verification: true,
           },
           {
             wave: null,
@@ -506,6 +508,7 @@ describe('readPlanCopy', () => {
             done: false,
             file: '03-c.md',
             status: null,
+            verification: false,
           },
         ],
       },
