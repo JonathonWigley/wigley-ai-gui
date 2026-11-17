@@ -844,6 +844,25 @@ describe('host lifetime', () => {
     ).toBe(false);
   });
 
+  it('shutDown_RecordNowHoldsAnotherPid_LeavesTheRecord', async () => {
+    const running = await runningHost();
+    const record = path.join(
+      running.folder,
+      hostRecordFile(SESSION_HOST_PROTOCOL),
+    );
+    const another = JSON.stringify({
+      protocol: SESSION_HOST_PROTOCOL,
+      channel: running.channel,
+      pid: 4343,
+    });
+    writeFileSync(record, another);
+
+    running.time.advanceTo(30_000);
+    await vi.waitFor(() => expect(running.exits).toEqual([0]));
+
+    expect(readFileSync(record, 'utf8')).toBe(another);
+  });
+
   it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: a probe leaves inside the wait', async () => {
     const running = await runningHost();
     const probe = await client(running.channel);

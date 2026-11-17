@@ -149,12 +149,19 @@ function writeRecord(folder: string, record: SessionHostRecord) {
   );
 }
 
-function recordedChannel(file: string): string | null {
+function readRecord(file: string): SessionHostRecord | null {
   try {
-    return (JSON.parse(readFileSync(file, 'utf8')) as SessionHostRecord)
-      .channel;
+    return JSON.parse(readFileSync(file, 'utf8')) as SessionHostRecord | null;
   } catch {
     return null;
+  }
+}
+
+// A record another host wrote since, or one that cannot be read, stays.
+function removeOwnRecord(folder: string, pid: number) {
+  const file = path.join(folder, hostRecordFile(SESSION_HOST_PROTOCOL));
+  if (readRecord(file)?.pid === pid) {
+    rmSync(file, { force: true });
   }
 }
 
@@ -167,7 +174,7 @@ async function anotherHostMayListen(
     return protocol !== null && protocol !== SESSION_HOST_PROTOCOL;
   });
   for (const name of otherRecords) {
-    const channel = recordedChannel(path.join(folder, name));
+    const channel = readRecord(path.join(folder, name))?.channel ?? null;
     if (channel !== null && (await askHello(channel, timers)) !== 'none') {
       return true;
     }
@@ -406,9 +413,9 @@ function createConnections(deps: ConnectionsDeps) {
   return { connected, checkExitRule, serveHeldMessages, table, queue };
 }
 
-// Runs the start steps. A host that finds the channel owned, or cannot listen, calls `deps.exit` and is done;
-// one that owns the channel loads its pending queue, ends what the last host left before it serves a `spawn` or starts
-// a pending entry, and serves until the exit rule calls `deps.exit`. Resolves once the log sweep has finished.
+// Runs the start steps. A host that finds the channel owned or its lock held, or cannot listen, calls `deps.exit` and
+// is done; one that owns the channel loads its pending queue, ends what the last host left before it serves a `spawn`
+// or starts a pending entry, and serves until the exit rule calls `deps.exit`. Resolves once the log sweep has finished.
 export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
   const { folder, channel, clock, timers } = deps;
   const logsFolder = path.join(folder, HOST_LOGS_FOLDER);
@@ -436,9 +443,7 @@ export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
       }
       shuttingDown = true;
       void server.close().then(() => {
-        rmSync(path.join(folder, hostRecordFile(SESSION_HOST_PROTOCOL)), {
-          force: true,
-        });
+        removeOwnRecord(folder, deps.pid);
         deps.exit(0);
       });
     },
@@ -467,6 +472,7 @@ export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
   }
 
   ownsChannel = true;
+  // Listening holds the channel's lock, so no other host of this protocol runs to write this log or the swept logs.
   diagnostics.setAsidePrevious();
   writeRecord(folder, {
     protocol: SESSION_HOST_PROTOCOL,

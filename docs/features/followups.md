@@ -809,12 +809,6 @@ because the earlier items rewrite many of these tests anyway.
   330. Stated as a limit in the forms README. To decide: carry the time left through the relay, or accept it, since
   `collect_last_round` recovers the round. Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in
   wigley-ai-gui.
-- **Two hosts on one channel** — *agent-ready*: the check-then-listen at
-  `src/shared/local-channel/local-channel.ts:91-102` lets two hosts listen, and a socket file gone lets a second start
-  beside a live one. Reaping is safe since `30af5c3e`, but the older host's `shutDown` can remove the newer one's socket
-  and record, and the newer one renames the older's log and sweeps its pipe logs. A lock around listening and acting
-  only on a record still its own are the likely shape. Stated as a limit in `docs/features/session-host/design.md`.
-  Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in wigley-ai-gui.
 - **An idle harness compaction cannot be interrupted** — *needs a feature plan*: it opens no turn, so `interrupt()` does
   nothing while the chip shows compacting and `compact()` would queue a second (`src/main/claude-code/claude-code-harness.ts`).
   It cannot happen until an idle compaction is seen under the app's flags (`docs/features/agent-chat/claude-stream.md`

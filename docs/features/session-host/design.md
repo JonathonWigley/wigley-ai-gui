@@ -5,7 +5,7 @@
 - **Intent** — sessions keep running through a quit, a relaunch and `install-app`.
 - **Vocabulary** — session host, hosted process, pipe log, replay, drain.
 - **Flow** — start, quit, relaunch and re-attach, idle end.
-- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, its known limits, and its pending runs.
+- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, one host per channel, and its pending runs.
 - **Protocol** — the operations, which of them never change, the queue messages, and the pipe log format.
 - **Re-attach** — replay through the harness's pipe fold, the history cut, replayed events, queued messages.
 - **Older hosts** — drain after an update that changed the protocol.
@@ -109,9 +109,8 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
     children record while that writer may run, so no host can delete or overwrite another's.
   - A new host, once it owns the channel, reads every protocol's children record, so a protocol bump leaves no orphan.
     It compares each record's writer with what `ps` or PowerShell reports for that pid. A writer that still runs keeps
-    its children and its record, and the new host logs it: owning the channel proves nothing, since a socket file gone
-    or a check-then-listen race gives a new host the channel beside a live one, and an older host may be draining. A
-    new host that cannot ask the OS, or cannot read a record, leaves that record the same way, for a later host. A session
+    its children and its record, and the new host logs it: owning the channel rules out only another host of its own
+    protocol, and an older host may be draining. A new host that cannot ask the OS, or cannot read a record, leaves that record the same way, for a later host. A session
     whose process runs under such a writer can run a second process beside it.
   - Once a record's writer is gone, its pid unused or reused, the new host ends what the record left and removes it:
     SIGTERM, then SIGKILL after 3 s, about 6 s at most, on macOS and Windows alike through the platform's kill (on
@@ -126,13 +125,15 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
     comes. The leftovers' pipe logs go with that host's log sweep.
   - Children are not started `detached`, and the end reaches only the recorded process: a tool the orphan was running
     may outlive it.
-- Two known limits come with a new host that owns the channel beside a live one, which only a socket file gone or a
-  check-then-listen race reaches:
-  - The new host renames the live host's log too. Both hosts then append to `host-v<protocol>.log`, so a line of the
-    live host can sit in either file.
-  - A host of the same protocol that exits still runs its `shutDown`, which removes the channel and the record by path,
-    and those are now the newer host's. The newer host keeps the clients it holds, and the next app finds no channel
-    and starts another host beside it.
+- One host listens per channel. On a Unix socket a host takes `<channel>.lock`, which holds its pid, before it checks
+  the channel, and holds it until its server has closed; a named pipe in use already refuses a second listener. A host
+  that finds the lock held by a pid that runs exits as a host that finds the channel owned does, the socket file gone
+  or not, so a login start and an app start at one moment leave one host. A lock whose pid does not run, or that holds
+  no pid, is stale, and one taker alone takes it over. So only the host that listens sets the last log aside and
+  sweeps the pipe logs, and a host's `shutDown` removes the record only while it still holds that host's pid. The relay
+  channel takes the same lock, so two app instances of one id never share it.
+  - A known limit: a lock left by a host killed outright, whose pid another process has taken since, counts as held,
+    and no host starts on that channel until that process ends.
 - A drive run and the self-test end their host's processes at teardown, since their runs are thrown away. A drive
   `restart` keeps them, so a drive run can check re-attach, and `drive quit --keep-sessions` keeps them with the run's
   home and user data, so `start --run <id>` brings the run back. Any other quit of a running app ends them. A plain
