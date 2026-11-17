@@ -4,6 +4,7 @@
 
 - **What it is** — the hub's Live section and who drives it.
 - **The agent's tools** — `show_live_view` and `hide_live_view`, their arguments and replies.
+- **The playtest watch** — the app opening and closing Live on a session's Unity playtest commands.
 - **Finding the window** — the editor's process, the window that holds the Game View, the crop.
 - **The ScreenCapture service** — the core service, its per-OS adapters, and Screen Recording access.
 - **The section** — what it shows, its height, when it streams, its lines.
@@ -15,8 +16,9 @@
 
 The `live-view` plugin adds a **Live** section to each session's hub, directly under Main agent. It streams a Unity
 editor's Game View, cut out of the editor's window, so the user watches the game beside the chat while the agent plays
-it. The agent alone starts and stops it: the section has no pick or stop button, and it stays hidden until the agent
-shows it. The summary names what streams: `Game View · <project folder>`, or `Editor · <project folder>` for the whole
+it. The agent starts and stops it, and the app also opens it when the session starts a Unity playtest and closes the
+view it opened when the playtest stops (planned in `plan-auto-open`, not built yet; § The playtest watch). The section
+has no pick or stop button, and it stays hidden until the agent or the playtest watch shows it. The summary names what streams: `Game View · <project folder>`, or `Editor · <project folder>` for the whole
 editor window. `spike.md` beside this file is the result the spike settled.
 
 ## The agent's tools
@@ -33,6 +35,38 @@ The plugin contributes two tools to every session, subagents included (not main-
 A reply says what streams, or what went wrong and what to do next. A failed call leaves the section as it was, except
 when Screen Recording is off: the section then shows that line and its button, and the reply says the same. A
 session's pick ends with its row.
+
+## The playtest watch
+
+Planned in `plan-auto-open`, not built yet. The app opens a session's Live section on its own when that session starts
+a Unity playtest, so the user never asks the agent for the stream. It works for any Unity project the `unity` CLI
+drives, and knows nothing of a particular project.
+
+- **Open:** a Bash call of any agent of the session, the lead or a subagent (a subagent's calls arrive under the
+  lead's row), whose command runs `unity command editor_play` or `capture.py start`, seen when the call starts. A
+  chained command counts (`cd <dir> && unity command editor_play`); text inside quotes, another `unity command`, and
+  `capture.py stop` do not.
+- **Live calls only:** a replayed or restored entry never opens it. The watch reads the call's full command from
+  chat's `chat.entries` list, since a `toolStarted` event's summary is cut to 80 characters, and counts the entry as
+  live only when chat's `agentEvent` `toolStarted` for its `toolUseId` came with `replayed: false`. A restore writes
+  the list whole and fires no `toolStarted`.
+- **Project folder:** the command's `--project-path <dir>` when it names one; else the unity-pool clone whose claim
+  is this session's row (the `unity-pool.snapshot` slot; the first such clone in the snapshot's order); else the
+  session's project folder (`chat.session`). With no editor found there (no `Library/EditorInstance.json` with a
+  `process_id`), or no editor window, the watch writes no pick and logs a line.
+- **What streams:** the whole editor window, `Editor · <project folder>`, as `show_live_view` with no `gameRect`
+  does. The agent's later `show_live_view` with the Game View rect crops it, as the `wigley:unity-playtest` skill
+  already calls it. With Screen Recording off, the section shows that line and its button, as for the agent's call.
+- **Close:** a Bash call running `unity command editor_stop` closes a view the app opened. The agent's
+  `hide_live_view` and the session ending close any view.
+- **The agent's pick wins:** the app opens the view only when the session has no pick. The agent's `show_live_view`
+  replaces an app-opened pick and makes the pick the agent's, so a later `editor_stop` leaves it. An app opening
+  still waiting on the window list writes nothing when a pick, a hide, an `editor_stop` or the session's end came
+  first.
+- No setting turns it off.
+
+live-view's main part lists `unity-pool` in its manifest's `reads`, so with that plugin off the pool slot reads
+`undefined` and the watch goes on to the session's folder.
 
 ## Finding the window
 
@@ -107,7 +141,9 @@ section with no Unity editor and no Screen Recording grant.
 
 ## Rejected
 
-- **Pick window and Stop buttons for the user** — the user wants the agent alone to start and stop Live.
+- **Pick window and Stop buttons for the user** — the user wants the agent, and the app on a session's playtest
+  commands, to start and stop Live, never a button.
+- **A setting to turn the playtest watch off** — the user wants none.
 - **A Live tab beside the Chat tab** — the user wants the stream beside the agent's work, not a tab away.
 - **Finding the editor by its window title** (`[<folder> …`) — a floating Game View has its own title; the editor's
   process finds every window it owns.
