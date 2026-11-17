@@ -1,6 +1,6 @@
 # 08 — Main part: tools, hooks, delivery, entries
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses sessions, chat and the room service through session lifecycle (connect, end, turn finished) and async delivery, and rests on the low-confidence hook `agent_id` match (07)
 Wave: 3 · Depends on: 01, 02, 05, 06

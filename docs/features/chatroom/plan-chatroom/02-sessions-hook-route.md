@@ -1,6 +1,6 @@
 # 02 — Sessions hook route
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses the relay socket's lifecycle (a second line after the hello, a read timeout, a handler that rejects) and adds the seam 07 and 08 consume
 Wave: 1 · Depends on: none
@@ -59,3 +59,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 3df0458c1 · proof: diff read: every Produces present (addHookHandler, project, HookHandler, HookReply, RelayHello.hook, createHookRoutes, SessionList.sessionOf); wave typecheck passes; oxfmt, oxlint, check-styles clean; layer check waits on 08's manifest · concerns: sessionOf_ConnectOrder's 'owned over connected with one host id' row cannot be built (open/connect/setHostSessionId keep host ids unique), so the owned-first branch is untested; the client-left test leans on two 20 ms real-time pauses

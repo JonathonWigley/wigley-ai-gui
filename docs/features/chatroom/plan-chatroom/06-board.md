@@ -1,6 +1,6 @@
 # 06 — Board
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds `BoardRow` to the contract, which tasks 08 and 09 consume, and reads five plugins' records
 Wave: 2 · Depends on: 01
@@ -67,3 +67,5 @@ Done when: compiles; the layer check passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit b94a871b2 · proof: diff read: BoardState, BoardClone, BoardFile, BoardRow in contract.ts; BoardSession, GitFolderState, Touch, BoardInputs, buildBoard, readGitFolder, TouchTracker, createTouchTracker in board.ts; wave typecheck passes; oxfmt applied · concerns: the stale-touch test copies 08's forgetting rule (a staleTouchPaths export would be the deeper seam); the spec's 'other root' touch /r/o/d.ts sat under root /r, so the test uses /o/d.ts

@@ -1,6 +1,6 @@
 # 07 — Hook script and hooks.json
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses Claude Code's hook contract, a git subprocess and the app's socket under a hard time budget, and rests on hook fields marked low-confidence below
 Wave: 2 · Depends on: 02, 03

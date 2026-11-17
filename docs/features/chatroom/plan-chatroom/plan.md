@@ -211,13 +211,13 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 
 ### Wave 1
 - [x] [Contract and room store](01-contract-and-store.md)
-- [ ] [Sessions hook route](02-sessions-hook-route.md)
-- [ ] [Relay endpoint module and Codex id](03-relay-endpoint-and-codex-id.md)
+- [x] [Sessions hook route](02-sessions-hook-route.md)
+- [x] [Relay endpoint module and Codex id](03-relay-endpoint-and-codex-id.md)
 - [x] ~~[Stale harness doc lines](04-stale-harness-docs.md)~~ — dropped: Lane H (plan-lane-h-harness-seams) is running, at task 10 of 17 on branch lane-h-harness-seams; its landing makes the AGENTS.md passages true and its task 16 re-reads them, so a rewrite to today's shape would be undone and conflict at merge
 
 ### Wave 2
 - [x] [Room service](05-room-service.md) — after 01
-- [ ] [Board](06-board.md) — after 01
+- [x] [Board](06-board.md) — after 01
 - [ ] [Hook script and hooks.json](07-hook-script.md) — after 02, 03
 
 ### Wave 3
@@ -242,10 +242,14 @@ Review base: 7c3eb9665
 ### Groups
 - 01 · deep · bed909cf0 · diff read: every Produces present; typecheck passes; oxfmt clean; layer check waits on 08's manifest · concerns: layer check needs 08's manifest; read('') rejects in jsonl, [] in memory; lone-surrogate room names; a line's room field not checked against its file
 - 05 · deep · e467c8144 · diff read: every Produces export present; typecheck passes; oxfmt applied (7ae838a7a) · concerns: isParticipant and ref types copied from jsonl-room-store.ts (private there); a store.read rejection inside post/unread rejects rather than returning ok:false; it.each tables mixing row shapes
+- 02 · deep · 3df0458c1 · diff read: every Produces present (addHookHandler, project, HookHandler, HookReply, RelayHello.hook, createHookRoutes, SessionList.sessionOf); wave typecheck passes; oxfmt, oxlint, check-styles clean; layer check waits on 08's manifest · concerns: sessionOf_ConnectOrder's 'owned over connected with one host id' row cannot be built (open/connect/setHostSessionId keep host ids unique), so the owned-first branch is untested; the client-left test leans on two 20 ms real-time pauses
+- 03 · hard · e4d5ff8bc · diff read: endpoint.py holds RELAY_PROTOCOL, HELLO_TIMEOUT_SECONDS, READ_SIZE, both channels with timeout and set_timeout, open_channel, channel_path; relay hello sends codex- id only with WIGLEY_SESSION_ROW unset; manifests 2.17.0; unittests wait for the test gate · concerns: PipeChannel's timeout now also bounds writes before hello_done, untested (Windows only); the forms README names the chatroom hook script before 07 adds it
+- 06 · hard · b94a871b2 · diff read: BoardState, BoardClone, BoardFile, BoardRow in contract.ts; BoardSession, GitFolderState, Touch, BoardInputs, buildBoard, readGitFolder, TouchTracker, createTouchTracker in board.ts; wave typecheck passes; oxfmt applied · concerns: the stale-touch test copies 08's forgetting rule (a staleTouchPaths export would be the deeper seam); the spec's 'other root' touch /r/o/d.ts sat under root /r, so the test uses /o/d.ts
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 - 02 Produces: SessionList.sessionOfHost(hostId) → sessionOf(info: SessionInfo); createHookRoutes takes sessionOf · why: row-id-first lookup (Lane H's connect order) · consumers: 02 only (08 consumes the routes, not the lookup) · lead, before dispatch
 - 06 BoardRow.harness / BoardSession.harness and 08 RosterSession.harness: Harness | null → string | null · why: Lane H removed the Harness type; the field holds the harness id · consumers: 08, 09 · lead, before dispatch
+- createHookRoutes(sessionOf) → createHookRoutes(sessionOf, log: PluginLog) · why: the route logs 'hook <name> failed: <text>' · consumers: sessions start.ts only · group 02
 ### Rulings
 - Task 04 struck: its cause (Lane H not started) no longer holds; Lane H runs and rewrites the same passages — a stale-doc window stays until Lane H lands — lead
 - Order agreed with the Lane H session: Lane H lands on main first (several hours; it bumps wigley to 2.13.1 and adds row_id to relay.py's hello); this run builds only new files (01, 05, 06) until Lane H's landed-sha notice, then rebases onto main and re-checks 02, 03, 07 and 08 against Lane H's code before dispatch — a wrong order would mean merge conflicts across sessions, relay and chat — lead
@@ -262,5 +266,11 @@ Review base: 7c3eb9665
 - 08's manifest moves workflow from reads to dependsOn.main: 08 calls workflow exports (flowOf, flows, stageFinishes) and api.dependency takes only dependsOn ids; chatroom now needs the workflow plugin enabled (on by default) — lead
 - 09's mode icon is 'organization', not 'comment-discussion', which the Sessions mode already uses — lead
 - 06 released from its hold and dispatched with 02 and 03: it now consumes SessionInfo.harness as string | null, and ChatSessionInfo as Lane H left it — lead
+- createHookRoutes takes the plugin log as a second parameter, for the spec's 'hook <name> failed' line — a hook route with no log would fail silently — group 02 · group 02
+- After the request line the hook socket is resumed, so a client that leaves is seen and a late reply is not written (destroyed || writableEnded checked) — group 02 · group 02
+- The hook handler timeout runs on Node's global setTimeout, since RelayServerDeps has no timers dep — group 02 · group 02
+- PipeChannel applies its timeout to writes as well as reads until hello_done, matching SocketChannel and the Produces line — group 03 · group 03
+- BoardInputs.chat and .flows are keyed by row id; 08 must key flows by row id or the flow-driven working and done states never fire — group 06 · group 06
+- A resting row with a finishing flow shows done, not idle — group 06 · group 06
 ### Review rounds
 ### Test gate

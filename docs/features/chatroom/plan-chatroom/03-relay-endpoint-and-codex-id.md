@@ -1,6 +1,6 @@
 # 03 — Relay endpoint module and Codex id
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds `endpoint.py`, the module 07 imports, and changes the relay hello's `session_id` for Codex, which the app's session and forms hand-back code reads
 Wave: 1 · Depends on: none
@@ -47,3 +47,5 @@ Done when: `(cd plugins/wigley/scripts/forms && python3 -m unittest discover)` p
 Commit:    one commit for the group
 
 ## Proof
+
+Commit e4d5ff8bc · proof: diff read: endpoint.py holds RELAY_PROTOCOL, HELLO_TIMEOUT_SECONDS, READ_SIZE, both channels with timeout and set_timeout, open_channel, channel_path; relay hello sends codex- id only with WIGLEY_SESSION_ROW unset; manifests 2.17.0; unittests wait for the test gate · concerns: PipeChannel's timeout now also bounds writes before hello_done, untested (Windows only); the forms README names the chatroom hook script before 07 adds it
