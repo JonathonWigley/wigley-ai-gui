@@ -1,6 +1,6 @@
 # 02 — Structured round results
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01 (task 01 edits `forms/main/start.ts` too: read it as task 01 left it)
 Plan: [plan.md](plan.md)
@@ -309,3 +309,5 @@ Commit: one commit for the group. It also removes the **Structured round results
 commit (plan.md, Lane gates).
 
 ## Proof
+
+Commit d204d35b7 · proof: diff read: mcp-wording.ts exports, argsErrorText on AgentFormType, needs_manual_open only in tool descriptions; wave compile (typecheck, lint) passes; golden captured on the base tree, where all 59 hand-traced values passed (f2f1a2f37) · concerns: golden values hand-traced (settled by the base run); Lane E's 06 and 08 task docs still name argsErrorName, parse(raw, where) and removed exports — its refresh must pick up argsErrorText, parse(raw, at), describe(), RoundResult

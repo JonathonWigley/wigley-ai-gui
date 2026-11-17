@@ -1,6 +1,6 @@
 # 03 — The claude-code plugin
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -291,3 +291,4 @@ Commit:    one commit for the group ("Claude Code becomes the built-in claude-co
 
 ## Proof
 
+Commit 594eb7589 · proof: diff read: claudeCodeManifest, realHarnessPluginIds, ProcessRunner.spawn, agentEnvironment/agentHomeDir present, src/main/claude-code gone; wave compile (typecheck, lint) passes · concerns: fake runs serve a catalog without claude-code (self-test plugin lists may shift); endpointEnv's undefined-drop rule now untested in main.ts; Lane P's plan docs still name claude.command; manifest text names ~/.local/bin/claude as the platform default

@@ -340,8 +340,8 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 - [x] [AgentHarnessRegistry](01-agent-harness-registry.md)
 
 ### Wave 2
-- [ ] [Structured round results](02-structured-round-results.md) — after 01 (both edit `forms/main/start.ts`)
-- [ ] [The claude-code plugin](03-claude-code-plugin.md) — after 01
+- [x] [Structured round results](02-structured-round-results.md) — after 01 (both edit `forms/main/start.ts`)
+- [x] [The claude-code plugin](03-claude-code-plugin.md) — after 01
 
 ### Wave 3
 - [ ] [AgentHarness grows what a second harness needs](04-agent-harness-grows.md) — after 03
@@ -387,14 +387,21 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 
 ### Groups
 - 01 · hard · 166a52d74 · diff read: every Produces present; wave compile (typecheck, lint) passes after one same-rung test-cast fix · concerns: self-test expectations changed beyond Files (notes session line from the registry, forms expects 'codex session'); stale 'Claude pending' wording fixed in docs/main/start.ts and drive SKILL.md; usage poller looks its harness up once at start
+- 02 · hard · d204d35b7 · diff read: mcp-wording.ts exports, argsErrorText on AgentFormType, needs_manual_open only in tool descriptions; wave compile (typecheck, lint) passes; golden captured on the base tree, where all 59 hand-traced values passed (f2f1a2f37) · concerns: golden values hand-traced (settled by the base run); Lane E's 06 and 08 task docs still name argsErrorName, parse(raw, where) and removed exports — its refresh must pick up argsErrorText, parse(raw, at), describe(), RoundResult
+- 03 · hard · 594eb7589 · diff read: claudeCodeManifest, realHarnessPluginIds, ProcessRunner.spawn, agentEnvironment/agentHomeDir present, src/main/claude-code gone; wave compile (typecheck, lint) passes · concerns: fake runs serve a catalog without claude-code (self-test plugin lists may shift); endpointEnv's undefined-drop rule now untested in main.ts; Lane P's plan docs still name claude.command; manifest text names ~/.local/bin/claude as the platform default
 ### Contract changes
 - IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
 - docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01
 - DRIVE_SESSION_DEFAULTS typed { projectDir: string; harness: string }; sessions sidebar-view drawRow takes a harnesses() function; NotesSelfTestResult gains sessionLine · why: the literal union is gone; labels re-read per draw · consumers: none planned · group 01
+- FakeSpawn: a record → an exported class implementing SpawnedProcess in src/shared/fake-processes.ts (command, args, cwd, env, written, isInputEnded, kills; drivers stdout/stderr/close) · why: the returned process and the recorded spawn are one object · consumers: 03's tests, later fake-spawn users · group 03
 ### Rulings
 - Waves 2, 4 and 5 keep their pairs despite the wave check's clashes on followups.md, master-plan.md and drive SKILL.md: the plan's boundary rules put the two groups in disjoint hunks of those files; workers edit only their own hunk, and the group that commits first leaves the shared doc to the second group's commit, which carries both hunks and says so — the check's clash rule cannot see hunks — a mislabelled hunk in one commit if wrong · lead
 - Run works in worktree ~/Documents/.worktrees/ai-lane-h-harness-seams (branch lane-h-harness-seams) per WigleyRepos.md § Landing; Lane E's worktree is paused at its forms gate (waits on task 02) and its unmerged commits stay its own; peers on the main clone make every commit pathspec-scoped — a merge conflict at landing if Lane E or P lands first · lead
 - Fake labels itself Fake under id 'claude' until task 10, so fake runs read 'Fake' where they read 'Claude Code' — drive captures differ until task 10 · group 01 · group 01
 - Relay hello and the drive sessions action accept any string harness; an unregistered id shows its raw id ('codex session') — a typo reads as a raw label · group 01 · group 01
+- Payload rows of the golden test assert JSON.stringify(<object literal>, null, 2) rather than literal strings; key order and values stay pinned — stringify's own format is unpinned · group 02 · group 02
+- main.ts mode services: ModeServicesContext is { window, homeDir, log }; forWindow adds a RunAgents { harnesses, agentHomeDir } record; a drive run on Claude registers no harness in the root and runs as os.homedir() · group 03 · group 03
+- spawnStreaming catches a synchronous spawn throw and reports it through closed on a microtask; abortableProcesses returns a no-op SpawnedProcess for a spawn after stop · group 03 · group 03
+- Lead: the wave 2 compile also ran oxfmt --write over the wave's files (49a74243b), and the golden test ran once on the pre-change tree to capture forms-tools.golden.txt — a fixture capture of the base, not a test of the change, so the test gate at the end stays the run's only test evidence · lead
 ### Review rounds
 ### Test gate
