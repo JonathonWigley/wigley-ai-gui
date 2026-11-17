@@ -3375,6 +3375,8 @@ describe('createChatSessions', () => {
     flag: { unattended?: boolean };
     decision: PermissionDecision | 'pending';
     answers: PermissionDecision[];
+    // The answer of each permission card sent: null for one still waiting.
+    shown: (PermissionDecision | null)[];
     sentByPrompt: string[];
   }>([
     {
@@ -3382,6 +3384,7 @@ describe('createChatSessions', () => {
       flag: { unattended: true },
       decision: { allowed: false, reason: UNATTENDED_REASON },
       answers: [{ allowed: false, reason: UNATTENDED_REASON }],
+      shown: [{ allowed: false, reason: UNATTENDED_REASON }],
       sentByPrompt: [],
     },
     {
@@ -3389,11 +3392,12 @@ describe('createChatSessions', () => {
       flag: {},
       decision: 'pending',
       answers: [],
+      shown: [null],
       sentByPrompt: ['waiting'],
     },
   ])(
     'permission_LaunchedRow_AnswersByUnattended: $given',
-    async ({ flag, decision, answers, sentByPrompt }) => {
+    async ({ flag, decision, answers, shown, sentByPrompt }) => {
       const test = setUp();
       test.chat.launch({
         projectDir: PROJECT_DIR,
@@ -3415,7 +3419,7 @@ describe('createChatSessions', () => {
       expect(
         test.sent('entry').filter((sent) => sent.entry.kind === 'permission'),
       ).toEqual(
-        answers.map((answer) => ({
+        shown.map((answer) => ({
           sessionId: ROW_ID,
           entry: expect.objectContaining({ answer }),
         })),
@@ -5419,7 +5423,8 @@ describe('createChatSessions clear', () => {
       await flush();
 
       expect(test.harness.processes).toHaveLength(1);
-      expect(test.hostIdChanges).toEqual([]);
+      // The start's own report alone: the clear moved the row nowhere.
+      expect(test.hostIdChanges).toEqual(['fake-session-1']);
       expect(test.logged).toContain(logged);
     },
   );
@@ -5433,7 +5438,8 @@ describe('createChatSessions clear', () => {
     expect(() => test.chat.clear(ROW_ID)).toThrow('personal');
 
     expect(test.chat.sessions()[0].entries).toEqual(entriesBefore);
-    expect(test.hostIdChanges).toEqual([]);
+    // The start's own report alone: the clear moved the row nowhere.
+    expect(test.hostIdChanges).toEqual(['fake-session-1']);
     expect(test.process.calls).toEqual([]);
     expect(test.harness.processes).toHaveLength(1);
   });
@@ -6256,9 +6262,12 @@ describe('createChatSessions restoring hosted processes', () => {
     },
   );
 
+  // Each control declares its role, as the fake does: chat holds the mode by
+  // its `permissionMode` role, not its id.
   const heldControl = (id: string, value: string | null): SessionControl => ({
     id,
     label: id,
+    role: id === 'mode' ? 'permissionMode' : id,
     choices: [],
     value,
   });
@@ -9934,10 +9943,13 @@ describe('createChatSessions harness leave and return', () => {
 
   // Breaks if a process whose conversation has no settled host id is kept
   // unheld, which the return would attach with no session id or the old one.
+  // `arrange` may wait; `act` starts the process and must not, since the fake
+  // reports the session id a microtask after the start.
   it.each([
     {
       given: 'a new row before its harness reports',
-      arrange: (test: ReturnType<typeof setUp>) => {
+      arrange: async () => {},
+      act: (test: ReturnType<typeof setUp>) => {
         test.chat.start(START_ON_FAKE);
         return test.harness.processes[0];
       },
@@ -9947,15 +9959,18 @@ describe('createChatSessions harness leave and return', () => {
       arrange: async (test: ReturnType<typeof setUp>) => {
         test.chat.start(START_ON_FAKE);
         await flush();
+      },
+      act: (test: ReturnType<typeof setUp>) => {
         test.chat.clear(ROW_ID);
         return test.harness.processes[1];
       },
     },
   ])(
     'harnessLeft_NoSettledHostId_EndsTheProcess given $given',
-    async ({ arrange }) => {
+    async ({ arrange, act }) => {
       const test = setUp();
-      const process = await arrange(test);
+      await arrange(test);
+      const process = act(test);
       const settling = test.chat.hostSessionIdSettled(ROW_ID);
 
       test.leave(FAKE_HARNESS_ID);

@@ -942,6 +942,8 @@ describe('chat main part', () => {
       harness: 'claude',
       profile: 'work',
     });
+    // The gates skip a row until its harness reports a host id.
+    await flushMicrotasks();
     const message = { text: 'hi', images: [] };
     const gate = chat.exports.addSendGate(() => ({
       action: 'compact',
