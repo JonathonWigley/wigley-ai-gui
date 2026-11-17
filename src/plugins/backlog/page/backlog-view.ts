@@ -365,6 +365,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   let shownRepo: string | null = null;
   // The pane that last held the keys, which `focusMain` focuses again.
   let lastHostFocus: HostFocus = 'table';
+  // True while a click's `focusin` hands a pane the keys: the click already
+  // put the DOM focus where it belongs, so `syncFocus` leaves it there.
+  let isFocusFromClick = false;
   // The strip cursor the last strip draw revealed; undefined before the
   // first.
   let revealedCursor: string | null | undefined;
@@ -727,7 +730,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   // Moves the DOM focus to the pane the keys act on, when that changed, and
-  // logs the pane that took them. The assistant pane focuses itself.
+  // logs the pane that took them. The assistant pane focuses itself, and a
+  // click's own focus stays put.
   const syncFocus = (state: BacklogState, always: boolean) => {
     const isChanged = state.focus !== shownFocus;
     if (!deps.isShown() || (!always && !isChanged)) {
@@ -736,6 +740,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     shownFocus = state.focus;
     if (isChanged) {
       deps.log(`${state.focus} focused`);
+    }
+    if (isFocusFromClick) {
+      return;
     }
     switch (state.focus) {
       case 'table':
@@ -803,6 +810,31 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     render(true);
   };
+
+  // A focus that lands inside a pane the keys are not on, a click on its
+  // contents, hands that pane the keys and leaves the click's DOM focus. A
+  // pane the reducer refuses (the review with no row selected) leaves the
+  // keys where they were, so the DOM focus goes back to that pane.
+  for (const [paneElement, focus] of [
+    [tablePane, 'table'],
+    [reviewPane, 'review'],
+    [stripPane, 'strip'],
+  ] as const) {
+    paneElement.addEventListener('focusin', () => {
+      if (store.get().focus === focus) {
+        return;
+      }
+      isFocusFromClick = true;
+      try {
+        setFocus(focus);
+      } finally {
+        isFocusFromClick = false;
+      }
+      if (store.get().focus !== focus) {
+        syncFocus(store.get(), true);
+      }
+    });
+  }
 
   // The pane that held the keys last takes them; the table when the review
   // refuses them with no row selected.

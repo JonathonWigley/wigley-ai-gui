@@ -17,6 +17,7 @@ import {
 } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
+  type FakeElement,
   type FocusFakeDocument,
   type FocusFakeElement,
   findAll,
@@ -678,7 +679,68 @@ describe('backlog view layouts', () => {
   });
 });
 
+// Focuses `target`, then fires the `focusin` a browser fires, on it and each
+// parent.
+function focusIn(target: FakeElement) {
+  (target as FocusFakeElement).focus();
+  for (let node: FakeElement | null = target; node; node = node.parentNode) {
+    node.fire('focusin', { target });
+  }
+}
+
 describe('backlog pane targets', () => {
+  it.each<{
+    pane: 'table' | 'review' | 'strip';
+    from: 'table' | 'review';
+    target: string;
+  }>([
+    { pane: 'review', from: 'table', target: 'backlog-review-body' },
+    { pane: 'strip', from: 'table', target: 'backlog-chunk' },
+    { pane: 'table', from: 'review', target: 'backlog-rows' },
+  ])(
+    'a click inside a pane hands it the keys and keeps the click\'s focus: $pane',
+    async ({ pane, from, target }) => {
+      const setup = await backlogSetup();
+      if (from === 'review') {
+        setup.move('right');
+      }
+      const [clicked] = findAll(setup.sheet, target);
+
+      focusIn(clicked);
+
+      expect({
+        scope: lastScope(setup),
+        isLogged: setup.logs.includes(`${pane} focused`),
+        isKept: fakeDocument.activeElement === clicked,
+      }).toEqual({ scope: pane, isLogged: true, isKept: true });
+    },
+  );
+
+  it('focusMain after a click in the review gives the review the keys', async () => {
+    const setup = await backlogSetup();
+    const [body] = findAll(setup.sheet, 'backlog-review-body');
+    focusIn(body);
+
+    setup.view.focusMain();
+
+    expect(lastScope(setup)).toBe('review');
+  });
+
+  it('a click into the review with no row selected leaves the keys and the focus on the table', async () => {
+    const setup = await backlogSetup({
+      answers: { load: async () => ({ homes: [], message: null }) },
+    });
+    const [body] = findAll(setup.sheet, 'backlog-review-body');
+    const [table] = findAll(setup.sheet, 'backlog-table');
+
+    focusIn(body);
+
+    expect({
+      scope: lastScope(setup),
+      isTableFocused: fakeDocument.activeElement === table,
+    }).toEqual({ scope: 'table', isTableFocused: true });
+  });
+
   // `to` is the scope the move sets; false for a move the view turns down.
   it.each<{
     from: 'table' | 'review' | 'strip';
