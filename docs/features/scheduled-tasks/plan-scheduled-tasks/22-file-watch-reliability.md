@@ -1,6 +1,6 @@
 # 22 — File watches: rescan on a missed burst, and report a write's target
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 1 · Depends on: none
 Rung: hard · changes when the Node adapter reports a watch event, which every `Files.watch` consumer reads

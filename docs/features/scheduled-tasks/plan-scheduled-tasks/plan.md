@@ -943,10 +943,11 @@ relay are drive checks in task 21.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Waves keep 05 beside 04 and 15 beside 14: both dependencies are on plan-pinned formats or injected deps, with no code wait — 05 writes offline.json to the plan's shape, 15 reaches projects through a dep 17 fills — if wrong, a worker finds a missing name and reports BLOCKED · lead
 ### Review rounds
 ### Test gate

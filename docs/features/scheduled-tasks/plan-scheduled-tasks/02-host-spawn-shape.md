@@ -1,6 +1,6 @@
 # 02 — Host spawn shape: env overlay, unset names, stdin lines
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
