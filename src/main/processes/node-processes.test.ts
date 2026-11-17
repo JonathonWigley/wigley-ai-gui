@@ -538,19 +538,23 @@ async function runToExit(
   command: string,
 ): Promise<string | null> {
   const startsBefore = setUp.started.length;
-  const run = setUp.runner.run(command, [], {
-    unsetEnv: HOST_PATH_NAMES,
-    setEnv: WINDOWS_PATH,
-  });
+  // The handler goes on at once: a failed start rejects on a microtask, before
+  // the wait below returns.
+  const settled = setUp.runner
+    .run(command, [], {
+      unsetEnv: HOST_PATH_NAMES,
+      setEnv: WINDOWS_PATH,
+    })
+    .then(
+      () => null,
+      (error: Error) => error.message,
+    );
   await vi.waitFor(() => expect(setUp.started.length).toBe(startsBefore + 1));
   const { child } = setUp.started[startsBefore].child;
   if (child.pid !== undefined) {
     child.emit('close', 0);
   }
-  return run.then(
-    () => null,
-    (error: Error) => error.message,
-  );
+  return settled;
 }
 
 function spawnOn(runner: ProcessRunner, command: string, exits: SpawnExit[]) {
