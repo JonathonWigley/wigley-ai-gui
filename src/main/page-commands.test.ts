@@ -32,11 +32,10 @@ function setup(page: boolean, isStarted: boolean) {
     commands,
     logs,
     send,
-    done: (
-      request: unknown,
-      outcome: unknown = 'ran',
-      errorText: unknown = null,
-    ) => done({}, request, outcome, errorText),
+    // No default for `outcome`: a row passing `undefined` must reach the
+    // listener as a missing outcome.
+    done: (request: unknown, outcome: unknown, errorText: unknown = null) =>
+      done({}, request, outcome, errorText),
   };
 }
 
@@ -194,7 +193,7 @@ describe('createPageCommands', () => {
       const { commands, logs, send, done } = setup(true, true);
       const answered = commands.run('p.answered', undefined, { reportErrors });
       const waiting = commands.run('p.waiting', undefined, { reportErrors });
-      done(send.mock.calls[0][1]);
+      done(send.mock.calls[0][1], 'ran');
       await answered;
 
       commands.pageGone();

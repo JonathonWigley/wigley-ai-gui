@@ -955,6 +955,8 @@ describe('sessions page part', () => {
       logged,
       isShown,
     }) => {
+      // The rename dialog focuses its input and sets its selection on open.
+      installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
       const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
         withOtherMode: true,
       });

@@ -515,6 +515,7 @@ function startChatPart(
       clock,
       timers,
       sessionHost,
+      window: { isFocused: () => true },
       files: {
         stat: () => Promise.resolve({ isFolder: true, isLink: false }),
       },
