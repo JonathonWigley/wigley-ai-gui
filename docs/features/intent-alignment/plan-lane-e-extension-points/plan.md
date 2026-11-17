@@ -52,12 +52,14 @@ wigley-ai-gui folder of the clone or worktree the run works in; `MKT` is `/Users
      after the refresh first
      (`git log --oneline --since=2026-11-17 -- src/plugins/forms src/shared/agent-forms src/contracts/agent-forms.ts`)
      and reports any Produces they moved as a concern.
-   - 06 holds three points marked **Open** (A: how a registered kind's `parse` reports a malformed item; B: how
-     `RoundResult` and `roundPayload` carry a registered kind's results; C: where `roundErrorText` reads a registered
-     kind's noun). The lead rules each and writes the ruling into 06 before 06 starts.
-3. **Order against Lane L.** Lane L's forms items (dialog confirms, forms and primer column chrome, layout hot reload's
-   forms redraw) have not started on the forms files: `git log --oneline main -- src/plugins/forms/page/round-view.ts
-   src/plugins/forms/layouts` shows no Lane L commit after this plan's first commit. Lane L waits for task 10.
+   - 06's Decisions › Lane H's error and result shapes holds the lead's rulings (2026-11-17) on how the kind registry
+     meets Lane H's `RoundError`, `RoundResult` and `roundErrorText`.
+3. **Order against Lane L.** Lane L's forms tasks have not started: in
+   `GUI/docs/features/intent-alignment/plan-lane-l-layouts/plan.md` on `main`, boxes 11 (Forms dialog frame and cancel
+   confirm), 12 (Forms column chrome) and 13 (Forms keeps its boxes and redraws only changed parts) are unticked.
+   `grep -n "\[x\] \[Forms" GUI/docs/features/intent-alignment/plan-lane-l-layouts/plan.md` prints nothing. Lane L's
+   commits `7f2ba3afc` and `5d83b3421` each add one member to a Pick in `page/round-view.ts`; they are expected and do
+   not fail this check. Lane L waits for task 10.
 4. The ex command table is closed today: `grep -n "DOCUMENT_EX_COMMANDS" GUI/src/renderer/codemirror-vim/*.ts` finds
    the table in `document-ex-commands.ts` and its loop in `codemirror-vim-host.ts`.
 5. Three plugins open document editors with their own `:w`/`:q` handlers:
@@ -284,5 +286,6 @@ Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 - 04: controlKindsChanged redraws the open section and relies on drawRows' early return before load; the onChanged listener in start.ts is not filed with api (the registry goes with the part) · group 04
 - 05: every registration's first dispose tells namesChanged (toldNames starts as ['default'], so every registration has told names); names compared with isSameJson · group 05
 - Ruling (user, 2026-11-17): the run paused at the forms gate after 01, 03, 04, 05; the branch lane-e-extension-points and its worktree are held unmerged until Lane H ticks Structured round results, then the run resumes at task 06
+- Rulings (headless, recommended picks, 2026-11-17): A RoundError and its path types move to forms' contract.ts with kind: string; B RoundResult.results is a record by kind id and roundPayload(kinds, result) lays it out; C roundErrorText(kinds, error) looks up the noun, falling back to the kind id; precondition 3 checks Lane L's boxes 11-13
 ### Review rounds
 ### Test gate

@@ -9,16 +9,16 @@ All paths are under `src/plugins/forms/` unless they start with `src/`. Tree fac
 on `main`. The main-side facts were refreshed on 2026-11-17 against Lane H's Structured round results (branch
 `lane-h-harness-seams` at `7e20f1cf9`), which lands before this task (plan.md Precondition 2). Since Lane H:
 
-- A malformed item throws `new RoundError({ path: at, problem, detail? })` (`main/round-error.ts`); `at` is the
-  item's `RoundItemPath`. The agent reads `roundErrorText(error)` (`main/mcp-wording.ts`): the `Finding 1: ` prefix,
-  then `problem`, then `detail`. The field helpers in `main/kinds/fields.ts` take `at` in place of `where`.
+- A malformed item throws `new RoundError({ path: at, problem, detail? })`; `at` is the item's `RoundItemPath`. Lane
+  H put both in `main/round-error.ts`; 06 moves them to `contract.ts`. The agent reads `roundErrorText(kinds, error)`
+  (`main/mcp-wording.ts`): the `Finding 1: ` prefix, then `problem`, then `detail`. The field helpers in `main/kinds/fields.ts` take `at` in place of `where`.
 - A kind's schema is the method `describe()`, built on each call.
 - `main/mcp-wording.test.ts` pins every tool text and error text, and `main/forms-tools.golden.txt` pins the tool
   list. This task changes some of those texts on purpose (see Pinned values).
 
 Read `git log --oneline --since=2026-11-17 -- src/plugins/forms src/shared/agent-forms` first, and report a member
-that moved after the refresh as a concern. 06 carries three rulings (its Open A, B and C) that this task builds on:
-read them in 06's document as the lead settled them.
+that moved after the refresh as a concern. This task builds on 06's Decisions › Lane H's error and result shapes: one
+`RoundError` for every kind, `RoundResult.results` by kind id, and `roundErrorText(kinds, error)`.
 
 ## Files
 
@@ -73,7 +73,7 @@ Not this task's: `AGENTS.md` "A finding origin" (task 11), the marketplace and `
 - Members the tree holds: `MAX_ENTRIES`, `FINDING_ACTIONS`, `FindingAction`, `Severity`, `SEVERITIES` in
   `contract.ts`; `themeVariable(token: string): string` in `src/shared/theme-variables.ts`;
   `requireText(value, field, at: RoundErrorPath)` and `quotedList` in `main/kinds/fields.ts`; `RoundError` and
-  `RoundItemPath` in `main/round-error.ts`; `completeFindingPick` in `finding-pick.ts`; `contributions.onChanged(() =>
+  `RoundItemPath` in `contract.ts` (06 moves them there); `completeFindingPick` in `finding-pick.ts`; `contributions.onChanged(() =>
   view.rebuild())` in `page/start.ts` as the redraw pattern.
 
 ## Produces
