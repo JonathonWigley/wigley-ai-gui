@@ -66,8 +66,9 @@ any other. The set:
 
 - **chat** — `send`, `sendNow`, `interrupt`, `allowOrCopy`: the target's chat session, whichever tab shows.
 - **sessions** — `closeSession` and `renameSession`: the target's row. A target passes the Sessions-mode-shown guard;
-  `renameSession` shows Sessions mode, since its dialog waits on the user's typing. A targeted `closeSession` closes
-  at once, with no end-session confirm, since the agent's run already asked the user.
+  `renameSession` shows Sessions mode, since its dialog waits on the user's typing. A targeted `closeSession` skips the
+  session's end-session confirm, since the agent's run already asked the user, but main still refuses a session an
+  open form holds.
 - **workflow** — `mainAction`, `toggleHeadless`; **workflow-large** — `clearAndMake`, `cancelCountdown`,
   `makeInNewSession`, `resumeMake`, `retro`, `dismiss`: the stage action runs for the target.
 

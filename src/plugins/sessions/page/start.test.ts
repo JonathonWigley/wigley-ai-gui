@@ -881,21 +881,25 @@ describe('sessions page part', () => {
   // left empty clears the user title of the dialog's session, so its line
   // names the row the dialog opened for. Breaks: a targeted close of a busy
   // target asking its end-session confirm, a second ask after the Allow; the
-  // busy target's tab refuses any close that is not at once.
+  // busy target's tab refuses any close that is not at once. Breaks: a
+  // targeted close telling main to cancel the holds of a target whose open
+  // form popup asks for an instant close, dropping answers the Allow did not
+  // cover.
   it.each<{
     case: string;
     command: 'closeSession' | 'renameSession';
     targetSessionId?: string;
     busyTarget?: boolean;
+    heldTarget?: boolean;
     closes: unknown[][];
     logged: string[];
     isShown: boolean;
   }>([
     {
-      case: 'closeSession closes the target at once',
+      case: 'closeSession asks main to close the target',
       command: 'closeSession',
       targetSessionId: 's2',
-      closes: [['s2', true]],
+      closes: [['s2', false]],
       logged: [],
       isShown: false,
     },
@@ -904,7 +908,16 @@ describe('sessions page part', () => {
       command: 'closeSession',
       targetSessionId: 's2',
       busyTarget: true,
-      closes: [['s2', true]],
+      closes: [['s2', false]],
+      logged: [],
+      isShown: false,
+    },
+    {
+      case: 'closeSession cancels no hold of a target a form holds',
+      command: 'closeSession',
+      targetSessionId: 's2',
+      heldTarget: true,
+      closes: [['s2', false]],
       logged: [],
       isShown: false,
     },
@@ -937,6 +950,7 @@ describe('sessions page part', () => {
       command,
       targetSessionId,
       busyTarget,
+      heldTarget,
       closes,
       logged,
       isShown,
@@ -951,6 +965,17 @@ describe('sessions page part', () => {
           icon: 'book',
           element: document.createElement('div'),
           beforeClose: (atOnce) => atOnce,
+          shown: () => undefined,
+        });
+      }
+      if (heldTarget) {
+        setup.exports.addPopup('s2', {
+          id: 'forms',
+          title: 'Forms',
+          icon: 'bell',
+          element: document.createElement('div'),
+          closesAtOnce: () => true,
+          beforeClose: () => true,
           shown: () => undefined,
         });
       }

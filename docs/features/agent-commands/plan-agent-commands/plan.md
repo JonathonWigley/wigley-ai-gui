@@ -251,5 +251,7 @@ Review base: 8d829c42c
 - 08: call arguments that are not an object return 'arguments must be an object' · group 08
 - 08: a drive call that rejects is stored as an error result · group 08
 - 08: the 'no drive actions when api.drive is null' row is dropped, as no assertion can fail in the harness; start.test.ts checks both actions are added with drive on · group 08
+- Review round 1, headless auto-picks: a targeted closeSession closes at once; the confirm overview is the detail's first paragraph; docs.conflictOverwrite is risky; chat.denyPermission, denyEntry and submitReason stay not risky; the commandRunDone reply is guarded; a frame line typed by the user still reads as framed (the user is trusted). Pre-existing finding 23 dismissed: sessions' consumer view tracks every contributeTools disposable (consumer-view.ts:47-48), so the worker's hunk was reverted.
 ### Review rounds
+- Round 1 (pinned d6ac75086): NEEDS FIXES, 22 findings plus 1 pre-existing; report review-d6ac75086.md. Fix range 2c29d234f..103c6d76a (5 worker commits), compile passes. Tier: Medium, because behaviour crosses modules (the confirm overview between forms and agent-commands; a targeted closeSession through chat's close guard; the page-reply guard at the IPC boundary). No shared contract shape changed. A correctness re-review runs on the fix commits; the tests wait for the gate.
 ### Test gate
