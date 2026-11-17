@@ -41,7 +41,13 @@ describe('FakeProcesses', () => {
       command: 'claude',
       args: [],
     });
+  });
+
+  it('resolveProgram_ScriptedNull_FindsNone', async () => {
+    const processes = new FakeProcesses();
+
     processes.scriptProgram('python', null);
+
     expect(await processes.resolveProgram('python')).toBeNull();
   });
 

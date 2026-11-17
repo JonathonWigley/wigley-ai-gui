@@ -23,6 +23,7 @@ import type {
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
 import { fakePlatform } from '../../shared/platform.test-support';
+import { shimLaunch } from '../../shared/program-lookup';
 import { createNodeProcesses, type StartProgram } from './node-processes';
 import { hostNodeProcesses } from './node-processes.test-support';
 
@@ -476,6 +477,7 @@ function windowsSetUp(present: string[], holdStats = false) {
   const statted: string[] = [];
   const held: (() => void)[] = [];
   let failsNextStart = false;
+  let throwsNextStart = false;
   const stat = async (file: string): Promise<FileStat | null> => {
     statted.push(file);
     if (holdStats) {
@@ -484,6 +486,10 @@ function windowsSetUp(present: string[], holdStats = false) {
     return present.includes(file) ? { isFolder: false, isLink: false } : null;
   };
   const start: StartProgram = (file, args, options) => {
+    if (throwsNextStart) {
+      throwsNextStart = false;
+      throw new Error('spawn EINVAL');
+    }
     const fake = fakeChild();
     started.push({ file, args, options, child: fake });
     const { child } = fake;
@@ -517,6 +523,9 @@ function windowsSetUp(present: string[], holdStats = false) {
     releaseStats: () => held.splice(0).forEach((release) => release()),
     failNextStart: () => {
       failsNextStart = true;
+    },
+    throwNextStart: () => {
+      throwsNextStart = true;
     },
   };
 }
@@ -554,6 +563,16 @@ function spawnOn(runner: ProcessRunner, command: string, exits: SpawnExit[]) {
       closed: (exit) => exits.push(exit),
     },
   });
+}
+
+// What `shimLaunch` throws for an argument holding a line break.
+function lineBreakMessage(): string {
+  try {
+    shimLaunch('tool.cmd', ['a\nb'], 'windows', COM_SPEC);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  throw new Error('shimLaunch did not refuse a line break');
 }
 
 describe('createNodeProcesses on Windows', () => {
@@ -667,6 +686,95 @@ describe('createNodeProcesses on Windows', () => {
     expect(afterSecond).toBe(afterFirst);
     expect(afterFailed).toBe(afterFirst);
     expect(setUp.statted.length).toBeGreaterThan(afterFailed);
+  });
+
+  it('looks a command up again after a start of it throws', async () => {
+    const setUp = windowsSetUp(['C:\\T\\git.EXE']);
+
+    await runToExit(setUp, 'git');
+    const afterFirst = setUp.statted.length;
+    setUp.throwNextStart();
+    await expect(
+      setUp.runner.run('git', [], {
+        unsetEnv: HOST_PATH_NAMES,
+        setEnv: WINDOWS_PATH,
+      }),
+    ).rejects.toThrow('Could not run git: spawn EINVAL');
+    const afterThrown = setUp.statted.length;
+    await runToExit(setUp, 'git');
+
+    expect(afterThrown).toBe(afterFirst);
+    expect(setUp.statted.length).toBeGreaterThan(afterThrown);
+  });
+
+  it('run_ArgumentWithLineBreak_RejectsAndStartsNothing', async () => {
+    await withComSpec(async () => {
+      const setUp = windowsSetUp(['C:\\T\\tool.CMD']);
+
+      await expect(
+        setUp.runner.run('tool', ['a\nb'], {
+          unsetEnv: HOST_PATH_NAMES,
+          setEnv: WINDOWS_PATH,
+        }),
+      ).rejects.toThrow(`Could not run tool: ${lineBreakMessage()}`);
+      expect(setUp.started).toEqual([]);
+    });
+  });
+
+  it('spawn_ArgumentWithLineBreak_ClosesWithStartErrorAndStartsNothing', async () => {
+    await withComSpec(async () => {
+      const setUp = windowsSetUp(['C:\\T\\tool.CMD']);
+      const exits: SpawnExit[] = [];
+
+      setUp.runner.spawn('tool', ['a\nb'], {
+        cwd: 'C:\\',
+        env: WINDOWS_PATH,
+        events: {
+          stdout() {},
+          stderr() {},
+          closed: (exit) => exits.push(exit),
+        },
+      });
+      await vi.waitFor(() => expect(exits).toHaveLength(1));
+
+      expect(exits).toEqual([
+        {
+          code: null,
+          signal: null,
+          startError: { message: lineBreakMessage(), notFound: false },
+        },
+      ]);
+      expect(setUp.started).toEqual([]);
+    });
+  });
+
+  it('run_SetEnvNameInOtherCase_ReplacesTheAppsKeyForLookupAndChild', async () => {
+    const pathBefore = process.env.Path;
+    process.env.Path = 'C:\\A';
+    try {
+      const setUp = windowsSetUp(['C:\\B\\git.EXE']);
+
+      const run = setUp.runner.run('git', [], {
+        setEnv: { PATH: 'C:\\B', PATHEXT: '.EXE' },
+      });
+      await vi.waitFor(() => expect(setUp.started).toHaveLength(1));
+      setUp.started[0].child.child.emit('close', 0);
+      await run;
+
+      const { file, options } = setUp.started[0];
+      const pathKeys = Object.keys(options.env ?? {}).filter(
+        (key) => key.toUpperCase() === 'PATH',
+      );
+      expect(file).toBe('C:\\B\\git.EXE');
+      expect(pathKeys).toEqual(['PATH']);
+      expect(options.env?.PATH).toBe('C:\\B');
+    } finally {
+      if (pathBefore === undefined) {
+        delete process.env.Path;
+      } else {
+        process.env.Path = pathBefore;
+      }
+    }
   });
 
   it('rejects Stopped and starts nothing when the signal aborts during the lookup', async () => {

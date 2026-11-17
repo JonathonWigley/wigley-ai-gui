@@ -107,9 +107,9 @@ export function createNodeProcesses(deps: NodeProcessesDeps): ProcessRunner {
     deps.os === 'windows' ? windowsLauncher(deps) : directLauncher();
   return {
     run: (command, args, options) =>
-      runToEnd(launcher, start, command, args, options),
+      runToEnd(launcher, start, deps.os, command, args, options),
     startDetached: (command, args, options) =>
-      startDetached(launcher, start, command, args, options),
+      startDetached(launcher, start, deps.os, command, args, options),
     spawn: (command, args, options) =>
       spawnStreaming(launcher, start, command, args, options),
     resolveProgram: (name) => resolveProgram(deps, name),
@@ -312,11 +312,12 @@ function spawnStreaming(
 function startDetached(
   launcher: Launcher,
   start: StartProgram,
+  os: OsName,
   command: string,
   args: string[],
   options: DetachedStartOptions,
 ): Promise<void> {
-  const env = runEnv(undefined, options.setEnv);
+  const env = runEnv(os, undefined, options.setEnv);
   return new Promise((resolve, reject) => {
     const fail = (error: Error) =>
       reject(new Error(`Could not run ${command}: ${error.message}`));
@@ -368,6 +369,7 @@ function startDetached(
 function runToEnd(
   launcher: Launcher,
   start: StartProgram,
+  os: OsName,
   command: string,
   args: string[],
   options?: ProcessRunOptions,
@@ -378,21 +380,33 @@ function runToEnd(
       reject(new Error(`Stopped ${command}`));
       return;
     }
-    const env = runEnv(options?.unsetEnv, options?.setEnv);
+    const env = runEnv(os, options?.unsetEnv, options?.setEnv);
     const begin = (launch: Launch) => {
       if (signal?.aborted) {
         reject(new Error(`Stopped ${command}`));
         return;
       }
-      // stdout and stderr are pipes, so both streams are there.
-      const child = start(launch.file, launch.args, {
-        cwd: options?.cwd,
-        env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        // Off Windows the flag does nothing; on it, no console window flashes.
-        windowsHide: true,
-        windowsVerbatimArguments: launch.windowsVerbatimArguments,
-      }) as ChildProcessByStdio<null, Readable, Readable>;
+      let child: ChildProcessByStdio<null, Readable, Readable>;
+      try {
+        // stdout and stderr are pipes, so both streams are there.
+        child = start(launch.file, launch.args, {
+          cwd: options?.cwd,
+          env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          // Off Windows the flag does nothing; on it, no console window
+          // flashes.
+          windowsHide: true,
+          windowsVerbatimArguments: launch.windowsVerbatimArguments,
+        }) as ChildProcessByStdio<null, Readable, Readable>;
+      } catch (error) {
+        // A spawn that throws (EINVAL, or EAGAIN on fork) rather than
+        // emitting `error`.
+        launcher.forget(launch);
+        reject(
+          new Error(`Could not run ${command}: ${(error as Error).message}`),
+        );
+        return;
+      }
       collectToEnd(child, command, options, resolve, reject, () =>
         launcher.forget(launch),
       );
@@ -468,8 +482,10 @@ function collectToEnd(
 
 // The app's environment without `unsetEnv`, then with `setEnv`'s names set.
 // Undefined only when both are, so the child inherits the app's environment as
-// it is.
+// it is. On Windows names ignore case, so a name drops every key equal to it
+// without case, leaving one key for the lookup and the child to agree on.
 function runEnv(
+  os: OsName,
   unsetEnv: readonly string[] | undefined,
   setEnv: Readonly<Record<string, string>> | undefined,
 ): NodeJS.ProcessEnv | undefined {
@@ -477,10 +493,23 @@ function runEnv(
     return undefined;
   }
   const env = { ...process.env };
-  for (const name of unsetEnv ?? []) {
-    delete env[name];
+  for (const name of [...(unsetEnv ?? []), ...Object.keys(setEnv ?? {})]) {
+    dropName(env, name, os);
   }
   return { ...env, ...setEnv };
+}
+
+function dropName(env: NodeJS.ProcessEnv, name: string, os: OsName): void {
+  if (os !== 'windows') {
+    delete env[name];
+    return;
+  }
+  const upper = name.toUpperCase();
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === upper) {
+      delete env[key];
+    }
+  }
 }
 
 // One stream's kept chunks, their byte count, and whether any byte was dropped.

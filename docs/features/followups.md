@@ -336,6 +336,12 @@ What Windows support and installers need.
   PATH lookup looks only for `claude.exe`. The fix puts the session host's adapters (`src/session-host/`) behind the
   same shim handling, then lets the Windows lookup find shims. Killing a shim's `cmd.exe` also leaves its child
   running, as `run` does today.
+- **A `.cmd` shim re-parses its arguments once more** — *needs a decision*: `shimLaunch`
+  (`src/shared/program-lookup.ts`) escapes cmd metacharacters once. cross-spawn escapes twice for a `node_modules`
+  `.cmd` shim, since a cmd-shim batch file re-parses `%*` (the BatBadBut class). It matters only when a setting or a
+  bare name resolves to an npm `.cmd` shim and an argument holds `"` with `&` or `|`. Options: escape twice for every
+  `.cmd` shim, or refuse `"` in arguments as the line-break refusal does. Check cross-spawn's source and cmd's parse
+  rules first: the double escape is an unchecked theory today.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
   `packagerConfig`, no makers).
 - **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`
