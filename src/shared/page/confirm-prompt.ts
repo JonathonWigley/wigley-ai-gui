@@ -5,7 +5,7 @@ import type { PluginLog } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
 import { appended, element } from './dom';
 import { type ButtonVariant, textButton } from './ui/button';
-import { createDialog } from './ui/dialog';
+import { createDialog, type DrawDialogFrame } from './ui/dialog';
 
 export interface ConfirmChoice {
   label: string;
@@ -46,9 +46,14 @@ export interface ConfirmPromptDeps {
   // Draws the body into `parent` (the dialog's body), placing the buttons
   // through `parts`; the prompt draws its own body when left out.
   drawBody?(parent: HTMLElement, parts: ConfirmBodyParts): void;
+  // Draws the dialog's frame, the opener's layout part; the dialog builds its
+  // own frame when left out.
+  drawFrame?: DrawDialogFrame;
 }
 
 // What a `drawBody` draws with: the body text and the prompt's two buttons.
+// The layout kit's `ConfirmButtonsKit` (`layout-host/kit.d.ts`) is the
+// layout-facing copy of the two buttons.
 export interface ConfirmBodyParts {
   body: string;
   // Each appends the prompt's own button (label, variant, key anchor in the
@@ -67,7 +72,8 @@ export interface ConfirmPrompt {
   // once it is not asked, so the caller's own base change never reaches its listener, and shows and pushes its
   // scope after once it is asked, over the new base.
   setBaseScope(setBase: () => void): void;
-  // Empties the body and actions and draws them again, as after a new layout.
+  // Draws the dialog's frame again, then empties its body and actions and
+  // draws them again, as after a new layout.
   redraw(): void;
 }
 
@@ -84,7 +90,7 @@ const DISMISSED_LINE = 'cancel prompt dismissed: the view moved on';
 // attempt that rolled back) is appended to the actions, so both commands
 // always hold an anchor.
 export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
-  const dialog = createDialog(deps.title);
+  const dialog = createDialog(deps.title, { drawFrame: deps.drawFrame });
   // The anchors of the buttons the last draw made.
   let anchors: Disposable[] = [];
   const choiceButton = (choice: ConfirmChoice, variant: ButtonVariant) => {
@@ -178,6 +184,9 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
         pushScope();
       }
     },
-    redraw: draw,
+    redraw() {
+      dialog.redrawFrame();
+      draw();
+    },
   };
 }
