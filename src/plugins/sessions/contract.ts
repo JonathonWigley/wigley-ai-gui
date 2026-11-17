@@ -85,7 +85,9 @@ export interface ToolDefinition {
 export const RELAY_PROTOCOL = 1;
 
 // The first line the relay sends, before any MCP message. Every other field
-// is the host's own, and lands in `SessionInfo.host`.
+// is the host's own, and lands in `SessionInfo.host`. A string `hook` makes it
+// a hook hello: one request line follows, and the app answers it with one
+// `HookReply` line and closes, opening no session.
 export interface RelayHello {
   protocol: number;
   session_id: string | null;
@@ -96,11 +98,25 @@ export interface RelayHello {
   config_dir?: string | null;
   // Absent reads as null.
   row_id?: string | null;
+  // Absent reads as null.
+  hook?: string | null;
   [field: string]: unknown;
 }
 
 // The app's one-line answer to a hello; MCP follows only after `ok: true`.
 export type RelayHelloReply = { ok: true } | { ok: false; error: string };
+
+// Answers one hook request from the session it came from; the request is the
+// parsed request line, which the handler checks itself.
+export type HookHandler = (
+  session: AgentSession,
+  request: unknown,
+) => Promise<Record<string, unknown>>;
+
+// The app's one-line answer to a hook hello and its request line.
+export type HookReply =
+  | { ok: true; reply: Record<string, unknown> }
+  | { ok: false; error: string };
 
 // `~/.agents/<instance id>/endpoint.json`.
 export interface RelayEndpoint {
@@ -326,9 +342,21 @@ export interface SessionsMainExports {
   // namer and re-asks every session; `changed()` after that does nothing. Each
   // call is its own registration, so one function added twice is two namers.
   addProjectNamer(namer: ProjectNamer): ProjectNamerHandle;
+  // Answers each hook request named `name` with `handler`, given the live
+  // session the hook hello names, found as `connect` finds the session it
+  // joins; a hook opens no session. A handler that rejects answers the hook
+  // with its error. Throws on a name another live registration holds. The
+  // handle's `dispose` frees the name; a second `dispose` does nothing.
+  addHookHandler(name: string, handler: HookHandler): Disposable;
+  // The session's project, as its row shows it, also for a connected session
+  // with no row; null for a session not connected. It can change at a namer's
+  // `changed()` and when the origin lookup lands, so a caller reads it at each
+  // use.
+  project(sessionId: string): string | null;
   // Holds each relay's connect until `until` settles, up to a bound, so a
   // relaunched relay joins the row a plugin is about to open rather than
-  // opening its own. Only a relay's hello waits: `connect` does not.
+  // opening its own. Only a relay's hello waits: a hook hello and `connect`
+  // do not.
   holdConnects(until: Promise<unknown>): void;
 }
 

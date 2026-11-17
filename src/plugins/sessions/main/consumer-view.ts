@@ -36,8 +36,8 @@ function ownedWith(consumer: Registrations, owned: OwnedSession): OwnedSession {
 }
 
 // One dependent's view of sessions' main exports: every tool contribution,
-// close guard, tool-call guard and project namer it adds, and every session it
-// connects or opens, is filed under its registrations.
+// close guard, tool-call guard, hook handler and project namer it adds, and
+// every session it connects or opens, is filed under its registrations.
 export function sessionsMainView(
   exports: SessionsMainExports,
   consumer: Registrations,
@@ -50,6 +50,8 @@ export function sessionsMainView(
       consumer.track(exports.addCloseGuard(mayClose, cancelHold)),
     addToolCallGuard: (guard) =>
       consumer.track(exports.addToolCallGuard(guard)),
+    addHookHandler: (name, handler) =>
+      consumer.track(exports.addHookHandler(name, handler)),
     addProjectNamer: (namer) => consumer.track(exports.addProjectNamer(namer)),
     connect: (info) => endedWith(consumer, exports.connect(info)),
     open: (info, options) => ownedWith(consumer, exports.open(info, options)),

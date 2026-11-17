@@ -9,11 +9,15 @@ import {
 import { listenOnChannel } from '../../../../shared/local-channel/local-channel';
 import {
   type ConnectedSession,
+  type HookReply,
   RELAY_PROTOCOL,
   type RelayHello,
   type RelayHelloReply,
   type SessionInfo,
 } from '../../contract';
+
+// How long a hook hello waits for its request line, and then for its handler.
+export const HOOK_REQUEST_TIMEOUT_MS = 5_000;
 
 // Serves MCP for one session; `input` arrives paused, holding any bytes the
 // relay sent after its hello, and `serve` resumes it.
@@ -23,12 +27,17 @@ export type ServeSession = (
 ) => { close(): Promise<void> };
 
 // `connect` opens the app's session for each relay that said a good hello, once
-// `ready` resolves; `ready` never rejects.
+// `ready` resolves; `ready` never rejects. `hook` answers each hook hello's
+// request, waiting on neither and never rejecting; `hookTimeoutMs` bounds the
+// wait for the request line and for `hook`'s answer, HOOK_REQUEST_TIMEOUT_MS
+// when absent.
 export interface RelayServerDeps {
   channel: string;
   ready(): Promise<void>;
   connect(info: SessionInfo): ConnectedSession;
   serve: ServeSession;
+  hook(name: string, info: SessionInfo, request: unknown): Promise<HookReply>;
+  hookTimeoutMs?: number;
   log: PluginLog;
 }
 
@@ -72,6 +81,9 @@ function mistypedHelloField(hello: RelayHello): string | null {
   if (!isOptional(hello.row_id, 'string')) {
     return 'row_id';
   }
+  if (!isOptional(hello.hook, 'string')) {
+    return 'hook';
+  }
   return null;
 }
 
@@ -83,6 +95,7 @@ const SESSIONS_HELLO_FIELDS: ReadonlySet<string> = new Set([
   'harness',
   'config_dir',
   'row_id',
+  'hook',
 ]);
 
 function sessionInfo(hello: RelayHello): SessionInfo {
@@ -169,9 +182,94 @@ async function startSessionOnceReady(
   startSession(socket, hello, deps);
 }
 
-// Reads the hello line and refuses a bad one at once; a good one waits for
-// `deps.ready`, then the socket is handed on paused, with the bytes that followed
-// the newline put back in front.
+function parseHookRequest(
+  line: string,
+): { request: unknown } | { error: string } {
+  try {
+    return { request: JSON.parse(line) as unknown };
+  } catch {
+    return { error: 'the hook request was not JSON' };
+  }
+}
+
+// Writes the one reply line and ends the socket, unless the client already
+// left or the socket already ended.
+function endWithHookReply(socket: Socket, reply: HookReply) {
+  if (socket.destroyed || socket.writableEnded) {
+    return;
+  }
+  socket.end(jsonLine(reply));
+}
+
+// The handler's answer, or a refusal once `limit` ms pass first; the timer is
+// cleared when the handler settles first.
+async function hookReplyWithin(
+  answering: Promise<HookReply>,
+  limit: number,
+  refused: (error: string) => void,
+): Promise<HookReply> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<HookReply>((resolve) => {
+    timer = setTimeout(() => {
+      const error = `hook handler did not answer within ${limit} ms`;
+      refused(error);
+      resolve({ ok: false, error });
+    }, limit);
+  });
+  try {
+    return await Promise.race([answering, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// A hook hello: reads one request line, answers it with one `HookReply` line
+// and ends the socket, waiting on no connect hold and opening no session. The
+// request line and the handler each get the hook timeout.
+function answerHook(
+  socket: Socket,
+  name: string,
+  hello: RelayHello,
+  deps: RelayServerDeps,
+) {
+  const limit = deps.hookTimeoutMs ?? HOOK_REQUEST_TIMEOUT_MS;
+  const logRefusal = (error: string) =>
+    deps.log(`refused hook ${name}: ${error}`);
+  const refuseHook = (error: string) => {
+    logRefusal(error);
+    endWithHookReply(socket, { ok: false, error });
+  };
+  let hasTimedOut = false;
+  socket.setTimeout(limit);
+  socket.once('timeout', () => {
+    hasTimedOut = true;
+    refuseHook(`no hook request line within ${limit} ms`);
+  });
+  readFirstLine(socket, (line) => {
+    // A paused socket never reads the client's end, so a client that left
+    // would go unseen; flowing, it drops any later bytes.
+    socket.resume();
+    if (hasTimedOut) {
+      return;
+    }
+    socket.setTimeout(0);
+    const parsed = parseHookRequest(line);
+    if ('error' in parsed) {
+      refuseHook(parsed.error);
+      return;
+    }
+    void hookReplyWithin(
+      deps.hook(name, sessionInfo(hello), parsed.request),
+      limit,
+      logRefusal,
+    ).then((reply) => endWithHookReply(socket, reply));
+  });
+  socket.resume();
+}
+
+// Reads the hello line and refuses a bad one at once; a hook hello is answered
+// at once, and any other good one waits for `deps.ready`, then the socket is
+// handed on paused, with the bytes that followed the newline put back in front.
 function acceptConnection(socket: Socket, deps: RelayServerDeps) {
   socket.on('error', (error) =>
     deps.log(`a relay connection failed: ${error.message}`),
@@ -182,11 +280,17 @@ function acceptConnection(socket: Socket, deps: RelayServerDeps) {
       refuse(socket, parsed.error, deps);
       return;
     }
-    void startSessionOnceReady(socket, parsed.hello, deps);
+    const { hello } = parsed;
+    if (typeof hello.hook === 'string') {
+      answerHook(socket, hello.hook, hello, deps);
+      return;
+    }
+    void startSessionOnceReady(socket, hello, deps);
   });
 }
 
-// Listens for relay.py connections on the channel, one connected session each.
+// Listens for relay.py connections on the channel, one connected session each,
+// and for hook calls, each answered with one line and closed.
 export function startRelayServer(deps: RelayServerDeps): {
   close(): Promise<void>;
 } {

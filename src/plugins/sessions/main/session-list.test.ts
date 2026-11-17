@@ -724,6 +724,15 @@ describe('createSessionList', () => {
     expect(list.label('unknown')).toBeNull();
   });
 
+  it('project_ConnectedWithoutRow_ReturnsEntryProject', () => {
+    const { list } = setUp();
+    const { session } = list.connect(info('/work/alpha'));
+
+    expect(list.state().rows).toEqual([]);
+    expect(list.project(session.id)).toBe('alpha');
+    expect(list.project('unknown')).toBeNull();
+  });
+
   it('numbers two folders with one name as one group', () => {
     const { list } = setUp();
 
@@ -1791,6 +1800,66 @@ describe('createSessionList', () => {
     });
 
     expect(second.session.id).not.toBe(first.session.id);
+  });
+
+  // Ids run 00000001, 00000002, … in the order `arrange` opens or connects.
+  it.each<{
+    case: string;
+    arrange(list: SessionList): void;
+    query: SessionInfo;
+    expected: string | null;
+  }>([
+    {
+      case: 'a row id naming an owned entry with no host id',
+      arrange: (list) => list.open(owned(null)),
+      query: { ...owned('host-7'), rowId: '00000001' },
+      expected: '00000001',
+    },
+    {
+      case: 'a row id naming an owned entry whose host id differs',
+      arrange(list) {
+        list.open(owned('host-1'));
+        list.open(owned('host-2'));
+      },
+      query: { ...owned('host-2'), rowId: '00000001' },
+      expected: '00000002',
+    },
+    {
+      case: 'a row id naming an owned entry over a connected one holding the host id',
+      arrange(list) {
+        list.open(owned(null));
+        list.connect(owned('host-1'));
+      },
+      query: { ...owned('host-1'), rowId: '00000001' },
+      expected: '00000001',
+    },
+    {
+      case: 'a row id naming a connected entry counts as none',
+      arrange(list) {
+        list.connect(owned('host-1'));
+        list.connect(owned('host-2'));
+      },
+      query: { ...owned('host-2'), rowId: '00000001' },
+      expected: '00000002',
+    },
+    {
+      case: 'unknown row id and host id',
+      arrange(list) {
+        list.open(owned('host-1'));
+        list.connect(owned('host-2'));
+      },
+      query: { ...owned('host-9'), rowId: 'ffffffff' },
+      expected: null,
+    },
+  ])('sessionOf_ConnectOrder: $case', ({ arrange, query, expected }) => {
+    const { list, emitted } = setUp();
+    arrange(list);
+    const emittedBefore = emitted.length;
+
+    const found = list.sessionOf(query);
+
+    expect(found?.id ?? null).toBe(expected);
+    expect(emitted).toHaveLength(emittedBefore);
   });
 
   it('join_NoHostIdAtJoin_CallsRunUntilMovedOff', async () => {

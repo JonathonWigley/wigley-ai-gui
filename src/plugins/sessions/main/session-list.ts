@@ -55,10 +55,15 @@ export interface SessionListDeps {
 // one disposed, once each.
 export interface SessionList extends Omit<
   SessionsMainExports,
-  'holdConnects' | 'activate'
+  'holdConnects' | 'activate' | 'addHookHandler'
 > {
   // `SessionsMainExports.activate`; true when it wrote the rows or the selection.
   activate(sessionId: string): boolean;
+  // The live session `info` names, looked up in `connect`'s order: the owned
+  // session `info.rowId` names under `connect`'s join rule, else the owned
+  // session holding `info.sessionId`, else the first connected one holding it;
+  // null when none does. Connects and changes nothing.
+  sessionOf(info: SessionInfo): AgentSession | null;
   tools(): ToolDefinition[];
   onToolsChanged(listener: () => void): Disposable;
   state(): SessionsState;
@@ -554,6 +559,20 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       (entry) => entry.session.info.sessionId === hostId,
     );
 
+  // The owned entry `info.rowId` names, while it has no host id, `info` has
+  // none, or the two are equal; a row id naming a connected entry, or none,
+  // finds nothing.
+  const rowJoinEntry = (info: SessionInfo): SessionEntry | undefined => {
+    const hostId = info.sessionId;
+    const rowEntry = info.rowId === null ? undefined : entries.get(info.rowId);
+    const rowHostId = rowEntry?.session.info.sessionId ?? null;
+    const isRowJoin =
+      rowEntry !== undefined &&
+      rowEntry.owned &&
+      (rowHostId === null || hostId === null || hostId === rowHostId);
+    return isRowJoin ? rowEntry : undefined;
+  };
+
   // Ends the contribution's tool session in every live entry, each whatever
   // another's `end` throws, and frees its tool names.
   const withdrawContribution = (contribution: Contribution) => {
@@ -855,14 +874,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     },
     connect(info): ConnectedSession {
       const hostId = info.sessionId;
-      const rowEntry =
-        info.rowId === null ? undefined : entries.get(info.rowId);
-      const rowHostId = rowEntry?.session.info.sessionId ?? null;
-      const isRowJoin =
-        rowEntry !== undefined &&
-        rowEntry.owned &&
-        (rowHostId === null || hostId === null || hostId === rowHostId);
-      if (isRowJoin) {
+      const rowEntry = rowJoinEntry(info);
+      if (rowEntry !== undefined) {
         return join(rowEntry, hostId);
       }
       const ownedEntry =
@@ -1035,6 +1048,18 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     label(sessionId) {
       const entry = entries.get(sessionId);
       return entry === undefined ? null : labelOf(entry);
+    },
+    project(sessionId) {
+      return entries.get(sessionId)?.project ?? null;
+    },
+    sessionOf(info) {
+      const holders =
+        info.sessionId === null ? [] : entriesHolding(info.sessionId);
+      const entry =
+        rowJoinEntry(info) ??
+        holders.find((holder) => holder.owned) ??
+        holders[0];
+      return entry?.session ?? null;
     },
     setTitle,
     titles(sessionId) {

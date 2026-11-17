@@ -38,6 +38,7 @@ import { sessionsMainView } from './consumer-view';
 import { serveMcp } from './mcp/mcp-server';
 import { createEndpointWriter, endedDriveRunLaunch } from './relay/endpoint';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
+import { createHookRoutes, type HookRoutes } from './relay/hook-routes';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
 import { createSessionList, type SessionList } from './session-list';
@@ -121,9 +122,15 @@ function createList(api: SessionsApi): SessionList {
 
 // Opens the channel relay.py connects to, each relay connecting one session
 // served the live tool list under the platform's relay server name, its calls'
-// tool-use ids read by its harness. A relay that finds the app gone starts
-// it again, except a drive run's, which stays ended and names the run's home.
-function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
+// tool-use ids read by its harness, and each hook call answered by `routes`. A
+// relay that finds the app gone starts it again, except a drive run's, which
+// stays ended and names the run's home.
+function openRelay(
+  api: SessionsApi,
+  list: SessionList,
+  hold: ConnectHold,
+  routes: HookRoutes,
+) {
   const channel = channelPath(
     api.services.platform.os,
     api.services.homeDir,
@@ -145,6 +152,7 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
             meta,
           ),
       }),
+    hook: (name, info, request) => routes.answer(name, info, request),
     log: api.services.log,
   });
   const endpoint: RelayEndpoint = {
@@ -268,7 +276,8 @@ export function addDriveActions(
   });
 }
 
-// Owns agent sessions: the relay they connect through, the tools other
+// Owns agent sessions: the relay they connect through, the hook calls it
+// answers with the handlers other plugins register, the tools other
 // plugins contribute for them and its own `set_session_title`, their sidebar
 // rows and the project each row groups under, from the namers other plugins
 // register, and the sessions layouts.
@@ -287,8 +296,14 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   start(api: SessionsApi) {
     const list = createList(api);
     const hold = createConnectHold(api.services.timers, api.services.log);
+    const routes = createHookRoutes(
+      (info) => list.sessionOf(info),
+      api.services.log,
+    );
     const opened =
-      api.services.runMode === 'selfTest' ? null : openRelay(api, list, hold);
+      api.services.runMode === 'selfTest'
+        ? null
+        : openRelay(api, list, hold, routes);
     const endpointWriter = createEndpointWriter(
       api.services.files,
       api.services.paths,
@@ -313,9 +328,11 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       activate: (sessionId) => list.activate(sessionId),
       release: (sessionId) => list.release(sessionId),
       label: (sessionId) => list.label(sessionId),
+      project: (sessionId) => list.project(sessionId),
       addCloseGuard: (mayClose, cancelHold) =>
         list.addCloseGuard(mayClose, cancelHold),
       addToolCallGuard: (guard) => list.addToolCallGuard(guard),
+      addHookHandler: (name, handler) => routes.add(name, handler),
       setTitle: (sessionId, source, title) =>
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),

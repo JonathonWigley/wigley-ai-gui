@@ -9,6 +9,7 @@ import { channelPath } from '../../../../shared/local-channel/channel-path';
 import { osPlatform } from '../../../../shared/os-platform';
 import {
   type ConnectedSession,
+  type HookReply,
   RELAY_PROTOCOL,
   type RelayHello,
   type SessionInfo,
@@ -26,6 +27,19 @@ const HELLO: RelayHello = {
   deadline_seconds: 300,
   harness: 'claude',
 };
+
+const HOOK_HELLO: RelayHello = { ...HELLO, hook: 'chatroom.pre' };
+
+// The session info every hook test's hello carries.
+const HOOK_INFO: SessionInfo = {
+  sessionId: 'session-1',
+  projectDir: '/work/project',
+  harness: 'claude',
+  rowId: null,
+  host: { deadline_seconds: 300 },
+};
+
+const HOOK_TIMEOUT_MS = 50;
 
 const cleanups: (() => Promise<void> | void)[] = [];
 
@@ -81,6 +95,11 @@ function testChannel(dir: string): string {
 
 const channelIsPipe = testChannel(tmpdir()).startsWith('\\\\.\\pipe\\');
 
+const noHook: RelayServerDeps['hook'] = async (name) => ({
+  ok: false,
+  error: `no hook ${name} in this test`,
+});
+
 // macOS caps a socket path near 104 bytes, so the folder name stays short.
 function start(
   serve: ServeSession,
@@ -88,6 +107,7 @@ function start(
   leftover = false,
   ready: RelayServerDeps['ready'] = () => Promise.resolve(),
   log: RelayServerDeps['log'] = () => {},
+  hooks: Pick<RelayServerDeps, 'hook' | 'hookTimeoutMs'> = { hook: noHook },
 ) {
   const dir = mkdtempSync(path.join(tmpdir(), 'wr-'));
   const channel = testChannel(dir);
@@ -95,7 +115,14 @@ function start(
     mkdirSync(path.dirname(channel), { recursive: true });
     writeFileSync(channel, '');
   }
-  const server = startRelayServer({ channel, ready, connect, serve, log });
+  const server = startRelayServer({
+    channel,
+    ready,
+    connect,
+    serve,
+    log,
+    ...hooks,
+  });
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   cleanups.push(() => server.close());
   return channel;
@@ -131,6 +158,32 @@ async function open(channel: string) {
 
 function helloLine(hello: object): string {
   return `${JSON.stringify(hello)}\n`;
+}
+
+// Writes `text` on a new connection and resolves with everything the server
+// wrote before it ended the socket.
+async function hookCall(channel: string, text: string): Promise<string> {
+  const socket = connect(channel);
+  cleanups.push(() => {
+    socket.destroy();
+  });
+  await once(socket, 'connect');
+  const chunks: Buffer[] = [];
+  socket.on('data', (chunk: Buffer) => chunks.push(chunk));
+  const ended = once(socket, 'end');
+  socket.write(text);
+  await ended;
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+// A `hook` dep that records each call and answers with `answer`.
+function recordingHook(answer: () => Promise<HookReply>) {
+  const calls: [string, SessionInfo, unknown][] = [];
+  const hook: RelayServerDeps['hook'] = (name, info, request) => {
+    calls.push([name, info, request]);
+    return answer();
+  };
+  return { hook, calls };
 }
 
 describe('startRelayServer', () => {
@@ -212,6 +265,7 @@ describe('startRelayServer', () => {
     ['harness', { harness: 3 }],
     ['config_dir', { config_dir: 3 }],
     ['row_id', { row_id: 5 }],
+    ['hook', { hook: 4 }],
   ])(
     'refuses a hello whose %s has the wrong type and starts no session',
     async (field, override) => {
@@ -443,6 +497,134 @@ describe('startRelayServer', () => {
       ok: false,
       error: `relay protocol 99, app protocol ${RELAY_PROTOCOL}`,
     });
+    expect(fake.started).toEqual([]);
+  });
+
+  it('hookHello_RoutesOneRequest_RepliesAndCloses', async () => {
+    const fake = fakeSessions();
+    const recorded = recordingHook(async () => ({
+      ok: true,
+      reply: { verdict: 'allow' },
+    }));
+    const channel = start(
+      echoServe().serve,
+      fake.connect,
+      false,
+      undefined,
+      undefined,
+      { hook: recorded.hook },
+    );
+
+    const written = await hookCall(
+      channel,
+      `${helloLine(HOOK_HELLO)}{"tool":"edit"}\n`,
+    );
+
+    expect(written).toBe('{"ok":true,"reply":{"verdict":"allow"}}\n');
+    expect(recorded.calls).toEqual([
+      ['chatroom.pre', HOOK_INFO, { tool: 'edit' }],
+    ]);
+    expect(fake.started).toEqual([]);
+  });
+
+  it.each([
+    {
+      case: 'a request line that is not JSON',
+      sent: `${helloLine(HOOK_HELLO)}not json\n`,
+      expected: { ok: false, error: 'the hook request was not JSON' },
+    },
+    {
+      case: 'no request line within the timeout',
+      sent: helloLine(HOOK_HELLO),
+      expected: {
+        ok: false,
+        error: `no hook request line within ${HOOK_TIMEOUT_MS} ms`,
+      },
+    },
+  ])('hookHello_BadRequest_RepliesError: $case', async ({ sent, expected }) => {
+    const recorded = recordingHook(async () => ({ ok: true, reply: {} }));
+    const channel = start(
+      echoServe().serve,
+      fakeSessions().connect,
+      false,
+      undefined,
+      undefined,
+      { hook: recorded.hook, hookTimeoutMs: HOOK_TIMEOUT_MS },
+    );
+
+    const written = await hookCall(channel, sent);
+
+    expect(written).toBe(`${JSON.stringify(expected)}\n`);
+    expect(recorded.calls).toEqual([]);
+  });
+
+  it('hookHello_HandlerNeverResolves_RepliesError', async () => {
+    const recorded = recordingHook(() => new Promise<HookReply>(() => {}));
+    const channel = start(
+      echoServe().serve,
+      fakeSessions().connect,
+      false,
+      undefined,
+      undefined,
+      { hook: recorded.hook, hookTimeoutMs: HOOK_TIMEOUT_MS },
+    );
+
+    const written = await hookCall(channel, `${helloLine(HOOK_HELLO)}{}\n`);
+
+    expect(written).toBe(
+      `{"ok":false,"error":"hook handler did not answer within ${HOOK_TIMEOUT_MS} ms"}\n`,
+    );
+  });
+
+  it('hookHello_ClientLeftBeforeTheReply_WritesNothing', async () => {
+    const answer = Promise.withResolvers<HookReply>();
+    const recorded = recordingHook(() => answer.promise);
+    const hold = heldReady();
+    const channel = start(
+      echoServe().serve,
+      fakeSessions().connect,
+      false,
+      undefined,
+      hold.log,
+      { hook: recorded.hook, hookTimeoutMs: 1_000 },
+    );
+    const socket = connect(channel);
+    cleanups.push(() => {
+      socket.destroy();
+    });
+    await once(socket, 'connect');
+
+    socket.write(`${helloLine(HOOK_HELLO)}{}\n`);
+    await vi.waitFor(() => expect(recorded.calls).toHaveLength(1));
+    socket.destroy();
+    await once(socket, 'close');
+    // The server has no signal for a client that left; the pause lets it see the close.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    answer.resolve({ ok: true, reply: {} });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(hold.logged).toEqual([]);
+  });
+
+  it('hookHello_WhileHeld_RepliesAtOnce', async () => {
+    const fake = fakeSessions();
+    const hold = heldReady();
+    const recorded = recordingHook(async () => ({
+      ok: true,
+      reply: { verdict: 'allow' },
+    }));
+    const channel = start(
+      echoServe().serve,
+      fake.connect,
+      false,
+      hold.ready,
+      hold.log,
+      { hook: recorded.hook },
+    );
+
+    const written = await hookCall(channel, `${helloLine(HOOK_HELLO)}{}\n`);
+
+    expect(written).toBe('{"ok":true,"reply":{"verdict":"allow"}}\n');
     expect(fake.started).toEqual([]);
   });
 
