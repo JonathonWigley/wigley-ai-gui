@@ -1,4 +1,5 @@
-/* Toasts stack above the status bar, newest last. */
+/* Toasts stack above the status bar, newest last. A toast's own look is in the
+   shell default layout's `layout.css`. */
 .toasts {
   position: fixed;
   right: var(--wg-space-4);
@@ -8,18 +9,4 @@
   align-items: flex-end;
   gap: var(--wg-space-2);
   z-index: var(--wg-z-toast);
-}
-
-.toast {
-  display: flex;
-  align-items: center;
-  gap: var(--wg-space-2);
-  max-width: min(calc(var(--wg-space-8) * 12), calc(100vw - var(--wg-space-8)));
-  padding: var(--wg-space-2) var(--wg-space-3);
-  font-size: var(--wg-text-13);
-}
-
-.toast-text {
-  min-width: 0;
-  overflow-wrap: anywhere;
 }

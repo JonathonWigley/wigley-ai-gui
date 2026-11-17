@@ -1,8 +1,17 @@
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
-// The shell chrome's layout contract: what the core puts in the title bar and the activity bar. The app keeps the
-// areas and their arrangement, the side bar's contents and state, every plugin's contribution, the click that shows a
-// mode, and the shown mode's mark (`is-shown`, `aria-current`) on its activity item.
+// The shell chrome's layout contract: what the core puts in the title bar and the activity bar, and each toast. The
+// app keeps the areas and their arrangement, the side bar's contents and state, every plugin's contribution, the click
+// that shows a mode, and the shown mode's mark (`is-shown`, `aria-current`) on its activity item. For a toast it keeps
+// the toasts layer, `data-tone` and `role="status"` on the toast's root, the fade in, the 4000 ms it shows for and its
+// removal.
+
+// The same members as `ToastTone` in the app's plugin contract, which this file cannot import.
+export type ToastTone = 'success' | 'info' | 'error';
+export interface ToastInput {
+  text: string;
+  tone: ToastTone;
+}
 
 // The shown mode's context: its title, and its detail or null.
 export interface ContextInput {
@@ -27,7 +36,10 @@ export interface ActivityItemInput {
 // The shell's kit. The shell owns no command, so `keys`, `keyHint` and `edge` take any plugin's command by its
 // qualified id (as `docs.openDoc`), and a hint anchors in every scope. A hint shows once the plugins have started.
 // `keys` and `command` read the commands the app serves, so `command` runs a command of either process.
-export interface ShellKit extends BaseKit {}
+export interface ShellKit extends BaseKit {
+  // `div.ui-floating`: the glass panel, appended to `parent`. The app's toast fade keys on it.
+  floatingPanel(parent: HTMLElement): HTMLElement;
+}
 
 // A layout defines only the parts it changes: each part comes from the first layout that defines it among the
 // `shell.layout` setting's layout and `default`. A part that throws, or returns no element appended to `parent`, is
@@ -55,6 +67,9 @@ export interface Layout {
     input: ActivityItemInput,
     kit: ShellKit,
   ): HTMLElement;
+  // A toast's whole look, drawn once per toast into the toasts layer. A shown toast keeps the layout it drew with; a
+  // layout change applies from the next toast.
+  toast?(parent: HTMLElement, input: ToastInput, kit: ShellKit): HTMLElement;
 }
 
 // The built-in `default` layout, which defines every part.

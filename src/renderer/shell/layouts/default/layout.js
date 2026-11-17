@@ -11,6 +11,14 @@ function problemText(problem) {
   return `${problem.file}: ${problem.message}`;
 }
 
+// The status dot leading each tone's toast; an info note carries none.
+/** @type {Record<import('../layout').ToastTone, 'success' | 'error' | null>} */
+const TOAST_DOTS = {
+  success: 'success',
+  info: null,
+  error: 'error',
+};
+
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
   // The title then the detail, on one line cut short; the full detail, or the
@@ -57,6 +65,17 @@ const layout = {
     item.title = input.title;
     item.setAttribute('aria-label', input.title);
     return item;
+  },
+  // A glass panel: the tone's dot, if it has one, then the text.
+  toast(parent, input, kit) {
+    const root = kit.floatingPanel(parent);
+    root.classList.add('toast');
+    const dot = TOAST_DOTS[input.tone];
+    if (dot !== null) {
+      kit.statusDot(root, dot);
+    }
+    kit.el(root, 'span', 'toast-text', input.text);
+    return root;
   },
 };
 

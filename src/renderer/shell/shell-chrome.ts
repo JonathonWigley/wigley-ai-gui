@@ -12,14 +12,20 @@ import type {
   ShownLayouts,
 } from '../../contracts/plugin';
 import type { ConfigProblem } from '../../contracts/settings';
-import { element } from '../../shared/page/dom';
+import { appended, element } from '../../shared/page/dom';
 import {
   createBaseKit,
   type OwnerKitServices,
 } from '../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../shared/page/layout-host/layout-parts';
-import type { CompleteLayout, Layout, ShellKit } from './layouts/layout';
+import { floatingPanel } from '../../shared/page/ui/floating-panel';
+import type {
+  CompleteLayout,
+  Layout,
+  ShellKit,
+  ToastInput,
+} from './layouts/layout';
 
 // `services` are what the shell kit reads, the keys fixed for the mount.
 export interface ShellChromeDeps {
@@ -37,6 +43,9 @@ export interface ShellChromeDeps {
 // `showMode` shows an added mode by id, and does nothing for an unknown one;
 // `markMode` marks the shown mode's item, logging only when the
 // marked mode changed; `setLayouts` draws every part again with new layouts.
+// `drawToast` draws one toast into `parent` with the current layouts and
+// returns its root and the dispose of what it drew; `setLayouts` leaves a
+// drawn toast as it is.
 export interface ShellChrome {
   showContext(context: ModeContext | null): void;
   showProblems(problems: readonly ConfigProblem[]): void;
@@ -44,6 +53,10 @@ export interface ShellChrome {
   showMode(modeId: string): void;
   markMode(modeId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
+  drawToast(
+    parent: HTMLElement,
+    input: ToastInput,
+  ): { element: HTMLElement; dispose(): void };
 }
 
 // The shell kit of one drawing attempt. The shell owns no command, so only a
@@ -52,13 +65,16 @@ function createShellKit(
   services: OwnerKitServices,
   rollback: Pick<RollbackDeps, 'recordAnchor'>,
 ): ShellKit {
-  return createBaseKit({
-    ...services,
-    scope: null,
-    commandNamed: () => null,
-    recordAnchor: (anchor) => rollback.recordAnchor(anchor),
-    recordMount: (mount) => rollback.recordAnchor(mount),
-  });
+  return {
+    ...createBaseKit({
+      ...services,
+      scope: null,
+      commandNamed: () => null,
+      recordAnchor: (anchor) => rollback.recordAnchor(anchor),
+      recordMount: (mount) => rollback.recordAnchor(mount),
+    }),
+    floatingPanel: (parent) => appended(parent, floatingPanel()),
+  };
 }
 
 // A part's place in its area: the app-owned `span.shell-part-slot`, which
@@ -256,6 +272,20 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
     setLayouts(next) {
       parts.setLayouts(next);
       drawAll();
+    },
+    drawToast(parent, input) {
+      const drawn = parts.draw(
+        'toast',
+        parent,
+        (builder, toastParent, rollback) => ({
+          element: builder(
+            toastParent,
+            input,
+            createShellKit({ ...services, log: shellLog }, rollback),
+          ),
+        }),
+      );
+      return { element: drawn.built.element, dispose: drawn.dispose };
     },
   };
 }
