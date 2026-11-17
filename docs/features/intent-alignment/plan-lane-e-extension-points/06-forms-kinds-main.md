@@ -1,6 +1,6 @@
 # 06 — Forms item kinds register in main
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none in this plan · Gated: Lane H's Structured round results (plan.md precondition 2)
 Plan: [plan.md](plan.md)
@@ -535,3 +535,4 @@ built-ins register through it, and the ask_round schema follows it".
 
 ## Proof
 
+Commit 9e08800b6 · proof: diff read: every Produces present (BuiltInItemKind/ItemKind/AnswerableKind, PythonJsonValue, RoundError/RoundErrorPath/RoundItemPath in contract.ts with kind: string, ItemKindSpec, MainItemKind, FormsMainExports/formsMainKey, FormBody/AnswersPayload index signatures, BUILT_IN_KIND_SPECS, KindRegistry/createKindRegistry, BUILT_IN_KINDS, KindRound/RoundResult.results and the kinds-first round functions, roundErrorText/roundPayload(kinds, …), createRoundType/autoAnsweredPayload/withKnownLayouts, formsTools(kinds), contributeFormsTools, start exports registerKind); typecheck, lint and npm test -- src/plugins/forms (825) pass; golden and mcp-wording literals unchanged · concerns: the round sent to the page carries the items record until 07 reads it; casts to FormBody and AnswersPayload sit at bodyOf and roundPayload; outside forms, markdown-it-renderer addBlock_SecondOfAName and plan-copies readPlanCopy fail on the branch but not on main (for the test gate); user-keymap parseUserKeymap_UnknownToken fails on main too
