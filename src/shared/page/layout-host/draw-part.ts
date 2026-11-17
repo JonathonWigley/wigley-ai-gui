@@ -99,9 +99,7 @@ export function drawPart<
   }
   const builder = options.part(options.defaultLayout);
   if (builder === undefined) {
-    throw new Error(
-      `layout ${DEFAULT_LAYOUT_NAME} has no ${options.partName}`,
-    );
+    throw new Error(`layout ${DEFAULT_LAYOUT_NAME} has no ${options.partName}`);
   }
   return attempt(options, builder, DEFAULT_LAYOUT_NAME, isBundledPick);
 }

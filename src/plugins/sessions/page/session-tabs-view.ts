@@ -384,8 +384,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       }),
     );
     const isDrawnBarCurrent =
-      frame.popupBar !== null &&
-      isSamePopupBar(frame.popupBarEntries, entries);
+      frame.popupBar !== null && isSamePopupBar(frame.popupBarEntries, entries);
     if (isDrawnBarCurrent) {
       return;
     }

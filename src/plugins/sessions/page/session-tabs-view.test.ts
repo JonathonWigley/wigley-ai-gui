@@ -272,9 +272,7 @@ describe('session tabs view', () => {
   // one in the strip.
   it('a removed tab leaves the strip while the others keep their elements', () => {
     const { view, area } = sessionsViewSetup();
-    const [, b] = ['a', 'b', 'c'].map((id) =>
-      view.tabs.add('s', tabView(id)),
-    );
+    const [, b] = ['a', 'b', 'c'].map((id) => view.tabs.add('s', tabView(id)));
     view.render(stateOf(['s'], 's'));
     view.panes.restore(
       { root: { kind: 'leaf', id: 'pane-1' }, focusedId: 'pane-1' },

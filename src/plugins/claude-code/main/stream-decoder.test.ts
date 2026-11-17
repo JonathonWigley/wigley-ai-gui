@@ -1099,9 +1099,9 @@ describe('createStreamDecoder', () => {
       }
 
       expect(decoded.slice(0, -1).flatMap((out) => out.entries)).toEqual([]);
-      expect(
-        [...kept].map(([id, raw]) => [id, raw.map(rawKind)]),
-      ).toEqual(expected);
+      expect([...kept].map(([id, raw]) => [id, raw.map(rawKind)])).toEqual(
+        expected,
+      );
       expect(
         decoded.flatMap((out) =>
           out.lifecycle === null ? [] : [out.lifecycle],
