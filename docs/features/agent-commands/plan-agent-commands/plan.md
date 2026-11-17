@@ -210,8 +210,8 @@ Critical path: 01 → 06 → 08 → 09
 - [x] [chat.sendTo and the frame line](06-chat-send-to.md) — after 01
 
 ### Wave 3
-- [ ] [The "from" tag](07-from-tag.md) — after 05, 06
-- [ ] [agent-commands plugin](08-agent-commands-plugin.md) — after 01, 02, 03, 06
+- [x] [The "from" tag](07-from-tag.md) — after 05, 06
+- [x] [agent-commands plugin](08-agent-commands-plugin.md) — after 01, 02, 03, 06
 
 ### Wave 4
 - [ ] [Doc re-read](09-doc-re-read.md) — after 01–08
@@ -228,6 +228,8 @@ Review base: 8d829c42c
 - 04 · standard · f1c02b55b · diff read: every risky/targets flag in the task's table, counts checked against it; wave-2 typecheck passes · concerns: single-line declarations expanded to multi-line for the flag
 - 05 · hard · 60da2181a · diff read: chat sessionFor, sessions closeSession/renameSession, workflow and Large runOnSelected act on targetSessionId; wave-2 typecheck passes · concerns: the task named sessions.active, the code uses sessions.shownSessionId(); sessions' rename test sees the dialog only through renameAccept; the Large target row uses b with s1 selected
 - 06 · hard · 11db446db · diff read: frameAgentMessage, readAgentFrame, frameSenderName in chat/agent-frame.ts; chat.sendTo in the manifest (runsIn main, arg sessionId/text); isUnattended and senderName on ChatMainExports; wave-2 typecheck passes · concerns: sendTo needed a label and group (label: send a message to another session, framed as its agent's; group chat); the 'running target' test row is the likeliest to fail; the fake sessions gained label and the harness exposes titles/labels
+- 07 · standard (compile error → same-rung fix) · 113ffce7a · diff read: from on UserInput and QueuedMessageInput in layout.d.ts; entryInput, queuedInput, stopText, putBack read the frame; layout.js draws the chat-user-from Tag; wave-3 typecheck passes after the read-chat-layout fix · concerns: the worker looked for DESIGN.md under docs/ and read no § Chat (it is at wigley-ai-gui/DESIGN.md); the putBack comment line runs past the wrap width
+- 08 · deep · 0b157af9d · diff read: agentCommandsManifest (readsEverySlot, depends on sessions/chat/forms), agentCommandsMainPart, AGENT_COMMAND_TOOLS and createAgentCommandTools, drive actions call/result; refusal order matches the task; wave-3 typecheck passes · concerns: chat.sendTo is a string literal in tools.ts (no command key in chat's contract); the confirm detail lands in the round's overview, documented as inline markdown, so the fenced JSON argument may render badly (task 10 looks); keyed-slot JSON puts all-digit keys first (Object.fromEntries)
 ### Contract changes
 - 01 adds `commandHopOf(value: unknown): CommandHop` in `src/shared/command-args.ts`: it reads a hop the other process sent, keeping only the two session-id strings and `reportErrors: true`. Consumers: none outside 01.
 ### Rulings
@@ -243,5 +245,10 @@ Review base: 8d829c42c
 - 05: renameSession with a target checks the row before showing Sessions mode, so an unknown target logs 'no session to rename' and leaves the mode alone · group 05
 - 06: the unknown-target refusal checks holds() directly, so it throws the task's exact text and also refuses the layout preview's session · group 06
 - 06: firstMessageTitleOf titles a framed message from its body, on send and on resume · group 06
+- 07: in a pending row the Tag sits between the label and the text · group 07
+- 08: an Allow after the call's signal aborted counts as a denial (tested) · group 08
+- 08: call arguments that are not an object return 'arguments must be an object' · group 08
+- 08: a drive call that rejects is stored as an error result · group 08
+- 08: the 'no drive actions when api.drive is null' row is dropped, as no assertion can fail in the harness; start.test.ts checks both actions are added with drive on · group 08
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 08 — The agent-commands plugin: three MCP tools and two drive actions
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · joins four earlier groups behind three tools, with the confirm gate, the refusals and async drive calls
 Wave: 3 · Depends on: 01, 02, 03, 06
@@ -144,3 +144,7 @@ Tests:
 Done when: `npm run typecheck` passes; the test gate runs the tests above. The tools in the live app are checked by 10
 (Final verification).
 Commit:    one commit for the group
+
+## Proof
+
+Commit 0b157af9d · proof: diff read: agentCommandsManifest (readsEverySlot, depends on sessions/chat/forms), agentCommandsMainPart, AGENT_COMMAND_TOOLS and createAgentCommandTools, drive actions call/result; refusal order matches the task; wave-3 typecheck passes · concerns: chat.sendTo is a string literal in tools.ts (no command key in chat's contract); the confirm detail lands in the round's overview, documented as inline markdown, so the fenced JSON argument may render badly (task 10 looks); keyed-slot JSON puts all-digit keys first (Object.fromEntries)

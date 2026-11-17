@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · reads four docs against the built code and changes only the lines that are no longer true
 Wave: 4 · Depends on: 01 (docs name its contract), 02 (docs name `confirm`), 03 (docs name `readsEverySlot`), 04 (docs list the risky and target sets), 05 (docs list the target rules), 06 (docs name `sendTo` and the frame), 07 (DESIGN.md names the Tag), 08 (docs name the tools)

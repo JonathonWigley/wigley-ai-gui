@@ -1,6 +1,6 @@
 # 07 — The "from" tag wherever the page shows a framed message
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · one new layout input field read from the frame 06 writes, and one Tag in the default layout, as `rowProfile` draws its Tag (`layout.js`)
 Wave: 3 · Depends on: 05, 06
@@ -75,3 +75,7 @@ Tests:
 Done when: `npm run typecheck` passes; the test gate runs the tests above. The Tag's class and title in a live session
 are checked by 10 (Final verification), with a screenshot and a `query`.
 Commit:    one commit for the group
+
+## Proof
+
+Commit 113ffce7a · proof: diff read: from on UserInput and QueuedMessageInput in layout.d.ts; entryInput, queuedInput, stopText, putBack read the frame; layout.js draws the chat-user-from Tag; wave-3 typecheck passes after the read-chat-layout fix · concerns: the worker looked for DESIGN.md under docs/ and read no § Chat (it is at wigley-ai-gui/DESIGN.md); the putBack comment line runs past the wrap width
