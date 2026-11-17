@@ -104,7 +104,7 @@ export function createRuntimeCommands<Context extends { arg: unknown }>(
         byId.set(info.id, info);
       }
     }
-    return [...byId.keys()].sort().map((id) => byId.get(id));
+    return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : 1));
   };
   // Every refusal and failure is a rejection, never a throw at the call.
   const runFor = async (
