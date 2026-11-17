@@ -75,7 +75,7 @@ describe('CommandRegistry', () => {
     { case: 'throws, reporting', handler: throwsBoom, reportErrors: true },
     { case: 'rejects, reporting', handler: rejectsBoom, reportErrors: true },
   ] as const)(
-    'run_HandlerThrowsOrRejects_LogsUnderOwnerAndResolves: $case',
+    'run_HandlerThrowsOrRejects_LogsUnderOwnerAndSkipsOrRejectsAReportingRun: $case',
     async ({ handler, reportErrors }) => {
       const { commands, logs } = setup();
       const heard: string[] = [];
@@ -174,7 +174,7 @@ describe('CommandRegistry', () => {
     { case: 'plain', reportErrors: undefined },
     { case: 'reporting', reportErrors: true },
   ] as const)(
-    'intercept_WrapThrows_LogsUnderTheWrapOwnerAndResolves: $case',
+    'intercept_WrapThrows_LogsUnderTheWrapOwnerAndSkipsOrRejectsAReportingRun: $case',
     async ({ reportErrors }) => {
       const { commands, logs } = setup();
       const heard: string[] = [];

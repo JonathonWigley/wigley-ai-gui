@@ -11,7 +11,9 @@ import type { Log } from '../contracts/log';
 // outcome the page sends once the command settled. While no started page can
 // take it, a run that reports rejects with `<id> not run: no page`, and any other
 // logs that line and resolves `skipped`. A run that reports rejects with the
-// error text the page sends.
+// error text the page sends, or `<id> failed with no error text from the page`
+// when the page sends a non-null error that is not a string. An outcome other
+// than `ran` resolves `skipped`.
 export interface PageCommands {
   run(id: CommandId, arg: unknown, hop?: CommandHop): Promise<CommandOutcome>;
   // Settles every waiting run, logging `<id> ended with the page` for each: a run
@@ -35,23 +37,28 @@ export function createPageCommands(deps: {
 }): PageCommands {
   const waiting = new Map<number, WaitingRun>();
   let lastRequest = 0;
+  // The reply comes from the page, so only its typed values are read.
   deps.ipc.on(
     BRIDGE_CHANNELS.commandRunDone,
-    (
-      _event,
-      request: number,
-      outcome: CommandOutcome,
-      errorText: string | null,
-    ) => {
+    (_event, request: unknown, outcome: unknown, errorText: unknown) => {
+      if (typeof request !== 'number') {
+        return;
+      }
       const run = waiting.get(request);
       waiting.delete(request);
       if (run === undefined) {
         return;
       }
       if (run.reportsErrors && errorText !== null) {
-        run.reject(new Error(errorText));
+        run.reject(
+          new Error(
+            typeof errorText === 'string'
+              ? errorText
+              : `${run.id} failed with no error text from the page`,
+          ),
+        );
       } else {
-        run.resolve(outcome);
+        run.resolve(outcome === 'ran' ? 'ran' : 'skipped');
       }
     },
   );

@@ -139,4 +139,29 @@ describe('createRuntimeCommands', () => {
       ],
     ]);
   });
+
+  it('runFor_LocalHandlerThrows_RejectsWithItsErrorAndTheHandlerSeesItsSessions', async () => {
+    const { api, remote } = setup();
+    const contexts: unknown[] = [];
+    api.register(
+      'boom',
+      { label: 'Boom', group: 'g', runsIn: 'main', targets: true },
+      (context) => {
+        contexts.push(context);
+        throw new Error('boom');
+      },
+    );
+
+    await expect(
+      api.runFor('p.boom', undefined, {
+        targetSessionId: 's1',
+        callerSessionId: 'c1',
+      }),
+    ).rejects.toThrow(/^boom$/);
+
+    expect(contexts).toEqual([
+      { targetSessionId: 's1', callerSessionId: 'c1', arg: undefined },
+    ]);
+    expect(remote).not.toHaveBeenCalled();
+  });
 });

@@ -6,9 +6,9 @@ import { createPageCommands } from './page-commands';
 
 type Done = (
   event: unknown,
-  request: number,
-  outcome: CommandOutcome,
-  errorText: string | null,
+  request: unknown,
+  outcome: unknown,
+  errorText: unknown,
 ) => void;
 
 function setup(page: boolean, isStarted: boolean) {
@@ -33,9 +33,9 @@ function setup(page: boolean, isStarted: boolean) {
     logs,
     send,
     done: (
-      request: number,
-      outcome: CommandOutcome = 'ran',
-      errorText: string | null = null,
+      request: unknown,
+      outcome: unknown = 'ran',
+      errorText: unknown = null,
     ) => done({}, request, outcome, errorText),
   };
 }
@@ -78,22 +78,25 @@ describe('createPageCommands', () => {
       isStarted: false,
       reportErrors: true,
     },
-  ] as const)('run_NoPageOrNotStarted_LogsAndResolves: $case', async (row) => {
-    const { commands, logs, send } = setup(row.page, row.isStarted);
+  ] as const)(
+    'run_NoPageOrNotStarted_SkipsWithALogOrRejectsAReportingRun: $case',
+    async (row) => {
+      const { commands, logs, send } = setup(row.page, row.isStarted);
 
-    const run = commands.run('p.go', undefined, {
-      reportErrors: row.reportErrors,
-    });
+      const run = commands.run('p.go', undefined, {
+        reportErrors: row.reportErrors,
+      });
 
-    if (row.reportErrors) {
-      await expect(run).rejects.toThrow(/^p\.go not run: no page$/);
-      expect(logs).toEqual([]);
-    } else {
-      await expect(run).resolves.toBe('skipped');
-      expect(logs).toEqual(['commands: p.go not run: no page']);
-    }
-    expect(send).not.toHaveBeenCalled();
-  });
+      if (row.reportErrors) {
+        await expect(run).rejects.toThrow(/^p\.go not run: no page$/);
+        expect(logs).toEqual([]);
+      } else {
+        await expect(run).resolves.toBe('skipped');
+        expect(logs).toEqual(['commands: p.go not run: no page']);
+      }
+      expect(send).not.toHaveBeenCalled();
+    },
+  );
 
   it('run_PageAnswers_SendsTheHopAndResolvesOnDone', async () => {
     const { commands, send, done } = setup(true, true);
@@ -115,21 +118,69 @@ describe('createPageCommands', () => {
     expect(await isSettled(second)).toBe(false);
   });
 
-  it.each([
-    { case: 'plain', reportErrors: undefined },
-    { case: 'reporting', reportErrors: true },
-  ] as const)(
-    'run_PageSendsErrorText_RejectsOnlyAReportingRun: $case',
-    async ({ reportErrors }) => {
+  // `settles` is the outcome the run resolves, or the error text it rejects
+  // with as a pattern.
+  it.each<{
+    case: string;
+    reportErrors: true | undefined;
+    outcome: unknown;
+    errorText: unknown;
+    settles: CommandOutcome | RegExp;
+  }>([
+    {
+      case: 'error text, plain',
+      reportErrors: undefined,
+      outcome: 'skipped',
+      errorText: 'boom',
+      settles: 'skipped',
+    },
+    {
+      case: 'error text, reporting',
+      reportErrors: true,
+      outcome: 'skipped',
+      errorText: 'boom',
+      settles: /^boom$/,
+    },
+    {
+      case: 'a non-string error, plain',
+      reportErrors: undefined,
+      outcome: 'ran',
+      errorText: 42,
+      settles: 'ran',
+    },
+    {
+      case: 'a non-string error, reporting',
+      reportErrors: true,
+      outcome: 'ran',
+      errorText: { message: 'boom' },
+      settles: /^p\.go failed with no error text from the page$/,
+    },
+    {
+      case: 'an unknown outcome',
+      reportErrors: true,
+      outcome: 'done',
+      errorText: null,
+      settles: 'skipped',
+    },
+    {
+      case: 'a missing outcome',
+      reportErrors: undefined,
+      outcome: undefined,
+      errorText: null,
+      settles: 'skipped',
+    },
+  ])(
+    'run_PageReplies_ResolvesATypedOutcomeOrRejectsAReportingRunWithItsError: $case',
+    async ({ reportErrors, outcome, errorText, settles }) => {
       const { commands, send, done } = setup(true, true);
 
       const run = commands.run('p.go', undefined, { reportErrors });
-      done(send.mock.calls[0][1], 'skipped', 'boom');
+      done(send.mock.calls[0][1], outcome, errorText);
 
-      if (reportErrors) {
-        await expect(run).rejects.toThrow(/^boom$/);
+      if (settles instanceof RegExp) {
+        await expect(run).rejects.toThrow(settles);
       } else {
-        await expect(run).resolves.toBe('skipped');
+        await expect(run).resolves.toBe(settles);
       }
     },
   );
@@ -138,7 +189,7 @@ describe('createPageCommands', () => {
     { case: 'plain', reportErrors: undefined },
     { case: 'reporting', reportErrors: true },
   ] as const)(
-    'pageGone_WaitingRun_LogsAndResolves: $case',
+    'pageGone_WaitingRun_LogsAndSkipsOrRejectsAReportingRun: $case',
     async ({ reportErrors }) => {
       const { commands, logs, send, done } = setup(true, true);
       const answered = commands.run('p.answered', undefined, { reportErrors });
