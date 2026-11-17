@@ -691,9 +691,8 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
     packages: ['node:'],
   },
-  // The login-start adapters: files through `Files`, programs through
-  // `ProcessRunner`, Electron's `app` handed in by `main.ts` as a structural
-  // type; no `node:` or `electron` import.
+  // The login-start adapters: files through `Files`, Electron's `app` handed
+  // in by `main.ts` as a structural type; no `node:` or `electron` import.
   'src/main/login-start': {
     layers: ['src/contracts', 'src/shared'],
     packages: [],

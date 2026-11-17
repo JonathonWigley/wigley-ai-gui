@@ -10,3 +10,8 @@ export interface LoginStart {
   // registration that differs from what this build would write. Never rejects: a failure is `off` with `detail`.
   set(on: boolean): Promise<LoginStartStatus>;
 }
+
+// The argument a login start runs the app executable with: the app then starts the session host detached and exits.
+export const LOGIN_START_FLAG = '--start-session-host';
+// The launchd label of the login start, in the login item's and the LaunchAgent's plist names.
+export const LOGIN_START_LABEL = 'wigley-ai-gui.session-host';

@@ -46,6 +46,7 @@ import {
 } from '../contracts/core-state';
 import type { Disposable } from '../contracts/disposable';
 import type { Log } from '../contracts/log';
+import { LOGIN_START_FLAG, type LoginStart } from '../contracts/login-start';
 import type { Paths } from '../contracts/paths';
 import type { OsName, Platform } from '../contracts/platform';
 import type { ProcessRunner } from '../contracts/processes';
@@ -67,7 +68,7 @@ import type { PluginCatalog } from '../contracts/plugin-catalog';
 import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
 import { manifests } from '../plugins/manifests';
-import { appEndpointDir } from '../shared/app-endpoint-dir';
+import { APP_ENDPOINT_ENV, appEndpointDir } from '../shared/app-endpoint-dir';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
@@ -126,12 +127,16 @@ import {
   createLayoutService,
   type LayoutService,
 } from './layouts/layout-service';
+import { createAgentServiceLoginStart } from './login-start/agent-service-login-start';
 import { createNoLoginStart } from './login-start/no-login-start';
 import { resolveCloneDir } from './resolve-clone-dir';
 import { wireRuntime } from './runtime-wiring';
 import { createSlotHolder, type SlotHolder } from './state/slot-holder';
 import { startWindowFocusSlot } from './state/window-focus-slot';
-import { createSessionHostClient } from './session-host/session-host-client';
+import {
+  createSessionHostClient,
+  sessionHostLaunch,
+} from './session-host/session-host-client';
 import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi, type MainApiServices } from './plugins/main-api';
 import { createBuiltInSource } from './plugin-catalog/built-in-source';
@@ -226,17 +231,23 @@ const appInstance = appInstanceOf(app.isPackaged);
 const driveRunDir =
   runEnvironment.mode === 'drive' ? runEnvironment.runDir : null;
 
+// A login start's run, which starts the session host and exits (`startSessionHostAtLogin`).
+const isLoginStart = process.argv.includes(LOGIN_START_FLAG);
+
 registerAppSchemes();
 
 // Read while the app gets ready, and applied before any plugin starts. A
 // terminal start, the self-test and a drive run keep the environment of the
-// shell that ran them and stay clear of the user's shell profile.
-const loginShellEnv = shouldReadLoginShellEnv({
-  isLive: runMode === 'live',
-  parentPid: process.ppid,
-})
-  ? readLoginShellEnv(process.env.SHELL)
-  : Promise.resolve({ path: null, sshAuthSock: null });
+// shell that ran them and stay clear of the user's shell profile; a login
+// start spawns no agent, so it reads none.
+const loginShellEnv =
+  !isLoginStart &&
+  shouldReadLoginShellEnv({
+    isLive: runMode === 'live',
+    parentPid: process.ppid,
+  })
+    ? readLoginShellEnv(process.env.SHELL)
+    : Promise.resolve({ path: null, sshAuthSock: null });
 
 // The services that differ by run mode. `trashItem` backs the files service,
 // which loads the config before the window exists; `forWindow` builds the
@@ -295,7 +306,7 @@ function claudeHarness(
 function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    WIGLEY_AI_GUI_ENDPOINT_DIR: appEndpointDir(
+    [APP_ENDPOINT_ENV]: appEndpointDir(
       paths,
       endpointHome,
       appInstance.id,
@@ -677,6 +688,16 @@ function sessionHostFolder(homeDir: string): string {
   return runMode === 'selfTest'
     ? path.join(homeDir, 'session-host')
     : path.join(app.getPath('userData'), 'session-host');
+}
+
+// The login item the bundle ships, for the live stable app on macOS; no login start for the dev app, which never
+// fires, the self-test and drive runs, which must not register one on the user's Mac, and the other platforms.
+function loginStartOf(): LoginStart {
+  const startsHostAtLogin =
+    runMode === 'live' && !appInstance.isDev && platform.os === 'macos';
+  return startsHostAtLogin
+    ? createAgentServiceLoginStart(app)
+    : createNoLoginStart();
 }
 
 // The app's ui-state file; outside a live run it sits inside the run's own
@@ -1195,7 +1216,7 @@ function createWindow(
         runMode === 'live',
       ),
       sessionHost,
-      loginStart: createNoLoginStart(),
+      loginStart: loginStartOf(),
       pluginSwitch: {
         mayDisable: (id) =>
           pluginSwitch === null
@@ -1574,9 +1595,50 @@ function startLiveApp() {
   }
 }
 
+// A login start's run: starts the stable app's session host detached, as the
+// session host client starts it, and exits, with no Dock icon, window, lock or
+// plugin. It takes no lock, since a running app's `second-instance` handler
+// would show its window. A host that finds its channel owned exits by itself.
+function startSessionHostAtLogin() {
+  if (platform.lifecycle.hidesFromDockBesideApp) {
+    app.setActivationPolicy('accessory');
+  }
+  const launch = sessionHostLaunch({
+    // The live run's `sessionHostFolder`, whose user data is `<appData>/<appInstance.id>`.
+    folder: path.join(app.getPath('appData'), appInstance.id, 'session-host'),
+    channel: sessionHostChannel(
+      platform.os,
+      os.homedir(),
+      platform.relay.username,
+      appInstance.id,
+    ),
+    hostScript: path.join(__dirname, 'session-host.js'),
+    execPath: process.execPath,
+  });
+  const host = spawn(launch.command, launch.args, {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, ...launch.env },
+  });
+  // Node reports a failed spawn as an `error` event after `spawn` returns, and
+  // emits `spawn` or `error` for every child.
+  host.once('spawn', () => {
+    host.unref();
+    app.exit(0);
+  });
+  host.once('error', (error) => {
+    process.stderr.write(
+      `wigley-ai-gui could not start the session host: ${errorText(error)}\n`,
+    );
+    app.exit(1);
+  });
+}
+
 // The self-test and a drive run run beside the user's own app, so they take
 // no lock.
-if (runMode === 'live') {
+if (isLoginStart) {
+  startSessionHostAtLogin();
+} else if (runMode === 'live') {
   startLiveApp();
 } else {
   startApp();
