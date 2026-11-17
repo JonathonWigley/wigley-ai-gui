@@ -122,7 +122,10 @@ interface ChatDriveDeps {
   // The names of the profiles of chat's harness, in its settings order, read
   // at each `chat.start`.
   profileNames: () => string[];
-  chat: Pick<ChatSessions, 'start' | 'hostSessionIdOf' | 'closed' | 'sessions'>;
+  chat: Pick<
+    ChatSessions,
+    'start' | 'hostSessionIdSettled' | 'closed' | 'sessions'
+  >;
   sessions: Pick<SessionsMainExports, 'activate'>;
   harnesses: AgentHarnessRegistry;
 }
@@ -163,12 +166,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
         chat.closed(sessionId, 'start-failed');
         throw error;
       }
-      const hostSessionId = chat.hostSessionIdOf(sessionId);
-      if (hostSessionId === null) {
-        throw new Error(
-          `chat started ${sessionId} but holds no host id for it`,
-        );
-      }
+      const hostSessionId = await chat.hostSessionIdSettled(sessionId);
       return { sessionId, hostSessionId };
     },
   });
@@ -324,7 +322,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       sessions,
       selectedSessionId: () => selection.get() ?? null,
       profiles,
-      randomUuid: services.randomUuid,
       recent,
       archived: createArchivedSessions(api.data),
       saved,
@@ -357,7 +354,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     sessions.addToolCallGuard(
       callerGuard({
         callers: toolCallers,
-        owns: (sessionId) => chat.hostSessionIdOf(sessionId) !== null,
+        owns: (sessionId) => chat.activeTimeOf(sessionId) !== null,
       }),
     );
     const preview = createChatPreview({
@@ -584,6 +581,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       clear: async (sessionId) => {
         requireHeld(sessionId);
         chat.clear(sessionId);
+        await chat.hostSessionIdSettled(sessionId);
       },
       closeSessionsIn: async (projectDir) => {
         const closing = chat

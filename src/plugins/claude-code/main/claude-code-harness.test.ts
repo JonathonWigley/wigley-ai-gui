@@ -255,11 +255,15 @@ function recordingEvents() {
   const heard: [string, unknown][] = [];
   const agentEvents: AgentEvent[] = [];
   const timeline: [string, unknown][] = [];
+  // Every event in order, `sessionId` included, which `heard` and `timeline` leave out.
+  const sequence: [string, unknown][] = [];
   const hear = (name: string, payload: unknown) => {
     heard.push([name, payload]);
     timeline.push([name, payload]);
+    sequence.push([name, payload]);
   };
   const events: AgentProcessEvents = {
+    sessionId: (id) => sequence.push(['sessionId', id]),
     entry: (entry) => hear('entry', entry),
     controls: (controls) => hear('controls', controls),
     activity: (activity) => hear('activity', activity),
@@ -273,13 +277,14 @@ function recordingEvents() {
       }
       agentEvents.push(event);
       timeline.push(['agentEvent', event]);
+      sequence.push(['agentEvent', event]);
     },
     messageDropped: (entryId, message) =>
       hear('messageDropped', { entryId, message }),
     permission: (permissionRequest) => hear('permission', permissionRequest),
     ended: (end) => hear('ended', end),
   };
-  return { heard, agentEvents, timeline, events };
+  return { heard, agentEvents, timeline, sequence, events };
 }
 
 // Measured lines, docs/features/agent-chat/claude-stream.md § Usage and § Other events.
@@ -3517,6 +3522,60 @@ describe('createClaudeCodeHarness on the session host', () => {
     );
   });
 
+  it.each([
+    {
+      name: 'start_NoSessionId_MintsPassesAndReportsIt',
+      sessionId: null,
+      expected: 'uuid-1',
+    },
+    {
+      name: 'start_GivenSessionId_ReportsIt',
+      sessionId: 's-1',
+      expected: 's-1',
+    },
+  ])('$name', async ({ sessionId, expected }) => {
+    const host = createFakeSessionHost(clock);
+    const { sequence, events } = recordingEvents();
+
+    hostHarness(host, clock).start(
+      { ...request, sessionId, resume: false },
+      events,
+    );
+    await settle();
+
+    const args = host.processes[0].request?.args ?? [];
+    const flagAt = args.indexOf('--session-id');
+    expect(args.slice(flagAt, flagAt + 2)).toEqual(['--session-id', expected]);
+    expect(sequence[0]).toEqual(['sessionId', expected]);
+    expect(
+      sequence.filter(([name]) => name === 'sessionId'),
+    ).toHaveLength(1);
+  });
+
+  it('attach_NullSessionId_Rejects', async () => {
+    const host = createFakeSessionHost(clock);
+    const record = host.addRunning(running(logOf([])));
+
+    await expect(
+      hostHarness(host, clock).attach(
+        { ...request, sessionId: null },
+        recordingEvents().events,
+      ),
+    ).rejects.toThrow('attach needs a session id');
+    expect(record.events).toBeNull();
+  });
+
+  it('attach_ReportsSessionIdFirst', async () => {
+    const host = createFakeSessionHost(clock);
+    host.addRunning(running(logOf(ENDED_TURN_LOG)));
+    const { sequence, events } = recordingEvents();
+
+    await hostHarness(host, clock).attach(request, events);
+
+    expect(sequence[0]).toEqual(['sessionId', 's-1']);
+    expect(sequence.length).toBeGreaterThan(1);
+  });
+
   it('idleRule_LinesBetweenTurns_AreNotBusy', () => {
     // `user` on stdout: a `set_model` acknowledgement prints one with no turn.
     const stdoutBetweenTurns = [
@@ -3546,7 +3605,7 @@ describe('createClaudeCodeHarness on the session host', () => {
   };
   const rowSession: AgentSession = {
     id: 'row-1',
-    info: { sessionId: 's-1', projectDir: '/proj', harness: 'claude' },
+    info: { sessionId: 's-1', projectDir: '/proj', harness: 'claude', rowId: null },
   };
   const callContext = (signal = new AbortController().signal) => ({
     toolUseId: 'toolu_1',

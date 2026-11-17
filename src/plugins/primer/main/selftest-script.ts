@@ -272,6 +272,7 @@ export function primerSelfTestScript(
         sessionId: `primer-selftest-${run}`,
         projectDir: 'primer-selftest',
         harness: 'claude',
+        rowId: null,
         host: { [HOST_DEADLINE_FIELD]: 120 },
       });
       connected = session;

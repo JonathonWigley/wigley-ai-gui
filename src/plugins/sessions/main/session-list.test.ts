@@ -37,14 +37,15 @@ function info(
   projectDir: string | null,
   harness: string | null = null,
 ): SessionInfo {
-  return { sessionId: null, projectDir, harness };
+  return { sessionId: null, projectDir, harness, rowId: null };
 }
 
-function owned(hostId: string, projectDir = '/work/x'): SessionInfo {
+function owned(hostId: string | null, projectDir = '/work/x'): SessionInfo {
   return {
     sessionId: hostId,
     projectDir,
     harness: 'claude',
+    rowId: null,
   };
 }
 
@@ -1720,12 +1721,144 @@ describe('createSessionList', () => {
     expect(contribution.started).toEqual([ownedSession.session]);
   });
 
-  it('throws opening a session with no host id', () => {
-    const { list, states, emitted } = setUp();
+  it('open_NoHostId_OpensRowWithNullHost', () => {
+    const { list, emitted } = setUp();
 
-    expect(() => list.open({ ...owned('h'), sessionId: null })).toThrow();
-    expect(states).toEqual([]);
-    expect(emitted).toEqual([]);
+    const first = list.open(owned(null));
+    const second = list.open(owned(null));
+
+    expect(list.state().rows.map((row) => row.hostSessionId)).toEqual([
+      null,
+      null,
+    ]);
+    expect(emitted.filter(([event]) => event === 'connected')).toEqual([
+      ['connected', { ...first.session, owned: true }],
+      ['connected', { ...second.session, owned: true }],
+    ]);
+    expect(second.session.id).not.toBe(first.session.id);
+  });
+
+  it.each([
+    { rowHost: null, helloHost: null, joins: true },
+    { rowHost: null, helloHost: 'host-9', joins: true },
+    { rowHost: 'host-1', helloHost: 'host-1', joins: true },
+    { rowHost: 'host-1', helloHost: null, joins: true },
+    { rowHost: 'host-1', helloHost: 'host-2', joins: false },
+  ])(
+    'connect_HelloNamesOwnedRow_JoinsUnderTheRule: row host $rowHost, hello $helloHost',
+    ({ rowHost, helloHost, joins }) => {
+      const { list, emitted } = setUp();
+      const ownedSession = list.open(owned(rowHost));
+
+      const connected = list.connect({
+        ...owned(helloHost),
+        rowId: '00000001',
+      });
+
+      const connectedEvents = emitted.filter(
+        ([event]) => event === 'connected',
+      );
+      if (joins) {
+        expect(connected.session).toBe(ownedSession.session);
+        expect(connectedEvents).toHaveLength(1);
+      } else {
+        expect(connected.session.id).not.toBe(ownedSession.session.id);
+        expect(connectedEvents.at(-1)).toEqual([
+          'connected',
+          { ...connected.session, owned: false },
+        ]);
+      }
+      expect(list.state().rows).toHaveLength(1);
+    },
+  );
+
+  it('connect_RowIdOfRetiredHost_Refused', () => {
+    const { list } = setUp();
+    const ownedSession = list.open(owned('host-1'));
+    ownedSession.setHostSessionId('host-2');
+
+    expect(() =>
+      list.connect({ ...owned('host-1'), rowId: '00000001' }),
+    ).toThrow(/retired/);
+  });
+
+  it('connect_RowIdOfConnectedSession_ConnectsOwn', () => {
+    const { list } = setUp();
+    const first = list.connect(owned('host-1'));
+
+    const second = list.connect({
+      ...owned(null),
+      rowId: first.session.id,
+    });
+
+    expect(second.session.id).not.toBe(first.session.id);
+  });
+
+  it('join_NoHostIdAtJoin_CallsRunUntilMovedOff', async () => {
+    const { list } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned(null));
+    const relay = list.connect({ ...owned(null), rowId: '00000001' });
+
+    expect(await relay.call('a', {}, CONTEXT)).toBe(RESULT);
+    ownedSession.setHostSessionId('host-1');
+    expect(await relay.call('a', {}, CONTEXT)).toBe(RESULT);
+    ownedSession.setHostSessionId('host-2');
+
+    await expect(relay.call('a', {}, CONTEXT)).rejects.toThrow(
+      /moved from host host-1 to host-2/,
+    );
+  });
+
+  it('join_HelloIdDiffersFromFirstHostId_CallsRefused', async () => {
+    const { list } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned(null));
+    const relay = list.connect({ ...owned('host-9'), rowId: '00000001' });
+
+    ownedSession.setHostSessionId('host-1');
+
+    await expect(relay.call('a', {}, CONTEXT)).rejects.toThrow(
+      /moved from host host-9 to host-1/,
+    );
+  });
+
+  it('setHostSessionId_FromNoHostId_KeepsJoinAndEmitsChange', async () => {
+    const { list, emitted } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned(null));
+    const relay = list.connect({ ...owned(null), rowId: '00000001' });
+
+    ownedSession.setHostSessionId('host-1');
+
+    expect(list.state().rows.map((row) => row.hostSessionId)).toEqual([
+      'host-1',
+    ]);
+    expect(emitted.filter(([event]) => event === 'hostSessionChanged')).toEqual(
+      [['hostSessionChanged', ownedSession.session]],
+    );
+    expect(await relay.call('a', {}, CONTEXT)).toBe(RESULT);
+  });
+
+  it('open_KeptRowNoHostId_AdoptsKeepingItsHost', () => {
+    const { list, emitted } = setUp();
+    const first = list.open(owned('host-1'));
+    first.keep();
+    const emittedBefore = emitted.length;
+
+    const adopted = list.open(
+      { ...owned('x'), sessionId: null },
+      { select: true, rowId: '00000001' },
+    );
+
+    expect(adopted.session).toBe(first.session);
+    expect(adopted.session.info.sessionId).toBe('host-1');
+    expect(
+      emitted.slice(emittedBefore).filter(([event]) => event === 'connected'),
+    ).toEqual([]);
   });
 
   it('throws opening a host id already open, owned or connected', () => {
@@ -1823,6 +1956,25 @@ describe('createSessionList', () => {
     newer.end();
     expect(logged.at(-1)).toEqual(expect.stringContaining('00000001'));
     expect(contribution.ends()).toBe(0);
+  });
+
+  it('hands the join to a newer relay joining by row id from an older one joined by host id', async () => {
+    const { list, logged } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned('host-1'));
+    const older = list.connect(owned('host-1'));
+
+    const newer = list.connect({ ...owned('host-1'), rowId: '00000001' });
+
+    expect(newer.session).toBe(ownedSession.session);
+    expect(logged.at(-1)).toEqual(
+      expect.stringContaining('newer relay took over session 00000001'),
+    );
+    const loggedBefore = logged.length;
+    older.end();
+    expect(logged).toHaveLength(loggedBefore);
+    expect(await newer.call('a', { v: 1 }, CONTEXT)).toBe(RESULT);
   });
 
   it('setHostSessionId_MovesRowAndJoinToNewId', () => {

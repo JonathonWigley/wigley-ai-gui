@@ -18,11 +18,13 @@ export interface AgentFormDriveSession extends AgentFormToolSession {
 
 export interface AgentFormDriveSessions {
   // Connects a session for the host session id, with no row until a form
-  // shows, or joins the owned session holding it.
+  // shows, or joins the owned session holding it. A drive session names no
+  // row, so `rowId` is null.
   connect(info: {
     sessionId: string;
     projectDir: string | null;
     harness: string;
+    rowId: null;
   }): AgentFormDriveSession;
 }
 
@@ -110,7 +112,7 @@ export function addAgentFormDriveActions(deps: {
       return known;
     }
     const session: DriveFormSession = {
-      connected: sessions.connect(spec),
+      connected: sessions.connect({ ...spec, rowId: null }),
       ended: false,
       latest: { state: 'pending' },
     };

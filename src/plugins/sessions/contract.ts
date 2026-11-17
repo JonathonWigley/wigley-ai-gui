@@ -62,6 +62,9 @@ export interface SessionInfo {
   projectDir: string | null;
   // The agent harness's id. Null when the relay did not say.
   harness: string | null;
+  // The owned row a relay's hello names (`row_id`, the process's `WIGLEY_SESSION_ROW`); null when the hello names
+  // none, and for every info a plugin builds itself.
+  rowId: string | null;
   // The session's harness config folder, as `AgentStart` holds one, which a form
   // source has no use for; absent for the harness default.
   profileDir?: string;
@@ -91,6 +94,8 @@ export interface RelayHello {
   harness?: string | null;
   // Absent reads as null.
   config_dir?: string | null;
+  // Absent reads as null.
+  row_id?: string | null;
   [field: string]: unknown;
 }
 
@@ -147,12 +152,14 @@ export interface ConnectedSession extends ToolSession {
 }
 
 // A session the app started itself. `end` ends its tool sessions and removes
-// its row; a second call does nothing. `setHostSessionId` moves the session
-// and its row to a new host id, keeping its app id, by changing `sessionId`
-// inside the session's one info object, and emits `hostSessionChanged`. The
-// relay joined under the old id loses its join and has its later calls
-// refused, and a relay saying hello with the old id is refused while the
-// session lasts, unless another owned session holds that id. It throws when
+// its row; a second call does nothing. `setHostSessionId` gives a session
+// opened with no host id its first one, or moves the session and its row to a
+// new host id, keeping its app id, by changing `sessionId` inside the
+// session's one info object, and emits `hostSessionChanged` either way. A
+// first id retires nothing and keeps the relay's join. On a move the relay
+// joined under the old id loses its join and has its later calls refused,
+// and a relay saying hello with the old id is refused while the session
+// lasts, unless another owned session holds that id. It throws when
 // another session holds that host id and does nothing after `end`. `keep`
 // hands the session to its owner's restart: it ends nothing, and its owner's
 // stop no longer ends it; the next `open` naming its row id adopts it as it
@@ -228,20 +235,26 @@ export interface SessionsMainExports {
     start: (session: AgentSession) => ToolSession,
     options?: ContributeToolsOptions,
   ): Disposable;
-  // Connects the session with no row, writing none, or joins the owned
-  // session whose host id the info carries; `mark` or `activate` adds a
-  // connected session's row, and `release` closes it. A newer relay for that
-  // host id takes the join from an older one still connected; the older
-  // handle's `end` then leaves the join alone. Throws for a host id an owned
-  // session moved away from, unless another owned session holds it.
+  // Joins an owned session, or connects the session with no row, writing
+  // none; `mark` or `activate` adds a connected session's row, and `release`
+  // closes it. In order: an `info.rowId` naming an owned session joins it
+  // while that session has no host id, `info.sessionId` is null or it equals
+  // the session's host id; else an owned session holding `info.sessionId`
+  // is joined; else a host id an owned session moved away from throws; else
+  // the session connects as its own, keeping `info.rowId`. A row id naming a
+  // connected session, or none, counts as none. A newer relay takes the join
+  // from an older one still connected, whichever way each joined; the older
+  // handle's `end` then leaves the join alone.
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was; with
-  // `options.owner`, added unmarked and never selected. Throws when
-  // `info.sessionId` is null, any session already holds that host id, or one
-  // already holds `options.rowId`, except a session its owner kept
-  // (`OwnedSession.keep`) under that row id, which it adopts: no `connected`
-  // is emitted, and its host id moves to `info.sessionId`.
+  // `options.owner`, added unmarked and never selected. A null
+  // `info.sessionId` opens the row with no host id, which its owner's
+  // `setHostSessionId` sets later. Throws when any session already holds
+  // `info.sessionId`, or one already holds `options.rowId`, except a session
+  // its owner kept (`OwnedSession.keep`) under that row id, which it adopts:
+  // no `connected` is emitted, and its host id moves to a non-null
+  // `info.sessionId`. `info.rowId` is ignored: the row id is `options.rowId`.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets
@@ -333,8 +346,9 @@ export interface ConnectedSessionEvent extends AgentSession {
 
 // `closed` is a row the user closed, or one `release` closed, every guard
 // allowing; the session itself stays until it ends.
-// `hostSessionChanged` is an owned session moved to a new host id, emitted
-// after the row write that carries it, with the session's info already updated.
+// `hostSessionChanged` is an owned session given its first host id or moved
+// to a new one, emitted after the row write that carries it, with the
+// session's info already updated.
 // `titleChanged` is a session's titles changing, after the row write that carries
 // them when the session has a row.
 export interface SessionsMainEvents extends EventShape {

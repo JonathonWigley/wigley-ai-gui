@@ -17,7 +17,7 @@ const ARGS = { tool_name: 'Bash', input: { command: 'ls' } };
 function sessionOf(rowId: string): AgentSession {
   return {
     id: rowId,
-    info: { sessionId: null, projectDir: '/p', harness: 'claude' },
+    info: { sessionId: null, projectDir: '/p', harness: 'claude', rowId: null },
   };
 }
 

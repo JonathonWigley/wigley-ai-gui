@@ -421,6 +421,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         sessionId: store.hostIdOf(sessionId),
         projectDir: null,
         harness: null,
+        rowId: null,
       },
     });
     const selfTestHooks: WorkflowSelfTestHooks = {

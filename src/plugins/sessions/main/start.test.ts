@@ -40,10 +40,12 @@ import {
 import { addDriveActions, harnessToolUseId, sessionsMainPart } from './start';
 import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
 
+// `connect` joins the opened row its info's `rowId` names, as the session list would for a row with no host id.
 function fakeSessions() {
   const connectedInfo: SessionInfo[] = [];
   const openedInfo: SessionInfo[] = [];
   const ended: string[] = [];
+  const openedRowIds = new Set<string>();
   return {
     connectedInfo,
     openedInfo,
@@ -51,7 +53,10 @@ function fakeSessions() {
     activate: vi.fn<(sessionId: string) => void>(),
     connect(info: SessionInfo): ConnectedSession {
       connectedInfo.push(info);
-      const id = `row-${String(info.sessionId)}`;
+      const id =
+        info.rowId !== null && openedRowIds.has(info.rowId)
+          ? info.rowId
+          : `row-${String(info.sessionId)}`;
       return {
         session: { id, info },
         call: () => Promise.reject(new Error('no tools')),
@@ -61,6 +66,7 @@ function fakeSessions() {
     open(info: SessionInfo): OwnedSession {
       openedInfo.push(info);
       const id = `owned-${String(info.sessionId)}`;
+      openedRowIds.add(id);
       return {
         session: { id, info },
         end: () => ended.push(id),
@@ -98,8 +104,24 @@ describe('sessions drive actions', () => {
         sessionId: 'drive-session-1',
         projectDir: 'drive',
         harness: 'claude',
+        rowId: null,
       },
     ]);
+  });
+
+  it('connect_RowIdArg_JoinsOpenedRow', async () => {
+    const drive = fakeDriveHost();
+    const sessions = fakeSessions();
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
+    const opened = (await drive.run('open')) as { rowId: string };
+
+    const joined = (await drive.run('connect', {
+      sessionId: 'other',
+      rowId: opened.rowId,
+    })) as { rowId: string };
+
+    expect(joined.rowId).toBe(opened.rowId);
+    expect(sessions.connectedInfo[0]?.rowId).toBe(opened.rowId);
   });
 
   it('open opens an owned session with the fixture defaults, which end ends', async () => {
@@ -118,6 +140,7 @@ describe('sessions drive actions', () => {
         sessionId: 's',
         projectDir: 'drive',
         harness: 'claude',
+        rowId: null,
       },
     ]);
     expect(sessions.connectedInfo).toEqual([]);
@@ -371,6 +394,7 @@ describe('sessions main part', () => {
         sessionId,
         projectDir,
         harness,
+        rowId: null,
         profileDir: '/home/.claude-work',
       });
 
@@ -400,6 +424,7 @@ describe('sessions main part', () => {
         sessionId: 'host-1',
         projectDir: '/work/folder',
         harness: 'claude',
+        rowId: null,
       });
       exports.mark(session.id, { text: 'Round from folder', action: 'answer' });
       if (disposed) {
@@ -422,6 +447,7 @@ describe('sessions main part', () => {
       sessionId: 'host-1',
       projectDir: null,
       harness: 'claude',
+      rowId: null,
     });
     viewOf(started).mark(session.id, {
       text: 'Round from folder',
@@ -442,6 +468,7 @@ describe('sessions main part', () => {
       sessionId: 'host-1',
       projectDir: null,
       harness: 'claude',
+      rowId: null,
     });
     const context = { toolUseId: null, signal: new AbortController().signal };
     const guarded: GuardedToolCall[] = [];
@@ -522,6 +549,7 @@ describe('sessions main part', () => {
       sessionId: 'host-1',
       projectDir: '/p/clone',
       harness: 'claude',
+      rowId: null,
     });
 
     viewOf(started, dependent)

@@ -62,7 +62,7 @@ function fakeChat(running = true) {
   return {
     closed: vi.fn<(sessionId: string, reason: SessionCloseReason) => void>(),
     start: () => 'started',
-    hostSessionIdOf: () => 'host-started',
+    hostSessionIdSettled: () => Promise.resolve('host-started'),
     sessions: () => [
       { sessionId: 'held', projectDir: '/p', running } as ChatSessionState,
     ],
@@ -113,6 +113,7 @@ function heldFake() {
       rowId: 'held',
     },
     {
+      sessionId: ignore,
       entry: ignore,
       controls: ignore,
       activity: ignore,
@@ -263,7 +264,8 @@ describe('chat drive actions', () => {
 // `core.agentHarnesses`; null leaves that entry out.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
-// process starts, `startInstructions` each start's instructions and
+// process starts, each reporting its request's session id, or `host-<n>` for a
+// new conversation, in a microtask; `startInstructions` each start's instructions and
 // `startIdleCompactMinTokens` each start's threshold, in start order.
 // `processEvents` holds each process's events, by start, and
 // `holdProcessEnds` keeps every process's `end` pending until the function it
@@ -309,6 +311,7 @@ function startChatPart(
   const startInstructions: (readonly string[])[] = [];
   const startIdleCompactMinTokens: (number | null)[] = [];
   const processEvents: {
+    sessionId: (id: string) => void;
     ended: (exit: { code: number; error: string | null }) => void;
     agentEvent: (event: AgentEvent) => void;
   }[] = [];
@@ -333,6 +336,8 @@ function startChatPart(
       startInstructions.push(request.instructions);
       startIdleCompactMinTokens.push(request.idleCompactMinTokens);
       processEvents.push(events);
+      const hostId = request.sessionId ?? `host-${starts.count}`;
+      queueMicrotask(() => events.sessionId(hostId));
       return {
         send: processSends,
         end: () => processEnd,
@@ -517,6 +522,12 @@ function startChatPart(
       emitted.flatMap(({ event, data }) =>
         event === 'sessionOpened'
           ? [(data as { origin: SessionOrigin }).origin]
+          : [],
+      ),
+    clearedTo: () =>
+      emitted.flatMap(({ event, data }) =>
+        event === 'sessionCleared'
+          ? [(data as { newHostSessionId: string }).newHostSessionId]
           : [],
       ),
     logged,
@@ -785,6 +796,7 @@ describe('chat main part', () => {
             sessionId: 'host-relay',
             projectDir: '/p',
             harness: 'claude',
+            rowId: null,
           },
         })
         .call(
@@ -821,7 +833,7 @@ describe('chat main part', () => {
     const result = await contribution
       ?.start({
         id: 'row-1',
-        info: { sessionId: 'host-1', projectDir: '/p', harness: 'claude' },
+        info: { sessionId: 'host-1', projectDir: '/p', harness: 'claude', rowId: null },
       })
       .call(
         'set_headless',
@@ -873,14 +885,18 @@ describe('chat main part', () => {
     ]);
   });
 
-  it('exports_Clear_ResolvesAfterTheFreshStart', async () => {
+  // Breaks if the export resolves before the fresh process reports its host
+  // session id, when a caller would still read the old one.
+  it('clear_Export_ResolvesAfterHostSessionChanged', async () => {
     const chat = startChatPart();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
     await chat.exports.send('row-1', { text: 'hi', images: [] });
+    await settle();
 
     await chat.exports.clear('row-1');
 
     expect(chat.starts.count).toBe(2);
+    expect(chat.clearedTo()).toEqual(['host-2']);
   });
 
   it('toolCallGuard_SubagentCall_SkipsUntilTheRowEnds', async () => {
@@ -947,6 +963,7 @@ describe('chat main part', () => {
     const chat = startChatPart();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
     chat.invoke('start', { projectDir: '/q', profile: 'work' });
+    await settle();
 
     await chat.exports.closeSessionsIn('/p');
 
@@ -957,6 +974,7 @@ describe('chat main part', () => {
     const chat = startChatPart();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
     chat.invoke('start', { projectDir: '/q', profile: 'work' });
+    await settle();
     const releaseEnds = chat.holdProcessEnds();
     let resolved = false;
 
@@ -985,9 +1003,10 @@ describe('chat main part', () => {
     expect(chat.closeReasons()).toEqual([]);
   });
 
-  it('sessionsClosed_UserClose_SaysUser', () => {
+  it('sessionsClosed_UserClose_SaysUser', async () => {
     const chat = startChatPart();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    await settle();
 
     chat.listeners.get('sessions.closed')?.({ sessionId: 'row-1' });
 
@@ -998,6 +1017,7 @@ describe('chat main part', () => {
     const chat = startChatPart({ data: await dataWithSavedRow() });
     await chat.heldConnects[0];
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    await settle();
 
     await chat.part.dispose?.('end');
 
@@ -1395,8 +1415,10 @@ describe('chat main part', () => {
 
 // Chat's main part on the part harness, over a sessions fake that files each
 // contribution and owned row with `consumer.track`, as sessions' view does. A
-// row's end is recorded in `ended` and emits `sessions.ended`. A process's detach
-// and kill are recorded in `stops`; a kill reports its exit, as a real one does.
+// row's end is recorded in `ended` and emits `sessions.ended`. A process reports
+// its request's session id, or `host-new` for a new conversation, in a
+// microtask. A process's detach and kill are recorded in `stops`; a kill
+// reports its exit, as a real one does.
 function startChatOnHarness() {
   const ended: string[] = [];
   const stops = { detaches: 0, kills: 0 };
@@ -1404,9 +1426,19 @@ function startChatOnHarness() {
   const agentHarness = {
     id: 'claude',
     start: (
-      _request: AgentStart,
-      events: { ended(exit: { code: number; error: string | null }): void },
-    ) => ({
+      request: AgentStart,
+      events: {
+        sessionId(id: string): void;
+        ended(exit: { code: number; error: string | null }): void;
+      },
+    ) => {
+      queueMicrotask(() => events.sessionId(request.sessionId ?? 'host-new'));
+      return startedProcess(events);
+    },
+  } as unknown as AgentHarness;
+  const startedProcess = (events: {
+    ended(exit: { code: number; error: string | null }): void;
+  }) => ({
       send: () => undefined,
       end: () => Promise.resolve(),
       interrupt: () => undefined,
@@ -1417,8 +1449,7 @@ function startChatOnHarness() {
         stops.kills += 1;
         events.ended({ code: 0, error: null });
       },
-    }),
-  } as unknown as AgentHarness;
+    });
   const harness = startMainPart(chatMainPart, {
     services: {
       agentHarnesses: harnessRegistryOf([agentHarness]),

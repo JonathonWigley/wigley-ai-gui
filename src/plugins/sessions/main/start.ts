@@ -172,6 +172,7 @@ function driveSessionInfo(args: JsonObject, sessionId: string): SessionInfo {
       DRIVE_SESSION_DEFAULTS.projectDir,
     ),
     harness: optionalString(args, 'harness') ?? DRIVE_SESSION_DEFAULTS.harness,
+    rowId: optionalString(args, 'rowId') ?? null,
   };
   const { host } = args;
   if (host === undefined) {
@@ -188,7 +189,8 @@ type StartedSession = Pick<OwnedSession, 'session' | 'end'>;
 
 // Starts a drive run's sessions, each with no form, and ends or selects them:
 // `connect` connects one as a relay would, with no row until a form shows or
-// `activate` adds it; `open` opens an owned one, selected, which forms' and
+// `activate` adds it, or joins the owned row its `rowId` names as a relay's
+// hello would; `open` opens an owned one, selected, which forms' and
 // the primer's open actions join when they name its id, so a round and a
 // primer share its row. A session's id is
 // `drive-session-<n>` unless the caller names one; `rowId` is the app's own
@@ -209,7 +211,7 @@ export function addDriveActions(
     }
   });
   const sessionArgs =
-    '{ sessionId?: string, projectDir?: string | null, harness?: string, host?: object }';
+    '{ sessionId?: string, projectDir?: string | null, harness?: string, rowId?: string, host?: object }';
   // Reads the args, then starts the session `start` makes from them.
   const startSession = (
     rawArgs: unknown,

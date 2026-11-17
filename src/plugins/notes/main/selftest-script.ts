@@ -372,6 +372,7 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
         sessionId: SESSION_ID,
         projectDir: folder,
         harness: SESSION_HARNESS,
+        rowId: null,
       },
       { select: false },
     );

@@ -170,7 +170,9 @@ export interface PermissionRequest {
   entry: Extract<ChatEntry, { kind: 'permission' }>;
 }
 
-// `sessionId` is the host's session id: fresh for a new session, the old one when `resume` is true.
+// `sessionId` null asks the harness for a new conversation, whose id the adapter mints or learns and reports through
+// `AgentProcessEvents.sessionId`; a string with `resume` false starts a conversation under that id (a row whose earlier
+// start never got a message); a string with `resume` true resumes it. `attach` always gets a string.
 // `profileDir` is the config folder of the profile the session runs under, as that harness's profiles setting writes
 // it (`HarnessProfile.configDir`), which the adapter resolves (`~` against the home the adapter was built with); null
 // for the harness default.
@@ -186,7 +188,7 @@ export interface PermissionRequest {
 // to its harness's environment for tools that track the row, such as `unity-pool`.
 export interface AgentStart {
   processId: string;
-  sessionId: string;
+  sessionId: string | null;
   resume: boolean;
   projectDir: string;
   profileDir: string | null;
@@ -409,6 +411,9 @@ export type AgentEvent =
 // An event caused by `start` or by a call on the process arrives in a later
 // microtask, never inside that call.
 export interface AgentProcessEvents {
+  // The id the process's conversation runs under. Each `start` calls it once, before every other event of that
+  // process, in a later microtask like every event; each `attach` calls it once, first, before its promise resolves.
+  sessionId(id: string): void;
   entry(entry: ChatEntry): void;
   controls(controls: SessionControl[]): void;
   activity(activity: ProcessActivity): void;

@@ -92,6 +92,7 @@ describe('open', () => {
         sessionId: 'primer-preview',
         projectDir: null,
         harness: null,
+        rowId: null,
         label: 'Primer preview',
       },
     ]);

@@ -14,7 +14,7 @@ import type {
   UsageAgentEvent,
   UserMessage,
 } from '../../../contracts/agent';
-import type { Clock, RandomUuid } from '../../../contracts/ambient';
+import type { Clock } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
@@ -104,7 +104,6 @@ export interface ChatSessionsDeps {
   // Expand a folder project's `~`.
   homeDir: string;
   paths: Pick<Paths, 'expandTilde' | 'join' | 'parent' | 'segmentsBelow'>;
-  randomUuid: RandomUuid;
   recent: RecentFolders;
   archived: ArchivedSessions;
   saved: OpenSessions;
@@ -132,9 +131,16 @@ export interface ChatSessionsDeps {
 
 export interface ChatSessions {
   sessions(): ChatSessionState[];
-  // The held session's current host id, which a `clear` replaces; null for a
-  // row chat does not hold.
+  // The held session's current host id, which a `clear` replaces once the
+  // fresh process reports its id; null for a row chat does not hold, and for a
+  // held row whose harness has not reported an id yet.
   hostSessionIdOf(sessionId: string): string | null;
+  // The held session's host id once it holds one and no clear is pending: at
+  // once when it does, else when its harness reports an id. Rejects with
+  // `chat holds no session <id>` for a row chat does not hold, and with
+  // `session <id> closed before its harness reported a session id` when the
+  // row closes first.
+  hostSessionIdSettled(sessionId: string): Promise<string>;
   // The held session's active-time clock; null for a row chat does not hold.
   activeTimeOf(sessionId: string): ActiveTime | null;
   // Whether the held session is headless; false for a row chat does not hold.
@@ -261,8 +267,12 @@ export interface ChatSessions {
   // a process.
   interrupt(sessionId: string): void;
   // Ends the session's process, interrupting a running turn first, and starts a
-  // fresh one at once under a new host session id with the row's held mode and
-  // the model and effort the user picked that a report confirmed. Waiting
+  // fresh one at once as a new conversation with the row's held mode and the
+  // model and effort the user picked that a report confirmed; the row moves to
+  // the host id the fresh process reports, and `sessionCleared` fires then.
+  // Until that report the row keeps its old host id, and is saved with it and
+  // its pre-clear `sent`. A row with no host id yet clears nothing for
+  // listeners: no `sessionCleared` follows. Waiting
   // permission requests end with the old process, a running compaction's end goes out as an
   // `interrupted` `agentEvent`, since the old process's own is dropped, and
   // messages written but not taken in and every queued message, the held row
@@ -271,8 +281,9 @@ export interface ChatSessions {
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
   // is missing or while the row attaches; a fresh start that throws leaves the
-  // row resting under the new id, then rethrows, with `sessionCleared` already
-  // fired. An unheld process is left running on the host, since the fresh
+  // row resting with the clear pending, then rethrows: its next start passes no
+  // session id, and that start's report fires `sessionCleared`. An unheld
+  // process is left running on the host, since the fresh
   // process shares no transcript with it.
   // Logs and does nothing for a session chat does not hold, or after
   // `detachAll`.
@@ -391,7 +402,19 @@ interface HeldSession {
   sessionId: string;
   slots: SessionSlots;
   owned: OwnedSession;
-  hostId: string;
+  // Null for a new session from its open until its harness reports an id.
+  hostId: string | null;
+  // The origin of the `sessionOpened` a row opened with no host id fires once
+  // its harness reports an id; null when none is pending.
+  pendingOpened: SessionOrigin | null;
+  // A clear whose fresh process has not reported its id: the row keeps its old
+  // host id until then, and `sent` is the row's before the clear.
+  pendingClear: { sent: boolean } | null;
+  // The `hostSessionIdSettled` calls waiting on the harness's report.
+  hostIdWaiters: {
+    resolve(hostId: string): void;
+    reject(error: Error): void;
+  }[];
   process: AgentProcess | null;
   // A message was ever sent, so a start resumes the conversation.
   sent: boolean;
@@ -648,17 +671,25 @@ function processEndReasonOf(
   return isCleanExit ? 'clean' : 'crash';
 }
 
+// `sent` as listeners and the saved file know it: the row's before a pending
+// clear.
+function reportedSent(session: HeldSession): boolean {
+  return session.pendingClear?.sent ?? session.sent;
+}
+
+// The session's record under `hostId`, its held host id.
 function savedSessionOf(
   session: HeldSession,
+  hostId: string,
   titles: SessionTitles,
   now: number,
 ): SavedSession {
   const { projectDir, profile, activity, activeTime } = session.slots.info();
   return {
-    hostSessionId: session.hostId,
+    hostSessionId: hostId,
     projectDir,
     profile,
-    sent: session.sent,
+    sent: reportedSent(session),
     busy: activity !== 'idle',
     titles,
     processId: session.processId,
@@ -719,8 +750,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const openHostIds = new Map<string, string>();
   // Every started process until its `ended`, held or closed.
   const running = new Set<AgentProcess>();
-  // Host id of the last row chat holds that was selected.
-  let selectedHostId: string | null = null;
+  // Row id of the last row chat holds that was selected.
+  let selectedRowId: string | null = null;
   // Saving waits for the restore, so no save overwrites the saved records
   // before they are read; it stops for good at `detachAll`.
   let isRestored = false;
@@ -740,21 +771,29 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // One object per `addResumeSection` call, in registration order.
   const resumeSectionRegistrations = new Set<{ section: ResumeSection }>();
 
+  // A row whose harness has not reported a host id yet is left out: a start
+  // that fails leaves no record.
   function snapshot(): SavedSessions {
     const now = deps.clock.now();
-    const records = [...held.values()].map((session) =>
-      savedSessionOf(
-        session,
-        sessions.titles(session.sessionId) ?? NO_TITLES,
-        now,
-      ),
+    const records = [...held.values()].flatMap((session) =>
+      session.hostId === null
+        ? []
+        : [
+            savedSessionOf(
+              session,
+              session.hostId,
+              sessions.titles(session.sessionId) ?? NO_TITLES,
+              now,
+            ),
+          ],
     );
-    const selectionHeld = records.some(
-      (record) => record.hostSessionId === selectedHostId,
-    );
+    const selectedHostSessionId =
+      selectedRowId === null
+        ? null
+        : (held.get(selectedRowId)?.hostId ?? null);
     return {
       sessions: [...records, ...skippedRecords],
-      selectedHostSessionId: selectionHeld ? selectedHostId : null,
+      selectedHostSessionId,
     };
   }
 
@@ -1138,14 +1177,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // `compactionEnded` fails `isLive`, and emits its end in that one's place.
   function clearCompaction(session: HeldSession, profileDir: string) {
     const running = session.slots.info().compaction;
+    const { hostId } = session;
     forgetCompaction(session);
-    if (running === null) {
+    if (running === null || hostId === null) {
       return;
     }
     deps.emit('agentEvent', {
       sessionId: session.sessionId,
       profileDir,
-      hostSessionId: session.hostId,
+      hostSessionId: hostId,
       event: {
         type: 'compactionEnded',
         at: deps.clock.now(),
@@ -1261,23 +1301,36 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // The slots close first, so every later event for the session writes no slot
-  // and fails `isLive`; its queue goes with them, returned nowhere.
+  // and fails `isLive`; its queue goes with them, returned nowhere. Every
+  // `hostSessionIdSettled` still waiting rejects.
   function drop(session: HeldSession) {
     session.slots.close();
     held.delete(session.sessionId);
     session.pending.clear();
+    const error = new Error(
+      `session ${session.sessionId} closed before its harness reported a session id`,
+    );
+    for (const waiter of session.hostIdWaiters.splice(0)) {
+      waiter.reject(error);
+    }
   }
 
-  // Runs before the owned session ends: a resting row's titles end with it.
+  // Runs before the owned session ends: a resting row's titles end with it. A
+  // row whose harness never reported a host id fired no `sessionOpened`, so it
+  // fires no `sessionClosed`.
   function fireSessionClosed(session: HeldSession, reason: SessionCloseReason) {
     const { sessionId, projectDir, profile } = session.slots.info();
+    const { hostId } = session;
+    if (hostId === null) {
+      return;
+    }
     deps.emit('sessionClosed', {
       sessionId,
-      hostSessionId: session.hostId,
+      hostSessionId: hostId,
       projectDir,
       profile,
       titles: sessions.titles(sessionId) ?? NO_TITLES,
-      sent: session.sent,
+      sent: reportedSent(session),
       headless: session.headless,
       reason,
     });
@@ -1302,7 +1355,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // show the session's state and act on nothing that already happened. A
   // permission request shows as a waiting card, pending by its row entry id
   // until chat answers it or its answered entry arrives; an unattended row
-  // denies it at once and shows only the answered entry.
+  // denies it at once and shows only the answered entry. The process's reported
+  // session id comes before its other events, and a live one moves the row to
+  // it (`adoptHostId`).
   function processEvents(
     session: HeldSession,
     processStart: number,
@@ -1311,9 +1366,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     replay: { isReplaying: boolean },
   ): AgentProcessEvents {
     const { sessionId } = session;
-    // A clear moves the row to a new host id while this process still ends.
-    const hostSessionId = session.hostId;
+    // This process's own host id: a clear moves the row to a new one while this
+    // process still ends.
+    let hostSessionId = session.hostId;
     return {
+      sessionId(id) {
+        hostSessionId = id;
+        if (isLive(session, processStart)) {
+          adoptHostId(session, id, profileDir);
+        }
+      },
       entry(entry) {
         if (!isLive(session, processStart)) {
           return;
@@ -1412,7 +1474,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
             event.agentId,
           );
         }
-        if (isLiveEvent || endsTheSession) {
+        const isReported = isLiveEvent || endsTheSession;
+        if (isReported && hostSessionId !== null) {
           deps.emit('agentEvent', {
             sessionId,
             profileDir,
@@ -1488,7 +1551,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         clearBackground(session);
         showRestingIdle(session);
         save();
-        if (!replay.isReplaying) {
+        if (!replay.isReplaying && hostSessionId !== null) {
           deps.emit('processEnded', {
             sessionId,
             hostSessionId,
@@ -1512,13 +1575,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // `opening.titles` holds, and holds its state, resting, with `entries`.
   // `profileDir` is null when the profile is not among the profiles of chat's
   // harness;
-  // such a row emits no `sessionOpened`.
+  // such a row emits no `sessionOpened`. A null `opening.hostId` opens a row
+  // for a new conversation, whose `sessionOpened` waits for its harness's
+  // report (`adoptHostId`).
   function openRow(
     projectDir: string,
     profileName: string,
     profileDir: string | null,
     opening: {
-      hostId: string;
+      hostId: string | null;
       entries: ChatEntry[];
       sent: boolean;
       historyPending: boolean;
@@ -1546,6 +1611,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         sessionId: hostId,
         projectDir,
         harness: CHAT_HARNESS_ID,
+        rowId: null,
         ...(profileDir === null ? {} : { profileDir }),
       },
       owner === null ? options : { ...options, owner },
@@ -1557,7 +1623,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         sessions.setTitle(sessionId, source, title);
       }
     }
-    if (profileDir !== null) {
+    if (profileDir !== null && hostId !== null) {
       emitSessionOpened(
         { sessionId, hostSessionId: hostId, projectDir },
         profileName,
@@ -1565,10 +1631,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         opening.origin,
       );
     }
+    const pendingOpened =
+      profileDir !== null && hostId === null ? opening.origin : null;
     // The sessions plugin writes its selection inside `open`, before the row is
     // held, so `selected` cannot record it.
     if (options.select) {
-      selectedHostId = hostId;
+      selectedRowId = sessionId;
     }
     const session: HeldSession = {
       sessionId,
@@ -1594,6 +1662,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }),
       owned,
       hostId,
+      pendingOpened,
+      pendingClear: null,
+      hostIdWaiters: [],
       process: null,
       sent: opening.sent,
       historyPending: opening.historyPending,
@@ -1640,6 +1711,52 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     readBranch(session);
     readWorktreeRoots(session);
     return session;
+  }
+
+  // The row's process reported `id` as its session id, under `profileDir`: the
+  // row moves to it, fires the `sessionOpened` or `sessionCleared` it held back,
+  // settles its `hostSessionIdSettled` waiters and saves. An id another session
+  // holds is logged and leaves the row as it was.
+  function adoptHostId(session: HeldSession, id: string, profileDir: string) {
+    const { sessionId, pendingClear } = session;
+    if (id === session.hostId && pendingClear === null) {
+      return;
+    }
+    try {
+      session.owned.setHostSessionId(id);
+    } catch (error) {
+      log(`session ${sessionId} not moved to host ${id}: ${errorText(error)}`);
+      return;
+    }
+    const oldHostId = session.hostId;
+    session.hostId = id;
+    session.pendingClear = null;
+    const { projectDir, profile } = session.slots.info();
+    const origin = session.pendingOpened;
+    if (origin !== null) {
+      session.pendingOpened = null;
+      emitSessionOpened(
+        { sessionId, hostSessionId: id, projectDir },
+        profile,
+        profileDir,
+        origin,
+      );
+    }
+    if (pendingClear !== null && oldHostId !== null) {
+      deps.emit('sessionCleared', {
+        sessionId,
+        oldHostSessionId: oldHostId,
+        newHostSessionId: id,
+        projectDir,
+        profile,
+        titles: sessions.titles(sessionId) ?? NO_TITLES,
+        sent: pendingClear.sent,
+      });
+    }
+    for (const waiter of session.hostIdWaiters.splice(0)) {
+      waiter.resolve(id);
+    }
+    save();
   }
 
   function emitSessionOpened(
@@ -1890,7 +2007,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     beginProcess(session);
     const started: { process: AgentProcess | null } = { process: null };
     const profileDir = profileDirOf(profile);
-    session.processId = `${session.hostId}-${session.processStarts}-${deps.clock.now()}`;
+    session.processId = `${session.sessionId}-${session.processStarts}-${deps.clock.now()}`;
     session.launchControls = controlValuesOf(
       session.slots.controls(),
       session.confirmedPicks,
@@ -1901,7 +2018,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const process = harness.start(
       {
         processId: session.processId,
-        sessionId: session.hostId,
+        sessionId: session.pendingClear !== null ? null : session.hostId,
         resume,
         projectDir,
         profileDir,
@@ -2189,22 +2306,25 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session.unheldProcessId !== null || session.unheldSettling !== null;
   }
 
-  function requireNotDetached(hostId: string) {
+  // `label` names the session in the refusal: its host id, or its folder for a
+  // new one.
+  function requireNotDetached(label: string) {
     if (isDetached) {
-      throw new Error(`session ${hostId} not started: chat is stopping`);
+      throw new Error(`session ${label} not started: chat is stopping`);
     }
   }
 
-  // Opens the row for `hostId` and starts its process; a start that throws
-  // fires `sessionClosed`, drops the session, keeping any queued or returned
-  // messages it took over saved, then ends the owned session. After `detachAll`
-  // it throws and opens nothing.
+  // Opens the row for `hostId`, null for a new conversation, and starts its
+  // process; a start that throws fires `sessionClosed` (none for a row with no
+  // host id), drops the session, keeping any queued or returned messages it
+  // took over saved, then ends the owned session. After `detachAll` it throws
+  // and opens nothing.
   function openAndStart(
     harness: AgentHarness,
     profile: HarnessProfile,
     projectDir: string,
     opening: {
-      hostId: string;
+      hostId: string | null;
       resume: boolean;
       entries: ChatEntry[];
       titles: SessionTitles;
@@ -2217,7 +2337,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     },
     options: OpenOptions,
   ): HeldSession {
-    requireNotDetached(opening.hostId);
+    requireNotDetached(opening.hostId ?? `in ${projectDir}`);
     const session = openRow(
       projectDir,
       profile.name,
@@ -2250,13 +2370,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     } catch (error) {
       fireSessionClosed(session, 'start-failed');
       drop(session);
-      keepSkipped(
-        savedSessionOf(
-          session,
-          sessions.titles(session.sessionId) ?? NO_TITLES,
-          deps.clock.now(),
-        ),
-      );
+      const { hostId } = session;
+      if (hostId !== null) {
+        keepSkipped(
+          savedSessionOf(
+            session,
+            hostId,
+            sessions.titles(session.sessionId) ?? NO_TITLES,
+            deps.clock.now(),
+          ),
+        );
+      }
       session.owned.end();
       save();
       throw error;
@@ -2385,7 +2509,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       profile,
       target.projectDir,
       {
-        hostId: deps.randomUuid(),
+        hostId: null,
         resume: false,
         entries: [],
         titles: NO_TITLES,
@@ -2501,20 +2625,21 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // The first verdict's reason, in registration order; null with no running
-  // process to compact or no verdict.
+  // process to compact, no verdict, or no host id yet: a new conversation has
+  // nothing to compact.
   function askSendGates(
     session: HeldSession,
     message: UserMessage,
   ): string | null {
-    const { sessionId } = session;
-    if (session.process === null) {
+    const { sessionId, hostId } = session;
+    if (session.process === null || hostId === null) {
       return null;
     }
     for (const { gate } of sendGateRegistrations) {
       try {
         const verdict = gate({
           sessionId,
-          hostSessionId: session.hostId,
+          hostSessionId: hostId,
           text: message.text,
           now: deps.clock.now(),
         });
@@ -2991,6 +3116,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   ) {
     const { sessionId } = session;
     const { hostId } = session;
+    if (hostId === null) {
+      return;
+    }
     const profileDir = profileDirOf(profile);
     const event = await readSavedUsage(
       requireHarness(),
@@ -3004,7 +3132,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (isClosedOrCleared(session, sessionId, hostId)) {
       return;
     }
-    emitSavedUsage(session, profileDir, event);
+    emitSavedUsage(session, hostId, profileDir, event);
   }
 
   // The session's saved usage, or null when it has none or it cannot be read,
@@ -3025,13 +3153,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   function emitSavedUsage(
     session: HeldSession,
+    hostSessionId: string,
     profileDir: string,
     event: UsageAgentEvent,
   ) {
     deps.emit('agentEvent', {
       sessionId: session.sessionId,
       profileDir,
-      hostSessionId: session.hostId,
+      hostSessionId,
       event,
       replayed: false,
     });
@@ -3053,7 +3182,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         ? undefined
         : holding(saved.selectedHostSessionId);
     if (selection !== undefined) {
-      selectedHostId = selection.hostId;
+      selectedRowId = selection.sessionId;
       sessions.activate(selection.sessionId);
     }
     isRestored = true;
@@ -3127,6 +3256,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   ) {
     const { sessionId } = session;
     const { hostId } = session;
+    if (hostId === null) {
+      return;
+    }
     const history = await readHistory(
       harness,
       hostId,
@@ -3311,7 +3443,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       { select },
     );
     if (usage !== null) {
-      emitSavedUsage(session, profileDir, usage);
+      emitSavedUsage(session, hostSessionId, profileDir, usage);
     }
     return session.sessionId;
   }
@@ -3364,29 +3496,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     clearCompaction(session, profileDirOf(profile));
     session.pending.clear();
     returnAllHeld(session);
-    const oldHostId = session.hostId;
-    const wasSent = session.sent;
-    const newHostId = deps.randomUuid();
-    session.owned.setHostSessionId(newHostId);
-    session.hostId = newHostId;
+    // A clear already pending keeps the `sent` from before it. A row with no
+    // host id has nothing reported to clear.
+    if (session.hostId !== null && session.pendingClear === null) {
+      session.pendingClear = { sent: session.sent };
+    }
     session.sent = false;
     session.historyPending = false;
     session.historyBefore = null;
-    if (selectedHostId === oldHostId) {
-      selectedHostId = newHostId;
-    }
     session.slots.replaceEntries([
       nextNotice(session, 'Conversation cleared', 'info'),
     ]);
-    deps.emit('sessionCleared', {
-      sessionId,
-      oldHostSessionId: oldHostId,
-      newHostSessionId: newHostId,
-      projectDir: session.slots.info().projectDir,
-      profile: session.slots.info().profile,
-      titles: sessions.titles(sessionId) ?? NO_TITLES,
-      sent: wasSent,
-    });
     try {
       startProcess(session, harness, profile, false);
     } catch (error) {
@@ -3440,6 +3560,19 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   return {
     sessions: () => [...held.values()].map((session) => session.slots.read()),
     hostSessionIdOf: (sessionId) => held.get(sessionId)?.hostId ?? null,
+    hostSessionIdSettled(sessionId) {
+      const session = held.get(sessionId);
+      if (session === undefined) {
+        return Promise.reject(new Error(`chat holds no session ${sessionId}`));
+      }
+      const { hostId } = session;
+      if (hostId !== null && session.pendingClear === null) {
+        return Promise.resolve(hostId);
+      }
+      return new Promise<string>((resolve, reject) => {
+        session.hostIdWaiters.push({ resolve, reject });
+      });
+    },
     activeTimeOf: (sessionId) =>
       held.get(sessionId)?.slots.info().activeTime ?? null,
     isHeadless: (sessionId) => held.get(sessionId)?.headless ?? false,
@@ -3485,7 +3618,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       if (session === undefined) {
         return;
       }
-      selectedHostId = session.hostId;
+      selectedRowId = session.sessionId;
       save();
     },
     pastSessions,

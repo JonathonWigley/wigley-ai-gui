@@ -33,6 +33,7 @@ describe('primer drive actions', () => {
         sessionId: 'drive-primer-1',
         projectDir: 'drive',
         harness: 'claude',
+        rowId: null,
       },
     ]);
     expect(sessions.calls).toEqual([['open_primer', SAMPLE_PRIMER_ARGS]]);

@@ -150,6 +150,7 @@ describe('startRelayServer', () => {
         sessionId: 'session-1',
         projectDir: '/work/project',
         harness: 'claude',
+        rowId: null,
         host: { deadline_seconds: 300 },
       },
     ]);
@@ -210,6 +211,7 @@ describe('startRelayServer', () => {
     ['project_dir', { project_dir: 42 }],
     ['harness', { harness: 3 }],
     ['config_dir', { config_dir: 3 }],
+    ['row_id', { row_id: 5 }],
   ])(
     'refuses a hello whose %s has the wrong type and starts no session',
     async (field, override) => {
@@ -266,6 +268,7 @@ describe('startRelayServer', () => {
         sessionId: null,
         projectDir: null,
         harness: null,
+        rowId: null,
         host: { deadline_seconds: null },
       },
     },
@@ -275,6 +278,7 @@ describe('startRelayServer', () => {
         sessionId: null,
         projectDir: null,
         harness: null,
+        rowId: null,
       },
     },
     {
@@ -283,6 +287,7 @@ describe('startRelayServer', () => {
         sessionId: 'session-1',
         projectDir: '/work/project',
         harness: 'claude',
+        rowId: null,
         profileDir: '/home/me/.claude-work',
         host: { deadline_seconds: 300 },
       },
@@ -293,6 +298,7 @@ describe('startRelayServer', () => {
         sessionId: 'session-1',
         projectDir: '/work/project',
         harness: 'codex',
+        rowId: null,
         host: { deadline_seconds: 300 },
       },
     },
@@ -302,6 +308,7 @@ describe('startRelayServer', () => {
         sessionId: 'session-1',
         projectDir: '/work/project',
         harness: 'gemini',
+        rowId: null,
         host: { deadline_seconds: 300 },
       },
     },
@@ -311,7 +318,18 @@ describe('startRelayServer', () => {
         sessionId: 'session-1',
         projectDir: '/work/project',
         harness: 'claude',
+        rowId: null,
         host: { deadline_seconds: '300', tab_id: 7 },
+      },
+    },
+    {
+      hello: { ...HELLO, row_id: 'row-7' },
+      expected: {
+        sessionId: 'session-1',
+        projectDir: '/work/project',
+        harness: 'claude',
+        rowId: 'row-7',
+        host: { deadline_seconds: 300 },
       },
     },
   ])(

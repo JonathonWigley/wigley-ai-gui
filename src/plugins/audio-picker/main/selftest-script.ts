@@ -173,6 +173,7 @@ export function audioPickerSelfTestScript(
         sessionId: `audio-picker-selftest-${run}`,
         projectDir: 'audio-picker-selftest',
         harness: 'claude',
+        rowId: null,
         host: { [HOST_DEADLINE_FIELD]: 120 },
       });
       connected = session;

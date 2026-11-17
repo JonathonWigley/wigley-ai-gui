@@ -466,11 +466,11 @@ function setUp(
   const keptRows: string[] = [];
   let isFocused = true;
   let selectedSessionId: string | null = ROW_ID;
-  let uuidCalls = 0;
   const hostIdChanges: string[] = [];
-  // Host ids whose `open` throws, row ids another session holds, and what
-  // each owned `end` also does.
+  // Host ids whose `open` throws, row ids another session holds, host ids
+  // `setHostSessionId` refuses, and what each owned `end` also does.
   const refusedOpens = new Set<string>();
+  const refusedHostIds = new Set<string>();
   const heldRowIds = new Set<string>();
   let onOwnedEnd = () => {};
   let profiles: readonly HarnessProfile[] = PROFILES;
@@ -499,6 +499,9 @@ function setUp(
           onOwnedEnd();
         },
         setHostSessionId: (hostSessionId) => {
+          if (refusedHostIds.has(hostSessionId)) {
+            throw new Error(`host ${hostSessionId} is held by another row`);
+          }
           hostIdChanges.push(hostSessionId);
         },
         keep: () => {
@@ -529,10 +532,6 @@ function setUp(
     sessions,
     selectedSessionId: () => selectedSessionId,
     profiles: () => profiles,
-    randomUuid: () => {
-      uuidCalls++;
-      return `uuid-${uuidCalls}`;
-    },
     recent: createRecentFolders({
       data,
       clock,
@@ -601,7 +600,6 @@ function setUp(
     // Changes a row's titles as sessions would, recording no call.
     setRowTitles: (sessionId: string, next: SessionTitles) =>
       titles.set(sessionId, next),
-    uuidCalls: () => uuidCalls,
     setNow: (now: number) => {
       clockNow = now;
     },
@@ -615,6 +613,7 @@ function setUp(
       selectedSessionId = sessionId;
     },
     refuseOpen: (hostId: string) => refusedOpens.add(hostId),
+    refuseHostId: (hostId: string) => refusedHostIds.add(hostId),
     holdRowId: (rowId: string) => heldRowIds.add(rowId),
     // Runs as each event is emitted, while chat's emit is on the stack.
     setOnEmit: (listen: (emitted: Emitted) => void) => {
@@ -664,6 +663,7 @@ function connected(id: string, hostId: string): AgentSession {
       sessionId: hostId,
       projectDir: '/w/app',
       harness: 'claude',
+      rowId: null,
     },
   };
 }
@@ -854,16 +854,17 @@ describe('createChatSessions', () => {
     expect(sessionId).toBe(ROW_ID);
     expect(test.opened).toEqual([
       {
-        sessionId: 'uuid-1',
+        sessionId: null,
         projectDir: PROJECT_DIR,
         harness: 'claude',
+        rowId: null,
         profileDir: '~/.claude-personal',
       },
     ]);
     expect(test.harness.processes.map((process) => process.request)).toEqual([
       {
-        processId: 'uuid-1-1-1000',
-        sessionId: 'uuid-1',
+        processId: 'row-1-1-1000',
+        sessionId: null,
         resume: false,
         projectDir: PROJECT_DIR,
         profileDir: '~/.claude-personal',
@@ -903,14 +904,36 @@ describe('createChatSessions', () => {
   });
 
   it.each([
-    { row: 'the started row', sessionId: ROW_ID, expected: 'uuid-1' },
-    { row: 'a row chat does not hold', sessionId: 'row-9', expected: null },
-  ])('hostSessionIdOf_$row_ReturnsItsHostId', ({ sessionId, expected }) => {
-    const test = setUp();
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    {
+      row: 'the started row once its harness reported',
+      reported: true,
+      sessionId: ROW_ID,
+      expected: 'fake-session-1',
+    },
+    {
+      row: 'the started row before its harness reported',
+      reported: false,
+      sessionId: ROW_ID,
+      expected: null,
+    },
+    {
+      row: 'a row chat does not hold',
+      reported: true,
+      sessionId: 'row-9',
+      expected: null,
+    },
+  ])(
+    'hostSessionIdOf_$row_ReturnsItsHostId',
+    async ({ reported, sessionId, expected }) => {
+      const test = setUp();
+      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+      if (reported) {
+        await flush();
+      }
 
-    expect(test.chat.hostSessionIdOf(sessionId)).toBe(expected);
-  });
+      expect(test.chat.hostSessionIdOf(sessionId)).toBe(expected);
+    },
+  );
 
   it('addInstructions_EachStartCarriesTheRegisteredOnes', async () => {
     const test = setUp();
@@ -1088,6 +1111,7 @@ describe('createChatSessions', () => {
         sessionId: hostId,
         projectDir: '/w/app',
         harness: 'claude',
+        rowId: null,
         profileDir: '~/.claude',
       },
     ]);
@@ -1103,7 +1127,7 @@ describe('createChatSessions', () => {
     ]);
     expect(state.commands).toEqual([]);
     expect(test.harness.processes.at(-1)?.request).toEqual({
-      processId: `${hostId}-1-1000`,
+      processId: `${ROW_ID}-1-1000`,
       sessionId: hostId,
       resume: true,
       projectDir: '/w/app',
@@ -1113,7 +1137,7 @@ describe('createChatSessions', () => {
       idleCompactMinTokens: null,
       rowId: ROW_ID,
     });
-    expect(test.uuidCalls()).toBe(0);
+    expect(test.hostIdChanges).toEqual([]);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
       { projectDir: '/w/app', profile: 'work', lastUsed: 1000 },
     ]);
@@ -1480,7 +1504,7 @@ describe('createChatSessions', () => {
     const sessionId = await test.chat.resume({
       projectDir: '/w/app',
       profile: 'work',
-      hostSessionId: 'uuid-1',
+      hostSessionId: 'fake-session-1',
       title: 'go',
       owner: 'practice',
     });
@@ -1524,14 +1548,14 @@ describe('createChatSessions', () => {
       const resumed = test.chat.resume({
         projectDir: '/w/app',
         profile: 'work',
-        hostSessionId: 'uuid-1',
+        hostSessionId: 'fake-session-1',
         title: 'go',
         instructions: ['own note'],
         ...asked,
       });
 
       await expect(resumed).rejects.toThrow(
-        new RegExp(`uuid-1.*${named[0]}.*${named[1]}`),
+        new RegExp(`fake-session-1.*${named[0]}.*${named[1]}`),
       );
       expect(test.activated).toEqual([]);
       expect(test.opened).toHaveLength(openedBefore);
@@ -3339,11 +3363,13 @@ describe('createChatSessions saved sessions', () => {
   it.each([
     {
       given: 'a host id chat holds',
-      arrange: (test: ReturnType<typeof setUp>) =>
-        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
-      saved: ['host-a', 'uuid-1', 'host-b'],
-      opened: ['uuid-1', 'host-a', 'host-b'],
-      logged: 'session uuid-1 already open; not restored',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        await flush();
+      },
+      saved: ['host-a', 'fake-session-1', 'host-b'],
+      opened: [null, 'host-a', 'host-b'],
+      logged: 'session fake-session-1 already open; not restored',
     },
     {
       given: 'a host id open on a relay row',
@@ -3369,9 +3395,9 @@ describe('createChatSessions saved sessions', () => {
     },
   ])(
     'restore_RecordNotOpenable_SkippedAndLogged given $given',
-    ({ arrange, saved, opened, logged }) => {
+    async ({ arrange, saved, opened, logged }) => {
       const test = setUp();
-      arrange(test);
+      await arrange(test);
 
       test.chat.restore(
         {
@@ -3549,7 +3575,7 @@ describe('createChatSessions saved sessions', () => {
 
       expect(test.harness.processes.map((process) => process.request)).toEqual([
         {
-          processId: `${hostId}-1-1000`,
+          processId: `${ROW_ID}-1-1000`,
           sessionId: hostId,
           resume: sent,
           projectDir: '/w/app',
@@ -3604,13 +3630,13 @@ describe('createChatSessions saved sessions', () => {
 
     expect(test.saved.last()?.sessions).toEqual([
       {
-        hostSessionId: 'uuid-1',
+        hostSessionId: 'fake-session-1',
         projectDir: PROJECT_DIR,
         profile: 'personal',
         sent,
         busy: false,
         titles: { ...NO_TITLES, firstMessage: sent ? 'hi' : null },
-        processId: 'uuid-1-1-1000',
+        processId: 'row-1-1-1000',
         queued: [],
         returned: [],
         launchControls: {},
@@ -3993,7 +4019,7 @@ describe('createChatSessions saved sessions', () => {
 
     expect(
       test.saved.last()?.sessions.map((saved) => saved.hostSessionId),
-    ).toEqual(['uuid-1', 'host-a']);
+    ).toEqual(['fake-session-1', 'host-a']);
   });
 
   it.each([
@@ -4397,7 +4423,7 @@ describe('createChatSessions saved sessions', () => {
       given: 'a start',
       open: (chat: ChatSessions) =>
         chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
-      selected: 'uuid-1',
+      selected: 'fake-session-1',
     },
     {
       given: 'a launch',
@@ -4668,7 +4694,7 @@ describe('createChatSessions usage forwarding', () => {
         data: {
           sessionId: ROW_ID,
           profileDir: '~/.claude-personal',
-          hostSessionId: 'uuid-1',
+          hostSessionId: 'fake-session-1',
           event,
           replayed: false,
         },
@@ -4706,7 +4732,7 @@ describe('createChatSessions usage forwarding', () => {
           data: {
             sessionId: ROW_ID,
             profileDir: '~/.claude-personal',
-            hostSessionId: 'uuid-1',
+            hostSessionId: 'fake-session-1',
             event: fakeUsageEvent(1, 1000),
             replayed: false,
           },
@@ -4776,26 +4802,27 @@ describe('createChatSessions clear', () => {
       sessionId: ROW_ID,
       entries: [CLEARED],
     });
-    expect(old.request.sessionId).toBe('uuid-1');
+    expect(old.sessionId).toBe('fake-session-1');
     expect(old.request.rowId).toBe(ROW_ID);
     expect(test.harness.processes[1].request).toMatchObject({
-      sessionId: 'uuid-2',
+      sessionId: null,
       rowId: ROW_ID,
       resume: false,
       controls: { model: 'fake-large' },
     });
+    expect(test.harness.processes[1].sessionId).toBe('fake-session-2');
     expect(old.calls).toContainEqual({ method: 'end' });
-    expect(test.hostIdChanges).toEqual(['uuid-2']);
+    expect(test.hostIdChanges).toEqual(['fake-session-1', 'fake-session-2']);
     expect(test.saved.last()).toEqual({
       sessions: [
         {
-          hostSessionId: 'uuid-2',
+          hostSessionId: 'fake-session-2',
           projectDir: PROJECT_DIR,
           profile: 'personal',
           sent: false,
           busy: false,
           titles: { ...NO_TITLES, firstMessage: 'first' },
-          processId: 'uuid-2-2-1000',
+          processId: 'row-1-2-1000',
           queued: [],
           returned: [],
           launchControls: { mode: 'auto', model: 'fake-large' },
@@ -4812,7 +4839,7 @@ describe('createChatSessions clear', () => {
           owner: null,
         },
       ],
-      selectedHostSessionId: 'uuid-2',
+      selectedHostSessionId: 'fake-session-2',
     });
     expect(test.chat.sessions()[0].running).toBe(true);
     expect(test.logged).toContain('conversation cleared in app');
@@ -4845,7 +4872,7 @@ describe('createChatSessions clear', () => {
         ? [emitted.data.hostSessionId]
         : [],
     );
-    expect(sessionEndedHostIds).toEqual(['uuid-1']);
+    expect(sessionEndedHostIds).toEqual(['fake-session-1']);
   });
 
   it('clear_RowWithRunTime_ResetsTheClockAndSavesZero', async () => {
@@ -4877,7 +4904,7 @@ describe('createChatSessions clear', () => {
 
     expect(test.harness.processes).toHaveLength(2);
     expect(test.harness.processes[1].request).toMatchObject({
-      sessionId: 'uuid-2',
+      sessionId: null,
       resume: false,
     });
     expect(test.process.calls).not.toContainEqual({ method: 'end' });
@@ -4941,11 +4968,14 @@ describe('createChatSessions clear', () => {
     },
   );
 
-  it('clear_StartThrows_RowRestsUnderNewIdAndRethrows', async () => {
+  // Breaks if a clear whose start throws moves the row to a host id no
+  // harness reported, or loses the clear before the next start reports.
+  it('clear_StartThrows_ClearPendingUntilNextStartReports', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
     test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
     await flush();
+    await test.chat.send(ROW_ID, IDLE_SEND);
     test.harness.failNextStart('spawn failed');
 
     expect(() => test.chat.clear(ROW_ID)).toThrow('spawn failed');
@@ -4955,10 +4985,26 @@ describe('createChatSessions clear', () => {
       entries: [CLEARED],
     });
     expect(test.saved.last()?.sessions).toEqual([
-      expect.objectContaining({ hostSessionId: 'uuid-2', sent: false }),
+      expect.objectContaining({ hostSessionId: 'fake-session-1', sent: true }),
     ]);
     expect(test.sent('sessionRested')).toEqual([
       { sessionId: ROW_ID, error: null },
+    ]);
+    expect(emittedOf(test, 'sessionCleared')).toEqual([]);
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    await flush();
+
+    expect(test.harness.processes.at(-1)?.request.sessionId).toBeNull();
+    expect(emittedOf(test, 'sessionCleared')).toEqual([
+      expect.objectContaining({
+        oldHostSessionId: 'fake-session-1',
+        newHostSessionId: 'fake-session-2',
+        sent: true,
+      }),
+    ]);
+    expect(test.saved.last()?.sessions).toEqual([
+      expect.objectContaining({ hostSessionId: 'fake-session-2' }),
     ]);
   });
 
@@ -5469,7 +5515,7 @@ describe('createChatSessions active time', () => {
     runClockSteps(test, [{ at: 1000, activity: 'working' }]);
     test.setNow(3000);
 
-    restoreOne(test, record('uuid-1', { activeMs: 42000 }), []);
+    restoreOne(test, record('fake-session-1', { activeMs: 42000 }), []);
 
     expect(test.chat.sessions()[0].activeTime).toEqual({
       totalMs: 42000,
@@ -5677,11 +5723,11 @@ describe('createChatSessions process ids and the saved queue', () => {
 
     expect(
       test.harness.processes.map((each) => each.request.processId),
-    ).toEqual(['uuid-1-1-1000', 'uuid-1-2-1000']);
-    expect(firstSaved?.processId).toBe('uuid-1-1-1000');
+    ).toEqual(['row-1-1-1000', 'row-1-2-1000']);
+    expect(firstSaved?.processId).toBe('row-1-1-1000');
     expect(firstSaved?.launchResume).toBe(false);
     const lastSaved = test.saved.last()?.sessions[0];
-    expect(lastSaved?.processId).toBe('uuid-1-2-1000');
+    expect(lastSaved?.processId).toBe('row-1-2-1000');
     expect(lastSaved?.launchResume).toBe(true);
   });
 
@@ -6153,7 +6199,6 @@ describe('createChatSessions attaching', () => {
 
       expect(attachedOf(test)[0].calls).toEqual(calls);
       expect(test.hostIdChanges).toEqual([]);
-      expect(test.uuidCalls()).toBe(0);
     },
   );
 
@@ -6986,7 +7031,7 @@ describe('createChatSessions send gate and hold', () => {
     expect(inputs).toEqual([
       {
         sessionId: 'row-1',
-        hostSessionId: 'uuid-1',
+        hostSessionId: 'fake-session-1',
         text: IDLE_SEND.text,
         now: 5000,
       },
@@ -7442,7 +7487,7 @@ describe('createChatSessions send gate and hold', () => {
       {
         sessionId: ROW_ID,
         profileDir: '~/.claude-personal',
-        hostSessionId: 'uuid-1',
+        hostSessionId: 'fake-session-1',
         replayed: false,
         event: {
           type: 'compactionEnded',
@@ -7980,7 +8025,7 @@ describe('createChatSessions lifecycle events', () => {
   const OPENED_NEW = {
     sessionId: ROW_ID,
     profileDir: '~/.claude-personal',
-    hostSessionId: 'uuid-1',
+    hostSessionId: 'fake-session-1',
     projectDir: PROJECT_DIR,
     profile: 'personal',
     origin: 'new',
@@ -8115,7 +8160,7 @@ describe('createChatSessions lifecycle events', () => {
       expect(closedAtOwnedEnd).toEqual([
         {
           sessionId: ROW_ID,
-          hostSessionId: 'uuid-1',
+          hostSessionId: 'fake-session-1',
           projectDir: PROJECT_DIR,
           profile: 'personal',
           titles: AGENT_TITLES,
@@ -8133,7 +8178,7 @@ describe('createChatSessions lifecycle events', () => {
     { given: 'an unsent row', sends: false, failsRestart: false, sent: false },
     { given: 'a failed restart', sends: true, failsRestart: true, sent: true },
   ])(
-    'sessionCleared_EachRow_CarriesBothIds given $given',
+    'sessionCleared_EachRow_CarriesBothIdsOnceReported given $given',
     async ({ sends, failsRestart, sent }) => {
       const test = await started();
       if (sends) {
@@ -8146,18 +8191,24 @@ describe('createChatSessions lifecycle events', () => {
       } else {
         test.chat.clear(ROW_ID);
       }
+      expect(emittedOf(test, 'sessionCleared')).toEqual([]);
+      await flush();
 
-      expect(emittedOf(test, 'sessionCleared')).toEqual([
-        {
-          sessionId: ROW_ID,
-          oldHostSessionId: 'uuid-1',
-          newHostSessionId: 'uuid-2',
-          projectDir: PROJECT_DIR,
-          profile: 'personal',
-          titles: AGENT_TITLES,
-          sent,
-        },
-      ]);
+      expect(emittedOf(test, 'sessionCleared')).toEqual(
+        failsRestart
+          ? []
+          : [
+              {
+                sessionId: ROW_ID,
+                oldHostSessionId: 'fake-session-1',
+                newHostSessionId: 'fake-session-2',
+                projectDir: PROJECT_DIR,
+                profile: 'personal',
+                titles: AGENT_TITLES,
+                sent,
+              },
+            ],
+      );
     },
   );
 
@@ -8197,7 +8248,7 @@ describe('createChatSessions lifecycle events', () => {
       test.process.events.ended(exit);
 
       expect(emittedOf(test, 'processEnded')).toEqual([
-        { sessionId: ROW_ID, hostSessionId: 'uuid-1', reason, ...exit },
+        { sessionId: ROW_ID, hostSessionId: 'fake-session-1', reason, ...exit },
       ]);
     },
   );
@@ -8245,24 +8296,19 @@ describe('createChatSessions lifecycle events', () => {
     expect(emittedOf(test, 'processEnded')).toEqual([]);
   });
 
-  it('sessionClosed_FailedStart_SaysStartFailed', () => {
+  // Breaks if a new row whose start throws fires lifecycle events or saves a
+  // record under a host id no harness reported.
+  it('openAndStart_StartThrows_NoOpenedNoClosedNoRecord', async () => {
     const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
     test.harness.failNextStart('spawn failed');
 
     expect(() => test.chat.start(START)).toThrow('spawn failed');
+    await flush();
 
-    expect(emittedOf(test, 'sessionClosed')).toEqual([
-      {
-        sessionId: ROW_ID,
-        hostSessionId: 'uuid-1',
-        projectDir: PROJECT_DIR,
-        profile: 'personal',
-        titles: NO_TITLES,
-        sent: false,
-        headless: false,
-        reason: 'start-failed',
-      },
-    ]);
+    expect(emittedOf(test, 'sessionOpened')).toEqual([]);
+    expect(emittedOf(test, 'sessionClosed')).toEqual([]);
+    expect(test.saved.last()?.sessions ?? []).toEqual([]);
   });
 
   it.each([
@@ -8563,9 +8609,10 @@ describe('createChatSessions resume sections', () => {
       given: 'one held, one archived and one free session',
       arrange: async (test: ReturnType<typeof setUp>) => {
         test.chat.start(START);
+        await flush();
         await test.archived.set('host-archived', true);
       },
-      ids: ['uuid-1', 'host-archived', 'host-free'],
+      ids: ['fake-session-1', 'host-archived', 'host-free'],
       resumable: ['host-free'],
     },
     {
@@ -8581,12 +8628,12 @@ describe('createChatSessions resume sections', () => {
       arrange: async (test: ReturnType<typeof setUp>) => {
         test.chat.start(START);
         await flush();
-        test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-1'));
+        test.chat.recordOpenHostId(connected(ROW_ID, 'fake-session-1'));
         test.chat.clear(ROW_ID);
         await flush();
       },
-      ids: ['uuid-1', 'uuid-2'],
-      resumable: ['uuid-1'],
+      ids: ['fake-session-1', 'fake-session-2'],
+      resumable: ['fake-session-1'],
     },
     {
       given: 'an unreadable archived file',
@@ -8642,14 +8689,14 @@ describe('createChatSessions resume sections', () => {
     {
       given: 'a row closed',
       clears: false,
-      ids: ['uuid-1'],
+      ids: ['fake-session-1'],
       whileEnding: [],
     },
     {
       given: 'a row /clear moved to a new host id, then closed',
       clears: true,
-      ids: ['uuid-1', 'uuid-2'],
-      whileEnding: ['uuid-1'],
+      ids: ['fake-session-1', 'fake-session-2'],
+      whileEnding: ['fake-session-1'],
     },
   ])(
     'isResumable_JustClosedRowEnding_IsFalseUntilEnded given $given',
@@ -8657,10 +8704,10 @@ describe('createChatSessions resume sections', () => {
       const test = setUp();
       test.chat.start(START);
       await flush();
-      test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-1'));
+      test.chat.recordOpenHostId(connected(ROW_ID, 'fake-session-1'));
       if (clears) {
         test.chat.clear(ROW_ID);
-        test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-2'));
+        test.chat.recordOpenHostId(connected(ROW_ID, 'fake-session-2'));
         await flush();
       }
       test.harness.holdEnd();
@@ -8903,7 +8950,7 @@ describe('createChatSessions projects', () => {
     const { request } = test.harness.processes[0];
     expect([request.projectDir, request.sessionId]).toEqual([
       '/pool/ng-1',
-      'uuid-1',
+      null,
     ]);
     expect(noticesOf(test)).toEqual([]);
     expect(
@@ -8986,5 +9033,204 @@ describe('createChatSessions projects', () => {
     await expect(
       test.chat.projectPastSessions('Nope', 'personal'),
     ).rejects.toThrow('Unknown project');
+  });
+});
+
+describe('createChatSessions host session ids', () => {
+  const START = { projectDir: PROJECT_DIR, profile: 'personal' };
+
+  // Breaks if a new row starts under an id chat made up, or fires
+  // `sessionOpened` or saves before its harness reports the id.
+  it('startNew_NewSession_StartsWithNullAndAdoptsReportedId', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    test.chat.start(START);
+
+    expect(test.harness.processes[0].request.sessionId).toBeNull();
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBeNull();
+    expect(emittedOf(test, 'sessionOpened')).toEqual([]);
+
+    await flush();
+
+    expect(test.hostIdChanges).toEqual(['fake-session-1']);
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBe('fake-session-1');
+    expect(emittedOf(test, 'sessionOpened')).toEqual([
+      expect.objectContaining({
+        sessionId: ROW_ID,
+        hostSessionId: 'fake-session-1',
+        origin: 'new',
+      }),
+    ]);
+    expect(
+      test.saved.last()?.sessions.map((saved) => saved.hostSessionId),
+    ).toEqual(['fake-session-1']);
+  });
+
+  // Breaks if process ids go back to starting with the host id, which a new
+  // row does not have when its process starts.
+  it('startProcess_ProcessId_StartsWithRowId', async () => {
+    const test = setUp({ keptRowIds: ['kept-row'] });
+    test.chat.restore(
+      {
+        sessions: [record('host-b', { rowId: 'kept-row' })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    await test.chat.send('kept-row', IDLE_SEND);
+
+    expect(
+      test.harness.processes.map((process) => process.request.processId),
+    ).toEqual(['kept-row-1-1000']);
+  });
+
+  // Breaks if a row that was never sent a message restarts as a new
+  // conversation instead of under the id its harness reported.
+  it('restart_NeverSentRow_PassesKnownHostId', async () => {
+    const test = await started();
+    test.process.events.ended({ code: 0, error: null });
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    await flush();
+
+    expect(test.harness.processes[1].request).toMatchObject({
+      sessionId: 'fake-session-1',
+      resume: false,
+    });
+    expect(test.hostIdChanges).toEqual(['fake-session-1']);
+  });
+
+  // Breaks if a clear names the new conversation itself, or fires
+  // `sessionCleared` before the fresh process reports its id.
+  it('clear_FreshProcess_StartsWithNullAndFiresClearedOnReport', async () => {
+    const test = await started();
+
+    test.chat.clear(ROW_ID);
+
+    expect(test.harness.processes[1].request.sessionId).toBeNull();
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBe('fake-session-1');
+    expect(emittedOf(test, 'sessionCleared')).toEqual([]);
+
+    await flush();
+
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBe('fake-session-2');
+    expect(emittedOf(test, 'sessionCleared')).toEqual([
+      expect.objectContaining({
+        oldHostSessionId: 'fake-session-1',
+        newHostSessionId: 'fake-session-2',
+      }),
+    ]);
+  });
+
+  // Breaks if a reported id another row holds moves the row anyway, or
+  // fires `sessionOpened` for it.
+  it('adoptHostId_IdHeldElsewhere_LogsAndKeepsRow', async () => {
+    const test = setUp();
+    test.refuseHostId('fake-session-1');
+
+    test.chat.start(START);
+    await flush();
+
+    expect(test.logged).toContain(
+      `session ${ROW_ID} not moved to host fake-session-1: host fake-session-1 is held by another row`,
+    );
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBeNull();
+    expect(test.chat.sessions()).toHaveLength(1);
+    expect(emittedOf(test, 'sessionOpened')).toEqual([]);
+  });
+
+  // Breaks if a send gate runs for a row with no host id to name.
+  it('sendGate_NoHostId_NotRun', async () => {
+    const test = setUp();
+    const inputs: SendGateInput[] = [];
+    test.chat.addSendGate((input) => {
+      inputs.push(input);
+      return null;
+    });
+    test.chat.start(START);
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    expect(inputs).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'a row with a known host id',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.restore(
+          { sessions: [record('host-a')], selectedHostSessionId: null },
+          [],
+        );
+      },
+      settles: 'host-a',
+    },
+    {
+      given: 'a new row once its harness reports',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+      },
+      settles: 'fake-session-1',
+    },
+    {
+      given: 'a cleared row once its fresh process reports',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        await flush();
+        test.chat.clear(ROW_ID);
+      },
+      settles: 'fake-session-2',
+    },
+  ])(
+    'hostSessionIdSettled_Cases resolve given $given',
+    async ({ arrange, settles }) => {
+      const test = setUp();
+      await arrange(test);
+
+      await expect(test.chat.hostSessionIdSettled(ROW_ID)).resolves.toBe(
+        settles,
+      );
+    },
+  );
+
+  it.each([
+    {
+      given: 'a row chat does not hold',
+      settle: (test: ReturnType<typeof setUp>) =>
+        test.chat.hostSessionIdSettled('row-9'),
+      rejects: 'chat holds no session row-9',
+    },
+    {
+      given: 'a new row closed before its harness reports',
+      settle: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        const settling = test.chat.hostSessionIdSettled(ROW_ID);
+        test.chat.closed(ROW_ID, 'user');
+        return settling;
+      },
+      rejects: `session ${ROW_ID} closed before its harness reported a session id`,
+    },
+  ])(
+    'hostSessionIdSettled_Cases reject given $given',
+    async ({ settle, rejects }) => {
+      const test = setUp();
+
+      await expect(settle(test)).rejects.toThrow(rejects);
+    },
+  );
+
+  // Breaks if the selection is kept by host id again, which a new row lacks
+  // when it is selected.
+  it('snapshot_SelectedNewRow_SavedByRowOnceIdArrives', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    test.chat.start(START);
+    expect(test.saved.last()?.selectedHostSessionId ?? null).toBeNull();
+    await flush();
+
+    expect(test.saved.last()?.selectedHostSessionId).toBe('fake-session-1');
   });
 });

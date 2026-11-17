@@ -1527,9 +1527,10 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         return { selftest, permission: decision, round: null };
       }
       const relay = sessions.connect({
-        sessionId: process.request.sessionId,
+        sessionId: null,
         projectDir: selftest,
         harness: 'claude',
+        rowId: id,
       });
       previousRelay = relay;
       const round = await relay.call(

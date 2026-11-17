@@ -8,6 +8,7 @@ const INFO: SessionInfo = {
   sessionId: 'host',
   projectDir: null,
   harness: 'claude',
+  rowId: null,
 };
 
 // Exports whose sessions count their ends.

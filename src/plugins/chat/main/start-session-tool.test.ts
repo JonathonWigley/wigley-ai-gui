@@ -318,6 +318,7 @@ function toolSession(row: Row) {
       sessionId: 'host-1',
       projectDir: row.callerFolder === undefined ? '/caller' : row.callerFolder,
       harness: 'claude',
+      rowId: null,
     },
   });
   return { launch, stat, log, session };

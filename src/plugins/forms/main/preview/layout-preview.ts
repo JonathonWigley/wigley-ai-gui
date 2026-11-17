@@ -15,6 +15,7 @@ const PREVIEW_SESSION: SessionInfo = {
   sessionId: 'layout-preview',
   projectDir: null,
   harness: null,
+  rowId: null,
   label: 'Layout preview',
 };
 

@@ -88,7 +88,7 @@ async function startPart() {
   );
   const toolSession = contributions[0]!.start({
     id: SESSION,
-    info: { sessionId: 'host-1', projectDir: PROJECT, harness: 'claude' },
+    info: { sessionId: 'host-1', projectDir: PROJECT, harness: 'claude', rowId: null },
   });
   const call = (name: string, args: unknown, context = CONTEXT) =>
     toolSession.call(name, args, context);

@@ -35,7 +35,7 @@ export function addDriveActions(
       }
       const toolSession = deps.tools({
         id,
-        info: { sessionId: null, projectDir: null, harness: null },
+        info: { sessionId: null, projectDir: null, harness: null, rowId: null },
       });
       try {
         return await toolSession.call(tool, toolArgs, {

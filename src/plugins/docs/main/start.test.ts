@@ -308,6 +308,7 @@ describe('docs main part', () => {
       sessionId: 'abc',
       projectDir: '/p',
       harness: 'claude',
+      rowId: null,
     };
     docs.emit('sessions.connected', { id: 'row-1', info, owned: false });
 
@@ -339,6 +340,7 @@ describe('docs main part', () => {
       sessionId: 'old-host',
       projectDir: '/p',
       harness: 'claude',
+      rowId: null,
     };
     docs.emit('sessions.connected', { id: 'row-1', info, owned: true });
 
@@ -368,8 +370,8 @@ describe('docs main part', () => {
   }>([
     {
       event: 'sessions.hostSessionChanged',
-      info: { sessionId: 'old-host', projectDir: '/p', harness: 'claude' },
-      changed: { sessionId: 'new-host', projectDir: '/p', harness: 'claude' },
+      info: { sessionId: 'old-host', projectDir: '/p', harness: 'claude', rowId: null },
+      changed: { sessionId: 'new-host', projectDir: '/p', harness: 'claude', rowId: null },
       oldRun: ['session', 'old-host'],
       oldPath: '/p/old.md',
       newRun: ['session', 'new-host'],
@@ -806,6 +808,7 @@ describe('docs main part lifecycle', () => {
         sessionId: 'abc',
         projectDir: '/p',
         harness: 'claude',
+        rowId: null,
       },
       owned: false,
     });

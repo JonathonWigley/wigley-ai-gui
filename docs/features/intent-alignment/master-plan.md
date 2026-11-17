@@ -135,7 +135,7 @@ conversion of chat to slots and its chat events also edited; that conversion has
    - [x] Permission behind the harness
    - [x] Sessions stops naming Claude
    - [x] Structured round results
-   - [ ] Owned sessions join by an adapter key [plan]
+   - [x] Owned sessions join by an adapter key [plan]
 4. [ ] Codex harness adapter [plan]: the proof; a second harness shows what the seams missed. It is planned in its
    own session once the steps above land, outside the lane's plan.
 

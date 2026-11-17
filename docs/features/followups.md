@@ -257,9 +257,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout names them. Chat page
   exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default. A partial
   chat layout already falls back to `default` per entry kind (`pickEntry` in `src/plugins/chat/page/chat-layouts.ts`).
-- **Owned sessions join by an adapter key** — *needs a feature plan*: owned sessions join by a key the harness adapter
-  supplies, settable after start, or a token passed in the spawn environment, rather than requiring a host session
-  id before spawning (`session-list.ts` `connect`).
 - **Harness-neutral UI copy** — *agent-ready*: UI copy says "the agent" or the harness label rather than Claude
   (chat's `default` layout's reason box and close confirm, the exit notice in `chat-sessions.ts`, chat's setting
   descriptions and `start-session-tool.ts`, and the Claude adapter's notices and toasts that reach chat).

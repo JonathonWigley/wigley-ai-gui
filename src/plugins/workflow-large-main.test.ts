@@ -140,6 +140,7 @@ function session(id: string, hostSessionId: string): AgentSession {
       sessionId: hostSessionId,
       projectDir: '/r',
       harness: null,
+      rowId: null,
     },
   };
 }

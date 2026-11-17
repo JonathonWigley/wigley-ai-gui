@@ -69,6 +69,9 @@ function mistypedHelloField(hello: RelayHello): string | null {
   if (!isOptional(hello.config_dir, 'string')) {
     return 'config_dir';
   }
+  if (!isOptional(hello.row_id, 'string')) {
+    return 'row_id';
+  }
   return null;
 }
 
@@ -79,6 +82,7 @@ const SESSIONS_HELLO_FIELDS: ReadonlySet<string> = new Set([
   'project_dir',
   'harness',
   'config_dir',
+  'row_id',
 ]);
 
 function sessionInfo(hello: RelayHello): SessionInfo {
@@ -86,6 +90,7 @@ function sessionInfo(hello: RelayHello): SessionInfo {
     sessionId: hello.session_id ?? null,
     projectDir: hello.project_dir ?? null,
     harness: hello.harness ?? null,
+    rowId: hello.row_id ?? null,
     profileDir: hello.config_dir ?? undefined,
   };
   const hostFields = Object.entries(hello).filter(

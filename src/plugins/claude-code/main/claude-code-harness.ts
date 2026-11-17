@@ -42,6 +42,7 @@ import {
 } from './agent-definitions';
 import { readAccountStatus, signInLink } from './claude-auth';
 import {
+  type ClaudeStart,
   claudeConfigFolder,
   claudeEnv,
   claudeLaunch,
@@ -797,7 +798,7 @@ function createClaudeSession(
 // next session.
 function loadSessionDefinitions(
   deps: ClaudeCodeHarnessDeps,
-  request: AgentStart,
+  request: ClaudeStart,
 ): Promise<AgentDefinitions> {
   return loadAgentDefinitions(
     { files: deps.files, paths: deps.paths, log: deps.log },
@@ -810,7 +811,7 @@ function loadSessionDefinitions(
 // that failed, which it logs.
 async function readSessionReplies(
   deps: ClaudeCodeHarnessDeps,
-  request: AgentStart,
+  request: ClaudeStart,
 ): Promise<SavedReply[] | null> {
   if (!request.resume) {
     return null;
@@ -870,17 +871,23 @@ function createPipeForwarder() {
   };
 }
 
+// A new session (a null `request.sessionId`) runs under a uuid the adapter mints; the session id is reported first.
 function startClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
   events: AgentProcessEvents,
 ): AgentProcess {
-  const launch = claudeLaunch(request, deps.env, deps.homeDir, deps.paths);
+  const started: ClaudeStart = {
+    ...request,
+    sessionId: request.sessionId ?? deps.randomUuid(),
+  };
+  const launch = claudeLaunch(started, deps.env, deps.homeDir, deps.paths);
   const command = deps.command();
   const forwarder = createPipeForwarder();
+  queueMicrotask(() => events.sessionId(started.sessionId));
   const pipe = deps.host.spawn(
     {
-      id: request.processId,
+      id: started.processId,
       command,
       args: launch.args,
       cwd: launch.cwd,
@@ -890,22 +897,22 @@ function startClaudeProcess(
     },
     withSpawnHint(forwarder.events, command, launch.cwd),
   );
-  const state = createSessionFoldState(request);
-  const session = createClaudeSession(deps, request, events, state, pipe);
+  const state = createSessionFoldState(started);
+  const session = createClaudeSession(deps, started, events, state, pipe);
   session.keepRoute(
-    deps.permissions.route(request.rowId, Promise.resolve(session.permissions)),
+    deps.permissions.route(started.rowId, Promise.resolve(session.permissions)),
   );
   session.open();
   forwarder.goLive(session.pipeEvents);
   session.readConfiguredPercent();
   // A resumed session seeds its context from the saved main replies, unless a
   // live reply came first.
-  void readSessionReplies(deps, request).then((replies) => {
+  void readSessionReplies(deps, started).then((replies) => {
     if (replies !== null) {
       session.foldSavedReplies(replies);
     }
   });
-  void loadSessionDefinitions(deps, request).then((loaded) => {
+  void loadSessionDefinitions(deps, started).then((loaded) => {
     state.definitions = loaded;
   });
   return session.process;
@@ -919,7 +926,8 @@ function startClaudeProcess(
 // attached: a refusal for each unanswered host request, the context request of a
 // turn that ended, and the settings request of a turn that ended or of a log that
 // has none. Rejects, having detached from the host, when a step after the host's
-// attach fails; it never fires `ended` for that. The row's `permission_prompt`
+// attach fails; it never fires `ended` for that. Rejects at once for a null
+// `request.sessionId`. Reports the session id before the replay's events. The row's `permission_prompt`
 // calls are routed here from the start of the attach and wait for it: they reach
 // the process once it resolves, and get no process when it resolves null or
 // rejects.
@@ -928,6 +936,10 @@ async function attachClaudeProcess(
   request: AgentStart,
   events: AgentProcessEvents,
 ): Promise<AgentProcess | null> {
+  if (request.sessionId === null) {
+    throw new Error('attach needs a session id');
+  }
+  const started: ClaudeStart = { ...request, sessionId: request.sessionId };
   let settleTarget: (target: PermissionTarget | null) => void = () => {};
   const record = deps.permissions.route(
     request.rowId,
@@ -953,10 +965,10 @@ async function attachClaudeProcess(
     return null;
   }
   try {
-    const state = createSessionFoldState(request);
+    const state = createSessionFoldState(started);
     const [definitions, savedReplies] = await Promise.all([
-      loadSessionDefinitions(deps, request),
-      readSessionReplies(deps, request),
+      loadSessionDefinitions(deps, started),
+      readSessionReplies(deps, started),
     ]);
     state.definitions = definitions;
     const lastLoggedSeq = attached.log.at(-1)?.seq ?? 0;
@@ -971,9 +983,10 @@ async function attachClaudeProcess(
       deps.clock.now(),
       savedReplies,
     );
+    events.sessionId(started.sessionId);
     const session = createClaudeSession(
       deps,
-      request,
+      started,
       events,
       state,
       attached.process,

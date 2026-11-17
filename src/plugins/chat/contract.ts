@@ -413,8 +413,9 @@ export interface ChatChannel extends ChannelShape {
     // is up it skips the compaction and returns nothing: the held row is written
     // when the compaction ends, then the rows behind it.
     interrupt(sessionId: string): void;
-    // Ends the session's process and starts a fresh one under a new host
-    // session id; the entries become one `Conversation cleared` notice in
+    // Ends the session's process and starts a fresh one as a new conversation,
+    // whose host session id the harness reports; the entries become one
+    // `Conversation cleared` notice in
     // `chat.entries`, the active time returns to 0 in `chat.session`, and
     // every message written but not taken in, then every queued message,
     // goes into `chat.returned`. Rejects when the fresh process cannot start,
@@ -525,15 +526,17 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // default, which chat never sends.
 // `sessionOpened`: a session chat now owns, with the profile it opened under,
 // its host id and folder, and how it came to open; a row whose profile is not
-// among the profiles of chat's harness fires none. It fires before the session's slots
-// exist and before chat's exports know the row. A pool project's row fires it
-// when its claim lands instead, with the clone as `projectDir` and after its
-// slots exist; it fires none, nor `sessionClosed`, when its claim fails or the
-// row closes first.
+// among the profiles of chat's harness fires none. A restored, resumed or
+// attached row fires it before the session's slots exist and before chat's
+// exports know the row. A new session's row fires it once its harness reports
+// the host id, after its slots exist and the sessions row holds that id; it
+// fires none, nor `sessionClosed`, when the row closes first.
 // `sessionClosed`: chat closing a row it holds, before its state goes, with the
 // titles, `sent` and `headless` it had. A quit or relaunch fires none.
-// `sessionCleared`: a clear moving a row to a new host id, with the titles it
-// holds and whether the old conversation was sent a message.
+// `sessionCleared`: a clear moving a row to a new host id, once the fresh
+// process reports that id, with the titles it holds and whether the old
+// conversation was sent a message. A clear of a row with no host id yet fires
+// none.
 // `processEnded`: a row's live process exiting, outside a replay;
 // `hostSessionId` is the id it started under.
 // `sessionArchived`: a saved session's archived flag, once written.
@@ -638,8 +641,9 @@ export interface ChatMainExports {
   // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.
   send(sessionId: string, message: UserMessage): Promise<void>;
-  // The `/clear` command's clear: resolves once the fresh process started;
-  // rejects when it cannot start, or for a session chat does not hold.
+  // The `/clear` command's clear: resolves once the fresh process started and
+  // reported its host session id; rejects when it cannot start, or for a
+  // session chat does not hold.
   // `sessions.hostSessionChanged` is emitted before it resolves.
   clear(sessionId: string): Promise<void>;
   // Drops every session chat holds in `projectDir` (compared as samePath

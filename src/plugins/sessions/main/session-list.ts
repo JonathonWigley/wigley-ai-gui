@@ -264,10 +264,11 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // connected session has no row until `mark` or `activate` adds it at the end,
 // and `release` closes that row again; an owned session gets its row at open,
 // under the `rowId` it was opened with, else a new id, selected unless opened
-// with `select` false or with an `owner`, is joined by each relay carrying
-// its host id without a row of its own, a newer relay taking the join from an
-// older one, moves to a new host id by its `setHostSessionId()`, which retires
-// the old id and its relay, and ends only by its `end()`, or once
+// with `select` false or with an `owner`, is joined by each relay naming its
+// row id (under the join rule `connect` states) or carrying its host id,
+// without a row of its own, a newer relay taking the join from an older one,
+// takes its first host id or moves to a new one by its `setHostSessionId()`,
+// a move retiring the old id and its relay, and ends only by its `end()`, or once
 // KEPT_SESSION_MS passed after its `keep()` with no `open` naming its row id
 // to adopt it. Each session keeps
 // its label while it lasts; a closed row comes back at the end with the
@@ -624,7 +625,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   };
 
   // Changes `sessionId` inside the session's one info object, so every holder
-  // of it sees the new id. The relay joined under the old id loses its join.
+  // of it sees the new id. The relay joined under an old id loses its join; a
+  // first host id, set on a session opened with none, retires nothing and keeps
+  // the join.
   const setHostSessionId = (entry: SessionEntry, newHostId: string) => {
     const appId = entry.session.id;
     if (!entries.has(appId)) {
@@ -726,10 +729,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
 
   // The kept session's new owner takes it as it is: its row, written again
   // when the user closed it meanwhile, and selected unless `select` is false
-  // or the row has an owner.
+  // or the row has an owner. A null `hostId` keeps the session's own host id.
   const adopt = (
     entry: SessionEntry,
-    hostId: string,
+    hostId: string | null,
     select: boolean,
   ): OwnedSession => {
     const appId = entry.session.id;
@@ -737,7 +740,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       deps.timers.clear(entry.keptTimer);
       entry.keptTimer = null;
     }
-    if (entry.session.info.sessionId !== hostId) {
+    if (hostId !== null && entry.session.info.sessionId !== hostId) {
       setHostSessionId(entry, hostId);
     }
     if (rows.get(appId) === undefined) {
@@ -756,10 +759,15 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // hello on the new socket before the old one closes. The handle's `end`
   // only clears the join, and only while this handle still holds it; its
   // calls are refused once the session moves off the host id it joined under,
-  // a move during a call's guard wait included.
-  const join = (entry: SessionEntry): ConnectedSession => {
+  // a move during a call's guard wait included. A relay joining a session with
+  // no host id yet joins under the hello's `helloSessionId`, else under the
+  // session's first host id; its calls run while the session has none.
+  const join = (
+    entry: SessionEntry,
+    helloSessionId: string | null,
+  ): ConnectedSession => {
     const appId = entry.session.id;
-    const joinedHostId = entry.session.info.sessionId;
+    let joinedHostId = entry.session.info.sessionId ?? helloSessionId;
     const handle = Symbol(appId);
     const isTakingOver = entry.joinedBy !== null;
     entry.joinedBy = handle;
@@ -773,6 +781,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       call: (name, args, context) =>
         routeCall(entry, name, args, context, () => {
           const hostId = entry.session.info.sessionId;
+          if (hostId === null) {
+            return null;
+          }
+          joinedHostId ??= hostId;
           if (hostId === joinedHostId) {
             return null;
           }
@@ -843,12 +855,22 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     },
     connect(info): ConnectedSession {
       const hostId = info.sessionId;
+      const rowEntry =
+        info.rowId === null ? undefined : entries.get(info.rowId);
+      const rowHostId = rowEntry?.session.info.sessionId ?? null;
+      const isRowJoin =
+        rowEntry !== undefined &&
+        rowEntry.owned &&
+        (rowHostId === null || hostId === null || hostId === rowHostId);
+      if (isRowJoin) {
+        return join(rowEntry, hostId);
+      }
       const ownedEntry =
         hostId === null
           ? undefined
           : entriesHolding(hostId).find((entry) => entry.owned);
       if (ownedEntry !== undefined) {
-        return join(ownedEntry);
+        return join(ownedEntry, hostId);
       }
       const retiringEntry =
         hostId === null
@@ -875,15 +897,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     },
     open(info, options): OwnedSession {
       const hostId = info.sessionId;
-      if (hostId === null) {
-        throw new Error('open needs a host session id');
-      }
       const rowId = options?.rowId;
       const held = rowId === undefined ? undefined : entries.get(rowId);
       const kept = held?.keptTimer === null ? undefined : held;
-      const isHostHeld = entriesHolding(hostId).some(
-        (holder) => holder !== kept,
-      );
+      const isHostHeld =
+        hostId !== null &&
+        entriesHolding(hostId).some((holder) => holder !== kept);
       if (isHostHeld) {
         throw new Error(`Host session ${hostId} is already open`);
       }

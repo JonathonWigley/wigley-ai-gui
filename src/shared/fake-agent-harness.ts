@@ -50,10 +50,12 @@ import { typedSkill } from './typed-skill';
 // `usage`, `compactionStarted` and one `compactionEnded` for each
 // compaction (`compact()`, `/compact`, `FAKE_COMPACT_TEXT`), `turnEnded` when a
 // turn or a compaction closes or is interrupted, and
-// `sessionEnded` just before each `ended`. A started process reports
+// `sessionEnded` just before each `ended`. A started process reports its
+// session id (`FakeAgentProcessRecord.sessionId`) before every other event, and
 // `FAKE_AGENT_PID` through `pid` right after `sessionStarted`. A process `attach`
-// resolves opens with none of `start`'s emissions, its pid included: the test's
-// replay stands for them. Once a process
+// resolves reports the request's session id, then the test's replay, and opens
+// with none of `start`'s emissions, its pid included: the replay stands for
+// them. An `attach` with a null session id rejects. Once a process
 // has detached, it emits nothing. The workflow
 // sends (`FAKE_WORKFLOW_FEATURE_TEXT`, `/wigley:make <plan folder>`,
 // `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
@@ -162,11 +164,15 @@ export type FakeAgentCall =
     };
 
 // `request` and `events` are the very objects `start` or `attach` received;
+// `sessionId` is the id the process reported: the request's, or the
+// `fake-session-<n>` a start with a null one minted, `n` counting from 1 per
+// fake harness;
 // `calls` lists every call on the process in call order, refused ones included.
 // `attached` marks a process `attach` resolved; `detached` one `detach` was called
 // on.
 export interface FakeAgentProcessRecord {
   request: AgentStart;
+  sessionId: string;
   events: AgentProcessEvents;
   calls: FakeAgentCall[];
   ended: boolean;
@@ -573,6 +579,7 @@ function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
     }
   };
   return {
+    sessionId: (id) => whileAttached(() => events.sessionId(id)),
     entry: (entry) => whileAttached(() => events.entry(entry)),
     controls: (controls) => whileAttached(() => events.controls(controls)),
     activity: (activity) => whileAttached(() => events.activity(activity)),
@@ -1185,6 +1192,8 @@ export function createFakeAgentHarness(
   const attachScripts = new Map<string, FakeAttachScript>();
   const pastSessionCalls: FakePastSessionCall[] = [];
   let nextStartFailure: string | null = null;
+  // The session ids starts with a null `sessionId` minted.
+  let mintedSessionIds = 0;
   let nextHistoryFailure: string | null = null;
   let nextPlanUsageFailure: string | null = null;
   const lastUsages = new Map<string, UsageAgentEvent | null>();
@@ -1735,6 +1744,7 @@ export function createFakeAgentHarness(
     };
     if (!record.attached) {
       queueMicrotask(() => {
+        events.sessionId(record.sessionId);
         events.agentEvent({ type: 'sessionStarted', at: clock.now() });
         events.pid(FAKE_AGENT_PID);
         events.controls(controls);
@@ -2089,6 +2099,8 @@ export function createFakeAgentHarness(
       }
       const record: FakeAgentProcessRecord = {
         request,
+        sessionId:
+          request.sessionId ?? `fake-session-${++mintedSessionIds}`,
         events,
         calls: [],
         ended: false,
@@ -2104,6 +2116,10 @@ export function createFakeAgentHarness(
       const script = attachScripts.get(request.processId);
       attachScripts.delete(request.processId);
       await Promise.resolve();
+      const { sessionId } = request;
+      if (sessionId === null) {
+        throw new Error('attach needs a session id');
+      }
       if (script === undefined) {
         return null;
       }
@@ -2117,6 +2133,7 @@ export function createFakeAgentHarness(
       }
       const record: FakeAgentProcessRecord = {
         request,
+        sessionId,
         events,
         calls: [],
         ended: false,
@@ -2124,6 +2141,7 @@ export function createFakeAgentHarness(
         detached: false,
       };
       processes.push(record);
+      events.sessionId(sessionId);
       script.replay(events);
       return startProcess(record, script.turns ?? 0);
     },

@@ -68,16 +68,25 @@ const request: AgentStart = {
 
 // Every event the process emits, as `[event name, payload]`, in emit order,
 // except the agent events other than `usage`, which `agentEvents` holds.
-// `timeline` holds every event, those included, in emit order.
+// `timeline` holds every event, those included, in emit order. `sessionIds`
+// holds each reported session id, and `firstEvents` each event's name in emit
+// order, `sessionId` included, which `heard` and `timeline` leave out.
 function recordingEvents() {
   const heard: [string, unknown][] = [];
   const agentEvents: AgentEvent[] = [];
   const timeline: [string, unknown][] = [];
+  const sessionIds: string[] = [];
+  const firstEvents: string[] = [];
   const hear = (name: string, payload: unknown) => {
     heard.push([name, payload]);
     timeline.push([name, payload]);
+    firstEvents.push(name);
   };
   const events: AgentProcessEvents = {
+    sessionId: (id) => {
+      sessionIds.push(id);
+      firstEvents.push('sessionId');
+    },
     entry: (entry) => hear('entry', entry),
     controls: (controls) => hear('controls', controls),
     activity: (activity) => hear('activity', activity),
@@ -91,12 +100,13 @@ function recordingEvents() {
       }
       agentEvents.push(event);
       timeline.push(['agentEvent', event]);
+      firstEvents.push('agentEvent');
     },
     messageDropped: (entryId) => hear('messageDropped', entryId),
     permission: (permissionRequest) => hear('permission', permissionRequest),
     ended: (end) => hear('ended', end),
   };
-  return { heard, agentEvents, timeline, events };
+  return { heard, agentEvents, timeline, sessionIds, firstEvents, events };
 }
 
 // One timeline event as a line: an entry as its kind, id and tool result text,
@@ -213,6 +223,37 @@ describe('createFakeAgentHarness', () => {
       ],
     ]);
     expect(heard[3]).toEqual(['activity', 'idle']);
+  });
+
+  it('start_NoSessionId_MintsCountingIds', async () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const runs = [null, null, 's-9'].map((sessionId) => {
+      const recording = recordingEvents();
+      harness.start({ ...request, sessionId }, recording.events);
+      return recording;
+    });
+    await flush();
+
+    expect(runs.map((run) => run.sessionIds)).toEqual([
+      ['fake-session-1'],
+      ['fake-session-2'],
+      ['s-9'],
+    ]);
+    expect(runs.map((run) => run.firstEvents[0])).toEqual([
+      'sessionId',
+      'sessionId',
+      'sessionId',
+    ]);
+    expect(harness.processes.map((record) => record.sessionId)).toEqual([
+      'fake-session-1',
+      'fake-session-2',
+      's-9',
+    ]);
+    expect(harness.processes[0].request.sessionId).toBeNull();
   });
 
   it('start_RequestControls_ReplaceStartingValues', async () => {

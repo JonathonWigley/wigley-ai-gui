@@ -73,7 +73,8 @@ and every `CLAUDE_CODE_*` (`CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXPERIMENTAL_A
 these variables, and `CLAUDE_EFFORT` in particular may set the child's effort. The app's launch strips the named ones
 and `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, which it sets from its own setting; any other `CLAUDE_CODE_*` passes through.
 It also strips `WIGLEY_SESSION_ROW` and sets it to the row's id, for `unity-pool`
-(`~/wigley-agents/tools/unity-pool/README.md`).
+(`~/wigley-agents/tools/unity-pool/README.md`); the relay's hello carries it as `row_id`, by which the app joins the
+relay to the row.
 
 ## User message
 

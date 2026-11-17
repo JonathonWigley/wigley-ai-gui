@@ -7,6 +7,9 @@ import {
 import { launchMode } from './claude-controls';
 import { CLAUDE_PERMISSION_TOOL } from './permission-route';
 
+// A start request whose session id the adapter has settled: the request's own, or one it minted for a new session.
+export type ClaudeStart = Omit<AgentStart, 'sessionId'> & { sessionId: string };
+
 export interface ClaudeLaunch {
   args: string[];
   cwd: string;
@@ -61,7 +64,7 @@ export function defaultConfigFolder(homeDir: string, paths: Paths): string {
 // `claudeEnv`'s environment, plus the request's `idleCompactMinTokens` when it
 // is not null and its `rowId` as `WIGLEY_SESSION_ROW`.
 export function claudeLaunch(
-  request: AgentStart,
+  request: ClaudeStart,
   env: Readonly<Record<string, string>>,
   homeDir: string,
   paths: Paths,

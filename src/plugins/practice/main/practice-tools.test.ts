@@ -31,7 +31,7 @@ const REFERENCE = 'class Solution { /* REFERENCE_TEXT */ };';
 const CASES_FILE = '/scratch/two-sum.cases.json';
 const SESSION = {
   id: 'row-1',
-  info: { sessionId: 'host-1', projectDir: PRACTICE_FOLDER, harness: null },
+  info: { sessionId: 'host-1', projectDir: PRACTICE_FOLDER, harness: null, rowId: null },
 } as AgentSession;
 
 function caseResult(

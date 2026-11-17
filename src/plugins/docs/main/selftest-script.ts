@@ -1277,6 +1277,7 @@ export async function openDocsFixtureSession(
       sessionId,
       projectDir: paths.join(home, 'dev', 'selftest-repo'),
       harness: 'claude',
+      rowId: null,
     },
     { select: false },
   );

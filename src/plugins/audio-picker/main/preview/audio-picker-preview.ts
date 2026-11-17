@@ -15,6 +15,7 @@ const PREVIEW_SESSION: SessionInfo = {
   sessionId: 'audio-picker-preview',
   projectDir: null,
   harness: null,
+  rowId: null,
   label: 'Audio picker preview',
 };
 

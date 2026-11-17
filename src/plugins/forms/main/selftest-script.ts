@@ -1340,6 +1340,7 @@ export function formsSelfTestScript(
       sessionId,
       projectDir,
       harness,
+      rowId: null,
       host: { [HOST_DEADLINE_FIELD]: 120 },
     });
   return {
@@ -1376,6 +1377,7 @@ export function formsSelfTestScript(
             sessionId: idleSessionId,
             projectDir: null,
             harness: 'codex',
+            rowId: null,
             host: { [HOST_DEADLINE_FIELD]: 120 },
           },
           { select: false },
