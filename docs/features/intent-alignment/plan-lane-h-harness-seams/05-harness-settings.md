@@ -1,6 +1,6 @@
 # 05 — Harness settings with the harness
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -237,3 +237,4 @@ Commit:    one commit for the group; it also removes "Harness settings with the 
 
 ## Proof
 
+Commit cb20cd2ff · proof: diff read: HarnessProfile, AgentHarnessInfo.profiles, createAgentHarnessRegistry(slot, log), claude-code profiles setting and DEFAULT_PROFILES, registeredProfiles, FAKE_PROFILES present; ChatProfile and chat.profiles gone; wave compile (typecheck, lint) passes; oxfmt in the wave's format commit · concerns: startUsagePart tests with no registered harness now log an async failing poll none asserts; user-visible strings naming the removed setting reworded harness-neutral beyond the comment edits listed; edits beyond Files: comments in claude-launch.ts, chat and usage layout.d.ts, retro-queue.ts, auto-retro manifest, session-host/design.md; followups 'Docs reads harness config roots' still says it builds on the removed item (07 removes it)

@@ -1,6 +1,6 @@
 # 07 — Docs reads harness config roots from the adapter
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)

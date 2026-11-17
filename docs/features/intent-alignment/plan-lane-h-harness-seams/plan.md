@@ -347,8 +347,8 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 - [x] [AgentHarness grows what a second harness needs](04-agent-harness-grows.md) — after 03
 
 ### Wave 4
-- [ ] [Harness settings with the harness](05-harness-settings.md) — after 04
-- [ ] [Sessions stops naming Claude](06-sessions-stops-naming-claude.md) — after 04
+- [x] [Harness settings with the harness](05-harness-settings.md) — after 04
+- [x] [Sessions stops naming Claude](06-sessions-stops-naming-claude.md) — after 04
 
 ### Wave 5
 - [ ] [Docs reads harness config roots from the adapter](07-docs-config-roots.md) — after 05
@@ -390,12 +390,15 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 02 · hard · d204d35b7 · diff read: mcp-wording.ts exports, argsErrorText on AgentFormType, needs_manual_open only in tool descriptions; wave compile (typecheck, lint) passes; golden captured on the base tree, where all 59 hand-traced values passed (f2f1a2f37) · concerns: golden values hand-traced (settled by the base run); Lane E's 06 and 08 task docs still name argsErrorName, parse(raw, where) and removed exports — its refresh must pick up argsErrorText, parse(raw, at), describe(), RoundResult
 - 03 · hard · 594eb7589 · diff read: claudeCodeManifest, realHarnessPluginIds, ProcessRunner.spawn, agentEnvironment/agentHomeDir present, src/main/claude-code gone; wave compile (typecheck, lint) passes · concerns: fake runs serve a catalog without claude-code (self-test plugin lists may shift); endpointEnv's undefined-drop rule now untested in main.ts; Lane P's plan docs still name claude.command; manifest text names ~/.local/bin/claude as the platform default
 - 04 · hard · 920835082 · diff read: HarnessCapabilities, HarnessConfigRoots, InstalledPlugin, CONTROL_ROLES, SessionControl.role, info's capabilities/clearAliases/projectConfigFolder, controls/toolUseIdOf/configRoots/installedPlugins present in contracts/agent.ts and both adapters; wave compile (typecheck, lint) passes; oxfmt 4c4cb1bd6 · concerns: foldPipeLine_InitializeWithoutList_KeepsHeldList now expects a second 'initialize listed no models' log; info_Label_* tests replaced by declaration tests; model-choice reader sits in session-fold.ts (commandRecordsOf is in claude-commands.ts); preview-session.ts controls carry no role (task 11); agent definitions now skip an install record with no installPath before picking project-or-user, so a pathless project install falls to the user install where it used to give none
+- 06 · hard · 48bde0c9f · diff read: PlatformRelay.serverName, RELAY_SERVER_NAME, McpServeOptions, 4-arg serveMcp, harnessToolUseId present; no claudecode key left in sessions source; wave compile (typecheck, lint) passes; shared-doc hunks in cb20cd2ff · concerns: harness toolUseIdOf runs inside callTool's try, so a throwing reader gives a tool error result as the old read did
+- 05 · hard · cb20cd2ff · diff read: HarnessProfile, AgentHarnessInfo.profiles, createAgentHarnessRegistry(slot, log), claude-code profiles setting and DEFAULT_PROFILES, registeredProfiles, FAKE_PROFILES present; ChatProfile and chat.profiles gone; wave compile (typecheck, lint) passes; oxfmt in the wave's format commit · concerns: startUsagePart tests with no registered harness now log an async failing poll none asserts; user-visible strings naming the removed setting reworded harness-neutral beyond the comment edits listed; edits beyond Files: comments in claude-launch.ts, chat and usage layout.d.ts, retro-queue.ts, auto-retro manifest, session-host/design.md; followups 'Docs reads harness config roots' still says it builds on the removed item (07 removes it)
 ### Contract changes
 - IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
 - docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01
 - DRIVE_SESSION_DEFAULTS typed { projectDir: string; harness: string }; sessions sidebar-view drawRow takes a harnesses() function; NotesSelfTestResult gains sessionLine · why: the literal union is gone; labels re-read per draw · consumers: none planned · group 01
 - FakeSpawn: a record → an exported class implementing SpawnedProcess in src/shared/fake-processes.ts (command, args, cwd, env, written, isInputEnded, kills; drivers stdout/stderr/close) · why: the returned process and the recorded spawn are one object · consumers: 03's tests, later fake-spawn users · group 03
 - FAKE_TOOL_USE_ID_META_KEY = 'fake/toolUseId' exported from src/shared/fake-agent-harness.ts beyond Produces, the key the fake's toolUseIdOf reads · why: tests drive the fake's tool-use id the way CLAUDE_TOOL_USE_ID_META_KEY drives Claude's · consumers: 06 · group 04
+- usage-internal PlanPollerDeps.planUsage(profileDir) → planUsage(profile: RegisteredProfile); profiles/roundStarted/polled take RegisteredProfile · why: the poller reaches each profile's own harness · consumers: none outside usage · group 05
 ### Rulings
 - Waves 2, 4 and 5 keep their pairs despite the wave check's clashes on followups.md, master-plan.md and drive SKILL.md: the plan's boundary rules put the two groups in disjoint hunks of those files; workers edit only their own hunk, and the group that commits first leaves the shared doc to the second group's commit, which carries both hunks and says so — the check's clash rule cannot see hunks — a mislabelled hunk in one commit if wrong · lead
 - Run works in worktree ~/Documents/.worktrees/ai-lane-h-harness-seams (branch lane-h-harness-seams) per WigleyRepos.md § Landing; Lane E's worktree is paused at its forms gate (waits on task 02) and its unmerged commits stay its own; peers on the main clone make every commit pathspec-scoped — a merge conflict at landing if Lane E or P lands first · lead
@@ -409,5 +412,8 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - controls(profileDir) ignores profileDir on both adapters — a profile with its own default mode would need a read later · group 04
 - A refreshed model choice list leaves the held model value as it is even when the list lacks it; the next get_settings reply re-maps — a stale value shows until then · group 04
 - installedPlugins' listedAt matches the literal "<key>" substring per line; a key written with JSON escapes gets listedAt null · group 04
+- Registry compares each recomputed entry with slot.get(id) and sets only changed ones; a changed entry that still loses a clash logs the clash again — one repeated line per real change if wrong · group 05
+- Strings naming chat's removed profiles setting now name 'the harness's profiles setting' — task 13 may reword · group 05
+- plan-poller's in-flight map stays keyed by configDir, so two harnesses declaring one folder share a poll · group 05
 ### Review rounds
 ### Test gate

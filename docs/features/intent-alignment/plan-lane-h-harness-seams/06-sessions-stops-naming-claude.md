@@ -1,6 +1,6 @@
 # 06 — Sessions stops naming Claude
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -79,3 +79,5 @@ Done when: compiles (`npm run lint` and `npm run typecheck`); the test gate runs
 Commit: one commit. It also removes the "Sessions stops naming Claude" item from `docs/features/followups.md` § Harness seams, and ticks `- [ ] Sessions stops naming Claude` in `docs/features/intent-alignment/master-plan.md` § Lane H.
 
 ## Proof
+
+Commit 48bde0c9f · proof: diff read: PlatformRelay.serverName, RELAY_SERVER_NAME, McpServeOptions, 4-arg serveMcp, harnessToolUseId present; no claudecode key left in sessions source; wave compile (typecheck, lint) passes; shared-doc hunks in cb20cd2ff · concerns: harness toolUseIdOf runs inside callTool's try, so a throwing reader gives a tool error result as the old read did
