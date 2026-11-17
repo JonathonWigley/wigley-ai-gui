@@ -1,6 +1,6 @@
 # 09 — Owned sessions join by row id
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 06, 08
 Plan: [plan.md](plan.md)

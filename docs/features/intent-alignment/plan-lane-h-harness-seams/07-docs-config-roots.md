@@ -1,6 +1,6 @@
 # 07 — Docs reads harness config roots from the adapter
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -216,3 +216,4 @@ Commit:    one commit for the group; it also removes "Docs reads harness config 
 
 ## Proof
 
+Commit 2236bd15f · proof: diff read: HarnessFolders/createHarnessFolders, HarnessChip, ChipInput.harness string, docsFixtureInstalls, readPluginStatus harnesses option present; docs plugin reads roots and installs through the slot; wave compile (typecheck, lint) passes; shared-doc hunks in 8c942653e · concerns: after task 10 renames the fake to 'fake' the self-test i step's fixture index still says claude; a drive run on real Claude reads the user's real ~/.claude profiles; index-sources.test.ts edited beyond Files; page/start.test.ts and the drive docs.seed line left unchanged (01 already says pending chips)

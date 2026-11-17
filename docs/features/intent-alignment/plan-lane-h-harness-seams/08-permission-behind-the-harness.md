@@ -1,6 +1,6 @@
 # 08 — Permission behind the harness
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -270,3 +270,4 @@ Commit:    one commit for the group; it also removes "Permission behind the harn
 
 ## Proof
 
+Commit 8c942653e · proof: diff read: PermissionDecision, PermissionRequest, AgentProcessEvents.permission, AgentProcess.answerPermission in contracts/agent.ts; permission-route.ts with route/toolSession; claude-code contributes permission_prompt; permission-tool.ts deleted; no CLAUDE_PERMISSION_TOOL in contracts, chat or main; wave compile (typecheck, lint) passes · concerns: two new oxlint no-useless-spread warnings (cancelWaitingPermissions in claude-code-harness.ts:507 and fake-agent-harness.ts:1350, a keys snapshot while settling deletes); test cases most likely to need a touch-up at the gate: harness permission_Cancelled on close, fake send_PermissionText microtask order, chat permission_sessionEnds/rowCloses; chat-sessions permission_abortAfterDetachAll and NoLiveRow cases deleted as now owned by the route and adapter
