@@ -1,4 +1,5 @@
 import type { MainPart, PluginManifest } from '../contracts/plugin';
+import { agentCommandsManifest } from './agent-commands/manifest';
 import { agentLinesManifest } from './agent-lines/manifest';
 import { appUpdateManifest } from './app-update/manifest';
 import { audioPickerManifest } from './audio-picker/manifest';
@@ -47,6 +48,7 @@ export const builtInManifests = [
   sessionsManifest,
   claudeCodeManifest,
   formsManifest,
+  agentCommandsManifest,
   primerManifest,
   audioPickerManifest,
   chatManifest,
