@@ -361,7 +361,7 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **Setting control kinds as registrations** — *agent-ready*: `SettingKind` (`'string' | 'number' | 'boolean'`,
   `src/contracts/plugin.ts`) and the settings layout's row `control` union (`src/plugins/settings/layouts/layout.d.ts`)
   are closed, and Settings mode switches over them (`setting-rows.ts`, `setting-rows-view.ts`). A plugin with a
-  structured setting (chat's profiles, docs' config folders) cannot contribute its editor. A plugin registers a
+  structured setting (the `claude-code` plugin's profiles, docs' config folders) cannot contribute its editor. A plugin registers a
   control kind with its row editor and its layout part, and the `control` field becomes a string so a new kind does
   not break a user settings layout. The layout name picker (Features) is then one such kind.
 - **Layout hot reload keeps the user's place** — *agent-ready*: `round-view.ts` `rebuild` (run by `setLayouts` when a
