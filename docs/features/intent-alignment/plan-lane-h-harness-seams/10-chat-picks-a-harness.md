@@ -1,6 +1,6 @@
 # 10 — Chat picks a harness
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -314,3 +314,5 @@ Commit: one commit. It removes the "Chat picks a harness" item from `docs/featur
 ticks `[ ] Chat picks a harness` in `docs/features/intent-alignment/master-plan.md` § Lane H.
 
 ## Proof
+
+Commit eeb2e337e · proof: diff read: chat defaultHarness setting, FAKE_HARNESS_ID = 'fake', composition-root override in selftest-config, CHAT_HARNESS_ID gone, lookups harness resolution present; wave compile passes after one same-rung fix (harness on RecentFolder test literals) and oxfmt · concerns: restore with an unregistered harness now rests with a notice; two start.test restore tests now throw through an artificial infoFails stub; chat-sessions.test setUp patches the fake's info() in place; docs self-test i step still opens its session as 'claude' (docs only tells codex apart)

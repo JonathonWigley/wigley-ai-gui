@@ -358,7 +358,7 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 - [x] [Owned sessions join by row id](09-owned-sessions-join-by-row-id.md) — after 06, 08
 
 ### Wave 7
-- [ ] [Chat picks a harness](10-chat-picks-a-harness.md) — after 09
+- [x] [Chat picks a harness](10-chat-picks-a-harness.md) — after 09
 
 ### Wave 8
 - [ ] [Control roles](11-control-roles.md) — after 10
@@ -395,6 +395,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 07 · hard · 2236bd15f · diff read: HarnessFolders/createHarnessFolders, HarnessChip, ChipInput.harness string, docsFixtureInstalls, readPluginStatus harnesses option present; docs plugin reads roots and installs through the slot; wave compile (typecheck, lint) passes; shared-doc hunks in 8c942653e · concerns: after task 10 renames the fake to 'fake' the self-test i step's fixture index still says claude; a drive run on real Claude reads the user's real ~/.claude profiles; index-sources.test.ts edited beyond Files; page/start.test.ts and the drive docs.seed line left unchanged (01 already says pending chips)
 - 08 · hard · 8c942653e · diff read: PermissionDecision, PermissionRequest, AgentProcessEvents.permission, AgentProcess.answerPermission in contracts/agent.ts; permission-route.ts with route/toolSession; claude-code contributes permission_prompt; permission-tool.ts deleted; no CLAUDE_PERMISSION_TOOL in contracts, chat or main; wave compile (typecheck, lint) passes · concerns: two new oxlint no-useless-spread warnings (cancelWaitingPermissions in claude-code-harness.ts:507 and fake-agent-harness.ts:1350, a keys snapshot while settling deletes); test cases most likely to need a touch-up at the gate: harness permission_Cancelled on close, fake send_PermissionText microtask order, chat permission_sessionEnds/rowCloses; chat-sessions permission_abortAfterDetachAll and NoLiveRow cases deleted as now owned by the route and adapter
 - 09 · hard · 6fb763cb3 · diff read: AgentStart.sessionId nullable, AgentProcessEvents.sessionId, SessionInfo.rowId, RelayHello.row_id, hostSessionIdSettled, ClaudeStart present; relay.py sends row_id; wave compile passes after one same-rung fix (rowId on two 06 test literals) and oxfmt · concerns: resume finds a running hosted process by hosted.id.startsWith(hostSessionId-) while new process ids start with the row id, so resume of an unheld session no longer finds a process started under the new scheme; hostSessionIdSettled waiters stay pending after detachAll; ~9k-line chat-sessions.test edited unrun, event-order expectations may shift; a pending clear's snapshot pairs the old host id with the new processId for one microtask; workflow hears hostSessionChanged null to id before chat.sessionOpened for a new row
+- 10 · hard · eeb2e337e · diff read: chat defaultHarness setting, FAKE_HARNESS_ID = 'fake', composition-root override in selftest-config, CHAT_HARNESS_ID gone, lookups harness resolution present; wave compile passes after one same-rung fix (harness on RecentFolder test literals) and oxfmt · concerns: restore with an unregistered harness now rests with a notice; two start.test restore tests now throw through an artificial infoFails stub; chat-sessions.test setUp patches the fake's info() in place; docs self-test i step still opens its session as 'claude' (docs only tells codex apart)
 ### Contract changes
 - IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
 - docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01
@@ -404,6 +405,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - usage-internal PlanPollerDeps.planUsage(profileDir) → planUsage(profile: RegisteredProfile); profiles/roundStarted/polled take RegisteredProfile · why: the poller reaches each profile's own harness · consumers: none outside usage · group 05
 - fake-agent-harness exports FAKE_CANCELLED_REASON and FakeAgentCall gains { method: 'answerPermission'; requestId; decision }; UNATTENDED_REASON moves to chat-sessions.ts; permission-route.ts also exports RoutedPermissionCall, PermissionCall, PermissionTarget, PermissionRoute, permissionReplyText, DEFAULT_DENY_MESSAGE, PERMISSION_TOOLS · why: src/shared may not import the Claude plugin; the target needs raw args · consumers: 08 only · group 08
 - AgentFormDriveSessions.connect param gains rowId: null (shared/agent-forms/drive-actions.ts); ClaudeStart = Omit<AgentStart,'sessionId'> & { sessionId: string } exported from claude-launch.ts · why: every SessionInfo literal carries rowId; the launch needs a minted id · consumers: none planned · group 09
+- ChatSessionsDeps.defaultHarness not added; ChatDriveDeps.profileNames() → defaultProfile(): string | null; lookups.ts adds requireHarnessOfProfile and UNRECORDED_HARNESS_ID; ChatSelfTestDeps gains defaultHarness() · why: unused dep dropped; drive needs the default profile's harness · consumers: 10 only · group 10
 ### Rulings
 - Waves 2, 4 and 5 keep their pairs despite the wave check's clashes on followups.md, master-plan.md and drive SKILL.md: the plan's boundary rules put the two groups in disjoint hunks of those files; workers edit only their own hunk, and the group that commits first leaves the shared doc to the second group's commit, which carries both hunks and says so — the check's clash rule cannot see hunks — a mislabelled hunk in one commit if wrong · lead
 - Run works in worktree ~/Documents/.worktrees/ai-lane-h-harness-seams (branch lane-h-harness-seams) per WigleyRepos.md § Landing; Lane E's worktree is paused at its forms gate (waits on task 02) and its unmerged commits stay its own; peers on the main clone make every commit pathspec-scoped — a merge conflict at landing if Lane E or P lands first · lead
@@ -431,5 +433,8 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - The fake harness's attach rejects a null sessionId, as Claude does · group 09
 - A second clear while one is pending keeps the first pre-clear sent; sessionClosed during a pending clear reports it · group 09
 - The Claude adapter's sessionId microtask bypasses the isDetached emit gate · group 09
+- No harness step in the start prompt: target is defaultHarness, a picked recent folder's recorded registered harness, or a pinned profile's harness · group 10
+- ChatSessionsDeps gains no defaultHarness (no reader); drive deps take defaultProfile() in place of profileNames() · group 10
+- UNRECORDED_HARNESS_ID = 'claude' is the harness of a record or recent folder saved without one · group 10
 ### Review rounds
 ### Test gate
