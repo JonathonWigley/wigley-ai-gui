@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · doc-only: a re-read of the docs written ahead against the landed code
 Wave: 6 · Depends on: 01, 02, 03, 05, 06, 07, 08, 09, 10 (04 struck)

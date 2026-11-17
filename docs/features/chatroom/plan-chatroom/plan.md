@@ -227,7 +227,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 - [x] [Chatroom mode, row badge and layouts](09-page-mode.md) — after 08
 
 ### Wave 5
-- [ ] [Self-test script and drive fixture](10-selftest.md) — after 08, 09
+- [x] [Self-test script and drive fixture](10-selftest.md) — after 08, 09
 
 ### Wave 6
 - [ ] [Doc re-read](11-doc-re-read.md) — after 01–10
@@ -248,6 +248,7 @@ Review base: 7c3eb9665
 - 07 · deep · d8a9fe6e7 · diff read: every Produces present in hook.py (HOOK_DEADLINE_SECONDS, GIT_TIMEOUT_SECONDS, git_runner, request_from_input, commit_paths, ask_app, output_for, main); hooks.json parses; py_compile passes; unittests and plugin validate wait for the test gate · concerns: the Bash matcher also fires on Monitor commands and starts python3 on every Bash call; python3 may be missing on Windows; a git add -A earlier on the line adds no paths; AGENTS.md wording differs slightly from the spec's dictated text; low-confidence (a) MultiEdit, (a2) notebook_path, (a4) additionalContext delivery, (b), (c) still need task 12's live probe
 - 08 · deep · f53249933 · diff read: every Produces present (manifest, chatroomMainPart, roster, tools, hook handlers, delivery, agent entries, room views, board feed, contract additions, chat.toolCaller, workflow.stageFinishes); typecheck passes; layer check now passes; oxfmt applied; oxlint one warning (no-useless-spread, board-feed.ts:400) · concerns: rebuilds_InOrder passes without the per-room chain (loads cached); 01/05 keep private ref-type lists beside MESSAGE_REF_TYPES; stale-touch rule sits in board-feed.ts, not board.ts; board-feed.test copies board.test fixtures; AGENTS.md plugin folder map lacks chatroom/; a repeated sessions.connected for a tracked row does not refresh; oxlint no-useless-spread warning
 - 09 · hard · c8d08397f · diff read: mode, side bar, board, log, composer, row badge, asks-you activity, chatroom.place, layouts and zlr preview present; typecheck and lint clean (one prior 08 warning); tests wait for the test gate · concerns: nothing run before the gate; start.test.ts leans on harness assumptions (mode element, disposed writer value persists, default layout drawn before showLayouts); composer tests find the box by class through kit.textBox; i/r hints sit in the board part for want of a log-header part; main/start.ts top comment line runs long; AGENTS.md lacks chatroom/ in the folder map and zlr in Space z l (task 11)
+- 10 · hard · 9e87c6852 · diff read: seedChatroomFixture, chatroomSelfTestScript, chatroom.seed drive action present; every page line and command matches 09; typecheck and lint clean; self-test waits for the test gate · concerns: open() must finish two launches, three waits and two posts inside the runner's 5 s shown-line wait; board rows reach chatroom.rooms only on a board-feed refresh; <A-h> from the composer and from the log not checked against the keys plugin
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 - 02 Produces: SessionList.sessionOfHost(hostId) → sessionOf(info: SessionInfo); createHookRoutes takes sessionOf · why: row-id-first lookup (Lane H's connect order) · consumers: 02 only (08 consumes the routes, not the lookup) · lead, before dispatch
@@ -255,6 +256,7 @@ Review base: 7c3eb9665
 - createHookRoutes(sessionOf) → createHookRoutes(sessionOf, log: PluginLog) · why: the route logs 'hook <name> failed: <text>' · consumers: sessions start.ts only · group 02
 - ChatroomChannel.messages: {} → Record<never, never> · why: the codebase's empty message map; {} is lint-banned · consumers: 09 · group 08
 - contract.ts gains MESSAGE_REF_TYPES (file, branch, commit, plan, message) and start.ts exports STANDING_NOTE, pure additions · why: the tools' arg check and schema enum; start.test asserts the note · consumers: 08 · group 08
+- chatroom layout contract: ComposerKit extends ChatroomKit { textBox(parent) } for the composer part · why: the layout places the app-owned input, as other adopters' app slots do · consumers: 09 only (10 drives the box by keys) · group 09
 ### Rulings
 - Task 04 struck: its cause (Lane H not started) no longer holds; Lane H runs and rewrites the same passages — a stale-doc window stays until Lane H lands — lead
 - Order agreed with the Lane H session: Lane H lands on main first (several hours; it bumps wigley to 2.13.1 and adds row_id to relay.py's hello); this run builds only new files (01, 05, 06) until Lane H's landed-sha notice, then rebases onto main and re-checks 02, 03, 07 and 08 against Lane H's code before dispatch — a wrong order would mean merge conflicts across sessions, relay and chat — lead
@@ -289,5 +291,6 @@ Review base: 7c3eb9665
 - 09: composer Enter/Esc are plain page binds in chatroom.composer, not mode insert, since the box is a plain input · group 09
 - 09: layout contract adds ComposerKit.textBox; page/chatroom.css holds only the app containers, outside Files · group 09
 - 09: asks-you activity reads every room's userAsks by from.rowId; the badge counts only the row's own project room · group 09
+- 10: the fixture polls roomsSlot.get for the board rows rather than subscribing; PEER_LABEL lives in the script and LEAD_LABEL is dropped, since nothing reads it · group 10 · group 10
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 10 — Self-test script and drive fixture
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `chatroom.seed` drive action and its result, which 12 drives; the fixture waits on rows, titles and the board, which settle asynchronously. It follows `src/plugins/unity-pool/main/selftest-script.ts` and `selftest-fixture.ts`, and practice's `writeFixture` drive action
 Wave: 5 · Depends on: 08, 09
@@ -102,3 +102,5 @@ Done when: compiles; `npm run lint` passes; `npm run selftest -- --plugin chatro
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 9e87c6852 · proof: diff read: seedChatroomFixture, chatroomSelfTestScript, chatroom.seed drive action present; every page line and command matches 09; typecheck and lint clean; self-test waits for the test gate · concerns: open() must finish two launches, three waits and two posts inside the runner's 5 s shown-line wait; board rows reach chatroom.rooms only on a board-feed refresh; <A-h> from the composer and from the log not checked against the keys plugin
