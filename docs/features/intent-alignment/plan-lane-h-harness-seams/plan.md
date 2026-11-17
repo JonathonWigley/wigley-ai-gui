@@ -370,7 +370,7 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 - [x] [Harness-neutral UI copy](13-harness-neutral-copy.md) — after 12
 
 ### Wave 11
-- [ ] [Open chat entry kinds and entry renderers](14-entry-kinds-and-renderers.md) — after 13
+- [x] [Open chat entry kinds and entry renderers](14-entry-kinds-and-renderers.md) — after 13
 
 ### Wave 12
 - [ ] [Chat follows a harness leaving and returning](15-harness-leave-and-return.md) — after 14
@@ -399,6 +399,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 11 · hard · 2728bd986 · diff read: ROLE_COMMANDS replaces CONTROL_IDS, role lookups in controlCommand/chipKeyCommands/composerInputOf/controlChip/pickControlOf, MODE_CONTROL_ID gone, ComposerControlInput.role, preview-session roles; wave compile (typecheck, lint) passes · concerns: none beyond formatting left to oxfmt
 - 12 · hard · 4eb8decc2 · diff read: addClearCommands returns one Disposable, aliases from core.agentHarnesses re-registered on slot change, SlashCommands.addAlias present; self-test clear step sends /reset; wave compile (typecheck, lint) passes, oxfmt clean · concerns: clear aliases register app-wide from every harness, not per the session's harness; it.each row typed never[] (compiled clean)
 - 13 · hard · abb65711e · diff read: exitNoticeText(harnessLabel, code, error), processEvents takes the harness label, Claude wording replaced in chat-sessions, session-fold, claude-code-harness and setting descriptions; wave compile (typecheck, lint) passes; oxfmt · concerns: src/main/drive/drive-commands.ts:67 still says 'hosted Claude processes' (outside Files); done-when grep keeps four new hits judged harness-specific (main.ts:43, lookups.ts:8, defaultHarness description, sessions-view-fakes.ts); comments in chat/main/start.ts, usage/main/start.ts, docs layout.d.ts already neutral from earlier groups
+- 14 · hard · a7bf98ec5 · Diff read: HarnessEntryKind, AnyEntryKind, HarnessEntryInput, ChatEntryRenderer, addEntryRenderer, createEntryRenderers, pickEntryDraw present; typecheck and lint pass after 45e141e9e (test-site kind narrowing, check-layers grant for chat contract → layouts) · concerns: entry-renderers.ts holds two casts; KNOWN_KINDS_ARE_NOT_HARNESS_KINDS relies on TS reducing the intersection to never (compiled fine); renderer match runs and logs on every draw; toast source chosen by comparing pick name with 'entry renderer' (a user layout of that name toasts as a renderer); working-turn.test.ts edited beyond Files
 ### Contract changes
 - IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
 - docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01
@@ -409,6 +410,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - fake-agent-harness exports FAKE_CANCELLED_REASON and FakeAgentCall gains { method: 'answerPermission'; requestId; decision }; UNATTENDED_REASON moves to chat-sessions.ts; permission-route.ts also exports RoutedPermissionCall, PermissionCall, PermissionTarget, PermissionRoute, permissionReplyText, DEFAULT_DENY_MESSAGE, PERMISSION_TOOLS · why: src/shared may not import the Claude plugin; the target needs raw args · consumers: 08 only · group 08
 - AgentFormDriveSessions.connect param gains rowId: null (shared/agent-forms/drive-actions.ts); ClaudeStart = Omit<AgentStart,'sessionId'> & { sessionId: string } exported from claude-launch.ts · why: every SessionInfo literal carries rowId; the launch needs a minted id · consumers: none planned · group 09
 - ChatSessionsDeps.defaultHarness not added; ChatDriveDeps.profileNames() → defaultProfile(): string | null; lookups.ts adds requireHarnessOfProfile and UNRECORDED_HARNESS_ID; ChatSelfTestDeps gains defaultHarness() · why: unused dep dropped; drive needs the default profile's harness · consumers: 10 only · group 10
+- 14: EntryRenderers.add is generic over K (strictFunctionTypes); chat-layouts.ts also exports EntryDrawPick, defaultBuilderKind, isHarnessKind (consumers 14, 15); DrawnEntry gains pickName
 ### Rulings
 - Waves 2, 4 and 5 keep their pairs despite the wave check's clashes on followups.md, master-plan.md and drive SKILL.md: the plan's boundary rules put the two groups in disjoint hunks of those files; workers edit only their own hunk, and the group that commits first leaves the shared doc to the second group's commit, which carries both hunks and says so — the check's clash rule cannot see hunks — a mislabelled hunk in one commit if wrong · lead
 - Run works in worktree ~/Documents/.worktrees/ai-lane-h-harness-seams (branch lane-h-harness-seams) per WigleyRepos.md § Landing; Lane E's worktree is paused at its forms gate (waits on task 02) and its unmerged commits stay its own; peers on the main clone make every commit pathspec-scoped — a merge conflict at landing if Lane E or P lands first · lead
@@ -442,5 +444,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - ComposerControlInput.role is left out of the fixture object when null (verbosity has no role) · group 11
 - Aliases are recomputed only when the distinct list changes; a command that takes a dropped alias's name moves to the end of list() · group 12
 - The Claude adapter's own fold texts say 'the agent' too, since chat shows them for the session · group 13
+- pickEntryDraw falls back to the shown default pick (live or bundled), not the bundled DEFAULT_ENTRY_PICK the task doc names, so a live default still draws known kinds · group 14
+- check-layers.mts grants chat's contract the chat layouts layer, as workflow's contract has · group 14
 ### Review rounds
 ### Test gate

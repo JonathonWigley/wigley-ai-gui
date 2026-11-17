@@ -1,6 +1,6 @@
 # 14 — Open chat entry kinds and entry renderers
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 11 · Depends on: 13
 Plan: [plan.md](plan.md)
@@ -272,3 +272,5 @@ from `docs/features/followups.md` § Harness seams and ticks `[ ] Open chat entr
 line, line 134 at plan time).
 
 ## Proof
+
+Commit a7bf98ec5 · proof: Diff read: HarnessEntryKind, AnyEntryKind, HarnessEntryInput, ChatEntryRenderer, addEntryRenderer, createEntryRenderers, pickEntryDraw present; typecheck and lint pass after 45e141e9e (test-site kind narrowing, check-layers grant for chat contract → layouts) · concerns: entry-renderers.ts holds two casts; KNOWN_KINDS_ARE_NOT_HARNESS_KINDS relies on TS reducing the intersection to never (compiled fine); renderer match runs and logs on every draw; toast source chosen by comparing pick name with 'entry renderer' (a user layout of that name toasts as a renderer); working-turn.test.ts edited beyond Files

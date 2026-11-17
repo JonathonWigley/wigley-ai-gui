@@ -1,6 +1,6 @@
 # 15 — Chat follows a harness leaving and returning
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 12 · Depends on: 14
 Plan: [plan.md](plan.md)
