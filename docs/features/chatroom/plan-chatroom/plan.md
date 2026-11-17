@@ -221,7 +221,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 - [x] [Hook script and hooks.json](07-hook-script.md) — after 02, 03
 
 ### Wave 3
-- [ ] [Main part: tools, hooks, delivery, entries](08-main-part.md) — after 01, 02, 05, 06
+- [x] [Main part: tools, hooks, delivery, entries](08-main-part.md) — after 01, 02, 05, 06
 
 ### Wave 4
 - [ ] [Chatroom mode, row badge and layouts](09-page-mode.md) — after 08
@@ -246,11 +246,14 @@ Review base: 7c3eb9665
 - 03 · hard · e4d5ff8bc · diff read: endpoint.py holds RELAY_PROTOCOL, HELLO_TIMEOUT_SECONDS, READ_SIZE, both channels with timeout and set_timeout, open_channel, channel_path; relay hello sends codex- id only with WIGLEY_SESSION_ROW unset; manifests 2.17.0; unittests wait for the test gate · concerns: PipeChannel's timeout now also bounds writes before hello_done, untested (Windows only); the forms README names the chatroom hook script before 07 adds it
 - 06 · hard · b94a871b2 · diff read: BoardState, BoardClone, BoardFile, BoardRow in contract.ts; BoardSession, GitFolderState, Touch, BoardInputs, buildBoard, readGitFolder, TouchTracker, createTouchTracker in board.ts; wave typecheck passes; oxfmt applied · concerns: the stale-touch test copies 08's forgetting rule (a staleTouchPaths export would be the deeper seam); the spec's 'other root' touch /r/o/d.ts sat under root /r, so the test uses /o/d.ts
 - 07 · deep · d8a9fe6e7 · diff read: every Produces present in hook.py (HOOK_DEADLINE_SECONDS, GIT_TIMEOUT_SECONDS, git_runner, request_from_input, commit_paths, ask_app, output_for, main); hooks.json parses; py_compile passes; unittests and plugin validate wait for the test gate · concerns: the Bash matcher also fires on Monitor commands and starts python3 on every Bash call; python3 may be missing on Windows; a git add -A earlier on the line adds no paths; AGENTS.md wording differs slightly from the spec's dictated text; low-confidence (a) MultiEdit, (a2) notebook_path, (a4) additionalContext delivery, (b), (c) still need task 12's live probe
+- 08 · deep · f53249933 · diff read: every Produces present (manifest, chatroomMainPart, roster, tools, hook handlers, delivery, agent entries, room views, board feed, contract additions, chat.toolCaller, workflow.stageFinishes); typecheck passes; layer check now passes; oxfmt applied; oxlint one warning (no-useless-spread, board-feed.ts:400) · concerns: rebuilds_InOrder passes without the per-room chain (loads cached); 01/05 keep private ref-type lists beside MESSAGE_REF_TYPES; stale-touch rule sits in board-feed.ts, not board.ts; board-feed.test copies board.test fixtures; AGENTS.md plugin folder map lacks chatroom/; a repeated sessions.connected for a tracked row does not refresh; oxlint no-useless-spread warning
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 - 02 Produces: SessionList.sessionOfHost(hostId) → sessionOf(info: SessionInfo); createHookRoutes takes sessionOf · why: row-id-first lookup (Lane H's connect order) · consumers: 02 only (08 consumes the routes, not the lookup) · lead, before dispatch
 - 06 BoardRow.harness / BoardSession.harness and 08 RosterSession.harness: Harness | null → string | null · why: Lane H removed the Harness type; the field holds the harness id · consumers: 08, 09 · lead, before dispatch
 - createHookRoutes(sessionOf) → createHookRoutes(sessionOf, log: PluginLog) · why: the route logs 'hook <name> failed: <text>' · consumers: sessions start.ts only · group 02
+- ChatroomChannel.messages: {} → Record<never, never> · why: the codebase's empty message map; {} is lint-banned · consumers: 09 · group 08
+- contract.ts gains MESSAGE_REF_TYPES (file, branch, commit, plan, message) and start.ts exports STANDING_NOTE, pure additions · why: the tools' arg check and schema enum; start.test asserts the note · consumers: 08 · group 08
 ### Rulings
 - Task 04 struck: its cause (Lane H not started) no longer holds; Lane H runs and rewrites the same passages — a stale-doc window stays until Lane H lands — lead
 - Order agreed with the Lane H session: Lane H lands on main first (several hours; it bumps wigley to 2.13.1 and adds row_id to relay.py's hello); this run builds only new files (01, 05, 06) until Lane H's landed-sha notice, then rebases onto main and re-checks 02, 03, 07 and 08 against Lane H's code before dispatch — a wrong order would mean merge conflicts across sessions, relay and chat — lead
@@ -277,5 +280,10 @@ Review base: 7c3eb9665
 - git commit -o drops an earlier git add's pathspec; each git add pathspec resolves against that add's own -C folder — group 07 · group 07
 - A hook input with no cwd sends nothing — group 07 · group 07
 - Vendor docs checked (code.claude.com): hooks/hooks.json loads with no manifest field, closing (a3); matcher semantics, agent_id on subagent tool calls, quoted CLAUDE_PLUGIN_ROOT shell form, timeout and exit-0 handling confirmed — group 07 · group 07
+- Dispatch entry body is 'dispatched <agentSpawned.name> (<agentType>): <description>' — the roster name would repeat the type — group 08 · group 08
+- A user-word question/blocker/handoff to the main agent matching wake rules (a) and (b) sends one wake with (b)'s text — group 08 · group 08
+- A rested turnFinished keeps a row's pending wakes until a later idle finish — group 08 · group 08
+- Arg error texts the spec left open are written in chatroom-tools.ts (report 08-1.md); null counts as absent; an empty thread read succeeds with 'No messages in thread <thread>.' — group 08 · group 08
+- Dispose: stopped flag, boardFeed.stop, delivery.dispose, then awaits rebuild chains and room.settled() so queued cursor and claim writes finish — group 08 · group 08
 ### Review rounds
 ### Test gate

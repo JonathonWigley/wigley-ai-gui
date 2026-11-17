@@ -1,6 +1,6 @@
 # 09 — Chatroom mode, row badge and layouts
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · new mode with its own key scopes, a composer, a place slot and a layout contract that 10 drives; it follows existing patterns but leaves many view choices to the worker
 Wave: 4 · Depends on: 08

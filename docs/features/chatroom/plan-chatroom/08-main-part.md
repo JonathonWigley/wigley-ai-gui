@@ -1,6 +1,6 @@
 # 08 — Main part: tools, hooks, delivery, entries
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses sessions, chat and the room service through session lifecycle (connect, end, turn finished) and async delivery, and rests on the low-confidence hook `agent_id` match (07)
 Wave: 3 · Depends on: 01, 02, 05, 06
@@ -137,3 +137,5 @@ Done when: compiles; `npm run lint` passes (the layer check included); the test 
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f53249933 · proof: diff read: every Produces present (manifest, chatroomMainPart, roster, tools, hook handlers, delivery, agent entries, room views, board feed, contract additions, chat.toolCaller, workflow.stageFinishes); typecheck passes; layer check now passes; oxfmt applied; oxlint one warning (no-useless-spread, board-feed.ts:400) · concerns: rebuilds_InOrder passes without the per-room chain (loads cached); 01/05 keep private ref-type lists beside MESSAGE_REF_TYPES; stale-touch rule sits in board-feed.ts, not board.ts; board-feed.test copies board.test fixtures; AGENTS.md plugin folder map lacks chatroom/; a repeated sessions.connected for a tracked row does not refresh; oxlint no-useless-spread warning
