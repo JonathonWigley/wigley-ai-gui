@@ -515,6 +515,7 @@ describe('backlog view layouts', () => {
     {
       name: 'a follow-up in no chunk',
       key: FIRST,
+      title: 'First',
       prompt: [
         ['backlog.mark', 'mark'],
         ['backlog.addToChunk', 'chunk'],
@@ -525,6 +526,7 @@ describe('backlog view layouts', () => {
     {
       name: 'a follow-up in an unstarted chunk',
       key: SECOND,
+      title: 'Second',
       prompt: [
         ['backlog.mark', 'mark'],
         ['backlog.addToChunk', 'chunk'],
@@ -536,9 +538,19 @@ describe('backlog view layouts', () => {
         ['backlog.openInDocs', 'docs'],
       ],
     },
+    {
+      name: 'a follow-up in a started chunk',
+      key: rowKey('lib', 'Third'),
+      title: 'Third',
+      prompt: [
+        ['backlog.activate', 'session'],
+        ['backlog.toggleCommits', 'commits'],
+        ['backlog.openInDocs', 'docs'],
+      ],
+    },
   ])(
     'cursorPrompt_SelectedRow_ListsItsActionsInTableScope $name',
-    async ({ key, prompt }) => {
+    async ({ key, title, prompt }) => {
       const setup = await backlogSetup();
       const lastInputs = new Map<string, TableRowInput>();
       setup.view.setLayouts(
@@ -556,7 +568,6 @@ describe('backlog view layouts', () => {
 
       setup.view.selectRow(key);
 
-      const title = key === FIRST ? 'First' : 'Second';
       const promptCommands = prompt.map(([command]) => command);
       const live = setup.anchors.filter(
         (anchor) =>
@@ -626,7 +637,7 @@ describe('backlog view layouts', () => {
       first: ['No features homes found'],
       message: ['No features homes found', 'Could not read the homes'],
       afterLayoutChange: 'Could not read the homes',
-      tablesDuringMessage: 1,
+      tablesDuringMessage: 0,
       isFilterFocused: true,
     });
   });

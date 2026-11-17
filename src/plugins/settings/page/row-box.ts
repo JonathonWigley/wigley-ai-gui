@@ -25,10 +25,10 @@ export interface BoxRequest {
 // `expectedText` is the file's text the box writes against; a refused stale
 // write replaces it with the text now on disk. `showMessage` shows a line
 // under the box until the next; `redrawMessage` draws the last one again, for
-// a new layout, and does nothing before the first. `keepFocusAcross` runs `move`, which may move
-// the box's element, and gives the box back the focus and the selection it
-// held. `accept` runs the request's accept on a line box and focuses a
-// document box, whose own ex commands accept it.
+// a new layout, and does nothing before the first. `keepFocusAcross` runs
+// `move`, which may move the box's element, and gives the box back the focus
+// and the selection it held. `accept` runs the request's accept on a line box
+// and focuses a document box, whose own ex commands accept it.
 export interface RowBox {
   key: string;
   element: HTMLElement;

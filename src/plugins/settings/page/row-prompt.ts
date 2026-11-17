@@ -53,3 +53,48 @@ export function samePromptActions(
     )
   );
 }
+
+// Draws a cursor prompt into the slot `draw` is handed and returns the dispose
+// that takes it out again.
+export type DrawPrompt = (
+  slot: HTMLElement,
+  actions: readonly PromptActionInput[],
+) => () => void;
+
+// The one cursor prompt a pane holds. `place` draws it into `slot` with
+// `actions`, disposing the one held, and draws again only when the slot or
+// the actions changed. `dispose` disposes the held prompt, if any.
+export interface PromptHolder {
+  place(slot: HTMLElement, actions: readonly PromptActionInput[]): void;
+  dispose(): void;
+}
+
+// The drawn prompt: its slot, the actions it was drawn for and its dispose.
+interface HeldPrompt {
+  slot: HTMLElement;
+  actions: readonly PromptActionInput[];
+  dispose(): void;
+}
+
+export function createPromptHolder(draw: DrawPrompt): PromptHolder {
+  let held: HeldPrompt | null = null;
+  const dispose = () => {
+    const drawn = held;
+    held = null;
+    drawn?.dispose();
+  };
+  return {
+    place(slot, actions) {
+      const isDrawn =
+        held !== null &&
+        held.slot === slot &&
+        samePromptActions(held.actions, actions);
+      if (isDrawn) {
+        return;
+      }
+      dispose();
+      held = { slot, actions, dispose: draw(slot, actions) };
+    },
+    dispose,
+  };
+}

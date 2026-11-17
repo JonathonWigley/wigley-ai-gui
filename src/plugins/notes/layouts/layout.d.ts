@@ -37,7 +37,7 @@ import type {
 //
 // The selected field's cursor prompt is the `cursorPrompt` part: the app draws it at the end of that field's row root
 // and draws it again when the field moves or a target changes, with no row drawing again. A layout that leaves
-// `cursorPrompt` out shows no prompt.
+// `cursorPrompt` out draws it with `default`; a `cursorPrompt` that draws no hint shows no prompt.
 //
 // Kit scopes: rows, values, images, actions and `cursorPrompt` `notes.popup`; `confirm` `notes.confirm`; `markupToolbar`
 // `notes.markup`; `pickerRow` `notes.picker`; `dialogFrame` `notes.popup` for the Note popup, `notes.confirm` for the

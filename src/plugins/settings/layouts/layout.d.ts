@@ -329,16 +329,16 @@ export interface SettingsLayout {
     kit: PickerRowKit,
   ): HTMLElement;
   // The cursor row's action keys, into its `rowActions` slot, drawn again only when the cursor reaches another row or
-  // the row's actions change, so a cursor move draws no row again. A layout that leaves it out shows no prompt: the
-  // app places none of its own.
+  // the row's actions change, so a cursor move draws no row again. A layout that leaves it out draws it with
+  // `default`; a `cursorPrompt` that draws no hint shows no prompt: the app places none of its own.
   cursorPrompt?(
     parent: HTMLElement,
     input: CursorPromptInput,
     kit: SettingsKit,
   ): HTMLElement;
   // The message under an open box, into the box's message slot (`div.settings-box-message-slot`, which draws no box)
-  // each time the box shows one, and again after a layout change. A layout that leaves it out shows no message: the
-  // app places none of its own.
+  // each time the box shows one, and again after a layout change. A layout that leaves it out draws it with
+  // `default`; a `boxMessage` that draws no text shows no message: the app places none of its own.
   boxMessage?(
     parent: HTMLElement,
     input: BoxMessageInput,

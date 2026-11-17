@@ -49,14 +49,26 @@ import { textBoxInput } from '../../../shared/page/text-box';
 export type DialogScope = 'box' | 'confirm';
 
 // Draws a dialog's frame through the layout's `dialogFrame` in `scope`,
-// disposing the earlier draw once the next returns.
-function frameDrawer(parts: DocsParts, scope: DialogScope): DrawDialogFrame {
+// disposing the earlier draw once the next returns; `dispose` disposes the
+// last draw.
+interface FrameDrawer {
+  draw: DrawDialogFrame;
+  dispose(): void;
+}
+
+function frameDrawer(parts: DocsParts, scope: DialogScope): FrameDrawer {
   let last: { dispose(): void } | null = null;
-  return (parent, input) => {
-    const next = parts.dialogFrame(parent, input, scope);
-    last?.dispose();
-    last = next;
-    return next.frame;
+  return {
+    draw: (parent, input) => {
+      const next = parts.dialogFrame(parent, input, scope);
+      last?.dispose();
+      last = next;
+      return next.frame;
+    },
+    dispose() {
+      last?.dispose();
+      last = null;
+    },
   };
 }
 
@@ -95,12 +107,11 @@ interface TextBoxDeps {
   pushScope(): PushedScope;
   closed(): void;
   parts: DocsParts;
+  drawFrame: DrawDialogFrame;
 }
 
 function createTextBox(deps: TextBoxDeps): TextBox {
-  const dialog = createDialog('', {
-    drawFrame: frameDrawer(deps.parts, 'box'),
-  });
+  const dialog = createDialog('', { drawFrame: deps.drawFrame });
   const frame = inputFrame();
   const input = textBoxInput('docs-box');
   frame.append(input);
@@ -331,11 +342,10 @@ function createConfirm(
   pushScope: () => PushedScope,
   closed: () => void,
   parts: DocsParts,
+  drawFrame: DrawDialogFrame,
   viewId: string,
 ): Confirm {
-  const dialog = createDialog('Move to the Trash', {
-    drawFrame: frameDrawer(parts, 'confirm'),
-  });
+  const dialog = createDialog('Move to the Trash', { drawFrame });
 
   let answers: { yes(): void; no(): void } | null = null;
   let pushed: PushedScope | null = null;
@@ -519,6 +529,8 @@ export function createDocsPicker(list: ListPicker): {
 export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
   const { channel, log, paths, toast, picker } = deps;
   const { parts } = deps;
+  const boxFrame = frameDrawer(parts, 'box');
+  const confirmFrame = frameDrawer(parts, 'confirm');
   const box = createTextBox({
     channel,
     homeDir: deps.homeDir,
@@ -527,11 +539,13 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     pushScope: () => deps.pushScope('box'),
     closed: deps.dialogClosed,
     parts,
+    drawFrame: boxFrame.draw,
   });
   const confirm = createConfirm(
     () => deps.pushScope('confirm'),
     deps.dialogClosed,
     parts,
+    confirmFrame.draw,
     deps.viewId,
   );
 
@@ -769,6 +783,8 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     },
     dispose() {
       dialogs.close();
+      boxFrame.dispose();
+      confirmFrame.dispose();
     },
   };
   return dialogs;

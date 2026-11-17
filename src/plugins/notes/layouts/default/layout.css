@@ -9,8 +9,9 @@
   padding: var(--wg-space-1) var(--wg-space-2);
 }
 
-/* A row's keys at its end: the key that picks its value. It hides, keeping its
-   space, while a box holds the keys. */
+/* A row's keys at its end: the key that picks its value. The app's
+   `.is-box-focused` rule in `notes.css` hides it, keeping its space, while a
+   box holds the keys. */
 .notes-row-keys {
   align-items: center;
   display: inline-flex;
@@ -18,8 +19,8 @@
   min-height: var(--wg-row-list);
 }
 
-/* The selected row's prompt at its end. It hides, keeping its space, while a
-   box holds the keys. */
+/* The selected row's prompt at its end. The app's `.is-box-focused` rule in
+   `notes.css` hides it, keeping its space, while a box holds the keys. */
 .notes-cursor-prompt {
   align-items: center;
   display: inline-flex;

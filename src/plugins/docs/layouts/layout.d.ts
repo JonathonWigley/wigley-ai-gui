@@ -24,8 +24,7 @@ export interface LayoutPart {
 export interface DocsKit extends BaseKit {}
 
 // The tree pane, scope `docs.tree`. Each app part mounts once per draw. One the pane leaves out the app appends at
-// the end of the pane's element, in the order sidebarSwitch, status, filterBox, line, rows. A pane that leaves out a
-// `treeStatus` draws none: the app places no status for it.
+// the end of the pane's element, in the order sidebarSwitch, status, filterBox, line, rows.
 export interface TreePaneInput {
   // True in Docs mode's tree, false in a session's Docs tab.
   isMachine: boolean;
@@ -55,7 +54,7 @@ export interface TreeLineInput {
 // The tree's status line, drawn into the pane's status slot and again alone whenever its text changes, so the filter box
 // keeps its focus and the rows their scroll. `text` is null for no status: draw nothing visible then. Keep the
 // `docs-status` class on the root element: the app's self-test finds it there. A user layout that leaves out
-// `treeStatus` shows no status.
+// `treeStatus` draws it with `default`; a `treeStatus` that draws no text shows no status.
 export interface TreeStatusInput {
   text: string | null;
 }
@@ -79,13 +78,14 @@ export interface TreeRowInput {
   isStarred: boolean;
   // The selected leaf: it draws its `prompt`.
   isPrompted: boolean;
-  // The cursor prompt's actions (`s star  r rename  d trash`; the wiki view leaves out `s star`), each a qualified
-  // command and its label, for `kit.keyHint(parent, action.command, { label: action.label })`. Empty on every row but
-  // the prompted one, and a layout that draws no prompt shows none.
   // A `wikiLink` whose target the index does not hold; false on every other row.
   isDangling: boolean;
   // The size of a `wikiLink`'s kind or owner list; null on every other row.
   count: number | null;
+  // The cursor prompt's actions (`s star  r rename  d trash`; the wiki view leaves out `s star`), each a qualified
+  // command and its label, for `kit.keyHint(parent, action.command, { label: action.label })`. Empty on every row but
+  // the prompted one. A user layout that leaves out `treeRow` draws it with `default`; a `treeRow` that draws no
+  // prompt hint shows no prompt.
   prompt: readonly PromptActionInput[];
 }
 export interface TreeRowKit extends DocsKit {}

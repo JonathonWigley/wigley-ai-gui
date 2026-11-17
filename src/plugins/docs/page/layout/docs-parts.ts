@@ -169,16 +169,12 @@ export function createDocsParts(deps: DocsPartsDeps): DocsParts {
         slot,
         (builder, parent, rollback) =>
           requireDialogFrame(
-            (builder as PartBuilder<'dialogFrame'>)(
-              parent,
-              input,
-              deps.baseKit(scope, rollback),
-            ),
+            builder(parent, input, deps.baseKit(scope, rollback)),
             input,
             'dialogFrame',
           ),
       );
-      const frame = drawn.built as DialogFramePart;
+      const frame = drawn.built;
       return {
         frame,
         dispose() {

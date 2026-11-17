@@ -148,8 +148,9 @@ export interface PickerRowKit extends BacklogKit {
 // `tableRow`, `tableStatus` and `empty` `backlog.table`; `review`, `reviewItem` and `commits` `backlog.review`; `strip`, `chunkCard`
 // and `newChunk` `backlog.strip`; `pickerRow` `backlog.picker`. A user layout's `table` part draws the `rescan`,
 // `sweep` and `startAllChunks` hints itself, and its `strip` part the `renameChunk`, `toggleHeadless`, `startChunk`
-// and `startAllChunks` hints: none of their keys is a vim key. A user `tableRow` that leaves out `input.prompt` shows
-// no cursor prompt, and a user layout without `tableStatus` shows no status: the app places neither.
+// and `startAllChunks` hints: none of their keys is a vim key. A part a user layout leaves out draws with `default`;
+// a `tableRow` that draws no `input.prompt` hint shows no cursor prompt, and a `tableStatus` that draws no text shows
+// no status: the app places neither.
 export interface BacklogLayout {
   table?(parent: HTMLElement, kit: TableKit): BacklogPane;
   filters?(

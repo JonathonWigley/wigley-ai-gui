@@ -33,7 +33,7 @@ import {
 } from './keymap-rows';
 import { openScopePicker, recordingOn, scopeTitle } from './keymap-view';
 import type { BuiltLeaderPanes, BuiltRow } from './layout/settings-kit';
-import { samePromptActions } from './row-prompt';
+import { createPromptHolder, type PromptHolder } from './row-prompt';
 import {
   freeKeys,
   groupNameIn,
@@ -241,19 +241,16 @@ function withOtherLeaderPathsRemoved(
   return edited;
 }
 
-// The `cursorPrompt` drawn into a pane's cursor row: its slot, the actions it
-// was drawn for and its dispose.
-interface DrawnPrompt {
-  slot: HTMLElement;
-  actions: readonly PromptActionInput[];
-  dispose(): void;
-}
-
 export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   const { context: ctx, log } = deps;
-  const prompts: Record<LeaderPane, DrawnPrompt | null> = {
-    groups: null,
-    items: null,
+  // Each pane's `cursorPrompt`, drawn into its cursor row.
+  const promptHolder = (at: LeaderPane): PromptHolder =>
+    createPromptHolder((slot, actions) =>
+      deps.drawPrompt(slot, actions, PANE_SCOPES[at]),
+    );
+  const prompts: Record<LeaderPane, PromptHolder> = {
+    groups: promptHolder('groups'),
+    items: promptHolder('items'),
   };
 
   let pane: LeaderPane = 'groups';
@@ -773,17 +770,10 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   const listOf = (at: LeaderPane): HTMLElement | undefined =>
     at === 'groups' ? panes?.groupRows : panes?.itemRows;
 
-  // Disposes the cursor prompt drawn in `at`'s pane, if any.
-  const disposePrompt = (at: LeaderPane) => {
-    const drawnPrompt = prompts[at];
-    prompts[at] = null;
-    drawnPrompt?.dispose();
-  };
-
   // Disposes both panes' cursor prompts, so no prompt anchor outlives its row.
   const disposePrompts = () => {
-    disposePrompt('groups');
-    disposePrompt('items');
+    prompts.groups.dispose();
+    prompts.items.dispose();
   };
 
   // Marks each pane's cursor row selected, ringed while its pane holds the
@@ -798,8 +788,8 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       }
       listOf(at)?.classList.toggle('is-pane-inactive', holding !== at);
     }
-    placePrompt('groups', groupRows, GROUP_HINTS, 'leaderGroups');
-    placePrompt('items', itemRows, ITEM_HINTS, 'leaderItems');
+    placePrompt('groups', groupRows, GROUP_HINTS);
+    placePrompt('items', itemRows, ITEM_HINTS);
     if (holding !== null) {
       const cursor = cursors[holding];
       if (cursor !== null) {
@@ -811,36 +801,23 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   };
 
   // Draws `at`'s cursor prompt into its cursor row's actions slot with the
-  // row's `hints`, in order, taken from `table`; it draws again only when the
-  // slot or the actions changed. With no cursor row it disposes the drawn
-  // prompt.
+  // row's `hints`, in order, taken from `table`. With no cursor row it
+  // disposes the drawn prompt.
   const placePrompt = <H extends string>(
     at: LeaderPane,
     rows: readonly PaneRow<H>[],
     table: Record<H, PromptActionInput>,
-    scope: LeaderScope,
   ) => {
     const row = rows.find((each) => each.key === cursors[at]);
     const into = row === undefined ? undefined : drawn[at].get(row.key);
     if (row === undefined || into === undefined) {
-      disposePrompt(at);
+      prompts[at].dispose();
       return;
     }
-    const actions = row.hints.map((hint) => table[hint]);
-    const held = prompts[at];
-    const isDrawn =
-      held !== null &&
-      held.slot === into.actions &&
-      samePromptActions(held.actions, actions);
-    if (isDrawn) {
-      return;
-    }
-    disposePrompt(at);
-    prompts[at] = {
-      slot: into.actions,
-      actions,
-      dispose: deps.drawPrompt(into.actions, actions, scope),
-    };
+    prompts[at].place(
+      into.actions,
+      row.hints.map((hint) => table[hint]),
+    );
   };
 
   const focusTarget: FocusTarget = {

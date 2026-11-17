@@ -92,7 +92,7 @@ import {
 } from './leader-menu-view';
 import { pluginSection } from './plugin-rows-view';
 import { type BoxRequest, createRowBox, type RowBox } from './row-box';
-import { rowPromptActions, samePromptActions } from './row-prompt';
+import { createPromptHolder, rowPromptActions } from './row-prompt';
 import { createSectionsView } from './sections-view';
 import { settingSection } from './setting-rows-view';
 
@@ -345,14 +345,6 @@ export interface SettingsView {
   hidden(): void;
 }
 
-// The `cursorPrompt` drawn into a row's actions slot: the slot, the actions it
-// was drawn for and its dispose.
-interface DrawnRowPrompt {
-  slot: HTMLElement;
-  actions: readonly PromptActionInput[];
-  dispose(): void;
-}
-
 interface OpenBox {
   box: RowBox;
   file: ConfigFile;
@@ -430,8 +422,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   // The cursor row's action keys: the `cursorPrompt` `markCursor` draws into
-  // the cursor row's actions slot; null while none is drawn.
-  let rowPrompt: DrawnRowPrompt | null = null;
+  // the cursor row's actions slot.
+  const rowPrompt = createPromptHolder((slot, actions) =>
+    drawCursorPrompt(slot, actions, 'rows'),
+  );
 
   // The filter frame the rows pane places; it and its input outlive every
   // redraw.
@@ -482,19 +476,13 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     log,
   });
 
-  const disposeRowPrompt = () => {
-    const drawn = rowPrompt;
-    rowPrompt = null;
-    drawn?.dispose();
-  };
-
   // Disposes everything drawn into the rows pane's slots, the cursor prompts
   // included: their slots go with the rows.
   const disposeEntries = () => {
     const disposes = entryDisposes;
     entryDisposes = [];
     drawnRows = new Map();
-    disposeRowPrompt();
+    rowPrompt.dispose();
     leaderMenu.dispose();
     for (const dispose of disposes) {
       dispose();
@@ -552,28 +540,15 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   // Draws the cursor prompt into the cursor row's actions slot with the keys
-  // of the actions that row has; it draws again only when the slot or the
-  // actions changed. With no cursor row it disposes the drawn prompt.
+  // of the actions that row has. With no cursor row it disposes the drawn
+  // prompt.
   const placeRowPrompt = (row: SettingsRow | undefined) => {
     const drawn = row === undefined ? undefined : drawnRows.get(row.key);
     if (row === undefined || drawn === undefined) {
-      disposeRowPrompt();
+      rowPrompt.dispose();
       return;
     }
-    const actions = rowPromptActions(row.actions);
-    const isDrawn =
-      rowPrompt !== null &&
-      rowPrompt.slot === drawn.actions &&
-      samePromptActions(rowPrompt.actions, actions);
-    if (isDrawn) {
-      return;
-    }
-    disposeRowPrompt();
-    rowPrompt = {
-      slot: drawn.actions,
-      actions,
-      dispose: drawCursorPrompt(drawn.actions, actions, 'rows'),
-    };
+    rowPrompt.place(drawn.actions, rowPromptActions(row.actions));
   };
 
   // Marks the cursor row selected, and draws its focus ring while the keys
