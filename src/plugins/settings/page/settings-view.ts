@@ -900,8 +900,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       editor: deps.editor,
       quit: () => closeBox(box),
       drawMessage(parent, text) {
-        const drawn = parts.draw('boxMessage', parent, (message, at, rollback) =>
-          buildEntry(message, at, { text }, 'rows', services, rollback),
+        const drawn = parts.draw(
+          'boxMessage',
+          parent,
+          (message, at, rollback) =>
+            buildEntry(message, at, { text }, 'rows', services, rollback),
         );
         return () => {
           drawn.dispose();

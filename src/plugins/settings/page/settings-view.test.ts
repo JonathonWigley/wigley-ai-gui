@@ -481,9 +481,7 @@ describe('createSettingsView', () => {
           return defaultLayout.cursorPrompt(parent, input, kit);
         },
       };
-      view.setLayouts(
-        withUser<SettingsLayout>(defaultLayout, countingLayout),
-      );
+      view.setLayouts(withUser<SettingsLayout>(defaultLayout, countingLayout));
       draws.rows = 0;
       draws.prompts = 0;
 

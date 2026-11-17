@@ -252,10 +252,7 @@ interface DrawnStrip {
 interface ShownStrip<Input extends object> {
   slot: HTMLElement;
   part: PartOf;
-  draw(
-    input: Input,
-    pick: PartPick<PrimerLayout>,
-  ): DrawnPrimerPart<DrawnStrip>;
+  draw(input: Input, pick: PartPick<PrimerLayout>): DrawnPrimerPart<DrawnStrip>;
   drawn: DrawnPrimerPart<DrawnStrip> | null;
   input: Input | null;
 }

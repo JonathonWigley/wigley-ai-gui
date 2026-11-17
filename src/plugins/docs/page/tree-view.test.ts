@@ -211,36 +211,35 @@ describe('createTreeView', () => {
   it.each([
     { text: 'Reading…', isHidden: false },
     { text: null, isHidden: true },
-  ])(
-    'setStatus_$text_DrawsOnlyTheStatusPart',
-    ({ text, isHidden }) => {
-      let paneDraws = 0;
-      const counting: Layout = {
-        treePane(parent, input, kit) {
-          paneDraws += 1;
-          return paneLayout('pane').treePane?.(parent, input, kit) ?? {
+  ])('setStatus_$text_DrawsOnlyTheStatusPart', ({ text, isHidden }) => {
+    let paneDraws = 0;
+    const counting: Layout = {
+      treePane(parent, input, kit) {
+        paneDraws += 1;
+        return (
+          paneLayout('pane').treePane?.(parent, input, kit) ?? {
             element: parent,
-          };
-        },
-      };
-      const { parts } = fakeDocsParts(() => withUser(defaultLayout, counting));
-      const tree = createTreeView(treeDeps(parts));
-      const root = asFake(tree.element);
-      tree.openFilter();
-      const input = findAll(root, 'docs-box')[0] as FocusFakeElement;
-      tree.setStatus('first');
-      const drawsBefore = paneDraws;
+          }
+        );
+      },
+    };
+    const { parts } = fakeDocsParts(() => withUser(defaultLayout, counting));
+    const tree = createTreeView(treeDeps(parts));
+    const root = asFake(tree.element);
+    tree.openFilter();
+    const input = findAll(root, 'docs-box')[0] as FocusFakeElement;
+    tree.setStatus('first');
+    const drawsBefore = paneDraws;
 
-      tree.setStatus(text);
+    tree.setStatus(text);
 
-      const status = findAll(root, 'docs-status');
-      expect(status).toHaveLength(1);
-      expect(status[0].textContent).toBe(text ?? '');
-      expect(status[0].hidden).toBe(isHidden);
-      expect(paneDraws).toBe(drawsBefore);
-      expect(document.activeElement).toBe(input);
-    },
-  );
+    const status = findAll(root, 'docs-status');
+    expect(status).toHaveLength(1);
+    expect(status[0].textContent).toBe(text ?? '');
+    expect(status[0].hidden).toBe(isHidden);
+    expect(paneDraws).toBe(drawsBefore);
+    expect(document.activeElement).toBe(input);
+  });
 
   it('setStatus_ThenLayoutChange_TheNewLayoutDrawsTheSameText', () => {
     let shown = withUser(defaultLayout, paneLayout('pane-1'));

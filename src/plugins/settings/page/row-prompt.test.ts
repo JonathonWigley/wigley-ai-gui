@@ -45,10 +45,20 @@ describe('samePromptActions', () => {
   const edit = { command: 'settings.edit', label: 'edit' };
 
   it.each([
-    { case: 'the same list', drawn: [edit, reset], next: [edit, reset], same: true },
+    {
+      case: 'the same list',
+      drawn: [edit, reset],
+      next: [edit, reset],
+      same: true,
+    },
     { case: 'both empty', drawn: [], next: [], same: true },
     { case: 'a shorter list', drawn: [edit, reset], next: [edit], same: false },
-    { case: 'another order', drawn: [edit, reset], next: [reset, edit], same: false },
+    {
+      case: 'another order',
+      drawn: [edit, reset],
+      next: [reset, edit],
+      same: false,
+    },
     {
       case: 'another label',
       drawn: [reset],

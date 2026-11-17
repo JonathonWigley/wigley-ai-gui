@@ -284,7 +284,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   filterFrame.append(filterBox);
   const rowsList = element('ol', 'backlog-rows');
 
-
   const reviewPane = element('div', 'backlog-review');
   reviewPane.tabIndex = -1;
   const reviewBody = element('div', 'backlog-review-body');

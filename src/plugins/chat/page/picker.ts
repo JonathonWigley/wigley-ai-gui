@@ -166,20 +166,15 @@ export function createPicker(deps: PickerDeps): Picker {
           deps.log(`picker closed: ${next.title}`);
         },
         drawRow: (parent, item, row) =>
-          drawPickerRow(
-            deps,
-            nextScope,
-            parent,
-            {
-              item: next.rowInput(item),
-              label: row.label,
-              prompt: cursorPrompt(
-                nextScope,
-                row.isCursor,
-                next.archiveState?.(item) ?? null,
-              ),
-            },
-          ),
+          drawPickerRow(deps, nextScope, parent, {
+            item: next.rowInput(item),
+            label: row.label,
+            prompt: cursorPrompt(
+              nextScope,
+              row.isCursor,
+              next.archiveState?.(item) ?? null,
+            ),
+          }),
         section: next.section,
         drawHeading: (parent, title) =>
           drawPickerHeading(deps, nextScope, parent, title),
