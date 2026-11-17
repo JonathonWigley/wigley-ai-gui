@@ -876,6 +876,69 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
+  // Breaks: a targeted run stopped by the hidden mode's guard, or acting on
+  // the focused pane's session instead of the target. An accept with the box
+  // left empty clears the user title of the dialog's session, so its line
+  // names the row the dialog opened for.
+  it.each<{
+    case: string;
+    command: 'closeSession' | 'renameSession';
+    targetSessionId?: string;
+    closes: unknown[][];
+    logged: string[];
+    isShown: boolean;
+  }>([
+    {
+      case: 'closeSession closes the target',
+      command: 'closeSession',
+      targetSessionId: 's2',
+      closes: [['s2', false]],
+      logged: [],
+      isShown: false,
+    },
+    {
+      case: "renameSession shows the mode and opens the target's dialog",
+      command: 'renameSession',
+      targetSessionId: 's2',
+      closes: [],
+      logged: ['cleared the user title of label s2'],
+      isShown: true,
+    },
+    {
+      case: 'renameSession with an unknown target',
+      command: 'renameSession',
+      targetSessionId: 'gone',
+      closes: [],
+      logged: ['no session to rename'],
+      isShown: false,
+    },
+    {
+      case: 'closeSession with no target',
+      command: 'closeSession',
+      closes: [],
+      logged: ['close ignored: Sessions mode is hidden'],
+      isShown: false,
+    },
+  ])(
+    'a target passes the hidden mode guard: $case',
+    async ({ command, targetSessionId, closes, logged, isShown }) => {
+      const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+        withOtherMode: true,
+      });
+      const { commands } = setup.harness.started();
+      const before = setup.harness.logs.length;
+
+      commands[command]({ arg: undefined, targetSessionId });
+      commands.renameAccept({ arg: undefined });
+      await settle();
+
+      expect(setup.closes).toEqual(closes);
+      expect(setup.logsSince(before)).toEqual(expect.arrayContaining(logged));
+      expect(setup.exports.shownSessionId() !== null).toBe(isShown);
+      await setup.harness.stop();
+    },
+  );
+
   it('tab_shown_and_hidden_run_on_a_switch_and_on_mode_hide', async () => {
     const setup = await startApplied(['s1'], 's1', fakeUiState(), {
       withOtherMode: true,

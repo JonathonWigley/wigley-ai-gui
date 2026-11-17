@@ -109,8 +109,9 @@ type Handler = (context: PageCommandContext) => void;
 // `hubLineDown`, `hubLineUp`, `hubHalfPageDown`, `hubHalfPageUp`), by short id.
 // A command whose arg names a session, as a click's does, acts on that session,
 // and only logs for a session no longer held. Any other command acting on a
-// session acts only on the session whose Chat tab is the visible tab, and does
-// nothing while no Chat tab is visible.
+// session acts on the run's target when the run names one, and only logs for a
+// target chat does not hold; with no target it acts only on the session whose
+// Chat tab is the visible tab, and does nothing while no Chat tab is visible.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
 ): Omit<
@@ -168,7 +169,11 @@ export function chatCommandHandlers(
     (context) => {
       const session = sessionFor(tabs, context);
       if (session === undefined) {
-        log('no Chat tab shown');
+        log(
+          context.targetSessionId === undefined
+            ? 'no Chat tab shown'
+            : `no chat session ${context.targetSessionId}`,
+        );
         return;
       }
       act(session, context);
@@ -447,12 +452,16 @@ export function chatCommandHandlers(
   };
 }
 
-// The visible Chat tab's session; undefined while no Chat tab is visible, or
-// when the key fired in another session's box.
+// The run's target session when the run names one, undefined when chat holds
+// no such session. With no target, the visible Chat tab's session; undefined
+// while no Chat tab is visible, or when the key fired in another session's box.
 function sessionFor(
   tabs: ChatTabs,
   context: PageCommandContext,
 ): ChatSession | undefined {
+  if (context.targetSessionId !== undefined) {
+    return tabs.session(context.targetSessionId);
+  }
   const visible = tabs.visibleSessionId();
   const session = visible === null ? undefined : tabs.session(visible);
   const firedInOtherBox =

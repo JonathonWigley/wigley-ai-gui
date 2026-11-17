@@ -396,19 +396,26 @@ describe('workflow page part', () => {
     }
   });
 
-  it.each(['mainAction', 'toggleFinishedWaves', 'toggleHeadless'] as const)(
-    'engineKeys_RunStageActionOnTheSelectedSession %s',
-    async (command) => {
+  // Breaks: a targeted run acting on the selected session instead.
+  it.each([
+    ['mainAction', undefined, 's1'],
+    ['toggleFinishedWaves', undefined, 's1'],
+    ['toggleHeadless', undefined, 's1'],
+    ['mainAction', 's2', 's2'],
+    ['toggleHeadless', 's2', 's2'],
+  ] as const)(
+    'engineKeys_RunStageActionOnTheSelectedSession %s, target %s',
+    async (command, targetSessionId, sessionId) => {
       const { harness, runs } = startWorkflow();
       harness.state.publish(sessionsActiveSlot).set('s1');
 
-      harness.started().commands[command]({ arg: undefined });
+      harness.started().commands[command]({ arg: undefined, targetSessionId });
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(
         runs.filter(([id]) => id === workflowStageActionCommand.id),
       ).toEqual([
-        [workflowStageActionCommand.id, { sessionId: 's1', action: command }],
+        [workflowStageActionCommand.id, { sessionId, action: command }],
       ]);
     },
   );

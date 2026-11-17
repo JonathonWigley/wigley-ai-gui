@@ -967,23 +967,28 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const openPreview = previewToggle(mode, view, log);
 
-    // Acts on the focused pane's session, as `closeSession` does.
-    const renameSession = () => {
-      if (!mode.isShown()) {
+    // Acts on the run's target when it names one, showing Sessions mode first
+    // since the dialog waits on the user's typing; else on the focused pane's
+    // session, as `closeSession` does.
+    const renameSession = ({ targetSessionId }: PageCommandContext) => {
+      if (targetSessionId === undefined && !mode.isShown()) {
         log('rename ignored: Sessions mode is hidden');
         return;
       }
-      const sessionId = view.panes.focusedSessionId();
+      const sessionId = targetSessionId ?? view.panes.focusedSessionId();
       const row = sessionId === null ? undefined : rowOf(sessionId);
       if (row === undefined) {
         log('no session to rename');
         return;
       }
+      if (!mode.isShown()) {
+        mode.show();
+      }
       renameDialog.open(row);
     };
 
     // Runs a project key on the focused pane's session's project, as
-    // `renameSession` acts on its session.
+    // `renameSession` with no target acts on its session.
     const projectKey = (run: (project: string) => void) => () => {
       if (!mode.isShown()) {
         log('projects ignored: Sessions mode is hidden');
@@ -1142,14 +1147,15 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         nextTab: () => stepToTab(1),
         prevTab: () => stepToTab(-1),
         togglePopup,
-        // Acts on the focused pane's session, whichever box the key fired in;
-        // never on a row the user cannot see.
-        closeSession: () => {
-          if (!mode.isShown()) {
+        // Acts on the run's target when it names one, shown or not; else on the
+        // focused pane's session, whichever box the key fired in, and never on
+        // a row the user cannot see.
+        closeSession: ({ targetSessionId }: PageCommandContext) => {
+          if (targetSessionId === undefined && !mode.isShown()) {
             log('close ignored: Sessions mode is hidden');
             return;
           }
-          const sessionId = view.panes.focusedSessionId();
+          const sessionId = targetSessionId ?? view.panes.focusedSessionId();
           if (sessionId !== null) {
             const atOnce = closesAtOnce([
               ...view.tabs.tabsOf(sessionId),
