@@ -52,7 +52,12 @@ export const audioPickerManifest = definePlugin({
     leaveBox: { label: 'leave the box', group: 'boxes', runsIn: 'page' },
     lineDown: { label: 'scroll a line down', group: 'view', runsIn: 'page' },
     lineUp: { label: 'scroll a line up', group: 'view', runsIn: 'page' },
-    submit: { label: 'send the picks', group: 'send', runsIn: 'page' },
+    submit: {
+      label: 'send the picks',
+      group: 'send',
+      runsIn: 'page',
+      risky: true,
+    },
     askCancel: {
       label: 'cancel the audio picker',
       group: 'send',
@@ -62,6 +67,7 @@ export const audioPickerManifest = definePlugin({
       label: 'yes, cancel the audio picker',
       group: 'confirm',
       runsIn: 'page',
+      risky: true,
     },
     dismissConfirm: {
       label: 'keep the audio picker',

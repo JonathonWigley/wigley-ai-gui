@@ -24,6 +24,8 @@ export const workflowManifest = definePlugin({
       label: "run the stage's next step",
       group: 'workflow',
       runsIn: 'page',
+      risky: true,
+      targets: true,
     },
     toggleSidePane: {
       label: 'show or hide the side pane',
@@ -39,12 +41,14 @@ export const workflowManifest = definePlugin({
       label: 'turn headless on or off',
       group: 'workflow',
       runsIn: 'page',
+      targets: true,
     },
     stageAction: {
       label: 'run a stage action for a session',
       group: 'workflow',
       runsIn: 'page',
       arg: { sessionId: 'string', action: 'string' },
+      risky: true,
     },
     openPreview: {
       label: 'show the workflow layout preview',

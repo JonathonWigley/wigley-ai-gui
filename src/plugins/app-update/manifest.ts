@@ -20,6 +20,7 @@ export const appUpdateManifest = definePlugin({
       label: 'install the app update',
       group: 'app',
       runsIn: 'main',
+      risky: true,
     },
     check: {
       label: 'check for an app update',

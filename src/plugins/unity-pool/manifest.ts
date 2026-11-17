@@ -37,6 +37,7 @@ export const unityPoolManifest = definePlugin({
       group: 'pool',
       runsIn: 'page',
       arg: { pool: 'string', clone: 'number' },
+      risky: true,
     },
     selectHolder: {
       label: "show the holder's session",

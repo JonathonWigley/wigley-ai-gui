@@ -1,6 +1,6 @@
 # 05 — Target-capable commands read the run's target
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · changes which session the target-capable commands act on, across four plugins, with a guard to bypass
 Wave: 2 · Depends on: 01

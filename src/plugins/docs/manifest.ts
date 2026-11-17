@@ -147,6 +147,7 @@ export const docsManifest = definePlugin({
       label: 'reload from disk',
       group: 'conflict',
       runsIn: 'page',
+      risky: true,
     },
     conflictOverwrite: {
       label: 'overwrite the disk',
@@ -169,11 +170,17 @@ export const docsManifest = definePlugin({
       runsIn: 'page',
     },
     rename: { label: 'rename or move', group: 'change', runsIn: 'page' },
-    trash: { label: 'move to the Trash', group: 'change', runsIn: 'page' },
+    trash: {
+      label: 'move to the Trash',
+      group: 'change',
+      runsIn: 'page',
+      risky: true,
+    },
     confirmYes: {
       label: 'yes, move it to the Trash',
       group: 'confirm',
       runsIn: 'page',
+      risky: true,
     },
     confirmNo: { label: 'keep it', group: 'confirm', runsIn: 'page' },
     asideDown: { label: 'next row', group: 'aside', runsIn: 'page' },

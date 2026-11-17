@@ -1,6 +1,6 @@
 # 04 — Risky and target flags
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: standard · adds one declared field per command, as each declaration's `arg` field sits (`allowEntry` in `src/plugins/chat/manifest.ts`)
 Wave: 2 · Depends on: 01

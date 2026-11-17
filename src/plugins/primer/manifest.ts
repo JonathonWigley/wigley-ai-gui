@@ -88,7 +88,12 @@ export const primerManifest = definePlugin({
     reviewTop: { label: 'first task', group: 'review', runsIn: 'page' },
     reviewBottom: { label: 'last task', group: 'review', runsIn: 'page' },
     reviewJump: { label: 'jump to the task', group: 'review', runsIn: 'page' },
-    submit: { label: 'send the primer', group: 'review', runsIn: 'page' },
+    submit: {
+      label: 'send the primer',
+      group: 'review',
+      runsIn: 'page',
+      risky: true,
+    },
     askCancel: {
       label: 'cancel the primer',
       group: 'review',
@@ -98,6 +103,7 @@ export const primerManifest = definePlugin({
       label: 'yes, cancel the primer',
       group: 'confirm',
       runsIn: 'page',
+      risky: true,
     },
     dismissConfirm: {
       label: 'keep the primer',

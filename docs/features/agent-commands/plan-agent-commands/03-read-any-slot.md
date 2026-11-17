@@ -1,6 +1,6 @@
 # 03 — Read any slot
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `readsEverySlot` declaration and the main state members that 08 consumes
 Wave: 2 · Depends on: 01

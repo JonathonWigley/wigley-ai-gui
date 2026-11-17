@@ -34,9 +34,19 @@ export const settingsManifest = definePlugin({
       runsIn: 'page',
     },
     edit: { label: 'edit the row', group: 'settings', runsIn: 'page' },
-    reset: { label: 'reset to the default', group: 'settings', runsIn: 'page' },
+    reset: {
+      label: 'reset to the default',
+      group: 'settings',
+      runsIn: 'page',
+      risky: true,
+    },
     addBind: { label: 'add a key', group: 'settings', runsIn: 'page' },
-    removeBind: { label: 'remove a key', group: 'settings', runsIn: 'page' },
+    removeBind: {
+      label: 'remove a key',
+      group: 'settings',
+      runsIn: 'page',
+      risky: true,
+    },
     filter: { label: 'filter the rows', group: 'settings', runsIn: 'page' },
     clearFilter: {
       label: 'clear the filter',

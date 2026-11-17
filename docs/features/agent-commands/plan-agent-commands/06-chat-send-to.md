@@ -1,6 +1,6 @@
 # 06 — Chat sends to another session, framed
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · a new main command over chat's session store, the frame rule both processes read, and the title rule
 Wave: 2 · Depends on: 01
