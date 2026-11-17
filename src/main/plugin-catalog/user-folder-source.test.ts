@@ -240,10 +240,7 @@ describe('createUserFolderSource', () => {
     expect(await code.stat('notes/6/main.js')).not.toBeNull();
     expect(notJson.kind).toBe('failed');
     expect(revisionOf(goodAgain)).toBe(7);
-    expect(removed).toEqual([
-      `${CODE_ROOT}/notes/1`,
-      `${CODE_ROOT}/notes/4`,
-    ]);
+    expect(removed).toEqual([`${CODE_ROOT}/notes/1`, `${CODE_ROOT}/notes/4`]);
   });
 
   it('loads a plugin whose old revision cannot be deleted, and logs the failure', async () => {

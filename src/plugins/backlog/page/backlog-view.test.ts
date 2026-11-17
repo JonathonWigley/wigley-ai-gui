@@ -698,7 +698,7 @@ describe('backlog pane targets', () => {
     { pane: 'strip', from: 'table', target: 'backlog-chunk' },
     { pane: 'table', from: 'review', target: 'backlog-rows' },
   ])(
-    'a click inside a pane hands it the keys and keeps the click\'s focus: $pane',
+    "a click inside a pane hands it the keys and keeps the click's focus: $pane",
     async ({ pane, from, target }) => {
       const setup = await backlogSetup();
       if (from === 'review') {

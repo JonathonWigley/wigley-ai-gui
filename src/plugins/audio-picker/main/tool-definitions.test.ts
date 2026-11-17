@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import {
-  COLLECT_AUDIO_PICKER_TOOL,
-  OPEN_AUDIO_PICKER_TOOL,
-} from '../contract';
+import { COLLECT_AUDIO_PICKER_TOOL, OPEN_AUDIO_PICKER_TOOL } from '../contract';
 import { createAudioPickerType } from './picker-type';
 import { AUDIO_PICKER_TOOLS } from './tool-definitions';
 

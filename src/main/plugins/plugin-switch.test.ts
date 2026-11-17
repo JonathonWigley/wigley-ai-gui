@@ -1150,7 +1150,10 @@ describe('createPluginSwitch', () => {
     );
     switched.calls.length = 0;
 
-    const calls = await changeCatalog(switched, [user('x', { revision: 2 }), Y]);
+    const calls = await changeCatalog(switched, [
+      user('x', { revision: 2 }),
+      Y,
+    ]);
 
     expect(calls.filter((call) => call.startsWith('page start'))).toEqual([
       'page start x',

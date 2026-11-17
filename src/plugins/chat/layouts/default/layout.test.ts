@@ -759,7 +759,10 @@ describe('default chat layout activity', () => {
         ...liveRun([toolStep('Read', 'a.ts', null)], false, 3000),
         startedAt: null,
       },
-      lines: ['chat-activity is-live', 'span.chat-activity-steps:1 step · Read'],
+      lines: [
+        'chat-activity is-live',
+        'span.chat-activity-steps:1 step · Read',
+      ],
     },
   ] as {
     state: string;
