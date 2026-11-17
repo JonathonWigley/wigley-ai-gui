@@ -24,6 +24,7 @@ import {
   chatToggleSectionCommand,
   type SlashCommandContext,
 } from '../contract';
+import { frameAgentMessage } from '../agent-frame';
 import { chatManifest } from '../manifest';
 import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
@@ -1417,6 +1418,18 @@ describe('chat commands', () => {
       ['send', 'row-1', { text: '', images: [png] }],
     ]);
     expect(run.marked).toEqual(['row-1']);
+  });
+
+  it('putBack_FramedMessage_BoxHoldsTheBodyOnly', () => {
+    const message = box('');
+    const shown = Object.assign(session(true), { box: message });
+    const tabs = { session: () => shown } as unknown as ChatTabs;
+
+    putBack({ tabs }, shown, [
+      { text: frameAgentMessage('Planner', 'go'), images: [] },
+    ]);
+
+    expect(message.held.text).toBe('go');
   });
 
   it('putBack_TwoReturnedOverADraft_OldestOnTopImagesAheadOfAttached', () => {

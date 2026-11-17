@@ -18,6 +18,7 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import type { ChatEntryRenderer, QueuedMessage } from '../contract';
+import { frameAgentMessage } from '../agent-frame';
 import { chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -1945,6 +1946,60 @@ describe('slots and focus', () => {
   });
 
   it.each([
+    {
+      case: 'a framed entry',
+      entry: userText('u1', frameAgentMessage('Planner', 'go')),
+      from: 'Planner',
+      text: 'go',
+    },
+    {
+      case: 'a plain entry',
+      entry: userText('u1', 'go'),
+      from: null,
+      text: 'go',
+    },
+    {
+      case: 'a framed queued message',
+      queued: { ...queued('q1'), text: frameAgentMessage('Planner', 'go') },
+      from: 'Planner',
+      text: 'go',
+    },
+    {
+      case: 'a plain queued message',
+      queued: { ...queued('q1'), text: 'go' },
+      from: null,
+      text: 'go',
+    },
+  ])("a framed message's input carries the sender and the body ($case)", (row) => {
+    const seen: [string | null, string][] = [];
+    const shown = withUser<ChatLayout>(
+      defaultLayout,
+      {
+        entries: {
+          user(parent, input, kit) {
+            seen.push([input.from, input.text]);
+            return { element: kit.el(parent, 'div', 'recorded') };
+          },
+        },
+        queuedMessage(parent, input, kit) {
+          seen.push([input.from, input.text]);
+          return { element: kit.el(parent, 'div', 'recorded') };
+        },
+      },
+      'recording',
+    );
+    const { list, put } = setUpList(shown);
+
+    if (row.entry !== undefined) {
+      put(row.entry);
+    } else {
+      list.setQueued([row.queued]);
+    }
+
+    expect(seen).toEqual([[row.from, row.text]]);
+  });
+
+  it.each([
     { case: 'following', scrollsUp: false, scrollTop: 500 },
     { case: 'scrolled up', scrollsUp: true, scrollTop: 250 },
   ])(
@@ -2587,6 +2642,15 @@ describe('block stops', () => {
       puts: [assistantText('a', '')],
       act: () => undefined,
       source: null,
+    },
+    {
+      case: 'a framed message gives the second block without its frame line',
+      puts: [userText('u', frameAgentMessage('Planner', 'one\n\ntwo'))],
+      act: (list) => {
+        list.first();
+        list.move(1);
+      },
+      source: { text: 'two', blockCount: 1 },
     },
     {
       case: 'a pending row gives its message',

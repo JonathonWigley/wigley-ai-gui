@@ -18,6 +18,11 @@
   color: var(--wg-fg-secondary);
 }
 
+/* Above the message's text, when another session's agent sent it. */
+.chat-user-from {
+  margin-bottom: var(--wg-space-1);
+}
+
 /* Under the message's card. */
 .chat-user-delivery {
   color: var(--wg-fg-tertiary);

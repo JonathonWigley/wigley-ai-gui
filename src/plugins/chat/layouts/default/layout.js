@@ -116,8 +116,9 @@ function resultLine(input, kit) {
   return parts.join(' · ');
 }
 
-// The text, then the thumbnails of any images under it, in place of what
-// `turn` held. The user's own html block stays code.
+// The "from" Tag when another session's agent sent the message, then the text,
+// then the thumbnails of any images under it, in place of what `turn` held. The
+// user's own html block stays code.
 /**
  * @param {HTMLElement} turn
  * @param {import('../layout').UserInput} input
@@ -125,20 +126,39 @@ function resultLine(input, kit) {
  */
 function fillUserTurn(turn, input, kit) {
   turn.replaceChildren();
+  if (input.from !== null) {
+    drawFromTag(turn, input.from, kit);
+  }
   kit.markdown(turn, input.text, 'md', { liveFences: false });
   if (input.images.length > 0) {
     kit.images(turn);
   }
 }
 
-// Whether `next` holds other text or images than `last`, compared by value since
-// each input arrives over IPC.
+// The neutral Tag naming the session whose agent sent the message, as the last
+// child of `parent`.
+/**
+ * @param {HTMLElement} parent
+ * @param {string} from
+ * @param {import('../layout').BaseKit} kit
+ * @returns {HTMLElement}
+ */
+function drawFromTag(parent, from, kit) {
+  const tag = kit.tag(parent, 'from ' + from, 'neutral');
+  tag.classList.add('chat-user-from');
+  tag.title = `Sent by the agent in session "${from}", not typed by the user`;
+  return tag;
+}
+
+// Whether `next` holds another sender, text or images than `last`, compared by
+// value since each input arrives over IPC.
 /**
  * @param {import('../layout').UserInput} last
  * @param {import('../layout').UserInput} next
  */
 function isUserTurnChanged(last, next) {
   return (
+    last.from !== next.from ||
     last.text !== next.text ||
     last.images.length !== next.images.length ||
     next.images.some(
@@ -503,14 +523,28 @@ function queuedLabel(input) {
   return `${state} · ${input.imageCount} ${noun}`;
 }
 
+// The label and text, with the "from" Tag between them when another session's
+// agent sent the message, in place of `drawn`, the Tag drawn before; the Tag
+// now drawn, or null.
 /**
+ * @param {HTMLElement} row
  * @param {HTMLElement} label
  * @param {HTMLElement} text
+ * @param {HTMLElement | null} drawn
  * @param {import('../layout').QueuedMessageInput} input
+ * @param {import('../layout').BaseKit} kit
+ * @returns {HTMLElement | null}
  */
-function showQueued(label, text, input) {
+function showQueued(row, label, text, drawn, input, kit) {
   label.textContent = queuedLabel(input);
   text.textContent = input.text;
+  drawn?.remove();
+  if (input.from === null) {
+    return null;
+  }
+  const tag = drawFromTag(row, input.from, kit);
+  row.insertBefore(tag, text);
+  return tag;
 }
 
 /**
@@ -835,16 +869,16 @@ const layout = {
   // The dim label, with the image count when there are images, over the text
   // as typed. A held row's label names the skip key, not the reason: the dock
   // shows that.
-  queuedMessage(parent, input) {
+  queuedMessage(parent, input, kit) {
     const row = root(parent, 'chat-queued');
     const label = el('div', 'chat-queued-label');
     const text = el('div', 'chat-queued-text');
     row.append(label, text);
-    showQueued(label, text, input);
+    let fromTag = showQueued(row, label, text, null, input, kit);
     return {
       element: row,
       update(next) {
-        showQueued(label, text, next);
+        fromTag = showQueued(row, label, text, fromTag, next, kit);
       },
     };
   },

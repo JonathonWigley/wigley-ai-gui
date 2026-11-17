@@ -35,6 +35,7 @@ import type {
   PermissionActions,
   SessionRef,
 } from './chat-view';
+import { readAgentFrame } from '../agent-frame';
 import { ROLE_COMMANDS } from './control-commands';
 import type { ImageViewer } from './image-viewer';
 import type { Picker } from './picker';
@@ -592,8 +593,8 @@ function refused(
 }
 
 // Puts messages, oldest first, back into their session's box, ahead of
-// anything typed or attached since: each text on its own line above the box's
-// text, the oldest at the top, and their images in order before the attached
+// anything typed or attached since: each text, a framed message's body without
+// its frame line, on its own line above the box's text, the oldest at the top, and their images in order before the attached
 // ones. A session closed since takes nothing back; whether the box took them.
 export function putBack(
   deps: Pick<ChatCommandDeps, 'tabs'>,
@@ -604,7 +605,7 @@ export function putBack(
     return false;
   }
   const texts = messages
-    .map((message) => message.text)
+    .map((message) => readAgentFrame(message.text)?.body ?? message.text)
     .filter((text) => text !== '');
   if (texts.length > 0) {
     const typed = session.box.text();

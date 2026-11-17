@@ -145,6 +145,7 @@ function fakeKit() {
         },
       };
     },
+    tag: (parent, text, tone) => part(parent, 'span', `tag:${text}:${tone}`),
     card: (parent) => part(parent, 'div', 'card:none'),
     edgeCard: (parent, edge) => part(parent, 'div', `card:${edge ?? 'none'}`),
     statusDot: (parent, status) => part(parent, 'span', `dot:${status}`),
@@ -209,6 +210,7 @@ describe('default chat layout', () => {
     const entry = {
       kind: 'user' as const,
       id: 'u1',
+      from: null,
       text: 'hello',
       images: [] as { mediaType: string; data: string }[],
       delivery: null,
@@ -229,9 +231,69 @@ describe('default chat layout', () => {
     ]);
   });
 
+  it.each([
+    {
+      from: 'Planner',
+      children: ['tag:from Planner:neutral', 'markdown:go (fences off)'],
+    },
+    { from: null, children: ['markdown:go (fences off)'] },
+  ])(
+    'a user turn draws the from Tag only for a framed message ($from)',
+    ({ from, children }) => {
+      const { kit } = fakeKit();
+      const view = draw(
+        {
+          kind: 'user' as const,
+          id: 'u3',
+          from,
+          text: 'go',
+          images: [],
+          delivery: null,
+          isLatestDelivery: false,
+          raw: [],
+        },
+        kit,
+      );
+
+      const turn = asFake(view.element).children[0];
+      expect(describeChildren(turn)).toEqual(children);
+      if (from !== null) {
+        const tag = turn.children[0];
+        expect(tag.classList.contains('chat-user-from')).toBe(true);
+        expect(tag.title).toBe(
+          'Sent by the agent in session "Planner", not typed by the user',
+        );
+      }
+    },
+  );
+
+  it('a changed from redraws the turn', () => {
+    const { kit } = fakeKit();
+    const entry = {
+      kind: 'user' as const,
+      id: 'u4',
+      from: null,
+      text: 'go',
+      images: [] as { mediaType: string; data: string }[],
+      delivery: null,
+      isLatestDelivery: false,
+      raw: [] as unknown[],
+    };
+    const view = draw(entry, kit);
+    const turn = asFake(view.element).children[0];
+
+    view.update?.({ ...entry, from: 'Planner' });
+
+    expect(describeChildren(turn)).toEqual([
+      'tag:from Planner:neutral',
+      'markdown:go (fences off)',
+    ]);
+  });
+
   const userWithImage = {
     kind: 'user' as const,
     id: 'u2',
+    from: null,
     text: 'look',
     images: [{ mediaType: 'image/png', data: 'cG5n' }],
     delivery: null,
@@ -1236,6 +1298,7 @@ describe('default chat layout queuedMessage', () => {
     'queuedMessage_Default_Label ($imageCount, sent $sent, hold $holdReason, key $skipKey → $label)',
     ({ imageCount, sent, holdReason, skipKey, label }) => {
       const view = drawQueued({
+        from: null,
         text: 'fix the tests',
         imageCount,
         sent,
@@ -1250,8 +1313,41 @@ describe('default chat layout queuedMessage', () => {
     },
   );
 
+  it.each([
+    {
+      from: 'Planner',
+      children: [
+        'div.chat-queued-label:pending',
+        'tag:from Planner:neutral',
+        'div.chat-queued-text:go',
+      ],
+    },
+    {
+      from: null,
+      children: [
+        'div.chat-queued-label:pending',
+        'div.chat-queued-text:go',
+      ],
+    },
+  ])(
+    'a queued message draws the from Tag only for a framed message ($from)',
+    ({ from, children }) => {
+      const view = drawQueued({
+        from,
+        text: 'go',
+        imageCount: 0,
+        sent: false,
+        holdReason: null,
+        skipKey: '⌃C',
+      });
+
+      expect(describeChildren(asFake(view.element))).toEqual(children);
+    },
+  );
+
   it('queuedMessage_Default_UpdateRedrawsInPlace', () => {
     const view = drawQueued({
+      from: null,
       text: 'fix the tests',
       imageCount: 0,
       sent: false,
@@ -1261,6 +1357,7 @@ describe('default chat layout queuedMessage', () => {
     const row = view.element;
 
     view.update?.({
+      from: null,
       text: 'and the lint',
       imageCount: 2,
       sent: false,

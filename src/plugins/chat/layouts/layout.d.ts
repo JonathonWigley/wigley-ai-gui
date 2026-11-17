@@ -36,10 +36,13 @@ export type UserDelivery = 'sent' | 'received' | 'notReceived';
 // `images` are the message's attached images, base64 with no `data:` prefix.
 // `delivery` is null when nothing tracks the message. `isLatestDelivery` holds on the session's last user message whose
 // `delivery` is not null, and the app sends the input again when it changes; the default layout draws `Received` only
-// on that message, and `Sent` and `Not received` on every message.
+// on that message, and `Sent` and `Not received` on every message. `from` is the sending session's name when another
+// session's agent sent the message, else null; `text` is then the message without its frame line, and the default
+// layout draws a Tag `from <name>` before it.
 export interface UserInput {
   kind: 'user';
   id: string;
+  from: string | null;
   text: string;
   images: { mediaType: string; data: string }[];
   delivery: UserDelivery | null;
@@ -215,8 +218,10 @@ export type WorkingInput = LiveWorkingInput | DoneWorkingInput;
 // One pending message: its text as typed, how many images it carries, and whether the user sent it into the running
 // turn, so it waits only for the agent to take it in. `holdReason` is the send gate's reason while the message waits
 // on a compaction it asked for, else null. `skipKey` is the keys that skip that compaction, formatted for the
-// platform; empty when the interrupt command is unbound.
+// platform; empty when the interrupt command is unbound. `from` is the sending session's name when another session's
+// agent sent the message, else null; `text` is then the message without its frame line.
 export interface QueuedMessageInput {
+  from: string | null;
   text: string;
   imageCount: number;
   sent: boolean;
