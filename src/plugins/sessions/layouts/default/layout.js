@@ -21,11 +21,12 @@
 // popup's sheet around its body, the hidden popups' bar (each entry's icon and
 // status, or its title with no status, then the toggle key), and the rename
 // dialog's title box over why a title was refused and the hint, in the class
-// names its `layout.css` styles.
+// names its `layout.css` styles, and each split picker row as the kit's list
+// row holding its label alone.
 
 const UNTITLED_ROW_TEXT = 'New Chat';
 
-/** @type {NonNullable<import('../layout').SessionRowInput['activity']>} */
+/** @type {import('../layout').ActivityInput} */
 const MARKED_ROW_ACTIVITY = {
   word: 'needs you',
   tone: 'attention',
@@ -36,7 +37,7 @@ const MARKED_ROW_ACTIVITY = {
 // when urgent; a success Tag opens on a check. Any other is plain text.
 /**
  * @param {HTMLElement} parent
- * @param {NonNullable<import('../layout').SessionRowInput['activity']>} activity
+ * @param {import('../layout').ActivityInput} activity
  * @param {Parameters<import('../layout').CompleteLayout['row']>[2]} kit
  */
 function drawActivityLabel(parent, { word, tone, emphasis }, kit) {
@@ -215,6 +216,16 @@ const layout = {
       kit.el(element, 'p', 'session-rename-problem', input.problem);
     }
     kit.el(element, 'p', 'session-rename-hint', input.hint);
+    return { element };
+  },
+
+  pickerRow(parent, input, kit) {
+    const element = kit.row(parent, {
+      density: 'list',
+      tag: 'li',
+      label: input.label,
+      trailing: kit.trailing(),
+    });
     return { element };
   },
 };

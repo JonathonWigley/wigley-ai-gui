@@ -15,6 +15,7 @@ import type {
   GroupKit,
   GroupPane,
   Layout,
+  PickerRowInput,
   PopupBarInput,
   SectionInput,
 } from '../../layouts/layout';
@@ -446,6 +447,59 @@ describe('sessions parts', () => {
       expect(drawn.layoutName).toBe(drawnBy);
       expect(element.children[0]).toBe(asFake(box));
       expect(element.textContent).toContain('the hint');
+    },
+  );
+
+  it.each<{ case: string; input: PickerRowInput; hasTrailing: boolean }>([
+    {
+      case: 'session item with trailing',
+      input: {
+        item: {
+          kind: 'session',
+          sessionId: 's1',
+          title: 'Fix toasts',
+          label: 'gamma 2',
+          project: 'gamma',
+          harness: 'Claude Code',
+          activity: { word: 'running', tone: 'running', emphasis: null },
+        },
+        label: 'gamma 2',
+      },
+      hasTrailing: true,
+    },
+    {
+      case: 'new item without trailing',
+      input: { item: { kind: 'new' }, label: 'New session' },
+      hasTrailing: false,
+    },
+  ])(
+    'pickerRow_Draw_HandsTheItemAndTrailing ($case)',
+    ({ input, hasTrailing }) => {
+      const { parts } = sessionsPartsSetup();
+      const recorded: PickerRowInput[] = [];
+      const handed: (HTMLElement | null)[] = [];
+      parts.setLayouts(
+        withUser<Layout>(defaultLayout, {
+          pickerRow: (parent, rowInput, kit) => {
+            recorded.push(rowInput);
+            handed.push(kit.trailing());
+            return { element: kit.el(parent, 'li', 'mine-row') };
+          },
+        }),
+      );
+      const trailing = hasTrailing ? asHtml(new FakeElement('span')) : null;
+
+      const drawn = parts.pickerRow(
+        document.createElement('ul'),
+        input,
+        trailing,
+      );
+
+      expect(recorded).toEqual([input]);
+      expect(handed).toHaveLength(1);
+      expect(handed[0]).toBe(trailing);
+      expect(drawn.built.element.dataset.layout).toBe('mine');
+      expect(drawn.built.element.dataset.layoutOwner).toBe('sessions');
     },
   );
 

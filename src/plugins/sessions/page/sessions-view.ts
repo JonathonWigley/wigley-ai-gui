@@ -28,7 +28,7 @@ import {
   type SessionsState,
   type SidebarSection,
 } from '../contract';
-import type { Layout } from '../layouts/layout';
+import type { Layout, PickerItemInput } from '../layouts/layout';
 import { shownTitle, titleLimit } from '../session-title';
 import {
   createSessionsParts,
@@ -52,8 +52,12 @@ import {
   type SidebarSections,
   sidebarSections,
 } from './sidebar-order';
-import { mountSidebarView, type RowState } from './sidebar-view';
-import { rowChanges, stepSession } from './tabs';
+import {
+  activityInput,
+  mountSidebarView,
+  type RowState,
+} from './sidebar-view';
+import { harnessText, rowChanges, stepSession } from './tabs';
 
 // `activate` runs on a row click and `runFavorite` on a star's click, neither
 // while the preview shows; `selectTab` runs on a tab's click; `isModeShown`
@@ -174,12 +178,14 @@ export interface SessionPanes {
 // The preview never changes the favorites: while it shows, a star and a drop do
 // nothing, and the two methods log `projects ignored` and do nothing. `parts`
 // draws through the sessions layout the view's `setLayouts` sets, for the
-// mode's dialogs. `dispose` ends a side bar drag and drops its rows, stops the
+// mode's dialogs and the split picker's rows. `pickerItem` reads a session's
+// split picker item: what its side-bar row shows now. `dispose` ends a side bar drag and drops its rows, stops the
 // pane tree watching its size and pointer and drops every frame.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
-  parts: Pick<SessionsParts, 'renameDialog'>;
+  parts: Pick<SessionsParts, 'renameDialog' | 'pickerRow'>;
+  pickerItem(row: SessionRow): PickerItemInput;
   tabs: SessionTabsView;
   panes: SessionPanes;
   list: SessionList;
@@ -515,6 +521,15 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     element: root,
     sideBar: sidebar.element,
     parts,
+    pickerItem: (row) => ({
+      kind: 'session',
+      sessionId: row.sessionId,
+      title: shownTitle(row.titles, titleLimit(deps.titleMaxLength())),
+      label: row.label,
+      project: row.project,
+      harness: harnessText(row.harness),
+      activity: activityInput(activities.top(row.sessionId)),
+    }),
     tabs,
     panes,
     list,

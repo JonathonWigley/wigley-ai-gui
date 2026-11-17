@@ -936,6 +936,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     });
     api.areas.overlay.contribute(renameDialog.element);
 
+    const picker = api.services.picker.create({ filter: true });
+
     api.layouts.show<Layout>({
       defaultLayout,
       defaultStylesheet,
@@ -944,13 +946,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       setLayouts: (shown) => {
         view.setLayouts(shown);
         renameDialog.redraw();
+        picker.redraw();
         checkVisible(true);
       },
     });
 
     const openPreview = previewToggle(mode, view, log);
-
-    const picker = api.services.picker.create({ filter: true });
 
     // Acts on the focused pane's session, as `closeSession` does.
     const renameSession = () => {
@@ -1001,6 +1002,20 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         items: choices,
         label: (choice) =>
           choice.kind === 'row' ? choice.row.label : 'New session',
+        drawRow(list, choice, input) {
+          const drawn = view.parts.pickerRow(
+            list,
+            {
+              item:
+                choice.kind === 'row'
+                  ? view.pickerItem(choice.row)
+                  : { kind: 'new' },
+              label: input.label,
+            },
+            input.trailing,
+          );
+          return { element: drawn.built.element, dispose: drawn.dispose };
+        },
         chosen(choice) {
           if (!isPaneLive()) {
             return;

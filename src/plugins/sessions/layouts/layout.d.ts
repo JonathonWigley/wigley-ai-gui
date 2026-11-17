@@ -45,7 +45,9 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - `is-open` on the root of the popup that shows, the top open popup of its session, and `inert` on every other
 //   popup's root; `is-entering` on a popup's root from its add until its first transition on that root ends or the
 //   popup hides, so a slide up on add keyed on it runs once; the click on each `popupBar` entry, which opens its popup,
-//   set as on a tab, and the entry's `aria-label` (its popup's `title`).
+//   set as on a tab, and the entry's `aria-label` (its popup's `title`);
+// - the list picker sets `title`, `is-selected`, `is-cursor` and the click on a `pickerRow` root, and appends
+//   `trailing` when the row leaves it out.
 // The tab bodies, the sheet that holds them, the popup layer over them and the elements other plugins add stay the
 // app's.
 // Every key prompt here has no scope, so it shows in every scope, except the row's cursor prompt, whose keys fire in
@@ -60,7 +62,15 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 //
 // Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
 // `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input or the layouts
-// change.
+// change. `pickerRow` draws each row of the split picker each time the picker draws its rows, and again when the
+// layouts change while it is open.
+
+// What a session is doing: its word, its tone and its emphasis.
+export interface ActivityInput {
+  word: string;
+  tone: DotStatus;
+  emphasis: 'raised' | 'urgent' | null;
+}
 
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
 // message cut to the title length), null for none, which `default` draws as `New Chat`; `section` is the id of the
@@ -78,11 +88,7 @@ export interface SessionRowInput {
   label: string;
   harness: string;
   marked: boolean;
-  activity: {
-    word: string;
-    tone: DotStatus;
-    emphasis: 'raised' | 'urgent' | null;
-  } | null;
+  activity: ActivityInput | null;
   onScreen: boolean;
   section: string | null;
   isPrompted: boolean;
@@ -149,6 +155,28 @@ export interface PopupBarInput {
 export interface RenameDialogInput {
   problem: string | null;
   hint: string;
+}
+
+// One choice of the split picker (`Show session`): a session no pane shows, with what its side-bar row shows (`title`
+// as the row shows it, null for none; `label` the folder label; `project`; `harness`, '' for none; `activity` its top
+// activity, null for none), or `new`, the New session row, listed last when chat can start a session.
+export type PickerItemInput =
+  | {
+      kind: 'session';
+      sessionId: string;
+      title: string | null;
+      label: string;
+      project: string;
+      harness: string;
+      activity: ActivityInput | null;
+    }
+  | { kind: 'new' };
+
+// One split picker row. `label` is the line the picker filters on and the row's tooltip shows: the session's folder
+// label, or `New session`.
+export interface PickerRowInput {
+  item: PickerItemInput;
+  label: string;
 }
 
 // A part's root, appended to `parent`.
@@ -284,6 +312,11 @@ export interface RenameDialogKit extends SessionsKit {
   textBox(parent: HTMLElement): HTMLElement;
 }
 
+export interface PickerRowKit extends SessionsKit {
+  // The app's element for the end of the cursor row, or null; pass it as `KitRowOptions.trailing`.
+  trailing(): HTMLElement | null;
+}
+
 export interface Layout {
   // The side bar: a header over the sections.
   sideBar?(parent: HTMLElement, kit: SideBarKit): SideBarPane;
@@ -326,6 +359,12 @@ export interface Layout {
     parent: HTMLElement,
     input: RenameDialogInput,
     kit: RenameDialogKit,
+  ): SessionsPart;
+  // One row of the split picker, drawn through `kit.row(parent, { density: 'list', tag: 'li', … })`.
+  pickerRow?(
+    parent: HTMLElement,
+    input: PickerRowInput,
+    kit: PickerRowKit,
   ): SessionsPart;
 }
 

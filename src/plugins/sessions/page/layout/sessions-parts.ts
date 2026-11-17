@@ -39,6 +39,8 @@ import type {
   Layout,
   PaneInput,
   PaneKit,
+  PickerRowInput,
+  PickerRowKit,
   PopupBarInput,
   PopupBarKit,
   PopupBarPart,
@@ -144,6 +146,13 @@ export interface SessionsParts {
     parent: HTMLElement,
     input: RenameDialogInput,
     textBox: HTMLElement,
+  ): DrawnPart<SessionsPart>;
+  // `trailing` is the picker's element for the cursor row's end, null on
+  // other rows.
+  pickerRow(
+    parent: HTMLElement,
+    input: PickerRowInput,
+    trailing: HTMLElement | null,
   ): DrawnPart<SessionsPart>;
 }
 
@@ -495,6 +504,14 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
           'start',
         );
         return body;
+      }),
+    pickerRow: (parent, input, trailing) =>
+      parts.draw('pickerRow', parent, (builder, into, rollback) => {
+        const kit: PickerRowKit = {
+          ...sessionsKit(rollback),
+          trailing: () => trailing,
+        };
+        return builder(into, input, kit);
       }),
   };
 }

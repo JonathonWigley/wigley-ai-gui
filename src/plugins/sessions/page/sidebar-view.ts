@@ -16,6 +16,7 @@ import type {
   SidebarSection,
 } from '../contract';
 import type {
+  ActivityInput,
   SectionInput,
   SectionPane,
   SessionsPart,
@@ -405,6 +406,19 @@ export function mountSidebarView(
   };
 }
 
+// A session's activity as the sessions layout reads it; null for none.
+export function activityInput(
+  activity: RowActivity | null,
+): ActivityInput | null {
+  return activity === null
+    ? null
+    : {
+        word: activity.word,
+        tone: activity.tone,
+        emphasis: activity.emphasis ?? null,
+      };
+}
+
 function drawRow(
   parts: SessionsParts,
   list: HTMLElement,
@@ -423,14 +437,7 @@ function drawRow(
       label: session.label,
       harness: harnessText(session.harness),
       marked: session.marked && !isSelected,
-      activity:
-        activity === null
-          ? null
-          : {
-              word: activity.word,
-              tone: activity.tone,
-              emphasis: activity.emphasis ?? null,
-            },
+      activity: activityInput(activity),
       onScreen,
       section,
       isPrompted,
