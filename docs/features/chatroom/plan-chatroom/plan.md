@@ -216,7 +216,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 - [x] ~~[Stale harness doc lines](04-stale-harness-docs.md)~~ — dropped: Lane H (plan-lane-h-harness-seams) is running, at task 10 of 17 on branch lane-h-harness-seams; its landing makes the AGENTS.md passages true and its task 16 re-reads them, so a rewrite to today's shape would be undone and conflict at merge
 
 ### Wave 2
-- [ ] [Room service](05-room-service.md) — after 01
+- [x] [Room service](05-room-service.md) — after 01
 - [ ] [Board](06-board.md) — after 01
 - [ ] [Hook script and hooks.json](07-hook-script.md) — after 02, 03
 
@@ -241,6 +241,7 @@ Review base: 7c3eb9665
 
 ### Groups
 - 01 · deep · bed909cf0 · diff read: every Produces present; typecheck passes; oxfmt clean; layer check waits on 08's manifest · concerns: layer check needs 08's manifest; read('') rejects in jsonl, [] in memory; lone-surrogate room names; a line's room field not checked against its file
+- 05 · deep · e467c8144 · diff read: every Produces export present; typecheck passes; oxfmt applied (7ae838a7a) · concerns: isParticipant and ref types copied from jsonl-room-store.ts (private there); a store.read rejection inside post/unread rejects rather than returning ok:false; it.each tables mixing row shapes
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 ### Rulings
@@ -249,5 +250,8 @@ Review base: 7c3eb9665
 - roomFileName_EmptyRoom_Throws sits in main/room-store.test.ts, not contract.test.ts: the root layer may not import main/ — group 01 · group 01
 - jsonl read() and rooms() run through the room's serial queue, so a read waits for earlier appends — group 01 · group 01
 - Task 06 held with 02, 03, 07, 08: it consumes sessions' Harness and chat's ChatSessionInfo, which Lane H changes (Harness list removed, ChatSessionInfo gains harness) — dispatching it now would build on types about to change — lead
+- Character counts (body cap, thread 1-80, entry cut, read line 200) use code points — group 05 · group 05
+- unreadAddressed returns the user's word to a thread only while that thread is open, so it stays a subset of unread — group 05 · group 05
+- An expired claim drops in memory; claims.json is rewritten only when a claim changes; a state file read failing for any reason but missing rejects and caches nothing — group 05 · group 05
 ### Review rounds
 ### Test gate

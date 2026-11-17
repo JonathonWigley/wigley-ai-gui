@@ -1,6 +1,6 @@
 # 05 — Room service
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · keeps cursors, claims and threads in save files, serializes concurrent posts per room, and fans out to mirrors asynchronously
 Wave: 2 · Depends on: 01
@@ -142,3 +142,5 @@ Done when: compiles; the layer check passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit e467c8144 · proof: diff read: every Produces export present; typecheck passes; oxfmt applied (7ae838a7a) · concerns: isParticipant and ref types copied from jsonl-room-store.ts (private there); a store.read rejection inside post/unread rejects rather than returning ok:false; it.each tables mixing row shapes
