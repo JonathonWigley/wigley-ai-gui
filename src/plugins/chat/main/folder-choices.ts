@@ -1,5 +1,6 @@
 import type {
   AgentHarness,
+  AgentHarnessRegistry,
   HarnessProfile,
   ProjectFolder,
 } from '../../../contracts/agent';
@@ -12,14 +13,16 @@ import { MAX_RECENT_FOLDERS, type RecentFolders } from './recent-folders';
 
 export const MAX_FOLDER_CHOICES = MAX_RECENT_FOLDERS * 2;
 
-// A harness's project folder under the profile it was listed for.
+// A harness's project folder under the profile it was listed for, with that
+// harness's id.
 export interface ListedProject {
+  harness: string;
   profile: string;
   folder: ProjectFolder;
 }
 
 // One entry per folder (`paths.samePath`), the one with the greatest
-// `lastUsed` kept with its spelling and profile; a project's `modified` is its
+// `lastUsed` kept with its spelling, harness and profile; a project's `modified` is its
 // `lastUsed`. Newest first, every folder kept: `list` caps its folders at
 // MAX_FOLDER_CHOICES after leaving folders out.
 export function mergeFolderChoices(
@@ -29,8 +32,9 @@ export function mergeFolderChoices(
 ): RecentFolder[] {
   const uses: RecentFolder[] = [
     ...recent,
-    ...projects.map(({ profile, folder }) => ({
+    ...projects.map(({ harness, profile, folder }) => ({
       projectDir: folder.projectDir,
+      harness,
       profile,
       lastUsed: folder.modified,
     })),
@@ -49,21 +53,18 @@ export function mergeFolderChoices(
 }
 
 export interface FolderChoices {
-  // The start prompt's folders: chat's recent folders merged with every
-  // profile's harness project folders, leaving out each folder inside one of
-  // the OS's temp folders, each that is no longer a folder, and each it cannot
-  // check (logged); the newest MAX_FOLDER_CHOICES of the rest. A profile whose
-  // listing rejects is logged and lists none; rejects when chat's harness is
-  // missing.
+  // The start prompt's folders: chat's recent folders merged with the project
+  // folders of every profile of every registered harness, leaving out each
+  // folder inside one of the OS's temp folders, each that is no longer a
+  // folder, and each it cannot check (logged); the newest MAX_FOLDER_CHOICES of
+  // the rest. A profile whose listing rejects is logged and lists none.
   list(): Promise<RecentFolder[]>;
 }
 
-// `harness` is looked up on every call and throws when chat's harness is
-// missing.
+// The registered harnesses are read on every call.
 export function createFolderChoices(deps: {
   recent: RecentFolders;
-  harness(): AgentHarness;
-  profiles(): readonly HarnessProfile[];
+  harnesses: Pick<AgentHarnessRegistry, 'list'>;
   files: Pick<Files, 'stat'>;
   paths: Paths;
   tempFolders: readonly string[];
@@ -77,7 +78,11 @@ export function createFolderChoices(deps: {
   ): Promise<ListedProject[]> {
     try {
       const folders = await harness.listProjects(profile.configDir);
-      return folders.map((folder) => ({ profile: profile.name, folder }));
+      return folders.map((folder) => ({
+        harness: harness.id,
+        profile: profile.name,
+        folder,
+      }));
     } catch (error) {
       log(`project folders of ${profile.name} not listed: ${errorText(error)}`);
       return [];
@@ -85,9 +90,14 @@ export function createFolderChoices(deps: {
   }
 
   async function everyProfileProjects(): Promise<ListedProject[]> {
-    const harness = deps.harness();
     const listings = await Promise.all(
-      deps.profiles().map((profile) => profileProjects(harness, profile)),
+      deps.harnesses
+        .list()
+        .flatMap((harness) =>
+          harness
+            .info()
+            .profiles.map((profile) => profileProjects(harness, profile)),
+        ),
     );
     return listings.flat();
   }

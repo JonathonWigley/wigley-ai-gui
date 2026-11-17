@@ -13,6 +13,7 @@ import type {
   ResizeTarget,
 } from '../../../contracts/panes';
 import type { AgentCommand, ChatEntry } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
@@ -109,6 +110,7 @@ function stateOf(
   return {
     sessionId: 'row-1',
     projectDir: '/w/app',
+    harness: 'fake',
     profile: 'work',
     entries: NO_ENTRIES,
     controls: [],
@@ -264,6 +266,7 @@ function mounted(
     },
     paths: posixPaths,
     homeDir: '/w',
+    harnesses: store.read(coreAgentHarnessesSlot, 'chat'),
     sessions: {
       addTab: (
         sessionId: string,

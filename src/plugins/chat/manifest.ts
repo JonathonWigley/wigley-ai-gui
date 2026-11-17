@@ -274,6 +274,7 @@ export const chatManifest = definePlugin({
     layout: 'default',
     keepIdleMinutes: 60,
     completionDescriptions: true,
+    defaultHarness: 'claude',
   },
   settingInfo: {
     projects: {
@@ -295,6 +296,11 @@ export const chatManifest = definePlugin({
       label: 'Completion descriptions',
       description:
         "Show each command's description beside its name in the / completion list.",
+    },
+    defaultHarness: {
+      label: 'Default harness',
+      description:
+        "The id of the agent harness a new session runs on: claude for Claude Code. A project that names a profile runs on that profile's harness, and a resumed session on the harness it was saved with.",
     },
   },
   themeTokens: {

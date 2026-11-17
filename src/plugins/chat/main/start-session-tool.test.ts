@@ -363,4 +363,11 @@ describe('start_session', () => {
 
     await expect(session.call('other', {}, CONTEXT)).rejects.toThrow('other');
   });
+
+  it('startSessionTool_Description_NamesNoHarness', () => {
+    expect(START_SESSION_TOOL.description).not.toContain('Claude');
+    expect(START_SESSION_TOOL.description).toContain(
+      'It runs on the agent harness of the profile it starts under',
+    );
+  });
 });

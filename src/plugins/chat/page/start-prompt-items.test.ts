@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { HarnessProfile } from '../../../contracts/agent';
@@ -17,17 +18,20 @@ import {
   projectItems,
   projectLabel,
   projectSection,
+  recentFolderHarness,
 } from './start-prompt-items';
 
 const home = '/Users/u';
 
 const app: RecentFolder = {
   projectDir: '/Users/u/dev/app',
+  harness: 'claude',
   profile: 'personal',
   lastUsed: 2,
 };
 const tool: RecentFolder = {
   projectDir: '/opt/tool',
+  harness: 'claude',
   profile: 'work',
   lastUsed: 1,
 };
@@ -239,7 +243,7 @@ describe('start prompt items', () => {
     {
       given: 'a Windows folder in another case',
       recentFolders: [
-        { projectDir: 'C:\\Dev\\App', profile: 'personal', lastUsed: 2 },
+        { projectDir: 'C:\\Dev\\App', harness: 'claude', profile: 'personal', lastUsed: 2 },
       ],
       folder: 'c:\\dev\\app\\',
       paths: windowsPaths,
@@ -254,7 +258,7 @@ describe('start prompt items', () => {
     },
     {
       given: 'a folder last used with a removed profile',
-      recentFolders: [{ projectDir: '/srv/old', profile: 'old', lastUsed: 3 }],
+      recentFolders: [{ projectDir: '/srv/old', harness: 'claude', profile: 'old', lastUsed: 3 }],
       folder: '/srv/old',
       paths: posixPaths,
       index: 0,
@@ -348,4 +352,21 @@ describe('start prompt items', () => {
   ])('projectSection: $name', ({ item, showsSections, heading }) => {
     expect(projectSection(item, showsSections)).toBe(heading);
   });
+
+  it.each([
+    { given: 'its harness registered', harness: 'fake', expected: 'fake' },
+    { given: 'its harness gone', harness: 'gone', expected: 'claude' },
+  ])(
+    'recentFolderHarness_given $given → $expected',
+    ({ harness, expected }) => {
+      const harnesses = new Map([
+        ['claude', harnessInfo()],
+        ['fake', harnessInfo()],
+      ]);
+
+      expect(recentFolderHarness({ ...app, harness }, harnesses, 'claude')).toBe(
+        expected,
+      );
+    },
+  );
 });

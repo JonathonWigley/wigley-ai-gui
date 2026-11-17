@@ -61,7 +61,9 @@ import { CALLER_WAIT_MS, SUBAGENT_CALL_TEXT } from './tool-callers';
 function fakeChat(running = true) {
   return {
     closed: vi.fn<(sessionId: string, reason: SessionCloseReason) => void>(),
-    start: () => 'started',
+    start: vi.fn<
+      (request: { projectDir: string; harness: string; profile: string }) => string
+    >(() => 'started'),
     hostSessionIdSettled: () => Promise.resolve('host-started'),
     sessions: () => [
       { sessionId: 'held', projectDir: '/p', running } as ChatSessionState,
@@ -69,10 +71,17 @@ function fakeChat(running = true) {
   };
 }
 
+// A harness `other` declaring the drive's default profile, `default`.
+const DEFAULT_PROFILE_HARNESS = {
+  id: 'other',
+  info: () =>
+    harnessInfo({ profiles: [{ name: 'default', configDir: '/default' }] }),
+} as unknown as AgentHarness;
+
 function chatDriveActions(
   chat: ReturnType<typeof fakeChat>,
   activate: (sessionId: string) => void = () => undefined,
-  harnesses: readonly AgentHarness[] = [],
+  harnesses: readonly AgentHarness[] = [DEFAULT_PROFILE_HARNESS],
 ) {
   const drive = fakeDriveHost();
   addDriveActions(drive.host, {
@@ -82,7 +91,7 @@ function chatDriveActions(
       log: () => undefined,
       files: { makeFolder: () => Promise.resolve() },
     },
-    profileNames: () => ['default'],
+    defaultProfile: () => 'default',
     chat,
     sessions: { activate },
     harnesses: harnessRegistryOf(harnesses),
@@ -143,6 +152,17 @@ describe('chat drive actions', () => {
       sessionId: 'started',
       hostSessionId: 'host-started',
     });
+  });
+
+  it('driveStart_NoProfileArg_StartsOnTheDefaultProfileAndItsHarness', async () => {
+    const chat = fakeChat();
+    const drive = chatDriveActions(chat);
+
+    await drive.run('start');
+
+    expect(chat.start).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ harness: 'other', profile: 'default' }),
+    );
   });
 
   it('driveStart_ActivateFails_SaysStartFailed', async () => {
@@ -260,8 +280,9 @@ describe('chat drive actions', () => {
 // and an owned session's end emits `sessions.ended`, recorded in `ended`,
 // and its `keep` is recorded in `kept`;
 // each row holds its titles as sessions would, starting with none.
-// `options.profiles` replaces the profiles of the `claude` entry of
-// `core.agentHarnesses`; null leaves that entry out.
+// `options.profiles` replaces the profiles the harness `claude` declares (and
+// of its `core.agentHarnesses` entry); null registers no harness.
+// `options.infoFails` makes the harness's `info()` throw.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
 // process starts, each reporting its request's session id, or `host-<n>` for a
@@ -284,7 +305,7 @@ function startChatPart(
   options: {
     list?: () => Promise<HostedProcessInfo[]>;
     data?: Files;
-    harnessId?: string;
+    infoFails?: boolean;
     profiles?: { name: string; configDir: string }[] | null;
     projects?: ProjectSetting[];
   } = {},
@@ -325,7 +346,13 @@ function startChatPart(
   };
   const harnessAttaches: AgentStart[] = [];
   const harness = {
-    id: options.harnessId ?? 'claude',
+    id: 'claude',
+    info: () => {
+      if (options.infoFails === true) {
+        throw new Error('info unreadable');
+      }
+      return harnessInfo({ profiles: profiles ?? [] });
+    },
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
     attach: (request: AgentStart) => {
       harnessAttaches.push(request);
@@ -439,6 +466,7 @@ function startChatPart(
   const startSettings = {
     keepIdleMinutes: 60,
     projects: options.projects ?? [],
+    defaultHarness: 'claude',
   };
   const api = {
     channel: {
@@ -464,7 +492,9 @@ function startChatPart(
     },
     services: {
       log: (line: string) => logged.push(line),
-      agentHarnesses: harnessRegistryOf([harness as unknown as AgentHarness]),
+      agentHarnesses: harnessRegistryOf(
+        profiles === null ? [] : [harness as unknown as AgentHarness],
+      ),
       randomUuid: () => 'host-1',
       clock,
       timers,
@@ -610,7 +640,7 @@ describe('chat main part', () => {
 
   it('slots_PreviewOpen_ListsItAfterChatSessions', () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     chat.invoke('openPreview');
 
     const listed = chat.sessionsInSlots();
@@ -668,7 +698,7 @@ describe('chat main part', () => {
     'exports_$method_SessionChatDoesNotHold_Rejects ($target)',
     async ({ method, target }) => {
       const chat = startChatPart();
-      chat.invoke('start', { projectDir: '/p', profile: 'work' });
+      chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
       chat.invoke('openPreview');
       const startsBefore = chat.starts.count;
 
@@ -685,7 +715,7 @@ describe('chat main part', () => {
 
   it('exports_ActiveTime_ReadsAHeldSessionsClock', () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
 
     expect(chat.exports.activeTime('row-1')).toEqual({
       totalMs: 0,
@@ -702,7 +732,7 @@ describe('chat main part', () => {
 
   it('exports_Send_WritesToTheProcess', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     const message = { text: '/wigley:make /p', images: [] };
 
     await chat.exports.send('row-1', message);
@@ -736,7 +766,7 @@ describe('chat main part', () => {
       expected: null,
     },
     {
-      given: 'no chat harness registered',
+      given: 'no harness registered',
       profiles: null,
       sessionId: null,
       expected: null,
@@ -749,7 +779,7 @@ describe('chat main part', () => {
           profiles?.map((name) => ({ name, configDir: `/${name}` })) ?? null,
       });
       if (profiles !== null && profiles.length > 0) {
-        chat.invoke('start', { projectDir: '/p', profile: 'second' });
+        chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'second' });
       }
 
       expect(chat.exports.defaultProfile(sessionId)).toBe(expected);
@@ -783,7 +813,7 @@ describe('chat main part', () => {
         })),
       });
       if (callerProfile !== null) {
-        chat.invoke('start', { projectDir: '/p', profile: callerProfile });
+        chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: callerProfile });
       }
       const contribution = chat.contributions.find(({ tools }) =>
         tools.some((tool) => tool.name === 'start_session'),
@@ -825,7 +855,7 @@ describe('chat main part', () => {
 
   it('setHeadlessTool_CallOnAStartedRow_FlipsItsFlag_AsAMainAgentOnlyContribution', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     const contribution = chat.contributions.find(({ tools }) =>
       tools.some((tool) => tool.name === 'set_headless'),
     );
@@ -853,7 +883,7 @@ describe('chat main part', () => {
 
   it('exports_AddSendGate_HoldsAnExportedSend', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     const message = { text: 'hi', images: [] };
     const gate = chat.exports.addSendGate(() => ({
       action: 'compact',
@@ -874,7 +904,7 @@ describe('chat main part', () => {
     const chat = startChatPart();
     chat.exports.addIdleCompactThreshold(() => 150_000);
 
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
 
     expect(chat.startIdleCompactMinTokens).toEqual([150_000]);
   });
@@ -883,7 +913,7 @@ describe('chat main part', () => {
     const chat = startChatPart();
     chat.exports.addInstructions('visual note');
 
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
 
     expect(chat.startInstructions).toEqual([
       [expect.stringContaining('set_session_title'), 'visual note'],
@@ -894,7 +924,7 @@ describe('chat main part', () => {
   // session id, when a caller would still read the old one.
   it('clear_Export_ResolvesAfterHostSessionChanged', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     await chat.exports.send('row-1', { text: 'hi', images: [] });
     await settle();
 
@@ -906,7 +936,7 @@ describe('chat main part', () => {
 
   it('toolCallGuard_SubagentCall_SkipsUntilTheRowEnds', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     await settle();
     chat.processEvents[0].agentEvent({
       type: 'toolStarted',
@@ -943,9 +973,9 @@ describe('chat main part', () => {
 
   it("exports_CloseSessionsIn_EndsTheFolder'sSessions_ResolvesOnceTheyEnded", async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
-    chat.invoke('start', { projectDir: '/q', profile: 'work' });
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
+    chat.invoke('start', { projectDir: '/q', harness: 'claude', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     chat.processEvents[2]?.ended({ code: 0, error: null });
     const releaseEnds = chat.holdProcessEnds();
     let resolved = false;
@@ -966,8 +996,8 @@ describe('chat main part', () => {
 
   it('exports_CloseSessionsIn_ClosesWithProjectClosed', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
-    chat.invoke('start', { projectDir: '/q', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
+    chat.invoke('start', { projectDir: '/q', harness: 'claude', profile: 'work' });
     await settle();
 
     await chat.exports.closeSessionsIn('/p');
@@ -977,8 +1007,8 @@ describe('chat main part', () => {
 
   it('exports_Close_EndsTheRow_ResolvesOnceItEnded', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
-    chat.invoke('start', { projectDir: '/q', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
+    chat.invoke('start', { projectDir: '/q', harness: 'claude', profile: 'work' });
     await settle();
     const releaseEnds = chat.holdProcessEnds();
     let resolved = false;
@@ -1010,7 +1040,7 @@ describe('chat main part', () => {
 
   it('sessionsClosed_UserClose_SaysUser', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     await settle();
 
     chat.listeners.get('sessions.closed')?.({ sessionId: 'row-1' });
@@ -1021,7 +1051,7 @@ describe('chat main part', () => {
   it('stop_HeldRows_FiresNoSessionClosed', async () => {
     const chat = startChatPart({ data: await dataWithSavedRow() });
     await chat.heldConnects[0];
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     await settle();
 
     await chat.part.dispose?.('end');
@@ -1038,7 +1068,7 @@ describe('chat main part', () => {
     async ({ stop, kept }) => {
       const chat = startChatPart({ data: await dataWithSavedRow() });
       await chat.heldConnects[0];
-      chat.invoke('start', { projectDir: '/p', profile: 'work' });
+      chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
 
       await chat.part.dispose?.(stop);
 
@@ -1048,7 +1078,7 @@ describe('chat main part', () => {
 
   it('exports_CloseSessionsIn_EndsNeverCome_ResolvesAtStop', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     chat.holdProcessEnds();
     const closing = chat.exports.closeSessionsIn('/p');
 
@@ -1061,7 +1091,7 @@ describe('chat main part', () => {
   it('sessionsTitleChanged_HeldRow_Saves', async () => {
     const chat = startChatPart();
     await settle();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
     await settle();
     // The harness's data folder refuses every write, so each save logs this.
     const saveAttempts = () =>
@@ -1109,7 +1139,7 @@ describe('chat main part', () => {
   it('dispose_SignInRunning_CancelsIt', async () => {
     const chat = startChatPart();
     chat.invoke('logIn', 1, 'work');
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
 
     await chat.part.dispose?.('end');
 
@@ -1120,7 +1150,7 @@ describe('chat main part', () => {
 
   it('stopAll_Channel_StopsEveryProcess', () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
 
     chat.invoke('stopAll');
 
@@ -1181,7 +1211,7 @@ describe('chat main part', () => {
 
   it('restore_Throws_LogsAndSettlesTheHold', async () => {
     const chat = startChatPart({
-      harnessId: 'not-chats',
+      infoFails: true,
       list: () =>
         Promise.resolve([
           { id: 'p1', startedAt: 1, running: true, current: true },
@@ -1197,13 +1227,13 @@ describe('chat main part', () => {
   });
 
   it.each([
-    { given: 'a restore that reopens the saved row', harnessId: undefined },
-    { given: 'a restore that throws', harnessId: 'not-chats' },
+    { given: 'a restore that reopens the saved row', infoFails: false },
+    { given: 'a restore that throws', infoFails: true },
   ])(
     'exports_Restored_SettlesWithTheRestore given $given',
-    async ({ harnessId }) => {
+    async ({ infoFails }) => {
       const chat = startChatPart({
-        harnessId,
+        infoFails,
         list: () =>
           Promise.resolve([
             { id: 'p1', startedAt: 1, running: true, current: true },
@@ -1231,7 +1261,7 @@ describe('chat main part', () => {
       contribution: 'instructions',
       contribute: (view: ChatMainExports) => view.addInstructions('note'),
       observe: (chat: ReturnType<typeof startChatPart>) => {
-        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
         return chat.startInstructions.at(-1);
       },
       expected: [expect.stringContaining('set_session_title')],
@@ -1241,7 +1271,7 @@ describe('chat main part', () => {
       contribute: (view: ChatMainExports) =>
         view.addSendGate(() => ({ action: 'compact', reason: 'r' })),
       observe: async (chat: ReturnType<typeof startChatPart>) => {
-        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
         await chat.exports.send('row-1', { text: 'hi', images: [] });
         return chat.processSends.mock.calls;
       },
@@ -1252,7 +1282,7 @@ describe('chat main part', () => {
       contribute: (view: ChatMainExports) =>
         view.addIdleCompactThreshold(() => 150_000),
       observe: (chat: ReturnType<typeof startChatPart>) => {
-        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        chat.invoke('start', { projectDir: '/p', harness: 'claude', profile: 'work' });
         return chat.startIdleCompactMinTokens.at(-1);
       },
       expected: null,
@@ -1276,6 +1306,7 @@ describe('chat main part', () => {
         try {
           return chat.invoke('start', {
             project: 'New Games',
+            harness: 'claude',
             profile: 'work',
           });
         } catch (error) {
@@ -1372,7 +1403,7 @@ describe('chat main part', () => {
     const before = chat.namerChanges.count;
 
     chat.exports.addPoolProvider(fakePoolProvider());
-    chat.invoke('start', { project: 'New Games', profile: 'work' });
+    chat.invoke('start', { project: 'New Games', harness: 'claude', profile: 'work' });
 
     expect(chat.namerChanges.count).toBe(before + 1);
     expect(chat.starts.count).toBe(1);
@@ -1430,6 +1461,8 @@ function startChatOnHarness() {
   let rows = 0;
   const agentHarness = {
     id: 'claude',
+    info: () =>
+      harnessInfo({ profiles: [{ name: 'work', configDir: '/work' }] }),
     start: (
       request: AgentStart,
       events: {
@@ -1523,7 +1556,11 @@ describe('chat main part on the harness', () => {
   it('selectionWrite_SavesTheSelectedSession', async () => {
     const { harness } = startChatOnHarness();
     await settleFiles();
-    harness.invoke('start', { projectDir: '/p', profile: 'work' });
+    harness.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     await settleFiles();
 
     harness.state.publish(sessionsSelectionSlot).set('row-1');
@@ -1550,7 +1587,11 @@ describe('chat main part on the harness', () => {
     );
     const openSessionsWrites = () =>
       writes.filter((changed) => changed === OPEN_SESSIONS_FILE).length;
-    harness.invoke('start', { projectDir: '/p', profile: 'work' });
+    harness.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     await settleFiles();
     const writesBeforeStop = openSessionsWrites();
     expect(writesBeforeStop).toBeGreaterThan(0);

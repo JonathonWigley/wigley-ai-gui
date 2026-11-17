@@ -1,8 +1,10 @@
 import type { SelfTestScript, SelfTestStep } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
+import { FAKE_HARNESS_ID } from '../shared/fake-agent-harness';
 import { overrideSettings } from '../shared/plugin-manifests';
 import { SCREENSHOT_NAME } from './drive/page-driver';
+import type { RunEnvironment } from './run-mode';
 import { SELFTEST_USER_ID } from './selftest-user-plugin';
 
 // A script as the self-test received it, with the id of the plugin that handed
@@ -190,6 +192,25 @@ export function applySelfTestConfig(
     },
     pluginSettings: overrideSettings(config.pluginSettings, selfTest.settings),
   };
+}
+
+// `pluginSettings` as a fake run reads them: chat's `defaultHarness` is the
+// fake's id in the self-test and in a drive run on the fake, so main parts and
+// the page both start sessions on the fake. Every other run, and settings that
+// hold no `chat`, come back unchanged.
+export function fakeRunPluginSettings(
+  pluginSettings: Record<string, object>,
+  environment: RunEnvironment,
+): Record<string, object> {
+  const isFakeRun =
+    environment.mode === 'selfTest' ||
+    (environment.mode === 'drive' && environment.harness === 'fake');
+  if (!isFakeRun || !Object.hasOwn(pluginSettings, 'chat')) {
+    return pluginSettings;
+  }
+  return overrideSettings(pluginSettings, {
+    chat: { defaultHarness: FAKE_HARNESS_ID },
+  });
 }
 
 // The environment variable `npm run selftest` sets to the run's filter, as

@@ -175,7 +175,11 @@ import { createWindowsWindowList } from './screen-capture/windows-window-list';
 import { createMacSystemStats } from './system-stats/mac-system-stats';
 import { createUnavailableSystemStats } from './system-stats/unavailable-system-stats';
 import { createWindowsSystemStats } from './system-stats/windows-system-stats';
-import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
+import {
+  applySelfTestConfig,
+  fakeRunPluginSettings,
+  selfTestFilterOf,
+} from './selftest-config';
 import {
   SELFTEST_USER_ID,
   seedSelfTestUserPlugin,
@@ -983,9 +987,17 @@ function startMainParts(
       const started = part.start(
         createMainApi(part.manifest, {
           channels,
-          pluginSettings: () => store.current().pluginSettings,
+          pluginSettings: () =>
+            fakeRunPluginSettings(
+              store.current().pluginSettings,
+              runEnvironment,
+            ),
           onPluginSettingsChanged: (listener) =>
-            store.onChanged((config) => listener(config.pluginSettings)),
+            store.onChanged((config) =>
+              listener(
+                fakeRunPluginSettings(config.pluginSettings, runEnvironment),
+              ),
+            ),
           services,
           selfTestFor: (pluginId) =>
             isLaunchStartDone() ? null : (selfTest?.hostFor(pluginId) ?? null),
@@ -1265,7 +1277,16 @@ function createWindow(
   // current config.
   const served = () =>
     withAppliedList(
-      applySelfTestConfig(store.current(), selfTestConfig),
+      applySelfTestConfig(
+        {
+          ...store.current(),
+          pluginSettings: fakeRunPluginSettings(
+            store.current().pluginSettings,
+            runEnvironment,
+          ),
+        },
+        selfTestConfig,
+      ),
       applied.disabled(),
       applied.paused(),
     );

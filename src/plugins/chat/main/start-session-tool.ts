@@ -13,7 +13,7 @@ import type { ChatProject, LaunchRequest } from '../contract';
 export const START_SESSION_TOOL: ToolDefinition = {
   name: 'start_session',
   description:
-    "Start a new, independent chat session in the Auri app with `prompt` as its first message. It opens in the background as a new row in the side bar, without taking focus. It is a full agent session running the user's whole agent setup, not a lightweight subagent: even a one-word prompt spends tens of thousands of tokens of the user's plan, so start one only when the work needs its own session. It always runs on Claude, whichever agent calls this tool. It runs on its own: its output does not come back here, and this tool cannot message or end it. Name where it starts with `folder` or `project`, not both; with neither it starts in this session's folder when there is one. `folder` must be an absolute path to a folder that exists. `project` names one of the app's projects: a folder project starts in its folder, and a Unity pool project starts in the pool's lowest-numbered clone and claims no clone, so name the branch in `prompt` when the work needs one. `profile` defaults to the project's own profile when it has one, else to this session's when the app started this session, else to the app's first profile; a project with its own profile refuses any other. Returns the new session's id.",
+    "Start a new, independent chat session in the Auri app with `prompt` as its first message. It opens in the background as a new row in the side bar, without taking focus. It is a full agent session running the user's whole agent setup, not a lightweight subagent: even a one-word prompt spends tens of thousands of tokens of the user's plan, so start one only when the work needs its own session. It runs on the agent harness of the profile it starts under: this session's harness when the app started this session, else the app's default harness. It runs on its own: its output does not come back here, and this tool cannot message or end it. Name where it starts with `folder` or `project`, not both; with neither it starts in this session's folder when there is one. `folder` must be an absolute path to a folder that exists. `project` names one of the app's projects: a folder project starts in its folder, and a Unity pool project starts in the pool's lowest-numbered clone and claims no clone, so name the branch in `prompt` when the work needs one. `profile` defaults to the project's own profile when it has one, else to this session's when the app started this session, else to the first profile of the app's default harness; a project with its own profile refuses any other. Returns the new session's id.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -34,7 +34,7 @@ export const START_SESSION_TOOL: ToolDefinition = {
       profile: {
         type: 'string',
         description:
-          "The name of the chat profile to start under. Defaults to this session's when the app started this session, else to the app's first profile.",
+          "The name of the chat profile to start under. Defaults to this session's when the app started this session, else to the first profile of the app's default harness.",
       },
     },
     required: ['prompt'],
@@ -46,7 +46,10 @@ export interface StartSessionToolDeps {
   launch(request: LaunchRequest): string;
   // Whether the calling session is headless; its launch copies the flag.
   isHeadless(sessionId: string): boolean;
+  // The profile of the calling session when chat owns it, else the first
+  // profile of chat's default harness.
   defaultProfile(sessionId: string | null): string | null;
+  // Every registered harness's profile names, in registration order.
   profileNames(): string[];
   // Chat's checked projects, read at each call for a project's own profile.
   projects(): readonly ChatProject[];

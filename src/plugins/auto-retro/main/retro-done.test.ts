@@ -18,6 +18,7 @@ function info(
   return {
     sessionId: 'retro-1',
     projectDir: '/home/me/wigley-agents',
+    harness: 'fake',
     profile: 'work',
     activity,
     background,

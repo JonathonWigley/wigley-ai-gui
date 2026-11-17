@@ -290,6 +290,9 @@ export interface FakeAgentHarness extends AgentHarness {
   ): void;
 }
 
+// The fake's harness id.
+export const FAKE_HARNESS_ID = 'fake';
+
 // The `_meta` key the fake reads a tool call's id under.
 export const FAKE_TOOL_USE_ID_META_KEY = 'fake/toolUseId';
 
@@ -2060,7 +2063,7 @@ export function createFakeAgentHarness(
   }
 
   const harness: FakeAgentHarness = {
-    id: 'claude',
+    id: FAKE_HARNESS_ID,
     info: () => ({
       label: 'Fake',
       capabilities: {

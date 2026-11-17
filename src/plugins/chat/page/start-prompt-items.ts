@@ -1,5 +1,8 @@
 import type { Paths } from '../../../contracts/paths';
-import type { HarnessProfile } from '../../../contracts/agent';
+import type {
+  AgentHarnessInfo,
+  HarnessProfile,
+} from '../../../contracts/agent';
 import type {
   ChatProject,
   RecentFolder,
@@ -173,6 +176,16 @@ export function preselectedProfile(
   }
   const index = profiles.findIndex((profile) => profile.name === used.profile);
   return Math.max(0, index);
+}
+
+// The harness a picked recent folder starts on: the harness recorded with it
+// while `harnesses` holds it, else `defaultHarness`.
+export function recentFolderHarness(
+  folder: RecentFolder,
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>,
+  defaultHarness: string,
+): string {
+  return harnesses.has(folder.harness) ? folder.harness : defaultHarness;
 }
 
 export function profileLabel(profile: HarnessProfile): string {

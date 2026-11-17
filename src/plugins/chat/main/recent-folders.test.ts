@@ -36,26 +36,44 @@ describe('createRecentFolders', () => {
   it('record_newestFirstDeduplicated', async () => {
     const test = setUp();
     const earlier: RecentFolder[] = [
-      { projectDir: '/a', profile: 'work', lastUsed: 10 },
-      { projectDir: '/b', profile: 'personal', lastUsed: 5 },
+      { projectDir: '/a', harness: 'claude', profile: 'work', lastUsed: 10 },
+      { projectDir: '/b', harness: 'claude', profile: 'personal', lastUsed: 5 },
     ];
     await test.data.write(RECENT_FOLDERS_FILE, JSON.stringify(earlier));
     test.setNow(2000);
 
-    await test.recent.record('/b', 'work');
+    await test.recent.record('/b', 'fake', 'work');
 
     expect(await test.saved()).toEqual([
-      { projectDir: '/b', profile: 'work', lastUsed: 2000 },
-      { projectDir: '/a', profile: 'work', lastUsed: 10 },
+      { projectDir: '/b', harness: 'fake', profile: 'work', lastUsed: 2000 },
+      { projectDir: '/a', harness: 'claude', profile: 'work', lastUsed: 10 },
+    ]);
+  });
+
+  it('list_EntryWithNoHarness_ReadsAsClaude', async () => {
+    const test = setUp();
+    await test.data.write(
+      RECENT_FOLDERS_FILE,
+      JSON.stringify([{ projectDir: '/a', profile: 'work', lastUsed: 10 }]),
+    );
+
+    expect(await test.recent.list()).toEqual([
+      { projectDir: '/a', harness: 'claude', profile: 'work', lastUsed: 10 },
     ]);
   });
 
   it('addRecentFolder_WindowsCaseDiffers_OneEntry', () => {
     const earlier: RecentFolder[] = [
-      { projectDir: 'C:\\Dev\\App', profile: 'work', lastUsed: 10 },
+      {
+        projectDir: 'C:\\Dev\\App',
+        harness: 'claude',
+        profile: 'work',
+        lastUsed: 10,
+      },
     ];
     const added: RecentFolder = {
       projectDir: 'c:\\dev\\app\\',
+      harness: 'claude',
       profile: 'work',
       lastUsed: 20,
     };
@@ -69,6 +87,7 @@ describe('createRecentFolders', () => {
       { length: MAX_RECENT_FOLDERS },
       (_, index) => ({
         projectDir: `/p${index}`,
+        harness: 'claude',
         profile: 'work',
         lastUsed: 1000 - index,
       }),
@@ -76,7 +95,7 @@ describe('createRecentFolders', () => {
     const oldest = full[MAX_RECENT_FOLDERS - 1].projectDir;
     await test.data.write(RECENT_FOLDERS_FILE, JSON.stringify(full));
 
-    await test.recent.record('/new', 'work');
+    await test.recent.record('/new', 'claude', 'work');
 
     const saved = await test.saved();
     expect(saved).toHaveLength(MAX_RECENT_FOLDERS);
@@ -117,7 +136,9 @@ describe('createRecentFolders', () => {
     const read = test.data.read;
     test.data.read = () => Promise.reject(new Error('EIO: i/o error'));
 
-    await expect(test.recent.record('/b', 'work')).rejects.toThrow('EIO');
+    await expect(test.recent.record('/b', 'claude', 'work')).rejects.toThrow(
+      'EIO',
+    );
 
     test.data.read = read;
     expect(await test.data.read(RECENT_FOLDERS_FILE)).toBe(earlier);
@@ -127,7 +148,7 @@ describe('createRecentFolders', () => {
     const test = setUp();
     await test.data.write(RECENT_FOLDERS_FILE, '{oops');
 
-    await expect(test.recent.record('/b', 'work')).rejects.toThrow();
+    await expect(test.recent.record('/b', 'claude', 'work')).rejects.toThrow();
 
     expect(await test.data.read(RECENT_FOLDERS_FILE)).toBe('{oops');
   });
@@ -135,10 +156,10 @@ describe('createRecentFolders', () => {
   it('record_missingFile_writesTheFirstEntry', async () => {
     const test = setUp();
 
-    await test.recent.record('/a', 'work');
+    await test.recent.record('/a', 'claude', 'work');
 
     expect(await test.saved()).toEqual([
-      { projectDir: '/a', profile: 'work', lastUsed: 1000 },
+      { projectDir: '/a', harness: 'claude', profile: 'work', lastUsed: 1000 },
     ]);
   });
 
@@ -146,8 +167,8 @@ describe('createRecentFolders', () => {
     const test = setUp();
 
     await Promise.all([
-      test.recent.record('/a', 'work'),
-      test.recent.record('/b', 'personal'),
+      test.recent.record('/a', 'claude', 'work'),
+      test.recent.record('/b', 'claude', 'personal'),
     ]);
 
     expect((await test.saved()).map((folder) => folder.projectDir)).toEqual([

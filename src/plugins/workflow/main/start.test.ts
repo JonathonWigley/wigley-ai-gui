@@ -300,6 +300,7 @@ function chatHeld(sessionId: string, profile: string): ChatSessionInfo {
   return {
     sessionId,
     projectDir: '/p',
+    harness: 'fake',
     profile,
     activity: 'idle',
     background: 0,

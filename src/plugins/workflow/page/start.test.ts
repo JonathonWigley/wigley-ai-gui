@@ -416,6 +416,7 @@ describe('workflow page part', () => {
     return {
       sessionId: 's1',
       projectDir: '/p',
+      harness: 'fake',
       profile: 'work',
       activity: 'idle',
       background: 0,

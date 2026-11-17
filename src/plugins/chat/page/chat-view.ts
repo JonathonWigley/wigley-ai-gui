@@ -16,7 +16,10 @@ import type {
   ScrollStep,
   TextEditor,
 } from '../../../contracts/editor';
-import type { ChatEntryKind } from '../../../contracts/agent';
+import type {
+  AgentHarnessInfo,
+  ChatEntryKind,
+} from '../../../contracts/agent';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type {
@@ -190,7 +193,8 @@ export interface HubKeys {
 // session's row shows, as a message sent there does. `composerOf` is a held
 // session's composer surface, for the part that places its activity dock.
 // `sessionFactsSource` is a held session's facts for the hub's Session section,
-// read live: `onChanged` fires after each status line draw. `hub` is the
+// read live: `onChanged` fires after each status line draw and on each change
+// of `core.agentHarnesses`. `hub` is the
 // session hub's keys. `mount` builds the Chat tab of a session whose row has an
 // owner into `element`, with the throws and the wait `ChatMount` states.
 export interface ChatTabs extends ChatView {
@@ -268,6 +272,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   slots: ChatSlotReaders;
   paths: Paths;
   homeDir: string;
+  // `core.agentHarnesses`, for the Session facts' harness label.
+  harnesses: Pick<KeyedSlotReader<AgentHarnessInfo>, 'all' | 'on'>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'setActivity'>;
   activeSessionId(): string | null;
   ownerOf(sessionId: string): string | null | undefined;
@@ -973,15 +979,27 @@ function drawStatusLine(tab: HeldTab) {
 
 function sessionFactsSourceOf(
   tab: HeldTab,
-  deps: Pick<ChatViewDeps, 'homeDir' | 'paths'>,
+  deps: Pick<ChatViewDeps, 'homeDir' | 'paths' | 'harnesses'>,
 ): SessionFactsSource {
   return {
-    input: () => sessionFactsOf(composerInputOf(tab), tab.state, deps),
+    input: () =>
+      sessionFactsOf(composerInputOf(tab), tab.state, {
+        homeDir: deps.homeDir,
+        paths: deps.paths,
+        harnesses: deps.harnesses.all(),
+      }),
     onChanged(listener) {
       // A wrapper per subscription, so each handle removes only its own.
       const wrapped = () => listener();
       tab.factsListeners.add(wrapped);
-      return { dispose: () => tab.factsListeners.delete(wrapped) };
+      // A label that registers late redraws the harness tag.
+      const harnessChanges = deps.harnesses.on(wrapped);
+      return {
+        dispose: () => {
+          tab.factsListeners.delete(wrapped);
+          harnessChanges.dispose();
+        },
+      };
     },
   };
 }

@@ -247,9 +247,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 - **The drive `wait-log` misses lines logged before it starts** — *agent-ready*: a driver waiting on a line a page
   start already logged never sees it. Read earlier lines back with `drive log`, or let `wait-log` scan the log it
   already holds.
-- **Chat picks a harness** — *agent-ready*: `StartRequest.harness`, a harness step in the start prompt (skipped with
-  one harness), replacing `CHAT_HARNESS_ID = 'claude'` (`src/plugins/chat/contract.ts`; also used by chat's
-  `lookups.ts`, `chat-sessions.ts` and the usage plugin).
 - **Control roles** — *agent-ready*: controls carry a `role` (`model`, `permissionMode`, `effort`) that chat's pick
   commands find them by (`src/plugins/chat/page/control-commands.ts`), rather than the fixed ids `mode` / `effort` /
   `model`.

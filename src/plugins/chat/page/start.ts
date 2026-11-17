@@ -23,7 +23,6 @@ import {
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
-  CHAT_HARNESS_ID,
   type ChatChannel,
   chatCommandsSlot,
   type ChatComposerPart,
@@ -269,6 +268,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       log: services.log,
       activeTime: (sessionId) => view.activeTime(sessionId),
     });
+    const harnessSlot = api.state.read(coreAgentHarnessesSlot);
     const view = mountChatView({
       channel: api.channel,
       slots: {
@@ -281,6 +281,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       },
       paths: services.paths,
       homeDir: services.homeDir,
+      harnesses: harnessSlot,
       sessions,
       activeSessionId: () => active.get() ?? null,
       ownerOf: (sessionId) => rows.get(sessionId)?.owner,
@@ -336,7 +337,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       hasSavedPlace: (sessionId) => savedPlaceIds.has(sessionId),
     });
     sessions.addRowPart(rowClock.part);
-    const harnessSlot = api.state.read(coreAgentHarnessesSlot);
     const rowProfile = createRowProfile({
       layouts,
       kit: partDeps,
@@ -373,7 +373,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       signIn,
       channel: api.channel,
       chooseFolder: services.chooseFolder,
-      profiles: () => harnessSlot.get(CHAT_HARNESS_ID)?.profiles ?? [],
+      harnesses: () => harnessSlot.all(),
+      defaultHarness: () => api.settings().defaultHarness,
       reveal: (sessionId) => view.reveal(sessionId),
       paths: services.paths,
       homeDir: services.homeDir,

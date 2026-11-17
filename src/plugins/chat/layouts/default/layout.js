@@ -557,7 +557,7 @@ function fillSessionHeader(header, input, kit) {
   for (const worktree of input.worktrees) {
     kit.tag(tags, worktree, 'accent').title = `Worktree ${worktree}`;
   }
-  kit.tag(tags, input.harness);
+  kit.tag(tags, input.harnessLabel);
   if (input.modelEffort !== null) {
     kit.tag(tags, input.modelEffort);
   }
@@ -574,6 +574,7 @@ function sameSessionFacts(a, b) {
     a.branch === b.branch &&
     a.folder === b.folder &&
     a.harness === b.harness &&
+    a.harnessLabel === b.harnessLabel &&
     a.modelEffort === b.modelEffort;
   const sameWorktrees =
     a.worktrees.length === b.worktrees.length &&
@@ -893,7 +894,7 @@ const layout = {
     };
   },
   // The session hub's header: the repo with its branch, the folder, then a tag
-  // per worktree, the harness and the model · effort. An update that changes
+  // per worktree, the harness's label and the model · effort. An update that changes
   // nothing draws nothing, keeping an open tooltip and a selection.
   sessionFacts(parent, input, kit) {
     const header = el('div', 'chat-session-header');

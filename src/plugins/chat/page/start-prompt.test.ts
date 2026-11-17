@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { AccountStatus, HarnessProfile } from '../../../contracts/agent';
+import type {
+  AccountStatus,
+  AgentHarnessInfo,
+  HarnessProfile,
+} from '../../../contracts/agent';
 import type { ToastTone } from '../../../contracts/plugin';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import {
   filterPicker,
@@ -44,6 +49,7 @@ const personal: HarnessProfile = {
 
 const app: RecentFolder = {
   projectDir: '/Users/u/dev/app',
+  harness: 'claude',
   profile: 'personal',
   lastUsed: 2,
 };
@@ -80,14 +86,22 @@ async function flush() {
   }
 }
 
+// `profiles` are those of the one harness `claude`, unless `harnesses`
+// replaces every harness; `defaultHarness` is `claude` unless given.
 function setUp(
   options: {
     profiles?: HarnessProfile[];
+    harnesses?: ReadonlyMap<string, AgentHarnessInfo>;
+    defaultHarness?: string;
     recent?: RecentFolder[];
     answers?: Partial<Answers>;
   } = {},
 ) {
-  const profiles = options.profiles ?? [work, personal];
+  const harnesses =
+    options.harnesses ??
+    new Map([
+      ['claude', harnessInfo({ profiles: options.profiles ?? [work, personal] })],
+    ]);
   const recent = options.recent ?? [app];
   const opened: Opened[] = [];
   const invoked: string[] = [];
@@ -182,7 +196,8 @@ function setUp(
     },
     channel: { invoke } as Parameters<typeof createStartPrompt>[0]['channel'],
     chooseFolder: () => answers.chooseFolder(),
-    profiles: () => profiles,
+    harnesses: () => harnesses,
+    defaultHarness: () => options.defaultHarness ?? 'claude',
     reveal: (sessionId) => revealed.push(sessionId),
     paths: posixPaths,
     homeDir: HOME,
@@ -385,8 +400,8 @@ describe('start prompt', () => {
   it('folderStep_Filter_NameOutranksAnotherRowsPath', async () => {
     const run = setUp({
       recent: [
-        { projectDir: '/Users/u/gui/backlog', profile: 'work', lastUsed: 3 },
-        { projectDir: '/Users/u/dev/wigley-gui', profile: 'work', lastUsed: 2 },
+        { projectDir: '/Users/u/gui/backlog', harness: 'claude', profile: 'work', lastUsed: 3 },
+        { projectDir: '/Users/u/dev/wigley-gui', harness: 'claude', profile: 'work', lastUsed: 2 },
       ],
     });
     await flush();
@@ -532,6 +547,7 @@ describe('start prompt', () => {
     expect(run.resumed).toEqual([
       {
         projectDir: '/Users/u/dev/app',
+        harness: 'claude',
         profile: 'work',
         hostSessionId: 'a',
         title: 'Fix login',
@@ -610,7 +626,7 @@ describe('start prompt', () => {
     pickItem(run.opened[1], 'work · ~/.claude');
     await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
     ]);
     expect(run.revealed).toEqual(['row-1']);
     expect(run.logs).toEqual([expect.stringContaining('work')]);
@@ -623,7 +639,7 @@ describe('start prompt', () => {
     await flush();
     expect(run.opened.map((opened) => opened.title)).toEqual(['Folder']);
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
     ]);
     expect(run.revealed).toEqual(['row-1']);
   });
@@ -641,7 +657,7 @@ describe('start prompt', () => {
     pickItem(run.opened[1], 'personal · ~/.claude-personal');
     await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/new', profile: 'personal' },
+      { projectDir: '/Users/u/dev/new', harness: 'claude', profile: 'personal' },
     ]);
   });
 
@@ -671,6 +687,83 @@ describe('start prompt', () => {
     expect(run.logs).toEqual([expect.stringContaining('no dialog')]);
     expect(run.toasts).toEqual([
       { text: expect.stringContaining('no dialog'), tone: 'error' },
+    ]);
+  });
+
+  it('open_DefaultHarnessNotRegistered_ToastsAndOpensNothing', async () => {
+    const run = setUp({ defaultHarness: 'gone' });
+    await flush();
+    expect(run.opened).toEqual([]);
+    expect(run.toasts).toEqual([
+      {
+        text: 'No agent harness "gone" is registered. Set chat\'s defaultHarness to a registered harness.',
+        tone: 'error',
+      },
+    ]);
+  });
+
+  it('recentFolder_OtherHarness_ListsThatHarnessesProfiles', async () => {
+    const run = setUp({
+      harnesses: new Map([
+        ['claude', harnessInfo({ profiles: [work, personal] })],
+        [
+          'fake',
+          harnessInfo({
+            profiles: [
+              { name: 'spare', configDir: '~/.spare' },
+              { name: 'extra', configDir: '~/.extra' },
+            ],
+          }),
+        ],
+      ]),
+      recent: [{ ...app, harness: 'fake', profile: 'extra' }],
+    });
+    await flush();
+    pickFolder(run.opened[0], '~/dev/app');
+    await flush();
+    expect(run.opened[1].labels).toEqual([
+      'spare · ~/.spare',
+      'extra · ~/.extra',
+    ]);
+    expect(run.opened[1].selected).toBe(1);
+
+    pickItem(run.opened[1], 'extra · ~/.extra');
+    await flush();
+
+    expect(run.started).toEqual([
+      { projectDir: '/Users/u/dev/app', harness: 'fake', profile: 'extra' },
+    ]);
+  });
+
+  it('projectStep_ProjectPinsAnotherHarnessesProfile_StartsOnThatHarness', async () => {
+    const spareProject: ChatProject = {
+      kind: 'pool',
+      name: 'Spare',
+      pool: 'spare-pool',
+      profile: 'spare',
+    };
+    const run = setUp({
+      harnesses: new Map([
+        ['claude', harnessInfo({ profiles: [work] })],
+        [
+          'fake',
+          harnessInfo({
+            profiles: [{ name: 'spare', configDir: '~/.spare' }],
+          }),
+        ],
+      ]),
+      answers: {
+        projects: () => Promise.resolve([spareProject]),
+        projectPastSessions: () =>
+          Promise.resolve([{ ...alpha, projectDir: '/c/1' }]),
+      },
+    });
+    await flush();
+
+    await pickInTurn(run, 'Spare · spare-pool', NEW_SESSION_LABEL);
+
+    expect(run.started).toEqual([
+      { project: 'Spare', harness: 'fake', profile: 'spare' },
     ]);
   });
 
@@ -728,7 +821,7 @@ describe('start prompt', () => {
     pickItem(run.last(), NEW_SESSION_LABEL);
     await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
     ]);
     expect(run.resumed).toEqual([]);
   });
@@ -740,6 +833,7 @@ describe('start prompt', () => {
     expect(run.resumed).toEqual([
       {
         projectDir: '/Users/u/dev/app',
+        harness: 'claude',
         profile: 'work',
         hostSessionId: 'b',
         title: 'Beta',
@@ -1012,7 +1106,7 @@ describe('start prompt', () => {
       expect.stringContaining('claude not found'),
     );
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work' },
+      { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
     ]);
   });
 
@@ -1181,6 +1275,7 @@ describe('start prompt', () => {
         recent: [
           {
             projectDir: '/Users/u/Documents/ai-dev',
+            harness: 'claude',
             profile: 'personal',
             lastUsed: 3,
           },
@@ -1227,6 +1322,7 @@ describe('start prompt', () => {
     expect(run.resumed).toEqual([
       {
         projectDir: '/c/3',
+        harness: 'claude',
         profile: 'work',
         hostSessionId: 'b',
         title: 'Beta',
@@ -1241,6 +1337,7 @@ describe('start prompt', () => {
       picks: [NEW_GAMES_LABEL],
       started: {
         project: 'New Games',
+        harness: 'claude',
         profile: 'work',
       },
     },
@@ -1249,6 +1346,7 @@ describe('start prompt', () => {
       picks: [AI_DEV_LABEL, 'work · ~/.claude'],
       started: {
         project: 'Wigley AI Dev',
+        harness: 'claude',
         profile: 'work',
       },
     },
@@ -1276,7 +1374,7 @@ describe('start prompt', () => {
         await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
         return run;
       },
-      started: { projectDir: '/Users/u/dev/app', profile: 'work' },
+      started: { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
       toasts: [],
       unlisted: 'pastSessions',
     },
@@ -1288,7 +1386,7 @@ describe('start prompt', () => {
         await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
         return run;
       },
-      started: { projectDir: '/Users/u/dev/app', profile: 'work' },
+      started: { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
       toasts: [],
       unlisted: null,
     },
@@ -1304,7 +1402,7 @@ describe('start prompt', () => {
         await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
         return run;
       },
-      started: { projectDir: '/Users/u/dev/app', profile: 'work' },
+      started: { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
       toasts: [{ text: expect.stringContaining('no folder'), tone: 'error' }],
       unlisted: null,
     },
@@ -1316,7 +1414,7 @@ describe('start prompt', () => {
         await pickInTurn(run, NEW_GAMES_LABEL);
         return run;
       },
-      started: { project: 'New Games', profile: 'work' },
+      started: { project: 'New Games', harness: 'claude', profile: 'work' },
       toasts: [],
       unlisted: null,
     },
@@ -1338,7 +1436,7 @@ describe('start prompt', () => {
         await pickInTurn(run, NEW_GAMES_LABEL);
         return run;
       },
-      started: { project: 'New Games', profile: 'work' },
+      started: { project: 'New Games', harness: 'claude', profile: 'work' },
       toasts: [],
       unlisted: 'projectPastSessions',
     },

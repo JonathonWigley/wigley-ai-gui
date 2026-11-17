@@ -2,12 +2,16 @@ import type { SessionControl, UserMessage } from '../../../contracts/agent';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import { isJsonObject } from '../../../shared/json';
 import { type SessionTitles, TITLE_SOURCES } from '../../sessions/contract';
+import { UNRECORDED_HARNESS_ID } from './lookups';
 
 export const OPEN_SESSIONS_FILE = 'open-sessions.json';
 
 export interface SavedSession {
   hostSessionId: string;
   projectDir: string;
+  // The id of the harness the row ran on. A file written without it reads as
+  // UNRECORDED_HARNESS_ID.
+  harness: string;
   profile: string;
   // Whether a message was ever sent in the session.
   sent: boolean;
@@ -73,6 +77,7 @@ export const NO_TITLES: SessionTitles = {
 // A saved session as the file holds it: a file written before a field was
 // saved has none.
 type LaterSavedField =
+  | 'harness'
   | 'titles'
   | 'processId'
   | 'queued'
@@ -196,6 +201,7 @@ function isStoredSession(value: unknown): value is StoredSession {
     isJsonObject(value) &&
     typeof value.hostSessionId === 'string' &&
     typeof value.projectDir === 'string' &&
+    (value.harness === undefined || typeof value.harness === 'string') &&
     typeof value.profile === 'string' &&
     typeof value.sent === 'boolean' &&
     typeof value.busy === 'boolean' &&
@@ -245,6 +251,7 @@ function parseSavedSessions(text: string): SavedSessions {
     sessions: (sessions as StoredSession[]).map((stored) => ({
       hostSessionId: stored.hostSessionId,
       projectDir: stored.projectDir,
+      harness: stored.harness ?? UNRECORDED_HARNESS_ID,
       profile: stored.profile,
       sent: stored.sent,
       busy: stored.busy,

@@ -13,6 +13,7 @@ const TWO_SESSIONS: SavedSessions = {
     {
       hostSessionId: 's-alpha',
       projectDir: '/work/alpha',
+      harness: 'claude',
       profile: 'personal',
       sent: true,
       busy: false,
@@ -43,6 +44,7 @@ const TWO_SESSIONS: SavedSessions = {
     {
       hostSessionId: 's-beta',
       projectDir: '/work/beta',
+      harness: 'fake',
       profile: 'work',
       sent: false,
       busy: true,
@@ -72,6 +74,7 @@ const ONE_SESSION: SavedSessions = {
     {
       hostSessionId: 's-gamma',
       projectDir: '/work/gamma',
+      harness: 'fake',
       profile: 'work',
       sent: true,
       busy: true,
@@ -138,6 +141,7 @@ describe('createOpenSessions', () => {
           {
             hostSessionId: 's-alpha',
             projectDir: '/work/alpha',
+            harness: 'claude',
             profile: 'personal',
             sent: true,
             busy: false,
@@ -169,6 +173,16 @@ describe('createOpenSessions', () => {
       ]),
       expected: {
         sessions: [TWO_SESSIONS.sessions[0]],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a record with no harness',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[1], harness: undefined },
+      ]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[1], harness: 'claude' }],
         selectedHostSessionId: null,
       },
     },
@@ -287,6 +301,10 @@ describe('createOpenSessions', () => {
           titles: { user: null, agent: 7, firstMessage: null },
         },
       ]),
+    },
+    {
+      file: 'harness a number',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], harness: 7 }]),
     },
     {
       file: 'busy a string',

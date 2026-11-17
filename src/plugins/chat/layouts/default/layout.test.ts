@@ -1579,6 +1579,7 @@ describe('default chat layout surfaces', () => {
         folder: '~/dev/app',
         worktrees: ['app-fix'],
         harness: 'claude',
+        harnessLabel: 'Claude Code',
         modelEffort: 'Opus 5 · high',
       },
       shown: {
@@ -1586,7 +1587,7 @@ describe('default chat layout surfaces', () => {
         folder: '~/dev/app',
         tags: [
           'tag:accent:app-fix',
-          'tag:neutral:claude',
+          'tag:neutral:Claude Code',
           'tag:neutral:Opus 5 · high',
         ],
       },
@@ -1599,12 +1600,13 @@ describe('default chat layout surfaces', () => {
         folder: '~/dev/app',
         worktrees: [],
         harness: 'claude',
+        harnessLabel: 'Claude Code',
         modelEffort: null,
       },
       shown: {
         title: ['span.chat-session-repo:app'],
         folder: '~/dev/app',
-        tags: ['tag:neutral:claude'],
+        tags: ['tag:neutral:Claude Code'],
       },
     },
   ])('sessionFacts_Default_$case', ({ input, shown }) => {
@@ -1630,6 +1632,7 @@ describe('default chat layout surfaces', () => {
       folder: '~/dev/app',
       worktrees: [],
       harness: 'claude',
+      harnessLabel: 'Claude Code',
       modelEffort: null,
     };
     const view = drawSurface('sessionFacts', facts, kit);
@@ -1651,6 +1654,7 @@ describe('default chat layout surfaces', () => {
       folder: '~/dev/app',
       worktrees: ['app-fix'],
       harness: 'claude',
+      harnessLabel: 'Claude Code',
       modelEffort: null,
     };
     const view = drawSurface('sessionFacts', facts, kit);
@@ -1661,6 +1665,27 @@ describe('default chat layout surfaces', () => {
     expect(
       asFake(view.element).children.map((child, i) => child === before[i]),
     ).toEqual([true, true, true]);
+  });
+
+  it('sessionFacts_Default_LabelOnlyUpdate_RedrawsTheHarnessTag', () => {
+    const { kit } = fakeSurfaceKit();
+    const facts: SessionFactsInput = {
+      repo: 'app',
+      branch: 'main',
+      folder: '~/dev/app',
+      worktrees: [],
+      harness: 'claude',
+      harnessLabel: 'claude',
+      modelEffort: null,
+    };
+    const view = drawSurface('sessionFacts', facts, kit);
+
+    view.update?.({ ...facts, harnessLabel: 'Claude Code' });
+
+    const [, , tags] = asFake(view.element).children;
+    expect(
+      tags.children.map((tag) => `${tag.dataset.part}:${tag.textContent}`),
+    ).toEqual(['tag:neutral:Claude Code']);
   });
 
   it('imageViewer_Default_UpdateMovesCounterAndHidesItForOneAndTheRemoveHintWhenNotRemovable', () => {

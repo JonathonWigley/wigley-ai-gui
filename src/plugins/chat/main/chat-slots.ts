@@ -33,7 +33,7 @@ export interface SessionSlots {
   info(): ChatSessionInfo;
   setInfo(
     change: Partial<
-      Omit<ChatSessionInfo, 'sessionId' | 'projectDir' | 'profile'>
+      Omit<ChatSessionInfo, 'sessionId' | 'projectDir' | 'profile' | 'harness'>
     >,
   ): void;
   entries(): readonly ChatEntry[];

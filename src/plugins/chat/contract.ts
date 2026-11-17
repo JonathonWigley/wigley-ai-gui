@@ -21,10 +21,6 @@ import type {
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
 import type { SessionTitles } from '../sessions/contract';
 
-// The `id` of the agent harness chat runs its sessions on: a new session starts
-// under one of the profiles of chat's harness.
-export const CHAT_HARNESS_ID = 'claude';
-
 // The layout preview's row host session id; no harness holds a session by it.
 export const CHAT_PREVIEW_HOST_ID = 'chat-layout-preview';
 
@@ -40,8 +36,10 @@ export const HEADLESS_NOTE =
 export const HEADLESS_OFF_NOTE =
   'This session is no longer headless: send each round to the form again.';
 
+// `harness` is the id of the harness the folder's session ran on.
 export interface RecentFolder {
   projectDir: string;
+  harness: string;
   profile: string;
   lastUsed: number;
 }
@@ -77,7 +75,9 @@ export interface PoolProviderHandle extends Disposable {
 // setting.
 export type StartTarget = { projectDir: string } | { project: string };
 
-export type StartRequest = StartTarget & { profile: string };
+// `harness` is the id of the harness the session runs on, and `profile` one of
+// that harness's profiles.
+export type StartRequest = StartTarget & { harness: string; profile: string };
 
 // `unattended`: true for a session nobody answers: chat denies each permission
 // prompt at once. Kept with the row across a relaunch.
@@ -114,9 +114,11 @@ export interface ProjectPastSessionRow extends PastSessionRow {
 // `title` is the saved session's title, which the new row takes as its
 // first-message title. `instructions` and `owner` are as `LaunchRequest` has
 // them; a resume with `owner` opens its row unselected. True `headless` opens
-// the row headless, as a stashed session that was headless resumes.
+// the row headless, as a stashed session that was headless resumes. With no
+// `harness` the session resumes on the harness that declares `profile`.
 export interface ResumeRequest {
   projectDir: string;
+  harness?: string;
   profile: string;
   hostSessionId: string;
   title: string;
@@ -171,9 +173,11 @@ export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
 
 // A saved session a resume section lists. `note` is the section's word about
 // the session, drawn after its title. True `headless` resumes it headless.
+// `harness` is as `ResumeRequest` has it.
 export interface ResumeSectionRow {
   hostSessionId: string;
   projectDir: string;
+  harness?: string;
   profile: string;
   title: string;
   note?: string;
@@ -210,10 +214,12 @@ export interface ReturnedMessage extends UserMessage {
 // `sessionId` is the sessions plugin's id for the row. A session's row lasts
 // until the user closes it, across a relaunch, where it comes back resting
 // with its earlier conversation read again; a closed session's keys are
-// deleted at once.
+// deleted at once. `harness` is the id of the harness the row runs on, fixed
+// when the row opens.
 export interface ChatSessionInfo {
   sessionId: string;
   projectDir: string;
+  harness: string;
   profile: string;
   activity: ProcessActivity;
   // The subagents and background tasks still running in the session's
@@ -349,7 +355,8 @@ export interface ChatChannel extends ChannelShape {
     // folders and those in the OS's temp folders left out.
     recentFolders(): Promise<RecentFolder[]>;
     // The new row's sessionId; a pool project's row starts in the pool's
-    // lowest-numbered clone. Throws, opening nothing, on an unknown project, a
+    // lowest-numbered clone. Throws, opening nothing, on a harness not
+    // registered, a profile its harness does not declare, an unknown project, a
     // profile other than the project's, no pool provider, or a pool with no
     // clones.
     start(request: StartRequest): string;
@@ -526,7 +533,7 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // default, which chat never sends.
 // `sessionOpened`: a session chat now owns, with the profile it opened under,
 // its host id and folder, and how it came to open; a row whose profile is not
-// among the profiles of chat's harness fires none. A restored, resumed or
+// among the profiles of its harness fires none. A restored, resumed or
 // attached row fires it before the session's slots exist and before chat's
 // exports know the row. A new session's row fires it once its harness reports
 // the host id, after its slots exist and the sessions row holds that id; it
@@ -603,10 +610,10 @@ export interface ChatMainExports {
   // row's process starts; `owner` names the plugin the row belongs to, and
   // such a row raises no `Turn finished` mark. Resolves to the new row's
   // sessionId; rejects, opening nothing, on an image chat refuses (with the
-  // refusal text), an unknown profile, no chat harness, an unknown project, a
-  // profile other than the project's, no pool provider, or a pool with no
-  // clones. A pool project's session starts in the pool's lowest-numbered
-  // clone.
+  // refusal text), a profile no registered harness declares, an unknown
+  // project, a profile other than the project's, no pool provider, or a pool
+  // with no clones. A pool project's session starts in the pool's
+  // lowest-numbered clone. It runs on the harness that declares its profile.
   launch(request: LaunchRequest): Promise<string>;
   // The channel's resume for another plugin: resolves to the row's sessionId.
   // A row chat holds for the host id is returned as it is only when its owner
@@ -629,8 +636,8 @@ export interface ChatMainExports {
   // changes, since a running process keeps the instructions it started with.
   launchedHeadless(sessionId: string): boolean;
   // The profile a launch takes when its caller names none: the profile of a
-  // session chat owns, else the first profile of chat's harness; null when
-  // chat's harness is not registered or has no profiles.
+  // session chat owns, else the first profile of chat's `defaultHarness`; null
+  // when that harness is not registered or has no profiles.
   // `sessionId` is null when the launch comes from no session.
   defaultProfile(sessionId: string | null): string | null;
   // Settles once main's restore of the saved rows ends, a failed one

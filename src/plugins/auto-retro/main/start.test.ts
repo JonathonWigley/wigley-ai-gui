@@ -69,6 +69,7 @@ function sessionInfo(
   return {
     sessionId,
     projectDir: '/home/me/wigley-agents',
+    harness: 'fake',
     profile: 'work',
     activity,
     background: 0,

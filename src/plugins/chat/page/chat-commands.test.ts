@@ -128,6 +128,7 @@ function session(
   const state: ChatSessionState = {
     sessionId: 'row-1',
     projectDir: '/Users/u/dev/app',
+    harness: 'fake',
     profile: 'work',
     entries: [],
     controls: [mode],

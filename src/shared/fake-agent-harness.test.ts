@@ -25,6 +25,7 @@ import {
   FAKE_COMPACT_TEXT,
   FAKE_END_TEXT,
   FAKE_HISTORY_IMAGES,
+  FAKE_HARNESS_ID,
   FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
@@ -1717,6 +1718,8 @@ describe('createFakeAgentHarness', () => {
       { id: 'model', role: 'model', value: 'fake-small' },
       { id: 'verbosity', role: undefined, value: 'brief' },
     ]);
+    expect(harness.id).toBe('fake');
+    expect(FAKE_HARNESS_ID).toBe('fake');
     expect(harness.info()).toEqual({
       label: 'Fake',
       capabilities: {

@@ -26,6 +26,7 @@ import {
   FAKE_VISUAL_TEXT,
   type FakeAgentCall,
   type FakeAgentProcessRecord,
+  FAKE_HARNESS_ID,
   isFakeAgentHarness,
   markRun,
   type RunMark,
@@ -75,6 +76,9 @@ export interface ChatSelfTestDeps {
   >;
   sessions: Pick<SessionsMainExports, 'activate' | 'connect'>;
   harnesses: AgentHarnessRegistry;
+  // Chat's `defaultHarness` setting, read at each run: every session the run
+  // starts runs on it.
+  defaultHarness(): string;
 }
 
 interface ChatSelfTestResult {
@@ -1314,12 +1318,20 @@ function selftestProcess(
   return records.at(-1) ?? null;
 }
 
+// `harness` is the harness id of the self-test project's row; null when chat
+// holds none.
 function fixtureProblems(
   { permission, round }: ChatSelfTestResult,
   process: FakeAgentProcessRecord | null,
   projectDir: string,
+  harness: string | null,
 ): string[] {
   const problems: string[] = [];
+  if (harness !== FAKE_HARNESS_ID) {
+    problems.push(
+      `the self-test session runs on ${harness ?? 'no harness'}, not ${FAKE_HARNESS_ID}`,
+    );
+  }
   const isAllowed = permission?.allowed === true && permission.reason === null;
   if (!isAllowed) {
     problems.push(`permission answer ${JSON.stringify(permission)}`);
@@ -1413,7 +1425,7 @@ interface SelfTestProjects {
 // self-test's session that follows `fake: cold`, with the fake holding the
 // compaction until problems reads the run; it needs no auto-compact plugin.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
-  const { chat, sessions, harnesses, files } = deps;
+  const { chat, sessions, harnesses, files, defaultHarness } = deps;
   // Cleared when making them fails, so a later run tries again.
   let made: Promise<SelfTestProjects> | null = null;
   let previousRelay: ConnectedSession | null = null;
@@ -1503,9 +1515,14 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     run: number,
     { selftest, second, images }: SelfTestProjects,
   ): Promise<ChatSelfTestResult> {
-    chat.start({ projectDir: second, profile: 'work' });
-    const imagesId = chat.start({ projectDir: images, profile: 'work' });
-    const id = chat.start({ projectDir: selftest, profile: 'work' });
+    const harness = defaultHarness();
+    chat.start({ projectDir: second, harness, profile: 'work' });
+    const imagesId = chat.start({
+      projectDir: images,
+      harness,
+      profile: 'work',
+    });
+    const id = chat.start({ projectDir: selftest, harness, profile: 'work' });
     await attachImages(imagesId);
     sessions.activate(id);
     const process = selftestProcess(marks, selftest, false);
@@ -1529,7 +1546,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       const relay = sessions.connect({
         sessionId: null,
         projectDir: selftest,
-        harness: 'claude',
+        harness: FAKE_HARNESS_ID,
         rowId: id,
       });
       previousRelay = relay;
@@ -1549,6 +1566,8 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         result,
         selftestProcess(marks, selftest, false),
         selftest,
+        chat.sessions().find((held) => held.projectDir === selftest)
+          ?.harness ?? null,
       ),
       ...resumedProblems(selftestProcess(marks, selftest, true), selftest),
       ...pastSessionProblems(marks, selftest),

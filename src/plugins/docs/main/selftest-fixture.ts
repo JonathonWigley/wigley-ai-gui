@@ -1,6 +1,7 @@
 import type { InstalledPlugin } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
+import { FAKE_HARNESS_ID } from '../../../shared/fake-agent-harness';
 import type {
   IndexContext,
   IndexDocument,
@@ -21,7 +22,7 @@ const LONG_SECTION = `\n## Long section\n\n${Array.from(
 ).join('\n')}`;
 const KEPT_RULE = 'style.md';
 // One global doc per index load state other than `launch`, each written to
-// `<state>.md` in the load-states folder and judged for Claude only.
+// `<state>.md` in the load-states folder and judged for the fake harness only.
 const LOAD_STATE_DOCS: readonly LoadStateRecord[] = [
   { state: 'on-demand', reason: 'loads when invoked' },
   { state: 'listed', reason: 'listed by name only' },
@@ -275,11 +276,15 @@ function entry(
   };
 }
 
+// A doc's load states, keyed by the fake's id: a fake run registers it, so its
+// chips draw; no `codex` harness registers, so a `codex` record draws none.
 function state(
-  claude: LoadStateRecord,
+  primary: LoadStateRecord,
   codex?: LoadStateRecord,
-): Partial<Record<'claude' | 'codex', LoadStateRecord>> {
-  return codex === undefined ? { claude } : { claude, codex };
+): Partial<Record<string, LoadStateRecord>> {
+  return codex === undefined
+    ? { [FAKE_HARNESS_ID]: primary }
+    : { [FAKE_HARNESS_ID]: primary, codex };
 }
 
 // The Backlog self-test's git repo (written by Backlog's fixture): its
@@ -459,7 +464,7 @@ function indexDocument(
       path: fixture.pluginRoot,
       title: FIXTURE_PLUGIN_KEY,
       meta: {
-        harness: 'claude',
+        harness: FAKE_HARNESS_ID,
         version: '1.0.0',
         installs: [{ scope: 'user', projectPath: null }],
       },

@@ -1,5 +1,6 @@
 import type { Clock } from '../../../../contracts/ambient';
 import type { PluginLog } from '../../../../contracts/log';
+import { FAKE_HARNESS_ID } from '../../../../shared/fake-agent-harness';
 import type {
   OwnedSession,
   SessionsMainExports,
@@ -72,6 +73,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
       const slots = deps.slots.open({
         sessionId,
         projectDir: PREVIEW_PROJECT_DIR,
+        harness: FAKE_HARNESS_ID,
         profile: PREVIEW_PROFILE,
         entries: previewEntries(),
         controls: previewControls(),
