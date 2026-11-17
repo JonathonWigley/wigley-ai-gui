@@ -1,6 +1,6 @@
 # 01 — Contract and room store
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · sets the jsonl save format and serializes concurrent appends, and adds the contract every later task consumes
 Wave: 1 · Depends on: none

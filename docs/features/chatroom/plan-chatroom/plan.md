@@ -213,7 +213,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 - [ ] [Contract and room store](01-contract-and-store.md)
 - [ ] [Sessions hook route](02-sessions-hook-route.md)
 - [ ] [Relay endpoint module and Codex id](03-relay-endpoint-and-codex-id.md)
-- [ ] [Stale harness doc lines](04-stale-harness-docs.md)
+- [x] ~~[Stale harness doc lines](04-stale-harness-docs.md)~~ — dropped: Lane H (plan-lane-h-harness-seams) is running, at task 10 of 17 on branch lane-h-harness-seams; its landing makes the AGENTS.md passages true and its task 16 re-reads them, so a rewrite to today's shape would be undone and conflict at merge
 
 ### Wave 2
 - [ ] [Room service](05-room-service.md) — after 01
@@ -237,10 +237,11 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 7c3eb9665
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Task 04 struck: its cause (Lane H not started) no longer holds; Lane H runs and rewrites the same passages — a stale-doc window stays until Lane H lands — lead
 ### Review rounds
 ### Test gate
