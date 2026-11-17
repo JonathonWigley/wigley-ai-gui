@@ -240,6 +240,56 @@ describe('session tabs view', () => {
     expect(view.tabs.selectedTabOf('s')?.id).toBe('docs');
   });
 
+  // Breaks: a draw that empties the strip and draws every tab again.
+  it('a draw keeps each unchanged tab element, so a release that moves pane focus leaves the click its target', () => {
+    const { view, area, runs } = sessionsViewSetup();
+    view.tabs.add('s', tabView('a'));
+    view.tabs.add('s', tabView('b'));
+    view.render(stateOf(['r', 's'], 'r'));
+    view.panes.restore(
+      TWO_PANES,
+      new Map([
+        ['pane-1', 'r'],
+        ['pane-2', 's'],
+      ]),
+    );
+    const tabB = () =>
+      findAll(area, 'ui-tab').find((tab) => tab.title === 'title b');
+    const pressed = tabB();
+
+    view.panes.focus('pane-2');
+    const afterFocus = tabB();
+    const runsBeforeClick = runs.length;
+    pressed!.click();
+
+    expect(afterFocus).toBe(pressed);
+    expect(runs.slice(runsBeforeClick)).toEqual([
+      ['sessions.selectTab', { sessionId: 's', tab: 'b' }],
+    ]);
+  });
+
+  // Breaks: a removal that draws the kept tabs again or leaves the removed
+  // one in the strip.
+  it('a removed tab leaves the strip while the others keep their elements', () => {
+    const { view, area } = sessionsViewSetup();
+    const [, b] = ['a', 'b', 'c'].map((id) =>
+      view.tabs.add('s', tabView(id)),
+    );
+    view.render(stateOf(['s'], 's'));
+    view.panes.restore(
+      { root: { kind: 'leaf', id: 'pane-1' }, focusedId: 'pane-1' },
+      new Map([['pane-1', 's']]),
+    );
+    const [tabA, , tabC] = findAll(area, 'ui-tab');
+
+    b.dispose();
+
+    const strip = findAll(area, 'ui-tab');
+    expect(strip).toHaveLength(2);
+    expect(strip[0]).toBe(tabA);
+    expect(strip[1]).toBe(tabC);
+  });
+
   it('sessionTabs_SelectedTabRemoved_SelectsItsStripNeighbour', () => {
     const { view } = sessionsViewSetup();
     const chat = view.tabs.add('s', tabView('chat', 2));
@@ -653,6 +703,29 @@ describe('session popups', () => {
     popup.hide();
 
     expect(popupsShown(area).bar).toEqual(['R1']);
+  });
+
+  // Breaks: a draw that disposes the popup bar and draws it again.
+  it("a draw keeps an unchanged popup bar, so the first click on an unfocused pane's bar entry reaches it", () => {
+    const { view, area } = sessionsViewSetup();
+    view.render(stateOf(['r', 's'], 'r'));
+    view.panes.restore(
+      TWO_PANES,
+      new Map([
+        ['pane-1', 'r'],
+        ['pane-2', 's'],
+      ]),
+    );
+    view.tabs.addPopup('s', popupView('p')).hide();
+    const entry = () => findAll(area, 'session-popup-bar-entry')[0];
+    const pressed = entry();
+
+    view.panes.focus('pane-2');
+    const afterFocus = entry();
+    pressed!.click();
+
+    expect(afterFocus).toBe(pressed);
+    expect(popupsShown(area).open).toEqual(['title p']);
   });
 
   it('sessionPopups_SecondPopupWithOneId_Throws', () => {

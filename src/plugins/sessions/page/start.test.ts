@@ -1280,6 +1280,42 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
+  // Breaks: a release that reads the selection it finds as the press's own.
+  it('a press that leaves an older selection sends the keys to the Chat box', async () => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+    const focusBox = vi.fn();
+    const setup = await startApplied(['s1', 's2'], 's1', savedSplit('a'), {
+      parts: [chatFocusBoxPart(focusBox)],
+    });
+    const pressed = document.createElement('div');
+    setup.exports.addTab('s2', {
+      id: 'chat',
+      title: 'Chat',
+      icon: 'comment',
+      element: pressed,
+      beforeClose: () => true,
+      shown: () => undefined,
+    });
+    const older = {
+      isCollapsed: false,
+      anchorNode: pressed,
+      anchorOffset: 2,
+      focusNode: pressed,
+      focusOffset: 7,
+    };
+    // The harness stubs its own copy of the window the fake DOM stubbed.
+    (window as unknown as { getSelection(): unknown }).getSelection = () => ({
+      ...older,
+    });
+
+    setup.harness.fireWindow('pointerdown', { target: pressed });
+    setup.harness.fireWindow('pointerup');
+
+    expect(setup.exports.shownSessionId()).toBe('s2');
+    expect(focusBox).toHaveBeenCalledTimes(1);
+    await setup.harness.stop();
+  });
+
   it('closeSession_PopupRefuses_KeepsTheSession', async () => {
     const setup = await startApplied(['s1'], 's1');
     setup.addTab('s1');

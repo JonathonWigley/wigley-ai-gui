@@ -52,6 +52,7 @@ import {
   activationTarget,
   echoesAfterReply,
   fillPlan,
+  isPressSelection,
   liveWaits,
   type PaneSessions,
   type PendingEcho,
@@ -59,6 +60,7 @@ import {
   pickerRows,
   pressedFocusAction,
   restorePlan,
+  type SelectionEnds,
   type SelectionTarget,
   savedPaneSessions,
   selectionAction,
@@ -143,6 +145,15 @@ function popupToggledLine(
   sessionLabel: string,
 ): string {
   return `${isOpen ? 'opened' : 'hid'} ${title} popup in ${sessionLabel}`;
+}
+
+// The ends of `selection` while it is not collapsed, else null.
+function selectionEnds(selection: Selection | null): SelectionEnds | null {
+  if (selection?.isCollapsed !== false) {
+    return null;
+  }
+  const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+  return { anchorNode, anchorOffset, focusNode, focusOffset };
 }
 
 // The ids of the side bar's own sections, which no registered section may take.
@@ -584,12 +595,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       // The keys follow a release into its pane, as `pressedFocusAction` says.
       panePressed(pane) {
         const textSelection = window.getSelection();
+        const atRelease = selectionEnds(textSelection);
         const focused = document.activeElement;
         const sessionId = view.panes.focusedSessionId();
         const action = pressedFocusAction({
           hasSelectionInPane:
-            textSelection?.isCollapsed === false &&
-            pane.contains(textSelection.anchorNode),
+            isPressSelection(selectionAtPress, atRelease) &&
+            pane.contains(textSelection?.anchorNode ?? null),
           isFocusInPane: pane.contains(focused),
           doesFocusTakeText: holdsTextEntry(focused),
           isChatTabShown:
@@ -710,6 +722,15 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
     view.element.addEventListener('pointerdown', endListByMain, true);
     view.element.addEventListener('focusin', endListByMain);
+
+    // The selection each press found as it began, so `panePressed` tells a
+    // selection the press made from an older one. On `window`, as the pane
+    // tree hears a press wherever it begins.
+    let selectionAtPress: SelectionEnds | null = null;
+    const noteSelectionAtPress = () => {
+      selectionAtPress = selectionEnds(window.getSelection());
+    };
+    window.addEventListener('pointerdown', noteSelectionAtPress, true);
 
     // Lays out the first state's panes as `restorePlan` says.
     const restoreSavedPanes = (first: SessionsState) => {
@@ -1247,7 +1268,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       ready() {
         apply(currentState());
       },
-      dispose: () => view.dispose(),
+      dispose() {
+        window.removeEventListener('pointerdown', noteSelectionAtPress, true);
+        view.dispose();
+      },
     };
   },
 };

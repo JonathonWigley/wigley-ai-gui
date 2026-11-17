@@ -50,6 +50,22 @@ interface Tab {
   view: SessionTabView;
 }
 
+// A tab's drawn `tab` part and the title and icon it drew with.
+interface DrawnTab {
+  part: DrawnPart<SessionsPart>;
+  title: string;
+  icon: string;
+}
+
+// A hidden popup's entry in its frame's drawn bar: the popup's view id and
+// what the entry drew.
+interface PopupBarEntry {
+  id: string;
+  title: string;
+  icon: string;
+  status: string;
+}
+
 // A popup with the status it last set, whether it is open, and its drawn
 // `popup` part, whose body holds its element.
 interface Popup {
@@ -82,7 +98,8 @@ interface Frame {
   awaitedSelectedTabId: string | null;
   awaitedHiddenPopupIds: Set<string>;
   placeWrites: PlaceWrites<SessionsPlace>;
-  drawnTabs: DrawnPart<SessionsPart>[];
+  // The drawn tabs by tab id.
+  drawnTabs: Map<string, DrawnTab>;
   // The selected tab the strip last scrolled into view.
   scrolledTabId: string | null;
   text: DrawnPart<SessionsPart> | null;
@@ -90,6 +107,9 @@ interface Frame {
   popupBarHost: HTMLElement;
   popups: Popup[];
   popupBar: DrawnPart<PopupBarPart> | null;
+  // The entries the drawn bar holds, newest hidden first; empty while no bar
+  // is drawn.
+  popupBarEntries: PopupBarEntry[];
 }
 
 // One chat pane as the owner places it: its pane tree slot and the session it
@@ -219,7 +239,10 @@ export interface SessionTabsView {
 // had hidden comes back hidden, and until it comes back the place keeps it
 // hidden. Until `render` hands it main's first state, it shows no text either.
 // The view keeps each tab's click, which runs `selectTab`, its tooltip and the
-// active tab's mark.
+// active tab's mark. A draw keeps each tab element whose title and icon are
+// unchanged, and the popup bar while its entries are, so the first click in an
+// unfocused pane, whose release moves pane focus and draws, reaches its target;
+// a layout redraw draws them all again.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   const { parts } = deps;
   const holder = element('div', 'session-frame-holder');
@@ -284,23 +307,24 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       awaitedSelectedTabId: saved?.selectedTabId ?? null,
       awaitedHiddenPopupIds: new Set(saved?.hiddenPopupIds),
       placeWrites: placeWrites((place) => deps.places.set(sessionId, place)),
-      drawnTabs: [],
+      drawnTabs: new Map(),
       scrolledTabId: null,
       text: null,
       popupLayer,
       popupBarHost,
       popups: [],
       popupBar: null,
+      popupBarEntries: [],
     };
     frames.set(sessionId, created);
     return created;
   };
 
   const disposeTabs = (frame: Frame) => {
-    for (const tab of frame.drawnTabs) {
-      tab.dispose();
+    for (const tab of frame.drawnTabs.values()) {
+      tab.part.dispose();
     }
-    frame.drawnTabs = [];
+    frame.drawnTabs.clear();
   };
 
   const disposeText = (drawn: { text: DrawnPart<SessionsPart> | null }) => {
@@ -346,27 +370,43 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     frame.popupLayer.classList.toggle('has-open', shown !== undefined);
   };
 
+  // Keeps the drawn bar and its entry elements while its entries are
+  // unchanged, so a release that moved pane focus keeps its click's target in
+  // the document; else draws it again, or none while no popup is hidden. An
+  // entry's click finds its popup by id, doing nothing once none is held.
   const drawPopupBar = (frame: Frame) => {
-    if (frame.popupBar !== null) {
-      disposePart(frame.popupBar);
-      frame.popupBar = null;
-    }
-    const hidden = hiddenNewestFirst(frame.popups);
-    if (hidden.length === 0) {
-      return;
-    }
-    frame.popupBar = parts.popupBar(frame.popupBarHost, {
-      entries: hidden.map((popup) => ({
+    const entries = hiddenNewestFirst(frame.popups).map(
+      (popup): PopupBarEntry => ({
+        id: popup.view.id,
         title: popup.view.title,
         icon: popup.view.icon,
         status: popup.status,
+      }),
+    );
+    const isDrawnBarCurrent =
+      frame.popupBar !== null &&
+      isSamePopupBar(frame.popupBarEntries, entries);
+    if (isDrawnBarCurrent) {
+      return;
+    }
+    disposePopupBar(frame);
+    if (entries.length === 0) {
+      return;
+    }
+    frame.popupBar = parts.popupBar(frame.popupBarHost, {
+      entries: entries.map(({ title, icon, status }) => ({
+        title,
+        icon,
+        status,
       })),
     });
+    frame.popupBarEntries = entries;
     frame.popupBar.built.entries.forEach((entry, index) => {
-      const popup = hidden[index];
-      entry.setAttribute('aria-label', popup.view.title);
+      const { id, title } = entries[index];
+      entry.setAttribute('aria-label', title);
       rowAction(entry, () => {
-        if (openPopup(frame.sessionId, popup)) {
+        const popup = frame.popups.find((each) => each.view.id === id);
+        if (popup !== undefined && openPopup(frame.sessionId, popup)) {
           deps.popupOpenedFromBar(frame.sessionId, popup.view);
         }
       });
@@ -392,10 +432,48 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       return;
     }
     frame.scrolledTabId = selectedId;
-    const index = [...frame.entries.keys()].indexOf(selectedId ?? '');
-    const tab = frame.drawnTabs[index]?.built.element;
+    const tab =
+      selectedId === null
+        ? undefined
+        : frame.drawnTabs.get(selectedId)?.part.built.element;
     if (tab !== undefined) {
       strip.scrollLeft = scrollLeftShowing(strip, tab);
+    }
+  };
+
+  // Keeps each drawn tab whose title and icon are unchanged, only marking
+  // whether it is active, so a release that moved pane focus keeps its click's
+  // target in the document; draws the rest afresh, drops those of tabs gone,
+  // and moves a tab element only when the strip holds another at its index.
+  const drawStrip = (frame: Frame) => {
+    const strip = frame.bar.built.strip;
+    for (const [tabId, drawn] of frame.drawnTabs) {
+      const view = frame.entries.get(tabId)?.view;
+      const isDrawnCurrent =
+        view !== undefined &&
+        view.title === drawn.title &&
+        view.icon === drawn.icon;
+      if (!isDrawnCurrent) {
+        disposePart(drawn.part);
+        frame.drawnTabs.delete(tabId);
+      }
+    }
+    let index = 0;
+    for (const { view } of frame.entries.values()) {
+      let drawn = frame.drawnTabs.get(view.id);
+      if (drawn === undefined) {
+        drawn = drawTab(parts, strip, view, () =>
+          deps.selectTab(frame.sessionId, view.id),
+        );
+        frame.drawnTabs.set(view.id, drawn);
+      }
+      const entry = drawn.part.built.element;
+      markActive(entry, view.id === frame.tabs.selectedTabId);
+      const atIndex = strip.children[index] ?? null;
+      if (atIndex !== entry) {
+        strip.insertBefore(entry, atIndex);
+      }
+      index++;
     }
   };
 
@@ -403,19 +481,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     for (const tab of frame.entries.values()) {
       tab.view.element.hidden = tab.view.id !== frame.tabs.selectedTabId;
     }
-    const tabs = [...frame.entries.values()];
-    disposeTabs(frame);
-    const strip = frame.bar.built.strip;
-    strip.replaceChildren();
-    frame.drawnTabs = tabs.map((tab) =>
-      drawTab(
-        parts,
-        strip,
-        tab.view,
-        tab.view.id === frame.tabs.selectedTabId,
-        () => deps.selectTab(sessionId, tab.view.id),
-      ),
-    );
+    drawStrip(frame);
     scrollSelectedIntoView(frame);
     const isTabStepping =
       isFocused && hasOtherTab(frame.tabs.tabIds, frame.tabs.selectedTabId);
@@ -426,7 +492,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     for (const prompt of [close, splitRight, splitDown, closePane]) {
       prompt?.classList.toggle('is-no-target', !isFocused);
     }
-    const text = textFor(state, sessionId, tabs.length, false);
+    const text = textFor(state, sessionId, frame.entries.size, false);
     frame.text =
       text === null ? null : parts.emptyText(frame.bodies, text, pickHint);
     showTopPopup(frame);
@@ -686,6 +752,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       for (const frame of frames.values()) {
         redrawBar(frame);
         redrawPopups(frame);
+        disposePopupBar(frame);
       }
       const placed = [...panes].map(([id, pane]) => {
         pane.input = null;
@@ -700,6 +767,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     redrawBars() {
       for (const frame of frames.values()) {
         redrawBar(frame);
+        disposePopupBar(frame);
       }
       draw();
     },
@@ -948,17 +1016,48 @@ function drawTab(
   parts: SessionsParts,
   strip: HTMLElement,
   view: SessionTabView,
-  isActive: boolean,
   select: () => void,
-): DrawnPart<SessionsPart> {
-  const drawn = parts.tab(strip, { title: view.title, icon: view.icon });
-  const entry = drawn.built.element;
+): DrawnTab {
+  const { title, icon } = view;
+  const part = parts.tab(strip, { title, icon });
+  const entry = part.built.element;
   rowAction(entry, select);
-  entry.title = view.title;
-  entry.setAttribute('aria-label', view.title);
+  entry.title = title;
+  entry.setAttribute('aria-label', title);
+  return { part, title, icon };
+}
+
+function markActive(entry: HTMLElement, isActive: boolean): void {
   entry.classList.toggle('is-active', isActive);
   entry.setAttribute('aria-current', String(isActive));
-  return drawn;
+}
+
+// Whether the two bars list the same popups in the same order, each entry
+// drawn alike.
+function isSamePopupBar(
+  drawn: readonly PopupBarEntry[],
+  next: readonly PopupBarEntry[],
+): boolean {
+  return (
+    drawn.length === next.length &&
+    drawn.every((entry, index) => {
+      const other = next[index];
+      return (
+        entry.id === other.id &&
+        entry.title === other.title &&
+        entry.icon === other.icon &&
+        entry.status === other.status
+      );
+    })
+  );
+}
+
+function disposePopupBar(frame: Frame): void {
+  if (frame.popupBar !== null) {
+    disposePart(frame.popupBar);
+    frame.popupBar = null;
+  }
+  frame.popupBarEntries = [];
 }
 
 // Marks a popup's root `is-entering` until its own transition ends or is

@@ -280,9 +280,39 @@ export function selectionAction(change: SelectionChange): {
   return { action: { kind: 'place', sessionId: next }, echoes };
 }
 
+// Where a text selection's two ends sit, as `Selection` holds them.
+export interface SelectionEnds {
+  anchorNode: unknown;
+  anchorOffset: number;
+  focusNode: unknown;
+  focusOffset: number;
+}
+
+// Whether the release found a selection the press did not: one at the
+// release, and none at the press or one differing at either end. A press that
+// leaves an older selection, collapsed after the release or kept by a target
+// that prevented the default, made none.
+export function isPressSelection(
+  atPress: SelectionEnds | null,
+  atRelease: SelectionEnds | null,
+): boolean {
+  if (atRelease === null) {
+    return false;
+  }
+  if (atPress === null) {
+    return true;
+  }
+  return (
+    atPress.anchorNode !== atRelease.anchorNode ||
+    atPress.anchorOffset !== atRelease.anchorOffset ||
+    atPress.focusNode !== atRelease.focusNode ||
+    atPress.focusOffset !== atRelease.focusOffset
+  );
+}
+
 // What the page holds as a release focuses the pane its press began in.
 export interface PressedPaneFacts {
-  // A selection that is not collapsed is anchored in the pressed pane.
+  // A selection this press made, not collapsed, anchored in the pressed pane.
   hasSelectionInPane: boolean;
   // The element holding keyboard focus sits inside the pressed pane.
   isFocusInPane: boolean;
@@ -299,7 +329,8 @@ export interface PressedPaneFacts {
 // pane's Chat box, when its visible tab has one, takes them in insert mode.
 export type PressedFocusAction = 'keep' | 'letGo' | 'toBox';
 
-// A selection in the pane stays, and so does the focus it came with. A text
+// A selection the press made in the pane stays, and so does the focus it came
+// with. A text
 // box the press focused keeps the keys, the Chat box going through `toBox` to
 // enter insert mode at its caret. Any other focus, or one outside the pane,
 // lets go. Over an open popup any focus in the pane stays, and one outside it

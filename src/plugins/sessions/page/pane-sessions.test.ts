@@ -5,6 +5,7 @@ import {
   activationTarget,
   echoesAfterReply,
   fillPlan,
+  isPressSelection,
   liveWaits,
   type PaneSessions,
   paneOf,
@@ -12,6 +13,7 @@ import {
   pickerRows,
   pressedFocusAction,
   restorePlan,
+  type SelectionEnds,
   savedPaneSessions,
   selectionAction,
   selectionTarget,
@@ -464,5 +466,61 @@ describe('pane-sessions', () => {
     },
   ])('pressedFocusAction: $name', ({ facts, action }) => {
     expect(pressedFocusAction({ ...noFacts, ...facts })).toBe(action);
+  });
+
+  // A selection in `node` from `anchorOffset` to `focusOffset`.
+  const ends = (
+    node: unknown,
+    anchorOffset: number,
+    focusOffset: number,
+  ): SelectionEnds => ({
+    anchorNode: node,
+    anchorOffset,
+    focusNode: node,
+    focusOffset,
+  });
+  const n1 = { name: 'n1' };
+  const held = ends(n1, 0, 4);
+
+  // Breaks: a release reading any selection as the press's own, or one
+  // comparing the ends by object rather than by place.
+  it.each<{
+    case: string;
+    atPress: SelectionEnds | null;
+    atRelease: SelectionEnds | null;
+    isPress: boolean;
+  }>([
+    {
+      case: 'no selection at either end',
+      atPress: null,
+      atRelease: null,
+      isPress: false,
+    },
+    {
+      case: 'a new selection',
+      atPress: null,
+      atRelease: ends(n1, 0, 4),
+      isPress: true,
+    },
+    {
+      case: 'the same selection',
+      atPress: held,
+      atRelease: { ...held },
+      isPress: false,
+    },
+    {
+      case: 'a different selection',
+      atPress: held,
+      atRelease: ends(n1, 0, 6),
+      isPress: true,
+    },
+    {
+      case: 'the selection gone',
+      atPress: held,
+      atRelease: null,
+      isPress: false,
+    },
+  ])('isPressSelection: $case', ({ atPress, atRelease, isPress }) => {
+    expect(isPressSelection(atPress, atRelease)).toBe(isPress);
   });
 });
