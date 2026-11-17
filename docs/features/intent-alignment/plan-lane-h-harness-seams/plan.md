@@ -452,4 +452,5 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - Chat defines PERMISSION_CANCELLED_REASON (same text as claude-code's CANCELLED_REASON) since it may not import that plugin; settlePermission no longer exists after 08 · group 15
 - A return drops the row's entries and rebuilds them from the attach replay and history, since the attach numbers entries under a new process start · group 15
 ### Review rounds
+- Round 1 (review dfead4027): NEEDS FIXES, 9 Important, 28 Minor, 2 pre-existing. Fix range e7cd5ade1..41eb06ce4, 6 worker commits + oxfmt. Tier: High — chat-sessions resume/process-id/leave/waiter logic and the chat main profile seam change behaviour on session lifecycle paths. Re-review: correctness lanes over the fix range.
 ### Test gate
