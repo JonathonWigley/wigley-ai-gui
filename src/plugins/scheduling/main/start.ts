@@ -43,6 +43,7 @@ import {
   runEntry,
   type ScheduledRunRecord,
 } from './run-records';
+import { schedulingSelfTestScript } from './selftest-script';
 import { createTaskStore } from './task-store';
 import { startTaskTools, TASK_TOOLS, type TaskToolsDeps } from './task-tools';
 
@@ -108,7 +109,8 @@ function uniqueRows(entries: readonly RunHistoryEntry[]): string[] {
 // queues it in the session host, which starts it at its time; adopts each run the host started as a row, records
 // it in history, and tracks the finished, unviewed run rows for the page and the Dock badge. Every event, push,
 // timer and channel call that changes state runs as one step of a serial chain. Where the app does not fire (the dev
-// app's live run) it shows and edits the tasks and never touches the host's queue or the login start.
+// app's live run) it shows and edits the tasks and never touches the host's queue or the login start. Hands the
+// self-test its script.
 export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
   manifest: schedulingManifest,
   start(api: SchedulingApi) {
@@ -506,7 +508,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       forget(run);
     };
 
-    // The step for one host run read through `listRuns`, then a re-plan. Task 19 hands it to the self-test script.
+    // The step for one host run read through `listRuns`, then a re-plan. The self-test feeds its fixture runs here.
     const adoptRun = (run: HostedRun): Promise<void> =>
       serial(async () => {
         await handleRun(run, 'listed');
@@ -671,6 +673,18 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         sessionHost.onConnected(() => serial(readRunsThenPlan)),
       );
     }
+
+    services.selfTest?.run(
+      schedulingSelfTestScript({
+        homeDir: services.homeDir,
+        files: services.files,
+        paths: services.paths,
+        now: () => clock.now(),
+        chat,
+        store: taskStore,
+        adoptRun,
+      }),
+    );
 
     return {
       commands: {},
