@@ -930,7 +930,7 @@ is the task's name, or its id when the task is gone.
 - [x] [Hosted turn state](25-turn-state-rule.md) — after 02, 07, 08, 13, 24
 
 ### Wave 6
-- [ ] [Doc re-read](20-doc-re-read.md) — after every task above
+- [x] [Doc re-read](20-doc-re-read.md) — after every task above
 
 ### Wave 7
 - [ ] [Final verification](21-final-verification.md) — after 20
@@ -969,6 +969,7 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - 24 · deep · 1c8af15c3 · diff read: Produces present; wave 4 typecheck and lint pass after a2e4f76f4 · concerns: pid reuse after a kill -9 can lock a channel out until that process ends (lock survives reboot); put-back branch untested; stale-socket row is the one that catches the old bug
 - 19 · hard · dae39230b · diff read: Produces present; wave 5 typecheck and lint pass; AGENTS.md self-test list gains the script (lead) · concerns: a failed fixture adopt shows only as missing lines (serial catches); group 4 assumes details keep focus after Escape; scrollsItself [] until the fit check runs
 - 25 · deep · 144ac8dc0 · diff read: Produces present; wave 5 typecheck and lint pass after formatter pass · concerns: drain ends a process at background_tasks_changed [] and can cut the self-started report turn ~20 ms later (the task's drain test asks for it); touched fake-agent-harness.ts FAKE_IDLE_RULE outside Files for typecheck; dropped-keys pre-filter removed
+- 20 · standard · 5506249b0 · diff read: docs match code; no code changed · concerns: LaunchAgent adapter built and tested but unwired in main.ts; adoption finished wording reads process gone, code reads row not running
 ### Contract changes
 ### Rulings
 - Waves keep 05 beside 04 and 15 beside 14: both dependencies are on plan-pinned formats or injected deps, with no code wait — 05 writes offline.json to the plan's shape, 15 reaches projects through a dep 17 fills — if wrong, a worker finds a missing name and reports BLOCKED · lead

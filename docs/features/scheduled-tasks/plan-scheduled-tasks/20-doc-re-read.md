@@ -1,6 +1,6 @@
 # 20 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01–19 (re-reads every task's docs), 22–25 (re-reads every task's docs)
 Plan: [plan.md](plan.md)
@@ -103,3 +103,5 @@ by field; each folder's fix is committed.
 Commit:    one commit per folder with a fix
 
 ## Proof
+
+Commit 5506249b0 · proof: diff read: docs match code; no code changed · concerns: LaunchAgent adapter built and tested but unwired in main.ts; adoption finished wording reads process gone, code reads row not running
