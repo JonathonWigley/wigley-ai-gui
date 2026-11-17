@@ -89,10 +89,7 @@ function fakeHost(
 
 // The parts that draw the picker's own rows; the cancel prompt's two parts
 // draw apart from them.
-type PartName = Exclude<
-  keyof AudioPickerLayout,
-  'confirmBody' | 'dialogFrame'
->;
+type PartName = Exclude<keyof AudioPickerLayout, 'confirmBody' | 'dialogFrame'>;
 type PartCounts = Record<PartName, number>;
 
 type PickerCommand = keyof ReturnType<typeof pickerCommandHandlers>;

@@ -163,16 +163,19 @@ export function createDocsParts(deps: DocsPartsDeps): DocsParts {
     },
     dialogFrame(slot, input, scope) {
       drawnPicks.set('dialogFrame', host.pick('dialogFrame'));
-      const drawn = host.draw('dialogFrame', slot, (builder, parent, rollback) =>
-        requireDialogFrame(
-          (builder as PartBuilder<'dialogFrame'>)(
-            parent,
+      const drawn = host.draw(
+        'dialogFrame',
+        slot,
+        (builder, parent, rollback) =>
+          requireDialogFrame(
+            (builder as PartBuilder<'dialogFrame'>)(
+              parent,
+              input,
+              deps.baseKit(scope, rollback),
+            ),
             input,
-            deps.baseKit(scope, rollback),
+            'dialogFrame',
           ),
-          input,
-          'dialogFrame',
-        ),
       );
       const frame = drawn.built as DialogFramePart;
       return {

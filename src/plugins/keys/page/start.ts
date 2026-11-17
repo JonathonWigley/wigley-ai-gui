@@ -90,11 +90,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
 
     const currentHelpSections = () =>
       helpSections(keys.keymap(), keys.scopes, keys.label, platform);
-    const help = mountHelpView(
-      api.areas.overlay,
-      currentHelpSections(),
-      parts,
-    );
+    const help = mountHelpView(api.areas.overlay, currentHelpSections(), parts);
     // The pushed `help` scope while help is open, `null` while it is closed.
     let helpScope: PushedScope | null = null;
     // What held focus as help opened, given it back as the user closes help.

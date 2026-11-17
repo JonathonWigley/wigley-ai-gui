@@ -1323,6 +1323,7 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   completionDescription: true,
   signIn: true,
   reasonBox: true,
+  dialogFrame: true,
   closeConfirm: true,
   imageViewer: true,
   rowClock: true,

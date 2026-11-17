@@ -216,7 +216,11 @@ const layout = {
     return kit.el(parent, 'p', '', input.body);
   },
   dialogFrame(parent, input, kit) {
-    const panel = kit.el(parent, 'div', 'ui-floating material-floating ui-dialog');
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog',
+    );
     kit.el(panel, 'h2', 'ui-dialog-title', input.title);
     const body = kit.el(panel, 'div', 'ui-dialog-body');
     const actions = input.hasActions

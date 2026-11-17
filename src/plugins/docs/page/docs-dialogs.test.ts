@@ -206,7 +206,7 @@ describe('createDocsDialogs', () => {
   );
 
   it('redraw_ChangedFrameLayout_DrawsTheTrashConfirmInTheNewFrame', async () => {
-    let shown = withUser(defaultLayout, {});
+    let shown = withUser<Layout>(defaultLayout, {});
     const dialogs = dialogsOver(() => shown);
     dialogs.trash(TRASHED_ENTRY);
     await settled();
@@ -230,7 +230,7 @@ describe('createDocsDialogs', () => {
   });
 
   it('redraw_ChangedFrameLayout_KeepsTheBoxInputAndCompletionsInTheNewFrame', () => {
-    let shown = withUser(defaultLayout, {});
+    let shown = withUser<Layout>(defaultLayout, {});
     const dialogs = dialogsOver(() => shown);
     dialogs.createByPath(null);
     const scrim = asFake(dialogs.elements[0]);

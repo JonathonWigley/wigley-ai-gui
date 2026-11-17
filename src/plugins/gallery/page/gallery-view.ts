@@ -11,7 +11,10 @@ import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { card, createCollapsibleCard } from '../../../shared/page/ui/card';
 import { chip } from '../../../shared/page/ui/chip';
-import { createDialog, type DrawDialogFrame } from '../../../shared/page/ui/dialog';
+import {
+  createDialog,
+  type DrawDialogFrame,
+} from '../../../shared/page/ui/dialog';
 import {
   createDragReorder,
   type DragReorder,
