@@ -90,7 +90,7 @@ export async function findCandidate(
 // What Node spawns to start `target` with `args`. On Windows a `.cmd` or `.bat`
 // cannot start without cmd.exe, so it starts as `<comSpec> /d /s /c "<line>"`
 // with no quoting from Node, each part escaped once for cmd.exe, as
-// cross-spawn escapes a non-shim command.
+// cross-spawn escapes a `.cmd` outside `node_modules\.bin`.
 // Throws on such a start when an argument holds a line break.
 export function shimLaunch(
   target: string,

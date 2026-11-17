@@ -44,7 +44,7 @@ function setUp() {
 }
 
 describe('limitRuns', () => {
-  it('spawn_PastTheLimit_PassesStraightThrough', async () => {
+  it('spawn_PastTheLimit_PassesStraightThrough', () => {
     const spawned: string[] = [];
     const inner: ProcessRunner = {
       run: () => new Promise(() => {}),

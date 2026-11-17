@@ -337,11 +337,12 @@ What Windows support and installers need.
   same shim handling, then lets the Windows lookup find shims. Killing a shim's `cmd.exe` also leaves its child
   running, as `run` does today.
 - **A `.cmd` shim re-parses its arguments once more** — *needs a decision*: `shimLaunch`
-  (`src/shared/program-lookup.ts`) escapes cmd metacharacters once. cross-spawn escapes twice for a `node_modules`
-  `.cmd` shim, since a cmd-shim batch file re-parses `%*` (the BatBadBut class). It matters only when a setting or a
-  bare name resolves to an npm `.cmd` shim and an argument holds `"` with `&` or `|`. Options: escape twice for every
-  `.cmd` shim, or refuse `"` in arguments as the line-break refusal does. Check cross-spawn's source and cmd's parse
-  rules first: the double escape is an unchecked theory today.
+  (`src/shared/program-lookup.ts`) escapes cmd metacharacters once. cross-spawn 7.0.6 escapes twice for a `.cmd`
+  under `node_modules\.bin` (`lib/parse.js` `needsDoubleEscapeMetaChars`, checked), because a cmd-shim batch file
+  re-parses `%*`. The open question is whether that re-parse breaks this code's single escape (the BatBadBut class);
+  the theory, unchecked, is that it matters only when a setting or a bare name resolves to an npm `.cmd` shim and an
+  argument holds cmd metacharacters. Options: escape twice for every `.cmd` shim, or refuse `"` in arguments as the
+  line-break refusal does. Check cmd's parse rules first.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
   `packagerConfig`, no makers).
 - **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`
