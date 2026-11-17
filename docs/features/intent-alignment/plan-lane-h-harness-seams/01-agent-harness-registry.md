@@ -1,6 +1,6 @@
 # 01 — AgentHarnessRegistry
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -276,3 +276,4 @@ Commit: one commit for the group. It also removes the "AgentHarnessRegistry" ite
 
 ## Proof
 
+Commit 166a52d74 · proof: diff read: every Produces present; wave compile (typecheck, lint) passes after one same-rung test-cast fix · concerns: self-test expectations changed beyond Files (notes session line from the registry, forms expects 'codex session'); stale 'Claude pending' wording fixed in docs/main/start.ts and drive SKILL.md; usage poller looks its harness up once at start

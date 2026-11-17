@@ -337,7 +337,7 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [AgentHarnessRegistry](01-agent-harness-registry.md)
+- [x] [AgentHarnessRegistry](01-agent-harness-registry.md)
 
 ### Wave 2
 - [ ] [Structured round results](02-structured-round-results.md) — after 01 (both edit `forms/main/start.ts`)
@@ -386,9 +386,15 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 
 ### Groups
+- 01 · hard · 166a52d74 · diff read: every Produces present; wave compile (typecheck, lint) passes after one same-rung test-cast fix · concerns: self-test expectations changed beyond Files (notes session line from the registry, forms expects 'codex session'); stale 'Claude pending' wording fixed in docs/main/start.ts and drive SKILL.md; usage poller looks its harness up once at start
 ### Contract changes
+- IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
+- docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01
+- DRIVE_SESSION_DEFAULTS typed { projectDir: string; harness: string }; sessions sidebar-view drawRow takes a harnesses() function; NotesSelfTestResult gains sessionLine · why: the literal union is gone; labels re-read per draw · consumers: none planned · group 01
 ### Rulings
 - Waves 2, 4 and 5 keep their pairs despite the wave check's clashes on followups.md, master-plan.md and drive SKILL.md: the plan's boundary rules put the two groups in disjoint hunks of those files; workers edit only their own hunk, and the group that commits first leaves the shared doc to the second group's commit, which carries both hunks and says so — the check's clash rule cannot see hunks — a mislabelled hunk in one commit if wrong · lead
 - Run works in worktree ~/Documents/.worktrees/ai-lane-h-harness-seams (branch lane-h-harness-seams) per WigleyRepos.md § Landing; Lane E's worktree is paused at its forms gate (waits on task 02) and its unmerged commits stay its own; peers on the main clone make every commit pathspec-scoped — a merge conflict at landing if Lane E or P lands first · lead
+- Fake labels itself Fake under id 'claude' until task 10, so fake runs read 'Fake' where they read 'Claude Code' — drive captures differ until task 10 · group 01 · group 01
+- Relay hello and the drive sessions action accept any string harness; an unregistered id shows its raw id ('codex session') — a typo reads as a raw label · group 01 · group 01
 ### Review rounds
 ### Test gate

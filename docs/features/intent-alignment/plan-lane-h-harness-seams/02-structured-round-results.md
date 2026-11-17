@@ -1,6 +1,6 @@
 # 02 — Structured round results
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 01 (task 01 edits `forms/main/start.ts` too: read it as task 01 left it)
 Plan: [plan.md](plan.md)
