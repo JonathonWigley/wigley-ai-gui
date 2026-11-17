@@ -645,9 +645,7 @@ function openingControlsOf(
       value: values[control.id] ?? null,
     })),
     confirmedPicks: Object.fromEntries(
-      ids
-        .filter((id) => id !== MODE_CONTROL_ID)
-        .map((id) => [id, values[id]]),
+      ids.filter((id) => id !== MODE_CONTROL_ID).map((id) => [id, values[id]]),
     ),
   };
 }
@@ -659,9 +657,7 @@ function requireDeclaredControls(
   values: Readonly<Record<string, string>>,
 ) {
   const declaredIds = declared.map((control) => control.id);
-  const unknownId = Object.keys(values).find(
-    (id) => !declaredIds.includes(id),
-  );
+  const unknownId = Object.keys(values).find((id) => !declaredIds.includes(id));
   if (unknownId !== undefined) {
     throw new Error(
       `Unknown control "${unknownId}". Controls: ${declaredIds.join(', ')}.`,

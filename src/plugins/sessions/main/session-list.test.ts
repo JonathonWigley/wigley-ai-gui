@@ -1071,7 +1071,8 @@ describe('createSessionList', () => {
       const ids = kinds.map((kind, index) => {
         if (kind === 'owned') {
           const hostId = `host-${index}`;
-          return list.open(owned(hostId), { owner: 'retro' }).session.id;
+          return list.open(owned(hostId), { select: false, owner: 'retro' })
+            .session.id;
         }
         const { session } = list.connect(info('/work/x'));
         list.mark(session.id, MARK);

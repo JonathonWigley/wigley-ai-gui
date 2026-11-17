@@ -1375,7 +1375,10 @@ describe('createSessionHostClient', () => {
 
   it.each([
     { name: 'a new host after a host death', dropsDuringDrain: false },
-    { name: 'the first link drops during its drain wait', dropsDuringDrain: true },
+    {
+      name: 'the first link drops during its drain wait',
+      dropsDuringDrain: true,
+    },
   ])(
     'onConnected_Reconnect_FiresAfterTheDrainAndThePendingList: $name',
     async ({ dropsDuringDrain }) => {

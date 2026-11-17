@@ -301,20 +301,27 @@ describe('task tools', () => {
         paused: false,
       },
     },
-  ])('scheduleTask_Args_SavesTheDraft: $name', async ({ args, setup, draft }) => {
-    const { save, session } = harness(setup);
+  ])(
+    'scheduleTask_Args_SavesTheDraft: $name',
+    async ({ args, setup, draft }) => {
+      const { save, session } = harness(setup);
 
-    const result = await session.call('schedule_task', args, CONTEXT);
+      const result = await session.call('schedule_task', args, CONTEXT);
 
-    expect(result.isError ?? false).toBe(false);
-    expect(result.content[0]?.text).toBe(
-      'Scheduled task f0e1d2c3: Morning review, Daily at 09:00.',
-    );
-    expect(save).toHaveBeenCalledExactlyOnceWith(draft);
-  });
+      expect(result.isError ?? false).toBe(false);
+      expect(result.content[0]?.text).toBe(
+        'Scheduled task f0e1d2c3: Morning review, Daily at 09:00.',
+      );
+      expect(save).toHaveBeenCalledExactlyOnceWith(draft);
+    },
+  );
 
   it.each<{ name: string; args: object; setup?: Setup; error: string }>([
-    { name: 'blank name', args: { ...SCHEDULE_ARGS, name: '  ' }, error: 'name' },
+    {
+      name: 'blank name',
+      args: { ...SCHEDULE_ARGS, name: '  ' },
+      error: 'name',
+    },
     {
       name: 'blank prompt',
       args: { ...SCHEDULE_ARGS, prompt: '' },
@@ -563,34 +570,34 @@ describe('task tools', () => {
       text: 'No scheduled task ffffffff.',
       error: true,
     },
-  ])(
-    'updateScheduledTask_Args_ReplacesOnlyGivenFields: $name',
-    async (row) => {
-      const { save, capControls, session } = harness();
+  ])('updateScheduledTask_Args_ReplacesOnlyGivenFields: $name', async (row) => {
+    const { save, capControls, session } = harness();
 
-      const result = await session.call(
-        'update_scheduled_task',
-        row.args,
-        CONTEXT,
-      );
+    const result = await session.call(
+      'update_scheduled_task',
+      row.args,
+      CONTEXT,
+    );
 
-      expect(result.content[0]?.text).toBe(row.text);
-      expect(result.isError ?? false).toBe(row.error ?? false);
-      if (row.draft === undefined) {
-        expect(save).not.toHaveBeenCalled();
-      } else {
-        expect(save).toHaveBeenCalledExactlyOnceWith(row.draft);
-      }
-      if (row.capped === false) {
-        expect(capControls).not.toHaveBeenCalled();
-      }
-    },
-  );
+    expect(result.content[0]?.text).toBe(row.text);
+    expect(result.isError ?? false).toBe(row.error ?? false);
+    if (row.draft === undefined) {
+      expect(save).not.toHaveBeenCalled();
+    } else {
+      expect(save).toHaveBeenCalledExactlyOnceWith(row.draft);
+    }
+    if (row.capped === false) {
+      expect(capControls).not.toHaveBeenCalled();
+    }
+  });
 
   it.each<{ name: string; args: object; setup?: Setup; error: string }>([
     {
       name: 'a bad schedule',
-      args: { id: NIGHTLY.id, schedule: { kind: 'weekly', day: 9, time: '09:00' } },
+      args: {
+        id: NIGHTLY.id,
+        schedule: { kind: 'weekly', day: 9, time: '09:00' },
+      },
       error: 'schedule.',
     },
     {

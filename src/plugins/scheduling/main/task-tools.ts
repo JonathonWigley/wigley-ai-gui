@@ -437,7 +437,8 @@ async function scheduleTask(
     deps,
     SCHEDULE_TASK_TOOL.name,
     draft,
-    (id) => `Scheduled task ${id}: ${draft.name}, ${scheduleText(draft.schedule)}.`,
+    (id) =>
+      `Scheduled task ${id}: ${draft.name}, ${scheduleText(draft.schedule)}.`,
   );
 }
 
@@ -548,8 +549,7 @@ async function updateScheduledTask(
   if (!isAbsent(args.paused) && typeof args.paused !== 'boolean') {
     return errorResult('paused must be true or false.');
   }
-  const paused =
-    typeof args.paused === 'boolean' ? args.paused : task.paused;
+  const paused = typeof args.paused === 'boolean' ? args.paused : task.paused;
   // A pause grants nothing, so it alone leaves the controls uncapped.
   const isPauseOnly = given.length === 1 && args.paused === true;
   const kept = controls.value ?? task.controls;

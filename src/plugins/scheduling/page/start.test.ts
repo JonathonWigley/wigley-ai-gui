@@ -255,9 +255,10 @@ describe('scheduling page part', () => {
     const [section] = page.sections;
     expect(page.sections).toHaveLength(1);
     expect(section!.label).toBe('Scheduled runs');
-    expect(
-      ['s1', 's2'].map((id) => section!.claims(sessionRow(id))),
-    ).toEqual([true, false]);
+    expect(['s1', 's2'].map((id) => section!.claims(sessionRow(id)))).toEqual([
+      true,
+      false,
+    ]);
   });
 
   it('mayStop refuses while the draft changed', async () => {
