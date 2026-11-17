@@ -151,8 +151,9 @@ function spawnedChild(
 }
 
 // A `ProcessRunner` whose `spawn` hands out `children` in order, recording each
-// spawn's arguments, folder and environment in `spawned`; `run` and
-// `startDetached` throw, since the harness never calls them.
+// spawn's arguments, folder and environment in `spawned`; `run`,
+// `startDetached` and `resolveProgram` throw, since the harness never calls
+// them.
 function childProcesses(children: ChildProcessWithoutNullStreams[]) {
   const spawned: {
     args: readonly string[];
@@ -166,6 +167,9 @@ function childProcesses(children: ChildProcessWithoutNullStreams[]) {
     },
     startDetached: () => {
       throw new Error('the harness reached processes.startDetached');
+    },
+    resolveProgram: () => {
+      throw new Error('the harness reached processes.resolveProgram');
     },
     spawn(_command, args, options) {
       spawned.push({ args, options: { cwd: options.cwd, env: options.env } });

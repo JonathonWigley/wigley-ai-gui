@@ -38,6 +38,9 @@ export interface Settings {
   shell: { layout: string };
   // Plugin ids neither process starts; an id no plugin has disables nothing.
   plugins: { disabled: string[] };
+  // `python` is the Python the docs index and unity-pool run; empty, the app
+  // looks up the OS's candidates.
+  programs: { python: string };
 }
 
 // A config file that could not be applied, and why.

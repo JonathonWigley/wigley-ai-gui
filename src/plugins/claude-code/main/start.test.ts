@@ -127,9 +127,15 @@ describe('claudeCodeMainPart', () => {
   ])(
     'claudeCommand_EmptyOrSet_PicksThePlatformProgramOrTheSetting ($setting)',
     ({ setting, expected }) => {
-      expect(claudeCommand(setting, { claude: '~/.local/bin/claude' })).toBe(
-        expected,
-      );
+      const programs = {
+        python: [],
+        claude: [
+          { command: 'claude', args: [] },
+          { command: '~/.local/bin/claude', args: [] },
+        ],
+      };
+
+      expect(claudeCommand(setting, programs)).toBe(expected);
     },
   );
 

@@ -30,6 +30,21 @@ describe('FakeProcesses', () => {
     expect(processes.runs.map((held) => held.command)).toEqual(['python3']);
   });
 
+  it('resolveProgram_Unscripted_AnswersTheDefaults', async () => {
+    const processes = new FakeProcesses();
+
+    expect(await processes.resolveProgram('python')).toEqual({
+      command: 'python3',
+      args: [],
+    });
+    expect(await processes.resolveProgram('claude')).toEqual({
+      command: 'claude',
+      args: [],
+    });
+    processes.scriptProgram('python', null);
+    expect(await processes.resolveProgram('python')).toBeNull();
+  });
+
   it('spawn_RecordsAndDrives', () => {
     const processes = new FakeProcesses();
     const heard: [string, unknown][] = [];

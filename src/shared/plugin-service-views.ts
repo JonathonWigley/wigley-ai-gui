@@ -33,6 +33,7 @@ export function trackedFiles(
 // to outlive the plugin and the app. `spawn` is the tracked path: disposing
 // kills every live spawned program with `SIGKILL`, and a later spawn starts
 // nothing and hears `closed` with `Stopped <command>` on a microtask.
+// `resolveProgram` forwards unchanged.
 export function abortableProcesses(
   processes: ProcessRunner,
   registrations: Registrations,
@@ -89,6 +90,7 @@ export function abortableProcesses(
     startDetached: (command, args, options) =>
       processes.startDetached(command, args, options),
     spawn: spawnTracked,
+    resolveProgram: (name) => processes.resolveProgram(name),
     run: (command, args, options) =>
       processes.run(command, args, {
         ...options,

@@ -32,7 +32,7 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
     );
     // The CLI as the settings name it now.
     const cliDeps = () => {
-      const { scriptPath, pythonCommand } = api.settings();
+      const { scriptPath } = api.settings();
       return {
         processes: services.processes,
         files: services.files,
@@ -42,7 +42,6 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
           scriptPath,
           services.platform.os === 'windows',
         ),
-        pythonCommand,
       };
     };
     const watch = createPoolWatch({

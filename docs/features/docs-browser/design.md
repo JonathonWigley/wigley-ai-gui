@@ -100,8 +100,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   does not list the path and a rebuild is coming or running, once that rebuild settles; a path still not listed is
   refused with a toast. A waiting request is dropped when a newer one is asked meanwhile.
 - The script is found through the wigley install each registered harness profile lists (the adapter's
-  `installedPlugins`), the first whose `docs_index.py` exists; a `docs.scriptPath` setting, empty by default, overrides it. `python3 -X utf8`
-  runs it: UTF-8 mode lets it print the index's `→` to a Windows console's cp1252 pipe.
+  `installedPlugins`), the first whose `docs_index.py` exists; a `docs.scriptPath` setting, empty by default, overrides it. The Python
+  `resolveProgram('python')` gives runs it with `-X utf8`: UTF-8 mode lets it print the index's `→` to a Windows console's cp1252 pipe.
 - The tree shows the last `index.json` at once; a full `build` (12.7 s, 629 entries, 4 MB measured 2026-10-19) runs
   in the background on launch and on Rescan. After create, rename or delete the tree updates at once and a background
   build fills in load states; until then the changed entry's chips read `pending`.

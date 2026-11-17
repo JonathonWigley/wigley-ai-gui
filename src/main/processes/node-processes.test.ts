@@ -8,13 +8,25 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { type ChildProcess } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import type { ProcessRunOptions, SpawnExit } from '../../contracts/processes';
-import { createNodeProcesses } from './node-processes';
+import { PassThrough } from 'node:stream';
+import { describe, expect, it, vi } from 'vitest';
+import type { FileStat } from '../../contracts/files';
+import type {
+  ProcessRunner,
+  ProcessRunOptions,
+  SpawnExit,
+} from '../../contracts/processes';
+import { posixPaths } from '../../shared/paths/posix-paths';
+import { windowsPaths } from '../../shared/paths/windows-paths';
+import { fakePlatform } from '../../shared/platform.test-support';
+import { createNodeProcesses, type StartProgram } from './node-processes';
+import { hostNodeProcesses } from './node-processes.test-support';
 
-const processes = createNodeProcesses();
+const processes = hostNodeProcesses();
 
 // Runs `script` in the Node that runs the tests.
 function runScript(script: string, options?: ProcessRunOptions) {
@@ -298,6 +310,34 @@ describe('createNodeProcesses', () => {
     }
   });
 
+  // Breaks when `setEnv` is dropped, or an unset `logPath` is opened as a file.
+  it(
+    'startDetached_NoLogPath_StartsWithTheSetEnv',
+    { timeout: 10000 },
+    async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'wigley-node-processes-'));
+      const seenPath = path.join(dir, 'seen');
+      try {
+        await processes.startDetached(
+          process.execPath,
+          [
+            '-e',
+            'require("node:fs").writeFileSync(process.argv[1], String(process.env.DETACHED_ENV_TEST))',
+            seenPath,
+          ],
+          { setEnv: { DETACHED_ENV_TEST: 'yes' } },
+        );
+
+        await vi.waitFor(
+          () => expect(readFileSync(seenPath, 'utf8')).toBe('yes'),
+          { timeout: 8000 },
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('spawn_WritesAndStreams_ClosesWithTheCode', async () => {
     const run = spawnCollecting(process.execPath, [
       '-e',
@@ -352,5 +392,331 @@ describe('createNodeProcesses', () => {
       startError: { notFound: true },
     });
     expect(run.exits[0].startError?.message).toContain('ENOENT');
+  });
+});
+
+describe('resolveProgram', () => {
+  it.each<{
+    setting: string;
+    python: { command: string; args: string[] }[];
+    expected: { command: string; args: string[] } | null;
+  }>([
+    {
+      setting: '~/py',
+      python: [{ command: process.execPath, args: [] }],
+      expected: { command: '/h/py', args: [] },
+    },
+    {
+      setting: '',
+      python: [{ command: 'wigley-no-such-python', args: [] }],
+      expected: null,
+    },
+    {
+      setting: '',
+      python: [
+        { command: 'wigley-no-such-python', args: [] },
+        { command: process.execPath, args: ['-v'] },
+      ],
+      expected: { command: process.execPath, args: ['-v'] },
+    },
+  ])(
+    'resolves python from setting "$setting" as $expected',
+    async ({ setting, python, expected }) => {
+      const runner = hostNodeProcesses({
+        paths: posixPaths,
+        homeDir: '/h',
+        programs: { python, claude: [] },
+        programSetting: (name) => (name === 'python' ? setting : ''),
+      });
+
+      expect(await runner.resolveProgram('python')).toEqual(expected);
+    },
+  );
+});
+
+// A child the Windows branch starts in place of a real one: its stdin
+// records each write and end, and a kill records its signal.
+function fakeChild() {
+  const stdinCalls: string[] = [];
+  const child = Object.assign(new EventEmitter(), {
+    pid: 7 as number | undefined,
+    stdin: Object.assign(new EventEmitter(), {
+      write: (text: string) => stdinCalls.push(`write ${text}`),
+      end: () => stdinCalls.push('end'),
+    }),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kills: [] as string[],
+    kill(signal: string) {
+      child.kills.push(signal);
+      return true;
+    },
+    unref() {},
+  });
+  return { child, stdinCalls };
+}
+
+interface Started {
+  file: string;
+  args: readonly string[];
+  options: Parameters<StartProgram>[2];
+  child: ReturnType<typeof fakeChild>;
+}
+
+const COM_SPEC = 'C:\\Windows\\system32\\cmd.exe';
+const WINDOWS_PATH = { PATH: 'C:\\T', PATHEXT: '.EXE;.CMD' };
+// The host's own PATH names, so the lookup reads only `WINDOWS_PATH`.
+const HOST_PATH_NAMES = ['PATH', 'Path', 'PATHEXT'];
+
+// The node adapter on Windows over a `stat` of `present` files and a `start`
+// that records each start and hands a fake child, which starts on a
+// microtask. `holdStats` makes every `stat` wait until `releaseStats`.
+function windowsSetUp(present: string[], holdStats = false) {
+  const started: Started[] = [];
+  const statted: string[] = [];
+  const held: (() => void)[] = [];
+  let failsNextStart = false;
+  const stat = async (file: string): Promise<FileStat | null> => {
+    statted.push(file);
+    if (holdStats) {
+      await new Promise<void>((resolve) => held.push(resolve));
+    }
+    return present.includes(file) ? { isFolder: false, isLink: false } : null;
+  };
+  const start: StartProgram = (file, args, options) => {
+    const fake = fakeChild();
+    started.push({ file, args, options, child: fake });
+    const { child } = fake;
+    if (failsNextStart) {
+      failsNextStart = false;
+      child.pid = undefined;
+      queueMicrotask(() =>
+        child.emit(
+          'error',
+          Object.assign(new Error(`spawn ${file} ENOENT`), { code: 'ENOENT' }),
+        ),
+      );
+    } else {
+      queueMicrotask(() => child.emit('spawn'));
+    }
+    return child as unknown as ChildProcess;
+  };
+  const runner = createNodeProcesses({
+    files: { stat },
+    paths: windowsPaths,
+    os: 'windows',
+    homeDir: 'C:\\Users\\u',
+    programs: fakePlatform('windows').programs,
+    programSetting: () => '',
+    start,
+  });
+  return {
+    runner,
+    started,
+    statted,
+    releaseStats: () => held.splice(0).forEach((release) => release()),
+    failNextStart: () => {
+      failsNextStart = true;
+    },
+  };
+}
+
+// Runs `command` on the Windows PATH and ends its child with exit 0 once it
+// starts; a child whose start fails is left to its `error`. Settles with the
+// rejection's message, if any.
+async function runToExit(
+  setUp: ReturnType<typeof windowsSetUp>,
+  command: string,
+): Promise<string | null> {
+  const startsBefore = setUp.started.length;
+  const run = setUp.runner.run(command, [], {
+    unsetEnv: HOST_PATH_NAMES,
+    setEnv: WINDOWS_PATH,
+  });
+  await vi.waitFor(() => expect(setUp.started.length).toBe(startsBefore + 1));
+  const { child } = setUp.started[startsBefore].child;
+  if (child.pid !== undefined) {
+    child.emit('close', 0);
+  }
+  return run.then(
+    () => null,
+    (error: Error) => error.message,
+  );
+}
+
+function spawnOn(runner: ProcessRunner, command: string, exits: SpawnExit[]) {
+  return runner.spawn(command, ['a'], {
+    cwd: 'C:\\',
+    env: WINDOWS_PATH,
+    events: {
+      stdout() {},
+      stderr() {},
+      closed: (exit) => exits.push(exit),
+    },
+  });
+}
+
+describe('createNodeProcesses on Windows', () => {
+  const comSpecBefore = process.env.ComSpec;
+
+  // ComSpec is read from the app's environment at each start.
+  function withComSpec<T>(body: () => Promise<T>): Promise<T> {
+    process.env.ComSpec = COM_SPEC;
+    return body().finally(() => {
+      if (comSpecBefore === undefined) {
+        delete process.env.ComSpec;
+      } else {
+        process.env.ComSpec = comSpecBefore;
+      }
+    });
+  }
+
+  it.each<{
+    name: string;
+    present: string;
+    begin: (runner: ProcessRunner) => unknown;
+    expected: {
+      file: string;
+      args: string[];
+      windowsVerbatimArguments: boolean;
+      detached?: boolean;
+    };
+  }>([
+    {
+      name: 'run of an .exe',
+      present: 'C:\\T\\git.EXE',
+      begin: (runner) =>
+        runner.run('git', ['a'], {
+          unsetEnv: HOST_PATH_NAMES,
+          setEnv: WINDOWS_PATH,
+        }),
+      expected: {
+        file: 'C:\\T\\git.EXE',
+        args: ['a'],
+        windowsVerbatimArguments: false,
+      },
+    },
+    {
+      name: 'run of a .cmd',
+      present: 'C:\\T\\tool.CMD',
+      begin: (runner) =>
+        runner.run('tool', ['a'], {
+          unsetEnv: HOST_PATH_NAMES,
+          setEnv: WINDOWS_PATH,
+        }),
+      expected: {
+        file: COM_SPEC,
+        args: ['/d', '/s', '/c', '"C:\\T\\tool.CMD ^"a^""'],
+        windowsVerbatimArguments: true,
+      },
+    },
+    {
+      name: 'spawn of a .cmd, looked up in its env',
+      present: 'C:\\T\\tool.CMD',
+      begin: (runner) => spawnOn(runner, 'tool', []),
+      expected: {
+        file: COM_SPEC,
+        args: ['/d', '/s', '/c', '"C:\\T\\tool.CMD ^"a^""'],
+        windowsVerbatimArguments: true,
+      },
+    },
+    {
+      name: 'startDetached of a .cmd, looked up in its setEnv',
+      present: 'C:\\T\\tool.CMD',
+      begin: (runner) =>
+        runner.startDetached('tool', ['a'], { setEnv: WINDOWS_PATH }),
+      expected: {
+        file: COM_SPEC,
+        args: ['/d', '/s', '/c', '"C:\\T\\tool.CMD ^"a^""'],
+        windowsVerbatimArguments: true,
+        detached: true,
+      },
+    },
+  ])('starts the $name as Node is handed it', ({ present, begin, expected }) =>
+    withComSpec(async () => {
+      const setUp = windowsSetUp([present]);
+
+      void Promise.resolve(begin(setUp.runner)).catch(() => {});
+      await vi.waitFor(() => expect(setUp.started).toHaveLength(1));
+
+      const [{ file, args, options }] = setUp.started;
+      expect({
+        file,
+        args,
+        windowsVerbatimArguments: options.windowsVerbatimArguments,
+        ...(expected.detached === undefined
+          ? {}
+          : { detached: options.detached }),
+      }).toEqual(expected);
+    }),
+  );
+
+  it('looks a command up once, and again after a start of it fails', async () => {
+    const setUp = windowsSetUp(['C:\\T\\git.EXE']);
+
+    await runToExit(setUp, 'git');
+    const afterFirst = setUp.statted.length;
+    await runToExit(setUp, 'git');
+    const afterSecond = setUp.statted.length;
+    setUp.failNextStart();
+    expect(await runToExit(setUp, 'git')).toContain('Could not run git');
+    const afterFailed = setUp.statted.length;
+    await runToExit(setUp, 'git');
+
+    expect(afterFirst).toBeGreaterThan(0);
+    expect(afterSecond).toBe(afterFirst);
+    expect(afterFailed).toBe(afterFirst);
+    expect(setUp.statted.length).toBeGreaterThan(afterFailed);
+  });
+
+  it('rejects Stopped and starts nothing when the signal aborts during the lookup', async () => {
+    const setUp = windowsSetUp(['C:\\T\\git.EXE'], true);
+    const controller = new AbortController();
+
+    const run = setUp.runner.run('git', [], {
+      signal: controller.signal,
+      unsetEnv: HOST_PATH_NAMES,
+      setEnv: WINDOWS_PATH,
+    });
+    await vi.waitFor(() => expect(setUp.statted.length).toBeGreaterThan(0));
+    controller.abort();
+    setUp.releaseStats();
+
+    await expect(run).rejects.toThrow('Stopped git');
+    expect(setUp.started).toEqual([]);
+  });
+
+  it('applies a write and an endInput made before the start, in order', async () => {
+    const setUp = windowsSetUp(['C:\\T\\tool.EXE'], true);
+
+    const spawned = spawnOn(setUp.runner, 'tool', []);
+    spawned.write('one');
+    spawned.write('two');
+    spawned.endInput();
+    await vi.waitFor(() => expect(setUp.statted.length).toBeGreaterThan(0));
+    setUp.releaseStats();
+    await vi.waitFor(() => expect(setUp.started).toHaveLength(1));
+
+    expect(setUp.started[0].child.stdinCalls).toEqual([
+      'write one',
+      'write two',
+      'end',
+    ]);
+  });
+
+  it('closes with the signal and starts nothing on a kill before the start', async () => {
+    const setUp = windowsSetUp(['C:\\T\\tool.EXE'], true);
+    const exits: SpawnExit[] = [];
+
+    const spawned = spawnOn(setUp.runner, 'tool', exits);
+    spawned.kill('SIGKILL');
+    await vi.waitFor(() => expect(setUp.statted.length).toBeGreaterThan(0));
+    setUp.releaseStats();
+    await settle();
+
+    expect(exits).toEqual([
+      { code: null, signal: 'SIGKILL', startError: null },
+    ]);
+    expect(setUp.started).toEqual([]);
   });
 });

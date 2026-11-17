@@ -97,6 +97,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  theme variables, `plugin-url.ts`: the `wigley-plugin:` URLs of a user plugin's files and the path each
                  serves from, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
                  `platform.ts`: one builder of the `Platform` record per OS,
+                 `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
+                 (pure, so both OSes' rules are tested anywhere),
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
                  `command-router.ts`: the run and intercept chain each process builds its commands on, over
                  `command-registry.ts`, which holds `onDidRun`,
@@ -212,9 +214,13 @@ src/main/        core main process; main.ts is its composition root
                  EPERM or EBUSY holds is tried again), append, rename, trash, file deletes, folder lists and
                  watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
-  processes/     runs a program, killed past an optional timeout, and returns its exit code and output, or starts one
-                 detached, its output appended to a log file, so it outlives the app's quit, behind ProcessRunner;
-                 `limitRuns` caps how many of a runner's programs run at once (git's runner: 4);
+  processes/     runs a program to its end, killed past an optional timeout, and returns its exit code and output;
+                 spawns one with its stdin, stdout and stderr as text, its exit and its kill; or starts one detached,
+                 its output appended to a log file when one is given, so it outlives the app's quit, behind
+                 ProcessRunner; `resolveProgram` finds a program from the core `programs.python` setting or the
+                 Platform record's per-OS candidates; on Windows a bare name is looked up over PATH × PATHEXT and a
+                 `.cmd` or `.bat` starts through `cmd.exe /d /s /c` (`src/shared/program-lookup.ts`);
+                 `limitRuns` caps how many of a runner's runs go at once (git's runner: 4), not its spawns;
                  `requiredStdout` runs a program and returns its stdout, rejecting naming the program when it cannot
                  run, times out or exits non-zero
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
@@ -937,7 +943,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
-  watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
+  watches, aborts its running processes and kills its spawned ones (a detached start outlives it), destroys its
+  editors and zeroes its alert counts. `services.log` is
   scoped to the plugin: a plugin calls `log(message)`, and the line shows as `[<id>] message` under its own id. The page's services add `picker` (the shared list picker,
   wired to the plugin's scope, log and overlay), `chooseFolder` (the native folder dialog, null when dismissed) and
   `openExternal` (an http or https link in the default app; main refuses any other). The page's home folder

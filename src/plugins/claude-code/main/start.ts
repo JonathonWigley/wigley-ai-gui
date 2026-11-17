@@ -6,12 +6,14 @@ import { createClaudeCodeHarness } from './claude-code-harness';
 import { createPermissionRoute, PERMISSION_TOOLS } from './permission-route';
 
 // The program the `command` setting names, the setting itself when set. Empty,
-// it is the platform's `claude`.
+// it is the platform's last `claude` candidate, the installer's spot.
 export function claudeCommand(
   setting: string,
   programs: PlatformPrograms,
 ): string {
-  return setting === '' ? programs.claude : setting;
+  return setting === ''
+    ? programs.claude[programs.claude.length - 1].command
+    : setting;
 }
 
 // Registers the Claude Code adapter, run as `services.agentHomeDir`: its

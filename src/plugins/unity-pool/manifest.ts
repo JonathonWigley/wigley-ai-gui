@@ -46,17 +46,12 @@ export const unityPoolManifest = definePlugin({
     },
   },
   scopes: { panel: 'In the Unity pool panel' },
-  settings: { scriptPath: '', pythonCommand: 'python3', layout: 'default' },
+  settings: { scriptPath: '', layout: 'default' },
   settingInfo: {
     scriptPath: {
       label: 'unity-pool command',
       description:
-        "The unity-pool script the panel's Hold, Release and Open buttons run with the Python command. ~ is the home folder. Empty, it is ~/.local/bin/unity-pool, and on Windows ~/wigley-agents/tools/unity-pool/unity-pool, since a Windows install writes launchers, not a symlink Python can run.",
-    },
-    pythonCommand: {
-      label: 'Python command',
-      description:
-        'The Python the unity-pool script runs with: python3, or py or python on a Windows install with no python3.',
+        "The unity-pool script the panel's Hold, Release and Open buttons run with the core programs.python Python. ~ is the home folder. Empty, it is ~/.local/bin/unity-pool, and on Windows ~/wigley-agents/tools/unity-pool/unity-pool, since a Windows install writes launchers, not a symlink Python can run.",
     },
     layout: {
       label: 'Layout',

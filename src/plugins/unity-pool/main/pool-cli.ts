@@ -6,6 +6,7 @@ import type {
 } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
 import { isJsonObject } from '../../../shared/json';
+import { programNotFoundMessage } from '../../../shared/program-lookup';
 import { SESSION_IDENTITY_ENV } from '../../../shared/session-env';
 import type { PoolAction, PoolActionResult } from '../contract';
 
@@ -18,14 +19,14 @@ const RUN_TIMEOUT_MS: Record<PoolAction, number> = {
 
 type CliFailure = { ok: false; error: string; message: string };
 
-// The CLI and the Python that runs it; `scriptPath` is the raw setting, `~` not yet expanded.
+// The CLI and the runner whose `resolveProgram('python')` runs it, answering `no-python` when it finds none;
+// `scriptPath` is the raw setting, `~` not yet expanded.
 export interface CliDeps {
   processes: ProcessRunner;
   files: Pick<Files, 'stat'>;
   paths: Pick<Paths, 'expandTilde'>;
   homeDir: string;
   scriptPath: string;
-  pythonCommand: string;
 }
 
 // The Python arguments of `unity-pool <action> <pool> <clone> --json`.
@@ -92,9 +93,10 @@ export function resolveScriptPath(setting: string, windows: boolean): string {
     : '~/.local/bin/unity-pool';
 }
 
-// Runs `<pythonCommand> -X utf8 <script> <action> <pool> <clone> --json`, `scriptPath` being the raw setting with `~`
-// not yet expanded, without any session's identity in its environment, so the CLI takes the run as the user's. A
-// script missing from its path runs nothing and answers `no-cli`.
+// Runs `<python> -X utf8 <script> <action> <pool> <clone> --json` with the Python `resolveProgram('python')` gives,
+// its own args leading, `scriptPath` being the raw setting with `~` not yet expanded, without any session's identity
+// in its environment, so the CLI takes the run as the user's. A script missing from its path runs nothing and answers
+// `no-cli`; no Python found runs nothing and answers `no-python`.
 export async function runPoolCommand(
   deps: CliDeps,
   action: PoolAction,
@@ -106,9 +108,17 @@ export async function runPoolCommand(
     return script;
   }
   try {
+    const python = await deps.processes.resolveProgram('python');
+    if (python === null) {
+      return {
+        ok: false,
+        error: 'no-python',
+        message: programNotFoundMessage('python'),
+      };
+    }
     const result = await deps.processes.run(
-      deps.pythonCommand,
-      poolCommandArgs(script, action, pool, clone),
+      python.command,
+      [...python.args, ...poolCommandArgs(script, action, pool, clone)],
       { timeoutMs: RUN_TIMEOUT_MS[action], unsetEnv: SESSION_IDENTITY_ENV },
     );
     return readActionResult(result);

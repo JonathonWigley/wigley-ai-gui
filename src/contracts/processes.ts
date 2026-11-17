@@ -1,3 +1,5 @@
+import type { ProgramCandidate, ProgramName } from './platform';
+
 // What a finished program left: its exit code, -1 when a signal ended it or
 // the timeout killed it, and everything it wrote to stdout and stderr as UTF-8.
 export interface ProcessResult {
@@ -26,12 +28,14 @@ export interface ProcessRunOptions {
   setEnv?: Readonly<Record<string, string>>;
 }
 
-// How one `ProcessRunner.startDetached` starts its program: `logPath` is the
-// full path of the file its stdout and stderr are appended to, made when
-// missing.
+// How one `ProcessRunner.startDetached` starts its program.
 export interface DetachedStartOptions {
   cwd?: string;
-  logPath: string;
+  // The full path of the file its stdout and stderr are appended to, made when
+  // missing. Unset, both are dropped.
+  logPath?: string;
+  // Names set for this start over the app's environment, as `run`'s `setEnv`.
+  setEnv?: Readonly<Record<string, string>>;
 }
 
 // Runs the machine's programs.
@@ -50,9 +54,10 @@ export interface ProcessRunner {
     options?: ProcessRunOptions,
   ): Promise<ProcessResult>;
   // Starts `command` with `args`, no shell, in `cwd` when given and in the
-  // app's environment, detached from the app: in its own process group (on
-  // Windows, its own console-less process), its stdout and stderr appended to
-  // `logPath`, and not waited on, so it outlives the app's quit. Resolves once
+  // app's environment with `setEnv`'s names set, detached from the app: in its
+  // own process group (on Windows, its own console-less process), its stdout
+  // and stderr appended to `logPath` when one is given, dropped otherwise, and
+  // not waited on, so it outlives the app's quit. Resolves once
   // the program has started; rejects with `Could not run <command>: <reason>`
   // when it cannot start or `logPath` cannot be opened. Nothing stops it: a
   // plugin's stop and the app's quit leave it running.
@@ -75,6 +80,11 @@ export interface ProcessRunner {
     args: readonly string[],
     options: SpawnOptions,
   ): SpawnedProcess;
+  // The program to run as `name`: the core setting that names it when set
+  // (`programs.python`), `~` expanded and not looked up; else the first of the
+  // Platform record's candidates found on PATH or at its path, as the found
+  // file with the candidate's leading args. Null when none is found.
+  resolveProgram(name: ProgramName): Promise<ProgramCandidate | null>;
 }
 
 export type SpawnSignal = 'SIGTERM' | 'SIGKILL';

@@ -13,7 +13,9 @@ interface WaitingRun {
 // that waits its turn, in call order, and its `timeoutMs` counts from its
 // start. An abort of `signal` while it waits rejects it with
 // `Stopped <command>` without starting the program. A detached start and a
-// spawn neither count nor wait: the limit is git's, and git only runs.
+// spawn neither count nor wait: the limit is git's, and git only runs; a
+// spawned program has no end the limit could wait on. `resolveProgram`
+// forwards at once.
 export function limitRuns(
   runner: ProcessRunner,
   maxRunning: number,
@@ -35,6 +37,7 @@ export function limitRuns(
     startDetached: (command, args, options) =>
       runner.startDetached(command, args, options),
     spawn: (command, args, options) => runner.spawn(command, args, options),
+    resolveProgram: (name) => runner.resolveProgram(name),
     run(
       command: string,
       args: string[],

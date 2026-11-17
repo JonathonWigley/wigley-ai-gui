@@ -52,7 +52,7 @@ import type { OsName, Platform } from '../contracts/platform';
 import type { ProcessRunner } from '../contracts/processes';
 import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
-import type { AppConfig } from '../contracts/settings';
+import type { AppConfig, Settings } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
 import type { UserConfig } from '../contracts/user-config';
@@ -440,10 +440,23 @@ const files = createNodeFiles({
   trashItem: modeServices.trashItem,
   os: platform.os,
 });
-const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = platform.os === 'windows' ? windowsPaths : posixPaths;
+// The core settings as the config store holds them now; null until the store
+// loads, so a program lookup before then reads no core setting.
+let currentSettings: (() => Settings) | null = null;
+// Programs install under the user's real home, never a self-test's or drive
+// run's temp home.
+const processes = createNodeProcesses({
+  files,
+  paths,
+  os: platform.os,
+  homeDir: os.homedir(),
+  programs: platform.programs,
+  programSetting: (name) =>
+    name === 'python' ? (currentSettings?.().programs.python ?? '') : '',
+});
 // Git runs at most this many at once, so a burst of reads cannot pile up
 // exited children faster than main's event loop reaps them.
 const MAX_GIT_RUNS = 4;
@@ -1493,6 +1506,7 @@ function startApp() {
         inputs.homeDir,
         catalog,
       );
+      currentSettings = () => store.current().settings;
       onSelfTestExit('the config store', () => store.dispose());
       // Logs its own failure and never rejects, so the start goes on.
       await writePluginTypes({

@@ -1,6 +1,6 @@
 # 04 — Program lookup and spawn behind ProcessRunner
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 03 and the Lane H gate (plan.md § Cross-lane gate)
 Plan: [plan.md](plan.md)
