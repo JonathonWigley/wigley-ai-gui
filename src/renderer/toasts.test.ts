@@ -94,8 +94,7 @@ describe('createToasts', () => {
     expect(layer.children).toEqual([]);
   });
 
-  // Breaks if a draw that throws reaches `show`'s caller, leaves a half-built
-  // toast, or goes unlogged.
+  // Breaks if a draw that throws reaches `show`'s caller or goes unlogged.
   it('createToasts_DrawThrows_LogsAndShowsNothing', () => {
     const layer = new FakeElement('div');
     const { timers, delays } = fakeTimers();

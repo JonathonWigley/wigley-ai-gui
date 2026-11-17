@@ -6,11 +6,21 @@ import {
   FocusFakeElement,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
+import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import type { Layout } from '../layouts/layout';
 import { stashPartsSetup } from './layout/session-stash-parts.test-support';
 import { createNoteDialog } from './note-dialog';
 
 const TARGET = { sessionId: 's1', name: 'gamma' };
+
+// A layout whose frame marks its panel `frame-mine`.
+const mineFrame: Layout = {
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(parent, 'div', 'frame-mine', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    return { element: panel, body, actions: null };
+  },
+};
 
 // A note dialog drawn through the session-stash parts (showing `mine` when
 // handed in), whose `stash` records each call and whose pushed scope records
@@ -49,6 +59,7 @@ function dialogSetup(mine?: Layout) {
   opener.focus();
   return {
     dialog,
+    parts,
     stashed,
     // The note box, drawn once the dialog opens.
     box: () => findAll(root, 'session-stash-box')[0] as FocusFakeElement,
@@ -178,13 +189,7 @@ describe('createNoteDialog', () => {
   });
 
   it('redraw_ChangedLayout_KeepsOneBodyAndTheTypedNote', () => {
-    const { dialog, box, bodies } = dialogSetup({
-      dialogFrame(parent, input, kit) {
-        const panel = kit.el(parent, 'div', 'frame-mine', input.title);
-        const body = kit.el(panel, 'div', 'ui-dialog-body');
-        return { element: panel, body, actions: null };
-      },
-    });
+    const { dialog, box, bodies } = dialogSetup(mineFrame);
     dialog.open(TARGET);
     box().value = 'half typed';
 
@@ -196,5 +201,18 @@ describe('createNoteDialog', () => {
     expect(findAll(panels[0], 'session-stash-note')).toHaveLength(1);
     expect(bodies('session-stash-note')).toHaveLength(1);
     expect(box().value).toBe('half typed');
+  });
+
+  it('redraw_LayoutSwitchedAfterOpen_FrameFollowsTheSwitch', () => {
+    const { dialog, parts, bodies } = dialogSetup();
+    dialog.open(TARGET);
+    expect(bodies('frame-mine')).toHaveLength(0);
+
+    parts.setLayouts(withUser<Layout>(defaultLayout, mineFrame, 'mine'));
+    dialog.redraw();
+
+    const panels = bodies('frame-mine');
+    expect(panels).toHaveLength(1);
+    expect(panels[0].dataset.layout).toBe('mine');
   });
 });

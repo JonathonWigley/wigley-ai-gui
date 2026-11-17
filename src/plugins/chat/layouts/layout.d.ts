@@ -444,13 +444,14 @@ export type PickerItemInput =
   | { list: 'choices'; label: string; isCurrent: boolean };
 // `label` is the line the list filters on and the row's tooltip shows; a `section` row's joins its title and detail.
 // `prompt` is the actions the cursor row shows (`x archive` / `x restore` in the Session step), each drawn with
-// `kit.keyHint`; empty on every other row. A layout that leaves it out shows no prompt.
+// `kit.keyHint`; empty on every other row. A layout that leaves out `pickerRow` draws it with `default`.
 export interface PickerRowInput {
   item: PickerItemInput;
   label: string;
   prompt: readonly PromptActionInput[];
 }
-// A row draws through `row(parent, { density: 'list', tag: 'li', … })`; the app sets `is-selected` and `is-cursor` on it.
+// A row draws through `row(parent, { density: 'list', tag: 'li', … })`; the app sets `is-selected` and `is-cursor`
+// on it.
 export interface PickerRowKit extends BaseKit {}
 export interface PickerHeadingInput {
   title: string;

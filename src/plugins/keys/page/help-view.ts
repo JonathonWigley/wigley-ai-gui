@@ -35,6 +35,12 @@ export function mountHelpView(
     body = parts.help(dialog.body, { sections: current });
     isStale = false;
   };
+  // The keys frame draws its whole actions row itself, so the old row's Close
+  // is dropped before `redrawFrame` moves it into the new frame.
+  const redrawFrame = () => {
+    dialog.actions.replaceChildren();
+    dialog.redrawFrame();
+  };
   draw();
   overlay.contribute(dialog.element);
   return {
@@ -43,7 +49,7 @@ export function mountHelpView(
     },
     show() {
       if (isStale) {
-        dialog.redrawFrame();
+        redrawFrame();
         draw();
       }
       dialog.show();
@@ -55,7 +61,7 @@ export function mountHelpView(
     },
     layoutsChanged() {
       if (dialog.isShown()) {
-        dialog.redrawFrame();
+        redrawFrame();
         draw();
       } else {
         isStale = true;

@@ -6,7 +6,8 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // the toasts layer, `data-tone` and `role="status"` on the toast's root, the fade in, the 4000 ms it shows for and its
 // removal.
 
-// The same members as `ToastTone` in the app's plugin contract, which this file cannot import; `toast-tone.test-d.ts` checks the two stay equal.
+// The same members as `ToastTone` in the app's plugin contract, which this file cannot import;
+// `toast-tone.test-d.ts` checks the two stay equal.
 export type ToastTone = 'success' | 'info' | 'error';
 export interface ToastInput {
   text: string;

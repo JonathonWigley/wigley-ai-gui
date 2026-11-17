@@ -58,6 +58,55 @@ const userLayout: ChatLayout = {
   },
 };
 
+// The reason box over fake page services, handing back the layouts it draws
+// through and the scrim it contributes once it is built.
+function reasonBoxSetup() {
+  const log = () => undefined;
+  const noEvent = () => undefined;
+  const layouts = createChatLayouts(log);
+  let scrim: HTMLElement | null = null;
+  const reasonBox = createReasonBox({
+    layouts,
+    markdown: {},
+    keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
+    commands: { exists: () => true, argShape: () => undefined, run: noEvent },
+    platform: 'macos',
+    log,
+    overlay: {
+      contribute: (element: HTMLElement) => {
+        scrim = element;
+        return { dispose: noEvent };
+      },
+    },
+    run: noEvent,
+    pushScope: () => ({
+      pop: noEvent,
+      dispose: noEvent,
+      onBaseChanged: () => ({ dispose: noEvent }),
+    }),
+    editor: {
+      create: () => ({
+        text: () => '',
+        setText: noEvent,
+        focus: noEvent,
+        blur: noEvent,
+      }),
+    },
+  } as unknown as Parameters<typeof createReasonBox>[0]);
+  return { reasonBox, layouts, root: () => asFake(scrim!), noEvent };
+}
+
+// Makes `mine` the layout the chat draws with.
+function showMine(layouts: ReturnType<typeof createChatLayouts>) {
+  layouts.set({
+    layouts: new Map([
+      ['default', defaultLayout],
+      ['mine', userLayout],
+    ]),
+    user: 'mine',
+  });
+}
+
 describe('createReasonBox', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -65,55 +114,29 @@ describe('createReasonBox', () => {
   });
 
   it('reasonBox_OpenAfterALayoutChange_DrawsTheBodyInTheNewFrame', () => {
-    const log = () => undefined;
-    const noEvent = () => undefined;
-    const layouts = createChatLayouts(log);
-    let scrim: HTMLElement | null = null;
-    const reasonBox = createReasonBox({
-      layouts,
-      markdown: {},
-      keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
-      commands: { exists: () => true, argShape: () => undefined, run: noEvent },
-      platform: 'macos',
-      log,
-      overlay: {
-        contribute: (element: HTMLElement) => {
-          scrim = element;
-          return { dispose: noEvent };
-        },
-      },
-      run: noEvent,
-      pushScope: () => ({
-        pop: noEvent,
-        dispose: noEvent,
-        onBaseChanged: () => ({ dispose: noEvent }),
-      }),
-      editor: {
-        create: () => ({
-          text: () => '',
-          setText: noEvent,
-          focus: noEvent,
-          blur: noEvent,
-        }),
-      },
-    } as unknown as Parameters<typeof createReasonBox>[0]);
-    layouts.set({
-      layouts: new Map([
-        ['default', defaultLayout],
-        ['mine', userLayout],
-      ]),
-      user: 'mine',
-    });
+    const { reasonBox, layouts, root, noEvent } = reasonBoxSetup();
+    showMine(layouts);
 
     reasonBox.open('Bash', noEvent);
 
-    const root = asFake(scrim!);
-    const [panel] = findAll(root, 'user-frame');
+    const [panel] = findAll(root(), 'user-frame');
     const [body] = findAll(panel, 'user-body');
     const [part] = findAll(body, 'chat-dialog-part');
     expect(panel.dataset.layout).toBe('mine');
     expect(part).toBeDefined();
     expect(findAll(panel, 'user-title')[0].textContent).toBe('Deny Bash?');
+  });
+
+  it('reasonBox_LayoutChangeAfterBuilt_FrameFollowsTheNewLayout', () => {
+    const { reasonBox, layouts, root, noEvent } = reasonBoxSetup();
+    reasonBox.open('Bash', noEvent);
+    expect(findAll(root(), 'user-frame')).toHaveLength(0);
+
+    showMine(layouts);
+
+    const panels = findAll(root(), 'user-frame');
+    expect(panels).toHaveLength(1);
+    expect(panels[0].dataset.layout).toBe('mine');
   });
 });
 

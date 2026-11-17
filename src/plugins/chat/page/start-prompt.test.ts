@@ -1374,6 +1374,7 @@ function pickerRun(options: {
 }) {
   const inputs = new Map<string, PickerRowInput>();
   const { anchors, keys } = recordingAnchors();
+  const rowAnchors = new Map<string, typeof anchors>();
   const layouts = {
     onChange: () => ({ dispose: () => undefined }),
     draw(
@@ -1391,9 +1392,11 @@ function pickerRun(options: {
         kit: PickerRowKit,
       ) => {
         inputs.set(input.label, input);
+        const anchorsBefore = anchors.length;
         for (const action of input.prompt) {
           kit.keyHint(at, action.command, { label: action.label });
         }
+        rowAnchors.set(input.label, anchors.slice(anchorsBefore));
         return { element: at };
       };
       const built = build(builder, parent, {
@@ -1429,7 +1432,7 @@ function pickerRun(options: {
     archiveState: () => options.archiveState,
     picked: () => undefined,
   });
-  return { inputs, anchors };
+  return { inputs, rowAnchors };
 }
 
 describe('chat picker prompt', () => {
@@ -1477,10 +1480,10 @@ describe('chat picker prompt', () => {
   ])(
     'resumePicker_CursorRow_PromptNamesArchiveOrRestore: $case',
     ({ scope, archiveState, row, expected }) => {
-      const { inputs, anchors } = pickerRun({ scope, archiveState });
+      const { inputs, rowAnchors } = pickerRun({ scope, archiveState });
 
       expect(inputs.get(row)?.prompt).toEqual(expected);
-      const archiveScopes = anchors
+      const archiveScopes = (rowAnchors.get(row) ?? [])
         .filter((anchor) => anchor.command === chatCommand('toggleArchive'))
         .map((anchor) => anchor.scope);
       expect(archiveScopes).toEqual(

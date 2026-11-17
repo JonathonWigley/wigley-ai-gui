@@ -1,7 +1,8 @@
 // The keys layout contract: the parts a keys layout draws for the help overlay, the which-key panel, the leader
 // search's rows and the title bar's Keys button, and the kit each part gets. The app keeps the help dialog's scrim,
-// keys and focus (its `dialogFrame` draws the panel, title and Close button), the which-key panel's placement and timers, the leader search's list picker (its filter,
-// cursor and clicks), the Keys button's slot in the title bar, and every key and scope.
+// keys and focus (its `dialogFrame` draws the panel, title and Close button), the which-key panel's placement and
+// timers, the leader search's list picker (its filter, cursor and clicks), the Keys button's slot in the title bar,
+// and every key and scope.
 //
 // Keys reach a part already printed for the platform: draw them with `kit.kbd(parent, keys)`.
 import type {
