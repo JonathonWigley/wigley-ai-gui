@@ -3526,28 +3526,43 @@ describe('createClaudeCodeHarness on the session host', () => {
     {
       name: 'start_NoSessionId_MintsPassesAndReportsIt',
       sessionId: null,
+      detaches: false,
       expected: 'uuid-1',
+      reported: [['sessionId', 'uuid-1']],
     },
     {
       name: 'start_GivenSessionId_ReportsIt',
       sessionId: 's-1',
+      detaches: false,
       expected: 's-1',
+      reported: [['sessionId', 's-1']],
     },
-  ])('$name', async ({ sessionId, expected }) => {
+    // Nothing is emitted after a detach, the queued session id included.
+    {
+      name: 'start_ThenDetach_ReportsNoSessionId',
+      sessionId: 's-1',
+      detaches: true,
+      expected: 's-1',
+      reported: [],
+    },
+  ])('$name', async ({ sessionId, detaches, expected, reported }) => {
     const host = createFakeSessionHost(clock);
     const { sequence, events } = recordingEvents();
 
-    hostHarness(host, clock).start(
+    const agent = hostHarness(host, clock).start(
       { ...request, sessionId, resume: false },
       events,
     );
+    if (detaches) {
+      agent.detach();
+    }
     await settle();
 
     const args = host.processes[0].request?.args ?? [];
     const flagAt = args.indexOf('--session-id');
     expect(args.slice(flagAt, flagAt + 2)).toEqual(['--session-id', expected]);
-    expect(sequence[0]).toEqual(['sessionId', expected]);
-    expect(sequence.filter(([name]) => name === 'sessionId')).toHaveLength(1);
+    expect(sequence.slice(0, reported.length)).toEqual(reported);
+    expect(sequence.filter(([name]) => name === 'sessionId')).toEqual(reported);
   });
 
   it('attach_NullSessionId_Rejects', async () => {

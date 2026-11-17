@@ -63,10 +63,10 @@ start one whenever a check needs it.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
    folder; Read the PNG. `query` returns a selector's text, box and computed style.
 5. `npm run drive -- quit` when done; it waits for the ui-state write, part disposal and any
-   recording to finish and ends the run's Claude sessions before the app exits, then deletes the
+   recording to finish and ends the run's agent sessions before the app exits, then deletes the
    run's `home/` and `user-data/`, so its test repos leave the machine's docs index: `screenshots/`,
    `videos/` and `app.log` stay for reading back. `quit --keep-sessions` instead keeps the run's
-   Claude sessions running on the session host, and its `home/` and `user-data/`, so `start --run
+   agent sessions running on the session host, and its `home/` and `user-data/`, so `start --run
    <id>` brings it back and re-attaches them. That start takes the flags in the run's `start.json`
    when its command line names none, and copies no user config over the kept home. While the host
    still answers, a plain `quit` of the stopped run refuses and deletes nothing: end it with `start
@@ -75,7 +75,7 @@ start one whenever a check needs it.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
-survives a restart runs the same way. `restart` also keeps the run's Claude sessions running on
+survives a restart runs the same way. `restart` also keeps the run's agent sessions running on
 the session host and re-attaches them. The docs fixture survives a `restart` as the agent left it;
 `docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per
 index load state other than `launch`, under `.claude/load-states/`; `indexDelayMs: <ms>` makes the

@@ -149,6 +149,21 @@ describe('agent definitions', () => {
       },
       expected: { 'wigley:haiku': { model: 'haiku', effort: null } },
     },
+    // An install with no `installPath` is never listed, so this folder's
+    // broken project install falls through to the user install.
+    {
+      name: 'PluginProjectScopeWithNoInstallPath_UserInstallLoads',
+      files: {
+        [INSTALLED]: installedPlugins({
+          'wigley@wigley-ai-marketplace': [
+            { scope: 'user', installPath: '/cache/wigley/1.0' },
+            { scope: 'project', projectPath: PROJECT },
+          ],
+        }),
+        '/cache/wigley/1.0/agents/haiku.md': definition('model: haiku'),
+      },
+      expected: { 'wigley:haiku': { model: 'haiku', effort: null } },
+    },
     {
       name: 'NoInstalledFile',
       files: {

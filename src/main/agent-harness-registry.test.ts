@@ -43,6 +43,8 @@ const B_PROFILES: HarnessProfile[] = [
 ];
 const CLASH_LINE =
   'agent harness "b": profile "work" left out, agent harness "a" has that name';
+const LISTED_TWICE_LINE =
+  'agent harness "a": profile "work" listed twice, the later one left out';
 
 const idsOf = (harnesses: readonly AgentHarness[]) =>
   harnesses.map((harness) => harness.id);
@@ -162,45 +164,67 @@ describe('createAgentHarnessRegistry', () => {
     expect(slot.get('a')).toBeUndefined();
   });
 
-  // Registers `a` then `b`; each row acts on their registrations after, and
-  // the slot keys heard count only from the act on.
+  // Registers `a` (with `aProfiles`) then `b`; each row acts on their
+  // registrations after, and the slot keys heard count only from the act on.
   it.each<{
     given: string;
+    aProfiles: HarnessProfile[];
     act: (a: AgentHarnessRegistration, b: AgentHarnessRegistration) => void;
+    aKept: HarnessProfile[];
     bProfiles: HarnessProfile[];
+    logged: string[];
     heardKeys: string[];
   }>([
     {
       given: 'a then b both declare work',
+      aProfiles: A_PROFILES,
       act: () => undefined,
+      aKept: A_PROFILES,
       bProfiles: [{ name: 'home', configDir: '/h' }],
+      logged: [CLASH_LINE],
       heardKeys: [],
     },
     {
       given: 'a disposed',
+      aProfiles: A_PROFILES,
       act: (a) => a.dispose(),
+      aKept: [],
       bProfiles: B_PROFILES,
+      logged: [CLASH_LINE],
       heardKeys: ['a', 'b'],
     },
     {
       given: 'b refreshed with no change',
+      aProfiles: A_PROFILES,
       act: (_a, b) => b.refresh(),
+      aKept: A_PROFILES,
       bProfiles: [{ name: 'home', configDir: '/h' }],
+      logged: [CLASH_LINE],
+      heardKeys: [],
+    },
+    {
+      given: 'a lists work twice',
+      aProfiles: [...A_PROFILES, { name: 'work', configDir: '/a2' }],
+      act: () => undefined,
+      aKept: A_PROFILES,
+      bProfiles: [{ name: 'home', configDir: '/h' }],
+      logged: [LISTED_TWICE_LINE, CLASH_LINE],
       heardKeys: [],
     },
   ])(
     'registry_ProfileNameClash_given $given',
-    ({ act, bProfiles, heardKeys }) => {
+    ({ aProfiles, act, aKept, bProfiles, logged: expectedLog, heardKeys }) => {
       const { registry, slot, logged } = registryOverStore();
-      const a = registry.register(harnessDouble('a', 'A', A_PROFILES).harness);
+      const a = registry.register(harnessDouble('a', 'A', aProfiles).harness);
       const b = registry.register(harnessDouble('b', 'B', B_PROFILES).harness);
       const heard: string[] = [];
       slot.on((key) => heard.push(key));
 
       act(a, b);
 
+      expect(slot.get('a')?.profiles ?? []).toEqual(aKept);
       expect(slot.get('b')?.profiles).toEqual(bProfiles);
-      expect(logged).toEqual([CLASH_LINE]);
+      expect(logged).toEqual(expectedLog);
       expect(heard).toEqual(heardKeys);
     },
   );

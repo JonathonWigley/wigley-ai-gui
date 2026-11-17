@@ -49,11 +49,8 @@ function waitingTarget() {
   return { target, signals };
 }
 
-async function flush() {
-  for (let index = 0; index < 5; index += 1) {
-    await Promise.resolve();
-  }
-}
+// Lets every queued promise reaction run, however long the route's chain.
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 describe('readPermissionCall', () => {
   it('readPermissionCall_readsTheDocumentedShape', () => {
@@ -154,11 +151,11 @@ describe('createPermissionRoute', () => {
       .then((settled) => {
         result = settled;
       });
-    await flush();
+    await settle();
     expect(result).toBe('pending');
 
     attach(replyingTarget('after attach').target);
-    await flush();
+    await settle();
 
     expect(result).toEqual(textResult('after attach'));
   });
@@ -169,7 +166,7 @@ describe('createPermissionRoute', () => {
     route.route('row-a', Promise.resolve(target));
     const tools = route.toolSession(sessionOf('row-a'));
     void tools.call('permission_prompt', ARGS, context());
-    await flush();
+    await settle();
     expect(signals.map((signal) => signal.aborted)).toEqual([false]);
 
     tools.end();

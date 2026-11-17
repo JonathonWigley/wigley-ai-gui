@@ -8,7 +8,7 @@ import type { KeyedSlotWriter } from '../contracts/state';
 import { isSameJson } from '../shared/json';
 
 // A harness's slot entry, and each profile it left out with the id of the
-// harness that holds that name.
+// harness that holds that name: its own id for a name it lists twice.
 interface ComputedEntry {
   harness: AgentHarness;
   info: AgentHarnessInfo;
@@ -16,7 +16,7 @@ interface ComputedEntry {
 }
 
 // Each harness's `info()` in `harnesses` order, leaving out each profile whose
-// name an earlier harness already holds.
+// name an earlier harness, or an earlier profile of its own, already holds.
 function computeEntries(harnesses: readonly AgentHarness[]): ComputedEntry[] {
   const holders = new Map<string, string>();
   return harnesses.map((harness) => {
@@ -37,8 +37,8 @@ function computeEntries(harnesses: readonly AgentHarness[]): ComputedEntry[] {
 
 // The registry behind `services.agentHarnesses`, writing each live harness's
 // `info()` to `slot` (`core.agentHarnesses`) under its id, with each profile
-// whose name an earlier registered harness holds left out and logged through
-// `log`. A harness joins `list` and `get` before its key is set and leaves
+// whose name an earlier registered harness holds, or that the harness lists
+// twice, left out and logged through `log`. A harness joins `list` and `get` before its key is set and leaves
 // them before its key is deleted, so a slot listener that reads the registry
 // sees what the slot says.
 export function createAgentHarnessRegistry(
@@ -58,7 +58,9 @@ export function createAgentHarnessRegistry(
       slot.set(id, entry.info);
       for (const { name, holderId } of entry.leftOut) {
         log(
-          `agent harness "${id}": profile "${name}" left out, agent harness "${holderId}" has that name`,
+          holderId === id
+            ? `agent harness "${id}": profile "${name}" listed twice, the later one left out`
+            : `agent harness "${id}": profile "${name}" left out, agent harness "${holderId}" has that name`,
         );
       }
     }

@@ -96,6 +96,7 @@ import { scopedFiles } from '../shared/scoped-files';
 import type { SlotStore } from '../shared/state/slot-store';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
 import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
+import { agentEnvironmentOf } from './agent-environment';
 import { createAgentHarnessRegistry } from './agent-harness-registry';
 import { createMacAlerts } from './alerts/mac-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
@@ -178,6 +179,7 @@ import { createWindowsSystemStats } from './system-stats/windows-system-stats';
 import {
   applySelfTestConfig,
   fakeRunPluginSettings,
+  isFakeHarnessRun,
   selfTestFilterOf,
 } from './selftest-config';
 import {
@@ -273,26 +275,6 @@ interface ModeServicesContext {
 interface RunAgents {
   harnesses: readonly AgentHarness[];
   agentHomeDir: string;
-}
-
-// The app's environment, its undefined values dropped, with
-// `WIGLEY_AI_GUI_ENDPOINT_DIR` set to the app instance's endpoint folder in
-// `endpointHome`, so the relays of the agent sessions this app starts send their
-// rounds to this app.
-function endpointEnv(endpointHome: string): Readonly<Record<string, string>> {
-  const definedEnv = Object.fromEntries(
-    Object.entries(process.env).filter(
-      (pair): pair is [string, string] => pair[1] !== undefined,
-    ),
-  );
-  return {
-    ...definedEnv,
-    WIGLEY_AI_GUI_ENDPOINT_DIR: appEndpointDir(
-      paths,
-      endpointHome,
-      appInstance.id,
-    ),
-  };
 }
 
 // The icon badge of the OS `osName`. Linux has none.
@@ -408,19 +390,6 @@ function driveAgents(name: DriveHarnessName, homeDir: string): RunAgents {
   return name === 'fake'
     ? fakeAgents(homeDir)
     : { harnesses: [], agentHomeDir: os.homedir() };
-}
-
-// Whether the run's agent sessions run on the fake harness, so the built-in
-// plugins that run a real harness are left out.
-function isFakeHarnessRun(environment: RunEnvironment): boolean {
-  switch (environment.mode) {
-    case 'selfTest':
-      return true;
-    case 'drive':
-      return environment.harness === 'fake';
-    case 'live':
-      return false;
-  }
 }
 
 // A drive run's system stats, as `WIGLEY_DRIVE_SYSTEM_STATS` named them: the
@@ -1219,7 +1188,10 @@ function createWindow(
       ),
       sessionHost,
       agentHarnesses,
-      agentEnvironment: endpointEnv(inputs.homeDir),
+      agentEnvironment: agentEnvironmentOf(
+        process.env,
+        appEndpointDir(paths, inputs.homeDir, appInstance.id),
+      ),
       pluginSwitch: {
         mayDisable: (id) =>
           pluginSwitch === null

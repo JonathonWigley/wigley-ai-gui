@@ -548,7 +548,7 @@ export interface HarnessCapabilities {
 // `clearAliases` are the names typed after `/` that clear the session beside the app's own `clear`;
 // `projectConfigFolder` is the folder name the harness reads in a project (`.claude` for Claude); `profiles` are the
 // profiles a session can run under, in the harness's settings order; the registry's slot entry leaves out each name
-// an earlier registered harness holds.
+// an earlier registered harness holds, and the later of a name the harness lists twice.
 export interface AgentHarnessInfo {
   label: string;
   capabilities: HarnessCapabilities;

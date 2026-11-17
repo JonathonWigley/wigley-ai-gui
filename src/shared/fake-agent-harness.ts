@@ -1375,7 +1375,7 @@ export function createFakeAgentHarness(
       waiting.resolve(decision);
     };
     const cancelWaitingPermissions = (isShown: boolean) => {
-      for (const id of [...waitingPermissions.keys()]) {
+      for (const id of waitingPermissions.keys()) {
         settlePermission(id, CANCELLED, isShown);
       }
     };

@@ -20,8 +20,9 @@ import { NO_PROCESS_TEXT, PERMISSION_TOOLS } from './permission-route';
 import { claudeCodeMainPart, claudeCommand } from './start';
 
 // A registry that records: `register` adds the harness and returns a handle
-// whose `dispose` removes it and counts; `refresh` counts.
-function recordingRegistry() {
+// whose `dispose` removes it, counts and logs `registration` to `stops`;
+// `refresh` counts.
+function recordingRegistry(stops: string[]) {
   const harnesses: AgentHarness[] = [];
   const counts = { disposes: 0, refreshes: 0 };
   const registry: AgentHarnessRegistry = {
@@ -33,6 +34,7 @@ function recordingRegistry() {
         },
         dispose: () => {
           counts.disposes += 1;
+          stops.push('registration');
           harnesses.splice(harnesses.indexOf(harness), 1);
         },
       };
@@ -45,8 +47,9 @@ function recordingRegistry() {
 
 // A sessions provider whose `contributeTools` records each contribution and
 // returns a handle, tracked on the consumer as the real one is, whose dispose
-// counts and ends every tool session the contribution built.
-function recordingSessions() {
+// counts, logs `tools` to `stops` and ends every tool session the
+// contribution built.
+function recordingSessions(stops: string[]) {
   const contributed: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
@@ -72,6 +75,7 @@ function recordingSessions() {
           return consumer.track({
             dispose: () => {
               counts.toolDisposes += 1;
+              stops.push('tools');
               for (const toolSession of built) {
                 counts.toolEnds += 1;
                 toolSession.end();
@@ -91,8 +95,9 @@ function started(
     agentEnvironment?: Readonly<Record<string, string>>;
   } = {},
 ) {
-  const registry = recordingRegistry();
-  const sessions = recordingSessions();
+  const stops: string[] = [];
+  const registry = recordingRegistry(stops);
+  const sessions = recordingSessions(stops);
   const harness = startMainPart(claudeCodeMainPart, {
     settings: overrides.settings,
     dependencies: [sessions.dependency],
@@ -108,6 +113,7 @@ function started(
   });
   return {
     harness,
+    stops,
     ...registry,
     contributed: sessions.contributed,
     toolCounts: sessions.toolCounts,
@@ -133,13 +139,16 @@ describe('claudeCodeMainPart', () => {
     expect(harnesses.map((harness) => harness.id)).toEqual(['claude']);
   });
 
-  it('stop_DisposesTheRegistration', async () => {
-    const { harness, harnesses, counts } = started();
+  // Chat must detach the harness's processes before the permission tools
+  // cancel their waiting calls.
+  it('stop_DisposesTheRegistrationBeforeThePermissionTools', async () => {
+    const { harness, harnesses, counts, stops } = started();
 
     await harness.stop();
 
     expect(harnesses).toEqual([]);
     expect(counts.disposes).toBe(1);
+    expect(stops).toEqual(['registration', 'tools']);
   });
 
   it('start_ContributesPermissionTools_StopDisposesThem', async () => {

@@ -51,6 +51,10 @@ export const claudeCodeMainPart: MainPart<typeof claudeCodeManifest> = {
         permissions.toolSession(session),
       );
     api.onSettingsChanged(() => registration.refresh());
+    // The part's own dispose runs before its registrations, which dispose in
+    // reverse track order, so the harness leaves the registry (chat detaches
+    // its processes) before the permission contribution cancels the waiting
+    // calls; tracked alone, the contribution would go first.
     return { commands: {}, dispose: () => registration.dispose() };
   },
 };

@@ -108,7 +108,8 @@ async function addFolder(
 }
 
 // The folder of the install a session in `projectDir` loads: this folder's project install, else the user install;
-// null when neither is listed.
+// null when neither is listed. A project install with no `installPath` is never listed, so it falls through to the
+// user install.
 function installPathOf(
   installs: readonly PluginInstallRecord[],
   projectDir: string,

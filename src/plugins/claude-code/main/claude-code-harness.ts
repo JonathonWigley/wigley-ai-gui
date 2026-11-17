@@ -238,9 +238,9 @@ interface ClaudeSession {
   process: AgentProcess;
   // Fold each line and run its effects, or end the process on `closed`.
   pipeEvents: HostedProcessEvents;
-  // What a new process emits first, then its first context and settings
-  // requests.
-  open(): void;
+  // What a new process emits first, `sessionId` leading, then its first
+  // context and settings requests.
+  open(sessionId: string): void;
   // Arms the live grace timer for `nextFoldDeadline(state)`.
   syncGraceTimer(): void;
   // Writes what a replay shows the process is owed, unless it has closed: a
@@ -505,7 +505,7 @@ function createClaudeSession(
   };
 
   const cancelWaitingPermissions = (isShown: boolean) => {
-    for (const id of [...waitingPermissions.keys()]) {
+    for (const id of waitingPermissions.keys()) {
       settlePermission(id, CANCELLED, isShown);
     }
   };
@@ -639,7 +639,8 @@ function createClaudeSession(
     );
   };
 
-  const open = () => {
+  const open = (sessionId: string) => {
+    emit(() => events.sessionId(sessionId));
     emitAgentEvent({ type: 'sessionStarted', at: deps.clock.now() });
     emit(() =>
       events.controls(state.controls.map((control) => ({ ...control }))),
@@ -884,7 +885,6 @@ function startClaudeProcess(
   const launch = claudeLaunch(started, deps.env, deps.homeDir, deps.paths);
   const command = deps.command();
   const forwarder = createPipeForwarder();
-  queueMicrotask(() => events.sessionId(started.sessionId));
   const pipe = deps.host.spawn(
     {
       id: started.processId,
@@ -902,7 +902,7 @@ function startClaudeProcess(
   session.keepRoute(
     deps.permissions.route(started.rowId, Promise.resolve(session.permissions)),
   );
-  session.open();
+  session.open(started.sessionId);
   forwarder.goLive(session.pipeEvents);
   session.readConfiguredPercent();
   // A resumed session seeds its context from the saved main replies, unless a
