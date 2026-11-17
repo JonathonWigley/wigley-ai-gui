@@ -275,7 +275,7 @@ through `api.services`; the page reads the Platform record from the served confi
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Per-platform chord matching](01-chord-matching.md)
+- [x] [Per-platform chord matching](01-chord-matching.md)
 
 ### Wave 2
 - [ ] [Per-source alert descriptions](02-alert-descriptions.md) — after 01 (shared master plan and follow-ups)
@@ -300,7 +300,9 @@ through `api.services`; the page reads the Platform record from the served confi
 Review base: e6c894d93
 
 ### Groups
+- 01 · hard · 07bec5457 · diff read against Produces (all present, no contract changes); typecheck and lint pass after an oxfmt pass on three files · concerns: done-when grep 'keys:' finds only the parameter, the records are positional (optionMatchesByCode finds all three); capture test row Ctrl+[ swapped for Dead since <C-[> is now a chord; check-layers lets src/renderer/fabric import src/shared/page for isChordPress; settings design.md:34 reworded off the comma reason
 ### Contract changes
 ### Rulings
+- the matcher compares the press's chordTokenFor token with the bind's token rather than five fields — one token per chord, so equal — and named-key checks ask chordToken, keeping one list of chord keys · group 01
 ### Review rounds
 ### Test gate

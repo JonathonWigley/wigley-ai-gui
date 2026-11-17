@@ -1,6 +1,6 @@
 # 02 — Per-source alert descriptions
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01 (shared `master-plan.md` and `followups.md`)
 Plan: [plan.md](plan.md)
