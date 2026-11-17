@@ -379,7 +379,7 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 - [x] [Doc re-read](16-doc-re-read.md) — after 15
 
 ### Wave 14
-- [ ] [Final verification](17-final-verification.md) — after 16
+- [x] [Final verification](17-final-verification.md) — after 16
 
 ## Run log
 
@@ -402,6 +402,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 14 · hard · a7bf98ec5 · Diff read: HarnessEntryKind, AnyEntryKind, HarnessEntryInput, ChatEntryRenderer, addEntryRenderer, createEntryRenderers, pickEntryDraw present; typecheck and lint pass after 45e141e9e (test-site kind narrowing, check-layers grant for chat contract → layouts) · concerns: entry-renderers.ts holds two casts; KNOWN_KINDS_ARE_NOT_HARNESS_KINDS relies on TS reducing the intersection to never (compiled fine); renderer match runs and logs on every draw; toast source chosen by comparing pick name with 'entry renderer' (a user layout of that name toasts as a renderer); working-turn.test.ts edited beyond Files
 - 15 · hard · f7b3afb8d · Diff read: harnessLeft, harnessReturned, harnessLabelOf, FakeHarnessIdentity and createFakeAgentHarness identity param present; typecheck and lint pass first time · concerns: resume's prefix match (09) still misses new-scheme process ids — return path uses settleUnheld's exact id match instead; a row whose harness leaves before its host id is reported fails its re-attach on return (attach rejects a null sessionId); self-test history read adds a harmless error notice to the return fixture row; hostSessionIdSettled waiters still pending after detachAll
 - 16 · standard · 4c9570a3b · Every claim in the Approach checked against the landed tree; design.md, AGENTS.md, drive SKILL.md and the worktree forms README agree; one followups line rewritten · concerns: drive-commands.ts:67 and :378 still say Claude in user copy; old names remain only in Lane P's open plan docs
+- 17 · opus-low walker · b5dd07227 · Live checks: 4, 8, 9, 10, 11, 12, 15, 16, 17 pass; 1 hub tag passes, its sessions-row expectation is stale (the default sessions layout draws no harness); 3 stale (fake runs force chat.defaultHarness by design, task 10; toast pinned by the start-prompt test); 14 partial (y and n-with-reason pass, close removes the row so no cancelled card shows, interrupt does; unattended deny pinned by unit test); 13 needs landing (relay plugin update). Report: scratchpad/reports/live.md · concerns: Keys unresponsive after resume + send-now until pane refocus; follow-up filed (needs repro).
 ### Contract changes
 - IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
 - docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01
@@ -455,3 +456,4 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - Round 1 (review dfead4027): NEEDS FIXES, 9 Important, 28 Minor, 2 pre-existing. Fix range e7cd5ade1..41eb06ce4, 6 worker commits + oxfmt. Tier: High — chat-sessions resume/process-id/leave/waiter logic and the chat main profile seam change behaviour on session lifecycle paths. Re-review: correctness lanes over the fix range.
 - Round 2 (re-review 41eb06ce4): NEEDS FIXES, 1 Important (doc), 7 Minor (3 repeats: label-fallback prose, renderer match logging, comment wraps). Fix range 4b0d068a4..309404c12: comments/docs, test rows, adoptHostId drops a stale map entry, throwing match logged once, start-prompt label via harnessLabel. Tier: Low — two one-branch behaviour edits, each pinned by a test row; the rest prose and tests. Closed by commit and compile; no re-review.
 ### Test gate
+- vitest (npm test, 688 files): 15 failed -> 14 stale tests fixed (7f63b9e0e; lane tasks 05/08/09/11 and review fix 1's harnessLeft test), 1 pre-existing at base (plan-copies.test verification field, 282bcc2b3). Filtered self-test sessions,chat,forms,docs,notes,usage,settings: 9 failed -> chat's 2 fixed (b5dd07227: fake-session ids, harness read at open, now:true sends), passes filtered; forms preview row order (3) and docs index counts 21/22 vs 19/20 (4) fail identically at review base, not Lane H. Relay test_relay.py (unittest): 52 ok, 2 skipped. Typecheck and lint clean.

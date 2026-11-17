@@ -239,6 +239,11 @@ Defects seen in a drive run, a transcript or the user's own use.
   200 wide, in the backlog launcher's live check), so the filter bar is cut off. `fit` does not report the overlap, only
   truncated cells. Fix: below the width the main cell needs, the right bar stacks or hides, as a split's stacked panes
   do; add an overlap check to `fit`.
+- **Keys do nothing after a resume and send-now until the pane is refocused** — *needs repro*: seen in the Lane H
+  final-verification drive run on Claude (`WIGLEY_DRIVE_HARNESS=claude`). After resuming a session and sending with
+  ⌘↩ (send now), key presses did nothing until `<A-h>`/`<A-l>` moved focus to another pane and back. Not yet known
+  whether Lane H caused it or whether it reproduces on a fake run. A first step is a fake drive run of resume, then
+  ⌘↩, then a key that logs, reading `app.log` for the key.
 
 ## Harness seams
 

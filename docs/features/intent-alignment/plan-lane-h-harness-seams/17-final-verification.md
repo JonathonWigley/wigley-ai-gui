@@ -1,6 +1,6 @@
 # 17 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 14 · Depends on: 16
 Plan: [plan.md](plan.md)
@@ -91,3 +91,4 @@ Commit:    the Run log line, with the plan's closing commit
 
 ## Proof
 
+Commit b5dd07227 · proof: Live checks: 4, 8, 9, 10, 11, 12, 15, 16, 17 pass; 1 hub tag passes, its sessions-row expectation is stale (the default sessions layout draws no harness); 3 stale (fake runs force chat.defaultHarness by design, task 10; toast pinned by the start-prompt test); 14 partial (y and n-with-reason pass, close removes the row so no cancelled card shows, interrupt does; unattended deny pinned by unit test); 13 needs landing (relay plugin update). Report: scratchpad/reports/live.md · concerns: Keys unresponsive after resume + send-now until pane refocus; follow-up filed (needs repro).
