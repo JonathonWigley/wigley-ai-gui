@@ -49,7 +49,7 @@ import {
   formsSelfTestScript,
   SELFTEST_LAYOUTS,
 } from './selftest-script';
-import { FORMS_TOOLS } from './tool-definitions';
+import { ASK_ROUND_OFFLINE, FORMS_TOOLS } from './tool-definitions';
 
 type FormsApi = MainApi<
   typeof formsManifest,
@@ -273,8 +273,11 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       layoutNames,
     );
     api.channel.handle('openPreview', () => preview.open());
-    sessions.contributeTools(FORMS_TOOLS, (session) =>
-      createAgentFormToolSession(forms.startSession(session), roundType),
+    sessions.contributeTools(
+      FORMS_TOOLS,
+      (session) =>
+        createAgentFormToolSession(forms.startSession(session), roundType),
+      { offline: { ask_round: ASK_ROUND_OFFLINE } },
     );
     const { selfTest } = api.services;
     // Written before forms registers, so its first set lists every self-test

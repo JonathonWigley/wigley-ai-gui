@@ -16,6 +16,7 @@ import {
 import {
   type SessionsMainExports,
   sessionsMainKey,
+  textResult,
   type ToolResult,
 } from '../../sessions/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
@@ -390,5 +391,32 @@ describe('audio-picker main part', () => {
     await harness.stop();
 
     expect(sessions.end).toHaveBeenCalledTimes(1);
+  });
+
+  it('contributes open_audio_picker with its offline answer and leaves collect_last_audio_picker out', async () => {
+    const sessions = previewSessions();
+    const harness = startMainPart(audioPickerMainPart, {
+      dependencies: [fakeChat(), sessions.dependency],
+      services: { homeDir },
+    });
+
+    const contribution = sessions.contributions.find(({ tools }) =>
+      tools.some((tool) => tool.name === OPEN_AUDIO_PICKER_TOOL),
+    );
+
+    expect(contribution?.options).toEqual({
+      offline: {
+        open_audio_picker: {
+          result: textResult(
+            "The app is closed, so no audio picker was shown. Take each moment's recommended candidate, wire it as its play, volume and pitch say, and list every pick as a Decided notice in your reply.",
+          ),
+          replay: false,
+        },
+      },
+    });
+    expect(contribution?.options?.offline).not.toHaveProperty(
+      'collect_last_audio_picker',
+    );
+    await harness.stop();
   });
 });

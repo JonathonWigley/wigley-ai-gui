@@ -1,4 +1,8 @@
-import type { ToolDefinition } from '../../sessions/contract';
+import {
+  type OfflineAnswer,
+  textResult,
+  type ToolDefinition,
+} from '../../sessions/contract';
 import { MAX_ENTRIES } from '../contract';
 import { findingCardsText } from './kinds/finding/finding-text';
 import { FORMATS, ITEM_KINDS } from './kinds/formats';
@@ -135,3 +139,13 @@ export const FORMS_TOOLS: ToolDefinition[] = [
     },
   },
 ];
+
+// ask_round's answer while the app is closed: the agent takes the recommended
+// picks, as a headless session does. collect_last_round has none, so it
+// answers that it did not run.
+export const ASK_ROUND_OFFLINE: OfflineAnswer = {
+  result: textResult(
+    "The app is closed, so no round was shown. Take each item's recommended pick and list every pick as a Decided notice in your reply.",
+  ),
+  replay: false,
+};

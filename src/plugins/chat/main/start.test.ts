@@ -32,6 +32,7 @@ import {
   sessionsMainKey,
   sessionsSelectionSlot,
   type SessionTitles,
+  textResult,
   type TitleSource,
   type ToolCallGuard,
   type ToolDefinition,
@@ -752,10 +753,44 @@ describe('chat main part', () => {
         { toolUseId: null, signal: new AbortController().signal },
       );
 
-    expect(contribution?.options).toEqual({ mainAgentOnly: true });
+    expect(contribution?.options).toEqual({
+      mainAgentOnly: true,
+      offline: {
+        set_headless: {
+          result: textResult('The app is closed: the session stays headless.'),
+          replay: false,
+        },
+      },
+    });
     expect(result?.isError ?? false).toBe(false);
     expect(chat.exports.isHeadless('row-1')).toBe(true);
   });
+
+  it.each([
+    {
+      tool: 'permission_prompt',
+      offline: {
+        permission_prompt: {
+          result: textResult(
+            '{"behavior":"deny","message":"The app is closed: this run\'s permission mode does not allow this tool, so it was denied."}',
+          ),
+          replay: false,
+        },
+      },
+    },
+    { tool: 'start_session', offline: undefined },
+  ])(
+    'offlineAnswers_EachChatContribution_AnswersAsPinned: $tool',
+    ({ tool, offline }) => {
+      const chat = startChatPart();
+      const contribution = chat.contributions.find(({ tools }) =>
+        tools.some((definition) => definition.name === tool),
+      );
+
+      expect(contribution).toBeDefined();
+      expect(contribution?.options?.offline).toEqual(offline);
+    },
+  );
 
   it('exports_AddSendGate_HoldsAnExportedSend', async () => {
     const chat = startChatPart();

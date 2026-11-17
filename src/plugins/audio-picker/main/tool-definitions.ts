@@ -1,4 +1,8 @@
-import type { ToolDefinition } from '../../sessions/contract';
+import {
+  type OfflineAnswer,
+  textResult,
+  type ToolDefinition,
+} from '../../sessions/contract';
 import {
   AUDIO_EXTENSIONS,
   COLLECT_AUDIO_PICKER_TOOL,
@@ -160,3 +164,14 @@ export const AUDIO_PICKER_TOOLS: ToolDefinition[] = [
     },
   },
 ];
+
+// open_audio_picker's answer while the app is closed: the agent takes each
+// moment's recommended candidate, as a headless session does. A fixed answer
+// cannot carry the picks, so the text points at the agent's own recommends.
+// collect_last_audio_picker has none, so it answers that it did not run.
+export const OPEN_AUDIO_PICKER_OFFLINE: OfflineAnswer = {
+  result: textResult(
+    "The app is closed, so no audio picker was shown. Take each moment's recommended candidate, wire it as its play, volume and pitch say, and list every pick as a Decided notice in your reply.",
+  ),
+  replay: false,
+};

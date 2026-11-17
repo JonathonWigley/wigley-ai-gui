@@ -30,6 +30,7 @@ import {
   type WorkflowObserver,
   type WorkflowSelfTestHooks,
   type WorkflowSignal,
+  WORKFLOW_OFFLINE_ANSWER,
 } from '../contract';
 import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
@@ -259,7 +260,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     sessions.contributeTools(
       [checklistToolDefinition()],
       startChecklistToolSession,
-      { mainAgentOnly: true },
+      {
+        mainAgentOnly: true,
+        offline: { [SET_WORKFLOW_CHECKLIST_TOOL]: WORKFLOW_OFFLINE_ANSWER },
+      },
     );
     if (api.drive !== null) {
       addDriveActions(api.drive, { reportStep, reportChecklist });
@@ -277,7 +281,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           : sessions.contributeTools(
               [stepToolDefinition(workflows.all())],
               startStepToolSession,
-              { mainAgentOnly: true },
+              {
+                mainAgentOnly: true,
+                offline: { [SET_WORKFLOW_STEP_TOOL]: WORKFLOW_OFFLINE_ANSWER },
+              },
             );
     };
     const addWorkflow = (workflow: MainWorkflow): Disposable => {

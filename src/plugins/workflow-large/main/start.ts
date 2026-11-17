@@ -6,6 +6,7 @@ import { sessionsMainKey } from '../../sessions/contract';
 import {
   type FoldEvent,
   type SessionFlow,
+  WORKFLOW_OFFLINE_ANSWER,
   workflowMainKey,
 } from '../../workflow/contract';
 import {
@@ -24,7 +25,11 @@ import { createWorkflowActions } from './actions';
 import { createCountdown } from './countdown';
 import { createPlanReports, PLAN_RUNS_FOLDER } from './plan-reports';
 import { largePlanReporter } from './plan-report';
-import { planToolDefinition, startPlanTool } from './plan-tool';
+import {
+  planToolDefinition,
+  SET_WORKFLOW_PLAN_TOOL,
+  startPlanTool,
+} from './plan-tool';
 import { createPlanWatch } from './plan-watch';
 import { workflowLargeSelfTestScript } from './selftest-script';
 
@@ -81,7 +86,10 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
         files: services.files,
         reportPlan,
       }),
-      { mainAgentOnly: true },
+      {
+        mainAgentOnly: true,
+        offline: { [SET_WORKFLOW_PLAN_TOOL]: WORKFLOW_OFFLINE_ANSWER },
+      },
     );
     const planRunsFolder = services.paths.join(
       appEndpointDir(services.paths, services.homeDir, services.appInstance.id),

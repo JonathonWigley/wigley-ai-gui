@@ -19,8 +19,10 @@ import {
 } from '../../chat/contract';
 import {
   type AgentSession,
+  type ContributeToolsOptions,
   type SessionsMainExports,
   sessionsMainKey,
+  textResult,
   type ToolDefinition,
   type ToolSession,
 } from '../../sessions/contract';
@@ -54,6 +56,7 @@ async function startPart() {
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
+    options: ContributeToolsOptions | undefined;
   }[] = [];
   const capture = {
     list: (): Promise<WindowList> => GRANTED.listWindows(),
@@ -73,8 +76,9 @@ async function startPart() {
             contributeTools: (
               tools: ToolDefinition[],
               start: (session: AgentSession) => ToolSession,
+              options?: ContributeToolsOptions,
             ) => {
-              contributions.push({ tools, start });
+              contributions.push({ tools, start, options });
               return consumer.track({ dispose() {} });
             },
           }) as unknown as SessionsMainExports,
@@ -104,6 +108,29 @@ describe('liveViewMainPart', () => {
     expect(
       contributions.map(({ tools }) => tools.map(({ name }) => name)),
     ).toEqual([['show_live_view', 'hide_live_view']]);
+  });
+
+  it('contributes the live-view tools with their offline answers', async () => {
+    const { contributions } = await startPart();
+
+    expect(contributions.map(({ options }) => options)).toEqual([
+      {
+        offline: {
+          show_live_view: {
+            result: textResult(
+              'The app is closed, so no Live section streams. Carry on without the stream.',
+            ),
+            replay: false,
+          },
+          hide_live_view: {
+            result: textResult(
+              'The app is closed: no Live section was streaming.',
+            ),
+            replay: false,
+          },
+        },
+      },
+    ]);
   });
 
   it.each<{

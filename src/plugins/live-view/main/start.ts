@@ -23,7 +23,7 @@ import { livePicksSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { liveViewManifest } from '../manifest';
 import { pickOf, rectOfTuple } from '../window-pick';
-import { createLiveTools } from './live-tools';
+import { createLiveTools, LIVE_VIEW_OFFLINE } from './live-tools';
 import { liveViewSelfTestScript } from './selftest-script';
 
 type LiveViewApi = MainApi<
@@ -56,6 +56,7 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
     sessions.contributeTools(
       [...liveTools.definitions],
       liveTools.startSession,
+      { offline: LIVE_VIEW_OFFLINE },
     );
     api.events.on('sessions.ended', ({ sessionId }) =>
       liveTools.sessionEnded(sessionId),

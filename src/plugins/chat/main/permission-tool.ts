@@ -1,5 +1,9 @@
 import { PERMISSION_TOOL_NAME } from '../../../contracts/agent';
-import type { ToolDefinition } from '../../sessions/contract';
+import {
+  type OfflineAnswer,
+  textResult,
+  type ToolDefinition,
+} from '../../sessions/contract';
 import type { PermissionAnswer } from '../contract';
 
 export { PERMISSION_TOOL_NAME };
@@ -79,3 +83,19 @@ export function permissionReplyText(
         message: answer.reason ?? DEFAULT_DENY_MESSAGE,
       });
 }
+
+// permission_prompt's answer while the app is closed: a tool the run's
+// permission mode does not allow is denied, since nobody can allow it.
+export const PERMISSION_OFFLINE: OfflineAnswer = {
+  result: textResult(
+    permissionReplyText(
+      {
+        allowed: false,
+        reason:
+          "The app is closed: this run's permission mode does not allow this tool, so it was denied.",
+      },
+      undefined,
+    ),
+  ),
+  replay: false,
+};

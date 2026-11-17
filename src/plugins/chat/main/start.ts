@@ -46,12 +46,20 @@ import { askFixturePermission } from './fixtures';
 import { createFolderChoices } from './folder-choices';
 import { requireChatHarness } from './lookups';
 import { createOpenSessions } from './open-sessions';
-import { PERMISSION_TOOLS } from './permission-tool';
+import {
+  PERMISSION_OFFLINE,
+  PERMISSION_TOOL_NAME,
+  PERMISSION_TOOLS,
+} from './permission-tool';
 import { createChatPreview } from './preview/chat-preview';
 import { createPoolProviders, projectOf, readProjects } from './projects';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
-import { SET_HEADLESS_TOOL, setHeadlessToolSession } from './set-headless-tool';
+import {
+  SET_HEADLESS_OFFLINE,
+  SET_HEADLESS_TOOL,
+  setHeadlessToolSession,
+} from './set-headless-tool';
 import { callerGuard, createToolCallers } from './tool-callers';
 import {
   START_SESSION_TOOL,
@@ -486,8 +494,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     );
     // The registration lives and dies with the part.
     chat.addInstructions(SESSION_TITLE_INSTRUCTION);
-    sessions.contributeTools(PERMISSION_TOOLS, (session) =>
-      chat.permissionToolSession(session),
+    sessions.contributeTools(
+      PERMISSION_TOOLS,
+      (session) => chat.permissionToolSession(session),
+      { offline: { [PERMISSION_TOOL_NAME]: PERMISSION_OFFLINE } },
     );
     const holds = (sessionId: string) =>
       chat.sessions().some((held) => held.sessionId === sessionId);
@@ -519,7 +529,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
           chat.setHeadless(sessionId, headless),
         log: services.log,
       }),
-      { mainAgentOnly: true },
+      {
+        mainAgentOnly: true,
+        offline: { [SET_HEADLESS_TOOL.name]: SET_HEADLESS_OFFLINE },
+      },
     );
     const restored = Promise.all([
       saved.load().catch((error: unknown) => {

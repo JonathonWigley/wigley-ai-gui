@@ -18,7 +18,7 @@ import {
   previewSessions,
   SUBMITTED,
 } from '../../agent-form-fakes.test-support';
-import { sessionsMainKey } from '../../sessions/contract';
+import { sessionsMainKey, textResult } from '../../sessions/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
 import { SAVED_ROUNDS_FOLDER } from '../contract';
 import type { formsManifest } from '../manifest';
@@ -157,6 +157,32 @@ describe('forms main part', () => {
     await harness.stop();
 
     expect(sessions.end).toHaveBeenCalledTimes(1);
+  });
+
+  it('contributes ask_round with its offline answer and leaves collect_last_round out', async () => {
+    const sessions = previewSessions();
+    const harness = startMainPart(formsMainPart, {
+      dependencies: [fakeChat(), sessions.dependency],
+    });
+
+    const contribution = sessions.contributions.find(({ tools }) =>
+      tools.some((tool) => tool.name === 'ask_round'),
+    );
+
+    expect(contribution?.options).toEqual({
+      offline: {
+        ask_round: {
+          result: textResult(
+            "The app is closed, so no round was shown. Take each item's recommended pick and list every pick as a Decided notice in your reply.",
+          ),
+          replay: false,
+        },
+      },
+    });
+    expect(contribution?.options?.offline).not.toHaveProperty(
+      'collect_last_round',
+    );
+    await harness.stop();
   });
 
   it('stop closes each open round, releases its row and settles its call with the error', async () => {

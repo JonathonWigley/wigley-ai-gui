@@ -1,6 +1,7 @@
 import {
   type AgentSession,
   errorResult,
+  type OfflineAnswer,
   type SessionsMainExports,
   textResult,
   type ToolDefinition,
@@ -25,6 +26,13 @@ export const SET_SESSION_TITLE_TOOL: ToolDefinition = {
     required: ['title'],
     additionalProperties: false,
   },
+};
+
+// set_session_title's answer while the app is closed: the call is recorded and
+// replays onto its row when the app adopts the run.
+export const SET_SESSION_TITLE_OFFLINE: OfflineAnswer = {
+  result: textResult('Title recorded. The app applies it when it opens.'),
+  replay: true,
 };
 
 export interface TitleToolDeps {

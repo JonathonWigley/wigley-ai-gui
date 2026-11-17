@@ -619,8 +619,39 @@ describe('sessions main part', () => {
     }
 
     expect(
-      JSON.parse(await files.read(`${homeDir}/.agents/app/offline.json`)),
-    ).toEqual({ tools: { ask: { result: ASK_RESULT, replay: false } } });
+      (
+        JSON.parse(await files.read(`${homeDir}/.agents/app/offline.json`)) as {
+          tools: Record<string, unknown>;
+        }
+      ).tools.ask,
+    ).toEqual({ result: ASK_RESULT, replay: false });
+  });
+
+  it("writes set_session_title's offline answer to offline.json", async () => {
+    const { homeDir, remove } = relayHome();
+    const files = createMemoryFiles();
+    const started = startSessionsPart(10, { runMode: 'live', homeDir, files });
+    try {
+      await vi.waitFor(async () => {
+        const table = JSON.parse(
+          await files.read(`${homeDir}/.agents/app/offline.json`),
+        ) as { tools: Record<string, unknown> };
+        expect(table.tools.set_session_title).toEqual({
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: 'Title recorded. The app applies it when it opens.',
+              },
+            ],
+          },
+          replay: true,
+        });
+      });
+    } finally {
+      await started.dispose?.('end');
+      remove();
+    }
   });
 
   it('stops with nothing live and starts again', async () => {

@@ -42,7 +42,11 @@ import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
 import { createSessionList, type SessionList } from './session-list';
-import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
+import {
+  SET_SESSION_TITLE_OFFLINE,
+  SET_SESSION_TITLE_TOOL,
+  startTitleTool,
+} from './title-tool';
 
 type SessionsApi = MainApi<
   typeof sessionsManifest,
@@ -321,7 +325,10 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         titles: exports.titles,
         maxLength: () => titleLimit(api.settings().titleMaxLength),
       }),
-      { mainAgentOnly: true },
+      {
+        mainAgentOnly: true,
+        offline: { [SET_SESSION_TITLE_TOOL.name]: SET_SESSION_TITLE_OFFLINE },
+      },
     );
     if (api.drive !== null) {
       addDriveActions(api.drive, exports, (listener) =>

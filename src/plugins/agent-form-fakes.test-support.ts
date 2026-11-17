@@ -3,9 +3,11 @@ import { fakeDependency } from '../shared/plugin-part-harness.test-support';
 import { type ChatMainExports, chatMainKey } from './chat/contract';
 import {
   type ConnectedSession,
+  type ContributeToolsOptions,
   type SessionInfo,
   type SessionsMainExports,
   sessionsMainKey,
+  type ToolDefinition,
   type ToolResult,
 } from './sessions/contract';
 
@@ -67,14 +69,26 @@ export function fakeEndedEvent() {
   };
 }
 
-// Sessions faked so a test sees the `end` of the connection the preview holds.
+// Sessions faked so a test sees the `end` of the connection the preview holds;
+// each `contributeTools` call's tools and options are kept in `contributions`.
 export function previewSessions() {
   const end = vi.fn();
+  const contributions: {
+    tools: ToolDefinition[];
+    options: ContributeToolsOptions | undefined;
+  }[] = [];
   const dependency = fakeDependency(
     sessionsMainKey,
     (consumer) =>
       ({
-        contributeTools: () => consumer.track({ dispose() {} }),
+        contributeTools: (
+          tools: ToolDefinition[],
+          _start: unknown,
+          options?: ContributeToolsOptions,
+        ) => {
+          contributions.push({ tools, options });
+          return consumer.track({ dispose() {} });
+        },
         addCloseGuard: () => consumer.track({ dispose() {} }),
         activate() {},
         connect: (info: SessionInfo): ConnectedSession => ({
@@ -84,5 +98,5 @@ export function previewSessions() {
         }),
       }) as unknown as SessionsMainExports,
   );
-  return { end, dependency };
+  return { end, contributions, dependency };
 }
