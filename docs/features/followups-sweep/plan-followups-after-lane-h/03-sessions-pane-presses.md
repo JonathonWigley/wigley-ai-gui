@@ -1,6 +1,6 @@
 # 03 — Sessions pane clicks and presses
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · changes when a tab bar draw replaces DOM under a live click, and what a release reads of a press it did not see begin
 Wave: 1 · Depends on: none

@@ -1,6 +1,6 @@
 # 02 — One ownsRoot helper
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · a pure helper beside `isKnownSource` in `src/plugins/docs/index-document.ts`, swapped in at four call sites
 Wave: 1 · Depends on: none

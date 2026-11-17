@@ -1,5 +1,6 @@
 import type { Paths } from '../../contracts/paths';
 import type { IndexEntry } from './contract';
+import { ownsRoot } from './index-document';
 
 // The folders, outside any index entry, that the guard judges a change
 // against, as real paths.
@@ -70,7 +71,7 @@ export function changeRefusal(
   const isEntryOrInsideRoot = entries.some(
     (entry) =>
       paths.samePath(target, entry.path) ||
-      ((entry.source === 'repo' || entry.source === 'features') &&
+      (ownsRoot(entry) &&
         entry.root !== null &&
         paths.isInside(target, entry.root)),
   );

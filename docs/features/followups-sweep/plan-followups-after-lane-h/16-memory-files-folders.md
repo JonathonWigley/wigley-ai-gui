@@ -1,6 +1,6 @@
 # 16 — Memory Files reports folder events
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · one test double reports three more kinds of change; every test that watches it reruns
 Wave: 1 · Depends on: none

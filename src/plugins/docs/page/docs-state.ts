@@ -28,7 +28,7 @@ import {
   type PluginStatusRead,
   UNSAVED_TEXT,
 } from '../contract';
-import { installedCopies, metaString } from '../index-document';
+import { installedCopies, metaString, ownsRoot } from '../index-document';
 import { skillFolder } from '../kinds';
 import type { docsManifest } from '../manifest';
 import {
@@ -783,8 +783,8 @@ function owningEntry(
   let ownerRoot = '';
   for (const entry of entries) {
     const { root } = entry;
-    const ownsFolder = entry.source === 'repo' || entry.source === 'features';
-    const holdsPath = root !== null && ownsFolder && paths.isInside(path, root);
+    const holdsPath =
+      root !== null && ownsRoot(entry) && paths.isInside(path, root);
     if (holdsPath && root.length > ownerRoot.length) {
       owner = entry;
       ownerRoot = root;

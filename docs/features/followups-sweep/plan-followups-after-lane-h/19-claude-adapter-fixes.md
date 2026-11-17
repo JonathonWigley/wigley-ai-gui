@@ -1,6 +1,6 @@
 # 19 — Claude adapter: interrupt and hand-back
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · two stream-protocol edge cases in the adapter's pure state machines; each fix moves when a working state or an events entry opens, against measured CLI line orders
 Wave: 1 · Depends on: none

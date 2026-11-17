@@ -1,6 +1,6 @@
 # 17 — Auto-retro claims restored rows
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · the settle wait becomes per-row state cleared on three paths, across chat's synchronous close and the serial event chain
 Wave: 1 · Depends on: none
