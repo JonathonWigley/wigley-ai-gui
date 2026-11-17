@@ -24,12 +24,15 @@ the user does no browser testing.
 2. **Self-test, chat** — `npm run selftest -- --plugin chat`. Expected: passes. It guards the shared fake harness
    change in 03 (a new send text, and `emitToolTurn` taking its call as arguments). Confidence: expected — the change
    keeps `FAKE_TOOL_TEXT`'s values.
+3. **Self-test, workflow** — `npm run selftest -- --plugin workflow`. Expected: passes. Its level self-test
+   (`src/plugins/workflow/main/level-selftest-script.ts`) launches with `FAKE_TOOL_TEXT` and asserts the sends, so it
+   guards the same refactor. Confidence: expected.
 
 ## Dropped
 
 - Pairing orders, replays, restores, the missing `--project-path`, precedence and interrupted shows: pinned by 02's tests
   (`playtestStart_OpensTheWholeEditor_given`, `playtestCommand_WritesNoPick_given`,
-  `editorStop_ClosesOnlyTheAppsPick_given`, `playtestShow_InterruptedWhileTheWindowsList_given`).
+  `editorStop_ClosesOnlyTheAppsPickForItsProject_given`, `playtestShow_InterruptedWhileTheWindowsList_given`).
 - Command forms: pinned by 01's `parsePlaytestCommand_ReadsTheSignal_given`.
 - A drive run of the Live section: the page part is unchanged, and check 1's screenshots cover the section.
 

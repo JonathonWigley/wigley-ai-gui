@@ -16,16 +16,16 @@ Decisions: plan decision 8 · `wigley:writing-for-agents` § Doctrine before cod
 1. Read `wigley-ai-gui/docs/features/live-view/design.md` line by line against the landed code of 01, 02 and 03:
    "What it is", "The agent's tools", "The playtest watch", "The sample" and "Rejected". Check each claim: the
    trigger forms, the live guard (`replayed: false` `toolStarted` paired by `toolUseId`; a `replace` never acts), the
-   folder rule (the command's `--project-path` only; none gives a log line), the blocked pick, the precedence rule,
-   and the close triggers.
+   folder rule (the command's `--project-path` only; none gives a log line), acting on success only, the blocked
+   pick, the precedence rule, and the close triggers (a stop closes only for the same project).
 2. Drop every "planned in `plan-auto-open`, not built yet" mark once its code has landed: in `design.md`, one in
    "What it is" and one at the head of "The playtest watch"; in
    `wigley-ai-marketplace/plugins/wigley/skills/unity-playtest/SKILL.md` § Session setup, the one on the
    `--project-path` bullet. Check that bullet's claim against 02's watch.
    The skill change is a plugin change: read `wigley-ai-marketplace/AGENTS.md` § Changing a plugin, and run
-   `python3 scripts/check_manifests.py --against origin/main` from `wigley-ai-marketplace/`. When it fails because the
-   version bump of `dfe96e014` (2.16.1) already reached origin, bump the patch version again in both
-   `plugins/wigley/.claude-plugin/plugin.json` and `plugins/wigley/.codex-plugin/plugin.json` in this commit.
+   `python3 scripts/check_manifests.py --against origin/main` from `wigley-ai-marketplace/`. When it fails, bump the
+   wigley version above whatever `origin/main` holds at landing, whichever change put it there, in both
+   `plugins/wigley/.claude-plugin/plugin.json` and `plugins/wigley/.codex-plugin/plugin.json`, in this commit.
 3. Read the `live-view/` entry of `wigley-ai-gui/AGENTS.md`'s source layout, the `livePicksSlot` comment in
    `src/plugins/live-view/contract.ts`, the header comments of `src/plugins/live-view/manifest.ts` and
    `src/plugins/live-view/main/start.ts`, and the `show_live_view` / `hide_live_view` descriptions in

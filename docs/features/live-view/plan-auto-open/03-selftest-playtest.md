@@ -6,7 +6,7 @@ Rung: hard · async wait on a slot in the self-test fixture, and a new fake harn
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
 
-Files:     modify `wigley-ai-gui/src/shared/fake-agent-harness.ts` · modify `wigley-ai-gui/src/plugins/live-view/main/selftest-script.ts` · modify `wigley-ai-gui/src/plugins/live-view/main/start.ts`
+Files:     modify `wigley-ai-gui/src/shared/fake-agent-harness.ts` · test `wigley-ai-gui/src/shared/fake-agent-harness.test.ts` · modify `wigley-ai-gui/src/plugins/live-view/main/selftest-script.ts` · modify `wigley-ai-gui/src/plugins/live-view/main/start.ts`
 Consumes:  `playtestStarted(sessionId: string, projectPath: string): Promise<void>` on `LiveTools` ← 02 (reached through the real chat plugin, not called directly)
            `createPlaytestWatch(deps: PlaytestWatchDeps): PlaytestWatch` ← 02 (wired in `main/start.ts`)
 Produces:  `export const FAKE_PLAYTEST_TEXT = 'fake: playtest'` in `…/src/shared/fake-agent-harness.ts`
@@ -39,11 +39,14 @@ of an app-opened pick (a whole-editor stream) is existing behaviour, so the page
 - `open()`:
   1. Launch the session as now, with `message: { text: FAKE_PLAYTEST_TEXT, images: [] }` in place of
      `'live-view self-test'`.
-  2. Wait for the session's pick: read `picks.get(sessionId)` first, else wait on `picks.on` for that key, for at most
-     10 000 ms. Dispose the listener when the wait ends.
-  3. Then call `show` with `FAKE_GAME_RECT`, as now (the agent's call after `capture.py start`).
-  4. `result` resolves to `{ playtestPick: LivePick | null, shown: ToolResult }`: the pick the wait saw, or null when
-     it timed out.
+  2. Wait for the session's pick: read `picks.get(sessionId)` first; when it is undefined, wait on `picks.on` for a
+     call whose key is the session's id and whose value is defined, for at most 10 000 ms. A call with `undefined` (a
+     delete, such as an earlier run's `closeSessionsIn` or a hide) does not end the wait. Dispose the listener when
+     the wait ends.
+  3. Then call `show` with `FAKE_GAME_RECT`, as now (the agent's call after `capture.py start`), whether the wait
+     resolved or timed out.
+  4. `result` resolves to `{ playtestPick: LivePick | null, shown: ToolResult }`: the pick as the wait first saw it
+     (not read again after `show` replaces it), or null when the wait timed out.
 - `problems(result)` lists, in this order, each that holds:
   - `playtestPick` null: `the playtest command opened no Live view`
   - `playtestPick` not a stream, or its summary is not `Editor · selftest-unity`:
@@ -69,10 +72,16 @@ the Game View line.
 
 ## Tests
 
-- No new Vitest test: the behaviour is the self-test's. `npm run selftest -- --plugin live-view` runs it; task 05
-  carries that run.
+- `send_PlaytestText_EmitsTheEditorPlayCall` in `src/shared/fake-agent-harness.test.ts`, beside
+  `send_ToolText_EmitsToolWithResult` and in its style: GIVEN a started process whose `projectDir` is the test's
+  folder WHEN it is sent `FAKE_PLAYTEST_TEXT` THEN the heard entries hold the Bash tool entry with `input.command`
+  `unity command editor_play --result-only --project-path '<projectDir>'`, `summary` the same text, and the result
+  `{ text: 'Entered Play Mode.', isError: false }`, then the assistant reply `fake agent entered Play Mode`, then the
+  turn's end, compared by value.
+- `send_ToolText_EmitsToolWithResult` (existing) must pass unchanged: it guards the `emitToolTurn` refactor.
+- The self-test behaviour runs in task 05 (`npm run selftest -- --plugin live-view`).
 
-Done when: compiles; `npm run typecheck` passes.
+Done when: compiles; `npm run typecheck` passes; the test gate runs the tests above.
 Commit:    one commit for the group
 
 ## Proof

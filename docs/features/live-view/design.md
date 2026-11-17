@@ -43,9 +43,9 @@ a Unity playtest, so the user never asks the agent for the stream. It works for 
 drives, and knows nothing of a particular project.
 
 - **Open:** a Bash call of any agent of the session, the lead or a subagent (a subagent's calls arrive under the
-  lead's row), whose command runs `unity command editor_play` or `capture.py start`, seen when the call starts. A
-  chained command counts (`cd <dir> && unity command editor_play --project-path <dir>`); text inside quotes, another `unity command`, and
-  `capture.py stop` do not.
+  lead's row), whose command runs `unity command editor_play` or `capture.py start`, once the call succeeds: a denied
+  or failed call opens nothing. A chained command counts (`cd <dir> && unity command editor_play --project-path
+  <dir>`); `echo`, text inside quotes, a subshell, `bash -c`, another `unity command`, and `capture.py stop` do not.
 - **Live calls only:** a replayed or restored entry never opens it. The watch reads the call's full command from
   chat's `chat.entries` list, since a `toolStarted` event's summary is cut to 80 characters, and counts the entry as
   live only when chat's `agentEvent` `toolStarted` for its `toolUseId` came with `replayed: false`. A restore writes
@@ -57,8 +57,9 @@ drives, and knows nothing of a particular project.
 - **What streams:** the whole editor window, `Editor · <project folder>`, as `show_live_view` with no `gameRect`
   does. The agent's later `show_live_view` with the Game View rect crops it, as the `wigley:unity-playtest` skill
   already calls it. With Screen Recording off, the section shows that line and its button, as for the agent's call.
-- **Close:** a Bash call running `unity command editor_stop` closes a view the app opened. The agent's
-  `hide_live_view` and the session ending close any view.
+- **Close:** a Bash call running `unity command editor_stop` that succeeds closes a view the app opened, when its
+  `--project-path` names the project the app opened the view for. The agent's `hide_live_view` and the session ending
+  close any view.
 - **The agent's pick wins:** the app opens the view only when the session has no pick. The agent's `show_live_view`
   replaces an app-opened pick and makes the pick the agent's, so a later `editor_stop` leaves it. An app opening
   still waiting on the window list writes nothing when a pick, a hide, an `editor_stop` or the session's end came

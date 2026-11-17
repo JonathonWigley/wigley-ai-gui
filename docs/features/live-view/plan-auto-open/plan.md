@@ -26,11 +26,10 @@ the shared fake agent harness for the self-test.
 
 ## Preconditions
 
-- The worktree `/Users/jonathonwigley/Documents/.worktrees/ai-live-auto-open` (branch `live-auto-open`) starts at
-  `e23142c0e`, the same commit as local `main` and `origin/main`. Verified with
-  `git -C /Users/jonathonwigley/Documents/ai rev-parse main origin/main` and
-  `git -C /Users/jonathonwigley/Documents/.worktrees/ai-live-auto-open rev-parse 694e2682c~1` (the docs-ahead
-  commit's parent).
+- The worktree `/Users/jonathonwigley/Documents/.worktrees/ai-live-auto-open` (branch `live-auto-open`) branched
+  from `e23142c0e`, which was local `main` and `origin/main` when the plan was written (checked with
+  `git rev-parse 694e2682c~1`). `origin/main` has moved since: `wigley:make` brings the branch up to the target's tip
+  before the run, and the landing rebases. Re-check each tree claim below against that tip.
 - Chat tells a live Bash call from a replayed one only through its private `replay.isReplaying`
   (`src/plugins/chat/main/chat-sessions.ts`, `processEvents` → `entry(entry)` → `noteBashCommand(session, entry,
   replay.isReplaying)`); the `chat.entries` slot carries no such flag. The public live marker is
@@ -55,7 +54,8 @@ the shared fake agent harness for the self-test.
 - `wigley-ai-gui/docs/features/live-view/design.md` — "What it is" no longer says the agent alone starts and stops
   Live; new section "The playtest watch"; Rejected rewritten and gains "A setting to turn the playtest watch off".
   Commit `694e2682c`; its folder rule rewritten to the command's `--project-path` only, and Rejected gains
-  "Guessing the playtest's project folder", in commit `dfe96e014`. Each new behaviour is marked "planned in
+  "Guessing the playtest's project folder", in commit `dfe96e014`; the open and close bullets moved to "once the
+  call succeeds" and "the same project" in the commit "plan-auto-open: close the cold readers' gaps". Each new behaviour is marked "planned in
   `plan-auto-open`, not built yet"; task 04 drops the marks.
 - `wigley-ai-marketplace/plugins/wigley/skills/unity-playtest/SKILL.md` § Session setup — `unity command editor_play`
   takes `--project-path <dir>`, and a bullet gives the reason (the editor among several; the app reads the path to
@@ -81,17 +81,18 @@ The comments in `contract.ts` and `manifest.ts`, the header comment of `main/sta
         |                                   |
         +------> playtest watch (main/playtest-watch.ts) <------+
                    live only: the entry's toolUseId has a toolStarted with replayed=false;
+                   acts on the completion put, only when the result is not an error;
                    a list `replace` (restore) never acts; acts once per toolUseId
                    |
            parsePlaytestCommand(command)            (playtest-command.ts, pure)
                    |
-        start {projectPath|null}                 stop
-                   |                                |                                |
+        start {projectPath|null}                 stop {projectPath|null}
+                   |                                |
    projectPath null -> log line, no call            |
                    |                                |
-   LiveTools.playtestStarted(R, folder)    LiveTools.playtestStopped(R)
-     no pick for R -> show whole editor       app-opened pick -> delete it
-     (no editor / no window: log, no pick)    agent pick -> leave it
+   LiveTools.playtestStarted(R, path)      LiveTools.playtestStopped(R, path)
+     no pick for R -> show whole editor       app-opened pick for the same path -> delete it
+     (no editor / no window: log, no pick)    agent pick, other path, no path -> leave it
                    |
             live-view.picks[R]  --> page Live section (unchanged)
 
@@ -106,7 +107,8 @@ The comments in `contract.ts` and `manifest.ts`, the header comment of `main/sta
    (new-games) knowledge.
 2. Open trigger: a Bash tool call from any agent of the session (the lead or a subagent; subagent calls arrive under
    the lead's row id) whose command runs `unity command editor_play` or `capture.py start`, seen when the call
-   starts. Live calls only: a replayed or restored entry never opens the view.
+   starts. Live calls only: a replayed or restored entry never opens the view. ("Seen when the call starts" is moved to
+   "seen when the call succeeds": plan, Decided, "Act on success".)
 3. Close trigger, only for a view the app opened itself: a Bash call running `unity command editor_stop`, the agent's
    `hide_live_view`, or the session ending.
 4. The agent's pick always wins: the app opens the view only when the session has no pick; an agent
@@ -139,6 +141,32 @@ The comments in `contract.ts` and `manifest.ts`, the header comment of `main/sta
   no slot carries. The watch's equivalent: a Bash entry acts only when a `chat.agentEvent` with `replayed: false`,
   `event.type === 'toolStarted'`, `event.tool === 'Bash'` came for the same row id and `toolUseId`. A list `replace`
   change never acts. Each `toolUseId` acts at most once. Details in task 02.
+- **Act on success.** The watch acts on a Bash entry when its result arrives and is not an error
+  (`result !== null && !result.isError`), still paired with a live `toolStarted` (`replayed: false`) for the same row
+  and `toolUseId`; a denied or failed call does nothing. This moves decision 2's "seen when the call starts" to "seen
+  when the call succeeds", because `toolStarted` comes from the `tool_use` block before any permission answer, and a
+  denied `editor_play` must not open the view (cold read, task 02).
+- **Stop scope.** `editor_stop` closes the app-opened pick only when its `--project-path` equals the project the app
+  pick was opened for (one trailing `/` ignored); a stop with no path or another path leaves it. So `PlaytestSignal`'s
+  `stop` keeps its `projectPath`, and `LiveTools.playtestStopped` takes it.
+- **Parser.** Split the command into segments on `&&`, `||`, `;`, `|` and newlines. A segment signals only when its
+  program word (after leading `VAR=value` assignments) is `unity` or a path ending in `/unity`, followed by
+  `command`; the first positional after it that is not a flag is the command name (`editor_play` start,
+  `editor_stop` stop). Value-taking flags of `unity command` (`--project-path`, `--timeout`, `--port`, `--pid`,
+  `--instance`, `--runtime`, `--runtime-path`, `--detail`, `--query`, `--tag`) consume the next token; redirections
+  (`2>&1`, `>f`, `2>/dev/null`) are dropped. `capture.py start` signals when the program is `python`/`python3`(.x) or
+  a path to one, the script token ends in `capture.py`, and the first positional after it is `start`.
+  `echo unity command editor_play`, `(unity …)` subshells and `bash -c '…'` give no signal (out of scope). A missing
+  or empty `--project-path` value gives the signal with no project path. Task 01 pins each rule with a table row.
+- **Two concurrent app starts.** `playtestStarted` bumps the app counter at its start, so of two app shows waiting at
+  once only the later can write: one pick, one log line (cold read, task 02).
+- **The watch's id sets.** Per row the watch keeps a live set and a done set of `toolUseId`s, so each id acts at most
+  once even when a second live `toolStarted` arrives; `replace` clears neither, since a live put can follow it;
+  `delete` and the session's end clear both (cold read, task 02).
+- **Self-test wait.** The live-view self-test's `picks.on` wait resolves only on a defined pick for the session's
+  key, and the `show` call runs after the wait whether it resolved or timed out (cold read, task 03).
+- **Rejected: Rung deep for 03.** A cold reader suggested it; its wait is small and bounded, and 02 holds the real
+  concurrency, so 03 stays hard.
 - **An app-opened pick may be the blocked pick.** With Screen Recording off, the app's show writes
   `{ kind: 'blocked' }` as the agent's would, so the user sees the line and the settings button; it counts as
   app-opened, so `editor_stop` deletes it.
@@ -190,7 +218,7 @@ Shared names (one producer each):
 - `export type PlaytestSignal = { kind: 'start'; projectPath: string | null } | { kind: 'stop'; projectPath: string | null }`
   and `export function parsePlaytestCommand(command: string): PlaytestSignal | null` in `playtest-command.ts` (01)
 - `LiveTools.playtestStarted(sessionId: string, projectPath: string): Promise<void>` and
-  `LiveTools.playtestStopped(sessionId: string): void` in `main/live-tools.ts` (02)
+  `LiveTools.playtestStopped(sessionId: string, projectPath: string | null): void` in `main/live-tools.ts` (02)
 - `export const FAKE_PLAYTEST_TEXT = 'fake: playtest'` in `src/shared/fake-agent-harness.ts` (03)
 
 Boundary rules:
