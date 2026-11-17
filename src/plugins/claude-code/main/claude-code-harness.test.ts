@@ -3181,6 +3181,19 @@ describe('createClaudeCodeHarness accounts', () => {
     expect(spawned).toEqual([]);
   });
 
+  it('logIn_CommandRejects_EndsWithTheErrorText', async () => {
+    const { harness, spawned } = authHarness([], clock, async () => {
+      throw new Error('lookup broke');
+    });
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await settle();
+
+    expect(heard).toEqual([['ended', { status: null, error: 'lookup broke' }]]);
+    expect(spawned).toEqual([]);
+  });
+
   it('logIn_CancelBeforeSpawn_SpawnsNothing', async () => {
     const before = authChild();
     const login = authChild();
@@ -3399,6 +3412,15 @@ describe('createClaudeCodeHarness accounts', () => {
       command: async () => null,
       finish: () => settle(),
       reason: CLAUDE_NOT_FOUND,
+      spawnCount: 0,
+    },
+    {
+      name: 'CommandRejects',
+      command: async () => {
+        throw new Error('lookup broke');
+      },
+      finish: () => settle(),
+      reason: 'lookup broke',
       spawnCount: 0,
     },
     {
@@ -3627,6 +3649,23 @@ describe('createClaudeCodeHarness on the session host', () => {
     expect(host.processes).toEqual([]);
   });
 
+  it('start_CommandRejects_EndsWithTheErrorText', async () => {
+    const host = createFakeSessionHost(clock);
+    const { heard, events } = recordingEvents();
+
+    hostHarness(host, clock, {
+      command: async () => {
+        throw new Error('lookup broke');
+      },
+    }).start(request, events);
+    await settle();
+
+    expect(heard.filter(([name]) => name === 'ended')).toEqual([
+      ['ended', { code: null, error: 'lookup broke' }],
+    ]);
+    expect(host.processes).toEqual([]);
+  });
+
   // A harness on `host` whose command resolves only when `resolve` is called.
   function heldCommandHarness(host: SessionHost) {
     let resolve: (program: ProgramCandidate | null) => void = () => {};
@@ -3671,6 +3710,32 @@ describe('createClaudeCodeHarness on the session host', () => {
     expect(sequence).toEqual([]);
   });
 
+  // The end request waits for the command, then reaches the hosted process
+  // after the queued writes, inside the grace window and before any kill.
+  it('start_EndBeforeCommandResolves_EndsInputAfterTheWrites', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const host = createFakeSessionHost(clock);
+    const held = heldCommandHarness(host);
+    let hasResolved = false;
+
+    const process = held.harness.start(request, recordingEvents().events);
+    process.send({ text: 'hi', images: [] });
+    const ending = process.end().then(() => {
+      hasResolved = true;
+    });
+    held.resolve();
+    await settle();
+
+    const [hosted] = host.processes;
+    expect(hosted.writes.at(-1)).toBe(JSON.stringify(SEND_LINE));
+    expect(hosted.inputEnded).toBe(true);
+    expect(hosted.kills).toEqual([]);
+    expect(hasResolved).toBe(false);
+    host.close(hosted.id, { code: 0, signal: null, error: null });
+    await ending;
+    expect(hasResolved).toBe(true);
+  });
+
   it('start_WriteBeforeCommandResolves_ReplaysOnTheHostedProcess', async () => {
     const host = createFakeSessionHost(clock);
     const held = heldCommandHarness(host);
@@ -3695,7 +3760,6 @@ describe('createClaudeCodeHarness on the session host', () => {
     {
       name: 'start_NoSessionId_MintsPassesAndReportsIt',
       sessionId: null,
-      detaches: false,
       expected: 'uuid-1',
       reported: [['sessionId', 'uuid-1']],
     },

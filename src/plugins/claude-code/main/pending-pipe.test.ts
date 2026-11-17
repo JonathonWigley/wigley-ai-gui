@@ -47,10 +47,14 @@ describe('createPendingPipe', () => {
     stopped.pipe.kill('SIGTERM');
     stopped.pipe.kill('SIGKILL');
     stopped.pipe.detach();
+    const detachedFirst = createPendingPipe('p-3');
+    detachedFirst.pipe.detach();
+    detachedFirst.pipe.kill('SIGTERM');
 
-    expect([untouched.stoppedBy(), stopped.stoppedBy()]).toEqual([
-      null,
-      'SIGTERM',
-    ]);
+    expect([
+      untouched.stoppedBy(),
+      stopped.stoppedBy(),
+      detachedFirst.stoppedBy(),
+    ]).toEqual([null, 'SIGTERM', 'detach']);
   });
 });
