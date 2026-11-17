@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -72,3 +72,5 @@ Done when: every check 1–12 but 6 recorded in the Proof with its outcome and t
 Commit:    none, unless a failure's fix lands (committed with its owning task's scope).
 
 ## Proof
+
+Commit 820e219a5 · proof: Live checks 1-5 and 7-11 pass in the drive (7: a real claude chat and /usage with the command empty; 8: killed host, next session cold-starts it detached; 11: docs index built with no 'not run' line); 6 dropped; 12 not run, the drive has no unity-pool action, so the unity-pool self-test stands for it · concerns: none

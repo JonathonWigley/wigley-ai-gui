@@ -293,7 +293,7 @@ through `api.services`; the page reads the Platform record from the served confi
 - [x] [Doc re-read](06-doc-re-read.md) — after 05
 
 ### Wave 7
-- [ ] [Final verification](07-final-verification.md) — after 06
+- [x] [Final verification](07-final-verification.md) — after 06
 
 ## Run log
 
@@ -306,6 +306,7 @@ Review base: e6c894d93
 - 04 · hard · 978572251 · Diff read: ProgramCandidate/PlatformPrograms per OS, resolveProgram on node/limitRuns/abortable/Fake runners, program-lookup.ts exports (envVariable, findProgram, findCandidate, shimLaunch, programNotFoundMessage), NodeProcessesDeps with injected start, startDetached optional logPath and setEnv, programs.python core setting, docs and unity-pool through resolveProgram; Lane H's spawn kept per ruling. typecheck passes; lint passes after a check-layers sublayer fix (same rung). · concerns: Windows spawn line-break failure reports shimLaunch's raw message (no Could not run prefix) to match the landed spawn's startError shape; found Windows paths keep PATHEXT case; a sync throw from start inside run keeps its cached path; a setEnv PATH beside a copied Path key takes the first; new hostNodeProcesses test-support helper used by process-git and judge tests; claudeCommand falls back to the last claude candidate until 05
 - 05 · hard · 8138eba0b · Diff read: command(): Promise<ProgramCandidate|null> in start.ts via resolveProgram('claude'); createPendingPipe in pending-pipe.ts; session host via processes.startDetached with setEnv ELECTRON_RUN_AS_NODE; main.ts drops node:child_process; Done-when greps print nothing. typecheck and lint pass. · concerns: harness tests adjusted by reading alone (settle() awaits); start_ThenDetach_ReportsNoSessionId row removed, its claim moved to start_DetachBeforeCommandResolves_SpawnsNothing; one-shots split into async claudeProgram + sync spawnCli with CliEvents so a cancel before spawn spawns nothing
 - 06 · standard · ddba3fbdf · Diff read: keymap.md and the PageBind comment name the Option-chord and non-ASCII physical-key exceptions; every other listed line checked true against the code. typecheck and lint pass. · concerns: none
+- 07 · opus-low · 820e219a5 · Live checks 1-5 and 7-11 pass in the drive (7: a real claude chat and /usage with the command empty; 8: killed host, next session cold-starts it detached; 11: docs index built with no 'not run' line); 6 dropped; 12 not run, the drive has no unity-pool action, so the unity-pool self-test stands for it · concerns: none
 ### Contract changes
 ### Rulings
 - the matcher compares the press's chordTokenFor token with the bind's token rather than five fields — one token per chord, so equal — and named-key checks ask chordToken, keeping one list of chord keys · group 01
