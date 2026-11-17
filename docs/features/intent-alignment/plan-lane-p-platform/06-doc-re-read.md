@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -39,3 +39,5 @@ Done when: every line above checked; stale lines fixed, or none found and that r
 Commit:    one commit for the fixes, when any.
 
 ## Proof
+
+Commit ddba3fbdf · proof: Diff read: keymap.md and the PageBind comment name the Option-chord and non-ASCII physical-key exceptions; every other listed line checked true against the code. typecheck and lint pass. · concerns: none
