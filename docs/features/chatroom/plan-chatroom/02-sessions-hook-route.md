@@ -1,6 +1,6 @@
 # 02 — Sessions hook route
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses the relay socket's lifecycle (a second line after the hello, a read timeout, a handler that rejects) and adds the seam 07 and 08 consume
 Wave: 1 · Depends on: none

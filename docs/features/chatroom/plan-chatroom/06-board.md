@@ -1,6 +1,6 @@
 # 06 — Board
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds `BoardRow` to the contract, which tasks 08 and 09 consume, and reads five plugins' records
 Wave: 2 · Depends on: 01

@@ -1,6 +1,6 @@
 # 03 — Relay endpoint module and Codex id
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds `endpoint.py`, the module 07 imports, and changes the relay hello's `session_id` for Codex, which the app's session and forms hand-back code reads
 Wave: 1 · Depends on: none

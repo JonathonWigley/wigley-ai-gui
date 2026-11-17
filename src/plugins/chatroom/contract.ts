@@ -125,6 +125,53 @@ export interface Claim {
   readonly expiresAt: number;
 }
 
+// A session's state on the board. `connected` and `gone` are a terminal or
+// Codex session's, which has no app row: its connection is open or closed.
+export type BoardState =
+  | 'working'
+  | 'idle'
+  | 'waiting'
+  | 'done'
+  | 'connected'
+  | 'gone';
+
+// The unity-pool clone a session works in, and who holds it: `this` the
+// session, `other` another session, `user` a hold, `none` no claim.
+export interface BoardClone {
+  readonly pool: string;
+  readonly number: number;
+  readonly holder: 'this' | 'other' | 'user' | 'none';
+}
+
+// A changed file of the session's clone, `/`-separated below its top folder,
+// with the session whose agent last wrote it; both null when no session did.
+// `by` is `an ended session` for a row no longer on any board.
+export interface BoardFile {
+  readonly path: string;
+  readonly byRowId: string | null;
+  readonly by: string | null;
+}
+
+// One session of a room's board. `harness` is the harness id (`claude`,
+// `codex`), never a label; null when none is known. `uncommitted` and
+// `unpushedPaths` list their first files in plain string order, and the
+// `More` counts give the files left out. `unpushedPaths` is null when the
+// clone has no upstream or the board has no git state for it.
+export interface BoardRow {
+  readonly rowId: string;
+  readonly name: string;
+  readonly harness: string | null;
+  readonly state: BoardState;
+  readonly folder: string | null;
+  readonly branch: string | null;
+  readonly clone: BoardClone | null;
+  readonly uncommitted: readonly BoardFile[];
+  readonly uncommittedMore: number;
+  readonly unpushedPaths: readonly string[] | null;
+  readonly unpushedMore: number;
+  readonly claims: readonly Claim[];
+}
+
 // Copies the room out to a cloud service and brings the user's replies back.
 export interface ChatroomMirror {
   readonly id: string;
