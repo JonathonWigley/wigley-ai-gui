@@ -20,10 +20,10 @@ import type { Disposable } from '../../../contracts/disposable';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
+import type { ProgramCandidate } from '../../../contracts/platform';
 import type {
   ProcessRunner,
   SpawnedProcess,
-  SpawnEvents,
   SpawnStartError,
 } from '../../../contracts/processes';
 import type {
@@ -36,6 +36,7 @@ import type {
   SessionHost,
 } from '../../../contracts/session-host';
 import { errorText } from '../../../shared/error-text';
+import { programNotFoundMessage } from '../../../shared/program-lookup';
 import {
   type AgentDefinitions,
   loadAgentDefinitions,
@@ -64,6 +65,7 @@ import {
   readSavedReplies,
   readSessionName,
 } from './past-sessions';
+import { createPendingPipe } from './pending-pipe';
 import {
   CANCELLED_REASON,
   permissionReplyText,
@@ -104,8 +106,9 @@ export const CLAUDE_TOOL_USE_ID_META_KEY = 'claudecode/toolUseId';
 export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 
 // `host` runs each session's `claude` process, so it outlives the app;
-// `processes` spawns the one-shot commands, which must not. `command` reads the
-// `claude` binary's path, once per process spawned;
+// `processes` spawns the one-shot commands, which must not. `command` gives the
+// `claude` program and its leading args, read once per launch, null when none
+// was found;
 // `permissions` routes each row's `permission_prompt` calls to the row's
 // process; `env` the environment every process starts from; `files` reads
 // saved transcripts, `homeDir` holds the default config folder `.claude`, is
@@ -117,13 +120,13 @@ export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 // reads the profile's `settings.json` and the agent definitions at each session
 // start. `profiles` reads the harness's profiles at each `info()` call.
 export interface ClaudeCodeHarnessDeps {
-  command(): string;
+  command(): Promise<ProgramCandidate | null>;
   profiles(): readonly HarnessProfile[];
   permissions: PermissionRoute;
   env: Readonly<Record<string, string>>;
   log: Log;
   host: SessionHost;
-  processes: ProcessRunner;
+  processes: Pick<ProcessRunner, 'spawn'>;
   files: Files;
   homeDir: string;
   paths: Paths;
@@ -180,6 +183,18 @@ function spawnError(error: string, command: string, cwd: string): string {
   return error.includes('ENOENT')
     ? `claude was not found at ${command}, or the project folder ${cwd} does not exist; set claude-code.command`
     : error;
+}
+
+// The `claude` program a launch runs. Rejects with `programNotFoundMessage`
+// when the lookup found none, and with `command`'s own error when it rejects.
+async function claudeProgram(
+  deps: ClaudeCodeHarnessDeps,
+): Promise<ProgramCandidate> {
+  const program = await deps.command();
+  if (program === null) {
+    throw new Error(programNotFoundMessage('claude'));
+  }
+  return program;
 }
 
 // `events` with a failed spawn's error carrying `spawnError`'s hint.
@@ -873,6 +888,10 @@ function createPipeForwarder() {
 }
 
 // A new session (a null `request.sessionId`) runs under a uuid the adapter mints; the session id is reported first.
+// The session holds a pending pipe from the start, and the host spawns once the
+// command resolves: a kill before then ends the session with its signal and a
+// detach ends nothing, each spawning nothing; a command not found ends it with
+// the lookup's text.
 function startClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -883,22 +902,49 @@ function startClaudeProcess(
     sessionId: request.sessionId ?? deps.randomUuid(),
   };
   const launch = claudeLaunch(started, deps.env, deps.homeDir, deps.paths);
-  const command = deps.command();
   const forwarder = createPipeForwarder();
-  const pipe = deps.host.spawn(
-    {
-      id: started.processId,
-      command,
-      args: launch.args,
-      cwd: launch.cwd,
-      env: launch.env,
-      idleRule: CLAUDE_IDLE_RULE,
-      droppedOutKeys: CLAUDE_DROPPED_OUT_KEYS,
-    },
-    withSpawnHint(forwarder.events, command, launch.cwd),
-  );
+  const pending = createPendingPipe(started.processId);
   const state = createSessionFoldState(started);
-  const session = createClaudeSession(deps, started, events, state, pipe);
+  const session = createClaudeSession(
+    deps,
+    started,
+    events,
+    state,
+    pending.pipe,
+  );
+  void claudeProgram(deps)
+    .then(
+      (program): ProgramCandidate | string => program,
+      (error: unknown) => errorText(error),
+    )
+    .then((found) => {
+      const stoppedBy = pending.stoppedBy();
+      if (stoppedBy === 'detach') {
+        return;
+      }
+      if (stoppedBy !== null) {
+        forwarder.events.closed({ code: null, signal: stoppedBy, error: null });
+        return;
+      }
+      if (typeof found === 'string') {
+        forwarder.events.closed({ code: null, signal: null, error: found });
+        return;
+      }
+      pending.attach(
+        deps.host.spawn(
+          {
+            id: started.processId,
+            command: found.command,
+            args: [...found.args, ...launch.args],
+            cwd: launch.cwd,
+            env: launch.env,
+            idleRule: CLAUDE_IDLE_RULE,
+            droppedOutKeys: CLAUDE_DROPPED_OUT_KEYS,
+          },
+          withSpawnHint(forwarder.events, found.command, launch.cwd),
+        ),
+      );
+    });
   session.keepRoute(
     deps.permissions.route(started.rowId, Promise.resolve(session.permissions)),
   );
@@ -1037,52 +1083,75 @@ function commandLabel(args: readonly string[]): string {
   return ['claude', ...words].join(' ');
 }
 
-// `claude <args>` as `command` for `profileDir`, in the home folder with the
-// session launch's environment.
+// What a one-shot `claude` run reports: its output, then its exit, or the
+// `claude-code.command` hint when it could not start.
+interface CliEvents {
+  stdout(chunk: string): void;
+  stderr(chunk: string): void;
+  exited(code: number | null, signal: string | null): void;
+  failed(message: string): void;
+}
+
+// `claude <args>` as `program` for `profileDir`, in the home folder with the
+// session launch's environment, the program's leading args first.
 function spawnCli(
   deps: ClaudeCodeHarnessDeps,
-  command: string,
+  program: ProgramCandidate,
   args: readonly string[],
   profileDir: string | null,
-  events: SpawnEvents,
+  events: CliEvents,
 ): SpawnedProcess {
-  return deps.processes.spawn(command, args, {
+  return deps.processes.spawn(program.command, [...program.args, ...args], {
     cwd: deps.homeDir,
     env: claudeEnv(deps.env, profileDir, deps.homeDir, deps.paths),
-    events,
+    events: {
+      stdout: (chunk) => events.stdout(chunk),
+      stderr: (chunk) => events.stderr(chunk),
+      closed: (exit) => {
+        if (exit.startError === null) {
+          events.exited(exit.code, exit.signal);
+        } else {
+          events.failed(cliSpawnError(exit.startError, program.command));
+        }
+      },
+    },
   });
 }
 
-// Runs `claude <args>` to its exit, stdin closed. Rejects with the
+// Runs `claude <args>` to its exit, stdin closed. Rejects with the lookup's
+// not-found text when no `claude` was found, spawning nothing, with the
 // `claude-code.command` hint when the process cannot start, and, given
 // `timeoutMs`, kills the child and rejects when it has not exited by then.
-function runCli(
+async function runCli(
   deps: ClaudeCodeHarnessDeps,
   args: readonly string[],
   profileDir: string | null,
   timeoutMs: number | null,
 ): Promise<CliRun> {
+  const program = await claudeProgram(deps);
   return new Promise((resolve, reject) => {
-    const command = deps.command();
     let stdout = '';
     let stderr = '';
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const child = spawnCli(deps, command, args, profileDir, {
+    const stopTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    };
+    const child = spawnCli(deps, program, args, profileDir, {
       stdout: (chunk) => {
         stdout += chunk;
       },
       stderr: (chunk) => {
         stderr += chunk;
       },
-      closed: (exit) => {
-        if (timer !== null) {
-          clearTimeout(timer);
-        }
-        if (exit.startError !== null) {
-          reject(new Error(cliSpawnError(exit.startError, command)));
-          return;
-        }
-        resolve({ code: exit.code, stdout, stderr: stderr.trim() });
+      exited: (code) => {
+        stopTimer();
+        resolve({ code, stdout, stderr: stderr.trim() });
+      },
+      failed: (message) => {
+        stopTimer();
+        reject(new Error(message));
       },
     });
     child.endInput();
@@ -1175,7 +1244,10 @@ function isNewSignIn(
 // after a finished sign-in is unmeasured, so every exit reads the status, and
 // a status read as the login starts tells a new sign-in from the profile's
 // old one: a signed-in status ends the sign-in finished when the login exited
-// 0, the profile was signed out before, or the account changed.
+// 0, the profile was signed out before, or the account changed. The login
+// spawns once the command resolves: a code sent before then is dropped, since
+// the user pastes one only after the link, and a cancel before then spawns
+// nothing.
 function startLogIn(
   deps: ClaudeCodeHarnessDeps,
   profileDir: string | null,
@@ -1183,7 +1255,7 @@ function startLogIn(
 ): LogInProcess {
   // A failed read leaves the earlier status unknown, read as signed out.
   const statusBefore = readAuthStatus(deps, profileDir).catch(() => null);
-  const command = deps.command();
+  let child: SpawnedProcess | null = null;
   let stdout = '';
   let stderr = '';
   let hasLink = false;
@@ -1226,36 +1298,39 @@ function startLogIn(
     );
   };
 
-  const child = spawnCli(deps, command, ['auth', 'login'], profileDir, {
-    stdout: (chunk) => {
-      stdout += chunk;
-      findLink(stdout);
-    },
-    stderr: (chunk) => {
-      stderr += chunk;
-      findLink(stderr);
-    },
-    closed: (exit) => {
-      if (exit.startError === null) {
-        endAfterExit(exit.code, exit.signal);
-      } else {
-        end(null, cliSpawnError(exit.startError, command));
+  void claudeProgram(deps).then(
+    (program) => {
+      if (hasEnded) {
+        return;
       }
+      child = spawnCli(deps, program, ['auth', 'login'], profileDir, {
+        stdout: (chunk) => {
+          stdout += chunk;
+          findLink(stdout);
+        },
+        stderr: (chunk) => {
+          stderr += chunk;
+          findLink(stderr);
+        },
+        exited: endAfterExit,
+        failed: (message) => end(null, message),
+      });
     },
-  });
+    (error: unknown) => end(null, errorText(error)),
+  );
 
   return {
     sendCode(code) {
       if (hasEnded) {
         return;
       }
-      child.write(`${code}\n`);
+      child?.write(`${code}\n`);
     },
     cancel() {
       if (hasEnded) {
         return;
       }
-      child.kill();
+      child?.kill();
       end(null, 'Sign-in cancelled');
     },
   };

@@ -1,6 +1,6 @@
 # 04 — Program lookup and spawn behind ProcessRunner
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03 and the Lane H gate (plan.md § Cross-lane gate)
 Plan: [plan.md](plan.md)
@@ -526,3 +526,5 @@ One commit for the group: "Processes: spawn handles, resolveProgram with per-OS 
 programs.python setting, PATHEXT lookup and cmd.exe shims on Windows; docs and unity-pool resolve their Python".
 
 ## Proof
+
+Commit 978572251 · proof: Diff read: ProgramCandidate/PlatformPrograms per OS, resolveProgram on node/limitRuns/abortable/Fake runners, program-lookup.ts exports (envVariable, findProgram, findCandidate, shimLaunch, programNotFoundMessage), NodeProcessesDeps with injected start, startDetached optional logPath and setEnv, programs.python core setting, docs and unity-pool through resolveProgram; Lane H's spawn kept per ruling. typecheck passes; lint passes after a check-layers sublayer fix (same rung). · concerns: Windows spawn line-break failure reports shimLaunch's raw message (no Could not run prefix) to match the landed spawn's startError shape; found Windows paths keep PATHEXT case; a sync throw from start inside run keeps its cached path; a setEnv PATH beside a copied Path key takes the first; new hostNodeProcesses test-support helper used by process-git and judge tests; claudeCommand falls back to the last claude candidate until 05

@@ -17,7 +17,9 @@ import {
 } from '../../sessions/contract';
 import { claudeCodeManifest, DEFAULT_PROFILES } from '../manifest';
 import { NO_PROCESS_TEXT, PERMISSION_TOOLS } from './permission-route';
-import { claudeCodeMainPart, claudeCommand } from './start';
+import { claudeCodeMainPart } from './start';
+
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 // A registry that records: `register` adds the harness and returns a handle
 // whose `dispose` removes it, counts and logs `registration` to `stops`;
@@ -121,24 +123,6 @@ function started(
 }
 
 describe('claudeCodeMainPart', () => {
-  it.each([
-    { setting: '', expected: '~/.local/bin/claude' },
-    { setting: '/opt/claude', expected: '/opt/claude' },
-  ])(
-    'claudeCommand_EmptyOrSet_PicksThePlatformProgramOrTheSetting ($setting)',
-    ({ setting, expected }) => {
-      const programs = {
-        python: [],
-        claude: [
-          { command: 'claude', args: [] },
-          { command: '~/.local/bin/claude', args: [] },
-        ],
-      };
-
-      expect(claudeCommand(setting, programs)).toBe(expected);
-    },
-  );
-
   it('start_RegistersTheClaudeHarness', () => {
     const { harnesses } = started();
 
@@ -184,17 +168,23 @@ describe('claudeCodeMainPart', () => {
     expect(toolCounts).toEqual({ toolDisposes: 1, toolEnds: 1 });
   });
 
-  it('accountStatus_CommandSetting_SpawnsItInTheAgentHomeWithTheAgentEnvironment', () => {
+  it('accountStatus_CommandSetting_SpawnsItInTheAgentHomeWithTheAgentEnvironment_EmptyLooksClaudeUp', async () => {
     const { harness, harnesses } = started({
       settings: { command: '~/bin/claude', profiles: DEFAULT_PROFILES },
       agentHomeDir: '/Users/u',
       agentEnvironment: { PATH: '/bin', WIGLEY_AI_GUI_ENDPOINT_DIR: '/e' },
     });
     const [registered] = harnesses;
+    harness.processes.scriptProgram('claude', {
+      command: '/found/claude',
+      args: ['--found'],
+    });
 
     void registered.accountStatus(null);
+    await settle();
     harness.pushSettings({ command: '', profiles: DEFAULT_PROFILES });
     void registered.accountStatus(null);
+    await settle();
 
     expect(harness.processes.spawns[0]).toMatchObject({
       command: '/Users/u/bin/claude',
@@ -202,9 +192,10 @@ describe('claudeCodeMainPart', () => {
       cwd: '/Users/u',
       env: { PATH: '/bin', WIGLEY_AI_GUI_ENDPOINT_DIR: '/e' },
     });
-    expect(harness.processes.spawns[1].command).toBe(
-      '/Users/u/.local/bin/claude',
-    );
+    expect(harness.processes.spawns[1]).toMatchObject({
+      command: '/found/claude',
+      args: ['--found', 'auth', 'status', '--json'],
+    });
   });
 
   it('settingsChanged_Profiles_RefreshesTheRegistration', () => {

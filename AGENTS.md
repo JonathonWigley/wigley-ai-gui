@@ -224,7 +224,8 @@ src/main/        core main process; main.ts is its composition root
                  `requiredStdout` runs a program and returns its stdout, rejecting naming the program when it cannot
                  run, times out or exits non-zero
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
-                 answers, drains an older protocol's host, and hands out hosted processes;
+                 answers through `ProcessRunner.startDetached`, drains an older protocol's host, and hands out hosted
+                 processes;
                  `docs/features/session-host/design.md`
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
                  upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), and a commit of named paths
@@ -337,9 +338,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   claude-code/   manifest.ts (the `command` and `profiles` settings), main/ (the Claude Code CLI adapter behind
                  AgentHarness, registered through `services.agentHarnesses`: it resolves a profile's config folder,
                  lists and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and
-                 status and `claude -p /usage` (the plan usage poll), asks each session for `get_context_usage` and
-                 `get_settings`, and contributes Claude's `permission_prompt` MCP tool, routed to the session's
-                 process) → the only place the app spawns `claude`; `docs/features/agent-harnesses/design.md`
+                 status and `claude -p /usage` (the plan usage poll), each one-shot started through
+                 `ProcessRunner.spawn`, asks each session for `get_context_usage` and `get_settings`, and contributes
+                 Claude's `permission_prompt` MCP tool, routed to the session's process; an empty `command` looks
+                 `claude` up on PATH, then in `~/.local/bin`) → the only place the app spawns `claude`;
+                 `docs/features/agent-harnesses/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round; the agents' service auto-answers a headless chat session's rounds with every item's
                  recommendation, outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout);

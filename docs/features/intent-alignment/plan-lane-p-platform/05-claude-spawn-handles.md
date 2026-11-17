@@ -1,6 +1,6 @@
 # 05 — Claude adapter and session host start through ProcessRunner
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 04
 Plan: [plan.md](plan.md)

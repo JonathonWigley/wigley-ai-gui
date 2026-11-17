@@ -13,7 +13,6 @@ import {
   shell,
   type WebContents,
 } from 'electron';
-import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -1544,8 +1543,7 @@ function startApp() {
         ),
         hostScript: path.join(__dirname, 'session-host.js'),
         execPath: process.execPath,
-        env: process.env,
-        spawn,
+        processes,
         clock,
         timers,
         log: pageLog.log,

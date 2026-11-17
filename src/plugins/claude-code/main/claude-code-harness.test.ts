@@ -28,6 +28,7 @@ import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
+import type { ProgramCandidate } from '../../../contracts/platform';
 import type {
   ProcessRunner,
   SpawnedProcess,
@@ -350,6 +351,9 @@ const initializeRequest = (requestId: string) => ({
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+const CLAUDE_NOT_FOUND =
+  'claude was not found on PATH or in ~/.local/bin; set claude-code.command';
+
 function started(
   fake = fakeChild(),
   files: Files = createMemoryFiles(),
@@ -360,7 +364,7 @@ function started(
   let uuidCount = 0;
   const log: Log = (source, message) => logged.push([source, message]);
   const harness = createClaudeCodeHarness({
-    command: () => '/bin/claude',
+    command: async () => ({ command: '/bin/claude', args: [] }),
     permissions: createPermissionRoute(),
     profiles: () => [],
     env: {},
@@ -516,7 +520,7 @@ function idleHarness(
   profiles: () => readonly HarnessProfile[] = () => [],
 ) {
   return createClaudeCodeHarness({
-    command: () => '/bin/claude',
+    command: async () => ({ command: '/bin/claude', args: [] }),
     permissions: createPermissionRoute(),
     profiles,
     env: { CLAUDE_CONFIG_DIR: '/c' },
@@ -1733,6 +1737,7 @@ describe('createClaudeCodeHarness', () => {
     const fake = fakeChild();
     (fake.child as { pid: number | undefined }).pid = undefined;
     const run = started(fake);
+    await settle();
 
     run.emitter.emit(
       'error',
@@ -2901,7 +2906,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       transcript,
     );
     const harness = createClaudeCodeHarness({
-      command: () => '/bin/claude',
+      command: async () => ({ command: '/bin/claude', args: [] }),
       permissions: createPermissionRoute(),
       profiles: () => [],
       env,
@@ -2942,7 +2947,7 @@ describe('createClaudeCodeHarness past sessions', () => {
     'configFolder_$profileDir_IgnoresTheAppsConfigDir',
     ({ profileDir, folder }) => {
       const harness = createClaudeCodeHarness({
-        command: () => '/bin/claude',
+        command: async () => ({ command: '/bin/claude', args: [] }),
         permissions: createPermissionRoute(),
         profiles: () => [],
         env: { CLAUDE_CONFIG_DIR: '/c' },
@@ -3008,10 +3013,14 @@ describe('createClaudeCodeHarness accounts', () => {
   function authHarness(
     children: ReturnType<typeof authChild>[],
     harnessClock = clock,
+    command: () => Promise<ProgramCandidate | null> = async () => ({
+      command: '/bin/claude',
+      args: [],
+    }),
   ) {
     const processes = childProcesses(children.map((child) => child.child));
     const harness = createClaudeCodeHarness({
-      command: () => '/bin/claude',
+      command,
       permissions: createPermissionRoute(),
       profiles: () => [],
       env: { HOME: '/Users/u', CLAUDECODE: '1' },
@@ -3056,6 +3065,7 @@ describe('createClaudeCodeHarness accounts', () => {
     const { harness } = authHarness([child]);
 
     const status = harness.accountStatus(null);
+    await settle();
     child.emitter.emit(
       'error',
       Object.assign(new Error('spawn /bin/claude ENOENT'), { code: 'ENOENT' }),
@@ -3129,6 +3139,7 @@ describe('createClaudeCodeHarness accounts', () => {
     const { heard, events } = recordingLogIn();
 
     const process = harness.logIn(null, events);
+    await settle();
     process.cancel();
     process.cancel();
     login.emitter.emit('close', null, 'SIGTERM');
@@ -3149,10 +3160,43 @@ describe('createClaudeCodeHarness accounts', () => {
     const login = authChild();
     const { harness } = authHarness([before, login]);
 
-    harness.logIn(null, recordingLogIn().events).sendCode('abc#123');
+    const process = harness.logIn(null, recordingLogIn().events);
+    await settle();
+    process.sendCode('abc#123');
     await settle();
 
     expect(login.lines).toEqual(['abc#123']);
+  });
+
+  it('logIn_CommandNotFound_EndsWithNotFoundText', async () => {
+    const { harness, spawned } = authHarness([], clock, async () => null);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await settle();
+
+    expect(heard).toEqual([
+      ['ended', { status: null, error: CLAUDE_NOT_FOUND }],
+    ]);
+    expect(spawned).toEqual([]);
+  });
+
+  it('logIn_CancelBeforeSpawn_SpawnsNothing', async () => {
+    const before = authChild();
+    const login = authChild();
+    const { harness, spawned } = authHarness([before, login]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events).cancel();
+    await settle();
+
+    expect(heard).toEqual([
+      ['ended', { status: null, error: 'Sign-in cancelled' }],
+    ]);
+    expect(spawned.map((spawn) => spawn.args)).not.toContainEqual([
+      'auth',
+      'login',
+    ]);
   });
 
   it('logIn_LinkOnStderrSplitAcrossChunks_LinksOnce', async () => {
@@ -3328,11 +3372,18 @@ describe('createClaudeCodeHarness accounts', () => {
     ]);
   });
 
+  const foundClaude = async (): Promise<ProgramCandidate | null> => ({
+    command: '/bin/claude',
+    args: [],
+  });
+
   it.each([
     {
       name: 'SpawnNotFound',
+      command: foundClaude,
       finish: async (child: ReturnType<typeof authChild>) => {
         child.setPid(undefined);
+        await settle();
         child.emitter.emit(
           'error',
           Object.assign(new Error('spawn /bin/claude ENOENT'), {
@@ -3341,30 +3392,46 @@ describe('createClaudeCodeHarness accounts', () => {
         );
       },
       reason: 'claude was not found at /bin/claude; set claude-code.command',
+      spawnCount: 1,
+    },
+    {
+      name: 'CommandNotFound',
+      command: async () => null,
+      finish: () => settle(),
+      reason: CLAUDE_NOT_FOUND,
+      spawnCount: 0,
     },
     {
       name: 'NotSignedIn',
+      command: foundClaude,
       finish: async (child: ReturnType<typeof authChild>) => {
         child.stderr.write('Not logged in\n');
         await exitWith(child, '', 1);
       },
       reason: 'exited with code 1: Not logged in',
+      spawnCount: 1,
     },
     {
       name: 'NoReport',
+      command: foundClaude,
       finish: (child: ReturnType<typeof authChild>) =>
         exitWith(child, '{}\n', 0),
       reason: 'printed no usage report',
+      spawnCount: 1,
     },
-  ])('planUsage_Fails_$name', async ({ finish, reason }) => {
-    const child = authChild();
-    const { harness } = authHarness([child]);
+  ])(
+    'planUsage_Fails_$name',
+    async ({ command, finish, reason, spawnCount }) => {
+      const child = authChild();
+      const { harness, spawned } = authHarness([child], clock, command);
 
-    const rejected = expect(harness.planUsage(null)).rejects.toThrow(reason);
-    await finish(child);
+      const rejected = expect(harness.planUsage(null)).rejects.toThrow(reason);
+      await finish(child);
 
-    await rejected;
-  });
+      await rejected;
+      expect(spawned).toHaveLength(spawnCount);
+    },
+  );
 
   it('planUsage_NoAnswer_KillsAndRejectsAfterTimeout', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -3375,6 +3442,7 @@ describe('createClaudeCodeHarness accounts', () => {
     harness.planUsage(null).catch((error: unknown) => {
       failure = error;
     });
+    await settle();
     vi.advanceTimersByTime(PLAN_USAGE_TIMEOUT_MS - 1);
     await settle();
     expect(child.signals).toEqual([]);
@@ -3417,11 +3485,14 @@ describe('createClaudeCodeHarness on the session host', () => {
       files?: Files;
       permissions?: PermissionRoute;
       log?: Log;
+      command?: () => Promise<ProgramCandidate | null>;
     } = {},
   ) {
     let uuidCount = 0;
     return createClaudeCodeHarness({
-      command: () => '/bin/claude',
+      command:
+        overrides.command ??
+        (async () => ({ command: '/bin/claude', args: [] })),
       permissions: overrides.permissions ?? createPermissionRoute(),
       profiles: () => [],
       env: overrides.env ?? {},
@@ -3485,10 +3556,11 @@ describe('createClaudeCodeHarness on the session host', () => {
       name === 'entry' ? [payload as ChatEntry] : [],
     );
 
-  it('start_SpawnsThroughTheHost', () => {
+  it('start_SpawnsThroughTheHost', async () => {
     const host = createFakeSessionHost(clock);
 
     hostHarness(host, clock).start(request, recordingEvents().events);
+    await settle();
 
     expect(host.processes[0].request).toEqual({
       id: 'p-1',
@@ -3526,6 +3598,99 @@ describe('createClaudeCodeHarness on the session host', () => {
     );
   });
 
+  it('start_CandidateArgs_LeadTheLaunchArgs', async () => {
+    const host = createFakeSessionHost(clock);
+
+    hostHarness(host, clock, {
+      command: async () => ({ command: '/opt/claude', args: ['--x'] }),
+    }).start(request, recordingEvents().events);
+    await settle();
+
+    const hosted = host.processes[0].request;
+    expect(hosted?.command).toBe('/opt/claude');
+    expect(hosted?.args.slice(0, 3)).toEqual(['--x', '-p', '--input-format']);
+  });
+
+  it('start_CommandNotFound_EndsWithNotFoundText', async () => {
+    const host = createFakeSessionHost(clock);
+    const { heard, events } = recordingEvents();
+
+    hostHarness(host, clock, { command: async () => null }).start(
+      request,
+      events,
+    );
+    await settle();
+
+    expect(heard.filter(([name]) => name === 'ended')).toEqual([
+      ['ended', { code: null, error: CLAUDE_NOT_FOUND }],
+    ]);
+    expect(host.processes).toEqual([]);
+  });
+
+  // A harness on `host` whose command resolves only when `resolve` is called.
+  function heldCommandHarness(host: SessionHost) {
+    let resolve: (program: ProgramCandidate | null) => void = () => {};
+    const harness = hostHarness(host, clock, {
+      command: () =>
+        new Promise<ProgramCandidate | null>((settled) => {
+          resolve = settled;
+        }),
+    });
+    return {
+      harness,
+      resolve: () => resolve({ command: '/bin/claude', args: [] }),
+    };
+  }
+
+  it('start_KillBeforeCommandResolves_SpawnsNothing', async () => {
+    const host = createFakeSessionHost(clock);
+    const held = heldCommandHarness(host);
+    const { heard, events } = recordingEvents();
+
+    held.harness.start(request, events).kill();
+    held.resolve();
+    await settle();
+
+    expect(host.processes).toEqual([]);
+    expect(heard.filter(([name]) => name === 'ended')).toEqual([
+      ['ended', { code: null, error: null }],
+    ]);
+  });
+
+  // Nothing is emitted after a detach, the queued session id included.
+  it('start_DetachBeforeCommandResolves_SpawnsNothing', async () => {
+    const host = createFakeSessionHost(clock);
+    const held = heldCommandHarness(host);
+    const { sequence, events } = recordingEvents();
+
+    held.harness.start(request, events).detach();
+    held.resolve();
+    await settle();
+
+    expect(host.processes).toEqual([]);
+    expect(sequence).toEqual([]);
+  });
+
+  it('start_WriteBeforeCommandResolves_ReplaysOnTheHostedProcess', async () => {
+    const host = createFakeSessionHost(clock);
+    const held = heldCommandHarness(host);
+
+    held.harness
+      .start(request, recordingEvents().events)
+      .send({ text: 'hi', images: [] });
+    held.resolve();
+    await settle();
+
+    expect(host.processes[0].writes).toEqual(
+      [
+        initializeRequest('wigley-1'),
+        contextUsageRequest('wigley-2'),
+        settingsRequest('wigley-3'),
+        SEND_LINE,
+      ].map((line) => JSON.stringify(line)),
+    );
+  });
+
   it.each([
     {
       name: 'start_NoSessionId_MintsPassesAndReportsIt',
@@ -3537,29 +3702,17 @@ describe('createClaudeCodeHarness on the session host', () => {
     {
       name: 'start_GivenSessionId_ReportsIt',
       sessionId: 's-1',
-      detaches: false,
       expected: 's-1',
       reported: [['sessionId', 's-1']],
     },
-    // Nothing is emitted after a detach, the queued session id included.
-    {
-      name: 'start_ThenDetach_ReportsNoSessionId',
-      sessionId: 's-1',
-      detaches: true,
-      expected: 's-1',
-      reported: [],
-    },
-  ])('$name', async ({ sessionId, detaches, expected, reported }) => {
+  ])('$name', async ({ sessionId, expected, reported }) => {
     const host = createFakeSessionHost(clock);
     const { sequence, events } = recordingEvents();
 
-    const agent = hostHarness(host, clock).start(
+    hostHarness(host, clock).start(
       { ...request, sessionId, resume: false },
       events,
     );
-    if (detaches) {
-      agent.detach();
-    }
     await settle();
 
     const args = host.processes[0].request?.args ?? [];
@@ -3657,6 +3810,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       permissions,
       log: (source, message) => logged.push([source, message]),
     }).start(request, recorded.events);
+    await settle();
     host.spawned('p-1', 4321);
     await settle();
     const tools = permissions.toolSession(rowSession);
@@ -3861,6 +4015,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       via: 'start',
       run: async (host: FakeSessionHost, events: AgentProcessEvents) => {
         hostHarness(host, clock).start(request, events);
+        await settle();
         host.spawned('p-1', 4321);
         await settle();
       },
