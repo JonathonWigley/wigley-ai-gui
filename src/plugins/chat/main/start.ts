@@ -1,7 +1,6 @@
 import path from 'node:path';
 import type {
   AgentHarnessInfo,
-  AgentHarnessRegistry,
   PermissionDecision,
 } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
@@ -26,6 +25,7 @@ import {
   createFakeAgentHarness,
   isFakeAgentHarness,
 } from '../../../shared/fake-agent-harness';
+import { registeredProfiles } from '../../../shared/harness-profiles';
 import { isSameJson } from '../../../shared/json';
 import {
   type SessionsMainEvents,
@@ -52,7 +52,11 @@ import { type ChatSessions, createChatSessions } from './chat-sessions';
 import { createChatSlots } from './chat-slots';
 import { askFixturePermission } from './fixtures';
 import { createFolderChoices } from './folder-choices';
-import { requireHarnessOfProfile } from './lookups';
+import {
+  type ChatHarnesses,
+  chatHarnessesOf,
+  requireHarnessOfProfile,
+} from './lookups';
 import { createOpenSessions } from './open-sessions';
 import { createChatPreview } from './preview/chat-preview';
 import { createPoolProviders, projectOf, readProjects } from './projects';
@@ -131,7 +135,7 @@ interface ChatDriveDeps {
     'start' | 'hostSessionIdSettled' | 'closed' | 'sessions'
   >;
   sessions: Pick<SessionsMainExports, 'activate'>;
-  harnesses: AgentHarnessRegistry;
+  harnesses: ChatHarnesses;
 }
 
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
@@ -253,9 +257,9 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 }
 
 // Chat's view of `core.agentHarnesses`: the ids present when it was made and
-// the last label read for each id. `follow` tells `chat` of each later change: a
-// present id's key deleted is a leave, a key set for an id not present (a first
-// registration included) a return, and a present id's key set again (a
+// the last label read for each id. `follow` tells `chat` of each later change:
+// a present id's key deleted is a leave, a key set for an id not present (a
+// first registration included) a return, and a present id's key set again (a
 // refresh) neither. `labelOf` is the last label read for an id, else the id.
 export interface HarnessFollower {
   labelOf(harnessId: string): string;
@@ -295,8 +299,9 @@ export function createHarnessFollower(
 }
 
 // Starts, resumes and runs the agent sessions the page asks for, each on its
-// harness (a new one on the `defaultHarness` setting's, or its profile's), keeps
-// the open ones saved with their titles and queued messages, and on start
+// harness (a new one on the `defaultHarness` setting's, or its profile's),
+// reading profiles as the registry publishes them in `core.agentHarnesses`;
+// keeps the open ones saved with their titles and queued messages, and on start
 // restores them, re-attaching each to its process the session host still runs,
 // holding relay connects until the rows are open, and on a restart keeps
 // their rows for the restarted part's restore to adopt; lets a harness's
@@ -333,23 +338,18 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       paths: services.paths,
       log: services.log,
     });
-    // Every registered harness's profile names, in registration order.
+    const harnessSlot = api.state.read(coreAgentHarnessesSlot);
+    const harnesses = chatHarnessesOf(services.agentHarnesses, harnessSlot);
+    // Every profile name the registry publishes, in registration order.
     const profileNames = () =>
-      services.agentHarnesses
-        .list()
-        .flatMap((harness) =>
-          harness.info().profiles.map((profile) => profile.name),
-        );
-    // The first profile of chat's `defaultHarness`; null when it is not
-    // registered or has no profiles.
+      registeredProfiles(harnessSlot.all()).map((profile) => profile.name);
+    // The first profile published for chat's `defaultHarness`; null when it is
+    // not registered or has no profiles.
     const defaultHarnessProfile = () =>
-      services.agentHarnesses
-        .get(api.settings().defaultHarness)
-        ?.info()
-        .profiles.at(0)?.name ?? null;
+      harnesses.profilesOf(api.settings().defaultHarness).at(0)?.name ?? null;
     const folderChoices = createFolderChoices({
       recent,
-      harnesses: services.agentHarnesses,
+      harnesses,
       files: services.files,
       paths: services.paths,
       tempFolders: services.tempFolders,
@@ -361,7 +361,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     let projectSettings = api.settings().projects;
     let projects = readProjects(projectSettings, services.log);
     const accounts = createAccounts({
-      harnesses: services.agentHarnesses,
+      harnesses,
       send: (message, data) => api.channel.send(message, data),
       log: services.log,
     });
@@ -375,12 +375,9 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       returned: api.state.publish(chatReturnedSlot),
     });
     const toolCallers = createToolCallers(services.timers);
-    const harnessFollower = createHarnessFollower(
-      api.state.read(coreAgentHarnessesSlot),
-      services.log,
-    );
+    const harnessFollower = createHarnessFollower(harnessSlot, services.log);
     const chat = createChatSessions({
-      harnesses: services.agentHarnesses,
+      harnesses,
       harnessLabelOf: (harnessId) => harnessFollower.labelOf(harnessId),
       sessions,
       selectedSessionId: () => selection.get() ?? null,
@@ -627,7 +624,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         defaultProfile: defaultHarnessProfile,
         chat,
         sessions,
-        harnesses: services.agentHarnesses,
+        harnesses,
       });
     }
     api.layouts.register({ layoutTypes });

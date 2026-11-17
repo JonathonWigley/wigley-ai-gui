@@ -157,9 +157,10 @@ lines past the last `seq` it read.
 - A re-attached row shows the transcript up to its process's start time, then the replayed entries, so no entry
   shows twice: transcript entries and live entries have different ids.
 - A row whose process runs but cannot be attached — it lives in another protocol's host, the host list timed out, the
-  attach failed, or its profile is missing from the profiles of chat's harness — is **unheld**: it refuses a send until that process ends, and before a send or a history read
+  attach failed, or its profile is missing from the profiles its harness declares — is **unheld**: it refuses a send until that process ends, and before a send or a history read
   chat lists the host again and re-attaches when it can. `resume` lists the host first too: a process of the session
-  running in the current host has the row open and attach to it, and one in another app version or a list that rejects
+  running in the current host (the process id chat last knew for that session, or an id starting with its host session
+  id) has the row open and attach to it, and one in another app version or a list that rejects
   refuses the resume. So a session never runs two processes, past those § The host names: a process left alone, a
   live host's child beside a new host, and a relaunch inside a new host's hold, when `list` answers empty.
 - Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no turn-finished mark fires for a

@@ -10,6 +10,7 @@ import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-s
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { ChatChannel } from '../contract';
 import { createAccounts } from './accounts';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
 
 type Message = {
   [K in keyof ChatChannel['messages']]: {
@@ -49,7 +50,7 @@ function setUp() {
     },
   };
   const accounts = createAccounts({
-    harnesses: harnessRegistryOf([counted]),
+    harnesses: chatHarnessesOfRegistry(harnessRegistryOf([counted])),
     send: (message, data) => messages.push({ message, data } as Message),
     log: (message) => logged.push(message),
   });
@@ -203,7 +204,7 @@ describe('createAccounts', () => {
 
   it('status_ProfileOfNoHarness_Rejects', async () => {
     const accounts = createAccounts({
-      harnesses: harnessRegistryOf([]),
+      harnesses: chatHarnessesOfRegistry(harnessRegistryOf([])),
       send: () => undefined,
       log: () => undefined,
     });

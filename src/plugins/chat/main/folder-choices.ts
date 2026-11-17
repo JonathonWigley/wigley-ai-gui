@@ -1,6 +1,5 @@
 import type {
   AgentHarness,
-  AgentHarnessRegistry,
   HarnessProfile,
   ProjectFolder,
 } from '../../../contracts/agent';
@@ -9,6 +8,7 @@ import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type { RecentFolder } from '../contract';
+import type { ChatHarnesses } from './lookups';
 import { MAX_RECENT_FOLDERS, type RecentFolders } from './recent-folders';
 
 export const MAX_FOLDER_CHOICES = MAX_RECENT_FOLDERS * 2;
@@ -54,8 +54,8 @@ export function mergeFolderChoices(
 
 export interface FolderChoices {
   // The start prompt's folders: chat's recent folders merged with the project
-  // folders of every profile of every registered harness, leaving out each
-  // folder inside one of the OS's temp folders, each that is no longer a
+  // folders of every profile each registered harness publishes, leaving out
+  // each folder inside one of the OS's temp folders, each that is no longer a
   // folder, and each it cannot check (logged); the newest MAX_FOLDER_CHOICES of
   // the rest. A profile whose listing rejects is logged and lists none.
   list(): Promise<RecentFolder[]>;
@@ -64,7 +64,7 @@ export interface FolderChoices {
 // The registered harnesses are read on every call.
 export function createFolderChoices(deps: {
   recent: RecentFolders;
-  harnesses: Pick<AgentHarnessRegistry, 'list'>;
+  harnesses: Pick<ChatHarnesses, 'list' | 'profilesOf'>;
   files: Pick<Files, 'stat'>;
   paths: Paths;
   tempFolders: readonly string[];
@@ -94,9 +94,9 @@ export function createFolderChoices(deps: {
       deps.harnesses
         .list()
         .flatMap((harness) =>
-          harness
-            .info()
-            .profiles.map((profile) => profileProjects(harness, profile)),
+          deps.harnesses
+            .profilesOf(harness.id)
+            .map((profile) => profileProjects(harness, profile)),
         ),
     );
     return listings.flat();

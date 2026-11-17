@@ -1,21 +1,24 @@
 import type {
   AccountStatus,
   AgentHarness,
-  AgentHarnessRegistry,
   LogInEvents,
   LogInProcess,
 } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
 import type { ChatChannel } from '../contract';
-import { requireHarnessOfProfile, requireProfile } from './lookups';
+import {
+  type ChatHarnesses,
+  requireHarnessOfProfile,
+  requireProfile,
+} from './lookups';
 
 // Each profile's sign-in, by profile name. One sign-in runs at a time, named
 // by the id the page gave it: its link and its end reach the page as
 // `logInLink` and `logInEnded`, carrying that id. A cancelled sign-in stops
 // running at once, and its later events are logged and reach no page. Each runs
-// on the harness that declares the profile; a name no registered harness
-// declares rejects (`logIn` throws), naming it.
+// on the harness that publishes the profile; a name no registered harness
+// publishes rejects (`logIn` throws), naming it.
 export interface Accounts {
   status(profile: string): Promise<AccountStatus>;
   // Throws while a sign-in runs, starting none.
@@ -39,20 +42,23 @@ interface RunningLogIn {
 
 // The profile's harness is looked up on every call.
 export function createAccounts(deps: {
-  harnesses: AgentHarnessRegistry;
+  harnesses: ChatHarnesses;
   send: MainChannel<ChatChannel>['send'];
   log: PluginLog;
 }): Accounts {
   const { send, log } = deps;
   let running: RunningLogIn | null = null;
 
-  // The harness that declares the profile `name`, and the profile's folder.
+  // The harness that publishes the profile `name`, and the profile's folder.
   function profileAt(name: string): {
     harness: AgentHarness;
     configDir: string;
   } {
     const harness = requireHarnessOfProfile(deps.harnesses, name);
-    const { configDir } = requireProfile(harness.info().profiles, name);
+    const { configDir } = requireProfile(
+      deps.harnesses.profilesOf(harness.id),
+      name,
+    );
     return { harness, configDir };
   }
 

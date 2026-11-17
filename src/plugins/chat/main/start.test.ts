@@ -53,6 +53,7 @@ import {
   type SessionCloseReason,
   type SessionOrigin,
 } from '../contract';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
 import { OPEN_SESSIONS_FILE } from './open-sessions';
 import { addDriveActions, chatMainPart, createHarnessFollower } from './start';
 import { CALLER_WAIT_MS, SUBAGENT_CALL_TEXT } from './tool-callers';
@@ -98,7 +99,7 @@ function chatDriveActions(
     defaultProfile: () => 'default',
     chat,
     sessions: { activate },
-    harnesses: harnessRegistryOf(harnesses),
+    harnesses: chatHarnessesOfRegistry(harnessRegistryOf(harnesses)),
   });
   return drive;
 }
@@ -286,6 +287,8 @@ describe('chat drive actions', () => {
 // each row holds its titles as sessions would, starting with none.
 // `options.profiles` replaces the profiles the harness `claude` declares (and
 // of its `core.agentHarnesses` entry); null registers no harness.
+// `options.publishedProfiles` replaces the entry's profiles alone, as the
+// registry does for a profile another harness already names.
 // `options.infoFails` makes the harness's `info()` throw.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
@@ -311,6 +314,7 @@ function startChatPart(
     data?: Files;
     infoFails?: boolean;
     profiles?: { name: string; configDir: string }[] | null;
+    publishedProfiles?: { name: string; configDir: string }[];
     projects?: ProjectSetting[];
   } = {},
 ) {
@@ -325,9 +329,10 @@ function startChatPart(
       ? [{ name: 'work', configDir: '/work' }]
       : options.profiles;
   if (profiles !== null) {
-    store
-      .publish(coreAgentHarnessesSlot)
-      .set('claude', harnessInfo({ profiles }));
+    store.publish(coreAgentHarnessesSlot).set(
+      'claude',
+      harnessInfo({ profiles: options.publishedProfiles ?? profiles }),
+    );
   }
   const sent: { message: string; data: unknown }[] = [];
   const emitted: { event: string; data: unknown }[] = [];
@@ -738,6 +743,21 @@ describe('chat main part', () => {
       since: null,
     });
     expect(chat.exports.activeTime('none')).toBeNull();
+  });
+
+  // Breaks if chat main reads a harness's own `info()` profiles again rather
+  // than the ones the registry publishes, which leave out a clashing name.
+  it('start_ProfileTheRegistryLeftOut_ThrowsNamingIt', () => {
+    const chat = startChatPart({ publishedProfiles: [] });
+
+    expect(() =>
+      chat.invoke('start', {
+        projectDir: '/p',
+        harness: 'claude',
+        profile: 'work',
+      }),
+    ).toThrow('chat has no profile "work"');
+    expect(chat.starts.count).toBe(0);
   });
 
   it('exports_HaveNoProfiles', () => {
@@ -1612,7 +1632,12 @@ function startChatOnHarness() {
       events.ended({ code: 0, error: null });
     },
   });
+  const state = createSlotStore(() => undefined);
+  state
+    .publish(coreAgentHarnessesSlot)
+    .set(agentHarness.id, agentHarness.info());
   const harness = startMainPart(chatMainPart, {
+    state,
     services: {
       agentHarnesses: harnessRegistryOf([agentHarness]),
       sessionHost: createFakeSessionHost({ now: () => 0 }),

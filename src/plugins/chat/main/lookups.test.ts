@@ -1,17 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentHarness, HarnessProfile } from '../../../contracts/agent';
+import type {
+  AgentHarness,
+  AgentHarnessInfo,
+  HarnessProfile,
+} from '../../../contracts/agent';
 import {
   harnessInfo,
   harnessRegistryOf,
 } from '../../../shared/agent-harness-registry.test-support';
-import { harnessOfProfile, requireHarness } from './lookups';
+import { chatHarnessesOf, harnessOfProfile, requireHarness } from './lookups';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
+
+function profilesNamed(profileNames: string[]): HarnessProfile[] {
+  return profileNames.map((name) => ({ name, configDir: `~/.${name}` }));
+}
 
 // A harness double that answers only `id` and `info()`, all a lookup reads.
 function harnessWith(id: string, profileNames: string[]): AgentHarness {
-  const profiles: HarnessProfile[] = profileNames.map((name) => ({
-    name,
-    configDir: `~/.${name}`,
-  }));
+  const profiles = profilesNamed(profileNames);
   return {
     id,
     info: () => harnessInfo({ profiles }),
@@ -35,14 +41,38 @@ describe('lookups', () => {
 
   it('harnessOfProfile_ProfileOfTheSecondHarness_ReturnsTheSecond', () => {
     const fake = harnessWith('fake', ['spare']);
-    const registry = harnessRegistryOf([harnessWith('claude', ['work']), fake]);
+    const harnesses = chatHarnessesOfRegistry(
+      harnessRegistryOf([harnessWith('claude', ['work']), fake]),
+    );
 
-    expect(harnessOfProfile(registry, 'spare')).toBe(fake);
+    expect(harnessOfProfile(harnesses, 'spare')).toBe(fake);
   });
 
   it('harnessOfProfile_NoHarnessDeclaresIt_Null', () => {
-    const registry = harnessRegistryOf([harnessWith('claude', ['work'])]);
+    const harnesses = chatHarnessesOfRegistry(
+      harnessRegistryOf([harnessWith('claude', ['work'])]),
+    );
 
-    expect(harnessOfProfile(registry, 'spare')).toBeNull();
+    expect(harnessOfProfile(harnesses, 'spare')).toBeNull();
+  });
+
+  // Breaks if chat main reads a harness's own `info()` again, past the
+  // registry's clash rule.
+  it('harnessOfProfile_ClashingName_ReturnsTheHarnessThatPublishesIt', () => {
+    const fake = harnessWith('fake', ['work', 'spare']);
+    const claude = harnessWith('claude', ['work']);
+    const published = new Map<string, AgentHarnessInfo>([
+      ['claude', harnessInfo({ profiles: profilesNamed(['work']) })],
+      ['fake', harnessInfo({ profiles: profilesNamed(['spare']) })],
+    ]);
+    const harnesses = chatHarnessesOf(
+      harnessRegistryOf([fake, claude]),
+      published,
+    );
+
+    expect(harnessOfProfile(harnesses, 'work')).toBe(claude);
+    expect(harnesses.profilesOf('fake').map(({ name }) => name)).toEqual([
+      'spare',
+    ]);
   });
 });

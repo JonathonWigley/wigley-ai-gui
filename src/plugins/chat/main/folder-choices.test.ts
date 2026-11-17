@@ -17,6 +17,7 @@ import {
   MAX_FOLDER_CHOICES,
   mergeFolderChoices,
 } from './folder-choices';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
 
 const PROFILES: HarnessProfile[] = [
   { name: 'work', configDir: '~/.claude' },
@@ -78,8 +79,12 @@ function setUp(options: {
       list: async () => options.recent,
       record: async () => undefined,
     },
-    harnesses: harnessRegistryOf(
-      options.harnesses ?? [harnessListing('claude', PROFILES, options.listed)],
+    harnesses: chatHarnessesOfRegistry(
+      harnessRegistryOf(
+        options.harnesses ?? [
+          harnessListing('claude', PROFILES, options.listed),
+        ],
+      ),
     ),
     files,
     paths: posixPaths,

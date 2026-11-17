@@ -110,7 +110,8 @@ interview on 2026-10-23; this file is the record of both.
   one long-lived process per session, in stream-json mode, with the user's own login, plugins, skills and hooks. It
   is the built-in `claude-code` plugin, which registers the adapter through `services.agentHarnesses`. The `claude`
   path and the profiles are that plugin's settings (`claude-code.command`, `claude-code.profiles`): an app started from the Dock
-  has no shell `PATH` or `CLAUDE_CONFIG_DIR`.
+  has no shell `PATH` or `CLAUDE_CONFIG_DIR`. Chat reads each harness's profiles as the registry publishes them in
+  `core.agentHarnesses`, which leaves out a profile whose name an earlier harness already declares.
 - A fake adapter in `src/shared/` plays scripted entries for the tests and the self-test, so the seam has two
   adapters now.
 - The adapter, not the chat, reads Claude's JSON: it turns stdout events into chat entries (streamed text updates
@@ -368,7 +369,7 @@ interview on 2026-10-23; this file is the record of both.
   `open-sessions.json` in chat's plugin data: its host session id, its row id (`rowId`; the restore reopens the row
   under it), folder and profile, its `titles` (the user, agent and first-message titles; a file without them reads as
   untitled), its last process's
-  id, the controls and resume flag that process launched with, the controls the row holds and the values the user
+  id (none while a clear's fresh process has not reported its session id), the controls and resume flag that process launched with, the controls the row holds and the values the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
   messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), whether it is `headless` (a file without it reads as false), its own `instructions` and its `owner` (a file without them reads as none and null), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
@@ -386,9 +387,11 @@ interview on 2026-10-23; this file is the record of both.
   session host, rests the row with the notice `<label> is not loaded. This session waits for it to load again.`, and
   refuses a send, Send now, clear or control change until the harness registers again; then the row re-attaches
   through `attach` as a relaunch does (`agent-harnesses/design.md` § A harness reloading). A restored record whose
-  harness is not registered waits the same way. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued or returned messages stays in the saved file, so the next start tries it again. A restored
+  harness is not registered waits the same way. A row whose process has not reported its session id yet, or is a
+  clear's fresh process, cannot be found again, so chat ends that process instead of detaching it, logs it, and the
+  row waits with none. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued or returned messages stays in the saved file, so the next start tries it again. A restored
   row that was ever sent to has its earlier conversation read from its transcript once, on the first show of its Chat
-  tab or the first send, whichever comes first, while its profile is in the settings, so start reads no transcripts; a
+  tab or the first send, whichever comes first, while its harness declares its profile, so start reads no transcripts; a
   send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting
   row starts its process (`--resume` when a message was ever sent, else `--session-id`); app slash commands run without
   one, its controls show what the record held, and the agent's slash commands and the controls' current values fill in
@@ -419,7 +422,7 @@ interview on 2026-10-23; this file is the record of both.
   A session whose process exits while the app runs rests the same way, a notice in its chat giving the exit and its
   reason. A restored session whose turn was running when its process was lost (a reboot or a host crash, since quit
   ends none) gets a notice that the app quit during that turn; one whose
-  profile is no longer in the settings gets a notice naming it, and a send there toasts that the message was not sent
+  profile its harness no longer declares gets a notice naming both, and a send there toasts that the message was not sent
   because the profile is missing, instead of starting. A message main refuses goes back into the box, above anything
   typed since, with its images ahead of any attached since. A resting row looks like an idle one in the sidebar. A file
   that cannot be read is logged (`open sessions not read`) and restores nothing, and the store refuses every save
@@ -541,8 +544,9 @@ interview on 2026-10-23; this file is the record of both.
   through the relay or on a row another plugin owns is left out, and picking one that has a chat row selects that row
   instead of opening a second; a resume onto a held row whose owner is not the request's rejects, naming both),
   resume with their earlier conversation read from the transcript. A resume lists the session host first, so a session
-  never runs two processes: a process of the session running in the current host has the row open and attach to it,
-  its history pending, as a restored row does; a process running in another app version refuses, and a host that
+  never runs two processes: a process of the session running in the current host (the process id chat last knew for
+  that session, or an id starting with its host session id, the prefix of a process started once that id was known)
+  has the row open and attach to it, its history pending, as a restored row does; a process running in another app version refuses, and a host that
   cannot be listed rejects, each opening nothing. `x` archives the entry under the
   cursor or restores an archived one; `.` shows or hides archived entries. When the transcript cannot be read, the
   chat shows one notice and the session still resumes. Archived ids live in chat's plugin data; Claude's

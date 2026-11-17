@@ -65,6 +65,9 @@ const IMAGES_PROJECT_NAME = 'chat-images';
 // A fourth session, opened and closed before the other three, whose harness
 // leaves the registry and returns.
 const RETURN_PROJECT_NAME = 'chat-return';
+// The saved session the fourth session resumes, so the return reads its
+// history: one the steps never resume.
+const RETURN_FIXTURE_SESSION = FAKE_PAST_SESSIONS[1];
 // How long a condition the run waits on may take to hold, such as the images
 // session's hold turn reporting running, and how often it is asked.
 const WAIT_TIMEOUT_MS = 10_000;
@@ -85,6 +88,7 @@ export interface ChatSelfTestDeps {
   chat: Pick<
     ChatSessions,
     | 'start'
+    | 'resume'
     | 'closed'
     | 'sessions'
     | 'setArchived'
@@ -103,10 +107,12 @@ export interface ChatSelfTestDeps {
 }
 
 // What the leave-and-return fixture saw: the text the send to the waiting row
-// was refused with, null when it resolved, and how many records the fixture
-// fake held when the run began.
+// was refused with, null when it resolved, the text of each error notice the
+// row showed before it closed, and how many records the fixture fake held when
+// the run began.
 interface HarnessReturnRun {
   refusal: string | null;
+  errorNotices: string[];
   processes: number;
 }
 
@@ -1435,7 +1441,7 @@ function pastSessionProblems(
 // The leave-and-return fixture's problems, from `records`, the fixture fake's
 // records this run added, in start order.
 function harnessReturnProblems(
-  { refusal }: HarnessReturnRun,
+  { refusal, errorNotices }: HarnessReturnRun,
   records: readonly FakeAgentProcessRecord[],
 ): string[] {
   const { label } = RETURN_FIXTURE_IDENTITY;
@@ -1454,6 +1460,9 @@ function harnessReturnProblems(
   if (!records.slice(1).some((record) => record.request.resume)) {
     problems.push(`harness return: no resumed process started on ${label}`);
   }
+  for (const text of errorNotices) {
+    problems.push(`harness return: the row showed the error "${text}"`);
+  }
   return problems;
 }
 
@@ -1469,9 +1478,9 @@ interface SelfTestProjects {
 // one the page shows as `~`, then each run first closes every session chat
 // holds in a self-test project (a resumed one included) and unarchives the
 // fake's saved sessions, runs the leave-and-return fixture in the return
-// project (a session on the return fixture, which leaves the registry and
-// returns, then closes), and starts three chat sessions: the second project's,
-// the images project's, whose box it fills with two returned images, then the
+// project (a saved session resumed on the return fixture, which leaves the
+// registry and returns, then closes), and starts three chat sessions: the
+// second project's, the images project's, whose box it fills with two returned images, then the
 // self-test's, whose Chat tab it shows. Raises one permission request through
 // the fake that started the self-test's process, which the steps allow; the
 // answer asks a forms round there over a relay that joins the session, which
@@ -1582,10 +1591,13 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     }
   }
 
-  // Starts a session on the return fixture and sends to it, disposes the
-  // fixture's registration and sends to the waiting row, keeping its refusal,
-  // then registers the fixture again, sends once the waiting notice is gone,
-  // and closes the row. Disposes the registration it holds however it ends.
+  // Resumes `RETURN_FIXTURE_SESSION` on the return fixture and sends to it,
+  // disposes the fixture's registration and sends to the waiting row, keeping
+  // its refusal, then registers the fixture again, sends once the waiting
+  // notice is gone, keeps the row's error notices and closes the row. Disposes
+  // the registration it holds however it ends. The fixture's processes do not
+  // run on the session host, so the return finds none to re-attach and the
+  // detached one stays in the fake's records.
   async function runHarnessReturn(
     projectDir: string,
   ): Promise<HarnessReturnRun> {
@@ -1597,10 +1609,12 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       chat.sessions().find((state) => state.sessionId === sessionId);
     let registration = harnesses.register(returnFixture);
     try {
-      const id = chat.start({
+      const id = await chat.resume({
         projectDir,
         harness: returnFixture.id,
         profile,
+        hostSessionId: RETURN_FIXTURE_SESSION.sessionId,
+        title: RETURN_FIXTURE_SESSION.title,
       });
       await chat.send(id, { text: 'before the leave', images: [] });
       registration.dispose();
@@ -1623,8 +1637,11 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         `${RETURN_PROJECT_NAME}'s waiting notice stayed after its harness returned`,
       );
       await chat.send(id, { text: 'after the return', images: [] });
+      const errorNotices = (rowOf(id)?.entries ?? []).flatMap((entry) =>
+        entry.kind === 'notice' && entry.tone === 'error' ? [entry.text] : [],
+      );
       chat.closed(id, 'project-closed');
-      return { refusal, processes };
+      return { refusal, errorNotices, processes };
     } finally {
       registration.dispose();
     }

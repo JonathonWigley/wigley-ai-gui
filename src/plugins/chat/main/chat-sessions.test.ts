@@ -80,6 +80,7 @@ import type {
   SavedSession,
   SavedSessions,
 } from './open-sessions';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
 import { createRecentFolders, RECENT_FOLDERS_FILE } from './recent-folders';
 import { createChatSlots } from './chat-slots';
 
@@ -549,7 +550,7 @@ function setUp(
     register(each);
   }
   const chat = createChatSessions({
-    harnesses: registry,
+    harnesses: chatHarnessesOfRegistry(registry),
     harnessLabelOf: (harnessId) => labels.get(harnessId) ?? harnessId,
     sessions,
     selectedSessionId: () => selectedSessionId,
@@ -1196,7 +1197,7 @@ describe('createChatSessions', () => {
     ]);
     expect(state.commands).toEqual([]);
     expect(test.harness.processes.at(-1)?.request).toEqual({
-      processId: `${ROW_ID}-1-1000`,
+      processId: `${hostId}-1-1000`,
       sessionId: hostId,
       resume: true,
       projectDir: '/w/app',
@@ -1428,6 +1429,38 @@ describe('createChatSessions', () => {
       ).toHaveLength(starts);
     },
   );
+
+  // Breaks if a resume finds the session's running process by its id's prefix
+  // alone: a new row's process id starts with the row id.
+  it('resume_ProcessStartedBeforeItsHostIdWasKnown_AttachesToIt', async () => {
+    const test = await started();
+    const { processId } = test.process.request;
+    test.leave(FAKE_HARNESS_ID);
+    test.chat.closed(ROW_ID, 'user');
+    test.register(test.harness);
+    test.sessionHost.setList([
+      { id: processId, startedAt: 900, running: true, current: true },
+    ]);
+    test.harness.scriptAttach(processId, {
+      outcome: 'process',
+      turns: 0,
+      replay() {},
+    });
+
+    await test.chat.resume({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      hostSessionId: test.process.sessionId,
+      title: 'a session',
+    });
+    await flush();
+
+    expect(processId).toBe('row-1-1-1000');
+    expect(test.harness.attachCalls.map((attach) => attach.processId)).toEqual([
+      processId,
+    ]);
+    expect(startsOf(test)).toHaveLength(1);
+  });
 
   it('resume_ProcessRunningHere_ReadsHistoryUpToItsStart', async () => {
     const test = setUp({
@@ -3827,7 +3860,7 @@ describe('createChatSessions saved sessions', () => {
 
       expect(test.harness.processes.map((process) => process.request)).toEqual([
         {
-          processId: `${ROW_ID}-1-1000`,
+          processId: `${hostId}-1-1000`,
           sessionId: hostId,
           resume: sent,
           projectDir: '/w/app',
@@ -5281,7 +5314,11 @@ describe('createChatSessions clear', () => {
       entries: [CLEARED],
     });
     expect(test.saved.last()?.sessions).toEqual([
-      expect.objectContaining({ hostSessionId: 'fake-session-1', sent: true }),
+      expect.objectContaining({
+        hostSessionId: 'fake-session-1',
+        sent: true,
+        processId: null,
+      }),
     ]);
     expect(test.sent('sessionRested')).toEqual([
       { sessionId: ROW_ID, error: null },
@@ -6013,7 +6050,9 @@ function attachedOf(test: ReturnType<typeof setUp>) {
 }
 
 describe('createChatSessions process ids and the saved queue', () => {
-  it('startProcess_ProcessId_HostIdStartCountAndTime', async () => {
+  // Breaks if a process id starts with the host id before the row has one,
+  // or with the row id once it does, which a later resume could not find.
+  it('startProcess_ProcessId_RowIdUntilTheHostIdIsKnown', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
     test.chat.start({
@@ -6031,11 +6070,11 @@ describe('createChatSessions process ids and the saved queue', () => {
 
     expect(
       test.harness.processes.map((each) => each.request.processId),
-    ).toEqual(['row-1-1-1000', 'row-1-2-1000']);
+    ).toEqual(['row-1-1-1000', 'fake-session-1-2-1000']);
     expect(firstSaved?.processId).toBe('row-1-1-1000');
     expect(firstSaved?.launchResume).toBe(false);
     const lastSaved = test.saved.last()?.sessions[0];
-    expect(lastSaved?.processId).toBe('row-1-2-1000');
+    expect(lastSaved?.processId).toBe('fake-session-1-2-1000');
     expect(lastSaved?.launchResume).toBe(true);
   });
 
@@ -6799,6 +6838,17 @@ describe('createChatSessions attaching', () => {
       const attach = test.harness.attach.bind(test.harness);
       test.harness.attach = (request, events) => {
         events.activity('working');
+        events.permission({
+          entry: {
+            kind: 'permission',
+            id: 'replayed-permission',
+            at: 0,
+            toolName: 'Bash',
+            input: { command: 'ls' },
+            answer: null,
+            raw: [],
+          },
+        });
         events.agentEvent({
           type: 'taskStarted',
           at: 0,
@@ -6818,6 +6868,16 @@ describe('createChatSessions attaching', () => {
       expect(test.chat.sessions()[0].background).toBe(0);
       expect(test.saved.last()?.sessions[0].busy).toBe(false);
       expect(test.chat.sessions()[0].running).toBe(false);
+      expect(test.chat.sessions()[0].activity).toBe('idle');
+      expect(
+        test.chat
+          .sessions()[0]
+          .entries.find((entry) => entry.kind === 'permission'),
+      ).toEqual(
+        expect.objectContaining({
+          answer: { allowed: false, reason: PERMISSION_CANCELLED_REASON },
+        }),
+      );
       expect(test.sent('sessionRested')).toEqual([
         { sessionId: ROW_ID, error: null },
       ]);
@@ -9426,24 +9486,44 @@ describe('createChatSessions host session ids', () => {
     ).toEqual(['fake-session-1']);
   });
 
-  // Breaks if process ids go back to starting with the host id, which a new
-  // row does not have when its process starts.
-  it('startProcess_ProcessId_StartsWithRowId', async () => {
-    const test = setUp({ keptRowIds: ['kept-row'] });
-    test.chat.restore(
-      {
-        sessions: [record('host-b', { rowId: 'kept-row' })],
-        selectedHostSessionId: null,
+  // Breaks if a known conversation's process id stops starting with its host
+  // id, or a clear's fresh process takes the old conversation's.
+  it.each([
+    {
+      given: 'a restored row with a known host id',
+      act: async (test: ReturnType<typeof setUp>) => {
+        test.chat.restore(
+          {
+            sessions: [record('host-b', { rowId: 'kept-row' })],
+            selectedHostSessionId: null,
+          },
+          [],
+        );
+        await test.chat.send('kept-row', IDLE_SEND);
       },
-      [],
-    );
+      processIds: ['host-b-1-1000'],
+    },
+    {
+      given: 'a cleared row',
+      act: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        await flush();
+        test.chat.clear(ROW_ID);
+      },
+      processIds: ['row-1-1-1000', 'row-1-2-1000'],
+    },
+  ])(
+    'startProcess_ProcessId_Cases given $given',
+    async ({ act, processIds }) => {
+      const test = setUp({ keptRowIds: ['kept-row'] });
 
-    await test.chat.send('kept-row', IDLE_SEND);
+      await act(test);
 
-    expect(
-      test.harness.processes.map((process) => process.request.processId),
-    ).toEqual(['kept-row-1-1000']);
-  });
+      expect(
+        test.harness.processes.map((process) => process.request.processId),
+      ).toEqual(processIds);
+    },
+  );
 
   // Breaks if a row that was never sent a message restarts as a new
   // conversation instead of under the id its harness reported.
@@ -9571,6 +9651,47 @@ describe('createChatSessions host session ids', () => {
       },
       rejects: `session ${ROW_ID} closed before its harness reported a session id`,
     },
+    {
+      given: 'a new row whose process ends before its harness reports',
+      settle: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        const settling = test.chat.hostSessionIdSettled(ROW_ID);
+        test.harness.processes[0].events.ended({ code: 1, error: null });
+        return settling;
+      },
+      rejects: `session ${ROW_ID} ended before its harness reported a session id`,
+    },
+    {
+      given: "a cleared row whose fresh process ends before it reports",
+      settle: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        await flush();
+        test.chat.clear(ROW_ID);
+        const settling = test.chat.hostSessionIdSettled(ROW_ID);
+        test.harness.processes[1].events.ended({ code: 1, error: null });
+        return settling;
+      },
+      rejects: `session ${ROW_ID} ended before its harness reported a session id`,
+    },
+    {
+      given: 'detachAll while it waits',
+      settle: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        const settling = test.chat.hostSessionIdSettled(ROW_ID);
+        void test.chat.detachAll();
+        return settling;
+      },
+      rejects: `session ${ROW_ID} not settled: chat is stopping`,
+    },
+    {
+      given: 'a call after detachAll that would wait',
+      settle: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        void test.chat.detachAll();
+        return test.chat.hostSessionIdSettled(ROW_ID);
+      },
+      rejects: `session ${ROW_ID} not settled: chat is stopping`,
+    },
   ])(
     'hostSessionIdSettled_Cases reject given $given',
     async ({ settle, rejects }) => {
@@ -9597,9 +9718,14 @@ describe('createChatSessions host session ids', () => {
 const WAITING_NOTICE =
   'Fake is not loaded. This session waits for it to load again.';
 const WAITING_REFUSAL = 'Fake is not loaded. Send again once it is.';
+const START_ON_FAKE = {
+  harness: FAKE_HARNESS_ID,
+  projectDir: PROJECT_DIR,
+  profile: 'personal',
+};
 
 // A row resumed on the fake from `PAST_ONE`, whose history the fake reads, with
-// its process `row-1-1-1000` running.
+// its process `<PAST_ONE's id>-1-1000` running.
 async function resumedOnFake(options?: Parameters<typeof setUp>[0]) {
   const test = setUp(options);
   await test.chat.resume({
@@ -9750,6 +9876,52 @@ describe('createChatSessions harness leave and return', () => {
       WAITING_REFUSAL,
     );
   });
+
+  // Breaks if a process whose conversation has no settled host id is kept
+  // unheld, which the return would attach with no session id or the old one.
+  it.each([
+    {
+      given: 'a new row before its harness reports',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START_ON_FAKE);
+        return test.harness.processes[0];
+      },
+    },
+    {
+      given: "a cleared row before its fresh process reports",
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START_ON_FAKE);
+        await flush();
+        test.chat.clear(ROW_ID);
+        return test.harness.processes[1];
+      },
+    },
+  ])(
+    'harnessLeft_NoSettledHostId_EndsTheProcess given $given',
+    async ({ arrange }) => {
+      const test = setUp();
+      const process = await arrange(test);
+      const settling = test.chat.hostSessionIdSettled(ROW_ID);
+
+      test.leave(FAKE_HARNESS_ID);
+
+      await expect(settling).rejects.toThrow(
+        `session ${ROW_ID} ended before its harness reported a session id`,
+      );
+      await flush();
+      expect(process.calls).toContainEqual({ method: 'end' });
+      expect(process.detached).toBe(false);
+      expect(test.logged).toContain(
+        `session ${ROW_ID} ended process ${process.request.processId}: its harness left before it reported a session id`,
+      );
+      test.register(test.harness);
+      await test.chat.harnessReturned(FAKE_HARNESS_ID);
+      await test.chat.send(ROW_ID, IDLE_SEND);
+      await flush();
+      expect(test.harness.attachCalls).toEqual([]);
+      expect(test.harness.processes.at(-1)?.request.sessionId).toBeNull();
+    },
+  );
 
   it('harnessLeft_AfterDetachAll_ChangesNoRow', async () => {
     const test = await started();
