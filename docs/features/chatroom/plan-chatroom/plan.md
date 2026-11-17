@@ -231,7 +231,9 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 
 ### Wave 6
 - [ ] [Doc re-read](11-doc-re-read.md) — after 01–10
-- [ ] [Final verification](12-final-verification.md)
+
+### Wave 7
+- [ ] [Final verification](12-final-verification.md) — after 01–11
 
 ## Run log
 

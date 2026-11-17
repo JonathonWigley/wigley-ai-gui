@@ -69,7 +69,10 @@ Decisions:
 GIVEN the landed chatroom code WHEN an agent reads any of the docs above THEN each statement agrees with the code,
   and no "planned in `plan-chatroom`" mark is left outside the plan folder
 Tests:     none: a doc change.
-Done when: the `plan-chatroom` grep prints only the plan folder's files; every doc above is re-read and fixed; the
+Done when: the `plan-chatroom` grep, run as `grep -rn "plan-chatroom" wigley-ai-gui wigley-ai-marketplace wigley-agents --include='*.md' | grep -v 'docs/features/chatroom/plan-chatroom/'`,
+           prints no line. At plan time it printed exactly four: `wigley-ai-gui/docs/features/chatroom/design.md:3`,
+           `wigley-ai-marketplace/plugins/wigley/skills/chatroom/SKILL.md:16`, and `wigley-agents/AGENTS.md:206` and
+           `:219`. Each of the four is a mark this task removes. Every doc above is re-read and fixed; the
            marketplace Done checks `python3 scripts/check_pointers.py` and both `check_manifests.py` lines pass,
            run from the `wigley-ai-marketplace/` folder (the skill edits are in plugin version
            2.13.0, which is already bumped). Report each doc changed, each line fixed that is not a mark removal,

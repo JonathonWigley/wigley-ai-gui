@@ -6,7 +6,7 @@ Rung: standard · doc-only: it states settled code, so the pattern condition doe
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
-Files:     modify `AGENTS.md` · modify `docs/features/agent-harnesses/design.md`
+Files:     modify `AGENTS.md` · modify `docs/features/agent-harnesses/design.md` · modify `docs/features/intent-alignment/plan-lane-h-harness-seams/16-doc-re-read.md`
 Consumes:  none
 Produces:  none
 Decisions:
@@ -20,8 +20,8 @@ Decisions:
   § Writing the plan step 1 gives: one block quote under the title, `> Planned in
   \`plan-lane-h-harness-seams\` (\`docs/features/intent-alignment/\`), not built yet: …`. Under the Contents list,
   add a short `## Today` section that lists the facts below. Then a reader of the design sees which parts exist.
-  Lane H's own doc re-read (its task 16) removes the mark and the Today section. Do not change Lane H's target
-  text.
+  Lane H's doc re-read (its task 16) names neither the mark nor the Today section, so this task adds that step to
+  task 16 (see Approach). Do not change Lane H's target text.
 - The truth, verified at plan time. Check each item again against the tree before you write it:
   1. There is no `src/plugins/claude-code/`. The Claude adapter is `src/main/claude-code/` (for example
      `claude-code-harness.ts`, `claude-launch.ts`, `transcripts.ts`). The composition root builds it:
@@ -69,8 +69,16 @@ GIVEN the tree at the plan's base WHEN an agent reads the fixed `AGENTS.md` THEN
 GIVEN `agent-harnesses/design.md` WHEN an agent reads it THEN the planned mark and the Today section show what
   is built and what waits on Lane H
 Tests:     none: a doc change. The proof is the diff and the grep for each item.
+Approach:  Fix the `AGENTS.md` passages to the truth above. Add the planned mark and the Today section to
+           `agent-harnesses/design.md`. In `plan-lane-h-harness-seams/16-doc-re-read.md`, add this line to the
+           `design.md` item of its Approach: "remove the planned block quote and the `## Today` section from
+           `agent-harnesses/design.md`". Lane H's task 16 rewrites the fixed `AGENTS.md` passages again, from today's
+           shape to the Lane H shape, when Lane H lands. That later rewrite is not a regression. Say so in the
+           report.
 Done when: every item above is fixed or confirmed true. The grep `grep -n "src/plugins/claude-code\|claude-code\.command\|claude-code\.profiles\|core\.agentHarnesses\|row_id" AGENTS.md`
            prints no line that states one as present fact. The design carries the mark and the Today section.
+           Lane H's task 16 holds the line that removes them: `grep -n "Today" docs/features/intent-alignment/plan-lane-h-harness-seams/16-doc-re-read.md`
+           prints it.
            Report each passage changed. Report each fact that differed from the list above when you checked it.
 Commit:    one commit for the group
 

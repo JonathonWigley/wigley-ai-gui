@@ -66,7 +66,8 @@ notices. So the board carries state, messages carry events, and the guards cut a
   | `note` | anything else |
 
   The app also writes read-only **entries** an agent never posts: `dispatch` and `hand-back` (from the lead's agent
-  events), `joined` and `left`. Entries and `progress` stay out of an agent's default read; the user sees all of them.
+  events), `joined` (at the session's first chatroom tool or hook call, once its project name is final) and
+  `left`. Entries and `progress` stay out of an agent's default read; the user sees all of them.
 
 ## The board
 
@@ -126,8 +127,9 @@ channel with a hello that marks it a hook call for its session, sends one reques
 plugin routes it to the handler the chatroom registers. With no app, or no answer within a short timeout, the script
 prints nothing and exits 0, so a session never waits on the room.
 
-- **Pre** (Edit, Write, MultiEdit, and Bash running `git commit`) — the claim and uncommitted-file check above.
-- **Post** (Edit, Write, MultiEdit) — reports the touched paths for the board, then the unread line.
+- **Pre** (Edit, Write, MultiEdit, NotebookEdit, and Bash running `git commit`) — the claim and uncommitted-file
+  check above.
+- **Post** (Edit, Write, MultiEdit, NotebookEdit) — reports the touched paths for the board, then the unread line.
 
 ## The user in the room
 
