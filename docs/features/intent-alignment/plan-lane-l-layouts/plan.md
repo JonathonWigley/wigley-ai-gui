@@ -274,7 +274,7 @@ every part its contract adds.
 - [x] [Editor boxes kept across a redraw](06-editor-boxes-keep.md)
 
 ### Wave 2
-- [ ] [Dialog frames through each opener's layout](07-dialog-frames.md) — after 03, 04
+- [x] [Dialog frames through each opener's layout](07-dialog-frames.md) — after 03, 04
 
 ### Wave 3
 - [ ] [Fixed texts in layout slots](08-fixed-texts.md) — after 04, 07
@@ -309,8 +309,11 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 04 · hard · 5fcdb2c18 · diff read + wave 1 compile (layer check clean on dialog-frame.test-d.ts) · concerns: none
 - 05 · hard · 4cc9e04a1 · diff read + wave 1 compile · concerns: restyled narrowed to entries still in layouts; the leave-and-rejoin test is weaker
 - 06 · hard · 9dcfa2c14 · diff read + wave 1 compile (forms Pick fixed in ff56db41b) · concerns: keepFocusedBox Pick now needs destroyReleased (forms RoundViewDeps fixed); followups.md ~line 424 'at the text's end' stale
+- 07 · standard · 1936ca16c · diff read of all ten rows + wave 2 compile (typecheck, lint clean after 501d3d31d) · concerns: chat dialog parts take parent as a getter (frame redraw replaces the body), composer-kit tests followed; keys moved its Close button and help width into the default layout and dropped the closeHint anchor; gallery adds no redrawFrame (setLayouts rebuilds the sample); docs frameDrawer casts drawn.built; several new tests unrun (fake-DOM dataset/contains/ui-button assumptions); six row workers ran at once for a short spell (one over the limit)
 ### Contract changes
 ### Rulings
 - 01: the ToastTone equality test lives in src/renderer/shell/toast-tone.test-d.ts, not layouts/layout.test-d.ts — the layer check bars layouts from importing src/contracts · group 01
+- 07 keys: the default dialogFrame draws help's Close button (keys.closeHelp + keyHint closeHelp); mountHelpView no longer takes close/closeHint · group 07
+- 07 chat: createDialogPart and the sign-in, reason-box, close-confirm and image-viewer part creators take parent: () => HTMLElement · group 07
 ### Review rounds
 ### Test gate

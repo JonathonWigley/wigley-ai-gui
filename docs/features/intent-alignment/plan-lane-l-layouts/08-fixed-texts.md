@@ -1,6 +1,6 @@
 # 08 — Fixed texts in layout slots
 
-Status: not started
+Status: in progress
 Type: Parallel
 Wave: 3 · Depends on: 04, 07
 Plan: [plan.md](plan.md)

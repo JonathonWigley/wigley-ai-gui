@@ -1,6 +1,6 @@
 # 07 — Dialog frames through each opener's layout
 
-Status: in progress
+Status: done
 Type: Parallel
 Wave: 2 · Depends on: 03, 04
 Plan: [plan.md](plan.md)
@@ -357,3 +357,4 @@ another session may hold changes in those folders.
 
 ## Proof
 
+Commit 1936ca16c · proof: diff read of all ten rows + wave 2 compile (typecheck, lint clean after 501d3d31d) · concerns: chat dialog parts take parent as a getter (frame redraw replaces the body), composer-kit tests followed; keys moved its Close button and help width into the default layout and dropped the closeHint anchor; gallery adds no redrawFrame (setLayouts rebuilds the sample); docs frameDrawer casts drawn.built; several new tests unrun (fake-DOM dataset/contains/ui-button assumptions); six row workers ran at once for a short spell (one over the limit)

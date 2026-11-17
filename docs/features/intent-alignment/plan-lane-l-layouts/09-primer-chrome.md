@@ -1,6 +1,6 @@
 # 09 — Primer column chrome and cursor prompt
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 04, 07
 Plan: [plan.md](plan.md)
