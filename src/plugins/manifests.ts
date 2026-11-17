@@ -19,6 +19,7 @@ import { liveViewManifest } from './live-view/manifest';
 import { notesManifest } from './notes/manifest';
 import { practiceManifest } from './practice/manifest';
 import { primerManifest } from './primer/manifest';
+import { schedulingManifest } from './scheduling/manifest';
 import { scopedAgentsManifest } from './scoped-agents/manifest';
 import { sessionLogManifest } from './session-log/manifest';
 import { sessionStashManifest } from './session-stash/manifest';
@@ -52,6 +53,7 @@ export const builtInManifests = [
   sessionStashManifest,
   sessionLogManifest,
   autoRetroManifest,
+  schedulingManifest,
   agentsManifest,
   agentLinesManifest,
   agentStripManifest,
