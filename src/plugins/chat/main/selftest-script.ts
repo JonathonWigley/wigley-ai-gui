@@ -1480,9 +1480,10 @@ interface SelfTestProjects {
 // fake's saved sessions, runs the leave-and-return fixture in the return
 // project (a saved session resumed on the return fixture, which leaves the
 // registry and returns, then closes), and starts three chat sessions: the
-// second project's, the images project's, whose box it fills with two returned images, then the
-// self-test's, whose Chat tab it shows. Raises one permission request through
-// the fake that started the self-test's process, which the steps allow; the
+// second project's, the images project's, whose box it fills with two
+// returned images, then the self-test's, whose Chat tab it shows. Raises one
+// permission request through the fake that started the self-test's process,
+// which the steps allow; the
 // answer asks a forms round there over a relay that joins the session, which
 // the steps submit. The result is the decision, the round's reply and the
 // self-test project's folder; problems reads the fake processes, whose records

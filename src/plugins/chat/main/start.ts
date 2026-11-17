@@ -305,7 +305,8 @@ export function createHarnessFollower(
 // restores them, re-attaching each to its process the session host still runs,
 // holding relay connects until the rows are open, and on a restart keeps
 // their rows for the restarted part's restore to adopt; lets a harness's
-// sessions wait, detached, while it is gone from `core.agentHarnesses` and
+// sessions wait, detached, while it is gone from `core.agentHarnesses` (ending
+// a process with no settled host id, which it cannot find again) and
 // re-attaches them when it is back; stops every process on
 // request, leaves them running on quit, tells the host how long to keep idle
 // ones, asks every session it starts to name its row, lists and archives

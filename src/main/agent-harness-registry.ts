@@ -38,9 +38,9 @@ function computeEntries(harnesses: readonly AgentHarness[]): ComputedEntry[] {
 // The registry behind `services.agentHarnesses`, writing each live harness's
 // `info()` to `slot` (`core.agentHarnesses`) under its id, with each profile
 // whose name an earlier registered harness holds, or that the harness lists
-// twice, left out and logged through `log`. A harness joins `list` and `get` before its key is set and leaves
-// them before its key is deleted, so a slot listener that reads the registry
-// sees what the slot says.
+// twice, left out and logged through `log`. A harness joins `list` and `get`
+// before its key is set and leaves them before its key is deleted, so a slot
+// listener that reads the registry sees what the slot says.
 export function createAgentHarnessRegistry(
   slot: KeyedSlotWriter<AgentHarnessInfo>,
   log: (message: string) => void,

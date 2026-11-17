@@ -547,7 +547,12 @@ interview on 2026-10-23; this file is the record of both.
   never runs two processes: a process of the session running in the current host (the process id chat last knew for
   that session, or an id starting with its host session id, the prefix of a process started once that id was known)
   has the row open and attach to it, its history pending, as a restored row does; a process running in another app version refuses, and a host that
-  cannot be listed rejects, each opening nothing. `x` archives the entry under the
+  cannot be listed rejects, each opening nothing. Chat learns the last process id of each session from its process's
+  report, an attach and a restored record, and keeps them in memory for one chat run: a row that moves to a new
+  session id with no clear pending drops the old id's. After the app or chat's part reloads, only the prefix finds a
+  process no saved record names, so a process started before its session id was known (its id starts with the row id)
+  that was left running unheld when its row closed, or that was never saved before a crash, is not found, and the
+  resume starts a second process on the conversation. `x` archives the entry under the
   cursor or restores an archived one; `.` shows or hides archived entries. When the transcript cannot be read, the
   chat shows one notice and the session still resumes. Archived ids live in chat's plugin data; Claude's
   transcript files stay as Claude keeps them.

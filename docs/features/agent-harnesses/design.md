@@ -93,7 +93,10 @@ or output format. Every decision below serves that.
 
 Agent processes run in the session host, so a harness plugin's stop drops only the adapter object. Chat detaches a
 leaving harness's sessions, shows them waiting, and re-attaches each live one through `attach` when the harness
-registers again, the path an app relaunch already takes.
+registers again, the path an app relaunch already takes. A process that has not reported its session id yet, or is a
+clear's fresh process, cannot be found again, so chat ends it instead, logged, and its row waits with none
+(`agent-chat/design.md`). An adapter's stop disposes its registration before it tears down its process objects:
+chat's leave handling ends that kind of process through them, and on a torn-down object the end does nothing.
 
 ## Rejected
 

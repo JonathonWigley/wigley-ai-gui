@@ -404,11 +404,14 @@ export interface ChatSessions {
   addResumeSection(section: ResumeSection): Disposable;
   // The harness `harnessId` left the registry: every held row on it waits for
   // it to load again, with the info notice `<label> is not loaded. This session
-  // waits for it to load again.`. A row's process is detached, never ended,
-  // and kept as the row's unheld process; the row rests with no saved-usage
-  // read and no exit notice, its queue left as it was, and each permission card
-  // still waiting shows as cancelled. A row still attaching does this once its
-  // attach settles. Does nothing after `detachAll`.
+  // waits for it to load again.`. A row's process is detached and kept as the
+  // row's unheld process, except one that has not reported its session id yet
+  // or is a clear's fresh process: chat cannot find that one again, so it ends
+  // it, logged, and rejects the row's `hostSessionIdSettled` calls. The row
+  // rests with no saved-usage read and no exit notice, its queue left as it
+  // was, and each permission card still waiting shows as cancelled. A row still
+  // attaching does this once its attach settles. Does nothing after
+  // `detachAll`.
   harnessLeft(harnessId: string): void;
   // The harness `harnessId` is registered again: each row waiting on it waits
   // no more and loses its waiting notice. A row whose profile the harness no
@@ -820,7 +823,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const openHostIds = new Map<string, string>();
   // Host session id → the id of the last process chat knew to run that
   // conversation, from each report, attach and restored record, so `resume`
-  // finds a process still running whatever its id starts with.
+  // finds a process still running whatever its id starts with. It lives one
+  // chat run: after a reload, a process no saved record names is found by its
+  // id's `<host id>-` prefix alone.
   const processIdsOfHost = new Map<string, string>();
   // Every started process until its `ended`, held or closed.
   const running = new Set<AgentProcess>();
@@ -1823,8 +1828,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // The row's process reported `id` as its session id, under `profileDir`:
   // chat notes the process as `id`'s, and the row moves to it, fires the
   // `sessionOpened` or `sessionCleared` it held back, settles its
-  // `hostSessionIdSettled` waiters and saves. An id another session holds is
-  // logged and leaves the row as it was.
+  // `hostSessionIdSettled` waiters and saves. A move with no clear pending
+  // forgets the process as the old id's: it now runs `id`. An id another
+  // session holds is logged and leaves the row as it was.
   function adoptHostId(session: HeldSession, id: string, profileDir: string) {
     const { sessionId, pendingClear } = session;
     if (session.processId !== null) {
@@ -1842,6 +1848,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const oldHostId = session.hostId;
     session.hostId = id;
     session.pendingClear = null;
+    const isStaleEntry =
+      pendingClear === null &&
+      oldHostId !== null &&
+      processIdsOfHost.get(oldHostId) === session.processId;
+    if (isStaleEntry) {
+      processIdsOfHost.delete(oldHostId);
+    }
     const { projectDir, profile } = session.slots.info();
     const origin = session.pendingOpened;
     if (origin !== null) {
@@ -2449,8 +2462,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
-  // The row waits on `harnessId`: its process, if any, is let go detached and
-  // the row rests, after its running attach when one runs.
+  // The row waits on `harnessId`: its process, if any, is let go detached (or
+  // ended, when it has no settled host id: `restDetached`) and the row rests,
+  // after its running attach when one runs.
   function waitOnHarness(session: HeldSession, harnessId: string) {
     session.waiting = { harnessId, noticeId: null };
     log(`session ${session.sessionId} waits for harness ${harnessId}`);
