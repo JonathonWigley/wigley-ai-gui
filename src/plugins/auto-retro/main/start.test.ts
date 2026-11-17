@@ -190,6 +190,24 @@ function startPart(
   return part;
 }
 
+// The part restarted over an unreadable `queue.json`, with a restored row
+// `retro-9` (host `retro-host-9`) whose first message is `firstMessage`.
+async function restartWithQueueLost(firstMessage: string) {
+  const part = startPart();
+  await settled();
+  await part.harness.files.write(QUEUE_PATH, '{');
+  part.rows.set(
+    'retro-9',
+    sessionRow('retro-9', {
+      hostSessionId: 'retro-host-9',
+      titles: { user: null, agent: null, firstMessage },
+    }),
+  );
+  await part.harness.restart();
+  await settled();
+  return part;
+}
+
 describe('autoRetroMainPart', () => {
   it('sessionClosed_UserClose_LaunchesUnattendedAndTitlesTheRow', async () => {
     const part = startPart();
@@ -274,19 +292,32 @@ describe('autoRetroMainPart', () => {
   });
 
   // `inSettle` closes the row after it reads done, inside the settle wait; else it closes while working. Each
-  // close deletes the row's `chat.session` entry right after the emit, as chat does.
+  // close deletes the row's `chat.session` entry right after the emit, as chat does; `rowDropped` deletes its
+  // sessions row instead, as chat's `endClosed` does for a session that is not running.
   it.each([
-    { reason: 'user', inSettle: false, logsLostRetro: true },
-    { reason: 'project-closed', inSettle: false, logsLostRetro: true },
-    { reason: 'finished', inSettle: false, logsLostRetro: false },
-    { reason: 'user', inSettle: true, logsLostRetro: false },
+    { reason: 'user', inSettle: false, rowDropped: false, logsLostRetro: true },
+    {
+      reason: 'project-closed',
+      inSettle: false,
+      rowDropped: false,
+      logsLostRetro: true,
+    },
+    {
+      reason: 'finished',
+      inSettle: false,
+      rowDropped: false,
+      logsLostRetro: false,
+    },
+    { reason: 'user', inSettle: true, rowDropped: false, logsLostRetro: false },
+    { reason: 'user', inSettle: true, rowDropped: true, logsLostRetro: false },
   ] satisfies {
     reason: SessionCloseReason;
     inSettle: boolean;
+    rowDropped: boolean;
     logsLostRetro: boolean;
   }[])(
-    'sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone ($reason, in settle: $inSettle) → logs: $logsLostRetro',
-    async ({ reason, inSettle, logsLostRetro }) => {
+    'sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone ($reason, in settle: $inSettle, row dropped: $rowDropped) → logs: $logsLostRetro',
+    async ({ reason, inSettle, rowDropped, logsLostRetro }) => {
       const part = startPart();
       await settled();
       await part.close('h1');
@@ -302,7 +333,11 @@ describe('autoRetroMainPart', () => {
         ...closedEvent('retro-host-1', reason),
         sessionId: 'retro-1',
       });
-      part.sessions.delete('retro-1');
+      if (rowDropped) {
+        part.rows.delete('retro-1');
+      } else {
+        part.sessions.delete('retro-1');
+      }
       await settled();
 
       const lostRetroLogs = part
@@ -382,6 +417,62 @@ describe('autoRetroMainPart', () => {
     expect(part.closes).toEqual([]);
 
     part.harness.advance(1);
+
+    expect(part.closes).toEqual([['retro-9', 'finished']]);
+  });
+
+  it('claims a restored retro row the queue lost and closes it once done', async () => {
+    const part = await restartWithQueueLost('/wigley:retro auto h1');
+
+    expect(part.state()?.rows).toEqual(['retro-9']);
+
+    part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([['retro-9', 'finished']]);
+
+    part.harness.emit('chat.sessionClosed', {
+      ...closedEvent('retro-host-9', 'user'),
+      sessionId: 'retro-9',
+      titles: {
+        user: null,
+        agent: null,
+        firstMessage: '/wigley:retro auto h1',
+      },
+    });
+    await settled();
+
+    expect(part.launches).toEqual([]);
+  });
+
+  it('leaves a restored row that is not a retro unclaimed', async () => {
+    const part = await restartWithQueueLost('hi');
+
+    expect(part.state()?.rows).toEqual([]);
+  });
+
+  it('closes two claimed rows that settle together', async () => {
+    const part = await restartWithQueueLost('/wigley:retro auto h1');
+    part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));
+    await part.close('h1');
+    await part.startedThenIdle('retro-1');
+
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes.toSorted(([a], [b]) => a.localeCompare(b))).toEqual([
+      ['retro-1', 'finished'],
+      ['retro-9', 'finished'],
+    ]);
+  });
+
+  it('keeps one claimed row settling when another reads not done', async () => {
+    const part = await restartWithQueueLost('/wigley:retro auto h1');
+    part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));
+    await part.close('h1');
+    await part.startedThenIdle('retro-1');
+
+    part.sessions.set('retro-1', sessionInfo('retro-1', 'working'));
+    part.harness.advance(SETTLE_MS);
 
     expect(part.closes).toEqual([['retro-9', 'finished']]);
   });

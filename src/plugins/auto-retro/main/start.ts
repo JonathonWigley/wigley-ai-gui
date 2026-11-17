@@ -30,6 +30,7 @@ import {
 import {
   EMPTY_QUEUE,
   nextQueue,
+  opensWithRetroCommand,
   type QueueEvent,
   RETRO_COMMAND,
   type RetroItem,
@@ -58,7 +59,8 @@ function hostIdsText(item: RetroItem): string {
 
 // Queues a retro for each session the user closes, and each conversation a `/clear` ends, after it sent a message, in
 // `queue.json` in the plugin data, launches one unattended `/wigley:retro auto <host ids>` row at a time in the
-// `folder` setting, and closes it `settleSeconds` after it reads done. Every event and launch result applies in one
+// `folder` setting, claims each retro row (launched, or restored with a retro command as its first message), and
+// closes it `settleSeconds` after it reads done. Every event and launch result applies in one
 // serial chain that starts once the queue is loaded. Writes the retro rows and the queued count to
 // `auto-retro.state`. A `queue.json` it cannot read is never written during that start. In the self-test it registers its layouts and queues nothing.
 export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
@@ -86,31 +88,22 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     const rows: string[] = [];
     // Row ids whose first turn began, kept until the row leaves the side bar.
     const startedRows = new Set<string>();
-    let settle: { rowId: string; timer: number } | null = null;
+    // Each claimed row in its settle wait, to its timer.
+    const settles = new Map<string, number>();
 
     const publish = () =>
       state.set({ rows: [...rows], queued: queue.queued.length });
 
-    const runningRowId = (): string | null => {
-      const host = queue.running?.hostSessionId ?? null;
-      if (host === null) {
-        return null;
-      }
-      return (
-        rows.find((rowId) => rowsSlot.get(rowId)?.hostSessionId === host) ??
-        null
-      );
-    };
-
-    const clearSettle = () => {
-      if (settle !== null) {
-        services.timers.clear(settle.timer);
-        settle = null;
+    const clearSettle = (rowId: string) => {
+      const timer = settles.get(rowId);
+      if (timer !== undefined) {
+        services.timers.clear(timer);
+        settles.delete(rowId);
       }
     };
 
     const closeIfStillDone = (rowId: string) => {
-      settle = null;
+      settles.delete(rowId);
       if (!isRetroDone(sessionSlot.get(rowId), startedRows.has(rowId))) {
         return;
       }
@@ -122,26 +115,25 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
         );
     };
 
-    // Starts the settle wait when the running row turns done, and drops it when the row reads not done.
+    // Starts a claimed row's settle wait when it turns done, and drops that wait when it reads not done.
     const checkDone = (rowId: string, info: ChatSessionInfo | undefined) => {
-      if (rowId !== runningRowId()) {
+      if (!rows.includes(rowId)) {
         return;
       }
       if (!isRetroDone(info, startedRows.has(rowId))) {
-        clearSettle();
+        clearSettle(rowId);
         return;
       }
-      if (settle?.rowId === rowId) {
+      if (settles.has(rowId)) {
         return;
       }
-      clearSettle();
-      settle = {
+      settles.set(
         rowId,
-        timer: services.timers.set(
+        services.timers.set(
           () => closeIfStillDone(rowId),
           settleMs(api.settings().settleSeconds),
         ),
-      };
+      );
     };
 
     const markStarted = (rowId: string) => {
@@ -160,9 +152,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
 
     const leaveRow = (rowId: string) => {
       startedRows.delete(rowId);
-      if (settle?.rowId === rowId) {
-        clearSettle();
-      }
+      clearSettle(rowId);
       const index = rows.indexOf(rowId);
       if (index !== -1) {
         rows.splice(index, 1);
@@ -310,13 +300,14 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
           `dropped retro ${before.hostSessionId}: profile ${before.item.profile} is gone`,
         );
       }
-      // A row that joins here is a restored retro row, which counts as started.
+      // A row that joins here is a restored retro row, one `launched` holds or one the queue lost, which counts as
+      // started.
       followRows(rowsSlot, {
         added(row) {
-          const isRetroRow =
+          const isLaunchedRow =
             row.hostSessionId !== null &&
             queue.launched.includes(row.hostSessionId);
-          if (!isRetroRow) {
+          if (!isLaunchedRow && !opensWithRetroCommand(row.titles)) {
             return;
           }
           joinRow(row.sessionId);
@@ -333,10 +324,10 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
     };
 
-    // Chat deletes the row's `chat.session` entry right after the emit, which clears the settle wait before the
-    // step runs.
+    // Read at the emit: before the step runs, chat deletes the row's `chat.session` entry right after the emit, and
+    // `endClosed` ends a session that is not running at once, dropping its sessions row; either clears the wait.
     api.events.on('chat.sessionClosed', (event) => {
-      const isSettling = settle?.rowId === event.sessionId;
+      const isSettling = settles.has(event.sessionId);
       serial(() => closed(event, isSettling));
     });
     api.events.on('chat.sessionCleared', (event) =>
@@ -355,7 +346,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       serial(() => markStarted(sessionId)),
     );
     sessionSlot.on((sessionId, info) => {
-      if (sessionId !== runningRowId()) {
+      if (!rows.includes(sessionId)) {
         return;
       }
       if (info !== undefined && info.activity !== 'idle') {
