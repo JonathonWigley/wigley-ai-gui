@@ -60,8 +60,9 @@ Produces:  a check report in the Proof section: each check below with its result
 The relay that real Claude runs is the one in the profile's installed wigley plugin, not the marketplace clone. So
 before checks 3–5 (the real-Claude checks), land task 04's marketplace work and update the plugin:
 
-1. In the marketplace worktree `/Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-scheduled-tasks-relay-docs`
-   (branch `scheduled-tasks-relay-docs`: the README commits written ahead, then 04's code and version-bump commit),
+1. In the marketplace folder `/Users/jonathonwigley/Documents/.worktrees/ai-scheduled-tasks/wigley-ai-marketplace`
+   (the monorepo worktree and branch the whole plan runs on: the README commits written ahead, then 04's code and
+   version-bump commit),
    run `~/wigley-agents/WigleyRepos.md` § Landing steps 2–5 for that branch: rebase onto `main` and fast-forward
    `main` (step 2, polling while `main` is unavailable), remove the worktree and the branch (step 3), push `main`
    (step 4 as written: § Syncing makes a push of one wigley repo a push of all four, each with its committed work;
@@ -131,10 +132,12 @@ report to the lead with the step and its output. Checks 1, 2 and 6–9 run eithe
 6. **The endpoint files list the tools and the offline table** — expected path, a file read. `<endpoint>/tools.json`
    lists `schedule_task`, `list_scheduled_tasks`, `update_scheduled_task` and `remove_scheduled_task`;
    `<endpoint>/offline.json` lists none of the four and holds the pinned texts of plan.md § Offline answers per tool
-   for `ask_round`, `permission_prompt`, `set_headless`, `set_session_title` and the three workflow tools. Assert the
+   for `ask_round`, `permission_prompt`, `set_headless`, `set_session_title`, the three workflow tools,
+   `open_audio_picker`, `show_live_view` and `hide_live_view`. Assert the
    key set once, as the merged table of every contributor (09 checks each contribution alone): `python3 -c` reading
-   `sorted(json.load(open('<endpoint>/offline.json'))['tools'])` equals exactly `['ask_round', 'permission_prompt',
-   'set_headless', 'set_session_title', 'set_workflow_checklist', 'set_workflow_plan', 'set_workflow_step']`.
+   `sorted(json.load(open('<endpoint>/offline.json'))['tools'])` equals exactly `['ask_round', 'hide_live_view',
+   'open_audio_picker', 'permission_prompt', 'set_headless', 'set_session_title', 'set_workflow_checklist',
+   'set_workflow_plan', 'set_workflow_step', 'show_live_view']`.
 7. **Clean up and leave nothing running** — expected path. Remove every task through Schedules mode; poll the log
    for a `[scheduling] queued 0 runs` line after the last remove; close the run rows; `npm run drive -- quit --run sched-check`. Pass: no
    `session-host` process names `<run>/user-data` (`pgrep -fl session-host`). A host left alive is a finding: report

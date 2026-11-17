@@ -16,8 +16,9 @@ Consumes:  the offline file shapes in plan.md § Shared names and shapes › Off
            `ToolResult`, `ToolCallContext`, `ToolCallGuard`, `ContributeToolsOptions.mainAgentOnly` in
            `src/plugins/sessions/contract.ts` (tree)
            `appEndpointDir(paths, homeDir, instanceId)` in `src/shared/app-endpoint-dir.ts` (tree)
-           `writeEndpointFiles(dir, endpoint, tools)` in `src/plugins/sessions/main/relay/endpoint.ts` (tree; this task
-           grows it)
+           `createEndpointWriter(files, paths, dir, log)` and its `EndpointWriter` in
+           `src/plugins/sessions/main/relay/endpoint.ts` (tree; this task grows `write`)
+           `Files.deleteFile`, `Files.rename`, `isMissingFile` in `src/contracts/files.ts` (tree)
 
 Produces:  in `src/plugins/sessions/contract.ts`, as plan.md gives them word for word:
            `export interface OfflineAnswer { readonly result: ToolResult; readonly replay: boolean; }`
@@ -29,12 +30,12 @@ Produces:  in `src/plugins/sessions/contract.ts`, as plan.md gives them word for
            `export const OFFLINE_ENV = 'WIGLEY_FORMS_OFFLINE';`
            `export const OFFLINE_CALLS_FOLDER = 'offline-calls';`
            `export interface OfflineCall { tool: string; arguments: unknown; toolUseId: string | null; at: number; replay: boolean; }`
-           `export function replayOfflineCalls(deps: { folder: string; route(call: OfflineCall): Promise<unknown>; log: PluginLog }, hostSessionId: string): Promise<number>`
+           `export function replayOfflineCalls(deps: { files: Files; paths: Paths; folder: string; route(call: OfflineCall): Promise<unknown>; log: PluginLog }, hostSessionId: string): Promise<number>`
            in `src/plugins/sessions/main/session-list.ts`, on `SessionList`:
            `offlineTable(): Record<string, OfflineAnswer>`
            `replayCall(hostSessionId: string, call: OfflineCall): Promise<ToolResult>`
            in `src/plugins/sessions/main/relay/endpoint.ts`:
-           `writeEndpointFiles(dir: string, endpoint: RelayEndpoint, tools: ToolDefinition[], offline: Readonly<Record<string, OfflineAnswer>>): void`
+           `EndpointWriter.write(endpoint: RelayEndpoint, tools: ToolDefinition[], offline: Readonly<Record<string, OfflineAnswer>>): void`
 
 ## Decisions
 
@@ -46,23 +47,29 @@ Produces:  in `src/plugins/sessions/contract.ts`, as plan.md gives them word for
   contribution does not list` when `options.offline` holds a key that is not a tool name of the same contribution.
   It throws before it starts any tool session or records any name, as the duplicate-name checks do now. Reason: a
   typo in a key would silently make a tool answer "did not run".
-- **`offline.json` rides on every endpoint write.** `writeEndpointFiles` writes `offline.json` beside `tools.json`,
-  as `{ "tools": <table> }`, through the same temp file and rename (`writeJsonWhole`). Order: `endpoint.json`,
-  `tools.json`, `offline.json`. `start.ts` passes `list.offlineTable()` on each call it makes now (each
-  `contributeTools`). A disposal and a stop still leave the files. The self-test still writes no file.
+- **`offline.json` rides on every endpoint write.** `EndpointWriter.write` writes `offline.json` beside
+  `tools.json`, as `{ "tools": <table> }`, in the same queued job, through `files.write` (atomic). Order:
+  `endpoint.json`, `tools.json`, `offline.json`. A failed write is logged as today's are. `start.ts` changes its
+  call to `endpointWriter.write(opened.endpoint, list.tools(), list.offlineTable())`, so each `contributeTools`
+  passes the table. A disposal and a stop still leave the files, and a stop still awaits `endpointWriter.flushed()`.
+  The self-test still writes no file.
 - **`offlineEnv()`** returns `{ WIGLEY_FORMS_OFFLINE: <endpoint dir>/offline-calls }`, the path built with
-  `api.services.paths.join(endpointDir, OFFLINE_CALLS_FOLDER)`. It returns `{}` when the part opened no relay (the
+  `api.services.paths.join(endpointDir, OFFLINE_CALLS_FOLDER)`. `start.ts` passes `appEndpointDir(...)` inline to
+  `createEndpointWriter` now: hoist it into a `const endpointDir` that both `createEndpointWriter` and `offlineEnv`
+  read. It returns `{}` when the part opened no relay (the
   self-test, `opened === null`). A drive run returns its own home's folder. It creates no folder: the relay creates
   the folder when it writes the first line (task 04).
-- **`replayCalls(hostSessionId)`** calls `replayOfflineCalls` with `folder` = the calls folder, `route` =
-  `(call) => list.replayCall(hostSessionId, call)` and `api.services.log`. It runs in the self-test too, where it
+- **`replayCalls(hostSessionId)`** calls `replayOfflineCalls` with `files` and `paths` from `api.services`, `folder` =
+  the calls folder, `route` = `(call) => list.replayCall(hostSessionId, call)` and `api.services.log`. It runs in the self-test too, where it
   finds no file and resolves to 0.
 - **`replayOfflineCalls` is the deep module.** It holds the file name, the line format, the order and the delete:
   - The file is `<folder>/<hostSessionId>.jsonl`. A `hostSessionId` that is empty, `.`, `..`, or holds `/` or `\`
     rejects with `Not a host session id: <id>` and reads nothing.
-  - It first claims the file: it renames `<id>.jsonl` to `<id>.jsonl.replaying` with `node:fs/promises` `rename`,
-    which replaces a `.replaying` file an earlier run left. No file (`ENOENT` on the rename) resolves to 0 and routes
-    nothing. Any other rename or read error rejects. Reason: the relay may still append while the app replays (an
+  - It reads, renames and deletes through `Files`. It first claims the file: `files.deleteFile` on
+    `<id>.jsonl.replaying` (an earlier run's leftover; nothing there is no error), then `files.rename` of
+    `<id>.jsonl` to `<id>.jsonl.replaying` (`rename` refuses an existing target, so the delete comes first). A
+    rename rejection that `isMissingFile` matches resolves to 0 and routes nothing. Any other rename or read
+    error rejects. Reason: the relay may still append while the app replays (an
     attached run's call answered offline during a hold). It opens the file by name for each line (task 04), so a
     line it writes after the rename goes to a new `<id>.jsonl` and is not deleted unread. That new file waits for the
     next `replayCalls` of the same id; task 17 calls it at adoption only, so such a line is not replayed in this run
@@ -76,13 +83,13 @@ Produces:  in `src/plugins/sessions/contract.ts`, as plan.md gives them word for
   - Each replayable call is routed with `await route(call)` before the next one starts, so step and checklist
     reports apply in the order the run made them. A route that rejects is logged as
     `offline call <tool> of <id> not replayed: <error>`, and the next line still routes.
-  - After the last line it deletes the claimed file with `node:fs/promises` `rm` (`force: true`). A failed delete
-    is logged, and the call still resolves.
+  - After the last line it calls `files.deleteFile` on the claimed file. A failed delete is logged, and the call
+    still resolves.
   - It resolves to the number of calls it routed, rejected routes included.
-  - It uses `node:fs/promises` directly, as `relay/endpoint.ts` uses `node:fs`: the `Files` service has no delete
-    (only `trash`), and a calls file in the Trash is noise. This is the sanctioned route: sessions' `PLUGIN_EXTRAS`
-    entry in `scripts/check-layers.mts` already gives its main part `packages: ['node:']` (AGENTS.md § A plugin
-    needing more, such as a `node:` package), so no layer edit is needed.
+  - It imports no `node:` module, as `relay/endpoint.ts` imports none: `Files.deleteFile` deletes for good, so a
+    calls file does not reach the Trash. On Node a late relay append after the claim opens a new `<id>.jsonl`,
+    because the adapter moves a file by hard link. Sessions' `PLUGIN_EXTRAS` main entry keeps its
+    `packages: ['node:']`; this task neither needs nor edits it.
 - **`replayCall` goes through the normal call path.** `SessionList.replayCall(hostSessionId, call)` finds the owned
   entry whose `info.sessionId` is `hostSessionId` (else a connected one). It calls the existing `routeCall` with
   `call.tool`, `call.arguments`, a context of `{ toolUseId: call.toolUseId, signal: <a new AbortController's
@@ -129,15 +136,16 @@ GIVEN the self-test WHEN a plugin calls `offlineEnv()` THEN it returns `{}`
 
 ## Tests
 
-- `src/plugins/sessions/main/offline-calls.test.ts` (new; real temp folder, as `endpoint.test.ts` does):
+- `src/plugins/sessions/main/offline-calls.test.ts` (new; memory files and `posixPaths`, as `endpoint.test.ts` does; run `npm run lint` to see whether the test needs a
+  layer entry, since `start.test.ts` in the folder imports `posixPaths` with none):
   - `routes each replayable line in order and deletes the file` — `it.each` rows over file contents:
     `{ case, lines, routed: string[] /* tool names */, count, logs }`. Rows: replay and non-replay lines mixed
     (only replay ones routed, in order); a line that is not JSON (logged, skipped, later lines routed); a line
     missing `replay` (logged, skipped); an empty trailing line (ignored); a line with no `arguments` (routed with
     `{}`). Every row asserts `<id>.jsonl` and `<id>.jsonl.replaying` are both gone after the call.
   - `resolves to 0 and routes nothing when the session has no calls file`.
-  - `a line appended during the replay survives in a new calls file` — the `route` fake appends one line to
-    `<folder>/<id>.jsonl` when it is called the first time; after the call that file holds that line only, and
+  - `a line appended during the replay survives in a new calls file` — the `route` fake appends one line with
+    `files.append(<folder>/<id>.jsonl, …)` when it is called the first time; after the call that file holds that line only, and
     the claimed file is gone. Break: a read-then-delete of one path that drops the late line.
   - `logs a route that rejects and still routes the next line` — the count includes the rejected call.
   - `rejects a host session id that is not one path segment, reading nothing` — rows `''`, `'.'`, `'..'`, `'a/b'`,
@@ -155,16 +163,20 @@ GIVEN the self-test WHEN a plugin calls `offlineEnv()` THEN it returns `{}`
 - `src/plugins/sessions/main/relay/endpoint.test.ts` (change):
   - `writes the endpoint and the tool list into a folder it creates` also asserts `offline.json` equals
     `{ tools: offline }`.
-  - `replaces the files of an earlier start and leaves no temp file`: its `readdirSync` row becomes
+  - `replaces the files of an earlier start and leaves no temp file`: its `files.list(dir)` row becomes
     `['endpoint.json', 'offline.json', 'tools.json']`.
-- `src/plugins/sessions/main/start.test.ts` (add, through `startSessionsPart` in a temp home):
+  - Every `writer.write(...)` call in the file gains the `offline` argument (`{}` where the test is not about it).
+    `writes in call order behind a held write` also asserts `offline.json` follows the later call.
+- `src/plugins/sessions/main/start.test.ts` (add, through `startSessionsPart` with `runMode: 'live'`, `homeDir` from `relayHome()` and a `createMemoryFiles()`
+  passed as `files`; the endpoint write is queued, so write and read the files through that `files`, reading
+  `offline.json` after `vi.waitFor` or after `dispose`):
   - `offlineEnv names the calls folder in a live run and is empty in the self-test` — rows `live` →
     `{ WIGLEY_FORMS_OFFLINE: <home>/.agents/app/offline-calls }`, `selfTest` → `{}`.
   - `replayCalls routes a calls file to the owned session holding its host id` — open an owned session for
-    `host-1`, contribute a fake tool, write `<home>/.agents/app/offline-calls/host-1.jsonl`, expect the fake's call
+    `host-1`, contribute a fake tool, write `<home>/.agents/app/offline-calls/host-1.jsonl` into the memory files, expect the fake's call
     and a resolved 1, and the file gone.
   - `writes each contribution's offline answers to offline.json` — one contribution with an `offline` entry; read the
-    file from the endpoint folder.
+    file from the endpoint folder through the memory files.
 
 ## Done when
 

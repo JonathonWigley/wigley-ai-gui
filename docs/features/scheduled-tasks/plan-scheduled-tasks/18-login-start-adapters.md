@@ -24,9 +24,8 @@ Consumes:  `LoginStart`, `LoginStartStatus`, `LoginStartState` ← 06 · `MainSe
            `createNoLoginStart()` ← 06 · `sessionHostLaunch(deps)` ← 13 · `APP_ENDPOINT_ENV` ← 08 · the result
            file `01-login-item-result.md` ← 01 · `SessionHostClientDeps` and `sessionHostChannel(platform, home,
            username, instanceId)` (tree, `src/main/session-host/`) · `appInstanceOf` (tree) · `Files.read`,
-           `Files.stat`, `Files.write`, `Files.makeFolder`, `Files.modified` (tests) and `ProcessRunner.run`, which
-           resolves a non-zero exit as `{ code }` (tree) · `createMemoryFiles`
-           and `FakeProcesses` (tree, `src/shared/`)
+           `Files.stat`, `Files.write`, `Files.makeFolder`, `Files.deleteFile` (deletes for good; nothing there is no
+           error; rejects for a folder), `Files.modified` (tests) (tree) · `createMemoryFiles` (tree, `src/shared/`)
 Produces:  in `src/contracts/login-start.ts`:
            `export const LOGIN_START_FLAG = '--start-session-host';`
            `export const LOGIN_START_LABEL = 'wigley-ai-gui.session-host';`
@@ -34,16 +33,17 @@ Produces:  in `src/contracts/login-start.ts`:
            `export interface LoginItems { setLoginItemSettings(settings: { openAtLogin: boolean; type: 'agentService'; serviceName: string }): void; getLoginItemSettings(options: { type: 'agentService'; serviceName: string }): { status?: string } }`
            `export function createAgentServiceLoginStart(loginItems: LoginItems): LoginStart`
            in `src/main/login-start/launch-agent-login-start.ts`:
-           `export function createLaunchAgentLoginStart(deps: { files: Files; processes: ProcessRunner; homeDir: string; programArguments: readonly string[] }): LoginStart`
+           `export function createLaunchAgentLoginStart(deps: { files: Files; homeDir: string; programArguments: readonly string[] }): LoginStart`
 
 ## The app's login entry (`main.ts`)
 
 - A start whose `process.argv` holds `LOGIN_START_FLAG` runs the login entry and nothing else of the app. The
-  dispatch at the bottom of `main.ts` checks the flag before `runMode === 'live'`. The `loginShellPath` read at the
-  top is skipped under the flag (add the flag check to its condition), since the entry spawns no agent.
+  dispatch at the bottom of `main.ts` checks the flag before `runMode === 'live'`. The `loginShellEnv` read at the
+  top (`main.ts` ~233) is skipped under the flag: add `!process.argv.includes(LOGIN_START_FLAG)` to its condition
+  (`shouldReadLoginShellEnv({ isLive: …, parentPid: … })`), since the entry spawns no agent.
 - The entry calls `app.setActivationPolicy('accessory')` first, so it takes no foreground and shows no Dock icon,
   as the self-test does. It takes no single-instance lock, opens no window and starts no plugin. The flag check sits
-  before `startLiveApp`, which calls `app.requestSingleInstanceLock()` (`main.ts`, around line 1510). Reason: a
+  before `startLiveApp`, which calls `app.requestSingleInstanceLock()` (`main.ts`, around line 1568, inside `startLiveApp`; the dispatch `if (runMode === 'live')` is at ~1577). Reason: a
   login start that reached the lock while the app runs would raise the running app's `second-instance` handler,
   which shows its window, and the login entry would then quit without starting the host.
 - It builds the launch with `sessionHostLaunch` from the stable instance's values, the same values `startApp`
@@ -112,19 +112,17 @@ Produces:  in `src/contracts/login-start.ts`:
   must be one fixed form.
 - `set(true)`: makes the `LaunchAgents` folder, reads the file when it exists, and writes the builder's text when
   the file is missing or its text differs. Resolves to `on`.
-- `set(false)`: when the file exists, runs `/bin/rm -f <file>` through `processes`. Resolves to `off` when the run
-  exits 0. A non-zero exit resolves to `off` with `Login start failed: rm exited <code>`, since the plist is still
-  there. Reason for `rm`: the `Files` contract has no delete, and `trash` would put a plist in the user's Trash on
-  each switch-off.
+- `set(false)`: when the file exists, calls `files.deleteFile(file)`. Resolves to `off` with `detail` null. A
+  rejection resolves to `off` with `Login start failed: <error text>`, since the plist may still be there.
 - It runs no `launchctl`. launchd loads the file at the next login. A `bootout` would end a host launchd started,
   and every session in it; a `bootstrap` now is not needed, since the app that calls `set` has a host running.
-- A failed read, write or run resolves to `off` with `Login start failed: <error text>`. It never rejects.
+- A failed read, write or delete resolves to `off` with `Login start failed: <error text>`. It never rejects.
 
 ## The pick in `main.ts`
 
 - `loginStart` in the services literal: when `runMode === 'live'`, `!appInstance.isDev` and
   `platform.os === 'macos'`, the adapter the result's `Pick:` names; else `createNoLoginStart()`. For
-  `launchAgent`: `programArguments` `[process.execPath, LOGIN_START_FLAG]`, `files`, `processes` and `homeDir`
+  `launchAgent`: `programArguments` `[process.execPath, LOGIN_START_FLAG]`, `files` and `homeDir`
   from main's own values. For `agentService`: `createAgentServiceLoginStart(app)`.
 - The adapter not picked stays in the tree, unused by `main.ts`, for a Mac where it works (plan.md § Decisions).
   Its tests keep it checked.
@@ -160,9 +158,9 @@ GIVEN no LaunchAgent file WHEN `set(true)` runs THEN the file holds the builder'
 arguments and the status is `{ state: 'on', detail: null }`
 GIVEN the file with the same text WHEN `set(true)` runs THEN nothing is written
 GIVEN the file with other text WHEN `set(true)` runs THEN it is rewritten
-GIVEN the file WHEN `set(false)` runs THEN `/bin/rm -f <file>` runs and the status is `off` with `detail` null
-GIVEN the file and an `rm` that exits 1 WHEN `set(false)` runs THEN the status is `off` with
-`Login start failed: rm exited 1`
+GIVEN the file WHEN `set(false)` runs THEN the file is gone and the status is `off` with `detail` null
+GIVEN the file and a `deleteFile` that rejects WHEN `set(false)` runs THEN the status is `off` with
+`Login start failed: <error>`
 GIVEN a write that fails WHEN `set(true)` runs THEN it resolves to `off` with `Login start failed: <error>` and does
 not reject
 GIVEN `getLoginItemSettings` answers `requires-approval` WHEN `set(true)` runs THEN the status is `needsApproval` with
@@ -171,12 +169,12 @@ GIVEN the app executable started with `--start-session-host` WHEN it runs THEN i
 exits 0, with no window, lock or plugin (live check in task 21)
 Tests:     `launch-agent-login-start.test.ts`, one `describe` for `createLaunchAgentLoginStart` over
            `createMemoryFiles({ now: () => now })` over a `let now` the test moves (as `plan-watch.test.ts` does)
-           and `FakeProcesses` (script `/bin/rm`
-           `['-f', <file>]`). The test advances the clock before each `set`, so `files.modified(file)` shows a write:
-           `it.each` over { the file before, `on` } → { the file after, the `rm` runs, the status }: missing/true
+           (wrap its `deleteFile` where a row needs it to reject). The test advances the clock before each `set`, so
+           `files.modified(file)` shows a write:
+           `it.each` over { the file before, `on` } → { the file after, the delete call, the status }: missing/true
            (the text equals the literal above with the arguments substituted), same text/true (`modified` unchanged),
-           other text/true (`modified` moved), present/false, present/false with `rm` exiting 1 (the pinned
-           detail), missing/false (no run) · `it('resolves to off with the reason when the write fails')` ·
+           other text/true (`modified` moved), present/false, present/false with `deleteFile` rejecting (the
+           pinned detail), missing/false (no delete call, or a no-op, since `deleteFile` on a missing file is no error) · `it('resolves to off with the reason when the write fails')` ·
            `it('escapes XML in a program argument')`, an argument holding `a&b<c>` lands as `a&amp;b&lt;c&gt;`.
            `agent-service-login-start.test.ts`, one `describe` for `createAgentServiceLoginStart` over a fake
            `LoginItems` that records each `setLoginItemSettings` call and answers a status per call:

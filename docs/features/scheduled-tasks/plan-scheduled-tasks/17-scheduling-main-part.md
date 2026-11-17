@@ -27,8 +27,8 @@ Consumes:  `SessionsMainExports.offlineEnv()`, `SessionsMainExports.replayCalls(
            `CHAT_HARNESS_ID`, `ChatMainExports.profiles()`, `.profileOf()`, `.defaultProfile()`, `ChatSessionInfo.headless`
            in `src/plugins/chat/contract.ts`; `sessionsMainKey`, `sessionsRowsSlot`, `sessionsSelectionSlot`,
            `followRows`, `SessionsMainExports.holdConnects(until)`, `SessionRow.hostSessionId` in
-           `src/plugins/sessions/contract.ts`; `services.alerts.setOpenCount`,
-           `services.appInstance.isDev`, `services.runMode`, `services.agentHarnesses`, `api.data`,
+           `src/plugins/sessions/contract.ts`; `services.alerts.setOpenCount(source, count, noun)` with `AlertNoun`
+           (`src/contracts/alerts.ts`), `services.appInstance.isDev`, `services.runMode`, `services.agentHarnesses`, `api.data`,
            `api.channel.handle`, `api.state.publish`, `api.layouts.register` in `src/contracts/plugin.ts`; `errorText`
            in `src/shared/error-text.ts`; `startMainPart`, `fakeDependency` in
            `src/shared/plugin-part-harness.test-support.ts`
@@ -187,7 +187,9 @@ host fires each run at its `at`, and its `runStarted` push or the next `listRuns
   restored at start whose entry is still `running` and whose session reads not running is updated to `finished`.
 - `unviewedRows` lists the open rows whose entry is `finished` with `viewed` false, by the entry's `at`. A row that
   closes leaves it, as it leaves `runRows`; its entry keeps its `viewed`.
-- Each state publish calls `services.alerts.setOpenCount('scheduling', unviewedRows.length)`.
+- Each state publish calls `services.alerts.setOpenCount('scheduling', unviewedRows.length, { singular: 'finished
+  scheduled run', plural: 'finished scheduled runs' })`. The words are pinned: the Windows overlay prints
+  `<count> <singular|plural>`.
 
 **Channel handlers.**
 
@@ -257,7 +259,9 @@ GIVEN the only active task is paused WHEN the part re-plans THEN it calls `login
 `start.test.ts`, through `startMainPart` with `fakeDependency` for chat and sessions (as
 `src/plugins/auto-retro/main/start.test.ts` does), `createFakeSessionHost()` for `sessionHost`, the harness's fake
 `loginStart`, memory files for the config folder and plugin data, and fake timers and clock. `prepareLaunch` in the
-chat fake returns a `PreparedLaunch` whose ids carry a counter, so a test sees a fresh prepare.
+chat fake returns a `PreparedLaunch` whose ids carry a counter, so a test sees a fresh prepare. The chat fake also
+implements `restored()` (resolving at once), which `ChatMainExports` now has; check `fakeDependency`'s typing, since a
+full `ChatMainExports` fake fails to type-check without it.
 
 - `start_FiresRule_QueuesOrNot` — `it.each` of `{ isDev, runMode, fires }`: `false, 'live'` → fires; `true, 'live'` →
   no fire; `true, 'drive'` → fires; `true, 'selfTest'` → fires. A fire row asserts one `setPending` call; a no-fire
@@ -307,7 +311,7 @@ chat fake returns a `PreparedLaunch` whose ids carry a counter, so a test sees a
   pinned text).
 - `rows_FinishAndView_TrackUnviewedAndAlerts` — `chat.turnFinished` on a run row: outcome `finished`, the row in
   `unviewedRows`, alert count 1; selection names it: both cleared; a second run row finishing while selected: not
-  unviewed. A second part started over the same memory files: the first row's entry reads `viewed` as the first
+  unviewed. The alert call also carries the pinned noun. A second part started over the same memory files: the first row's entry reads `viewed` as the first
   part left it.
 - `rows_RunRowCloses_IsFinishedAndLeavesRunRows`.
 - `saveTask_UnknownProfileOrProject_Rejects` — `it.each` of the three pinned texts (unknown profile, unknown

@@ -18,10 +18,10 @@ Files:     modify `src/contracts/login-start.ts` (only where the seam needs a ch
            `scripts/check-layers.mts` · check `src/main/plugins/main-api.ts`
 Consumes:  `LoginStartState`, `LoginStartStatus`, `LoginStart` in `src/contracts/login-start.ts` ← 03 (plan.md
            § Shared names and shapes › Login start, word for word) ·
-           `MainServices` in `src/contracts/plugin.ts` (tree, line 1061) · `MainApiServices` in
+           `MainServices` in `src/contracts/plugin.ts` (tree, line 1073) · `MainApiServices` in
            `src/main/plugins/main-api.ts` (tree) · the `services` block of `createMainWorld` in
-           `src/shared/plugin-part-harness.test-support.ts` (tree, around line 997) · the services literal
-           `startMainParts` gets in `createWindow` in `src/main/main.ts` (tree, around line 1124) · `CORE_LAYERS`
+           `src/shared/plugin-part-harness.test-support.ts` (tree, around line 1000) · the services literal
+           `startMainParts` gets in `createWindow` in `src/main/main.ts` (tree, around line 1169) · `CORE_LAYERS`
            and its `'src/main/main.ts'` entry in `scripts/check-layers.mts` (tree)
 Produces:  in `src/contracts/plugin.ts`: `MainServices.loginStart: LoginStart`
            in `src/main/login-start/no-login-start.ts`: `export function createNoLoginStart(): LoginStart`

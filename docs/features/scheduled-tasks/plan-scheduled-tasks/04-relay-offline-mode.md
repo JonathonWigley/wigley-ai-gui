@@ -5,21 +5,20 @@ Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
-This task changes the marketplace repo, `<market>` = `/Users/jonathonwigley/Documents/ai-dev/wigley-ai-marketplace`,
-the landing target. It edits, tests, checks and commits in the worktree `<market wt>` =
-`/Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-scheduled-tasks-relay-docs`, on its branch
-`scheduled-tasks-relay-docs`, since only that branch holds the written-ahead README commits. Every path and command
-below runs in `<market wt>`. plan.md § Preconditions' relay row greps `<market>` and stays right.
+This task changes the marketplace folder of the `ai` monorepo, `<market>` =
+`/Users/jonathonwigley/Documents/.worktrees/ai-scheduled-tasks/wigley-ai-marketplace`, in the same worktree and
+branch as `<gui>` (the written-ahead README commits are already on this branch). Every path and command below runs in
+`<market>`. plan.md § Preconditions' relay row greps `<market>` and stays right.
 It touches no file in `<gui>`. Task 05 writes the files this task reads; their shapes are pinned in plan.md
-§ Shared names and shapes › Offline files. Read `<market wt>/AGENTS.md` whole and `README.md` § The relay and
+§ Shared names and shapes › Offline files. Read `<market>/AGENTS.md` whole and `README.md` § The relay and
 § Boundary rules first (plan.md § Mandatory Reads).
 
-Files:     modify `<market wt>/plugins/wigley/scripts/forms/relay.py` ·
-           test `<market wt>/plugins/wigley/scripts/forms/tests/test_relay.py` ·
-           read `<market wt>/plugins/wigley/scripts/forms/README.md` (written ahead; edit a line only where the code
+Files:     modify `<market>/plugins/wigley/scripts/forms/relay.py` ·
+           test `<market>/plugins/wigley/scripts/forms/tests/test_relay.py` ·
+           read `<market>/plugins/wigley/scripts/forms/README.md` (written ahead; edit a line only where the code
            proves it wrong) ·
-           modify `<market wt>/plugins/wigley/.claude-plugin/plugin.json` and
-           `<market wt>/plugins/wigley/.codex-plugin/plugin.json` (version bump)
+           modify `<market>/plugins/wigley/.claude-plugin/plugin.json` and
+           `<market>/plugins/wigley/.codex-plugin/plugin.json` (version bump)
 
 Consumes:  nothing from another task. The offline file shapes are pinned in plan.md § Offline files:
            the env var `WIGLEY_FORMS_OFFLINE`, `<endpoint dir>/offline.json`, and the calls file
@@ -98,10 +97,10 @@ Decisions:
   `WIGLEY_AI_GUI_ENDPOINT_DIR` reaches the relay today (README § The relay › Finding the app). No manifest change.
 - **The README is written ahead.** `README.md` § The relay › Offline mode, the offline sentences in **Starting the
   app** and **App gone mid-call**, the Contents line, § Local commands' test-suite sentence and § Boundary rules were
-  committed before this task (plan.md § Docs written ahead: marketplace commits `738f47d` and the integrator's fix).
+  committed before this task, on this branch (plan.md § Docs written ahead).
   Read them first and make the code match them. Edit a README line only where the code proves it wrong, and name each
   such edit in the commit message. `relay.py`'s module docstring names the offline mode in one clause.
-- **Version bump.** `<market wt>/AGENTS.md` § Changing a plugin: bump `version` in both wigley manifests in this
+- **Version bump.** `<market>/AGENTS.md` § Changing a plugin: bump `version` in both wigley manifests in this
   commit, from `2.3.3` (at plan time) to `2.4.0`, a new relay mode. When main moved past 2.3.3 before this task
   runs, take the next minor version from main's value.
 
@@ -185,19 +184,17 @@ Tests:     in `tests/test_relay.py`, a new `OfflineTests(RelayTestCase)`. `make_
   and its calls replaying onto the adopted row — are in task 21 (Final verification). This task runs none.
 
 Done when:
-- `(cd plugins/wigley/scripts/forms && python3 -m unittest discover)` passes from `<market wt>`.
-- The four checks in `<market wt>/AGENTS.md` § Done pass: both `check_manifests.py` lines (the second against
+- `(cd plugins/wigley/scripts/forms && python3 -m unittest discover)` passes from `<market>`.
+- The four checks in `<market>/AGENTS.md` § Done pass: both `check_manifests.py` lines (the second against
   `origin/main`, which proves the bump), `check_pointers.py`, and `claude plugin validate .`.
-- `grep -c 'WIGLEY_FORMS_OFFLINE\|offline.json' <market wt>/plugins/wigley/scripts/forms/relay.py` is above 0 (plan.md
+- `grep -c 'WIGLEY_FORMS_OFFLINE\|offline.json' <market>/plugins/wigley/scripts/forms/relay.py` is above 0 (plan.md
   § Preconditions' relay row flips).
 - Each README line of the Offline mode section and the offline sentences elsewhere is true of `relay.py`, read line
   by line against the code.
 
-Commit:    one commit in `<market wt>` for the group, on the branch `scheduled-tasks-relay-docs` (worktree
-           `/Users/jonathonwigley/Documents/ai-dev/.worktrees/wigley-ai-marketplace-scheduled-tasks-relay-docs`), which
-           holds the written-ahead README commits, or on a branch from `main` once `main` holds them. It lands per
-           `<market wt>/AGENTS.md` § Land on main with the README commits ahead of it; task 21 runs the landing
-           (`~/wigley-agents/WigleyRepos.md` § Landing). Message: the relay gains an offline mode, switched on by
+Commit:    one commit for the group, on this worktree's branch, which holds the written-ahead README
+           commits. It lands with the branch per `~/wigley-agents/WigleyRepos.md` § Landing; task 21 runs the
+           landing. Message: the relay gains an offline mode, switched on by
            `WIGLEY_FORMS_OFFLINE`, that never starts the app, answers each call from the app's `offline.json` and
            logs it to the session's calls file for the app to replay; tests; bump to 2.4.0 (the version bump stays in
            this commit); any README line the code proved wrong.

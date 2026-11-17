@@ -5,10 +5,13 @@ Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
 
-Read first, beyond plan.md § Mandatory Reads: `src/plugins/backlog/page/start.ts`, `src/plugins/backlog/manifest.ts`,
-`src/plugins/backlog/layouts/layout.d.ts` and `src/plugins/backlog/page/followup-editor.ts`. Backlog is the pattern
-for a mode with a list, a detail pane, an editor in the detail pane, a list picker and a confirm prompt. Copy its
-shape; do not import from it.
+Read first, beyond plan.md § Mandatory Reads: `src/plugins/practice/page/start.ts`, `src/plugins/practice/manifest.ts`,
+`src/plugins/practice/layouts/layout.d.ts`, `src/plugins/practice/page/layout/practice-kit.ts`, and in
+`src/plugins/practice/page/problem-workspace.ts` the box set (`createEditorBoxes`, `boxes.place`) and the confirm
+prompt (`createConfirmPrompt` with `drawFrame` → `requireDialogFrame`, and `confirmBody`). Practice is the pattern
+for a mode with a side-bar list, a sheet, vim boxes and a confirm prompt. For the list picker, see `backlog-view.ts`
+(`deps.picker.create({ filter: true })`) or `settings-view.ts`. For the Tab and Esc box keys, see the Audio picker
+block in `src/plugins/keymap.ts`. Copy the shape; do not import from any of them.
 
 Files:
 - modify `src/plugins/scheduling/manifest.ts` (commands, scopes, the `layout` setting, `dependsOn.page`)
@@ -19,16 +22,20 @@ Files:
 - create `src/plugins/scheduling/page/schedule-fields.ts` · test `src/plugins/scheduling/page/schedule-fields.test.ts`
 - create `src/plugins/scheduling/page/schedules-view.ts` (DOM: the side bar, the sheet, the editor, the picker and
   confirm openers)
-- create `src/plugins/scheduling/page/task-editor.ts` (the editor's vim boxes, as `followup-editor.ts`)
+- create `src/plugins/scheduling/page/task-editor.ts` (the editor's vim boxes through `createEditorBoxes(...).place`,
+  as `practice/page/problem-workspace.ts` places its notes and custom-cases boxes)
 - create `src/plugins/scheduling/page/schedules.css` (only what the app draws itself: panes, slots, boxes)
 - create `src/plugins/scheduling/page/layout/read-scheduling-layout.ts`
 - create `src/plugins/scheduling/layouts/layout.d.ts`, `src/plugins/scheduling/layouts/default/layout.js`,
   `src/plugins/scheduling/layouts/default/layout.css`
 - test `src/plugins/scheduling/page/start.test.ts`
-- modify `docs/keymap.md` (the `k` row gains `kt` Schedules), `DESIGN.md` § Surfaces (a **Schedules** bullet with
-  the look below)
-- read `docs/features/layouts/design.md`: its Adopters table already lists `scheduling` (written ahead, plan.md
-  § Docs written ahead). Make the layout contract match that row; edit the row only where the code proves it wrong.
+- modify `docs/keymap.md` (the `k` row gains `kt` Schedules, and the Ctrl+n, Ctrl+j/k, Alt+hjkl and side-bar-list
+  paragraphs name the Schedules list, details and editor), `DESIGN.md` § Surfaces (a **Schedules** bullet with the
+  look below; it does not compare itself to Backlog)
+- modify `docs/features/layouts/design.md`: its Adopters table already lists `scheduling` (written ahead, plan.md
+  § Docs written ahead). Make the layout contract match that row, and edit the row's end to "…the picker rows, and
+  the confirm's frame (`dialogFrame`) and body (`confirmBody`)", as the primer, audio-picker and practice rows name
+  their frames. Edit the row elsewhere only where the code proves it wrong.
 
 Consumes:
 - `ScheduledTask`, `ScheduledTaskView`, `SchedulingState`, `schedulingStateSlot`, `TaskDraft`, `TaskSchedule`,
@@ -61,7 +68,7 @@ Produces:
   draft and its changed flag, the draft-to-`TaskDraft` check (`draftOf`, below), and every line of copy pinned below.
 - in `src/plugins/scheduling/layouts/layout.d.ts`: `SchedulingLayout` (every part optional) and
   `CompleteSchedulingLayout extends Required<SchedulingLayout>`, with these parts, each appending its root to
-  `parent` and returning it (`BacklogLayout`'s form):
+  `parent` and returning it (`PracticeLayout`'s form; panes return `{ element }`, as `PracticePane` does):
   - panes, drawn once per layout set into app-owned containers: `list(parent, kit: ListKit)` (side bar; slot
     `rows`), `detail(parent, kit: DetailKit)` (sheet; slots `notices`, `body`, `history`, `editor`),
     `editor(parent, input: EditorInput, kit: EditorKit)` (into the `editor` slot on each editor open)
@@ -71,6 +78,10 @@ Produces:
     `historyRow(parent, input: HistoryRowInput, kit: RowKit)`, `fieldRow(parent, input: FieldRowInput, kit:
     FieldRowKit)`, `pickerRow(parent, input: PickerRowInput, kit: PickerRowKit)`,
     `confirmBody(parent, input: ConfirmBodyInput, kit: ConfirmBodyKit)`
+  - the confirm's frame: `dialogFrame(parent, input: DialogFrameInput, kit: SchedulingKit): DialogFramePart` — the
+    frame of the remove and discard confirms (scope `scheduling.confirm`). The page passes it to `createConfirmPrompt`
+    as `drawFrame`, checked with `requireDialogFrame` (`src/shared/page/layout-host/draw-part.ts`), as Practice's
+    Solution confirm does
   - inputs: `TaskRowInput { name; scheduleText; next: string; paused: boolean }` (`next` is `Paused` when `paused`), `EmptyInput { reason: 'noTasks' | 'newTask' }`,
     `NoticeInput { kind: 'dev' | 'fileError' | 'loginStart'; text: string; tone: 'neutral' | 'warning' | 'error' }`,
     `TaskDetailInput { name; project; profile; scheduleText; next; controls: { label: string; value: string }[];
@@ -79,20 +90,25 @@ Produces:
     'multiline' }`, `EditorInput { kind: 'create' | 'edit'; heading: string; envNote: string; problem: string | null }`,
     `PickerRowInput { picker: string; label: string }`, `ConfirmBodyInput { body: string }`
   - kits: every kit extends `BaseKit`; `ListKit.rows`, `DetailKit.notices/body/history/editor`,
-    `EditorKit.fields(parent)` (the slot the field rows render into), `FieldRowKit.textBox(parent)` (mounts the
-    field's vim box, as Backlog's `EditorKit.textBox`), `RowKit.cursorActions(parent)`, `TaskDetailKit` with
+    `EditorKit.fields(parent)` (the slot the field rows render into), `FieldRowKit.textBox(parent)` (appends the
+    field's box frame (`ui-input`), places its vim box through `EditorBoxes.place` and returns the frame, as
+    Practice's `BoxKit.textBox`; a second call throws `textBox placed twice`), `RowKit.cursorActions(parent)`, `TaskDetailKit` with
     `editButton`, `pauseButton`, `runNowButton`, `removeButton` (each `(parent) => HTMLButtonElement`, the label and
-    key anchor the app's), `PickerRowKit.trailing()`, `ConfirmBodyKit.keepButton/confirmButton`
+    key anchor the app's), `PickerRowKit.trailing()`, `ConfirmBodyKit extends SchedulingKit, ConfirmButtonsKit` (it gets `keepButton` and
+    `confirmButton` from `ConfirmButtonsKit`, not by hand). Import `BaseKit`, `ConfirmButtonsKit`, `DialogFrameInput`,
+    `DialogFramePart` and `KitRowOptions` from `../../../shared/page/layout-host/kit`, as `practice/layouts/layout.d.ts`
+    does
 - `default` layout `layout.js` (`// @ts-check` against `layout.d.ts`) defining every part, and its `layout.css`
 
 Decisions:
 - **Layout of the mode** (the user's pick, round 6): the task list is the mode's side bar, as Settings' sections and
   Practice's list are; the sheet holds the selected task's details and, under them, its history. The editor opens in
-  the sheet in place of the details and history, as Backlog's editor opens in its detail pane. Reason: the side bar
+  the sheet in place of the details and history (a sheet swap no sibling mode models; this task owns it). Reason: the side bar
   is where every mode keeps its list, and Alt+h / Alt+l and `focusSideBar` / `focusMain` then work with no new code.
 - **Mode**: `api.modes.add({ id: 'main', title: 'Schedules', icon: 'calendar', … })`. `setContext` gives
   `{ title: 'Schedules', detail: <selected task's name> }`, null with no selection. `scheduling.showMode` shows the
-  mode, or toggles its side bar while it shows (Backlog's `showMode`).
+  mode, or toggles its side bar while it shows (Practice's `showMode`). The mode passes `sideBarHidden` and
+  `sideBarOpenedOver` to `api.modes.add`, mirroring Practice, so focus returns correctly when the side bar hides.
 - **State source**: the page reads `schedulingStateSlot` and redraws on each change. A missing value draws as
   `{ tasks: [], fileError: null, fires: true, loginStart: null, runRows: [], unviewedRows: [] }`. A change keeps the
   selection by task id; a selected task that leaves selects the row at the same index, else the "+ New task" row. A
@@ -182,7 +198,8 @@ Decisions:
   `remove`, `historyDown`, `historyUp`, `historyTop`, `historyBottom`, `openRun`, `lineDown`, `lineUp`,
   `halfPageDown`, `halfPageUp`, `fieldDown`, `fieldUp`, `editField`, `nextField`, `previousField`, `save`,
   `cancelEdit`, `leaveBox`, `confirmYes`, `confirmNo`, `...LIST_PICKER_COMMANDS`, and the clicks `selectTask` and
-  `openRunRow` (each `arg: 'string'`, no key). Labels are short verbs in Backlog's style.
+  `openRunRow` (each `arg: 'string'`, no key). Labels are short verbs in Practice's style (`'next row'`, `'open the problem'`). Each command has a `group`, as
+  every sibling's do (`'list'`, `'box'`, `'modes'`).
 - **Keys** (`src/plugins/keymap.ts`, a `// ── Schedules ──` banner section; `docs/keymap.md` § Adding a bind):
   - `<Leader>kt` scope `any` → `scheduling.showMode` (a mode goes under `k`; `t` for tasks; `kt` is free).
   - `<C-n>` → `chat.startNewSession` in `scheduling.list`, `scheduling.detail`, `scheduling.editor` (the per-view

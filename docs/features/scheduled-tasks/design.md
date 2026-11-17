@@ -270,7 +270,7 @@ started this way reads its pending table and runs record at start. `LoginStart` 
   - The login-item service (`createAgentServiceLoginStart`): Electron's `setLoginItemSettings` with type
     `agentService`, over a plist inside the bundle.
   - A LaunchAgent file (`createLaunchAgentLoginStart`): `~/Library/LaunchAgents/wigley-ai-gui.session-host.plist`,
-    running the app with the flag, rewritten on each start when it differs, deleted (`/bin/rm -f`) when no task is
+    running the app with the flag, rewritten on each start when it differs, deleted (`files.deleteFile`) when no task is
     active. The adapter runs no `launchctl`: launchd reads the file at the next login.
   - Neither adapter imports `electron`: `main.ts` hands the login-item service Electron's `app` as a structural
     `LoginItems` type.

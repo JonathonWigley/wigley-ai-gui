@@ -165,6 +165,8 @@ chat's caller guard must tell the main agent's calls from a subagent's. Two rule
 - `prepareLaunch: (request, env) => chat.prepareLaunch(request, env)`.
 - `projects`: the same list the channel's `projects()` handler returns, from the same function, so the page and a
   main part read one list. The scheduling main part (17) reads it for project names and the editor's picker.
+- `restored` is the promise the `restored()` export already returns (`start.ts` `restored: () => restored`); chain on
+  it.
 - `adopt` builds `restored.then(() => chat.adopt(run))`, gives that promise to `sessions.holdConnects`, and returns
   it. Waiting for chat's own restore means that a saved record of the same host session id is restored first, so the
   adopt then resolves to that restored row and does not open a second row. It also means that `save()` runs after
@@ -259,7 +261,8 @@ as they are and must pass after the `restoreRecord` split. Add no rows to them.
 In `start.test.ts`, in `describe('chat main part')`:
 
 - `exports_Adopt_HoldsRelayConnectsAfterTheRestore` — the hold gets the export's promise, and the adopt runs after
-  the restore settles.
+  the restore settles. It can reuse `startChatPart({ list, data: await dataWithSavedRow() })` and assert through
+  `chat.exports.restored()`, as `exports_Restored_SettlesWithTheRestore` does.
 - `exports_PrepareLaunch_PassesTheEnvToTheHarness`.
 - `exports_Projects_EqualsTheChannelsList` — with one configured project, the export and the channel's `projects()`
   return equal lists; after a settings change that adds a project, both return the new list. Break: an export that
