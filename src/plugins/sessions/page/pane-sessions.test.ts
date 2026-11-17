@@ -480,7 +480,7 @@ describe('pane-sessions', () => {
     focusOffset,
   });
   const n1 = { name: 'n1' };
-  const held = ends(n1, 0, 4);
+  const pressSelection = ends(n1, 0, 4);
 
   // Breaks: a release reading any selection as the press's own, or one
   // comparing the ends by object rather than by place.
@@ -504,19 +504,19 @@ describe('pane-sessions', () => {
     },
     {
       case: 'the same selection',
-      atPress: held,
-      atRelease: { ...held },
+      atPress: pressSelection,
+      atRelease: { ...pressSelection },
       isPress: false,
     },
     {
       case: 'a different selection',
-      atPress: held,
+      atPress: pressSelection,
       atRelease: ends(n1, 0, 6),
       isPress: true,
     },
     {
       case: 'the selection gone',
-      atPress: held,
+      atPress: pressSelection,
       atRelease: null,
       isPress: false,
     },
