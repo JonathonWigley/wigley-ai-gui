@@ -9,8 +9,10 @@ import {
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type SessionsPageExports,
+  type SidebarSection,
   sessionsPageKey,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   type EditorChoices,
   type ScheduledTaskView,
@@ -61,8 +63,8 @@ interface FakeBox {
 }
 
 // The Schedules page on the harness, drawing its layout for real, with `state` published to `scheduling.state`.
-// `saveTask` answers with `save`, else `bbbb2222`; `calls` holds each invoke, `boxes` each box made in order, and
-// `activated` each row sessions' `activate` got.
+// `saveTask` answers with `save`, else `bbbb2222`; `calls` holds each invoke, `boxes` each box made in order,
+// `activated` each row sessions' `activate` got, and `sections` each section sessions' `addSection` got.
 function startSchedulesPage(
   state: SchedulingState | undefined,
   save: () => Promise<string> = async () => 'bbbb2222',
@@ -71,6 +73,7 @@ function startSchedulesPage(
   const calls: { method: string; args: unknown[] }[] = [];
   const boxes: FakeBox[] = [];
   const activated: string[] = [];
+  const sections: SidebarSection[] = [];
   const editor: EditorHost = {
     ...countingEditors().host,
     create(_parent, doc, events) {
@@ -110,6 +113,11 @@ function startSchedulesPage(
             activate(sessionId: string) {
               activated.push(sessionId);
             },
+            addSection(section: SidebarSection) {
+              sections.push(section);
+              return { dispose: () => undefined };
+            },
+            setActivity: () => undefined,
           }) as unknown as SessionsPageExports,
       ),
     ],
@@ -128,7 +136,7 @@ function startSchedulesPage(
   const run = (
     command: Exclude<keyof typeof commands, 'selectTask' | 'openRunRow'>,
   ) => commands[command]({ arg: undefined });
-  return { harness, calls, boxes, activated, run };
+  return { harness, calls, boxes, activated, sections, run };
 }
 
 async function settle() {
@@ -239,6 +247,17 @@ describe('scheduling page part', () => {
     page.run('openRun');
 
     expect(page.activated).toEqual(['s1']);
+  });
+
+  it('the slot runRows reach the Scheduled runs section sessions gets', () => {
+    const page = startSchedulesPage(schedulingState({ runRows: ['s1'] }));
+
+    const [section] = page.sections;
+    expect(page.sections).toHaveLength(1);
+    expect(section!.label).toBe('Scheduled runs');
+    expect(
+      ['s1', 's2'].map((id) => section!.claims(sessionRow(id))),
+    ).toEqual([true, false]);
   });
 
   it('mayStop refuses while the draft changed', async () => {

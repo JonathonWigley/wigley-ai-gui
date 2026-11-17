@@ -6,12 +6,17 @@ import {
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
 import { sessionsPageKey } from '../../sessions/contract';
-import { type SchedulingChannel, schedulingStateSlot } from '../contract';
+import {
+  type SchedulingChannel,
+  type SchedulingState,
+  schedulingStateSlot,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { SchedulingLayout } from '../layouts/layout';
 import { schedulingManifest } from '../manifest';
 import { readSchedulingLayout } from './layout/read-scheduling-layout';
+import { startRunRows } from './run-rows';
 import { createSchedulesView } from './schedules-view';
 
 type SchedulingApi = PageApi<typeof schedulingManifest, SchedulingChannel>;
@@ -22,7 +27,8 @@ const SESSIONS_MODE = 'sessions.sessions';
 // editor in their place, in the sheet, drawn with the layout the `layout` setting names. `showMode` shows the mode,
 // or toggles its side bar while it shows. The page draws each value of `scheduling.state` main publishes, and keeps no
 // place: a page load selects the first task with the editor closed. A history row opens its run's row through
-// sessions' `activate`. The page may not stop while the editor's draft changed.
+// sessions' `activate`. The page may not stop while the editor's draft changed. In Sessions mode's side bar, the
+// Scheduled runs section claims the open run rows and marks the unviewed ones done, while the slot holds a value.
 export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
   manifest: schedulingManifest,
   start(api: SchedulingApi) {
@@ -87,9 +93,25 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
       setLayouts: (shown) => view.setLayouts(shown),
     });
 
+    let runRows: ReturnType<typeof startRunRows> | null = null;
+    const runRowsChanged = (value: SchedulingState | undefined) => {
+      if (value === undefined) {
+        runRows?.dispose();
+        runRows = null;
+      } else if (runRows === null) {
+        runRows = startRunRows({ sessions, log: services.log }, value);
+      } else {
+        runRows.changed(value);
+      }
+    };
+
     const state = api.state.read(schedulingStateSlot);
-    const stateListener = state.on((value) => view.stateChanged(value));
+    const stateListener = state.on((value) => {
+      view.stateChanged(value);
+      runRowsChanged(value);
+    });
     view.stateChanged(state.get());
+    runRowsChanged(state.get());
 
     // The core logs the side bar's hiding and showing.
     const showMode = () => {
@@ -110,6 +132,7 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
       mayStop: () => view.mayStop(),
       dispose() {
         stateListener.dispose();
+        runRows?.dispose();
         view.dispose();
       },
     };
