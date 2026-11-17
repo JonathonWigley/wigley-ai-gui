@@ -5,7 +5,7 @@ import type {
   AgentFormSessions,
   PresentedAgentForm,
 } from '../../contracts/agent-forms';
-import type { Alerts } from '../../contracts/alerts';
+import type { AlertNoun, Alerts } from '../../contracts/alerts';
 import type { PluginLog } from '../../contracts/log';
 import type { MainChannel } from '../../contracts/plugin';
 
@@ -33,24 +33,27 @@ export interface AgentFormChannelPresenter<
 // that row's close while the form is open, cancels the form when the close key
 // closes the session at once, and releases the row when the form closes.
 // Registers its channel handlers and close guard once, which the plugin's stop
-// removes. `source` names only the alert open count; `noun` names one form in
-// the refusal, which a close and a switch-off read alike.
+// removes. `source` names the alert open count and `alertNoun` what it counts;
+// `noun` names one form in the refusal, which a close and a switch-off read
+// alike, and never reaches the alert.
 export function createAgentFormChannelPresenter<Form, Body>(deps: {
   channel: Pick<MainChannel<AgentFormChannel<Form, Body>>, 'handle' | 'send'>;
   alerts: Alerts;
   source: string;
+  alertNoun: AlertNoun;
   noun: string;
   markText(label: string): string;
   markAction: string;
   log: PluginLog;
   sessions: AgentFormSessions;
 }): AgentFormChannelPresenter<Form, Body> {
-  const { channel, alerts, source, noun, log, sessions } = deps;
+  const { channel, alerts, source, alertNoun, noun, log, sessions } = deps;
   const open = new Map<string, OpenForm<Form, Body>>();
   const updateOpenCount = () =>
     alerts.setOpenCount(
       source,
       [...open.values()].filter((entry) => !entry.quiet).length,
+      alertNoun,
     );
   const openFormsOf = (sessionId: string) =>
     [...open.values()].filter((entry) => entry.form.sessionId === sessionId);

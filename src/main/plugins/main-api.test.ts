@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Alerts } from '../../contracts/alerts';
+import type { AlertNoun, Alerts } from '../../contracts/alerts';
 import type { Timers } from '../../contracts/ambient';
 import type { Disposable } from '../../contracts/disposable';
 import type { Files } from '../../contracts/files';
@@ -155,11 +155,20 @@ function fakeTimers() {
   return { timers, cleared, fireAll };
 }
 
+const F: AlertNoun = {
+  singular: 'open agent form',
+  plural: 'open agent forms',
+};
+const P: AlertNoun = {
+  singular: 'open feature primer',
+  plural: 'open feature primers',
+};
+
 // Alerts recording each `setOpenCount` call.
 function fakeAlerts() {
-  const counts: [string, number][] = [];
+  const counts: [string, number, AlertNoun][] = [];
   const alerts: Alerts = {
-    setOpenCount: (source, count) => counts.push([source, count]),
+    setOpenCount: (source, count, noun) => counts.push([source, count, noun]),
   };
   return { alerts, counts };
 }
@@ -334,7 +343,7 @@ const AFTER_DISPOSE_ROWS: {
       const { api, registrations } = apiWithServices({ alerts });
       registrations.dispose();
 
-      api.services.alerts.setOpenCount('p', 2);
+      api.services.alerts.setOpenCount('p', 2, F);
 
       expect(counts).toEqual([]);
     },
@@ -617,13 +626,13 @@ describe('createMainApi recording', () => {
   it('zeroes the open counts the plugin set when its registrations are disposed', () => {
     const { alerts, counts } = fakeAlerts();
     const { api, registrations } = apiWithServices({ alerts });
-    api.services.alerts.setOpenCount('p', 2);
-    api.services.alerts.setOpenCount('p.other', 0);
+    api.services.alerts.setOpenCount('p', 2, F);
+    api.services.alerts.setOpenCount('p.other', 0, P);
     counts.length = 0;
 
     registrations.dispose();
 
-    expect(counts).toEqual([['p', 0]]);
+    expect(counts).toEqual([['p', 0, F]]);
   });
 
   it("clears the plugin's pending timer when its registrations are disposed", () => {

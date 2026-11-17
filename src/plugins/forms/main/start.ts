@@ -84,6 +84,7 @@ function createForms(
     channel: api.channel,
     alerts: services.alerts,
     source: 'forms',
+    alertNoun: { singular: 'open agent form', plural: 'open agent forms' },
     noun: roundType.noun,
     markText: (label) => `Round from ${label}`,
     markAction: 'answer',

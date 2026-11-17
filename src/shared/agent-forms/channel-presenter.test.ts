@@ -7,7 +7,7 @@ import type {
   AgentFormSessions,
   PresentedAgentForm,
 } from '../../contracts/agent-forms';
-import type { Alerts } from '../../contracts/alerts';
+import type { AlertNoun, Alerts } from '../../contracts/alerts';
 import type { MainChannel } from '../../contracts/plugin';
 import { createAgentFormChannelPresenter } from './channel-presenter';
 import type { TestBody, TestForm } from './test-form-type';
@@ -24,6 +24,11 @@ const FORM: PresentedAgentForm<TestForm, TestBody> = {
 };
 
 const BODY: TestBody = { note: 'looks right' };
+
+const F: AlertNoun = {
+  singular: 'open agent form',
+  plural: 'open agent forms',
+};
 
 type Invoke = TestChannel['invoke'];
 
@@ -52,9 +57,9 @@ function fakeChannel(calls: string[]) {
 }
 
 function fakeAlerts() {
-  const counts: [string, number][] = [];
+  const counts: [string, number, AlertNoun][] = [];
   const alerts: Alerts = {
-    setOpenCount: (source, count) => counts.push([source, count]),
+    setOpenCount: (source, count, noun) => counts.push([source, count, noun]),
   };
   return { alerts, counts };
 }
@@ -116,6 +121,7 @@ function setUp(labels: ReadonlyMap<string, string> = new Map()) {
     channel: page.channel,
     alerts: attention.alerts,
     source: 'forms',
+    alertNoun: F,
     noun: 'round',
     markText: (label) => `Round from ${label}`,
     markAction: 'answer',
@@ -151,7 +157,7 @@ describe('createAgentFormChannelPresenter', () => {
 
     expect(calls).toEqual(['mark app-1', 'send formShown']);
     expect(page.sent).toEqual([['formShown', FORM]]);
-    expect(attention.counts).toEqual([['forms', 1]]);
+    expect(attention.counts).toEqual([['forms', 1, F]]);
     expect(logged).toEqual(['form shown: wigley-ai-gui · Pick a theme']);
   });
 
@@ -179,7 +185,7 @@ describe('createAgentFormChannelPresenter', () => {
     finish('form-q', { kind: 'submitted', body: BODY });
     presenter.quiet.close('form-q2');
 
-    expect(attention.counts).toEqual([['forms', 1]]);
+    expect(attention.counts).toEqual([['forms', 1, F]]);
     expect(page.sent.at(-1)).toEqual([
       'formClosed',
       { formId: 'form-q2', byFinish: false },
@@ -361,8 +367,8 @@ describe('createAgentFormChannelPresenter', () => {
     expect(drafts).toEqual([]);
     expect(openForms()).toEqual([]);
     expect(attention.counts).toEqual([
-      ['forms', 1],
-      ['forms', 0],
+      ['forms', 1, F],
+      ['forms', 0, F],
     ]);
     expect(page.sent.at(-1)).toEqual([
       'formClosed',
@@ -385,7 +391,7 @@ describe('createAgentFormChannelPresenter', () => {
     );
     expect(openForms()).toEqual([FORM]);
     expect(page.sent).toEqual([['formShown', FORM]]);
-    expect(attention.counts).toEqual([['forms', 1]]);
+    expect(attention.counts).toEqual([['forms', 1, F]]);
     expect(refusal('app-1')).not.toBeNull();
   });
 
@@ -419,8 +425,8 @@ describe('createAgentFormChannelPresenter', () => {
       ['formClosed', { formId: 'form-1', byFinish: false }],
     ]);
     expect(attention.counts).toEqual([
-      ['forms', 1],
-      ['forms', 0],
+      ['forms', 1, F],
+      ['forms', 0, F],
     ]);
     expect(openForms()).toEqual([]);
   });

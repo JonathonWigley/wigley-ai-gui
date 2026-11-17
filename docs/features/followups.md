@@ -360,9 +360,6 @@ What Windows support and installers need.
   atomic write retries `rename` on Windows `EPERM`/`EBUSY`; today a held file makes a draft show unsaved and
   `returned` silently stay false. The store goes async with an in-memory index refreshed by `files.watch`, and the
   `~/.agents/wigley-forms/rounds` location becomes one named constant beside `SavedRound`.
-- **Per-source alert descriptions** — *agent-ready*: `Alerts.setOpenCount(source, count)` carries no per-source
-  description: the core sums the counts, but the Windows overlay names every source "open agent forms"
-  (`windows-alerts.ts`), so chat waiting on the user would read as a form.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
   `packagerConfig`, no makers).
 - **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`

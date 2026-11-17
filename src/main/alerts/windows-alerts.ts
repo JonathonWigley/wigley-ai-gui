@@ -1,6 +1,6 @@
 import { type BrowserWindow, type NativeImage, nativeImage } from 'electron';
 import type { Alerts } from '../../contracts/alerts';
-import { createOpenCounts } from './open-counts';
+import { createOpenCounts, describeOpenCounts } from './open-counts';
 
 const OVERLAY_SIZE = 16;
 // Catppuccin Mocha red in the BGRA byte order createFromBitmap reads.
@@ -30,19 +30,13 @@ export function createWindowsAlerts(window: BrowserWindow): Alerts {
   const dot = overlayDot();
   const openCounts = createOpenCounts();
   return {
-    setOpenCount(source, count) {
-      const total = openCounts.set(source, count);
+    setOpenCount(source, count, noun) {
+      const { total, parts } = openCounts.set(source, count, noun);
       // Electron throws on a call to a destroyed window, as at quit.
       if (window.isDestroyed()) {
         return;
       }
-      const description =
-        total === 0
-          ? ''
-          : total === 1
-            ? '1 open agent form'
-            : `${total} open agent forms`;
-      window.setOverlayIcon(total > 0 ? dot : null, description);
+      window.setOverlayIcon(total > 0 ? dot : null, describeOpenCounts(parts));
     },
   };
 }

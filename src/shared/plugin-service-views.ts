@@ -1,4 +1,4 @@
-import type { Alerts } from '../contracts/alerts';
+import type { AlertNoun, Alerts } from '../contracts/alerts';
 import type { Registrations } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
@@ -46,30 +46,30 @@ export function abortableProcesses(
   };
 }
 
-// One plugin's view of `alerts`: `registrations` disposing it sets to 0 each
-// source whose last count from this plugin is not 0, and a count set after that
-// is dropped.
+// One plugin's view of `alerts`: `registrations` disposing it sets to 0, with
+// its last noun, each source whose last count from this plugin is not 0, and a
+// count set after that is dropped.
 export function trackedAlerts(
   alerts: Alerts,
   registrations: Registrations,
 ): Alerts {
-  const lastCounts = new Map<string, number>();
+  const lastCounts = new Map<string, { count: number; noun: AlertNoun }>();
   let isDisposed = false;
   registrations.track({
     dispose() {
       isDisposed = true;
-      for (const [source, count] of lastCounts) {
+      for (const [source, { count, noun }] of lastCounts) {
         if (count !== 0) {
-          alerts.setOpenCount(source, 0);
+          alerts.setOpenCount(source, 0, noun);
         }
       }
     },
   });
   return {
-    setOpenCount(source, count) {
+    setOpenCount(source, count, noun) {
       if (!isDisposed) {
-        lastCounts.set(source, count);
-        alerts.setOpenCount(source, count);
+        lastCounts.set(source, { count, noun });
+        alerts.setOpenCount(source, count, noun);
       }
     },
   };

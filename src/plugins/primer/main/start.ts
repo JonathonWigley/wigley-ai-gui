@@ -92,6 +92,10 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       channel: api.channel,
       alerts: services.alerts,
       source: 'primer',
+      alertNoun: {
+        singular: 'open feature primer',
+        plural: 'open feature primers',
+      },
       noun: primerType.noun,
       markText: (label) => `Primer from ${label}`,
       markAction: 'answer',

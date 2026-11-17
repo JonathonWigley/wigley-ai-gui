@@ -146,7 +146,7 @@ record (Wave 0) because they read it:
 
 - [ ] Per-platform program lookup and spawning [ready]
 - [ ] Round store through Files [ready]
-- [ ] Per-source alert descriptions [ready]
+- [x] Per-source alert descriptions [ready]
 - [x] Per-platform chord matching [ready]
 
 ## Lane L: layouts everywhere

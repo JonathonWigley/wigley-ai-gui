@@ -115,6 +115,10 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
       channel: api.channel,
       alerts: services.alerts,
       source: 'audio-picker',
+      alertNoun: {
+        singular: 'open audio picker',
+        plural: 'open audio pickers',
+      },
       noun: type.noun,
       markText: (label) => `Audio picker from ${label}`,
       markAction: 'answer',
