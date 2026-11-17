@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import type {
+  AgentFormListener,
+  AgentFormPresenter,
+} from '../../../contracts/agent-forms';
 import type { MainPart } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
@@ -18,7 +22,12 @@ import { sessionsMainKey } from '../../sessions/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
 import { SAVED_ROUNDS_FOLDER } from '../contract';
 import type { formsManifest } from '../manifest';
-import { addDriveActions, formsMainPart, registerLayoutsAfter } from './start';
+import {
+  addDriveActions,
+  formsMainPart,
+  registerLayoutsAfter,
+  withShownWaits,
+} from './start';
 
 describe('forms drive actions', () => {
   it('openRound connects a session with the fixture defaults', async () => {
@@ -413,5 +422,83 @@ describe('forms layouts registration', () => {
 
     expect(subject.logLines).toEqual([expect.stringContaining(reason)]);
     await expect(subject.layouts.dispose()).resolves.toBeUndefined();
+  });
+});
+
+// A presenter that records the ids of the forms it shows and closes.
+function recordingPresenter() {
+  const shownIds: string[] = [];
+  const closedIds: string[] = [];
+  const presenter: AgentFormPresenter<string, string> = {
+    show: (form) => shownIds.push(form.formId),
+    close: (formId) => closedIds.push(formId),
+  };
+  return { presenter, shownIds, closedIds };
+}
+
+const NO_LISTENER: AgentFormListener<string> = {
+  draft: () => Promise.resolve(),
+  finish: () => undefined,
+  cancel: () => undefined,
+};
+
+function formOf(sessionId: string, formId: string) {
+  return { formId, sessionId, label: 'label', form: 'form', draft: null };
+}
+
+describe('withShownWaits', () => {
+  it.each([
+    {
+      case: 'a form of the session shows',
+      shows: 'a',
+      aborts: false,
+      settles: true,
+    },
+    {
+      case: 'only another session shows',
+      shows: 'b',
+      aborts: false,
+      settles: false,
+    },
+    {
+      case: 'the wait aborted before the show',
+      shows: 'a',
+      aborts: true,
+      settles: false,
+    },
+  ])(
+    'shownSettles_Is_$settles when $case',
+    async ({ shows, aborts, settles }) => {
+      const waits = withShownWaits(recordingPresenter().presenter);
+      const abort = new AbortController();
+      let didSettle = false;
+      void waits.shown('a', abort.signal).then(() => {
+        didSettle = true;
+      });
+
+      if (aborts) {
+        abort.abort();
+      }
+      waits.presenter.show(formOf(shows, 'f1'), NO_LISTENER);
+      await flush();
+
+      expect(didSettle).toBe(settles);
+    },
+  );
+
+  it('show_ForwardsToThePresenter', () => {
+    const { presenter, shownIds } = recordingPresenter();
+
+    withShownWaits(presenter).presenter.show(formOf('a', 'f1'), NO_LISTENER);
+
+    expect(shownIds).toEqual(['f1']);
+  });
+
+  it('close_ForwardsToThePresenter', () => {
+    const { presenter, closedIds } = recordingPresenter();
+
+    withShownWaits(presenter).presenter.close('f1');
+
+    expect(closedIds).toEqual(['f1']);
   });
 });

@@ -71,7 +71,7 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // Both services and the preview read `layoutNames` for the layouts a round may
 // name. `flushed` settles once every saved-round write queued before it has.
 // `shown` settles once the agents' service shows a round of the session, by
-// its app id, after the call.
+// its app id, after the call, until `signal` aborts.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -82,7 +82,7 @@ function createForms(
   preview: { open(): void } & Disposable;
   presenter: AgentFormChannelPresenter<Round, FormBody>;
   flushed(): Promise<void>;
-  shown(sessionId: string): Promise<void>;
+  shown(sessionId: string, signal: AbortSignal): Promise<void>;
 } {
   const { services } = api;
   const store = createFolderFormStore({
@@ -149,12 +149,13 @@ function createForms(
 }
 
 // `presenter` with `shown`, which settles once `presenter` shows a form of the
-// session, by its app id, after the call.
-function withShownWaits<Form, Body>(
+// session, by its app id, after the call. Aborting `signal` drops the wait: it
+// never settles and leaves nothing held.
+export function withShownWaits<Form, Body>(
   presenter: AgentFormPresenter<Form, Body>,
 ): {
   presenter: AgentFormPresenter<Form, Body>;
-  shown(sessionId: string): Promise<void>;
+  shown(sessionId: string, signal: AbortSignal): Promise<void>;
 } {
   const waiters = new Map<string, (() => void)[]>();
   return {
@@ -168,9 +169,23 @@ function withShownWaits<Form, Body>(
       },
       close: (formId) => presenter.close(formId),
     },
-    shown: (sessionId) =>
+    shown: (sessionId, signal) =>
       new Promise((resolve) => {
         waiters.set(sessionId, [...(waiters.get(sessionId) ?? []), resolve]);
+        signal.addEventListener(
+          'abort',
+          () => {
+            const rest = (waiters.get(sessionId) ?? []).filter(
+              (waiter) => waiter !== resolve,
+            );
+            if (rest.length === 0) {
+              waiters.delete(sessionId);
+            } else {
+              waiters.set(sessionId, rest);
+            }
+          },
+          { once: true },
+        );
       }),
   };
 }

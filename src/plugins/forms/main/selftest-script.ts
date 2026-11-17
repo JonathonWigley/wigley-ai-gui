@@ -1335,7 +1335,8 @@ function payloadProblems(payload: AnswersPayload, chips: ChipPaths): string[] {
 // fixture round in the first, a second round in the second, which the steps
 // never answer, and the layouts round in the third; they show in the order
 // asked, so their rows come in that order and the first is selected. Once
-// `shown` has settled for all three, it opens a Codex session with no project
+// `shown` has settled for all three, or an ask has rejected, which rejects the
+// result, it opens a Codex session with no project
 // in the background, whose row follows theirs though it never shows a round,
 // and asks the unknown-layout round there through a relay joining it, which
 // refuses it. The script checks the answers the first call returns and the
@@ -1347,7 +1348,7 @@ export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect' | 'open'>,
   userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
   os: OsName,
-  shown: (sessionId: string) => Promise<void>,
+  shown: (sessionId: string, signal: AbortSignal) => Promise<void>,
 ): SelfTestScript {
   const chips = chipPaths(os);
   let started: { end(): void }[] = [];
@@ -1388,14 +1389,32 @@ export function formsSelfTestScript(
         );
         const asked = [first, second, layouts];
         started = [...asked];
-        const roundsShown = Promise.all(
-          asked.map((session) => shown(session.session.id)),
-        );
         const fixture = askFixtureRound(first, fixtureRound(run));
-        // Nothing checks the second and layouts calls' end: a later run ends
-        // their sessions.
-        askFixtureRound(second, secondRound(run)).catch(() => undefined);
-        askFixtureRound(layouts, layoutsRound(run)).catch(() => undefined);
+        const secondAsk = askFixtureRound(second, secondRound(run));
+        const layoutsAsk = askFixtureRound(layouts, layoutsRound(run));
+        // A session's wait ends on its round showing or its ask rejecting, so
+        // a refused ask rejects the result; the waits are dropped once all
+        // end.
+        const waits = new AbortController();
+        const showsOrRejects = (
+          session: { session: { id: string } },
+          ask: Promise<unknown>,
+        ) =>
+          Promise.race([
+            shown(session.session.id, waits.signal),
+            ask.then(() => new Promise<never>(() => {})),
+          ]);
+        const roundsShown = Promise.all([
+          showsOrRejects(first, fixture),
+          showsOrRejects(second, secondAsk),
+          showsOrRejects(layouts, layoutsAsk),
+        ]);
+        const dropWaits = () => waits.abort();
+        roundsShown.then(dropWaits, dropWaits);
+        // Nothing else checks the second and layouts calls' end: a later run
+        // ends their sessions.
+        secondAsk.catch(() => undefined);
+        layoutsAsk.catch(() => undefined);
         const unknownLayout = roundsShown.then(() => {
           if (thisOpen !== latestOpen) {
             return new Promise<never>(() => {});
