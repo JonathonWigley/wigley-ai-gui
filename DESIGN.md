@@ -548,6 +548,17 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   too narrow and whole in its tooltip), and the plugin's state, `true` or `false`, which says whether a version of the
   plugin runs. The problem shows under the description as a `status-error` line, wrapped whole. A plugin that failed its
   first load has a row labelled with its id and no description. A file that fails its check shows an error Card at the section's top.
+- **Schedules** (`docs/features/scheduled-tasks/design.md`): in Schedules mode the task list is the side bar, `row-list`
+  rows: a task's name in `fg`, its schedule and next run under it in `fg-secondary`, `Paused` as a neutral Tag; the
+  "+ New task" row first, its label in `fg-link`. The cursor row shows its keys' prompts at its end. The details pane is
+  one sheet: notices as one-line Cards in their tone, the task's name as a heading, its fields as label (`fg-secondary`)
+  and value (`fg`) pairs, the prompt in `font-mono` wrapped, the Edit, Pause or Resume, Run now and Remove buttons in
+  one row (Remove `danger`), then the `History` SectionHeader over `row-list` rows: the time in tabular numerals, the
+  outcome in `status-success` for Finished, `status-warning` for Skipped, `status-error` for Failed and
+  `status-running` for Running, a row whose run row is open also in `fg-link`; no runs reads `No runs yet.` in
+  `fg-tertiary`. The editor takes the details' place and follows Settings' rows: each a label and its value or box in an
+  InputFrame, the hint under it in `fg-tertiary`, the problem in `status-error`, the environment note last in
+  `fg-tertiary`.
 - **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Spike's, Small's, Medium's or
   Large's own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter
   (X, S, M or L) in the plugin token `--wg-workflow-spike-badge` (default `fg-secondary`), `--wg-workflow-small-badge` (`status-info`), `--wg-workflow-medium-badge` (`accent`)
