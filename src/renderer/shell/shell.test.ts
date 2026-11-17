@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../contracts/ambient';
+import type { Disposable } from '../../contracts/disposable';
 import { PANE_RESIZE_COMMANDS } from '../../contracts/panes';
 import type { KeyHints, ShellLayout } from '../../contracts/plugin';
 import type { UiState } from '../../contracts/ui-state';
@@ -20,6 +21,7 @@ import {
   nextInTrack,
   type Placement,
   placementOf,
+  type Shell,
 } from './shell';
 import { defaultShellLayout } from './shell-layout';
 
@@ -363,6 +365,163 @@ describe('mountShell', () => {
     expect(swapped).toEqual(mine);
     expect(chromeLayouts(root)).toEqual(mine);
   });
+
+  // The measured default layout, marking its main element
+  // `data-mounted-by="<name>"` and counting its mounts.
+  function countedLayout(name: string): ShellLayout & { mounts: number } {
+    const measured = measuredLayout(DEFAULT_EDGES);
+    const layout: ShellLayout & { mounts: number } = {
+      mounts: 0,
+      mount(root: HTMLElement) {
+        layout.mounts += 1;
+        const areas = measured.mount(root);
+        (areas.main as HTMLElement).dataset.mountedBy = name;
+        return areas;
+      },
+    };
+    return layout;
+  }
+
+  interface SwapLayouts {
+    A: ShellLayout & { mounts: number };
+    B: ShellLayout;
+    throws: ShellLayout;
+    missesStatusBar: ShellLayout;
+  }
+
+  function swapLayouts(): SwapLayouts {
+    return {
+      A: countedLayout('A'),
+      B: countedLayout('B'),
+      throws: {
+        mount() {
+          throw new Error('mount failed');
+        },
+      },
+      missesStatusBar: {
+        mount(root) {
+          const areas: Partial<ReturnType<ShellLayout['mount']>> =
+            measuredLayout(DEFAULT_EDGES).mount(root);
+          delete areas.statusBar;
+          return areas as ReturnType<ShellLayout['mount']>;
+        },
+      },
+    };
+  }
+
+  // The message `swap` threw, or undefined when it threw nothing.
+  function thrownBy(swap: () => unknown): string | undefined {
+    try {
+      swap();
+      return undefined;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  }
+
+  // Breaks when a failed swap leaves the shell empty or on the failed layout,
+  // files a contribution in the wrong track, drops the handles or the chrome
+  // marks, or counts as a swap so the earlier handle no longer restores; or
+  // when a stale handle restores over a later swap.
+  it.each([
+    {
+      row: 'mount throws',
+      steps: (shell: Shell, layouts: SwapLayouts) => {
+        const a = shell.setLayout(layouts.A);
+        const thrown = thrownBy(() => shell.setLayout(layouts.throws));
+        return { live: a, thrown };
+      },
+      thrown: 'mount failed',
+      mountedBy: 'A',
+      mountsOfA: 2,
+    },
+    {
+      row: 'layout misses an area',
+      steps: (shell: Shell, layouts: SwapLayouts) => {
+        const a = shell.setLayout(layouts.A);
+        const thrown = thrownBy(() => shell.setLayout(layouts.missesStatusBar));
+        return { live: a, thrown };
+      },
+      thrown: 'Shell layout returned no element for statusBar',
+      mountedBy: 'A',
+      mountsOfA: 2,
+    },
+    {
+      row: 'second swap before the first restore',
+      steps: (shell: Shell, layouts: SwapLayouts) => {
+        const a = shell.setLayout(layouts.A);
+        const b = shell.setLayout(layouts.B);
+        a.dispose();
+        return { live: b, thrown: undefined };
+      },
+      thrown: undefined,
+      mountedBy: 'B',
+      mountsOfA: 1,
+    },
+  ] satisfies {
+    row: string;
+    steps: (
+      shell: Shell,
+      layouts: SwapLayouts,
+    ) => { live: Disposable; thrown: string | undefined };
+    thrown: string | undefined;
+    mountedBy: string;
+    mountsOfA: number;
+  }[])(
+    'mountShell_SwapFails_KeepsTheRightLayoutMounted ($row)',
+    ({ steps, thrown, mountedBy, mountsOfA }) => {
+      installFakeDom((name, value) => vi.stubGlobal(name, value));
+      vi.stubGlobal('document', {
+        createElement: (tag: string) => new FakeElement(tag),
+        documentElement: { style: { setProperty: () => undefined } },
+      });
+      stubShellGlobals();
+      const root = new FakeElement('div');
+      const shell = mountShell(
+        asHtml(root),
+        countedLayout('initial'),
+        stateOver(new Map()),
+        NO_TIMERS,
+        recordingAnchors().keys,
+      );
+      shell.setChromeLayout('mine');
+      const mainContribution = new FakeElement('div');
+      const statusContribution = new FakeElement('div');
+      shell.areas.main.contribute(asHtml(mainContribution), { align: 'start' });
+      shell.areas.statusBar.contribute(asHtml(statusContribution), {
+        align: 'end',
+      });
+      const layouts = swapLayouts();
+      const mountedByNow = () => mainContribution.parentNode?.dataset.mountedBy;
+
+      const outcome = steps(shell, layouts);
+      const state = {
+        thrown: outcome.thrown,
+        mountedBy: mountedByNow(),
+        contributionsIn: [
+          mainContribution.parentNode?.className,
+          statusContribution.parentNode?.className,
+        ],
+        handles: [
+          root.querySelector('.shell-side-bar-handle')?.parentNode === root,
+          root.querySelector('.shell-right-bar-handle')?.parentNode === root,
+        ],
+        chrome: chromeLayouts(root),
+        mountsOfA: layouts.A.mounts,
+      };
+      outcome.live.dispose();
+
+      expect({ ...state, afterRestore: mountedByNow() }).toEqual({
+        thrown,
+        mountedBy,
+        contributionsIn: ['shell-main', 'shell-track shell-track-end'],
+        handles: [true, true],
+        chrome: Array(5).fill(['mine', 'shell']),
+        mountsOfA,
+        afterRestore: 'initial',
+      });
+    },
+  );
 
   // Gives `area` a client height of 300 and a scroll range of `range`
   // pixels, clamping its scrollTop to the range as a browser does.
