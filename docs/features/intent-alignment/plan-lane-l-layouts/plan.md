@@ -277,8 +277,8 @@ every part its contract adds.
 - [x] [Dialog frames through each opener's layout](07-dialog-frames.md) — after 03, 04
 
 ### Wave 3
-- [ ] [Fixed texts in layout slots](08-fixed-texts.md) — after 04, 07
-- [ ] [Primer column chrome and cursor prompt](09-primer-chrome.md) — after 04, 07
+- [x] [Fixed texts in layout slots](08-fixed-texts.md) — after 04, 07
+- [x] [Primer column chrome and cursor prompt](09-primer-chrome.md) — after 04, 07
 
 ### Wave 4
 - [ ] [Primer, practice and the audio picker keep their boxes](10-boxes-kept-primer-practice-audio-picker.md) — after 06, 08, 09
@@ -310,10 +310,14 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 05 · hard · 4cc9e04a1 · diff read + wave 1 compile · concerns: restyled narrowed to entries still in layouts; the leave-and-rejoin test is weaker
 - 06 · hard · 9dcfa2c14 · diff read + wave 1 compile (forms Pick fixed in ff56db41b) · concerns: keepFocusedBox Pick now needs destroyReleased (forms RoundViewDeps fixed); followups.md ~line 424 'at the text's end' stale
 - 07 · standard · 1936ca16c · diff read of all ten rows + wave 2 compile (typecheck, lint clean after 501d3d31d) · concerns: chat dialog parts take parent as a getter (frame redraw replaces the body), composer-kit tests followed; keys moved its Close button and help width into the default layout and dropped the closeHint anchor; gallery adds no redrawFrame (setLayouts rebuilds the sample); docs frameDrawer casts drawn.built; several new tests unrun (fake-DOM dataset/contains/ui-button assumptions); six row workers ran at once for a short spell (one over the limit)
+- 08 · standard · 7e3bbdbec · diff read of the six rows + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: self-test steps: backlog activate has no fixture with a started chunk (Enter is a vim key, no anchor needed); docs actions mapped to existing groups by name, cursor-on-leaf at load unchecked; notes, sessions, settings, chat use existing steps; chat .chat-picker-key CSS now matches the wrapper span, not the hint; backlog openInDocs keeps label docs; out-of-Files edits: docs-view.ts (anchor arg), sessions-view.ts (anchor arg), settings start.ts (anchor dep), chat layout.test.ts (cursorEnd fake); settings LeaderMenuView gained dispose() and row-prompt exports samePromptActions
+- 09 · hard · 6cab7ba59 · diff read + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: row pair keeps class primer-column-key; cancel prompt anchors are not disposed by view.dispose() (outside the task); keys-fake empty asserted only for strip slots
 ### Contract changes
 ### Rulings
 - 01: the ToastTone equality test lives in src/renderer/shell/toast-tone.test-d.ts, not layouts/layout.test-d.ts — the layer check bars layouts from importing src/contracts · group 01
 - 07 keys: the default dialogFrame draws help's Close button (keys.closeHelp + keyHint closeHelp); mountHelpView no longer takes close/closeHint · group 07
 - 07 chat: createDialogPart and the sign-in, reason-box, close-confirm and image-viewer part creators take parent: () => HTMLElement · group 07
+- 08 docs/sessions/settings: TreeViewDeps.anchor, mountSidebarView's anchor and SettingsViewDeps.anchor removed with their callers' arguments, per the task's unused-parameter rule · group 08
+- 08 settings: SettingsView has no dispose, so the cursor prompt and Leader prompts dispose with disposeEntries on each redraw · group 08
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 10 — Primer, practice and the audio picker keep their boxes
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 06, 08, 09
 Plan: [plan.md](plan.md)

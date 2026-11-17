@@ -1,6 +1,6 @@
 # 08 — Fixed texts in layout slots
 
-Status: in progress
+Status: done
 Type: Parallel
 Wave: 3 · Depends on: 04, 07
 Plan: [plan.md](plan.md)
@@ -423,3 +423,5 @@ One commit for the group, pathspecs: `src/plugins/backlog/` `src/plugins/docs/` 
 `src/shared/page/list-picker.ts` `src/shared/page/list-picker.test.ts`.
 
 ## Proof
+
+Commit 7e3bbdbec · proof: diff read of the six rows + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: self-test steps: backlog activate has no fixture with a started chunk (Enter is a vim key, no anchor needed); docs actions mapped to existing groups by name, cursor-on-leaf at load unchecked; notes, sessions, settings, chat use existing steps; chat .chat-picker-key CSS now matches the wrapper span, not the hint; backlog openInDocs keeps label docs; out-of-Files edits: docs-view.ts (anchor arg), sessions-view.ts (anchor arg), settings start.ts (anchor dep), chat layout.test.ts (cursorEnd fake); settings LeaderMenuView gained dispose() and row-prompt exports samePromptActions
