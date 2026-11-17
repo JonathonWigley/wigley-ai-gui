@@ -338,7 +338,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  round; the agents' service auto-answers a headless chat session's rounds with every item's
                  recommendation, outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout);
                  planned in `plan-agent-commands`, not built yet: main exports `confirm` (an Allow or Deny round in the
-                 calling session's own forms session) to agent-commands
+                 calling session's own forms session, a fresh round each call) to agent-commands
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
@@ -402,7 +402,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; planned in `plan-agent-commands`, not built yet: `agent-frame.ts` at the root holds the frame
                  line an agent's `chat.sendTo` opens its text with and the page reads back as a "from" tag, `chat.sendTo`
-                 runs in main, and main exports `isHeadless` and `isUnattended` to agent-commands; main exports `launch` (a background session with a first message) and
+                 runs in main, and main exports `isHeadless`, `isUnattended` and `senderName` (the frame's cleaned sender name) to agent-commands; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to scoped-agents, `launch` and `defaultProfile` to practice (its import session), `launch`, `defaultProfile`, `profileOf` and `restored` (settles once chat's restore of saved sessions has run) to backlog, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to scoped-agents, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
@@ -619,11 +619,13 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   and `kit.command(qualifiedId, arg)` name one by id, and a view's own click handler runs the command a key would.
   Planned in `plan-agent-commands`, not built yet: a run also carries two optional session ids beside its argument,
   `targetSessionId` (the session the command acts on) and `callerSessionId` (the session whose agent asked), on
-  `PageCommandContext` and `MainCommandContext` and across the page hop both ways; every command that resolves the
-  visible or focused session reads the target first, and a target passes a mode-shown guard. `commands.runFor(id, arg,
-  sessions)` is a reporting run, which rejects with the failure where `run` logs and resolves, a page handler's failure
-  coming back to main with the done message; `commands.list()` gives every command the process knows. A declaration's
-  `risky: true` marks a command an agent runs only on the user's Allow (`docs/features/agent-commands/design.md`).
+  `PageCommandContext` and `MainCommandContext` and across the page hop both ways. Only a command whose declaration
+  carries `targets: true` (it acts on a session without that session's UI shown or focused) reads the target, and a
+  target passes a mode-shown guard; a run that gives any other command a target is refused. Every run resolves `'ran'`
+  or `'skipped'` (an intercept kept the handler from running). `commands.runFor(id, arg, sessions)` is a reporting
+  run, which rejects with the failure where `run` logs and resolves, a page handler's failure coming back to main with
+  the done message; `commands.list()` gives every live command the process knows. A declaration's `risky: true` marks
+  a command an agent runs only on the user's Allow (`docs/features/agent-commands/design.md`).
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`closed` in plugin
   `sessions` is `sessions.closed`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`, and the core has no events of its own: a part that needs
