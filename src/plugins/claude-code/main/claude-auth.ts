@@ -1,4 +1,4 @@
-import type { AccountStatus } from '../../contracts/agent';
+import type { AccountStatus } from '../../../contracts/agent';
 import { asJson, parsed } from './json-fields';
 
 // Readers for `claude auth` output, as measured on the installed CLI.

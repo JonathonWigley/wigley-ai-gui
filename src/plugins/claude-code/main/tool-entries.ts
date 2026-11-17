@@ -1,4 +1,4 @@
-import type { EntryDraft } from '../../shared/entry-stamp';
+import type { EntryDraft } from '../../../shared/entry-stamp';
 import { asArray, asJson, asString, type Json } from './json-fields';
 import { toolSummary } from './tool-summary';
 

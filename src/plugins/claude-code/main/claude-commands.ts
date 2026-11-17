@@ -1,4 +1,4 @@
-import type { AgentCommand } from '../../contracts/agent';
+import type { AgentCommand } from '../../../contracts/agent';
 import {
   asArray,
   asJson,

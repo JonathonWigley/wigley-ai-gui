@@ -4,7 +4,11 @@ import type { Registrations } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
 import type { MarkdownRenderer } from '../contracts/markdown';
-import type { ProcessRunner } from '../contracts/processes';
+import type {
+  ProcessRunner,
+  SpawnedProcess,
+  SpawnOptions,
+} from '../contracts/processes';
 import type { UserConfig } from '../contracts/user-config';
 import { createRegistrations } from './registrations';
 
@@ -26,16 +30,65 @@ export function trackedFiles(
 // One plugin's view of `processes`: `registrations` disposing it aborts every
 // run still going and every later one, as an abort of the caller's own `signal`
 // aborts that run. A detached start passes through untracked, since it is meant
-// to outlive the plugin and the app.
+// to outlive the plugin and the app. `spawn` is the tracked path: disposing
+// kills every live spawned program with `SIGKILL`, and a later spawn starts
+// nothing and hears `closed` with `Stopped <command>` on a microtask.
 export function abortableProcesses(
   processes: ProcessRunner,
   registrations: Registrations,
 ): ProcessRunner {
   const stopping = new AbortController();
-  registrations.track({ dispose: () => stopping.abort() });
+  const liveSpawns = new Set<SpawnedProcess>();
+  registrations.track({
+    dispose: () => {
+      stopping.abort();
+      for (const spawned of liveSpawns) {
+        spawned.kill('SIGKILL');
+      }
+      liveSpawns.clear();
+    },
+  });
+  const spawnTracked = (
+    command: string,
+    args: readonly string[],
+    options: SpawnOptions,
+  ): SpawnedProcess => {
+    if (stopping.signal.aborted) {
+      queueMicrotask(() =>
+        options.events.closed({
+          code: null,
+          signal: null,
+          startError: { message: `Stopped ${command}`, notFound: false },
+        }),
+      );
+      return { write() {}, endInput() {}, kill() {} };
+    }
+    // `closed` may come inside the spawn call, before `spawned` is set.
+    let spawned: SpawnedProcess | null = null;
+    let hasClosed = false;
+    spawned = processes.spawn(command, args, {
+      ...options,
+      events: {
+        stdout: (chunk) => options.events.stdout(chunk),
+        stderr: (chunk) => options.events.stderr(chunk),
+        closed: (exit) => {
+          hasClosed = true;
+          if (spawned !== null) {
+            liveSpawns.delete(spawned);
+          }
+          options.events.closed(exit);
+        },
+      },
+    });
+    if (!hasClosed) {
+      liveSpawns.add(spawned);
+    }
+    return spawned;
+  };
   return {
     startDetached: (command, args, options) =>
       processes.startDetached(command, args, options),
+    spawn: spawnTracked,
     run: (command, args, options) =>
       processes.run(command, args, {
         ...options,

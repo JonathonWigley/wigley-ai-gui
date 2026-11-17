@@ -3,7 +3,7 @@ import {
   type ContextSource,
   type ContextSourceItem,
   MAIN_AGENT_ID,
-} from '../../contracts/agent';
+} from '../../../contracts/agent';
 import {
   asArray,
   asJson,

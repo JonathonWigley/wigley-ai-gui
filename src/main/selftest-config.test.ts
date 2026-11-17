@@ -152,7 +152,6 @@ describe('applySelfTestConfig', () => {
           transparency: 'system',
           fonts: {},
           keySequenceTimeoutMs: 1,
-          claude: { command: 'claude' },
           shell: { layout: 'default' },
           plugins: { disabled: ['p'] },
         },

@@ -111,6 +111,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  // Its adapter's tests drive fake children over node:events, node:readline and node:stream.
+  'claude-code': { main: NODE_ONLY },
   // Its plugin status hashes files with `node:crypto`.
   docs: { main: NODE_ONLY },
   forms: {
@@ -570,10 +572,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/main/drive'],
     packages: ['electron', 'node:'],
   },
-  'src/main/claude-code': {
-    layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
-    packages: ['node:'],
-  },
   'src/main/themes': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/main/config': {
     layers: ['src/contracts', 'src/shared', 'src/main/themes'],
@@ -688,7 +686,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/shared/paths',
       'src/config',
       'src/main',
-      'src/main/claude-code',
       'src/main/plugins',
       'src/main/themes',
       'src/main/config',
@@ -745,6 +742,11 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   // Checks the order the built-in page parts start in.
   'src/plugins/page.test.ts': {
     layers: ['src/contracts', 'src/shared', 'src/plugins/page.ts'],
+    packages: [],
+  },
+  // Checks the order the built-in main parts start in.
+  'src/plugins/main.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/main.ts'],
     packages: [],
   },
   // Checks the built-in manifests' setting declarations, and that the default

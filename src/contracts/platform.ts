@@ -11,7 +11,8 @@ export interface PlatformLifecycle {
 }
 
 export interface PlatformPrograms {
-  // The default of the `claude.command` setting.
+  // The program a Claude Code session runs when the
+  // claude-code.command setting is empty.
   readonly claude: string;
 }
 

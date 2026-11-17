@@ -35,11 +35,36 @@ function setUp() {
     startDetached: async (command: string) => {
       started.push(`detached ${command}`);
     },
+    spawn: () => {
+      throw new Error('unused');
+    },
   };
   return { started, release, limited: limitRuns(inner, 2) };
 }
 
 describe('limitRuns', () => {
+  it('spawn_PastTheLimit_PassesStraightThrough', () => {
+    const spawned: string[] = [];
+    const inner: ProcessRunner = {
+      run: () => new Promise(() => {}),
+      startDetached: () => Promise.reject(new Error('unused')),
+      spawn: (command) => {
+        spawned.push(command);
+        return { write() {}, endInput() {}, kill() {} };
+      },
+    };
+    const limited = limitRuns(inner, 1);
+    limited.run('a', []);
+
+    limited.spawn('claude', [], {
+      cwd: '/',
+      env: {},
+      events: { stdout() {}, stderr() {}, closed() {} },
+    });
+
+    expect(spawned).toEqual(['claude']);
+  });
+
   it('startDetached_AtTheLimit_StartsAtOnce', async () => {
     const { started, limited } = setUp();
     limited.run('a', []);
@@ -76,6 +101,9 @@ describe('limitRuns', () => {
           : Promise.resolve(DONE);
       },
       startDetached: () => Promise.reject(new Error('unused')),
+      spawn: () => {
+        throw new Error('unused');
+      },
     };
     const limited = limitRuns(inner, 1);
 

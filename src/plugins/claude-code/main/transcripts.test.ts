@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAIN_AGENT_ID } from '../../contracts/agent';
+import { MAIN_AGENT_ID } from '../../../contracts/agent';
 import {
   endsInsideLine,
   mainReplies,

@@ -4,8 +4,8 @@ import type {
   PlanRowPatch,
   PlanSeverity,
   PlanUsage,
-} from '../../contracts/agent';
-import { isJsonObject } from '../../shared/json';
+} from '../../../contracts/agent';
+import { isJsonObject } from '../../../shared/json';
 import {
   asArray,
   asJson,

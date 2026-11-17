@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs';
 import path from 'node:path';
 import type {
@@ -6,10 +6,13 @@ import type {
   ProcessResult,
   ProcessRunner,
   ProcessRunOptions,
+  SpawnedProcess,
+  SpawnExit,
+  SpawnOptions,
 } from '../../contracts/processes';
 
-// `ProcessRunner` through `node:child_process`, in the app's environment less
-// `unsetEnv` plus `setEnv`.
+// `ProcessRunner` through `node:child_process`, `run` in the app's environment
+// less `unsetEnv` plus `setEnv`.
 // Output is collected whole unless `maxOutputBytes` caps each stream, which
 // marks the result `truncated` once either is cut. A run that cannot start
 // rejects naming the program, or the folder when `cwd` does not exist. Past
@@ -17,9 +20,82 @@ import type {
 // output so far; a grandchild it started is not killed. An abort of `signal`
 // kills it the same way and the run rejects at once with `Stopped <command>`.
 // `startDetached` spawns with `detached`, its output appended to the log file,
-// and unrefs the child.
+// and unrefs the child. `spawn` pipes all three streams, decodes output as
+// UTF-8, and reports a start failure or the exit through one `closed`.
 export function createNodeProcesses(): ProcessRunner {
-  return { run: runToEnd, startDetached };
+  return { run: runToEnd, startDetached, spawn: spawnStreaming };
+}
+
+function spawnStreaming(
+  command: string,
+  args: readonly string[],
+  options: SpawnOptions,
+): SpawnedProcess {
+  const { events } = options;
+  let hasClosed = false;
+  const close = (exit: SpawnExit) => {
+    if (!hasClosed) {
+      hasClosed = true;
+      events.closed(exit);
+    }
+  };
+  const startFailed = (error: NodeJS.ErrnoException): SpawnExit => ({
+    code: null,
+    signal: null,
+    startError: { message: error.message, notFound: error.code === 'ENOENT' },
+  });
+  let child: ChildProcessWithoutNullStreams;
+  try {
+    child = spawn(command, args, {
+      cwd: options.cwd,
+      env: { ...options.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      // Off Windows the flag does nothing; on it, no console window flashes.
+      windowsHide: true,
+    });
+  } catch (error) {
+    // A spawn that throws (EINVAL, or EAGAIN on fork) rather than emitting `error`.
+    queueMicrotask(() => close(startFailed(error as NodeJS.ErrnoException)));
+    return { write() {}, endInput() {}, kill() {} };
+  }
+  const { stdin, stdout, stderr } = child;
+  // EPIPE once the program has exited; `closed` reports the exit itself.
+  stdin.on('error', () => {});
+  stdout.setEncoding('utf8');
+  stderr.setEncoding('utf8');
+  stdout.on('data', (chunk: string) => {
+    if (!hasClosed) {
+      events.stdout(chunk);
+    }
+  });
+  stderr.on('data', (chunk: string) => {
+    if (!hasClosed) {
+      events.stderr(chunk);
+    }
+  });
+  child.on('error', (error: NodeJS.ErrnoException) =>
+    close(startFailed(error)),
+  );
+  child.on('close', (code: number | null, signal: string | null) =>
+    close({ code, signal, startError: null }),
+  );
+  return {
+    write(text) {
+      if (!hasClosed) {
+        stdin.write(text);
+      }
+    },
+    endInput() {
+      if (!hasClosed) {
+        stdin.end();
+      }
+    },
+    kill(signal = 'SIGTERM') {
+      if (!hasClosed) {
+        child.kill(signal);
+      }
+    },
+  };
 }
 
 function startDetached(

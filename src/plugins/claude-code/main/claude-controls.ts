@@ -2,7 +2,7 @@ import type {
   AgentStart,
   ControlChoice,
   UserMessage,
-} from '../../contracts/agent';
+} from '../../../contracts/agent';
 import { asJson, asString, type Json } from './json-fields';
 
 export type ClaudeControlId = 'mode' | 'effort' | 'model';

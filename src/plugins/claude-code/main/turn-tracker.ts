@@ -1,4 +1,4 @@
-import type { ProcessActivity } from '../../contracts/agent';
+import type { ProcessActivity } from '../../../contracts/agent';
 import type { DecodedLine } from './stream-decoder';
 
 // Whether a Claude Code process is working, from the messages written to it

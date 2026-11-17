@@ -12,6 +12,7 @@ import type {
   PluginManifest,
   SelfTestHost,
 } from '../../contracts/plugin';
+import type { SpawnExit } from '../../contracts/processes';
 import {
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
@@ -615,6 +616,53 @@ describe('createMainApi recording', () => {
     registrations.dispose();
 
     await expect(run).rejects.toThrow('Stopped python3');
+  });
+
+  it("kills the plugin's spawned programs when its registrations are disposed", () => {
+    const processes = new FakeProcesses();
+    const { api, registrations } = apiWithServices({ processes });
+    const events = { stdout() {}, stderr() {}, closed() {} };
+    api.services.processes.spawn('claude', [], { cwd: '/', env: {}, events });
+    api.services.processes.spawn('claude', ['-p'], {
+      cwd: '/',
+      env: {},
+      events,
+    });
+    const [live, closed] = processes.spawns;
+    closed.close({ code: 0, signal: null, startError: null });
+
+    registrations.dispose();
+
+    expect(live.kills).toEqual(['SIGKILL']);
+    expect(closed.kills).toEqual([]);
+  });
+
+  it('refuses a spawn once its registrations are disposed', async () => {
+    const processes = new FakeProcesses();
+    const { api, registrations } = apiWithServices({ processes });
+    const heard: SpawnExit[] = [];
+    registrations.dispose();
+
+    api.services.processes.spawn('claude', [], {
+      cwd: '/',
+      env: {},
+      events: {
+        stdout() {},
+        stderr() {},
+        closed: (exit) => heard.push(exit),
+      },
+    });
+    expect(heard).toEqual([]);
+    await Promise.resolve();
+
+    expect(processes.spawns).toEqual([]);
+    expect(heard).toEqual([
+      {
+        code: null,
+        signal: null,
+        startError: { message: 'Stopped claude', notFound: false },
+      },
+    ]);
   });
 
   it("stops a run when the caller's own signal aborts", async () => {

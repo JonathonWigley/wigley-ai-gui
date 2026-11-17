@@ -21,7 +21,7 @@ release a clone.
 
 ## Status
 
-Built, in `src/contracts/agent.ts`, `src/main/claude-code/claude-launch.ts` and `src/shared/session-env.ts` (the launch
+Built, in `src/contracts/agent.ts`, `src/plugins/claude-code/main/claude-launch.ts` and `src/shared/session-env.ts` (the launch
 variable), `src/shared/origin-repo-names.ts` (the origin-name lookup) and
 `src/plugins/unity-pool/` (the state watch, the CLI runs in `pool-cli.ts`, chat's pool provider in
 `pool-provider.ts` and the self-test script in `main/`; the row badge, the

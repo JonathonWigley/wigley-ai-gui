@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Files } from '../../contracts/files';
-import type { Paths } from '../../contracts/paths';
-import { createMemoryFiles } from '../../shared/memory-files';
-import { posixPaths } from '../../shared/paths/posix-paths';
-import { windowsPaths } from '../../shared/paths/windows-paths';
+import type { Files } from '../../../contracts/files';
+import type { Paths } from '../../../contracts/paths';
+import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import { windowsPaths } from '../../../shared/paths/windows-paths';
 import {
   listPastSessions,
   listProjectFolders,

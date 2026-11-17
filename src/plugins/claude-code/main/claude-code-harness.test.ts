@@ -10,27 +10,32 @@ import type {
   AgentStart,
   ChatEntry,
   LogInEvents,
-} from '../../contracts/agent';
-import type { Clock } from '../../contracts/ambient';
-import type { Log } from '../../contracts/log';
+} from '../../../contracts/agent';
+import type { Clock } from '../../../contracts/ambient';
+import type { Log } from '../../../contracts/log';
 import type {
   HostedExit,
   PipeDirection,
   PipeLine,
   SessionHost,
-} from '../../contracts/session-host';
+} from '../../../contracts/session-host';
 import {
   createFakeSessionHost,
   type FakeSessionHost,
-} from '../../shared/fake-session-host';
-import { createMemoryFiles } from '../../shared/memory-files';
-import { posixPaths } from '../../shared/paths/posix-paths';
-import type { Files } from '../../contracts/files';
-import type { Paths } from '../../contracts/paths';
+} from '../../../shared/fake-session-host';
+import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import type { Files } from '../../../contracts/files';
+import type { Paths } from '../../../contracts/paths';
+import type {
+  ProcessRunner,
+  SpawnedProcess,
+  SpawnEvents,
+  SpawnExit,
+} from '../../../contracts/processes';
 import {
   CLAUDE_IDLE_RULE,
   createClaudeCodeHarness,
-  type ClaudeSpawn,
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, userMessage } from './claude-controls';
@@ -88,6 +93,76 @@ function fakeChild() {
     written,
     isStdinEnded: () => stdinEnded,
   };
+}
+
+// `child` as a `SpawnedProcess` over `events`: its stdout and stderr `data` as
+// UTF-8 text, its first `close` or `error` as the one `closed`, and `write`,
+// `endInput` and `kill` passed to it.
+function spawnedChild(
+  child: ChildProcessWithoutNullStreams,
+  events: SpawnEvents,
+): SpawnedProcess {
+  let hasClosed = false;
+  const close = (exit: SpawnExit) => {
+    if (!hasClosed) {
+      hasClosed = true;
+      events.closed(exit);
+    }
+  };
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (chunk: string) => events.stdout(chunk));
+  child.stderr.on('data', (chunk: string) => events.stderr(chunk));
+  child.on('close', (code: number | null, signal: string | null) =>
+    close({ code, signal, startError: null }),
+  );
+  child.on('error', (error: NodeJS.ErrnoException) =>
+    close({
+      code: null,
+      signal: null,
+      startError: { message: error.message, notFound: error.code === 'ENOENT' },
+    }),
+  );
+  return {
+    write: (text) => {
+      child.stdin.write(text);
+    },
+    endInput: () => {
+      child.stdin.end();
+    },
+    kill: (signal = 'SIGTERM') => {
+      child.kill(signal);
+    },
+  };
+}
+
+// A `ProcessRunner` whose `spawn` hands out `children` in order, recording each
+// spawn's arguments, folder and environment in `spawned`; `run` and
+// `startDetached` throw, since the harness never calls them.
+function childProcesses(children: ChildProcessWithoutNullStreams[]) {
+  const spawned: {
+    args: readonly string[];
+    options: { cwd: string; env: Readonly<Record<string, string>> };
+  }[] = [];
+  const queue = [...children];
+  const processes: ProcessRunner & { spawned: typeof spawned } = {
+    spawned,
+    run: () => {
+      throw new Error('the harness reached processes.run');
+    },
+    startDetached: () => {
+      throw new Error('the harness reached processes.startDetached');
+    },
+    spawn(_command, args, options) {
+      spawned.push({ args, options: { cwd: options.cwd, env: options.env } });
+      const next = queue.shift();
+      if (next === undefined) {
+        throw new Error('no child left to spawn');
+      }
+      return spawnedChild(next, options.events);
+    },
+  };
+  return processes;
 }
 
 const clock = { now: () => 1000 };
@@ -258,7 +333,6 @@ function started(
   startRequest: AgentStart = request,
 ) {
   const logged: [string, string][] = [];
-  const spawn: ClaudeSpawn = () => fake.child;
   let uuidCount = 0;
   const log: Log = (source, message) => logged.push([source, message]);
   const harness = createClaudeCodeHarness({
@@ -267,7 +341,7 @@ function started(
     env: {},
     log,
     host: childHost(fake, harnessClock, log),
-    spawn,
+    processes: childProcesses([fake.child]),
     files,
     homeDir: '/Users/u',
     paths: posixPaths,
@@ -417,7 +491,7 @@ describe('createClaudeCodeHarness', () => {
       env: {},
       log: () => {},
       host: createFakeSessionHost(clock),
-      spawn: () => fakeChild().child,
+      processes: childProcesses([fakeChild().child]),
       files: createMemoryFiles(),
       homeDir: '/Users/u',
       paths: posixPaths,
@@ -1498,7 +1572,7 @@ describe('createClaudeCodeHarness', () => {
         'ended',
         {
           code: null,
-          error: expect.stringMatching(/\/bin\/claude.*\/proj/),
+          error: expect.stringMatching(/\/bin\/claude.*\/proj.*set claude-code\.command$/),
         },
       ],
     ]);
@@ -2643,7 +2717,7 @@ describe('createClaudeCodeHarness past sessions', () => {
   // The ids `listSessions` finds with one transcript saved in `configFolder`.
   async function listedFrom(
     configFolder: string,
-    env: NodeJS.ProcessEnv,
+    env: Readonly<Record<string, string>>,
     profileDir: string | null,
   ) {
     const files = createMemoryFiles();
@@ -2657,7 +2731,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       env,
       log: () => {},
       host: createFakeSessionHost(clock),
-      spawn: () => fakeChild().child,
+      processes: childProcesses([fakeChild().child]),
       files,
       homeDir: '/Users/u',
       paths: posixPaths,
@@ -2697,7 +2771,7 @@ describe('createClaudeCodeHarness past sessions', () => {
         env: { CLAUDE_CONFIG_DIR: '/c' },
         log: () => {},
         host: createFakeSessionHost(clock),
-        spawn: () => fakeChild().child,
+        processes: childProcesses([fakeChild().child]),
         files: createMemoryFiles(),
         homeDir: '/Users/u',
         paths: posixPaths,
@@ -2758,32 +2832,21 @@ describe('createClaudeCodeHarness accounts', () => {
     children: ReturnType<typeof authChild>[],
     harnessClock = clock,
   ) {
-    const spawned: {
-      args: readonly string[];
-      options: { cwd: string; env: NodeJS.ProcessEnv };
-    }[] = [];
-    const queue = [...children];
+    const processes = childProcesses(children.map((child) => child.child));
     const harness = createClaudeCodeHarness({
       command: () => '/bin/claude',
       permissionTool: 'tool',
       env: { HOME: '/Users/u', CLAUDECODE: '1' },
       log: () => {},
       host: createFakeSessionHost(harnessClock),
-      spawn: (_command, args, options) => {
-        spawned.push({ args, options });
-        const next = queue.shift();
-        if (next === undefined) {
-          throw new Error('no child left to spawn');
-        }
-        return next.child;
-      },
+      processes,
       files: createMemoryFiles(),
       homeDir: '/Users/u',
       paths: posixPaths,
       clock: harnessClock,
       randomUuid: () => 'uuid-1',
     });
-    return { harness, spawned };
+    return { harness, spawned: processes.spawned };
   }
 
   // Ends `child` as a run that printed `stdout` and exited with `code`.
@@ -3099,7 +3162,7 @@ describe('createClaudeCodeHarness accounts', () => {
           }),
         );
       },
-      reason: 'claude was not found at /bin/claude; set claude.command',
+      reason: 'claude was not found at /bin/claude; set claude-code.command',
     },
     {
       name: 'NotSignedIn',
@@ -3166,11 +3229,15 @@ describe('createClaudeCodeHarness on the session host', () => {
     vi.useRealTimers();
   });
 
-  // A harness on `host`; `spawn` throws, since no session may reach it.
+  // A harness on `host`; `processes.spawn` throws, since no session may reach it.
   function hostHarness(
     host: SessionHost,
     harnessClock: Clock,
-    overrides: { env?: NodeJS.ProcessEnv; paths?: Paths; files?: Files } = {},
+    overrides: {
+      env?: Readonly<Record<string, string>>;
+      paths?: Paths;
+      files?: Files;
+    } = {},
   ) {
     let uuidCount = 0;
     return createClaudeCodeHarness({
@@ -3179,9 +3246,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       env: overrides.env ?? {},
       log: () => {},
       host,
-      spawn: () => {
-        throw new Error('a session process reached deps.spawn');
-      },
+      processes: childProcesses([]),
       files: overrides.files ?? createMemoryFiles(),
       homeDir: '/Users/u',
       paths: overrides.paths ?? posixPaths,
@@ -3300,18 +3365,6 @@ describe('createClaudeCodeHarness on the session host', () => {
         stdinBetweenTurns.includes(value),
       ),
     ).toEqual([]);
-  });
-
-  it('start_EnvWithUndefined_SpawnsWithoutIt', () => {
-    const host = createFakeSessionHost(clock);
-    const env = { KEEP: 'a', DROP: undefined };
-
-    hostHarness(host, clock, { env }).start(request, recordingEvents().events);
-
-    expect(host.processes[0].request?.env).toEqual({
-      KEEP: 'a',
-      WIGLEY_SESSION_ROW: 'row-1',
-    });
   });
 
   it.each([

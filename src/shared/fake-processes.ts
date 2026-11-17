@@ -3,6 +3,11 @@ import type {
   ProcessResult,
   ProcessRunner,
   ProcessRunOptions,
+  SpawnedProcess,
+  SpawnEvents,
+  SpawnExit,
+  SpawnOptions,
+  SpawnSignal,
 } from '../contracts/processes';
 
 // One call `FakeProcesses.run` received.
@@ -22,6 +27,51 @@ export interface FakeDetachedStart {
   options: DetachedStartOptions;
 }
 
+// One program `FakeProcesses.spawn` started: what it was started with, what
+// was written to it, and the test's drivers of its events. `kill` records its
+// signal and closes nothing; a second `close` does nothing.
+export class FakeSpawn implements SpawnedProcess {
+  readonly written: string[] = [];
+  isInputEnded = false;
+  readonly kills: SpawnSignal[] = [];
+  private hasClosed = false;
+
+  constructor(
+    readonly command: string,
+    readonly args: readonly string[],
+    readonly cwd: string,
+    readonly env: Readonly<Record<string, string>>,
+    private readonly events: SpawnEvents,
+  ) {}
+
+  write(text: string): void {
+    this.written.push(text);
+  }
+
+  endInput(): void {
+    this.isInputEnded = true;
+  }
+
+  kill(signal: SpawnSignal = 'SIGTERM'): void {
+    this.kills.push(signal);
+  }
+
+  stdout(text: string): void {
+    this.events.stdout(text);
+  }
+
+  stderr(text: string): void {
+    this.events.stderr(text);
+  }
+
+  close(exit: SpawnExit): void {
+    if (!this.hasClosed) {
+      this.hasClosed = true;
+      this.events.closed(exit);
+    }
+  }
+}
+
 type ScriptedResult = ProcessResult | Error | Promise<ProcessResult>;
 
 // A scripted `ProcessRunner` for the tests. A run nothing is scripted for
@@ -29,12 +79,15 @@ type ScriptedResult = ProcessResult | Error | Promise<ProcessResult>;
 // sets no timer: a timed-out run is scripted as a result with `timedOut: true`.
 // A run whose `signal` is aborted, at the call or later while a scripted promise
 // holds it, rejects with `Stopped <command>`. A detached start is recorded and
-// resolves, or rejects with the error `failDetachedStarts` set.
+// resolves, or rejects with the error `failDetachedStarts` set. A spawn is
+// recorded as a `FakeSpawn` the test drives; nothing is scripted for it.
 export class FakeProcesses implements ProcessRunner {
   // Every run, in call order.
   readonly runs: FakeRun[] = [];
   // Every detached start, in call order.
   readonly detachedStarts: FakeDetachedStart[] = [];
+  // Every spawn, in call order.
+  readonly spawns: FakeSpawn[] = [];
   private readonly results = new Map<string, ScriptedResult>();
   private detachedFailure: Error | null = null;
 
@@ -52,6 +105,22 @@ export class FakeProcesses implements ProcessRunner {
     return this.detachedFailure === null
       ? Promise.resolve()
       : Promise.reject(this.detachedFailure);
+  }
+
+  spawn(
+    command: string,
+    args: readonly string[],
+    options: SpawnOptions,
+  ): SpawnedProcess {
+    const spawned = new FakeSpawn(
+      command,
+      [...args],
+      options.cwd,
+      options.env,
+      options.events,
+    );
+    this.spawns.push(spawned);
+    return spawned;
   }
 
   // The result of each later run whose command and args equal these. An Error

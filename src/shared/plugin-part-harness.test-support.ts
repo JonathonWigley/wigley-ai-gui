@@ -1003,6 +1003,8 @@ function fakeMainApi(
       randomHex: world.randomHex,
       randomUuid: world.randomUuid,
       homeDir: '/home',
+      agentEnvironment: {},
+      agentHomeDir: '/home',
       tempFolders: [],
       paths: posixPaths,
       platform: fakePlatform('macos'),

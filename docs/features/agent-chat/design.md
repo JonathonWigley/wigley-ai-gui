@@ -104,11 +104,12 @@ interview on 2026-10-23; this file is the record of both.
 - `src/contracts/agent.ts` holds `AgentHarness`, `AgentProcess`, `ChatEntry` and `SessionControl`, replacing the
   one-shot `AgentClient`. The ACP adapter (`src/main/acp/`), the mock agent (`src/mock-agent/`, its Forge entry) and
   `@agentclientprotocol/sdk` are removed; ACP comes back as an adapter of this contract if a later harness needs it.
-- The Claude adapter is `src/main/claude-code/`, the only place the app builds the `claude` command; the session host
+- The Claude adapter is `src/plugins/claude-code/main/`, the only place the app builds the `claude` command; the session host
   (`docs/features/session-host/design.md`) spawns it. It runs the installed CLI,
   one long-lived process per session, in stream-json mode, with the user's own login, plugins, skills and hooks. It
-  is handed to plugins as a main service. The `claude` path is a core setting (`claude.command`) and the profiles a
-  chat setting: an app started from the Dock has no shell `PATH` or `CLAUDE_CONFIG_DIR`.
+  is the built-in `claude-code` plugin, which registers the adapter through `services.agentHarnesses`. The `claude`
+  path is that plugin's `claude-code.command` setting and the profiles a chat setting: an app started from the Dock
+  has no shell `PATH` or `CLAUDE_CONFIG_DIR`.
 - A fake adapter in `src/shared/` plays scripted entries for the tests and the self-test, so the seam has two
   adapters now.
 - The adapter, not the chat, reads Claude's JSON: it turns stdout events into chat entries (streamed text updates

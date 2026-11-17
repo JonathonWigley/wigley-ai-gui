@@ -11,11 +11,11 @@ import {
   type UsageAgentEvent,
   type UserDelivery,
   type UserMessage,
-} from '../../contracts/agent';
-import type { PipeLine } from '../../contracts/session-host';
-import type { EntryDraft } from '../../shared/entry-stamp';
-import { isSameJson } from '../../shared/json';
-import { type TypedSkill, typedSkill } from '../../shared/typed-skill';
+} from '../../../contracts/agent';
+import type { PipeLine } from '../../../contracts/session-host';
+import type { EntryDraft } from '../../../shared/entry-stamp';
+import { isSameJson } from '../../../shared/json';
+import { type TypedSkill, typedSkill } from '../../../shared/typed-skill';
 import type { AgentDefinitions } from './agent-definitions';
 import {
   commandRecordsOf,

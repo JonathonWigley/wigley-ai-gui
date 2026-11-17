@@ -1,7 +1,7 @@
-import { type Files, readIfPresent } from '../../contracts/files';
-import type { Log } from '../../contracts/log';
-import type { Paths } from '../../contracts/paths';
-import { errorText } from '../../shared/error-text';
+import { type Files, readIfPresent } from '../../../contracts/files';
+import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
+import { errorText } from '../../../shared/error-text';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
 
 // What an agent definition file sets for the agents of its type; each null when the file sets none.

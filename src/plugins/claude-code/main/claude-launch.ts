@@ -1,12 +1,12 @@
-import type { AgentStart } from '../../contracts/agent';
-import type { Paths } from '../../contracts/paths';
-import { NESTED_SESSION_ENV, SESSION_ROW_ENV } from '../../shared/session-env';
+import type { AgentStart } from '../../../contracts/agent';
+import type { Paths } from '../../../contracts/paths';
+import { NESTED_SESSION_ENV, SESSION_ROW_ENV } from '../../../shared/session-env';
 import { launchMode } from './claude-controls';
 
 export interface ClaudeLaunch {
   args: string[];
   cwd: string;
-  env: NodeJS.ProcessEnv;
+  env: Record<string, string>;
 }
 
 const IDLE_COMPACT_ENV = 'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS';
@@ -21,11 +21,11 @@ const APP_LAUNCH_ENV: readonly string[] = [IDLE_COMPACT_ENV, SESSION_ROW_ENV];
 // `profileDir` resolved against `homeDir` when one is given, and removed when
 // that folder is the default `<homeDir>/.claude`.
 export function claudeEnv(
-  env: NodeJS.ProcessEnv,
+  env: Readonly<Record<string, string>>,
   profileDir: string | null,
   homeDir: string,
   paths: Paths,
-): NodeJS.ProcessEnv {
+): Record<string, string> {
   const launchEnv = { ...env };
   for (const name of [...NESTED_SESSION_ENV, ...APP_LAUNCH_ENV]) {
     delete launchEnv[name];
@@ -59,7 +59,7 @@ export function defaultConfigFolder(homeDir: string, paths: Paths): string {
 export function claudeLaunch(
   request: AgentStart,
   permissionTool: string,
-  env: NodeJS.ProcessEnv,
+  env: Readonly<Record<string, string>>,
   homeDir: string,
   paths: Paths,
 ): ClaudeLaunch {
@@ -107,7 +107,7 @@ export function claudeLaunch(
 // `CLAUDE_CONFIG_DIR` the launch passes through, else `<homeDir>/.claude`.
 export function claudeConfigFolder(
   profileDir: string | null,
-  env: NodeJS.ProcessEnv,
+  env: Readonly<Record<string, string>>,
   homeDir: string,
   paths: Paths,
 ): string {

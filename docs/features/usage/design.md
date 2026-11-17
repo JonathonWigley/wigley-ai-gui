@@ -45,7 +45,7 @@ extra-usage credits.
 
 ## Sources
 
-Only `src/main/claude-code/` knows any of these shapes.
+Only `src/plugins/claude-code/main/` knows any of these shapes.
 
 | Number | Source | When |
 | --- | --- | --- |

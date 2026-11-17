@@ -11,7 +11,10 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { ProcessRunOptions } from '../../contracts/processes';
+import type {
+  ProcessRunOptions,
+  SpawnExit,
+} from '../../contracts/processes';
 import { createNodeProcesses } from './node-processes';
 
 const processes = createNodeProcesses();
@@ -20,6 +23,38 @@ const processes = createNodeProcesses();
 function runScript(script: string, options?: ProcessRunOptions) {
   return processes.run(process.execPath, ['-e', script], options);
 }
+
+// Spawns `command` with `args` in `env`, collecting its output and every
+// `closed`; `ended` settles at the first `closed`.
+function spawnCollecting(
+  command: string,
+  args: readonly string[],
+  env: Readonly<Record<string, string>> = {},
+) {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const exits: SpawnExit[] = [];
+  let resolveEnded: (exit: SpawnExit) => void = () => {};
+  const ended = new Promise<SpawnExit>((resolve) => {
+    resolveEnded = resolve;
+  });
+  const spawned = processes.spawn(command, args, {
+    cwd: tmpdir(),
+    env,
+    events: {
+      stdout: (chunk) => stdout.push(chunk),
+      stderr: (chunk) => stderr.push(chunk),
+      closed: (exit) => {
+        exits.push(exit);
+        resolveEnded(exit);
+      },
+    },
+  });
+  return { spawned, stdout, stderr, exits, ended };
+}
+
+// Waits a turn of the event loop, so a second `closed` would arrive.
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 describe('createNodeProcesses', () => {
   it('run_ExitThree_ReturnsCodeAndOutput', async () => {
@@ -264,5 +299,61 @@ describe('createNodeProcesses', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('spawn_WritesAndStreams_ClosesWithTheCode', async () => {
+    const run = spawnCollecting(process.execPath, [
+      '-e',
+      'process.stdin.pipe(process.stdout); process.stderr.write("err"); process.stdin.on("end", () => process.exit(3))',
+    ]);
+
+    run.spawned.write('hello\n');
+    run.spawned.endInput();
+    await run.ended;
+    await settle();
+
+    expect(run.stdout.join('')).toBe('hello\n');
+    expect(run.stderr.join('')).toBe('err');
+    expect(run.exits).toEqual([{ code: 3, signal: null, startError: null }]);
+  });
+
+  it('spawn_Env_IsTheWholeEnvironment', async () => {
+    const run = spawnCollecting(
+      process.execPath,
+      ['-e', 'process.stdout.write(`${process.env.ONLY} ${process.env.HOME}`)'],
+      { ONLY: 'x' },
+    );
+
+    await run.ended;
+
+    expect(run.stdout.join('')).toBe('x undefined');
+  });
+
+  it('spawn_Kill_ClosesWithTheSignal', async () => {
+    const run = spawnCollecting(process.execPath, [
+      '-e',
+      'setTimeout(() => {}, 60000)',
+    ]);
+
+    run.spawned.kill('SIGKILL');
+    const exit = await run.ended;
+
+    expect(exit).toEqual({ code: null, signal: 'SIGKILL', startError: null });
+    expect(() => run.spawned.write('x')).not.toThrow();
+  });
+
+  it('spawn_MissingProgram_ClosesOnceNotFound', async () => {
+    const run = spawnCollecting('/no/such/program', []);
+
+    await run.ended;
+    await settle();
+
+    expect(run.exits).toHaveLength(1);
+    expect(run.exits[0]).toMatchObject({
+      code: null,
+      signal: null,
+      startError: { notFound: true },
+    });
+    expect(run.exits[0].startError?.message).toContain('ENOENT');
   });
 });

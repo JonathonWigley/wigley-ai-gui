@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentStart } from '../../contracts/agent';
-import type { PipeDirection, PipeLine } from '../../contracts/session-host';
+import type { AgentStart } from '../../../contracts/agent';
+import type { PipeDirection, PipeLine } from '../../../contracts/session-host';
 import { controlMessage, userMessage } from './claude-controls';
 import {
   advanceFold,

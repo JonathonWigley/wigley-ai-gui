@@ -33,10 +33,6 @@ export interface Settings {
   };
   // How long a page key sequence waits for its next key.
   keySequenceTimeoutMs: number;
-  // `command` is the `claude` executable a session runs; `~` alone, or a
-  // leading `~/` (or `~\` on Windows), means the home folder, since an app
-  // started from the Dock has no shell `PATH`.
-  claude: { command: string };
   // The layout the shell chrome draws with: a folder in `layouts/shell/`, or
   // `default`.
   shell: { layout: string };

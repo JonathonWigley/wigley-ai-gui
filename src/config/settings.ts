@@ -1,15 +1,13 @@
-import type { PlatformPrograms } from '../contracts/platform';
 import type { SettingInfos } from '../contracts/plugin';
 import type { Settings } from '../contracts/settings';
 
-export function defaultSettingsFor(programs: PlatformPrograms): Settings {
+export function coreDefaultSettings(): Settings {
   return {
     window: { width: 900, height: 700, minWidth: 420, minHeight: 360 },
     theme: 'catppuccin-mocha',
     transparency: 'system',
     fonts: {},
     keySequenceTimeoutMs: 1000,
-    claude: { command: programs.claude },
     shell: { layout: 'default' },
     plugins: {
       disabled: ['agent-lines', 'usage-tab-line', 'docs-session-tab'],
@@ -17,7 +15,7 @@ export function defaultSettingsFor(programs: PlatformPrograms): Settings {
   };
 }
 
-// The JSON kind of each core setting `defaultSettingsFor` leaves unset, by its
+// The JSON kind of each core setting `coreDefaultSettings` leaves unset, by its
 // dotted path, so a `settings.json` may set it.
 export const optionalSettings: Readonly<
   Record<string, 'string' | 'number' | 'boolean'>
@@ -90,11 +88,6 @@ export const settingInfo: SettingInfos<Settings> = {
     label: 'Key sequence timeout',
     description:
       'How long a key sequence waits for its next key, in milliseconds.',
-  },
-  'claude.command': {
-    label: 'Claude command',
-    description:
-      'The `claude` program sessions run; `~` is the home folder. Applies to the next session.',
   },
   'shell.layout': {
     label: 'Shell layout',

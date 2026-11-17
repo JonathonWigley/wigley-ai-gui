@@ -3,12 +3,12 @@ import {
   MAIN_AGENT_ID,
   type PlanRowPatch,
   type UsageAgentEvent,
-} from '../../contracts/agent';
+} from '../../../contracts/agent';
 import type { AgentDefinition } from './agent-definitions';
 import { withoutSlash } from './claude-commands';
 import type { ClaudeControlId } from './claude-controls';
-import type { EntryDraft, WithoutAt } from '../../shared/entry-stamp';
-import { isJsonObject } from '../../shared/json';
+import type { EntryDraft, WithoutAt } from '../../../shared/entry-stamp';
+import { isJsonObject } from '../../../shared/json';
 import {
   asArray,
   asJson,

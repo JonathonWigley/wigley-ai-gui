@@ -1,4 +1,3 @@
-import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   type AccountStatus,
   type AgentEvent,
@@ -11,11 +10,17 @@ import {
   type LogInProcess,
   type PlanUsage,
   type ProcessActivity,
-} from '../../contracts/agent';
-import type { Clock, RandomUuid } from '../../contracts/ambient';
-import { type Files, readIfPresent } from '../../contracts/files';
-import type { Log } from '../../contracts/log';
-import type { Paths } from '../../contracts/paths';
+} from '../../../contracts/agent';
+import type { Clock, RandomUuid } from '../../../contracts/ambient';
+import { type Files, readIfPresent } from '../../../contracts/files';
+import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
+import type {
+  ProcessRunner,
+  SpawnedProcess,
+  SpawnEvents,
+  SpawnStartError,
+} from '../../../contracts/processes';
 import type {
   HostedExit,
   HostedProcess,
@@ -24,8 +29,8 @@ import type {
   KeyPath,
   PipeLine,
   SessionHost,
-} from '../../contracts/session-host';
-import { errorText } from '../../shared/error-text';
+} from '../../../contracts/session-host';
+import { errorText } from '../../../shared/error-text';
 import {
   type AgentDefinitions,
   loadAgentDefinitions,
@@ -75,17 +80,14 @@ import {
 } from './session-usage';
 import { projectFolderName } from './transcripts';
 
-export type ClaudeSpawn = (
-  command: string,
-  args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv },
-) => ChildProcessWithoutNullStreams;
+// The harness id relay hellos and saved sessions carry for Claude Code.
+export const CLAUDE_HARNESS_ID = 'claude';
 
-// `host` runs each session's `claude` process, so it outlives the app; `spawn`
-// runs the one-shot commands, which must not. `command` reads the `claude`
-// binary's path, once per session process `start` spawns;
+// `host` runs each session's `claude` process, so it outlives the app;
+// `processes` spawns the one-shot commands, which must not. `command` reads the
+// `claude` binary's path, once per process spawned;
 // `permissionTool` the MCP tool Claude asks what the session's permission mode
-// would still prompt; `env` the environment the process inherits; `files` reads
+// would still prompt; `env` the environment every process starts from; `files` reads
 // saved transcripts, `homeDir` holds the default config folder `.claude`, is
 // what a `~` profile folder resolves against and is where `claude auth` and
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
@@ -97,10 +99,10 @@ export type ClaudeSpawn = (
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;
-  env: NodeJS.ProcessEnv;
+  env: Readonly<Record<string, string>>;
   log: Log;
   host: SessionHost;
-  spawn: ClaudeSpawn;
+  processes: ProcessRunner;
   files: Files;
   homeDir: string;
   paths: Paths;
@@ -155,7 +157,7 @@ function exitError(
 // so the hint names both causes.
 function spawnError(error: string, command: string, cwd: string): string {
   return error.includes('ENOENT')
-    ? `claude was not found at ${command}, or the project folder ${cwd} does not exist; set claude.command`
+    ? `claude was not found at ${command}, or the project folder ${cwd} does not exist; set claude-code.command`
     : error;
 }
 
@@ -175,15 +177,6 @@ function withSpawnHint(
           : { ...exit, error: spawnError(exit.error, command, cwd) },
       ),
   };
-}
-
-// `launch.env` without its undefined values.
-function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(env).filter(
-      (pair): pair is [string, string] => pair[1] !== undefined,
-    ),
-  );
 }
 
 // Calls `events` for an effect that only reports; the others call nothing.
@@ -764,7 +757,7 @@ function startClaudeProcess(
       command,
       args: launch.args,
       cwd: launch.cwd,
-      env: definedEnv(launch.env),
+      env: launch.env,
       idleRule: CLAUDE_IDLE_RULE,
       droppedOutKeys: CLAUDE_DROPPED_OUT_KEYS,
     },
@@ -860,11 +853,10 @@ interface CliRun {
 
 // The one-shot commands run in the home folder, so ENOENT names the binary
 // alone.
-function cliSpawnError(error: Error, command: string): string {
-  const isMissing = (error as NodeJS.ErrnoException).code === 'ENOENT';
-  return isMissing
-    ? `claude was not found at ${command}; set claude.command`
-    : error.message;
+function cliSpawnError(startError: SpawnStartError, command: string): string {
+  return startError.notFound
+    ? `claude was not found at ${command}; set claude-code.command`
+    : startError.message;
 }
 
 function withStderr(message: string, stderr: string): string {
@@ -878,68 +870,65 @@ function commandLabel(args: readonly string[]): string {
   return ['claude', ...words].join(' ');
 }
 
-// `claude <args>` for `profileDir`, in the home folder with the session
-// launch's environment.
+// `claude <args>` as `command` for `profileDir`, in the home folder with the
+// session launch's environment.
 function spawnCli(
   deps: ClaudeCodeHarnessDeps,
+  command: string,
   args: readonly string[],
   profileDir: string | null,
-): { command: string; child: ChildProcessWithoutNullStreams } {
-  const command = deps.command();
-  const child = deps.spawn(command, args, {
+  events: SpawnEvents,
+): SpawnedProcess {
+  return deps.processes.spawn(command, args, {
     cwd: deps.homeDir,
     env: claudeEnv(deps.env, profileDir, deps.homeDir, deps.paths),
+    events,
   });
-  child.stdin.on('error', (error) => deps.log('claude', errorText(error)));
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  return { command, child };
 }
 
 // Runs `claude <args>` to its exit, stdin closed. Rejects with the
-// `claude.command` hint when the process cannot start, and, given `timeoutMs`,
-// kills the child and rejects when it has not exited by then.
+// `claude-code.command` hint when the process cannot start, and, given
+// `timeoutMs`, kills the child and rejects when it has not exited by then.
 function runCli(
   deps: ClaudeCodeHarnessDeps,
   args: readonly string[],
   profileDir: string | null,
   timeoutMs: number | null,
 ): Promise<CliRun> {
-  const { command, child } = spawnCli(deps, args, profileDir);
-  let stdout = '';
-  let stderr = '';
-  child.stdout.on('data', (chunk: string) => {
-    stdout += chunk;
-  });
-  child.stderr.on('data', (chunk: string) => {
-    stderr += chunk;
-  });
-  child.stdin.end();
   return new Promise((resolve, reject) => {
-    const timer =
-      timeoutMs === null
-        ? null
-        : setTimeout(() => {
-            child.kill('SIGKILL');
-            reject(
-              new Error(
-                `${commandLabel(args)} gave no answer in ${timeoutMs / 1000} s`,
-              ),
-            );
-          }, timeoutMs);
-    const stopTimer = () => {
-      if (timer !== null) {
-        clearTimeout(timer);
-      }
-    };
-    child.on('error', (error: Error) => {
-      stopTimer();
-      reject(new Error(cliSpawnError(error, command)));
+    const command = deps.command();
+    let stdout = '';
+    let stderr = '';
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const child = spawnCli(deps, command, args, profileDir, {
+      stdout: (chunk) => {
+        stdout += chunk;
+      },
+      stderr: (chunk) => {
+        stderr += chunk;
+      },
+      closed: (exit) => {
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+        if (exit.startError !== null) {
+          reject(new Error(cliSpawnError(exit.startError, command)));
+          return;
+        }
+        resolve({ code: exit.code, stdout, stderr: stderr.trim() });
+      },
     });
-    child.on('close', (code: number | null) => {
-      stopTimer();
-      resolve({ code, stdout, stderr: stderr.trim() });
-    });
+    child.endInput();
+    if (timeoutMs !== null) {
+      timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(
+          new Error(
+            `${commandLabel(args)} gave no answer in ${timeoutMs / 1000} s`,
+          ),
+        );
+      }, timeoutMs);
+    }
   });
 }
 
@@ -1027,7 +1016,7 @@ function startLogIn(
 ): LogInProcess {
   // A failed read leaves the earlier status unknown, read as signed out.
   const statusBefore = readAuthStatus(deps, profileDir).catch(() => null);
-  const { command, child } = spawnCli(deps, ['auth', 'login'], profileDir);
+  const command = deps.command();
   let stdout = '';
   let stderr = '';
   let hasLink = false;
@@ -1054,15 +1043,7 @@ function startLogIn(
     }
   };
 
-  child.stdout.on('data', (chunk: string) => {
-    stdout += chunk;
-    findLink(stdout);
-  });
-  child.stderr.on('data', (chunk: string) => {
-    stderr += chunk;
-    findLink(stderr);
-  });
-  child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+  const endAfterExit = (code: number | null, signal: string | null) => {
     if (hasEnded) {
       return;
     }
@@ -1076,15 +1057,32 @@ function startLogIn(
         end(after, isNewSignIn(before, after, code) ? null : failure),
       (error: unknown) => end(null, errorText(error)),
     );
+  };
+
+  const child = spawnCli(deps, command, ['auth', 'login'], profileDir, {
+    stdout: (chunk) => {
+      stdout += chunk;
+      findLink(stdout);
+    },
+    stderr: (chunk) => {
+      stderr += chunk;
+      findLink(stderr);
+    },
+    closed: (exit) => {
+      if (exit.startError === null) {
+        endAfterExit(exit.code, exit.signal);
+      } else {
+        end(null, cliSpawnError(exit.startError, command));
+      }
+    },
   });
-  child.on('error', (error: Error) => end(null, cliSpawnError(error, command)));
 
   return {
     sendCode(code) {
       if (hasEnded) {
         return;
       }
-      child.stdin.write(`${code}\n`);
+      child.write(`${code}\n`);
     },
     cancel() {
       if (hasEnded) {
@@ -1128,7 +1126,7 @@ export function createClaudeCodeHarness(
   deps: ClaudeCodeHarnessDeps,
 ): AgentHarness {
   return {
-    id: 'claude',
+    id: CLAUDE_HARNESS_ID,
     info: () => ({ label: 'Claude Code' }),
     start: (request, events) => startClaudeProcess(deps, request, events),
     attach: (request, events) => attachClaudeProcess(deps, request, events),

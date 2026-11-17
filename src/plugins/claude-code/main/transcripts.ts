@@ -2,8 +2,8 @@ import {
   type ChatEntry,
   type ChatImage,
   MAIN_AGENT_ID,
-} from '../../contracts/agent';
-import { isJsonObject } from '../../shared/json';
+} from '../../../contracts/agent';
+import { isJsonObject } from '../../../shared/json';
 import {
   asArray,
   asJson,

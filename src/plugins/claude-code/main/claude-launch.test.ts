@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { posixPaths } from '../../shared/paths/posix-paths';
-import { windowsPaths } from '../../shared/paths/windows-paths';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import { windowsPaths } from '../../../shared/paths/windows-paths';
 import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 
 const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
@@ -249,7 +249,7 @@ describe('claudeLaunch', () => {
     },
   );
 
-  it.each<{ name: string; env: NodeJS.ProcessEnv }>([
+  it.each<{ name: string; env: Record<string, string> }>([
     { name: 'nothing inherited', env: {} },
     {
       name: 'the request replaces an inherited row',

@@ -24,7 +24,6 @@ const DEFAULTS: Settings = {
   transparency: 'system',
   fonts: {},
   keySequenceTimeoutMs: 1000,
-  claude: { command: 'claude' },
   shell: { layout: 'default' },
   plugins: { disabled: [] },
 };

@@ -1,4 +1,4 @@
-import type { PluginManifest } from '../contracts/plugin';
+import type { MainPart, PluginManifest } from '../contracts/plugin';
 import { agentLinesManifest } from './agent-lines/manifest';
 import { appUpdateManifest } from './app-update/manifest';
 import { audioPickerManifest } from './audio-picker/manifest';
@@ -10,6 +10,7 @@ import { autoCompactManifest } from './auto-compact/manifest';
 import { autoRetroManifest } from './auto-retro/manifest';
 import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
+import { claudeCodeManifest } from './claude-code/manifest';
 import { docsManifest } from './docs/manifest';
 import { docsSessionTabManifest } from './docs-session-tab/manifest';
 import { formsManifest } from './forms/manifest';
@@ -44,6 +45,7 @@ export { MAX_CANDIDATES } from './audio-picker/manifest';
 // and scopes in its type, which the default keymap is checked against.
 export const builtInManifests = [
   sessionsManifest,
+  claudeCodeManifest,
   formsManifest,
   primerManifest,
   audioPickerManifest,
@@ -86,3 +88,25 @@ export const builtInManifests = [
 // check each part's `dependsOn` against it, so a plugin's main and page parts
 // each need their manifest here.
 export const manifests: readonly PluginManifest[] = builtInManifests;
+
+// The built-in plugins that run a real agent harness, which a run on the fake
+// harness leaves out.
+export const realHarnessPluginIds: readonly string[] = [claudeCodeManifest.id];
+
+// `manifests` and `mainParts` without the plugins in `realHarnessPluginIds`
+// when `isFake`, each in its input order; both unchanged otherwise.
+export function withoutRealHarnessPlugins(
+  manifests: readonly PluginManifest[],
+  mainParts: readonly MainPart[],
+  isFake: boolean,
+): { manifests: readonly PluginManifest[]; mainParts: readonly MainPart[] } {
+  if (!isFake) {
+    return { manifests, mainParts };
+  }
+  const isKept = (manifest: PluginManifest) =>
+    !realHarnessPluginIds.includes(manifest.id);
+  return {
+    manifests: manifests.filter(isKept),
+    mainParts: mainParts.filter((part) => isKept(part.manifest)),
+  };
+}

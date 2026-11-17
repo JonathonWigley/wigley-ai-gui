@@ -3,11 +3,11 @@ import type {
   PastSession,
   ProjectFolder,
   UsageAgentEvent,
-} from '../../contracts/agent';
-import type { Files } from '../../contracts/files';
-import type { Log } from '../../contracts/log';
-import type { Paths } from '../../contracts/paths';
-import { errorText } from '../../shared/error-text';
+} from '../../../contracts/agent';
+import type { Files } from '../../../contracts/files';
+import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
+import { errorText } from '../../../shared/error-text';
 import {
   EMPTY_SESSION_USAGE,
   type SavedReply,

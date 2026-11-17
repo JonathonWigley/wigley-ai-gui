@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createMemoryFiles } from '../../shared/memory-files';
-import { posixPaths } from '../../shared/paths/posix-paths';
+import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import { agentFrontmatter, loadAgentDefinitions } from './agent-definitions';
 
 const PROJECT = '/work/app';

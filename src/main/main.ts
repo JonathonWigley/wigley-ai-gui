@@ -22,14 +22,14 @@ import path from 'node:path';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { coreCommands, coreScopes } from '../config/keymap';
 import {
-  defaultSettingsFor,
+  coreDefaultSettings,
   optionalSettings,
   settingChoices,
   settingInfo,
 } from '../config/settings';
 import { coreThemeTokens } from '../config/theme-tokens';
 import { builtInThemes } from '../config/themes';
-import { type AgentHarness, CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
+import type { AgentHarness } from '../contracts/agent';
 import type { Alerts } from '../contracts/alerts';
 import type {
   Clock,
@@ -67,7 +67,7 @@ import type {
 import type { PluginCatalog } from '../contracts/plugin-catalog';
 import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
-import { manifests } from '../plugins/manifests';
+import { manifests, withoutRealHarnessPlugins } from '../plugins/manifests';
 import { appEndpointDir } from '../shared/app-endpoint-dir';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
@@ -101,7 +101,6 @@ import { createMacAlerts } from './alerts/mac-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createWindowsAlerts } from './alerts/windows-alerts';
 import { appBuildOf, appInstanceOf } from './app-instance';
-import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
 import {
   type ConfigStore,
   type ConfigStoreDeps,
@@ -247,51 +246,41 @@ interface ModeServices {
   trashItem(file: string): Promise<void>;
   forWindow(context: ModeServicesContext): Pick<
     MainServices,
-    'alerts' | 'window' | 'openExternal' | 'systemStats' | 'screenCapture'
-  > & {
-    harnesses: readonly AgentHarness[];
-  };
+    | 'alerts'
+    | 'window'
+    | 'openExternal'
+    | 'systemStats'
+    | 'screenCapture'
+    | 'agentHomeDir'
+  > &
+    RunAgents;
 }
 
 interface ModeServicesContext {
   window: BrowserWindow;
-  store: ConfigStore;
   homeDir: string;
   log: Log;
-  sessionHost: SessionHost;
 }
 
-// Claude Code run as the user of `homeDir`, its command and profile folders
-// expanded against that home, its sessions on `host`.
-function claudeHarness(
-  store: ConfigStore,
-  homeDir: string,
-  env: NodeJS.ProcessEnv,
-  log: Log,
-  host: SessionHost,
-) {
-  return createClaudeCodeHarness({
-    command: () =>
-      paths.expandTilde(store.current().settings.claude.command, homeDir),
-    permissionTool: CLAUDE_PERMISSION_TOOL,
-    env,
-    log,
-    host,
-    spawn,
-    files,
-    homeDir,
-    paths,
-    clock,
-    randomUuid,
-  });
+// The harnesses the composition root registers in a run, and the home folder
+// an agent harness runs as (`services.agentHomeDir`).
+interface RunAgents {
+  harnesses: readonly AgentHarness[];
+  agentHomeDir: string;
 }
 
-// The app's environment with `WIGLEY_AI_GUI_ENDPOINT_DIR` set to the app
-// instance's endpoint folder in `endpointHome`, so the relays of the Claude
-// sessions this app starts send their rounds to this app.
-function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
+// The app's environment, its undefined values dropped, with
+// `WIGLEY_AI_GUI_ENDPOINT_DIR` set to the app instance's endpoint folder in
+// `endpointHome`, so the relays of the agent sessions this app starts send their
+// rounds to this app.
+function endpointEnv(endpointHome: string): Readonly<Record<string, string>> {
+  const definedEnv = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (pair): pair is [string, string] => pair[1] !== undefined,
+    ),
+  );
   return {
-    ...process.env,
+    ...definedEnv,
     WIGLEY_AI_GUI_ENDPOINT_DIR: appEndpointDir(
       paths,
       endpointHome,
@@ -350,18 +339,16 @@ function screenCaptureFor(
   }
 }
 
-// The user's app: the OS Trash, the icon badge, native dialogs, Claude Code, whose
-// relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, links
-// opened in the user's browser, the machine's own readings, and the OS's own
-// windows to stream.
+// The user's app: the OS Trash, the icon badge, native dialogs, the agent
+// harnesses its plugins register, run as the user, links opened in the user's
+// browser, the machine's own readings, and the OS's own windows to stream.
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
-    forWindow: ({ window, store, homeDir, log, sessionHost }) => ({
+    forWindow: ({ window, homeDir }) => ({
       alerts: alertsFor(platform.os, window),
-      harnesses: [
-        claudeHarness(store, homeDir, endpointEnv(homeDir), log, sessionHost),
-      ],
+      harnesses: [],
+      agentHomeDir: homeDir,
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
       systemStats: systemStatsFor(platform.os, processes),
@@ -375,11 +362,12 @@ function liveServices(): ModeServices {
 // collects nothing; alerts are silent, the window stays offscreen and shows no
 // dialog, and no link takes the user's foreground. `runName` names the run in
 // the line a window not shown or a link not opened logs; sessions run over the
-// harness `harness` builds, and plugins read the machine `systemStats` builds
-// and the windows `screenCapture` builds.
+// harnesses `agents` builds for the run's home, as the home it names, and
+// plugins read the machine `systemStats` builds and the windows `screenCapture`
+// builds.
 function offscreenRunServices(
   runName: string,
-  harness: (context: ModeServicesContext) => AgentHarness,
+  agents: (homeDir: string) => RunAgents,
   systemStats: () => SystemStats,
   screenCapture: () => ScreenCapture,
 ): ModeServices {
@@ -387,7 +375,7 @@ function offscreenRunServices(
     trashItem: (file) => rm(file, { recursive: true }),
     forWindow: (context) => ({
       alerts: silentAlerts,
-      harnesses: [harness(context)],
+      ...agents(context.homeDir),
       window: offscreenWindowService(context.window, runName, context.log),
       openExternal: gateExternalLinks(async (url) =>
         context.log('main', `external link not opened in ${runName}: ${url}`),
@@ -398,24 +386,35 @@ function offscreenRunServices(
   };
 }
 
-// A drive run's agent harness, as `WIGLEY_DRIVE_HARNESS` named it: the fake
-// harness, or Claude Code logged in as the user, whose relays find this run's
-// endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, the app instance's endpoint
-// folder in the run's home.
-function driveHarness(
-  name: DriveHarnessName,
-  { store, homeDir, log, sessionHost }: ModeServicesContext,
-): AgentHarness {
-  if (name === 'fake') {
-    return createFakeAgentHarness(clock, files, timers);
+// The fake harness, registered by the composition root, run in `homeDir`.
+function fakeAgents(homeDir: string): RunAgents {
+  return {
+    harnesses: [createFakeAgentHarness(clock, files, timers)],
+    agentHomeDir: homeDir,
+  };
+}
+
+// A drive run's agents, as `WIGLEY_DRIVE_HARNESS` named them: the fake harness
+// in the run's home `homeDir`, or none, the built-in harness plugins
+// registering theirs to run as the user, logged in in their real home; their
+// relays still find this run's endpoint through `services.agentEnvironment`.
+function driveAgents(name: DriveHarnessName, homeDir: string): RunAgents {
+  return name === 'fake'
+    ? fakeAgents(homeDir)
+    : { harnesses: [], agentHomeDir: os.homedir() };
+}
+
+// Whether the run's agent sessions run on the fake harness, so the built-in
+// plugins that run a real harness are left out.
+function isFakeHarnessRun(environment: RunEnvironment): boolean {
+  switch (environment.mode) {
+    case 'selfTest':
+      return true;
+    case 'drive':
+      return environment.harness === 'fake';
+    case 'live':
+      return false;
   }
-  return claudeHarness(
-    store,
-    os.homedir(),
-    endpointEnv(homeDir),
-    log,
-    sessionHost,
-  );
 }
 
 // A drive run's system stats, as `WIGLEY_DRIVE_SYSTEM_STATS` named them: the
@@ -433,14 +432,14 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
     case 'selfTest':
       return offscreenRunServices(
         'the self-test',
-        () => createFakeAgentHarness(clock, files, timers),
+        fakeAgents,
         () => createFakeSystemStats(clock),
         () => createFakeScreenCapture(),
       );
     case 'drive':
       return offscreenRunServices(
         'a drive run',
-        (context) => driveHarness(environment.harness, context),
+        (homeDir) => driveAgents(environment.harness, homeDir),
         () => driveSystemStats(environment.systemStats),
         () => createFakeScreenCapture(),
       );
@@ -748,7 +747,13 @@ function startCatalog(
   inputs: StartInputs,
 ): Promise<PluginCatalog & Disposable> {
   return startPluginCatalog({
-    builtIn: createBuiltInSource({ manifests, mainParts }),
+    builtIn: createBuiltInSource(
+      withoutRealHarnessPlugins(
+        manifests,
+        mainParts,
+        isFakeHarnessRun(runEnvironment),
+      ),
+    ),
     user: createUserFolderSource({
       pluginsFolder: scopedFiles(files, inputs.pluginsFolder, paths),
       userRoot: inputs.pluginsFolder,
@@ -771,7 +776,7 @@ function layoutsFolder(homeDir: string): string {
 // the default `plugins.disabled` is empty, so the store's list and the applied
 // list agree and the plugin switch stops nothing at the first config change.
 function defaultSettings() {
-  const defaults = defaultSettingsFor(platform.programs);
+  const defaults = coreDefaultSettings();
   return runMode === 'selfTest'
     ? { ...defaults, plugins: { disabled: [] } }
     : defaults;
@@ -1156,10 +1161,8 @@ function createWindow(
   );
   const { harnesses, ...windowServices } = modeServices.forWindow({
     window,
-    store,
     homeDir: inputs.homeDir,
     log,
-    sessionHost,
   });
   // Registered before the main parts start, so every part and page finds them;
   // the registrations live as long as the window, as the shell layout's does.
@@ -1201,6 +1204,7 @@ function createWindow(
       ),
       sessionHost,
       agentHarnesses,
+      agentEnvironment: endpointEnv(inputs.homeDir),
       pluginSwitch: {
         mayDisable: (id) =>
           pluginSwitch === null

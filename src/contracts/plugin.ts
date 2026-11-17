@@ -1048,9 +1048,14 @@ export interface DriveHost {
 // the user's attention, and stopping the plugin zeroes the open counts it set.
 // Stopping the plugin also clears its pending `timers`, disposes its live
 // `files` watches and stops its running `processes`, each of which then rejects
-// with `Stopped <command>`. `agentHarnesses` is the harness registry: a harness
+// with `Stopped <command>`, and kills its spawned ones with `SIGKILL`.
+// `agentHarnesses` is the harness registry: a harness
 // plugin registers its adapter there, and stopping the plugin disposes its
-// registrations. `window.summon` brings the app
+// registrations. `agentEnvironment` is the whole environment an agent process
+// the app starts gets: the app's own plus the relay's endpoint folder as
+// `WIGLEY_AI_GUI_ENDPOINT_DIR`. `agentHomeDir` is the home folder an agent
+// harness runs as: the user's real home in a drive run on a real harness,
+// `homeDir` in every other run. `window.summon` brings the app
 // forward from behind another app and returns whether the window came forward.
 // `window.chooseFolder` opens the native folder dialog over the window and
 // resolves to null when the user cancels; `window.isFocused` is true while the app's window has focus;
@@ -1090,6 +1095,8 @@ export interface MainServices {
   systemStats: SystemStats;
   screenCapture: ScreenCapture;
   agentHarnesses: AgentHarnessRegistry;
+  agentEnvironment: Readonly<Record<string, string>>;
+  agentHomeDir: string;
   sessionHost: SessionHost;
   window: {
     show(): void;

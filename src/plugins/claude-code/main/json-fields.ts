@@ -1,4 +1,4 @@
-import { isJsonObject, type JsonObject } from '../../shared/json';
+import { isJsonObject, type JsonObject } from '../../../shared/json';
 
 // Readers for Claude's JSON lines: each reads a field as one shape, or that
 // shape's empty value (null for a number) when the field holds another.

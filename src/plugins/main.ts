@@ -10,6 +10,7 @@ import { autoCompactMainPart } from './auto-compact/main/start';
 import { autoRetroMainPart } from './auto-retro/main/start';
 import { backlogMainPart } from './backlog/main/start';
 import { chatMainPart } from './chat/main/start';
+import { claudeCodeMainPart } from './claude-code/main/start';
 import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
 import { galleryMainPart } from './gallery/main/start';
@@ -39,6 +40,8 @@ import { workflowSpikeMainPart } from './workflow-spike/main/start';
 export const mainParts: readonly MainPart[] = [
   keysMainPart,
   sessionsMainPart,
+  // Before chat and usage, so Claude's harness is registered when they start.
+  claudeCodeMainPart,
   formsMainPart,
   primerMainPart,
   audioPickerMainPart,

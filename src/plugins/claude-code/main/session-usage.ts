@@ -1,4 +1,4 @@
-import { MAIN_AGENT_ID, type UsageAgentEvent } from '../../contracts/agent';
+import { MAIN_AGENT_ID, type UsageAgentEvent } from '../../../contracts/agent';
 import { asJson, type Json, numberOrNull, parsed } from './json-fields';
 
 // The prompt cache's two lifetimes, by the `usage.cache_creation` bucket a reply wrote.

@@ -8,7 +8,6 @@ const CORE_DEFAULTS = {
   transparency: 'system',
   fonts: {},
   keySequenceTimeoutMs: 1000,
-  claude: { command: 'claude' },
 } as Settings;
 
 const SCHEMA: SettingsSchema = {

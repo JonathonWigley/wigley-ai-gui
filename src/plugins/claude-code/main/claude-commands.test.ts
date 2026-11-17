@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentCommand } from '../../contracts/agent';
+import type { AgentCommand } from '../../../contracts/agent';
 import {
   commandRecordsOf,
   mergeInitNames,
