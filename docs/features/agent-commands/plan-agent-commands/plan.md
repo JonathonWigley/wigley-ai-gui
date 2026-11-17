@@ -214,7 +214,7 @@ Critical path: 01 → 06 → 08 → 09
 - [x] [agent-commands plugin](08-agent-commands-plugin.md) — after 01, 02, 03, 06
 
 ### Wave 4
-- [ ] [Doc re-read](09-doc-re-read.md) — after 01–08
+- [x] [Doc re-read](09-doc-re-read.md) — after 01–08
 - [ ] [Final verification](10-final-verification.md)
 
 ## Run log
@@ -230,6 +230,7 @@ Review base: 8d829c42c
 - 06 · hard · 11db446db · diff read: frameAgentMessage, readAgentFrame, frameSenderName in chat/agent-frame.ts; chat.sendTo in the manifest (runsIn main, arg sessionId/text); isUnattended and senderName on ChatMainExports; wave-2 typecheck passes · concerns: sendTo needed a label and group (label: send a message to another session, framed as its agent's; group chat); the 'running target' test row is the likeliest to fail; the fake sessions gained label and the harness exposes titles/labels
 - 07 · standard (compile error → same-rung fix) · 113ffce7a · diff read: from on UserInput and QueuedMessageInput in layout.d.ts; entryInput, queuedInput, stopText, putBack read the frame; layout.js draws the chat-user-from Tag; wave-3 typecheck passes after the read-chat-layout fix · concerns: the worker looked for DESIGN.md under docs/ and read no § Chat (it is at wigley-ai-gui/DESIGN.md); the putBack comment line runs past the wrap width
 - 08 · deep · 0b157af9d · diff read: agentCommandsManifest (readsEverySlot, depends on sessions/chat/forms), agentCommandsMainPart, AGENT_COMMAND_TOOLS and createAgentCommandTools, drive actions call/result; refusal order matches the task; wave-3 typecheck passes · concerns: chat.sendTo is a string literal in tools.ts (no command key in chat's contract); the confirm detail lands in the round's overview, documented as inline markdown, so the fenced JSON argument may render badly (task 10 looks); keyed-slot JSON puts all-digit keys first (Object.fromEntries)
+- 09 · standard · 995d667e9 · diff read: every planned mark for this feature gone; grep -in 'planned|not built yet' has no hit naming it and grep -c plan-agent-commands prints 0 in each of the four docs · concerns: AGENTS.md was read by section, not in full; the edited lines were not re-wrapped to the 120-column prose width
 ### Contract changes
 - 01 adds `commandHopOf(value: unknown): CommandHop` in `src/shared/command-args.ts`: it reads a hop the other process sent, keeping only the two session-id strings and `reportErrors: true`. Consumers: none outside 01.
 ### Rulings
