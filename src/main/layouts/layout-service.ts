@@ -1,6 +1,10 @@
 import type { Disposable } from '../../contracts/disposable';
 import type { Files } from '../../contracts/files';
-import type { LayoutOwner, LayoutSet } from '../../contracts/layouts';
+import {
+  DEFAULT_LAYOUT_NAME,
+  type LayoutOwner,
+  type LayoutSet,
+} from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { PLUGIN_ID_PATTERN } from '../../shared/define-plugin';
@@ -67,7 +71,6 @@ export interface LayoutService {
 // Lowercase letters, digits and `-`, as a plugin id is: the `wigley-layout:`
 // URL host carries the owner, and Chromium lowercases a URL's host.
 const OWNER = new RegExp(PLUGIN_ID_PATTERN);
-const DEFAULT_NAME = 'default';
 // The log source of the service's own lines.
 const LOG_SOURCE = 'layouts';
 
@@ -132,7 +135,7 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
       const userDefault =
         userFolder === null
           ? null
-          : paths.join(userFolder, 'layouts', DEFAULT_NAME);
+          : paths.join(userFolder, 'layouts', DEFAULT_LAYOUT_NAME);
       const defaultFolderPath =
         userDefault ??
         (deps.repoDir === null
@@ -142,7 +145,7 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
         registry: null,
         isDisposed: false,
         defaultFolderPath,
-        toldNames: [DEFAULT_NAME],
+        toldNames: [DEFAULT_LAYOUT_NAME],
       };
       registrations.set(owner, held);
       // The registry leaves a default folder missing at its start unwatched,
@@ -194,11 +197,11 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
       };
     },
     names: (owner) =>
-      registrations.get(owner)?.registry?.names() ?? [DEFAULT_NAME],
+      registrations.get(owner)?.registry?.names() ?? [DEFAULT_LAYOUT_NAME],
     namesByOwner() {
       const byOwner: Record<LayoutOwner, string[]> = {};
       for (const [owner, held] of registrations) {
-        byOwner[owner] = held.registry?.names() ?? [DEFAULT_NAME];
+        byOwner[owner] = held.registry?.names() ?? [DEFAULT_LAYOUT_NAME];
       }
       return byOwner;
     },

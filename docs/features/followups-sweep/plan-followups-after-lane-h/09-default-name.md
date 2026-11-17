@@ -1,6 +1,6 @@
 # 09 — One DEFAULT_NAME
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · one exported constant replacing nine private copies, after the exported constants `src/contracts/core-state.ts` already holds; behaviour unchanged
 Wave: 1 · Depends on: none

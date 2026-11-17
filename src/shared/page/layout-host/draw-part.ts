@@ -1,5 +1,8 @@
 import type { Disposable } from '../../../contracts/disposable';
-import type { LayoutOwner } from '../../../contracts/layouts';
+import {
+  DEFAULT_LAYOUT_NAME,
+  type LayoutOwner,
+} from '../../../contracts/layouts';
 import type { PluginLog } from '../../../contracts/log';
 import { callEach } from '../../call-each';
 import { errorText } from '../../error-text';
@@ -58,8 +61,6 @@ export function disposeDraws<R>(
   return [];
 }
 
-const DEFAULT_NAME = 'default';
-
 // The part names whose failure was logged, by the layout object that failed.
 // The loader makes a new layout object for each revision, so a new revision
 // logs again.
@@ -98,9 +99,11 @@ export function drawPart<
   }
   const builder = options.part(options.defaultLayout);
   if (builder === undefined) {
-    throw new Error(`layout ${DEFAULT_NAME} has no ${options.partName}`);
+    throw new Error(
+      `layout ${DEFAULT_LAYOUT_NAME} has no ${options.partName}`,
+    );
   }
-  return attempt(options, builder, DEFAULT_NAME, isBundledPick);
+  return attempt(options, builder, DEFAULT_LAYOUT_NAME, isBundledPick);
 }
 
 // A layout's part must return an element it appended to `parent`: the host

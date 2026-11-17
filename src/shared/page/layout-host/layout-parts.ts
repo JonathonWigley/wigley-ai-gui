@@ -1,4 +1,7 @@
-import type { LayoutOwner } from '../../../contracts/layouts';
+import {
+  DEFAULT_LAYOUT_NAME,
+  type LayoutOwner,
+} from '../../../contracts/layouts';
 import type { PluginLog } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import {
@@ -54,19 +57,17 @@ export interface LayoutParts<L, C> {
   dispose(): void;
 }
 
-const DEFAULT_NAME = 'default';
-
 export function createLayoutParts<L extends object, C extends L>(
   deps: LayoutPartsDeps<C>,
 ): LayoutParts<L, C> {
   let shown: ShownLayouts<L> = {
-    layouts: new Map<string, L>([[DEFAULT_NAME, deps.defaultLayout]]),
-    user: DEFAULT_NAME,
+    layouts: new Map<string, L>([[DEFAULT_LAYOUT_NAME, deps.defaultLayout]]),
+    user: DEFAULT_LAYOUT_NAME,
   };
   const kept = new Map<string, DrawnPart<{ element: HTMLElement }>>();
   const pick = (key: keyof C & string): PartPick<L> =>
     pickLayout(
-      [shown.user, DEFAULT_NAME],
+      [shown.user, DEFAULT_LAYOUT_NAME],
       shown.layouts,
       (layout) => partOf(layout, key) !== undefined,
     );

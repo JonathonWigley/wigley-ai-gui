@@ -1,7 +1,8 @@
-import type {
-  LayoutEntry,
-  LayoutOwner,
-  LayoutSet,
+import {
+  DEFAULT_LAYOUT_NAME,
+  type LayoutEntry,
+  type LayoutOwner,
+  type LayoutSet,
 } from '../../../contracts/layouts';
 import { isRecord } from './read-layout-module';
 
@@ -42,8 +43,6 @@ export interface LayoutLoader<L> {
   load(set: LayoutSet, names: readonly string[]): Promise<LayoutLoad<L>>;
   dispose(): void;
 }
-
-const DEFAULT_NAME = 'default';
 
 // The URLs of a layout's files: its script at its revision, its stylesheet at
 // its style revision.
@@ -106,7 +105,7 @@ export function createLayoutLoader<L>(
   const failedRevisions = new Map<string, number>();
   const links = new Map<string, StyleLink>();
   const defaultLink: StyleLink = {
-    element: createLink(DEFAULT_NAME, deps),
+    element: createLink(DEFAULT_LAYOUT_NAME, deps),
     href: null,
   };
   placeDefaultLink(deps.defaultStylesheet, defaultLink, links, deps.head);
@@ -116,7 +115,7 @@ export function createLayoutLoader<L>(
       const urls = layoutUrls(entry, deps.layoutUrl);
       const module = await deps.importModule(urls.script);
       const layout = deps.read(module, entry.name);
-      if (entry.name === DEFAULT_NAME) {
+      if (entry.name === DEFAULT_LAYOUT_NAME) {
         requireEveryDefaultPart(layout, deps.defaultLayout);
       }
       return { entry, layout };
@@ -127,7 +126,7 @@ export function createLayoutLoader<L>(
 
   return {
     async load(set, names) {
-      const entries = listedEntries(set, [...names, DEFAULT_NAME]);
+      const entries = listedEntries(set, [...names, DEFAULT_LAYOUT_NAME]);
       const toImport = entries.filter(
         (entry) =>
           !entry.builtIn &&
@@ -148,7 +147,9 @@ export function createLayoutLoader<L>(
         }
       }
       followSetEntries(set, good);
-      const layouts = new Map<string, L>([[DEFAULT_NAME, deps.defaultLayout]]);
+      const layouts = new Map<string, L>([
+        [DEFAULT_LAYOUT_NAME, deps.defaultLayout],
+      ]);
       const shownVersions: GoodVersion<L>[] = [];
       for (const entry of set.layouts) {
         const version = entry.builtIn ? undefined : good.get(entry.name);
@@ -167,7 +168,7 @@ export function createLayoutLoader<L>(
         deps.head,
       );
       if (isDefaultRelinked) {
-        relinked.add(DEFAULT_NAME);
+        relinked.add(DEFAULT_LAYOUT_NAME);
       }
       const imported = new Set(toImport.map((entry) => entry.name));
       // A built-in entry, or one whose good version is older, is never the
@@ -209,7 +210,7 @@ function requireEveryDefaultPart(live: unknown, bundled: unknown): void {
   const liveParts = isRecord(live) ? live : {};
   for (const [key, part] of Object.entries(bundled as object)) {
     if (typeof part === 'function' && typeof liveParts[key] !== 'function') {
-      throw new Error(`layout ${DEFAULT_NAME} has no ${key}`);
+      throw new Error(`layout ${DEFAULT_LAYOUT_NAME} has no ${key}`);
     }
     if (isRecord(part)) {
       const liveNested = isRecord(liveParts[key]) ? liveParts[key] : {};
@@ -218,7 +219,9 @@ function requireEveryDefaultPart(live: unknown, bundled: unknown): void {
           typeof nestedPart === 'function' &&
           typeof liveNested[nestedKey] !== 'function';
         if (isMissing) {
-          throw new Error(`layout ${DEFAULT_NAME} has no ${key}.${nestedKey}`);
+          throw new Error(
+            `layout ${DEFAULT_LAYOUT_NAME} has no ${key}.${nestedKey}`,
+          );
         }
       }
     }
@@ -231,7 +234,7 @@ function defaultStylesheetHref<L>(
   versions: GoodVersion<L>[],
   deps: Pick<LayoutLoaderDeps<L>, 'layoutUrl' | 'defaultStylesheet'>,
 ): string | null {
-  const live = versions.find(({ entry }) => entry.name === DEFAULT_NAME);
+  const live = versions.find(({ entry }) => entry.name === DEFAULT_LAYOUT_NAME);
   return live === undefined
     ? deps.defaultStylesheet
     : layoutUrls(live.entry, deps.layoutUrl).style;
@@ -309,7 +312,7 @@ function syncStylesheets<L>(
   const styled = new Map<string, string>();
   for (const { entry } of versions) {
     const { style } = layoutUrls(entry, deps.layoutUrl);
-    if (style !== null && entry.name !== DEFAULT_NAME) {
+    if (style !== null && entry.name !== DEFAULT_LAYOUT_NAME) {
       styled.set(entry.name, style);
     }
   }

@@ -1,6 +1,10 @@
 import type { Bridge } from '../../../contracts/bridge';
 import type { Disposable } from '../../../contracts/disposable';
-import type { LayoutOwner, LayoutSet } from '../../../contracts/layouts';
+import {
+  DEFAULT_LAYOUT_NAME,
+  type LayoutOwner,
+  type LayoutSet,
+} from '../../../contracts/layouts';
 import type { Log } from '../../../contracts/log';
 import type {
   LayoutShow,
@@ -28,8 +32,6 @@ export interface PageLayoutsDeps {
 export interface PageLayouts {
   show<L>(owner: LayoutOwner, options: ShowLayoutOptions<L>): LayoutShow;
 }
-
-const DEFAULT_NAME = 'default';
 
 // What a load was queued for: the set, the names to load, and the setting's
 // name when the set lists it, else null.
@@ -99,7 +101,7 @@ function showLayouts<L>(
     }
     if (missingLogged !== user) {
       missingLogged = user;
-      log(owner, `layout ${user} not found, drawing ${DEFAULT_NAME}`);
+      log(owner, `layout ${user} not found, drawing ${DEFAULT_LAYOUT_NAME}`);
     }
   };
 
@@ -130,7 +132,7 @@ function showLayouts<L>(
     const isUserLoaded = listedUser !== null && result.layouts.has(listedUser);
     const shown: ShownLayouts<L> = {
       layouts: result.layouts,
-      user: isUserLoaded ? listedUser : DEFAULT_NAME,
+      user: isUserLoaded ? listedUser : DEFAULT_LAYOUT_NAME,
     };
     if (lastShown === null || shownChanged(lastShown, shown)) {
       options.setLayouts(shown);
