@@ -54,11 +54,7 @@ import {
   type SessionOrigin,
 } from '../contract';
 import { OPEN_SESSIONS_FILE } from './open-sessions';
-import {
-  addDriveActions,
-  chatMainPart,
-  createHarnessFollower,
-} from './start';
+import { addDriveActions, chatMainPart, createHarnessFollower } from './start';
 import { CALLER_WAIT_MS, SUBAGENT_CALL_TEXT } from './tool-callers';
 
 // A chat holding one session, `held`, resting when `running` is false.

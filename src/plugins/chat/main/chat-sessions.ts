@@ -2458,9 +2458,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     const harness = deps.harnesses.get(harnessId);
     if (harness === null) {
-      log(
-        `harness ${harnessId} set in core.agentHarnesses but not registered`,
-      );
+      log(`harness ${harnessId} set in core.agentHarnesses but not registered`);
       return;
     }
     const waitingRows = [...held.values()].filter(
@@ -3377,10 +3375,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     } else if (profile === undefined) {
       addNotice(
         session,
-        missingProfileText(
-          record.profile,
-          deps.harnessLabelOf(record.harness),
-        ),
+        missingProfileText(record.profile, deps.harnessLabelOf(record.harness)),
         'error',
       );
     }

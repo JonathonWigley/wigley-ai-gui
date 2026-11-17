@@ -1538,7 +1538,9 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     harnessReturn,
   }: SelfTestProjects) {
     for (const state of chat.sessions()) {
-      if ([selftest, second, images, harnessReturn].includes(state.projectDir)) {
+      if (
+        [selftest, second, images, harnessReturn].includes(state.projectDir)
+      ) {
         chat.closed(state.sessionId, 'project-closed');
       }
     }

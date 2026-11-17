@@ -9695,9 +9695,9 @@ describe('createChatSessions harness leave and return', () => {
       const queuedBefore = test.chat.sessions()[0].queued;
       const callsBefore = test.process.calls.length;
 
-      await expect(
-        Promise.resolve().then(() => act(test)),
-      ).rejects.toThrow(WAITING_REFUSAL);
+      await expect(Promise.resolve().then(() => act(test))).rejects.toThrow(
+        WAITING_REFUSAL,
+      );
       await flush();
 
       expect(test.chat.sessions()[0].queued).toEqual(queuedBefore);
@@ -9781,9 +9781,9 @@ describe('createChatSessions harness leave and return', () => {
     await test.chat.harnessReturned(FAKE_HARNESS_ID);
     await flush();
 
-    expect(
-      test.harness.attachCalls.map((attach) => attach.processId),
-    ).toEqual([processId]);
+    expect(test.harness.attachCalls.map((attach) => attach.processId)).toEqual([
+      processId,
+    ]);
     const [session] = test.chat.sessions();
     expect(session.running).toBe(true);
     expect(noticesOf(test).map((notice) => notice.text)).not.toContain(

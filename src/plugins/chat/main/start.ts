@@ -5,10 +5,7 @@ import type {
   PermissionDecision,
 } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
-import type {
-  Disposable,
-  Registrations,
-} from '../../../contracts/disposable';
+import type { Disposable, Registrations } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type {
   DriveHost,
