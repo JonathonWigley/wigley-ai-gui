@@ -29,13 +29,12 @@ import { NESTED_SESSION_ENV } from '../../shared/session-env';
 import type { Files } from '../../contracts/files';
 import type { Paths } from '../../contracts/paths';
 import {
-  CLAUDE_IDLE_RULE,
   createClaudeCodeHarness,
   type ClaudeSpawn,
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, userMessage } from './claude-controls';
-import { claudeEnv, claudeLaunch } from './claude-launch';
+import { CLAUDE_IDLE_RULE, claudeEnv, claudeLaunch } from './claude-launch';
 import {
   appCommandUuid,
   createSessionFoldState,
@@ -3154,7 +3153,12 @@ describe('createClaudeCodeHarness on the session host', () => {
   function hostHarness(
     host: SessionHost,
     harnessClock: Clock,
-    overrides: { env?: NodeJS.ProcessEnv; paths?: Paths; files?: Files } = {},
+    overrides: {
+      env?: NodeJS.ProcessEnv;
+      paths?: Paths;
+      files?: Files;
+      homeDir?: string;
+    } = {},
   ) {
     let uuidCount = 0;
     return createClaudeCodeHarness({
@@ -3167,7 +3171,7 @@ describe('createClaudeCodeHarness on the session host', () => {
         throw new Error('a session process reached deps.spawn');
       },
       files: overrides.files ?? createMemoryFiles(),
-      homeDir: '/Users/u',
+      homeDir: overrides.homeDir ?? '/Users/u',
       paths: overrides.paths ?? posixPaths,
       clock: harnessClock,
       randomUuid: () => {
@@ -3350,6 +3354,138 @@ describe('createClaudeCodeHarness on the session host', () => {
       KEEP: 'a',
       WIGLEY_SESSION_ROW: 'row-1',
     });
+  });
+
+  const preparedRequest: AgentStart = {
+    ...request,
+    rowId: 'row-7',
+    profileDir: '~/.claude-work',
+    controls: { mode: 'plan', model: 'sonnet' },
+  };
+  const APP_ENV = {
+    PATH: '/usr/bin',
+    WIGLEY_AI_GUI_ENDPOINT_DIR: '/h/.agents/wigley-ai-gui',
+    HOME: '/h',
+    CLAUDECODE: '1',
+  };
+  const OFFLINE_ENV = {
+    WIGLEY_FORMS_OFFLINE: '/h/.agents/wigley-ai-gui/offline-calls',
+  };
+  const RUN_IT = { text: 'run it', images: [] };
+
+  it('prepareRun_SameRequest_MatchesTheLiveSpawn', () => {
+    const host = createFakeSessionHost(clock);
+    const liveHost = createFakeSessionHost(clock);
+    const overrides = { env: APP_ENV, homeDir: '/h' };
+
+    const spawn = hostHarness(host, clock, overrides).prepareRun(
+      preparedRequest,
+      RUN_IT,
+      OFFLINE_ENV,
+    );
+    hostHarness(liveHost, clock, overrides).start(
+      preparedRequest,
+      recordingEvents().events,
+    );
+
+    const live = liveHost.processes[0].request;
+    expect(spawn.command).toBe(live?.command);
+    expect(spawn.args).toEqual(live?.args);
+    expect(spawn.cwd).toBe(live?.cwd);
+    expect(spawn.unsetEnv).toEqual(live?.unsetEnv);
+    expect(spawn.idleRule).toEqual(live?.idleRule);
+    expect(spawn.droppedOutKeys).toEqual(live?.droppedOutKeys);
+    expect(live?.inheritEnv).toBe(false);
+    expect(spawn.inheritEnv).toBe(true);
+    expect(spawn.env).toEqual({
+      PATH: '/usr/bin',
+      WIGLEY_AI_GUI_ENDPOINT_DIR: '/h/.agents/wigley-ai-gui',
+      WIGLEY_FORMS_OFFLINE: '/h/.agents/wigley-ai-gui/offline-calls',
+      CLAUDE_CONFIG_DIR: '/h/.claude-work',
+      WIGLEY_SESSION_ROW: 'row-7',
+    });
+    expect(host.processes).toEqual([]);
+  });
+
+  it('prepareRun_EnvArgument_CannotOverrideHarnessValues', () => {
+    const host = createFakeSessionHost(clock);
+
+    const spawn = hostHarness(host, clock).prepareRun(request, RUN_IT, {
+      WIGLEY_SESSION_ROW: 'x',
+      CLAUDECODE: '1',
+    });
+
+    expect(spawn.env.WIGLEY_SESSION_ROW).toBe('row-1');
+    expect(spawn.env).not.toHaveProperty('CLAUDECODE');
+  });
+
+  it('prepareRun_DefaultProfile_CarriesInheritedConfigDir', () => {
+    const host = createFakeSessionHost(clock);
+
+    const spawn = hostHarness(host, clock, {
+      env: { CLAUDE_CONFIG_DIR: '/h/cfg' },
+    }).prepareRun(request, RUN_IT, {});
+
+    expect(spawn.env.CLAUDE_CONFIG_DIR).toBe('/h/cfg');
+  });
+
+  it('prepareRun_StdinReplayedOnAttach_WritesNothingAndHoldsTheMessage', async () => {
+    const host = createFakeSessionHost(clock);
+    const spawn = hostHarness(host, clock).prepareRun(request, RUN_IT, {});
+    const record = host.addRunning(
+      running(logOf(spawn.stdin.map((line) => ({ dir: 'in' as const, line })))),
+    );
+    const { timeline, events } = recordingEvents();
+
+    await hostHarness(host, clock).attach(request, events);
+    await settle();
+    expect(record.writes).toEqual([]);
+    host.output('p-1', 'out', asText(lifecycle('uuid-1', 'started')));
+    await settle();
+
+    expect(
+      entriesOf(timeline).map((entry) =>
+        entry.kind === 'user' ? [entry.id, entry.text] : [entry.id],
+      ),
+    ).toEqual([['user-1', 'run it']]);
+  });
+
+  it('prepareRun_Resume_Throws', () => {
+    const host = createFakeSessionHost(clock);
+
+    expect(() =>
+      hostHarness(host, clock).prepareRun(resumeRequest, RUN_IT, {}),
+    ).toThrow('A prepared run starts a new session');
+    expect(host.processes).toEqual([]);
+  });
+
+  it.each<{ controls: Record<string, string>; error: string | null }>([
+    {
+      controls: { mode: 'bypassPermissions' },
+      error: 'Claude Code control mode has no choice bypassPermissions',
+    },
+    {
+      controls: { mode: 'plna' },
+      error: 'Claude Code control mode has no choice plna',
+    },
+    {
+      controls: { effort: 'huge' },
+      error: 'Claude Code control effort has no choice huge',
+    },
+    { controls: { model: 'claude-opus-5-5' }, error: null },
+  ])('prepareRun_ControlValue_Cases ($controls)', ({ controls, error }) => {
+    const prepare = () =>
+      hostHarness(createFakeSessionHost(clock), clock).prepareRun(
+        { ...request, controls },
+        RUN_IT,
+        {},
+      );
+
+    if (error === null) {
+      expect(prepare().args).toContain('claude-opus-5-5');
+    } else {
+      expect(prepare).toThrow(error);
+    }
   });
 
   it.each([

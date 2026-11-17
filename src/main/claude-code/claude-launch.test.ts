@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
-import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
+import {
+  claudeConfigFolder,
+  claudeEnv,
+  claudeLaunch,
+  claudeSpawn,
+} from './claude-launch';
 
 const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
 
@@ -319,6 +324,45 @@ describe('claudeLaunch', () => {
     );
 
     expect(launch.env.CLAUDE_CONFIG_DIR).toBe('C:\\Users\\jo\\.claude-work');
+  });
+});
+
+describe('claudeSpawn', () => {
+  it('claudeSpawn_Request_IsTheLaunchUnderTheProcessId', () => {
+    const request = {
+      processId: 'p-3',
+      sessionId: 's-1',
+      resume: false,
+      projectDir: '/proj',
+      profileDir: '~/.claude',
+      controls: { mode: 'plan' },
+      instructions: [],
+      idleCompactMinTokens: null,
+      rowId: 'row-1',
+    };
+    const env = { HOME: '/h', CLAUDECODE: '1', UNSET: undefined };
+
+    const spawn = claudeSpawn({
+      request,
+      command: '/bin/claude',
+      permissionTool: TOOL,
+      env,
+      homeDir: '/h',
+      paths: posixPaths,
+      stdin: ['line-1'],
+      inheritEnv: true,
+    });
+
+    const launch = claudeLaunch(request, TOOL, env, '/h', posixPaths);
+    expect(spawn.id).toBe('p-3');
+    expect(spawn.command).toBe('/bin/claude');
+    expect(spawn.args).toEqual(launch.args);
+    expect(spawn.cwd).toBe(launch.cwd);
+    expect(spawn.unsetEnv).toEqual(launch.unsetEnv);
+    expect(spawn.stdin).toEqual(['line-1']);
+    expect(spawn.inheritEnv).toBe(true);
+    expect(spawn.env).toEqual({ HOME: '/h', WIGLEY_SESSION_ROW: 'row-1' });
+    expect(Object.values(spawn.env)).not.toContain(undefined);
   });
 });
 

@@ -1,8 +1,10 @@
 import type {
   AgentStart,
   ControlChoice,
+  SessionControl,
   UserMessage,
 } from '../../contracts/agent';
+import { capPermission } from '../../shared/permission-cap';
 import { asJson, asString, type Json } from './json-fields';
 
 export type ClaudeControlId = 'mode' | 'effort' | 'model';
@@ -53,9 +55,44 @@ export const CLAUDE_CONTROLS: readonly {
 // The `/effort` value that hands the level to Claude: it names no choice.
 export const EFFORT_CLEARING_VALUE = 'auto';
 
+// The permission mode a process launches with when its request sets none.
+const LAUNCH_MODE = 'auto';
+
+// The `mode` values from least to most permissive.
+export const CLAUDE_PERMISSION_ORDER: readonly string[] = [
+  'plan',
+  'dontAsk',
+  'manual',
+  'acceptEdits',
+  'auto',
+];
+
 // The permission mode a process launches with: the request's, else `auto`.
 export function launchMode(controls: AgentStart['controls']): string {
-  return controls.mode ?? 'auto';
+  return controls.mode ?? LAUNCH_MODE;
+}
+
+// Each Claude control with a copy of its choices and no value, in
+// `CLAUDE_CONTROLS` order.
+export function claudeStartControls(): SessionControl[] {
+  return CLAUDE_CONTROLS.map((control) => ({
+    id: control.id,
+    label: control.label,
+    choices: control.choices.map((choice) => ({ ...choice })),
+    value: null,
+  }));
+}
+
+// `controls` with `mode` lowered to `cap`'s mode where it grants more.
+export function capClaudeControls(
+  controls: Readonly<Record<string, string>>,
+  cap: Readonly<Record<string, string>>,
+): Record<string, string> {
+  return capPermission(controls, cap, {
+    controlId: 'mode',
+    order: CLAUDE_PERMISSION_ORDER,
+    launchDefault: LAUNCH_MODE,
+  });
 }
 
 // A typed `/effort <value>` or `/model <value>`.
@@ -153,4 +190,35 @@ export function controlMessage(
     };
   }
   return userMessage({ text: `/${id} ${value}`, images: [] }, lineId);
+}
+
+// The control requests a new process is sent when it opens, in order.
+export const CLAUDE_OPENING_REQUESTS: readonly string[] = [
+  'initialize',
+  'get_context_usage',
+  'get_settings',
+];
+
+// The stdin line asking Claude for `subtype`, answered under `requestId`.
+export function controlRequest(subtype: string, requestId: string): object {
+  return {
+    type: 'control_request',
+    request_id: requestId,
+    request: { subtype },
+  };
+}
+
+// The stdin lines a new session opens with, as `JSON.stringify` text: the
+// `CLAUDE_OPENING_REQUESTS` under request ids `wigley-1` onward, then
+// `firstMessage` under `uuid`.
+export function claudeOpeningLines(
+  firstMessage: UserMessage,
+  uuid: string,
+): string[] {
+  const requests = CLAUDE_OPENING_REQUESTS.map((subtype, index) =>
+    controlRequest(subtype, `wigley-${index + 1}`),
+  );
+  return [...requests, userMessage(firstMessage, uuid)].map((line) =>
+    JSON.stringify(line),
+  );
 }

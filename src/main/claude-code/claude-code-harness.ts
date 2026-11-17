@@ -11,6 +11,7 @@ import {
   type LogInProcess,
   type PlanUsage,
   type ProcessActivity,
+  type UserMessage,
 } from '../../contracts/agent';
 import type { Clock, RandomUuid } from '../../contracts/ambient';
 import { type Files, readIfPresent } from '../../contracts/files';
@@ -20,8 +21,7 @@ import type {
   HostedExit,
   HostedProcess,
   HostedProcessEvents,
-  IdleRule,
-  KeyPath,
+  HostedSpawn,
   PipeLine,
   SessionHost,
 } from '../../contracts/session-host';
@@ -32,14 +32,20 @@ import {
 } from './agent-definitions';
 import { readAccountStatus, signInLink } from './claude-auth';
 import {
+  CLAUDE_CARRIED_ENV,
   claudeConfigFolder,
   claudeEnv,
-  claudeLaunch,
+  claudeSpawn,
   defaultConfigFolder,
 } from './claude-launch';
 import {
+  CLAUDE_OPENING_REQUESTS,
+  capClaudeControls,
+  claudeOpeningLines,
+  claudeStartControls,
   controlMessage,
   controlOf,
+  controlRequest,
   isChoice,
   userMessage,
 } from './claude-controls';
@@ -83,9 +89,10 @@ export type ClaudeSpawn = (
 
 // `host` runs each session's `claude` process, so it outlives the app; `spawn`
 // runs the one-shot commands, which must not. `command` reads the `claude`
-// binary's path, once per session process `start` spawns;
-// `permissionTool` the MCP tool Claude asks what the session's permission mode
-// would still prompt; `env` the environment the process inherits; `files` reads
+// binary's path, once per session process `start` spawns and once per
+// `prepareRun`; `permissionTool` the MCP tool Claude asks what the session's
+// permission mode would still prompt; `env` the environment a started process
+// inherits, of which a prepared run carries only `CLAUDE_CARRIED_ENV`; `files` reads
 // saved transcripts, `homeDir` holds the default config folder `.claude`, is
 // what a `~` profile folder resolves against and is where `claude auth` and
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
@@ -108,21 +115,6 @@ export interface ClaudeCodeHarnessDeps {
   randomUuid: RandomUuid;
 }
 
-// A stdout line of type `result` ends a turn. The app's `user` line starts one,
-// and `assistant` or `stream_event` shows one Claude started by itself, after a
-// background task ended. `system` and the rest also print between turns.
-export const CLAUDE_IDLE_RULE: IdleRule = {
-  key: 'type',
-  value: 'result',
-  busyStdoutValues: ['assistant', 'stream_event'],
-  busyStdinValues: ['user'],
-};
-// A `get_settings` reply's settings-file copies, which hold the `env` block's
-// values. The fold reads only the reply's `applied`.
-export const CLAUDE_DROPPED_OUT_KEYS: readonly KeyPath[] = [
-  ['response', 'response', 'effective'],
-  ['response', 'response', 'sources'],
-];
 // How long `end` waits after closing stdin before SIGTERM, and again before
 // SIGKILL.
 const END_GRACE_MS = 3000;
@@ -175,15 +167,6 @@ function withSpawnHint(
           : { ...exit, error: spawnError(exit.error, command, cwd) },
       ),
   };
-}
-
-// `launch.env` without its undefined values.
-function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(env).filter(
-      (pair): pair is [string, string] => pair[1] !== undefined,
-    ),
-  );
 }
 
 // Calls `events` for an effect that only reports; the others call nothing.
@@ -381,32 +364,15 @@ function createClaudeSession(
 
   const nextRequestId = () => `wigley-${state.requestCount + 1}`;
 
-  // `init` waits for the first message; this answers at once.
-  const requestCommands = () => {
-    writeMessage({
-      type: 'control_request',
-      request_id: nextRequestId(),
-      request: { subtype: 'initialize' },
-    });
-  };
-
   // This request and `requestAppliedSettings` are asked at start and after every
   // turn, a control command's included: `/model` changes the window and the limit,
   // and `/effort` and `/model` change the applied model and effort.
   const requestContextUsage = () => {
-    writeMessage({
-      type: 'control_request',
-      request_id: nextRequestId(),
-      request: { subtype: 'get_context_usage' },
-    });
+    writeMessage(controlRequest('get_context_usage', nextRequestId()));
   };
 
   const requestAppliedSettings = () => {
-    writeMessage({
-      type: 'control_request',
-      request_id: nextRequestId(),
-      request: { subtype: 'get_settings' },
-    });
+    writeMessage(controlRequest('get_settings', nextRequestId()));
   };
 
   const answerOwed = () => {
@@ -536,9 +502,10 @@ function createClaudeSession(
       events.controls(state.controls.map((control) => ({ ...control }))),
     );
     emitActivity('idle');
-    requestCommands();
-    requestContextUsage();
-    requestAppliedSettings();
+    // `initialize` answers at once, where `init` waits for the first message.
+    for (const subtype of CLAUDE_OPENING_REQUESTS) {
+      writeMessage(controlRequest(subtype, nextRequestId()));
+    }
   };
 
   const agentProcess: AgentProcess = {
@@ -575,11 +542,7 @@ function createClaudeSession(
         kill();
         return;
       }
-      writeMessage({
-        type: 'control_request',
-        request_id: nextRequestId(),
-        request: { subtype: 'interrupt' },
-      });
+      writeMessage(controlRequest('interrupt', nextRequestId()));
       // Claude's interrupt leaves a main agent's background Bash running.
       for (const taskId of runningTaskIds) {
         writeMessage({
@@ -749,29 +712,20 @@ function startClaudeProcess(
   request: AgentStart,
   events: AgentProcessEvents,
 ): AgentProcess {
-  const launch = claudeLaunch(
+  const spec = claudeSpawn({
     request,
-    deps.permissionTool,
-    deps.env,
-    deps.homeDir,
-    deps.paths,
-  );
-  const command = deps.command();
+    command: deps.command(),
+    permissionTool: deps.permissionTool,
+    env: deps.env,
+    homeDir: deps.homeDir,
+    paths: deps.paths,
+    stdin: [],
+    inheritEnv: false,
+  });
   const forwarder = createPipeForwarder();
   const pipe = deps.host.spawn(
-    {
-      id: request.processId,
-      command,
-      args: launch.args,
-      cwd: launch.cwd,
-      env: definedEnv(launch.env),
-      inheritEnv: false,
-      unsetEnv: launch.unsetEnv,
-      stdin: [],
-      idleRule: CLAUDE_IDLE_RULE,
-      droppedOutKeys: CLAUDE_DROPPED_OUT_KEYS,
-    },
-    withSpawnHint(forwarder.events, command, launch.cwd),
+    spec,
+    withSpawnHint(forwarder.events, spec.command, spec.cwd),
   );
   const state = createSessionFoldState(request);
   const session = createClaudeSession(deps, request, events, state, pipe);
@@ -789,6 +743,45 @@ function startClaudeProcess(
     state.definitions = loaded;
   });
   return session.process;
+}
+
+// The controls whose values a launch passes to a flag Claude checks only at
+// run time; `model` also takes a full model id, so it is not checked.
+const CHECKED_START_CONTROLS = ['mode', 'effort'] as const;
+
+// The spec of a new session the host starts later: its stdin opens the session
+// and sends `firstMessage`, and its env holds the `CLAUDE_CARRIED_ENV` names of
+// `deps.env` under `env`, before the launch's own values. Throws on a resumed
+// request and on a `mode` or `effort` value Claude does not offer.
+function prepareClaudeRun(
+  deps: ClaudeCodeHarnessDeps,
+  request: AgentStart,
+  firstMessage: UserMessage,
+  env: Readonly<Record<string, string>>,
+): HostedSpawn {
+  if (request.resume) {
+    throw new Error('A prepared run starts a new session');
+  }
+  for (const id of CHECKED_START_CONTROLS) {
+    const value = request.controls[id];
+    if (value !== undefined && !isChoice(id, value)) {
+      throw new Error(`Claude Code control ${id} has no choice ${value}`);
+    }
+  }
+  // `claudeSpawn` drops a name `deps.env` does not hold.
+  const carried = Object.fromEntries(
+    CLAUDE_CARRIED_ENV.map((name) => [name, deps.env[name]]),
+  );
+  return claudeSpawn({
+    request,
+    command: deps.command(),
+    permissionTool: deps.permissionTool,
+    env: { ...carried, ...env },
+    homeDir: deps.homeDir,
+    paths: deps.paths,
+    stdin: claudeOpeningLines(firstMessage, deps.randomUuid()),
+    inheritEnv: true,
+  });
 }
 
 // Attaches to the running process `request.processId`: replays a resumed
@@ -1175,5 +1168,9 @@ export function createClaudeCodeHarness(
         projectsRoot(deps, profileDir),
       ),
     planUsage: (profileDir) => readProfilePlanUsage(deps, profileDir),
+    prepareRun: (request, firstMessage, env) =>
+      prepareClaudeRun(deps, request, firstMessage, env),
+    startControls: claudeStartControls,
+    capControls: capClaudeControls,
   };
 }

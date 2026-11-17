@@ -1,7 +1,36 @@
 import type { AgentStart } from '../../contracts/agent';
 import type { Paths } from '../../contracts/paths';
+import type {
+  HostedSpawn,
+  IdleRule,
+  KeyPath,
+} from '../../contracts/session-host';
+import { APP_ENDPOINT_ENV } from '../../shared/app-endpoint-dir';
 import { NESTED_SESSION_ENV, SESSION_ROW_ENV } from '../../shared/session-env';
 import { launchMode } from './claude-controls';
+
+// A stdout line of type `result` ends a turn. The app's `user` line starts one,
+// and `assistant` or `stream_event` shows one Claude started by itself, after a
+// background task ended. `system` and the rest also print between turns.
+export const CLAUDE_IDLE_RULE: IdleRule = {
+  key: 'type',
+  value: 'result',
+  busyStdoutValues: ['assistant', 'stream_event'],
+  busyStdinValues: ['user'],
+};
+// A `get_settings` reply's settings-file copies, which hold the `env` block's
+// values. The fold reads only the reply's `applied`.
+export const CLAUDE_DROPPED_OUT_KEYS: readonly KeyPath[] = [
+  ['response', 'response', 'effective'],
+  ['response', 'response', 'sources'],
+];
+
+// The names of the app's environment a prepared run carries into its spec.
+export const CLAUDE_CARRIED_ENV: readonly string[] = [
+  'PATH',
+  APP_ENDPOINT_ENV,
+  'CLAUDE_CONFIG_DIR',
+];
 
 export interface ClaudeLaunch {
   args: string[];
@@ -120,6 +149,54 @@ export function claudeLaunch(
     env: launchEnv,
     unsetEnv: claudeUnsetEnv(request.profileDir, homeDir, paths),
   };
+}
+
+// What `claudeSpawn` builds a hosted session spec from: `command` is the
+// `claude` binary's path, `env` the environment `claudeLaunch` starts from, and
+// `stdin` and `inheritEnv` pass to the spec as given.
+export interface ClaudeSpawnInput {
+  request: AgentStart;
+  command: string;
+  permissionTool: string;
+  env: NodeJS.ProcessEnv;
+  homeDir: string;
+  paths: Paths;
+  stdin: readonly string[];
+  inheritEnv: boolean;
+}
+
+// The hosted session spec for `input.request`: `claudeLaunch`'s arguments,
+// folder, unset names and environment, its undefined values dropped, under the
+// request's process id, with Claude's idle rule and dropped keys.
+export function claudeSpawn(input: ClaudeSpawnInput): HostedSpawn {
+  const launch = claudeLaunch(
+    input.request,
+    input.permissionTool,
+    input.env,
+    input.homeDir,
+    input.paths,
+  );
+  return {
+    id: input.request.processId,
+    command: input.command,
+    args: launch.args,
+    cwd: launch.cwd,
+    env: definedEnv(launch.env),
+    inheritEnv: input.inheritEnv,
+    unsetEnv: launch.unsetEnv,
+    stdin: input.stdin,
+    idleRule: CLAUDE_IDLE_RULE,
+    droppedOutKeys: CLAUDE_DROPPED_OUT_KEYS,
+  };
+}
+
+// `env` without its undefined values.
+function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      (pair): pair is [string, string] => pair[1] !== undefined,
+    ),
+  );
 }
 
 // The config folder a session launched with `claudeLaunch` uses: `profileDir`

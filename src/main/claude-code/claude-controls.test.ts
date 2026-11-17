@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   appliedControlsOf,
+  capClaudeControls,
+  CLAUDE_CONTROLS,
+  claudeOpeningLines,
+  claudeStartControls,
   controlMessage,
   controlValue,
   userMessage,
@@ -122,6 +126,94 @@ describe('claude-controls', () => {
 
     expect(message.message.content.map((block) => block.type)).toEqual([
       'image',
+    ]);
+  });
+
+  it.each<{
+    controls: Record<string, string>;
+    cap: Record<string, string>;
+    expected: Record<string, string>;
+  }>([
+    {
+      controls: { mode: 'dontAsk' },
+      cap: { mode: 'plan' },
+      expected: { mode: 'plan' },
+    },
+    {
+      controls: { mode: 'manual' },
+      cap: { mode: 'dontAsk' },
+      expected: { mode: 'dontAsk' },
+    },
+    {
+      controls: { mode: 'acceptEdits' },
+      cap: { mode: 'manual' },
+      expected: { mode: 'manual' },
+    },
+    {
+      controls: { mode: 'auto' },
+      cap: { mode: 'acceptEdits' },
+      expected: { mode: 'acceptEdits' },
+    },
+    { controls: {}, cap: { mode: 'manual' }, expected: { mode: 'manual' } },
+    {
+      controls: { mode: 'auto', effort: 'high' },
+      cap: {},
+      expected: { mode: 'auto', effort: 'high' },
+    },
+  ])(
+    'capClaudeControls_$controls.mode_Under_$cap.mode',
+    ({ controls, cap, expected }) => {
+      expect(capClaudeControls(controls, cap)).toEqual(expected);
+    },
+  );
+
+  it('claudeStartControls_EveryControl_ChoicesAndNoValue', () => {
+    const controls = claudeStartControls();
+
+    expect(controls.map((control) => control.id)).toEqual([
+      'mode',
+      'effort',
+      'model',
+    ]);
+    expect(controls.map((control) => control.value)).toEqual([
+      null,
+      null,
+      null,
+    ]);
+    expect(controls.map((control) => control.choices)).toEqual(
+      CLAUDE_CONTROLS.map((control) => control.choices),
+    );
+  });
+
+  it('claudeOpeningLines_FirstMessage_RequestsThenTheMessage', () => {
+    const message = { text: 'run it', images: [] };
+
+    const lines = claudeOpeningLines(message, 'u-9').map(
+      (line) => JSON.parse(line) as unknown,
+    );
+
+    expect(lines).toEqual([
+      {
+        type: 'control_request',
+        request_id: 'wigley-1',
+        request: { subtype: 'initialize' },
+      },
+      {
+        type: 'control_request',
+        request_id: 'wigley-2',
+        request: { subtype: 'get_context_usage' },
+      },
+      {
+        type: 'control_request',
+        request_id: 'wigley-3',
+        request: { subtype: 'get_settings' },
+      },
+      {
+        type: 'user',
+        message: { role: 'user', content: 'run it' },
+        parent_tool_use_id: null,
+        uuid: 'u-9',
+      },
     ]);
   });
 

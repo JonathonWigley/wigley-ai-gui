@@ -1,3 +1,5 @@
+import type { HostedSpawn } from './session-host';
+
 // The MCP tool that answers a harness's permission prompts, served to every
 // session by the app's MCP server. Claude Code names a plugin's MCP tool
 // `mcp__plugin_<plugin>_<server>__<tool>`: the server is `wigley-forms` in the
@@ -544,4 +546,22 @@ export interface AgentHarness {
   listProjects(profileDir: string | null): Promise<ProjectFolder[]>;
   // Runs one poll of `profileDir`'s plan usage, or rejects with the reason.
   planUsage(profileDir: string | null): Promise<PlanUsage>;
+  // A start of `request` that the session host runs later. Its `stdin` holds the lines `start` writes when a process
+  // opens, then `firstMessage`. Its `env` holds `env`, the harness's own values and the names the adapter carries from
+  // the app's environment; its `unsetEnv` the names the child must not inherit. Pure: spawns and writes nothing.
+  // Throws where `start` would throw before spawning, and on a control value the harness does not offer for a control
+  // whose values it checks. `request.resume` is false.
+  prepareRun(
+    request: AgentStart,
+    firstMessage: UserMessage,
+    env: Readonly<Record<string, string>>,
+  ): HostedSpawn;
+  // The controls a new session starts from: each declared control with its choices and `value` null.
+  startControls(): SessionControl[];
+  // `controls` with each permission control lowered to `cap`'s value where `controls` grants more. A permission
+  // control `cap` has no value for caps at the harness's launch default. Other controls stay as `controls` has them.
+  capControls(
+    controls: Readonly<Record<string, string>>,
+    cap: Readonly<Record<string, string>>,
+  ): Record<string, string>;
 }
