@@ -18,6 +18,7 @@ import { liveViewMainPart } from './live-view/main/start';
 import { notesMainPart } from './notes/main/start';
 import { practiceMainPart } from './practice/main/start';
 import { primerMainPart } from './primer/main/start';
+import { schedulingMainPart } from './scheduling/main/start';
 import { scopedAgentsMainPart } from './scoped-agents/main/start';
 import { sessionLogMainPart } from './session-log/main/start';
 import { sessionStashMainPart } from './session-stash/main/start';
@@ -48,6 +49,7 @@ export const mainParts: readonly MainPart[] = [
   sessionStashMainPart,
   sessionLogMainPart,
   autoRetroMainPart,
+  schedulingMainPart,
   agentsMainPart,
   agentLinesMainPart,
   agentStripMainPart,
