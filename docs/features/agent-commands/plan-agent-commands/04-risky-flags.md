@@ -1,6 +1,6 @@
 # 04 — Risky and target flags
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: standard · adds one declared field per command, as each declaration's `arg` field sits (`allowEntry` in `src/plugins/chat/manifest.ts`)
 Wave: 2 · Depends on: 01
@@ -98,3 +98,7 @@ Done when: `npm run typecheck` passes, and `grep -c 'risky: true'` per file prin
 true'` shows each flag inside the declaration named above.
 
 Commit:    one commit for the group
+
+## Proof
+
+Commit f1c02b55b · proof: diff read: every risky/targets flag in the task's table, counts checked against it; wave-2 typecheck passes · concerns: single-line declarations expanded to multi-line for the flag

@@ -1,6 +1,6 @@
 # 07 — The "from" tag wherever the page shows a framed message
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · one new layout input field read from the frame 06 writes, and one Tag in the default layout, as `rowProfile` draws its Tag (`layout.js`)
 Wave: 3 · Depends on: 05, 06

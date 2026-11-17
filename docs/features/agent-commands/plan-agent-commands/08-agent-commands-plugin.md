@@ -1,6 +1,6 @@
 # 08 — The agent-commands plugin: three MCP tools and two drive actions
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · joins four earlier groups behind three tools, with the confirm gate, the refusals and async drive calls
 Wave: 3 · Depends on: 01, 02, 03, 06

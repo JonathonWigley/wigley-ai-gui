@@ -1,6 +1,6 @@
 # 03 — Read any slot
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `readsEverySlot` declaration and the main state members that 08 consumes
 Wave: 2 · Depends on: 01
@@ -75,3 +75,7 @@ Tests:
 
 Done when: `npm run typecheck` passes; the test gate runs the tests above.
 Commit:    one commit for the group
+
+## Proof
+
+Commit 8765648f6 · proof: diff read: readsEverySlot on PluginManifest and definePlugin, MainPluginState with readAny/slotIds, MainApi.state, SlotStore snapshotOf/ids, mainPluginState; wave-2 typecheck passes · concerns: mainPluginState casts pluginState(...) to PluginState<M,'main'> (compiles); manifest-schema.test.ts reads validManifest() and belongs in the gate pick

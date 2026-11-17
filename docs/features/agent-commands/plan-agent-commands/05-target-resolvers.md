@@ -1,6 +1,6 @@
 # 05 — Target-capable commands read the run's target
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · changes which session the target-capable commands act on, across four plugins, with a guard to bypass
 Wave: 2 · Depends on: 01
@@ -94,3 +94,7 @@ Tests:
 Done when: `npm run typecheck` passes; the test gate runs the tests above. A targeted page command run from main is
 checked live by 10 (Final verification).
 Commit:    one commit for the group
+
+## Proof
+
+Commit 60da2181a · proof: diff read: chat sessionFor, sessions closeSession/renameSession, workflow and Large runOnSelected act on targetSessionId; wave-2 typecheck passes · concerns: the task named sessions.active, the code uses sessions.shownSessionId(); sessions' rename test sees the dialog only through renameAccept; the Large target row uses b with s1 selected

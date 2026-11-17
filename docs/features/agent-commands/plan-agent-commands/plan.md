@@ -204,10 +204,10 @@ Critical path: 01 → 06 → 08 → 09
 - [x] [Forms confirm export](02-forms-confirm.md)
 
 ### Wave 2
-- [ ] [Read any slot](03-read-any-slot.md) — after 01
-- [ ] [Risky and target flags](04-risky-flags.md) — after 01
-- [ ] [Target-capable commands read the target](05-target-resolvers.md) — after 01
-- [ ] [chat.sendTo and the frame line](06-chat-send-to.md) — after 01
+- [x] [Read any slot](03-read-any-slot.md) — after 01
+- [x] [Risky and target flags](04-risky-flags.md) — after 01
+- [x] [Target-capable commands read the target](05-target-resolvers.md) — after 01
+- [x] [chat.sendTo and the frame line](06-chat-send-to.md) — after 01
 
 ### Wave 3
 - [ ] [The "from" tag](07-from-tag.md) — after 05, 06
@@ -224,6 +224,10 @@ Review base: 8d829c42c
 ### Groups
 - 01 · deep (compile error → same-rung fix dispatch) · fa8146889 · diff read: every Produces present (contracts/commands.ts, plugin.ts, bridge.ts, registry, router, page-commands, harness hop); wave-1 typecheck passes after 6b-fix commit · concerns: runFor casts sessions as Omit<Context,'arg'>; commandHopOf has no direct test (only the router row); edits outside Files: test fakes resolve 'ran', base-kit runLogged takes Promise<unknown>
 - 02 · deep · db66ef045 · diff read: ConfirmRequest, FormsMainExports, formsMainKey in forms/contract.ts; confirmRoundArgs, confirmAllowed, askConfirm in forms/main/confirm.ts; wave-1 typecheck passes · concerns: start tests fake the sessions part; an empty title fails the round parser so confirm rejects (08 keeps titles non-empty); test nonces share the id counter
+- 03 · hard · 8765648f6 · diff read: readsEverySlot on PluginManifest and definePlugin, MainPluginState with readAny/slotIds, MainApi.state, SlotStore snapshotOf/ids, mainPluginState; wave-2 typecheck passes · concerns: mainPluginState casts pluginState(...) to PluginState<M,'main'> (compiles); manifest-schema.test.ts reads validManifest() and belongs in the gate pick
+- 04 · standard · f1c02b55b · diff read: every risky/targets flag in the task's table, counts checked against it; wave-2 typecheck passes · concerns: single-line declarations expanded to multi-line for the flag
+- 05 · hard · 60da2181a · diff read: chat sessionFor, sessions closeSession/renameSession, workflow and Large runOnSelected act on targetSessionId; wave-2 typecheck passes · concerns: the task named sessions.active, the code uses sessions.shownSessionId(); sessions' rename test sees the dialog only through renameAccept; the Large target row uses b with s1 selected
+- 06 · hard · 11db446db · diff read: frameAgentMessage, readAgentFrame, frameSenderName in chat/agent-frame.ts; chat.sendTo in the manifest (runsIn main, arg sessionId/text); isUnattended and senderName on ChatMainExports; wave-2 typecheck passes · concerns: sendTo needed a label and group (label: send a message to another session, framed as its agent's; group chat); the 'running target' test row is the likeliest to fail; the fake sessions gained label and the harness exposes titles/labels
 ### Contract changes
 - 01 adds `commandHopOf(value: unknown): CommandHop` in `src/shared/command-args.ts`: it reads a hop the other process sent, keeping only the two session-id strings and `reportErrors: true`. Consumers: none outside 01.
 ### Rulings
@@ -234,5 +238,10 @@ Review base: 8d829c42c
 - 02: an answer marked dont_ask counts as a denial even on choice 1 · group 02
 - 02: a newer tool session of the same app id replaces the map entry; the older one's end only removes its own entry · group 02
 - 02: askConfirm returns true for this round's Allow even when the signal aborted after; 08 checks signal.aborted before running a risky command · group 02
+- 03: SlotStore.ids() itself sorts in code-unit order and slotIds() returns it unchanged, satisfying both the Tests line and the Decisions line · group 03
+- 04: docs.confirmYes is also flagged risky (lead ruling): it is the step that moves the file to the Trash, and the rule flags every route; notes already flags both discard and confirmYes · group 04
+- 05: renameSession with a target checks the row before showing Sessions mode, so an unknown target logs 'no session to rename' and leaves the mode alone · group 05
+- 06: the unknown-target refusal checks holds() directly, so it throws the task's exact text and also refuses the layout preview's session · group 06
+- 06: firstMessageTitleOf titles a framed message from its body, on send and on resume · group 06
 ### Review rounds
 ### Test gate

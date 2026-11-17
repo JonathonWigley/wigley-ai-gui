@@ -1,6 +1,6 @@
 # 06 — Chat sends to another session, framed
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · a new main command over chat's session store, the frame rule both processes read, and the title rule
 Wave: 2 · Depends on: 01
@@ -114,3 +114,7 @@ Done when: `npm run typecheck` passes; the test gate runs the tests above; `grep
 src/plugins/chat/manifest.ts` prints 7 and `grep -c 'targets: true'` prints 4. The send between two live sessions is
 checked by 10 (Final verification).
 Commit:    one commit for the group
+
+## Proof
+
+Commit 11db446db · proof: diff read: frameAgentMessage, readAgentFrame, frameSenderName in chat/agent-frame.ts; chat.sendTo in the manifest (runsIn main, arg sessionId/text); isUnattended and senderName on ChatMainExports; wave-2 typecheck passes · concerns: sendTo needed a label and group (label: send a message to another session, framed as its agent's; group chat); the 'running target' test row is the likeliest to fail; the fake sessions gained label and the harness exposes titles/labels
