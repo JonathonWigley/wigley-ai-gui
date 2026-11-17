@@ -1,4 +1,3 @@
-import './session-stash.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
