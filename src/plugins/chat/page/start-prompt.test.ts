@@ -100,7 +100,10 @@ function setUp(
   const harnesses =
     options.harnesses ??
     new Map([
-      ['claude', harnessInfo({ profiles: options.profiles ?? [work, personal] })],
+      [
+        'claude',
+        harnessInfo({ profiles: options.profiles ?? [work, personal] }),
+      ],
     ]);
   const recent = options.recent ?? [app];
   const opened: Opened[] = [];
@@ -400,8 +403,18 @@ describe('start prompt', () => {
   it('folderStep_Filter_NameOutranksAnotherRowsPath', async () => {
     const run = setUp({
       recent: [
-        { projectDir: '/Users/u/gui/backlog', harness: 'claude', profile: 'work', lastUsed: 3 },
-        { projectDir: '/Users/u/dev/wigley-gui', harness: 'claude', profile: 'work', lastUsed: 2 },
+        {
+          projectDir: '/Users/u/gui/backlog',
+          harness: 'claude',
+          profile: 'work',
+          lastUsed: 3,
+        },
+        {
+          projectDir: '/Users/u/dev/wigley-gui',
+          harness: 'claude',
+          profile: 'work',
+          lastUsed: 2,
+        },
       ],
     });
     await flush();
@@ -657,7 +670,11 @@ describe('start prompt', () => {
     pickItem(run.opened[1], 'personal · ~/.claude-personal');
     await flush();
     expect(run.started).toEqual([
-      { projectDir: '/Users/u/dev/new', harness: 'claude', profile: 'personal' },
+      {
+        projectDir: '/Users/u/dev/new',
+        harness: 'claude',
+        profile: 'personal',
+      },
     ]);
   });
 
@@ -1374,7 +1391,11 @@ describe('start prompt', () => {
         await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
         return run;
       },
-      started: { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
+      started: {
+        projectDir: '/Users/u/dev/app',
+        harness: 'claude',
+        profile: 'work',
+      },
       toasts: [],
       unlisted: 'pastSessions',
     },
@@ -1386,7 +1407,11 @@ describe('start prompt', () => {
         await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
         return run;
       },
-      started: { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
+      started: {
+        projectDir: '/Users/u/dev/app',
+        harness: 'claude',
+        profile: 'work',
+      },
       toasts: [],
       unlisted: null,
     },
@@ -1402,7 +1427,11 @@ describe('start prompt', () => {
         await pickInTurn(run, '~/dev/app', 'work · ~/.claude');
         return run;
       },
-      started: { projectDir: '/Users/u/dev/app', harness: 'claude', profile: 'work' },
+      started: {
+        projectDir: '/Users/u/dev/app',
+        harness: 'claude',
+        profile: 'work',
+      },
       toasts: [{ text: expect.stringContaining('no folder'), tone: 'error' }],
       unlisted: null,
     },

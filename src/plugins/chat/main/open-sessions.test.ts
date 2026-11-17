@@ -178,9 +178,7 @@ describe('createOpenSessions', () => {
     },
     {
       file: 'a record with no harness',
-      text: withSessions([
-        { ...TWO_SESSIONS.sessions[1], harness: undefined },
-      ]),
+      text: withSessions([{ ...TWO_SESSIONS.sessions[1], harness: undefined }]),
       expected: {
         sessions: [{ ...TWO_SESSIONS.sessions[1], harness: 'claude' }],
         selectedHostSessionId: null,

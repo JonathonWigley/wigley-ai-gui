@@ -243,7 +243,12 @@ describe('start prompt items', () => {
     {
       given: 'a Windows folder in another case',
       recentFolders: [
-        { projectDir: 'C:\\Dev\\App', harness: 'claude', profile: 'personal', lastUsed: 2 },
+        {
+          projectDir: 'C:\\Dev\\App',
+          harness: 'claude',
+          profile: 'personal',
+          lastUsed: 2,
+        },
       ],
       folder: 'c:\\dev\\app\\',
       paths: windowsPaths,
@@ -258,7 +263,14 @@ describe('start prompt items', () => {
     },
     {
       given: 'a folder last used with a removed profile',
-      recentFolders: [{ projectDir: '/srv/old', harness: 'claude', profile: 'old', lastUsed: 3 }],
+      recentFolders: [
+        {
+          projectDir: '/srv/old',
+          harness: 'claude',
+          profile: 'old',
+          lastUsed: 3,
+        },
+      ],
       folder: '/srv/old',
       paths: posixPaths,
       index: 0,
@@ -364,9 +376,9 @@ describe('start prompt items', () => {
         ['fake', harnessInfo()],
       ]);
 
-      expect(recentFolderHarness({ ...app, harness }, harnesses, 'claude')).toBe(
-        expected,
-      );
+      expect(
+        recentFolderHarness({ ...app, harness }, harnesses, 'claude'),
+      ).toBe(expected);
     },
   );
 });

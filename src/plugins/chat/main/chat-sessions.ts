@@ -3101,13 +3101,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       entry !== undefined && entry.running && !entry.current;
     const isListUnknown = hosted === null && record.processId !== null;
     if (runsHere && harness !== null && profile !== undefined) {
-      void attachProcess(
-        session,
-        harness,
-        profile,
-        entry,
-        record.busy,
-      );
+      void attachProcess(session, harness, profile, entry, record.busy);
       return;
     }
     if (runsHere || runsElsewhere || isListUnknown) {

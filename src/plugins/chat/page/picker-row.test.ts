@@ -36,7 +36,12 @@ describe('picker row inputs', () => {
       input: folderRowInput(
         {
           kind: 'recent',
-          folder: { projectDir: '/home/me/repo', profile: 'work', lastUsed: 7 },
+          folder: {
+            projectDir: '/home/me/repo',
+            harness: 'claude',
+            profile: 'work',
+            lastUsed: 7,
+          },
           label: '~/repo',
         },
         posixPaths,

@@ -1566,8 +1566,8 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         result,
         selftestProcess(marks, selftest, false),
         selftest,
-        chat.sessions().find((held) => held.projectDir === selftest)
-          ?.harness ?? null,
+        chat.sessions().find((held) => held.projectDir === selftest)?.harness ??
+          null,
       ),
       ...resumedProblems(selftestProcess(marks, selftest, true), selftest),
       ...pastSessionProblems(marks, selftest),

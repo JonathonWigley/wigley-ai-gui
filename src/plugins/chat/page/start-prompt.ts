@@ -160,7 +160,10 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // Logs and toasts that the harness has no profiles to start under.
   const reportNoProfiles = (harness: string) => {
     log(`harness ${harness} has no profiles`);
-    deps.toast("Add a profile to the harness's profiles setting first", 'error');
+    deps.toast(
+      "Add a profile to the harness's profiles setting first",
+      'error',
+    );
   };
 
   // Chat's projects; none when they cannot be read.
@@ -403,12 +406,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     profiles: readonly RegisteredProfile[],
   ): number => {
     const preselectedIn = (projectDir: string) =>
-      preselectedProfile(
-        profiles,
-        context.recent,
-        projectDir,
-        deps.paths,
-      );
+      preselectedProfile(profiles, context.recent, projectDir, deps.paths);
     if (target.kind === 'folder') {
       return preselectedIn(target.projectDir);
     }

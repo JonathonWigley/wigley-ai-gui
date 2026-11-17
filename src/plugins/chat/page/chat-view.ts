@@ -16,10 +16,7 @@ import type {
   ScrollStep,
   TextEditor,
 } from '../../../contracts/editor';
-import type {
-  AgentHarnessInfo,
-  ChatEntryKind,
-} from '../../../contracts/agent';
+import type { AgentHarnessInfo, ChatEntryKind } from '../../../contracts/agent';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type {

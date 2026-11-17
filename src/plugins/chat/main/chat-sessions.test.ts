@@ -653,7 +653,11 @@ function setUp(
 
 async function started(options?: Parameters<typeof setUp>[0]) {
   const test = setUp(options);
-  test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+  test.chat.start({
+    harness: FAKE_HARNESS_ID,
+    projectDir: PROJECT_DIR,
+    profile: 'personal',
+  });
   await flush();
   const process = test.harness.processes[0];
   const activity = (value: ProcessActivity) => process.events.activity(value);
@@ -749,7 +753,11 @@ async function startedRefusing() {
     },
   };
   const test = setUp({ harnesses: [refusing] });
-  test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+  test.chat.start({
+    harness: FAKE_HARNESS_ID,
+    projectDir: PROJECT_DIR,
+    profile: 'personal',
+  });
   await flush();
   const process = fake.processes[0];
   const activity = (value: ProcessActivity) => process.events.activity(value);
@@ -800,7 +808,11 @@ describe('createChatSessions', () => {
       given: 'a started process',
       expected: FAKE_AGENT_PID,
       run: async (test: ReturnType<typeof setUp>) => {
-        test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
         await flush();
       },
     },
@@ -808,7 +820,11 @@ describe('createChatSessions', () => {
       given: 'the process ended',
       expected: null,
       run: async (test: ReturnType<typeof setUp>) => {
-        test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
         await flush();
         test.chat.send(ROW_ID, { text: FAKE_END_TEXT, images: [] });
         await flush();
@@ -906,7 +922,12 @@ describe('createChatSessions', () => {
     expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
     expect(test.chat.sessions()[0].running).toBe(true);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
-      { projectDir: PROJECT_DIR, profile: 'personal', lastUsed: 1000 },
+      {
+        projectDir: PROJECT_DIR,
+        harness: FAKE_HARNESS_ID,
+        profile: 'personal',
+        lastUsed: 1000,
+      },
     ]);
   });
 
@@ -933,7 +954,11 @@ describe('createChatSessions', () => {
     'hostSessionIdOf_$row_ReturnsItsHostId',
     async ({ reported, sessionId, expected }) => {
       const test = setUp();
-      test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+      test.chat.start({
+        harness: FAKE_HARNESS_ID,
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+      });
       if (reported) {
         await flush();
       }
@@ -947,7 +972,11 @@ describe('createChatSessions', () => {
     const first = test.chat.addInstructions('first note');
     test.chat.addInstructions('second note');
 
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     expect(test.harness.processes[0].request.instructions).toEqual([
       'first note',
@@ -988,7 +1017,11 @@ describe('createChatSessions', () => {
       message: { text: 'go', images: [] },
       instructions: ['own note'],
     });
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     expect(
       test.harness.processes.map((process) => process.request.instructions),
@@ -1086,7 +1119,11 @@ describe('createChatSessions', () => {
     {
       entryPoint: 'start',
       call: (chat: ChatSessions) =>
-        chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'home' }),
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'home',
+        }),
     },
   ])(
     '$entryPoint with an unknown profile refuses and calls nothing',
@@ -1146,7 +1183,12 @@ describe('createChatSessions', () => {
     });
     expect(test.hostIdChanges).toEqual([]);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
-      { projectDir: '/w/app', profile: 'work', lastUsed: 1000 },
+      {
+        projectDir: '/w/app',
+        harness: FAKE_HARNESS_ID,
+        profile: 'work',
+        lastUsed: 1000,
+      },
     ]);
   });
 
@@ -1618,7 +1660,11 @@ describe('createChatSessions', () => {
   it('start_OpensSelected', () => {
     const test = setUp();
 
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
 
     expect(test.openOptions).toEqual([{ select: true }]);
   });
@@ -1744,7 +1790,11 @@ describe('createChatSessions', () => {
       test.harness.failNextStart('spawn failed');
 
       expect(() =>
-        test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'work' }),
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'work',
+        }),
       ).toThrow('spawn failed');
       expect(test.ownedEnds()).toBe(1);
       expect(test.sent('sessionRested')).toEqual([]);
@@ -2406,8 +2456,16 @@ describe('createChatSessions', () => {
 
   it('detachAll_DetachesHeldProcesses_KillsAClosedRowsStillEnding', async () => {
     const test = await started();
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'work' });
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'work' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'work',
+    });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'work',
+    });
     await flush();
     const [heldProcess, closedProcess, exitedProcess] = test.harness.processes;
     exitedProcess.events.ended({ code: 0, error: null });
@@ -2463,7 +2521,11 @@ describe('createChatSessions', () => {
       }),
     };
     const test = setUp({ harnesses: [failingExit] });
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
 
     test.chat.closed(ROW_ID, 'user');
@@ -2488,7 +2550,11 @@ describe('createChatSessions', () => {
       }),
     };
     const test = setUp({ harnesses: [failingEnd] });
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
 
     test.chat.closed(ROW_ID, 'user');
@@ -3452,7 +3518,11 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'a host id chat holds',
       arrange: async (test: ReturnType<typeof setUp>) => {
-        test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
         await flush();
       },
       saved: ['host-a', 'fake-session-1', 'host-b'],
@@ -3722,7 +3792,11 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'a new session then a send',
       act: (chat: ChatSessions) => {
-        chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
         chat.send(ROW_ID, { text: 'hi', images: [] });
       },
       sent: true,
@@ -3740,7 +3814,11 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'a new session with no send',
       act: (chat: ChatSessions) =>
-        chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' }),
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        }),
       sent: false,
     },
   ])('send_NewSession_SavesSentTrue given $given', async ({ act, sent }) => {
@@ -3795,7 +3873,11 @@ describe('createChatSessions saved sessions', () => {
         instructions: ['own note'],
         owner: 'practice',
       });
-      test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+      test.chat.start({
+        harness: FAKE_HARNESS_ID,
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+      });
       await flush();
       if (clear) {
         test.chat.clear(launchedId);
@@ -4129,7 +4211,11 @@ describe('createChatSessions saved sessions', () => {
 
   it('save_BeforeRestore_WritesNothing', async () => {
     const test = setUp();
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     test.chat.send(ROW_ID, { text: 'hi', images: [] });
     await flush();
     expect(test.saved.saves()).toBe(0);
@@ -4194,7 +4280,11 @@ describe('createChatSessions saved sessions', () => {
       given: 'a running row',
       open: (chat: ChatSessions) => {
         chat.restore(NOTHING_SAVED, []);
-        chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
       },
     },
   ])('closed_Row_DropsItsRecord given $given', async ({ open }) => {
@@ -4211,7 +4301,11 @@ describe('createChatSessions saved sessions', () => {
   it('detachAll_ThenExits_SavesNothingAndSendsNothing', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const { events } = test.harness.processes[0];
     events.activity('working');
@@ -4235,7 +4329,11 @@ describe('createChatSessions saved sessions', () => {
   it('activity_IdleFlip_SavesBusy', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const { events } = test.harness.processes[0];
 
@@ -4547,7 +4645,11 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'a start',
       open: (chat: ChatSessions) =>
-        chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' }),
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        }),
       selected: 'fake-session-1',
     },
     {
@@ -4910,7 +5012,11 @@ describe('createChatSessions clear', () => {
   it('clear_RunningRow_RestartsUnderNewIdWithOneNotice', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const old = test.harness.processes[0];
     test.chat.send(ROW_ID, { text: 'first', images: [] });
@@ -5099,7 +5205,11 @@ describe('createChatSessions clear', () => {
   it('clear_StartThrows_ClearPendingUntilNextStartReports', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     await test.chat.send(ROW_ID, IDLE_SEND);
     test.harness.failNextStart('spawn failed');
@@ -5763,7 +5873,11 @@ describe('createChatSessions titles', () => {
   it('titleChanged_HeldRow_SavesItsCurrentTitles', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const renamed = { ...NO_TITLES, agent: 'Named by agent' };
     test.setRowTitles(ROW_ID, renamed);
@@ -5778,7 +5892,11 @@ describe('createChatSessions titles', () => {
   it('titleChanged_RowChatDoesNotHold_SavesNothing', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const savesBefore = test.saved.saves();
 
@@ -5838,7 +5956,11 @@ describe('createChatSessions process ids and the saved queue', () => {
   it('startProcess_ProcessId_HostIdStartCountAndTime', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const firstSaved = test.saved.last()?.sessions[0];
     await test.chat.send(ROW_ID, { text: 'hi', images: [] });
@@ -5860,7 +5982,11 @@ describe('createChatSessions process ids and the saved queue', () => {
   it('save_QueuedChange_SavesUnsentRowsWithImages', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     test.harness.processes[0].events.activity('working');
     const image = { mediaType: 'image/png' as const, data: 'AAAA' };
@@ -6081,7 +6207,11 @@ describe('createChatSessions restoring hosted processes', () => {
   it('controls_ConfirmedPick_SavedWithTheRow', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const controls = [
       heldControl('mode', 'auto'),
@@ -6942,8 +7072,16 @@ describe('createChatSessions unheld processes', () => {
 describe('createChatSessions stopAll', () => {
   it('stopAll_KillsEveryRunningProcess_RowsRestWithStoppedNotice', async () => {
     const test = setUp();
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'work' });
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'work',
+    });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
 
     test.chat.stopAll();
@@ -7859,7 +7997,11 @@ describe('createChatSessions send gate and hold', () => {
         },
       ],
     });
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const { calls, events } = fake.processes[0];
     test.chat.addSendGate(answerA);
@@ -7935,7 +8077,11 @@ describe('createChatSessions send gate and hold', () => {
       const test = setUp();
       register(test.chat);
 
-      test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+      test.chat.start({
+        harness: FAKE_HARNESS_ID,
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+      });
 
       expect(test.harness.processes[0].request.idleCompactMinTokens).toBe(
         tokens,
@@ -8095,7 +8241,11 @@ describe('createChatSessions compact', () => {
         },
       ],
     });
-    test.chat.start({ harness: FAKE_HARNESS_ID, projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     test.setFocused(false);
 
@@ -8995,7 +9145,11 @@ describe('createChatSessions projects', () => {
       poolProvider: fakePoolProvider(CLONES),
     });
 
-    test.chat.start({ harness: FAKE_HARNESS_ID, project: 'AI Dev', profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      project: 'AI Dev',
+      profile: 'personal',
+    });
     await flush();
 
     expect(test.opened[0].projectDir).toBe('/home/me/ai-dev');
@@ -9061,7 +9215,9 @@ describe('createChatSessions projects', () => {
         poolProvider: folders === null ? null : fakePoolProvider(folders),
       });
 
-      expect(() => test.chat.start({ harness: FAKE_HARNESS_ID, project, profile })).toThrow(fragment);
+      expect(() =>
+        test.chat.start({ harness: FAKE_HARNESS_ID, project, profile }),
+      ).toThrow(fragment);
       expect(test.opened).toEqual([]);
     },
   );
@@ -9075,7 +9231,11 @@ describe('createChatSessions projects', () => {
     });
     test.chat.restore(NOTHING_SAVED, []);
 
-    const rowId = test.chat.start({ harness: FAKE_HARNESS_ID, project: 'New Games', profile: 'work' });
+    const rowId = test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      project: 'New Games',
+      profile: 'work',
+    });
     await flush();
 
     expect(rowId).toBe(ROW_ID);
