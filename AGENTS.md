@@ -574,7 +574,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   `wigley-plugin:` scheme. A save reloads the plugin once the edits settle, and `core.reloadPlugin` (no default key)
   reloads it with no change; a reload stops its dependents too. A load that fails keeps the last good version and shows the error as a
   config problem and on its Settings row. Settings and binds under a plugin that is not loaded are kept and ignored.
-  Each load copies the folder to `<userData>/plugin-code/<id>/<revision>/` and no step deletes an old revision.
+  Each load copies the folder to `<userData>/plugin-code/<id>/<revision>/`; a plugin's first load in a launch deletes the revisions an earlier launch left, and `loadAll` deletes the copies of plugins no longer in the folder.
   A user plugin draws only through its layout kit and bundles its own packages
   (`docs/features/plugin-framework/design.md` § Runtime loader (Wave 4 step 3)).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to

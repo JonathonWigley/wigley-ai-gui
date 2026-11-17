@@ -23,6 +23,10 @@ let imported: string[];
 // module for any id not set.
 let modules: Map<string, Promise<Record<string, unknown>>>;
 let logLines: string[];
+// The absolute paths the fake `removeFolder` received, in order.
+let removed: string[];
+// The paths the fake `removeFolder` rejects with `busy`.
+let failingRemovals: Set<string>;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -31,6 +35,8 @@ beforeEach(() => {
   imported = [];
   modules = new Map();
   logLines = [];
+  removed = [];
+  failingRemovals = new Set();
 });
 
 afterEach(() => {
@@ -48,6 +54,12 @@ function createSource(pluginsFolder: Files = plugins): WatchedPluginSource {
       imported.push(filePath);
       const id = filePath.slice(CODE_ROOT.length + 1).split('/')[0];
       return modules.get(id) ?? Promise.resolve(GOOD_MODULE);
+    },
+    removeFolder: async (folderPath) => {
+      removed.push(folderPath);
+      if (failingRemovals.has(folderPath)) {
+        throw new Error('busy');
+      }
     },
     log: (source, message) => logLines.push(`[${source}] ${message}`),
   });
@@ -228,6 +240,46 @@ describe('createUserFolderSource', () => {
     expect(await code.stat('notes/6/main.js')).not.toBeNull();
     expect(notJson.kind).toBe('failed');
     expect(revisionOf(goodAgain)).toBe(7);
+    expect(removed).toEqual([
+      `${CODE_ROOT}/notes/1`,
+      `${CODE_ROOT}/notes/4`,
+    ]);
+  });
+
+  it('loads a plugin whose old revision cannot be deleted, and logs the failure', async () => {
+    await code.makeFolder('notes/1');
+    await writePlugin('notes');
+    failingRemovals.add(`${CODE_ROOT}/notes/1`);
+
+    const load = await createSource().reload('notes');
+
+    expect(load).toMatchObject({ kind: 'loaded', entry: { revision: 2 } });
+    expect(logLines).toContain(
+      '[plugin-catalog] plugin notes old revision 1 not deleted: busy',
+    );
+  });
+
+  it('deletes the code of plugins no longer in the folder on loadAll', async () => {
+    await code.makeFolder('old/3');
+    await writePlugin('notes');
+
+    await createSource().loadAll();
+
+    expect(removed).toEqual([`${CODE_ROOT}/old`]);
+  });
+
+  // Breaks if the sweep reads only the listed names, deleting the running
+  // copy of a plugin a reload loaded this launch.
+  it('keeps the code of a plugin loaded this launch on loadAll', async () => {
+    await writePlugin('notes');
+    const source = createSource();
+    await source.reload('notes');
+    plugins.remove('notes');
+    await code.makeFolder('old/3');
+
+    await source.loadAll();
+
+    expect(removed).toEqual([`${CODE_ROOT}/old`]);
   });
 
   it('fails an import that does not settle, and moves on', async () => {
