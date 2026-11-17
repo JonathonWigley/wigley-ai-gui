@@ -1,6 +1,6 @@
 # 04 — Dialog frame hook and shared kit types
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
