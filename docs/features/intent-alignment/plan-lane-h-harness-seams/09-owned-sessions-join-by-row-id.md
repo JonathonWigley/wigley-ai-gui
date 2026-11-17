@@ -1,6 +1,6 @@
 # 09 — Owned sessions join by row id
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 06, 08
 Plan: [plan.md](plan.md)
@@ -198,3 +198,5 @@ Commit: two commits in the one `ai` worktree, one per folder.
 - wigley-ai-marketplace: one commit holding `relay.py`, `test_relay.py`, the README and the version bump in both manifests, landed per `~/wigley-agents/WigleyRepos.md` § Landing (the same worktree as the wigley-ai-gui commit, fast-forwarded into `main`, pushed).
 
 ## Proof
+
+Commit 6fb763cb3 · proof: diff read: AgentStart.sessionId nullable, AgentProcessEvents.sessionId, SessionInfo.rowId, RelayHello.row_id, hostSessionIdSettled, ClaudeStart present; relay.py sends row_id; wave compile passes after one same-rung fix (rowId on two 06 test literals) and oxfmt · concerns: resume finds a running hosted process by hosted.id.startsWith(hostSessionId-) while new process ids start with the row id, so resume of an unheld session no longer finds a process started under the new scheme; hostSessionIdSettled waiters stay pending after detachAll; ~9k-line chat-sessions.test edited unrun, event-order expectations may shift; a pending clear's snapshot pairs the old host id with the new processId for one microtask; workflow hears hostSessionChanged null to id before chat.sessionOpened for a new row
