@@ -11,6 +11,11 @@ const PANE_PARTS: Record<Exclude<keyof PrimerLayout, 'cards'>, true> = {
   tasks: true,
   items: true,
   review: true,
+  tasksHead: true,
+  itemsHead: true,
+  tasksFoot: true,
+  cardEdge: true,
+  reviewFooter: true,
   confirmBody: true,
   dialogFrame: true,
 };

@@ -3,6 +3,7 @@ import type {
   ConfirmButtonsKit,
   DialogFrameInput,
   DialogFramePart,
+  PromptActionInput,
 } from '../../../shared/page/layout-host/kit';
 
 // The primer layout contract: what a layout in `layouts/primer/<name>/layout.js` draws the primer popup with. A layout
@@ -12,11 +13,11 @@ import type {
 // `[data-layout-owner="primer"][data-layout="<name>"] …` in a layout's CSS selects only its own parts.
 //
 // The app keeps the two nested splits (tasks | (items | card)), their widths and their handles' resize prompt
-// (`⌥⇧H ◂ ▸ ⌥⇧L`); the tasks column header (save state, `⌃H ▲ ▼ ⌃L`, `⌥L items ›`) and foot (the Review button); the
-// items column header (`‹ tasks ⌥H`, `⌃H ▲ ▼ ⌃L`, `⌥L card ›`); the card edge strip (`‹ items ⌥H`); the review footer
-// (Back, Cancel primer, Send), the cancel prompt's scrim, keys and focus (`dialogFrame` and `confirmBody` draw its
-// panel, title, body and buttons), selection, each column's selected row prompt, the text boxes and
-// scrolling.
+// (`⌥⇧H ◂ ▸ ⌥⇧L`); the cancel prompt's lifecycle, scrim, keys and focus (`dialogFrame` and `confirmBody` draw its
+// panel, title, body and buttons); selection and which keys each column's selected row prompt shows; the save state's
+// text; `is-pane-inactive` and `is-no-target`; the text boxes and scrolling. A layout draws each column's header strip
+// (`tasksHead`, `itemsHead`), the tasks column's foot (`tasksFoot`), the card's edge strip (`cardEdge`) and the review
+// pane's footer (`reviewFooter`).
 
 export type PrimerNeed = 'yes' | 'no' | 'unclear';
 // `extra` is a task the user added; an agent sends only `primer` and `standing`.
@@ -90,9 +91,15 @@ export interface PrimerLayoutCards {
 }
 
 // One tasks column row. `position` is its 0-based place in the tasks column, which `TasksKit.taskRow` takes. A task
-// row counts its included items of `total`.
+// row counts its included items of `total`. `prompt` is the actions the selected row's prompt shows (the need keys
+// and, on an extra task, remove), empty on every other row and on the Feature row.
 export type TaskRowInput =
-  | { position: number; kind: 'feature'; name: string }
+  | {
+      position: number;
+      kind: 'feature';
+      name: string;
+      prompt: readonly PromptActionInput[];
+    }
   | {
       position: number;
       kind: 'task';
@@ -102,6 +109,7 @@ export type TaskRowInput =
       need: PrimerNeed;
       included: number;
       total: number;
+      prompt: readonly PromptActionInput[];
     };
 
 // A group of tasks under its header.
@@ -119,7 +127,8 @@ export interface TasksInput {
 }
 
 // One item of the selected task. `position` is its 0-based place in the items column, which `ItemsKit.itemRow`
-// takes; `number` is position + 1; `added` marks an item the user added.
+// takes; `number` is position + 1; `added` marks an item the user added. `prompt` is the actions the selected row's
+// prompt shows (the need keys and include), empty on every other row.
 export interface ItemRowInput {
   position: number;
   entryId: string;
@@ -127,6 +136,7 @@ export interface ItemRowInput {
   text: string;
   include: boolean;
   added: boolean;
+  prompt: readonly PromptActionInput[];
 }
 
 // The selected task's items. `task` is null on the Feature row. `empty` is the empty state copy, null while rows
@@ -208,25 +218,63 @@ export interface ItemKit extends PrimerKit {
 }
 
 // The app knows rows only by the elements a column's row function returns: it keeps on each the click that selects it
-// and focuses its column, `is-selected` while it is the column's selected row, and the selected row's prompt. A row
-// drawn otherwise gets no click and no selection, and when a part never calls its row function for the selected row,
-// the row prompt is appended at the end of the part's element. A row function throws for a position its column does
-// not hold.
+// and focuses its column, and `is-selected` while it is the column's selected row. A row drawn otherwise gets no click
+// and no selection. The selected row's input holds its prompt (`prompt`), which the part draws. A row function throws
+// for a position its column does not hold.
 export interface TasksKit extends PrimerKit {
   // The list row for tasks column `position`: the Feature row with the feature's name, or a task row with its need tag
-  // and included count. Its prompt holds the need keys and, on an extra task, the remove key.
+  // and included count.
   taskRow(parent: HTMLElement, position: number): HTMLElement;
   // The `A add` key hint for adding an extra task.
   addPrompt(parent: HTMLElement): HTMLElement;
 }
 
 export interface ItemsKit extends PrimerKit {
-  // The list row for items column `position`, led by its include mark and number. Its prompt holds the need keys and
-  // the include key; a click on its mark selects the item and toggles it.
+  // The list row for items column `position`, led by its include mark and number; a click on its mark selects the
+  // item and toggles it.
   itemRow(parent: HTMLElement, position: number): HTMLElement;
 }
 
 export type ReviewKit = PrimerKit;
+
+// `rows` is the tasks column's row count, the Feature row included.
+export interface TasksHeadInput {
+  rows: number;
+}
+// `task` is the selected task's name (`taskName`), null on the Feature row; `rows` is its item count.
+export interface ItemsHeadInput {
+  task: string | null;
+  rows: number;
+}
+// `problems` is how many things block a send (`submitProblems(primer).length`).
+export interface TasksFootInput {
+  problems: number;
+}
+// `row` is the kind of row the card shows.
+export interface CardEdgeInput {
+  row: 'feature' | 'task' | 'item';
+}
+export interface ReviewFooterInput {
+  problems: number;
+}
+
+export interface ColumnHeadKit extends PrimerKit {
+  // `span.ui-key-edge.primer-column-edge`: `⌃H ▲ ▼ ⌃L`, the prevRow and nextRow anchors in the part's scope.
+  // The app marks it `is-no-target` while the column holds fewer than two rows.
+  rowStep(parent: HTMLElement): HTMLElement;
+}
+export interface TasksHeadKit extends ColumnHeadKit {
+  // The app's save status (`span.ui-status-line`), which the app keeps current. It places once per draw; a
+  // second call throws. A head that leaves it out gets it at the start of its root.
+  saveStatus(parent: HTMLElement): HTMLElement;
+}
+export type ItemsHeadKit = ColumnHeadKit;
+export interface TasksFootKit extends PrimerKit {
+  // `span.ui-key-stack.primer-review-keys`: the openReview anchors in the tasks, items and card scopes.
+  reviewKeys(parent: HTMLElement): HTMLElement;
+}
+export type CardEdgeKit = PrimerKit;
+export type ReviewFooterKit = PrimerKit;
 
 // The cancel confirm's body text.
 export interface ConfirmBodyInput {
@@ -236,24 +284,50 @@ export interface ConfirmBodyKit extends PrimerKit, ConfirmButtonsKit {}
 
 export interface PrimerLayout {
   cards?: Partial<PrimerLayoutCards>;
-  // The tasks column's body, under the app's header and over its Review button, drawn again on each primer change.
+  // The tasks column's body, between the `tasksHead` and `tasksFoot` parts, drawn again on each primer change.
   tasks?(
     parent: HTMLElement,
     input: TasksInput,
     kit: TasksKit,
   ): PrimerLayoutPane;
-  // The items column's body, under the app's header, drawn again on each primer change.
+  // The items column's body, under the `itemsHead` part, drawn again on each primer change.
   items?(
     parent: HTMLElement,
     input: ItemsInput,
     kit: ItemsKit,
   ): PrimerLayoutPane;
-  // The review's body, over the app's Back, Cancel primer and Send buttons, drawn again on each primer change while
-  // the review shows.
+  // The review's body, over the `reviewFooter` part, drawn again on each primer change while the review shows.
   review?(
     parent: HTMLElement,
     input: ReviewInput,
     kit: ReviewKit,
+  ): PrimerLayoutPane;
+  // The chrome strips, scopes `primer.tasks`, `primer.items`, `primer.tasks`, `primer.card` and `primer.review`. Each
+  // draws when the primer opens, shown or hidden, and again only when its input or its pick changed.
+  tasksHead?(
+    parent: HTMLElement,
+    input: TasksHeadInput,
+    kit: TasksHeadKit,
+  ): PrimerLayoutPane;
+  itemsHead?(
+    parent: HTMLElement,
+    input: ItemsHeadInput,
+    kit: ItemsHeadKit,
+  ): PrimerLayoutPane;
+  tasksFoot?(
+    parent: HTMLElement,
+    input: TasksFootInput,
+    kit: TasksFootKit,
+  ): PrimerLayoutPane;
+  cardEdge?(
+    parent: HTMLElement,
+    input: CardEdgeInput,
+    kit: CardEdgeKit,
+  ): PrimerLayoutPane;
+  reviewFooter?(
+    parent: HTMLElement,
+    input: ReviewFooterInput,
+    kit: ReviewFooterKit,
   ): PrimerLayoutPane;
   // The cancel confirm's body, scope `primer.confirm`: `input.body` and the prompt's two buttons. A button the part
   // leaves out goes at the end of the frame's actions row.
@@ -290,6 +364,31 @@ export interface CompletePrimerLayout extends PrimerLayout {
     parent: HTMLElement,
     input: ReviewInput,
     kit: ReviewKit,
+  ): PrimerLayoutPane;
+  tasksHead(
+    parent: HTMLElement,
+    input: TasksHeadInput,
+    kit: TasksHeadKit,
+  ): PrimerLayoutPane;
+  itemsHead(
+    parent: HTMLElement,
+    input: ItemsHeadInput,
+    kit: ItemsHeadKit,
+  ): PrimerLayoutPane;
+  tasksFoot(
+    parent: HTMLElement,
+    input: TasksFootInput,
+    kit: TasksFootKit,
+  ): PrimerLayoutPane;
+  cardEdge(
+    parent: HTMLElement,
+    input: CardEdgeInput,
+    kit: CardEdgeKit,
+  ): PrimerLayoutPane;
+  reviewFooter(
+    parent: HTMLElement,
+    input: ReviewFooterInput,
+    kit: ReviewFooterKit,
   ): PrimerLayoutPane;
   confirmBody(
     parent: HTMLElement,

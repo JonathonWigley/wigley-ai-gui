@@ -8,14 +8,43 @@
 // - feature, task and item cards: `textBox` (each box left out is appended at
 //   the end of the card, in its field) and, on the item card, `includeMark`
 //   (`x` still toggles the item)
-// - tasks: `taskRow` (a row drawn otherwise selects nothing on a click; the
-//   selected row's prompt is appended at the end of the part) and `addPrompt`
+// - tasks: `taskRow` (a row drawn otherwise selects nothing on a click) and
+//   `addPrompt`
 // - items: `itemRow` (the same as `taskRow`)
 // - review: every part, which then draws nothing
+// - tasksHead: `saveStatus` (placed at the start of the part's root)
 // - confirmBody: either button (a button left out is appended at the end of
 //   the frame's actions row)
 
 /** @typedef {import('../layout').PrimerKit} PrimerKit */
+
+// The review footer's buttons: label, command and variant.
+/** @type {[string, string, 'primary' | 'secondary' | 'ghost'][]} */
+const REVIEW_ACTIONS = [
+  ['Back', 'primer.closeReview', 'ghost'],
+  ['Cancel primer', 'primer.askCancel', 'secondary'],
+  ['Send', 'primer.submit', 'primary'],
+];
+
+/**
+ * The selected row's prompt, a key hint per action, at the end of `row`;
+ * nothing on a row whose prompt is empty.
+ * @param {HTMLElement} row
+ * @param {import('../layout').ItemRowInput['prompt']} prompt
+ * @param {PrimerKit} kit
+ */
+function drawRowPrompt(row, prompt, kit) {
+  if (prompt.length === 0) {
+    return;
+  }
+  const span = kit.el(row, 'span', 'primer-row-prompt');
+  for (const action of prompt) {
+    kit.keyHint(span, action.command, {
+      className: 'primer-row-key',
+      label: action.label,
+    });
+  }
+}
 
 // The task card's markdown sections, by label, in card order.
 /** @type {[string, 'question' | 'evidence' | 'probes' | 'pointer'][]} */
@@ -163,7 +192,8 @@ const layout = {
   },
   tasks(parent, input, kit) {
     const list = kit.el(parent, 'div', 'primer-tasks-list');
-    kit.taskRow(list, input.feature.position);
+    const { feature } = input;
+    drawRowPrompt(kit.taskRow(list, feature.position), feature.prompt, kit);
     for (const group of input.groups) {
       const header = kit.sectionHeader(list, group.header);
       const isExtra = group.group === 'extra';
@@ -171,7 +201,7 @@ const layout = {
         kit.addPrompt(header);
       }
       for (const row of group.rows) {
-        kit.taskRow(list, row.position);
+        drawRowPrompt(kit.taskRow(list, row.position), row.prompt, kit);
       }
       if (isExtra && group.rows.length === 0) {
         kit.emptyState(list, 'No extra tasks.');
@@ -185,9 +215,44 @@ const layout = {
       kit.emptyState(list, input.empty);
     }
     for (const row of input.rows) {
-      kit.itemRow(list, row.position);
+      drawRowPrompt(kit.itemRow(list, row.position), row.prompt, kit);
     }
     return { element: list };
+  },
+  tasksHead(parent, _input, kit) {
+    const head = kit.el(parent, 'header', 'primer-column-head');
+    kit.saveStatus(head);
+    kit.rowStep(head);
+    kit.edge(head, 'panes.focusRight', { side: 'end', label: 'items' });
+    return { element: head };
+  },
+  itemsHead(parent, _input, kit) {
+    const head = kit.el(parent, 'header', 'primer-column-head');
+    kit.edge(head, 'panes.focusLeft', { side: 'start', chevron: '‹ tasks' });
+    kit.rowStep(head);
+    kit.edge(head, 'panes.focusRight', { side: 'end', label: 'card' });
+    return { element: head };
+  },
+  tasksFoot(parent, _input, kit) {
+    const foot = kit.el(parent, 'footer', 'primer-tasks-foot');
+    const review = kit.button(foot, 'Review', 'primer.openReview', {
+      variant: 'secondary',
+    });
+    kit.reviewKeys(review);
+    return { element: foot };
+  },
+  cardEdge(parent, _input, kit) {
+    const strip = kit.el(parent, 'div', 'primer-card-edge');
+    kit.edge(strip, 'panes.focusLeft', { side: 'start', chevron: '‹ items' });
+    return { element: strip };
+  },
+  reviewFooter(parent, _input, kit) {
+    const actions = kit.el(parent, 'div', 'primer-review-actions');
+    for (const [label, command, variant] of REVIEW_ACTIONS) {
+      const button = kit.button(actions, label, command, { variant });
+      kit.keyHint(button, command, { className: 'primer-review-key' });
+    }
+    return { element: actions };
   },
   review(parent, input, kit) {
     const review = kit.el(parent, 'div', 'primer-review');

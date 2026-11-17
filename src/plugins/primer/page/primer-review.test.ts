@@ -1,10 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommandId } from '../../../contracts/commands';
-import type { AnchorOptions } from '../../../contracts/keymap';
+import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../shared/page/session-forms';
-import { installFakeDom } from '../../../shared/page/test-dom';
 import type { PrimerEntry } from '../contract';
-import { reviewFooter, reviewTallies } from './primer-review';
+import { reviewTallies } from './primer-review';
 import { initialState, type OpenPrimer } from './primer-state';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
 
@@ -56,32 +53,5 @@ describe('review tallies', () => {
       included: 0,
       items: 0,
     });
-  });
-});
-
-describe('review footer', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('reviewFooter anchors Back, Cancel primer and Send in the review scope', () => {
-    const anchored: [CommandId, AnchorOptions | undefined][] = [];
-
-    reviewFooter({
-      keys: {
-        anchor: (_element, command, options) => {
-          anchored.push([command, options]);
-          return { dispose: () => undefined };
-        },
-      },
-      run: () => undefined,
-    });
-
-    expect(anchored).toEqual([
-      ['primer.closeReview', { scope: 'primer.review' }],
-      ['primer.askCancel', { scope: 'primer.review' }],
-      ['primer.submit', { scope: 'primer.review' }],
-    ]);
   });
 });

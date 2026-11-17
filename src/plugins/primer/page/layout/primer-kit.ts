@@ -5,8 +5,14 @@ import {
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
+import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
-import { boxHint, keyStack } from '../../../../shared/page/ui/key-anchors';
+import {
+  boxHint,
+  keyChevron,
+  keyEdge,
+  keyStack,
+} from '../../../../shared/page/ui/key-anchors';
 import { inputFrame } from '../../../../shared/page/ui/input-frame';
 import { row } from '../../../../shared/page/ui/row';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
@@ -22,15 +28,20 @@ import {
   type PrimerScopeName,
 } from '../../ids';
 import type {
+  CardEdgeKit,
   FeatureCardInput,
   FeatureKit,
   ItemCardInput,
   ItemKit,
+  ItemsHeadKit,
   ItemsKit,
   PrimerKit,
+  ReviewFooterKit,
   ReviewKit,
   TaskCardInput,
   TaskKit,
+  TasksFootKit,
+  TasksHeadKit,
   TasksKit,
 } from '../../layouts/layout';
 import { primerManifest } from '../../manifest';
@@ -81,6 +92,15 @@ export interface DrawnTasksKit {
 export interface DrawnItemsKit {
   kit: ItemsKit;
   rows: Map<number, HTMLElement>;
+}
+
+// A column head's kit, every row pair it drew (for the app's `is-no-target`),
+// and the app's step after the build: it places the save status at the start
+// of `root` when the head left it out (nothing for the items head).
+export interface DrawnColumnHeadKit<K> {
+  kit: K;
+  rowSteps: HTMLElement[];
+  placeLeftOut(root: HTMLElement): void;
 }
 
 // One text box a card has: the field a layout names it by, what it edits,
@@ -321,6 +341,100 @@ export function createReviewKit(
   rollback: RollbackDeps,
 ): ReviewKit {
   return createPrimerKit(deps, 'review', rollback);
+}
+
+// The tasks column head's kit: its row pair in the tasks scope, and
+// `saveStatus`, the app's status line, placed once per draw.
+export function createTasksHeadKit(
+  deps: PrimerKitDeps,
+  saveStatus: HTMLElement,
+  rollback: RollbackDeps,
+): DrawnColumnHeadKit<TasksHeadKit> {
+  const head = createColumnHeadKit(deps, 'tasks', rollback);
+  const slot = appSlot(saveStatus, 'saveStatus', rollback);
+  return {
+    kit: { ...head.kit, saveStatus: (parent) => slot.place(parent) },
+    rowSteps: head.rowSteps,
+    placeLeftOut: (root) => slot.placeIfLeftOut(root, 'start'),
+  };
+}
+
+export function createItemsHeadKit(
+  deps: PrimerKitDeps,
+  rollback: RollbackDeps,
+): DrawnColumnHeadKit<ItemsHeadKit> {
+  return createColumnHeadKit(deps, 'items', rollback);
+}
+
+// The tasks column foot's kit: `reviewKeys` anchors openReview in the tasks,
+// items and card scopes, so the Review button shows its key while any of them
+// has focus.
+export function createTasksFootKit(
+  deps: PrimerKitDeps,
+  rollback: RollbackDeps,
+): TasksFootKit {
+  return {
+    ...createPrimerKit(deps, 'tasks', rollback),
+    reviewKeys: (parent) =>
+      appended(
+        parent,
+        keyStack(
+          'primer-review-keys',
+          (['tasks', 'items', 'card'] as const).map((scope) =>
+            anchoredSpan(
+              deps,
+              rollback,
+              'primer-review-key',
+              'openReview',
+              scope,
+            ),
+          ),
+        ),
+      ),
+  };
+}
+
+export function createCardEdgeKit(
+  deps: PrimerKitDeps,
+  rollback: RollbackDeps,
+): CardEdgeKit {
+  return createPrimerKit(deps, 'card', rollback);
+}
+
+export function createReviewFooterKit(
+  deps: PrimerKitDeps,
+  rollback: RollbackDeps,
+): ReviewFooterKit {
+  return createPrimerKit(deps, 'review', rollback);
+}
+
+// A column head's kit in `scope`: each `rowStep` draws `⌃H ▲ ▼ ⌃L` and is
+// kept in `rowSteps`. Nothing is left out for the app to place.
+function createColumnHeadKit(
+  deps: PrimerKitDeps,
+  scope: 'tasks' | 'items',
+  rollback: RollbackDeps,
+): DrawnColumnHeadKit<ItemsHeadKit> {
+  const rowSteps: HTMLElement[] = [];
+  const stepKey = (command: 'prevRow' | 'nextRow') =>
+    anchoredSpan(deps, rollback, 'primer-column-key', command, scope);
+  return {
+    kit: {
+      ...createPrimerKit(deps, scope, rollback),
+      rowStep(parent) {
+        const edge = keyEdge('primer-column-edge', [
+          stepKey('prevRow'),
+          keyChevron('▲'),
+          keyChevron('▼'),
+          stepKey('nextRow'),
+        ]);
+        rowSteps.push(edge);
+        return appended(parent, edge);
+      },
+    },
+    rowSteps,
+    placeLeftOut: () => undefined,
+  };
 }
 
 // The list row for tasks column `position`: the Feature row, or a task row

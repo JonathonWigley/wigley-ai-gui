@@ -1,10 +1,5 @@
-import type { CommandId } from '../../../contracts/commands';
-import { element } from '../../../shared/page/dom';
-import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
 import type { PrimerEntry, PrimerNeed } from '../contract';
-import type { KeyHints } from '../../../contracts/plugin';
-import { type PrimerCommandName, primerCommand, primerScope } from '../ids';
 import type { ReviewInput, ReviewTaskInput } from '../layouts/layout';
 import {
   FEATURE_FIELDS,
@@ -21,24 +16,11 @@ export interface ReviewTallies {
   items: number;
 }
 
-// `keys` anchors each footer button's keys in the review scope; `run` runs a
-// button's command.
-export interface ReviewDeps {
-  keys: Pick<KeyHints, 'anchor'>;
-  run(command: CommandId): void;
-}
-
 const NEED_TAGS: Record<PrimerNeed, [string, TagTone]> = {
   yes: ['Yes', 'success'],
   no: ['No', 'neutral'],
   unclear: ['Unclear', 'warning'],
 };
-
-const FOOTER: [PrimerCommandName, string, ButtonVariant][] = [
-  ['closeReview', 'Back', 'ghost'],
-  ['askCancel', 'Cancel primer', 'secondary'],
-  ['submit', 'Send', 'primary'],
-];
 
 // The tag a task's need shows as, in the tasks column, the card and the review.
 export function needTag(need: PrimerNeed): HTMLElement {
@@ -100,19 +82,4 @@ function reviewTask(entry: PrimerEntry, isCursor: boolean): ReviewTaskInput {
       comment,
     })),
   };
-}
-
-// The Back, Cancel primer and Send buttons, each holding an anchor for its
-// command in the review scope. The caller disposes the anchors.
-export function reviewFooter(deps: ReviewDeps): HTMLElement {
-  const actions = element('div', 'primer-review-actions');
-  for (const [command, label, variant] of FOOTER) {
-    const qualified = primerCommand(command);
-    const hint = element('span', 'primer-review-key');
-    deps.keys.anchor(hint, qualified, { scope: primerScope('review') });
-    actions.append(
-      textButton(label, () => deps.run(qualified), { variant, hint }),
-    );
-  }
-  return actions;
 }

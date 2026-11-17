@@ -25,13 +25,9 @@
   overflow: hidden;
 }
 
-/* `‹ items ⌥H` at the split's edge, over the card. */
-.primer-card-edge {
-  align-items: baseline;
-  display: flex;
+/* The slot the `cardEdge` part draws into, over the card. */
+.primer-card-edge-slot {
   flex: none;
-  gap: var(--wg-space-1);
-  padding: var(--wg-space-2) var(--wg-space-3) 0;
 }
 
 .primer-tab .primer-card,
@@ -63,84 +59,9 @@
   overflow: hidden;
 }
 
-/* Keys that do not fit beside the save state wrap to a second line; a save
-   state wider than the column ends in an ellipsis. */
-.primer-column-head {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--wg-space-1);
-  padding: var(--wg-space-2) var(--wg-space-3) 0;
-}
-
-.primer-column-head > .ui-status-line {
-  margin-right: auto;
-}
-
-/* `⌃H ▲ ▼ ⌃L`, hidden while the column holds one row; in the items column
-   it ends `‹ tasks ⌥H`'s side of the header. */
-.primer-column-edge {
-  margin-right: var(--wg-space-2);
-}
-
-.primer-items .primer-column-edge {
-  margin-left: auto;
-}
-
 .primer-column-body {
   min-height: 0;
   overflow-y: auto;
-}
-
-/* The keys on the selected row, on a line of their own under its label,
-   wrapping when the column is narrow. The label takes the first line's free
-   space, so the line breaks before the prompt only. */
-.primer-column-body .ui-row:has(> .primer-row-prompt) {
-  flex-wrap: wrap;
-}
-
-.primer-column-body .ui-row:has(> .primer-row-prompt) > .ui-row-label {
-  flex: 1 1 0;
-}
-
-.primer-row-prompt {
-  display: flex;
-  flex: 1 0 100%;
-  flex-wrap: wrap;
-  gap: 0 var(--wg-space-2);
-  padding-bottom: var(--wg-space-1);
-}
-
-/* With no key to show, the prompt's line goes too. */
-.primer-row-prompt:not(:has(.ui-key-prompt)) {
-  display: none;
-}
-
-/* A column's keys fire only while it has focus, so the prompt leaves with
-   it, taking its line under the selected row along. */
-.is-pane-inactive .primer-row-prompt {
-  display: none;
-}
-
-.primer-tasks-foot {
-  border-top: 1px solid var(--wg-border-default);
-  padding: var(--wg-space-2);
-}
-
-/* The Review label stays whole however narrow the column; its keys clip at
-   the column's edge instead. */
-.primer-tasks-foot > .ui-button {
-  max-width: 100%;
-}
-
-.primer-tasks-foot .ui-button-label {
-  flex: none;
-  white-space: nowrap;
-}
-
-.primer-review-keys {
-  min-width: 0;
-  overflow: hidden;
 }
 
 .primer-task-trailing {
@@ -220,12 +141,4 @@
 
 .primer-box .cm-content {
   min-height: var(--wg-row-list);
-}
-
-/* Review */
-.primer-review-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-2);
-  margin-top: var(--wg-space-4);
 }
