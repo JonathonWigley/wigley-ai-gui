@@ -105,7 +105,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `keys-for.ts`: the keys that run a command, as help and hints read them,
                  `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
                  documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
-                 moved one among them (progress unlike the main tree's and not behind it), both read by workflow-large and backlog)
+                 moved one among them (progress unlike the main tree's and not behind it), both read only by workflow-large)
   plugin-catalog/ `validateManifest` and the manifest JSON Schema: the checks a user plugin's manifest meets at load →
                  pure, no I/O
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
