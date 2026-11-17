@@ -55,7 +55,7 @@ describe('roster', () => {
       },
     });
     for (const id of ['r1', 'r2', 'r3', 'r4']) {
-      roster.connected(agentSession(id), true);
+      roster.connected(agentSession(id));
     }
     roster.subagentSpawned('r1', 'agent-7', 'worker');
 
@@ -146,7 +146,7 @@ describe('roster', () => {
         titles: titles === null ? {} : { r1: titles },
         labels: label === null ? {} : { r1: label },
       });
-      roster.connected(agentSession('r1'), true);
+      roster.connected(agentSession('r1'));
       steps(roster);
 
       expect(roster.participant('r1', agentId)).toEqual({
@@ -162,20 +162,19 @@ describe('roster', () => {
   it('sessions_Lifecycle', () => {
     const roster = rosterOver({ projects: { r1: 'a' } });
 
-    roster.connected(agentSession('r1', 'host-1'), true);
+    roster.connected(agentSession('r1', 'host-1'));
     expect(roster.sessions()).toEqual([
       {
         rowId: 'r1',
         harness: 'claude',
         folder: '/r/r1',
         hostSessionId: 'host-1',
-        owned: true,
       },
     ]);
 
-    roster.connected(agentSession('r1', 'host-other'), false);
+    roster.connected(agentSession('r1', 'host-other'));
     expect(roster.sessions()).toEqual([
-      expect.objectContaining({ hostSessionId: 'host-1', owned: true }),
+      expect.objectContaining({ hostSessionId: 'host-1' }),
     ]);
 
     roster.hostSessionChanged(agentSession('r1', 'host-2'));

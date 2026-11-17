@@ -49,8 +49,8 @@ function newRoster(): Roster {
       label: () => null,
     },
   });
-  roster.connected(agentSession('rA'), true);
-  roster.connected(agentSession('rB'), true);
+  roster.connected(agentSession('rA'));
+  roster.connected(agentSession('rB'));
   return roster;
 }
 

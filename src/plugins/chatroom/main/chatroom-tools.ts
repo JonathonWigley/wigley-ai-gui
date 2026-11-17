@@ -17,6 +17,7 @@ import {
 } from '../../sessions/contract';
 import {
   type ClaimTarget,
+  isMessageRef,
   MESSAGE_REF_TYPES,
   type MessageRef,
   type Participant,
@@ -175,14 +176,6 @@ function isAbsent(value: unknown): value is undefined | null {
 
 function isWholeNumber(value: unknown): value is number {
   return Number.isInteger(value);
-}
-
-function isMessageRef(value: unknown): value is MessageRef {
-  return (
-    isJsonObject(value) &&
-    MESSAGE_REF_TYPES.includes(value.type as MessageRef['type']) &&
-    typeof value.value === 'string'
-  );
 }
 
 function fieldsOf(args: unknown): JsonObject {

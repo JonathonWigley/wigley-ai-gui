@@ -16,6 +16,7 @@ import {
   buildBoard,
   type GitFolderState,
   readGitFolder,
+  staleTouchPaths,
   type Touch,
   type TouchTracker,
 } from './board';
@@ -92,26 +93,6 @@ interface RootReads {
   timer: number | null;
   // Resolved once the next read that starts settles.
   waiting: (() => void)[];
-}
-
-// The touches under the state's root at or before its `readAt` whose file is
-// not changed: written and committed between two reads.
-function staleTouchPaths(
-  touches: readonly Touch[],
-  state: GitFolderState,
-  paths: Pick<Paths, 'samePath' | 'isInside' | 'join'>,
-): string[] {
-  const changedFiles = state.changed.map((entry) =>
-    paths.join(state.root, entry),
-  );
-  return touches
-    .filter(
-      (touch) =>
-        touch.at <= state.readAt &&
-        paths.isInside(touch.path, state.root) &&
-        !changedFiles.some((file) => paths.samePath(file, touch.path)),
-    )
-    .map((touch) => touch.path);
 }
 
 // The rows with an activity asking for the user: emphasis `urgent`.
@@ -217,9 +198,21 @@ export function createBoardFeed(deps: BoardFeedDeps): BoardFeed {
     return roomRoots;
   };
 
+  const trackedRoots = (): Set<string> => {
+    const found = new Set<string>();
+    for (const root of roots.values()) {
+      if (root !== null) {
+        found.add(root);
+      }
+    }
+    return found;
+  };
+
   const afterRead = (state: GitFolderState) => {
     gitStates.set(state.root, state);
-    tracker.forget(staleTouchPaths(tracker.touches(), state, paths));
+    tracker.forget(
+      staleTouchPaths(tracker.touches(), state, trackedRoots(), paths),
+    );
     for (const room of roomsHoldingRoot(state.root)) {
       announceIfChanged(room);
     }
@@ -328,8 +321,8 @@ export function createBoardFeed(deps: BoardFeedDeps): BoardFeed {
   // The deepest tracked root holding the full path, null when none does.
   const rootHolding = (path: string): string | null => {
     let found: string | null = null;
-    for (const root of new Set(roots.values())) {
-      const holds = root !== null && paths.isInside(path, root);
+    for (const root of trackedRoots()) {
+      const holds = paths.isInside(path, root);
       if (holds && (found === null || root.length > found.length)) {
         found = root;
       }
@@ -397,7 +390,7 @@ export function createBoardFeed(deps: BoardFeedDeps): BoardFeed {
     onChanged: (listener) => changed.add(listener),
     async settled() {
       while (inFlight.size > 0) {
-        await Promise.all([...inFlight]);
+        await Promise.all(inFlight);
       }
     },
     stop() {

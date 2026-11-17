@@ -8,13 +8,12 @@ import { type Participant, USER_PARTICIPANT } from '../contract';
 // A live session in the roster. `rowId` is the app's id for the session
 // (`AgentSession.id`), with or without a sessions row; `harness` the harness
 // id; `hostSessionId` the host's session id, null until the harness reports
-// one; `owned` true for a session the app started.
+// one.
 export interface RosterSession {
   readonly rowId: string;
   readonly harness: string | null;
   readonly folder: string | null;
   readonly hostSessionId: string | null;
-  readonly owned: boolean;
 }
 
 export interface RosterDeps {
@@ -26,7 +25,7 @@ export interface RosterDeps {
 // lookup landing shows at the next one.
 export interface Roster {
   // Adds the session; a session already in the roster is left as it is.
-  connected(session: AgentSession, owned: boolean): void;
+  connected(session: AgentSession): void;
   // Sets the session's host id from its info again.
   hostSessionChanged(session: AgentSession): void;
   has(rowId: string): boolean;
@@ -80,7 +79,7 @@ export function createRoster(deps: RosterDeps): Roster {
   };
 
   return {
-    connected(session, owned) {
+    connected(session) {
       if (entries.has(session.id)) {
         return;
       }
@@ -90,7 +89,6 @@ export function createRoster(deps: RosterDeps): Roster {
           harness: session.info.harness,
           folder: session.info.projectDir,
           hostSessionId: session.info.sessionId,
-          owned,
         },
         subagentTypes: new Map(),
       });

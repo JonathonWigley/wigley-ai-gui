@@ -274,6 +274,37 @@ export interface TouchTracker {
   forget(paths: readonly string[]): void;
 }
 
+// The touches under the state's root at or before its `readAt` whose file is
+// not changed: written and committed between two reads. A touch under a
+// deeper root of `roots` is left for that root's reads.
+export function staleTouchPaths(
+  touches: readonly Touch[],
+  state: GitFolderState,
+  roots: Iterable<string>,
+  paths: Pick<Paths, 'samePath' | 'isInside' | 'join'>,
+): string[] {
+  const changedFiles = state.changed.map((entry) =>
+    paths.join(state.root, entry),
+  );
+  const deeperRoots = [...roots].filter(
+    (root) =>
+      paths.isInside(root, state.root) && !paths.samePath(root, state.root),
+  );
+  return touches
+    .filter((touch) => {
+      const isReadByThisRoot =
+        touch.at <= state.readAt && paths.isInside(touch.path, state.root);
+      const isUnderDeeperRoot = deeperRoots.some((root) =>
+        paths.isInside(touch.path, root),
+      );
+      const isChanged = changedFiles.some((file) =>
+        paths.samePath(file, touch.path),
+      );
+      return isReadByThisRoot && !isUnderDeeperRoot && !isChanged;
+    })
+    .map((touch) => touch.path);
+}
+
 export function createTouchTracker(
   paths: Pick<Paths, 'isAbsolute' | 'normalize' | 'samePath'>,
 ): TouchTracker {

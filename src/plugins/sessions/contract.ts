@@ -84,10 +84,15 @@ export interface ToolDefinition {
 
 export const RELAY_PROTOCOL = 1;
 
+// A hook hello's own protocol, so an app that knows no hook calls refuses one
+// at once rather than opening a session for it.
+export const HOOK_PROTOCOL = 2;
+
 // The first line the relay sends, before any MCP message. Every other field
-// is the host's own, and lands in `SessionInfo.host`. A string `hook` makes it
-// a hook hello: one request line follows, and the app answers it with one
-// `HookReply` line and closes, opening no session.
+// is the host's own, and lands in `SessionInfo.host`. A hook hello carries
+// HOOK_PROTOCOL and a string `hook`, and only it does: one request line
+// follows, and the app answers it with one `HookReply` line and closes,
+// opening no session.
 export interface RelayHello {
   protocol: number;
   session_id: string | null;

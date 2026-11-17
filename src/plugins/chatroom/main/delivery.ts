@@ -1,7 +1,7 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
-import type { ChatMainExports } from '../../chat/contract';
+import type { ChatMainExports, ChatSessionInfo } from '../../chat/contract';
 import {
   type Participant,
   participantKey,
@@ -13,14 +13,16 @@ import type { Roster } from './roster';
 
 const WAKING_KINDS: readonly PostKind[] = ['question', 'blocker', 'handoff'];
 
-// `isIdle` is true when chat shows the row's activity `idle`.
-// `onTurnFinished` hears chat's `turnFinished`, `onSessionEnded` sessions'
-// `ended`.
+// `chatState` reads the row's `chat.session` value, undefined before it has
+// one. `onTurnFinished` hears chat's `turnFinished`, `onSessionEnded`
+// sessions' `ended`.
 export interface DeliveryDeps {
   readonly room: Pick<RoomService, 'onMessage' | 'unreadAddressed'>;
   readonly roster: Pick<Roster, 'sessions' | 'participant' | 'roomOf'>;
   readonly chat: Pick<ChatMainExports, 'profileOf' | 'send'>;
-  isIdle(rowId: string): boolean;
+  chatState(
+    rowId: string,
+  ): Pick<ChatSessionInfo, 'activity' | 'running'> | undefined;
   onTurnFinished(
     listener: (sessionId: string, how: 'idle' | 'rested') => void,
   ): Disposable;
@@ -41,9 +43,16 @@ function wakeText(message: RoomMessage, isUserWord: boolean): string {
 
 // Wakes an app-run session's main agent with a chat message when a question,
 // blocker or handoff names it, or the user's word reaches it: at once when the
-// session is idle, else at its next idle turn end if still unread.
+// session is idle with its process running, else at its next idle turn end if
+// still unread. A resting session is never woken, so a wake never restarts a
+// process the user stopped.
 export function startDelivery(deps: DeliveryDeps): Disposable {
   const { room, roster, chat } = deps;
+
+  const isIdle = (rowId: string): boolean => {
+    const state = deps.chatState(rowId);
+    return state?.running === true && state.activity === 'idle';
+  };
   // Row id → message id → the wake text, for rows that were busy.
   const pending = new Map<
     string,
@@ -105,7 +114,7 @@ export function startDelivery(deps: DeliveryDeps): Disposable {
       if (text === null || isStopped) {
         continue;
       }
-      if (deps.isIdle(rowId)) {
+      if (isIdle(rowId)) {
         send(rowId, text);
       } else {
         keepPending(rowId, message.id, { room: message.room, text });

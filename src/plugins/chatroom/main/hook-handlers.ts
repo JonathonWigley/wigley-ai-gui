@@ -188,6 +188,12 @@ export function createHookHandlers(deps: HookHandlersDeps): {
         return { text: null };
       }
       const { agentId, tool } = call.request;
+      // Read before this call's touch replaces a peer's on the same path. For
+      // an app-run row chat's `fileWritten` may have replaced it already, so
+      // the uncommitted line can be missing.
+      const warnings = deps.warnAtPost
+        ? await warningLines(session, call.roomName, call.request)
+        : [];
       if (tool !== 'commit') {
         boardFeed.noteTouched(
           session.id,
@@ -195,9 +201,6 @@ export function createHookHandlers(deps: HookHandlersDeps): {
           call.request.paths,
         );
       }
-      const warnings = deps.warnAtPost
-        ? await warningLines(session, call.roomName, call.request)
-        : [];
       const unread = await room.unreadAddressed(
         call.roomName,
         roster.participant(session.id, agentId),

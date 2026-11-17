@@ -1,6 +1,7 @@
 import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
 import type { KeyedSlotKey, SlotKey } from '../../contracts/state';
+import { isJsonObject } from '../../shared/json';
 
 // What an agent posts in a room.
 export type PostKind =
@@ -42,6 +43,29 @@ export interface Participant {
   readonly agentId: string | null; // null for a main agent, the subagent's id otherwise
   readonly mirrorId: string | null;
   readonly name: string; // the session title, `Title ▸ type` for a subagent, `you`, `system`
+}
+
+export const PARTICIPANT_KINDS: readonly Participant['kind'][] = [
+  'agent',
+  'human',
+  'system',
+  'mirror',
+];
+
+function isStringOrNull(value: unknown): boolean {
+  return value === null || typeof value === 'string';
+}
+
+// Whether `value`, as parsed from JSON, has a participant's shape.
+export function isParticipant(value: unknown): value is Participant {
+  return (
+    isJsonObject(value) &&
+    PARTICIPANT_KINDS.includes(value.kind as Participant['kind']) &&
+    isStringOrNull(value.rowId) &&
+    isStringOrNull(value.agentId) &&
+    isStringOrNull(value.mirrorId) &&
+    typeof value.name === 'string'
+  );
 }
 
 export const USER_PARTICIPANT: Participant = {
@@ -88,6 +112,30 @@ export const MESSAGE_REF_TYPES: readonly MessageRef['type'][] = [
   'message',
 ];
 
+// Whether `value`, as parsed from JSON, has a message ref's shape.
+export function isMessageRef(value: unknown): value is MessageRef {
+  return (
+    isJsonObject(value) &&
+    MESSAGE_REF_TYPES.includes(value.type as MessageRef['type']) &&
+    typeof value.value === 'string'
+  );
+}
+
+const SESSION_THREAD_PREFIX = 'session:';
+
+// A session row's own thread: its main agent's default thread, and its
+// dispatches, hand-backs and progress.
+export function sessionThread(rowId: string): string {
+  return `${SESSION_THREAD_PREFIX}${rowId}`;
+}
+
+// The row id of a `session:<row id>` thread, null for any other thread.
+export function sessionThreadRowId(thread: string): string | null {
+  return thread.startsWith(SESSION_THREAD_PREFIX)
+    ? thread.slice(SESSION_THREAD_PREFIX.length)
+    : null;
+}
+
 export interface RoomMessage {
   readonly id: number; // given by the store, monotonic per room
   readonly room: string;
@@ -112,7 +160,8 @@ export type NewMessage = Omit<RoomMessage, 'id'>;
 // The rooms' messages. `append` gives the message the room's next id, 1 for
 // a room's first, and rejects, using no id, when the room name is empty or
 // the write fails; appends to one room never share an id. `read` returns the
-// room's messages above `afterId` in id order, `[]` for a room with none.
+// room's messages above `afterId` in id order, `[]` for a room with none, the
+// empty name included.
 // `rooms` returns each room holding a message, in plain string order.
 export interface RoomStore {
   append(message: NewMessage): Promise<RoomMessage>;

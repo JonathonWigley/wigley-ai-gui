@@ -16,6 +16,8 @@ import {
   type ClaimTarget,
   ENTRY_KINDS,
   type EntryKind,
+  isParticipant,
+  MESSAGE_REF_TYPES,
   type MessageRef,
   type NewMessage,
   type Participant,
@@ -24,6 +26,7 @@ import {
   type PostKind,
   type RoomMessage,
   type RoomStore,
+  sessionThread,
   USER_PARTICIPANT,
 } from '../contract';
 import { claimPathsOverlap, normalizeClaimPath } from './claim-paths';
@@ -145,16 +148,19 @@ export type ReleaseResult =
 // first use and written whole on each change; a write that fails is logged and
 // the state kept in memory. Claims are advisory and never block.
 export interface RoomService {
-  // Refuses, writing nothing, a post a check or guard holds back; a retry
-  // with an accepted post's `key` returns that post's id as a duplicate.
+  // Refuses, writing nothing, a post a check or guard holds back, or one the
+  // store fails to save; a retry with an accepted post's `key` returns that
+  // post's id as a duplicate. Rejects, writing nothing, when reading the room
+  // or `threads.json` fails.
   post(request: PostRequest): Promise<PostResult>;
-  // A post from `USER_PARTICIPANT`, the user's word, uncapped.
+  // A post from `USER_PARTICIPANT`, the user's word: the body cap applies;
+  // the identical-body drop and the rate cap do not. Fails as `post` does.
   postHuman(request: HumanPostRequest): Promise<PostResult>;
   // Writes an entry with no check, its body cut to the body cap; rejects when
   // the store does.
   addEntry(entry: EntryRequest): Promise<RoomMessage>;
   // An unread read moves the reader's cursor; a thread or message read does
-  // not.
+  // not. Rejects when reading the room or a state file fails.
   read(
     room: string,
     reader: Participant,
@@ -163,7 +169,8 @@ export interface RoomService {
   // The unread messages that name the reader, or carry the user's word to an
   // open thread the reader takes part in; moves no cursor.
   unreadAddressed(room: string, reader: Participant): Promise<RoomMessage[]>;
-  // Posts above the user's cursor of their thread, the user's own left out.
+  // Posts above the user's cursor of their thread, the user's own left out:
+  // those from `USER_PARTICIPANT` and from a mirror.
   userUnread(room: string): Promise<RoomMessage[]>;
   // Moves the thread's user cursor up to `upToId`, never down.
   markUserRead(room: string, thread: string, upToId: number): Promise<void>;
@@ -214,21 +221,6 @@ const MAX_THREAD_LENGTH = 80;
 const READ_LINE_LENGTH = 200;
 const GENERAL_THREAD = 'general';
 const LINE_BREAK = /[\r\n]/;
-
-const REF_TYPES: readonly MessageRef['type'][] = [
-  'file',
-  'branch',
-  'commit',
-  'plan',
-  'message',
-];
-
-const PARTICIPANT_KINDS: readonly Participant['kind'][] = [
-  'agent',
-  'human',
-  'system',
-  'mirror',
-];
 
 const USER_KEY = participantKey(USER_PARTICIPANT);
 
@@ -315,8 +307,8 @@ function bodyRefusal(body: string, bodyCap: number): string | null {
 
 function refsRefusal(refs: readonly MessageRef[]): string | null {
   for (const ref of refs) {
-    if (!REF_TYPES.includes(ref.type)) {
-      return `ref type ${ref.type} is not one of ${REF_TYPES.join(', ')}`;
+    if (!MESSAGE_REF_TYPES.includes(ref.type)) {
+      return `ref type ${ref.type} is not one of ${MESSAGE_REF_TYPES.join(', ')}`;
     }
     if (ref.value.trim() === '') {
       return `a ${ref.type} ref has an empty value`;
@@ -392,12 +384,10 @@ function chosenThread(
   if (repliedTo !== null) {
     return { ok: true, thread: repliedTo.thread };
   }
+  const agentRowId = request.from.kind === 'agent' ? request.from.rowId : null;
   return {
     ok: true,
-    thread:
-      request.from.kind === 'agent'
-        ? `session:${request.from.rowId}`
-        : GENERAL_THREAD,
+    thread: agentRowId === null ? GENERAL_THREAD : sessionThread(agentRowId),
   };
 }
 
@@ -479,8 +469,9 @@ function threadsTakenPartIn(
 ): Set<string> {
   const readerKey = participantKey(reader);
   const threads = new Set<string>();
-  if (reader.kind === 'agent' && reader.agentId === null) {
-    threads.add(`session:${reader.rowId}`);
+  const isMainAgent = reader.kind === 'agent' && reader.agentId === null;
+  if (isMainAgent && reader.rowId !== null) {
+    threads.add(sessionThread(reader.rowId));
   }
   for (const message of messages) {
     const talkedThere =
@@ -622,14 +613,20 @@ function targetsOverlap(a: ClaimTarget, b: ClaimTarget): boolean {
   return sameTarget(a, b);
 }
 
-// A target as asked, its paths normalized and the unusable ones left out.
+// A target as asked, as `checkedTarget` stores one: its paths normalized and
+// the unusable ones left out, its branch or resource trimmed.
 function askedTarget(target: ClaimTarget): ClaimTarget {
-  if (!('paths' in target)) {
-    return target;
+  if ('paths' in target) {
+    return {
+      paths: target.paths
+        .map(normalizeClaimPath)
+        .filter((path) => path !== null),
+    };
   }
-  return {
-    paths: target.paths.map(normalizeClaimPath).filter((path) => path !== null),
-  };
+  if ('branch' in target) {
+    return { branch: target.branch.trim() };
+  }
+  return { resource: target.resource.trim() };
 }
 
 function overlapping(
@@ -743,21 +740,6 @@ const CLAIMS_SHAPE: StateShape<Claims> = {
   json: (claims) => [...claims.values()],
 };
 
-function isStringOrNull(value: unknown): boolean {
-  return value === null || typeof value === 'string';
-}
-
-function isParticipant(value: unknown): value is Participant {
-  return (
-    isJsonObject(value) &&
-    PARTICIPANT_KINDS.includes(value.kind as Participant['kind']) &&
-    isStringOrNull(value.rowId) &&
-    isStringOrNull(value.agentId) &&
-    isStringOrNull(value.mirrorId) &&
-    typeof value.name === 'string'
-  );
-}
-
 function isClaimTarget(value: unknown): value is ClaimTarget {
   if (!isJsonObject(value)) {
     return false;
@@ -803,10 +785,14 @@ function createSavedState<T>(
     } catch {
       parsed = null;
     }
-    if (parsed === null || parsed.droppedEntry) {
+    if (parsed === null) {
       deps.log(`${file} unreadable, starting empty`);
+      return shape.empty();
     }
-    return parsed?.value ?? shape.empty();
+    if (parsed.droppedEntry) {
+      deps.log(`${file}: dropped entries of the wrong shape`);
+    }
+    return parsed.value;
   };
 
   return {
@@ -884,8 +870,11 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
   const resolvedIn = async (room: string): Promise<ReadonlySet<string>> =>
     (await resolvedThreads.value()).get(room) ?? new Set();
 
-  const reopenThread = async (room: string, thread: string) => {
-    const resolved = await resolvedThreads.value();
+  const reopenThread = (
+    resolved: ResolvedThreads,
+    room: string,
+    thread: string,
+  ) => {
     const threads = resolved.get(room);
     if (threads === undefined || !threads.delete(thread)) {
       return;
@@ -929,6 +918,8 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
       return refused(badKind);
     }
     const messages = await deps.store.read(request.room, 0);
+    // Loaded before the append, so a failed load stores no message.
+    const resolved = await resolvedThreads.value();
     const senderKey = participantKey(request.from);
     const earlier =
       request.key === null
@@ -985,7 +976,7 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
     } catch (error) {
       return refused(`could not save the message: ${errorText(error)}`);
     }
-    await reopenThread(stored.room, stored.thread);
+    reopenThread(resolved, stored.room, stored.thread);
     fanOut(stored);
     return {
       ok: true,
@@ -1124,12 +1115,16 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
     async userUnread(room) {
       const messages = await deps.store.read(room, 0);
       const cursors = (await userCursors.value()).get(room);
-      return messages.filter(
-        (message) =>
+      return messages.filter((message) => {
+        const isUsersOwn =
+          participantKey(message.from) === USER_KEY ||
+          message.from.kind === 'mirror';
+        return (
           isTalk(message) &&
-          participantKey(message.from) !== USER_KEY &&
-          message.id > (cursors?.get(message.thread) ?? 0),
-      );
+          !isUsersOwn &&
+          message.id > (cursors?.get(message.thread) ?? 0)
+        );
+      });
     },
     async markUserRead(room, thread, upToId) {
       const cursors = await userCursors.value();

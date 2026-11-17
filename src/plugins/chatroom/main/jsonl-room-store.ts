@@ -1,5 +1,6 @@
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
+import { isJsonObject } from '../../../shared/json';
 import { compareText } from '../../../shared/key-hints';
 import {
   createSerialQueue,
@@ -7,29 +8,14 @@ import {
 } from '../../../shared/serial-queue';
 import {
   ENTRY_KINDS,
-  type MessageRef,
+  isMessageRef,
+  isParticipant,
   type NewMessage,
-  type Participant,
   POST_KINDS,
   type RoomMessage,
   type RoomStore,
 } from '../contract';
 import { ROOMS_FOLDER, roomFileName, roomOfFileName } from './room-store';
-
-const PARTICIPANT_KINDS: readonly Participant['kind'][] = [
-  'agent',
-  'human',
-  'system',
-  'mirror',
-];
-
-const REF_TYPES: readonly MessageRef['type'][] = [
-  'file',
-  'branch',
-  'commit',
-  'plan',
-  'message',
-];
 
 const MESSAGE_KINDS: readonly string[] = [...POST_KINDS, ...ENTRY_KINDS];
 
@@ -40,10 +26,6 @@ interface LoadedRoom {
   tailMayBeCut: boolean;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function isStringOrNull(value: unknown): boolean {
   return value === null || typeof value === 'string';
 }
@@ -52,27 +34,8 @@ function isNumberOrNull(value: unknown): boolean {
   return value === null || typeof value === 'number';
 }
 
-function isParticipant(value: unknown): value is Participant {
-  return (
-    isRecord(value) &&
-    PARTICIPANT_KINDS.includes(value.kind as Participant['kind']) &&
-    isStringOrNull(value.rowId) &&
-    isStringOrNull(value.agentId) &&
-    isStringOrNull(value.mirrorId) &&
-    typeof value.name === 'string'
-  );
-}
-
-function isMessageRef(value: unknown): value is MessageRef {
-  return (
-    isRecord(value) &&
-    REF_TYPES.includes(value.type as MessageRef['type']) &&
-    typeof value.value === 'string'
-  );
-}
-
 function isRoomMessage(value: unknown): value is RoomMessage {
-  if (!isRecord(value)) {
+  if (!isJsonObject(value)) {
     return false;
   }
   const hasStoreId = Number.isInteger(value.id) && (value.id as number) >= 1;
@@ -201,7 +164,10 @@ export function createJsonlRoomStore(deps: {
       const path = roomPath(message.room);
       return queueOf(message.room).run(() => appendInTurn(message, path));
     },
-    read(room, afterId) {
+    async read(room, afterId) {
+      if (room === '') {
+        return [];
+      }
       return queueOf(room).run(async () => {
         const { messages } = await loadedRoom(room);
         return messages.filter((message) => message.id > afterId);

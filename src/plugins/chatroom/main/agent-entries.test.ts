@@ -43,18 +43,15 @@ function entriesOver(
     },
   });
   for (const id of ['rA', 'rZ']) {
-    roster.connected(
-      {
-        id,
-        info: {
-          sessionId: null,
-          projectDir: null,
-          harness: 'claude',
-          rowId: null,
-        },
+    roster.connected({
+      id,
+      info: {
+        sessionId: null,
+        projectDir: null,
+        harness: 'claude',
+        rowId: null,
       },
-      true,
-    );
+    });
   }
   roster.subagentSpawned('rA', 'agent-1', 'planner');
   const room = { addEntry: vi.fn(addEntry) };
@@ -127,6 +124,24 @@ describe('createAgentEntries', () => {
         case: 'replayed',
         events: [chatEvent(SPAWNED, { replayed: true })],
         expected: [],
+      },
+      {
+        case: 'replayed spawn, then a live finish names its type',
+        events: [
+          chatEvent(SPAWNED, { replayed: true }),
+          chatEvent({
+            type: 'agentFinished',
+            at: 2,
+            agentId: 'agent-2',
+            outcome: 'done',
+          }),
+        ],
+        expected: [
+          expect.objectContaining({
+            kind: 'hand-back',
+            from: agent('agent-2', 'Lead ▸ worker'),
+          }),
+        ],
       },
       {
         case: 'row with no room',

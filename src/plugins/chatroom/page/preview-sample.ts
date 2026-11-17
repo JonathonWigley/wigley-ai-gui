@@ -6,6 +6,7 @@ import {
   type PostKind,
   type RoomMessage,
   type RoomView,
+  sessionThread,
   SYSTEM_PARTICIPANT,
   USER_PARTICIPANT,
 } from '../contract';
@@ -180,7 +181,7 @@ export const PREVIEW_ROOM_VIEW: RoomView = {
       userMentions: 1,
     },
     {
-      thread: `session:${LEAD_ROW}`,
+      thread: sessionThread(LEAD_ROW),
       resolved: false,
       lastId: 4,
       userUnread: 0,

@@ -11,10 +11,7 @@ import {
   deferred,
   fakeDependency,
 } from '../../../shared/plugin-part-harness.test-support';
-import {
-  createSlotStore,
-  type SlotStore,
-} from '../../../shared/state/slot-store';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type SessionsPageExports,
   sessionsPageKey,
@@ -124,7 +121,6 @@ interface PageOptions {
   holdsReads?: boolean;
   postResult?: UserPostResult;
   place?: ChatroomPlace;
-  state?: SlotStore;
 }
 
 // The chatroom page on the harness, drawing its layout for real, with the
@@ -134,7 +130,7 @@ function startChatroomPage(options: PageOptions = {}) {
   installFocusFakeDom(vi.stubGlobal);
   const calls: { method: string; args: unknown[] }[] = [];
   const reads: HeldRead[] = [];
-  const state = options.state ?? createSlotStore(() => undefined);
+  const state = createSlotStore(() => undefined);
   if (options.place !== undefined) {
     const lastPage = state.publish(chatroomPlaceSlot);
     lastPage.set(options.place);
@@ -395,6 +391,23 @@ describe('chatroomPagePart', () => {
         [ROOM, 'other', 0],
         [ROOM, 'other', 0],
       ],
+    ]);
+  });
+
+  it('restorePlace_SavedThreadAbsentThenArrives_OpensItOnTheRoomChange', async () => {
+    const page = startChatroomPage({
+      place: { room: ROOM, thread: 'late' },
+      messages: { late: [message(1)] },
+    });
+    await settle();
+    const beforeArrival = page.callsOf('readThread');
+
+    page.rooms.set(ROOM, shopRoom({ [THREAD]: 3, late: 1 }));
+    await settle();
+
+    expect([beforeArrival, page.callsOf('readThread')]).toEqual([
+      [],
+      [[ROOM, 'late', 0]],
     ]);
   });
 

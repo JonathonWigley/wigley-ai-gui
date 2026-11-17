@@ -131,6 +131,7 @@ export function describeRoomStoreContract(current: () => RoomStore): void {
       { room: 'shop', afterId: 3, expected: [4, 5] },
       { room: 'shop', afterId: 5, expected: [] },
       { room: 'unknown', afterId: 0, expected: [] },
+      { room: '', afterId: 0, expected: [] },
     ])(
       'read_AfterId: $room after $afterId → $expected',
       async ({ room, afterId, expected }) => {

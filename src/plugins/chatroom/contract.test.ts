@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ENTRY_KINDS,
   type Participant,
   participantKey,
-  POST_KINDS,
   SYSTEM_PARTICIPANT,
   USER_PARTICIPANT,
 } from './contract';
@@ -39,20 +37,5 @@ describe('chatroom contract', () => {
     },
   ])('participantKey: $name → $key', ({ participant, key }) => {
     expect(participantKey(participant)).toBe(key);
-  });
-
-  it('kindLists_KeepTheUnionOrder', () => {
-    expect(POST_KINDS).toEqual([
-      'question',
-      'answer',
-      'blocker',
-      'heads-up',
-      'handoff',
-      'decision',
-      'result',
-      'progress',
-      'note',
-    ]);
-    expect(ENTRY_KINDS).toEqual(['dispatch', 'hand-back', 'joined', 'left']);
   });
 });

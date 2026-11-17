@@ -2,11 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '../../../contracts/agent';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { ChatAgentEvent, ChatSessionInfo } from '../../chat/contract';
-import type {
-  CloneClaim,
-  PoolClone,
-  PoolSnapshot,
-} from '../../unity-pool/contract';
+import type { CloneClaim, PoolSnapshot } from '../../unity-pool/contract';
 import type { SessionFlow } from '../../workflow/contract';
 import type { Claim, Participant } from '../contract';
 import {
@@ -16,9 +12,11 @@ import {
   createTouchTracker,
   type GitFolderState,
   readGitFolder,
+  staleTouchPaths,
   type Touch,
   type TouchTracker,
 } from './board';
+import { chatInfo, cloneClaim, flow, poolClone } from './board.test-support';
 
 const FINISHING_STAGE = 'land';
 
@@ -32,42 +30,6 @@ function session(fields: Partial<BoardSession> = {}): BoardSession {
     root: '/r/c2',
     hostSessionId: null,
     connected: false,
-    ...fields,
-  };
-}
-
-function chatInfo(fields: Partial<ChatSessionInfo> = {}): ChatSessionInfo {
-  return {
-    sessionId: 'A',
-    projectDir: '/r/c2/src',
-    harness: 'claude',
-    profile: 'default',
-    activity: 'idle',
-    background: 0,
-    activeTime: { totalMs: 0, since: null },
-    running: true,
-    pid: null,
-    compaction: null,
-    repo: 'c2',
-    branch: null,
-    worktrees: [],
-    headless: false,
-    ...fields,
-  };
-}
-
-function flow(fields: Partial<SessionFlow> = {}): SessionFlow {
-  return {
-    sessionId: 'A',
-    projectDir: '/r/c2/src',
-    workflow: 'medium',
-    movedUpFrom: null,
-    stage: 'build',
-    checklist: null,
-    state: null,
-    missedLevel: false,
-    turnRunning: false,
-    runningSubagents: [],
     ...fields,
   };
 }
@@ -106,35 +68,6 @@ function gitMap(...states: GitFolderState[]): Map<string, GitFolderState> {
 
 function touch(path: string, rowId: string, at: number): Touch {
   return { path, rowId, agentId: 'main', at };
-}
-
-function poolClone(
-  number: number,
-  path: string,
-  claim: CloneClaim | null,
-): PoolClone {
-  return {
-    number,
-    path,
-    facts: { branch: null, dirty: null, editor: 'unknown', probedAt: null },
-    claim,
-    handoff: null,
-    stranded: null,
-    lastHolder: null,
-    lastReleasedAt: null,
-    warmup: null,
-  };
-}
-
-function cloneClaim(fields: Partial<CloneClaim>): CloneClaim {
-  return {
-    kind: 'agent',
-    session: null,
-    row: null,
-    since: 0,
-    renewedAt: 0,
-    ...fields,
-  };
 }
 
 function agent(rowId: string, agentId: string | null): Participant {
@@ -647,34 +580,22 @@ describe('createTouchTracker', () => {
       '/r/a.ts',
     ]);
   });
+});
 
-  // Task 08's rule after a git read: forget each touch under the root at or
-  // before `readAt` whose file is not in `changed`.
-  function stalePaths(tracker: TouchTracker, state: GitFolderState): string[] {
-    const changedPaths = state.changed.map((path) => `${state.root}/${path}`);
-    return tracker
-      .touches()
-      .filter(
-        (stored) =>
-          posixPaths.isInside(stored.path, state.root) &&
-          stored.at <= state.readAt &&
-          !changedPaths.some((path) => posixPaths.samePath(path, stored.path)),
-      )
-      .map((stored) => stored.path);
-  }
-
-  it('forgets the touches of files committed between two git reads', () => {
-    const tracker = createTouchTracker(posixPaths);
-    tracker.touched('A', 'main', '/r/a.ts', 1);
-    tracker.touched('A', 'main', '/r/b.ts', 5);
-    tracker.touched('A', 'main', '/r/c.ts', 4);
-    tracker.touched('A', 'main', '/o/d.ts', 1);
+describe('staleTouchPaths', () => {
+  it('names the touches under the read root, at or before the read, of unchanged files', () => {
+    const touches = [
+      touch('/r/a.ts', 'A', 1),
+      touch('/r/b.ts', 'A', 5),
+      touch('/r/c.ts', 'A', 4),
+      touch('/r/o/d.ts', 'A', 1),
+      touch('/q/e.ts', 'A', 1),
+      touch('/r/f.ts', 'A', 2),
+    ];
     const state = gitState({ root: '/r', readAt: 3, changed: ['b.ts'] });
-    tracker.forget(stalePaths(tracker, state));
-    expect(tracker.touches().map((stored) => stored.path)).toEqual([
-      '/o/d.ts',
-      '/r/c.ts',
-      '/r/b.ts',
-    ]);
+
+    expect(
+      staleTouchPaths(touches, state, ['/r', '/r/o', '/q'], posixPaths),
+    ).toEqual(['/r/a.ts', '/r/f.ts']);
   });
 });

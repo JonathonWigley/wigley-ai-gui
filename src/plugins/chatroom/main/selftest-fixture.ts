@@ -3,7 +3,7 @@ import type { Files } from '../../../contracts/files';
 import type { KeyedSlotReader } from '../../../contracts/state';
 import type { ChatMainExports } from '../../chat/contract';
 import { editableTitle, type SessionRow } from '../../sessions/contract';
-import type { Participant, RoomView } from '../contract';
+import { type Participant, type RoomView, sessionThread } from '../contract';
 import type { RoomService } from './room-service';
 
 // The first messages of the two sessions, which title their rows.
@@ -13,7 +13,7 @@ const PEER_TITLE = 'chatroom peer';
 // The thread the fixture's plan posts sit in.
 export const FIXTURE_THREAD = 'plan-demo';
 
-// The run's step wait, which each of the fixture's waits keeps to.
+// The run's step wait, which the fixture's waits keep to together.
 const WAIT_TIMEOUT_MS = 5_000;
 const WAIT_POLL_MS = 20;
 
@@ -53,8 +53,10 @@ export async function seedChatroomFixture(
   const peerId = await launch(chat, projectDir, PEER_TITLE);
   const rowIds = [leadId, peerId] as const;
 
+  const deadline = deps.clock.now() + WAIT_TIMEOUT_MS;
   await waitUntil(
     deps,
+    deadline,
     () => rowIds.every((rowId) => rows.get(rowId) !== undefined),
     "the chatroom fixture's rows never reached sessions.rows",
   );
@@ -68,11 +70,13 @@ export async function seedChatroomFixture(
   };
   await waitUntil(
     deps,
+    deadline,
     () => rowIds.every((rowId) => titleOf(rowId) !== ''),
     "the chatroom fixture's rows were never titled",
   );
   await waitUntil(
     deps,
+    deadline,
     () => {
       const board = rooms(project)?.board ?? [];
       return rowIds.every((rowId) => board.some((row) => row.rowId === rowId));
@@ -130,7 +134,7 @@ export async function seedChatroomFixture(
     lead,
     'progress',
     'Phase 2: wiring the hook',
-    `session:${leadId}`,
+    sessionThread(leadId),
     {},
   );
 
@@ -165,13 +169,13 @@ function agent(rowId: string, name: string): Participant {
 }
 
 // Asks `holds` every WAIT_POLL_MS until it is true; throws `failure` once
-// WAIT_TIMEOUT_MS has passed.
+// `deadline` (epoch ms) has passed.
 async function waitUntil(
   { clock, timers }: Pick<ChatroomFixtureDeps, 'clock' | 'timers'>,
+  deadline: number,
   holds: () => boolean,
   failure: string,
 ): Promise<void> {
-  const deadline = clock.now() + WAIT_TIMEOUT_MS;
   while (!holds()) {
     if (clock.now() > deadline) {
       throw new Error(failure);

@@ -3,6 +3,7 @@ import type { UserMessage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import { createListeners, type Listeners } from '../../../shared/listeners';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import type { ChatSessionInfo } from '../../chat/contract';
 import type { AgentSession } from '../../sessions/contract';
 import type { Participant } from '../contract';
 import { startDelivery } from './delivery';
@@ -22,7 +23,9 @@ const PROFILES: Record<string, string> = { rA: 'work', rB: 'work' };
 let roster: Roster;
 let room: RoomService;
 let sends: [string, UserMessage][];
-let idle: Set<string>;
+type ChatState = Pick<ChatSessionInfo, 'activity' | 'running'>;
+
+let chatStates: Map<string, ChatState>;
 let turnsFinished: Listeners<{ sessionId: string; how: 'idle' | 'rested' }>;
 let sessionsEnded: Listeners<string>;
 let bodyCount: number;
@@ -102,7 +105,7 @@ beforeEach(() => {
     },
   });
   for (const id of ['rA', 'rB', 'rC']) {
-    roster.connected(agentSession(id), id in PROFILES);
+    roster.connected(agentSession(id));
   }
   room = createRoomService({
     store: createMemoryRoomStore(),
@@ -115,7 +118,12 @@ beforeEach(() => {
   });
   sends = [];
   bodyCount = 0;
-  idle = new Set(['rA', 'rB', 'rC']);
+  chatStates = new Map(
+    ['rA', 'rB', 'rC'].map((id): [string, ChatState] => [
+      id,
+      { activity: 'idle', running: true },
+    ]),
+  );
   turnsFinished = createListeners();
   sessionsEnded = createListeners();
   delivery = startDelivery({
@@ -127,7 +135,7 @@ beforeEach(() => {
         sends.push([rowId, message]);
       }),
     },
-    isIdle: (rowId) => idle.has(rowId),
+    chatState: (rowId) => chatStates.get(rowId),
     onTurnFinished: (listener) =>
       turnsFinished.add(({ sessionId, how }) => listener(sessionId, how)),
     onSessionEnded: (listener) => sessionsEnded.add(listener),
@@ -194,7 +202,9 @@ describe('startDelivery', () => {
   });
 
   describe('wake_BusyThenIdle', () => {
-    beforeEach(() => idle.delete('rA'));
+    beforeEach(() => {
+      chatStates.set('rA', { activity: 'working', running: true });
+    });
 
     it('sends a busy row its wake once, at its idle turn end', async () => {
       await post('rB', { kind: 'handoff', to: ['Lead'] });
@@ -245,6 +255,21 @@ describe('startDelivery', () => {
       expect(sends).toEqual([
         ['rA', { text: USER_WAKE('session:rA'), images: [] }],
       ]);
+    });
+
+    it('keeps a resting row its wake until an idle turn end after it runs again', async () => {
+      chatStates.set('rA', { activity: 'idle', running: false });
+      await post('rB', { kind: 'question', to: ['Lead'] });
+      await settle();
+      finishTurn('rA', 'rested');
+      await settle();
+      expect(sends).toEqual([]);
+
+      chatStates.set('rA', { activity: 'idle', running: true });
+      finishTurn('rA');
+      await settle();
+
+      expect(sends.map(([rowId]) => rowId)).toEqual(['rA']);
     });
 
     it('drops a pending wake on dispose', async () => {

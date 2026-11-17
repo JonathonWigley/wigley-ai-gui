@@ -113,6 +113,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  // Its contract's record guards read JSON through `src/shared/json`.
+  chatroom: { contract: { layers: ['src/shared'] } },
   // Its adapter's tests drive fake children over node:events, node:readline and node:stream.
   'claude-code': { main: NODE_ONLY },
   // Its plugin status hashes files with `node:crypto`.

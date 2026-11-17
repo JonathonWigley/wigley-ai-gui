@@ -9,6 +9,7 @@ import { channelPath } from '../../../../shared/local-channel/channel-path';
 import { osPlatform } from '../../../../shared/os-platform';
 import {
   type ConnectedSession,
+  HOOK_PROTOCOL,
   type HookReply,
   RELAY_PROTOCOL,
   type RelayHello,
@@ -28,7 +29,11 @@ const HELLO: RelayHello = {
   harness: 'claude',
 };
 
-const HOOK_HELLO: RelayHello = { ...HELLO, hook: 'chatroom.pre' };
+const HOOK_HELLO: RelayHello = {
+  ...HELLO,
+  protocol: HOOK_PROTOCOL,
+  hook: 'chatroom.pre',
+};
 
 // The session info every hook test's hello carries.
 const HOOK_INFO: SessionInfo = {
@@ -40,6 +45,9 @@ const HOOK_INFO: SessionInfo = {
 };
 
 const HOOK_TIMEOUT_MS = 50;
+
+// Well under HOOK_TIMEOUT_MS, so an idle timeout would never fire.
+const DRIP_MS = 10;
 
 const cleanups: (() => Promise<void> | void)[] = [];
 
@@ -160,9 +168,14 @@ function helloLine(hello: object): string {
   return `${JSON.stringify(hello)}\n`;
 }
 
-// Writes `text` on a new connection and resolves with everything the server
-// wrote before it ended the socket.
-async function hookCall(channel: string, text: string): Promise<string> {
+// Writes `text` on a new connection, then with `drip` a space every DRIP_MS
+// until the server ends the socket, and resolves with everything the server
+// wrote before it did.
+async function hookCall(
+  channel: string,
+  text: string,
+  drip = false,
+): Promise<string> {
   const socket = connect(channel);
   cleanups.push(() => {
     socket.destroy();
@@ -170,9 +183,19 @@ async function hookCall(channel: string, text: string): Promise<string> {
   await once(socket, 'connect');
   const chunks: Buffer[] = [];
   socket.on('data', (chunk: Buffer) => chunks.push(chunk));
+  // A drip write can race the server's end; the reply is what the test reads.
+  socket.on('error', () => {});
   const ended = once(socket, 'end');
   socket.write(text);
+  const dripping = drip
+    ? setInterval(() => {
+        if (socket.writable) {
+          socket.write(' ');
+        }
+      }, DRIP_MS)
+    : undefined;
   await ended;
+  clearInterval(dripping);
   return Buffer.concat(chunks).toString('utf8');
 }
 
@@ -209,18 +232,31 @@ describe('startRelayServer', () => {
     ]);
   });
 
-  it('refuses a hello of another protocol, naming both versions', async () => {
+  it.each([
+    {
+      case: 'another protocol, naming both versions',
+      hello: { ...HELLO, protocol: 99 },
+      error: `relay protocol 99, app protocol ${RELAY_PROTOCOL}`,
+    },
+    {
+      case: 'the hook protocol with no hook name',
+      hello: { ...HELLO, protocol: HOOK_PROTOCOL },
+      error: `hook protocol ${HOOK_PROTOCOL} takes a hook name`,
+    },
+    {
+      case: 'a hook name on the relay protocol',
+      hello: { ...HOOK_HELLO, protocol: RELAY_PROTOCOL },
+      error: `a hook hello takes hook protocol ${HOOK_PROTOCOL}`,
+    },
+  ])('refuses a hello of $case', async ({ hello, error }) => {
     const { connect, started } = fakeSessions();
     const channel = start(echoServe().serve, connect);
     const { socket, nextLine } = await open(channel);
     const ended = once(socket, 'end');
 
-    socket.write(helloLine({ ...HELLO, protocol: 99 }));
+    socket.write(helloLine(hello));
 
-    expect(JSON.parse(await nextLine())).toEqual({
-      ok: false,
-      error: `relay protocol 99, app protocol ${RELAY_PROTOCOL}`,
-    });
+    expect(JSON.parse(await nextLine())).toEqual({ ok: false, error });
     await ended;
     expect(started).toEqual([]);
   });
@@ -531,32 +567,46 @@ describe('startRelayServer', () => {
     {
       case: 'a request line that is not JSON',
       sent: `${helloLine(HOOK_HELLO)}not json\n`,
+      drip: false,
       expected: { ok: false, error: 'the hook request was not JSON' },
     },
     {
       case: 'no request line within the timeout',
       sent: helloLine(HOOK_HELLO),
+      drip: false,
       expected: {
         ok: false,
         error: `no hook request line within ${HOOK_TIMEOUT_MS} ms`,
       },
     },
-  ])('hookHello_BadRequest_RepliesError: $case', async ({ sent, expected }) => {
-    const recorded = recordingHook(async () => ({ ok: true, reply: {} }));
-    const channel = start(
-      echoServe().serve,
-      fakeSessions().connect,
-      false,
-      undefined,
-      undefined,
-      { hook: recorded.hook, hookTimeoutMs: HOOK_TIMEOUT_MS },
-    );
+    {
+      case: 'bytes but no newline within the timeout',
+      sent: `${helloLine(HOOK_HELLO)}{`,
+      drip: true,
+      expected: {
+        ok: false,
+        error: `no hook request line within ${HOOK_TIMEOUT_MS} ms`,
+      },
+    },
+  ])(
+    'hookHello_BadRequest_RepliesError: $case',
+    async ({ sent, drip, expected }) => {
+      const recorded = recordingHook(async () => ({ ok: true, reply: {} }));
+      const channel = start(
+        echoServe().serve,
+        fakeSessions().connect,
+        false,
+        undefined,
+        undefined,
+        { hook: recorded.hook, hookTimeoutMs: HOOK_TIMEOUT_MS },
+      );
 
-    const written = await hookCall(channel, sent);
+      const written = await hookCall(channel, sent, drip);
 
-    expect(written).toBe(`${JSON.stringify(expected)}\n`);
-    expect(recorded.calls).toEqual([]);
-  });
+      expect(written).toBe(`${JSON.stringify(expected)}\n`);
+      expect(recorded.calls).toEqual([]);
+    },
+  );
 
   it('hookHello_HandlerNeverResolves_RepliesError', async () => {
     const recorded = recordingHook(() => new Promise<HookReply>(() => {}));

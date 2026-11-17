@@ -8,12 +8,18 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import { createSlotStore } from '../../../shared/state/slot-store';
-import { type ChatMainExports, chatMainKey } from '../../chat/contract';
+import {
+  type ChatMainExports,
+  chatMainKey,
+  chatSessionSlot,
+} from '../../chat/contract';
 import {
   type AgentSession,
   type ContributeToolsOptions,
   type HookHandler,
+  NEEDS_YOU_ACTIVITY,
   type SessionsMainExports,
+  sessionsActivitySlot,
   sessionsMainKey,
   sessionsRowsSlot,
   type ToolDefinition,
@@ -21,11 +27,15 @@ import {
   type ToolSession,
 } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
+import { unityPoolSnapshotSlot } from '../../unity-pool/contract';
 import {
+  type SessionFlow,
   type WorkflowMainExports,
+  workflowFlowsSlot,
   workflowMainKey,
 } from '../../workflow/contract';
 import {
+  type BoardRow,
   type ChatroomMainExports,
   type ChatroomMirror,
   chatroomRoomsSlot,
@@ -33,9 +43,39 @@ import {
   HOOK_PRE,
   type RoomMessage,
   type RoomView,
+  sessionThread,
   type UserPostResult,
 } from '../contract';
+import { GIT_READ_WINDOW_MS } from './board-feed';
+import { chatInfo, cloneClaim, flow, poolClone } from './board.test-support';
 import { chatroomMainPart, STANDING_NOTE } from './start';
+
+const FINISHING_STAGE = 'land';
+
+// Once armed, the next `userUnread` call holds its result until the gate
+// resolves, so one room rebuild can be held while a later one runs.
+const userUnreadGate = vi.hoisted(() => ({
+  next: null as Promise<void> | null,
+}));
+vi.mock('./room-service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./room-service')>();
+  return {
+    ...actual,
+    createRoomService(...args: Parameters<typeof actual.createRoomService>) {
+      const service = actual.createRoomService(...args);
+      return {
+        ...service,
+        async userUnread(room: string) {
+          const gate = userUnreadGate.next;
+          userUnreadGate.next = null;
+          const unread = await service.userUnread(room);
+          await gate;
+          return unread;
+        },
+      };
+    },
+  };
+});
 
 const TITLES: Record<string, string> = { rA: 'Lead', rB: 'Peer', rC: 'Quiet' };
 const CONTEXT = { toolUseId: null, signal: new AbortController().signal };
@@ -71,11 +111,15 @@ function startChatroom(
   }[] = [];
   const hooks = new Map<string, HookHandler>();
   const instructions: string[] = [];
+  userUnreadGate.next = null;
   const sends: [string, UserMessage][] = [];
+  const flows: SessionFlow[] = [];
+  // Root → its changed files, `/`-separated below it.
+  const changedByRoot: Record<string, string[]> = {};
   const git = {
     topLevel: async (folder: string) => folder,
     currentBranch: async () => null,
-    changedPaths: vi.fn(async () => [] as string[]),
+    changedPaths: vi.fn(async (root: string) => changedByRoot[root] ?? []),
     hasUpstream: async () => false,
     unpushedPaths: async () => [] as string[],
   };
@@ -125,8 +169,9 @@ function startChatroom(
         workflowMainKey,
         () =>
           ({
-            flows: () => [],
-            stageFinishes: () => false,
+            flows: () => flows,
+            stageFinishes: (candidate: SessionFlow) =>
+              candidate.stage === FINISHING_STAGE,
           }) as unknown as WorkflowMainExports,
       ),
     ],
@@ -157,6 +202,8 @@ function startChatroom(
     contributions,
     hooks,
     instructions,
+    flows,
+    changedByRoot,
     git,
     callTool,
     roomView,
@@ -164,6 +211,8 @@ function startChatroom(
     postAsUser,
   };
 }
+
+type Chatroom = ReturnType<typeof startChatroom>;
 
 describe('chatroomMainPart', () => {
   it('start_Wires', async () => {
@@ -193,7 +242,7 @@ describe('chatroomMainPart', () => {
     expect([...hooks.keys()]).toEqual([HOOK_PRE, HOOK_POST]);
     expect(instructions).toEqual([STANDING_NOTE]);
     expect(roomView('game')?.threads.map(({ thread }) => thread)).toEqual([
-      'session:rA',
+      sessionThread('rA'),
     ]);
   });
 
@@ -211,14 +260,14 @@ describe('chatroomMainPart', () => {
       expect.objectContaining({
         room: 'game',
         board: [],
-        threads: [expect.objectContaining({ thread: 'session:rA' })],
+        threads: [expect.objectContaining({ thread: sessionThread('rA') })],
       }),
     );
     expect(roomView('side')).toEqual(
       expect.objectContaining({
         room: 'side',
         board: [],
-        threads: [expect.objectContaining({ thread: 'session:rB' })],
+        threads: [expect.objectContaining({ thread: sessionThread('rB') })],
       }),
     );
   });
@@ -245,14 +294,14 @@ describe('chatroomMainPart', () => {
         owned: true,
       });
       await settle();
-      expect(await thread('game', 'session:rA')).toEqual([]);
+      expect(await thread('game', sessionThread('rA'))).toEqual([]);
 
       await callTool('rA', 'chatroom_board', {});
       await callTool('rA', 'chatroom_board', {});
       await settle();
 
       expect(
-        (await thread('game', 'session:rA')).map(({ kind, body }) => [
+        (await thread('game', sessionThread('rA'))).map(({ kind, body }) => [
           kind,
           body,
         ]),
@@ -271,7 +320,7 @@ describe('chatroomMainPart', () => {
       await settle();
 
       expect(
-        (await thread('game', 'session:rB')).map(({ kind }) => kind),
+        (await thread('game', sessionThread('rB'))).map(({ kind }) => kind),
       ).toEqual(['joined']);
       expect(roomView('game')?.board.map(({ rowId }) => rowId)).toEqual(['rB']);
     });
@@ -290,7 +339,7 @@ describe('chatroomMainPart', () => {
       await settle();
 
       expect(
-        (await thread('game', 'session:rA')).map(({ kind, body }) => [
+        (await thread('game', sessionThread('rA'))).map(({ kind, body }) => [
           kind,
           body,
         ]),
@@ -312,7 +361,7 @@ describe('chatroomMainPart', () => {
       harness.emit('sessions.ended', { sessionId: 'rC' });
       await settle();
 
-      expect(await thread('game', 'session:rC')).toEqual([]);
+      expect(await thread('game', sessionThread('rC'))).toEqual([]);
     });
 
     it('a project change in the rows slot rewrites both rooms', async () => {
@@ -332,19 +381,157 @@ describe('chatroomMainPart', () => {
     });
   });
 
-  it('rebuilds_InOrder', async () => {
-    const { harness, roomView, postAsUser } = startChatroom();
-    await settle();
-    const read = harness.files.read.bind(harness.files);
-    let release = () => undefined as void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
+  it.each<{
+    source: string;
+    before?: (chatroom: Chatroom) => void;
+    act: (chatroom: Chatroom) => void;
+    read: (row: BoardRow) => unknown;
+    expected: unknown;
+  }>([
+    {
+      source: 'the chat slot',
+      act: ({ harness }) =>
+        harness.state
+          .publish(chatSessionSlot)
+          .set('rA', chatInfo({ sessionId: 'rA', activity: 'working' })),
+      read: (row) => row.state,
+      expected: 'working',
+    },
+    {
+      source: 'the activity slot',
+      before: ({ harness }) =>
+        harness.state
+          .publish(chatSessionSlot)
+          .set('rA', chatInfo({ sessionId: 'rA' })),
+      act: ({ harness }) =>
+        harness.state
+          .publish(sessionsActivitySlot)
+          .set('rA', [{ sourceId: 'forms', activity: NEEDS_YOU_ACTIVITY }]),
+      read: (row) => row.state,
+      expected: 'waiting',
+    },
+    {
+      source: 'the flows slot',
+      before: ({ harness }) =>
+        harness.state
+          .publish(chatSessionSlot)
+          .set('rA', chatInfo({ sessionId: 'rA' })),
+      act: ({ harness, flows }) => {
+        const finishing = flow({ sessionId: 'rA', stage: FINISHING_STAGE });
+        flows.push(finishing);
+        harness.state.publish(workflowFlowsSlot).set('rA', finishing);
+      },
+      read: (row) => row.state,
+      expected: 'done',
+    },
+    {
+      source: 'the pool slot',
+      act: ({ harness }) =>
+        harness.state.publish(unityPoolSnapshotSlot).set({
+          pools: [
+            {
+              pool: 'games',
+              updatedAt: 0,
+              queue: [],
+              clones: [poolClone(1, '/r/rA', cloneClaim({ row: 'rA' }))],
+            },
+          ],
+        }),
+      read: (row) => row.clone,
+      expected: { pool: 'games', number: 1, holder: 'this' },
+    },
+    {
+      source: 'sessions.hostSessionChanged',
+      before: ({ harness }) =>
+        harness.state.publish(unityPoolSnapshotSlot).set({
+          pools: [
+            {
+              pool: 'games',
+              updatedAt: 0,
+              queue: [],
+              clones: [
+                poolClone(1, '/r/rA', cloneClaim({ session: 'host-new' })),
+              ],
+            },
+          ],
+        }),
+      act: ({ harness }) => {
+        const session = agentSession('rA');
+        harness.emit('sessions.hostSessionChanged', {
+          ...session,
+          info: { ...session.info, sessionId: 'host-new' },
+        });
+      },
+      read: (row) => row.clone?.holder,
+      expected: 'this',
+    },
+    {
+      source: 'a fileWritten agent event',
+      before: ({ changedByRoot }) => {
+        changedByRoot['/r/rA'] = ['a.ts'];
+      },
+      act: ({ harness }) =>
+        harness.emit('chat.agentEvent', {
+          sessionId: 'rA',
+          profileDir: null,
+          hostSessionId: 'host-rA',
+          event: {
+            type: 'fileWritten',
+            at: 1,
+            agentId: 'main',
+            path: '/r/rA/a.ts',
+          },
+          replayed: false,
+        }),
+      read: (row) => row.uncommitted,
+      expected: [{ path: 'a.ts', byRowId: 'rA', by: 'Lead' }],
+    },
+    {
+      source: 'chat.turnFinished',
+      act: ({ harness, changedByRoot }) => {
+        changedByRoot['/r/rA'] = ['a.ts'];
+        harness.emit('chat.turnFinished', { sessionId: 'rA', how: 'idle' });
+      },
+      read: (row) => row.uncommitted.map(({ path }) => path),
+      expected: ['a.ts'],
+    },
+    {
+      source: 'a repeated sessions.connected',
+      act: ({ harness, changedByRoot }) => {
+        changedByRoot['/r/rA'] = ['a.ts'];
+        harness.emit('sessions.connected', {
+          ...agentSession('rA'),
+          owned: true,
+        });
+      },
+      read: (row) => row.uncommitted.map(({ path }) => path),
+      expected: ['a.ts'],
+    },
+  ])('board_FollowsLiveSources: $source', async (row) => {
+    const chatroom = startChatroom();
+    row.before?.(chatroom);
+    chatroom.harness.emit('sessions.connected', {
+      ...agentSession('rA'),
+      owned: true,
     });
-    vi.spyOn(harness.files, 'read').mockImplementation(async (path) => {
-      if (path.endsWith('user-cursors.json')) {
-        await gate;
-      }
-      return read(path);
+    await settle();
+
+    row.act(chatroom);
+    await settle();
+    chatroom.harness.advance(GIT_READ_WINDOW_MS);
+    await settle();
+
+    const board = chatroom.roomView('game')?.board ?? [];
+    expect(board.map(({ rowId }) => rowId)).toEqual(['rA']);
+    expect(row.read(board[0])).toEqual(row.expected);
+  });
+
+  it('rebuilds_InOrder', async () => {
+    const { roomView, postAsUser } = startChatroom();
+    await settle();
+    let release = () => undefined as void;
+    userUnreadGate.next = new Promise<void>((resolve) => {
+      release = resolve;
     });
 
     await postAsUser('plan-x', { body: 'first' });
@@ -389,28 +576,33 @@ describe('chatroomMainPart', () => {
       }),
     ]);
     expect(
-      (await thread('game', 'session:rA')).map(({ id, kind }) => [id, kind]),
+      (await thread('game', sessionThread('rA'))).map(({ id, kind }) => [
+        id,
+        kind,
+      ]),
     ).toEqual([
       [1, 'joined'],
       [2, 'progress'],
     ]);
-    expect((await thread('game', 'session:rA', 1)).map(({ id }) => id)).toEqual(
-      [2],
-    );
+    expect(
+      (await thread('game', sessionThread('rA'), 1)).map(({ id }) => id),
+    ).toEqual([2]);
   });
 
   it('pageChannel: markUserRead moves the cursor and rewrites the key', async () => {
     const { harness, callTool, roomView } = startChatroom();
     await callTool('rA', 'chatroom_post', { kind: 'note', body: 'look' });
     await settle();
-    const sessionThread = () =>
-      roomView('game')?.threads.find((view) => view.thread === 'session:rA');
-    expect(sessionThread()?.userUnread).toBe(1);
+    const leadThread = () =>
+      roomView('game')?.threads.find(
+        (view) => view.thread === sessionThread('rA'),
+      );
+    expect(leadThread()?.userUnread).toBe(1);
 
-    await harness.invoke('markUserRead', 'game', 'session:rA', 2);
+    await harness.invoke('markUserRead', 'game', sessionThread('rA'), 2);
     await settle();
 
-    expect(sessionThread()?.userUnread).toBe(0);
+    expect(leadThread()?.userUnread).toBe(0);
   });
 
   it('dispose_StopsTimers', async () => {

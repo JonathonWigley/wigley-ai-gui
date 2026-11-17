@@ -31,6 +31,7 @@ import {
   HOOK_POST,
   HOOK_PRE,
   SYSTEM_PARTICIPANT,
+  sessionThread,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { chatroomManifest } from '../manifest';
@@ -64,13 +65,14 @@ const DRIVE_PROJECT_FOLDER = ['dev', 'chatroom-drive'];
 export const STANDING_NOTE =
   "This app runs a chatroom for each project's sessions: the wigley-forms tools chatroom_post, chatroom_read, chatroom_board, chatroom_claim and chatroom_release. Follow the wigley:chatroom skill for when to read and what to post. Call chatroom_read at the start of a turn when the hook or the app says a message waits for you.";
 
-// Registers the chatroom layouts. Keeps one room per project in plugin data; contributes the five
-// `chatroom_*` tools to every session, subagents included; answers the
-// `chatroom.pre` and `chatroom.post` hooks; wakes an idle app-run agent a
-// message is for; writes a session's `joined` and `left` entries and its
-// subagents' `dispatch` and `hand-back` entries; and writes each room's view
-// and board to `chatroom.rooms`, rebuilt one at a time per room. Hands the
-// self-test its script and offers a drive run the `seed` fixture.
+// Registers the chatroom layouts. Keeps one room per project in plugin data;
+// contributes the five `chatroom_*` tools to every session, subagents
+// included; answers the `chatroom.pre` and `chatroom.post` hooks; wakes an
+// idle app-run agent a message is for; writes a session's `joined` and `left`
+// entries and its subagents' `dispatch` and `hand-back` entries; and writes
+// each room's view and board to `chatroom.rooms`, rebuilt one at a time per
+// room. Hands the self-test its script and offers a drive run the `seed`
+// fixture.
 export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
   manifest: chatroomManifest,
   start(api: ChatroomApi) {
@@ -180,7 +182,7 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       room
         .addEntry({
           room: roomName,
-          thread: `session:${rowId}`,
+          thread: sessionThread(rowId),
           from: SYSTEM_PARTICIPANT,
           kind,
           body,
@@ -217,15 +219,15 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       addSessionEntry(roomName, rowId, 'joined', `${name} joined`);
     };
 
-    const connect = (session: AgentSession, owned: boolean): void => {
-      roster.connected(session, owned);
+    const connect = (session: AgentSession): void => {
+      roster.connected(session);
       boardFeed.track(session.id, session.info.projectDir);
       noteRoom(session.id);
     };
 
     // The first step of every tool and hook call.
     const arrive = (session: AgentSession): void => {
-      connect(session, false);
+      connect(session);
       join(session.id);
     };
 
@@ -292,7 +294,7 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       room,
       roster,
       chat,
-      isIdle: (rowId) => chatSlot.get(rowId)?.activity === 'idle',
+      chatState: (rowId) => chatSlot.get(rowId),
       onTurnFinished: (listener) =>
         api.events.on('chat.turnFinished', ({ sessionId, how }) =>
           listener(sessionId, how),
@@ -306,7 +308,10 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
     room.onMessage((message) => rewriteRoom(message.room));
     boardFeed.onChanged(rewriteRoom);
 
-    api.events.on('sessions.connected', (event) => connect(event, event.owned));
+    api.events.on('sessions.connected', (event) => {
+      connect(event);
+      refreshRowRoom(event.id);
+    });
     api.events.on('sessions.hostSessionChanged', (session) => {
       roster.hostSessionChanged(session);
       refreshRowRoom(session.id);
@@ -337,18 +342,15 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
     });
 
     for (const row of rowsSlot.all().values()) {
-      connect(
-        {
-          id: row.sessionId,
-          info: {
-            sessionId: row.hostSessionId,
-            projectDir: row.projectDir,
-            harness: row.harness,
-            rowId: null,
-          },
+      connect({
+        id: row.sessionId,
+        info: {
+          sessionId: row.hostSessionId,
+          projectDir: row.projectDir,
+          harness: row.harness,
+          rowId: null,
         },
-        chat.profileOf(row.sessionId) !== null,
-      );
+      });
     }
     room
       .rooms()

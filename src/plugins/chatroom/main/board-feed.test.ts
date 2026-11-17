@@ -11,6 +11,7 @@ import type { PoolSnapshot } from '../../unity-pool/contract';
 import type { SessionFlow } from '../../workflow/contract';
 import type { BoardRow } from '../contract';
 import { createTouchTracker, type TouchTracker } from './board';
+import { chatInfo, cloneClaim, flow, poolClone } from './board.test-support';
 import {
   type BoardFeed,
   type BoardFeedDeps,
@@ -83,44 +84,6 @@ async function advance(ms: number): Promise<void> {
   now = until;
 }
 
-function chatInfo(
-  sessionId: string,
-  fields: Partial<ChatSessionInfo> = {},
-): ChatSessionInfo {
-  return {
-    sessionId,
-    projectDir: '/r/c2',
-    harness: 'claude',
-    profile: 'default',
-    activity: 'idle',
-    background: 0,
-    activeTime: { totalMs: 0, since: null },
-    running: true,
-    pid: null,
-    compaction: null,
-    repo: 'c2',
-    branch: null,
-    worktrees: [],
-    headless: false,
-    ...fields,
-  };
-}
-
-function flow(sessionId: string, stage: string): SessionFlow {
-  return {
-    sessionId,
-    projectDir: '/r/c2',
-    workflow: 'medium',
-    movedUpFrom: null,
-    stage,
-    checklist: null,
-    state: null,
-    missedLevel: false,
-    turnRunning: false,
-    runningSubagents: [],
-  };
-}
-
 interface Inputs {
   chat?: Map<string, ChatSessionInfo>;
   flows?: SessionFlow[];
@@ -182,18 +145,15 @@ beforeEach(() => {
     },
   });
   for (const [rowId, [, , folder]] of Object.entries(ROWS)) {
-    roster.connected(
-      {
-        id: rowId,
-        info: {
-          sessionId: `host-${rowId}`,
-          projectDir: folder,
-          harness: 'claude',
-          rowId: null,
-        },
+    roster.connected({
+      id: rowId,
+      info: {
+        sessionId: `host-${rowId}`,
+        projectDir: folder,
+        harness: 'claude',
+        rowId: null,
       },
-      true,
-    );
+    });
   }
 });
 
@@ -202,10 +162,10 @@ describe('createBoardFeed', () => {
     changedByRoot['/r/c2'] = ['src/a.ts', 'src/c.ts'];
     const feed = feedOver({
       chat: new Map([
-        ['rA', chatInfo('rA')],
-        ['rB', chatInfo('rB')],
+        ['rA', chatInfo({ sessionId: 'rA' })],
+        ['rB', chatInfo({ sessionId: 'rB' })],
       ]),
-      flows: [flow('rA', FINISHING_STAGE)],
+      flows: [flow({ sessionId: 'rA', stage: FINISHING_STAGE })],
       activities: new Map([
         ['rB', [{ sourceId: 'forms', activity: NEEDS_YOU_ACTIVITY }]],
       ]),
@@ -215,30 +175,7 @@ describe('createBoardFeed', () => {
             pool: 'games',
             updatedAt: 0,
             queue: [],
-            clones: [
-              {
-                number: 2,
-                path: '/r/c2',
-                facts: {
-                  branch: null,
-                  dirty: null,
-                  editor: 'unknown',
-                  probedAt: null,
-                },
-                claim: {
-                  kind: 'agent',
-                  session: 'host-rA',
-                  row: null,
-                  since: 0,
-                  renewedAt: 0,
-                },
-                handoff: null,
-                stranded: null,
-                lastHolder: null,
-                lastReleasedAt: null,
-                warmup: null,
-              },
-            ],
+            clones: [poolClone(2, '/r/c2', cloneClaim({ session: 'host-rA' }))],
           },
         ],
       },

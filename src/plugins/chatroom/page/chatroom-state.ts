@@ -5,10 +5,9 @@ import {
   type RoomMessage,
   type RoomView,
   type RowUnread,
+  sessionThreadRowId,
   type UserPost,
 } from '../contract';
-
-const SESSION_THREAD_PREFIX = 'session:';
 
 // What a row shows while its agents asked the user a question or blocker no
 // answer replies to: over error (30) and working (20), under needs you (40).
@@ -18,18 +17,6 @@ export const ASKS_YOU_ACTIVITY: RowActivity = {
   rank: 35,
   emphasis: 'raised',
 };
-
-// A lead session's own thread: its dispatches, hand-backs and progress.
-export function sessionThread(rowId: string): string {
-  return `${SESSION_THREAD_PREFIX}${rowId}`;
-}
-
-// The row id of a `session:<row id>` thread, null for any other thread.
-function sessionRowIdOf(thread: string): string | null {
-  return thread.startsWith(SESSION_THREAD_PREFIX)
-    ? thread.slice(SESSION_THREAD_PREFIX.length)
-    : null;
-}
 
 function boardNameOf(
   board: readonly BoardRow[],
@@ -103,7 +90,7 @@ export function threadLabel(
   board: readonly BoardRow[],
   thread: string,
 ): string {
-  const rowId = sessionRowIdOf(thread);
+  const rowId = sessionThreadRowId(thread);
   const title = rowId === null ? null : boardNameOf(board, rowId);
   return title === null ? thread : `${title} (session)`;
 }
@@ -207,7 +194,7 @@ export function userPostFor(
   body: string,
 ): UserPost | null {
   if (intent.kind === 'note') {
-    const rowId = sessionRowIdOf(thread);
+    const rowId = sessionThreadRowId(thread);
     const name = rowId === null ? null : boardNameOf(board, rowId);
     return {
       kind: 'note',

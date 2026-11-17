@@ -26,17 +26,13 @@ import {
   chatroomPlaceSlot,
   chatroomRoomsSlot,
   type RoomView,
+  sessionThread,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { ChatroomPart, CompleteLayout, Layout } from '../layouts/layout';
 import { chatroomManifest } from '../manifest';
-import {
-  badgeText,
-  rowActivities,
-  rowUnreadOf,
-  sessionThread,
-} from './chatroom-state';
+import { badgeText, rowActivities, rowUnreadOf } from './chatroom-state';
 import { createChatroomView } from './chatroom-view';
 import { readChatroomLayout } from './layout/read-chatroom-layout';
 

@@ -9,6 +9,7 @@ import {
 import { listenOnChannel } from '../../../../shared/local-channel/local-channel';
 import {
   type ConnectedSession,
+  HOOK_PROTOCOL,
   type HookReply,
   RELAY_PROTOCOL,
   type RelayHello,
@@ -48,7 +49,7 @@ function parseHello(line: string): { hello: RelayHello } | { error: string } {
   } catch {
     return { error: 'the first line was not a relay hello' };
   }
-  if (hello?.protocol !== RELAY_PROTOCOL) {
+  if (hello?.protocol !== RELAY_PROTOCOL && hello?.protocol !== HOOK_PROTOCOL) {
     return {
       error: `relay protocol ${hello?.protocol}, app protocol ${RELAY_PROTOCOL}`,
     };
@@ -56,6 +57,14 @@ function parseHello(line: string): { hello: RelayHello } | { error: string } {
   const badField = mistypedHelloField(hello);
   if (badField !== null) {
     return { error: `relay hello field ${badField} has the wrong type` };
+  }
+  const isHook = typeof hello.hook === 'string';
+  if (isHook !== (hello.protocol === HOOK_PROTOCOL)) {
+    return {
+      error: isHook
+        ? `a hook hello takes hook protocol ${HOOK_PROTOCOL}`
+        : `hook protocol ${HOOK_PROTOCOL} takes a hook name`,
+    };
   }
   return { hello };
 }
@@ -225,7 +234,8 @@ async function hookReplyWithin(
 
 // A hook hello: reads one request line, answers it with one `HookReply` line
 // and ends the socket, waiting on no connect hold and opening no session. The
-// request line and the handler each get the hook timeout.
+// request line and the handler each get the hook timeout; the line's timer
+// runs from the hello, so bytes with no newline do not reset it.
 function answerHook(
   socket: Socket,
   name: string,
@@ -240,11 +250,11 @@ function answerHook(
     endWithHookReply(socket, { ok: false, error });
   };
   let hasTimedOut = false;
-  socket.setTimeout(limit);
-  socket.once('timeout', () => {
+  const lineTimer = setTimeout(() => {
     hasTimedOut = true;
     refuseHook(`no hook request line within ${limit} ms`);
-  });
+  }, limit);
+  socket.once('close', () => clearTimeout(lineTimer));
   readFirstLine(socket, (line) => {
     // A paused socket never reads the client's end, so a client that left
     // would go unseen; flowing, it drops any later bytes.
@@ -252,7 +262,7 @@ function answerHook(
     if (hasTimedOut) {
       return;
     }
-    socket.setTimeout(0);
+    clearTimeout(lineTimer);
     const parsed = parseHookRequest(line);
     if ('error' in parsed) {
       refuseHook(parsed.error);

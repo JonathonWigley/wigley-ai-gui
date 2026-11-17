@@ -1,6 +1,7 @@
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
+import { escapeRegExp } from '../../../shared/escape-reg-exp';
 import type { SessionsMainExports } from '../../sessions/contract';
 import {
   type ChatroomFixtureDeps,
@@ -25,6 +26,7 @@ export interface ChatroomSelfTestDeps extends ChatroomFixtureDeps {
 }
 
 const line = (text: string) => `[chatroom] ${text}`;
+const exactLine = (text: string) => new RegExp(`^${escapeRegExp(line(text))}$`);
 
 // `open` seeds the fixture in the project folder and shows the peer's row.
 // The fixture posts as the agents through the room service, so the room holds
@@ -65,7 +67,7 @@ export function chatroomSelfTestScript(
           expect: line(
             `thread shown: ${SELFTEST_ROOM}/${FIXTURE_THREAD} (3 messages)`,
           ),
-          alsoExpect: [/^\[chatroom\] badge in chatroom-selftest 2: none$/],
+          alsoExpect: [exactLine(`badge in ${PEER_LABEL}: none`)],
           screenshot: 'thread',
         },
       ],
@@ -139,7 +141,7 @@ export function chatroomSelfTestScript(
       })();
       return {
         shownLine: line(`badge in ${PEER_LABEL}: @1`),
-        alsoShown: [/^\[chatroom\] activity in chatroom-selftest 2: asks you$/],
+        alsoShown: [exactLine(`activity in ${PEER_LABEL}: asks you`)],
         result,
       };
     },

@@ -748,6 +748,7 @@ export function createChatroomView(deps: ChatroomViewDeps): ChatroomView {
         }
       }
       restorePlace();
+      noteShownThread();
       if (deps.isShown()) {
         placeListCursor();
       }

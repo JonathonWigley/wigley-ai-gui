@@ -79,7 +79,7 @@ function handlersOver(fakes: Fakes = {}) {
       label: () => null,
     },
   });
-  roster.connected({ ...SESSION, id: 'rB' }, true);
+  roster.connected({ ...SESSION, id: 'rB' });
   roster.subagentSpawned('rB', 'agent-9', 'worker');
   const room = {
     claimsTouching: vi.fn<RoomService['claimsTouching']>(async () => [
@@ -89,10 +89,17 @@ function handlersOver(fakes: Fakes = {}) {
       Array.from({ length: fakes.unread ?? 0 }, () => ({}) as RoomMessage),
     ),
   };
+  // A touch replaces any other on its path, as the board's does.
+  let touches: readonly Touch[] = fakes.touches ?? [];
   const boardFeed = {
-    noteTouched: vi.fn<BoardFeed['noteTouched']>(),
-    uncommittedByOthers: vi.fn<BoardFeed['uncommittedByOthers']>(
-      () => fakes.touches ?? [],
+    noteTouched: vi.fn<BoardFeed['noteTouched']>((rowId, agentId, paths) => {
+      touches = [
+        ...touches.filter((touch) => !paths.includes(touch.path)),
+        ...paths.map((path) => touchBy(rowId, path, agentId)),
+      ];
+    }),
+    uncommittedByOthers: vi.fn<BoardFeed['uncommittedByOthers']>((rowId) =>
+      touches.filter((touch) => touch.rowId !== rowId),
     ),
   };
   const deps: HookHandlersDeps = {
@@ -294,16 +301,31 @@ describe('post', () => {
 
   it.each([
     {
+      case: 'off',
       warnAtPost: false,
+      touches: [],
       expected: '1 chatroom message for you — chatroom_read',
     },
     {
+      case: 'on, claim hit',
       warnAtPost: true,
+      touches: [],
       expected: `${CLAIM_LINE('src/shop/a.ts', 'Peer', 'shop revamp', 1)}\n1 chatroom message for you — chatroom_read`,
     },
-  ])('post_WarnAtPost: $warnAtPost', async ({ warnAtPost, expected }) => {
+    {
+      case: 'on, uncommitted hit on the edited path',
+      warnAtPost: true,
+      touches: [touchBy('rB', `${ROOT}/src/shop/a.ts`)],
+      expected: [
+        CLAIM_LINE('src/shop/a.ts', 'Peer', 'shop revamp', 1),
+        TOUCH_LINE('src/shop/a.ts', 'Peer'),
+        '1 chatroom message for you — chatroom_read',
+      ].join('\n'),
+    },
+  ])('post_WarnAtPost: $case', async ({ warnAtPost, touches, expected }) => {
     const { handlers } = handlersOver({
       claims: [claimBy('Peer', 60_000)],
+      touches,
       unread: 1,
       warnAtPost,
     });

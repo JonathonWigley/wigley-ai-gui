@@ -549,6 +549,22 @@ describe('createRoomService', () => {
     });
   });
 
+  it('post_ThreadsUnreadable: rejects and stores nothing', async () => {
+    const failing: Pick<Files, 'read' | 'write'> = {
+      read: (path) =>
+        path === 'threads.json'
+          ? Promise.reject(new Error('EACCES'))
+          : files.read(path),
+      write: (path, text) => files.write(path, text),
+    };
+    const over = serviceOver({ files: failing });
+
+    const posted = over.post(postBy(shopRevamp, { thread: 'plan-x' }));
+
+    await expect(posted).rejects.toThrow('EACCES');
+    expect(await store.read(ROOM, 0)).toEqual([]);
+  });
+
   it('post_Key_Concurrent_WritesOnce', async () => {
     const [one, two] = await Promise.all([
       service.post(postBy(shopRevamp, { key: 'k1', body: 'one' })),
@@ -604,6 +620,22 @@ describe('createRoomService', () => {
     const second = await service.postHuman(humanPost({ body: 'same' }));
 
     expect([first.ok, second.ok]).toEqual([true, true]);
+  });
+
+  it('post_IdenticalBody: a mirror sender is dropped', async () => {
+    const mirror = fakeMirror('tg', true);
+    service.addMirror(mirror.mirror);
+
+    mirror.say('plan-x', 'from the phone');
+    await service.settled();
+    now += 1000;
+    mirror.say('plan-x', 'from the phone');
+    await service.settled();
+
+    expect(idsOf(await store.read(ROOM, 0))).toEqual([1]);
+    expect(logged).toEqual([
+      'mirror tg post refused: dropped: the same body was posted as #1 1 seconds ago',
+    ]);
   });
 
   it('post_RateCap: refuses the post past the cap until the oldest leaves the minute', async () => {
@@ -998,6 +1030,10 @@ describe('createRoomService', () => {
         postBy(docsFix, { kind: 'question', thread: 't2', to: ['you'] }),
       ),
     );
+    const phone = fakeMirror('tg', true);
+    service.addMirror(phone.mirror);
+    phone.say('t2', 'from the phone');
+    await service.settled();
 
     const first = idsOf(await service.userUnread(ROOM));
     await service.markUserRead(ROOM, 't1', 1);
@@ -1261,6 +1297,56 @@ describe('createRoomService', () => {
     },
   );
 
+  // A claim refuses these targets; an ask takes them as `claim` would store
+  // them, leaving out the unusable paths.
+  it.each([
+    {
+      row: 'a ./ path',
+      held: { paths: ['src/a/**'] },
+      asked: { paths: ['./src/a/b.ts'] },
+      listed: true,
+    },
+    {
+      row: 'a \\ path',
+      held: { paths: ['src/a/**'] },
+      asked: { paths: ['src\\a\\b.ts'] },
+      listed: true,
+    },
+    {
+      row: 'an absolute path beside a usable one',
+      held: { paths: ['src/a/**'] },
+      asked: { paths: ['/abs', 'src/a/b.ts'] },
+      listed: true,
+    },
+    {
+      row: 'only an absolute path',
+      held: { paths: ['src/a/**'] },
+      asked: { paths: ['/src/a/b.ts'] },
+      listed: false,
+    },
+    {
+      row: 'a branch with spaces',
+      held: { branch: 'main' },
+      asked: { branch: ' main ' },
+      listed: true,
+    },
+    {
+      row: 'a resource with spaces',
+      held: { resource: 'selftest' },
+      asked: { resource: ' selftest ' },
+      listed: true,
+    },
+  ])(
+    'claimsTouching_TakesTheAskAsStored: $row',
+    async ({ held, asked, listed }) => {
+      const holderClaim = await heldClaim(held, false);
+
+      const touching = await service.claimsTouching(ROOM, asked, docsFix);
+
+      expect(touching).toEqual(listed ? [holderClaim] : []);
+    },
+  );
+
   it.each([
     {
       row: 'own id',
@@ -1365,13 +1451,9 @@ describe('createRoomService', () => {
 
   it.each(
     SAVED_FILES.flatMap((file) =>
-      [
-        '{',
-        'null',
-        '"x"',
-        '{"room": 5}',
-        file === 'claims.json' ? '{}' : '[]',
-      ].map((text) => ({ file, text })),
+      ['{', 'null', '"x"', file === 'claims.json' ? '{}' : '[]'].map(
+        (text) => ({ file, text }),
+      ),
     ),
   )(
     'files_Unreadable_StartEmpty: $file holding $text',
@@ -1384,7 +1466,18 @@ describe('createRoomService', () => {
     },
   );
 
-  it('files_Unreadable_StartEmpty: keeps the whole claims of claims.json', async () => {
+  it.each(SAVED_FILES.filter((file) => file !== 'claims.json'))(
+    'files_DroppedEntry_LogsTheDrop: %s holding {"room": 5}',
+    async (file) => {
+      await files.write(file, '{"room": 5}');
+
+      await exercise(serviceOver());
+
+      expect(logged).toEqual([`${file}: dropped entries of the wrong shape`]);
+    },
+  );
+
+  it('files_DroppedEntry_KeepsTheWholeClaims', async () => {
     const whole: Claim = {
       id: 'c1',
       room: ROOM,
@@ -1398,7 +1491,7 @@ describe('createRoomService', () => {
     const claims = await serviceOver().claims(ROOM);
 
     expect(claims).toEqual([whole]);
-    expect(logged).toEqual(['claims.json unreadable, starting empty']);
+    expect(logged).toEqual(['claims.json: dropped entries of the wrong shape']);
   });
 
   it('files_WriteFails_KeepsMemory', async () => {
