@@ -115,8 +115,8 @@ export function isFinished(
 }
 
 // With no session id the project folder decides, compared as the same path;
-// with neither, as under Codex, nothing is anyone's, so one session never
-// gets another's answers.
+// with neither, nothing is anyone's, so one session never gets another's
+// answers.
 function isOwnedBy(
   record: SavedAgentForm,
   owner: AgentFormOwnerRef,
