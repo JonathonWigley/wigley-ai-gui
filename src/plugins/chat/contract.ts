@@ -18,6 +18,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { HostedSpawn } from '../../contracts/session-host';
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
 import type { SessionTitles } from '../sessions/contract';
 
@@ -93,6 +94,8 @@ export type StartRequest = StartTarget & { profile: string };
 // relaunch.
 // `owner`: the plugin the row belongs to (sessions' `OpenOptions.owner`). Kept
 // with the row across a clear and a relaunch.
+// `controls`: the first process's values, by control id; each later start in
+// the row passes them again. An id the harness does not declare is refused.
 export type LaunchRequest = StartTarget & {
   profile: string;
   message: UserMessage;
@@ -100,7 +103,30 @@ export type LaunchRequest = StartTarget & {
   headless?: boolean;
   instructions?: readonly string[];
   owner?: string;
+  // The first process's controls, by control id; the row keeps them as its
+  // picks. Left out, the harness defaults.
+  controls?: Readonly<Record<string, string>>;
 };
+
+// What `adopt` opens a row from. JSON, so a `PendingSpawn.record` can carry it.
+export interface AdoptRequest {
+  hostSessionId: string;
+  processId: string; // `<hostSessionId>-1-<epoch ms>`, chat's process id form
+  rowId: string;
+  projectDir: string;
+  profile: string;
+  headless: boolean;
+  unattended: boolean;
+  instructions: readonly string[]; // the run's own, as `LaunchRequest.instructions`
+  owner: string | null;
+  controls: Readonly<Record<string, string>>;
+  titles: SessionTitles; // `firstMessage` from the prompt, the others null
+}
+
+export interface PreparedLaunch {
+  spawn: HostedSpawn;
+  adopt: AdoptRequest;
+}
 
 // `hostSessionId` is the harness's id for the saved session.
 export interface PastSessionRow {
@@ -606,10 +632,29 @@ export interface ChatMainExports {
   // such a row raises no `Turn finished` mark. Resolves to the new row's
   // sessionId; rejects, opening nothing, on an image chat refuses (with the
   // refusal text), an unknown profile, no chat harness, an unknown project, a
-  // profile other than the project's, no pool provider, or a pool with no
-  // clones. A pool project's session starts in the pool's lowest-numbered
-  // clone.
+  // profile other than the project's, no pool provider, a pool with no
+  // clones, or an unknown control id. A pool project's session starts in the
+  // pool's lowest-numbered clone.
   launch(request: LaunchRequest): Promise<string>;
+  // A launch the session host starts later: chat's instructions as they stand
+  // now, the headless note when `request.headless`, `request.controls` as the
+  // first process's, `env` added to the run's environment, and fresh ids (host
+  // session id, process id, row id, message uuid). Opens nothing. Throws where
+  // `launch` rejects, an unknown control id included.
+  prepareLaunch(
+    request: LaunchRequest,
+    env: Readonly<Record<string, string>>,
+  ): PreparedLaunch;
+  // Chat's checked projects, in settings order, as the channel's `projects`
+  // gives the page.
+  projects(): readonly ChatProject[];
+  // Opens the row of a run the session host started from a `prepareLaunch`,
+  // inside a sessions connect hold: attached when the host still runs its
+  // process, else resting with its history pending. Resolves to the row's
+  // sessionId once the attach settled and, for a resting row, its history was
+  // read. When a row already holds the host session id, opens nothing and
+  // resolves to that row's sessionId. Rejects after `detachAll`.
+  adopt(run: AdoptRequest): Promise<string>;
   // The channel's resume for another plugin: resolves to the row's sessionId.
   // A row chat holds for the host id is returned as it is only when its owner
   // is the request's (none when absent), activated only when it has no owner;
@@ -665,6 +710,9 @@ export interface ChatMainExports {
   // with. Disposing it leaves later starts without it. A session's own
   // `instructions` follow these texts.
   addInstructions(text: string): Disposable;
+  // Hears each `addInstructions` registration and each disposal of one, so a
+  // prepared run can be prepared again with the texts a live start would get.
+  onInstructionsChanged(listener: () => void): Disposable;
   // Gates are asked in registration order before a write to an idle session; the
   // first non-null verdict holds the send, and no later gate is asked. A gate
   // that throws is logged and counts as null. Disposing the handle removes the

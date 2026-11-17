@@ -312,6 +312,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     // Checked once per settings change, so a bad entry logs once.
     let projectSettings = api.settings().projects;
     let projects = readProjects(projectSettings, services.log);
+    // The page's list and the `projects` export's, read at each call.
+    const projectList = () => [...projects];
     const accounts = createAccounts({
       harness,
       profiles,
@@ -389,7 +391,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     // page that is gone, and would refuse every later one.
     api.channel.handle('loaded', () => accounts.cancelRunning());
     api.channel.handle('start', (request) => chat.start(request));
-    api.channel.handle('projects', () => [...projects]);
+    api.channel.handle('projects', projectList);
     api.channel.handle('projectPastSessions', (project, profile) =>
       chat.projectPastSessions(project, profile),
     );
@@ -587,6 +589,16 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     };
     const exports = (consumer: Registrations): ChatMainExports => ({
       launch: async (request) => chat.launch(request),
+      prepareLaunch: (request, env) => chat.prepareLaunch(request, env),
+      projects: projectList,
+      // After chat's own restore, so a restored row of the same host session
+      // is found and saving has started; the hold makes the run's relay hello
+      // join the adopted row.
+      adopt: (run) => {
+        const adopting = restored.then(() => chat.adopt(run));
+        sessions.holdConnects(adopting);
+        return adopting;
+      },
       resume: (request) => chat.resume(request),
       profiles,
       profileOf,
@@ -628,6 +640,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         await ended;
       },
       addInstructions: (text) => consumer.track(chat.addInstructions(text)),
+      onInstructionsChanged: (listener) =>
+        consumer.track(chat.onInstructionsChanged(listener)),
       addSendGate: (gate) => consumer.track(chat.addSendGate(gate)),
       addIdleCompactThreshold: (read) =>
         consumer.track(chat.addIdleCompactThreshold(read)),

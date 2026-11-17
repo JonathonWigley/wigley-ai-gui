@@ -16,6 +16,8 @@ export interface ToolCallers {
   // The agent noted for the call; for a call not noted yet, waits up to
   // CALLER_WAIT_MS for its note, then resolves null.
   agentOf(sessionId: string, toolUseId: string): Promise<string | null>;
+  // The agent noted for the call, with no wait; null for a call not noted.
+  noted(sessionId: string, toolUseId: string): string | null;
   // Drops the row's notes and resolves its waiting reads with null.
   forget(sessionId: string): void;
   // `forget` for every row.
@@ -87,6 +89,8 @@ export function createToolCallers(timers: Timers): ToolCallers {
         reads.add(read);
       });
     },
+    noted: (sessionId, toolUseId) =>
+      noted.get(sessionId)?.get(toolUseId) ?? null,
     forget,
     stop() {
       for (const sessionId of new Set([...noted.keys(), ...waiting.keys()])) {
@@ -97,19 +101,26 @@ export function createToolCallers(timers: Timers): ToolCallers {
 }
 
 export interface CallerGuardDeps {
-  readonly callers: Pick<ToolCallers, 'agentOf'>;
+  readonly callers: Pick<ToolCallers, 'agentOf' | 'noted'>;
   // True for a row chat holds.
   owns(sessionId: string): boolean;
 }
 
 // Answers a subagent's call of a main-agent-only tool with SUBAGENT_CALL_TEXT,
-// and runs every other call. A call whose agent the stream never names in
-// CALLER_WAIT_MS runs.
+// and runs every other call. A live call whose agent the stream never names in
+// CALLER_WAIT_MS runs. A replayed call reads the notes with no wait and runs
+// only when they name the main agent: a resting row's history notes only the
+// main agent's calls.
 export function callerGuard(deps: CallerGuardDeps): ToolCallGuard {
-  return async ({ sessionId, toolUseId, mainAgentOnly }) => {
+  return async ({ sessionId, toolUseId, mainAgentOnly, replayed }) => {
     // A session chat does not hold has no stream to name the agent.
     if (!mainAgentOnly || toolUseId === null || !deps.owns(sessionId)) {
       return { kind: 'run' };
+    }
+    if (replayed) {
+      return deps.callers.noted(sessionId, toolUseId) === MAIN_AGENT_ID
+        ? { kind: 'run' }
+        : { kind: 'skip', text: SUBAGENT_CALL_TEXT };
     }
     const agentId = await deps.callers.agentOf(sessionId, toolUseId);
     if (agentId === null || agentId === MAIN_AGENT_ID) {

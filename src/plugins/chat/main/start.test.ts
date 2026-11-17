@@ -3,6 +3,7 @@ import type {
   AgentEvent,
   AgentHarness,
   AgentStart,
+  UserMessage,
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import type { Files } from '../../../contracts/files';
@@ -231,6 +232,8 @@ describe('chat drive actions', () => {
 // `processDetach` and `processKill` record their process calls.
 // `options.projects` is the `projects` setting; `namers` holds each namer
 // `addProjectNamer` got, and `namerChanges.count` each `changed()` call.
+// `preparedRuns` holds each `prepareRun` call's arguments and the spec it
+// returned; the harness declares no start controls.
 function startChatPart(
   options: {
     list?: () => Promise<HostedProcessInfo[]>;
@@ -265,8 +268,24 @@ function startChatPart(
     return release;
   };
   const harnessAttaches: AgentStart[] = [];
+  const preparedRuns: {
+    request: AgentStart;
+    firstMessage: UserMessage;
+    env: Readonly<Record<string, string>>;
+    spawn: { id: string };
+  }[] = [];
   const harness = {
     id: options.harnessId ?? 'claude',
+    prepareRun: (
+      request: AgentStart,
+      firstMessage: UserMessage,
+      env: Readonly<Record<string, string>>,
+    ) => {
+      const spawn = { id: request.processId };
+      preparedRuns.push({ request, firstMessage, env, spawn });
+      return spawn;
+    },
+    startControls: () => [],
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
     attach: (request: AgentStart) => {
       harnessAttaches.push(request);
@@ -480,6 +499,7 @@ function startChatPart(
     timerDelays,
     heldConnects,
     harnessAttaches,
+    preparedRuns,
     contributions,
     toolCallGuards,
     settingsChange: (settings: object) =>
@@ -1151,6 +1171,79 @@ describe('chat main part', () => {
       await expect(restored).resolves.toBeUndefined();
     },
   );
+
+  it('exports_Adopt_HoldsRelayConnectsAfterTheRestore', async () => {
+    // The restore's list waits for the test; every later list resolves empty.
+    let releaseRestoreList: (hosted: HostedProcessInfo[]) => void = () =>
+      undefined;
+    let lists = 0;
+    const list = () => {
+      lists += 1;
+      if (lists > 1) {
+        return Promise.resolve([]);
+      }
+      return new Promise<HostedProcessInfo[]>((resolve) => {
+        releaseRestoreList = resolve;
+      });
+    };
+    const chat = startChatPart({ list, data: await dataWithSavedRow() });
+
+    const adopting = chat.exports.adopt({
+      hostSessionId: 'host-a',
+      processId: 'host-a-1-4000',
+      rowId: 'row-adopted',
+      projectDir: '/p',
+      profile: 'work',
+      headless: true,
+      unattended: true,
+      instructions: [],
+      owner: 'scheduling',
+      controls: {},
+      titles: { user: null, agent: null, firstMessage: 'run' },
+    });
+    await settle();
+
+    expect(chat.heldConnects).toContain(adopting);
+    expect(chat.sessionsInSlots()).toEqual([]);
+    releaseRestoreList([]);
+    await expect(adopting).resolves.toBe('row-1');
+    expect(chat.sessionsInSlots().map((state) => state.sessionId)).toEqual([
+      'row-1',
+    ]);
+  });
+
+  it('exports_PrepareLaunch_PassesTheEnvToTheHarness', () => {
+    const chat = startChatPart();
+    const env = { WIGLEY_FORMS_OFFLINE: '/calls' };
+    const message = { text: 'run the task', images: [] };
+
+    const prepared = chat.exports.prepareLaunch(
+      { projectDir: '/p', profile: 'work', message },
+      env,
+    );
+
+    expect(chat.preparedRuns).toHaveLength(1);
+    expect(chat.preparedRuns[0].env).toEqual(env);
+    expect(chat.preparedRuns[0].firstMessage).toEqual(message);
+    expect(prepared.spawn).toBe(chat.preparedRuns[0].spawn);
+    expect(chat.starts.count).toBe(0);
+  });
+
+  it('exports_Projects_EqualsTheChannelsList', () => {
+    const aiDev = { name: 'AI Dev', folder: '/home/me/ai-dev' };
+    const chat = startChatPart({ projects: [aiDev] });
+    const before = chat.exports.projects();
+    expect(before).toEqual(chat.invoke('projects'));
+    expect(before.map((project) => project.name)).toEqual(['AI Dev']);
+
+    chat.settingsChange({
+      projects: [aiDev, { name: 'Other', folder: '/home/me/other' }],
+    });
+
+    const after = chat.exports.projects();
+    expect(after).toEqual(chat.invoke('projects'));
+    expect(after.map((project) => project.name)).toEqual(['AI Dev', 'Other']);
+  });
 
   it('restore_SessionHostListFails_LogsAndRestsEveryRow given a list that resolves first', async () => {
     const chat = startChatPart({ list: () => Promise.resolve([]) });
