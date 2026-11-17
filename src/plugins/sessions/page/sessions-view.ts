@@ -52,11 +52,7 @@ import {
   type SidebarSections,
   sidebarSections,
 } from './sidebar-order';
-import {
-  activityInput,
-  mountSidebarView,
-  type RowState,
-} from './sidebar-view';
+import { activityInput, mountSidebarView, type RowState } from './sidebar-view';
 import { harnessText, rowChanges, stepSession } from './tabs';
 
 // `activate` runs on a row click and `runFavorite` on a star's click, neither

@@ -286,23 +286,20 @@ describe('createEditorBoxes', () => {
   it.each<{ state: string; releases: boolean }>([
     { state: 'placed', releases: false },
     { state: 'released', releases: true },
-  ])(
-    'place_HeldBoxWithNewText_SetsTheEditorText: $state',
-    ({ releases }) => {
-      const { boxes, created, changes } = emptySetup();
-      const frame = boxes.place(div(), notes, 'a');
-      if (releases) {
-        boxes.release(notes);
-      }
+  ])('place_HeldBoxWithNewText_SetsTheEditorText: $state', ({ releases }) => {
+    const { boxes, created, changes } = emptySetup();
+    const frame = boxes.place(div(), notes, 'a');
+    if (releases) {
+      boxes.release(notes);
+    }
 
-      const moved = boxes.place(div(), notes, 'b');
+    const moved = boxes.place(div(), notes, 'b');
 
-      expect(created).toHaveLength(1);
-      expect(moved).toBe(frame);
-      expect(created[0].editor.setTexts).toEqual(['b']);
-      expect(changes).toEqual([]);
-    },
-  );
+    expect(created).toHaveLength(1);
+    expect(moved).toBe(frame);
+    expect(created[0].editor.setTexts).toEqual(['b']);
+    expect(changes).toEqual([]);
+  });
 
   it('place_AfterRelease_RestoresTheScroll', () => {
     const { boxes } = emptySetup();

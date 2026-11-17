@@ -80,6 +80,7 @@ export interface RoundViewDeps {
     | 'mount'
     | 'destroyBox'
     | 'destroyForm'
+    | 'destroyReleased'
     | 'isMounted'
     | 'active'
     | 'activeMode'
