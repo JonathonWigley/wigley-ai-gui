@@ -134,7 +134,7 @@ conversion of chat to slots and its chat events also edited; that conversion has
      the adapter → [ ] Harness-neutral UI copy → [ ] Open chat entry kinds and entry renderers
    - [ ] Permission behind the harness
    - [ ] Sessions stops naming Claude
-   - [ ] Structured round results
+   - [x] Structured round results
    - [ ] Owned sessions join by an adapter key [plan]
 4. [ ] Codex harness adapter [plan]: the proof; a second harness shows what the seams missed. It is planned in its
    own session once the steps above land, outside the lane's plan.

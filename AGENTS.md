@@ -827,7 +827,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the forms contract's `ItemKind` (and in `AnswerableKind`'s exclusion when it takes no answer), its item type, and
   its `ItemOf` entry in main's `kinds/item-format.ts`; from there the compiler flags each of the rest missing: that
   folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
-  fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records: `ROUND_ITEM_LISTS` and
+  fixed keys (`parseRound`, `readFormBody`, the answers result) and `mcp-wording.ts`'s answers payload, and the
+  per-kind records: `ROUND_ITEM_LISTS` and
   `FINGERPRINT_LISTS` in `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
   `round-type.ts`, and `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` (what Enter accepts) in
   `form-state.ts`, then its card input and kit parts in the Layout contract (`layouts/layout.d.ts`), the page's

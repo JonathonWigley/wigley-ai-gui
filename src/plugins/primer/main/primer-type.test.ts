@@ -9,6 +9,7 @@ import type { AgentFormStore } from '../../../shared/agent-forms/form-store';
 import { globalTimers } from '../../../shared/agent-forms/global-timers.test-support';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { ScriptedFormPresenter } from '../../../shared/agent-forms/scripted-presenter';
+import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { Primer, PrimerBody, PrimerPayload } from '../contract';
 import { SAMPLE_PRIMER_ARGS } from './fixtures';
@@ -168,5 +169,34 @@ describe('primerType through the agent form service', () => {
     expect(payload.summary).toContain("'Other feature'");
     expect(presenter.shown).toHaveLength(1);
     expect(presenter.closed).toEqual([]);
+  });
+});
+
+describe('primerType through its tool session', () => {
+  it("returns a malformed open_primer's message as its tool error text", async () => {
+    const session: AgentFormSession<PrimerPayload> = {
+      open: async (args) => {
+        primerType.parse(args);
+        throw new Error('the primer parsed');
+      },
+      collect: () => Promise.reject(new Error('collect is not called here')),
+      end: () => {},
+    };
+
+    const result = await createAgentFormToolSession(session, primerType).call(
+      'open_primer',
+      { feature: SAMPLE_PRIMER_ARGS.feature, entries: [] },
+      { toolUseId: null, signal: new AbortController().signal },
+    );
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: 'text',
+          text: "'entries' must be a non-empty array: the primer rows, then the standing tasks.",
+        },
+      ],
+      isError: true,
+    });
   });
 });

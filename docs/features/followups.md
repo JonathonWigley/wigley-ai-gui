@@ -80,7 +80,7 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
   restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
   (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
-  (`src/main/claude-code/transcripts.ts`, `let lastAt = 0` at line 127, a second copy at 151) stamps every entry
+  (`src/plugins/claude-code/main/transcripts.ts`, `let lastAt = 0` at line 127, a second copy at 151) stamps every entry
   before the transcript's first timestamped line with `at` 0, raw entries from unparsed or untimed lines included,
   and those are steps; `listRows` (`src/plugins/chat/page/activity-runs.ts:60`, `startedAt: previousAt ?? steps[0].at`)
   opens a run at 0 and closes it at the next timed entry. Two fixes: backfill the untimed leading lines with the first
@@ -102,7 +102,7 @@ Defects seen in a drive run, a transcript or the user's own use.
   startup reload. Create the adapter before the first load, or pass it into the window factory, so the count cannot
   miss load 1 (`src/main/drive/driven-window.ts` `navigationCount`).
 - **Interrupt in the gap before a message's init** — *agent-ready*: `interruptAnswered` with no turn open
-  (`src/main/claude-code/turn-tracker.ts`) also closes a message after its `queued`/`started` frame and before its
+  (`src/plugins/claude-code/main/turn-tracker.ts`) also closes a message after its `queued`/`started` frame and before its
   `init` — e.g. Ctrl+C in `/compact`'s gap between `started` and `init` (`agent-chat/claude-stream.md` § Message
   lifecycle) — so the session shows idle and the turn-finished mark fires, then the init shows working again. Option:
   in lifecycle mode keep a uuid whose last state was `started` open through `interruptAnswered`.
@@ -262,7 +262,7 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 - **Permission behind the harness** — *agent-ready*: `AgentProcessEvents.permission(request)` and
   `AgentProcess.answerPermission(id, decision)`; the adapter mints the entry and owns the reply JSON, and the MCP
   `permission_prompt` route becomes the Claude adapter's private wiring. `CLAUDE_PERMISSION_TOOL` leaves
-  `src/contracts/agent.ts` for `src/main/claude-code/`.
+  `src/contracts/agent.ts` for `src/plugins/claude-code/main/`.
 - **Harness settings with the harness** — *agent-ready*: `claude.command` leaves core `Settings`
   (`src/config/settings.ts`) for the Claude harness plugin's manifest; `AgentStart.profileDir` is reworded
   harness-neutral; profiles become `{ harness, name, configDir }` owned by the harness plugin, so chat's profiles and
@@ -290,18 +290,13 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 - **Clear aliases from the adapter** — *agent-ready*: chat registers Claude's other names for `/clear`, `/reset`
   and `/new` (`src/plugins/chat/page/clear-commands.ts`), which is harness CLI knowledge in chat. The adapter
   declares its clear command's aliases, and chat registers whatever it declares.
-- **Structured round results** — *agent-ready*: forms round logic returns structured results and the MCP adapter words
-  them: `RoundError` as `{ path, problem, detail }`, payloads as an outcome plus a `reason`; `ask_round` /
-  `collect_last_round` wording and "relay" leave `round.ts`, `round-type.ts` and the format errors, and
-  `needs_manual_open` leaves forms' `Outcome` for the relay's. Each `ItemFormat` splits its model-facing `describe()`
-  schema text from parse and fingerprint.
 - **Agent settings through an adapter** — *needs a feature plan*: Settings mode edits only the app's own
   `settings.json`, so changing an agent's config (Claude's model, effort, permissions, hooks, env, per profile and per
   user, project and local scope) still needs a terminal: in print mode `/config` takes only `key=value`
   (`agent-chat/claude-stream.md` § Terminal-only commands). Add an agent settings seam beside `AgentHarness`
   (`src/contracts/agent.ts`) that each harness adapter fills: the settings it declares (key, label, type, choices,
   scope, current value) and a write checked by the harness's own rules. Settings mode then draws whatever the adapter
-  declares, as the Chat tab draws session controls. Claude Code is the first adapter (`src/main/claude-code/`) and
+  declares, as the Chat tab draws session controls. Claude Code is the first adapter (`src/plugins/claude-code/main/`) and
   Codex's config the next; no file format or key name leaves its adapter. The first question is where each harness's
   key list and types come from (a schema, its CLI, or the adapter's own table) and whether a change reaches a running
   session.
@@ -660,7 +655,7 @@ because the earlier items rewrite many of these tests anyway.
   `src/main/git/process-git.ts`) is called only from tests now that Backlog's Commit is gone, and `AGENTS.md`'s git
   adapter entry still lists "a commit of named paths only". Remove the method, its adapter, its tests and the
   AGENTS.md mention, or name the next caller.
-- **A hand-back's join counts one step short** — *agent-ready*: in `src/main/claude-code/stream-decoder.ts`, a
+- **A hand-back's join counts one step short** — *agent-ready*: in `src/plugins/claude-code/main/stream-decoder.ts`, a
   non-empty turn right after a hand-back result puts its init in the hand-back turn's events entry, so its divider
   counts one step fewer; a second hand-back right after the first does the same. Key the join on the next result
   being empty rather than on the init.
@@ -866,7 +861,7 @@ because the earlier items rewrite many of these tests anyway.
   only on a record still its own are the likely shape. Stated as a limit in `docs/features/session-host/design.md`.
   Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in wigley-ai-gui.
 - **An idle harness compaction cannot be interrupted** — *needs a feature plan*: it opens no turn, so `interrupt()` does
-  nothing while the chip shows compacting and `compact()` would queue a second (`src/main/claude-code/claude-code-harness.ts`).
+  nothing while the chip shows compacting and `compact()` would queue a second (`src/plugins/claude-code/main/claude-code-harness.ts`).
   It cannot happen until an idle compaction is seen under the app's flags (`docs/features/agent-chat/claude-stream.md`
   § Idle compaction); measure that shape, then treat an unended compaction as busy in both calls. Source session: Claude
   Code c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
@@ -921,7 +916,7 @@ because the earlier items rewrite many of these tests anyway.
 - **A terminal session's saved name is read from the app's `CLAUDE_CONFIG_DIR`** — *agent-ready*: a relay sends no
   config folder when its terminal sets no `CLAUDE_CONFIG_DIR`, and `hostSessionName` (`src/plugins/sessions/main/start.ts`)
   passes that null to `sessionName`, whose `projectsRoot` falls back to the app's own `CLAUDE_CONFIG_DIR` through
-  `claudeConfigFolder` (`src/main/claude-code/claude-launch.ts`) rather than `~/.claude`. An app started from a
+  `claudeConfigFolder` (`src/plugins/claude-code/main/claude-launch.ts`) rather than `~/.claude`. An app started from a
   personal-profile shell reads a default-profile terminal session's name from the wrong folder. The row's profile tag
   already resolves null through `AgentHarness.configFolder`, which ignores the app's environment.
 - **The composer paints over the over-bars at 480px** — *needs a decision*: at a narrow window the chat composer

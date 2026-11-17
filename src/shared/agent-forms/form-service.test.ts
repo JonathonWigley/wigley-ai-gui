@@ -1247,7 +1247,7 @@ describe('saved forms from an earlier app run', () => {
     await expect(failed).rejects.toThrow(/Old review/);
     await expect(failed).rejects.toThrow(`${record.id}.json`);
     await expect(failed).rejects.toThrow(
-      'items must be a non-empty array of strings',
+      '(Bad form: items must be a non-empty array of strings)',
     );
     expect(savedFile(record.id).returned).toBe(false);
   });

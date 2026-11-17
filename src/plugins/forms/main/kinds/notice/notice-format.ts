@@ -1,5 +1,5 @@
 import type { Notice, NoticeBadge } from '../../../contract';
-import { RoundError } from '../../round-error';
+import { RoundError, type RoundItemPath } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
@@ -66,46 +66,56 @@ function isNoticeBadge(value: unknown): value is NoticeBadge {
   return (NOTICE_BADGES as readonly unknown[]).includes(value);
 }
 
-function parseNotice(item: unknown, where: string): Notice {
+function parseNotice(item: unknown, at: RoundItemPath): Notice {
   if (!isJsonObject(item)) {
-    throw new RoundError(`${where}each notice must be an object.`);
+    throw new RoundError({
+      path: at,
+      problem: 'each notice must be an object.',
+    });
   }
   const missing = fieldsMissing(item, NOTICE_REQUIRED_FIELDS);
   if (missing.length > 0) {
-    throw new RoundError(
-      `${where}missing ${missing.join(', ')}. Both fields are ` +
-        `required: title, context.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `missing ${missing.join(', ')}.`,
+      detail: 'Both fields are required: title, context.',
+    });
   }
   const extra = fieldsOutside(item, NOTICE_FIELDS);
   if (extra.length > 0) {
-    throw new RoundError(
-      `${where}unknown field(s) ${extra.join(', ')}. A notice takes ` +
-        `only title, context, and the optional badge and layout; the form ` +
-        `draws its own comment box, and a notice has no choices to describe.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `unknown field(s) ${extra.join(', ')}.`,
+      detail:
+        'A notice takes only title, context, and the optional badge and ' +
+        'layout; the form draws its own comment box, and a notice has no ' +
+        'choices to describe.',
+    });
   }
-  const title = requireText(item.title, 'title', where);
-  const context = requireText(item.context, 'context', where);
+  const title = requireText(item.title, 'title', at);
+  const context = requireText(item.context, 'context', at);
   const badge = Object.hasOwn(item, 'badge')
     ? item.badge
     : DEFAULT_NOTICE_BADGE;
   if (!isNoticeBadge(badge)) {
-    throw new RoundError(
-      `${where}badge must be one of ${NOTICE_BADGES.join(', ')}, not ` +
-        `${pythonRepr(badge)}. Use 'Applied' for a fix already landed, ` +
-        `'Dispatched' for one still in flight, and 'Decided' for a ` +
-        `decision you took alone.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem:
+        `badge must be one of ${NOTICE_BADGES.join(', ')}, not ` +
+        `${pythonRepr(badge)}.`,
+      detail:
+        "Use 'Applied' for a fix already landed, 'Dispatched' for one still " +
+        "in flight, and 'Decided' for a decision you took alone.",
+    });
   }
-  const layout = parseLayoutField(item, where);
+  const layout = parseLayoutField(item, at);
   return { title, context, badge, layout };
 }
 
 export const noticeFormat: ItemFormat<Notice> = {
   argsKey: 'notices',
   noun: 'notice',
-  arraySchema: {
+  describe: () => ({
     type: 'array',
     items: {
       type: 'object',
@@ -127,7 +137,7 @@ export const noticeFormat: ItemFormat<Notice> = {
       },
     },
     description: NOTICES_DESCRIPTION,
-  },
+  }),
   parse: parseNotice,
   fingerprintContent: (notice) => ({
     title: notice.title,

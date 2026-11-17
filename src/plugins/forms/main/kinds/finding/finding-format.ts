@@ -17,7 +17,7 @@ import {
   isFindingOrigin,
 } from '../../../finding-origins';
 import { findingEntries, isFindingAction } from '../../../finding-pick';
-import { RoundError } from '../../round-error';
+import { RoundError, type RoundItemPath } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
@@ -184,22 +184,25 @@ function parseChoiceAction(
   raw: JsonObject,
   field: string,
   origin: FindingOrigin,
-  where: string,
+  at: RoundItemPath,
 ): FindingAction {
   const action = Object.hasOwn(raw, CHOICE_ACTION_FIELD)
     ? raw.action
     : DEFAULT_CHOICE_ACTION;
   if (!isFindingAction(action)) {
-    throw new RoundError(
-      `${where}${field}.action must be one of ${quotedList(FINDING_ACTIONS)}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `${field}.action must be one of ${quotedList(FINDING_ACTIONS)}.`,
+    });
   }
   const offered = offeredActions(origin);
   if (!offered.includes(action)) {
-    throw new RoundError(
-      `${where}${field}.action is ${action}, which a ${origin} finding does ` +
-        `not offer; it offers ${offered.join(' or ')}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem:
+        `${field}.action is ${action}, which a ${origin} finding does not ` +
+        `offer; it offers ${offered.join(' or ')}.`,
+    });
   }
   return action;
 }
@@ -208,40 +211,44 @@ function parseChoice(
   raw: unknown,
   number: number,
   origin: FindingOrigin,
-  where: string,
+  at: RoundItemPath,
 ): FindingChoice {
   const field = `choices[${number}]`;
   if (!isJsonObject(raw)) {
-    throw new RoundError(
-      `${where}${field} must be an object with text, reason and an optional ` +
-        `action.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `${field} must be an object with text, reason and an optional action.`,
+    });
   }
   const missing = fieldsMissing(raw, CHOICE_FIELDS);
   if (missing.length > 0) {
-    throw new RoundError(
-      `${where}${field} missing ${missing.join(', ')}. Each choice takes ` +
-        `text and reason, and an optional action.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `${field} missing ${missing.join(', ')}.`,
+      detail: 'Each choice takes text and reason, and an optional action.',
+    });
   }
   const extra = fieldsOutside(raw, KNOWN_CHOICE_FIELDS);
   if (extra.length > 0) {
-    throw new RoundError(
-      `${where}${field} unknown field(s) ${extra.join(', ')}. Each choice ` +
-        `takes text and reason, and an optional action.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `${field} unknown field(s) ${extra.join(', ')}.`,
+      detail: 'Each choice takes text and reason, and an optional action.',
+    });
   }
-  const text = requireText(raw.text, `${field}.text`, where);
-  const reason = requireText(raw.reason, `${field}.reason`, where);
+  const text = requireText(raw.text, `${field}.text`, at);
+  const reason = requireText(raw.reason, `${field}.reason`, at);
   const actionWord = openingActionWord(text);
   if (actionWord !== null) {
-    throw new RoundError(
-      `${where}${field}.text opens with "${actionWord}", an action. A ` +
-        `choice names a solution; its action field sets the action it sits ` +
-        `under.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `${field}.text opens with "${actionWord}", an action.`,
+      detail:
+        'A choice names a solution; its action field sets the action it ' +
+        'sits under.',
+    });
   }
-  const action = parseChoiceAction(raw, field, origin, where);
+  const action = parseChoiceAction(raw, field, origin, at);
   return { text, reason, action };
 }
 
@@ -270,32 +277,37 @@ function openingActionWord(text: string): string | null {
 function parseChoices(
   raw: unknown,
   origin: FindingOrigin,
-  where: string,
+  at: RoundItemPath,
 ): FindingChoice[] {
   if (!Array.isArray(raw)) {
-    throw new RoundError(
-      `${where}choices must be a list of objects, each with text and reason.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: 'choices must be a list of objects, each with text and reason.',
+    });
   }
   const { minChoices, maxChoices } = FINDING_ORIGIN_RULES[origin];
   if (raw.length < minChoices || raw.length > maxChoices) {
-    throw new RoundError(
-      `${where}a ${origin} finding ${choiceCountText(origin)}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `a ${origin} finding ${choiceCountText(origin)}.`,
+    });
   }
   const choices = raw.map((choice, i) =>
-    parseChoice(choice, i + 1, origin, where),
+    parseChoice(choice, i + 1, origin, at),
   );
   const hasFixNowChoice = choices.some(
     (choice) => choice.action === DEFAULT_CHOICE_ACTION,
   );
   if (!hasFixNowChoice) {
-    throw new RoundError(
-      `${where}no choice has action fix_now. A finding needs at least one ` +
-        `fix_now choice; a choice with no action is fix_now.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: 'no choice has action fix_now.',
+      detail:
+        'A finding needs at least one fix_now choice; a choice with no ' +
+        'action is fix_now.',
+    });
   }
-  requireEntriesWithinKeys(origin, choices, where);
+  requireEntriesWithinKeys(origin, choices, at);
   return choices;
 }
 
@@ -304,43 +316,53 @@ function parseChoices(
 function requireEntriesWithinKeys(
   origin: FindingOrigin,
   choices: FindingChoice[],
-  where: string,
+  at: RoundItemPath,
 ): void {
   const entryCount = findingEntries({ origin, choices }).length;
   if (entryCount > MAX_ENTRIES) {
-    throw new RoundError(
-      `${where}the card would number ${entryCount} entries — its choices ` +
-        `plus a header for each action with no choices — and the page has ` +
-        `${MAX_ENTRIES} number keys. Give fewer choices, or move a fix_now ` +
-        `choice under an action drawn as a header, which the choice replaces.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem:
+        `the card would number ${entryCount} entries — its choices plus a ` +
+        `header for each action with no choices — and the page has ` +
+        `${MAX_ENTRIES} number keys.`,
+      detail:
+        'Give fewer choices, or move a fix_now choice under an action drawn ' +
+        'as a header, which the choice replaces.',
+    });
   }
 }
 
-function parseOriginFields(item: JsonObject, where: string): OriginFields {
+function parseOriginFields(item: JsonObject, at: RoundItemPath): OriginFields {
   const origin = item.origin;
   if (!isFindingOrigin(origin)) {
-    throw new RoundError(
-      `${where}origin must be one of ${quotedList(FINDING_ORIGINS)}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `origin must be one of ${quotedList(FINDING_ORIGINS)}.`,
+    });
   }
   const hasSeverity = Object.hasOwn(item, SEVERITY_FIELD);
   if (!isDefectOrigin(origin)) {
     if (hasSeverity) {
-      throw new RoundError(
-        `${where}severity is only for a ${SEVERITY_ORIGINS} finding.`,
-      );
+      throw new RoundError({
+        path: at,
+        problem: `severity is only for a ${SEVERITY_ORIGINS} finding.`,
+      });
     }
     return { origin };
   }
   if (!hasSeverity) {
-    throw new RoundError(`${where}a ${origin} finding needs severity.`);
+    throw new RoundError({
+      path: at,
+      problem: `a ${origin} finding needs severity.`,
+    });
   }
   const severity = item.severity;
   if (!isSeverity(severity)) {
-    throw new RoundError(
-      `${where}severity must be one of ${quotedList(SEVERITIES)}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `severity must be one of ${quotedList(SEVERITIES)}.`,
+    });
   }
   return { origin, severity };
 }
@@ -348,18 +370,20 @@ function parseOriginFields(item: JsonObject, where: string): OriginFields {
 function parseRecommendAction(
   raw: unknown,
   origin: FindingOrigin,
-  where: string,
+  at: RoundItemPath,
 ): FindingAction {
   if (!isFindingAction(raw)) {
-    throw new RoundError(
-      `${where}recommend_action must be one of ${quotedList(FINDING_ACTIONS)}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `recommend_action must be one of ${quotedList(FINDING_ACTIONS)}.`,
+    });
   }
   const offered = offeredActions(origin);
   if (!offered.includes(raw)) {
-    throw new RoundError(
-      `${where}a ${origin} finding offers ${offered.join(' or ')}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `a ${origin} finding offers ${offered.join(' or ')}.`,
+    });
   }
   return raw;
 }
@@ -369,24 +393,27 @@ function parseRecommendAction(
 function parseActionReasons(
   item: JsonObject,
   origin: FindingOrigin,
-  where: string,
+  at: RoundItemPath,
 ): Finding['actionReasons'] {
   const raw = item[ACTION_REASONS_FIELD];
   if (raw === undefined || raw === null) {
     return {};
   }
   if (!isJsonObject(raw)) {
-    throw new RoundError(
-      `${where}action_reasons must be an object with ` +
+    throw new RoundError({
+      path: at,
+      problem:
+        `action_reasons must be an object with ` +
         `${DEFERRAL_ACTIONS.join(', ')} or both.`,
-    );
+    });
   }
   const extra = fieldsOutside(raw, DEFERRAL_ACTIONS);
   if (extra.length > 0) {
-    throw new RoundError(
-      `${where}action_reasons unknown key(s) ${extra.join(', ')}. It takes ` +
-        `${DEFERRAL_ACTIONS.join(' and ')}, the deferral actions.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `action_reasons unknown key(s) ${extra.join(', ')}.`,
+      detail: `It takes ${DEFERRAL_ACTIONS.join(' and ')}, the deferral actions.`,
+    });
   }
   const offered = offeredActions(origin);
   const reasons: Finding['actionReasons'] = {};
@@ -395,16 +422,14 @@ function parseActionReasons(
       continue;
     }
     if (!offered.includes(action)) {
-      throw new RoundError(
-        `${where}action_reasons.${action} is for an action a ${origin} ` +
-          `finding does not offer; it offers ${offered.join(' or ')}.`,
-      );
+      throw new RoundError({
+        path: at,
+        problem:
+          `action_reasons.${action} is for an action a ${origin} finding ` +
+          `does not offer; it offers ${offered.join(' or ')}.`,
+      });
     }
-    reasons[action] = requireText(
-      raw[action],
-      `action_reasons.${action}`,
-      where,
-    );
+    reasons[action] = requireText(raw[action], `action_reasons.${action}`, at);
   }
   return reasons;
 }
@@ -416,7 +441,7 @@ function parseFindingRecommend(
   title: string,
   choices: FindingChoice[],
   recommendAction: FindingAction,
-  where: string,
+  at: RoundItemPath,
 ): number | null {
   const actionHasChoices = choices.some(
     (choice) => choice.action === recommendAction,
@@ -424,80 +449,95 @@ function parseFindingRecommend(
   const raw = item[RECOMMEND_FIELD];
   if (raw === undefined || raw === null) {
     if (actionHasChoices) {
-      throw new RoundError(
-        `${where}missing recommend. recommend_action is ${recommendAction}, ` +
-          `which has choices, so recommend names one of them; leave ` +
-          `recommend out only when recommend_action has no choices.`,
-      );
+      throw new RoundError({
+        path: at,
+        problem: 'missing recommend.',
+        detail:
+          `recommend_action is ${recommendAction}, which has choices, so ` +
+          `recommend names one of them; leave recommend out only when ` +
+          `recommend_action has no choices.`,
+      });
     }
     return null;
   }
   if (!actionHasChoices) {
-    throw new RoundError(
-      `${where}recommend names a choice, but no choice has action ` +
-        `${recommendAction}, the recommend_action. Leave recommend out when ` +
-        `the recommended action has no choices.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem:
+        `recommend names a choice, but no choice has action ` +
+        `${recommendAction}, the recommend_action.`,
+      detail:
+        'Leave recommend out when the recommended action has no choices.',
+    });
   }
   const recommend = parseRecommend(
     raw,
     title,
     choices.length,
     'solution',
-    where,
+    at,
   );
   const choiceAction = choices[recommend - 1].action;
   if (choiceAction !== recommendAction) {
-    throw new RoundError(
-      `${where}recommend is ${recommend}, a ${choiceAction} choice, but ` +
-        `recommend_action is ${recommendAction}. recommend names a choice of ` +
-        `the recommended action.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem:
+        `recommend is ${recommend}, a ${choiceAction} choice, but ` +
+        `recommend_action is ${recommendAction}.`,
+      detail: 'recommend names a choice of the recommended action.',
+    });
   }
   return recommend;
 }
 
-function parseFinding(item: unknown, where: string): Finding {
+function parseFinding(item: unknown, at: RoundItemPath): Finding {
   if (!isJsonObject(item)) {
-    throw new RoundError(`${where}each finding must be an object.`);
+    throw new RoundError({
+      path: at,
+      problem: 'each finding must be an object.',
+    });
   }
   const missing = fieldsMissing(item, FINDING_FIELDS);
   if (missing.length > 0) {
-    throw new RoundError(
-      `${where}missing ${missing.join(', ')}. Every finding needs ` +
-        `${FINDING_FIELDS.join(', ')}; a ${SEVERITY_ORIGINS} finding also ` +
-        `needs severity.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `missing ${missing.join(', ')}.`,
+      detail:
+        `Every finding needs ${FINDING_FIELDS.join(', ')}; a ` +
+        `${SEVERITY_ORIGINS} finding also needs severity.`,
+    });
   }
   const extra = fieldsOutside(item, KNOWN_FIELDS);
   if (extra.length > 0) {
-    throw new RoundError(
-      `${where}unknown field(s) ${extra.join(', ')}. The form draws ` +
-        `the not-applicable control and the Notes box itself; do not ` +
-        `describe them.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `unknown field(s) ${extra.join(', ')}.`,
+      detail:
+        'The form draws the not-applicable control and the Notes box ' +
+        'itself; do not describe them.',
+    });
   }
-  const originFields = parseOriginFields(item, where);
+  const originFields = parseOriginFields(item, at);
   const { origin } = originFields;
-  const title = requireText(item.title, 'title', where);
-  const impact = requireText(item.impact, 'impact', where);
-  const finding = requireText(item.finding, 'finding', where);
-  const proof = requireText(item.proof, 'proof', where);
-  const choices = parseChoices(item.choices, origin, where);
+  const title = requireText(item.title, 'title', at);
+  const impact = requireText(item.impact, 'impact', at);
+  const finding = requireText(item.finding, 'finding', at);
+  const proof = requireText(item.proof, 'proof', at);
+  const choices = parseChoices(item.choices, origin, at);
   const recommend_action = parseRecommendAction(
     item.recommend_action,
     origin,
-    where,
+    at,
   );
-  const actionReasons = parseActionReasons(item, origin, where);
+  const actionReasons = parseActionReasons(item, origin, at);
   const recommend = parseFindingRecommend(
     item,
     title,
     choices,
     recommend_action,
-    where,
+    at,
   );
-  const layout = parseLayoutField(item, where);
+  const layout = parseLayoutField(item, at);
   return {
     ...originFields,
     title,
@@ -530,7 +570,7 @@ function actionReasonsContent(
 export const findingFormat: AnswerableFormat<Finding> = {
   argsKey: 'findings',
   noun: 'finding',
-  arraySchema: {
+  describe: () => ({
     type: 'array',
     items: {
       type: 'object',
@@ -616,7 +656,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
       },
     },
     description: FINDINGS_DESCRIPTION,
-  },
+  }),
   parse: parseFinding,
   // A fix_now choice action, a null recommend and empty action_reasons stay
   // out, so a finding using none of them hashes as one sent before they

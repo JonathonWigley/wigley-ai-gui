@@ -99,7 +99,7 @@ describe('createAgentFormToolSession', () => {
     expect(collects).toEqual([true, false, true]);
   });
 
-  it('returns the args error as an error result carrying its message alone', async () => {
+  it("returns the args error as an error result carrying the type's text for it", async () => {
     const { session } = fakeSession(async () => {
       throw testFormError('questions must hold at most 20 items');
     });
@@ -111,9 +111,22 @@ describe('createAgentFormToolSession', () => {
     );
 
     expect(result).toEqual({
-      content: [{ type: 'text', text: 'questions must hold at most 20 items' }],
+      content: [
+        { type: 'text', text: 'Bad form: questions must hold at most 20 items' },
+      ],
       isError: true,
     });
+  });
+
+  it('rejects with a plain Error the type has no text for', async () => {
+    const error = new Error('boom');
+    const { session } = fakeSession(async () => {
+      throw error;
+    });
+
+    await expect(
+      toolSessionOver(session).call('open_form', {}, context()),
+    ).rejects.toBe(error);
   });
 
   it('lets any other error out', async () => {

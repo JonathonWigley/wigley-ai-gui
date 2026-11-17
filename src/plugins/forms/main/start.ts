@@ -32,8 +32,12 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { createLayoutPreview } from './preview/layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
-import { autoAnsweredPayload, recommendedBody } from './round';
-import { roundType, withKnownLayouts } from './round-type';
+import { recommendedBody } from './round';
+import {
+  autoAnsweredPayload,
+  roundType,
+  withKnownLayouts,
+} from './round-type';
 import {
   FORMS_LAYOUTS_FOLDER,
   formsSelfTestScript,

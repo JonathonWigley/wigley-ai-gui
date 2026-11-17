@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { RoundError } from '../../round-error';
+import { roundErrorText } from '../../mcp-wording';
+import { RoundError, type RoundItemPath } from '../../round-error';
 import { findingFormat } from './finding-format';
+
+const FINDING_1: RoundItemPath = { at: 'item', kind: 'finding', number: 1 };
 
 function finding(overrides: Record<string, unknown> = {}) {
   return {
@@ -53,13 +56,14 @@ const TWO_ACTION_CHOICES = [
   { text: 'Keep the cache', reason: 'Reloads are rare.', action: 'follow_up' },
 ];
 
-// The message of the RoundError the finding format throws for this item.
+// The tool error text of the RoundError the finding format throws for this
+// item.
 function parseError(raw: unknown): string {
   try {
-    findingFormat.parse(raw, 'Finding 1: ');
+    findingFormat.parse(raw, FINDING_1);
   } catch (error) {
     if (error instanceof RoundError) {
-      return error.message;
+      return roundErrorText(error);
     }
     throw error;
   }
@@ -77,7 +81,7 @@ function expectRefusal(raw: unknown, ...parts: string[]): void {
 
 describe('findingFormat.parse', () => {
   it('parses a caused finding to a Defect with its severity', () => {
-    expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual({
+    expect(findingFormat.parse(finding(), FINDING_1)).toEqual({
       title: 'Stale cache',
       origin: 'caused',
       severity: 'important',
@@ -107,7 +111,7 @@ describe('findingFormat.parse', () => {
       recommend_action: 'follow_up',
     });
 
-    expect(findingFormat.parse(raw, 'Finding 1: ')).toEqual({
+    expect(findingFormat.parse(raw, FINDING_1)).toEqual({
       title: 'Stale cache',
       origin: 'design',
       impact: 'Users see stale data after a reload.',
@@ -129,7 +133,7 @@ describe('findingFormat.parse', () => {
   });
 
   it('parses a nit finding with its one fix', () => {
-    expect(findingFormat.parse(nitFinding(), 'Finding 1: ')).toEqual({
+    expect(findingFormat.parse(nitFinding(), FINDING_1)).toEqual({
       title: 'Stale cache',
       origin: 'nit',
       impact: 'Users see stale data after a reload.',
@@ -203,7 +207,7 @@ describe('findingFormat.parse', () => {
       action_reasons: { follow_up: 'The plan covers it.', leave_it: 'Rare.' },
     });
 
-    expect(findingFormat.parse(raw, 'Finding 1: ').actionReasons).toEqual({
+    expect(findingFormat.parse(raw, FINDING_1).actionReasons).toEqual({
       follow_up: 'The plan covers it.',
       leave_it: 'Rare.',
     });
@@ -212,7 +216,7 @@ describe('findingFormat.parse', () => {
   it('reads null action_reasons as none', () => {
     const raw = finding({ action_reasons: null });
 
-    expect(findingFormat.parse(raw, 'Finding 1: ').actionReasons).toEqual({});
+    expect(findingFormat.parse(raw, FINDING_1).actionReasons).toEqual({});
   });
 
   it('refuses action_reasons for fix_now or an unknown key', () => {
@@ -241,13 +245,13 @@ describe('findingFormat.parse', () => {
   it('leaves recommend null when recommend_action has no choices', () => {
     const raw = findingWithoutRecommend({ recommend_action: 'leave_it' });
 
-    expect(findingFormat.parse(raw, 'Finding 1: ').recommend).toBeNull();
+    expect(findingFormat.parse(raw, FINDING_1).recommend).toBeNull();
   });
 
   it('reads a null recommend as absent when recommend_action has no choices', () => {
     const raw = finding({ recommend: null, recommend_action: 'leave_it' });
 
-    expect(findingFormat.parse(raw, 'Finding 1: ').recommend).toBeNull();
+    expect(findingFormat.parse(raw, FINDING_1).recommend).toBeNull();
   });
 
   it('refuses a missing recommend when recommend_action has choices', () => {
@@ -274,9 +278,9 @@ describe('findingFormat.parse', () => {
 
   it('keeps a layout name as sent and reads an absent one as null', () => {
     expect(
-      findingFormat.parse(finding({ layout: 'compact' }), 'Finding 1: ').layout,
+      findingFormat.parse(finding({ layout: 'compact' }), FINDING_1).layout,
     ).toBe('compact');
-    expect(findingFormat.parse(finding(), 'Finding 1: ').layout).toBeNull();
+    expect(findingFormat.parse(finding(), FINDING_1).layout).toBeNull();
   });
 
   it('names a missing origin and impact', () => {
@@ -328,7 +332,7 @@ describe('findingFormat.parse', () => {
       const raw = finding({ choices: [{ text, reason: 'r' }] });
 
       if (refused === null) {
-        expect(findingFormat.parse(raw, 'Finding 1: ').choices).toEqual([
+        expect(findingFormat.parse(raw, FINDING_1).choices).toEqual([
           { text, reason: 'r', action: 'fix_now' },
         ]);
         return;
@@ -392,7 +396,7 @@ describe('findingFormat.parse', () => {
   it('accepts a single solution on a caused finding', () => {
     const lone = finding({ choices: [{ text: 'a', reason: 'r' }] });
 
-    expect(findingFormat.parse(lone, 'Finding 1: ').choices).toEqual([
+    expect(findingFormat.parse(lone, FINDING_1).choices).toEqual([
       { text: 'a', reason: 'r', action: 'fix_now' },
     ]);
   });
@@ -421,7 +425,7 @@ describe('findingFormat.parse', () => {
     // 7 fix_now choices, then the follow_up and leave_it headers.
     const raw = finding({ choices: Array.from({ length: 7 }, () => choice) });
 
-    expect(findingFormat.parse(raw, 'Finding 1: ').choices).toHaveLength(7);
+    expect(findingFormat.parse(raw, FINDING_1).choices).toHaveLength(7);
   });
 
   it('names the title and the legal range for an out-of-range recommend', () => {
@@ -434,7 +438,7 @@ describe('findingFormat.parse', () => {
 
 describe('findingFormat.answerSubject', () => {
   it('gives the result builder its title, choice texts and recommend', () => {
-    const parsed = findingFormat.parse(finding(), 'Finding 1: ');
+    const parsed = findingFormat.parse(finding(), FINDING_1);
 
     expect(findingFormat.answerSubject(parsed)).toEqual({
       title: 'Stale cache',
@@ -443,7 +447,7 @@ describe('findingFormat.answerSubject', () => {
     });
     const headerRecommended = findingFormat.parse(
       findingWithoutRecommend({ recommend_action: 'leave_it' }),
-      'Finding 1: ',
+      FINDING_1,
     );
     expect(findingFormat.answerSubject(headerRecommended).recommend).toBe(0);
   });
@@ -452,14 +456,14 @@ describe('findingFormat.answerSubject', () => {
 describe('findingFormat.fingerprintContent', () => {
   const contentOf = (raw: unknown) =>
     JSON.stringify(
-      findingFormat.fingerprintContent(findingFormat.parse(raw, 'Finding 1: ')),
+      findingFormat.fingerprintContent(findingFormat.parse(raw, FINDING_1)),
     );
 
   it('differs when only the origin, impact or severity differs', () => {
     const content = (overrides: Record<string, unknown>) =>
       JSON.stringify(
         findingFormat.fingerprintContent(
-          findingFormat.parse(finding(overrides), 'Finding 1: '),
+          findingFormat.parse(finding(overrides), FINDING_1),
         ),
       );
     const base = content({});

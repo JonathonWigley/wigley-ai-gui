@@ -2,6 +2,7 @@ import type { ToolDefinition } from '../../sessions/contract';
 import { MAX_ENTRIES } from '../contract';
 import { findingCardsText } from './kinds/finding/finding-text';
 import { FORMATS, ITEM_KINDS } from './kinds/formats';
+import { ROUND_COLLECT_TOOL, ROUND_OPEN_TOOL } from './mcp-wording';
 
 const ASK_ROUND_DESCRIPTION =
   'Ask the user a whole round of interview questions and review findings in ' +
@@ -90,7 +91,7 @@ const COLLECT_LAST_ROUND_DESCRIPTION =
 // question's legacy `question` as its summary.
 export const FORMS_TOOLS: ToolDefinition[] = [
   {
-    name: 'ask_round',
+    name: ROUND_OPEN_TOOL,
     description: ASK_ROUND_DESCRIPTION,
     inputSchema: {
       type: 'object',
@@ -112,14 +113,14 @@ export const FORMS_TOOLS: ToolDefinition[] = [
         ...Object.fromEntries(
           ITEM_KINDS.map((kind) => [
             FORMATS[kind].argsKey,
-            FORMATS[kind].arraySchema,
+            FORMATS[kind].describe(),
           ]),
         ),
       },
     },
   },
   {
-    name: 'collect_last_round',
+    name: ROUND_COLLECT_TOOL,
     description: COLLECT_LAST_ROUND_DESCRIPTION,
     inputSchema: {
       type: 'object',

@@ -3,7 +3,6 @@ import type {
   AgentFormType,
 } from '../../../contracts/agent-forms';
 import {
-  AUDIO_PICKER_ERROR_NAME,
   type AudioPickerBody,
   type AudioPickerForm,
   type AudioPickerPayload,
@@ -23,6 +22,7 @@ import {
   recommendedBody,
   savedAudioPickerHeading,
 } from './picker';
+import { AudioPickerError } from './picker-error';
 
 // The audio picker as an agent form type: `open_audio_picker` opens one and
 // `collect_last_audio_picker` collects it. `parse` checks each file path by
@@ -34,7 +34,8 @@ export function createAudioPickerType(
     openTool: OPEN_AUDIO_PICKER_TOOL,
     collectTool: COLLECT_AUDIO_PICKER_TOOL,
     noun: 'audio picker',
-    argsErrorName: AUDIO_PICKER_ERROR_NAME,
+    argsErrorText: (error) =>
+      error instanceof AudioPickerError ? error.message : null,
     parse: (args) => parseAudioPicker(args, paths),
     fingerprint: audioPickerFingerprint,
     heading: (form) => form.heading,

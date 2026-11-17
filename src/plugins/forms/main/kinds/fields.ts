@@ -1,4 +1,4 @@
-import { RoundError } from '../round-error';
+import { RoundError, type RoundErrorPath } from '../round-error';
 import type { JsonObject } from '../../../../shared/json';
 
 export const MIN_CHOICES = 2;
@@ -6,13 +6,14 @@ export const MIN_CHOICES = 2;
 export function requireText(
   value: unknown,
   field: string,
-  where: string,
+  at: RoundErrorPath,
 ): string {
   if (typeof value !== 'string' || value.trim() === '') {
-    throw new RoundError(
-      `${where}${field} must be a non-empty string. Give it the text you ` +
-        `would have written in the reply.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `${field} must be a non-empty string.`,
+      detail: 'Give it the text you would have written in the reply.',
+    });
   }
   return value;
 }
@@ -32,16 +33,17 @@ export const ITEM_LAYOUT_SCHEMA: Record<string, unknown> = {
 // re-parses after its layout leaves the folder.
 export function parseLayoutField(
   item: JsonObject,
-  where: string,
+  at: RoundErrorPath,
 ): string | null {
   const layout = item.layout;
   if (layout === undefined || layout === null) {
     return null;
   }
   if (typeof layout !== 'string' || layout.trim() === '') {
-    throw new RoundError(
-      `${where}layout must be a layout name: a non-empty string.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: 'layout must be a layout name: a non-empty string.',
+    });
   }
   return layout;
 }
@@ -88,20 +90,23 @@ export function parseRecommend(
   title: string,
   optionCount: number,
   optionNoun: string,
-  where: string,
+  at: RoundErrorPath,
 ): number {
   if (typeof raw !== 'number' || !Number.isInteger(raw)) {
-    throw new RoundError(
-      `${where}recommend must be the 1-based number of the recommended ` +
+    throw new RoundError({
+      path: at,
+      problem:
+        `recommend must be the 1-based number of the recommended ` +
         `${optionNoun}, not ${pythonTypeName(raw)}.`,
-    );
+    });
   }
   if (raw < 1 || raw > optionCount) {
     const options = `${optionCount} ${optionNoun}${optionCount === 1 ? '' : 's'}`;
-    throw new RoundError(
-      `${where}'${title}' has ${options}; recommend was ` +
-        `${raw}. Use a number from 1 to ${optionCount}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `'${title}' has ${options}; recommend was ${raw}.`,
+      detail: `Use a number from 1 to ${optionCount}.`,
+    });
   }
   return raw;
 }

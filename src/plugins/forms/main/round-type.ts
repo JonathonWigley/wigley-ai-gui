@@ -1,22 +1,29 @@
 import type { AgentFormType } from '../../../contracts/agent-forms';
-import {
-  type AnswerableKind,
-  type AnswerEntry,
-  type AnswersPayload,
-  type FormBody,
-  type FormsService,
-  ROUND_ERROR_NAME,
-  type Round,
+import type {
+  AnswerableKind,
+  AnswerEntry,
+  AnswersPayload,
+  FormBody,
+  FormsService,
+  Round,
 } from '../contract';
 import {
-  answersPayload,
+  ROUND_COLLECT_TOOL,
+  ROUND_OPEN_TOOL,
+  roundErrorText,
+  roundPayload,
+} from './mcp-wording';
+import {
+  answersResult,
   fingerprint,
-  handedBackPayload,
-  noRoundPayload,
+  handedBackResult,
+  noRoundResult,
+  notShownResult,
   parseRound,
   readFormBody,
   requireKnownLayouts,
 } from './round';
+import { RoundError } from './round-error';
 
 function withoutDontAsk<Entry extends AnswerEntry>(answer: Entry): Entry {
   return { ...answer, dont_ask: false, dont_ask_reason: '' };
@@ -49,51 +56,37 @@ function savedHeading(args: unknown): string | null {
   return typeof heading === 'string' && heading.trim() !== '' ? heading : null;
 }
 
-// The draft a call returns when its round was never shown, so its answers are
-// blank; it names the blocking round, when one is open, for the agent to point
-// the user at.
-function roundNotShownPayload(
-  round: Round,
-  blockingHeading: string | null,
-): AnswersPayload {
-  const other =
-    blockingHeading === null
-      ? 'another round'
-      : `the round '${blockingHeading}'`;
-  const payload = answersPayload(round, 'draft', readFormBody(round, {}));
-  payload.summary =
-    `This round, '${round.heading}', was not shown: ${other} is still open ` +
-    `in the app.`;
-  payload.next =
-    `The user has not finished ${other} in the app, so this round was not ` +
-    `opened and has no answers. Send this round again with ask_round, and ` +
-    `again after every draft like this one. Once the user finishes ${other}, ` +
-    `a send may return that round's answers instead, marked with ` +
-    `earlier_heading: act on them, then send this round again. If ${other} ` +
-    `is no longer needed, ask the user to cancel it in the app. Do not call ` +
-    `collect_last_round for this round: that returns the other round's ` +
-    `answers.`;
-  return payload;
-}
-
-// Forms' review round as an agent form type: `ask_round` opens one and
-// `collect_last_round` collects it.
+// Forms' review round as an agent form type, the round logic's results worded
+// by the MCP wording: `ROUND_OPEN_TOOL` opens one and `ROUND_COLLECT_TOOL`
+// collects it.
 export const roundType: AgentFormType<Round, FormBody, AnswersPayload> = {
-  openTool: 'ask_round',
-  collectTool: 'collect_last_round',
+  openTool: ROUND_OPEN_TOOL,
+  collectTool: ROUND_COLLECT_TOOL,
   noun: 'round',
-  argsErrorName: ROUND_ERROR_NAME,
+  argsErrorText: (error) =>
+    error instanceof RoundError ? roundErrorText(error) : null,
   parse: parseRound,
   fingerprint,
   heading: (round) => round.heading,
   savedHeading,
   readBody: readFormBody,
   prefill: (_round, saved, finished) => prefillDraft(saved, finished),
-  payload: answersPayload,
-  handedBackPayload,
-  noFormPayload: noRoundPayload,
-  notShownPayload: roundNotShownPayload,
+  payload: (round, outcome, body) =>
+    roundPayload(answersResult(round, outcome, body)),
+  handedBackPayload: (round, outcome, body) =>
+    roundPayload(handedBackResult(round, outcome, body)),
+  noFormPayload: () => roundPayload(noRoundResult()),
+  notShownPayload: (round, blockingHeading) =>
+    roundPayload(notShownResult(round, blockingHeading)),
 };
+
+// A round the app answered with `body` and never showed.
+export function autoAnsweredPayload(
+  round: Round,
+  body: FormBody,
+): AnswersPayload {
+  return roundPayload(answersResult(round, 'auto_answered', body));
+}
 
 // Rejects, before the service sees the call, an open whose round names a layout `layoutNames()` lacks.
 export function withKnownLayouts(

@@ -8,7 +8,7 @@ import type {
 // The parts of a form type its tool session reads.
 type AgentFormTools = Pick<
   AgentFormType<unknown, unknown, unknown>,
-  'openTool' | 'collectTool' | 'argsErrorName'
+  'openTool' | 'collectTool' | 'argsErrorText'
 >;
 
 function payloadResult(payload: object): AgentFormToolResult {
@@ -41,9 +41,9 @@ function callFormTool<Payload>(
 }
 
 // A form type's two MCP tools, `type.openTool` and `type.collectTool`, over
-// one session. A malformed call, an Error named `type.argsErrorName`, comes
-// back as an error result holding its message alone; any other error rejects
-// the call.
+// one session. A malformed call, an error `type.argsErrorText` has text for,
+// comes back as an error result holding that text alone; any other error
+// rejects the call.
 export function createAgentFormToolSession<Payload extends object>(
   session: AgentFormSession<Payload>,
   type: AgentFormTools,
@@ -55,11 +55,9 @@ export function createAgentFormToolSession<Payload extends object>(
           await callFormTool(session, type, name, args, toolUseId, signal),
         );
       } catch (error) {
-        if (error instanceof Error && error.name === type.argsErrorName) {
-          return {
-            content: [{ type: 'text', text: error.message }],
-            isError: true,
-          };
+        const text = type.argsErrorText(error);
+        if (text !== null) {
+          return { content: [{ type: 'text', text }], isError: true };
         }
         throw error;
       }

@@ -238,7 +238,6 @@ export type Outcome =
   | 'submitted'
   | 'draft'
   | 'cancelled'
-  | 'needs_manual_open'
   | 'no_round'
   | 'auto_answered';
 
@@ -287,8 +286,8 @@ export interface AnswersPayload {
 // collect_last_round.
 export type FormsSession = AgentFormSession<AnswersPayload>;
 
-// The `name` of the error `open` rejects with for a malformed call; its
-// message is the whole tool error text.
+// The `name` of the error `open` rejects with for a malformed call; the tool
+// error text is its `roundErrorText`, not its message.
 export const ROUND_ERROR_NAME = 'RoundError';
 
 // Round sources (MCP now, the wigley harness next) reach round logic only here.
