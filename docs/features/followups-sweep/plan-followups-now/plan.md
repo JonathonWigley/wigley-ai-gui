@@ -120,7 +120,7 @@ Critical path: 14 → 15 → 17.
 - [x] [A deferred page part waits on its withheld dependency](18-deferred-page-part.md)
 
 ### Wave 2
-- [ ] [Shared waveform primitive](15-waveform-primitive.md) — after 14
+- [x] [Shared waveform primitive](15-waveform-primitive.md) — after 14
 
 ### Wave 3
 - [ ] [Doc re-read and follow-up removal](17-doc-re-read.md) — after every group
@@ -147,6 +147,7 @@ Review base: 34e4782344fb8ae4e6246859c522c2a5bb9abc53
 - 14 · standard · b273cdb4e · diff read against Produces; wave 1 typecheck clean; diff read sent back once to re-wrap the DESIGN.md Tag bullet · concerns: Colour row padded by hand
 - 16 · standard · 42675ea78 · diff read against Produces; wave 1 typecheck clean · concerns: none
 - 18 · deep · 236bdc88a · diff read against Produces; wave 1 typecheck clean · concerns: none
+- 15 · standard · 0a96f9660, a5770279b · diff read against Produces; wave 2 typecheck and lint clean after one compile fix on the same rung · concerns: none
 ### Contract changes
 ### Rulings
 - 01: listRows treats an at of 0 (previousAt || steps[0].at) as unknown; no source writes epoch 0 · group 01

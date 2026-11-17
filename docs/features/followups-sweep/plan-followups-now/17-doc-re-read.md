@@ -1,6 +1,6 @@
 # 17 — Doc re-read and follow-up removal
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · a doc-only task: prose checked against settled code
 Wave: 3 · Depends on: every group
