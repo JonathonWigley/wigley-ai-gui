@@ -412,7 +412,9 @@ export function createUserFolderSource(
       return;
     }
     for (const name of codeFolders) {
-      if (!listed.has(name) && !revisions.has(name)) {
+      const isListed = listed.has(name);
+      const tookRevisionThisLaunch = revisions.has(name);
+      if (!isListed && !tookRevisionThisLaunch) {
         await removeFolderOrLog(
           paths.join(deps.codeRoot, name),
           `plugin code ${name} not deleted`,

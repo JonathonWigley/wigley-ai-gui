@@ -39,12 +39,12 @@ import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { sparkline } from '../../../shared/page/ui/sparkline';
-import { waveform } from '../../../shared/page/ui/waveform';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
 import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
+import { waveform } from '../../../shared/page/ui/waveform';
 import type { GalleryHeadInput, Layout } from '../layouts/layout';
 import {
   createGalleryParts,

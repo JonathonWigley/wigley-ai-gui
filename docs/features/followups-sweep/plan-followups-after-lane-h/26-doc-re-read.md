@@ -16,8 +16,9 @@ Decisions:
 - Each landed group's follow-up items leave `followups.md` (the file's rule: remove an item when its work lands). Go by
   item title, never by line number. A group struck by a ruling leaves its items in place, with the item text corrected
   if the ruling found it untrue.
-- Items per group, 37 in all, by their exact bold titles. Find each with
-  `grep -n -F '**<title>**' docs/features/followups.md`; line numbers drift, so none are given:
+- Items per group, 37 in all (the 36 this plan's groups fix and one `plan-followups-now` landed), by their exact
+  bold titles. Find each with `grep -n -F '**<title>**' docs/features/followups.md`; line numbers drift, so none are
+  given:
   - 01 "Docs keeps only the first tree view's place", "Narrowing leaves the docs filter holding keys", "Selection lost
     on an outside rename or trash", "One newest-wins open rule"
   - 02 "ownsRoot helper"
