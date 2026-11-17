@@ -336,16 +336,15 @@ describe('installedCopies', () => {
       },
       expected: [{ harness: 'claude', version: '1.0.0', path: '/ok' }],
     },
+    {
+      given: 'a harness id no harness registers',
+      meta: {
+        installed: [{ harness: 'other', version: '1.0.0', path: '/o/a.md' }],
+      },
+      expected: [{ harness: 'other', version: '1.0.0', path: '/o/a.md' }],
+    },
   ])('installedCopies given $given → $expected', ({ meta, expected }) => {
     expect(installedCopies(entry({ path: '/a', meta }))).toEqual(expected);
-  });
-
-  it('installedCopies_AnyHarnessString_Kept', () => {
-    const copy = { harness: 'other', version: '1.0.0', path: '/o/a.md' };
-
-    expect(
-      installedCopies(entry({ path: '/a', meta: { installed: [copy] } })),
-    ).toEqual([copy]);
   });
 });
 

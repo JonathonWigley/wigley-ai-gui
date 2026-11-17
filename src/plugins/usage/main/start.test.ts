@@ -94,8 +94,8 @@ function usageEvent(agentId: string): UsageAgentEvent {
 }
 
 // Usage's main part started over a fake `MainApi` whose `core.agentHarnesses`
-// holds `PERSONAL` as the `claude` entry's one profile, with `harnesses`
-// registered, a real store for its slots and a drive host
+// holds `PERSONAL` as the one profile of each of `harnesses` (a list without
+// `claude` publishes none, so no poll runs), registered, a real store for its slots and a drive host
 // whose `run` runs an added action; `emit` calls the listeners of a qualified
 // event, `sent` records every write of the slot after the start, `snapshot` reads
 // the slot, `armed` records every timer set and `pendingTimers` the ids set and
@@ -105,9 +105,12 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const sent: UsageSnapshot[] = [];
   const store = createSlotStore(() => undefined);
-  store
-    .publish(coreAgentHarnessesSlot)
-    .set('claude', harnessInfo({ profiles: [PERSONAL] }));
+  const harnessEntries = store.publish(coreAgentHarnessesSlot);
+  for (const { id } of harnesses) {
+    if (id !== undefined) {
+      harnessEntries.set(id, harnessInfo({ profiles: [PERSONAL] }));
+    }
+  }
   const reader = store.read(usageSnapshotSlot, 'test');
   const logs: string[] = [];
   const armed: number[] = [];
@@ -360,6 +363,32 @@ describe('usageMainPart', () => {
     await settled();
 
     expect(heard).toEqual(['~/.claude-personal']);
+  });
+
+  it('usageMainPart_HarnessSlotChange_PollsOnlyWhenProfilesDiffer', async () => {
+    const state = createSlotStore(() => undefined);
+    const harnesses = state.publish(coreAgentHarnessesSlot);
+    harnesses.set('claude', harnessInfo({ profiles: [PERSONAL] }));
+    const heard: (string | null)[] = [];
+    startOverSlot(state, [
+      {
+        id: 'claude',
+        planUsage: (profileDir) => {
+          heard.push(profileDir);
+          return Promise.resolve(POLLED);
+        },
+      },
+    ]);
+    await settled();
+    heard.length = 0;
+
+    harnesses.set('claude', harnessInfo({ profiles: [{ ...PERSONAL }] }));
+    await settled();
+    expect(heard).toEqual([]);
+
+    harnesses.set('claude', harnessInfo({ profiles: [PERSONAL, LAB] }));
+    await settled();
+    expect(heard).toEqual(['~/.claude-personal', '/lab']);
   });
 
   it('usageMainPart_Seed_StopsThePollerAndWritesTheFixture', async () => {

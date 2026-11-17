@@ -80,7 +80,7 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
   restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
   (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
-  (`src/plugins/claude-code/main/transcripts.ts`, `let lastAt = 0` at line 127, a second copy at 151) stamps every entry
+  (`src/plugins/claude-code/main/transcripts.ts`, `let lastAt = 0` at line 174, a second copy at 214) stamps every entry
   before the transcript's first timestamped line with `at` 0, raw entries from unparsed or untimed lines included,
   and those are steps; `listRows` (`src/plugins/chat/page/activity-runs.ts:60`, `startedAt: previousAt ?? steps[0].at`)
   opens a run at 0 and closes it at the next timed entry. Two fixes: backfill the untimed leading lines with the first

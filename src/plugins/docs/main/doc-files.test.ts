@@ -301,6 +301,44 @@ describe('write', () => {
     );
   });
 
+  it('write_DeclaredConfigFolderWithTilde_ExpandedAndWritten', async () => {
+    const test = setUp({
+      folders: {
+        ...foldersOf(),
+        roots: () => [
+          {
+            harnessId: 'other',
+            profile: 'p',
+            roots: { configDir: '~/.other', pluginCacheDirs: [] },
+          },
+        ],
+      },
+    });
+
+    await test.docFiles.write(`${HOME}/.other/rules/r.md`, 'r', null);
+
+    expect(await test.files.read(`${HOME}/.other/rules/r.md`)).toBe('r');
+  });
+
+  it('write_DeclaredConfigFolderNotAbsolute_DroppedAndRefused', async () => {
+    const test = setUp({
+      folders: {
+        ...foldersOf(),
+        roots: () => [
+          {
+            harnessId: 'other',
+            profile: 'p',
+            roots: { configDir: 'rel/.other', pluginCacheDirs: [] },
+          },
+        ],
+      },
+    });
+
+    await expect(
+      test.docFiles.write(`${HOME}/rel/.other/r.md`, 'r', null),
+    ).rejects.toThrow('outside the indexed folders');
+  });
+
   it('write_InsideCodexFolder_RefusedOutsideIndexedFolders', async () => {
     const test = setUp();
 

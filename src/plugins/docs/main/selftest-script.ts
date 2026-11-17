@@ -6,6 +6,7 @@ import type {
   SelfTestStep,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { FAKE_HARNESS_ID } from '../../../shared/fake-agent-harness';
 import type {
   OwnedSession,
   SessionsMainExports,
@@ -1276,7 +1277,7 @@ export async function openDocsFixtureSession(
     {
       sessionId,
       projectDir: paths.join(home, 'dev', 'selftest-repo'),
-      harness: 'claude',
+      harness: FAKE_HARNESS_ID,
       rowId: null,
     },
     { select: false },
