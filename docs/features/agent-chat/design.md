@@ -381,7 +381,12 @@ interview on 2026-10-23; this file is the record of both.
   and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
   selects the saved row. A row whose process the host still holds is **re-attached**: the harness replays its pipe
   log, the row shows the transcript up to that process's start and then the process's own entries, and it carries on
-  live (`session-host/design.md` § Re-attach). Every other row **rests**, holding no process. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued or returned messages stays in the saved file, so the next start tries it again. A restored
+  live (`session-host/design.md` § Re-attach). Every other row **rests**, holding no process. A row whose harness
+  leaves the registry (its plugin stops or reloads) **waits**: chat detaches its process, which keeps running on the
+  session host, rests the row with the notice `<label> is not loaded. This session waits for it to load again.`, and
+  refuses a send, Send now, clear or control change until the harness registers again; then the row re-attaches
+  through `attach` as a relaunch does (`agent-harnesses/design.md` § A harness reloading). A restored record whose
+  harness is not registered waits the same way. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued or returned messages stays in the saved file, so the next start tries it again. A restored
   row that was ever sent to has its earlier conversation read from its transcript once, on the first show of its Chat
   tab or the first send, whichever comes first, while its profile is in the settings, so start reads no transcripts; a
   send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting

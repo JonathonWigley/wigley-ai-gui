@@ -25,7 +25,9 @@ import {
   FAKE_TOOL_TEXT,
   FAKE_VISUAL_TEXT,
   type FakeAgentCall,
+  type FakeAgentHarness,
   type FakeAgentProcessRecord,
+  type FakeHarnessIdentity,
   FAKE_HARNESS_ID,
   isFakeAgentHarness,
   markRun,
@@ -41,7 +43,11 @@ import type {
   ToolCallContext,
   ToolResult,
 } from '../../sessions/contract';
-import type { ChatSessions } from './chat-sessions';
+import {
+  type ChatSessions,
+  harnessRefusalText,
+  harnessWaitingText,
+} from './chat-sessions';
 import { askFixturePermission } from './fixtures';
 
 // The names of the self-test's project folders, made under the self-test's
@@ -56,10 +62,22 @@ const SECOND_PROJECT_NAME = 'chat-second';
 // remove key. It starts between the other two, so it lists between them and
 // chat-second stays the session before chat-selftest, the list wrapping.
 const IMAGES_PROJECT_NAME = 'chat-images';
-// How long the images session's hold turn may take to report running, and how
-// often it is asked.
-const RUNNING_TIMEOUT_MS = 10_000;
-const RUNNING_POLL_MS = 20;
+// A fourth session, opened and closed before the other three, whose harness
+// leaves the registry and returns.
+const RETURN_PROJECT_NAME = 'chat-return';
+// How long a condition the run waits on may take to hold, such as the images
+// session's hold turn reporting running, and how often it is asked.
+const WAIT_TIMEOUT_MS = 10_000;
+const WAIT_POLL_MS = 20;
+
+// The fixture harness the run registers and disposes to make a harness leave
+// and return; the composition root leaves `claude-code` out of a self-test, so
+// no real harness can.
+export const RETURN_FIXTURE_IDENTITY: FakeHarnessIdentity = {
+  id: 'fake-return',
+  label: 'Fake return',
+  profiles: [{ name: 'fake-return', configDir: '~/.fake-return' }],
+};
 
 export interface ChatSelfTestDeps {
   homeDir: string;
@@ -77,8 +95,19 @@ export interface ChatSelfTestDeps {
   sessions: Pick<SessionsMainExports, 'activate' | 'connect'>;
   harnesses: AgentHarnessRegistry;
   // Chat's `defaultHarness` setting, read at each run: every session the run
-  // starts runs on it.
+  // starts runs on it, but the return fixture's.
   defaultHarness(): string;
+  // A fake under `RETURN_FIXTURE_IDENTITY`, registered through `harnesses`
+  // only while the run's leave-and-return fixture runs.
+  returnFixture: FakeAgentHarness;
+}
+
+// What the leave-and-return fixture saw: the text the send to the waiting row
+// was refused with, null when it resolved, and how many records the fixture
+// fake held when the run began.
+interface HarnessReturnRun {
+  refusal: string | null;
+  processes: number;
 }
 
 interface ChatSelfTestResult {
@@ -89,6 +118,7 @@ interface ChatSelfTestResult {
   permission: PermissionDecision | null;
   // Null when no fake process was found to join.
   round: ToolResult | null;
+  harnessReturn: HarnessReturnRun;
 }
 
 const ROUND_HEADING = 'Chat self-test round';
@@ -1402,17 +1432,45 @@ function pastSessionProblems(
   return [`past session calls ${JSON.stringify(calls)}`];
 }
 
-// The self-test's three project folders.
+// The leave-and-return fixture's problems, from `records`, the fixture fake's
+// records this run added, in start order.
+function harnessReturnProblems(
+  { refusal }: HarnessReturnRun,
+  records: readonly FakeAgentProcessRecord[],
+): string[] {
+  const { label } = RETURN_FIXTURE_IDENTITY;
+  const expected = harnessRefusalText(label);
+  const problems: string[] = [];
+  if (refusal === null) {
+    problems.push('harness leave: the send was not refused');
+  } else if (refusal !== expected) {
+    problems.push(
+      `harness leave: the send was refused with "${refusal}", not "${expected}"`,
+    );
+  }
+  if (records.at(0)?.detached !== true) {
+    problems.push('harness leave: the process was not detached');
+  }
+  if (!records.slice(1).some((record) => record.request.resume)) {
+    problems.push(`harness return: no resumed process started on ${label}`);
+  }
+  return problems;
+}
+
+// The self-test's four project folders.
 interface SelfTestProjects {
   selftest: string;
   second: string;
   images: string;
+  harnessReturn: string;
 }
 
-// Makes the three self-test project folders under the home's real path, the
-// one the page shows as `~`, then starts three chat sessions each run, first
-// closing every session chat holds in a self-test project (a resumed one
-// included) and unarchiving the fake's saved sessions: the second project's,
+// Makes the four self-test project folders under the home's real path, the
+// one the page shows as `~`, then each run first closes every session chat
+// holds in a self-test project (a resumed one included) and unarchives the
+// fake's saved sessions, runs the leave-and-return fixture in the return
+// project (a session on the return fixture, which leaves the registry and
+// returns, then closes), and starts three chat sessions: the second project's,
 // the images project's, whose box it fills with two returned images, then the
 // self-test's, whose Chat tab it shows. Raises one permission request through
 // the fake that started the self-test's process, which the steps allow; the
@@ -1462,10 +1520,12 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       selftest: path.join(home, SELFTEST_PROJECT_NAME),
       second: path.join(home, SECOND_PROJECT_NAME),
       images: path.join(home, IMAGES_PROJECT_NAME),
+      harnessReturn: path.join(home, RETURN_PROJECT_NAME),
     };
     await files.makeFolder(madeProjects.selftest);
     await files.makeFolder(madeProjects.second);
     await files.makeFolder(madeProjects.images);
+    await files.makeFolder(madeProjects.harnessReturn);
     selftestProject = madeProjects.selftest;
     return madeProjects;
   }
@@ -1475,9 +1535,10 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     selftest,
     second,
     images,
+    harnessReturn,
   }: SelfTestProjects) {
     for (const state of chat.sessions()) {
-      if ([selftest, second, images].includes(state.projectDir)) {
+      if ([selftest, second, images, harnessReturn].includes(state.projectDir)) {
         chat.closed(state.sessionId, 'project-closed');
       }
     }
@@ -1493,27 +1554,84 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   }
 
   async function waitForTurnRunning(sessionId: string) {
-    const deadline = Date.now() + RUNNING_TIMEOUT_MS;
-    const isRunning = () =>
-      chat
-        .sessions()
-        .some(
-          (state) =>
-            state.sessionId === sessionId &&
-            state.running &&
-            state.activity !== 'idle',
-        );
-    while (!isRunning()) {
+    await waitUntil(
+      () =>
+        chat
+          .sessions()
+          .some(
+            (state) =>
+              state.sessionId === sessionId &&
+              state.running &&
+              state.activity !== 'idle',
+          ),
+      `${IMAGES_PROJECT_NAME}'s hold turn never ran`,
+    );
+  }
+
+  // Asks `holds` every WAIT_POLL_MS until it is true; throws `failure` once
+  // WAIT_TIMEOUT_MS has passed.
+  async function waitUntil(holds: () => boolean, failure: string) {
+    const deadline = Date.now() + WAIT_TIMEOUT_MS;
+    while (!holds()) {
       if (Date.now() > deadline) {
-        throw new Error(`${IMAGES_PROJECT_NAME}'s hold turn never ran`);
+        throw new Error(failure);
       }
-      await new Promise((resolve) => setTimeout(resolve, RUNNING_POLL_MS));
+      await new Promise((resolve) => setTimeout(resolve, WAIT_POLL_MS));
+    }
+  }
+
+  // Starts a session on the return fixture and sends to it, disposes the
+  // fixture's registration and sends to the waiting row, keeping its refusal,
+  // then registers the fixture again, sends once the waiting notice is gone,
+  // and closes the row. Disposes the registration it holds however it ends.
+  async function runHarnessReturn(
+    projectDir: string,
+  ): Promise<HarnessReturnRun> {
+    const { returnFixture } = deps;
+    const processes = returnFixture.processes.length;
+    const profile = RETURN_FIXTURE_IDENTITY.profiles[0].name;
+    const waitingText = harnessWaitingText(RETURN_FIXTURE_IDENTITY.label);
+    const rowOf = (sessionId: string) =>
+      chat.sessions().find((state) => state.sessionId === sessionId);
+    let registration = harnesses.register(returnFixture);
+    try {
+      const id = chat.start({
+        projectDir,
+        harness: returnFixture.id,
+        profile,
+      });
+      await chat.send(id, { text: 'before the leave', images: [] });
+      registration.dispose();
+      await waitUntil(
+        () => rowOf(id)?.running === false,
+        `${RETURN_PROJECT_NAME}'s row never rested after its harness left`,
+      );
+      let refusal: string | null = null;
+      try {
+        await chat.send(id, { text: 'while it is gone', images: [] });
+      } catch (error) {
+        refusal = errorText(error);
+      }
+      registration = harnesses.register(returnFixture);
+      await waitUntil(
+        () =>
+          rowOf(id)?.entries.some(
+            (entry) => entry.kind === 'notice' && entry.text === waitingText,
+          ) === false,
+        `${RETURN_PROJECT_NAME}'s waiting notice stayed after its harness returned`,
+      );
+      await chat.send(id, { text: 'after the return', images: [] });
+      chat.closed(id, 'project-closed');
+      return { refusal, processes };
+    } finally {
+      registration.dispose();
     }
   }
 
   async function openSessions(
     run: number,
     { selftest, second, images }: SelfTestProjects,
+    harnessReturn: HarnessReturnRun,
   ): Promise<ChatSelfTestResult> {
     const harness = defaultHarness();
     chat.start({ projectDir: second, harness, profile: 'work' });
@@ -1541,7 +1659,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
           });
     return permission.then(async (decision): Promise<ChatSelfTestResult> => {
       if (process === null) {
-        return { selftest, permission: decision, round: null };
+        return { selftest, permission: decision, round: null, harnessReturn };
       }
       const relay = sessions.connect({
         sessionId: null,
@@ -1555,7 +1673,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         chatRound(run),
         toolCallContext(),
       );
-      return { selftest, permission: decision, round };
+      return { selftest, permission: decision, round, harnessReturn };
     });
   }
 
@@ -1571,6 +1689,10 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       ),
       ...resumedProblems(selftestProcess(marks, selftest, true), selftest),
       ...pastSessionProblems(marks, selftest),
+      ...harnessReturnProblems(
+        result.harnessReturn,
+        deps.returnFixture.processes.slice(result.harnessReturn.processes),
+      ),
     ];
   }
 
@@ -1592,9 +1714,12 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         made = null;
         throw error;
       });
-      const result = made.then((madeProjects) => {
+      const result = made.then(async (madeProjects) => {
         closeEarlierSessions(madeProjects);
-        return openSessions(run, madeProjects);
+        const harnessReturn = await runHarnessReturn(
+          madeProjects.harnessReturn,
+        );
+        return openSessions(run, madeProjects, harnessReturn);
       });
       return {
         shownLine: `[chat] Chat tab shown in ${SELFTEST_PROJECT_NAME}`,

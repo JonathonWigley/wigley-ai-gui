@@ -1746,15 +1746,42 @@ describe('createFakeAgentHarness', () => {
     expect(await harness.installedPlugins(null)).toEqual([]);
   });
 
-  it('info_Profiles_FakeProfiles', () => {
-    const harness = createFakeAgentHarness(
-      clock,
-      createMemoryFiles(),
-      FAKE_MICROTASK_TIMERS,
-    );
+  it.each([
+    {
+      given: 'no identity',
+      identity: undefined,
+      expected: { id: 'fake', label: 'Fake', profiles: FAKE_PROFILES },
+    },
+    {
+      given: 'an identity',
+      identity: {
+        id: 'fake-return',
+        label: 'Fake return',
+        profiles: [{ name: 'fake-return', configDir: '~/.fake-return' }],
+      },
+      expected: {
+        id: 'fake-return',
+        label: 'Fake return',
+        profiles: [{ name: 'fake-return', configDir: '~/.fake-return' }],
+      },
+    },
+  ])(
+    'createFakeAgentHarness_Identity_IdLabelAndProfilesAsGiven given $given',
+    ({ identity, expected }) => {
+      const harness = createFakeAgentHarness(
+        clock,
+        createMemoryFiles(),
+        FAKE_MICROTASK_TIMERS,
+        identity,
+      );
 
-    expect(harness.info().profiles).toEqual(FAKE_PROFILES);
-  });
+      expect({
+        id: harness.id,
+        label: harness.info().label,
+        profiles: harness.info().profiles,
+      }).toEqual(expected);
+    },
+  );
 });
 
 describe('createFakeAgentHarness compaction', () => {

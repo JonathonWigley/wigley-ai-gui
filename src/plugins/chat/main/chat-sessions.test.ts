@@ -72,6 +72,7 @@ import {
   type ChatSessions,
   type ChatSessionsDeps,
   createChatSessions,
+  PERMISSION_CANCELLED_REASON,
   UNATTENDED_REASON,
 } from './chat-sessions';
 import type {
@@ -533,8 +534,23 @@ function setUp(
       return held === undefined ? null : { ...held };
     },
   };
+  // Each harness registers under its own handle, so a test can let one leave
+  // and register it again; `labels` holds the label of each id registered so
+  // far, which `harnessLabelOf` reads as `start.ts`'s follower does.
+  const registry = harnessRegistryOf([]);
+  const registrations = new Map<string, () => void>();
+  const labels = new Map<string, string>();
+  const register = (each: FakeAgentHarness) => {
+    const registration = registry.register(each);
+    registrations.set(each.id, () => registration.dispose());
+    labels.set(each.id, each.info().label);
+  };
+  for (const each of harnesses) {
+    register(each);
+  }
   const chat = createChatSessions({
-    harnesses: harnessRegistryOf(harnesses),
+    harnesses: registry,
+    harnessLabelOf: (harnessId) => labels.get(harnessId) ?? harnessId,
     sessions,
     selectedSessionId: () => selectedSessionId,
     recent: createRecentFolders({
@@ -629,6 +645,15 @@ function setUp(
     },
     setProfiles: (next: readonly HarnessProfile[]) => {
       profiles = next;
+    },
+    registry,
+    register,
+    // Drops `harnessId` from the registry, then tells chat it left, as the
+    // registry and `start.ts`'s follower do when its key is deleted.
+    leave: (harnessId: string) => {
+      registrations.get(harnessId)?.();
+      registrations.delete(harnessId);
+      chat.harnessLeft(harnessId);
     },
     sent: <K extends Message['message']>(message: K) =>
       messagesFrom(timeline)
@@ -3622,8 +3647,8 @@ describe('createChatSessions saved sessions', () => {
       entries: [
         {
           kind: 'notice',
-          tone: 'error',
-          text: 'No agent harness "gone" is registered; turn its plugin on to resume this session.',
+          tone: 'info',
+          text: 'gone is not loaded. This session waits for it to load again.',
         },
       ],
     },
@@ -3638,26 +3663,32 @@ describe('createChatSessions saved sessions', () => {
     );
   });
 
-  it('restore_HarnessNotRegistered_RestsWithTheNotice', () => {
+  it('restore_HarnessNotRegistered_WaitsAndAttachesWhenItRegisters', async () => {
     const test = setUp();
-
-    test.chat.restore(
-      {
-        sessions: [record('host-a', { harness: 'gone', processId: 'p1' })],
-        selectedHostSessionId: null,
-      },
-      [hostedP1()],
+    const gone = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+      { id: 'gone', label: 'Gone', profiles: PROFILES },
     );
+    gone.scriptAttach('p1', { outcome: 'process', replay() {} });
+    test.sessionHost.setList([hostedP1()]);
 
-    const [session] = test.chat.sessions();
-    expect(session.running).toBe(false);
-    expect(session.entries.at(-1)).toEqual(
-      expect.objectContaining({
-        kind: 'notice',
-        tone: 'error',
-        text: 'No agent harness "gone" is registered; turn its plugin on to resume this session.',
-      }),
-    );
+    restoreOne(test, hostedRecord({ harness: 'gone' }), [hostedP1()]);
+
+    expect(test.chat.sessions()[0].running).toBe(false);
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'info',
+      text: 'gone is not loaded. This session waits for it to load again.',
+    });
+
+    test.register(gone);
+    await test.chat.harnessReturned('gone');
+    await flush();
+
+    expect(gone.attachCalls.map((attach) => attach.processId)).toEqual(['p1']);
+    expect(test.chat.sessions()[0].running).toBe(true);
     expect(test.harness.attachCalls).toEqual([]);
   });
 
@@ -9560,5 +9591,358 @@ describe('createChatSessions host session ids', () => {
     await flush();
 
     expect(test.saved.last()?.selectedHostSessionId).toBe('fake-session-1');
+  });
+});
+
+const WAITING_NOTICE =
+  'Fake is not loaded. This session waits for it to load again.';
+const WAITING_REFUSAL = 'Fake is not loaded. Send again once it is.';
+
+// A row resumed on the fake from `PAST_ONE`, whose history the fake reads, with
+// its process `row-1-1-1000` running.
+async function resumedOnFake(options?: Parameters<typeof setUp>[0]) {
+  const test = setUp(options);
+  await test.chat.resume({
+    projectDir: '/w/app',
+    profile: 'work',
+    hostSessionId: PAST_ONE.sessionId,
+    title: PAST_ONE.title,
+  });
+  await flush();
+  return { ...test, process: test.harness.processes[0] };
+}
+
+// A restored row of `PAST_ONE`, sent before, that rests with no process and no
+// unheld process.
+function restoredResting(options?: Parameters<typeof setUp>[0]) {
+  const test = setUp(options);
+  restoreOne(test, record(PAST_ONE.sessionId, { sent: true }), []);
+  return test;
+}
+
+function historyCallsOf(test: ReturnType<typeof setUp>) {
+  return test.harness.pastSessionCalls.filter(
+    (call) => call.method === 'history',
+  );
+}
+
+describe('createChatSessions harness leave and return', () => {
+  it('harnessLeft_RunningRow_DetachesAndRestsWithTheNotice', async () => {
+    const test = await started();
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    await flush();
+
+    test.leave(FAKE_HARNESS_ID);
+
+    expect(test.registry.get(FAKE_HARNESS_ID)).toBeNull();
+    expect(test.process.detached).toBe(true);
+    expect(test.process.calls).not.toContainEqual({ method: 'kill' });
+    expect(test.process.calls).not.toContainEqual({ method: 'end' });
+    const [session] = test.chat.sessions();
+    expect(session).toEqual(
+      expect.objectContaining({ running: false, activity: 'idle' }),
+    );
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'info',
+      text: WAITING_NOTICE,
+    });
+    expect(test.sent('sessionRested')).toEqual([
+      { sessionId: ROW_ID, error: null },
+    ]);
+  });
+
+  it.each([
+    {
+      given: 'send',
+      queues: false,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.send(ROW_ID, IDLE_SEND),
+    },
+    {
+      given: 'sendAllNow',
+      queues: false,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.sendAllNow(ROW_ID, IDLE_SEND),
+    },
+    {
+      given: 'clear',
+      queues: false,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.clear(ROW_ID),
+    },
+    {
+      given: 'setControl',
+      queues: false,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.setControl(ROW_ID, 'mode', 'plan'),
+    },
+    {
+      given: 'sendNow',
+      queues: true,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.sendNow(ROW_ID, test.chat.sessions()[0].queued[0].id),
+    },
+  ])(
+    'send_HarnessLeft_RejectsNamingTheLabel given $given',
+    async ({ queues, act }) => {
+      const test = await started();
+      if (queues) {
+        test.activity('working');
+        await test.chat.send(ROW_ID, PENDING);
+      }
+      test.leave(FAKE_HARNESS_ID);
+      const queuedBefore = test.chat.sessions()[0].queued;
+      const callsBefore = test.process.calls.length;
+
+      await expect(
+        Promise.resolve().then(() => act(test)),
+      ).rejects.toThrow(WAITING_REFUSAL);
+      await flush();
+
+      expect(test.chat.sessions()[0].queued).toEqual(queuedBefore);
+      expect(test.process.calls).toHaveLength(callsBefore);
+      expect(test.harness.processes).toHaveLength(1);
+    },
+  );
+
+  it('harnessLeft_PullBackHeadlessInterrupt_WorkAsOnAnyRestingRow', async () => {
+    const test = await started();
+    test.activity('working');
+    await test.chat.send(ROW_ID, PENDING);
+    const [queued] = test.chat.sessions()[0].queued;
+    test.leave(FAKE_HARNESS_ID);
+    const callsBefore = test.process.calls.length;
+
+    test.chat.pullBack(ROW_ID, queued.id);
+    test.chat.setHeadless(ROW_ID, true);
+    const entriesBefore = test.chat.sessions()[0].entries;
+    test.chat.interrupt(ROW_ID);
+
+    expect(test.sentReturned()).toEqual([
+      { sessionId: ROW_ID, messages: [PENDING] },
+    ]);
+    const [session] = test.chat.sessions();
+    expect(session.queued).toEqual([]);
+    expect(session.headless).toBe(true);
+    expect(session.entries).toEqual(entriesBefore);
+    expect(test.process.calls).toHaveLength(callsBefore);
+  });
+
+  it('harnessLeft_AttachingRow_DetachesOnceTheAttachSettles', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', { outcome: 'process', replay() {} });
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+
+    test.leave(FAKE_HARNESS_ID);
+    await flush();
+
+    const [attached] = attachedOf(test);
+    expect(attached.detached).toBe(true);
+    expect(attached.calls).not.toContainEqual({ method: 'kill' });
+    expect(test.chat.sessions()[0].running).toBe(false);
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'info',
+      text: WAITING_NOTICE,
+    });
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
+      WAITING_REFUSAL,
+    );
+  });
+
+  it('harnessLeft_AfterDetachAll_ChangesNoRow', async () => {
+    const test = await started();
+    await test.chat.detachAll();
+    const timelineBefore = test.timeline.length;
+
+    test.leave(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.timeline).toHaveLength(timelineBefore);
+    expect(test.logged).toContain('harness fake left; chat is stopping');
+  });
+
+  it('harnessReturned_ProcessRunningHere_AttachesThroughAttach', async () => {
+    const test = await resumedOnFake();
+    const { processId } = test.process.request;
+    test.leave(FAKE_HARNESS_ID);
+    test.sessionHost.setList([
+      { id: processId, startedAt: 5000, running: true, current: true },
+    ]);
+    test.harness.scriptAttach(processId, {
+      outcome: 'process',
+      replay(events) {
+        events.entry(assistant('r1', 'replayed'));
+      },
+    });
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(
+      test.harness.attachCalls.map((attach) => attach.processId),
+    ).toEqual([processId]);
+    const [session] = test.chat.sessions();
+    expect(session.running).toBe(true);
+    expect(noticesOf(test).map((notice) => notice.text)).not.toContain(
+      WAITING_NOTICE,
+    );
+    const ids = session.entries.map((entry) => entry.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('harnessReturned_ProcessEnded_RestsAndReadsTheHistory', async () => {
+    const test = await resumedOnFake();
+    test.leave(FAKE_HARNESS_ID);
+    test.sessionHost.setList([]);
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.harness.attachCalls).toEqual([]);
+    const [session] = test.chat.sessions();
+    expect(session.running).toBe(false);
+    expect(session.entries.map((entry) => entry.id)).toEqual([
+      `history:${PAST_ONE.sessionId}-user`,
+      `history:${PAST_ONE.sessionId}-assistant`,
+    ]);
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    await flush();
+
+    const starts = startsOf(test);
+    expect(starts).toHaveLength(2);
+    expect(starts[1].request.resume).toBe(true);
+  });
+
+  it('harnessReturned_ProfileGone_RestsWithTheMissingProfileNotice', async () => {
+    const test = await resumedOnFake();
+    test.leave(FAKE_HARNESS_ID);
+    test.setProfiles([{ name: 'personal', configDir: '~/.claude-personal' }]);
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.harness.attachCalls).toEqual([]);
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'error',
+      text: 'Profile work is not declared by Fake; add it back to resume this session.',
+    });
+  });
+
+  it('harnessLeft_WaitingPermissionCard_SettlesAsAborted', async () => {
+    const test = await started();
+    const decision = await askBash(test);
+
+    test.leave(FAKE_HARNESS_ID);
+    await flush();
+
+    const card = test.chat
+      .sessions()[0]
+      .entries.find((entry) => entry.kind === 'permission');
+    expect(card).toEqual(
+      expect.objectContaining({
+        answer: { allowed: false, reason: PERMISSION_CANCELLED_REASON },
+      }),
+    );
+    expect(decision()).toEqual({
+      allowed: false,
+      reason: FAKE_CANCELLED_REASON,
+    });
+    expect(test.chat.sessions()[0].activity).toBe('idle');
+  });
+
+  it('loadHistory_HarnessLeft_ReadsNothingAndLaterTriesAgain', async () => {
+    const test = restoredResting();
+    test.leave(FAKE_HARNESS_ID);
+
+    await test.chat.loadHistory(ROW_ID);
+
+    expect(historyCallsOf(test)).toEqual([]);
+
+    test.register(test.harness);
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await test.chat.loadHistory(ROW_ID);
+
+    expect(historyCallsOf(test)).toHaveLength(1);
+  });
+
+  it('harnessLeft_RestingRowWithNoProcess_StillWaits', async () => {
+    const test = restoredResting();
+
+    test.leave(FAKE_HARNESS_ID);
+
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
+      WAITING_REFUSAL,
+    );
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'info',
+      text: WAITING_NOTICE,
+    });
+    expect(test.harness.processes).toEqual([]);
+  });
+
+  it('harnessReturned_NoUnheldProcessId_ChangesNothingMore', async () => {
+    let lists = 0;
+    const test = restoredResting({
+      sessionHost: {
+        list: () => {
+          lists++;
+          return Promise.resolve([]);
+        },
+      },
+    });
+    const entriesBefore = test.chat.sessions()[0].entries;
+    test.leave(FAKE_HARNESS_ID);
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.chat.sessions()[0].entries).toEqual(entriesBefore);
+    expect(test.harness.attachCalls).toEqual([]);
+    expect(lists).toBe(0);
+    expect(historyCallsOf(test)).toEqual([]);
+    // The history the row had pending before the leave is still pending.
+    await test.chat.loadHistory(ROW_ID);
+    expect(historyCallsOf(test)).toHaveLength(1);
+  });
+
+  it('harnessReturned_ListRejects_KeepsTheGuard', async () => {
+    const test = await resumedOnFake();
+    test.leave(FAKE_HARNESS_ID);
+    test.sessionHost.failList('boom');
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.harness.attachCalls).toEqual([]);
+    expect(noticesOf(test).map((notice) => notice.text)).not.toContain(
+      WAITING_NOTICE,
+    );
+    // The send lists the host again, which still rejects.
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow('boom');
+    expect(test.harness.processes).toHaveLength(1);
+  });
+
+  it('harnessReturned_NotInTheRegistry_ChangesNothing', async () => {
+    const test = await started();
+    test.leave(FAKE_HARNESS_ID);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+
+    expect(test.logged).toContain(
+      'harness fake set in core.agentHarnesses but not registered',
+    );
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
+      WAITING_REFUSAL,
+    );
   });
 });

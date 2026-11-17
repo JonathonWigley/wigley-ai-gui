@@ -54,7 +54,11 @@ import {
   type SessionOrigin,
 } from '../contract';
 import { OPEN_SESSIONS_FILE } from './open-sessions';
-import { addDriveActions, chatMainPart } from './start';
+import {
+  addDriveActions,
+  chatMainPart,
+  createHarnessFollower,
+} from './start';
 import { CALLER_WAIT_MS, SUBAGENT_CALL_TEXT } from './tool-callers';
 
 // A chat holding one session, `held`, resting when `running` is false.
@@ -1727,5 +1731,87 @@ describe('chat main part on the harness', () => {
     expect(stops).toEqual({ detaches: 1, kills: 0 });
     expect(ended).toEqual(['row-1']);
     expect(openSessionsWrites()).toBe(writesBeforeStop + 1);
+  });
+});
+
+// A follower over a `core.agentHarnesses` slot that holds `claude` labelled
+// `Claude Code`, following a chat double that records each leave and return.
+function followedHarnesses() {
+  const store = createSlotStore(() => undefined);
+  const writer = store.publish(coreAgentHarnessesSlot);
+  writer.set('claude', harnessInfo({ label: 'Claude Code' }));
+  const logged: string[] = [];
+  const follower = createHarnessFollower(
+    store.read(coreAgentHarnessesSlot, 'test'),
+    (line) => logged.push(line),
+  );
+  const heard: string[] = [];
+  follower.follow({
+    harnessLeft: (harnessId) => {
+      heard.push(`left ${harnessId}`);
+    },
+    harnessReturned: (harnessId) => {
+      heard.push(`returned ${harnessId}`);
+      return Promise.resolve();
+    },
+  });
+  return { writer, follower, heard, logged };
+}
+
+describe('createHarnessFollower', () => {
+  it('start_HarnessKeyDeleted_ChatHearsTheLeave', () => {
+    const test = followedHarnesses();
+
+    test.writer.delete('claude');
+    test.writer.delete('claude');
+
+    expect(test.heard).toEqual(['left claude']);
+    expect(test.follower.labelOf('claude')).toBe('Claude Code');
+  });
+
+  it.each([
+    { given: 'a harness that left', leftFirst: true, id: 'claude' },
+    { given: 'a first registration', leftFirst: false, id: 'codex' },
+  ])(
+    'start_HarnessKeySetAfterItLeft_ChatHearsTheReturn given $given',
+    ({ leftFirst, id }) => {
+      const test = followedHarnesses();
+      if (leftFirst) {
+        test.writer.delete(id);
+      }
+
+      test.writer.set(id, harnessInfo({ label: 'Renamed' }));
+
+      expect(test.heard.at(-1)).toBe(`returned ${id}`);
+      expect(test.follower.labelOf(id)).toBe('Renamed');
+    },
+  );
+
+  it('start_PresentHarnessSetAgain_ChatHearsNeither', () => {
+    const test = followedHarnesses();
+
+    test.writer.set('claude', harnessInfo({ label: 'Claude Code 2' }));
+
+    expect(test.heard).toEqual([]);
+    expect(test.follower.labelOf('claude')).toBe('Claude Code 2');
+    expect(test.follower.labelOf('unknown')).toBe('unknown');
+  });
+
+  it('follow_ReturnRejects_LogsIt', async () => {
+    const store = createSlotStore(() => undefined);
+    const writer = store.publish(coreAgentHarnessesSlot);
+    const logged: string[] = [];
+    createHarnessFollower(store.read(coreAgentHarnessesSlot, 'test'), (line) =>
+      logged.push(line),
+    ).follow({
+      harnessLeft: () => undefined,
+      harnessReturned: () => Promise.reject(new Error('boom')),
+    });
+
+    writer.set('claude', harnessInfo());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(logged).toEqual(['harness claude not re-attached: boom']);
   });
 });

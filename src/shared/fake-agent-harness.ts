@@ -303,6 +303,19 @@ export const FAKE_PROFILES: readonly HarnessProfile[] = [
   { name: 'personal', configDir: '~/.claude-personal' },
 ];
 
+// The id, label and profiles a fake harness declares.
+export interface FakeHarnessIdentity {
+  id: string;
+  label: string;
+  profiles: readonly HarnessProfile[];
+}
+
+const FAKE_IDENTITY: FakeHarnessIdentity = {
+  id: FAKE_HARNESS_ID,
+  label: 'Fake',
+  profiles: FAKE_PROFILES,
+};
+
 // Timers for tests that never look at a fake's hold: each `set` runs its `run`
 // in a microtask, whatever its `ms`, unless `clear` took its handle first.
 export const FAKE_MICROTASK_TIMERS: Timers = (() => {
@@ -1185,10 +1198,13 @@ function fakeHistory(sessionId: string): ChatEntry[] {
 // The config folder the fake names for a session with no profile.
 export const FAKE_DEFAULT_CONFIG_FOLDER = '~/.fake-agent';
 
+// `identity` sets the harness's id, label and profiles; with none it is the
+// fake: `FAKE_HARNESS_ID`, `Fake` and `FAKE_PROFILES`.
 export function createFakeAgentHarness(
   clock: Clock,
   files: Pick<Files, 'write' | 'trash'>,
   timers: Timers,
+  identity: FakeHarnessIdentity = FAKE_IDENTITY,
 ): FakeAgentHarness {
   const processes: FakeAgentProcessRecord[] = [];
   const attachCalls: AgentStart[] = [];
@@ -2063,9 +2079,9 @@ export function createFakeAgentHarness(
   }
 
   const harness: FakeAgentHarness = {
-    id: FAKE_HARNESS_ID,
+    id: identity.id,
     info: () => ({
-      label: 'Fake',
+      label: identity.label,
       capabilities: {
         interrupt: true,
         resume: true,
@@ -2074,7 +2090,7 @@ export function createFakeAgentHarness(
       },
       clearAliases: ['reset'],
       projectConfigFolder: '.claude',
-      profiles: FAKE_PROFILES,
+      profiles: identity.profiles,
     }),
     controls: () => startingControls({}),
     toolUseIdOf(meta) {

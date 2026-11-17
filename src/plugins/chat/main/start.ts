@@ -1,9 +1,14 @@
 import path from 'node:path';
 import type {
+  AgentHarnessInfo,
   AgentHarnessRegistry,
   PermissionDecision,
 } from '../../../contracts/agent';
-import type { Registrations } from '../../../contracts/disposable';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type {
+  Disposable,
+  Registrations,
+} from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type {
   DriveHost,
@@ -13,13 +18,17 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
+import type { KeyedSlotReader } from '../../../contracts/state';
 import {
   argsObject,
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
-import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
+import {
+  createFakeAgentHarness,
+  isFakeAgentHarness,
+} from '../../../shared/fake-agent-harness';
 import { isSameJson } from '../../../shared/json';
 import {
   type SessionsMainEvents,
@@ -51,7 +60,7 @@ import { createOpenSessions } from './open-sessions';
 import { createChatPreview } from './preview/chat-preview';
 import { createPoolProviders, projectOf, readProjects } from './projects';
 import { createRecentFolders } from './recent-folders';
-import { chatSelfTestScript } from './selftest-script';
+import { chatSelfTestScript, RETURN_FIXTURE_IDENTITY } from './selftest-script';
 import { SET_HEADLESS_TOOL, setHeadlessToolSession } from './set-headless-tool';
 import { callerGuard, createToolCallers } from './tool-callers';
 import {
@@ -246,12 +255,56 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
   });
 }
 
+// Chat's view of `core.agentHarnesses`: the ids present when it was made and
+// the last label read for each id. `follow` tells `chat` of each later change: a
+// present id's key deleted is a leave, a key set for an id not present (a first
+// registration included) a return, and a present id's key set again (a
+// refresh) neither. `labelOf` is the last label read for an id, else the id.
+export interface HarnessFollower {
+  labelOf(harnessId: string): string;
+  follow(
+    chat: Pick<ChatSessions, 'harnessLeft' | 'harnessReturned'>,
+  ): Disposable;
+}
+
+export function createHarnessFollower(
+  slot: KeyedSlotReader<AgentHarnessInfo>,
+  log: (line: string) => void,
+): HarnessFollower {
+  const present = new Set(slot.all().keys());
+  const labels = new Map(
+    [...slot.all()].map(([harnessId, info]) => [harnessId, info.label]),
+  );
+  return {
+    labelOf: (harnessId) => labels.get(harnessId) ?? harnessId,
+    follow: (chat) =>
+      slot.on((harnessId, info) => {
+        if (info === undefined) {
+          if (present.delete(harnessId)) {
+            chat.harnessLeft(harnessId);
+          }
+          return;
+        }
+        labels.set(harnessId, info.label);
+        if (present.has(harnessId)) {
+          return;
+        }
+        present.add(harnessId);
+        chat.harnessReturned(harnessId).catch((error: unknown) => {
+          log(`harness ${harnessId} not re-attached: ${errorText(error)}`);
+        });
+      }),
+  };
+}
+
 // Starts, resumes and runs the agent sessions the page asks for, each on its
 // harness (a new one on the `defaultHarness` setting's, or its profile's), keeps
 // the open ones saved with their titles and queued messages, and on start
 // restores them, re-attaching each to its process the session host still runs,
 // holding relay connects until the rows are open, and on a restart keeps
-// their rows for the restarted part's restore to adopt; stops every process on
+// their rows for the restarted part's restore to adopt; lets a harness's
+// sessions wait, detached, while it is gone from `core.agentHarnesses` and
+// re-attaches them when it is back; stops every process on
 // request, leaves them running on quit, tells the host how long to keep idle
 // ones, asks every session it starts to name its row, lists and archives
 // the saved ones, shows their processes' permission requests and hands the
@@ -325,8 +378,13 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       returned: api.state.publish(chatReturnedSlot),
     });
     const toolCallers = createToolCallers(services.timers);
+    const harnessFollower = createHarnessFollower(
+      api.state.read(coreAgentHarnessesSlot),
+      services.log,
+    );
     const chat = createChatSessions({
       harnesses: services.agentHarnesses,
+      harnessLabelOf: (harnessId) => harnessFollower.labelOf(harnessId),
       sessions,
       selectedSessionId: () => selection.get() ?? null,
       recent,
@@ -347,6 +405,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       homeDir: services.homeDir,
       paths: services.paths,
     });
+    harnessFollower.follow(chat);
     const namer = sessions.addProjectNamer(
       (projectDir) =>
         projectOf(
@@ -547,16 +606,24 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       projects = readProjects(projectSettings, services.log);
       namer.changed();
     });
-    services.selfTest?.run(
-      chatSelfTestScript({
-        homeDir: services.homeDir,
-        files: services.files,
-        chat,
-        sessions,
-        harnesses: services.agentHarnesses,
-        defaultHarness: () => api.settings().defaultHarness,
-      }),
-    );
+    if (services.selfTest !== null) {
+      services.selfTest.run(
+        chatSelfTestScript({
+          homeDir: services.homeDir,
+          files: services.files,
+          chat,
+          sessions,
+          harnesses: services.agentHarnesses,
+          defaultHarness: () => api.settings().defaultHarness,
+          returnFixture: createFakeAgentHarness(
+            services.clock,
+            services.files,
+            services.timers,
+            RETURN_FIXTURE_IDENTITY,
+          ),
+        }),
+      );
+    }
     if (api.drive !== null) {
       addDriveActions(api.drive, {
         services,
