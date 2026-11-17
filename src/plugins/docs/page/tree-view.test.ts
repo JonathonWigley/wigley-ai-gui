@@ -194,6 +194,7 @@ describe('createTreeView', () => {
           ? {
               ...drawn,
               dispose() {
+                drawn.dispose();
                 throw new Error('pane gone');
               },
             }

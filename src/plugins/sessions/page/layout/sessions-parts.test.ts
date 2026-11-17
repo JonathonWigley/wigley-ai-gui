@@ -928,11 +928,6 @@ describe('sessions parts', () => {
       'sessions.splitDown': 1,
       'sessions.closePane': 1,
       'sessions.showMode': 2,
-      'sessions.listFavorite': 2,
-      'sessions.listMoveUp': 1,
-      'sessions.listMoveDown': 1,
-      'sessions.listRename': 2,
-      'sessions.listClose': 2,
     });
   });
 

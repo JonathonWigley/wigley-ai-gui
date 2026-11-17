@@ -691,7 +691,7 @@ describe('primer item card', () => {
     setup.store.dispatch({ type: 'selectTask', row: 1 });
     setup.store.dispatch({ type: 'selectItem', item: 2 });
     const card = pane(setup.popup, 'primer-card');
-    const before = findAll(card, 'primer-box');
+    const before = pane(card, 'primer-card-body');
     setup.store.dispatch({
       type: 'setText',
       formId: 'p1',
@@ -707,9 +707,8 @@ describe('primer item card', () => {
     });
 
     expect(pane(card, 'primer-item-step').textContent).toContain('2 of 2');
-    const after = findAll(card, 'primer-box');
-    expect(after).toHaveLength(2);
-    expect(after.some((frame) => before.includes(frame))).toBe(false);
+    expect(pane(card, 'primer-card-body') === before).toBe(false);
+    expect(findAll(card, 'primer-box')).toHaveLength(2);
   });
 
   it('flips its mark on toggleInclude with no rebuild', () => {

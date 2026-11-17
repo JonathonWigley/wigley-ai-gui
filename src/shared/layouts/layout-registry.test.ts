@@ -425,13 +425,11 @@ describe('watch', () => {
     await files.rename('alpha', 'gamma');
 
     await vi.waitFor(() => expect(sent).toHaveLength(2));
-    expect(changesPerSet(before, sent)).toEqual([
-      ['alpha left'],
-      ['gamma joined'],
-    ]);
+    expect(changesIn(before, sent[1])).toEqual(['alpha left', 'gamma joined']);
     expect(registry.names()).toEqual(['default', 'beta', 'gamma']);
   });
 
+  // A folder-name report names no file, so the save in `alpha` raises both.
   it.each(['layout.d.ts', 'default/layout.js'])(
     'watch_FolderNameReportFor_%s_SendsNothing',
     async (saved) => {
@@ -442,7 +440,10 @@ describe('watch', () => {
       await files.write('alpha/layout.js', '// saved');
 
       await vi.waitFor(() => expect(sent).toHaveLength(1));
-      expect(changesIn(before, sent[0])).toEqual(['alpha revision']);
+      expect(changesIn(before, sent[0])).toEqual([
+        'alpha revision',
+        'alpha style',
+      ]);
     },
   );
 

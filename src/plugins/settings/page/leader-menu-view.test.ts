@@ -126,7 +126,11 @@ function shownMenu(
         box: document.createElement('div'),
       };
     },
-    drawPrompt: () => () => undefined,
+    drawPrompt(at) {
+      const prompt = document.createElement('span');
+      at.append(prompt);
+      return () => prompt.remove();
+    },
     setScope: (scope) => scopes.push(scope),
     setFocusTarget: (target) => targets.push(target),
     redraw: () => view.draw(parent),

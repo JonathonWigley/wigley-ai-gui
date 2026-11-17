@@ -533,7 +533,8 @@ describe('createSettingsView', () => {
       const { view, sheet } = await shownView({ refusals: [...refusals] });
       view.commands.edit();
       await settle();
-      const input = only(sheet, 'settings-box-input') as FocusFakeElement;
+      const box = only(sheet, 'settings-box');
+      const input = only(box, 'settings-box-input') as FocusFakeElement;
       input.value = 'typed';
       for (let attempt = 0; attempt < refusals.length; attempt += 1) {
         view.commands.boxAccept();
