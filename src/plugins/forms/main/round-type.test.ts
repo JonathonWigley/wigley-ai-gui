@@ -1,6 +1,3 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentFormOwnerInfo } from '../../../contracts/agent-forms';
 import { NO_FORM_WAKE } from '../../../shared/agent-forms/chat-wake';
@@ -13,6 +10,10 @@ import {
 } from '../../../shared/agent-forms/form-store';
 import { globalTimers } from '../../../shared/agent-forms/global-timers.test-support';
 import { ScriptedFormPresenter } from '../../../shared/agent-forms/scripted-presenter';
+import {
+  createMemoryFiles,
+  type MemoryFiles,
+} from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   AnswerEntry,
@@ -107,7 +108,8 @@ function oneAnswer(entry: Partial<AnswerEntry>, note = ''): FormBody {
 
 const HALF_BODY = oneAnswer({ choice: 2, notes: 'half done' });
 
-let roundsDir: string;
+const roundsDir = '/rounds';
+let files: MemoryFiles;
 let nowMs: number;
 let hexCount: number;
 let presenter: ScriptedFormPresenter<Round, FormBody>;
@@ -133,10 +135,10 @@ function live(): AbortSignal {
   return new AbortController().signal;
 }
 
-function savedFile(roundId: string): Record<string, unknown> {
-  return JSON.parse(
-    readFileSync(path.join(roundsDir, `${roundId}.json`), 'utf8'),
-  );
+// The round's file once every queued write has landed.
+async function savedFile(roundId: string): Promise<Record<string, unknown>> {
+  await store.flushed();
+  return JSON.parse(await files.read(`${roundsDir}/${roundId}.json`));
 }
 
 // The draft the latest shown round opened with, which the test expects to exist.
@@ -181,12 +183,13 @@ function watch(pending: Promise<AnswersPayload>): { settled: boolean } {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  roundsDir = mkdtempSync(path.join(tmpdir(), 'wigley-round-type-'));
   nowMs = 1_000_000;
+  files = createMemoryFiles({ now: () => nowMs });
   hexCount = 0;
   presenter = new ScriptedFormPresenter();
   layoutNames = ['default'];
   store = createFolderFormStore({
+    files,
     dir: roundsDir,
     clock: { now: () => nowMs },
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
@@ -197,7 +200,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-  rmSync(roundsDir, { recursive: true, force: true });
 });
 
 describe('roundType', () => {
@@ -272,7 +274,8 @@ describe('layouts a round names', () => {
 
     await expect(rejection).rejects.toBeInstanceOf(RoundError);
     expect(presenter.shown).toEqual([]);
-    expect(readdirSync(roundsDir)).toEqual([]);
+    await store.flushed();
+    expect(await files.list(roundsDir)).toEqual([]);
   });
 
   it('fails a round naming a layout the folder lacks before it queues behind an open round', async () => {
@@ -356,7 +359,7 @@ describe('saved rounds from an earlier app run', () => {
     await expect(failed).rejects.toThrow('Old review');
     await expect(failed).rejects.toThrow(`${record.id}.json`);
     await expect(failed).rejects.toThrow('origin');
-    expect(savedFile(record.id).returned).toBe(false);
+    expect((await savedFile(record.id)).returned).toBe(false);
   });
 });
 

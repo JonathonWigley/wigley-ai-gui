@@ -131,13 +131,4 @@ describe('createMemoryFormStore', () => {
     expect(subject.newestUnreturnedFinished(MINE, NONE)).toBeNull();
     expect(record.updated).toBe(2000);
   });
-
-  it('prune_KeepsEveryForm', () => {
-    const subject = store();
-    const record = subject.create(MINE, 'f1', {}, null, null);
-
-    subject.prune();
-
-    expect(subject.newestFor('f1')).toBe(record);
-  });
 });

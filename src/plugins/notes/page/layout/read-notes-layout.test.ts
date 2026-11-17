@@ -19,6 +19,11 @@ describe('readNotesLayout', () => {
       module: { default: { image: 'x' } },
       names: 'image is not a function',
     },
+    {
+      case: 'a cursor prompt that is not a function',
+      module: { default: { cursorPrompt: 'x' } },
+      names: 'cursorPrompt is not a function',
+    },
   ])('readNotesLayout_BadShape_ThrowsNamingIt ($case)', ({ module, names }) => {
     expect(() => readNotesLayout(module, 'mine')).toThrow(
       new RegExp(`^layout mine: .*${names}`),

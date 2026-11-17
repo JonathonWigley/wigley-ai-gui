@@ -39,6 +39,11 @@ describe('pageKeysFor', () => {
       'g',
       'G',
     ]);
+    expect(pageKeysFor('<C-/><F5><C-lt>', '<Space>')).toEqual([
+      '<C-/>',
+      '<F5>',
+      '<C-lt>',
+    ]);
   });
 
   it('spells <Leader> as the leader first', () => {
@@ -46,8 +51,8 @@ describe('pageKeysFor', () => {
   });
 
   it('throws naming a <…> token the page has no key for', () => {
-    expect(() => pageKeysFor('<F5>', '<Space>')).toThrow(
-      '<F5> is not a key the page can bind.',
+    expect(() => pageKeysFor('<Insert>', '<Space>')).toThrow(
+      '<Insert> is not a key the page can bind.',
     );
   });
 
@@ -75,6 +80,10 @@ describe('isChordKeys', () => {
     ['<Tab>', true],
     ['<tab>', true],
     ['<s-Tab>', true],
+    ['<F5>', true],
+    ['<C-/>', true],
+    ['<A-Up>', true],
+    ['<Up>', false],
     ['<Leader>', false],
     ['g<Tab>', false],
     ['<Esc>', false],

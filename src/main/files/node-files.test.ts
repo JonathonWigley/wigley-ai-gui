@@ -34,8 +34,11 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-// When set, `link` runs this in place of the real call.
+// When set, `link` and `rename` run these in place of the real calls.
 const linkStandIn = vi.hoisted(() => ({
+  current: null as ((from: string, to: string) => Promise<void>) | null,
+}));
+const renameStandIn = vi.hoisted(() => ({
   current: null as ((from: string, to: string) => Promise<void>) | null,
 }));
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -44,8 +47,21 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...fs,
     link: (from: string, to: string) =>
       (linkStandIn.current ?? fs.link)(from, to),
+    rename: (from: string, to: string) =>
+      (renameStandIn.current ?? fs.rename)(from, to),
   };
 });
+
+// Each wait the adapter asks `node:timers/promises` for, which resolves at
+// once.
+const delays = vi.hoisted(() => [] as number[]);
+vi.mock('node:timers/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:timers/promises')>()),
+  setTimeout: (ms: number) => {
+    delays.push(ms);
+    return Promise.resolve();
+  },
+}));
 
 const QUIET_MS = 100;
 
@@ -62,6 +78,8 @@ function waitMs(ms: number): Promise<void> {
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), 'wigley-node-files-'));
   linkStandIn.current = null;
+  renameStandIn.current = null;
+  delays.length = 0;
 });
 
 // Whether `folder`'s volume finds a name in any case.
@@ -117,6 +135,91 @@ describe('createNodeFiles', () => {
     expect(await files.list(root)).toEqual([{ path: 'z.txt', kind: 'file' }]);
     expect(await files.read(file)).toBe('second');
   });
+
+  // Breaks on no retry, a retry on any code, an off-by-one in the try count,
+  // or the temp file left after the last failure.
+  it.each<{
+    method: 'write' | 'writeBytes';
+    code: string;
+    times: number;
+    result: string;
+    rejects: boolean;
+    expected: string | number[];
+    waits: number[];
+  }>([
+    {
+      method: 'write',
+      code: 'EPERM',
+      times: 2,
+      result: 'writes the new text',
+      rejects: false,
+      expected: 'new',
+      waits: [10, 20],
+    },
+    {
+      method: 'writeBytes',
+      code: 'EBUSY',
+      times: 1,
+      result: 'writes the new bytes',
+      rejects: false,
+      expected: [1, 2],
+      waits: [10],
+    },
+    {
+      method: 'write',
+      code: 'EPERM',
+      times: 5,
+      result: 'rejects and keeps the old text',
+      rejects: true,
+      expected: 'old',
+      waits: [10, 20, 40, 80],
+    },
+    {
+      method: 'write',
+      code: 'EACCES',
+      times: 1,
+      result: 'rejects at once and keeps the old text',
+      rejects: true,
+      expected: 'old',
+      waits: [],
+    },
+  ])(
+    '$method with a rename failing $code $times times $result',
+    async ({ method, code, times, rejects, expected, waits }) => {
+      const file = path.join(root, 'z.txt');
+      writeFileSync(file, 'old');
+      const actual =
+        await vi.importActual<typeof import('node:fs/promises')>(
+          'node:fs/promises',
+        );
+      let failures = 0;
+      renameStandIn.current = async (from, to) => {
+        if (failures < times) {
+          failures += 1;
+          throw Object.assign(new Error(`rename failed: ${code}`), { code });
+        }
+        await actual.rename(from, to);
+      };
+
+      const written =
+        method === 'write'
+          ? files.write(file, 'new')
+          : files.writeBytes(file, new Uint8Array([1, 2]));
+      const error = await written.then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+
+      expect(rejects ? errorCode(error) : error).toBe(rejects ? code : null);
+      const stored =
+        typeof expected === 'string'
+          ? await files.read(file)
+          : [...(await files.readBytes(file))];
+      expect(stored).toEqual(expected);
+      expect(await files.list(root)).toEqual([{ path: 'z.txt', kind: 'file' }]);
+      expect(delays).toEqual(waits);
+    },
+  );
 
   it('readBytes_FileWrittenToDisk_ReturnsTheSameBytes', async () => {
     const file = path.join(root, 'shot.png');

@@ -1,6 +1,9 @@
 import type {
   BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
   KitRowOptions,
+  PromptActionInput,
 } from '../../../shared/page/layout-host/kit';
 
 // The contract of a notes layout: the note popup's field rows and their values, the image entries, the action
@@ -9,8 +12,9 @@ import type {
 // `data-layout-owner="notes"` on that root. A layout's `layout.css` restyles under
 // `[data-layout-owner="notes"][data-layout="<name>"]`.
 //
-// The app keeps the dialog frames and titles, the title box and the body editor, the markup editor, the cursor
-// prompt (moved to the selected row), `is-cursor` on the rows, and the picker's panel, title, filter and cursor.
+// The app keeps the dialogs' scrims, keys and focus, the title box and the body editor, the markup editor,
+// `is-cursor` on the rows, and the picker's panel, title, filter and cursor.
+// `dialogFrame` draws each dialog's panel, title and actions row.
 //
 // The app's container lays out each part's root as one item: the fields grid a `row`, the row's value slot (a
 // wrapping flex line) a value part, the dialog's actions row `actions`, the confirmation's body `confirm`, and the
@@ -31,8 +35,13 @@ import type {
 // click on a `pickerRow` root, the click dropped while the root is `is-disabled`, so the row gives `kit.row` no
 // `onClick`.
 //
-// Kit scopes: rows, values, images and actions `notes.popup`; `confirm` `notes.confirm`; `markupToolbar`
-// `notes.markup`; `pickerRow` `notes.picker`.
+// The selected field's cursor prompt is the `cursorPrompt` part: the app draws it at the end of that field's row root
+// and draws it again when the field moves or a target changes, with no row drawing again. A layout that leaves
+// `cursorPrompt` out draws it with `default`; a `cursorPrompt` that draws no hint shows no prompt.
+//
+// Kit scopes: rows, values, images, actions and `cursorPrompt` `notes.popup`; `confirm` `notes.confirm`; `markupToolbar`
+// `notes.markup`; `pickerRow` `notes.picker`; `dialogFrame` `notes.popup` for the Note popup, `notes.confirm` for the
+// discard confirmation.
 
 export type NoteField =
   | 'target'
@@ -82,6 +91,16 @@ export interface SessionInput {
 export interface PickerRowInput {
   picker: 'Target' | 'Tags' | 'Session' | 'Follow-up';
   label: string;
+}
+
+// One action of the cursor prompt, `command` a qualified id (`notes.editBox`, `notes.remove`). `hasTarget` is false
+// when the selected field has nothing for the action to act on: the prompt shows both actions in order, and a layout
+// dims the one with no target, keeping its space.
+export interface NotesPromptActionInput extends PromptActionInput {
+  hasTarget: boolean;
+}
+export interface CursorPromptInput {
+  actions: readonly NotesPromptActionInput[];
 }
 
 // A part's root, appended to `parent`.
@@ -162,6 +181,22 @@ export interface Layout {
     input: PickerRowInput,
     kit: PickerRowKit,
   ): NotesPart;
+  // The selected field's prompt, drawn at the end of that field's row root: one key hint per action.
+  cursorPrompt?(
+    parent: HTMLElement,
+    input: CursorPromptInput,
+    kit: NotesKit,
+  ): NotesPart;
+  // The frame of the Note popup and the discard confirmation: the panel, its title (`input.title`) and, when
+  // `input.hasActions`, its actions row. Return the panel, appended to `parent`, with `body` and `actions` inside it;
+  // the app fills them. The app keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or
+  // `actions` is not inside its panel, or whose `actions` is not null exactly when `hasActions` is false, draws with
+  // `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: NotesKit,
+  ): DialogFramePart;
 }
 
 // The built-in `default` layout defines every part.

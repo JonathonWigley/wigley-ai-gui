@@ -3,6 +3,7 @@ import type { LayoutOwner } from '../../../contracts/layouts';
 import type { PluginLog } from '../../../contracts/log';
 import { callEach } from '../../call-each';
 import { errorText } from '../../error-text';
+import type { DialogFrameInput, DialogFramePart } from '../ui/dialog';
 
 // The layout picked to draw a part, and its name.
 export interface PartPick<L> {
@@ -118,6 +119,53 @@ export function requireElementIn(
     throw new Error(`${partName}'s element is not appended to parent`);
   }
   return element;
+}
+
+// A layout's dialog frame must hold its `body` and, exactly when
+// `input.hasActions`, its `actions` inside `element`, apart from each other;
+// `drawPart` checks `element` itself, so a frame whose `element` is no element
+// returns unchecked past the first rule. Throws, in this order:
+// `<partName> returned no frame`, `<partName> body is not inside its element`,
+// `<partName> drew actions for a dialog with none`,
+// `<partName> actions is not inside its element`,
+// `<partName> body and actions overlap`.
+export function requireDialogFrame(
+  frame: unknown,
+  input: DialogFrameInput,
+  partName: string,
+): DialogFramePart {
+  if (typeof frame !== 'object' || frame === null) {
+    throw new Error(`${partName} returned no frame`);
+  }
+  const { element, body, actions } = frame as Partial<
+    Record<keyof DialogFramePart, unknown>
+  >;
+  if (!(element instanceof HTMLElement)) {
+    return frame as DialogFramePart;
+  }
+  if (!isInside(element, body)) {
+    throw new Error(`${partName} body is not inside its element`);
+  }
+  if (!input.hasActions) {
+    if (actions !== null) {
+      throw new Error(`${partName} drew actions for a dialog with none`);
+    }
+    return { element, body, actions };
+  }
+  if (!isInside(element, actions)) {
+    throw new Error(`${partName} actions is not inside its element`);
+  }
+  if (body.contains(actions) || actions.contains(body)) {
+    throw new Error(`${partName} body and actions overlap`);
+  }
+  return { element, body, actions };
+}
+
+// Whether `node` is an element under `element`, not `element` itself.
+function isInside(element: HTMLElement, node: unknown): node is HTMLElement {
+  return (
+    node instanceof HTMLElement && node !== element && element.contains(node)
+  );
 }
 
 // One build of `builder` into the parent with a fresh recorder, checked and

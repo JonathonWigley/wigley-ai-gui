@@ -21,6 +21,7 @@ export function createMemoryFormStore(
     record.updated = clock.now() / 1000;
   };
   return {
+    load: () => Promise.resolve(),
     create: (owner, fingerprint, args, body, toolUseId) => {
       const record = openRecord(
         owner,
@@ -42,11 +43,11 @@ export function createMemoryFormStore(
       return record;
     },
     saveBody: (record, body) => {
-      if (isFinished(record)) {
-        return;
+      if (!isFinished(record)) {
+        record.body = body;
+        stamp(record);
       }
-      record.body = body;
-      stamp(record);
+      return Promise.resolve();
     },
     finish: (record, outcome, body) => {
       record.body = body;
@@ -58,6 +59,6 @@ export function createMemoryFormStore(
       stamp(record);
     },
     ...formQueries(() => records, paths),
-    prune: () => undefined,
+    flushed: () => Promise.resolve(),
   };
 }

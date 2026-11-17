@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type DroppedFile, NOTHING_TAKES_FILES } from '../../contracts/drops';
 import type {
   EditorEvents,
@@ -13,6 +13,15 @@ import {
   keepFocusedBox,
 } from './editor-boxes';
 import { insertionText } from './file-drop/file-chips';
+import { installFocusFakeDom, ScrollerFakeElement } from './test-dom';
+
+beforeEach(() => {
+  installFocusFakeDom(vi.stubGlobal, ScrollerFakeElement);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 interface TestBox {
   formId: string;
@@ -25,22 +34,33 @@ interface FakeEditor extends TextEditor {
   blurCalls: number;
   isDestroyed: boolean;
   inserts: string[];
+  setTexts: string[];
 }
 
 // Focus and blur fire their events, as a real editor's DOM focus does; every
 // cursor sits after an `x`.
 function fakeHost() {
-  const created: { events: EditorEvents; editor: FakeEditor }[] = [];
+  const created: {
+    parent: HTMLElement;
+    doc: string;
+    events: EditorEvents;
+    editor: FakeEditor;
+  }[] = [];
   const host: EditorHost = {
-    create(_parent, doc, events) {
+    create(parent, doc, events) {
+      let text = doc;
       const editor: FakeEditor = {
         focusCalls: 0,
         focusOptions: [],
         blurCalls: 0,
         isDestroyed: false,
         inserts: [],
-        text: () => doc,
-        setText: () => undefined,
+        setTexts: [],
+        text: () => text,
+        setText: (value) => {
+          editor.setTexts.push(value);
+          text = value;
+        },
         insert: (text) => {
           editor.inserts.push(text);
         },
@@ -58,7 +78,7 @@ function fakeHost() {
           editor.isDestroyed = true;
         },
       };
-      created.push({ events, editor });
+      created.push({ parent, doc, events, editor });
       return editor;
     },
     createDocument: () => {
@@ -101,6 +121,10 @@ function emptySetup() {
     identity,
   );
   return { boxes, created, changes, activated, logs };
+}
+
+function div(): HTMLElement {
+  return document.createElement('div');
 }
 
 function setup() {
@@ -213,6 +237,293 @@ describe('createEditorBoxes', () => {
     expect(() => boxes.focus({ formId: 'f9', key: 'f9/note' })).toThrow(
       /f9\/note/,
     );
+    expect(() => boxes.place(div(), reason, '')).toThrow(
+      /mounted without a frame/,
+    );
+    expect(() => boxes.release(reason)).toThrow(/mounted without a frame/);
+    boxes.destroyBox(notes);
+    boxes.place(div(), notes, '');
+    boxes.release(notes);
+    expect(() => boxes.focus(notes)).toThrow(/f1\/notes/);
+  });
+
+  it('place_FirstCall_MountsTheEditorInAFrameItOwns', () => {
+    const { boxes, created } = emptySetup();
+    const first = div();
+
+    const frame = boxes.place(first, notes, 'a');
+
+    expect(created).toHaveLength(1);
+    expect(frame.classList.contains('ui-input')).toBe(true);
+    expect(frame.parentNode).toBe(first);
+    expect(created[0].parent).toBe(frame);
+    expect(created[0].doc).toBe('a');
+  });
+
+  it.each<{ steps: string; releases: boolean }>([
+    { steps: 'release, then place into a second parent', releases: true },
+    { steps: 'place into a second parent with no release', releases: false },
+  ])(
+    'place_AfterRelease_MovesTheFrameAndKeepsTheEditor: $steps',
+    ({ releases }) => {
+      const { boxes, created } = emptySetup();
+      const frame = boxes.place(div(), notes, 'a');
+      const second = div();
+
+      if (releases) {
+        boxes.release(notes);
+      }
+      const moved = boxes.place(second, notes, 'a');
+
+      expect(created).toHaveLength(1);
+      expect(moved).toBe(frame);
+      expect(frame.parentNode).toBe(second);
+      expect(created[0].editor.isDestroyed).toBe(false);
+      expect(created[0].editor.setTexts).toEqual([]);
+    },
+  );
+
+  // Each row starts on the box placed in `first` with text `a`, and focused.
+  it.each<{
+    steps: string;
+    act: (
+      boxes: ReturnType<typeof emptySetup>['boxes'],
+      second: HTMLElement,
+    ) => void;
+    setTexts: string[];
+    frameIn: 'first' | 'second' | 'nothing';
+    isFocused: boolean;
+  }>([
+    {
+      steps: 'place b again with no release',
+      act: (boxes, second) => boxes.place(second, notes, 'b'),
+      setTexts: ['b'],
+      frameIn: 'second',
+      isFocused: true,
+    },
+    {
+      steps: 'release, then place b',
+      act: (boxes, second) => {
+        boxes.release(notes);
+        boxes.place(second, notes, 'b');
+      },
+      setTexts: ['b'],
+      frameIn: 'second',
+      isFocused: false,
+    },
+    {
+      steps: 'setText b',
+      act: (boxes) => boxes.setText(notes, 'b'),
+      setTexts: ['b'],
+      frameIn: 'first',
+      isFocused: true,
+    },
+    {
+      steps: 'setText a, the text it holds',
+      act: (boxes) => boxes.setText(notes, 'a'),
+      setTexts: [],
+      frameIn: 'first',
+      isFocused: true,
+    },
+    {
+      steps: 'release, then setText b',
+      act: (boxes) => {
+        boxes.release(notes);
+        boxes.setText(notes, 'b');
+      },
+      setTexts: [],
+      frameIn: 'nothing',
+      isFocused: false,
+    },
+  ])(
+    'newText_HeldBox_SetsThePlacedEditorsText: $steps',
+    ({ act, setTexts, frameIn, isFocused }) => {
+      const { boxes, created, changes } = emptySetup();
+      const first = div();
+      const second = div();
+      const frame = boxes.place(first, notes, 'a');
+      boxes.focus(notes);
+
+      act(boxes, second);
+
+      const parents = { first, second, nothing: null };
+      expect(created).toHaveLength(1);
+      expect(created[0].editor.setTexts).toEqual(setTexts);
+      expect(changes).toEqual([]);
+      expect(frame.parentNode).toBe(parents[frameIn]);
+      expect(boxes.active()).toEqual(isFocused ? notes : null);
+      expect(created[0].editor.blurCalls).toBe(0);
+    },
+  );
+
+  // Each row starts on the box placed with its scroller at 40.
+  it.each<{
+    steps: string;
+    act: (
+      boxes: ReturnType<typeof emptySetup>['boxes'],
+      scroller: HTMLElement,
+    ) => void;
+    scrollTop: number;
+  }>([
+    {
+      steps: 'release, then place',
+      act: (boxes, scroller) => {
+        boxes.release(notes);
+        expect(scroller.scrollTop).toBe(0);
+        boxes.place(div(), notes, 'a');
+      },
+      scrollTop: 40,
+    },
+    {
+      steps: 'place again with no release',
+      act: (boxes) => {
+        boxes.place(div(), notes, 'a');
+      },
+      scrollTop: 40,
+    },
+    {
+      steps: 'release, place, scroll to 70, place again with no release',
+      act: (boxes, scroller) => {
+        boxes.release(notes);
+        boxes.place(div(), notes, 'a');
+        scroller.scrollTop = 70;
+        boxes.place(div(), notes, 'a');
+      },
+      scrollTop: 70,
+    },
+  ])('place_HeldBox_KeepsItsLastScroll: $steps', ({ act, scrollTop }) => {
+    const { boxes } = emptySetup();
+    const frame = boxes.place(div(), notes, 'a');
+    // Stands for the scroller the host's editor DOM holds.
+    const scroller = div();
+    scroller.className = 'cm-scroller';
+    frame.append(scroller);
+    scroller.scrollTop = 40;
+
+    act(boxes, scroller);
+
+    expect(scroller.scrollTop).toBe(scrollTop);
+  });
+
+  it('release_FocusedBox_DetachesItsFrameAndClearsTheFocus', () => {
+    const { boxes, created } = emptySetup();
+    const frame = boxes.place(div(), notes, 'a');
+    boxes.focus(notes);
+    let calls = 0;
+    boxes.onChange(() => calls++);
+
+    boxes.release(notes);
+
+    expect(frame.parentNode).toBeNull();
+    expect(boxes.active()).toBeNull();
+    expect(boxes.activeMode()).toBeNull();
+    expect(boxes.boxOf(created[0].editor)).toBeUndefined();
+    expect(calls).toBe(1);
+    expect(boxes.isMounted(notes)).toBe(false);
+    expect(created[0].editor.isDestroyed).toBe(false);
+    boxes.place(div(), notes, 'a');
+    expect(boxes.isMounted(notes)).toBe(true);
+  });
+
+  it.each<{
+    steps: string;
+    before: (boxes: ReturnType<typeof emptySetup>['boxes']) => void;
+  }>([
+    { steps: 'never mounted', before: () => undefined },
+    {
+      steps: 'already released',
+      before: (boxes) => {
+        boxes.place(div(), notes, '');
+        boxes.focus(notes);
+        boxes.release(notes);
+      },
+    },
+    {
+      steps: 'destroyed',
+      before: (boxes) => {
+        boxes.place(div(), notes, '');
+        boxes.destroyBox(notes);
+      },
+    },
+  ])('release_BoxNotPlaced_DoesNothing: $steps', ({ before }) => {
+    const { boxes } = emptySetup();
+    before(boxes);
+    let calls = 0;
+    boxes.onChange(() => calls++);
+
+    boxes.release(notes);
+
+    expect(calls).toBe(0);
+  });
+
+  it('destroyReleased_DestroysOnlyTheFormsReleasedBoxes', () => {
+    const { boxes, created } = emptySetup();
+    const notesFrame = boxes.place(div(), notes, '');
+    boxes.place(div(), reason, '');
+    boxes.place(div(), other, '');
+    boxes.release(other);
+
+    boxes.release(reason);
+    boxes.destroyReleased('f1');
+
+    expect(created.map((entry) => entry.editor.isDestroyed)).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect(notesFrame.parentNode).not.toBeNull();
+    expect(boxes.isMounted(notes)).toBe(true);
+    expect(boxes.isMounted(other)).toBe(false);
+    // `reason` mounts anew; `other` moves its kept editor.
+    boxes.place(div(), reason, '');
+    boxes.place(div(), other, '');
+    expect(created).toHaveLength(4);
+  });
+
+  it.each<{
+    steps: string;
+    act: (boxes: ReturnType<typeof emptySetup>['boxes']) => void;
+  }>([
+    { steps: 'destroyBox(notes)', act: (boxes) => boxes.destroyBox(notes) },
+    { steps: "destroyForm('f1')", act: (boxes) => boxes.destroyForm('f1') },
+    {
+      steps: "release(notes), destroyReleased('f1')",
+      act: (boxes) => {
+        boxes.release(notes);
+        boxes.destroyReleased('f1');
+      },
+    },
+  ])('destroy_PlacedBox_RemovesItsFrame: $steps', ({ act }) => {
+    const { boxes, created } = emptySetup();
+    const frame = boxes.place(div(), notes, '');
+
+    act(boxes);
+
+    expect(created[0].editor.isDestroyed).toBe(true);
+    expect(frame.parentNode).toBeNull();
+  });
+
+  it.each<{
+    steps: string;
+    before: (boxes: ReturnType<typeof emptySetup>['boxes']) => void;
+  }>([
+    { steps: 'never mounted', before: () => undefined },
+    {
+      steps: 'already destroyed',
+      before: (boxes) => {
+        boxes.mount(parent, notes, '');
+        boxes.destroyBox(notes);
+      },
+    },
+  ])('destroyBox_KeyNoEditorHolds_DoesNothing: $steps', ({ before }) => {
+    const { boxes } = emptySetup();
+    before(boxes);
+    let calls = 0;
+    boxes.onChange(() => calls++);
+
+    boxes.destroyBox(notes);
+
+    expect(calls).toBe(0);
   });
 });
 
@@ -243,16 +554,101 @@ describe('keepFocusedBox', () => {
     expect(created[2].editor.focusOptions).toEqual([undefined]);
   });
 
-  it('brings a box in insert mode back in insert mode at its end', () => {
-    const { boxes, created, rebuildWith } = keepSetup();
-    boxes.mount(parent, notes, '');
+  // `focused` is the index in `created` of the editor the refocus lands on.
+  it.each<{
+    steps: string;
+    first: 'mount' | 'place';
+    rebuild: (boxes: ReturnType<typeof emptySetup>['boxes']) => void;
+    focused: number;
+    options: FocusOptions;
+  }>([
+    {
+      steps: 'mounted anew',
+      first: 'mount',
+      rebuild: (boxes) => {
+        boxes.destroyForm('f1');
+        boxes.mount(parent, notes, '');
+      },
+      focused: 1,
+      options: { insertAtEnd: true },
+    },
+    {
+      steps: 'placed anew',
+      first: 'place',
+      rebuild: (boxes) => {
+        boxes.destroyBox(notes);
+        boxes.place(div(), notes, '');
+      },
+      focused: 1,
+      options: { insertAtEnd: true },
+    },
+    {
+      steps: 'kept through release and place',
+      first: 'place',
+      rebuild: (boxes) => {
+        boxes.release(notes);
+        boxes.place(div(), notes, '');
+      },
+      focused: 0,
+      options: { insert: true },
+    },
+  ])(
+    'keepFocusedBox_InsertingBox_FocusesItInInsertMode: $steps',
+    ({ first, rebuild, focused, options }) => {
+      const { boxes, created } = keepSetup();
+      if (first === 'mount') {
+        boxes.mount(parent, notes, '');
+      } else {
+        boxes.place(div(), notes, '');
+      }
+      // A click, so the editor's focus options hold only the refocus.
+      created[0].events.focused();
+      created[0].events.modeChanged({ mode: 'insert', subMode: '' });
+
+      keepFocusedBox(boxes, 'f1', () => rebuild(boxes));
+
+      expect(boxes.active()).toEqual(notes);
+      expect(created).toHaveLength(focused + 1);
+      expect(created[focused].editor.focusOptions).toEqual([options]);
+    },
+  );
+
+  it.each<{ mode: string; options: (FocusOptions | undefined)[] }>([
+    { mode: 'normal', options: [undefined] },
+    { mode: 'insert', options: [{ insert: true }] },
+    { mode: 'visual', options: [undefined] },
+  ])(
+    'keepFocusedBox_KeptBox_FocusesTheSameEditor: $mode',
+    ({ mode, options }) => {
+      const { boxes, created } = keepSetup();
+      boxes.place(div(), notes, '');
+      // A click, so the editor's focus options hold only the refocus.
+      created[0].events.focused();
+      created[0].events.modeChanged({ mode, subMode: '' });
+
+      keepFocusedBox(boxes, 'f1', () => {
+        boxes.release(notes);
+        boxes.place(div(), notes, '');
+      });
+
+      expect(created).toHaveLength(1);
+      expect(created[0].editor.focusOptions).toEqual(options);
+      expect(boxes.active()).toEqual(notes);
+    },
+  );
+
+  it('keepFocusedBox_BoxTheRebuildLeftOut_IsDestroyed', () => {
+    const { boxes, created } = keepSetup();
+    boxes.place(div(), notes, '');
     boxes.focus(notes);
-    created[0].events.modeChanged({ mode: 'insert', subMode: '' });
 
-    keepFocusedBox(boxes, 'f1', rebuildWith([notes]));
+    keepFocusedBox(boxes, 'f1', () => {
+      boxes.release(notes);
+      boxes.place(div(), reason, '');
+    });
 
-    expect(boxes.active()).toEqual(notes);
-    expect(created[1].editor.focusOptions).toEqual([{ insertAtEnd: true }]);
+    expect(created[0].editor.isDestroyed).toBe(true);
+    expect(boxes.active()).toBeNull();
   });
 
   it('focuses nothing when the rebuilt form no longer mounts the box', () => {
@@ -372,6 +768,16 @@ describe('fileEditor', () => {
       steps: "destroyForm('f1')",
       act: ({ boxes }) => boxes.destroyForm('f1'),
       expected: null,
+    },
+    {
+      steps: 'destroyBox(reason), place reason, focus reason, release reason',
+      act: ({ boxes }) => {
+        boxes.destroyBox(reason);
+        boxes.place(div(), reason, '');
+        boxes.focus(reason);
+        boxes.release(reason);
+      },
+      expected: notes,
     },
   ])(
     'fileEditor_PicksLastUsedElseFirst: $steps',

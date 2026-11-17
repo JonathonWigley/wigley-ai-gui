@@ -8,6 +8,8 @@ const PARTS: Record<keyof AudioPickerLayout, true> = {
   candidate: true,
   none: true,
   notes: true,
+  confirmBody: true,
+  dialogFrame: true,
 };
 
 // The audio picker layout a user's `layout.js` module exports as its default.

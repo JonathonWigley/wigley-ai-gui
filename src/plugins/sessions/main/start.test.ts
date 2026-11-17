@@ -1,16 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentHarness, AgentHarnessInfo } from '../../../contracts/agent';
+import type { Files } from '../../../contracts/files';
 import {
   harnessInfo,
   harnessRegistryOf,
 } from '../../../shared/agent-harness-registry.test-support';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import { createMemoryFiles } from '../../../shared/memory-files';
 import {
   dataEmitted,
   noCounts,
@@ -18,6 +21,7 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { channelPath } from '../../../shared/local-channel/channel-path';
 import { osPlatform } from '../../../shared/os-platform';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import { fakePlatform } from '../../../shared/platform.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
@@ -261,12 +265,13 @@ function fakeAskStart() {
 
 // Sessions' main part started over a fake `MainApi` with no drive and no
 // self-test script, its titles limited to `titleMaxLength`. It opens no relay
-// unless `runMode` says so, with its files under `homeDir`.
+// unless `runMode` says so, with its files under `homeDir` in `files`.
 function startSessionsPart(
   titleMaxLength: number,
   {
     runMode = 'selfTest',
     homeDir = '/home',
+    files = createMemoryFiles(),
     log = () => undefined,
     send = () => undefined,
     originRepoName = () => Promise.resolve(null),
@@ -275,6 +280,7 @@ function startSessionsPart(
   }: {
     runMode?: 'selfTest' | 'live';
     homeDir?: string;
+    files?: Files;
     log?: (message: string) => void;
     send?: (message: string, payload: unknown) => void;
     originRepoName?: (projectDir: string) => Promise<string | null>;
@@ -297,8 +303,9 @@ function startSessionsPart(
       randomHex: () => (++hex).toString(16),
       log,
       runMode,
-      paths: { join: (...parts: string[]) => parts.join('/') },
+      paths: posixPaths,
       homeDir,
+      files,
       appInstance: { id: 'app', isDev: false },
       selfTest: null,
       git: { originRepoName },
@@ -325,6 +332,21 @@ const HARNESS_APP_ID = 'wigley-ai-gui-dev';
 
 // The record of the OS the tests run on, so a test's relay opens the channel this OS's relays use.
 const platform = fakePlatform(osPlatform(process.platform));
+
+// A home the relay can listen in and memory files accept. On Windows the relay
+// listens on a named pipe, which needs no folder, so the home is a POSIX path
+// of its own; elsewhere it is a new temp folder, which holds the relay's socket.
+function relayHome(): { homeDir: string; remove: () => void } {
+  if (platform.os === 'windows') {
+    return { homeDir: `/home/${randomUUID()}`, remove: () => undefined };
+  }
+  // macOS caps a socket path near 104 bytes, so the folder name stays short.
+  const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
+  return {
+    homeDir,
+    remove: () => rmSync(homeDir, { recursive: true, force: true }),
+  };
+}
 
 const RELAY_HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
@@ -566,31 +588,42 @@ describe('sessions main part', () => {
   });
 
   it('keeps a contribution live when the endpoint files cannot be written', async () => {
-    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'sessions-start-'));
+    const { homeDir, remove } = relayHome();
     const logged: string[] = [];
+    const memory = createMemoryFiles();
+    let isRefusing = false;
     const started = startSessionsPart(10, {
       runMode: 'live',
       homeDir,
+      files: {
+        ...memory,
+        write: (file, text) =>
+          isRefusing
+            ? Promise.reject(new Error('EACCES'))
+            : memory.write(file, text),
+      },
       log: (message) => logged.push(message),
     });
     try {
       const view = viewOf(started);
       const connected = view.connect(hostInfo('host-1'));
-      const endpointDir = path.join(homeDir, '.agents', 'app');
-      rmSync(endpointDir, { recursive: true });
-      writeFileSync(endpointDir, 'not a folder');
+      // Lets the write the start queued land before the disk refuses.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      isRefusing = true;
 
       view.contributeTools([ASK_TOOL], fakeAskStart().start);
 
       await expect(connected.call('ask', {}, CONTEXT)).resolves.toBe(
         ASK_RESULT,
       );
-      expect(logged.filter((line) => line.includes('endpoint files'))).toEqual([
-        expect.stringContaining('endpoint files not written'),
-      ]);
+      await vi.waitFor(() =>
+        expect(
+          logged.filter((line) => line.includes('endpoint files')),
+        ).toEqual([expect.stringContaining('endpoint files not written')]),
+      );
     } finally {
       await started.dispose?.('end');
-      rmSync(homeDir, { recursive: true });
+      remove();
     }
   });
 
@@ -617,7 +650,7 @@ describe('sessions main part', () => {
   });
 
   it('stop_ToolSessionEndThrows_ClosesTheRelayAndThrows', async () => {
-    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
+    const { homeDir, remove } = relayHome();
     const harness = startMainPart(sessionsMainPart, {
       services: { runMode: 'live', homeDir, platform },
     });
@@ -645,13 +678,12 @@ describe('sessions main part', () => {
       );
       await expect(once(socket, 'connect')).rejects.toThrow();
     } finally {
-      rmSync(homeDir, { recursive: true, force: true });
+      remove();
     }
   });
 
   it('stop_ConnectedThroughRelay_EndsOnce', async () => {
-    // macOS caps a socket path near 104 bytes, so the folder name stays short.
-    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
+    const { homeDir, remove } = relayHome();
     const harness = startMainPart(sessionsMainPart, {
       services: { runMode: 'live', homeDir, platform },
     });
@@ -676,9 +708,8 @@ describe('sessions main part', () => {
       expect(connected).toHaveLength(1);
       expect(ended).toEqual(connected);
       const endpoint: unknown = JSON.parse(
-        readFileSync(
-          path.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
-          'utf8',
+        await harness.files.read(
+          posixPaths.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
         ),
       );
       expect(endpoint).toMatchObject({
@@ -687,7 +718,48 @@ describe('sessions main part', () => {
       });
     } finally {
       socket.destroy();
-      rmSync(homeDir, { recursive: true, force: true });
+      remove();
+    }
+  });
+
+  // Breaks if the stop does not wait for the queued endpoint writes.
+  it('stop_EndpointWriteHeld_SettlesOnceItLands', async () => {
+    const { homeDir, remove } = relayHome();
+    const memory = createMemoryFiles();
+    const held = Promise.withResolvers<void>();
+    const harness = startMainPart(sessionsMainPart, {
+      services: {
+        runMode: 'live',
+        homeDir,
+        platform,
+        files: {
+          ...memory,
+          write: async (file, text) => {
+            await held.promise;
+            await memory.write(file, text);
+          },
+        },
+      },
+    });
+    try {
+      let isStopped = false;
+      const stopped = harness.stop().then(() => {
+        isStopped = true;
+      });
+      // Long enough for the relay to close, which ends a stop that does not wait.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(isStopped).toBe(false);
+
+      held.resolve();
+      await stopped;
+
+      expect(
+        await memory.read(
+          posixPaths.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
+        ),
+      ).toContain(`"pid": 4242`);
+    } finally {
+      remove();
     }
   });
 });

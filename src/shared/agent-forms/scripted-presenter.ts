@@ -35,8 +35,8 @@ export class ScriptedFormPresenter<Form, Body> implements AgentFormPresenter<
     return form;
   }
 
-  draft(formId: string, body: Body) {
-    this.listenerFor(formId).draft(body);
+  draft(formId: string, body: Body): Promise<void> {
+    return this.listenerFor(formId).draft(body);
   }
 
   submit(formId: string, body: Body) {

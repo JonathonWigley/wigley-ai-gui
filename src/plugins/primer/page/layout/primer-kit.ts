@@ -5,9 +5,14 @@ import {
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
+import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
-import { boxHint, keyStack } from '../../../../shared/page/ui/key-anchors';
-import { inputFrame } from '../../../../shared/page/ui/input-frame';
+import {
+  boxHint,
+  keyChevron,
+  keyEdge,
+  keyStack,
+} from '../../../../shared/page/ui/key-anchors';
 import { row } from '../../../../shared/page/ui/row';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import {
@@ -22,15 +27,20 @@ import {
   type PrimerScopeName,
 } from '../../ids';
 import type {
+  CardEdgeKit,
   FeatureCardInput,
   FeatureKit,
   ItemCardInput,
   ItemKit,
+  ItemsHeadKit,
   ItemsKit,
   PrimerKit,
+  ReviewFooterKit,
   ReviewKit,
   TaskCardInput,
   TaskKit,
+  TasksFootKit,
+  TasksHeadKit,
   TasksKit,
 } from '../../layouts/layout';
 import { primerManifest } from '../../manifest';
@@ -59,16 +69,16 @@ export type PrimerKitDeps = OwnerKitServices;
 // What the card and column kits act through besides: the text boxes. Every
 // click runs a primer command through `commands`.
 export interface PrimerPartKitDeps extends PrimerKitDeps {
-  boxes: Pick<EditorBoxes<PrimerBox>, 'mount' | 'destroyBox'>;
+  boxes: Pick<EditorBoxes<PrimerBox>, 'place' | 'release' | 'setText'>;
 }
 
 // A card's kit and what the app does around the layout's card: append the
 // boxes the card left out at its end, and bring the kit's own parts up to date
-// with the card's input.
+// with the card's input and each of its boxes to its text in `primer`.
 export interface CardKit<K, Input> {
   kit: K;
   appendUnmountedBoxes(card: HTMLElement): void;
-  update(input: Input): void;
+  update(input: Input, primer: OpenPrimer): void;
 }
 
 // The tasks column's kit and the row element `taskRow` drew at each position.
@@ -81,6 +91,15 @@ export interface DrawnTasksKit {
 export interface DrawnItemsKit {
   kit: ItemsKit;
   rows: Map<number, HTMLElement>;
+}
+
+// A column head's kit, every row pair it drew (for the app's `is-no-target`),
+// and the app's step after the build: it places the save status at the start
+// of `root` when the head left it out (nothing for the items head).
+export interface DrawnColumnHeadKit<K> {
+  kit: K;
+  rowSteps: HTMLElement[];
+  placeLeftOut(root: HTMLElement): void;
 }
 
 // One text box a card has: the field a layout names it by, what it edits,
@@ -159,7 +178,7 @@ export function createFeatureKit(
   return {
     kit: { ...createPrimerKit(deps, 'card', rollback), textBox: boxes.mount },
     appendUnmountedBoxes: boxes.appendUnmounted,
-    update: () => undefined,
+    update: (_input, current) => boxes.syncText(current),
   };
 }
 
@@ -181,7 +200,7 @@ export function createTaskKit(
   return {
     kit: { ...createPrimerKit(deps, 'card', rollback), textBox: boxes.mount },
     appendUnmountedBoxes: boxes.appendUnmounted,
-    update: () => undefined,
+    update: (_input, current) => boxes.syncText(current),
   };
 }
 
@@ -244,10 +263,11 @@ export function createItemKit(
       },
     },
     appendUnmountedBoxes: boxes.appendUnmounted,
-    update(input) {
+    update(input, current) {
       for (const mark of marks) {
         setToggleMark(mark, input.include);
       }
+      boxes.syncText(current);
     },
   };
 }
@@ -323,6 +343,100 @@ export function createReviewKit(
   return createPrimerKit(deps, 'review', rollback);
 }
 
+// The tasks column head's kit: its row pair in the tasks scope, and
+// `saveStatus`, the app's status line, placed once per draw.
+export function createTasksHeadKit(
+  deps: PrimerKitDeps,
+  saveStatus: HTMLElement,
+  rollback: RollbackDeps,
+): DrawnColumnHeadKit<TasksHeadKit> {
+  const head = createColumnHeadKit(deps, 'tasks', rollback);
+  const slot = appSlot(saveStatus, 'saveStatus', rollback);
+  return {
+    kit: { ...head.kit, saveStatus: (parent) => slot.place(parent) },
+    rowSteps: head.rowSteps,
+    placeLeftOut: (root) => slot.placeIfLeftOut(root, 'start'),
+  };
+}
+
+export function createItemsHeadKit(
+  deps: PrimerKitDeps,
+  rollback: RollbackDeps,
+): DrawnColumnHeadKit<ItemsHeadKit> {
+  return createColumnHeadKit(deps, 'items', rollback);
+}
+
+// The tasks column foot's kit: `reviewKeys` anchors openReview in the tasks,
+// items and card scopes, so the Review button shows its key while any of them
+// has focus.
+export function createTasksFootKit(
+  deps: PrimerKitDeps,
+  rollback: RollbackDeps,
+): TasksFootKit {
+  return {
+    ...createPrimerKit(deps, 'tasks', rollback),
+    reviewKeys: (parent) =>
+      appended(
+        parent,
+        keyStack(
+          'primer-review-keys',
+          (['tasks', 'items', 'card'] as const).map((scope) =>
+            anchoredSpan(
+              deps,
+              rollback,
+              'primer-review-key',
+              'openReview',
+              scope,
+            ),
+          ),
+        ),
+      ),
+  };
+}
+
+export function createCardEdgeKit(
+  deps: PrimerKitDeps,
+  rollback: RollbackDeps,
+): CardEdgeKit {
+  return createPrimerKit(deps, 'card', rollback);
+}
+
+export function createReviewFooterKit(
+  deps: PrimerKitDeps,
+  rollback: RollbackDeps,
+): ReviewFooterKit {
+  return createPrimerKit(deps, 'review', rollback);
+}
+
+// A column head's kit in `scope`: each `rowStep` draws `⌃H ▲ ▼ ⌃L` and is
+// kept in `rowSteps`. Nothing is left out for the app to place.
+function createColumnHeadKit(
+  deps: PrimerKitDeps,
+  scope: 'tasks' | 'items',
+  rollback: RollbackDeps,
+): DrawnColumnHeadKit<ItemsHeadKit> {
+  const rowSteps: HTMLElement[] = [];
+  const stepKey = (command: 'prevRow' | 'nextRow') =>
+    anchoredSpan(deps, rollback, 'primer-column-key', command, scope);
+  return {
+    kit: {
+      ...createPrimerKit(deps, scope, rollback),
+      rowStep(parent) {
+        const edge = keyEdge('primer-column-edge', [
+          stepKey('prevRow'),
+          keyChevron('▲'),
+          keyChevron('▼'),
+          stepKey('nextRow'),
+        ]);
+        rowSteps.push(edge);
+        return appended(parent, edge);
+      },
+    },
+    rowSteps,
+    placeLeftOut: () => undefined,
+  };
+}
+
 // The list row for tasks column `position`: the Feature row, or a task row
 // with its need tag and count. Throws for a position `rows` lacks.
 function taskRowElement(
@@ -395,7 +509,8 @@ function itemRowElement(
 // One card draw's text boxes. `mount` draws the box of `field` in its
 // labelled field and records it in `rollback`; it throws for a field the card
 // lacks or one already mounted. `appendUnmounted` mounts every box `mount`
-// has not, in `cardBoxes` order, at the end of `card`.
+// has not, in `cardBoxes` order, at the end of `card`. `syncText` sets each
+// placed box's editor to its text in `current`, where the two differ.
 function createCardBoxes<Field extends string>(
   deps: PrimerPartKitDeps,
   primer: OpenPrimer,
@@ -404,6 +519,7 @@ function createCardBoxes<Field extends string>(
 ): {
   mount(parent: HTMLElement, field: Field): HTMLElement;
   appendUnmounted(card: HTMLElement): void;
+  syncText(current: OpenPrimer): void;
 } {
   const mounted = new Set<Field>();
   const mount = (parent: HTMLElement, field: Field) => {
@@ -426,6 +542,14 @@ function createCardBoxes<Field extends string>(
         }
       }
     },
+    syncText(current) {
+      for (const box of cardBoxes) {
+        deps.boxes.setText(
+          { primerId: current.formId, target: box.target },
+          boxText(current, box.target),
+        );
+      }
+    },
   };
 }
 
@@ -444,20 +568,18 @@ function appendField(
   const hint =
     box.command === null ? null : anchored('primer-field-hint', box.command);
   const field = element('div', 'primer-field');
-  const frame = inputFrame();
+  field.append(sectionHeader(box.label, hint));
+  parent.append(field);
+  const primerBox: PrimerBox = { primerId: primer.formId, target: box.target };
+  const frame = deps.boxes.place(field, primerBox, boxText(primer, box.target));
   frame.classList.add('primer-box');
   field.append(
-    sectionHeader(box.label, hint),
-    frame,
     boxHint('box-keys', [
       anchored('primer-box-key', 'prevBox'),
       anchored('primer-box-key', 'nextBox'),
     ]),
   );
-  parent.append(field);
-  const primerBox: PrimerBox = { primerId: primer.formId, target: box.target };
-  deps.boxes.mount(frame, primerBox, boxText(primer, box.target));
-  rollback.recordBox(() => deps.boxes.destroyBox(primerBox));
+  rollback.recordBox(() => deps.boxes.release(primerBox));
   return field;
 }
 

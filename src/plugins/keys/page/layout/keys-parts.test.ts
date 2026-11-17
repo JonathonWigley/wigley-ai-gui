@@ -21,6 +21,7 @@ import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-s
 // A part drawer whose kits record each anchor they name in `anchors`.
 function fakeKeysParts() {
   const { anchors, keys } = recordingAnchors();
+  const runs: string[] = [];
   const parts = createKeysParts({
     defaultLayout,
     kit: {
@@ -34,14 +35,16 @@ function fakeKeysParts() {
       commands: {
         exists: () => true,
         argShape: () => undefined,
-        run: () => undefined,
+        run: (id) => {
+          runs.push(id);
+        },
       },
       platform: 'macos',
       state: noLayoutState,
     },
     log: () => undefined,
   });
-  return { parts, anchors };
+  return { parts, anchors, runs };
 }
 
 // The set shown with `name`'s `layout` as the setting's layout.
@@ -111,13 +114,7 @@ describe('createKeysParts', () => {
   it('setLayouts_HelpShown_RedrawsOneBodyInPlace', () => {
     const { parts } = fakeKeysParts();
     const overlay = fakeOverlay();
-    const help = mountHelpView(
-      overlay.area,
-      SECTIONS,
-      () => undefined,
-      asHtml(new FakeElement('span')),
-      parts,
-    );
+    const help = mountHelpView(overlay.area, SECTIONS, parts);
     help.show();
 
     parts.setLayouts(
@@ -133,18 +130,43 @@ describe('createKeysParts', () => {
       'slim-help',
     ]);
     expect(scrim.hidden).toBe(false);
+    expect(
+      findAll(overlay.root, 'ui-button').map((button) => button.textContent),
+    ).toEqual(['Close']);
+  });
+
+  it('setLayouts_HelpShownWithOwnFrame_OneCloseAndFrameFollowsTheSwitch', () => {
+    const { parts } = fakeKeysParts();
+    const overlay = fakeOverlay();
+    const help = mountHelpView(overlay.area, SECTIONS, parts);
+    help.show();
+    expect(findAll(overlay.root, 'keys-frame-mine')).toHaveLength(0);
+
+    parts.setLayouts(
+      shownLayouts('mine', {
+        dialogFrame: (parent, input, kit) => {
+          const panel = kit.el(parent, 'div', 'keys-frame-mine', input.title);
+          const body = kit.el(panel, 'div', 'ui-dialog-body');
+          const actions = kit.el(panel, 'div', 'ui-dialog-actions');
+          kit.el(actions, 'button', 'ui-button', 'Close');
+          return { element: panel, body, actions };
+        },
+      }),
+    );
+    help.layoutsChanged();
+    help.layoutsChanged();
+
+    const panels = findAll(overlay.root, 'keys-frame-mine');
+    expect(panels).toHaveLength(1);
+    expect(panels[0].dataset.layout).toBe('mine');
+    const buttons = findAll(overlay.root, 'ui-button');
+    expect(buttons.map((button) => button.textContent)).toEqual(['Close']);
   });
 
   it('setLayouts_HelpHidden_NextShowDrawsNewBody', () => {
     const { parts } = fakeKeysParts();
     const overlay = fakeOverlay();
-    const help = mountHelpView(
-      overlay.area,
-      SECTIONS,
-      () => undefined,
-      asHtml(new FakeElement('span')),
-      parts,
-    );
+    const help = mountHelpView(overlay.area, SECTIONS, parts);
 
     parts.setLayouts(
       shownLayouts('slim', {
@@ -152,10 +174,11 @@ describe('createKeysParts', () => {
       }),
     );
     help.layoutsChanged();
-    const [body] = findAll(overlay.root, 'ui-dialog-body');
-    const whileHidden = body.children.map((child) => child.className);
+    const [hiddenBody] = findAll(overlay.root, 'ui-dialog-body');
+    const whileHidden = hiddenBody.children.map((child) => child.className);
     help.show();
 
+    const [body] = findAll(overlay.root, 'ui-dialog-body');
     expect(whileHidden).toEqual(['keys-help-sections']);
     expect(body.children.map((child) => child.className)).toEqual([
       'slim-help',
@@ -186,6 +209,24 @@ describe('createKeysParts', () => {
     expect(after).toHaveLength(before.length);
     expect(after.every((node, index) => node === before[index])).toBe(true);
     expect(panel.children.map((child) => child.className)).toEqual(['marked']);
+  });
+
+  it('dialogFrame_Default_CloseRunsCloseHelpAndShowsItsKey', () => {
+    const { parts, anchors, runs } = fakeKeysParts();
+    const parent = asHtml(new FakeElement('div'));
+
+    const { built } = parts.dialogFrame(parent, {
+      title: 'Keys',
+      hasActions: true,
+    });
+
+    const buttons = findAll(asFake(built.actions as HTMLElement), 'ui-button');
+    buttons[0].click();
+    expect(buttons.map((button) => button.textContent)).toEqual(['Close']);
+    expect(runs).toEqual(['keys.closeHelp']);
+    expect(
+      anchors.map(({ command, scope }) => ({ command, scope })),
+    ).toContainEqual({ command: 'keys.closeHelp', scope: 'keys.help' });
   });
 
   it('titleBarButton_Redraw_DisposesOldHintAnchor', () => {

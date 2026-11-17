@@ -1,6 +1,6 @@
 # 01 — Toasts through the shell layout
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -107,3 +107,4 @@ Commit:    one commit for the group: `src/renderer/shell/layouts/layout.d.ts`
 
 ## Proof
 
+Commit 30b395aae · proof: diff read + wave 1 compile (typecheck, lint clean after ff56db41b) · concerns: base kit spread assumes no this; default toast throw relies on createToasts catching; followups.md line 534 stale until task 10; the ToastTone type test moved to src/renderer/shell/toast-tone.test-d.ts (layer check), 01's Files lines still name the old path

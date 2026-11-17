@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
+import type { PlatformKeys } from '../contracts/platform';
 import { parseChord } from '../shared/chord-notation';
-import { createChordMatcher, createSequenceMatcher } from './key-sequences';
 import {
-  type CapturedPress,
+  type ChordPress,
+  createChordMatcher,
+  createSequenceMatcher,
+} from './key-sequences';
+import {
   capturedKeys,
   createPendingTimeout,
   dropPendingKeys,
@@ -15,6 +19,15 @@ import {
 } from './page-keys';
 
 const TIMEOUT_MS = 1000;
+
+const MAC_KEYS: PlatformKeys = {
+  optionMatchesByCode: true,
+  altGraphTypes: false,
+};
+const PC_KEYS: PlatformKeys = {
+  optionMatchesByCode: false,
+  altGraphTypes: true,
+};
 
 const binds: PageBind[] = [
   { keys: ['g', 'u', 'x'], scope: 'forms', command: 'test.long' },
@@ -159,32 +172,36 @@ describe('feedChordKey', () => {
     { keys: ['<C-h>'], scope: 'forms', command: 'test.chord' },
   ];
 
-  // A Control chord on `code`.
-  const ctrl = (code: string) => ({
+  // A Control chord on `key`, pressed on `code`.
+  const ctrl = (key: string, code: string): ChordPress => ({
+    key,
     code,
-    ctrlKey: true,
-    altKey: false,
-    shiftKey: false,
-    metaKey: false,
+    ctrl: true,
+    alt: false,
+    shift: false,
+    meta: false,
+    altGraph: false,
   });
 
   it('runs a chord bind and drops the pending sequence', () => {
-    const chords = createChordMatcher(chordBinds);
+    const chords = createChordMatcher(chordBinds, MAC_KEYS);
     const matcher = createSequenceMatcher(chordBinds, TIMEOUT_MS);
     const { page, target } = fakePage();
     feedPageKey(matcher, 'g', 0, target);
-    expect(feedChordKey(chords, matcher, ctrl('KeyH'), target)).toBe(true);
+    expect(feedChordKey(chords, matcher, ctrl('h', 'KeyH'), target)).toBe(true);
     expect(page.reports).toEqual([['g'], []]);
     feedPageKey(matcher, 'u', 200, target);
     expect(page.ran).toEqual(['test.chord', 'test.openReview']);
   });
 
   it('passes an unbound chord through and keeps the pending sequence', () => {
-    const chords = createChordMatcher(chordBinds);
+    const chords = createChordMatcher(chordBinds, MAC_KEYS);
     const matcher = createSequenceMatcher(chordBinds, TIMEOUT_MS);
     const { page, target } = fakePage();
     feedPageKey(matcher, 'g', 0, target);
-    expect(feedChordKey(chords, matcher, ctrl('KeyA'), target)).toBe(false);
+    expect(feedChordKey(chords, matcher, ctrl('a', 'KeyA'), target)).toBe(
+      false,
+    );
     feedPageKey(matcher, 'u', 100, target);
     feedPageKey(matcher, 'x', 200, target);
     expect(page.ran).toEqual(['test.long']);
@@ -268,81 +285,112 @@ describe('createPendingTimeout', () => {
 function press(
   key: string,
   code: string,
-  held: Partial<CapturedPress> = {},
-): CapturedPress {
+  held: Partial<ChordPress> = {},
+): ChordPress {
   return {
     key,
     code,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    metaKey: false,
+    ctrl: false,
+    alt: false,
+    shift: false,
+    meta: false,
+    altGraph: false,
     ...held,
   };
 }
 
 const ALL_MODIFIERS = {
-  ctrlKey: true,
-  altKey: true,
-  shiftKey: true,
-  metaKey: true,
+  ctrl: true,
+  alt: true,
+  shift: true,
+  meta: true,
 };
 
-const CHORD_ROWS: [CapturedPress, string][] = [
-  [press('t', 'KeyT', { ctrlKey: true }), '<C-t>'],
-  [press('ø', 'KeyO', { altKey: true }), '<A-o>'],
-  [press('Ø', 'KeyO', { altKey: true, shiftKey: true }), '<A-S-o>'],
-  [press('w', 'KeyW', { metaKey: true }), '<D-w>'],
-  [press('æ', 'Quote', { altKey: true }), "<A-'>"],
-  [press('1', 'Digit1', { ctrlKey: true }), '<C-1>'],
-  [press(';', 'Semicolon', ALL_MODIFIERS), '<C-A-S-D-;>'],
-  [press('Enter', 'Enter', { shiftKey: true }), '<S-Enter>'],
-  [press('Enter', 'Enter', { ctrlKey: true }), '<C-Enter>'],
-  [press('Dead', 'KeyE', { altKey: true }), '<A-e>'],
+const CHORD_ROWS: [ChordPress, string][] = [
+  [press('t', 'KeyT', { ctrl: true }), '<C-t>'],
+  [press('ø', 'KeyO', { alt: true }), '<A-o>'],
+  [press('Ø', 'KeyO', { alt: true, shift: true }), '<A-S-o>'],
+  [press('w', 'KeyW', { meta: true }), '<D-w>'],
+  [press('æ', 'Quote', { alt: true }), "<A-'>"],
+  [press('1', 'Digit1', { ctrl: true }), '<C-1>'],
+  [press(':', 'Semicolon', ALL_MODIFIERS), '<C-A-D-:>'],
+  [press('Enter', 'Enter', { shift: true }), '<S-Enter>'],
+  [press('Enter', 'Enter', { ctrl: true }), '<C-Enter>'],
+  [press('Dead', 'KeyE', { alt: true }), '<A-e>'],
+  [press('/', 'Slash', { ctrl: true }), '<C-/>'],
+  [press('?', 'Slash', { ctrl: true, shift: true }), '<C-?>'],
+  [press('<', 'Comma', { ctrl: true, shift: true }), '<C-lt>'],
+  [press(' ', 'Space', { ctrl: true }), '<C-Space>'],
+  [press('ArrowUp', 'ArrowUp', { alt: true }), '<A-Up>'],
+  [press('Backspace', 'Backspace', { meta: true }), '<D-BS>'],
+  [press('F5', 'F5'), '<F5>'],
+  [press('[', 'BracketLeft', { ctrl: true }), '<C-[>'],
 ];
 
 describe('capturedKeys', () => {
-  it.each<[CapturedPress, string | null]>([
+  it.each<[ChordPress, string | null]>([
     [press('t', 'KeyT'), 't'],
-    [press('T', 'KeyT', { shiftKey: true }), 'T'],
-    [press(':', 'Semicolon', { shiftKey: true }), ':'],
+    [press('T', 'KeyT', { shift: true }), 'T'],
+    [press(':', 'Semicolon', { shift: true }), ':'],
     [press(';', 'Semicolon'), ';'],
     [press(' ', 'Space'), '<Space>'],
     [press('Enter', 'Enter'), '<CR>'],
     [press('Tab', 'Tab'), '<Tab>'],
-    [press('Tab', 'Tab', { shiftKey: true }), '<S-Tab>'],
+    [press('Tab', 'Tab', { shift: true }), '<S-Tab>'],
     [press('Backspace', 'Backspace'), '<BS>'],
-    [press('<', 'Comma', { shiftKey: true }), '<lt>'],
+    [press('<', 'Comma', { shift: true }), '<lt>'],
     [press('\\', 'Backslash'), '<Bslash>'],
     ...CHORD_ROWS,
-    [press('Shift', 'ShiftLeft', { shiftKey: true }), null],
-    [press('Meta', 'MetaLeft', { metaKey: true }), null],
+    [press('Shift', 'ShiftLeft', { shift: true }), null],
+    [press('Meta', 'MetaLeft', { meta: true }), null],
     [press('ArrowUp', 'ArrowUp'), null],
-    [press('F5', 'F5'), null],
     [press('Dead', 'Backquote'), null],
-    [press('[', 'BracketLeft', { ctrlKey: true }), null],
   ])('capturedKeys_Press_SpellsTheKeyAsABindIsWritten %#', (pressed, keys) => {
-    expect(capturedKeys(pressed)).toBe(keys);
+    expect(capturedKeys(pressed, MAC_KEYS)).toBe(keys);
   });
 
   it.each(CHORD_ROWS)(
     'capturedKeys_Chord_MatchesTheChordBindItSpells %#',
     (pressed, keys) => {
-      const captured = capturedKeys(pressed)!;
+      const captured = capturedKeys(pressed, MAC_KEYS)!;
       const bind: PageBind = { keys: [captured], scope: 'any', command: 'p.x' };
 
       expect(captured).toBe(keys);
       expect(parseChord(captured)).not.toBeNull();
-      expect(createChordMatcher([bind]).match(pressed, 'any')).toBe(bind);
+      expect(createChordMatcher([bind], MAC_KEYS).match(pressed, 'any')).toBe(
+        bind,
+      );
     },
   );
+
+  it('capturedKeys_AltGrTyping_SpellsTheCharacter', () => {
+    const altGrAt = press('@', 'KeyQ', {
+      ctrl: true,
+      alt: true,
+      altGraph: true,
+    });
+
+    expect(capturedKeys(altGrAt, PC_KEYS)).toBe('@');
+  });
 });
 
 describe('installPageKeys', () => {
+  // The fields of a key event a test's press sets, and whether AltGr is down.
+  type PressedEvent = Partial<
+    Pick<
+      KeyboardEvent,
+      'code' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey' | 'repeat'
+    > & { altGraph: boolean }
+  >;
+
   // Installs the engine over stubbed page globals, with no binds; `press` sends a
   // key, stopping at the listener that stops its propagation, and reports
   // whether a listener prevented its default.
-  function installed(has = true, editors: Partial<EditorHost> = {}) {
+  function installed(
+    has = true,
+    editors: Partial<EditorHost> = {},
+    platformKeys: PlatformKeys = MAC_KEYS,
+  ) {
     const keydowns: ((event: unknown) => void)[] = [];
     const target = {
       addEventListener: (type: string, listener: (event: unknown) => void) => {
@@ -375,13 +423,12 @@ describe('installPageKeys', () => {
       (source, message) => void logs.push(`${source}: ${message}`),
       fakeTimers().timers,
       { where: () => 'page', onChanged: () => ({ dispose: () => {} }) },
+      platformKeys,
     );
-    const press = (
-      key: string,
-      pressed: Partial<CapturedPress & Pick<KeyboardEvent, 'repeat'>> = {},
-    ) => {
+    const press = (key: string, pressed: PressedEvent = {}) => {
       let isPrevented = false;
       let isStopped = false;
+      const { altGraph = false, ...held } = pressed;
       const event = {
         key,
         code: '',
@@ -389,7 +436,8 @@ describe('installPageKeys', () => {
         altKey: false,
         shiftKey: false,
         metaKey: false,
-        ...pressed,
+        ...held,
+        getModifierState: (name: string) => name === 'AltGraph' && altGraph,
         target: null,
         timeStamp: 0,
         preventDefault: () => {
@@ -464,7 +512,7 @@ describe('installPageKeys', () => {
     expect(logs).toEqual(['page: r names no command r.gone']);
   });
 
-  it.each<[string, string, Partial<CapturedPress>, string]>([
+  it.each<[string, string, PressedEvent, string]>([
     ['x', 'KeyX', {}, 'x'],
     ['x', 'KeyX', { ctrlKey: true }, '<C-x>'],
   ])(
@@ -512,10 +560,10 @@ describe('installPageKeys', () => {
     expect(runs).toEqual([['p.top', undefined, {}]]);
   });
 
-  it.each<[string, Partial<CapturedPress>]>([
+  it.each<[string, PressedEvent]>([
     ['Shift', { code: 'ShiftLeft', shiftKey: true }],
     ['ArrowUp', { code: 'ArrowUp' }],
-    ['[', { code: 'BracketLeft', ctrlKey: true }],
+    ['Dead', { code: 'Backquote' }],
   ])('capture_NotAKey_WaitsForTheNext %s', (key, pressed) => {
     const { engine, press } = installed();
     const { heard } = armed(engine);
@@ -655,5 +703,30 @@ describe('installPageKeys', () => {
     vi.unstubAllGlobals();
 
     expect(heard).toEqual(['<C-n>']);
+  });
+
+  const altGraphBinds: PageBind[] = [
+    { keys: ['<C-A-q>'], scope: 'any', command: 'p.chord' },
+    { keys: ['@'], scope: 'any', command: 'p.at' },
+  ];
+
+  it('keydown_AltGrTyping_RunsTheCharacterBindNotTheChord', () => {
+    const { engine, press, runs } = installed(true, {}, PC_KEYS);
+    engine.setBinds(altGraphBinds, TIMEOUT_MS);
+
+    press('@', { code: 'KeyQ', ctrlKey: true, altKey: true, altGraph: true });
+    vi.unstubAllGlobals();
+
+    expect(runs.map(([command]) => command)).toEqual(['p.at']);
+  });
+
+  it('keydown_CtrlAltWithoutAltGr_RunsTheChord', () => {
+    const { engine, press, runs } = installed(true, {}, PC_KEYS);
+    engine.setBinds(altGraphBinds, TIMEOUT_MS);
+
+    press('q', { code: 'KeyQ', ctrlKey: true, altKey: true });
+    vi.unstubAllGlobals();
+
+    expect(runs.map(([command]) => command)).toEqual(['p.chord']);
   });
 });

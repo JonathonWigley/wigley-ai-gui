@@ -1,4 +1,10 @@
-import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+  DotStatus,
+  PromptActionInput,
+} from '../../../shared/page/layout-host/kit';
 
 // The status dot's states and the base kit, for a layout's JSDoc to import from here.
 export type { BaseKit, DotStatus };
@@ -458,15 +464,16 @@ export type PickerItemInput =
   | { list: 'controls'; label: string; value: string }
   | { list: 'choices'; label: string; isCurrent: boolean };
 // `label` is the line the list filters on and the row's tooltip shows; a `section` row's joins its title and detail.
+// `prompt` is the actions the cursor row shows (`x archive` / `x restore` in the Session step), each drawn with
+// `kit.keyHint`; empty on every other row. A layout that leaves out `pickerRow` draws it with `default`.
 export interface PickerRowInput {
   item: PickerItemInput;
   label: string;
+  prompt: readonly PromptActionInput[];
 }
-export interface PickerRowKit extends BaseKit {
-  // The cursor row's prompt (`x archive` / `x restore` in the Session step); null on every other row. A row draws
-  // through `row(parent, { density: 'list', tag: 'li', … })`; the app sets `is-selected` and `is-cursor` on it.
-  cursorEnd(): HTMLElement | null;
-}
+// A row draws through `row(parent, { density: 'list', tag: 'li', … })`; the app sets `is-selected` and `is-cursor`
+// on it.
+export interface PickerRowKit extends BaseKit {}
 export interface PickerHeadingInput {
   title: string;
 }
@@ -531,8 +538,8 @@ export type EntryBuilder<K extends AnyEntryKind> = (
 ) => EntryView<K>;
 
 // The chat layout a user writes: a builder for each entry kind it changes, and the other surfaces' parts it changes;
-// a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; the app keeps the
-// dialog's frame and title.
+// a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; `dialogFrame` draws
+// the panel and title around it, and the app keeps the dialog's scrim, keys and focus.
 export interface ChatLayout {
   // Whether the entry list draws the agent's steps (activity lines and their step rows); `false` leaves them out of
   // the list and the entry cursor. A user layout that wants the activity lines sets it
@@ -628,6 +635,15 @@ export interface ChatLayout {
     input: CloseConfirmInput,
     kit: CloseConfirmKit,
   ): PartView<CloseConfirmInput>;
+  // The frame of the sign-in, deny-reason and end-session dialogs: the panel, its title (`input.title`) and, when
+  // `input.hasActions`, its actions row. Return the panel, appended to `parent`, with `body` and `actions` inside it;
+  // the app fills them. The app keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions`
+  // is not inside its panel, or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: BaseKit,
+  ): DialogFramePart;
   // The image and its place on the viewer's scrim.
   imageViewer?(
     parent: HTMLElement,

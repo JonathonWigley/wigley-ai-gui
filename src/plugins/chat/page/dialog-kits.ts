@@ -76,11 +76,12 @@ export interface DialogPartDeps extends SurfaceKitDeps {
   log: PluginLog;
 }
 
-// One dialog's part, drawn into `parent` (the dialog's body, or the image
-// viewer's scrim). `draw` replaces the last draw, disposing it; `update` runs
+// One dialog's part, drawn into `parent()` (the dialog's body, or the image
+// viewer's scrim), read on each `clear` and `draw`: a frame redraw replaces the
+// dialog's body. `draw` replaces the last draw, disposing it; `update` runs
 // the drawn view's update, else draws again, with `default` once the update
 // threw until the layouts change; `redraw` draws the last input again while a
-// draw is held; `clear` disposes the draw and empties `parent`.
+// draw is held; `clear` disposes the draw and empties `parent()`.
 export interface DialogPart<I> {
   draw(input: I): void;
   update(input: I): void;
@@ -109,7 +110,7 @@ type DialogPartName<I, K> = {
 
 function createDialogPart<I, K>(
   deps: DialogPartDeps,
-  parent: HTMLElement,
+  parent: () => HTMLElement,
   partName: DialogPartName<I, K>,
   kitFor: (rollback: RollbackDeps) => PartKit<K>,
 ): DialogPart<I> {
@@ -120,12 +121,12 @@ function createDialogPart<I, K>(
   const clear = () => {
     drawn?.dispose();
     drawn = null;
-    parent.replaceChildren();
+    parent().replaceChildren();
   };
   const draw = (input: I) => {
     clear();
     current = input;
-    drawn = draws.draw(parent, (builder, at, rollback) => {
+    drawn = draws.draw(parent(), (builder, at, rollback) => {
       const { kit, finish } = kitFor(rollback);
       // TypeScript cannot resolve the builder of a generic part name.
       const build = builder as (
@@ -166,7 +167,7 @@ export interface SignInPieces {
 
 export function createSignInPart(
   deps: DialogPartDeps,
-  body: HTMLElement,
+  body: () => HTMLElement,
   pieces: SignInPieces,
 ): DialogPart<SignInInput> {
   return createDialogPart<SignInInput, SignInKit>(
@@ -201,7 +202,7 @@ export interface ReasonBoxPieces {
 
 export function createReasonBoxPart(
   deps: DialogPartDeps,
-  body: HTMLElement,
+  body: () => HTMLElement,
   pieces: ReasonBoxPieces,
 ): DialogPart<ReasonBoxInput> {
   return createDialogPart<ReasonBoxInput, ReasonBoxKit>(
@@ -228,7 +229,7 @@ export function createReasonBoxPart(
 
 export function createCloseConfirmPart(
   deps: DialogPartDeps,
-  body: HTMLElement,
+  body: () => HTMLElement,
   pieces: { actions: HTMLElement },
 ): DialogPart<CloseConfirmInput> {
   return createDialogPart<CloseConfirmInput, CloseConfirmKit>(
@@ -250,7 +251,7 @@ export function createCloseConfirmPart(
 
 export function createImageViewerPart(
   deps: DialogPartDeps,
-  scrim: HTMLElement,
+  scrim: () => HTMLElement,
 ): DialogPart<ImageViewerInput> {
   return createDialogPart<ImageViewerInput, BaseKit>(
     deps,

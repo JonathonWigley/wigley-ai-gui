@@ -1,6 +1,6 @@
 # 09 — Primer column chrome and cursor prompt
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 04, 07
 Plan: [plan.md](plan.md)
@@ -212,3 +212,5 @@ bookkeeping: task 10 closes **Fixed texts in layout slots** (the primer cursor p
 closes **Forms and primer column chrome through their layouts**.
 
 ## Proof
+
+Commit 6cab7ba59 · proof: diff read + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: row pair keeps class primer-column-key; cancel prompt anchors are not disposed by view.dispose() (outside the task); keys-fake empty asserted only for strip slots

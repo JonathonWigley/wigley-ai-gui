@@ -1,4 +1,9 @@
-import type { BaseKit } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  ConfirmButtonsKit,
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../shared/page/layout-host/kit';
 
 // The audio picker layout contract: what a layout in `layouts/audio-picker/<name>/layout.js` draws the audio picker
 // popup with. A layout defines only the parts it changes; every part it leaves out, and every part that throws or
@@ -11,10 +16,12 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // `moment` part, a `candidate` part per candidate, the `none` part and the `notes` part. The app keeps the click on
 // each `candidate` and `none` part root (it moves the cursor to the row and chooses it), `is-cursor` on the cursor
 // row's part root and `is-selected` on the chosen row's; the footer (the Cancel picker and Send buttons and their
-// keys), the cancel prompt, scrolling and the notes boxes themselves.
+// keys), the cancel prompt's scrim, keys and focus, scrolling and the notes boxes themselves. `dialogFrame` and
+// `confirmBody` draw the cancel prompt's panel, title, body and buttons.
 //
 // The app draws a part again only when its input changes, so moving the cursor redraws two rows; a layout keeps no
-// state between draws. A `notes` part drawn again keeps its box's text, and its focus while the box had it.
+// state between draws. A `notes` part drawn again keeps its box, with its text, cursor, vim mode and undo, and its
+// focus while the box had it.
 
 export type PlayMode = 'one-shot' | 'loop' | 'variants';
 
@@ -78,6 +85,11 @@ export interface NotesInput {
   isNone: boolean;
 }
 
+// `body` is the cancel prompt's question.
+export interface ConfirmBodyInput {
+  body: string;
+}
+
 // `element` is the part's own node, appended to `parent`.
 export interface PickerLayoutPart {
   element: HTMLElement;
@@ -96,9 +108,12 @@ export interface CandidateKit extends PickerKit {
   waveform(parent: HTMLElement): HTMLElement;
 }
 
+// The cancel prompt's kit, in scope `audio-picker.confirm`: `keyHint`, `keys` and `keysFor` read that scope.
+export interface ConfirmBodyKit extends PickerKit, ConfirmButtonsKit {}
+
 export interface NotesKit extends PickerKit {
   // The moment's notes box in its field (`div.audio-picker-notes-field`), with its `⇧⇥ ⇥` box keys on the frame. It
-  // mounts once per draw; asking for it again throws. When a part leaves it out, the app appends it at the part's end,
+  // places once per draw; asking for it again throws. When a part leaves it out, the app appends it at the part's end,
   // so the box keys always reach it.
   textBox(parent: HTMLElement): HTMLElement;
 }
@@ -132,6 +147,22 @@ export interface AudioPickerLayout {
     input: NotesInput,
     kit: NotesKit,
   ): PickerLayoutPart;
+  // The cancel prompt's body, scope `audio-picker.confirm`: `input.body` and the prompt's two buttons. A button the
+  // part leaves out goes at the end of the frame's actions row.
+  confirmBody?(
+    parent: HTMLElement,
+    input: ConfirmBodyInput,
+    kit: ConfirmBodyKit,
+  ): PickerLayoutPart;
+  // The frame of the cancel prompt: the panel, its title (`input.title`) and, when `input.hasActions`, its actions
+  // row. Return the panel, appended to `parent`, with `body` and `actions` inside it; the app fills them. The app
+  // keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions` is not inside its panel,
+  // or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: PickerKit,
+  ): DialogFramePart;
 }
 
 // The built-in `default` layout, which defines every part.
@@ -157,4 +188,14 @@ export interface CompleteAudioPickerLayout extends AudioPickerLayout {
     input: NotesInput,
     kit: NotesKit,
   ): PickerLayoutPart;
+  confirmBody(
+    parent: HTMLElement,
+    input: ConfirmBodyInput,
+    kit: ConfirmBodyKit,
+  ): PickerLayoutPart;
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: PickerKit,
+  ): DialogFramePart;
 }

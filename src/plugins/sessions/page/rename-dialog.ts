@@ -17,12 +17,12 @@ import type { SessionsParts } from './layout/sessions-parts';
 // `pushScope` pushes the `rename` scope, whose Enter and Esc run `accept` and
 // `cancel`; `setUserTitle` asks main to set the user title, null clearing it;
 // `titleMaxLength` reads the setting a typed title is checked against;
-// `parts` draws the dialog's body through the sessions layout.
+// `parts` draws the dialog's frame and body through the sessions layout.
 export interface RenameDialogDeps {
   pushScope(): PushedScope;
   setUserTitle(sessionId: string, title: string | null): Promise<void>;
   titleMaxLength(): number;
-  parts: Pick<SessionsParts, 'renameDialog'>;
+  parts: Pick<SessionsParts, 'renameDialog' | 'dialogFrame'>;
   log: PluginLog;
 }
 
@@ -35,8 +35,8 @@ export interface RenameDialogDeps {
 // scope changing under it does; a cancel after `accept` does not undo the
 // title main is already setting, and a refusal the closed dialog cannot show
 // is logged. Closing gives focus back to what held it as the dialog opened,
-// unless focus moved elsewhere meanwhile. `redraw` draws the open dialog's
-// body again, for changed layouts.
+// unless focus moved elsewhere meanwhile. `redraw` draws the frame again, open
+// or not, and the open dialog's body, for changed layouts.
 export interface RenameDialog {
   element: HTMLElement;
   open(row: SessionRow): void;
@@ -56,7 +56,10 @@ interface Renaming {
 const HINT = 'Empty hands naming back to the agent.';
 
 export function createRenameDialog(deps: RenameDialogDeps): RenameDialog {
-  const dialog = createDialog('Rename session', { hasActions: false });
+  const dialog = createDialog('Rename session', {
+    hasActions: false,
+    drawFrame: (parent, input) => deps.parts.dialogFrame(parent, input).built,
+  });
   const frame = inputFrame();
   const input = textBoxInput('session-rename-box');
   frame.append(input);
@@ -175,6 +178,7 @@ export function createRenameDialog(deps: RenameDialogDeps): RenameDialog {
       }
     },
     redraw() {
+      dialog.redrawFrame();
       if (renaming !== null) {
         drawBody();
       }

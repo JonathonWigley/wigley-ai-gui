@@ -1,5 +1,6 @@
 import type { PageBind, ViewScope } from '../contracts/keymap';
-import { type Chord, isChordToken, parseChord } from '../shared/chord-notation';
+import type { PlatformKeys } from '../contracts/platform';
+import { type Chord, chordToken, isChordToken } from '../shared/chord-notation';
 import {
   firesIn,
   requireUnambiguousBinds,
@@ -116,114 +117,139 @@ export function createSequenceMatcher(
   };
 }
 
-// The parts of a key event a chord matches on.
-export type ChordPress = Pick<
-  KeyboardEvent,
-  'code' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'
->;
+// The parts of a key event a chord matches on, as plain data.
+export interface ChordPress {
+  key: string;
+  code: string;
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  meta: boolean;
+  altGraph: boolean;
+}
 
 export interface ChordMatcher {
   match(press: ChordPress, scope: ViewScope): PageBind | undefined;
 }
 
-interface ParsedChord extends ChordPress {
-  bind: PageBind;
-}
-
-// A letter matches its `Key` code, a digit its top-row `Digit` code, `;` and
-// `'` their US-layout codes, `Enter` the main Enter key's code, and `Tab` its
-// own.
-function toParsedChord(bind: PageBind, chord: Chord): ParsedChord {
-  return {
-    bind,
-    code: chordCode(chord.key),
-    ctrlKey: chord.ctrl,
-    altKey: chord.alt,
-    shiftKey: chord.shift,
-    metaKey: chord.meta,
-  };
-}
-
-const NAMED_KEY_CODES: Partial<Record<string, string>> = {
-  ';': 'Semicolon',
-  "'": 'Quote',
-  Enter: 'Enter',
-  Tab: 'Tab',
+// Each US-layout code a chord falls back to that types a character other than
+// a letter, with the character it types without Shift and with it.
+const US_CHARACTERS_BY_CODE: Partial<
+  Record<string, readonly [string, string]>
+> = {
+  Backquote: ['`', '~'],
+  ...Object.fromEntries(
+    [...'1234567890'].map((digit, index) => [
+      `Digit${digit}`,
+      [digit, '!@#$%^&*()'[index]] as const,
+    ]),
+  ),
+  Minus: ['-', '_'],
+  Equal: ['=', '+'],
+  BracketLeft: ['[', '{'],
+  BracketRight: [']', '}'],
+  Backslash: ['\\', '|'],
+  Semicolon: [';', ':'],
+  Quote: ["'", '"'],
+  Comma: [',', '<'],
+  Period: ['.', '>'],
+  Slash: ['/', '?'],
+  Space: [' ', ' '],
 };
 
-function chordCode(key: string): string {
-  const namedCode = NAMED_KEY_CODES[key];
-  if (namedCode !== undefined) {
-    return namedCode;
-  }
-  const isDigit = key >= '0' && key <= '9';
-  return isDigit ? `Digit${key}` : `Key${key.toUpperCase()}`;
+// Whether a chord's notation can hold `key`, read through `chordToken` so the
+// notation keeps the one list of chord keys.
+function isChordKey(key: string): boolean {
+  return (
+    chordToken({ ctrl: true, alt: false, shift: false, meta: false, key }) !==
+    null
+  );
 }
 
-// The chord key of `code`, the reverse of `chordCode`; null for a code no
-// chord names.
-function chordKeyFor(code: string): string | null {
-  const named = Object.entries(NAMED_KEY_CODES).find(
-    ([, namedCode]) => namedCode === code,
-  );
-  if (named !== undefined) {
-    return named[0];
-  }
-  const letter = /^Key([A-Z])$/.exec(code);
+// The chord `press`'s physical key names on a US layout; null for a code
+// outside it.
+function chordByCode(
+  press: ChordPress,
+  held: Omit<Chord, 'key' | 'shift'>,
+): Chord | null {
+  const letter = /^Key([A-Z])$/.exec(press.code);
   if (letter !== null) {
-    return letter[1].toLowerCase();
+    return { ...held, shift: press.shift, key: letter[1].toLowerCase() };
   }
-  return /^Digit([0-9])$/.exec(code)?.[1] ?? null;
+  const characters = US_CHARACTERS_BY_CODE[press.code];
+  if (characters === undefined) {
+    return null;
+  }
+  const [unshifted, shifted] = characters;
+  return { ...held, shift: false, key: press.shift ? shifted : unshifted };
+}
+
+// The chord `press` names, or null when it names none:
+// an AltGr press where AltGr types is typing, so no chord;
+// a named key (Enter, Tab, an F key, an arrow, Home, End, PageUp, PageDown,
+// Backspace, Delete) is itself, Shift held as typed;
+// an Option press where Option chords match by code goes by its physical key;
+// an ASCII letter is its lowercase, Shift held as typed;
+// a digit, space or ASCII symbol is the character, Shift being in it;
+// any other press goes by its physical key on a US layout.
+function pressedChord(press: ChordPress, keys: PlatformKeys): Chord | null {
+  if (press.altGraph && keys.altGraphTypes) {
+    return null;
+  }
+  const held = { ctrl: press.ctrl, alt: press.alt, meta: press.meta };
+  const isNamedKey = press.key.length > 1 && isChordKey(press.key);
+  if (isNamedKey) {
+    return { ...held, shift: press.shift, key: press.key };
+  }
+  const isOptionByCode = press.alt && keys.optionMatchesByCode;
+  if (isOptionByCode) {
+    return chordByCode(press, held);
+  }
+  if (/^[A-Za-z]$/.test(press.key)) {
+    return { ...held, shift: press.shift, key: press.key.toLowerCase() };
+  }
+  const isTypedCharacter = press.key.length === 1 && isChordKey(press.key);
+  if (isTypedCharacter) {
+    return { ...held, shift: false, key: press.key };
+  }
+  return chordByCode(press, held);
 }
 
 // The chord token a bind writes to match `press`, as `createChordMatcher`
-// reads it: `<C-t>` for Control+t, `<A-o>` for Option+o whatever character it
-// types. Null when the press names no chord: a key the notation has no name
-// for, or no modifier that makes a chord.
-export function chordTokenFor(press: ChordPress): string | null {
-  const key = chordKeyFor(press.code);
-  if (key === null) {
-    return null;
-  }
-  const modifiers =
-    (press.ctrlKey ? 'C-' : '') +
-    (press.altKey ? 'A-' : '') +
-    (press.shiftKey ? 'S-' : '') +
-    (press.metaKey ? 'D-' : '');
-  const token = `<${modifiers}${key}>`;
-  return parseChord(token) === null ? null : token;
-}
-
-function isSameChord(a: ChordPress, b: ChordPress): boolean {
-  return (
-    a.code === b.code &&
-    a.ctrlKey === b.ctrlKey &&
-    a.altKey === b.altKey &&
-    a.shiftKey === b.shiftKey &&
-    a.metaKey === b.metaKey
-  );
+// reads it: `<C-t>` for Control+t, `<C-?>` for Control+Shift+/ on a US layout,
+// `<A-o>` for Option+o on macOS whatever character it types. Null when the
+// press names no chord: AltGr typing, a key the notation has no name for, or
+// no modifier that makes a chord.
+export function chordTokenFor(
+  press: ChordPress,
+  keys: PlatformKeys,
+): string | null {
+  const chord = pressedChord(press, keys);
+  return chord === null ? null : chordToken(chord);
 }
 
 // Takes every page bind and keeps its chord binds: a bind whose only key is a
 // chord token such as `<C-h>`. Throws on a chord inside a longer sequence or a
-// chord that does not fit the notation. A chord matches on the physical key and
-// the exact modifiers held, never on `KeyboardEvent.key`.
-export function createChordMatcher(binds: PageBind[]): ChordMatcher {
+// chord that does not fit the notation. A press matches the bind written as
+// the chord it names, through `pressedChord`'s steps with the exact modifiers
+// held; a token spells one chord alone, so equal tokens are equal chords.
+export function createChordMatcher(
+  binds: PageBind[],
+  keys: PlatformKeys,
+): ChordMatcher {
   requireWellFormedChords(binds);
-  const chords: ParsedChord[] = [];
-  for (const bind of binds) {
-    const isChordBind = bind.keys.length === 1 && isChordToken(bind.keys[0]);
-    const chord = isChordBind ? parseChord(bind.keys[0]) : null;
-    if (chord !== null) {
-      chords.push(toParsedChord(bind, chord));
-    }
-  }
+  const chordBinds = binds.filter(
+    (bind) => bind.keys.length === 1 && isChordToken(bind.keys[0]),
+  );
 
   return {
     match(press, scope) {
-      return chords.find(
-        (chord) => isSameChord(chord, press) && firesIn(chord.bind, scope),
-      )?.bind;
+      const token = chordTokenFor(press, keys);
+      return token === null
+        ? undefined
+        : chordBinds.find(
+            (bind) => bind.keys[0] === token && firesIn(bind, scope),
+          );
     },
   };
 }

@@ -76,6 +76,19 @@ const layout = {
     kit.removeButton(root);
     return { element: root };
   },
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog',
+    );
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    return { element: panel, body, actions };
+  },
   actions(parent, kit) {
     const root = kit.el(parent, 'div', 'notes-actions');
     kit.actionButton(root, 'discard');
@@ -115,6 +128,17 @@ const layout = {
     kit.commandButton(commands, 'undo');
     kit.commandButton(commands, 'redo');
     kit.commandButton(commands, 'closeMarkup');
+    return { element: root };
+  },
+  cursorPrompt(parent, input, kit) {
+    const root = kit.el(parent, 'span', 'notes-cursor-prompt');
+    for (const action of input.actions) {
+      const shown = kit.keyHint(root, action.command, {
+        label: action.label,
+        className: 'notes-hint',
+      });
+      shown.classList.toggle('is-no-target', !action.hasTarget);
+    }
     return { element: root };
   },
   pickerRow(parent, input, kit) {

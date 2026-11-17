@@ -3,14 +3,9 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
-import type { AnchorOptions, ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import {
-  type FocusTarget,
-  PANE_FOCUS_COMMANDS,
-  type ResizeTarget,
-} from '../../../contracts/panes';
+import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
 import type { LayoutState } from '../../../contracts/state';
 import type {
@@ -31,10 +26,12 @@ import {
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
+import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import {
   type DrawnPart,
   drawPart,
   type PartPick,
+  requireDialogFrame,
   requireElementIn,
   type RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
@@ -51,18 +48,10 @@ import {
 } from '../../../shared/page/session-forms';
 import {
   createStatusLine,
-  type StatusLine,
   type StatusLineContent,
 } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
-import { textButton } from '../../../shared/page/ui/button';
-import {
-  disposeAnchors,
-  keyChevron,
-  keyEdge,
-  keyStack,
-  recordingAnchor,
-} from '../../../shared/page/ui/key-anchors';
+import type { DialogFramePart } from '../../../shared/page/ui/dialog';
 import { createSplit } from '../../../shared/page/ui/split';
 import {
   NEEDS_YOU_ACTIVITY,
@@ -84,15 +73,20 @@ import {
 } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
+  CardEdgeInput,
   FeatureCardInput,
   ItemCardInput,
+  ItemsHeadInput,
   ItemsInput,
   PrimerLayout,
   PrimerLayoutCard,
   PrimerLayoutCards,
   PrimerLayoutPane,
+  ReviewFooterInput,
   TaskCardInput,
   TaskRowInput,
+  TasksFootInput,
+  TasksHeadInput,
   TasksInput,
 } from '../layouts/layout';
 import {
@@ -104,16 +98,23 @@ import {
 } from './boxes';
 import {
   type CardKit,
+  createCardEdgeKit,
   createFeatureKit,
   createItemKit,
+  createItemsHeadKit,
   createItemsKit,
+  createPrimerKit,
+  createReviewFooterKit,
   createReviewKit,
   createTaskKit,
+  createTasksFootKit,
+  createTasksHeadKit,
   createTasksKit,
+  type PrimerKitDeps,
   type PrimerPartKitDeps,
 } from './layout/primer-kit';
 import { primerFocusTarget } from './primer-commands';
-import { reviewFooter, reviewInput, taskName } from './primer-review';
+import { reviewInput, taskName } from './primer-review';
 import {
   cardRow,
   includedCount,
@@ -126,6 +127,7 @@ import {
   scopeOf,
   selectedEntry,
   sessionTitle,
+  submitProblems,
   TASK_GROUPS,
   taskPosition,
   taskRows,
@@ -137,8 +139,8 @@ import type { PrimerStore } from './primer-store';
 // scope to `scopeOf` the state while a primer popup is the visible surface;
 // `pushConfirmScope` lays the cancel prompt's scope over it. `keys` anchors each
 // key hint the view and its layout draw and reads the keys a layout asks for.
-// `run` runs a button's command; `commands` is what a layout's `kit.command`
-// reaches. `platform` is the OS the layouts' key hints draw for.
+// `run` runs a cancel prompt button's command; `commands` is what a layout's
+// `kit.command` and `kit.button` reach. `platform` is the OS the layouts' key hints draw for.
 // `uiState` keeps the tasks and items columns' widths, which every primer's
 // columns open at. `timers` runs the splits' resize prompt linger. Each primer
 // view is a drop target through `drops`, typing files into the primer's box
@@ -194,7 +196,7 @@ export interface PrimerPopups {
 // keeping the primer returns to. `resizeTarget` is the split the resize keys
 // move while `pane` has focus: the outer split for the tasks column, the inner
 // split for the items column and the card. `dispose` disposes every anchor it
-// named and both splits, and destroys every box its parts mounted.
+// named and both splits, and releases every box its parts placed.
 interface PrimerFormView {
   element: HTMLElement;
   update(primer: OpenPrimer, view: PrimerView): void;
@@ -223,7 +225,7 @@ interface DrawnColumn {
 }
 
 // A drawn card: the pick it was drawn from, `update` redraws what changes
-// without a rebuild, and `dispose` disposes its anchors and destroys its
+// without a rebuild, and `dispose` disposes its anchors and releases its
 // boxes.
 interface DrawnCard {
   pick: PartPick<PrimerLayout>;
@@ -231,18 +233,37 @@ interface DrawnCard {
   dispose(): void;
 }
 
-type AnchorKeys = Pick<KeyHints, 'anchor'>;
-
-// The parts of a column a primer view builds once: the column, its header's
-// row pair, the body its layout part fills, and the row prompt `drawColumn`
-// moves to the selected row, with each of its keys and the RowPrompt field
-// that shows it.
+// The parts of a column a primer view builds once: the column and the body
+// its layout part fills.
 interface ColumnParts {
   element: HTMLElement;
-  edge: HTMLElement;
   body: HTMLElement;
-  rowPrompt: HTMLElement;
-  promptKeys: [HTMLElement, keyof RowPrompt][];
+}
+
+// What a chrome strip's draw returns: its root, and the row pairs a column
+// head drew (empty for the other strips).
+interface DrawnStrip {
+  element: HTMLElement;
+  rowSteps: HTMLElement[];
+}
+
+// One chrome strip of a primer view: the slot it draws into, built once; the
+// part it draws; its last draw and the input that draw was for.
+interface ShownStrip<Input extends object> {
+  slot: HTMLElement;
+  part: PartOf;
+  draw(input: Input, pick: PartPick<PrimerLayout>): DrawnPrimerPart<DrawnStrip>;
+  drawn: DrawnPrimerPart<DrawnStrip> | null;
+  input: Input | null;
+}
+
+// A primer view's chrome strips, one per strip part.
+interface PrimerStrips {
+  tasksHead: ShownStrip<TasksHeadInput>;
+  itemsHead: ShownStrip<ItemsHeadInput>;
+  tasksFoot: ShownStrip<TasksFootInput>;
+  cardEdge: ShownStrip<CardEdgeInput>;
+  reviewFooter: ShownStrip<ReviewFooterInput>;
 }
 
 // One column of a primer view: its parts, the part last drawn into its body,
@@ -255,8 +276,8 @@ interface ShownColumn {
   selection: string | null;
 }
 
-// A row prompt key: its command, its label and the RowPrompt field that shows
-// it.
+// A row prompt action: its command, its label and the RowPrompt field that
+// shows it.
 type PromptKey = [PrimerCommandName, string, keyof RowPrompt];
 
 const NEED_PROMPT_KEYS: PromptKey[] = [
@@ -274,6 +295,11 @@ const ITEMS_PROMPT_KEYS: PromptKey[] = [
   ...NEED_PROMPT_KEYS,
   ['toggleInclude', 'include', 'include'],
 ];
+
+const PROMPT_KEYS: Record<PrimerColumn, PromptKey[]> = {
+  tasks: TASKS_PROMPT_KEYS,
+  items: ITEMS_PROMPT_KEYS,
+};
 
 // The uiState keys of the columns' widths, and the rail width the tasks
 // column's width replaces.
@@ -326,6 +352,24 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
   });
   const statusPart = deps.sessions.addRowPart(popups.statusPart);
   const dispatch = (action: PrimerAction) => store.dispatch(action);
+  // The layouts the user's setting names; the cancel prompt draws its body and
+  // frame while it is made, so this is declared before it.
+  let shownLayouts: ShownLayouts<PrimerLayout> = {
+    layouts: new Map([['default', defaultLayout]]),
+    user: 'default',
+  };
+  const confirmKitDeps: PrimerKitDeps = {
+    markdown: deps.markdown,
+    keys: deps.keys,
+    commands: deps.commands,
+    platform: deps.platform,
+    state: deps.state,
+    log: deps.log,
+  };
+  // The last draw of the prompt's frame and body, disposed after the next draw
+  // returns so the anchors of the last draw do not stay alive.
+  let drawnFrame: DrawnPart<DialogFramePart> | null = null;
+  let drawnBody: DrawnPart<{ element: HTMLElement }> | null = null;
   const confirm = createConfirmPrompt({
     title: 'Cancel this primer?',
     body: 'The agent is told the primer was cancelled. Your edits stay saved.',
@@ -342,12 +386,60 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
     log: deps.log,
+    drawFrame(parent, input) {
+      const previous = drawnFrame;
+      drawnFrame = drawPart({
+        owner: 'primer',
+        parent,
+        pick: pickPart(shownLayouts, (layout) => layout.dialogFrame),
+        defaultLayout,
+        part: (layout: PrimerLayout) => layout.dialogFrame,
+        build: (builder, into, rollback) =>
+          requireDialogFrame(
+            builder(
+              into,
+              input,
+              createPrimerKit(confirmKitDeps, 'confirm', rollback),
+            ),
+            input,
+            'dialogFrame',
+          ),
+        log: deps.log,
+        partName: 'dialogFrame',
+      });
+      previous?.dispose();
+      return drawnFrame.built;
+    },
+    drawBody(body, promptParts) {
+      const previous = drawnBody;
+      drawnBody = drawPart({
+        owner: 'primer',
+        parent: body,
+        pick: pickPart(shownLayouts, (layout) => layout.confirmBody),
+        defaultLayout,
+        part: (layout: PrimerLayout) => layout.confirmBody,
+        build: (builder, into, rollback) => ({
+          element: requireElementIn(
+            into,
+            builder(
+              into,
+              { body: promptParts.body },
+              {
+                ...createPrimerKit(confirmKitDeps, 'confirm', rollback),
+                keepButton: promptParts.keepButton,
+                confirmButton: promptParts.confirmButton,
+              },
+            ),
+            'confirmBody',
+          ),
+        }),
+        log: deps.log,
+        partName: 'confirmBody',
+      });
+      previous?.dispose();
+    },
   });
   areas.overlay.contribute(confirm.element);
-  let shownLayouts: ShownLayouts<PrimerLayout> = {
-    layouts: new Map([['default', defaultLayout]]),
-    user: 'default',
-  };
 
   const renderOnce = () => {
     if (!confirm.settleOwedDismiss()) {
@@ -405,10 +497,13 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
     },
     setLayouts(shown) {
       shownLayouts = shown;
+      confirm.redraw();
       render();
     },
     dispose() {
       statusPart.dispose();
+      drawnBody?.dispose();
+      drawnFrame?.dispose();
       storeSubscription.dispose();
       for (const primerId of primerViews.keys()) {
         destroyPrimerView(primerId, shownPrimers, deps);
@@ -558,16 +653,18 @@ function destroyPrimerView(
 
 // Two nested splits, tasks | (items | card): the outer split holds the tasks
 // column and the inner split, which holds the items column and, in its end
-// pane, the card edge strip over the card and the review, each scrolling on
-// its own. Each column is a header, a body its layout part draws and, for the
-// tasks column, a foot; its body is drawn again whenever the primer changes.
-// The card is drawn again, its boxes destroyed and mounted again and its
-// anchors disposed, only when `cardKeyOf` changes or the layout picked for its
-// part changes; the review body is drawn again while it shows, when the
-// primer (its review cursor included) or the review's pick changed, over a
-// footer built once, and a moved cursor's task scrolled into sight. `attach`
-// places the root in the page once, before any editor mounts. `shown` reads
-// the layouts the parts are picked from now.
+// pane, the card edge strip's slot over the card and the review, each
+// scrolling on its own. Each column is its head's slot, a body its layout part
+// draws and, for the tasks column, its foot's slot; its body is drawn again
+// whenever the primer changes. Each chrome strip draws into its slot on the
+// first update and again when its input or pick changed (`updateStrips`).
+// The card is drawn again, its boxes moving into the new card, a box the new
+// card leaves out destroyed, and its anchors disposed, only when `cardKeyOf`
+// changes or the layout picked for its part changes; the review body is drawn
+// again while it shows, when the primer (its review cursor included) or the
+// review's pick changed, over the review footer's slot, and a moved cursor's
+// task scrolled into sight. `attach` places the root in the page once, before
+// any editor mounts. `shown` reads the layouts the parts are picked from now.
 function createPrimerFormView(
   attach: (root: HTMLElement) => void,
   primer: OpenPrimer,
@@ -598,19 +695,6 @@ function createPrimerFormView(
   inner.element.classList.add('primer-inner');
   inner.end.classList.add('primer-main');
   outer.end.append(inner.element);
-  const anchors: Disposable[] = [];
-  const keys = { anchor: recordingAnchor(deps.keys.anchor, anchors) };
-  const tasksColumn = mountTasksColumn(outer.start, keys, deps.run);
-  const tasks = shownColumn('tasks', tasksColumn.parts);
-  const items = shownColumn('items', mountItemsColumn(inner.start, keys));
-  const cardEdge = cardEdgeStrip(keys);
-  const cardPane = element('div', 'primer-card');
-  const reviewPane = element('div', 'primer-review-pane');
-  const reviewBody = element('div', 'primer-review-body');
-  reviewPane.append(reviewBody, reviewFooter({ keys, run: deps.run }));
-  inner.end.append(cardEdge, cardPane, reviewPane);
-  // Editors mount into attached elements, so they can measure themselves.
-  attach(root);
   const partDeps: PartDeps = {
     markdown: deps.markdown,
     keys: deps.keys,
@@ -620,6 +704,26 @@ function createPrimerFormView(
     boxes: deps.boxes,
     log: deps.log,
   };
+  const statusLine = createStatusLine();
+  const strips = createStrips(partDeps, statusLine.element);
+  const tasks = shownColumn(
+    'tasks',
+    mountColumn(outer.start, 'primer-tasks', [
+      strips.tasksHead.slot,
+      strips.tasksFoot.slot,
+    ]),
+  );
+  const items = shownColumn(
+    'items',
+    mountColumn(inner.start, 'primer-items', [strips.itemsHead.slot]),
+  );
+  const cardPane = element('div', 'primer-card');
+  const reviewPane = element('div', 'primer-review-pane');
+  const reviewBody = element('div', 'primer-review-body');
+  reviewPane.append(reviewBody, strips.reviewFooter.slot);
+  inner.end.append(strips.cardEdge.slot, cardPane, reviewPane);
+  // Editors mount into attached elements, so they can measure themselves.
+  attach(root);
   const primerId = primer.formId;
   let cardKey = cardKeyOf(primer);
   let card = drawCard(cardPane, primer, shown(), partDeps);
@@ -642,8 +746,9 @@ function createPrimerFormView(
       // Every primer's columns share their stored widths.
       outer.reloadWidth();
       inner.reloadWidth();
-      tasksColumn.statusLine.update(true, saveStatus(current));
+      statusLine.update(true, saveContent(current));
       const layouts = shown();
+      updateStrips(strips, current, layouts);
       updateColumn(tasks, current, layouts, partDeps);
       updateColumn(items, current, layouts, partDeps);
       const shownRow = rowName(cardRow(current));
@@ -660,7 +765,7 @@ function createPrimerFormView(
       card.update(current);
       drawnRow = shownRow;
       const isReview = viewName === 'review';
-      cardEdge.hidden = isReview;
+      strips.cardEdge.slot.hidden = isReview;
       cardPane.hidden = viewName !== 'primer';
       reviewPane.hidden = !isReview;
       const reviewPick = pickPart(layouts, REVIEW_PART);
@@ -690,7 +795,9 @@ function createPrimerFormView(
       tasks.drawn?.dispose();
       items.drawn?.dispose();
       reviewPart?.dispose();
-      disposeAnchors(anchors);
+      for (const strip of Object.values(strips)) {
+        strip.drawn?.dispose();
+      }
       inner.dispose();
       outer.dispose();
     },
@@ -701,148 +808,213 @@ function shownColumn(name: PrimerColumn, parts: ColumnParts): ShownColumn {
   return { name, parts, drawn: null, primer: null, selection: null };
 }
 
-// A `span` of `className` anchored to `command`.
-function anchoredSpan(
-  keys: AnchorKeys,
-  className: string,
-  command: CommandId,
-  options: AnchorOptions,
-): HTMLElement {
-  const node = element('span', className);
-  keys.anchor(node, command, options);
-  return node;
-}
-
-// `⌃H ▲ ▼ ⌃L`, the row pair at a column header, its keys in `scope`.
-function rowStepEdge(keys: AnchorKeys, scope: ViewScope): HTMLElement {
-  return keyEdge('primer-column-edge', [
-    anchoredSpan(keys, 'primer-column-key', primerCommand('prevRow'), {
-      scope,
-    }),
-    keyChevron('▲'),
-    keyChevron('▼'),
-    anchoredSpan(keys, 'primer-column-key', primerCommand('nextRow'), {
-      scope,
-    }),
-  ]);
-}
-
-// A column's row prompt, each of `promptKeys` anchored in `scope`.
-function columnRowPrompt(
-  keys: AnchorKeys,
-  scope: ViewScope,
-  promptKeys: PromptKey[],
-): Pick<ColumnParts, 'rowPrompt' | 'promptKeys'> {
-  const placed = promptKeys.map(
-    ([command, label, field]): [HTMLElement, keyof RowPrompt] => [
-      anchoredSpan(keys, 'primer-row-key', primerCommand(command), {
-        scope,
-        label,
-      }),
-      field,
-    ],
-  );
-  const rowPrompt = element('span', 'primer-row-prompt');
-  rowPrompt.append(...placed.map(([node]) => node));
-  return { rowPrompt, promptKeys: placed };
-}
-
-// Fills `column` with the tasks column's header, its body and its foot. The
-// header holds the save state, the row pair `⌃H ▲ ▼ ⌃L` and `⌥L items ›` at
-// the split's edge; the foot the Review button, whose keys show in the tasks,
-// items and card scopes alike.
-function mountTasksColumn(
+// Fills `column` of `className` with its head's slot, its body and, for the
+// tasks column, its foot's slot.
+function mountColumn(
   column: HTMLElement,
-  keys: AnchorKeys,
-  run: (command: CommandId) => void,
-): { parts: ColumnParts; statusLine: StatusLine } {
-  const scope = primerScope('tasks');
-  const statusLine = createStatusLine();
-  const edge = rowStepEdge(keys, scope);
-  const head = element('header', 'primer-column-head');
-  head.append(
-    statusLine.element,
-    edge,
-    anchoredSpan(keys, 'primer-column-key', PANE_FOCUS_COMMANDS.right, {
-      scope,
-      label: 'items',
-    }),
-    keyChevron('›'),
-  );
+  className: string,
+  [head, foot]: [HTMLElement] | [HTMLElement, HTMLElement],
+): ColumnParts {
   const body = element('div', 'primer-column-body');
-  const reviewKeys = keyStack(
-    'primer-review-keys',
-    (['tasks', 'items', 'card'] as const).map((pane) =>
-      anchoredSpan(keys, 'primer-review-key', primerCommand('openReview'), {
-        scope: primerScope(pane),
-      }),
-    ),
-  );
-  const foot = element('footer', 'primer-tasks-foot');
-  foot.append(
-    textButton('Review', () => run(primerCommand('openReview')), {
-      variant: 'secondary',
-      hint: reviewKeys,
-    }),
-  );
-  column.classList.add('primer-column', 'primer-tasks');
-  column.append(head, body, foot);
-  return {
-    parts: {
-      element: column,
-      edge,
-      body,
-      ...columnRowPrompt(keys, scope, TASKS_PROMPT_KEYS),
-    },
-    statusLine,
-  };
-}
-
-// Fills `column` with the items column's header and its body. The header
-// holds `‹ tasks ⌥H`, the row pair `⌃H ▲ ▼ ⌃L` and `⌥L card ›` at the split's
-// edges.
-function mountItemsColumn(column: HTMLElement, keys: AnchorKeys): ColumnParts {
-  const scope = primerScope('items');
-  const edge = rowStepEdge(keys, scope);
-  const head = element('header', 'primer-column-head');
-  head.append(
-    keyChevron('‹ tasks'),
-    anchoredSpan(keys, 'primer-column-key', PANE_FOCUS_COMMANDS.left, {
-      scope,
-    }),
-    edge,
-    anchoredSpan(keys, 'primer-column-key', PANE_FOCUS_COMMANDS.right, {
-      scope,
-      label: 'card',
-    }),
-    keyChevron('›'),
-  );
-  const body = element('div', 'primer-column-body');
-  column.classList.add('primer-column', 'primer-items');
+  column.classList.add('primer-column', className);
   column.append(head, body);
+  if (foot !== undefined) {
+    column.append(foot);
+  }
+  return { element: column, body };
+}
+
+// A strip of `slotClass`'s slot, drawn through `part` with nothing drawn yet.
+// `build` draws the builder `part` read with the strip's input and kit, a
+// throw falling back to `default` and logging as each primer part does.
+function shownStrip<B, Input extends object>(
+  slotClass: string,
+  partName: string,
+  part: (layout: PrimerLayout) => B | undefined,
+  log: PluginLog,
+  build: (
+    builder: B,
+    parent: HTMLElement,
+    input: Input,
+    rollback: RollbackDeps,
+  ) => DrawnStrip,
+): ShownStrip<Input> {
+  const slot = element('div', slotClass);
   return {
-    element: column,
-    edge,
-    body,
-    ...columnRowPrompt(keys, scope, ITEMS_PROMPT_KEYS),
+    slot,
+    part,
+    draw(input, pick) {
+      const drawn = drawPart({
+        owner: 'primer',
+        parent: slot,
+        pick,
+        defaultLayout,
+        part,
+        build: (builder, into, rollback) =>
+          build(builder, into, input, rollback),
+        log,
+        partName,
+      });
+      return { built: drawn.built, pick, dispose: drawn.dispose };
+    },
+    drawn: null,
+    input: null,
   };
 }
 
-// The strip over the card: `‹ items ⌥H` at the split's edge.
-function cardEdgeStrip(keys: AnchorKeys): HTMLElement {
-  const strip = element('div', 'primer-card-edge');
-  strip.append(
-    keyChevron('‹ items'),
-    anchoredSpan(keys, 'primer-card-edge-key', PANE_FOCUS_COMMANDS.left, {
-      scope: primerScope('card'),
-    }),
+// The five chrome strips, each with its slot and kit. The tasks head places
+// `statusLine`, the view's save status, at the start of its root when the
+// part left it out.
+function createStrips(deps: PartDeps, statusLine: HTMLElement): PrimerStrips {
+  const pane = (
+    parent: HTMLElement,
+    built: PrimerLayoutPane | null | undefined,
+    partName: string,
+  ): DrawnStrip => ({
+    element: paneElement(parent, built, partName),
+    rowSteps: [],
+  });
+  return {
+    tasksHead: shownStrip(
+      'primer-tasks-head-slot',
+      'tasksHead',
+      (layout: PrimerLayout) => layout.tasksHead,
+      deps.log,
+      (builder, parent, input: TasksHeadInput, rollback) => {
+        const head = createTasksHeadKit(deps, statusLine, rollback);
+        const element = paneElement(
+          parent,
+          builder(parent, input, head.kit),
+          'tasksHead',
+        );
+        head.placeLeftOut(element);
+        return { element, rowSteps: head.rowSteps };
+      },
+    ),
+    itemsHead: shownStrip(
+      'primer-items-head-slot',
+      'itemsHead',
+      (layout: PrimerLayout) => layout.itemsHead,
+      deps.log,
+      (builder, parent, input: ItemsHeadInput, rollback) => {
+        const head = createItemsHeadKit(deps, rollback);
+        const element = paneElement(
+          parent,
+          builder(parent, input, head.kit),
+          'itemsHead',
+        );
+        head.placeLeftOut(element);
+        return { element, rowSteps: head.rowSteps };
+      },
+    ),
+    tasksFoot: shownStrip(
+      'primer-tasks-foot-slot',
+      'tasksFoot',
+      (layout: PrimerLayout) => layout.tasksFoot,
+      deps.log,
+      (builder, parent, input: TasksFootInput, rollback) =>
+        pane(
+          parent,
+          builder(parent, input, createTasksFootKit(deps, rollback)),
+          'tasksFoot',
+        ),
+    ),
+    cardEdge: shownStrip(
+      'primer-card-edge-slot',
+      'cardEdge',
+      (layout: PrimerLayout) => layout.cardEdge,
+      deps.log,
+      (builder, parent, input: CardEdgeInput, rollback) =>
+        pane(
+          parent,
+          builder(parent, input, createCardEdgeKit(deps, rollback)),
+          'cardEdge',
+        ),
+    ),
+    reviewFooter: shownStrip(
+      'primer-review-footer-slot',
+      'reviewFooter',
+      (layout: PrimerLayout) => layout.reviewFooter,
+      deps.log,
+      (builder, parent, input: ReviewFooterInput, rollback) =>
+        pane(
+          parent,
+          builder(parent, input, createReviewFooterKit(deps, rollback)),
+          'reviewFooter',
+        ),
+    ),
+  };
+}
+
+// Draws each strip whose input or pick changed, then marks each column head's
+// row pairs `is-no-target` while its column holds fewer than two rows, on the
+// row pairs of the draw now shown.
+function updateStrips(
+  strips: PrimerStrips,
+  primer: OpenPrimer,
+  layouts: ShownLayouts<PrimerLayout>,
+): void {
+  const tasksRows = COLUMNS.tasks.rowCount(primer);
+  const itemsRows = COLUMNS.items.rowCount(primer);
+  const entry = selectedEntry(primer);
+  const problems = submitProblems(primer).length;
+  updateStrip(strips.tasksHead, { rows: tasksRows }, layouts);
+  updateStrip(
+    strips.itemsHead,
+    { task: entry === null ? null : taskName(entry), rows: itemsRows },
+    layouts,
   );
-  return strip;
+  updateStrip(strips.tasksFoot, { problems }, layouts);
+  updateStrip(strips.cardEdge, { row: cardRow(primer).kind }, layouts);
+  updateStrip(strips.reviewFooter, { problems }, layouts);
+  markRowSteps(strips.tasksHead, tasksRows < 2);
+  markRowSteps(strips.itemsHead, itemsRows < 2);
+}
+
+// Draws the strip again when it has no draw, its pick changed or a field of
+// its input changed: the last draw disposed, its slot emptied, then drawn.
+function updateStrip<Input extends object>(
+  strip: ShownStrip<Input>,
+  input: Input,
+  layouts: ShownLayouts<PrimerLayout>,
+): void {
+  const pick = pickPart(layouts, strip.part);
+  const isCurrent =
+    isSamePick(strip.drawn?.pick, pick) && isSameInput(strip.input, input);
+  if (isCurrent) {
+    return;
+  }
+  strip.drawn?.dispose();
+  strip.slot.replaceChildren();
+  strip.drawn = strip.draw(input, pick);
+  strip.input = input;
+}
+
+// Whether every field of `next` equals that field of `drawn`.
+function isSameInput<Input extends object>(
+  drawn: Input | null,
+  next: Input,
+): boolean {
+  if (drawn === null) {
+    return false;
+  }
+  return (Object.keys(next) as (keyof Input)[]).every(
+    (field) => drawn[field] === next[field],
+  );
+}
+
+function markRowSteps(
+  strip: Pick<ShownStrip<object>, 'drawn'>,
+  isNoTarget: boolean,
+): void {
+  for (const rowStep of strip.drawn?.built.rowSteps ?? []) {
+    rowStep.classList.toggle('is-no-target', isNoTarget);
+  }
 }
 
 // The save state the tasks column header shows: `Sending…` while the primer
 // sends.
-function saveStatus(primer: OpenPrimer): StatusLineContent {
+function saveContent(primer: OpenPrimer): StatusLineContent {
   if (primer.sending !== null) {
     return { save: 'Sending…', saveState: 'sending' };
   }
@@ -932,9 +1104,8 @@ const COLUMNS: Record<PrimerColumn, ColumnSpec> = {
   },
 };
 
-// Marks the column `is-pane-inactive` while another pane has focus and its
-// row pair `is-no-target` while it holds fewer than two rows, and draws its
-// body again when the primer or the pick of its part changed.
+// Marks the column `is-pane-inactive` while another pane has focus, and draws
+// its body again when the primer or the pick of its part changed.
 function updateColumn(
   column: ShownColumn,
   current: OpenPrimer,
@@ -947,7 +1118,6 @@ function updateColumn(
     'is-pane-inactive',
     current.pane !== column.name,
   );
-  parts.edge.classList.toggle('is-no-target', spec.rowCount(current) < 2);
   const pick = pickPart(layouts, spec.part);
   if (current === column.primer && isSamePick(column.drawn?.pick, pick)) {
     return;
@@ -966,10 +1136,7 @@ function updateColumn(
 }
 
 // The column body through its layout part: the rows it drew marked
-// `is-selected` for the selected row, which holds the row prompt, with its
-// keys shown as `rowPrompt` says; the prompt sits at the end of the part's
-// element when the part drew no row for the selected row, and leaves the
-// column when `rowPrompt` is null. The selected row scrolls into view when
+// `is-selected` for the selected row, which scrolls into view when
 // `isRowChanged`.
 function drawColumn(
   column: ShownColumn,
@@ -982,21 +1149,12 @@ function drawColumn(
   const { parts } = column;
   parts.body.replaceChildren();
   const drawn = spec.draw(parts.body, primer, pick, deps);
-  const { rows, element: partElement } = drawn.built;
+  const { rows } = drawn.built;
   const selectedPosition = spec.selectedPosition(primer);
-  const prompt = rowPrompt(primer, column.name);
   for (const [position, node] of rows) {
     node.classList.toggle('is-selected', position === selectedPosition);
   }
   const selectedNode = rows.get(selectedPosition);
-  if (prompt === null) {
-    parts.rowPrompt.remove();
-  } else {
-    (selectedNode ?? partElement).append(parts.rowPrompt);
-  }
-  for (const [key, field] of parts.promptKeys) {
-    key.hidden = prompt?.[field] !== true;
-  }
   if (isRowChanged) {
     selectedNode?.scrollIntoView({ block: 'nearest' });
   }
@@ -1153,9 +1311,9 @@ type CardBuilder<Kit, Input> = (
 ) => PrimerLayoutCard<Input>;
 
 // The card the spec builds through `pick`: the layout's card, then each box it
-// left out at its end. `update` brings the kit's own parts up to date, then
-// runs the card's own `update`, whose throw is logged once per layout object
-// and part and keeps the card.
+// left out at its end. `update` brings the kit's own parts and its boxes' text
+// up to date, then runs the card's own `update`, whose throw is logged once
+// per layout object and part and keeps the card.
 function drawCardPart<Kit, Input>(
   parent: HTMLElement,
   primer: OpenPrimer,
@@ -1197,7 +1355,7 @@ function drawCardPart<Kit, Input>(
       if (next === null) {
         return;
       }
-      kit.update(next);
+      kit.update(next, current);
       try {
         card.update?.(next);
       } catch (error) {
@@ -1285,10 +1443,40 @@ function entryById(
   return primer.entries.find((entry) => entry.id === entryId);
 }
 
+// The actions `column`'s selected row prompt shows: each of its prompt keys
+// whose RowPrompt field is on, none when the column has no prompt.
+function promptActions(
+  primer: OpenPrimer,
+  column: PrimerColumn,
+): PromptActionInput[] {
+  const prompt = rowPrompt(primer, column);
+  if (prompt === null) {
+    return [];
+  }
+  return PROMPT_KEYS[column]
+    .filter(([, , field]) => prompt[field])
+    .map(([command, label]) => ({ command: primerCommand(command), label }));
+}
+
+// The prompt of the row at `position`: `actions` on the column's selected
+// row, empty on every other.
+function promptAt(
+  primer: OpenPrimer,
+  column: PrimerColumn,
+  position: number,
+  actions: PromptActionInput[],
+): PromptActionInput[] {
+  const isSelected = position === COLUMNS[column].selectedPosition(primer);
+  return isSelected ? actions : [];
+}
+
 // The Feature row, then each group's rows: Primer and Every feature only over
-// tasks, Extra tasks always.
+// tasks, Extra tasks always. The selected row holds the column's prompt.
 function tasksInput(primer: OpenPrimer): TasksInput {
   const rows = taskRows(primer);
+  const actions = promptActions(primer, 'tasks');
+  const promptOf = (position: number) =>
+    promptAt(primer, 'tasks', position, actions);
   const groups = TASK_GROUPS.flatMap(([group, header]) => {
     const entries = primer.entries.filter((entry) => entry.group === group);
     if (entries.length === 0 && group !== 'extra') {
@@ -1298,22 +1486,31 @@ function tasksInput(primer: OpenPrimer): TasksInput {
       {
         group,
         header,
-        rows: entries.map((entry) => taskRowInput(rows, entry)),
+        rows: entries.map((entry) => taskRowInput(rows, entry, promptOf)),
       },
     ];
   });
   return {
-    feature: { position: 0, kind: 'feature', name: primer.feature.name },
+    feature: {
+      position: 0,
+      kind: 'feature',
+      name: primer.feature.name,
+      prompt: promptOf(0),
+    },
     groups,
   };
 }
 
-function taskRowInput(rows: TaskRow[], entry: PrimerEntry): TaskRowInput {
+function taskRowInput(
+  rows: TaskRow[],
+  entry: PrimerEntry,
+  promptOf: (position: number) => PromptActionInput[],
+): TaskRowInput {
+  const position = rows.findIndex(
+    (candidate) => candidate.kind === 'task' && candidate.entryId === entry.id,
+  );
   return {
-    position: rows.findIndex(
-      (candidate) =>
-        candidate.kind === 'task' && candidate.entryId === entry.id,
-    ),
+    position,
     kind: 'task',
     entryId: entry.id,
     group: entry.group,
@@ -1321,16 +1518,18 @@ function taskRowInput(rows: TaskRow[], entry: PrimerEntry): TaskRowInput {
     need: entry.need,
     included: includedCount(entry),
     total: entry.items.length,
+    prompt: promptOf(position),
   };
 }
 
 // The selected task's items, or the empty state on the Feature row and on a
-// task with none.
+// task with none. The selected item's row holds the column's prompt.
 function itemsInput(primer: OpenPrimer): ItemsInput {
   const entry = selectedEntry(primer);
   if (entry === null) {
     return { task: null, rows: [], empty: NO_TASK_ITEMS };
   }
+  const actions = promptActions(primer, 'items');
   const rows = entry.items.map((item, i) => ({
     position: i,
     entryId: entry.id,
@@ -1338,6 +1537,7 @@ function itemsInput(primer: OpenPrimer): ItemsInput {
     text: item.text,
     include: item.include,
     added: item.added,
+    prompt: promptAt(primer, 'items', i, actions),
   }));
   return {
     task: { entryId: entry.id, name: taskName(entry) },

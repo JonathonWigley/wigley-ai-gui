@@ -59,11 +59,9 @@ export type PendingKeys =
   | { where: 'editor'; keys: string[]; scope: ViewScope };
 
 // Keys pressed in order while no editor has focus; each is a KeyboardEvent.key
-// value. Or a chord, alone in `keys`: `<` + any of `C-` (Control), `A-`
-// (Alt/Option), `S-` (Shift), `D-` (Command) in that order, at least one of
-// C-, A-, D-, + one lowercase letter, one digit, `;`, `'`, or Enter + `>`, e.g.
-// `<C-h>` or `<D-Enter>`. A chord fires on the page and inside an editor,
-// matched on the physical key.
+// value. Or a chord, alone in `keys`, written by `CHORD_NOTATION_RULE` in
+// `src/shared/chord-notation.ts` (`<C-h>`, `<D-Enter>`), firing on the page and
+// inside an editor and matching the typed character.
 export interface PageBind {
   keys: string[];
   scope: ViewScope;

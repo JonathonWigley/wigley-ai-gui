@@ -1,6 +1,7 @@
 import type {
   BaseKit,
   KitRowOptions,
+  PromptActionInput,
 } from '../../../shared/page/layout-host/kit';
 
 // The contract of a Backlog layout. Each part appends its root element to `parent` and returns it; the app sets
@@ -8,7 +9,7 @@ import type {
 // `[data-layout-owner="backlog"][data-layout="<name>"]`.
 //
 // Slots. A slot member places an element the app owns or fills:
-// - `status` → `div.backlog-status`; the app sets its text, title and `hidden`.
+// - `status` → `div.backlog-status-slot`, which takes no box of its own; the app draws the `tableStatus` part into it.
 // - `filterBar` → `div.backlog-filter-bar`; the app draws the `filters` part into it on each render.
 // - `filterBox` places the app's filter frame (`backlog-filter`) and returns it; the app keeps the one frame and its
 //   input across every redraw.
@@ -18,14 +19,11 @@ import type {
 //   shown chunk, then `newChunk`.
 // - `renameBox` places the app's rename frame (`backlog-rename`) and returns it; the app keeps it `hidden` while no
 //   rename is open.
-// - `cursorActions` → `span.backlog-row-actions-slot`, which takes no box of its own; the app fills it with the cursor
-//   prompt `span.backlog-row-actions` while the row is the selected row.
 // - `trailing` → the picker's element for the end of the cursor row; pass it as `KitRowOptions.trailing`.
-// `status`, `filterBar`, `filterBox`, `rows`, `body`, `chunks`, `renameBox` and `cursorActions` each place once per
-// draw: a slot called twice throws `<slot> placed twice`, which fails the part, so it draws with `default`.
+// `status`, `filterBar`, `filterBox`, `rows`, `body`, `chunks` and `renameBox` each place once per draw: a slot called
+// twice throws `<slot> placed twice`, which fails the part, so it draws with `default`.
 // What a part leaves out:
-// - a slot: the app appends it at the end of the part's root; the cursor prompt with no `cursorActions` goes at the
-//   end of the row root.
+// - a slot: the app appends it at the end of the part's root.
 // - a `pickerRow`'s `trailing`: the app appends it at the end of the row root.
 // The app sets the click on each `tableRow` root and toggles `is-selected`, `is-cursor`, `is-marked` and `is-started`
 // there; it sets the click on each `chunkCard` and `newChunk` root and toggles `is-cursor` on the strip cursor's. So a
@@ -53,6 +51,9 @@ export interface FiltersInput {
   marked: number;
 }
 // One follow-up row. `staleness` is null until main has read it; `chunk` is the chunk holding the row, null for none.
+// `prompt` is the actions that act on the row while it is the cursor row, in order, each drawn with
+// `kit.keyHint(parent, action.command, { label: action.label })`; empty on every other row. A `tableRow` that draws
+// none shows no prompt.
 export interface TableRowInput {
   repo: string;
   title: string;
@@ -63,6 +64,12 @@ export interface TableRowInput {
   staleness: StalenessLevel | null;
   chunk: { name: string; isStarted: boolean } | null;
   isMarked: boolean;
+  prompt: readonly PromptActionInput[];
+}
+// The table's status line: the load's message, or `No features homes found`; `text` is null for no status, which
+// draws nothing visible. A `tableStatus` that draws nothing shows no status.
+export interface TableStatusInput {
+  text: string | null;
 }
 // Why the table shows no rows: a filter matching nothing, every follow-up done while done ones are hidden, none
 // agent-ready while ready-only is on, every one in a chunk while chunked rows are hidden, or no follow-ups at all.
@@ -127,9 +134,7 @@ export interface StripKit extends BacklogKit {
   chunks(parent: HTMLElement): HTMLElement;
   renameBox(parent: HTMLElement): HTMLElement;
 }
-export interface RowKit extends BacklogKit {
-  cursorActions(parent: HTMLElement): HTMLElement;
-}
+export interface RowKit extends BacklogKit {}
 export interface PickerRowKit extends BacklogKit {
   // The app's element for the end of the cursor row, or null on every other row; pass it as
   // `KitRowOptions.trailing`.
@@ -138,11 +143,14 @@ export interface PickerRowKit extends BacklogKit {
 
 // A user layout defines only the parts it changes; `default` draws the rest. The `table`, `review` and `strip` panes
 // are drawn into app-owned containers once per layout set; `filters`, `tableRow`, `empty`, `reviewItem`, `commits`,
-// `chunkCard`, `newChunk` and `pickerRow` on every render, one call per item. Kit scopes: `table`, `filters`,
-// `tableRow` and `empty` `backlog.table`; `review`, `reviewItem` and `commits` `backlog.review`; `strip`, `chunkCard`
+// `chunkCard`, `newChunk` and `pickerRow` on every render, one call per item; `tableStatus` on every render that
+// changes its text, and again after each layout set. Each `tableRow` draws its own prompt from its input. Kit scopes: `table`, `filters`,
+// `tableRow`, `tableStatus` and `empty` `backlog.table`; `review`, `reviewItem` and `commits` `backlog.review`; `strip`, `chunkCard`
 // and `newChunk` `backlog.strip`; `pickerRow` `backlog.picker`. A user layout's `table` part draws the `rescan`,
 // `sweep` and `startAllChunks` hints itself, and its `strip` part the `renameChunk`, `toggleHeadless`, `startChunk`
-// and `startAllChunks` hints: none of their keys is a vim key.
+// and `startAllChunks` hints: none of their keys is a vim key. A part a user layout leaves out draws with `default`;
+// a `tableRow` that draws no `input.prompt` hint shows no cursor prompt, and a `tableStatus` that draws no text shows
+// no status: the app places neither.
 export interface BacklogLayout {
   table?(parent: HTMLElement, kit: TableKit): BacklogPane;
   filters?(
@@ -156,6 +164,11 @@ export interface BacklogLayout {
     kit: RowKit,
   ): HTMLElement;
   empty?(parent: HTMLElement, input: EmptyInput, kit: BacklogKit): HTMLElement;
+  tableStatus?(
+    parent: HTMLElement,
+    input: TableStatusInput,
+    kit: BacklogKit,
+  ): HTMLElement;
   review?(parent: HTMLElement, kit: ReviewKit): BacklogPane;
   reviewItem?(
     parent: HTMLElement,

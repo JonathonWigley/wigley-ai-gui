@@ -1,7 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
@@ -26,6 +23,7 @@ import {
   type AudioPickerPayload,
   OPEN_AUDIO_PICKER_TOOL,
   type PresentedAudioPicker,
+  SAVED_PICKERS_FOLDER,
 } from '../contract';
 import { type SamplePickerArgs, samplePickerArgs, sineWav } from './fixtures';
 import { createAudioPickerType } from './picker-type';
@@ -56,8 +54,7 @@ vi.mock('./fixtures', async (importOriginal) => {
 });
 
 // The real sessions part, so a drive action's open reaches the contributed
-// tool. `homeDir` holds the picker folder, which the store writes with
-// node:fs.
+// tool. `homeDir` holds the picker folder.
 function startWithSessions(options: {
   homeDir: string;
   isHeadless?: (sessionId: string) => boolean;
@@ -178,14 +175,9 @@ describe('audio-picker drive actions', () => {
 });
 
 describe('audio-picker main part', () => {
-  // A home of its own per test: the picker store writes real files there.
-  let homeDir = '';
-  beforeEach(() => {
-    homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-audio-picker-'));
-  });
+  const homeDir = '/home/user';
   afterEach(() => {
     sampleWrite.gate = null;
-    rmSync(homeDir, { recursive: true, force: true });
   });
 
   it('stops with nothing live and starts again', async () => {
@@ -350,21 +342,36 @@ describe('audio-picker main part', () => {
     await harness.stop();
   });
 
+  // Breaks if the quit does not wait for the queued write.
   it('a quit leaves the open picker open on disk and on the page, for the agent to send again', async () => {
     const harness = startWithSessions({ homeDir });
+    const pickersDir = posixPaths.join(homeDir, SAVED_PICKERS_FOLDER);
+    const held = Promise.withResolvers<void>();
+    const write = harness.files.write;
+    vi.spyOn(harness.files, 'write').mockImplementation(async (path, text) => {
+      if (path.startsWith(pickersDir)) {
+        await held.promise;
+      }
+      await write(path, text);
+    });
     await openedPicker(harness);
-    const pickersDir = path.join(
-      homeDir,
-      '.agents',
-      'wigley-audio-picker',
-      'pickers',
-    );
 
-    await harness.stop('quit');
+    let isStopped = false;
+    const stopped = harness.stop('quit').then(() => {
+      isStopped = true;
+    });
+    await flush();
+    expect(isStopped).toBe(false);
+    held.resolve();
+    await stopped;
 
-    const outcomes = readdirSync(pickersDir).map(
-      (name) =>
-        JSON.parse(readFileSync(path.join(pickersDir, name), 'utf8')).outcome,
+    const outcomes = await Promise.all(
+      (await harness.files.list(pickersDir)).map(
+        async (entry) =>
+          JSON.parse(
+            await harness.files.read(posixPaths.join(pickersDir, entry.path)),
+          ).outcome,
+      ),
     );
     expect(outcomes).toEqual(['open']);
     expect(

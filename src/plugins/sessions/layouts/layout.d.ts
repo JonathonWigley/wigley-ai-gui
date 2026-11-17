@@ -1,4 +1,10 @@
-import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+  DotStatus,
+  PromptActionInput,
+} from '../../../shared/page/layout-host/kit';
 
 // The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar,
 // its chat panes, each session's tab bar and each session's popups with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
@@ -15,7 +21,7 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // bar's `strip` with one `tab` per tab of its session, replacing their children on each draw. A `row` places other plugins'
 // row parts and a `tabBar` their bar parts, each through its kit's `contributedParts`. The side bar's rows are the
 // Sessions list, which holds the keys in scope `sessions.sidebar` once Alt+h moves past the leftmost pane; the row
-// under its cursor ends in the cursor prompt, through its kit's `cursorPrompt`. A part whose `rows`, `groups`,
+// under its cursor ends in the cursor prompt, which its input's `prompt` lists. A part whose `rows`, `groups`,
 // `header` or `strip` is not a child of its `element` is drawn by `default` instead.
 //
 // Chat panes. Sessions mode splits into panes, each showing one session. `pane` draws each pane's frame, again
@@ -45,7 +51,9 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // - `is-open` on the root of the popup that shows, the top open popup of its session, and `inert` on every other
 //   popup's root; `is-entering` on a popup's root from its add until its first transition on that root ends or the
 //   popup hides, so a slide up on add keyed on it runs once; the click on each `popupBar` entry, which opens its popup,
-//   set as on a tab, and the entry's `aria-label` (its popup's `title`).
+//   set as on a tab, and the entry's `aria-label` (its popup's `title`);
+// - the list picker sets `title`, `is-selected`, `is-cursor` and the click on a `pickerRow` root, and appends
+//   `trailing` when the row leaves it out.
 // The tab bodies, the sheet that holds them, the popup layer over them and the elements other plugins add stay the
 // app's.
 // Every key prompt here has no scope, so it shows in every scope, except the row's cursor prompt, whose keys fire in
@@ -58,9 +66,18 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // `popupBar` whose entries, are not children of its `element` are drawn by `default` instead, and so is a `popupBar`
 // returning another count of entries than its input holds.
 //
-// Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
+// Dialogs. The app keeps the rename dialog's scrim, keys and focus; `dialogFrame` draws its panel and title, and
+// `renameDialog` draws its body.
 // `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input or the layouts
-// change.
+// change. `pickerRow` draws each row of the split picker each time the picker draws its rows, and again when the
+// layouts change while it is open.
+
+// What a session is doing: its word, its tone and its emphasis.
+export interface ActivityInput {
+  word: string;
+  tone: DotStatus;
+  emphasis: 'raised' | 'urgent' | null;
+}
 
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
 // message cut to the title length), null for none, which `default` draws as `New Chat`; `section` is the id of the
@@ -70,22 +87,23 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
 // and draws a needs you label for `marked` only while no activity is set; the contributed parts fill the row's second line, where `default` puts the parts ordered 2 and later on a third line of their own; `onScreen` is true while the session shows in a pane other than
-// the focused one; `isPrompted` is true on the list cursor's row while the list holds the keys, which ends in the cursor
-// prompt; no row is prompted while the list does not hold the keys.
+// the focused one; `isPrompted` is true on the list cursor's row while the list holds the keys; no row is prompted while
+// the list does not hold the keys. `prompt` is the cursor prompt's actions, in order, empty on every row but the
+// prompted one: `s favorite  r rename  d close`, with `K up  J down` after the favorite key on a favorite project's row,
+// the favorite key then reading `unfavorite`. `default` draws them in a `span.session-row-actions` at the row's end,
+// one `kit.keyHint(parent, action.command, { label: action.label })` per action; a row that draws none shows no prompt.
+// The hints fire in `sessions.sidebar` and hide, keeping their space, in every other scope.
 export interface SessionRowInput {
   sessionId: string;
   title: string | null;
   label: string;
   harness: string;
   marked: boolean;
-  activity: {
-    word: string;
-    tone: DotStatus;
-    emphasis: 'raised' | 'urgent' | null;
-  } | null;
+  activity: ActivityInput | null;
   onScreen: boolean;
   section: string | null;
   isPrompted: boolean;
+  prompt: readonly PromptActionInput[];
 }
 
 // One side bar section: Favorites and Recent always draw, then each plugin section that claims a row. `kind` is
@@ -149,6 +167,28 @@ export interface PopupBarInput {
 export interface RenameDialogInput {
   problem: string | null;
   hint: string;
+}
+
+// One choice of the split picker (`Show session`): a session no pane shows, with what its side-bar row shows (`title`
+// as the row shows it, null for none; `label` the folder label; `project`; `harness`, '' for none; `activity` its top
+// activity, null for none), or `new`, the New session row, listed last when chat can start a session.
+export type PickerItemInput =
+  | {
+      kind: 'session';
+      sessionId: string;
+      title: string | null;
+      label: string;
+      project: string;
+      harness: string;
+      activity: ActivityInput | null;
+    }
+  | { kind: 'new' };
+
+// One split picker row. `label` is the line the picker filters on and the row's tooltip shows: the session's folder
+// label, or `New session`.
+export interface PickerRowInput {
+  item: PickerItemInput;
+  label: string;
 }
 
 // A part's root, appended to `parent`.
@@ -215,12 +255,6 @@ export interface RowKit extends SessionsKit {
   // draws nothing. A second call throws `row placed contributed parts twice`, so the row draws with `default`. The
   // holder lays its parts on one line, each part keeping its content's width.
   contributedParts(parent: HTMLElement): HTMLElement;
-  // On a prompted row: places the app's cursor prompt `span.session-row-actions` (`s favorite  r rename  d close`, with
-  // `K up  J down` after the favorite key on a favorite project's row, the favorite key then reading `unfavorite`)
-  // and returns it; its keys fire in `sessions.sidebar` and hide, keeping their space, in every other scope. On any
-  // other row: places nothing and returns null. A prompted row that leaves it out gets it appended at its element's
-  // end. A second call on a prompted row throws `cursorPrompt placed twice`, so the row draws with `default`.
-  cursorPrompt(parent: HTMLElement): HTMLElement | null;
 }
 
 export interface SectionKit extends SessionsKit {
@@ -284,6 +318,11 @@ export interface RenameDialogKit extends SessionsKit {
   textBox(parent: HTMLElement): HTMLElement;
 }
 
+export interface PickerRowKit extends SessionsKit {
+  // The app's element for the end of the cursor row, or null; pass it as `KitRowOptions.trailing`.
+  trailing(): HTMLElement | null;
+}
+
 export interface Layout {
   // The side bar: a header over the sections.
   sideBar?(parent: HTMLElement, kit: SideBarKit): SideBarPane;
@@ -327,6 +366,21 @@ export interface Layout {
     input: RenameDialogInput,
     kit: RenameDialogKit,
   ): SessionsPart;
+  // One row of the split picker, drawn through `kit.row(parent, { density: 'list', tag: 'li', … })`.
+  pickerRow?(
+    parent: HTMLElement,
+    input: PickerRowInput,
+    kit: PickerRowKit,
+  ): SessionsPart;
+  // The frame of the rename dialog: the panel, its title (`input.title`) and, when `input.hasActions`, its actions
+  // row. Return the panel, appended to `parent`, with `body` and `actions` inside it; the app fills them. The app
+  // keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions` is not inside its panel,
+  // or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: SessionsKit,
+  ): DialogFramePart;
 }
 
 // A layout with every part defined, as `default` is.

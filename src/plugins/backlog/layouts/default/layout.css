@@ -90,6 +90,30 @@
   grid-column: repo / end;
 }
 
+.backlog-status {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  overflow: hidden;
+  padding: var(--wg-space-1) var(--wg-space-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The cursor row's actions, at its trailing end; they wrap onto lines of
+   their own when the row has no room. */
+.backlog-row-actions {
+  display: inline-flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1) var(--wg-space-2);
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.ui-row-trailing + .backlog-row-actions {
+  margin-left: 0;
+}
+
 .backlog-cell {
   align-items: center;
   display: flex;

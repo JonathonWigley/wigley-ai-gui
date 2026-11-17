@@ -266,22 +266,22 @@ every part its contract adds.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Toasts through the shell layout](01-toast-part.md)
-- [ ] [Shell layout swap failure tests](02-shell-swap-failure-tests.md)
-- [ ] [Sessions split picker rows](03-sessions-picker-rows.md)
-- [ ] [Dialog frame hook and shared kit types](04-dialog-frame-hook.md)
-- [ ] [Style-only layout reload](05-style-only-reload.md)
-- [ ] [Editor boxes kept across a redraw](06-editor-boxes-keep.md)
+- [x] [Toasts through the shell layout](01-toast-part.md)
+- [x] [Shell layout swap failure tests](02-shell-swap-failure-tests.md)
+- [x] [Sessions split picker rows](03-sessions-picker-rows.md)
+- [x] [Dialog frame hook and shared kit types](04-dialog-frame-hook.md)
+- [x] [Style-only layout reload](05-style-only-reload.md)
+- [x] [Editor boxes kept across a redraw](06-editor-boxes-keep.md)
 
 ### Wave 2
-- [ ] [Dialog frames through each opener's layout](07-dialog-frames.md) — after 03, 04
+- [x] [Dialog frames through each opener's layout](07-dialog-frames.md) — after 03, 04
 
 ### Wave 3
-- [ ] [Fixed texts in layout slots](08-fixed-texts.md) — after 04, 07
-- [ ] [Primer column chrome and cursor prompt](09-primer-chrome.md) — after 04, 07
+- [x] [Fixed texts in layout slots](08-fixed-texts.md) — after 04, 07
+- [x] [Primer column chrome and cursor prompt](09-primer-chrome.md) — after 04, 07
 
 ### Wave 4
-- [ ] [Primer, practice and the audio picker keep their boxes](10-boxes-kept-primer-practice-audio-picker.md) — after 06, 08, 09
+- [x] [Primer, practice and the audio picker keep their boxes](10-boxes-kept-primer-practice-audio-picker.md) — after 06, 08, 09
 
 ### Wave 5 — gate: Lane E's forms chain (§ Gate)
 - [ ] [Forms dialog frame and cancel confirm](11-forms-dialog-confirm.md) — after 07, 10
@@ -300,10 +300,31 @@ every part its contract adds.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 
 ### Groups
+- 01 · hard · 30b395aae · diff read + wave 1 compile (typecheck, lint clean after ff56db41b) · concerns: base kit spread assumes no this; default toast throw relies on createToasts catching; followups.md line 534 stale until task 10; the ToastTone type test moved to src/renderer/shell/toast-tone.test-d.ts (layer check), 01's Files lines still name the old path
+- 02 · hard · ec7888b62 · diff read + wave 1 compile · concerns: expected values read from the code, not a run
+- 03 · hard · 31d64c03a · diff read + wave 1 compile · concerns: test fakes need an overlay div and a stubbed getComputedStyle
+- 04 · hard · 5fcdb2c18 · diff read + wave 1 compile (layer check clean on dialog-frame.test-d.ts) · concerns: none
+- 05 · hard · 4cc9e04a1 · diff read + wave 1 compile · concerns: restyled narrowed to entries still in layouts; the leave-and-rejoin test is weaker
+- 06 · hard · 9dcfa2c14 · diff read + wave 1 compile (forms Pick fixed in ff56db41b) · concerns: keepFocusedBox Pick now needs destroyReleased (forms RoundViewDeps fixed); followups.md ~line 424 'at the text's end' stale
+- 07 · standard · 1936ca16c · diff read of all ten rows + wave 2 compile (typecheck, lint clean after 501d3d31d) · concerns: chat dialog parts take parent as a getter (frame redraw replaces the body), composer-kit tests followed; keys moved its Close button and help width into the default layout and dropped the closeHint anchor; gallery adds no redrawFrame (setLayouts rebuilds the sample); docs frameDrawer casts drawn.built; several new tests unrun (fake-DOM dataset/contains/ui-button assumptions); six row workers ran at once for a short spell (one over the limit)
+- 08 · standard · 7e3bbdbec · diff read of the six rows + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: self-test steps: backlog activate has no fixture with a started chunk (Enter is a vim key, no anchor needed); docs actions mapped to existing groups by name, cursor-on-leaf at load unchecked; notes, sessions, settings, chat use existing steps; chat .chat-picker-key CSS now matches the wrapper span, not the hint; backlog openInDocs keeps label docs; out-of-Files edits: docs-view.ts (anchor arg), sessions-view.ts (anchor arg), settings start.ts (anchor dep), chat layout.test.ts (cursorEnd fake); settings LeaderMenuView gained dispose() and row-prompt exports samePromptActions
+- 09 · hard · 6cab7ba59 · diff read + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: row pair keeps class primer-column-key; cancel prompt anchors are not disposed by view.dispose() (outside the task); keys-fake empty asserted only for strip slots
+- 10 · hard · ca910ef9e · Diff read: primer appendField and audio-picker appendNotesField place/release through EditorBoxes (Pick 'place'|'release'); practice textBoxSlot places with placedFor/boxTabKey, destroying on a changed key. Wave 4 typecheck clean; lint clean after oxfmt (ff9075cae). Tests written in primer-view, picker-kit, picker-view, practice start tests; run at the test gate. · concerns: Practice problem-change test drives customCases (opening a problem resets the problem tab to Description, so Notes cannot stay shown); primer and practice layout.d.ts still say 'mounts' (lines 65/189, 29) outside Files, for task 14's doc pass; after addItem the add-item box shows '' only on the next card redraw (card key unchanged), as before — check in task 15 live run; followups hot-reload item rewritten (text's start; fix now names place/release).
 ### Contract changes
 ### Rulings
+- 01: the ToastTone equality test lives in src/renderer/shell/toast-tone.test-d.ts, not layouts/layout.test-d.ts — the layer check bars layouts from importing src/contracts · group 01
+- 07 keys: the default dialogFrame draws help's Close button (keys.closeHelp + keyHint closeHelp); mountHelpView no longer takes close/closeHint · group 07
+- 07 chat: createDialogPart and the sign-in, reason-box, close-confirm and image-viewer part creators take parent: () => HTMLElement · group 07
+- 08 docs/sessions/settings: TreeViewDeps.anchor, mountSidebarView's anchor and SettingsViewDeps.anchor removed with their callers' arguments, per the task's unused-parameter rule · group 08
+- 08 settings: SettingsView has no dispose, so the cursor prompt and Leader prompts dispose with disposeEntries on each redraw · group 08
+- Task 15 stays open at the Lane E gate: Block A walked and recorded in the Test gate log; Block B (tasks 11–13) and the dialog-look rerun after task 11 run when the forms waves land.
 ### Review rounds
+- Round 1 fixes 6ed1fba05..6a18f4615: Medium — behaviour changes in shared EditorBoxes (setText, editorOf, keepFocusedBox caret, place scrollTop) and the layout-loader restyled filter; re-review correctness only.
+- Re-review 1 (correctness): all 29 findings closed; 3 Minor style findings lead-applied at review step 7 and closed by commit and compile; no new bug. #30 to step 7 as follow-up.
+- Live-check fix 0d27448f9: Medium — practice setLayouts focus rule; no re-review (only High re-reviews a live-session fix); practice vitest 339 pass, both checks re-run PASS on screen.
 ### Test gate
+- High — shared layout host, EditorBoxes and every owner's parts · vitest over every touched area (src/shared, renderer, contracts, main/layouts, plugins settings, docs, chat, sessions, primer, notes, keys, practice, backlog, audio-picker, session-stash, gallery, forms): 10 stale Lane L tests fixed in 5179db68e (no production change), then 9820 pass · selftest filtered to chat, sessions, docs, backlog, settings, notes, primer, practice, audio-picker, session-stash, forms: 1357 pass · skipped: the whole self-test run and its end-of-run placement check (whole runs need the user's ask) · known: plan-copies readPlanCopy (verification field, outside range); selftest 8 FAIL identical at review base e6c894d93 (chat EXPECTED_CALLS lacks now:true; forms <D-w> close never logs 'activated Codex session' + 2 cascades; docs 'machine index rebuilt: N entries' x4) · pass
+- Live session, task 15 Block A (at the Lane E gate; opus-low via drive): 37 PASS after one fix (practice import input and notes box lost focus across a layout change, fixed in 0d27448f9, re-checked on screen) · untried: missed-watch rescan (drive cannot pause the watch), success-tone toast (no drive trigger) · pre-existing, same at base: primer selected tasks row blank prompt line, notes popup Discard unframed · Block B waits on the gate.

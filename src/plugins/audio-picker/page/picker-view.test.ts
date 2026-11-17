@@ -3,6 +3,7 @@ import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type {
   EditorEvents,
   EditorHost,
+  FocusOptions,
   TextEditor,
   VimMode,
 } from '../../../contracts/editor';
@@ -10,7 +11,10 @@ import type { CommandHandler } from '../../../contracts/plugin';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
-import { withUser } from '../../../shared/page/layout-host/test-layouts';
+import {
+  USER_LAYOUT,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
   asFake,
@@ -38,11 +42,14 @@ import { presentedPicker } from './test-pickers';
 
 const INSERT: VimMode = { mode: 'insert', subMode: '' };
 
-// One editor the fake host made: the text it mounted with and its events.
+// One editor the fake host made: the text it mounted with, its events, the
+// options of each focus it took, and whether it was destroyed.
 interface CreatedEditor {
   editor: TextEditor;
   doc: string;
   events: EditorEvents;
+  focuses: (FocusOptions | undefined)[];
+  isDestroyed: boolean;
 }
 
 // An editor host recording every editor it makes in `created` and the editor
@@ -54,12 +61,17 @@ function fakeHost(
 ): EditorHost {
   return {
     create: (_parent, doc, events) => {
+      let text = doc;
+      const focuses: (FocusOptions | undefined)[] = [];
       const editor: TextEditor = {
-        text: () => doc,
-        setText: () => undefined,
+        text: () => text,
+        setText: (value) => {
+          text = value;
+        },
         insert: () => undefined,
         charBeforeCursor: () => '',
         focus: (options) => {
+          focuses.push(options);
           if (options?.insertAtEnd === true) {
             events.modeChanged(INSERT);
           }
@@ -67,9 +79,18 @@ function fakeHost(
           events.focused();
         },
         blur: () => events.blurred(),
-        destroy: () => undefined,
+        destroy: () => {
+          made.isDestroyed = true;
+        },
       };
-      created.push({ editor, doc, events });
+      const made: CreatedEditor = {
+        editor,
+        doc,
+        events,
+        focuses,
+        isDestroyed: false,
+      };
+      created.push(made);
       return editor;
     },
     createDocument: () => {
@@ -84,7 +105,9 @@ function fakeHost(
   };
 }
 
-type PartName = keyof AudioPickerLayout;
+// The parts that draw the picker's own rows; the cancel prompt's two parts
+// draw apart from them.
+type PartName = Exclude<keyof AudioPickerLayout, 'confirmBody' | 'dialogFrame'>;
 type PartCounts = Record<PartName, number>;
 
 type PickerCommand = keyof ReturnType<typeof pickerCommandHandlers>;
@@ -168,6 +191,7 @@ function pickerPopupSetup(
   const popups = new Map<string, FakeElement>();
   const disposed: string[] = [];
   const activities: [string, string, RowActivity | null][] = [];
+  const overlay: FakeElement[] = [];
   const ran: [CommandId, CommandArg | undefined][] = [];
   const runCommand = (id: CommandId, arg: CommandArg | undefined) => {
     ran.push([id, arg]);
@@ -176,7 +200,12 @@ function pickerPopupSetup(
   };
   const view = mountPickerPopups({
     areas: {
-      overlay: { contribute: () => ({ dispose: () => undefined }) },
+      overlay: {
+        contribute: (node) => {
+          overlay.push(asFake(node));
+          return { dispose: () => undefined };
+        },
+      },
     },
     sessions: {
       addPopup: (sessionId, popup) => {
@@ -249,6 +278,8 @@ function pickerPopupSetup(
     boxes,
     handlers,
     popup,
+    // The areas' overlay contributions, the cancel prompt's scrim first.
+    overlay,
     surface,
     added,
     disposed,
@@ -459,12 +490,42 @@ describe('mountPickerPopups', () => {
     },
   );
 
+  it('setLayouts_ChangedLayout_RedrawsTheCancelConfirmBodyAndFrame', () => {
+    const h = pickerPopupSetup();
+    const [prompt] = h.overlay;
+
+    h.view.setLayouts(
+      withUser<AudioPickerLayout>(defaultLayout, {
+        dialogFrame: (parent, input, kit) =>
+          defaultLayout.dialogFrame(parent, input, kit),
+        confirmBody: (parent, input, kit) =>
+          defaultLayout.confirmBody(parent, input, kit),
+      }),
+    );
+
+    const [panel] = findAll(prompt, 'ui-dialog');
+    const [body] = findAll(prompt, 'ui-dialog-body');
+    expect({
+      panel: panel.dataset.layout,
+      bodyRoot: body.children[0].dataset.layout,
+      buttons: findAll(panel, 'ui-button').length,
+      panels: findAll(prompt, 'ui-dialog').length,
+    }).toEqual({
+      panel: USER_LAYOUT,
+      bodyRoot: USER_LAYOUT,
+      buttons: 2,
+      panels: 1,
+    });
+  });
+
   it('mountPickerPopups_NotesRedraw_KeepsTheFocusedBox', () => {
     const h = pickerPopupSetup();
     h.boxes.focus(MOMENT_1_BOX);
     const typing = h.focusedEntry();
     typing.events.modeChanged(INSERT);
+    typing.editor.setText('quiet');
     typing.events.changed('quiet');
+    const editorsBefore = h.created.length;
 
     void (h.handlers.choose as CommandHandler)({
       arg: 3,
@@ -472,10 +533,33 @@ describe('mountPickerPopups', () => {
     });
 
     const refocused = h.focusedEntry();
-    expect(refocused.editor).not.toBe(typing.editor);
+    expect(h.created).toHaveLength(editorsBefore);
+    expect(refocused.editor).toBe(typing.editor);
+    expect(refocused.focuses.at(-1)).toEqual({ insert: true });
     expect(h.boxes.active()).toEqual(MOMENT_1_BOX);
     expect(h.boxes.activeMode()).toEqual(INSERT);
     expect(refocused.editor.text()).toBe('quiet');
+  });
+
+  it('mountPickerPopups_CandidateOnlyRedraw_LeavesTheNotesBoxesPlaced', () => {
+    const h = pickerPopupSetup();
+    const frames = findAll(h.popup, 'audio-picker-notes-box');
+    const parents = frames.map((frame) => frame.parentNode);
+    const editorsBefore = h.created.length;
+
+    h.view.setLayouts(
+      withUser<AudioPickerLayout>(defaultLayout, {
+        candidate: (parent, input, kit) =>
+          defaultLayout.candidate(parent, input, kit),
+      }),
+    );
+
+    expect(h.created).toHaveLength(editorsBefore);
+    expect(h.created.filter((made) => made.isDestroyed)).toEqual([]);
+    expect(frames).toHaveLength(2);
+    for (const [index, frame] of frames.entries()) {
+      expect(frame.parentNode).toBe(parents[index]);
+    }
   });
 
   it.each<[string, AudioPickerBody | null, (h: Setup) => unknown, unknown]>([

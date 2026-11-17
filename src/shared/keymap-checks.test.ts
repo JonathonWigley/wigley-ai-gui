@@ -164,11 +164,14 @@ describe('requireUnambiguousEditorBinds', () => {
 });
 
 describe('requireWellFormedChords', () => {
-  it('requireWellFormedChords rejects <Ctrl-h>', () => {
-    expect(() =>
-      requireWellFormedChords([
-        { keys: ['<Ctrl-h>'], scope: 'forms', command: 'test.x' },
-      ]),
-    ).toThrow(CHORD_NOTATION_RULE);
-  });
+  it.each(['<Ctrl-h>', '<C-S-/>'])(
+    'requireWellFormedChords rejects %s',
+    (token) => {
+      expect(() =>
+        requireWellFormedChords([
+          { keys: [token], scope: 'forms', command: 'test.x' },
+        ]),
+      ).toThrow(CHORD_NOTATION_RULE);
+    },
+  );
 });

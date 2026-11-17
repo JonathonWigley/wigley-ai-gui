@@ -4,11 +4,16 @@ import {
   type AppSlot,
   appSlot,
 } from '../../../../shared/page/layout-host/app-slot';
-import type {
-  PartPick,
-  RollbackDeps,
+import {
+  type PartPick,
+  type RollbackDeps,
+  requireDialogFrame,
 } from '../../../../shared/page/layout-host/draw-part';
-import type { BaseKit } from '../../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../../shared/page/layout-host/kit';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import type {
   CompleteLayout,
@@ -67,6 +72,15 @@ export interface DocsParts {
     input: PartInput<P>,
     kit: (docsKit: DocsKit, slotFor: SlotFor) => PartKit<P>,
   ): DrawnPart;
+  // Draws a dialog's frame into `slot`, the dialog's scrim, with the layout
+  // the pick chain names for `dialogFrame`, in the kit of `scope`; a frame that
+  // breaks its contract draws with `default`. Records the pick it drew with.
+  // `dispose` removes the panel and disposes the draw.
+  dialogFrame(
+    slot: HTMLElement,
+    input: DialogFrameInput,
+    scope: 'box' | 'confirm',
+  ): { frame: DialogFramePart; dispose(): void };
   // Reads the layouts shown now and runs `redraw` when a part drawn since the
   // last run would now pick another layout name or another layout object;
   // the picks `redraw` draws are the ones the next call compares.
@@ -84,6 +98,7 @@ const PART_SCOPES: Record<DocsPartName, DocsScope> = {
   treePane: 'tree',
   treeLine: 'tree',
   treeRow: 'tree',
+  treeStatus: 'tree',
   docPane: 'doc',
   emptyDoc: 'doc',
   docHeader: 'doc',
@@ -91,6 +106,8 @@ const PART_SCOPES: Record<DocsPartName, DocsScope> = {
   docBody: 'doc',
   editorFrame: 'doc',
   conflictPrompt: 'conflict',
+  // `dialogFrame` draws with the scope it is given.
+  dialogFrame: 'box',
   boxDialog: 'box',
   completion: 'box',
   confirmDialog: 'confirm',
@@ -141,6 +158,27 @@ export function createDocsParts(deps: DocsPartsDeps): DocsParts {
         layoutName: drawn.layoutName,
         dispose() {
           drawnElement.remove();
+          drawn.dispose();
+        },
+      };
+    },
+    dialogFrame(slot, input, scope) {
+      drawnPicks.set('dialogFrame', host.pick('dialogFrame'));
+      const drawn = host.draw(
+        'dialogFrame',
+        slot,
+        (builder, parent, rollback) =>
+          requireDialogFrame(
+            builder(parent, input, deps.baseKit(scope, rollback)),
+            input,
+            'dialogFrame',
+          ),
+      );
+      const frame = drawn.built;
+      return {
+        frame,
+        dispose() {
+          frame.element.remove();
           drawn.dispose();
         },
       };

@@ -24,12 +24,6 @@
   z-index: calc(var(--wg-z-dialog) + 1);
 }
 
-/* Help: every bound key, in a dialog wider than a prose one so its sections
-   sit side by side. */
-.ui-dialog.keys-help-dialog {
-  width: min(100%, calc(var(--wg-space-8) * 28));
-}
-
 /* The Keys button's slot draws no box, so the button sits in the title bar's
    end track. */
 .keys-title-bar-slot {

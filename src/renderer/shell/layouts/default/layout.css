@@ -1,5 +1,5 @@
 /* The default shell layout's look: the title bar's context, the activity bar's
-   items and the config problem badge. */
+   items, the config problem badge and the toast. */
 
 /* The shown mode's context: one line, cut short with an ellipsis, draggable
    like the bar under it. */
@@ -54,4 +54,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   -webkit-app-region: no-drag;
+}
+
+/* A toast: its dot and text on one row, the text wrapping anywhere. */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  max-width: min(calc(var(--wg-space-8) * 12), calc(100vw - var(--wg-space-8)));
+  padding: var(--wg-space-2) var(--wg-space-3);
+  font-size: var(--wg-text-13);
+}
+
+.toast-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }

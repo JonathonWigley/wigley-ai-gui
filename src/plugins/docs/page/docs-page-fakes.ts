@@ -50,9 +50,6 @@ export function fakeDocsParts(
   return { parts, anchors, logs };
 }
 
-// A view anchor that names nothing.
-export const noAnchor = () => ({ dispose: () => undefined });
-
 // A scope push that pops and hears nothing.
 export const fakePushedScope = () => ({
   pop: () => undefined,

@@ -21,15 +21,6 @@
   display: none;
 }
 
-/* The selected row's prompt at its end. It hides, keeping its space, while a
-   box holds the keys. */
-.notes-cursor-prompt {
-  align-items: center;
-  display: inline-flex;
-  gap: var(--wg-space-2);
-  min-height: var(--wg-row-list);
-}
-
 .notes-fields.is-box-focused :is(.notes-row-keys, .notes-cursor-prompt) {
   visibility: hidden;
 }

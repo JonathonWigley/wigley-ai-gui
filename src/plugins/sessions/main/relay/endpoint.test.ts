@@ -1,26 +1,12 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { Files } from '../../../../contracts/files';
+import { createMemoryFiles } from '../../../../shared/memory-files';
+import { posixPaths } from '../../../../shared/paths/posix-paths';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
-import { endedDriveRunLaunch, writeEndpointFiles } from './endpoint';
+import { createEndpointWriter, endedDriveRunLaunch } from './endpoint';
 
-const folders: string[] = [];
-
-afterEach(() => {
-  for (const folder of folders.splice(0)) {
-    rmSync(folder, { recursive: true, force: true });
-  }
-});
-
-function tempFolder(): string {
-  const folder = mkdtempSync(path.join(tmpdir(), 'wigley-endpoint-'));
-  folders.push(folder);
-  return folder;
-}
-
-function readJson(file: string): unknown {
-  return JSON.parse(readFileSync(file, 'utf8'));
+async function readJson(files: Files, file: string): Promise<unknown> {
+  return JSON.parse(await files.read(file));
 }
 
 describe('endedDriveRunLaunch', () => {
@@ -51,12 +37,16 @@ describe('endedDriveRunLaunch', () => {
   });
 });
 
-describe('writeEndpointFiles', () => {
+describe('createEndpointWriter', () => {
   const endpoint: RelayEndpoint = {
     protocol: 1,
     channel: '/Users/jon/.agents/wigley-ai-gui/app.sock',
     launch: { command: ['/opt/electron'], cwd: '/work/app' },
     pid: 4242,
+  };
+  const moved: RelayEndpoint = {
+    ...endpoint,
+    launch: { command: ['/b'], cwd: '/c' },
   };
   const tools: ToolDefinition[] = [
     {
@@ -65,25 +55,88 @@ describe('writeEndpointFiles', () => {
       inputSchema: { type: 'object' },
     },
   ];
+  const dir = '/home/.agents/wigley-ai-gui';
+  let logged: string[];
 
-  it('writes the endpoint and the tool list into a folder it creates', () => {
-    const dir = path.join(tempFolder(), 'wigley-ai-gui');
+  function writerOver(files: Files) {
+    logged = [];
+    return createEndpointWriter(files, posixPaths, dir, (line) =>
+      logged.push(line),
+    );
+  }
 
-    writeEndpointFiles(dir, endpoint, tools);
+  it('writes the endpoint and the tool list into a folder it creates', async () => {
+    const files = createMemoryFiles();
+    const writer = writerOver(files);
 
-    expect(readJson(path.join(dir, 'endpoint.json'))).toEqual(endpoint);
-    expect(readJson(path.join(dir, 'tools.json'))).toEqual({ tools });
+    writer.write(endpoint, tools);
+    await writer.flushed();
+
+    expect(await readJson(files, `${dir}/endpoint.json`)).toEqual(endpoint);
+    expect(await readJson(files, `${dir}/tools.json`)).toEqual({ tools });
   });
 
-  it('replaces the files of an earlier start and leaves no temp file', () => {
-    const dir = tempFolder();
-    writeEndpointFiles(dir, endpoint, tools);
-    const moved = { ...endpoint, launch: { command: ['/b'], cwd: '/c' } };
+  it('replaces the files of an earlier start and leaves no temp file', async () => {
+    const files = createMemoryFiles();
+    const writer = writerOver(files);
+    writer.write(endpoint, tools);
 
-    writeEndpointFiles(dir, moved, []);
+    writer.write(moved, []);
+    await writer.flushed();
 
-    expect(readJson(path.join(dir, 'endpoint.json'))).toEqual(moved);
-    expect(readJson(path.join(dir, 'tools.json'))).toEqual({ tools: [] });
-    expect(readdirSync(dir).sort()).toEqual(['endpoint.json', 'tools.json']);
+    expect(await readJson(files, `${dir}/endpoint.json`)).toEqual(moved);
+    expect(await readJson(files, `${dir}/tools.json`)).toEqual({ tools: [] });
+    expect((await files.list(dir)).map((entry) => entry.path).sort()).toEqual([
+      'endpoint.json',
+      'tools.json',
+    ]);
+  });
+
+  // Breaks if writes run in parallel.
+  it('writes in call order behind a held write', async () => {
+    const files = createMemoryFiles();
+    const held = Promise.withResolvers<void>();
+    let calls = 0;
+    const writer = writerOver({
+      ...files,
+      write: async (file, text) => {
+        calls += 1;
+        if (calls === 1) {
+          await held.promise;
+        }
+        await files.write(file, text);
+      },
+    });
+
+    writer.write(endpoint, tools);
+    writer.write(moved, tools);
+    held.resolve();
+    await writer.flushed();
+
+    expect(await readJson(files, `${dir}/endpoint.json`)).toEqual(moved);
+  });
+
+  it('logs a failed write and still runs the next', async () => {
+    const files = createMemoryFiles();
+    let calls = 0;
+    const writer = writerOver({
+      ...files,
+      write: (file, text) => {
+        calls += 1;
+        return calls === 1
+          ? Promise.reject(new Error('EACCES'))
+          : files.write(file, text);
+      },
+    });
+
+    writer.write(endpoint, tools);
+    writer.write(moved, []);
+    await writer.flushed();
+
+    expect(logged).toEqual([
+      expect.stringContaining('endpoint files not written'),
+    ]);
+    expect(await readJson(files, `${dir}/endpoint.json`)).toEqual(moved);
+    expect(await readJson(files, `${dir}/tools.json`)).toEqual({ tools: [] });
   });
 });

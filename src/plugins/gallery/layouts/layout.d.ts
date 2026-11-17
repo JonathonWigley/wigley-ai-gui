@@ -1,10 +1,15 @@
-import type { BaseKit } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../shared/page/layout-host/kit';
 
 // Gallery mode's layout contract: the status line over the sheet, each primitive's sample block and each sample
 // cell. Every part appends its root element to `parent` and returns it; the app sets `data-layout="<name>"` and
 // `data-layout-owner="gallery"` on that root. The app builds every sample with the shared primitives and keeps the
 // tab strip, the sheet, its scrolling and the transparency switch. A layout's CSS selects under its own root only,
-// so it never restyles a primitive.
+// so it never restyles a primitive; the Dialog sample's panel, title and actions row are the layout's
+// `dialogFrame`.
 
 // The status line: the transparency override in force, null when the setting decides.
 export interface GalleryHeadInput {
@@ -21,7 +26,7 @@ export interface GallerySectionInput {
   rows: GalleryCellInput[][];
 }
 // A primitive shown as one sample spanning the grid row (Split, FloatingPanel, Dialog); `isDialog` for the dialog,
-// whose frame holds its scrim.
+// whose scrim the app keeps and whose panel `dialogFrame` draws.
 export interface GalleryFramedInput {
   name: string;
   isDialog: boolean;
@@ -79,6 +84,15 @@ export interface Layout {
     input: GalleryCellInput,
     kit: SampleKit,
   ): GalleryPart;
+  // The frame of the Dialog sample: the panel, its title (`input.title`) and, when `input.hasActions`, its actions
+  // row. Return the panel, appended to `parent`, with `body` and `actions` inside it; the app fills them. The app
+  // keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions` is not inside its panel,
+  // or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: GalleryKit,
+  ): DialogFramePart;
 }
 
 // The built-in `default` layout, which defines every part.

@@ -50,9 +50,15 @@ describe('formatChord', () => {
     expect(formatChord('<C-h>', 'macos')).toBe('⌃H');
     expect(formatChord('<C-S-j>', 'macos')).toBe('⌃⇧J');
     expect(formatChord('<D-Enter>', 'macos')).toBe('⌘↩');
-    expect(formatChord('<C-A-S-D-1>', 'macos')).toBe('⌃⌥⇧⌘1');
+    expect(formatChord('<C-A-S-D-h>', 'macos')).toBe('⌃⌥⇧⌘H');
     expect(formatChord('<A-;>', 'macos')).toBe('⌥;');
     expect(formatChord("<A-'>", 'macos')).toBe("⌥'");
+    expect(formatChord('<C-/>', 'macos')).toBe('⌃/');
+    expect(formatChord('<C-lt>', 'macos')).toBe('⌃<');
+    expect(formatChord('<C-Space>', 'macos')).toBe('⌃Space');
+    expect(formatChord('<A-Up>', 'macos')).toBe('⌥↑');
+    expect(formatChord('<F5>', 'macos')).toBe('F5');
+    expect(formatChord('<D-BS>', 'macos')).toBe('⌘⌫');
   });
 
   it('prints Windows chords as names joined by +', () => {
@@ -61,7 +67,11 @@ describe('formatChord', () => {
     expect(formatChord('<C-h>', 'windows')).toBe('Ctrl+H');
     expect(formatChord('<C-S-j>', 'windows')).toBe('Ctrl+Shift+J');
     expect(formatChord('<D-Enter>', 'windows')).toBe('Win+Enter');
-    expect(formatChord('<C-A-S-D-1>', 'windows')).toBe('Ctrl+Alt+Shift+Win+1');
+    expect(formatChord('<C-A-S-D-h>', 'windows')).toBe('Ctrl+Alt+Shift+Win+H');
+    expect(formatChord('<C-/>', 'windows')).toBe('Ctrl+/');
+    expect(formatChord('<A-Up>', 'windows')).toBe('Alt+Up');
+    expect(formatChord('<C-PageUp>', 'windows')).toBe('Ctrl+PageUp');
+    expect(formatChord('<F5>', 'windows')).toBe('F5');
   });
 
   it('prints Linux chords as Windows does', () => {
@@ -145,6 +155,14 @@ describe('vimTokens', () => {
       '<Space>',
     ]);
     expect(vimTokens('<Esc>', '<Space>')).toEqual(['<Esc>']);
+  });
+
+  it.each([
+    { keys: '<C->>x', expected: ['<C->>', 'x'] },
+    { keys: '<C-w>>', expected: ['<C-w>', '>'] },
+    { keys: '<Leader>>', expected: ['<Space>', '>'] },
+  ])('reads $keys as $expected', ({ keys, expected }) => {
+    expect(vimTokens(keys, '<Space>')).toEqual(expected);
   });
 });
 

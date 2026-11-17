@@ -93,10 +93,21 @@ describe('createLayoutService', () => {
         'forms',
         {
           layouts: [
-            { name: 'default', revision: 1, hasCss: false, builtIn: true },
-            { name: 'f', revision: 1, hasCss: false, builtIn: false },
+            {
+              name: 'default',
+              revision: 1,
+              styleRevision: 1,
+              hasCss: false,
+              builtIn: true,
+            },
+            {
+              name: 'f',
+              revision: 1,
+              styleRevision: 1,
+              hasCss: false,
+              builtIn: false,
+            },
           ],
-          changed: null,
         },
       ],
     ]);
@@ -131,7 +142,6 @@ describe('createLayoutService', () => {
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     const [[owner, set]] = sent;
     expect(owner).toBe('chat');
-    expect(set.changed).toBe('x');
     expect(set.layouts.find((entry) => entry.name === 'x')?.revision).toBe(1);
   });
 
@@ -164,10 +174,21 @@ describe('createLayoutService', () => {
       defaultFolderPath: FORMS_DEFAULT,
       set: {
         layouts: [
-          { name: 'default', revision: 1, hasCss: false, builtIn: true },
-          { name: 'f', revision: 1, hasCss: false, builtIn: false },
+          {
+            name: 'default',
+            revision: 1,
+            styleRevision: 1,
+            hasCss: false,
+            builtIn: true,
+          },
+          {
+            name: 'f',
+            revision: 1,
+            styleRevision: 1,
+            hasCss: false,
+            builtIn: false,
+          },
         ],
-        changed: null,
       },
     },
   ] as const)(

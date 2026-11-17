@@ -67,6 +67,12 @@ const layout = {
     }
     return { element: line };
   },
+  treeStatus(parent, input, kit) {
+    const status = kit.el(parent, 'div', 'docs-status', input.text ?? '');
+    status.title = input.text ?? '';
+    status.hidden = input.text === null;
+    return { element: status };
+  },
   treeRow(parent, input, kit) {
     const caret = kit.el(parent, 'span', 'docs-row-caret');
     if (input.type === 'group') {
@@ -92,7 +98,12 @@ const layout = {
     }
     if (input.isPrompted) {
       row.classList.add('docs-row--prompted');
-      kit.cursorPrompt(row);
+    }
+    if (input.prompt.length > 0) {
+      const actions = kit.el(row, 'span', 'docs-row-actions');
+      for (const action of input.prompt) {
+        kit.keyHint(actions, action.command, { label: action.label });
+      }
     }
     return { element: row };
   },
@@ -169,6 +180,19 @@ const layout = {
     const frame = kit.el(parent, 'div', 'docs-editor-frame');
     kit.editor(frame);
     return { element: frame };
+  },
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog',
+    );
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    return { element: panel, body, actions };
   },
   boxDialog(parent, input, kit) {
     const box = kit.el(parent, 'div', 'docs-box-body');

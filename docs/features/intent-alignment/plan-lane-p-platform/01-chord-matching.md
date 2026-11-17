@@ -1,6 +1,6 @@
 # 01 — Per-platform chord matching
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -303,3 +303,4 @@ Commit: one commit for the task, holding the code, the tests, the self-test step
 
 ## Proof
 
+Commit 07bec5457 · proof: diff read against Produces (all present, no contract changes); typecheck and lint pass after an oxfmt pass on three files · concerns: done-when grep 'keys:' finds only the parameter, the records are positional (optionMatchesByCode finds all three); capture test row Ctrl+[ swapped for Dead since <C-[> is now a chord; check-layers lets src/renderer/fabric import src/shared/page for isChordPress; settings design.md:34 reworded off the comma reason

@@ -13,17 +13,23 @@ const BUILT_IN: TestLayout = { tag: 'built-in' };
 const DEFAULT_ENTRY: LayoutEntry = {
   name: 'default',
   revision: 1,
+  styleRevision: 1,
   hasCss: false,
   builtIn: true,
 };
 
-function entry(name: string, revision: number, hasCss = false): LayoutEntry {
-  return { name, revision, hasCss, builtIn: false };
+function entry(
+  name: string,
+  revision: number,
+  hasCss = false,
+  styleRevision = revision,
+): LayoutEntry {
+  return { name, revision, styleRevision, hasCss, builtIn: false };
 }
 
 // A set holding the built-in `default` and `users`.
 function setOf(...users: LayoutEntry[]): LayoutSet {
-  return { layouts: [DEFAULT_ENTRY, ...users], changed: null };
+  return { layouts: [DEFAULT_ENTRY, ...users] };
 }
 
 // The URL the page imports for `demo`'s layout `name` at `revision`.
@@ -229,7 +235,7 @@ describe('createPageLayouts', () => {
     {
       row: 'a live default',
       setting: 'default',
-      set: { layouts: [entry('default', 2)], changed: null },
+      set: { layouts: [entry('default', 2)] },
     },
   ])('showLayouts_LoadFails_LogsAndToasts: $row', async ({ setting, set }) => {
     const page = pageLayoutsWith(async () => {
@@ -270,6 +276,25 @@ describe('createPageLayouts', () => {
 
     expect(page.imports).toHaveLength(1);
     expect(show.shown).toHaveLength(1);
+  });
+
+  // Breaks if a style-only set imports the script again, hands the owner new
+  // layouts, or logs no re-link.
+  it('showLayouts_StyleOnlySet_LogsRestyledAndCallsNoSetLayouts', async () => {
+    const page = pageLayoutsWith();
+    const show = showing(page, 'mine');
+    show.change(setOf(entry('mine', 1, true, 1)));
+    await vi.waitFor(() => expect(show.shown).toHaveLength(1));
+
+    show.change(setOf(entry('mine', 1, true, 2)));
+
+    await vi.waitFor(() =>
+      expect(page.logLines).toContain(
+        '[demo] layout mine restyled (style revision 2)',
+      ),
+    );
+    expect(show.shown).toHaveLength(1);
+    expect(page.imports).toEqual([script('mine', 1)]);
   });
 
   it('showLayouts_SettingLeavesListedLayoutStillInUse_ShowsDefault', async () => {

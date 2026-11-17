@@ -8,6 +8,8 @@
 // does then:
 // - candidate: `playButton` (`p` still plays the cursor row) and `waveform`
 // - notes: `textBox` (the box is appended at the end of the part)
+// - confirmBody: `keepButton` and `confirmButton` (the prompt appends each
+//   to the frame's actions row)
 
 /** @typedef {import('../layout').CandidateRowInput} CandidateRowInput */
 
@@ -182,6 +184,22 @@ const layout = {
     kit.keyHint(label, 'editNote', { className: 'audio-picker-notes-hint' });
     kit.textBox(notes);
     return { element: notes };
+  },
+  confirmBody(parent, input, kit) {
+    return { element: kit.el(parent, 'p', '', input.body) };
+  },
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog',
+    );
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    return { element: panel, body, actions };
   },
 };
 

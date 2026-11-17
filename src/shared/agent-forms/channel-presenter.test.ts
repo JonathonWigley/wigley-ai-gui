@@ -7,7 +7,7 @@ import type {
   AgentFormSessions,
   PresentedAgentForm,
 } from '../../contracts/agent-forms';
-import type { Alerts } from '../../contracts/alerts';
+import type { AlertNoun, Alerts } from '../../contracts/alerts';
 import type { MainChannel } from '../../contracts/plugin';
 import { createAgentFormChannelPresenter } from './channel-presenter';
 import type { TestBody, TestForm } from './test-form-type';
@@ -24,6 +24,11 @@ const FORM: PresentedAgentForm<TestForm, TestBody> = {
 };
 
 const BODY: TestBody = { note: 'looks right' };
+
+const F: AlertNoun = {
+  singular: 'open agent form',
+  plural: 'open agent forms',
+};
 
 type Invoke = TestChannel['invoke'];
 
@@ -52,9 +57,9 @@ function fakeChannel(calls: string[]) {
 }
 
 function fakeAlerts() {
-  const counts: [string, number][] = [];
+  const counts: [string, number, AlertNoun][] = [];
   const alerts: Alerts = {
-    setOpenCount: (source, count) => counts.push([source, count]),
+    setOpenCount: (source, count, noun) => counts.push([source, count, noun]),
   };
   return { alerts, counts };
 }
@@ -97,7 +102,10 @@ function fakeListener() {
   const finishes: TestEnd[] = [];
   let cancels = 0;
   const listener: AgentFormListener<TestBody> = {
-    draft: (body) => drafts.push(body),
+    draft: (body) => {
+      drafts.push(body);
+      return Promise.resolve();
+    },
     finish: (end) => finishes.push(end),
     cancel: () => {
       cancels++;
@@ -116,6 +124,7 @@ function setUp(labels: ReadonlyMap<string, string> = new Map()) {
     channel: page.channel,
     alerts: attention.alerts,
     source: 'forms',
+    alertNoun: F,
     noun: 'round',
     markText: (label) => `Round from ${label}`,
     markAction: 'answer',
@@ -151,7 +160,7 @@ describe('createAgentFormChannelPresenter', () => {
 
     expect(calls).toEqual(['mark app-1', 'send formShown']);
     expect(page.sent).toEqual([['formShown', FORM]]);
-    expect(attention.counts).toEqual([['forms', 1]]);
+    expect(attention.counts).toEqual([['forms', 1, F]]);
     expect(logged).toEqual(['form shown: wigley-ai-gui · Pick a theme']);
   });
 
@@ -179,7 +188,7 @@ describe('createAgentFormChannelPresenter', () => {
     finish('form-q', { kind: 'submitted', body: BODY });
     presenter.quiet.close('form-q2');
 
-    expect(attention.counts).toEqual([['forms', 1]]);
+    expect(attention.counts).toEqual([['forms', 1, F]]);
     expect(page.sent.at(-1)).toEqual([
       'formClosed',
       { formId: 'form-q2', byFinish: false },
@@ -323,25 +332,25 @@ describe('createAgentFormChannelPresenter', () => {
     expect(openForms()).toEqual([{ ...FORM, draft: BODY }]);
   });
 
-  it("throws a draft's failed save out of the handler, so the page's invoke rejects", () => {
+  // Breaks if the handler drops the listener's promise.
+  it("rejects the handler with a draft's failed save, so the page's invoke rejects", async () => {
     const { presenter, saveDraft } = setUp();
     presenter.show(FORM, {
       cancel: () => {},
-      draft: () => {
-        throw new Error('could not save form form-1: EACCES');
-      },
+      draft: () =>
+        Promise.reject(new Error('could not save form form-1: EACCES')),
       finish: () => {},
     });
 
-    expect(() => saveDraft('form-1', BODY)).toThrow(
+    await expect(saveDraft('form-1', BODY)).rejects.toThrow(
       'could not save form form-1: EACCES',
     );
   });
 
-  it('answers a draft for a form no longer open without passing it on', () => {
+  it('answers a draft for a form no longer open without passing it on', async () => {
     const { saveDraft } = setUp();
 
-    expect(saveDraft('form-gone', BODY)).toBeUndefined();
+    expect(await saveDraft('form-gone', BODY)).toBeUndefined();
   });
 
   it('ends a form the page finishes and drops what arrives after', () => {
@@ -361,8 +370,8 @@ describe('createAgentFormChannelPresenter', () => {
     expect(drafts).toEqual([]);
     expect(openForms()).toEqual([]);
     expect(attention.counts).toEqual([
-      ['forms', 1],
-      ['forms', 0],
+      ['forms', 1, F],
+      ['forms', 0, F],
     ]);
     expect(page.sent.at(-1)).toEqual([
       'formClosed',
@@ -374,7 +383,7 @@ describe('createAgentFormChannelPresenter', () => {
     const { page, attention, refusal, presenter, openForms, finish } = setUp();
     presenter.show(FORM, {
       cancel: () => {},
-      draft: () => {},
+      draft: () => Promise.resolve(),
       finish: () => {
         throw new Error('form form-1 has no item 3');
       },
@@ -385,7 +394,7 @@ describe('createAgentFormChannelPresenter', () => {
     );
     expect(openForms()).toEqual([FORM]);
     expect(page.sent).toEqual([['formShown', FORM]]);
-    expect(attention.counts).toEqual([['forms', 1]]);
+    expect(attention.counts).toEqual([['forms', 1, F]]);
     expect(refusal('app-1')).not.toBeNull();
   });
 
@@ -394,7 +403,7 @@ describe('createAgentFormChannelPresenter', () => {
     const end: TestEnd = { kind: 'cancelled', body: BODY };
     presenter.show(FORM, {
       cancel: () => {},
-      draft: () => {},
+      draft: () => Promise.resolve(),
       finish: () => presenter.close('form-1'),
     });
 
@@ -419,8 +428,8 @@ describe('createAgentFormChannelPresenter', () => {
       ['formClosed', { formId: 'form-1', byFinish: false }],
     ]);
     expect(attention.counts).toEqual([
-      ['forms', 1],
-      ['forms', 0],
+      ['forms', 1, F],
+      ['forms', 0, F],
     ]);
     expect(openForms()).toEqual([]);
   });

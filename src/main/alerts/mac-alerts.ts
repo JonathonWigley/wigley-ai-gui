@@ -6,8 +6,8 @@ import { createOpenCounts } from './open-counts';
 export function createMacAlerts(): Alerts {
   const openCounts = createOpenCounts();
   return {
-    setOpenCount(source, count) {
-      app.setBadgeCount(openCounts.set(source, count));
+    setOpenCount(source, count, noun) {
+      app.setBadgeCount(openCounts.set(source, count, noun).total);
     },
   };
 }

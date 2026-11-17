@@ -8,6 +8,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   section: true,
   framedSection: true,
   cell: true,
+  dialogFrame: true,
 };
 
 // The gallery layout a user's `layout.js` module exports as its default. A

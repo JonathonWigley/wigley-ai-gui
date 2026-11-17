@@ -11,7 +11,12 @@ import {
 import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { CommandHandler } from '../../../contracts/plugin';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
-import type { EditorHost, TextEditor } from '../../../contracts/editor';
+import type {
+  EditorEvents,
+  EditorHost,
+  FocusOptions,
+  TextEditor,
+} from '../../../contracts/editor';
 import type { AnchorOptions } from '../../../contracts/keymap';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import type { ShownLayouts } from '../../../contracts/plugin';
@@ -53,22 +58,47 @@ interface Inserted {
   text: string;
 }
 
-// An editor host whose editors record each insert into `inserted`; every
-// cursor sits after an `x`.
-function fakeHost(inserted: Inserted[]): EditorHost {
+// One editor the fake host made: its events, the options of each focus it
+// took, and whether it was destroyed.
+interface CreatedEditor {
+  editor: TextEditor;
+  events: EditorEvents;
+  focuses: (FocusOptions | undefined)[];
+  isDestroyed: boolean;
+}
+
+// An editor host whose editors record each insert into `inserted` and which
+// records every editor it makes in `created`; every cursor sits after an `x`.
+function fakeHost(inserted: Inserted[], created: CreatedEditor[]): EditorHost {
   return {
     create: (_parent, doc, events) => {
+      let text = doc;
+      const focuses: (FocusOptions | undefined)[] = [];
       const editor: TextEditor = {
-        text: () => doc,
-        setText: () => undefined,
-        insert: (text) => {
-          inserted.push({ editor, text });
+        text: () => text,
+        setText: (value) => {
+          text = value;
+        },
+        insert: (inserting) => {
+          inserted.push({ editor, text: inserting });
         },
         charBeforeCursor: () => 'x',
-        focus: () => events.focused(),
+        focus: (options) => {
+          focuses.push(options);
+          events.focused();
+        },
         blur: () => events.blurred(),
-        destroy: () => undefined,
+        destroy: () => {
+          made.isDestroyed = true;
+        },
       };
+      const made: CreatedEditor = {
+        editor,
+        events,
+        focuses,
+        isDestroyed: false,
+      };
+      created.push(made);
       return editor;
     },
     createDocument: () => {
@@ -116,8 +146,9 @@ interface NamedAnchor {
 // `resizeTargets` every split handed to the resize keys, `focusTargets` every
 // target handed to the focus keys, `uiWrites` every
 // uiState write over the values `uiState` starts with, `targets` every drop
-// target the view registered, `inserted` every insert into a box's editor, and
-// `activities` every row activity the view set.
+// target the view registered, `inserted` every insert into a box's editor,
+// `created` every editor the host made, and `activities` every row activity
+// the view set.
 function primerPopupSetup(
   parts: {
     entries?: PrimerEntry[];
@@ -137,8 +168,9 @@ function primerPopupSetup(
   const log = (message: string) => logs.push(message);
   const targets: RegisteredTarget[] = [];
   const inserted: Inserted[] = [];
+  const created: CreatedEditor[] = [];
   const boxes = createEditorBoxes(
-    fakeHost(inserted),
+    fakeHost(inserted, created),
     {
       changed: (box, value) =>
         store.dispatch({
@@ -158,6 +190,7 @@ function primerPopupSetup(
     PRIMER_BOX_IDENTITY,
   );
   const anchors: NamedAnchor[] = [];
+  const overlays: FakeElement[] = [];
   const resizeTargets: (ResizeTarget | null)[] = [];
   const focusTargets: (FocusTarget | null)[] = [];
   const uiValues = new Map(Object.entries(parts.uiState ?? {}));
@@ -170,7 +203,12 @@ function primerPopupSetup(
   let isPopupHidden = false;
   const view = mountPrimerPopups({
     areas: {
-      overlay: { contribute: () => ({ dispose: () => undefined }) },
+      overlay: {
+        contribute: (element) => {
+          overlays.push(asFake(element));
+          return { dispose: () => undefined };
+        },
+      },
     },
     sessions: {
       addPopup: (sessionId, view, options) => {
@@ -276,11 +314,26 @@ function primerPopupSetup(
     boxes,
     logs,
     anchors,
+    // Each element the view contributed to the overlay area: the cancel prompt's scrim.
+    overlays,
     resizeTargets,
     focusTargets,
     uiWrites,
     targets,
     inserted,
+    created,
+    // The live editor `box` is placed with.
+    editorOf: (box: PrimerBox): CreatedEditor => {
+      const key = boxKey(box);
+      const made = created.find((candidate) => {
+        const held = boxes.boxOf(candidate.editor);
+        return held !== undefined && boxKey(held) === key;
+      });
+      if (made === undefined) {
+        throw new Error(`no editor is placed as ${key}`);
+      }
+      return made;
+    },
     activities,
     sessionId: presented.sessionId,
     popup,
@@ -638,7 +691,7 @@ describe('primer item card', () => {
     setup.store.dispatch({ type: 'selectTask', row: 1 });
     setup.store.dispatch({ type: 'selectItem', item: 2 });
     const card = pane(setup.popup, 'primer-card');
-    const before = findAll(card, 'primer-box');
+    const before = pane(card, 'primer-card-body');
     setup.store.dispatch({
       type: 'setText',
       formId: 'p1',
@@ -654,9 +707,8 @@ describe('primer item card', () => {
     });
 
     expect(pane(card, 'primer-item-step').textContent).toContain('2 of 2');
-    const after = findAll(card, 'primer-box');
-    expect(after).toHaveLength(2);
-    expect(after.some((frame) => before.includes(frame))).toBe(false);
+    expect(pane(card, 'primer-card-body') === before).toBe(false);
+    expect(findAll(card, 'primer-box')).toHaveLength(2);
   });
 
   it('flips its mark on toggleInclude with no rebuild', () => {
@@ -749,6 +801,19 @@ describe('primer add-item box', () => {
       expect.stringContaining('item 3 on task 1'),
     ]);
     expect(setup.boxes.active()).toBeNull();
+  });
+
+  it('addItem_AddItemBoxHeldEditor_ShowsTheClearedText', () => {
+    const setup = primerPopupSetup();
+    typeNewItem(setup, 'Test the store');
+    const held = setup.editorOf(newItem1);
+    held.editor.setText('Test the store');
+
+    setup.run('leaveBox');
+
+    expect(itemCount(setup)).toBe(3);
+    expect(setup.editorOf(newItem1)).toBe(held);
+    expect(held.editor.text()).toBe('');
   });
 
   it('adds the item once on a focus move to the items', () => {
@@ -885,6 +950,24 @@ describe('primer anchors', () => {
       container: (popup) => pane(popup, 'primer-card-edge'),
       expected: [['panes.focusLeft', { scope: 'primer.card' }]],
     },
+    {
+      name: 'the tasks column foot',
+      container: (popup) => pane(popup, 'primer-tasks-foot'),
+      expected: [
+        ['primer.openReview', { scope: 'primer.tasks' }],
+        ['primer.openReview', { scope: 'primer.items' }],
+        ['primer.openReview', { scope: 'primer.card' }],
+      ],
+    },
+    {
+      name: 'the review footer',
+      container: (popup) => pane(popup, 'primer-review-actions'),
+      expected: [
+        ['primer.closeReview', { scope: 'primer.review' }],
+        ['primer.askCancel', { scope: 'primer.review' }],
+        ['primer.submit', { scope: 'primer.review' }],
+      ],
+    },
   ])('anchors the header keys of $name', ({ container, expected }) => {
     const { popup, anchors } = primerPopupSetup();
 
@@ -897,49 +980,61 @@ describe('primer anchors', () => {
     expect(inside).toEqual(expect.arrayContaining(expected));
   });
 
-  it("moves each column's row prompt to its selected row, with remove only on an extra task", () => {
-    // Tasks column rows: the feature (0), `1` (1), `s1` (2), `extra-1` (3);
-    // only `1` holds items.
-    const { store, popup, anchors } = primerPopupSetup();
-    const [remove] = anchorsOf(anchors, 'primer.removeExtraTask');
-    const [include] = anchorsOf(anchors, 'primer.toggleInclude').filter(
-      (anchor) => anchor.options?.scope === 'primer.items',
-    );
-    // The text of the selected row holding `column`'s prompt; null when the
-    // column shows no prompt.
-    const promptRow = (column: PrimerColumn) => {
-      const [prompt] = findAll(columnOf(popup, column), 'primer-row-prompt');
-      if (prompt === undefined) {
-        return null;
+  // Tasks column rows: the feature (0), `1` (1), `s1` (2), `extra-1` (3);
+  // only `1` holds items.
+  const NEED_ACTIONS: [string, string | undefined][] = [
+    ['primer.needYes', 'yes'],
+    ['primer.needNo', 'no'],
+    ['primer.needUnclear', 'unclear'],
+  ];
+  it.each<{
+    name: string;
+    actions: PrimerAction[];
+    column: PrimerColumn;
+    expected: [string, string | undefined][];
+  }>([
+    { name: 'the Feature row', actions: [], column: 'tasks', expected: [] },
+    {
+      name: 'task 1',
+      actions: [{ type: 'selectTask', row: 1 }],
+      column: 'tasks',
+      expected: NEED_ACTIONS,
+    },
+    {
+      name: 'extra task extra-1',
+      actions: [{ type: 'selectTask', row: 3 }],
+      column: 'tasks',
+      expected: [...NEED_ACTIONS, ['primer.removeExtraTask', 'remove']],
+    },
+    {
+      name: "task 1's item 2",
+      actions: [
+        { type: 'selectTask', row: 1 },
+        { type: 'selectItem', item: 2 },
+      ],
+      column: 'items',
+      expected: [...NEED_ACTIONS, ['primer.toggleInclude', 'include']],
+    },
+  ])(
+    'columnRowPrompt_SelectedRow_DrawsItsShownActions: $name',
+    ({ actions, column, expected }) => {
+      const { store, popup, anchors } = primerPopupSetup();
+
+      for (const action of actions) {
+        store.dispatch(action);
       }
-      const row = prompt.parentNode as FakeElement;
-      expect(row.classList.contains('is-selected')).toBe(true);
-      return row.textContent;
-    };
-    const onFeature = [promptRow('tasks'), promptRow('items')];
 
-    store.dispatch({ type: 'selectTask', row: 3 });
-    const onExtra = [promptRow('tasks'), promptRow('items')];
-    const removeOnExtra = remove.element.hidden;
-
-    store.dispatch({ type: 'selectTask', row: 1 });
-    const onTask = [promptRow('tasks'), promptRow('items')];
-    const removeOnTask = remove.element.hidden;
-
-    store.dispatch({ type: 'selectItem', item: 2 });
-    const onItem = promptRow('items');
-
-    expect(onFeature).toEqual([null, null]);
-    expect(onExtra).toEqual([expect.stringContaining('extra-1 task'), null]);
-    expect(removeOnExtra).toBe(false);
-    expect(onTask).toEqual([
-      expect.stringContaining('1 task'),
-      expect.stringContaining('Read the store'),
-    ]);
-    expect(removeOnTask).toBe(true);
-    expect(include.element.hidden).toBe(false);
-    expect(onItem).toContain('Write the store');
-  });
+      const prompts = findAll(columnOf(popup, column), 'primer-row-prompt');
+      const drawn = prompts.flatMap((prompt) => {
+        const row = prompt.parentNode as FakeElement;
+        expect(row.classList.contains('is-selected')).toBe(true);
+        return anchors
+          .filter((anchor) => isInside(anchor.element, prompt))
+          .map((anchor) => [anchor.command, anchor.options?.label]);
+      });
+      expect(drawn).toEqual(expected);
+    },
+  );
 
   it("draws the selected task's items in the items column and toggles one by its mark", () => {
     const { store, popup } = primerPopupSetup();
@@ -995,6 +1090,30 @@ describe('primer anchors', () => {
         findAll(pane(popup, 'primer-card'), 'ui-toggle-mark')[0].click(),
       ran: ['primer.toggleInclude', undefined],
     },
+    {
+      control: 'the Review button',
+      click: (popup) =>
+        findAll(pane(popup, 'primer-tasks-foot'), 'ui-button')[0].click(),
+      ran: ['primer.openReview', undefined],
+    },
+    {
+      control: 'the Back button',
+      click: (popup) =>
+        findAll(pane(popup, 'primer-review-actions'), 'ui-button')[0].click(),
+      ran: ['primer.closeReview', undefined],
+    },
+    {
+      control: 'the Cancel primer button',
+      click: (popup) =>
+        findAll(pane(popup, 'primer-review-actions'), 'ui-button')[1].click(),
+      ran: ['primer.askCancel', undefined],
+    },
+    {
+      control: 'the Send button',
+      click: (popup) =>
+        findAll(pane(popup, 'primer-review-actions'), 'ui-button')[2].click(),
+      ran: ['primer.submit', undefined],
+    },
   ])('tasksAndItems_Click_RunTheirCommands: $control', ({ click, ran }) => {
     const setup = primerPopupSetup();
     setup.store.dispatch({ type: 'selectTask', row: 1 });
@@ -1031,6 +1150,15 @@ describe('primer anchors', () => {
 function partIn(popup: FakeElement, paneClass: string): FakeElement {
   return pane(popup, paneClass).children[0];
 }
+
+// The slot each chrome strip draws into.
+const STRIP_SLOTS = [
+  'primer-tasks-head-slot',
+  'primer-items-head-slot',
+  'primer-tasks-foot-slot',
+  'primer-card-edge-slot',
+  'primer-review-footer-slot',
+];
 
 // The element a column's part drew: its body's first child.
 function columnPart(popup: FakeElement, column: PrimerColumn): FakeElement {
@@ -1069,6 +1197,7 @@ describe('primer layout', () => {
       layoutOf(partIn(popup, 'primer-card')),
       layoutOf(columnPart(popup, 'tasks')),
       layoutOf(columnPart(popup, 'items')),
+      ...STRIP_SLOTS.map((slot) => layoutOf(partIn(popup, slot))),
     ];
     store.dispatch({ type: 'selectTask', row: 1 });
     drawn.push(layoutOf(partIn(popup, 'primer-card')));
@@ -1077,7 +1206,7 @@ describe('primer layout', () => {
     store.dispatch({ type: 'openReview' });
     drawn.push(layoutOf(partIn(popup, 'primer-review-body')));
 
-    expect(drawn).toEqual(Array(6).fill(['default', 'primer']));
+    expect(drawn).toEqual(Array(11).fill(['default', 'primer']));
   });
 
   it('draws a part from the user layout when it defines it, the rest from default', () => {
@@ -1099,8 +1228,40 @@ describe('primer layout', () => {
     });
   });
 
+  it('setLayouts_ChangedLayout_RedrawsTheCancelConfirmBodyAndFrame', () => {
+    const { view, overlays } = primerPopupSetup();
+    const userConfirm: PrimerLayout = {
+      confirmBody(parent, input, kit) {
+        const root = kit.el(parent, 'p', 'user-confirm-body', input.body);
+        kit.keepButton(root);
+        kit.confirmButton(root);
+        return root;
+      },
+      dialogFrame(parent, input, kit) {
+        const panel = kit.el(parent, 'div', 'user-frame');
+        kit.el(panel, 'h2', '', input.title);
+        const body = kit.el(panel, 'div', 'user-frame-body');
+        const actions = input.hasActions
+          ? kit.el(panel, 'div', 'user-frame-actions')
+          : null;
+        return { element: panel, body, actions };
+      },
+    };
+
+    view.setLayouts(withUser<PrimerLayout>(defaultLayout, userConfirm));
+
+    const [panel] = findAll(overlays[0], 'user-frame');
+    const [bodyRoot] = findAll(panel, 'user-confirm-body');
+    expect({
+      panel: panel.dataset.layout,
+      bodyRoot: bodyRoot.dataset.layout,
+      buttons: findAll(panel, 'ui-button').length,
+    }).toEqual({ panel: USER_LAYOUT, bodyRoot: USER_LAYOUT, buttons: 2 });
+  });
+
   it('falls back to default when a user card throws after mounting a box, mounting each box once', () => {
-    const { store, popup, view, boxes, logs } = primerPopupSetup();
+    const { store, popup, view, boxes, logs, created, editorOf } =
+      primerPopupSetup();
     view.setLayouts(
       withUser<PrimerLayout>(defaultLayout, {
         cards: {
@@ -1111,9 +1272,14 @@ describe('primer layout', () => {
         },
       }),
     );
+    const editorsBefore = created.length;
 
     store.dispatch({ type: 'selectTask', row: 1 });
 
+    const taskEditors = created.slice(editorsBefore);
+    expect(taskEditors).toHaveLength(2);
+    expect(taskEditors).toContain(editorOf(taskComment1));
+    expect(taskEditors.filter((made) => made.isDestroyed)).toEqual([]);
     const card = partIn(popup, 'primer-card');
     expect(card.dataset.layout).toBe('default');
     expect(logs).toContainEqual(
@@ -1148,9 +1314,13 @@ describe('primer layout', () => {
   });
 
   it('rebuilds the shown card on setLayouts with a new pick and keeps the focused box', () => {
-    const { store, popup, view, boxes } = primerPopupSetup();
+    const { store, popup, view, boxes, created, editorOf } = primerPopupSetup();
     store.dispatch({ type: 'selectTask', row: 1 });
     boxes.focus(taskComment1);
+    const comment = editorOf(taskComment1);
+    comment.events.modeChanged({ mode: 'visual', subMode: '' });
+    const focusesBefore = comment.focuses.length;
+    const editorsBefore = created.length;
     const before = partIn(popup, 'primer-card');
 
     view.setLayouts(withUser<PrimerLayout>(defaultLayout, BARE_TASK));
@@ -1160,6 +1330,9 @@ describe('primer layout', () => {
     expect(after.dataset.layout).toBe(USER_LAYOUT);
     const active = boxes.active();
     expect(active === null ? null : boxKey(active)).toBe('p1/task/1/comment');
+    expect(created).toHaveLength(editorsBefore);
+    expect(editorOf(taskComment1)).toBe(comment);
+    expect(comment.focuses.slice(focusesBefore)).toEqual([undefined]);
   });
 
   it("runs the item card's update on a toggle without a rebuild", () => {
@@ -1190,41 +1363,121 @@ describe('primer layout', () => {
     expect(updates).toEqual([false]);
   });
 
-  // A user part for each column that draws one plain row and never calls the
-  // kit's row function.
-  const PLAIN_COLUMNS: Record<PrimerColumn, PrimerLayout> = {
-    tasks: {
-      tasks(parent, input, kit) {
-        const list = kit.el(parent, 'div', 'plain-tasks');
-        kit.row(list, { density: 'list', label: input.feature.name });
-        return { element: list };
-      },
+  it.each<{
+    column: PrimerColumn;
+    entries: PrimerEntry[];
+    actions: PrimerAction[];
+    grow: PrimerAction;
+  }>([
+    {
+      column: 'tasks',
+      entries: [],
+      actions: [],
+      grow: { type: 'addExtraTask' },
     },
-    items: {
-      items(parent, input, kit) {
-        const list = kit.el(parent, 'div', 'plain-items');
-        kit.row(list, { density: 'list', label: input.task?.name ?? '' });
-        return { element: list };
-      },
+    {
+      // Task rows: Feature (0), `1` (1, one item), `2` (2, two items).
+      column: 'items',
+      entries: [
+        primerEntry('1', 'primer', { items: [primerItem('Read the store')] }),
+        primerEntry('2', 'primer', {
+          items: [primerItem('Write the store'), primerItem('Test the store')],
+        }),
+      ],
+      actions: [{ type: 'selectTask', row: 1 }],
+      grow: { type: 'selectTask', row: 2 },
     },
-  };
+  ])(
+    'columnHead_FewerThanTwoRows_MarksItsRowStepNoTarget: the $column column',
+    ({ column, entries, actions, grow }) => {
+      const { store, popup } = primerPopupSetup({ entries });
+      for (const action of actions) {
+        store.dispatch(action);
+      }
+      const rowStep = () => pane(columnOf(popup, column), 'primer-column-edge');
+      const ofOneRow = rowStep();
+      const isOneRowMarked = ofOneRow.classList.contains('is-no-target');
 
-  it.each<PrimerColumn>(['tasks', 'items'])(
-    "appends the %s column's row prompt at its part's end when the part never calls its row function",
-    (column) => {
-      const { store, popup, view } = primerPopupSetup();
-      view.setLayouts(
-        withUser<PrimerLayout>(defaultLayout, PLAIN_COLUMNS[column]),
-      );
+      store.dispatch(grow);
 
-      store.dispatch({ type: 'selectTask', row: 1 });
-
-      const [prompt] = findAll(columnOf(popup, column), 'primer-row-prompt');
-      const part = columnPart(popup, column);
-      expect(part.dataset.layout).toBe(USER_LAYOUT);
-      expect(prompt.parentNode).toBe(part);
+      const ofTwoRows = rowStep();
+      expect(isOneRowMarked).toBe(true);
+      expect(ofTwoRows).not.toBe(ofOneRow);
+      expect(ofTwoRows.classList.contains('is-no-target')).toBe(false);
     },
   );
+
+  it('tasksHead_LeavesOutSaveStatus_PlacesItAtItsRootsStart', () => {
+    const { store, popup, view } = primerPopupSetup();
+    view.setLayouts(
+      withUser<PrimerLayout>(defaultLayout, {
+        tasksHead(parent, _input, kit) {
+          return { element: kit.el(parent, 'header', 'bare-head') };
+        },
+      }),
+    );
+
+    store.dispatch({
+      type: 'setText',
+      formId: 'p1',
+      target: { field: 'feature', name: 'notes' },
+      value: 'Changed notes',
+    });
+
+    const [head] = findAll(popup, 'bare-head');
+    const first = head.children[0];
+    expect(head.dataset.layout).toBe(USER_LAYOUT);
+    expect(first.classList.contains('ui-status-line')).toBe(true);
+    expect(first.textContent).toBe('Unsaved');
+  });
+
+  // A user items head reading its task's name, its draws counted in `draws`.
+  function namingItemsHead(draws: { count: number }): PrimerLayout {
+    return {
+      itemsHead(parent, input, kit) {
+        draws.count += 1;
+        const name = input.task ?? '';
+        return { element: kit.el(parent, 'header', 'user-items-head', name) };
+      },
+    };
+  }
+
+  it('chromeStrip_Redraw_LeavesOneRootInItsSlot', () => {
+    const { store, popup, view, anchors } = primerPopupSetup();
+    view.setLayouts(
+      withUser<PrimerLayout>(defaultLayout, namingItemsHead({ count: 0 })),
+    );
+
+    store.dispatch({ type: 'selectTask', row: 1 });
+
+    const slot = pane(popup, 'primer-items-head-slot');
+    expect(slot.children).toHaveLength(1);
+    const slots = STRIP_SLOTS.map((slotClass) => pane(popup, slotClass));
+    const stripAnchors = anchors.filter((anchor) =>
+      slots.some((stripSlot) => isInside(anchor.element, stripSlot)),
+    );
+    view.dispose();
+    expect(stripAnchors.length).toBeGreaterThan(0);
+    expect(
+      stripAnchors.filter((anchor) => anchor.dispose.mock.calls.length !== 1),
+    ).toEqual([]);
+  });
+
+  it('chromeStrip_InputChanges_DrawsAgain', () => {
+    const { store, popup, view } = primerPopupSetup();
+    const draws = { count: 0 };
+    view.setLayouts(
+      withUser<PrimerLayout>(defaultLayout, namingItemsHead(draws)),
+    );
+
+    store.dispatch({ type: 'selectTask', row: 1 });
+    const named = pane(popup, 'user-items-head').textContent;
+    const drawsOnTask = draws.count;
+    store.dispatch({ type: 'setNeed', need: 'yes' });
+
+    expect(named).toBe('1 task');
+    expect(draws.count).toBe(drawsOnTask);
+  });
 
   it("disposes a part's anchors before it draws the part again and when the view goes", () => {
     const { store, popup, view, anchors, sessionId } = primerPopupSetup();

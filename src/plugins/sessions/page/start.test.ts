@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ListPickerService } from '../../../contracts/list-picker';
 import type {
   CommandInfo,
   PageApi,
@@ -135,6 +136,8 @@ interface StartOptions {
   parts?: readonly PagePart[];
   // The sessions part to start in place of `sessionsPagePart`.
   part?: typeof sessionsPagePart;
+  // The list picker service; a fake with no place for its lists when left out.
+  picker?: ListPickerService;
 }
 
 // `part` on the harness, its rows and selection written, up to the first
@@ -149,6 +152,7 @@ async function startApplied(
     withOtherMode = false,
     parts = [],
     part = sessionsPagePart,
+    picker = fakeListPickerService(),
   }: StartOptions = {},
 ) {
   const activations: unknown[] = [];
@@ -165,7 +169,7 @@ async function startApplied(
       }
       return true;
     },
-    services: { picker: fakeListPickerService(), uiState },
+    services: { picker, uiState },
     firstModeTaken: withOtherMode,
     parts: withOtherMode ? [other.part, ...parts] : parts,
   });
@@ -272,6 +276,22 @@ function chatFocusBoxPart(focusBox: () => void): PagePart {
       dependsOn: { main: [], page: [] },
     },
     start: () => ({ commands: { focusBox } }),
+  } as unknown as PagePart;
+}
+
+// A stand-in chat page part declaring `chat.newSession`, so the split picker
+// lists the New session row.
+function chatNewSessionPart(): PagePart {
+  return {
+    manifest: {
+      ...sessionsPagePart.manifest,
+      id: 'chat',
+      commands: {
+        newSession: { label: 'new session', group: 'box', runsIn: 'page' },
+      },
+      dependsOn: { main: [], page: [] },
+    },
+    start: () => ({ commands: { newSession: () => undefined } }),
   } as unknown as PagePart;
 }
 
@@ -927,6 +947,69 @@ describe('sessions page part', () => {
 
     expect(tabShown).toHaveBeenCalledTimes(1);
     expect(popup.shown).toHaveBeenCalledTimes(2);
+    await setup.harness.stop();
+  });
+
+  // Breaks: the picker drawing its built-in rows, or `setLayouts` leaving the
+  // open picker's rows drawn with the old layout.
+  it('splitPicker_LayoutsChange_RedrawsTheOpenRows', async () => {
+    const overlay = asFake(document.createElement('div'));
+    const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+      parts: [chatNewSessionPart()],
+      picker: fakeListPickerService({
+        place: (element) => overlay.append(asFake(element)),
+      }),
+    });
+    vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: () => '' }));
+    const [slot] = findAll(
+      asFake(setup.harness.mode('sessions.sessions').element),
+      'pane-tree-slot',
+    );
+    slot.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      right: 800,
+      bottom: 600,
+      width: 800,
+      height: 600,
+    });
+    const rows = () => overlay.querySelectorAll('[data-layout-owner]');
+    setup.harness.started().commands.splitRight({ arg: undefined });
+
+    expect(
+      rows().map((row) => [
+        row.tagName,
+        row.dataset.layout,
+        row.dataset.layoutOwner,
+        row.textContent,
+      ]),
+    ).toEqual([
+      ['LI', 'default', 'sessions', 'label s2'],
+      ['LI', 'default', 'sessions', 'New session'],
+    ]);
+
+    const kinds: string[] = [];
+    setup.harness.showLayouts(
+      withUser<Layout>(defaultLayout, {
+        pickerRow: (parent, input, kit) => {
+          kinds.push(input.item.kind);
+          return { element: kit.el(parent, 'li', 'mine-row') };
+        },
+      }),
+    );
+
+    expect(
+      rows().map((row) => [
+        row.tagName,
+        row.classList.contains('mine-row'),
+        row.dataset.layout,
+      ]),
+    ).toEqual([
+      ['LI', true, 'mine'],
+      ['LI', true, 'mine'],
+    ]);
+    expect(kinds).toEqual(['session', 'new']);
+    expect(overlay.children[0].hidden).toBe(false);
     await setup.harness.stop();
   });
 

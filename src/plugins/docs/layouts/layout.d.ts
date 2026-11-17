@@ -11,6 +11,9 @@
 import type {
   BaseKit,
   ButtonVariant,
+  DialogFrameInput,
+  DialogFramePart,
+  PromptActionInput,
 } from '../../../shared/page/layout-host/kit';
 
 export interface LayoutPart {
@@ -30,7 +33,7 @@ export interface TreePaneKit extends DocsKit {
   // `div.docs-switch-slot`: the slot the app draws `sidebarSwitch` into. The app sets `hidden` on it in a session's
   // Docs tab, which has no switch.
   sidebarSwitch(parent: HTMLElement): HTMLElement;
-  // `div.docs-status`: the app sets its text and hides it while it is empty.
+  // `div.docs-status-slot`: the slot the app draws `treeStatus` into.
   status(parent: HTMLElement): HTMLElement;
   // `div.docs-filter`: the InputFrame holding the app's filter input; the app shows it while the filter is open.
   filterBox(parent: HTMLElement): HTMLElement;
@@ -46,6 +49,14 @@ export interface TreeLineInput {
   placement: 'empty' | 'above';
   text: string;
   hint: { command: 'filter' | 'rescan'; words: string } | null;
+}
+
+// The tree's status line, drawn into the pane's status slot and again alone whenever its text changes, so the filter box
+// keeps its focus and the rows their scroll. `text` is null for no status: draw nothing visible then. Keep the
+// `docs-status` class on the root element: the app's self-test finds it there. A user layout that leaves out
+// `treeStatus` draws it with `default`; a `treeStatus` that draws no text shows no status.
+export interface TreeStatusInput {
+  text: string | null;
 }
 
 // One tree row. The app sets `is-selected`, `is-cursor` and the click on the row's root element, and keeps the
@@ -65,19 +76,19 @@ export interface TreeRowInput {
   // A leaf's last-loaded time, short, with the full date and time as its title.
   time: { text: string; title: string } | null;
   isStarred: boolean;
-  // The selected leaf: it ends in the cursor prompt.
+  // The selected leaf: it draws its `prompt`.
   isPrompted: boolean;
   // A `wikiLink` whose target the index does not hold; false on every other row.
   isDangling: boolean;
   // The size of a `wikiLink`'s kind or owner list; null on every other row.
   count: number | null;
+  // The cursor prompt's actions (`s star  r rename  d trash`; the wiki view leaves out `s star`), each a qualified
+  // command and its label, for `kit.keyHint(parent, action.command, { label: action.label })`. Empty on every row but
+  // the prompted one. A user layout that leaves out `treeRow` draws it with `default`; a `treeRow` that draws no
+  // prompt hint shows no prompt.
+  prompt: readonly PromptActionInput[];
 }
-export interface TreeRowKit extends DocsKit {
-  // On a prompted row: places the app's `span.docs-row-actions` (`s star  r rename  d trash`; the wiki view leaves out
-  // `s star`) and returns it. On any other row: places nothing and returns null. A prompted row that leaves it out
-  // gets it appended at its end.
-  cursorPrompt(parent: HTMLElement): HTMLElement | null;
-}
+export interface TreeRowKit extends DocsKit {}
 
 // The doc pane, scope `docs.doc`. The app sets `data-doc` on the element the pane draws into: `none` while no doc is
 // open, `open`, `editing`, or `page` while a page with no file shows: a list page or the empty Main page.
@@ -156,7 +167,8 @@ export interface EditorFrameKit extends DocsKit {
   editor(parent: HTMLElement): HTMLElement;
 }
 
-// Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
+// Dialogs. The app keeps each dialog's scrim, keys and focus; `dialogFrame` draws its panel, title and actions row, and
+// a part draws its body.
 // The name and path box, scope `docs.box`. `completes`: the box completes a path with Tab.
 export interface BoxDialogInput {
   label: string;
@@ -172,7 +184,7 @@ export interface BoxDialogKit extends DocsKit {
 export interface CompletionInput {
   text: string;
 }
-// The Trash confirmation, scope `docs.confirm`. The dialog's title stays the app's.
+// The Trash confirmation, scope `docs.confirm`. The app sets the dialog's title; `dialogFrame` draws it.
 export interface ConfirmDialogInput {
   question: string;
 }
@@ -297,6 +309,11 @@ export interface Layout {
     input: TreeLineInput,
     kit: DocsKit,
   ): LayoutPart;
+  treeStatus?(
+    parent: HTMLElement,
+    input: TreeStatusInput,
+    kit: DocsKit,
+  ): LayoutPart;
   treeRow?(
     parent: HTMLElement,
     input: TreeRowInput,
@@ -338,6 +355,15 @@ export interface Layout {
     input: EditorFrameInput,
     kit: EditorFrameKit,
   ): LayoutPart;
+  // The frame of the path box dialog and the Trash confirmation: the panel, its title (`input.title`) and, when
+  // `input.hasActions`, its actions row. Return the panel, appended to `parent`, with `body` and `actions` inside it;
+  // the app fills them. The app keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions`
+  // is not inside its panel, or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: DocsKit,
+  ): DialogFramePart;
   boxDialog?(
     parent: HTMLElement,
     input: BoxDialogInput,

@@ -4,6 +4,7 @@ import {
   type DrawPartOptions,
   drawPart,
   type RollbackDeps,
+  requireDialogFrame,
   requireElementIn,
 } from './draw-part';
 
@@ -410,5 +411,158 @@ describe('requireElementIn', () => {
     const parent = asHtml(new FakeElement('div'));
 
     expect(() => requireElementIn(parent, element(), 'rail')).toThrow(error);
+  });
+});
+
+// A panel holding a body and an actions row.
+function panelFrame() {
+  const element = new FakeElement('section');
+  const body = new FakeElement('div');
+  const actions = new FakeElement('div');
+  element.append(body, actions);
+  return {
+    element: asHtml(element),
+    body: asHtml(body),
+    actions: asHtml(actions),
+  };
+}
+
+describe('requireDialogFrame', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      row: 'frame is null',
+      frame: () => null,
+      hasActions: true,
+      error: 'dialogFrame returned no frame',
+    },
+    {
+      row: 'body outside the element',
+      frame: () => ({
+        ...panelFrame(),
+        body: asHtml(new FakeElement('div')),
+      }),
+      hasActions: true,
+      error: 'dialogFrame body is not inside its element',
+    },
+    {
+      row: 'body not an element',
+      frame: () => ({ ...panelFrame(), body: 'body' }),
+      hasActions: true,
+      error: 'dialogFrame body is not inside its element',
+    },
+    {
+      row: 'body is the element',
+      frame: () => {
+        const frame = panelFrame();
+        return { ...frame, body: frame.element };
+      },
+      hasActions: true,
+      error: 'dialogFrame body is not inside its element',
+    },
+    {
+      row: 'actions drawn for a dialog with none',
+      frame: panelFrame,
+      hasActions: false,
+      error: 'dialogFrame drew actions for a dialog with none',
+    },
+    {
+      row: 'actions undefined for a dialog with none',
+      frame: () => ({ ...panelFrame(), actions: undefined }),
+      hasActions: false,
+      error: 'dialogFrame drew actions for a dialog with none',
+    },
+    {
+      row: 'actions missing',
+      frame: () => ({ ...panelFrame(), actions: null }),
+      hasActions: true,
+      error: 'dialogFrame actions is not inside its element',
+    },
+    {
+      row: 'actions outside the element',
+      frame: () => ({
+        ...panelFrame(),
+        actions: asHtml(new FakeElement('div')),
+      }),
+      hasActions: true,
+      error: 'dialogFrame actions is not inside its element',
+    },
+    {
+      row: 'actions is the element',
+      frame: () => {
+        const frame = panelFrame();
+        return { ...frame, actions: frame.element };
+      },
+      hasActions: true,
+      error: 'dialogFrame actions is not inside its element',
+    },
+    {
+      row: 'actions inside body',
+      frame: () => {
+        const frame = panelFrame();
+        frame.body.append(frame.actions);
+        return frame;
+      },
+      hasActions: true,
+      error: 'dialogFrame body and actions overlap',
+    },
+    {
+      row: 'body inside actions',
+      frame: () => {
+        const frame = panelFrame();
+        frame.actions.append(frame.body);
+        return frame;
+      },
+      hasActions: true,
+      error: 'dialogFrame body and actions overlap',
+    },
+  ])('requireDialogFrame_Rejects: $row', ({ frame, hasActions, error }) => {
+    expect(() =>
+      requireDialogFrame(
+        frame(),
+        { title: 'Rename', hasActions },
+        'dialogFrame',
+      ),
+    ).toThrow(error);
+  });
+
+  it('requireDialogFrame_NonElementElement_ReturnsTheFrameUnchecked', () => {
+    const frame = { element: 'panel', body: 'body', actions: 'actions' };
+
+    expect(
+      requireDialogFrame(
+        frame,
+        { title: 'Rename', hasActions: true },
+        'dialogFrame',
+      ),
+    ).toBe(frame);
+  });
+
+  it('requireDialogFrame_ValidFrame_ReturnsIt', () => {
+    const withActions = panelFrame();
+    const bodyOnly = panelFrame();
+    bodyOnly.actions.remove();
+
+    const checked = requireDialogFrame(
+      withActions,
+      { title: 'Rename', hasActions: true },
+      'dialogFrame',
+    );
+    const checkedBodyOnly = requireDialogFrame(
+      { element: bodyOnly.element, body: bodyOnly.body, actions: null },
+      { title: 'Rename', hasActions: false },
+      'dialogFrame',
+    );
+
+    expect(checked.element).toBe(withActions.element);
+    expect(checked.body).toBe(withActions.body);
+    expect(checked.actions).toBe(withActions.actions);
+    expect(checkedBodyOnly.element).toBe(bodyOnly.element);
+    expect(checkedBodyOnly.body).toBe(bodyOnly.body);
+    expect(checkedBodyOnly.actions).toBeNull();
   });
 });

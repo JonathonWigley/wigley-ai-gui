@@ -1,5 +1,4 @@
 import type { CommandArg } from '../../../contracts/commands';
-import type { Disposable } from '../../../contracts/disposable';
 import type { KeyBind, UserKeymap, ViewScope } from '../../../contracts/keymap';
 import type { FocusTarget } from '../../../contracts/panes';
 import type { CommandInfo } from '../../../contracts/plugin';
@@ -9,7 +8,7 @@ import { parseChord } from '../../../shared/chord-notation';
 import { commandTarget } from '../../../shared/command-args';
 import { formatVimKeys, normalVimKeys } from '../../../shared/key-hints';
 import { scopesOverlap } from '../../../shared/keymap-checks';
-import { element } from '../../../shared/page/dom';
+import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import { commandLabel } from '../../../shared/plugin-manifests';
 import type { LeaderCursors } from '../contract';
 import type {
@@ -34,6 +33,7 @@ import {
 } from './keymap-rows';
 import { openScopePicker, recordingOn, scopeTitle } from './keymap-view';
 import type { BuiltLeaderPanes, BuiltRow } from './layout/settings-kit';
+import { createPromptHolder, type PromptHolder } from './row-prompt';
 import {
   freeKeys,
   groupNameIn,
@@ -72,8 +72,9 @@ export type LeaderRowPart =
 // `drawRow` draw a layout part, which the caller disposes on its next draw of
 // the rows; `drawRow` is handed the row's key, for a click on the row to move
 // the cursor to; `redraw` draws the rows again, the Leader menu through
-// `draw`. `anchor` keeps a settings command's keys in `element` while `scope`
-// is in force, followed by `label`. `cursorMoved` hears each cursor move.
+// `draw`. `drawPrompt` draws the layout's `cursorPrompt` for `actions` into a
+// row's actions slot `parent`, in the kit of the pane's `scope`, and returns
+// the dispose that takes it out again. `cursorMoved` hears each cursor move.
 export interface LeaderMenuDeps {
   context: RowContext;
   drawPanes(parent: HTMLElement, input: LeaderPanesInput): BuiltLeaderPanes;
@@ -83,12 +84,11 @@ export interface LeaderMenuDeps {
     scope: LeaderScope,
     key: string,
   ): BuiltRow;
-  anchor(
-    element: HTMLElement,
-    command: LeaderMenuCommand,
+  drawPrompt(
+    parent: HTMLElement,
+    actions: readonly PromptActionInput[],
     scope: LeaderScope,
-    label: string,
-  ): Disposable;
+  ): () => void;
   setScope(scope: LeaderScope): void;
   setFocusTarget(target: FocusTarget): void;
   redraw(): void;
@@ -112,8 +112,10 @@ export interface LeaderMenuDeps {
 // `moveTo` moves the cursor of the pane holding the row `key` to it, that pane
 // taking the keys on the next `focus`; false when no row holds `key`.
 // `drawnRow` finds a drawn row by key, for the box and the recording drawn on
-// it. `isEdit` is whether `command` on the cursor row edits the keymap rather
-// than moving the cursors.
+// it. `dispose` disposes the cursor prompts drawn in the panes' rows, for the
+// owner to run before it replaces or leaves the rows. `isEdit` is whether
+// `command` on the cursor row edits the keymap rather than moving the
+// cursors.
 export interface LeaderMenuView {
   draw(parent: HTMLElement): void;
   focus(): void;
@@ -122,6 +124,7 @@ export interface LeaderMenuView {
   cursors(): LeaderCursors;
   moveTo(key: string): boolean;
   drawnRow(key: string): BuiltRow | undefined;
+  dispose(): void;
   isEdit(command: LeaderMenuCommand): boolean;
   commands: Record<LeaderMenuCommand, () => void>;
 }
@@ -130,26 +133,23 @@ const MOVES = ['down', 'up', 'top', 'bottom'] as const;
 
 type RowAction = Exclude<LeaderMenuCommand, (typeof MOVES)[number]>;
 
-interface PromptHint {
-  command: LeaderMenuCommand;
-  label: string;
-}
-
+// The cursor prompt's actions: each a settings command, qualified, and the
+// word its hint draws.
 const GROUP_HINTS = {
-  rename: { command: 'renameGroup', label: 'rename' },
-  addGroup: { command: 'addBind', label: 'add group' },
-  remove: { command: 'removeBind', label: 'remove' },
-} satisfies Record<string, PromptHint>;
+  rename: { command: 'settings.renameGroup', label: 'rename' },
+  addGroup: { command: 'settings.addBind', label: 'add group' },
+  remove: { command: 'settings.removeBind', label: 'remove' },
+} satisfies Record<string, PromptActionInput>;
 
 const ITEM_HINTS = {
-  changeAction: { command: 'open', label: 'change action' },
-  open: { command: 'open', label: 'open' },
-  add: { command: 'addBind', label: 'add' },
-  changeKey: { command: 'changeKey', label: 'change key' },
-  clear: { command: 'removeBind', label: 'clear' },
-  move: { command: 'moveToGroup', label: 'move to group' },
-  reset: { command: 'reset', label: 'reset' },
-} satisfies Record<string, PromptHint>;
+  changeAction: { command: 'settings.open', label: 'change action' },
+  open: { command: 'settings.open', label: 'open' },
+  add: { command: 'settings.addBind', label: 'add' },
+  changeKey: { command: 'settings.changeKey', label: 'change key' },
+  clear: { command: 'settings.removeBind', label: 'clear' },
+  move: { command: 'settings.moveToGroup', label: 'move to group' },
+  reset: { command: 'settings.reset', label: 'reset' },
+} satisfies Record<string, PromptActionInput>;
 
 type GroupHint = keyof typeof GROUP_HINTS;
 type ItemHint = keyof typeof ITEM_HINTS;
@@ -178,7 +178,8 @@ const PANE_SCOPES: Record<LeaderPane, LeaderScope> = {
   items: 'leaderItems',
 };
 
-const CHORD_NOTE = 'A leader item is one key with no Ctrl, Alt or Cmd';
+const CHORD_NOTE =
+  'A leader item is one key with no Ctrl, Alt or Cmd, and not Tab or F1 to F12';
 const ITEMS_FIRST_NOTE = 'Move or clear its items first';
 
 function groupRowKey(group: LeaderGroup): string {
@@ -240,27 +241,17 @@ function withOtherLeaderPathsRemoved(
   return edited;
 }
 
-// A prompt span holding one anchored hint per entry of `hints`.
-function promptHints<H extends string>(
-  hints: Record<H, PromptHint>,
-  scope: LeaderScope,
-  anchor: LeaderMenuDeps['anchor'],
-): { prompt: HTMLElement; shown: Record<H, HTMLElement> } {
-  const prompt = element('span', 'settings-row-actions');
-  const shown = {} as Record<H, HTMLElement>;
-  for (const id of Object.keys(hints) as H[]) {
-    const hint = element('span');
-    anchor(hint, hints[id].command, scope, hints[id].label);
-    prompt.append(hint);
-    shown[id] = hint;
-  }
-  return { prompt, shown };
-}
-
 export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   const { context: ctx, log } = deps;
-  const groupPrompt = promptHints(GROUP_HINTS, 'leaderGroups', deps.anchor);
-  const itemPrompt = promptHints(ITEM_HINTS, 'leaderItems', deps.anchor);
+  // Each pane's `cursorPrompt`, drawn into its cursor row.
+  const promptHolder = (at: LeaderPane): PromptHolder =>
+    createPromptHolder((slot, actions) =>
+      deps.drawPrompt(slot, actions, PANE_SCOPES[at]),
+    );
+  const prompts: Record<LeaderPane, PromptHolder> = {
+    groups: promptHolder('groups'),
+    items: promptHolder('items'),
+  };
 
   let pane: LeaderPane = 'groups';
   let holding: LeaderPane | null = null;
@@ -779,9 +770,15 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
   const listOf = (at: LeaderPane): HTMLElement | undefined =>
     at === 'groups' ? panes?.groupRows : panes?.itemRows;
 
+  // Disposes both panes' cursor prompts, so no prompt anchor outlives its row.
+  const disposePrompts = () => {
+    prompts.groups.dispose();
+    prompts.items.dispose();
+  };
+
   // Marks each pane's cursor row selected, ringed while its pane holds the
-  // keys, the pane without them inactive, and puts each pane's cursor prompt
-  // in its cursor row; a prompt out of scope hides in place.
+  // keys, the pane without them inactive, and draws each pane's cursor prompt
+  // in its cursor row; a hint out of scope hides in place.
   const mark = () => {
     for (const at of ['groups', 'items'] as const) {
       for (const [key, row] of drawn[at]) {
@@ -791,8 +788,8 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       }
       listOf(at)?.classList.toggle('is-pane-inactive', holding !== at);
     }
-    placePrompt(groupPrompt, groupRows, 'groups');
-    placePrompt(itemPrompt, itemRows, 'items');
+    placePrompt('groups', groupRows, GROUP_HINTS);
+    placePrompt('items', itemRows, ITEM_HINTS);
     if (holding !== null) {
       const cursor = cursors[holding];
       if (cursor !== null) {
@@ -803,21 +800,24 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
     }
   };
 
+  // Draws `at`'s cursor prompt into its cursor row's actions slot with the
+  // row's `hints`, in order, taken from `table`. With no cursor row it
+  // disposes the drawn prompt.
   const placePrompt = <H extends string>(
-    prompt: { prompt: HTMLElement; shown: Record<H, HTMLElement> },
-    rows: readonly PaneRow<H>[],
     at: LeaderPane,
+    rows: readonly PaneRow<H>[],
+    table: Record<H, PromptActionInput>,
   ) => {
     const row = rows.find((each) => each.key === cursors[at]);
     const into = row === undefined ? undefined : drawn[at].get(row.key);
     if (row === undefined || into === undefined) {
-      prompt.prompt.remove();
+      prompts[at].dispose();
       return;
     }
-    for (const id of Object.keys(prompt.shown) as H[]) {
-      prompt.shown[id].hidden = !row.hints.includes(id);
-    }
-    into.actions.append(prompt.prompt);
+    prompts[at].place(
+      into.actions,
+      row.hints.map((hint) => table[hint]),
+    );
   };
 
   const focusTarget: FocusTarget = {
@@ -879,6 +879,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
     );
 
   const draw = (parent: HTMLElement) => {
+    disposePrompts();
     tree = leaderTree(ctx.schema, ctx.keymapLayer());
     const followed = follow;
     follow = null;
@@ -1002,6 +1003,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       mark();
     },
     reset(restored = null) {
+      disposePrompts();
       pane = 'groups';
       holding = null;
       cursors.groups = null;
@@ -1030,6 +1032,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
       return true;
     },
     drawnRow: (key) => drawn.groups.get(key) ?? drawn.items.get(key),
+    dispose: disposePrompts,
     isEdit,
     commands,
   };

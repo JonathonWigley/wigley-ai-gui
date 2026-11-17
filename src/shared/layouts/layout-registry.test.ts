@@ -55,12 +55,53 @@ function startWithDefault(): Promise<LayoutRegistry> {
   return start(files, LAYOUT_TYPES, defaultFolder);
 }
 
+// The `default` entry at revision and style revision 1.
+function defaultEntry(hasCss: boolean, builtIn: boolean): LayoutEntry {
+  return { name: 'default', revision: 1, styleRevision: 1, hasCss, builtIn };
+}
+
 function entryIn(set: LayoutSet, name: string): LayoutEntry | undefined {
   return set.layouts.find((layout) => layout.name === name);
 }
 
 function defaultIn(set: LayoutSet): LayoutEntry | undefined {
   return entryIn(set, 'default');
+}
+
+// Each change from `previous` to `next`, sorted: `<name> revision` and
+// `<name> style` for each entry whose revision or style revision rose,
+// `<name> joined` and `<name> left`, and `<name> built-in` or `<name> live`
+// for an entry whose `builtIn` flipped.
+function changesIn(previous: LayoutSet, next: LayoutSet): string[] {
+  const changes: string[] = [];
+  for (const layout of next.layouts) {
+    const before = entryIn(previous, layout.name);
+    if (before === undefined) {
+      changes.push(`${layout.name} joined`);
+      continue;
+    }
+    if (layout.revision > before.revision) {
+      changes.push(`${layout.name} revision`);
+    }
+    if (layout.styleRevision > before.styleRevision) {
+      changes.push(`${layout.name} style`);
+    }
+    if (layout.builtIn !== before.builtIn) {
+      changes.push(`${layout.name} ${layout.builtIn ? 'built-in' : 'live'}`);
+    }
+  }
+  for (const layout of previous.layouts) {
+    if (entryIn(next, layout.name) === undefined) {
+      changes.push(`${layout.name} left`);
+    }
+  }
+  return changes.sort();
+}
+
+// The changes each set in `sets` makes to the one before it, the first to
+// `first`.
+function changesPerSet(first: LayoutSet, sets: LayoutSet[]): string[][] {
+  return sets.map((set, i) => changesIn(i === 0 ? first : sets[i - 1], set));
 }
 
 // `files` whose watch hands its options' `onError` to `fail`, or throws
@@ -152,11 +193,28 @@ describe('start', () => {
 
     expect(registry.current()).toEqual({
       layouts: [
-        { name: 'default', revision: 1, builtIn: true, hasCss: false },
-        { name: 'alpha', revision: 1, builtIn: false, hasCss: false },
-        { name: 'beta', revision: 1, builtIn: false, hasCss: false },
+        {
+          name: 'default',
+          revision: 1,
+          styleRevision: 1,
+          builtIn: true,
+          hasCss: false,
+        },
+        {
+          name: 'alpha',
+          revision: 1,
+          styleRevision: 1,
+          builtIn: false,
+          hasCss: false,
+        },
+        {
+          name: 'beta',
+          revision: 1,
+          styleRevision: 1,
+          builtIn: false,
+          hasCss: false,
+        },
       ],
-      changed: null,
     });
   });
 
@@ -181,31 +239,31 @@ describe('start', () => {
       row: 'no clone',
       folder: 'none',
       written: [],
-      expected: { name: 'default', revision: 1, hasCss: false, builtIn: true },
+      expected: defaultEntry(false, true),
     },
     {
       row: 'folder missing',
       folder: 'clone',
       written: [],
-      expected: { name: 'default', revision: 1, hasCss: false, builtIn: true },
+      expected: defaultEntry(false, true),
     },
     {
       row: 'only layout.test.ts',
       folder: 'clone',
       written: ['layout.test.ts'],
-      expected: { name: 'default', revision: 1, hasCss: false, builtIn: true },
+      expected: defaultEntry(false, true),
     },
     {
       row: 'layout.js only',
       folder: 'clone',
       written: ['layout.js'],
-      expected: { name: 'default', revision: 1, hasCss: false, builtIn: false },
+      expected: defaultEntry(false, false),
     },
     {
       row: 'layout.js and layout.css',
       folder: 'clone',
       written: ['layout.js', 'layout.css'],
-      expected: { name: 'default', revision: 1, hasCss: true, builtIn: false },
+      expected: defaultEntry(true, false),
     },
   ])(
     'start_DefaultEntry_FollowsTheDefaultFolder ($row)',
@@ -251,25 +309,23 @@ describe('start', () => {
 describe('watch', () => {
   it('watch_SaveInAnyUserFolder_BumpsOnlyThatLayout', async () => {
     await writeLayouts('alpha', 'beta');
-    await start();
+    const before = (await start()).current();
 
     await files.write('beta/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('beta');
-    expect(entryIn(sent[0], 'beta')?.revision).toBe(2);
-    expect(entryIn(sent[0], 'alpha')?.revision).toBe(1);
+    expect(changesIn(before, sent[0])).toEqual(['beta revision']);
   });
 
   it('watch_LayoutJsRemoved_SendsSetWithoutIt', async () => {
     await writeLayouts('alpha');
     const registry = await start();
+    const before = registry.current();
 
     files.remove('alpha/layout.js');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('alpha');
-    expect(entryIn(sent[0], 'alpha')).toBeUndefined();
+    expect(changesIn(before, sent[0])).toEqual(['alpha left']);
     expect(registry.names()).toEqual(['default']);
   });
 
@@ -282,39 +338,40 @@ describe('watch', () => {
     await writeLayouts('alpha');
 
     await vi.waitFor(() => expect(sent).toHaveLength(2));
-    expect(entryIn(sent[1], 'alpha')?.revision).toBeGreaterThan(2);
+    expect(entryIn(sent[1], 'alpha')?.revision).toBe(3);
+    expect(entryIn(sent[1], 'alpha')?.styleRevision).toBe(3);
   });
 
   it('watch_NewFolder_JoinsTheSet', async () => {
-    await start();
+    const before = (await start()).current();
 
     await writeLayouts('gamma');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('gamma');
+    expect(changesIn(before, sent[0])).toEqual(['gamma joined']);
     expect(entryIn(sent[0], 'gamma')?.revision).toBe(1);
   });
 
   it('watch_SaveInFolderThatIsNoLayout_SendsNothing', async () => {
     await writeLayouts('alpha');
-    await start();
+    const before = (await start()).current();
 
     await files.write('notes/readme.json', '{}');
     await files.write('alpha/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('alpha');
+    expect(changesIn(before, sent[0])).toEqual(['alpha revision']);
   });
 
   it('watch_SaveInDefaultFolder_SendsNothing', async () => {
     await writeLayouts('alpha');
-    await start();
+    const before = (await start()).current();
 
     await files.write('default/layout.js', '// mine');
     await files.write('alpha/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('alpha');
+    expect(changesIn(before, sent[0])).toEqual(['alpha revision']);
   });
 
   it.each([
@@ -324,53 +381,69 @@ describe('watch', () => {
     'alpha/.#layout.js',
   ])('watch_EditorSideFile_%s_ChangesNothing', async (sideFile) => {
     await writeLayouts('alpha');
-    await start();
+    const before = (await start()).current();
 
     await files.write(`${sideFile}`, 'scratch');
     await files.write('alpha/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(entryIn(sent[0], 'alpha')?.revision).toBe(2);
+    expect(changesIn(before, sent[0])).toEqual(['alpha revision']);
   });
 
   it.each([
-    'alpha/parts/card.mjs',
-    'alpha/strings.json',
-    'alpha/icons/check.svg',
-  ])('watch_SaveOf_%s_SendsTheChange', async (saved) => {
-    await writeLayouts('alpha');
-    await start();
+    { saved: 'alpha/layout.css', changes: ['alpha style'] },
+    { saved: 'alpha/theme/extra.css', changes: ['alpha style'] },
+    { saved: 'alpha/layout.js', changes: ['alpha revision'] },
+    { saved: 'alpha/parts/card.mjs', changes: ['alpha revision'] },
+    { saved: 'alpha/strings.json', changes: ['alpha revision'] },
+    {
+      saved: 'alpha/icons/check.svg',
+      changes: ['alpha revision', 'alpha style'],
+    },
+    {
+      saved: 'alpha/fonts/body.woff2',
+      changes: ['alpha revision', 'alpha style'],
+    },
+  ])(
+    'watch_SaveOf_RaisesTheRevisionItsKindKeys ($saved)',
+    async ({ saved, changes }) => {
+      await writeLayouts('alpha');
+      const before = (await start()).current();
 
-    await files.write(`${saved}`, '// saved');
+      await files.write(saved, '// saved');
 
-    await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('alpha');
-  });
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      expect(changesIn(before, sent[0])).toEqual(changes);
+    },
+  );
 
   it('watch_LayoutFolderRenamed_OldLeavesAndNewJoins', async () => {
     await writeLayouts('alpha', 'beta');
     const registry = await start(withFolderNameWatch(files));
+    const before = registry.current();
 
     await files.rename('alpha', 'gamma');
 
     await vi.waitFor(() => expect(sent).toHaveLength(2));
-    expect(sent.map((set) => set.changed)).toEqual(['alpha', 'gamma']);
-    expect(entryIn(sent[1], 'alpha')).toBeUndefined();
-    expect(entryIn(sent[1], 'gamma')?.revision).toBeGreaterThanOrEqual(1);
+    expect(changesIn(before, sent[1])).toEqual(['alpha left', 'gamma joined']);
     expect(registry.names()).toEqual(['default', 'beta', 'gamma']);
   });
 
+  // A folder-name report names no file, so the save in `alpha` raises both.
   it.each(['layout.d.ts', 'default/layout.js'])(
     'watch_FolderNameReportFor_%s_SendsNothing',
     async (saved) => {
       await writeLayouts('alpha', 'default');
-      await start(withFolderNameWatch(files));
+      const before = (await start(withFolderNameWatch(files))).current();
 
       await files.write(`${saved}`, '// saved');
       await files.write('alpha/layout.js', '// saved');
 
       await vi.waitFor(() => expect(sent).toHaveLength(1));
-      expect(sent[0].changed).toBe('alpha');
+      expect(changesIn(before, sent[0])).toEqual([
+        'alpha revision',
+        'alpha style',
+      ]);
     },
   );
 
@@ -409,48 +482,88 @@ describe('watch', () => {
   });
 
   it.each([
-    { saved: 'layout.js', started: ['layout.js', 'layout.css'], hasCss: true },
-    { saved: 'layout.css', started: ['layout.js', 'layout.css'], hasCss: true },
-    { saved: 'layout.css', started: ['layout.js'], hasCss: true },
-    { saved: 'layout.js', started: ['layout.test.ts'], hasCss: false },
+    {
+      saved: 'layout.js',
+      started: ['layout.js', 'layout.css'],
+      hasCss: true,
+      changes: ['default revision'],
+    },
+    {
+      saved: 'layout.css',
+      started: ['layout.js', 'layout.css'],
+      hasCss: true,
+      changes: ['default style'],
+    },
+    {
+      saved: 'layout.css',
+      started: ['layout.js'],
+      hasCss: true,
+      changes: ['default style'],
+    },
+    {
+      saved: 'layout.js',
+      started: ['layout.test.ts'],
+      hasCss: false,
+      changes: ['default live', 'default revision', 'default style'],
+    },
   ])(
-    'watch_SaveInDefaultFolder_RaisesTheDefaultRevision ($saved, from $started)',
-    async ({ saved, started, hasCss }) => {
+    'watch_SaveInDefaultFolder_RaisesTheRevisionItsFileKeys ($saved, from $started)',
+    async ({ saved, started, hasCss, changes }) => {
       await writeDefaultFiles(...started);
-      const registry = await startWithDefault();
-      const startRevision = defaultIn(registry.current())?.revision ?? 0;
+      const before = (await startWithDefault()).current();
 
       await writeDefaultFiles(saved);
 
       await vi.waitFor(() => expect(sent).toHaveLength(1));
-      expect(sent[0].changed).toBe('default');
+      expect(changesIn(before, sent[0])).toEqual(changes);
       expect(defaultIn(sent[0])).toMatchObject({ builtIn: false, hasCss });
-      expect(defaultIn(sent[0])?.revision).toBeGreaterThan(startRevision);
     },
   );
 
   // Each row changes the folders with no event reported, then both watches
   // report that they may have missed changes.
-  it.each<{ change: string; arrange: () => Promise<void>; changed: string[] }>([
+  it.each<{
+    change: string;
+    arrange: () => Promise<void>;
+    changes: string[][];
+  }>([
     {
       change: 'a save in beta',
       arrange: () => files.write('beta/layout.js', '// saved'),
-      changed: ['beta'],
+      changes: [['beta revision']],
     },
-    { change: 'nothing', arrange: async () => {}, changed: [] },
+    {
+      change: 'a css save in beta',
+      arrange: () => files.write('beta/layout.css', 'body {}'),
+      changes: [['beta style']],
+    },
+    {
+      change: 'a js and a css save in beta',
+      arrange: async () => {
+        await files.write('beta/layout.js', '// saved');
+        await files.write('beta/layout.css', 'body {}');
+      },
+      changes: [['beta revision', 'beta style']],
+    },
+    { change: 'nothing', arrange: async () => {}, changes: [] },
     {
       change: 'a new layout',
       arrange: () => writeLayouts('gamma'),
-      changed: ['gamma'],
+      changes: [['gamma joined']],
     },
     {
       change: 'a save in the default folder',
       arrange: () => writeDefaultFiles('layout.css'),
-      changed: ['default'],
+      changes: [['default style']],
+    },
+    {
+      change: 'a js save in the default folder',
+      arrange: () => writeDefaultFiles('layout.js'),
+      changes: [['default revision']],
     },
   ])(
     'watch_MissedChange_ListsAgainOnlyWhatChanged: $change',
-    async ({ arrange, changed }) => {
+    async ({ arrange, changes }) => {
       let now = 1;
       files = createMemoryFiles({ now: () => now });
       clone = createMemoryFiles({ now: () => now });
@@ -458,11 +571,12 @@ describe('watch', () => {
       await writeLayouts('alpha', 'beta');
       await writeDefaultFiles('layout.js');
       const missed: (() => void)[] = [];
-      await start(
+      const registry = await start(
         withUnreportedWatch(files, missed),
         LAYOUT_TYPES,
         withUnreportedWatch(defaultFolder, missed),
       );
+      const before = registry.current();
       now = 2;
       await arrange();
 
@@ -471,7 +585,7 @@ describe('watch', () => {
       }
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(sent.map((set) => set.changed)).toEqual(changed);
+      expect(changesPerSet(before, sent)).toEqual(changes);
     },
   );
 
@@ -482,7 +596,7 @@ describe('watch', () => {
     files = createMemoryFiles({ now: () => now });
     await writeLayouts('alpha', 'beta');
     const missed: (() => void)[] = [];
-    await start(withMissedWatch(files, missed));
+    const before = (await start(withMissedWatch(files, missed))).current();
     now = 2;
 
     await files.write('beta/layout.js', '// saved');
@@ -492,7 +606,7 @@ describe('watch', () => {
     }
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(sent.map((set) => set.changed)).toEqual(['beta']);
+    expect(changesPerSet(before, sent)).toEqual([['beta revision']]);
   });
 
   // Breaks if a file whose modified time cannot be read fails the start or a
@@ -508,25 +622,23 @@ describe('watch', () => {
         return files.modified(path);
       },
     };
-    await start(unreadable);
+    const before = (await start(unreadable)).current();
 
     await files.write('alpha/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('alpha');
+    expect(changesIn(before, sent[0])).toEqual(['alpha revision']);
   });
 
   it('watch_DefaultLayoutCssRemoved_SendsDefaultWithoutCss', async () => {
     await writeDefaultFiles('layout.js', 'layout.css');
-    const registry = await startWithDefault();
-    const startRevision = defaultIn(registry.current())?.revision ?? 0;
+    const before = (await startWithDefault()).current();
 
     clone.remove(`${DEFAULT_PATH}/layout.css`);
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('default');
+    expect(changesIn(before, sent[0])).toEqual(['default style']);
     expect(defaultIn(sent[0])).toMatchObject({ builtIn: false, hasCss: false });
-    expect(defaultIn(sent[0])?.revision).toBeGreaterThan(startRevision);
   });
 
   it.each([
@@ -538,35 +650,30 @@ describe('watch', () => {
     async ({ saved, started }) => {
       await writeDefaultFiles(...started);
       await writeLayouts('alpha');
-      await startWithDefault();
+      const before = (await startWithDefault()).current();
 
       await writeDefaultFiles(saved);
       await files.write('alpha/layout.js', '// saved');
 
       await vi.waitFor(() => expect(sent).toHaveLength(1));
-      expect(sent[0].changed).toBe('alpha');
+      expect(changesIn(before, sent[0])).toEqual(['alpha revision']);
     },
   );
 
   it('watch_DefaultLayoutJsRemovedThenWritten_BuiltInThenHigherRevision', async () => {
     await writeDefaultFiles('layout.js');
-    const registry = await startWithDefault();
-    const liveRevision = defaultIn(registry.current())?.revision ?? 0;
+    const before = (await startWithDefault()).current();
 
     clone.remove(`${DEFAULT_PATH}/layout.js`);
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     await writeDefaultFiles('layout.js');
 
     await vi.waitFor(() => expect(sent).toHaveLength(2));
-    expect(sent.map((set) => set.changed)).toEqual(['default', 'default']);
-    expect(defaultIn(sent[0])).toEqual({
-      name: 'default',
-      revision: 1,
-      hasCss: false,
-      builtIn: true,
-    });
-    expect(defaultIn(sent[1])?.builtIn).toBe(false);
-    expect(defaultIn(sent[1])?.revision).toBeGreaterThan(liveRevision);
+    expect(changesPerSet(before, sent)).toEqual([
+      ['default built-in'],
+      ['default live', 'default revision', 'default style'],
+    ]);
+    expect(defaultIn(sent[0])).toEqual(defaultEntry(false, true));
   });
 
   it('dispose_ClosesTheDefaultWatch', async () => {
@@ -589,7 +696,11 @@ describe('watch', () => {
     await files.write('alpha/layout.css', 'body {}');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(entryIn(sent[0], 'alpha')?.hasCss).toBe(true);
+    expect(entryIn(sent[0], 'alpha')).toMatchObject({
+      hasCss: true,
+      revision: 1,
+      styleRevision: 2,
+    });
     expect(entryIn(registry.current(), 'alpha')?.hasCss).toBe(true);
   });
 });

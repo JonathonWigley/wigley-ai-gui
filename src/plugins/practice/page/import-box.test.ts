@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageChannel } from '../../../contracts/plugin';
 import {
+  asFake,
   type FakeElement,
+  type FocusFakeDocument,
   FocusFakeElement,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
@@ -13,13 +15,14 @@ import { createImportBox } from './import-box';
 // An import box over a channel whose `startImport` answers wait in
 // `answers`, one per call; its pushed scope records pushes and pops and runs
 // its base-change listener on `baseChanged`. `drawn` holds each body input
-// drawn.
+// drawn, `frames` each frame's panel and body, drawn by a fake `drawFrame`.
 function boxSetup() {
   const logs: string[] = [];
   const toasts: [string, string][] = [];
   const invokes: string[] = [];
   const answers: ReturnType<typeof deferred<string>>[] = [];
   const drawn: ImportBoxInput[] = [];
+  const frames: { panel: HTMLElement; body: HTMLElement }[] = [];
   let frame: FakeElement | null = null;
   let pushes = 0;
   let pops = 0;
@@ -51,6 +54,14 @@ function boxSetup() {
         },
       };
     },
+    drawFrame: (parent) => {
+      const panel = document.createElement('section');
+      const body = document.createElement('div');
+      panel.append(body);
+      parent.append(panel);
+      frames.push({ panel, body });
+      return { element: panel, body, actions: null };
+    },
     drawBody: (parent, input, textBox) => {
       drawn.push(input);
       frame = textBox as unknown as FakeElement;
@@ -68,6 +79,8 @@ function boxSetup() {
     logs,
     toasts,
     invokes,
+    frames,
+    textBox: () => frame!,
     pushes: () => pushes,
     pops: () => pops,
     baseChanged: () => onBaseChanged('practice.list'),
@@ -91,8 +104,9 @@ function boxSetup() {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('createImportBox', () => {
+  let doc: FocusFakeDocument;
   beforeEach(() => {
-    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+    doc = installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -198,5 +212,24 @@ describe('createImportBox', () => {
     expect(setup.pops()).toBe(1);
     expect(setup.logs).toEqual(['import box opened', 'import box closed']);
     expect(setup.invokes).toEqual([]);
+  });
+
+  it('redraw_ChangedLayout_DrawsTheFrameAndKeepsTheBox', () => {
+    const setup = boxSetup();
+    setup.box.open();
+    setup.type('add two sum');
+    const typing = setup.textBox().children[0] as FocusFakeElement;
+    expect(doc.activeElement).toBe(typing);
+
+    setup.box.redraw();
+
+    const [earlier, redrawn] = setup.frames;
+    expect(setup.frames).toHaveLength(2);
+    expect(asFake(setup.box.element).contains(asFake(earlier.panel))).toBe(
+      false,
+    );
+    expect(asFake(redrawn.body).contains(setup.textBox())).toBe(true);
+    expect(typing.value).toBe('add two sum');
+    expect(doc.activeElement).toBe(typing);
   });
 });

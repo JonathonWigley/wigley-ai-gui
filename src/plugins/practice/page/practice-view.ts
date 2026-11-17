@@ -31,6 +31,7 @@ import {
   type DrawnPart,
   disposeDraws,
   type RollbackDeps,
+  requireDialogFrame,
   requireElementIn,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
@@ -206,7 +207,9 @@ export interface PracticeView {
   // and focus leaving `interviewer` tells the pane first.
   setFocus(focus: PracticeFocus): void;
   // Draws the list pane, the rows and the column's part again with `shown`,
-  // keeping an open filter, the selection and the focus.
+  // keeping an open filter, the selection and the focus: an open dialog or
+  // a focused box keeps it, and focus the redraw dropped goes back to the
+  // pane holding the keys.
   setLayouts(shown: ShownLayouts<PracticeLayout>): void;
   // Disposes every part draw the view keeps.
   dispose(): void;
@@ -322,6 +325,18 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     log: deps.log,
     toast: deps.toast,
     pushScope: () => deps.pushScope('import'),
+    drawFrame: (parent, input) =>
+      parts.redraw(
+        'dialogFrame',
+        parent,
+        (dialogFrame, into, rollback) =>
+          requireDialogFrame(
+            dialogFrame(into, input, kitFor('import', rollback)),
+            input,
+            'dialogFrame',
+          ),
+        'dialogFrame:import',
+      ).built,
     drawBody: (parent, input, frame) =>
       parts.draw('importBox', parent, (importPart, into, rollback) => {
         const slot = appSlot(frame, 'textBox', rollback);
@@ -902,8 +917,13 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       drawMain(true);
       workspace.setLayouts(next);
       importBox.redraw();
-      render(true);
-      if (filterScope !== null) {
+      // The import box and the workspace's boxes keep their focus; focus
+      // the redraw dropped goes back to the pane holding the keys.
+      const isFocusLost =
+        document.activeElement === null ||
+        document.activeElement === document.body;
+      render(isFocusLost);
+      if (isFocusLost && filterScope !== null) {
         filterBox.focus();
       }
     },

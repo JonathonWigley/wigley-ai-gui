@@ -2,7 +2,15 @@ import type { ViewScope } from '../../../../contracts/keymap';
 import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
-import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
+import {
+  type DrawnPart,
+  type RollbackDeps,
+  requireDialogFrame,
+} from '../../../../shared/page/layout-host/draw-part';
+import type {
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../../shared/page/layout-host/kit';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import { qualify } from '../../../../shared/plugin-manifests';
 import type {
@@ -31,12 +39,17 @@ export interface KeysPartsDeps {
 // Draws each keys surface's part into `parent` with the layouts last set,
 // `default` alone until the first `setLayouts`. Each part, nested ones
 // included, picks its own layout and falls back to `default` on a throw.
-// `setLayouts` only stores the set; the views draw again.
+// `setLayouts` only stores the set; the views draw again. `dialogFrame` draws
+// the help dialog's frame and disposes the frame it drew before.
 export interface KeysParts {
   help(parent: HTMLElement, input: HelpInput): Drawn;
   whichKey(parent: HTMLElement, input: WhichKeyInput): Drawn;
   leaderSearchRow(parent: HTMLElement, input: LeaderSearchRowInput): Drawn;
   titleBarButton(parent: HTMLElement): Drawn;
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+  ): DrawnPart<DialogFramePart>;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
 
@@ -55,6 +68,7 @@ const PART_SCOPES: Record<PartName, ViewScope | null> = {
   whichKeyEntry: 'any',
   leaderSearchRow: PICKER_SCOPE,
   titleBarButton: null,
+  dialogFrame: HELP_SCOPE,
 };
 
 export function createKeysParts(deps: KeysPartsDeps): KeysParts {
@@ -164,6 +178,18 @@ export function createKeysParts(deps: KeysPartsDeps): KeysParts {
     titleBarButton(parent) {
       return draw('titleBarButton', parent, (titleBarButton, slot, rollback) =>
         titleBarButton(slot, kitFor('titleBarButton', rollback)),
+      );
+    },
+    dialogFrame(parent, input) {
+      return layoutParts.redraw(
+        'dialogFrame',
+        parent,
+        (dialogFrame, slot, rollback) =>
+          requireDialogFrame(
+            dialogFrame(slot, input, kitFor('dialogFrame', rollback)),
+            input,
+            'dialogFrame',
+          ),
       );
     },
     setLayouts: layoutParts.setLayouts,

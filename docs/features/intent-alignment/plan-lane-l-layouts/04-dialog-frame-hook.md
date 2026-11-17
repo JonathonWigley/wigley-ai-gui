@@ -1,6 +1,6 @@
 # 04 — Dialog frame hook and shared kit types
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -183,3 +183,4 @@ src/shared/page/layout-host/dialog-frame.test-d.ts`.
 
 ## Proof
 
+Commit 5fcdb2c18 · proof: diff read + wave 1 compile (layer check clean on dialog-frame.test-d.ts) · concerns: none

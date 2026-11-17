@@ -2,8 +2,9 @@
 
 // The built-in keys look: help's sections side by side, which-key as a quiet
 // shelf of keys and labels in columns under the keys pressed and their
-// group's name, the leader search's rows as help's are, and the Keys button
-// with its key prompt after the icon.
+// group's name, the leader search's rows as help's are, the help dialog's
+// frame with its Close button, and the Keys button with its key prompt after
+// the icon.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -59,6 +60,25 @@ const layout = {
       label: sentenceCase(input.label),
       trailing: keysElement(input.keys, kit),
     });
+  },
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog keys-help-dialog',
+    );
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    if (actions !== null) {
+      const close = kit.button(actions, 'Close', 'keys.closeHelp', {
+        variant: 'secondary',
+      });
+      kit.keyHint(close, 'closeHelp');
+    }
+    return { element: panel, body, actions };
   },
   titleBarButton(parent, kit) {
     const button = kit.iconButton(

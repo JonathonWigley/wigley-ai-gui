@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PartStore } from '../../../../shared/page/contributed-parts';
+import type { PromptActionInput } from '../../../../shared/page/layout-host/kit';
 import { withUser } from '../../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
@@ -15,6 +16,7 @@ import type {
   GroupKit,
   GroupPane,
   Layout,
+  PickerRowInput,
   PopupBarInput,
   SectionInput,
 } from '../../layouts/layout';
@@ -449,6 +451,59 @@ describe('sessions parts', () => {
     },
   );
 
+  it.each<{ case: string; input: PickerRowInput; hasTrailing: boolean }>([
+    {
+      case: 'session item with trailing',
+      input: {
+        item: {
+          kind: 'session',
+          sessionId: 's1',
+          title: 'Fix toasts',
+          label: 'gamma 2',
+          project: 'gamma',
+          harness: 'Claude Code',
+          activity: { word: 'running', tone: 'running', emphasis: null },
+        },
+        label: 'gamma 2',
+      },
+      hasTrailing: true,
+    },
+    {
+      case: 'new item without trailing',
+      input: { item: { kind: 'new' }, label: 'New session' },
+      hasTrailing: false,
+    },
+  ])(
+    'pickerRow_Draw_HandsTheItemAndTrailing ($case)',
+    ({ input, hasTrailing }) => {
+      const { parts } = sessionsPartsSetup();
+      const recorded: PickerRowInput[] = [];
+      const handed: (HTMLElement | null)[] = [];
+      parts.setLayouts(
+        withUser<Layout>(defaultLayout, {
+          pickerRow: (parent, rowInput, kit) => {
+            recorded.push(rowInput);
+            handed.push(kit.trailing());
+            return { element: kit.el(parent, 'li', 'mine-row') };
+          },
+        }),
+      );
+      const trailing = hasTrailing ? asHtml(new FakeElement('span')) : null;
+
+      const drawn = parts.pickerRow(
+        document.createElement('ul'),
+        input,
+        trailing,
+      );
+
+      expect(recorded).toEqual([input]);
+      expect(handed).toHaveLength(1);
+      expect(handed[0]).toBe(trailing);
+      expect(drawn.built.element.dataset.layout).toBe('mine');
+      expect(drawn.built.element.dataset.layoutOwner).toBe('sessions');
+    },
+  );
+
   const DEFAULT_GROUP_FAVORITE: DrawnShape = {
     drawnBy: 'default',
     holds: ['gamma', '2', 'star-full', 'gripper'],
@@ -628,97 +683,76 @@ describe('sessions parts', () => {
     },
   );
 
+  // Breaks: the row kit built with no scope, so its hints never hide outside
+  // `sessions.sidebar`; the default drawing a hint for an empty prompt or
+  // dropping an action; a layout that draws no prompt still showing one.
   it.each<{
     case: string;
     layout: Layout;
-    isPrompted: boolean;
-    expected: { drawnBy: string; promptAt: 'end' | 'inside' | 'none' };
+    prompt: PromptActionInput[];
+    expected: {
+      drawnBy: string;
+      anchors: { command: string; scope: string | undefined }[];
+    };
   }>([
     {
       case: 'the default row, prompted',
       layout: {},
-      isPrompted: true,
-      expected: { drawnBy: 'default', promptAt: 'end' },
+      prompt: [
+        { command: 'sessions.listFavorite', label: 'unfavorite' },
+        { command: 'sessions.listMoveUp', label: 'up' },
+        { command: 'sessions.listClose', label: 'close' },
+      ],
+      expected: {
+        drawnBy: 'default',
+        anchors: [
+          { command: 'sessions.listFavorite', scope: 'sessions.sidebar' },
+          { command: 'sessions.listMoveUp', scope: 'sessions.sidebar' },
+          { command: 'sessions.listClose', scope: 'sessions.sidebar' },
+        ],
+      },
     },
     {
-      case: 'a row that leaves the prompt out',
+      case: 'the default row, not prompted',
+      layout: {},
+      prompt: [],
+      expected: { drawnBy: 'default', anchors: [] },
+    },
+    {
+      case: 'a row that draws no prompt',
       layout: {
         row: (parent, input, kit) => ({
           element: kit.el(parent, 'div', 'bare', input.label),
         }),
       },
-      isPrompted: true,
-      expected: { drawnBy: 'mine', promptAt: 'end' },
-    },
-    {
-      case: 'a row that places the prompt twice',
-      layout: {
-        row: (parent, input, kit) => {
-          const element = kit.el(parent, 'div', 'bare', input.label);
-          const line = kit.el(element, 'div', 'bare-line');
-          kit.cursorPrompt(line);
-          kit.cursorPrompt(line);
-          return { element };
-        },
-      },
-      isPrompted: true,
-      expected: { drawnBy: 'default', promptAt: 'end' },
-    },
-    {
-      case: 'a row that places the prompt inside, not prompted',
-      layout: {
-        row: (parent, input, kit) => {
-          const element = kit.el(parent, 'div', 'bare', input.label);
-          kit.cursorPrompt(kit.el(element, 'div', 'bare-line'));
-          return { element };
-        },
-      },
-      isPrompted: false,
-      expected: { drawnBy: 'mine', promptAt: 'none' },
-    },
-    {
-      case: 'a row that places the prompt inside, prompted',
-      layout: {
-        row: (parent, input, kit) => {
-          const element = kit.el(parent, 'div', 'bare', input.label);
-          kit.cursorPrompt(kit.el(element, 'div', 'bare-line'));
-          return { element };
-        },
-      },
-      isPrompted: true,
-      expected: { drawnBy: 'mine', promptAt: 'inside' },
+      prompt: [{ command: 'sessions.listClose', label: 'close' }],
+      expected: { drawnBy: 'mine', anchors: [] },
     },
   ])(
-    'rowPart_CursorPrompt_PlacesTheAppsPrompt ($case)',
-    ({ layout, isPrompted, expected }) => {
-      const { parts } = sessionsPartsSetup();
+    'rowPart_PromptActions_DrawnThroughTheLayoutInTheSidebarScope ($case)',
+    ({ layout, prompt, expected }) => {
+      const { parts, anchors } = sessionsPartsSetup();
       parts.setLayouts(withUser<Layout>(defaultLayout, layout));
-      const prompt = document.createElement('span');
 
-      const drawn = parts.row(
-        document.createElement('div'),
-        {
-          sessionId: 'a',
-          title: 'Title',
-          label: 'a',
-          harness: '',
-          marked: false,
-          activity: null,
-          onScreen: false,
-          section: null,
-          isPrompted,
-        },
+      const drawn = parts.row(document.createElement('div'), {
+        sessionId: 'a',
+        title: 'Title',
+        label: 'a',
+        harness: '',
+        marked: false,
+        activity: null,
+        onScreen: false,
+        section: null,
+        isPrompted: prompt.length > 0,
         prompt,
-      );
+      });
 
-      const element = asFake(drawn.built.element);
-      const placed = asFake(prompt);
-      const promptAt = !element.contains(placed)
-        ? 'none'
-        : element.lastElementChild === placed
-          ? 'end'
-          : 'inside';
-      expect({ drawnBy: drawn.layoutName, promptAt }).toEqual(expected);
+      expect({
+        drawnBy: drawn.layoutName,
+        anchors: anchors
+          .filter((anchor) => !anchor.isDisposed)
+          .map(({ command, scope }) => ({ command, scope })),
+      }).toEqual(expected);
     },
   );
 
@@ -894,11 +928,6 @@ describe('sessions parts', () => {
       'sessions.splitDown': 1,
       'sessions.closePane': 1,
       'sessions.showMode': 2,
-      'sessions.listFavorite': 2,
-      'sessions.listMoveUp': 1,
-      'sessions.listMoveDown': 1,
-      'sessions.listRename': 2,
-      'sessions.listClose': 2,
     });
   });
 

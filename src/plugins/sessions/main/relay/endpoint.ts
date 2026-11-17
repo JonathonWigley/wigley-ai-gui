@@ -1,6 +1,10 @@
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import type { Files } from '../../../../contracts/files';
+import type { PluginLog } from '../../../../contracts/log';
+import type { Paths } from '../../../../contracts/paths';
 import type { OsName } from '../../../../contracts/platform';
+import { errorText } from '../../../../shared/error-text';
+import { createSerialQueue } from '../../../../shared/serial-queue';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
 
 // How a relay that finds a drive run gone "starts" it: a shell that exits 1
@@ -25,21 +29,38 @@ export function endedDriveRunLaunch(
   };
 }
 
-// Through a temp file and a rename, so a relay never reads half a file.
-function writeJsonWhole(file: string, value: unknown) {
-  const temp = `${file}.tmp`;
-  writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
-  renameSync(temp, file);
+// Writes `endpoint.json`, which tells relays where the app is and how to
+// start it, and `tools.json`, the tool list a relay serves while the app is
+// away, into `dir`, making it. Each write runs once every earlier one has
+// settled; a failed one is logged, and the next still runs. `Files.write` is
+// atomic, so a relay never reads half a file.
+export interface EndpointWriter {
+  // Queues one write of both files with this endpoint and tool list; returns at once.
+  write(endpoint: RelayEndpoint, tools: ToolDefinition[]): void;
+  // Settles once every write queued before the call has settled.
+  flushed(): Promise<void>;
 }
 
-// `endpoint.json` tells relays where the app is and how to start it;
-// `tools.json` is the tool list a relay serves while the app is away.
-export function writeEndpointFiles(
+export function createEndpointWriter(
+  files: Files,
+  paths: Paths,
   dir: string,
-  endpoint: RelayEndpoint,
-  tools: ToolDefinition[],
-) {
-  mkdirSync(dir, { recursive: true });
-  writeJsonWhole(path.join(dir, 'endpoint.json'), endpoint);
-  writeJsonWhole(path.join(dir, 'tools.json'), { tools });
+  log: PluginLog,
+): EndpointWriter {
+  const queue = createSerialQueue();
+  const writeJson = (name: string, value: unknown) =>
+    files.write(paths.join(dir, name), `${JSON.stringify(value, null, 2)}\n`);
+  return {
+    write(endpoint, tools) {
+      queue
+        .run(async () => {
+          await writeJson('endpoint.json', endpoint);
+          await writeJson('tools.json', { tools });
+        })
+        .catch((error: unknown) =>
+          log(`endpoint files not written: ${errorText(error)}`),
+        );
+    },
+    flushed: () => queue.settled(),
+  };
 }

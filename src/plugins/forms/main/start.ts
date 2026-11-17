@@ -1,4 +1,4 @@
-import path from 'node:path';
+import type { AgentFormPresenter } from '../../../contracts/agent-forms';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   DriveHost,
@@ -15,7 +15,10 @@ import {
   NO_FORM_WAKE,
 } from '../../../shared/agent-forms/chat-wake';
 import { addAgentFormDriveActions } from '../../../shared/agent-forms/drive-actions';
-import { createAgentFormService } from '../../../shared/agent-forms/form-service';
+import {
+  afterLoad,
+  createAgentFormService,
+} from '../../../shared/agent-forms/form-service';
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
@@ -27,7 +30,13 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
 } from '../../sessions/contract';
-import type { FormBody, FormsChannel, FormsService, Round } from '../contract';
+import {
+  type FormBody,
+  type FormsChannel,
+  type FormsService,
+  type Round,
+  SAVED_ROUNDS_FOLDER,
+} from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { createLayoutPreview } from './preview/layout-preview';
@@ -51,15 +60,17 @@ type FormsApi = MainApi<
 // How many saved rounds the preview cycles through.
 const PREVIEW_SAVED_ROUNDS = 20;
 
-// The agents' FormsService over the saved-round folder, and the layout
-// preview over a FormsService of its own whose store is in memory, with the
-// presenter they share, which owns the channel's `finish` and `draft`
-// handlers; the preview's rounds go through its quiet view. The agents'
-// service wakes the round's chat session when a round finishes with no call
-// waiting, and answers a headless chat session's rounds with their
-// recommendations; the preview's wakes nothing and answers none. Both
-// services and the preview read `layoutNames` for the layouts a round may
-// name.
+// The agents' FormsService over the saved-round folder, its calls waiting for
+// the folder's first read, and the layout preview over a FormsService of its
+// own whose store is in memory, with the presenter they share, which owns the
+// channel's `finish` and `draft` handlers; the preview's rounds go through its
+// quiet view. The agents' service wakes the round's chat session when a round
+// finishes with no call waiting, and answers a headless chat session's rounds
+// with their recommendations; the preview's wakes nothing and answers none.
+// Both services and the preview read `layoutNames` for the layouts a round may
+// name. `flushed` settles once every saved-round write queued before it has.
+// `shown` settles once the agents' service shows a round of the session, by
+// its app id, after the call, until `signal` aborts.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -69,20 +80,24 @@ function createForms(
   forms: FormsService;
   preview: { open(): void } & Disposable;
   presenter: AgentFormChannelPresenter<Round, FormBody>;
+  flushed(): Promise<void>;
+  shown(sessionId: string, signal: AbortSignal): Promise<void>;
 } {
   const { services } = api;
   const store = createFolderFormStore({
-    dir: path.join(services.homeDir, '.agents', 'wigley-forms', 'rounds'),
+    files: services.files,
+    dir: services.paths.join(services.homeDir, SAVED_ROUNDS_FOLDER),
     clock: services.clock,
     randomHex: services.randomHex,
     paths: services.paths,
     log: services.log,
   });
-  store.prune();
+  const loaded = store.load();
   const presenter = createAgentFormChannelPresenter({
     channel: api.channel,
     alerts: services.alerts,
     source: 'forms',
+    alertNoun: { singular: 'open agent form', plural: 'open agent forms' },
     noun: roundType.noun,
     markText: (label) => `Round from ${label}`,
     markAction: 'answer',
@@ -90,9 +105,10 @@ function createForms(
     sessions,
   });
   const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
+  const agentsShows = withShownWaits(presenter);
   const agentsService = createAgentFormService({
     type: roundType,
-    presenter,
+    presenter: agentsShows.presenter,
     store,
     wake: createChatFormWake(chat, services.log),
     defaultDeadlineSeconds,
@@ -123,9 +139,53 @@ function createForms(
     log: services.log,
   });
   return {
-    forms: withKnownLayouts(agentsService, layoutNames),
+    forms: withKnownLayouts(afterLoad(loaded, agentsService), layoutNames),
     preview,
     presenter,
+    flushed: () => store.flushed(),
+    shown: agentsShows.shown,
+  };
+}
+
+// `presenter` with `shown`, which settles once `presenter` shows a form of the
+// session, by its app id, after the call. Aborting `signal` drops the wait: it
+// never settles and leaves nothing held.
+export function withShownWaits<Form, Body>(
+  presenter: AgentFormPresenter<Form, Body>,
+): {
+  presenter: AgentFormPresenter<Form, Body>;
+  shown(sessionId: string, signal: AbortSignal): Promise<void>;
+} {
+  const waiters = new Map<string, (() => void)[]>();
+  return {
+    presenter: {
+      show: (form, listener) => {
+        presenter.show(form, listener);
+        for (const resolve of waiters.get(form.sessionId) ?? []) {
+          resolve();
+        }
+        waiters.delete(form.sessionId);
+      },
+      close: (formId) => presenter.close(formId),
+    },
+    shown: (sessionId, signal) =>
+      new Promise((resolve) => {
+        waiters.set(sessionId, [...(waiters.get(sessionId) ?? []), resolve]);
+        signal.addEventListener(
+          'abort',
+          () => {
+            const rest = (waiters.get(sessionId) ?? []).filter(
+              (waiter) => waiter !== resolve,
+            );
+            if (rest.length === 0) {
+              waiters.delete(sessionId);
+            } else {
+              waiters.set(sessionId, rest);
+            }
+          },
+          { once: true },
+        );
+      }),
   };
 }
 
@@ -205,7 +265,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const layoutNames = () => api.layouts.names();
-    const { forms, preview, presenter } = createForms(
+    const { forms, preview, presenter, flushed, shown } = createForms(
       api,
       sessions,
       chat,
@@ -232,6 +292,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
         sessions,
         api.services.userConfig,
         api.services.platform.os,
+        shown,
       ),
     );
     if (api.drive !== null) {
@@ -247,7 +308,9 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
           forms.detach();
         }
         preview.dispose();
-        return layouts.dispose();
+        return Promise.all([layouts.dispose(), flushed()]).then(
+          () => undefined,
+        );
       },
     };
   },

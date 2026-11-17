@@ -12,25 +12,35 @@ function readTestLayout(module: unknown): TestLayout {
   return (module as { default: TestLayout }).default;
 }
 
-function entry(name: string, revision: number, hasCss = false): LayoutEntry {
-  return { name, revision, hasCss, builtIn: false };
+function entry(
+  name: string,
+  revision: number,
+  hasCss = false,
+  styleRevision = revision,
+): LayoutEntry {
+  return { name, revision, styleRevision, hasCss, builtIn: false };
 }
 
 // A `default` entry read from the repo clone, not built in.
-function liveDefault(revision: number, hasCss = false): LayoutEntry {
-  return entry('default', revision, hasCss);
+function liveDefault(
+  revision: number,
+  hasCss = false,
+  styleRevision = revision,
+): LayoutEntry {
+  return entry('default', revision, hasCss, styleRevision);
 }
 
 const DEFAULT_ENTRY: LayoutEntry = {
   name: 'default',
   revision: 1,
+  styleRevision: 1,
   hasCss: false,
   builtIn: true,
 };
 
 // A set holding the built-in `default` and `users`.
 function setOf(...users: LayoutEntry[]): LayoutSet {
-  return { layouts: [DEFAULT_ENTRY, ...users], changed: null };
+  return { layouts: [DEFAULT_ENTRY, ...users] };
 }
 
 function layoutUrl(name: string, revision: number, path: string): string {
@@ -186,17 +196,138 @@ describe('createLayoutLoader', () => {
     expect(second.layouts.get('a')).toBe(first.layouts.get('a'));
   });
 
-  it('load_NewRevision_ImportsAgainAndMovesLink', async () => {
+  it('load_NewRevision_ImportsAgainAndKeepsTheLink', async () => {
     const { loader, inHead, imports } = loaderWith();
 
-    await loader.load(setOf(entry('a', 4, true)), ['a']);
-    await loader.load(setOf(entry('a', 5, true)), ['a']);
+    await loader.load(setOf(entry('a', 4, true, 1)), ['a']);
+    await loader.load(setOf(entry('a', 5, true, 1)), ['a']);
 
     expect(imports).toEqual(['url:a/layout.js@4', 'url:a/layout.js@5']);
     expect(shownLinks(inHead)).toEqual([
-      { layout: 'a', href: 'url:a/layout.css@5' },
+      { layout: 'a', href: 'url:a/layout.css@1' },
     ]);
   });
+
+  // Each row loads a set holding `first`, then one holding `second`, asking for
+  // its name both times, with a load of a set holding each of `between`, asked
+  // for when `isAsked`, in between; `failing` lists the script URLs whose
+  // import throws, and `imports` those the load of `second` imports.
+  it.each<{
+    row: string;
+    first: LayoutEntry;
+    between?: { held: LayoutEntry; isAsked: boolean }[];
+    second: LayoutEntry;
+    failing: string[];
+    imports: string[];
+    isSameLayout: boolean;
+    links: { layout: string; href: string }[];
+    restyled: string[];
+  }>([
+    {
+      row: "a user layout's css saved",
+      first: entry('mine', 2, true, 1),
+      second: entry('mine', 2, true, 2),
+      failing: [],
+      imports: [],
+      isSameLayout: true,
+      links: [{ layout: 'mine', href: 'url:mine/layout.css@2' }],
+      restyled: ['mine'],
+    },
+    {
+      row: 'a user layout gains css',
+      first: entry('mine', 2, false, 1),
+      second: entry('mine', 2, true, 2),
+      failing: [],
+      imports: [],
+      isSameLayout: true,
+      links: [{ layout: 'mine', href: 'url:mine/layout.css@2' }],
+      restyled: ['mine'],
+    },
+    {
+      row: 'a user layout loses css',
+      first: entry('mine', 2, true, 3),
+      second: entry('mine', 2, false, 4),
+      failing: [],
+      imports: [],
+      isSameLayout: true,
+      links: [],
+      restyled: ['mine'],
+    },
+    {
+      row: "the live default's css saved",
+      first: liveDefault(3, true, 1),
+      second: liveDefault(3, true, 2),
+      failing: [],
+      imports: [],
+      isSameLayout: true,
+      links: [{ layout: 'default', href: 'url:default/layout.css@2' }],
+      restyled: ['default'],
+    },
+    {
+      row: 'a newer revision failed',
+      first: entry('mine', 2, true, 1),
+      second: entry('mine', 3, true, 2),
+      failing: ['url:mine/layout.js@3'],
+      imports: ['url:mine/layout.js@3'],
+      isSameLayout: true,
+      links: [{ layout: 'mine', href: 'url:mine/layout.css@1' }],
+      restyled: [],
+    },
+    {
+      row: 'a code and css save',
+      first: entry('mine', 2, true, 1),
+      second: entry('mine', 3, true, 2),
+      failing: [],
+      imports: ['url:mine/layout.js@3'],
+      isSameLayout: false,
+      links: [{ layout: 'mine', href: 'url:mine/layout.css@2' }],
+      restyled: [],
+    },
+    {
+      row: 'a name re-added at an older good version',
+      first: entry('mine', 4, true),
+      between: [
+        { held: entry('mine', 5, true), isAsked: true },
+        { held: entry('mine', 5, true), isAsked: false },
+      ],
+      second: entry('mine', 5, true),
+      failing: ['url:mine/layout.js@5'],
+      imports: [],
+      isSameLayout: true,
+      links: [{ layout: 'mine', href: 'url:mine/layout.css@4' }],
+      restyled: [],
+    },
+  ])(
+    'load_StyleOnlyChange_RelinksWithNoImport ($row)',
+    async ({
+      first,
+      between = [],
+      second,
+      failing,
+      imports: secondImports,
+      isSameLayout,
+      links,
+      restyled,
+    }) => {
+      const { loader, inHead, imports } = loaderWith(importFailing(...failing));
+      const setHolding = (held: LayoutEntry): LayoutSet =>
+        held.name === 'default' ? { layouts: [held] } : setOf(held);
+      const before = await loader.load(setHolding(first), [first.name]);
+      for (const { held, isAsked } of between) {
+        await loader.load(setHolding(held), isAsked ? [held.name] : []);
+      }
+      const importedBefore = imports.length;
+
+      const after = await loader.load(setHolding(second), [second.name]);
+
+      expect(imports.slice(importedBefore)).toEqual(secondImports);
+      expect(
+        after.layouts.get(second.name) === before.layouts.get(first.name),
+      ).toBe(isSameLayout);
+      expect(shownLinks(inHead)).toEqual(links);
+      expect(after.restyled.map(({ name }) => name)).toEqual(restyled);
+    },
+  );
 
   it('load_ScriptFails_KeepsLastGoodAndItsLink', async () => {
     const broken = new Error('syntax');
@@ -293,7 +424,7 @@ describe('createLayoutLoader', () => {
     const { loader, appended, imports } = loaderWith();
 
     const result = await loader.load(
-      { layouts: [{ ...DEFAULT_ENTRY, hasCss: true }], changed: null },
+      { layouts: [{ ...DEFAULT_ENTRY, hasCss: true }] },
       ['default'],
     );
 
@@ -351,10 +482,7 @@ describe('createLayoutLoader', () => {
 
       let result: LayoutLoad<TestLayout> | null = null;
       for (const defaultEntry of defaults) {
-        result = await loader.load(
-          { layouts: [defaultEntry], changed: null },
-          [],
-        );
+        result = await loader.load({ layouts: [defaultEntry] }, []);
       }
 
       expect(imports).toEqual(['url:default/layout.js@3']);
@@ -396,10 +524,7 @@ describe('createLayoutLoader', () => {
         bundled,
       );
 
-      const result = await loader.load(
-        { layouts: [liveDefault(3)], changed: null },
-        [],
-      );
+      const result = await loader.load({ layouts: [liveDefault(3)] }, []);
 
       expect(result.failed).toEqual([
         {
@@ -425,10 +550,7 @@ describe('createLayoutLoader', () => {
 
       let result: LayoutLoad<TestLayout> | null = null;
       for (const revision of revisions) {
-        result = await loader.load(
-          { layouts: [liveDefault(revision)], changed: null },
-          [],
-        );
+        result = await loader.load({ layouts: [liveDefault(revision)] }, []);
       }
 
       expect(result?.failed.map((failure) => failure.entry)).toEqual([
@@ -515,10 +637,7 @@ describe('createLayoutLoader', () => {
       const names = users.map((user) => user.name);
 
       for (const defaultEntry of defaults) {
-        await loader.load(
-          { layouts: [defaultEntry, ...users], changed: null },
-          names,
-        );
+        await loader.load({ layouts: [defaultEntry, ...users] }, names);
       }
 
       expect(shownLinks(inHead)).toEqual(links);
@@ -533,7 +652,7 @@ describe('createLayoutLoader', () => {
     );
     const beforeLoad = shownLinks(inHead);
 
-    await loader.load({ layouts: [liveDefault(3, true)], changed: null }, []);
+    await loader.load({ layouts: [liveDefault(3, true)] }, []);
 
     expect(beforeLoad).toEqual([{ layout: 'default', href: 'bundled.css' }]);
     expect(shownLinks(inHead)).toEqual([

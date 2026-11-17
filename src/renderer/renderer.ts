@@ -279,7 +279,12 @@ async function start() {
   const toastLayer = document.createElement('div');
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);
-  const toasts = createToasts(toastLayer, timers);
+  const toasts = createToasts(
+    toastLayer,
+    timers,
+    (parent, input) => chrome.drawToast(parent, input),
+    (message) => log('toasts', message),
+  );
   chrome.showProblems(config.problems);
 
   const coreSlots = startPageCoreSlots(state, {
@@ -396,6 +401,7 @@ async function start() {
     log,
     timers,
     boxFocus,
+    config.platform.keys,
   );
   const pendingKeys = createPendingKeys({
     page: pageKeys,

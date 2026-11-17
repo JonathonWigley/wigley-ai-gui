@@ -21,6 +21,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   type FileEntry,
   type Files,
@@ -37,6 +38,11 @@ const WATCH_QUIET_MS = 100;
 
 // The temp file `write` renames over its target: `.<name>.<8 hex>.tmp`.
 const TEMP_FILE = /^\..+\.[0-9a-f]{8}\.tmp$/;
+
+// The waits between tries of `write`'s rename while another process holds the
+// file (EPERM or EBUSY, as on Windows): one try, then one after each wait.
+const RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80];
+const HELD_FILE = new Set(['EPERM', 'EBUSY']);
 
 // Every macOS watch the process holds open. Node watches each folder through
 // one FSEvents stream per process, rebuilt whenever a watch opens or closes,
@@ -81,6 +87,8 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
     },
     rename: renameWithoutReplacing,
     trash: (file) => options.trashItem(file),
+    // No `recursive`, so a folder rejects.
+    deleteFile: (file) => rm(file, { force: true }),
   };
 }
 
@@ -240,10 +248,27 @@ async function writeAtomically(
   await mkdir(folder, { recursive: true });
   try {
     await writeFile(temp, content, 'utf8');
-    await rename(temp, file);
+    await renameRetryingHeld(temp, file);
   } catch (error) {
     await rm(temp, { force: true });
     throw error;
+  }
+}
+
+// `rename`, tried again after each of `RENAME_RETRY_DELAYS_MS` while it fails
+// with a code `HELD_FILE` names; rejects with the last error.
+async function renameRetryingHeld(from: string, to: string): Promise<void> {
+  for (const wait of [...RENAME_RETRY_DELAYS_MS, null]) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (wait === null || code === undefined || !HELD_FILE.has(code)) {
+        throw error;
+      }
+      await delay(wait);
+    }
   }
 }
 

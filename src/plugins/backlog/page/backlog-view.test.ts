@@ -31,7 +31,11 @@ import type {
   BacklogRead,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
-import type { BacklogLayout, CommitsInput } from '../layouts/layout';
+import type {
+  BacklogLayout,
+  CommitsInput,
+  TableRowInput,
+} from '../layouts/layout';
 import { rowKey } from '../row-key';
 import { type BacklogView, createBacklogView } from './backlog-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
@@ -275,7 +279,8 @@ interface SetupOptions {
 // `resizeTarget` is the last resize target set. `invokes` holds each invoke
 // with its args, `runs` each command a click ran with its arg, `events` the
 // mode shows and each scope pushed or popped, `places` each place written,
-// `outer` each `setOuterPanes`, `contexts` each title bar detail.
+// `outer` each `setOuterPanes`, `contexts` each title bar detail, `anchors`
+// each key anchor drawn.
 async function backlogSetup(options: SetupOptions = {}) {
   const calls: ScopeCall[] = [];
   const invokes: unknown[][] = [];
@@ -297,7 +302,7 @@ async function backlogSetup(options: SetupOptions = {}) {
   const mode = { isShown: options.isShown ?? true };
   let focusTarget: FocusTarget | null = null;
   let resizeTarget: ResizeTarget | null = null;
-  const { keys } = recordingAnchors();
+  const { keys, anchors } = recordingAnchors();
   const channel = {
     invoke: async (method: string, ...args: unknown[]) => {
       invokes.push([method, ...args]);
@@ -393,6 +398,7 @@ async function backlogSetup(options: SetupOptions = {}) {
     places,
     outer,
     contexts,
+    anchors,
     pane,
     show,
     move: (direction: PaneDirection) => focusTarget?.move(direction) ?? false,
@@ -473,13 +479,13 @@ afterEach(() => {
 describe('backlog view layouts', () => {
   it('a partial layout draws its own rows and default for the rest', async () => {
     const setup = await backlogSetup();
+    const drawn: TableRowInput[] = [];
 
     setup.view.setLayouts(
       withUser({
         tableRow(parent, input, kit) {
-          const row = kit.el(parent, 'li', 'mine-row', input.title);
-          kit.cursorActions(row);
-          return row;
+          drawn.push(input);
+          return kit.el(parent, 'li', 'mine-row', input.title);
         },
       }),
     );
@@ -493,11 +499,147 @@ describe('backlog view layouts', () => {
     ]);
     const [review] = findAll(setup.sheet, 'backlog-review-item');
     expect(review.dataset.layout).toBe('default');
-    const [prompt] = findAll(rows, 'backlog-row-actions');
-    const slot = prompt.parentNode!;
-    expect(slot.classList.contains('backlog-row-actions-slot')).toBe(true);
-    expect(slot.parentNode).toBe(mine[0]);
+    expect(drawn[0].prompt.map((action) => action.command)).toEqual([
+      'backlog.mark',
+      'backlog.addToChunk',
+      'backlog.toggleCommits',
+      'backlog.openInDocs',
+    ]);
+    expect(drawn.slice(1).map((input) => input.prompt)).toEqual([[], []]);
+    expect(findAll(rows, 'backlog-row-actions')).toEqual([]);
     expect(mine[0].classList.contains('is-selected')).toBe(true);
+  });
+
+  // The labels `cursorCommands` lists, as the prompt shows them.
+  it.each([
+    {
+      name: 'a follow-up in no chunk',
+      key: FIRST,
+      title: 'First',
+      prompt: [
+        ['backlog.mark', 'mark'],
+        ['backlog.addToChunk', 'chunk'],
+        ['backlog.toggleCommits', 'commits'],
+        ['backlog.openInDocs', 'docs'],
+      ],
+    },
+    {
+      name: 'a follow-up in an unstarted chunk',
+      key: SECOND,
+      title: 'Second',
+      prompt: [
+        ['backlog.mark', 'mark'],
+        ['backlog.addToChunk', 'chunk'],
+        ['backlog.removeFromChunk', 'unchunk'],
+        ['backlog.startChunk', 'start'],
+        ['backlog.toggleHeadless', 'headless'],
+        ['backlog.renameChunk', 'rename'],
+        ['backlog.toggleCommits', 'commits'],
+        ['backlog.openInDocs', 'docs'],
+      ],
+    },
+    {
+      name: 'a follow-up in a started chunk',
+      key: rowKey('lib', 'Third'),
+      title: 'Third',
+      prompt: [
+        ['backlog.activate', 'session'],
+        ['backlog.toggleCommits', 'commits'],
+        ['backlog.openInDocs', 'docs'],
+      ],
+    },
+  ])(
+    'cursorPrompt_SelectedRow_ListsItsActionsInTableScope $name',
+    async ({ key, title, prompt }) => {
+      const setup = await backlogSetup();
+      const lastInputs = new Map<string, TableRowInput>();
+      setup.view.setLayouts(
+        withUser({
+          tableRow(parent, input, kit) {
+            lastInputs.set(input.title, input);
+            const row = kit.el(parent, 'li', 'mine-row', input.title);
+            for (const action of input.prompt) {
+              kit.keyHint(row, action.command, { label: action.label });
+            }
+            return row;
+          },
+        }),
+      );
+
+      setup.view.selectRow(key);
+
+      const promptCommands = prompt.map(([command]) => command);
+      const live = setup.anchors.filter(
+        (anchor) =>
+          !anchor.isDisposed &&
+          anchor.scope === 'backlog.table' &&
+          promptCommands.includes(anchor.command),
+      );
+      expect({
+        selected: lastInputs
+          .get(title)
+          ?.prompt.map((action) => [action.command, action.label]),
+        others: [...lastInputs]
+          .filter(([each]) => each !== title)
+          .map(([, input]) => input.prompt),
+        anchored: live.map((anchor) => anchor.command),
+      }).toEqual({
+        selected: prompt,
+        others: [[], []],
+        anchored: promptCommands,
+      });
+    },
+  );
+
+  it('tableStatus_Changes_DrawOnlyTheStatusPart', async () => {
+    let message: string | null = null;
+    const setup = await backlogSetup({
+      answers: { load: async () => ({ homes: [], message }) },
+    });
+    const statuses: (string | null)[] = [];
+    let tableDraws = 0;
+    const layout: BacklogLayout = {
+      table(parent, kit) {
+        tableDraws += 1;
+        const root = kit.el(parent, 'div', 'mine-table');
+        kit.status(root);
+        kit.filterBar(root);
+        kit.filterBox(root);
+        kit.rows(root);
+        return { element: root };
+      },
+      tableStatus(parent, input, kit) {
+        statuses.push(input.text);
+        return kit.el(parent, 'div', 'mine-status', input.text ?? '');
+      },
+    };
+    setup.view.setLayouts(withUser(layout));
+    setup.view.commands.filter();
+    const [input] = findAll(setup.sheet, 'backlog-filter-input');
+    const tablesBefore = tableDraws;
+
+    setup.view.commands.toggleDone();
+    const afterSameStatus = [...statuses];
+    message = 'Could not read the homes';
+    setup.view.reload();
+    await settle();
+    const afterMessage = [...statuses];
+    const tablesDuringMessage = tableDraws - tablesBefore;
+    setup.view.setLayouts(withUser(layout));
+
+    expect({
+      first: afterSameStatus,
+      message: afterMessage,
+      afterLayoutChange: statuses.at(-1),
+      tablesDuringMessage,
+      isFilterFocused: fakeDocument.activeElement === input,
+    }).toEqual({
+      first: ['No features homes found'],
+      message: ['No features homes found', 'Could not read the homes'],
+      afterLayoutChange: 'Could not read the homes',
+      tablesDuringMessage: 0,
+      isFilterFocused: true,
+    });
   });
 
   it('a reload keeps the open filter text and focus', async () => {

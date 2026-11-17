@@ -4,6 +4,7 @@ import {
   NOTHING_TAKES_FILES,
 } from '../../contracts/drops';
 import type {
+  EditorEvents,
   EditorHost,
   FocusOptions,
   TextEditor,
@@ -13,6 +14,7 @@ import type { PluginLog } from '../../contracts/log';
 import type { ToastTone } from '../../contracts/plugin';
 import { insertionText } from './file-drop/file-chips';
 import { pathOf } from './file-drop/file-path';
+import { inputFrame } from './ui/input-frame';
 
 // How the boxes of one kind of form are told apart.
 export interface BoxIdentity<Box> {
@@ -30,25 +32,51 @@ export interface EditorBoxEvents<Box> {
   activated(box: Box): void;
 }
 
-// One editor per text box, created once when its form first renders.
+// One editor per text box, created the first time its form places it and kept
+// across redraws until its form or the box is destroyed.
 export interface EditorBoxes<Box> {
+  // Creates the box's editor in `parent` itself, with no frame editor boxes
+  // own; such a box can be neither placed nor released.
   mount(parent: HTMLElement, box: Box, text: string): void;
+  // Appends the box's frame, a `div.ui-input` holding its editor, to `parent`
+  // and returns it. The first call makes the frame and the editor; a later
+  // call, placed or released, moves the same frame, keeping the editor's
+  // cursor, vim mode, undo and scroll, and sets its text when `text` differs
+  // from it (no `changed`). Throws for a box `mount` made.
+  place(parent: HTMLElement, box: Box, text: string): HTMLElement;
+  // Sets the placed box's editor text when `text` differs from it (no
+  // `changed`), leaving its frame, scroll and focus where they are. Does
+  // nothing for a box that is not placed.
+  setText(box: Box, text: string): void;
+  // Detaches the box's frame and keeps its editor, and blurs it when focused.
+  // Does nothing for a box already released or held by no editor; throws for
+  // a box `mount` made.
+  release(box: Box): void;
+  // Destroys every released box of form `formId`: the boxes a redraw
+  // released and did not place again.
+  destroyReleased(formId: string): void;
+  // Whether the box is placed or mounted; false once released or destroyed.
   isMounted(box: Box): boolean;
+  // Undefined for a released box's editor.
   boxOf(editor: TextEditor): Box | undefined;
-  // Focuses the box's editor; the box counts as focused at once.
+  // The box's editor while it is placed or mounted, else undefined.
+  editorOf(box: Box): TextEditor | undefined;
+  // Focuses the box's editor; the box counts as focused at once. Throws for a
+  // box released or never mounted.
   focus(box: Box, options?: FocusOptions): void;
   // Blurs the focused box, if any.
   leave(): void;
   active(): Box | null;
   // The focused box's vim mode, or null outside every box.
   activeMode(): VimMode | null;
-  // Destroys one mounted box's editor, so the box can mount again.
+  // Destroys one box's editor and removes its frame, so the box can mount
+  // again; does nothing for a box no editor holds.
   destroyBox(box: Box): void;
   destroyForm(formId: string): void;
   // The editor files dropped on form `formId` go into: its box activated last
-  // while that box is mounted and `isShown`, else its shown box that mounted
-  // first; null when the form shows none. Both records outlive `destroyBox`
-  // and `destroyForm`, so a rebuilt form keeps them.
+  // while that box is placed and `isShown`, else its placed, shown box that
+  // mounted first; null when the form shows none. Both records outlive
+  // `release`, `destroyBox` and `destroyForm`, so a rebuilt form keeps them.
   fileEditor(formId: string, isShown: (box: Box) => boolean): TextEditor | null;
   // Drops the form's last-activated box and its boxes' first-mount order.
   forgetForm(formId: string): void;
@@ -57,11 +85,16 @@ export interface EditorBoxes<Box> {
   onChange(listener: () => void): void;
 }
 
-// `order` is the box's first-mount order.
-interface MountedBox<Box> {
+// A box whose editor lives. `order` is the box's first-mount order; `frame`
+// is null for a box `mount` made; `scrollTop` is the editor scroller's scroll
+// when the box was last released or moved, null when it had no scroller.
+interface HeldBox<Box> {
   box: Box;
   editor: TextEditor;
   order: number;
+  frame: HTMLElement | null;
+  isPlaced: boolean;
+  scrollTop: number | null;
 }
 
 // When a box first mounted, kept across its remounts.
@@ -78,7 +111,7 @@ export function createEditorBoxes<Box>(
   log: PluginLog,
   identity: BoxIdentity<Box>,
 ): EditorBoxes<Box> {
-  const mounted = new Map<string, MountedBox<Box>>();
+  const held = new Map<string, HeldBox<Box>>();
   const modes = new Map<string, VimMode>();
   const listeners: (() => void)[] = [];
   let activeKey: string | null = null;
@@ -110,49 +143,142 @@ export function createEditorBoxes<Box>(
     activeKey = null;
     notify();
   };
-  const destroy = (key: string, entry: MountedBox<Box>) => {
+  const destroy = (key: string, entry: HeldBox<Box>) => {
     if (activeKey === key) {
       activeKey = null;
     }
     entry.editor.destroy();
-    mounted.delete(key);
+    entry.frame?.remove();
+    held.delete(key);
     modes.delete(key);
+  };
+  const placedEntry = (key: string) => {
+    const entry = held.get(key);
+    return entry?.isPlaced === true ? entry : undefined;
+  };
+  // Creates the box's editor in `parent` and records its first mount.
+  const create = (
+    parent: HTMLElement,
+    key: string,
+    box: Box,
+    text: string,
+    frame: HTMLElement | null,
+  ) => {
+    const editorEvents: EditorEvents = {
+      changed: (value) => events.changed(box, value),
+      focused: () => activate(key, box),
+      blurred: () => deactivate(key),
+      modeChanged: (mode) => {
+        modes.set(key, mode);
+        if (activeKey === key) {
+          notify();
+        }
+      },
+    };
+    const editor = host.create(parent, text, editorEvents);
+    const firstMount = firstMounts.get(key) ?? {
+      formId: identity.formIdOf(box),
+      order: mountCount++,
+    };
+    firstMounts.set(key, firstMount);
+    held.set(key, {
+      box,
+      editor,
+      order: firstMount.order,
+      frame,
+      isPlaced: true,
+      scrollTop: null,
+    });
+  };
+  const requireFrame = (key: string, entry: HeldBox<Box>): HTMLElement => {
+    if (entry.frame === null) {
+      throw new Error(`Box ${key} is mounted without a frame`);
+    }
+    return entry.frame;
   };
 
   return {
     mount(parent, box, text) {
       const key = identity.keyOf(box);
-      if (mounted.has(key)) {
+      if (held.has(key)) {
         throw new Error(`Box ${key} is already mounted`);
       }
-      const editor = host.create(parent, text, {
-        changed: (value) => events.changed(box, value),
-        focused: () => activate(key, box),
-        blurred: () => deactivate(key),
-        modeChanged: (mode) => {
-          modes.set(key, mode);
-          if (activeKey === key) {
-            notify();
-          }
-        },
-      });
-      const firstMount = firstMounts.get(key) ?? {
-        formId: identity.formIdOf(box),
-        order: mountCount++,
-      };
-      firstMounts.set(key, firstMount);
-      mounted.set(key, { box, editor, order: firstMount.order });
+      create(parent, key, box, text, null);
+    },
+    place(parent, box, text) {
+      const key = identity.keyOf(box);
+      const entry = held.get(key);
+      if (entry === undefined) {
+        const frame = inputFrame();
+        parent.append(frame);
+        create(frame, key, box, text, frame);
+        return frame;
+      }
+      const frame = requireFrame(key, entry);
+      const scroller = frame.querySelector<HTMLElement>('.cm-scroller');
+      if (entry.isPlaced) {
+        entry.scrollTop = scroller?.scrollTop ?? null;
+      }
+      parent.append(frame);
+      entry.isPlaced = true;
+      setTextIfChanged(entry.editor, text);
+      if (scroller !== null && entry.scrollTop !== null) {
+        scroller.scrollTop = entry.scrollTop;
+      }
+      return frame;
+    },
+    setText(box, text) {
+      const entry = placedEntry(identity.keyOf(box));
+      if (entry !== undefined) {
+        setTextIfChanged(entry.editor, text);
+      }
+    },
+    release(box) {
+      const key = identity.keyOf(box);
+      const entry = held.get(key);
+      if (entry === undefined) {
+        return;
+      }
+      const frame = requireFrame(key, entry);
+      if (!entry.isPlaced) {
+        return;
+      }
+      entry.scrollTop =
+        frame.querySelector<HTMLElement>('.cm-scroller')?.scrollTop ?? null;
+      entry.isPlaced = false;
+      // Cleared ahead of the detach, so a blur the detach fires finds no
+      // active box and the listeners hear one change.
+      const wasActive = activeKey === key;
+      if (wasActive) {
+        activeKey = null;
+      }
+      frame.remove();
+      if (wasActive) {
+        notify();
+      }
+    },
+    destroyReleased(formId) {
+      for (const [key, entry] of held) {
+        if (!entry.isPlaced && identity.formIdOf(entry.box) === formId) {
+          destroy(key, entry);
+        }
+      }
+      notify();
     },
     isMounted(box) {
-      return mounted.has(identity.keyOf(box));
+      return placedEntry(identity.keyOf(box)) !== undefined;
     },
     boxOf(editor) {
-      return [...mounted.values()].find((entry) => entry.editor === editor)
-        ?.box;
+      return [...held.values()].find(
+        (entry) => entry.isPlaced && entry.editor === editor,
+      )?.box;
+    },
+    editorOf(box) {
+      return placedEntry(identity.keyOf(box))?.editor;
     },
     focus(box, options) {
       const key = identity.keyOf(box);
-      const entry = mounted.get(key);
+      const entry = placedEntry(key);
       if (entry === undefined) {
         throw new Error(`No box is mounted as ${key}`);
       }
@@ -163,13 +289,13 @@ export function createEditorBoxes<Box>(
       if (activeKey === null) {
         return;
       }
-      const entry = mounted.get(activeKey);
+      const entry = held.get(activeKey);
       activeKey = null;
       entry?.editor.blur();
       notify();
     },
     active() {
-      return activeKey === null ? null : (mounted.get(activeKey)?.box ?? null);
+      return activeKey === null ? null : (held.get(activeKey)?.box ?? null);
     },
     activeMode() {
       return activeKey === null
@@ -178,15 +304,15 @@ export function createEditorBoxes<Box>(
     },
     destroyBox(box) {
       const key = identity.keyOf(box);
-      const entry = mounted.get(key);
+      const entry = held.get(key);
       if (entry === undefined) {
-        throw new Error(`No box is mounted as ${key}`);
+        return;
       }
       destroy(key, entry);
       notify();
     },
     destroyForm(formId) {
-      for (const [key, entry] of mounted) {
+      for (const [key, entry] of held) {
         if (identity.formIdOf(entry.box) === formId) {
           destroy(key, entry);
         }
@@ -195,14 +321,16 @@ export function createEditorBoxes<Box>(
     },
     fileEditor(formId, isShown) {
       const lastKey = lastActivated.get(formId);
-      const last = lastKey === undefined ? undefined : mounted.get(lastKey);
+      const last = lastKey === undefined ? undefined : placedEntry(lastKey);
       if (last !== undefined && isShown(last.box)) {
         return last.editor;
       }
-      const [first] = [...mounted.values()]
+      const [first] = [...held.values()]
         .filter(
           (entry) =>
-            identity.formIdOf(entry.box) === formId && isShown(entry.box),
+            entry.isPlaced &&
+            identity.formIdOf(entry.box) === formId &&
+            isShown(entry.box),
         )
         .sort((a, b) => a.order - b.order);
       return first?.editor ?? null;
@@ -224,14 +352,27 @@ export function createEditorBoxes<Box>(
   };
 }
 
-// Runs `rebuild`, which destroys and remounts the boxes of form `formId`,
-// then focuses the form's box that had focus before it again, when the
-// rebuilt form still mounts it. A box in insert mode comes back in insert
-// mode at its text's end; the cursor, any other vim mode and undo are lost.
+function setTextIfChanged(editor: TextEditor, text: string): void {
+  if (text !== editor.text()) {
+    editor.setText(text);
+  }
+}
+
+// Runs `rebuild`, which releases and places again the boxes of form `formId`,
+// destroys the form's boxes it left released, then focuses the form's box
+// that had focus before it again, when the rebuilt form places it. A kept box
+// keeps its cursor, vim mode and undo; a box in insert mode comes back in
+// insert mode, at its cursor when kept and at its text's end when made anew.
 export function keepFocusedBox<Box>(
   boxes: Pick<
     EditorBoxes<Box>,
-    'active' | 'activeMode' | 'focus' | 'isMounted' | 'formIdOf'
+    | 'active'
+    | 'activeMode'
+    | 'focus'
+    | 'isMounted'
+    | 'editorOf'
+    | 'formIdOf'
+    | 'destroyReleased'
   >,
   formId: string,
   rebuild: () => void,
@@ -240,11 +381,17 @@ export function keepFocusedBox<Box>(
   const focused =
     active !== null && boxes.formIdOf(active) === formId ? active : null;
   const wasInserting = boxes.activeMode()?.mode === 'insert';
+  const editorBefore = focused === null ? undefined : boxes.editorOf(focused);
   rebuild();
+  boxes.destroyReleased(formId);
   if (focused === null || !boxes.isMounted(focused)) {
     return;
   }
-  boxes.focus(focused, wasInserting ? { insertAtEnd: true } : undefined);
+  const isKept = boxes.editorOf(focused) === editorBefore;
+  const inserting: FocusOptions = isKept
+    ? { insert: true }
+    : { insertAtEnd: true };
+  boxes.focus(focused, wasInserting ? inserting : undefined);
 }
 
 // The box `step` places away from `from` in `shown`, clamped at the ends;

@@ -9,10 +9,16 @@ import {
   ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
 import {
+  type DrawnPart,
+  requireDialogFrame,
   requireElementIn,
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
-import type { BaseKit } from '../../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../../shared/page/layout-host/kit';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import {
   type ButtonVariant,
@@ -26,6 +32,7 @@ import defaultLayout from '../../layouts/default/layout.js';
 import type {
   CompleteLayout,
   ConfirmAction,
+  CursorPromptInput,
   ImagesInput,
   Layout,
   MarkupColour,
@@ -151,8 +158,9 @@ export interface DrawnToolbar {
 // first `setLayouts`; the popup and its markup view draw through one. Every
 // draw but `pickerRow` keeps the dispose of the part's last draw, and disposes
 // it and removes that draw's root before it draws the same part again, so a
-// part holds one set of key anchors however often it draws. A `pickerRow`
-// draw hands its dispose to the picker.
+// part holds one set of key anchors however often it draws; `cursorPrompt` is
+// one such single-instance part. A `pickerRow` draw hands its dispose to the
+// picker.
 export interface NotesParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
   // The field's row, appended to `parent`, with `box` (the title or body
@@ -187,6 +195,17 @@ export interface NotesParts {
     input: PickerRowInput,
     trailing: HTMLElement | null,
   ): DrawnPickerRow;
+  // The selected field's prompt, appended to `parent` (that field's row
+  // root), its key hints in `notes.popup`; the draw before it is disposed and
+  // removed.
+  cursorPrompt(parent: HTMLElement, input: CursorPromptInput): HTMLElement;
+  // The frame of the Note popup or the discard confirmation, appended to
+  // `parent`; each dialog keeps its own draw.
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    dialog: 'popup' | 'confirm',
+  ): DrawnPart<DialogFramePart>;
 }
 
 export function createNotesParts(deps: NotesPartsDeps): NotesParts {
@@ -358,6 +377,26 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
       );
       return { element: drawn.built.element, dispose: drawn.dispose };
     },
+    cursorPrompt: (parent, input) =>
+      parts.redraw('cursorPrompt', parent, (cursorPrompt, into, rollback) => ({
+        element: partRoot(
+          into,
+          cursorPrompt(into, input, kitFor(deps, 'popup', rollback)),
+          'cursorPrompt',
+        ),
+      })).built.element,
+    dialogFrame: (parent, input, dialog) =>
+      parts.redraw(
+        'dialogFrame',
+        parent,
+        (dialogFrame, into, rollback) =>
+          requireDialogFrame(
+            dialogFrame(into, input, kitFor(deps, dialog, rollback)),
+            input,
+            'dialogFrame',
+          ),
+        `dialogFrame:${dialog}`,
+      ),
   };
 }
 

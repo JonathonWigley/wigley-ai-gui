@@ -14,6 +14,7 @@ import type {
   MarkupSession,
   MarkupTool,
 } from '../../contracts/markup';
+import { isChordPress } from '../../shared/page/chord-press';
 import { dataUrlBytes, pngDataUrl } from '../../shared/png-data-url';
 import { fitScale } from './fit-scale';
 import { fullSizeExport } from './full-size-export';
@@ -292,14 +293,14 @@ function startSession(
 }
 
 // Typed keys stay in the text being edited instead of reaching the page's
-// keys; chords still reach them. Fabric's own listener ends the edit on Escape
-// and stops it there, so only a second Escape reaches the page.
+// keys; chords still reach them, and an AltGr press types. Fabric's own
+// listener ends the edit on Escape and stops it there, so only a second Escape
+// reaches the page.
 function keepTextKeysFromPage(textarea: HTMLTextAreaElement) {
   textarea.addEventListener(
     'keydown',
     (event) => {
-      const isChord = event.ctrlKey || event.altKey || event.metaKey;
-      if (!isChord) {
+      if (!isChordPress(event)) {
         event.stopPropagation();
       }
     },

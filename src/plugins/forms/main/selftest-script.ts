@@ -60,6 +60,11 @@ const MOVED_NOT_APPLICABLE_KEYMAP = JSON.stringify({
 // A user keymap making `,` the leader, on the page and in a text box.
 const COMMA_LEADER_KEYMAP = JSON.stringify({ leader: ',' });
 
+// A user keymap binding the punctuation chord `<C-/>` to the key help.
+const PUNCTUATION_CHORD_KEYMAP = JSON.stringify({
+  binds: [{ keys: '<C-/>', scope: 'any', command: 'keys.toggleHelp' }],
+});
+
 // An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
 
@@ -642,6 +647,18 @@ const USER_KEYMAP_STEPS: SelfTestStep[] = [
   },
   { keys: [' ', 'a', 'x'], expect: '[forms] not applicable on question 2' },
   { keys: ['Escape'], expect: '[forms] left the box' },
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: PUNCTUATION_CHORD_KEYMAP },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
+  { keys: ['<C-/>'], expect: '[page] <C-/> ran keys.toggleHelp' },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: '{}' },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
 ];
 
 const CHOICES_STEPS: SelfTestStep[] = [
@@ -1312,21 +1329,22 @@ function payloadProblems(payload: AnswersPayload, chips: ChipPaths): string[] {
 // it connects three sessions: a Claude and a Codex session in project
 // `selftest`, and a Claude session there for the layouts round. Asks the
 // fixture round in the first, a second round in the second, which the steps
-// never answer, and the layouts round in the third; each shows at once, so
-// their rows come in that order and the first is selected. That order relies on
-// each `askFixtureRound` reaching `sessions.mark` synchronously: an
-// asynchronous form show would put the background Codex session's row first.
-// Then it opens a Codex session with no project in the background, whose row
-// follows theirs though it never shows a round, and asks the unknown-layout
-// round there through a relay joining it, which refuses it. The script checks
-// the answers the first call returns and the unknown-layout call's refusal. The
-// result rejects when this open's emptying fails. An open superseded by a later
-// one before its files are emptied connects nothing, and its result settles
-// only by rejecting, when its own emptying fails.
+// never answer, and the layouts round in the third; they show in the order
+// asked, so their rows come in that order and the first is selected. Once
+// `shown` has settled for all three, or an ask has rejected, which rejects the
+// result, it opens a Codex session with no project
+// in the background, whose row follows theirs though it never shows a round,
+// and asks the unknown-layout round there through a relay joining it, which
+// refuses it. The script checks the answers the first call returns and the
+// unknown-layout call's refusal. The result rejects when this open's emptying
+// fails. An open superseded by a later one before its files are emptied
+// connects nothing, and one superseded before its rounds show opens no
+// Codex session; either one's result settles only by rejecting.
 export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect' | 'open'>,
   userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
   os: OsName,
+  shown: (sessionId: string, signal: AbortSignal) => Promise<void>,
 ): SelfTestScript {
   const chips = chipPaths(os);
   let started: { end(): void }[] = [];
@@ -1366,28 +1384,53 @@ export function formsSelfTestScript(
           'selftest',
           'claude',
         );
+        const asked = [first, second, layouts];
+        started = [...asked];
         const fixture = askFixtureRound(first, fixtureRound(run));
-        // Nothing checks the second and layouts calls' end: a later run ends
-        // their sessions.
-        askFixtureRound(second, secondRound(run)).catch(() => undefined);
-        askFixtureRound(layouts, layoutsRound(run)).catch(() => undefined);
-        const idleSessionId = `selftest-${run}-3`;
-        const idle = sessions.open(
-          {
-            sessionId: idleSessionId,
-            projectDir: null,
-            harness: 'codex',
-            rowId: null,
-            host: { [HOST_DEADLINE_FIELD]: 120 },
-          },
-          { select: false },
-        );
-        const idleRelay = connect(idleSessionId, null, 'codex');
-        started = [first, second, layouts, idleRelay, idle];
-        const unknownLayout = askFixtureRound(
-          idleRelay,
-          unknownLayoutRound(run),
-        );
+        const secondAsk = askFixtureRound(second, secondRound(run));
+        const layoutsAsk = askFixtureRound(layouts, layoutsRound(run));
+        // A session's wait ends on its round showing or its ask rejecting, so
+        // a refused ask rejects the result; the waits are dropped once all
+        // end.
+        const waits = new AbortController();
+        const showsOrRejects = (
+          session: { session: { id: string } },
+          ask: Promise<unknown>,
+        ) =>
+          Promise.race([
+            shown(session.session.id, waits.signal),
+            ask.then(() => new Promise<never>(() => {})),
+          ]);
+        const roundsShown = Promise.all([
+          showsOrRejects(first, fixture),
+          showsOrRejects(second, secondAsk),
+          showsOrRejects(layouts, layoutsAsk),
+        ]);
+        const dropWaits = () => waits.abort();
+        roundsShown.then(dropWaits, dropWaits);
+        // Nothing else checks the second and layouts calls' end: a later run
+        // ends their sessions.
+        secondAsk.catch(() => undefined);
+        layoutsAsk.catch(() => undefined);
+        const unknownLayout = roundsShown.then(() => {
+          if (thisOpen !== latestOpen) {
+            return new Promise<never>(() => {});
+          }
+          const idleSessionId = `selftest-${run}-3`;
+          const idle = sessions.open(
+            {
+              sessionId: idleSessionId,
+              projectDir: null,
+              harness: 'codex',
+              rowId: null,
+              host: { [HOST_DEADLINE_FIELD]: 120 },
+            },
+            { select: false },
+          );
+          const idleRelay = connect(idleSessionId, null, 'codex');
+          started.push(idleRelay, idle);
+          return askFixtureRound(idleRelay, unknownLayoutRound(run));
+        });
         return Promise.all([fixture, unknownLayout]).then(
           ([fixture, unknownLayout]) => ({ fixture, unknownLayout }),
         );
@@ -1430,7 +1473,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'user keymap',
-        why: "The user's keymap.json applies live; one refused whole keeps the last good keys and an unknown command drops its bind alone; it can move a box bind and change the leader, and {} restores both.",
+        why: "The user's keymap.json applies live; one refused whole keeps the last good keys and an unknown command drops its bind alone; it can move a box bind and change the leader, and {} restores both; a punctuation chord (<C-/>) binds and fires.",
         steps: USER_KEYMAP_STEPS,
       },
       {

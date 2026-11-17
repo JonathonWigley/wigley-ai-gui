@@ -71,7 +71,8 @@ const VIM_NAME_BY_CHARACTER = new Map(
   ),
 );
 
-const VIM_TOKEN = /<[^<>]+>|./gu;
+// One vim key: a chord on `>` (`<C->>`), a `<…>` group, or one character.
+const VIM_TOKEN = /<(?:[A-Za-z]-)+>>|<[^<>]+>|./gu;
 
 // A vim `<…>` key: its modifier prefixes, each one letter and a dash, then the
 // key.
@@ -237,8 +238,8 @@ export function formatVimKeys(
     .join(' ');
 }
 
-// A vim-notation key string as its tokens, a `<…>` group or one character
-// each, every `<Leader>` spelled as `leader`.
+// A vim-notation key string as its tokens, a `<…>` group (`<C->>` included)
+// or one character each, every `<Leader>` spelled as `leader`.
 export function vimTokens(keys: string, leader: string): string[] {
   return withLeader(keys, leader).match(VIM_TOKEN) ?? [];
 }

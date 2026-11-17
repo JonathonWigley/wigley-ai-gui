@@ -8,8 +8,13 @@ import {
 } from '../../../../shared/page/layout-host/base-kit';
 import {
   type DrawnPart,
+  requireDialogFrame,
   requireElementIn,
 } from '../../../../shared/page/layout-host/draw-part';
+import type {
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../../shared/page/layout-host/kit';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
@@ -27,9 +32,14 @@ export interface SessionStashPartsDeps extends OwnerKitServices {
 
 // The plugin's parts over its shown layouts. `noteDialog` draws the stash
 // dialog's body around `noteBox`, the app's note box, placing it first when
-// the layout leaves it out.
+// the layout leaves it out. `dialogFrame` draws the dialog's panel and title,
+// again each time it draws; the earlier draw is disposed and removed.
 export interface SessionStashParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+  ): DrawnPart<DialogFramePart>;
   noteDialog(
     parent: HTMLElement,
     input: NoteDialogInput,
@@ -47,6 +57,20 @@ export function createSessionStashParts(
   });
   return {
     setLayouts: (shown) => parts.setLayouts(shown),
+    dialogFrame: (parent, input) =>
+      parts.redraw('dialogFrame', parent, (builder, into, rollback) =>
+        requireDialogFrame(
+          builder(
+            into,
+            input,
+            createBaseKit(
+              ownerBaseKitDeps(sessionStashManifest, deps, null, rollback),
+            ),
+          ),
+          input,
+          'dialogFrame',
+        ),
+      ),
     noteDialog: (parent, input, noteBox) =>
       parts.draw('noteDialog', parent, (builder, into, rollback) => {
         const slot = appSlot(noteBox, 'noteBox', rollback);

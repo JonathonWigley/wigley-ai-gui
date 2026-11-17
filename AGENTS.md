@@ -105,7 +105,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `keys-for.ts`: the keys that run a command, as help and hints read them,
                  `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
                  documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
-                 moved one among them (progress unlike the main tree's and not behind it), both read by workflow-large and backlog)
+                 moved one among them (progress unlike the main tree's and not behind it), both read only by workflow-large)
   plugin-catalog/ `validateManifest` and the manifest JSON Schema: the checks a user plugin's manifest meets at load →
                  pure, no I/O
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
@@ -208,8 +208,9 @@ src/main/        core main process; main.ts is its composition root
                  owner pid and bounds in points: JXA over CoreGraphics; PowerShell over user32 and DWM, per-monitor-DPI
                  aware), `window-rows.ts` (their shared JSON row parser) and `unavailable-screen-capture.ts` (Linux,
                  whose list rejects); `docs/features/live-view/design.md`
-  files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
-                 rename, trash, folder lists and watching, behind Files; on macOS any watch opening or closing
+  files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes (a rename
+                 EPERM or EBUSY holds is tried again), append, rename, trash, file deletes, folder lists and
+                 watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, or starts one
                  detached, its output appended to a log file, so it outlives the app's quit, behind ProcessRunner;
@@ -707,7 +708,13 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   leader group is named in the file's `groups` for which-key (layered the same way, by prefix). Each process checks every keymap it installs, at startup and on
   each config change, for a key that names no registered
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
-  `<D-w>`; its key is a lowercase letter, a digit, `;`, `'`, Enter or Tab, as in `<A-'>`, and Tab needs no modifier: `<Tab>`, `<S-Tab>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
+  `<D-w>`; its key is a lowercase letter, a digit or symbol written as the character it types (`<C-/>`, `<C-?>`, never
+  `<C-S-/>`), vim's names `lt`, `Bslash`, `Bar` and `Space`, Enter, Tab or F1–F12 (these two alone too: `<Tab>`,
+  `<F5>`), or an arrow, Home, End, PageUp, PageDown, BS or Del with Ctrl, Alt or Cmd; `CHORD_NOTATION_RULE` in
+  `src/shared/chord-notation.ts` is the rule). A chord matches the typed character, and the physical key for an Option
+  chord where `platform.keys` says so (macOS, which turns Option+o into `ø`) and for a key that types no ASCII letter,
+  digit or symbol (a Cyrillic layout's Ctrl+j); an AltGr press is typing, never a chord, where `platform.keys` says so
+  (Windows, Linux). A chord bind fires inside a text box
   too, in every vim mode, ahead of the editor, except a key the editor takes itself (`EditorHost.takesChordKey`: an open completion popup's). A plugin's own text box may keep typed keys from the page keys while
   Tab, Enter, Escape and chords still reach its scope's binds (`textBoxInput`, `src/shared/page/text-box.ts`, which docs and settings share). An editor key carries a scope as a page key does and runs only while
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. It fires in normal mode,

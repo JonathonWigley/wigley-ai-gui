@@ -3,7 +3,7 @@ import type { FileEntry, Files, FileStat } from '../contracts/files';
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `append`, `rename`, `trash` and `remove` report each changed file's path to
+// `append`, `rename`, `trash`, `deleteFile` and `remove` report each changed file's path to
 // the watches over it at once, with no debounce, so a test drives a save by
 // writing; a rename reports each moved file's old path and its new one. A
 // watch with `recursive: false` reports a change under a subfolder as the
@@ -244,6 +244,18 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         throw missingError(`nothing at ${path}`);
       }
       removeKey(key);
+    },
+    deleteFile: async (path) => {
+      const key = keyOf(path);
+      if (isFolder(key)) {
+        throw codedError(`${path} is a folder`, 'ERR_FS_EISDIR');
+      }
+      if (hasFileAbove(key)) {
+        throw codedError(`a file lies above ${path}`, 'ENOTDIR');
+      }
+      if (contents.has(key)) {
+        removeKey(key);
+      }
     },
     remove: (path) => removeKey(keyOf(path)),
     bytesOf,

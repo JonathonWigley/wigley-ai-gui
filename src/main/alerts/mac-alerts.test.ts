@@ -10,8 +10,14 @@ describe('createMacAlerts', () => {
   it('setOpenCount_TwoSources_BadgesTheSum', () => {
     const alerts = createMacAlerts();
 
-    alerts.setOpenCount('forms', 2);
-    alerts.setOpenCount('primer', 3);
+    alerts.setOpenCount('forms', 2, {
+      singular: 'open agent form',
+      plural: 'open agent forms',
+    });
+    alerts.setOpenCount('primer', 3, {
+      singular: 'open feature primer',
+      plural: 'open feature primers',
+    });
 
     expect(electron.app.setBadgeCount).toHaveBeenLastCalledWith(5);
   });

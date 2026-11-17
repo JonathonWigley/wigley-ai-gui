@@ -52,6 +52,8 @@ export interface ListPickerRequest<T> {
 export interface DrawRowInput {
   label: string;
   trailing: HTMLElement | null;
+  // True on the row at the cursor.
+  isCursor: boolean;
 }
 
 // A row `drawRow` drew and the dispose of its draw: a layout host

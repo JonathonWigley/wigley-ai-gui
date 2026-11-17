@@ -157,8 +157,10 @@ forms.
 
 ## Alerts
 
-`Alerts.setOpenCount(source, count)` takes a source id; the adapter sums every source's count for the badge, so the
-forms and primer presenters do not overwrite each other. A new primer raises no system notification; it marks its
+`Alerts.setOpenCount(source, count, noun)` takes a source id and what the source counts; the adapter sums every
+source's count for the badge, so the forms and primer presenters do not overwrite each other. The primer's noun is
+`open feature primer` (plural `open feature primers`), which the Windows overlay text names beside the other sources'
+counts. A new primer raises no system notification; it marks its
 session's row.
 
 ## Out of scope

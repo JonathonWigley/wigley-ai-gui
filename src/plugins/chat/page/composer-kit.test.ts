@@ -170,7 +170,7 @@ describe('composer surface parts', () => {
     const body = new FakeElement('div');
     const codeBox = boxWithEditor();
     const actions = new FakeElement('div');
-    const part = createSignInPart(deps, asHtml(body), {
+    const part = createSignInPart(deps, () => asHtml(body), {
       codeBox: asHtml(codeBox),
       copy: asHtml(new FakeElement('button')) as HTMLButtonElement,
       actions: asHtml(actions),
@@ -677,7 +677,7 @@ describe('composer surface parts', () => {
       name: 'sign-in code box',
       draw(deps: ReturnType<typeof surfaceDeps>['deps'], box: FakeElement) {
         const body = new FakeElement('div');
-        const part = createSignInPart(deps, asHtml(body), {
+        const part = createSignInPart(deps, () => asHtml(body), {
           codeBox: asHtml(box),
           copy: asHtml(new FakeElement('button')) as HTMLButtonElement,
           actions: asHtml(new FakeElement('div')),

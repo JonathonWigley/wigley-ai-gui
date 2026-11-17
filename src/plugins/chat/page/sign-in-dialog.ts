@@ -61,7 +61,7 @@ const SIGN_IN_ACTIONS: readonly DialogAction[] = [
 ];
 
 export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
-  const dialog = createChatDialog('Sign in', deps);
+  const dialog = createChatDialog('Sign in', 'signIn', deps);
   const box = inputFrame();
   box.classList.add('chat-sign-in-box');
 
@@ -79,7 +79,7 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     { variant: 'ghost', hint: copyHint },
   );
   copy.disabled = true;
-  const part = createSignInPart(deps, dialog.body, {
+  const part = createSignInPart(deps, () => dialog.body, {
     codeBox: box,
     copy,
     actions: dialogActions(SIGN_IN_ACTIONS, deps),
@@ -92,7 +92,7 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     blurred: () => undefined,
     modeChanged: () => undefined,
   });
-  redrawOnLayoutChange(deps, part, box, editor);
+  redrawOnLayoutChange(deps, dialog, part, box, editor);
   const showLink = (url: string | null) => {
     shown = { ...shown, link: url };
     copy.disabled = url === null;

@@ -1,8 +1,6 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   noCounts,
   startMainPart,
@@ -15,6 +13,7 @@ import {
   SUBMITTED,
 } from '../../agent-form-fakes.test-support';
 import { sessionsMainPart } from '../../sessions/main/start';
+import { SAVED_PRIMERS_FOLDER } from '../contract';
 import { SAMPLE_PRIMER_ARGS } from './fixtures';
 import { addDriveActions, primerMainPart } from './start';
 
@@ -91,6 +90,11 @@ describe('primer drive actions', () => {
   });
 });
 
+// Lets an open run once the primer folder's first read settles.
+function flush(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe('primer main part', () => {
   it('stops with nothing live and starts again', async () => {
     const harness = startMainPart(primerMainPart, {
@@ -108,7 +112,7 @@ describe('primer main part', () => {
   });
 
   it('stop removes the drive actions and settles each open primer with the error', async () => {
-    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-primer-stop-'));
+    const homeDir = '/home/user';
     const harness = startMainPart(primerMainPart, {
       parts: [sessionsMainPart],
       dependencies: [fakeChat()],
@@ -122,6 +126,7 @@ describe('primer main part', () => {
     const answers = harness.drive?.actions.get('answers');
     await harness.drive?.run('openPrimer', { sessionId: 'a' });
     await harness.drive?.run('openPrimer', { sessionId: 'b' });
+    await flush();
 
     await harness.stop();
 
@@ -135,11 +140,11 @@ describe('primer main part', () => {
     await expect(answers?.run({ sessionId: 'b' })).rejects.toThrow(
       /open_primer/,
     );
-    rmSync(homeDir, { recursive: true, force: true });
   });
 
+  // Breaks if the quit does not wait for the queued write.
   it('a quit leaves each open primer open on disk and in the window, for the relay to send again', async () => {
-    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-primer-quit-'));
+    const homeDir = '/home/user';
     const harness = startMainPart(primerMainPart, {
       parts: [sessionsMainPart],
       dependencies: [fakeChat()],
@@ -150,29 +155,43 @@ describe('primer main part', () => {
         git: { originRepoName: () => Promise.resolve(null) } as never,
       },
     });
+    const primersDir = posixPaths.join(homeDir, SAVED_PRIMERS_FOLDER);
+    const held = Promise.withResolvers<void>();
+    const write = harness.files.write;
+    vi.spyOn(harness.files, 'write').mockImplementation(async (path, text) => {
+      if (path.startsWith(primersDir)) {
+        await held.promise;
+      }
+      await write(path, text);
+    });
     await harness.drive?.run('openPrimer', { sessionId: 'a' });
-    const primersDir = path.join(
-      homeDir,
-      '.agents',
-      'wigley-primer',
-      'primers',
-    );
+    await flush();
 
-    await harness.stop('quit');
+    let isStopped = false;
+    const stopped = harness.stop('quit').then(() => {
+      isStopped = true;
+    });
+    await flush();
+    expect(isStopped).toBe(false);
+    held.resolve();
+    await stopped;
 
-    const outcomes = readdirSync(primersDir).map(
-      (name) =>
-        JSON.parse(readFileSync(path.join(primersDir, name), 'utf8')).outcome,
+    const outcomes = await Promise.all(
+      (await harness.files.list(primersDir)).map(
+        async (entry) =>
+          JSON.parse(
+            await harness.files.read(posixPaths.join(primersDir, entry.path)),
+          ).outcome,
+      ),
     );
     expect(outcomes).toEqual(['open']);
     expect(
       harness.sent.filter((sent) => sent.message === 'formClosed'),
     ).toEqual([]);
-    rmSync(homeDir, { recursive: true, force: true });
   });
 
   it('mayStop names the open primer until it resolves', async () => {
-    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-primer-may-stop-'));
+    const homeDir = '/home/user';
     const harness = startMainPart(primerMainPart, {
       parts: [sessionsMainPart],
       dependencies: [fakeChat()],
@@ -184,6 +203,7 @@ describe('primer main part', () => {
       },
     });
     await harness.drive?.run('openPrimer', { sessionId: 'a' });
+    await flush();
     const [shown] = harness.sent
       .filter((sent) => sent.message === 'formShown')
       .map((sent) => sent.data as { formId: string; label: string });
@@ -195,7 +215,6 @@ describe('primer main part', () => {
     expect(harness.started().mayStop?.()).toBeNull();
 
     await harness.stop();
-    rmSync(homeDir, { recursive: true, force: true });
   });
 
   it("stop ends the open preview's session", async () => {

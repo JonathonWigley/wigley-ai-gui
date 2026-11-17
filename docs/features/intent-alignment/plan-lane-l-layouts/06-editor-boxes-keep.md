@@ -1,6 +1,6 @@
 # 06 — Editor boxes kept across a redraw
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -179,3 +179,5 @@ Done when: `npm run lint` and the typecheck pass; the test gate runs `src/shared
 Commit: one commit for the group — `src/shared/page/editor-boxes.ts`, `src/shared/page/editor-boxes.test.ts`.
 
 ## Proof
+
+Commit 9dcfa2c14 · proof: diff read + wave 1 compile (forms Pick fixed in ff56db41b) · concerns: keepFocusedBox Pick now needs destroyReleased (forms RoundViewDeps fixed); followups.md ~line 424 'at the text's end' stale

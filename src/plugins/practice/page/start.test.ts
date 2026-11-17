@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { EditorHost } from '../../../contracts/editor';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
-import { withUser } from '../../../shared/page/layout-host/test-layouts';
+import {
+  USER_LAYOUT,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   type FakeElement,
+  type FocusFakeDocument,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import {
@@ -128,13 +133,69 @@ function fakeAgentPane(pane: FakePane): AgentPane {
   };
 }
 
+// One editor the page made for a text box: the frame it was made in, the text
+// it was made with, and whether it was destroyed.
+interface BoxEditor {
+  frame: FakeElement;
+  doc: string;
+  isDestroyed: boolean;
+}
+
+// `editors`' host, recording each box editor it makes in `boxEditors` and
+// each focus of one in `boxFocuses`; a box editor's focus and blur move the
+// fake DOM focus to and from its frame, as a real editor's content does.
+function recordingHost(
+  editors: ReturnType<typeof countingEditors>,
+  boxEditors: BoxEditor[],
+  boxFocuses: BoxEditor[],
+): EditorHost {
+  return {
+    ...editors.host,
+    create(parent, doc, events) {
+      const editor = editors.host.create(parent, doc, events);
+      const made: BoxEditor = {
+        frame: asFake(parent),
+        doc,
+        isDestroyed: false,
+      };
+      boxEditors.push(made);
+      return {
+        ...editor,
+        focus(options) {
+          boxFocuses.push(made);
+          asFocusable(made.frame).focus();
+          editor.focus(options);
+        },
+        blur() {
+          asFocusable(made.frame).blur();
+          editor.blur();
+        },
+        destroy() {
+          made.isDestroyed = true;
+          editor.destroy();
+        },
+      };
+    },
+  };
+}
+
+// The editors made for box `id`, in the order they were made.
+function editorsOf(boxEditors: readonly BoxEditor[], id: string): BoxEditor[] {
+  return boxEditors.filter((made) =>
+    made.frame.classList.contains(`practice-box--${id}`),
+  );
+}
+
 // A Practice page whose `list` reads both problems, whose `open` opens the
 // slug asked for and whose judge accepts, unless `held` answers first; `calls`
 // holds each invoke, `place` the last page's place, `editors` the code editor
-// and boxes it made, `pane` the interviewer's fake pane.
+// and boxes it made, `boxEditors` each box editor and `boxFocuses` each focus
+// of one, `pane` the interviewer's fake pane.
 function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
   installFocusFakeDom(vi.stubGlobal);
   const editors = countingEditors();
+  const boxEditors: BoxEditor[] = [];
+  const boxFocuses: BoxEditor[] = [];
   const calls: { method: string; args: unknown[] }[] = [];
   const pane: FakePane = { spec: null, calls: [] };
   const state = createSlotStore(() => undefined);
@@ -155,7 +216,7 @@ function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
       })),
     ],
     services: {
-      editor: editors.host,
+      editor: recordingHost(editors, boxEditors, boxFocuses),
       markdown: {
         block: (text) => text,
         inline: (text) => text,
@@ -184,7 +245,7 @@ function startPracticePage(place?: PracticePlace, held?: HeldAnswer) {
       return undefined;
     },
   });
-  return { harness, calls, editors, pane };
+  return { harness, calls, editors, boxEditors, boxFocuses, pane };
 }
 
 // A Practice page, shown, with `SECOND` open in the workspace.
@@ -212,10 +273,17 @@ const messagesOf = (harness: ReturnType<typeof startPracticePage>['harness']) =>
 const placeOf = (harness: ReturnType<typeof startPracticePage>['harness']) =>
   harness.state.read(practicePlaceSlot, 'test').get();
 
+const asFocusable = (target: FakeElement) =>
+  target as unknown as { focus(): void; blur(): void };
+
+// The fake document's focused element.
+const focusedElement = () =>
+  (document as unknown as FocusFakeDocument).activeElement;
+
 // Focuses `target` as a click does, its `focusin` reaching it and each
 // element over it.
 function focusIn(target: FakeElement) {
-  (target as unknown as { focus(): void }).focus();
+  asFocusable(target).focus();
   for (let node: FakeElement | null = target; node; node = node.parentNode) {
     node.fire('focusin', { target });
   }
@@ -763,6 +831,173 @@ describe('practicePagePart', () => {
         'submit ignored: practice hidden',
       ]),
     );
+  });
+
+  it('layoutChange_FocusedNotesBox_KeepsItsEditor', async () => {
+    const { harness, commands, boxEditors, boxFocuses } =
+      await startWithProblemOpen();
+    commands.showTab({ arg: 'notes' });
+    commands.editBox({ arg: undefined });
+    const [notes] = editorsOf(boxEditors, 'notes');
+    const focusesBefore = boxFocuses.length;
+
+    harness.showLayouts(
+      withUser(defaultLayout, defaultLayout) as Parameters<
+        typeof harness.showLayouts
+      >[0],
+    );
+
+    expect(editorsOf(boxEditors, 'notes')).toEqual([notes]);
+    expect(notes.isDestroyed).toBe(false);
+    expect(boxFocuses.length).toBeGreaterThan(focusesBefore);
+    expect(boxFocuses.at(-1)).toBe(notes);
+  });
+
+  // A layout change leaves the DOM focus where the keys were: an open dialog
+  // and a focused box keep it, and a pane the redraw moved takes it back.
+  it.each<{
+    case: string;
+    act: (
+      commands: Awaited<ReturnType<typeof startWithProblemOpen>>['commands'],
+    ) => void;
+  }>([
+    {
+      case: 'ImportBoxInput',
+      act: (commands) => commands.importStart({ arg: undefined }),
+    },
+    {
+      case: 'NotesBox',
+      act: (commands) => {
+        commands.showTab({ arg: 'notes' });
+        commands.editBox({ arg: undefined });
+      },
+    },
+    { case: 'ProblemPaneBody', act: () => undefined },
+    {
+      case: 'FilterBox',
+      act: (commands) => commands.filter({ arg: undefined }),
+    },
+  ])('layoutChange_FocusOn$case_KeepsIt', async ({ act }) => {
+    const { harness, commands } = await startWithProblemOpen();
+    act(commands);
+    const focused = focusedElement();
+
+    harness.showLayouts(
+      withUser(defaultLayout, defaultLayout) as Parameters<
+        typeof harness.showLayouts
+      >[0],
+    );
+
+    expect(focused).not.toBeNull();
+    expect(focusedElement()).toBe(focused);
+  });
+
+  it('layoutChange_UserNotesTabPlacingTheBoxTwice_DrawsWithDefault', async () => {
+    const { harness, commands, boxEditors } = await startWithProblemOpen();
+    commands.showTab({ arg: 'notes' });
+    const userLayout = {
+      ...defaultLayout,
+      notesTab(
+        parent: HTMLElement,
+        kit: Parameters<typeof defaultLayout.notesTab>[1],
+      ) {
+        const root = kit.el(parent, 'div', 'user-notes');
+        kit.textBox(root);
+        kit.textBox(root);
+        return root;
+      },
+    };
+
+    harness.showLayouts(
+      withUser(defaultLayout, userLayout) as Parameters<
+        typeof harness.showLayouts
+      >[0],
+    );
+
+    expect(messagesOf(harness)).toContainEqual(
+      expect.stringMatching(/notesTab failed: .*textBox placed twice/),
+    );
+    const live = editorsOf(boxEditors, 'notes').filter(
+      (made) => !made.isDestroyed,
+    );
+    expect(live).toHaveLength(1);
+  });
+
+  it('layoutChange_UserDialogFrame_BothDialogsCarryItsLayoutOnePanelEach', async () => {
+    const { harness, commands } = await startWithProblemOpen();
+    const panels = new Map<string, HTMLElement[]>();
+    const userLayout = {
+      ...defaultLayout,
+      dialogFrame(
+        parent: HTMLElement,
+        input: Parameters<typeof defaultLayout.dialogFrame>[1],
+        kit: Parameters<typeof defaultLayout.dialogFrame>[2],
+      ) {
+        const frame = defaultLayout.dialogFrame(parent, input, kit);
+        panels.set(input.title, [
+          ...(panels.get(input.title) ?? []),
+          frame.element,
+        ]);
+        return frame;
+      },
+    };
+
+    harness.showLayouts(
+      withUser(defaultLayout, userLayout) as Parameters<
+        typeof harness.showLayouts
+      >[0],
+    );
+    commands.importStart({ arg: undefined });
+    commands.showTab({ arg: 'solution' });
+
+    expect([...panels.keys()].sort()).toEqual([
+      'Import problems',
+      'Open the solution?',
+    ]);
+    for (const [, drawn] of panels) {
+      expect(drawn).toHaveLength(1);
+      expect(drawn[0].dataset.layout).toBe(USER_LAYOUT);
+    }
+  });
+
+  it('refreshedDraft_ShownNotesBox_MountsANewEditor', async () => {
+    let notesOnDisk = '';
+    const { harness, commands, boxEditors } = await startWithProblemOpen(
+      (method, args) =>
+        method === 'open' && args[0] === SECOND
+          ? Promise.resolve({ ...opened(HARD), notes: notesOnDisk })
+          : undefined,
+    );
+    commands.showTab({ arg: 'notes' });
+    notesOnDisk = 'Two pointers';
+
+    harness.send('changed', { slug: SECOND });
+    await settle();
+    await settle();
+
+    const [earlier, live, ...rest] = editorsOf(boxEditors, 'notes');
+    expect(rest).toEqual([]);
+    expect(earlier.isDestroyed).toBe(true);
+    expect(live).toMatchObject({ doc: 'Two pointers', isDestroyed: false });
+  });
+
+  it('problemChange_ShownCustomCasesBox_MountsANewEditor', async () => {
+    const { commands, boxEditors } = await startWithProblemOpen(
+      (method, args) =>
+        method === 'open' && args[0] === EASY.slug
+          ? Promise.resolve({ ...opened(EASY), customCases: '[1, 2]' })
+          : undefined,
+    );
+
+    commands.listUp({ arg: undefined });
+    commands.openProblem({ arg: undefined });
+    await settle();
+    await settle();
+
+    const [earlier, live, ...rest] = editorsOf(boxEditors, 'customCases');
+    expect(rest).toEqual([]);
+    expect(earlier.isDestroyed).toBe(true);
+    expect(live).toMatchObject({ doc: '[1, 2]', isDestroyed: false });
   });
 
   it('stops with nothing live', async () => {

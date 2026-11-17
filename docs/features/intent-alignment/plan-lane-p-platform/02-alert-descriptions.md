@@ -1,6 +1,6 @@
 # 02 — Per-source alert descriptions
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01 (shared `master-plan.md` and `followups.md`)
 Plan: [plan.md](plan.md)
@@ -163,3 +163,4 @@ Commit: one commit for the task, holding the code, the tests, the master plan ti
 
 ## Proof
 
+Commit 36a249aa7 · proof: Diff read: AlertNoun and setOpenCount(source, count, noun) in contracts/alerts.ts; describeOpenCounts and OpenCounts {total, parts} in open-counts.ts; windows-alerts uses describeOpenCounts with no inline 'open agent form' string; alertNoun passed in forms, primer and audio-picker start.ts. typecheck and lint pass. · concerns: Part order rests on Map insertion order (a source enters on its first count above 0 and keeps its place); tests follow the task doc's table [count, noun] over its prose [count, singular]; primer and audio-picker noun literals wrapped for oxfmt.

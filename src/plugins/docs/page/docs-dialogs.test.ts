@@ -45,6 +45,22 @@ function markedLayout(marker: string): Layout {
   };
 }
 
+// A layout defining only the dialog frame, its panel, body and actions row
+// marked `user-frame`, `user-body` and `user-actions`.
+function framedLayout(): Layout {
+  return {
+    dialogFrame(parent, input, kit) {
+      const panel = kit.el(parent, 'div', 'user-frame');
+      kit.el(panel, 'h2', 'user-title', input.title);
+      const body = kit.el(panel, 'div', 'user-body');
+      const actions = input.hasActions
+        ? kit.el(panel, 'div', 'user-actions')
+        : null;
+      return { element: panel, body, actions };
+    },
+  };
+}
+
 const TRASHED_ENTRY = { path: '/home/a.md' } as IndexEntry;
 
 // Lets every settled promise's chain run.
@@ -189,6 +205,50 @@ describe('createDocsDialogs', () => {
       });
     },
   );
+
+  it('redraw_ChangedFrameLayout_DrawsTheTrashConfirmInTheNewFrame', async () => {
+    let shown = withUser<Layout>(defaultLayout, {});
+    const dialogs = dialogsOver(() => shown);
+    dialogs.trash(TRASHED_ENTRY);
+    await settled();
+    const scrim = asFake(dialogs.elements[1]);
+
+    shown = withUser(defaultLayout, framedLayout());
+    dialogs.redraw();
+
+    const panels = findAll(scrim, 'user-frame');
+    const body = findAll(panels[0], 'user-body')[0];
+    const actions = findAll(panels[0], 'user-actions')[0];
+    expect(panels).toHaveLength(1);
+    expect(panels[0].dataset.layout).toBe(USER_LAYOUT);
+    expect(findAll(body, 'docs-confirm-text')).toHaveLength(1);
+    expect(
+      findAll(actions, 'ui-button').map((button) => button.textContent),
+    ).toEqual([
+      expect.stringContaining('Keep it'),
+      expect.stringContaining('Move to the Trash'),
+    ]);
+  });
+
+  it('redraw_ChangedFrameLayout_KeepsTheBoxInputAndCompletionsInTheNewFrame', () => {
+    let shown = withUser<Layout>(defaultLayout, {});
+    const dialogs = dialogsOver(() => shown);
+    dialogs.createByPath(null);
+    const scrim = asFake(dialogs.elements[0]);
+    const input = findAll(scrim, 'docs-box')[0] as FocusFakeElement;
+    input.value = 'notes';
+
+    shown = withUser(defaultLayout, framedLayout());
+    dialogs.redraw();
+
+    const panels = findAll(scrim, 'user-frame');
+    const body = findAll(panels[0], 'user-body')[0];
+    expect(panels).toHaveLength(1);
+    expect(findAll(body, 'docs-box')[0]).toBe(input);
+    expect(input.value).toBe('notes');
+    expect(findAll(body, 'docs-completion')).toHaveLength(1);
+    expect(document.activeElement).toBe(input);
+  });
 
   it('redraw_BoxOpenWithText_KeepsTheInputItsTextAndFocus', () => {
     let shown = withUser(defaultLayout, markedLayout('box-1'));

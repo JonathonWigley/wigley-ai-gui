@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AccountStatus,
   AgentHarnessInfo,
@@ -7,6 +7,10 @@ import type {
 import type { ToastTone } from '../../../contracts/plugin';
 import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
+import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
+import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
+import { installFakeDom } from '../../../shared/page/test-dom';
 import {
   filterPicker,
   openPicker,
@@ -22,8 +26,12 @@ import type {
   ResumeSectionRows,
   StartRequest,
 } from '../contract';
-import type { Picker, PickerRequest } from './picker';
+import { chatCommand, chatScope } from '../ids';
+import type { PickerRowInput, PickerRowKit } from '../layouts/layout';
+import type { ChatLayouts } from './chat-layouts';
+import { createPicker, type Picker, type PickerRequest } from './picker';
 import {
+  type ArchiveState,
   NEW_SESSION_LABEL,
   SESSION_STEP_TITLE,
   SESSIONS_HEADING,
@@ -1489,6 +1497,133 @@ describe('start prompt', () => {
       if (unlisted !== null) {
         expect(run.invoked).not.toContain(unlisted);
       }
+    },
+  );
+});
+
+// The chat picker's list drawn through `createPicker`, each row's `pickerRow`
+// input recorded by label and its prompt's hints drawn on the real base kit.
+function pickerRun(options: {
+  scope: 'picker' | 'resume';
+  archiveState: ArchiveState | null;
+}) {
+  const inputs = new Map<string, PickerRowInput>();
+  const { anchors, keys } = recordingAnchors();
+  const rowAnchors = new Map<string, typeof anchors>();
+  const layouts = {
+    onChange: () => ({ dispose: () => undefined }),
+    draw(
+      _part: 'pickerRow' | 'pickerHeading',
+      parent: HTMLElement,
+      build: (
+        builder: unknown,
+        at: HTMLElement,
+        rollback: unknown,
+      ) => { element: HTMLElement },
+    ) {
+      const builder = (
+        at: HTMLElement,
+        input: PickerRowInput,
+        kit: PickerRowKit,
+      ) => {
+        inputs.set(input.label, input);
+        const anchorsBefore = anchors.length;
+        for (const action of input.prompt) {
+          kit.keyHint(at, action.command, { label: action.label });
+        }
+        rowAnchors.set(input.label, anchors.slice(anchorsBefore));
+        return { element: at };
+      };
+      const built = build(builder, parent, {
+        recordAnchor: () => undefined,
+      });
+      return { built, dispose: () => undefined };
+    },
+  } as unknown as ChatLayouts;
+  const picker = createPicker({
+    picker: fakeListPickerService({
+      place: () => undefined,
+      editor: { create: () => ({ setText: () => undefined }) } as never,
+    }),
+    layouts,
+    log: () => undefined,
+    keys,
+    markdown: {} as never,
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
+    platform: 'macos',
+    state: noLayoutState,
+  });
+  picker.open<string>({
+    title: 'Session',
+    items: ['first', 'second'],
+    label: (item) => item,
+    rowInput: (item) => ({ list: 'choices', label: item, isCurrent: false }),
+    scope: options.scope,
+    selected: 0,
+    archiveState: () => options.archiveState,
+    picked: () => undefined,
+  });
+  return { inputs, rowAnchors };
+}
+
+describe('chat picker prompt', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      case: 'a live session at the cursor',
+      scope: 'resume' as const,
+      archiveState: 'live' as const,
+      row: 'first',
+      expected: [{ command: 'chat.toggleArchive', label: 'archive' }],
+    },
+    {
+      case: 'an archived session at the cursor',
+      scope: 'resume' as const,
+      archiveState: 'archived' as const,
+      row: 'first',
+      expected: [{ command: 'chat.toggleArchive', label: 'restore' }],
+    },
+    {
+      case: 'a row off the cursor',
+      scope: 'resume' as const,
+      archiveState: 'live' as const,
+      row: 'second',
+      expected: [],
+    },
+    {
+      case: 'an item with no archive state',
+      scope: 'resume' as const,
+      archiveState: null,
+      row: 'first',
+      expected: [],
+    },
+    {
+      case: 'the picker scope',
+      scope: 'picker' as const,
+      archiveState: 'live' as const,
+      row: 'first',
+      expected: [],
+    },
+  ])(
+    'resumePicker_CursorRow_PromptNamesArchiveOrRestore: $case',
+    ({ scope, archiveState, row, expected }) => {
+      const { inputs, rowAnchors } = pickerRun({ scope, archiveState });
+
+      expect(inputs.get(row)?.prompt).toEqual(expected);
+      const archiveScopes = (rowAnchors.get(row) ?? [])
+        .filter((anchor) => anchor.command === chatCommand('toggleArchive'))
+        .map((anchor) => anchor.scope);
+      expect(archiveScopes).toEqual(
+        expected.length > 0 ? [chatScope('resume')] : [],
+      );
     },
   );
 });

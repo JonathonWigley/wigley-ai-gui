@@ -22,7 +22,7 @@ import {
   installFocusFakeDom,
 } from '../../shared/page/test-dom';
 import defaultLayout from './layouts/default/layout.js';
-import type { Layout } from './layouts/layout';
+import type { Layout, ToastTone } from './layouts/layout';
 import { mountShellChrome } from './shell-chrome';
 import { NO_FENCES } from '../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../shared/page/layout-host/fake-layout-state.test-support';
@@ -380,6 +380,37 @@ describe('mountShellChrome', () => {
         expect(badge.textContent).toMatch(text);
         expect(badge.title).toMatch(title!);
       }
+    },
+  );
+
+  // `dots`: each status dot's tag and status, in order. The user layout
+  // leaves `toast` out, so `default` draws it. Breaks if a tone's dot goes
+  // missing or appears for info, or the toast skips the layout host.
+  it.each([
+    { tone: 'success', text: 'Saved', dots: [['SPAN', 'success']] },
+    { tone: 'info', text: 'Copied the path', dots: [] },
+    { tone: 'error', text: 'Save failed', dots: [['SPAN', 'error']] },
+  ] satisfies { tone: ToastTone; text: string; dots: string[][] }[])(
+    'drawToast_Tone_DefaultDrawsTheDotOnlyForSuccessAndError: $tone',
+    ({ tone, text, dots }) => {
+      const { chrome } = mountChrome();
+      chrome.setLayouts(shownMine());
+      const layer = new FakeElement('div');
+
+      const drawn = chrome.drawToast(asHtml(layer), { text, tone });
+
+      const root = asFake(drawn.element);
+      expect(layer.children).toEqual([root]);
+      expect(root.classList.contains('ui-floating')).toBe(true);
+      expect(root.classList.contains('toast')).toBe(true);
+      expect(root.dataset.layoutOwner).toBe('shell');
+      expect(root.dataset.layout).toBe('default');
+      expect(root.querySelector('.toast-text')?.textContent).toBe(text);
+      expect(
+        root
+          .querySelectorAll('.ui-dot')
+          .map((dot) => [dot.tagName, dot.dataset.status]),
+      ).toEqual(dots);
     },
   );
 });

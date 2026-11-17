@@ -81,6 +81,35 @@ export interface KitSlotReader {
   on(listener: (...args: unknown[]) => void): void;
 }
 
+// What a dialog's frame draws: its title, and whether it has an actions row.
+export interface DialogFrameInput {
+  title: string;
+  hasActions: boolean;
+}
+
+// A dialog's frame: `element` is the panel the part appended to its parent; `body` and `actions` are inside it, the
+// app fills them, and `actions` is null exactly when `hasActions` is false. The app keeps the scrim, showing and
+// hiding, keys and focus. A frame that breaks these rules draws with `default`.
+export interface DialogFramePart {
+  element: HTMLElement;
+  body: HTMLElement;
+  actions: HTMLElement | null;
+}
+
+// A confirm prompt's own two buttons (label, variant, key anchor in the prompt's scope), each appended to `parent`. A
+// button the part leaves out goes at the end of the frame's actions row.
+export interface ConfirmButtonsKit {
+  keepButton(parent: HTMLElement): HTMLButtonElement;
+  confirmButton(parent: HTMLElement): HTMLButtonElement;
+}
+
+// One action a cursor row's prompt shows: `command`, a qualified id, and its `label`. Draw it with
+// `kit.keyHint(parent, command, { label })`.
+export interface PromptActionInput {
+  command: string;
+  label: string;
+}
+
 // Every part appends itself to `parent` and returns what it appended, except where its comment says otherwise.
 export interface BaseKit {
   el(

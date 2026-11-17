@@ -14,18 +14,19 @@
 // over a footer holding other plugins' row parts (`contributedParts`): the parts
 // ordered below 2 on the second line, and those ordered 2 and later always on
 // a third, then, on the list cursor's row, the cursor prompt on a line of its
-// own (`cursorPrompt`),
+// own (one key hint per action of `prompt`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt, split prompts and close-pane control, each tab's icon with no label, each session
 // popup's sheet around its body, the hidden popups' bar (each entry's icon and
 // status, or its title with no status, then the toggle key), and the rename
-// dialog's title box over why a title was refused and the hint, in the class
-// names its `layout.css` styles.
+// dialog's frame (its panel and title) and its title box over why a title was
+// refused and the hint, in the class names its `layout.css` styles, and each split picker row as the kit's list
+// row holding its label alone.
 
 const UNTITLED_ROW_TEXT = 'New Chat';
 
-/** @type {NonNullable<import('../layout').SessionRowInput['activity']>} */
+/** @type {import('../layout').ActivityInput} */
 const MARKED_ROW_ACTIVITY = {
   word: 'needs you',
   tone: 'attention',
@@ -36,7 +37,7 @@ const MARKED_ROW_ACTIVITY = {
 // when urgent; a success Tag opens on a check. Any other is plain text.
 /**
  * @param {HTMLElement} parent
- * @param {NonNullable<import('../layout').SessionRowInput['activity']>} activity
+ * @param {import('../layout').ActivityInput} activity
  * @param {Parameters<import('../layout').CompleteLayout['row']>[2]} kit
  */
 function drawActivityLabel(parent, { word, tone, emphasis }, kit) {
@@ -117,8 +118,11 @@ const layout = {
     }
     const foot = kit.el(element, 'div', 'session-row-foot');
     kit.contributedParts(foot);
-    if (input.isPrompted) {
-      kit.cursorPrompt(element);
+    if (input.prompt.length > 0) {
+      const prompt = kit.el(element, 'span', 'session-row-actions');
+      for (const action of input.prompt) {
+        kit.keyHint(prompt, action.command, { label: action.label });
+      }
     }
     return { element };
   },
@@ -216,6 +220,30 @@ const layout = {
     }
     kit.el(element, 'p', 'session-rename-hint', input.hint);
     return { element };
+  },
+
+  pickerRow(parent, input, kit) {
+    const element = kit.row(parent, {
+      density: 'list',
+      tag: 'li',
+      label: input.label,
+      trailing: kit.trailing(),
+    });
+    return { element };
+  },
+
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog',
+    );
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    return { element: panel, body, actions };
   },
 };
 

@@ -9,6 +9,7 @@ import {
   findAll,
   installFakeDom,
 } from './test-dom';
+import type { DrawDialogFrame } from './ui/dialog';
 
 const DISMISSED = 'cancel prompt dismissed: the view moved on';
 
@@ -16,11 +17,12 @@ const DISMISSED = 'cancel prompt dismissed: the view moved on';
 // sets them; `dismiss` drops the prompt unless the form is sending, as the
 // forms and primer reducers do. `calls` records the scope work in order, and
 // `anchors` each anchor named, `disposed` each anchor's dispose. Without
-// `hasOnBaseChanged` the deps leave out `onBaseChanged`; `drawBody` is handed
-// on when given.
+// `hasOnBaseChanged` the deps leave out `onBaseChanged`; `drawBody` and
+// `drawFrame` are handed on when given.
 function promptSetup(
   hasOnBaseChanged = true,
   drawBody?: ConfirmPromptDeps['drawBody'],
+  drawFrame?: DrawDialogFrame,
 ) {
   const caller = { asked: false, sending: false };
   const calls: string[] = [];
@@ -71,6 +73,7 @@ function promptSetup(
       : {}),
     log,
     ...(drawBody === undefined ? {} : { drawBody }),
+    ...(drawFrame === undefined ? {} : { drawFrame }),
   });
   const scrim = asFake(prompt.element);
   return {
@@ -286,5 +289,32 @@ describe('confirm prompt', () => {
       'test.confirm',
     ]);
     expect(buttons(scrim)).toHaveLength(2);
+  });
+
+  it('redraw_DrawFrame_DrawsTheFrameAndButtonsAgain', () => {
+    // Each frame drawn: a panel holding a body and an actions row.
+    const panels: HTMLElement[] = [];
+    const drawFrame: DrawDialogFrame = (parent) => {
+      const panel = document.createElement('section');
+      const body = document.createElement('div');
+      const actions = document.createElement('div');
+      actions.className = 'ui-dialog-actions';
+      panel.append(body, actions);
+      parent.append(panel);
+      panels.push(panel);
+      return { element: panel, body, actions };
+    };
+    const { prompt, scrim } = promptSetup(true, undefined, drawFrame);
+
+    prompt.redraw();
+
+    expect(panels).toHaveLength(2);
+    expect(scrim.childNodes).toHaveLength(1);
+    expect(scrim.childNodes[0]).toBe(asFake(panels[1]));
+    const [actions] = findAll(scrim, 'ui-dialog-actions');
+    expect(buttons(actions).map((button) => button.textContent)).toEqual([
+      'Keepn',
+      'Cancel formy',
+    ]);
   });
 });

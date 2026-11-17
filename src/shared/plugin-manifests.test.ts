@@ -418,12 +418,12 @@ describe('expandBind', () => {
   it("leaves a box-only bind's keys unconverted", () => {
     expect(
       expandBind(
-        { keys: '<F5>', scope: 'any', command: 'c', where: 'box' },
+        { keys: 'g<Tab>', scope: 'any', command: 'c', where: 'box' },
         '<Space>',
       ),
     ).toEqual({
       page: null,
-      editor: { keys: '<F5>', scope: 'any', command: 'c' },
+      editor: { keys: 'g<Tab>', scope: 'any', command: 'c' },
     });
   });
 });

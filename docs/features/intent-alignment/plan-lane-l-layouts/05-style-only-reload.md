@@ -1,6 +1,6 @@
 # 05 — Style-only layout reload
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -214,3 +214,4 @@ Show (`show-layouts.test.ts`). New `showLayouts_StyleOnlySet_LogsRestyledAndCall
 
 ## Proof
 
+Commit 4cc9e04a1 · proof: diff read + wave 1 compile · concerns: restyled narrowed to entries still in layouts; the leave-and-rejoin test is weaker

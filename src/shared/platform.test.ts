@@ -28,6 +28,17 @@ describe('platformFor', () => {
       expect(relay.serverName).toBe('wigley-forms');
     },
   );
+
+  it.each([
+    { os: 'macos', keys: { optionMatchesByCode: true, altGraphTypes: false } },
+    {
+      os: 'windows',
+      keys: { optionMatchesByCode: false, altGraphTypes: true },
+    },
+    { os: 'linux', keys: { optionMatchesByCode: false, altGraphTypes: true } },
+  ] as const)('gives $os its chord matching flags', ({ os, keys }) => {
+    expect(platformFor(os, INPUTS).keys).toEqual(keys);
+  });
 });
 
 describe('launchCommand', () => {

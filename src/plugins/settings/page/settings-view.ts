@@ -25,7 +25,6 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import type { ListPickerCommand } from '../../../shared/list-picker-commands';
-import { element } from '../../../shared/page/dom';
 import type {
   KitCommands,
   OwnerKitServices,
@@ -34,6 +33,7 @@ import type {
   DrawnPart,
   RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
+import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import {
   createLayoutParts,
   type LayoutParts,
@@ -92,7 +92,7 @@ import {
 } from './leader-menu-view';
 import { pluginSection } from './plugin-rows-view';
 import { type BoxRequest, createRowBox, type RowBox } from './row-box';
-import { type PromptAction, rowPromptActions } from './row-prompt';
+import { createPromptHolder, rowPromptActions } from './row-prompt';
 import { createSectionsView } from './sections-view';
 import { settingSection } from './setting-rows-view';
 
@@ -249,15 +249,6 @@ export interface SettingsViewDeps {
   // The page's one-shot key capture, as `api.keys.captureKey` arms it.
   captureKey(onKey: (keys: string) => void, onCancel: () => void): Disposable;
   picker: ListPickerService;
-  // Keeps the keys of the settings `command` drawn in `element`, shown while
-  // `scope` is in force, followed by `label` (true: the command's label): the
-  // cursor prompt's keys, which the app draws in each layout.
-  anchor(
-    element: HTMLElement,
-    command: SettingsCommand,
-    scope: 'sections' | 'rows' | LeaderScope,
-    label?: boolean | string,
-  ): Disposable;
   // The open section's title, for the title bar.
   sectionShown(title: string): void;
   // Hears each section the user picks from the side bar, by click or Enter,
@@ -305,7 +296,9 @@ export type SettingsCommand =
 // shows: the first time it opens the first section with focus on the side
 // bar, and each time it sets the scope where focus was left. Each change of
 // focus logs `sections focused` or `rows focused`. The keys show
-// where they act: the cursor row's actions in its layout's `rowActions` slot.
+// where they act: the layout's `cursorPrompt` draws the cursor row's actions
+// into that row's `rowActions` slot, and draws again only when the cursor
+// reaches a row with other actions.
 // `setLayouts` draws everything again in the new layouts, keeping the cursor,
 // the open section, the focus side, an open box or filter, an open picker and
 // a key recording. A recording ends on Esc, on opening a section, on `hidden`
@@ -352,15 +345,6 @@ export interface SettingsView {
   hidden(): void;
 }
 
-// The cursor prompt's label for each action it shows.
-const PROMPT_LABELS: Record<PromptAction, string> = {
-  open: 'reassign',
-  edit: 'edit',
-  addBind: 'add key',
-  removeBind: 'clear',
-  reset: 'reset',
-};
-
 interface OpenBox {
   box: RowBox;
   file: ConfigFile;
@@ -369,15 +353,6 @@ interface OpenBox {
 
 export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const { channel, log } = deps;
-  const anchored = (
-    command: SettingsCommand,
-    scope: 'sections' | 'rows',
-    label?: boolean | string,
-  ): HTMLElement => {
-    const hint = element('span');
-    deps.anchor(hint, command, scope, label);
-    return hint;
-  };
   const services: OwnerKitServices = {
     markdown: deps.markdown,
     keys: deps.keys,
@@ -430,22 +405,26 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   rowsSheet.classList.add('settings-sheet');
   rowsSheet.tabIndex = -1;
 
-  // The cursor row's action keys; `markCursor` moves the prompt into the
-  // cursor row's actions slot and shows the keys of the actions that row has.
-  const rowPrompt = element('span', 'settings-row-actions');
-  const promptHints: Record<PromptAction, HTMLElement> = {
-    open: anchored('open', 'rows', PROMPT_LABELS.open),
-    edit: anchored('edit', 'rows', PROMPT_LABELS.edit),
-    addBind: anchored('addBind', 'rows', PROMPT_LABELS.addBind),
-    removeBind: anchored('removeBind', 'rows', PROMPT_LABELS.removeBind),
-    reset: anchored('reset', 'rows', PROMPT_LABELS.reset),
+  // Draws `cursorPrompt` for `actions` into `slot`, in the kit of `scope`;
+  // returns the dispose that takes it out again.
+  const drawCursorPrompt = (
+    slot: HTMLElement,
+    actions: readonly PromptActionInput[],
+    scope: SettingsKitScope,
+  ): (() => void) => {
+    const drawn = parts.draw('cursorPrompt', slot, (prompt, parent, rollback) =>
+      buildEntry(prompt, parent, { actions }, scope, services, rollback),
+    );
+    return () => {
+      drawn.dispose();
+      drawn.built.element.remove();
+    };
   };
-  rowPrompt.append(
-    promptHints.open,
-    promptHints.edit,
-    promptHints.addBind,
-    promptHints.removeBind,
-    promptHints.reset,
+
+  // The cursor row's action keys: the `cursorPrompt` `markCursor` draws into
+  // the cursor row's actions slot.
+  const rowPrompt = createPromptHolder((slot, actions) =>
+    drawCursorPrompt(slot, actions, 'rows'),
   );
 
   // The filter frame the rows pane places; it and its input outlive every
@@ -497,10 +476,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     log,
   });
 
+  // Disposes everything drawn into the rows pane's slots, the cursor prompts
+  // included: their slots go with the rows.
   const disposeEntries = () => {
     const disposes = entryDisposes;
     entryDisposes = [];
     drawnRows = new Map();
+    rowPrompt.dispose();
+    leaderMenu.dispose();
     for (const dispose of disposes) {
       dispose();
     }
@@ -556,25 +539,22 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
   };
 
-  // Puts the cursor prompt in the cursor row's actions slot, showing the keys
-  // of the actions that row has; with no cursor row it leaves the rows.
+  // Draws the cursor prompt into the cursor row's actions slot with the keys
+  // of the actions that row has. With no cursor row it disposes the drawn
+  // prompt.
   const placeRowPrompt = (row: SettingsRow | undefined) => {
     const drawn = row === undefined ? undefined : drawnRows.get(row.key);
     if (row === undefined || drawn === undefined) {
-      rowPrompt.remove();
+      rowPrompt.dispose();
       return;
     }
-    const shownActions = rowPromptActions(row.actions);
-    for (const action of Object.keys(promptHints) as PromptAction[]) {
-      promptHints[action].hidden = !shownActions.includes(action);
-    }
-    drawn.actions.append(rowPrompt);
+    rowPrompt.place(drawn.actions, rowPromptActions(row.actions));
   };
 
   // Marks the cursor row selected, and draws its focus ring while the keys
   // act on the rows: an open box or filter draws its own ring instead. The
   // pane without focus is marked inactive, so its selected row takes the
-  // inactive selection fill. The cursor prompt moves to the cursor row.
+  // inactive selection fill. The cursor prompt is drawn on the cursor row.
   const markCursor = () => {
     const isRowsFocused =
       focus === 'rows' && openBox === null && filterScope === null;
@@ -894,6 +874,18 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const box = createRowBox(request, latest[request.file].text, {
       editor: deps.editor,
       quit: () => closeBox(box),
+      drawMessage(parent, text) {
+        const drawn = parts.draw(
+          'boxMessage',
+          parent,
+          (message, at, rollback) =>
+            buildEntry(message, at, { text }, 'rows', services, rollback),
+        );
+        return () => {
+          drawn.dispose();
+          drawn.built.element.remove();
+        };
+      },
     });
     const scope = deps.pushScope('box');
     scope.onBaseChanged(() => closeBox(box));
@@ -1091,8 +1083,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       moveToRowOnClick(drawn.built.element, key);
       return drawn.built;
     },
-    anchor: (element, command, scope, label) =>
-      deps.anchor(element, command, scope, label),
+    drawPrompt: drawCursorPrompt,
     setScope: deps.setScope,
     setFocusTarget: deps.setFocusTarget,
     redraw: () => draw(),
@@ -1450,6 +1441,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       parts.setLayouts(next);
       sections.redrawPane();
       draw(true);
+      openBox?.box.redrawMessage();
       if (filterScope !== null) {
         filterBox.focus();
       }

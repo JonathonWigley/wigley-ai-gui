@@ -103,6 +103,7 @@ const PART_SET: Record<ChatPartName, true> = {
   signIn: true,
   reasonBox: true,
   closeConfirm: true,
+  dialogFrame: true,
   imageViewer: true,
   rowClock: true,
   rowProfile: true,

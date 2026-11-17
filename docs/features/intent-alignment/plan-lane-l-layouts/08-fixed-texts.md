@@ -1,6 +1,6 @@
 # 08 — Fixed texts in layout slots
 
-Status: not started
+Status: done
 Type: Parallel
 Wave: 3 · Depends on: 04, 07
 Plan: [plan.md](plan.md)
@@ -423,3 +423,43 @@ One commit for the group, pathspecs: `src/plugins/backlog/` `src/plugins/docs/` 
 `src/shared/page/list-picker.ts` `src/shared/page/list-picker.test.ts`.
 
 ## Proof
+
+Commit 7e3bbdbec · proof: diff read of the six rows + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: self-test steps: backlog activate has no fixture with a started chunk (Enter is a vim key, no anchor needed); docs actions mapped to existing groups by name, cursor-on-leaf at load unchecked; notes, sessions, settings, chat use existing steps; chat .chat-picker-key CSS now matches the wrapper span, not the hint; backlog openInDocs keeps label docs; out-of-Files edits: docs-view.ts (anchor arg), sessions-view.ts (anchor arg), settings start.ts (anchor dep), chat layout.test.ts (cursorEnd fake); settings LeaderMenuView gained dispose() and row-prompt exports samePromptActions
+
+Self-test step per prompt action, as group › keys → expected line (`src/plugins/<id>/main/selftest-script.ts`):
+
+- **backlog** (scope `backlog.table`):
+  - `activate`: no step needed; its key `<CR>` is a vim key.
+  - `mark`: chunks › `x` → `marked Ready item`.
+  - `addToChunk`: chunks › `c` → `added 2 to Ready item`.
+  - `removeFromChunk`: unchunk › `u` → `took 1 out of chunks`.
+  - `startChunk`: start refused › `s` → `start refused First follow-up`.
+  - `toggleHeadless`: chunks › `H` → `headless Ready item on`, pressed in the strip, not the table.
+  - `renameChunk`: chunks › `r` → `renaming Ready item`, pressed in the strip, not the table.
+  - `toggleCommits`: review › `g l` → `commits shown`, pressed in the review pane, not the table.
+  - `openInDocs`: no step.
+- **docs** (scope `docs.tree`):
+  - `toggleStar`: recency and stars › `s` → `starred Style`.
+  - `rename`: create and rename › `r` → `rename: type the new path`.
+  - `trash`: trash and rescan › `d` → `asked to move fresh.md to the Trash`.
+- **settings**:
+  - rows: `open` is `<CR>`, a vim key, so it needs no step. `reset`: outside edits › `r` → `wrote settings.json`.
+    `addBind`: keymap › `a` → `recording keys.toggleHelp`. `removeBind`: keymap › `d` → `picker shown: Key to
+    remove`. `edit` (`i`): no step.
+  - Leader groups: `addGroup`: leader groups › `a` → `recording group top`. `rename`: leader groups › `R` → `box
+    open group <Leader>q`. `remove`: leader groups › `d` → `group has items <Leader>a`.
+  - Leader items: `open` and `changeAction` are `<CR>`, a vim key, so they need no step. `changeKey`: leader items ›
+    `c` → `recording item any <Leader>bd`. `reset`: leader items › `r` → `applied a new config`. `move`: leader
+    items › `m` → `picker shown: Group`. `clear`: leader items › `d` → `applied a new config`. `add`: leader items ›
+    `a` → `recording add <Leader>`.
+- **notes** (scope `notes.popup`):
+  - `editBox`: open › `i` on the title → `field title`.
+  - `remove` (`x`): no step.
+- **sessions** (scope `sessions.sidebar`), all in list row keys:
+  - `listFavorite`: `s` → `favorited panes-a`.
+  - `listMoveUp`: `K` → `moved panes-c up`.
+  - `listMoveDown`: `J` → `panes-b cannot move down`.
+  - `listRename`: `r` → `renamed panes-a to "…"`.
+  - `listClose`: `d` → `list cursor on panes-b`.
+- **chat** (scope `chat.resume`):
+  - `toggleArchive`: archive › `j x` → `archived fake past session one`, and `k x` → `restored fake past session one`.
