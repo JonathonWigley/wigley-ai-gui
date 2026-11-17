@@ -1,6 +1,6 @@
 # 01 — Login item spike
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -122,3 +122,4 @@ Commit:    one commit that adds `01-login-item-result.md` only
 
 ## Proof
 
+Commit 335b4f459 · proof: result file written; every step 5 cleanup check passed · concerns: no approval was asked, possibly from an earlier grant; a clean Mac may still need it; the detached host survives unregister

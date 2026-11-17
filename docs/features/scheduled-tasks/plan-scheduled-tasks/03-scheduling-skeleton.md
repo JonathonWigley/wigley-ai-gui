@@ -1,6 +1,6 @@
 # 03 — Scheduling skeleton, schedule and task file
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -168,3 +168,5 @@ Done when: compiles (`npm run typecheck`); `npm run lint` passes; the test gate 
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 498d9bc9f · proof: diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: TZ set at runtime relies on vitest forks pool; DST expectations checked with Python zoneinfo, not the code

@@ -897,12 +897,12 @@ is the task's name, or its id when the task is gone.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Login item spike](01-login-item-spike.md)
-- [ ] [Host spawn shape](02-host-spawn-shape.md)
-- [ ] [Scheduling skeleton, schedule and task file](03-scheduling-skeleton.md)
-- [ ] [Relay offline mode (marketplace)](04-relay-offline-mode.md)
-- [ ] [Sessions offline tools](05-sessions-offline-tools.md)
-- [ ] [File watch reliability](22-file-watch-reliability.md)
+- [x] [Login item spike](01-login-item-spike.md)
+- [x] [Host spawn shape](02-host-spawn-shape.md)
+- [x] [Scheduling skeleton, schedule and task file](03-scheduling-skeleton.md)
+- [x] [Relay offline mode (marketplace)](04-relay-offline-mode.md)
+- [x] [Sessions offline tools](05-sessions-offline-tools.md)
+- [x] [File watch reliability](22-file-watch-reliability.md)
 
 ### Wave 2
 - [ ] [Login-start seam](06-login-start-seam.md) — after 03 (modifies its `login-start.ts`)
@@ -946,8 +946,18 @@ relay are drive checks in task 21.
 Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 
 ### Groups
+- 02 · hard; compile fix 8b8a40c12 (env row type) · 08b4e3534 · diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: test lines hand-wrapped (oxfmt fixed)
+- 03 · hard; compile fix 8b8a40c12 (kind key) · 498d9bc9f · diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: TZ set at runtime relies on vitest forks pool; DST expectations checked with Python zoneinfo, not the code
+- 04 · hard · 53b96493a · diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12; relay tests not run (test gate) · concerns: README Calls-file sentence omits that refused and nameless calls write no line
+- 05 · hard; compile fix 8b8a40c12 (offlineEnv type) · f12e30333 · diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: added replayed:false to chat test literals (outside Files, typecheck needs them); relay/endpoint.ts imports node:path, the task said none
+- 22 · hard · c781912c2 · diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: kept copy watch may be dead on Linux after folder recreate; it.each options-arg form unchecked; possible rare flake in target-present row
+- 01 · hard · 335b4f459 · result file written; every step 5 cleanup check passed · concerns: no approval was asked, possibly from an earlier grant; a clean Mac may still need it; the detached host survives unregister
 ### Contract changes
 ### Rulings
 - Waves keep 05 beside 04 and 15 beside 14: both dependencies are on plan-pinned formats or injected deps, with no code wait — 05 writes offline.json to the plan's shape, 15 reaches projects through a dep 17 fills — if wrong, a worker finds a missing name and reports BLOCKED · lead
+- A once schedule computes its instant directly, with no 8-year horizon — the horizon guards stepping kinds only — a far-off once task still fires · group 03 · group 03
+- Schedule functions throw on a schedule readSchedule would refuse — callers only pass read schedules — a caller passing raw JSON throws · group 03 · group 03
+- Plugin version 2.16.0, not the plan's 2.4.0: next minor above origin/main's 2.15.0 — re-check at landing if origin moves · group 04 · group 04
+- onMissed handlers never reopen a watch (pool-watch re-reads, plan-watch keeps open copy watches, doc-files compares mtime) — on macOS a reopen sends onMissed to every live watch and loops — a stale watch is not refreshed by onMissed · group 22 · group 22
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 07 — Host pending queue and run records
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)

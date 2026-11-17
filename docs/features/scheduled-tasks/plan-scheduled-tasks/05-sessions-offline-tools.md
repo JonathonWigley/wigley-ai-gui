@@ -1,6 +1,6 @@
 # 05 — Sessions offline tools
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -189,3 +189,5 @@ One commit for the group: "Sessions writes an offline answer table beside tools.
 for host-fired runs, and replays a run's logged calls through the normal call path and its guards."
 
 ## Proof
+
+Commit f12e30333 · proof: diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: added replayed:false to chat test literals (outside Files, typecheck needs them); relay/endpoint.ts imports node:path, the task said none

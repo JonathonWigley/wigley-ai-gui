@@ -1,6 +1,6 @@
 # 22 — File watches: rescan on a missed burst, and report a write's target
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Rung: hard · changes when the Node adapter reports a watch event, which every `Files.watch` consumer reads
@@ -98,3 +98,4 @@ Commit:    one commit for the group: "File watches rescan on a missed burst and 
 
 ## Proof
 
+Commit c781912c2 · proof: diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: kept copy watch may be dead on Linux after folder recreate; it.each options-arg form unchecked; possible rare flake in target-present row

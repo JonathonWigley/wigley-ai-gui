@@ -1,6 +1,6 @@
 # 09 — Offline answers per contributor
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 05
 Plan: [plan.md](plan.md)

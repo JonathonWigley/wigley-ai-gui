@@ -1,6 +1,6 @@
 # 02 — Host spawn shape: env overlay, unset names, stdin lines
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -144,3 +144,4 @@ Commit:    one commit for the group: "Session host spawns take an env overlay, u
 
 ## Proof
 
+Commit 08b4e3534 · proof: diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12 · concerns: test lines hand-wrapped (oxfmt fixed)

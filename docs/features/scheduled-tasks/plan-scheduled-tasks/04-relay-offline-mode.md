@@ -1,6 +1,6 @@
 # 04 — Relay offline mode (marketplace)
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -201,3 +201,4 @@ Commit:    one commit for the group, on this worktree's branch, which holds the 
 
 ## Proof
 
+Commit 53b96493a · proof: diff read: Produces present; wave 1 typecheck and lint pass after 8b8a40c12; relay tests not run (test gate) · concerns: README Calls-file sentence omits that refused and nameless calls write no line
