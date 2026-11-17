@@ -1,12 +1,11 @@
-import type { Disposable } from '../../../contracts/disposable';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginLog } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
+import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { rowAction } from '../../../shared/page/ui/row';
 import { textBoxInput } from '../../../shared/page/text-box';
 import type { DocsPlace, IndexHeading } from '../contract';
@@ -18,7 +17,6 @@ import type {
   TreeWikiLink,
 } from '../tree';
 import {
-  type DocsAnchor,
   defaultExpandedIds,
   edgeSelection,
   expandNewGroups,
@@ -44,7 +42,7 @@ export type SidebarView = 'wiki' | 'all';
 export interface TreeViewDeps {
   log: PluginLog;
   matcher: FuzzyMatcher;
-  // Draws the pane, the line and the rows through the docs layout.
+  // Draws the pane, the line, the status and the rows through the docs layout.
   parts: DocsParts;
   // Whether the tree is Docs mode's, over the machine's index.
   isMachine: boolean;
@@ -68,7 +66,6 @@ export interface TreeViewDeps {
   // Runs once an accepted or cancelled filter box, or one holding focus through
   // `showView`, has closed and focus is back on the tree.
   filterClosed(): void;
-  anchor: DocsAnchor;
   // The node's status mark and detail, as the plugin-source statuses read now.
   rowStatus(node: TreeNode): TreeRowStatus;
   // The leaf's last-loaded time and star, read at each draw.
@@ -85,11 +82,12 @@ export interface LeafMarks {
 }
 
 // The tree pane, drawn by the layout's `treePane` around the app's switch slot,
-// status line, filter box, line slot and rows: in `default`, a header of the
+// status slot, filter box, line slot and rows: in `default`, a header of the
 // tree's keys (`/ filter`, `a new`, `A file`, `R rescan`, `c folder`) ending in
 // the `⌥L doc ›` edge prompt, then those five. The line slot holds the layout's
 // `treeLine` for an empty index, a filter matching nothing or a filter on;
-// the rows are the layout's `treeRow` parts.
+// the status slot holds the layout's `treeStatus`; the rows are the layout's
+// `treeRow` parts.
 //
 // It holds two views, the wiki and All pages, with `hasWiki`, and shows one;
 // the switch slot draws `sidebarSwitch` over them, and without `hasWiki` it is
@@ -107,8 +105,12 @@ export interface LeafMarks {
 // state. A filter also shows the section headings it matches, each a row under
 // its doc's leaf with the doc's title as its detail.
 // The selected row draws as the keyboard cursor while focus is inside the
-// pane, and a selected leaf ends in the `s star  r rename  d trash` cursor
-// prompt, with no `s star` in the wiki view.
+// pane, and a selected leaf's row input carries the `s star  r rename  d trash`
+// cursor prompt actions, with no `s star` in the wiki view, which the layout
+// draws.
+//
+// `setStatus` draws the `treeStatus` part again alone, so the filter box keeps its
+// focus and the rows their scroll.
 export interface TreeView {
   element: HTMLElement;
   setStatus(text: string | null): void;
@@ -186,7 +188,7 @@ export interface TreeView {
   // tree with rows in that view takes it in place of its default expansion and
   // first row. The filter applies with its box closed.
   restorePlace(place: TreePlace): void;
-  // Disposes the tree's anchors and drawn parts.
+  // Disposes the tree's drawn parts.
   dispose(): void;
 }
 
@@ -204,33 +206,17 @@ function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
 }
 
 // The cursor prompt's actions, in the order they show.
-const ALL_PAGES_ROW_ACTIONS = [
-  ['toggleStar', 'star'],
-  ['rename', 'rename'],
-  ['trash', 'trash'],
-] as const;
+const ALL_PAGES_ROW_ACTIONS: readonly PromptActionInput[] = [
+  { command: 'docs.toggleStar', label: 'star' },
+  { command: 'docs.rename', label: 'rename' },
+  { command: 'docs.trash', label: 'trash' },
+];
 
 // A wiki row takes no star: stars stay in All pages.
-const WIKI_ROW_ACTIONS = [
-  ['rename', 'rename'],
-  ['trash', 'trash'],
-] as const;
-
-// The cursor prompt a selected leaf row ends in, after its end; `anchors`
-// receives the anchors it names.
-function rowActionsElement(
-  rowActions: typeof ALL_PAGES_ROW_ACTIONS | typeof WIKI_ROW_ACTIONS,
-  anchors: Disposable[],
-  anchor: DocsAnchor,
-): HTMLElement {
-  const actions = element('span', 'docs-row-actions');
-  for (const [command, label] of rowActions) {
-    const node = element('span');
-    anchors.push(anchor(node, command, { scope: 'tree', label }));
-    actions.append(node);
-  }
-  return actions;
-}
+const WIKI_ROW_ACTIONS: readonly PromptActionInput[] = [
+  { command: 'docs.rename', label: 'rename' },
+  { command: 'docs.trash', label: 'trash' },
+];
 
 // One view's trees and its place in them.
 interface ViewSlot {
@@ -284,22 +270,10 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   const { parts } = deps;
   const pane = element('div', 'docs-tree');
   pane.tabIndex = -1;
-  // The anchors the cursor prompt names, for the view's life.
-  const anchors: Disposable[] = [];
-  const allPagesRowActions = rowActionsElement(
-    ALL_PAGES_ROW_ACTIONS,
-    anchors,
-    deps.anchor,
-  );
-  const wikiRowActions = rowActionsElement(
-    WIKI_ROW_ACTIONS,
-    anchors,
-    deps.anchor,
-  );
   const switchSlot = element('div', 'docs-switch-slot');
   switchSlot.hidden = !deps.hasWiki;
-  const status = element('div', 'docs-status');
-  status.hidden = true;
+  // The slot `treeStatus` draws into.
+  const status = element('div', 'docs-status-slot');
   const filterFrame = inputFrame();
   filterFrame.classList.add('docs-filter');
   filterFrame.hidden = true;
@@ -310,8 +284,10 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   lineSlot.hidden = true;
   const list = element('ol', 'docs-rows');
   let shownLine: TreeLine | null = null;
+  let shownStatus: string | null = null;
   let drawnPane: DrawnPart | null = null;
   let drawnLine: DrawnPart | null = null;
+  let drawnStatus: DrawnPart | null = null;
   let drawnSwitch: DrawnPart | null = null;
   let drawnRows: DrawnPart[] = [];
 
@@ -388,6 +364,17 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     }
   };
 
+  // Draws `shownStatus` into the status slot.
+  const drawStatus = () => {
+    drawnStatus?.dispose();
+    drawnStatus = parts.draw(
+      'treeStatus',
+      status,
+      { text: shownStatus },
+      (kit) => kit,
+    );
+  };
+
   const rowsOf = (slot: ViewSlot) =>
     visibleRows(rowTree(slot), slot.state, pathOf, headingsOf, deps.matcher);
 
@@ -438,6 +425,10 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     const { node } = row;
     const marks = node.type === 'entry' ? deps.leafMarks(node) : null;
     const { mark, detail } = deps.rowStatus(node);
+    const isPrompted =
+      node.id === shownSlot().state.selectedId && node.type === 'entry';
+    const actions =
+      shownView === 'wiki' ? WIKI_ROW_ACTIONS : ALL_PAGES_ROW_ACTIONS;
     return {
       id: node.id,
       type: node.type === 'headingMatch' ? 'entry' : node.type,
@@ -448,8 +439,8 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       mark,
       time: marks?.time ?? null,
       isStarred: marks?.isStarred === true,
-      isPrompted:
-        node.id === shownSlot().state.selectedId && node.type === 'entry',
+      isPrompted,
+      prompt: isPrompted ? actions : [],
       isDangling: node.type === 'wikiLink' && node.isDangling,
       count: node.type === 'wikiLink' ? node.count : null,
     };
@@ -458,23 +449,8 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   // Draws the row part, then sets the app's cursor classes and click on its
   // root, which keeps the mouse from taking focus.
   const drawRow = (row: TreeRow): DrawnPart => {
-    const input = rowInput(row);
-    let placing: AppSlot[] = [];
-    const drawn = parts.draw('treeRow', list, input, (kit, slotFor) => {
-      const rowActions =
-        shownView === 'wiki' ? wikiRowActions : allPagesRowActions;
-      const prompt = slotFor(rowActions, 'cursorPrompt');
-      placing = input.isPrompted ? [prompt] : [];
-      return {
-        ...kit,
-        cursorPrompt: (parent) =>
-          input.isPrompted ? prompt.place(parent) : null,
-      };
-    });
+    const drawn = parts.draw('treeRow', list, rowInput(row), (kit) => kit);
     const item = drawn.element;
-    for (const part of placing) {
-      part.placeIfLeftOut(item);
-    }
     rowAction(item, () => deps.rowClicked(row.node.id));
     const isSelected = row.node.id === shownSlot().state.selectedId;
     item.classList.toggle('is-selected', isSelected);
@@ -589,9 +565,8 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   const view: TreeView = {
     element: pane,
     setStatus(text) {
-      status.hidden = text === null;
-      status.textContent = text ?? '';
-      status.title = text ?? '';
+      shownStatus = text;
+      drawStatus();
     },
     setTree(next, nextPathOf, nextHeadingsOf, hasIndex) {
       const slot = slots.all;
@@ -737,6 +712,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
             drawPane();
             drawSwitch();
             drawLine();
+            drawStatus();
             draw();
           });
         } finally {
@@ -755,16 +731,20 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     },
     dispose() {
       isDisposed = true;
-      const drawn = [drawnPane, drawnLine, drawnSwitch, ...drawnRows];
+      const drawn = [
+        drawnPane,
+        drawnLine,
+        drawnStatus,
+        drawnSwitch,
+        ...drawnRows,
+      ];
       drawnPane = null;
       drawnLine = null;
+      drawnStatus = null;
       drawnSwitch = null;
       drawnRows = [];
       callEach<() => void>(
-        [
-          () => disposeAnchors(anchors),
-          ...drawn.map((part) => () => part?.dispose()),
-        ],
+        drawn.map((part) => () => part?.dispose()),
         (step) => step(),
       );
     },
@@ -793,5 +773,6 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
 
   drawPane();
   drawSwitch();
+  drawStatus();
   return view;
 }

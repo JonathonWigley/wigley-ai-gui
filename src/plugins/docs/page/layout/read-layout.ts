@@ -6,6 +6,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   treePane: true,
   treeLine: true,
   treeRow: true,
+  treeStatus: true,
   docPane: true,
   emptyDoc: true,
   docHeader: true,

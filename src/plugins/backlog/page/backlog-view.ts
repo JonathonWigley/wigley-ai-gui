@@ -46,6 +46,7 @@ import {
   disposeDraws,
   type RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
+import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import { listPickerCommands } from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
@@ -74,7 +75,6 @@ import type {
   BacklogLayout,
   CommitsInput,
   CompleteBacklogLayout,
-  RowKit,
 } from '../layouts/layout';
 import type { backlogManifest } from '../manifest';
 import { isReady } from '../ready';
@@ -140,7 +140,7 @@ const TABLE_SPLIT = { initial: 640, min: 400, endMin: 280 };
 const STRIP_SPLIT = { initial: 120, min: 72, endMin: 200 };
 const ASSISTANT_SPLIT = { initial: 380, min: 280, endMin: 520 };
 
-// Each cursor prompt anchor's label.
+// Each cursor prompt action's label.
 const CURSOR_LABELS: Record<CursorCommand, string> = {
   activate: 'session',
   mark: 'mark',
@@ -244,20 +244,6 @@ export interface BacklogView {
 export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const { channel, paths, homeDir, matcher } = deps;
   const tilde = (path: string) => paths.tilde(path, homeDir);
-  // A new element, made once for the view's life, that the core draws the
-  // keys of `command` in `scope` into, then `label` when given.
-  const anchored = (
-    command: BacklogCommand,
-    scope: BacklogBaseScope,
-    label?: string,
-  ): HTMLElement => {
-    const target = element('span', 'backlog-hint');
-    deps.keys.anchor(target, qualify(PLUGIN_ID, command), {
-      scope: qualify(PLUGIN_ID, scope),
-      label,
-    });
-    return target;
-  };
 
   const store = createReducerStore(
     initialBacklogState(),
@@ -287,8 +273,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   // places the slots below.
   const tablePane = element('div', 'backlog-table');
   tablePane.tabIndex = -1;
-  const status = element('div', 'backlog-status');
-  status.hidden = true;
+  // The slot `tableStatus` draws into, kept across a render that changes only
+  // the status text.
+  const status = element('div', 'backlog-status-slot');
   const filterBar = element('div', 'backlog-filter-bar');
   const filterFrame = inputFrame();
   filterFrame.classList.add('backlog-filter');
@@ -297,16 +284,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   filterFrame.append(filterBox);
   const rowsList = element('ol', 'backlog-rows');
 
-  // The cursor prompt, moved into the selected row's `cursorActions` slot on
-  // each draw.
-  const cursorPrompt = element('span', 'backlog-row-actions');
-  const cursorHints = new Map<CursorCommand, HTMLElement>(
-    (Object.keys(CURSOR_LABELS) as CursorCommand[]).map((command) => [
-      command,
-      anchored(command, 'table', CURSOR_LABELS[command]),
-    ]),
-  );
-  cursorPrompt.append(...cursorHints.values());
 
   const reviewPane = element('div', 'backlog-review');
   reviewPane.tabIndex = -1;
@@ -407,6 +384,25 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   let rowDraws: DrawnRoot[] = [];
   let reviewDraws: DrawnRoot[] = [];
   let stripDraws: DrawnRoot[] = [];
+  // The status text the `tableStatus` draw shows; undefined before the first
+  // render draws it.
+  let shownStatus: string | null | undefined;
+  let statusDraw: DrawnRoot | null = null;
+
+  // Draws `text` through `tableStatus` into the status slot, in place of the
+  // last draw.
+  const drawStatusPart = (text: string | null) => {
+    shownStatus = text;
+    statusDraw?.dispose();
+    status.replaceChildren();
+    statusDraw = parts.draw(
+      'tableStatus',
+      status,
+      (tableStatus, into, rollback) => ({
+        element: tableStatus(into, { text }, kitFor('table', rollback)),
+      }),
+    );
+  };
 
   // Draws the three panes again. The rows keep their scroll; the review
   // draws again at its scroll.
@@ -455,18 +451,23 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       renameSlot.placeIfLeftOut(pane.element);
       return pane;
     });
+    if (shownStatus !== undefined) {
+      drawStatusPart(shownStatus);
+    }
     rowsList.scrollTop = rowsScroll;
   };
 
+  // Draws `tableStatus` again only when the text changed, so a load message
+  // arriving under the filter box leaves the `table` pane in place.
   const drawStatus = (state: BacklogState) => {
     const statusText =
       state.message ??
       (state.isLoaded && state.homes.length === 0
         ? 'No features homes found'
         : null);
-    status.hidden = statusText === null;
-    status.textContent = statusText ?? '';
-    status.title = statusText ?? '';
+    if (statusText !== shownStatus) {
+      drawStatusPart(statusText);
+    }
   };
 
   const drawFilters = (state: BacklogState) => {
@@ -486,19 +487,22 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }));
   };
 
-  // Draws `shown`'s row into the rows slot; its `cursorActions` slot is
-  // `actions`, appended at the row's end when the row leaves it out.
-  const drawRow = (
+  // The actions that act on `shown` while it is the cursor row, in prompt
+  // order; none for any other row.
+  const promptOf = (
     state: BacklogState,
     shown: BacklogRow,
-    actions: HTMLElement,
-  ): DrawnRoot =>
+  ): PromptActionInput[] =>
+    shown.key === state.selectedKey
+      ? cursorCommands(shown).map((command) => ({
+          command: qualify(PLUGIN_ID, command),
+          label: CURSOR_LABELS[command],
+        }))
+      : [];
+
+  // Draws `shown`'s row into the rows slot.
+  const drawRow = (state: BacklogState, shown: BacklogRow): DrawnRoot =>
     parts.draw('tableRow', rowsList, (tableRow, into, rollback) => {
-      const actionsSlot = appSlot(actions, 'cursorActions', rollback);
-      const kit: RowKit = {
-        ...kitFor('table', rollback),
-        cursorActions: actionsSlot.place,
-      };
       const { item, chunk } = shown;
       const root = tableRow(
         into,
@@ -515,36 +519,18 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
               ? null
               : { name: chunk.name, isStarted: chunk.sessionId !== null },
           isMarked: state.marked.includes(shown.key),
+          prompt: promptOf(state, shown),
         },
-        kit,
+        kitFor('table', rollback),
       );
-      actionsSlot.placeIfLeftOut(root);
       return { element: root };
     });
-
-  // Moves the cursor prompt into the selected row's `cursorActions` slot,
-  // showing only the commands that act on it; detached with no selected row.
-  const placeCursorPrompt = (
-    selected: { shown: BacklogRow; actions: HTMLElement } | null,
-  ) => {
-    if (selected === null) {
-      cursorPrompt.remove();
-      return;
-    }
-    const shownCommands = cursorCommands(selected.shown);
-    for (const [command, hint] of cursorHints) {
-      hint.hidden = !shownCommands.includes(command);
-    }
-    selected.actions.append(cursorPrompt);
-  };
 
   const drawRows = (state: BacklogState) => {
     rowDraws = disposeDraws(rowDraws);
     rowsList.replaceChildren();
-    let selected: { shown: BacklogRow; actions: HTMLElement } | null = null;
     for (const shown of visibleRows(state, matcher)) {
-      const actions = element('span', 'backlog-row-actions-slot');
-      const drawn = drawRow(state, shown, actions);
+      const drawn = drawRow(state, shown);
       rowDraws.push(drawn);
       const root = drawn.built.element;
       rowAction(root, () => deps.runKey(backlogSelectRowCommand, shown.key));
@@ -558,11 +544,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         'is-started',
         (shown.chunk?.sessionId ?? null) !== null,
       );
-      if (isSelected) {
-        selected = { shown, actions };
-      }
     }
-    placeCursorPrompt(selected);
     const reason = emptyReason(state, matcher);
     if (reason !== null) {
       rowDraws.push(
@@ -1350,6 +1332,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       rowDraws = disposeDraws(rowDraws);
       reviewDraws = disposeDraws(reviewDraws);
       stripDraws = disposeDraws(stripDraws);
+      statusDraw?.dispose();
+      statusDraw = null;
       parts.dispose();
       pane.dispose();
       scroller.dispose();

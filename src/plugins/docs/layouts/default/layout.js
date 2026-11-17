@@ -67,6 +67,12 @@ const layout = {
     }
     return { element: line };
   },
+  treeStatus(parent, input, kit) {
+    const status = kit.el(parent, 'div', 'docs-status', input.text ?? '');
+    status.title = input.text ?? '';
+    status.hidden = input.text === null;
+    return { element: status };
+  },
   treeRow(parent, input, kit) {
     const caret = kit.el(parent, 'span', 'docs-row-caret');
     if (input.type === 'group') {
@@ -92,7 +98,12 @@ const layout = {
     }
     if (input.isPrompted) {
       row.classList.add('docs-row--prompted');
-      kit.cursorPrompt(row);
+    }
+    if (input.prompt.length > 0) {
+      const actions = kit.el(row, 'span', 'docs-row-actions');
+      for (const action of input.prompt) {
+        kit.keyHint(actions, action.command, { label: action.label });
+      }
     }
     return { element: row };
   },

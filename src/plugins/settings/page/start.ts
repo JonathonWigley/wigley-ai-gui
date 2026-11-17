@@ -7,7 +7,6 @@ import {
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
 import { placeWrites } from '../../../shared/page/place-slot';
-import { qualify } from '../../../shared/plugin-manifests';
 import {
   type SettingsChannel,
   type SettingsPlace,
@@ -57,11 +56,6 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       pushScope: (scope) => api.keys.pushScope(scope),
       captureKey: (onKey, onCancel) => api.keys.captureKey(onKey, onCancel),
       picker: services.picker,
-      anchor: (element, command, scope, label) =>
-        api.keys.anchor(element, qualify(settingsManifest.id, command), {
-          scope: qualify(settingsManifest.id, scope),
-          label,
-        }),
       sectionShown: (title) => mode.setContext({ title: TITLE, detail: title }),
       // A section picked from the side bar, or main taking the keys, closes
       // its overlay.

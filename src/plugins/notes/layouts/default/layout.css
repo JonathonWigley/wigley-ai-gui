@@ -18,6 +18,15 @@
   min-height: var(--wg-row-list);
 }
 
+/* The selected row's prompt at its end. It hides, keeping its space, while a
+   box holds the keys. */
+.notes-cursor-prompt {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-2);
+  min-height: var(--wg-row-list);
+}
+
 /* The field the popup's keys act on, while no box holds focus. */
 .notes-row.is-cursor {
   box-shadow: inset 0 0 0 1px var(--wg-focus-border);

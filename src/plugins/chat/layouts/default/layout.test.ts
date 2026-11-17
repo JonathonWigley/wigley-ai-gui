@@ -1259,7 +1259,6 @@ describe('default chat layout queuedMessage', () => {
 // fake element; `row` keeps its options.
 function fakeSurfaceKit() {
   const rows: KitRowOptions[] = [];
-  const cursorEnd = new FakeElement('span');
   const parts = {
     floatingPanel: (parent: HTMLElement) =>
       part(parent, 'div', 'floatingPanel'),
@@ -1283,7 +1282,6 @@ function fakeSurfaceKit() {
     },
     sectionHeader: (parent: HTMLElement, text: string) =>
       part(parent, 'h3', `section:${text}`),
-    cursorEnd: () => asHtml(cursorEnd),
     copyButton: (parent: HTMLElement) => part(parent, 'button', 'copy'),
     codeBox: (parent: HTMLElement) => part(parent, 'div', 'codeBox'),
     actions: (parent: HTMLElement) => part(parent, 'div', 'actions'),
@@ -1301,7 +1299,7 @@ function fakeSurfaceKit() {
     StatusLineKit &
     PickerRowKit &
     SignInKit;
-  return { kit, rows, cursorEnd: asHtml(cursorEnd) };
+  return { kit, rows };
 }
 
 type SurfacePart = Exclude<
@@ -1476,12 +1474,16 @@ describe('default chat layout surfaces', () => {
     },
   );
 
-  it('pickerRow_Default_PlacesCursorEnd', () => {
-    const { kit, rows, cursorEnd } = fakeSurfaceKit();
+  it('pickerRow_Default_DrawsNoTrailingWithoutAPrompt', () => {
+    const { kit, rows } = fakeSurfaceKit();
 
     drawSurface(
       'pickerRow',
-      { item: { list: 'session', kind: 'new' }, label: 'New session' },
+      {
+        item: { list: 'session', kind: 'new' },
+        label: 'New session',
+        prompt: [],
+      },
       kit,
     );
 
@@ -1490,17 +1492,36 @@ describe('default chat layout surfaces', () => {
         density: 'list',
         tag: 'li',
         label: 'New session',
-        trailing: cursorEnd,
+        trailing: null,
       },
     ]);
   });
 
-  it('pickerRow_SectionRow_DrawsTitleAndDetail', () => {
-    const { kit, rows, cursorEnd } = fakeSurfaceKit();
+  it('pickerRow_Default_DrawsEachPromptActionAsAKeyHintInItsTrailing', () => {
+    const { kit, rows } = fakeSurfaceKit();
 
     drawSurface(
       'pickerRow',
       {
+        item: { list: 'session', kind: 'new' },
+        label: 'New session',
+        prompt: [{ command: 'chat.toggleArchive', label: 'archive' }],
+      },
+      kit,
+    );
+
+    const trailing = asFake(rows[0].trailing as HTMLElement);
+    expect(trailing.className).toBe('chat-picker-key');
+    expect(describeChildren(trailing)).toEqual(['hint:chat.toggleArchive']);
+  });
+
+  it('pickerRow_SectionRow_DrawsTitleAndDetail', () => {
+    const { kit, rows } = fakeSurfaceKit();
+
+    drawSurface(
+      'pickerRow',
+      {
+        prompt: [],
         item: {
           list: 'session',
           kind: 'section',
@@ -1519,7 +1540,7 @@ describe('default chat layout surfaces', () => {
         tag: 'li',
         label: 'Fix the picker',
         detail: 'Today · 3 messages',
-        trailing: cursorEnd,
+        trailing: null,
       },
     ]);
   });

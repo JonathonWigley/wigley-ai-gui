@@ -6,7 +6,10 @@ const part = () => ({ element: null });
 describe('readDocsLayout', () => {
   it.each([
     { layout: {}, error: null },
-    { layout: { treeRow: part, confirmDialog: part }, error: null },
+    {
+      layout: { treeRow: part, treeStatus: part, confirmDialog: part },
+      error: null,
+    },
     { layout: { rows: part }, error: 'layout x: rows is not a layout part' },
     { layout: { treeRow: 1 }, error: 'layout x: treeRow is not a function' },
   ])(

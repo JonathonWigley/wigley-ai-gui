@@ -14,6 +14,7 @@ import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { SHRINK_REFUSED } from '../../../shared/shrink-image';
 import { MAX_IMAGE_BASE64 } from '../../../shared/image-types';
 import {
+  type RecordedAnchor,
   recordingAnchors,
   USER_LAYOUT,
   withUser,
@@ -142,6 +143,8 @@ interface Harness {
   changeBase(): void;
   // Settles the page load's restores.
   settleRestores(): void;
+  // Each key anchor the popup's parts recorded, in order.
+  anchors: RecordedAnchor[];
 }
 
 interface Fakes {
@@ -380,10 +383,11 @@ async function openPopup(
     log: services.log,
     pushScope: pushed,
   });
+  const anchoring = recordingAnchors();
   const popup = createNotePopup({
     channel: fakeChannel(draft, fakes, added, saved, savedMarkups),
     services,
-    keys: recordingAnchors().keys,
+    keys: anchoring.keys,
     overlay: {
       contribute(element) {
         roots.push(element);
@@ -460,6 +464,7 @@ async function openPopup(
     settleRestores() {
       restoresSettled = true;
     },
+    anchors: anchoring.anchors,
   };
 }
 
@@ -481,8 +486,148 @@ const FOCUSED_BOXES = [
   },
 ];
 
+// The label of the field row whose end holds the cursor prompt, and the prompt.
+function promptRow(harness: Harness) {
+  const prompts = findAll(harness.root, 'notes-cursor-prompt');
+  const [row] = findAll(harness.root, 'notes-row').filter((each) =>
+    each.contains(prompts[0]),
+  );
+  const [label] = findAll(row, 'notes-row-label');
+  return {
+    count: prompts.length,
+    label: label.textContent,
+    prompt: prompts[0],
+  };
+}
+
+// The live anchors of the prompt's two commands.
+const liveAnchors = (harness: Harness) =>
+  harness.anchors.filter(
+    (anchor) =>
+      !anchor.isDisposed &&
+      (anchor.command === 'notes.editBox' || anchor.command === 'notes.remove'),
+  );
+
+// A row in its own look that counts its draws.
+function countingRow(): {
+  layout: Layout;
+  draws: () => number;
+  reset(): void;
+} {
+  let count = 0;
+  return {
+    layout: {
+      row(parent, input, kit) {
+        count += 1;
+        const root = kit.el(parent, 'div', 'notes-row');
+        kit.el(root, 'span', 'notes-row-label', input.label);
+        kit.valueSlot(root);
+        return { element: root };
+      },
+    },
+    draws: () => count,
+    reset() {
+      count = 0;
+    },
+  };
+}
+
 describe('note popup', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    {
+      case: 'title',
+      draft: DRAFT,
+      moveTo: (harness: Harness) => harness.popup.commands.prevField(NO_ARG),
+      label: 'Title',
+      hasTargets: [true, false],
+    },
+    {
+      case: 'body',
+      draft: DRAFT,
+      moveTo: () => undefined,
+      label: 'Body',
+      hasTargets: [true, false],
+    },
+    {
+      case: 'images with one image',
+      draft: { ...DRAFT, images: [{ id: 1, hasMarkup: false }] },
+      moveTo(harness: Harness) {
+        harness.popup.commands.nextField(NO_ARG);
+        harness.popup.commands.nextField(NO_ARG);
+      },
+      label: 'Images',
+      hasTargets: [false, true],
+    },
+    {
+      case: 'images with none',
+      draft: { ...DRAFT, images: [] },
+      moveTo(harness: Harness) {
+        harness.popup.commands.nextField(NO_ARG);
+        harness.popup.commands.nextField(NO_ARG);
+      },
+      label: 'Images',
+      hasTargets: [false, false],
+    },
+    {
+      case: 'session set',
+      draft: { ...DRAFT, session: SESSIONS[0] },
+      moveTo(harness: Harness) {
+        for (let step = 0; step < 3; step += 1) {
+          harness.popup.commands.nextField(NO_ARG);
+        }
+      },
+      label: 'Session',
+      hasTargets: [false, true],
+    },
+    {
+      case: 'session null',
+      draft: DRAFT,
+      moveTo(harness: Harness) {
+        for (let step = 0; step < 3; step += 1) {
+          harness.popup.commands.nextField(NO_ARG);
+        }
+      },
+      label: 'Session',
+      hasTargets: [false, false],
+    },
+  ])(
+    'cursorPrompt_FieldMove_DrawsOnTheFieldRowWithItsTargets: $case',
+    async ({ draft, moveTo, label, hasTargets }) => {
+      const harness = await openPopup(draft);
+
+      moveTo(harness);
+
+      const shown = promptRow(harness);
+      expect(shown.count).toBe(1);
+      expect(shown.label).toBe(label);
+      const hints = findAll(shown.prompt, 'notes-hint');
+      expect(
+        hints.map((hint) => hint.classList.contains('is-no-target')),
+      ).toEqual(hasTargets.map((hasTarget) => !hasTarget));
+      expect(
+        liveAnchors(harness).map((anchor) => [anchor.command, anchor.scope]),
+      ).toEqual([
+        ['notes.editBox', 'notes.popup'],
+        ['notes.remove', 'notes.popup'],
+      ]);
+    },
+  );
+
+  it('cursorPrompt_BoxToBox_KeepsTheFocusedBox', async () => {
+    const harness = await openPopup();
+    const rows = countingRow();
+    harness.popup.setLayouts(withUser<Layout>(defaultLayout, rows.layout));
+    FOCUSED_BOXES[0].focus(harness);
+    rows.reset();
+
+    harness.body.focus();
+
+    expect(promptRow(harness).label).toBe('Body');
+    expect(rows.draws()).toBe(0);
+    expect(harness.doc.activeElement).toBe(harness.bodyFrame);
+  });
 
   it('pickTarget_Filter_NameOutranksAnotherRowsPath', async () => {
     const harness = await openPopup();

@@ -130,6 +130,17 @@ const layout = {
     kit.commandButton(commands, 'closeMarkup');
     return { element: root };
   },
+  cursorPrompt(parent, input, kit) {
+    const root = kit.el(parent, 'span', 'notes-cursor-prompt');
+    for (const action of input.actions) {
+      const shown = kit.keyHint(root, action.command, {
+        label: action.label,
+        className: 'notes-hint',
+      });
+      shown.classList.toggle('is-no-target', !action.hasTarget);
+    }
+    return { element: root };
+  },
   pickerRow(parent, input, kit) {
     return {
       element: kit.row(parent, {

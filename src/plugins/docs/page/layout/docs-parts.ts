@@ -98,6 +98,7 @@ const PART_SCOPES: Record<DocsPartName, DocsScope> = {
   treePane: 'tree',
   treeLine: 'tree',
   treeRow: 'tree',
+  treeStatus: 'tree',
   docPane: 'doc',
   emptyDoc: 'doc',
   docHeader: 'doc',

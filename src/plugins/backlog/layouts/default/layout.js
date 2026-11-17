@@ -199,8 +199,19 @@ const layout = {
         kit.icon(chunk, 'link-external');
       }
     }
-    kit.cursorActions(row);
+    if (input.prompt.length > 0) {
+      const actions = kit.el(row, 'span', 'backlog-row-actions');
+      for (const action of input.prompt) {
+        hint(actions, kit, action.command, action.label);
+      }
+    }
     return row;
+  },
+  tableStatus(parent, input, kit) {
+    const status = kit.el(parent, 'div', 'backlog-status', input.text ?? '');
+    status.title = input.text ?? '';
+    status.hidden = input.text === null;
+    return status;
   },
   empty(parent, input, kit) {
     const empty = kit.emptyState(

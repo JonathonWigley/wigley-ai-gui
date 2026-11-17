@@ -1,17 +1,21 @@
 import type {
   DrawnPickerRow,
-  DrawRowInput,
   ListPickerService,
 } from '../../../contracts/list-picker';
 import type { PluginLog } from '../../../contracts/log';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
+import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import {
   type ChatCommandName,
   type ChatScopeName,
   chatCommand,
   chatScope,
 } from '../ids';
-import type { PickerItemInput, PickerRowKit } from '../layouts/layout';
+import type {
+  PickerItemInput,
+  PickerRowInput,
+  PickerRowKit,
+} from '../layouts/layout';
 import {
   type ChatLayouts,
   type SurfaceKitDeps,
@@ -122,10 +126,6 @@ export function createPicker(deps: PickerDeps): Picker {
     picker: null,
     resume: anchored('showArchived', 'resume', 'archived'),
   };
-  const cursorPrompts: Record<ArchiveState, HTMLElement> = {
-    live: anchored('toggleArchive', 'resume', 'archive'),
-    archived: anchored('toggleArchive', 'resume', 'restore'),
-  };
 
   let isSessionBound = false;
   // The open request's handle; null once it is picked or closed.
@@ -157,13 +157,6 @@ export function createPicker(deps: PickerDeps): Picker {
         selected: next.selected,
         keepFilter: next.keepFilter,
         headerEnd: headers[nextScope],
-        cursorEnd:
-          nextScope === 'resume'
-            ? (item) => {
-                const state = next.archiveState?.(item) ?? null;
-                return state === null ? null : cursorPrompts[state];
-              }
-            : undefined,
         chosen: (item) => {
           shown = null;
           next.picked(item);
@@ -173,7 +166,20 @@ export function createPicker(deps: PickerDeps): Picker {
           deps.log(`picker closed: ${next.title}`);
         },
         drawRow: (parent, item, row) =>
-          drawPickerRow(deps, nextScope, parent, next.rowInput(item), row),
+          drawPickerRow(
+            deps,
+            nextScope,
+            parent,
+            {
+              item: next.rowInput(item),
+              label: row.label,
+              prompt: cursorPrompt(
+                nextScope,
+                row.isCursor,
+                next.archiveState?.(item) ?? null,
+              ),
+            },
+          ),
         section: next.section,
         drawHeading: (parent, title) =>
           drawPickerHeading(deps, nextScope, parent, title),
@@ -199,24 +205,39 @@ export function createPicker(deps: PickerDeps): Picker {
   };
 }
 
+// The actions the cursor row of the `resume` list shows: archive or restore by
+// the item's archive state; none on any other row, in any other scope, or for
+// an item with no archive state.
+function cursorPrompt(
+  scope: PickerScope,
+  isCursor: boolean,
+  state: ArchiveState | null,
+): readonly PromptActionInput[] {
+  if (!isCursor || scope !== 'resume' || state === null) {
+    return [];
+  }
+  return [
+    {
+      command: chatCommand('toggleArchive'),
+      label: state === 'live' ? 'archive' : 'restore',
+    },
+  ];
+}
+
 // One row drawn through the `pickerRow` part into the list, its kit's anchors
 // in `scope`; the list picker disposes the draw.
 function drawPickerRow(
   deps: PickerDeps,
   scope: PickerScope,
   parent: HTMLElement,
-  item: PickerItemInput,
-  row: DrawRowInput,
+  input: PickerRowInput,
 ): DrawnPickerRow {
   const drawn = deps.layouts.draw(
     'pickerRow',
     parent,
     (builder, at, rollback) => {
-      const kit: PickerRowKit = {
-        ...surfaceBaseKit(deps, scope, rollback),
-        cursorEnd: () => row.trailing,
-      };
-      const view = builder(at, { item, label: row.label }, kit);
+      const kit: PickerRowKit = surfaceBaseKit(deps, scope, rollback);
+      const view = builder(at, input, kit);
       return { element: view.element };
     },
   );

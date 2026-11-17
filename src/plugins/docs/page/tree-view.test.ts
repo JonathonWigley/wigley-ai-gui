@@ -16,7 +16,8 @@ import type {
   TreeWikiLabel,
   TreeWikiLink,
 } from '../tree';
-import { fakeDocsParts, fakePushedScope, noAnchor } from './docs-page-fakes';
+import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
+import type { DocsParts } from './layout/docs-parts';
 import { createTreeView, type TreeView, type TreeViewDeps } from './tree-view';
 
 // A tree pane marked `marker` that places every app part.
@@ -47,7 +48,6 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
     rowClicked: () => undefined,
     pushBoxScope: fakePushedScope,
     filterClosed: () => undefined,
-    anchor: noAnchor,
     rowStatus: () => ({ mark: null, detail: null }),
     leafMarks: () => ({ time: null, isStarred: false }),
     placeChanged: () => undefined,
@@ -93,21 +93,24 @@ const WIKI_LABEL: TreeWikiLabel = {
 };
 
 // A wiki-capable tree whose rows draw `li.test-row` holding only the title and
-// the prompt, its last input per row id in `inputs`, and the command each
-// prompt element anchors in `commands`.
+// one key hint per prompt action, its last input per row id in `inputs`, and
+// the anchors the hints name in `anchors`.
 function wikiSetUp(overrides: Partial<TreeViewDeps> = {}) {
   const inputs = new Map<string, TreeRowInput>();
-  const commands = new Map<unknown, string>();
   const rowLayout: Layout = {
     ...paneLayout('pane'),
     treeRow(parent, input, kit) {
       inputs.set(input.id, input);
       const row = kit.el(parent, 'li', 'test-row', input.title);
-      kit.cursorPrompt(row);
+      for (const action of input.prompt) {
+        kit.keyHint(row, action.command, { label: action.label });
+      }
       return { element: row };
     },
   };
-  const { parts } = fakeDocsParts(() => withUser(defaultLayout, rowLayout));
+  const { parts, anchors } = fakeDocsParts(() =>
+    withUser(defaultLayout, rowLayout),
+  );
   const openWikiLink = vi.fn();
   const switchView = vi.fn();
   const filterClosed = vi.fn();
@@ -119,10 +122,6 @@ function wikiSetUp(overrides: Partial<TreeViewDeps> = {}) {
     filterClosed,
     // A click runs `docs.openNode`, whose handler reaches `openNode`.
     rowClicked: (nodeId) => tree.openNode(nodeId),
-    anchor: (element, command) => {
-      commands.set(element, command);
-      return { dispose: () => undefined };
-    },
     ...overrides,
   });
   const root = asFake(tree.element);
@@ -130,7 +129,7 @@ function wikiSetUp(overrides: Partial<TreeViewDeps> = {}) {
     tree,
     root,
     inputs,
-    commands,
+    anchors,
     openWikiLink,
     switchView,
     filterClosed,
@@ -176,31 +175,86 @@ describe('createTreeView', () => {
     expect(document.activeElement).toBe(input);
   });
 
-  it('dispose_AnchorThrows_DisposesTheDrawnParts', () => {
-    const hintingPane: Layout = {
-      treePane(parent, _input, kit) {
-        const pane = kit.el(parent, 'div');
-        kit.keyHint(pane, 'filter');
-        return { element: pane };
+  it('dispose_PaneDisposeThrows_DisposesTheOtherDrawnParts', () => {
+    const hintingStatus: Layout = {
+      treeStatus(parent, _input, kit) {
+        const status = kit.el(parent, 'div');
+        kit.keyHint(status, 'filter');
+        return { element: status };
       },
     };
-    const { parts, anchors } = fakeDocsParts(() =>
-      withUser(defaultLayout, hintingPane),
+    const { parts: realParts, anchors } = fakeDocsParts(() =>
+      withUser(defaultLayout, hintingStatus),
     );
-    const tree = createTreeView({
-      ...treeDeps(parts),
-      anchor: () => ({
-        dispose() {
-          throw new Error('anchor gone');
-        },
-      }),
-    });
-    tree.redraw();
+    const parts: DocsParts = {
+      ...realParts,
+      draw(part, slot, input, kit) {
+        const drawn = realParts.draw(part, slot, input, kit);
+        return part === 'treePane'
+          ? {
+              ...drawn,
+              dispose() {
+                throw new Error('pane gone');
+              },
+            }
+          : drawn;
+      },
+    };
+    const tree = createTreeView(treeDeps(parts));
     expect(anchors.length).toBeGreaterThan(0);
 
-    expect(() => tree.dispose()).toThrow('anchor gone');
+    expect(() => tree.dispose()).toThrow('pane gone');
 
     expect(anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
+  });
+
+  it.each([
+    { text: 'Reading…', isHidden: false },
+    { text: null, isHidden: true },
+  ])(
+    'setStatus_$text_DrawsOnlyTheStatusPart',
+    ({ text, isHidden }) => {
+      let paneDraws = 0;
+      const counting: Layout = {
+        treePane(parent, input, kit) {
+          paneDraws += 1;
+          return paneLayout('pane').treePane?.(parent, input, kit) ?? {
+            element: parent,
+          };
+        },
+      };
+      const { parts } = fakeDocsParts(() => withUser(defaultLayout, counting));
+      const tree = createTreeView(treeDeps(parts));
+      const root = asFake(tree.element);
+      tree.openFilter();
+      const input = findAll(root, 'docs-box')[0] as FocusFakeElement;
+      tree.setStatus('first');
+      const drawsBefore = paneDraws;
+
+      tree.setStatus(text);
+
+      const status = findAll(root, 'docs-status');
+      expect(status).toHaveLength(1);
+      expect(status[0].textContent).toBe(text ?? '');
+      expect(status[0].hidden).toBe(isHidden);
+      expect(paneDraws).toBe(drawsBefore);
+      expect(document.activeElement).toBe(input);
+    },
+  );
+
+  it('setStatus_ThenLayoutChange_TheNewLayoutDrawsTheSameText', () => {
+    let shown = withUser(defaultLayout, paneLayout('pane-1'));
+    const { parts } = fakeDocsParts(() => shown);
+    const tree = createTreeView(treeDeps(parts));
+    const root = asFake(tree.element);
+    tree.setStatus('Reading…');
+
+    shown = withUser(defaultLayout, paneLayout('pane-2'));
+    tree.redraw();
+
+    const status = findAll(root, 'docs-status');
+    expect(status).toHaveLength(1);
+    expect(status[0].textContent).toBe('Reading…');
   });
 
   it('toggle_HeadingRow_CallsOpenHeading', () => {
@@ -489,20 +543,33 @@ describe('createTreeView', () => {
   });
 
   it('prompt_PageRowInTheWiki_OffersRenameAndTrashAndNoStar', () => {
-    const { tree, root, commands } = wikiSetUp();
+    const { tree, inputs, anchors } = wikiSetUp();
     tree.setWikiTree([shelf('One', [page('a')])], [], true);
     tree.setTree([shelf('Mine', [page('a')])], NOTHING, NO_HEADINGS, true);
     const promptCommands = () =>
-      findAll(root, 'docs-row-actions')
-        .flatMap((actions) => actions.children)
-        .map((action) => commands.get(action));
+      inputs.get('entry:e:a')?.prompt.map((action) => action.command);
+    const liveAnchors = () =>
+      anchors.filter((anchor) => !anchor.isDisposed && anchor.scope);
     tree.down();
 
-    expect(promptCommands()).toEqual(['rename', 'trash']);
+    expect(promptCommands()).toEqual(['docs.rename', 'docs.trash']);
+    expect(liveAnchors().map((anchor) => anchor.scope)).toEqual([
+      'docs.tree',
+      'docs.tree',
+    ]);
 
     tree.showView('all');
     tree.down();
-    expect(promptCommands()).toEqual(['toggleStar', 'rename', 'trash']);
+    expect(promptCommands()).toEqual([
+      'docs.toggleStar',
+      'docs.rename',
+      'docs.trash',
+    ]);
+    expect(liveAnchors().map((anchor) => anchor.scope)).toEqual([
+      'docs.tree',
+      'docs.tree',
+      'docs.tree',
+    ]);
   });
 
   it('selectEntry_InBothViews_EachSelectsItWhileTheWikiShows', () => {

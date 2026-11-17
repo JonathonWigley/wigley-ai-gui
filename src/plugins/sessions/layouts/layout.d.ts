@@ -3,6 +3,7 @@ import type {
   DialogFrameInput,
   DialogFramePart,
   DotStatus,
+  PromptActionInput,
 } from '../../../shared/page/layout-host/kit';
 
 // The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar,
@@ -20,7 +21,7 @@ import type {
 // bar's `strip` with one `tab` per tab of its session, replacing their children on each draw. A `row` places other plugins'
 // row parts and a `tabBar` their bar parts, each through its kit's `contributedParts`. The side bar's rows are the
 // Sessions list, which holds the keys in scope `sessions.sidebar` once Alt+h moves past the leftmost pane; the row
-// under its cursor ends in the cursor prompt, through its kit's `cursorPrompt`. A part whose `rows`, `groups`,
+// under its cursor ends in the cursor prompt, which its input's `prompt` lists. A part whose `rows`, `groups`,
 // `header` or `strip` is not a child of its `element` is drawn by `default` instead.
 //
 // Chat panes. Sessions mode splits into panes, each showing one session. `pane` draws each pane's frame, again
@@ -86,8 +87,12 @@ export interface ActivityInput {
 // doing, its word, its tone and its emphasis, null for none; `default` draws the word as a label, a Tag for attention, warning and
 // error or any emphasis, solid for `urgent`, gives a row with an emphasis a status edge in its tone,
 // and draws a needs you label for `marked` only while no activity is set; the contributed parts fill the row's second line, where `default` puts the parts ordered 2 and later on a third line of their own; `onScreen` is true while the session shows in a pane other than
-// the focused one; `isPrompted` is true on the list cursor's row while the list holds the keys, which ends in the cursor
-// prompt; no row is prompted while the list does not hold the keys.
+// the focused one; `isPrompted` is true on the list cursor's row while the list holds the keys; no row is prompted while
+// the list does not hold the keys. `prompt` is the cursor prompt's actions, in order, empty on every row but the
+// prompted one: `s favorite  r rename  d close`, with `K up  J down` after the favorite key on a favorite project's row,
+// the favorite key then reading `unfavorite`. `default` draws them in a `span.session-row-actions` at the row's end,
+// one `kit.keyHint(parent, action.command, { label: action.label })` per action; a row that draws none shows no prompt.
+// The hints fire in `sessions.sidebar` and hide, keeping their space, in every other scope.
 export interface SessionRowInput {
   sessionId: string;
   title: string | null;
@@ -98,6 +103,7 @@ export interface SessionRowInput {
   onScreen: boolean;
   section: string | null;
   isPrompted: boolean;
+  prompt: readonly PromptActionInput[];
 }
 
 // One side bar section: Favorites and Recent always draw, then each plugin section that claims a row. `kind` is
@@ -249,12 +255,6 @@ export interface RowKit extends SessionsKit {
   // draws nothing. A second call throws `row placed contributed parts twice`, so the row draws with `default`. The
   // holder lays its parts on one line, each part keeping its content's width.
   contributedParts(parent: HTMLElement): HTMLElement;
-  // On a prompted row: places the app's cursor prompt `span.session-row-actions` (`s favorite  r rename  d close`, with
-  // `K up  J down` after the favorite key on a favorite project's row, the favorite key then reading `unfavorite`)
-  // and returns it; its keys fire in `sessions.sidebar` and hide, keeping their space, in every other scope. On any
-  // other row: places nothing and returns null. A prompted row that leaves it out gets it appended at its element's
-  // end. A second call on a prompted row throws `cursorPrompt placed twice`, so the row draws with `default`.
-  cursorPrompt(parent: HTMLElement): HTMLElement | null;
 }
 
 export interface SectionKit extends SessionsKit {

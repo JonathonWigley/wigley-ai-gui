@@ -102,12 +102,14 @@ function filteredPickerSetup(filterHint?: () => HTMLElement | null) {
 
 // A `drawRow` drawing each item as `li.owned-row` holding its label, and its
 // trailing unless `leavesTrailingOut`. Each draw is named `<item>#<n>` for the
-// n-th draw made; `made` lists every draw and `disposed` each dispose. The
-// dispose removes the row when `disposeRemoves`, as a layout host draw's does.
+// n-th draw made; `made` lists every draw, `drawn` each draw's `isCursor` in
+// the same order and `disposed` each dispose. The dispose removes the row when
+// `disposeRemoves`, as a layout host draw's does.
 function owningRows(
   options: { leavesTrailingOut?: boolean; disposeRemoves?: boolean } = {},
 ) {
   const made: string[] = [];
+  const drawn: { name: string; isCursor: boolean }[] = [];
   const disposed: string[] = [];
   const drawRow: ListPickerRequest<string>['drawRow'] = (
     parent,
@@ -123,6 +125,7 @@ function owningRows(
     parent.append(asHtml(owned));
     const name = `${item}#${made.length + 1}`;
     made.push(name);
+    drawn.push({ name, isCursor: input.isCursor });
     const dispose = () => {
       disposed.push(name);
       if (options.disposeRemoves === true) {
@@ -131,7 +134,7 @@ function owningRows(
     };
     return { element: asHtml(owned), dispose };
   };
-  return { drawRow, made, disposed };
+  return { drawRow, made, drawn, disposed };
 }
 
 function request(
@@ -257,11 +260,17 @@ describe('list picker', () => {
     const { picker, layer, ran } = pickerSetup();
     const end = new FakeElement('span');
     const chosen = vi.fn();
-    const { drawRow } = owningRows();
+    const { drawRow, drawn: draws } = owningRows();
 
     picker.open(
       request({ drawRow, cursorEnd: () => asHtml(end), selected: 1, chosen }),
     );
+
+    expect(draws).toEqual([
+      { name: 'one#1', isCursor: false },
+      { name: 'two#2', isCursor: true },
+      { name: 'three#3', isCursor: false },
+    ]);
 
     const drawn = findAll(layer, 'owned-row');
     expect(rows(layer)).toEqual([]);
@@ -295,6 +304,17 @@ describe('list picker', () => {
       { owner: 'test', index: 1 },
     ]);
     expect(builtInChosen).toHaveBeenCalledWith('two');
+
+    const moved = owningRows();
+    picker.open(request({ drawRow: moved.drawRow, chosen }));
+    picker.down();
+    expect(moved.drawn).toEqual([
+      { name: 'one#1', isCursor: true },
+      { name: 'two#2', isCursor: false },
+      { name: 'three#3', isCursor: false },
+      { name: 'one#4', isCursor: false },
+      { name: 'two#5', isCursor: true },
+    ]);
   });
 
   it('drawRow_TrailingLeftOut_AppendedToTheRow', () => {

@@ -3,6 +3,7 @@ import type {
   DialogFrameInput,
   DialogFramePart,
   DotStatus,
+  PromptActionInput,
 } from '../../../shared/page/layout-host/kit';
 
 // The status dot's states and the base kit, for a layout's JSDoc to import from here.
@@ -442,15 +443,15 @@ export type PickerItemInput =
   | { list: 'controls'; label: string; value: string }
   | { list: 'choices'; label: string; isCurrent: boolean };
 // `label` is the line the list filters on and the row's tooltip shows; a `section` row's joins its title and detail.
+// `prompt` is the actions the cursor row shows (`x archive` / `x restore` in the Session step), each drawn with
+// `kit.keyHint`; empty on every other row. A layout that leaves it out shows no prompt.
 export interface PickerRowInput {
   item: PickerItemInput;
   label: string;
+  prompt: readonly PromptActionInput[];
 }
-export interface PickerRowKit extends BaseKit {
-  // The cursor row's prompt (`x archive` / `x restore` in the Session step); null on every other row. A row draws
-  // through `row(parent, { density: 'list', tag: 'li', … })`; the app sets `is-selected` and `is-cursor` on it.
-  cursorEnd(): HTMLElement | null;
-}
+// A row draws through `row(parent, { density: 'list', tag: 'li', … })`; the app sets `is-selected` and `is-cursor` on it.
+export interface PickerRowKit extends BaseKit {}
 export interface PickerHeadingInput {
   title: string;
 }

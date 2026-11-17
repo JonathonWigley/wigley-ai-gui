@@ -14,6 +14,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   confirm: true,
   markupToolbar: true,
   pickerRow: true,
+  cursorPrompt: true,
   dialogFrame: true,
 };
 

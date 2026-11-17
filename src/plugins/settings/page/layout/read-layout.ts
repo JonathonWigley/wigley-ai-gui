@@ -20,6 +20,8 @@ const LAYOUT_PARTS: Record<keyof SettingsLayout, true> = {
   leaderGroupRow: true,
   leaderItemRow: true,
   leaderAddRow: true,
+  cursorPrompt: true,
+  boxMessage: true,
 };
 
 // The layout a user's `layout.js` module exports as its default. A layout

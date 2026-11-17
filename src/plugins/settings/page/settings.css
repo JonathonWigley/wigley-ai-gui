@@ -27,16 +27,6 @@
   font-weight: var(--wg-weight-regular);
 }
 
-/* The cursor row's action keys, at the end of its first line; they wrap
-   onto lines of their own when the line has no room. */
-.settings-row-actions {
-  display: flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--wg-space-1) var(--wg-space-3);
-}
-
 .settings-section-rows,
 .settings-rows {
   list-style: none;
@@ -103,9 +93,10 @@
   width: 100%;
 }
 
-.settings-box-message {
-  color: var(--wg-status-error);
-  font-size: var(--wg-text-12);
+/* The box's message slot draws no box of its own: the layout's message is the
+   box's child. */
+.settings-box-message-slot {
+  display: contents;
 }
 
 /* The document editor fills its host's height and scrolls inside it. */

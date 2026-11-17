@@ -236,6 +236,22 @@
   grid-template-columns: max-content max-content;
 }
 
+/* The cursor row's action keys, at the end of its first line; they wrap
+   onto lines of their own when the line has no room. */
+.settings-row-actions {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--wg-space-1) var(--wg-space-3);
+}
+
+/* The line under an open box. */
+.settings-box-message {
+  color: var(--wg-status-error);
+  font-size: var(--wg-text-12);
+}
+
 .settings-key-row .settings-row-actions {
   flex: none;
   flex-wrap: nowrap;

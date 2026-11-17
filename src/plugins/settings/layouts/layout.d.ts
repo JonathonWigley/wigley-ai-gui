@@ -1,6 +1,7 @@
 import type {
   BaseKit,
   KitRowOptions,
+  PromptActionInput,
 } from '../../../shared/page/layout-host/kit';
 
 // The row options, for a layout's JSDoc to import from here.
@@ -136,6 +137,17 @@ export interface PickerRowInput {
   keys: string | null;
 }
 
+// The cursor row's prompt: the actions its row shows, in order, each a command and the word its hint draws. Draw each
+// with `kit.keyHint(parent, action.command, { label: action.label })`; the kit's scope is the pane's (`rows`, or the
+// Leader menu's groups or items pane), so a hint shows only while that pane holds the keys.
+export interface CursorPromptInput {
+  actions: readonly PromptActionInput[];
+}
+// The line under an open box: why a write was refused, or that the file changed on disk.
+export interface BoxMessageInput {
+  text: string;
+}
+
 // The Leader menu: `focused` the pane last focused, `itemsTitle` the selected group's title (`Top level`, `b — session`).
 export interface LeaderPanesInput {
   focused: 'groups' | 'items';
@@ -199,8 +211,8 @@ export interface RowsKit extends SettingsKit {
   rowList(parent: HTMLElement): HTMLElement;
 }
 export interface RowKit extends SettingsKit {
-  // `span.settings-row-actions-slot`, which draws no box (`display: contents`): the app fills it with the cursor
-  // prompt (`span.settings-row-actions`) while the row is the cursor row.
+  // `span.settings-row-actions-slot`, which draws no box (`display: contents`): the app draws `cursorPrompt` into it
+  // while the row is the cursor row.
   rowActions(parent: HTMLElement): HTMLElement;
   // A `div` the app fills with the row's open box.
   box(parent: HTMLElement): HTMLElement;
@@ -315,6 +327,22 @@ export interface SettingsLayout {
     parent: HTMLElement,
     input: PickerRowInput,
     kit: PickerRowKit,
+  ): HTMLElement;
+  // The cursor row's action keys, into its `rowActions` slot, drawn again only when the cursor reaches another row or
+  // the row's actions change, so a cursor move draws no row again. A layout that leaves it out shows no prompt: the
+  // app places none of its own.
+  cursorPrompt?(
+    parent: HTMLElement,
+    input: CursorPromptInput,
+    kit: SettingsKit,
+  ): HTMLElement;
+  // The message under an open box, into the box's message slot (`div.settings-box-message-slot`, which draws no box)
+  // each time the box shows one, and again after a layout change. A layout that leaves it out shows no message: the
+  // app places none of its own.
+  boxMessage?(
+    parent: HTMLElement,
+    input: BoxMessageInput,
+    kit: SettingsKit,
   ): HTMLElement;
 }
 

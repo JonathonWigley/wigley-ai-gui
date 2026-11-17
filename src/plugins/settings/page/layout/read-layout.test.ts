@@ -23,6 +23,16 @@ describe('readSettingsLayout', () => {
       throws: 'pluginRow is not a function',
     },
     {
+      case: 'a cursorPrompt that is not a function',
+      module: { default: { cursorPrompt: 'x' } },
+      throws: 'cursorPrompt is not a function',
+    },
+    {
+      case: 'a boxMessage that is not a function',
+      module: { default: { boxMessage: 'x' } },
+      throws: 'boxMessage is not a function',
+    },
+    {
       case: 'a settingRow function',
       module: { default: { settingRow } },
       throws: null,

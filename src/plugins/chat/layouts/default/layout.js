@@ -963,12 +963,19 @@ const layout = {
   pickerRow(parent, input, kit) {
     const { item } = input;
     const section = 'kind' in item && item.kind === 'section' ? item : null;
+    let trailing = null;
+    if (input.prompt.length > 0) {
+      trailing = el('span', 'chat-picker-key');
+      for (const action of input.prompt) {
+        kit.keyHint(trailing, action.command, { label: action.label });
+      }
+    }
     const row = kit.row(parent, {
       density: 'list',
       tag: 'li',
       label: section?.title ?? input.label,
       detail: section?.detail,
-      trailing: kit.cursorEnd(),
+      trailing,
     });
     if (section !== null) {
       row.classList.add('chat-picker-section-row');

@@ -11,6 +11,7 @@ import type {
   UserConfigSchema,
 } from '../../../contracts/user-config';
 import {
+  type RecordedAnchor,
   recordingAnchors,
   withUser,
 } from '../../../shared/page/layout-host/test-layouts';
@@ -64,12 +65,14 @@ const SCHEMA: UserConfigSchema = {
 // A channel serving `schema`, `keymap` (or `keymapRead`, when given) and an
 // empty settings file, recording each settings write and each keymap write,
 // which the next read then serves, and each `mayDisable` asked, which
-// `mayDisable` answers.
+// `mayDisable` answers. Each settings write is refused with the next of
+// `refusals` while any are left.
 function fakeChannel(
   schema: UserConfigSchema,
   keymap: UserKeymap | null,
   mayDisable: (pluginId: string) => Promise<string | null>,
   keymapRead?: UserConfigRead['keymap'],
+  refusals: string[] = [],
 ) {
   const written: Record<string, unknown>[] = [];
   const writtenKeymaps: UserKeymap[] = [];
@@ -85,9 +88,14 @@ function fakeChannel(
         return schema;
       case 'read':
         return read;
-      case 'writeSettings':
+      case 'writeSettings': {
+        const problem = refusals.shift();
+        if (problem !== undefined) {
+          return { type: 'refused', problem };
+        }
         written.push(args[0] as Record<string, unknown>);
         return { type: 'written' };
+      }
       case 'writeKeymap':
         writtenKeymaps.push(args[0] as UserKeymap);
         read.keymap = { state: 'ok', layer: args[0] as UserKeymap, text: null };
@@ -110,6 +118,8 @@ interface ShownViewOptions {
   schema?: UserConfigSchema;
   keymap?: UserKeymap | null;
   keymapRead?: UserConfigRead['keymap'];
+  // The problems the settings writes are refused with, in order.
+  refusals?: string[];
   // A reloaded page's place, put back before the load.
   restored?: SettingsPlace;
   plugins?: () => readonly PluginStatus[];
@@ -126,6 +136,7 @@ async function shownView({
   schema = SCHEMA,
   keymap = null,
   keymapRead,
+  refusals,
   restored,
   plugins = () => [],
   mayDisable = async () => null,
@@ -135,9 +146,9 @@ async function shownView({
     keymap,
     mayDisable,
     keymapRead,
+    refusals,
   );
   const overlay = asFake(document.createElement('div'));
-  const anchor = () => ({ dispose: () => undefined });
   const { anchors, keys } = recordingAnchors();
   const handed: (string | FocusTarget)[] = [];
   const runs: [string, unknown][] = [];
@@ -179,7 +190,6 @@ async function shownView({
         overlay.append(asFake(element));
       },
     }),
-    anchor,
     sectionShown: () => undefined,
     sectionPicked: () => {
       picked.count += 1;
@@ -260,6 +270,21 @@ async function settle() {
 
 function setUserLayout(view: SettingsView, layout: SettingsLayout) {
   view.setLayouts(withUser<SettingsLayout>(defaultLayout, layout));
+}
+
+// The keys the live cursor prompt hints name, by scope: each live anchor
+// drawn in a `settings-row-actions` prompt.
+function livePromptAnchors(anchors: readonly RecordedAnchor[]) {
+  return anchors
+    .filter(
+      (anchor) =>
+        !anchor.isDisposed &&
+        asFake(anchor.element).parentNode?.classList.contains(
+          'settings-row-actions',
+        ),
+    )
+    .map(({ command, label, scope }) => ({ command, label, scope }))
+    .sort((a, b) => String(a.scope).localeCompare(String(b.scope)));
 }
 
 function only(root: FakeElement, className: string): FakeElement {
@@ -379,13 +404,157 @@ describe('createSettingsView', () => {
     });
 
     const row = findAll(sheet, 'bare-row')[0];
-    expect(row.contains(only(sheet, 'settings-row-actions'))).toBe(true);
+    const prompt = only(sheet, 'settings-row-actions');
+    expect(row.contains(prompt)).toBe(true);
+    expect(prompt.dataset.layout).toBe('default');
 
     view.commands.edit();
     await settle();
 
     expect(row.contains(only(sheet, 'settings-box'))).toBe(true);
   });
+
+  // Section p's rows are setting rows; with no sections the Keybindings
+  // section is second, and its rows are the leader row, then one per bind.
+  it.each([
+    {
+      case: 'a setting row',
+      isKeyRow: false,
+      actions: [
+        { command: 'settings.edit', label: 'edit' },
+        { command: 'settings.reset', label: 'reset' },
+      ],
+    },
+    {
+      case: 'a key row',
+      isKeyRow: true,
+      actions: [
+        { command: 'settings.open', label: 'reassign' },
+        { command: 'settings.addBind', label: 'add key' },
+        { command: 'settings.removeBind', label: 'clear' },
+        { command: 'settings.reset', label: 'reset' },
+      ],
+    },
+  ])(
+    'cursorPrompt_CursorMove_DrawsOnTheReachedRowOnly: $case',
+    async ({ isKeyRow, actions }) => {
+      const command = {
+        id: 'p.pick',
+        plugin: 'p',
+        label: 'pick',
+        group: 'g',
+        runsIn: 'page',
+        arg: 'number',
+      } as const;
+      const { view, sheet, anchors, move } = await shownView(
+        isKeyRow
+          ? {
+              schema: {
+                ...SCHEMA,
+                sections: [],
+                commands: { [command.id]: command },
+              },
+              keymap: {
+                binds: [
+                  { keys: 'a', scope: 'any', command: command.id, arg: 1 },
+                ],
+              },
+            }
+          : {},
+      );
+      if (isKeyRow) {
+        view.openSectionAt(1);
+        move('right');
+      }
+      const draws = { rows: 0, prompts: 0 };
+      const countingLayout: SettingsLayout = {
+        settingRow(parent, input, kit) {
+          draws.rows += 1;
+          return defaultLayout.settingRow(parent, input, kit);
+        },
+        keyRow(parent, input, kit) {
+          draws.rows += 1;
+          return defaultLayout.keyRow(parent, input, kit);
+        },
+        cursorPrompt(parent, input, kit) {
+          draws.prompts += 1;
+          return defaultLayout.cursorPrompt(parent, input, kit);
+        },
+      };
+      view.setLayouts(
+        withUser<SettingsLayout>(defaultLayout, countingLayout),
+      );
+      draws.rows = 0;
+      draws.prompts = 0;
+
+      view.commands.down();
+
+      expect(draws).toEqual({ rows: 0, prompts: 1 });
+      expect(findAll(sheet, 'settings-row-actions')).toHaveLength(1);
+      expect(livePromptAnchors(anchors)).toEqual(
+        actions.map(({ command: id, label }) => ({
+          command: id,
+          label,
+          scope: 'settings.rows',
+        })),
+      );
+
+      view.setLayouts(
+        withUser<SettingsLayout>(defaultLayout, countingLayout, 'again'),
+      );
+
+      expect(findAll(sheet, 'settings-row-actions')).toHaveLength(1);
+    },
+  );
+
+  it.each([
+    {
+      case: 'first message',
+      refusals: ['no write'],
+      isReloaded: false,
+      text: 'no write',
+      layout: 'default',
+    },
+    {
+      case: 'a second message replaces the first',
+      refusals: ['no write', 'still no'],
+      isReloaded: false,
+      text: 'still no',
+      layout: 'default',
+    },
+    {
+      case: 'a layout reload draws it in the user layout',
+      refusals: ['no write'],
+      isReloaded: true,
+      text: 'no write',
+      layout: 'mine',
+    },
+  ])(
+    'boxMessage_DrawsThroughTheLayout: $case',
+    async ({ refusals, isReloaded, text, layout }) => {
+      const { view, sheet } = await shownView({ refusals: [...refusals] });
+      view.commands.edit();
+      await settle();
+      const input = only(sheet, 'settings-box-input') as FocusFakeElement;
+      input.value = 'typed';
+      for (let attempt = 0; attempt < refusals.length; attempt += 1) {
+        view.commands.boxAccept();
+        await settle();
+      }
+
+      if (isReloaded) {
+        setUserLayout(view, {
+          boxMessage: (parent, message, kit) =>
+            kit.el(parent, 'div', 'settings-box-message', message.text),
+        });
+      }
+
+      const message = only(sheet, 'settings-box-message');
+      expect(message.textContent).toBe(text);
+      expect(message.dataset.layout).toBe(layout);
+      expect(fakeDocument.activeElement).toBe(input);
+    },
+  );
 
   it("the picker's rows draw through pickerRow and redraw on a reload", async () => {
     const { view, overlay, written } = await shownView();
@@ -1126,9 +1295,17 @@ describe('createSettingsView', () => {
 
   it('leaderMenu_RowClickAndMoves_MoveItsPaneCursorAndReportIt', async () => {
     vi.stubGlobal('Element', FakeElement);
-    const { view, sheet, runs, logs, places } = await leaderView();
+    const { view, sheet, runs, logs, places, anchors } = await leaderView();
     // The groups top and b, then Top level's items: b, c and add.
     const row = findAll(sheet, 'settings-leader-row')[3];
+    // Only the groups pane has a cursor row yet: Top level.
+    expect(livePromptAnchors(anchors)).toEqual([
+      {
+        command: 'settings.addBind',
+        label: 'add group',
+        scope: 'settings.leaderGroups',
+      },
+    ]);
 
     row.fire('click', { target: row });
     const [[command, key]] = runs;
@@ -1144,6 +1321,19 @@ describe('createSettingsView', () => {
       items: 'item any <Leader>c',
     });
     expect(places.at(-1)?.leaderCursors.items).toBe('opens <Leader>b');
+    // Top level's prompt stays; the nested group row's is `open`.
+    expect(livePromptAnchors(anchors)).toEqual([
+      {
+        command: 'settings.addBind',
+        label: 'add group',
+        scope: 'settings.leaderGroups',
+      },
+      {
+        command: 'settings.open',
+        label: 'open',
+        scope: 'settings.leaderItems',
+      },
+    ]);
   });
 
   it('pluginsChanged_PluginsSectionOpen_Redraws', async () => {

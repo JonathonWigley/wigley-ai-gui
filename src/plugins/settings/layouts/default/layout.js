@@ -424,6 +424,16 @@ const layout = {
     }
     return row;
   },
+  cursorPrompt(parent, input, kit) {
+    const prompt = kit.el(parent, 'span', 'settings-row-actions');
+    for (const action of input.actions) {
+      kit.keyHint(prompt, action.command, { label: action.label });
+    }
+    return prompt;
+  },
+  boxMessage(parent, input, kit) {
+    return kit.el(parent, 'div', 'settings-box-message', input.text);
+  },
 };
 
 export default layout;

@@ -62,13 +62,9 @@
   outline: none;
 }
 
-.backlog-status {
-  color: var(--wg-fg-tertiary);
-  font-size: var(--wg-text-12);
-  overflow: hidden;
-  padding: var(--wg-space-1) var(--wg-space-3);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* The slot `tableStatus` draws into adds no box of its own. */
+.backlog-status-slot {
+  display: contents;
 }
 
 .backlog-rows {
@@ -76,26 +72,6 @@
   margin: 0;
   overflow-y: auto;
   padding: var(--wg-space-1) var(--wg-space-2);
-}
-
-/* A row's slot for the cursor prompt adds no box of its own. */
-.backlog-row-actions-slot {
-  display: contents;
-}
-
-/* The cursor row's actions, at its trailing end; they wrap onto lines of
-   their own when the row has no room. */
-.backlog-row-actions {
-  display: inline-flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-  gap: var(--wg-space-1) var(--wg-space-2);
-  justify-content: flex-end;
-  margin-left: auto;
-}
-
-.ui-row-trailing + .backlog-row-actions-slot > .backlog-row-actions {
-  margin-left: 0;
 }
 
 .backlog-filter,

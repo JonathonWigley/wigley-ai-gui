@@ -8,6 +8,7 @@ const LAYOUT_PARTS: Record<keyof BacklogLayout, true> = {
   filters: true,
   tableRow: true,
   empty: true,
+  tableStatus: true,
   review: true,
   reviewItem: true,
   commits: true,

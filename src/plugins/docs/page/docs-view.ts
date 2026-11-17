@@ -632,7 +632,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       focused = 'tree';
       applyScope();
     },
-    anchor: deps.anchor,
     rowStatus: (node: TreeNode) =>
       treeRowStatus(
         node,

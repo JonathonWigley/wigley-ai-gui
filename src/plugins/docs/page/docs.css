@@ -10,31 +10,11 @@
 }
 
 /* The slots the app draws a part into add no box of their own: the tree's
-   line slot, and the doc scroller's slot per doc part. */
+   line and status slots, and the doc scroller's slot per doc part. */
 .docs-line-slot,
+.docs-status-slot,
 .docs-slot {
   display: contents;
-}
-
-.docs-row-actions {
-  align-items: baseline;
-  display: inline-flex;
-  gap: var(--wg-space-2);
-  margin-left: auto;
-  white-space: nowrap;
-}
-
-.ui-row-trailing + .docs-row-actions {
-  margin-left: 0;
-}
-
-.docs-status {
-  color: var(--wg-fg-tertiary);
-  font-size: var(--wg-text-12);
-  overflow: hidden;
-  padding: var(--wg-space-1) var(--wg-space-3);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* The empty index and no-match lines wrap inside a narrow pane, a long

@@ -265,7 +265,6 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     },
     parts,
     deps.timers,
-    deps.keys.anchor,
   );
   let state: SessionsState | null = null;
   // The list cursor while the list holds the keys; out of the list it has no

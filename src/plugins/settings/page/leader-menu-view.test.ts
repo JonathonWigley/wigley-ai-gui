@@ -126,7 +126,7 @@ function shownMenu(
         box: document.createElement('div'),
       };
     },
-    anchor: () => ({ dispose: () => undefined }),
+    drawPrompt: () => () => undefined,
     setScope: (scope) => scopes.push(scope),
     setFocusTarget: (target) => targets.push(target),
     redraw: () => view.draw(parent),
@@ -195,6 +195,7 @@ function boxWith(request: BoxRequest, text: string): RowBox {
     text: () => text,
     accept: () => request.accept(boxWith(request, text)),
     showMessage: () => undefined,
+    redrawMessage: () => undefined,
     focus: () => undefined,
     keepFocusAcross: (move) => move(),
     destroy: () => undefined,

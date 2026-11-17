@@ -20,6 +20,7 @@ import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
   createBaseKit,
   type OwnerKitServices,
+  type OwnerScope,
   ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
 import {
@@ -125,14 +126,9 @@ export interface SessionsParts {
     header: SectionPart | null,
   ): DrawnPart<SectionPane>;
   group(parent: HTMLElement, input: GroupInput): DrawnPart<DrawnGroup>;
-  // `cursorPrompt` is the view's own cursor prompt, which `kit.cursorPrompt`
-  // moves in on a prompted row; a prompted row whose layout leaves it out ends
-  // with it.
-  row(
-    parent: HTMLElement,
-    input: SessionRowInput,
-    cursorPrompt: HTMLElement,
-  ): DrawnPart<SessionsPart>;
+  // Draws in the `sessions.sidebar` scope, so the hints of `input.prompt` hide
+  // while the Sessions list does not hold the keys.
+  row(parent: HTMLElement, input: SessionRowInput): DrawnPart<SessionsPart>;
   pane(parent: HTMLElement, input: PaneInput): DrawnPart<DrawnPanePart>;
   // `sessionId` is the session whose frame the bar tops.
   tabBar(parent: HTMLElement, sessionId: string): DrawnPart<DrawnTabBar>;
@@ -173,10 +169,13 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
     defaultLayout,
     log: deps.log,
   });
-  // The kit one part draw builds with. Every sessions prompt has no scope, so
-  // it shows in every scope.
-  const sessionsKit = (rollback: RollbackDeps): SessionsKit =>
-    createBaseKit(ownerBaseKitDeps(sessionsManifest, deps, null, rollback));
+  // The kit one part draw builds with. Every part but `row` draws with no
+  // scope, so its prompts show in every scope.
+  const sessionsKit = (
+    rollback: RollbackDeps,
+    scope: OwnerScope | null = null,
+  ): SessionsKit =>
+    createBaseKit(ownerBaseKitDeps(sessionsManifest, deps, scope, rollback));
 
   return {
     setLayouts: (shown) => parts.setLayouts(shown),
@@ -277,14 +276,11 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
           favoriteToggle,
         };
       }),
-    row: (parent, input, cursorPrompt) =>
+    row: (parent, input) =>
       parts.draw('row', parent, (builder, into, rollback) => {
         let isPlaced = false;
-        const prompt = appSlot(cursorPrompt, 'cursorPrompt', rollback);
         const kit: RowKit = {
-          ...sessionsKit(rollback),
-          cursorPrompt: (promptParent) =>
-            input.isPrompted ? prompt.place(promptParent) : null,
+          ...sessionsKit(rollback, 'sidebar'),
           contributedParts(partsParent) {
             if (isPlaced) {
               throw new Error('row placed contributed parts twice');
@@ -303,9 +299,6 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         const row = builder(into, input, kit);
         if (!isPlaced && deps.rowParts.parts().length > 0) {
           kit.contributedParts(requireElementIn(into, row.element, 'row'));
-        }
-        if (input.isPrompted) {
-          prompt.placeIfLeftOut(requireElementIn(into, row.element, 'row'));
         }
         return row;
       }),

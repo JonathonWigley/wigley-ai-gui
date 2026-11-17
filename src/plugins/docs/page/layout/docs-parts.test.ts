@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/page/test-dom';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { Layout } from '../../layouts/layout';
-import { fakeDocsParts, noAnchor } from '../docs-page-fakes';
+import { fakeDocsParts } from '../docs-page-fakes';
 import { createTreeView } from '../tree-view';
 import { createDocsParts, type DocsScope } from './docs-parts';
 
@@ -111,7 +111,7 @@ describe('createDocsParts', () => {
     expect(pane.classList.contains('bare-pane')).toBe(true);
     expect(pane.children.map((child) => child.className)).toEqual([
       'docs-switch-slot',
-      'docs-status',
+      'docs-status-slot',
       'ui-input docs-filter',
       'docs-line-slot',
       'docs-rows',
@@ -299,7 +299,6 @@ function treeDeps(parts: ReturnType<typeof fakeDocsParts>['parts']) {
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
     filterClosed: () => undefined,
-    anchor: noAnchor,
     rowStatus: () => ({ mark: null, detail: null }),
     leafMarks: () => ({ time: null, isStarred: false }),
     placeChanged: () => undefined,

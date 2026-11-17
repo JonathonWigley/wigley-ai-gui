@@ -193,19 +193,14 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Each image's bytes and thumbnail URL, by id.
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
 
-  // A new element the core draws the keys of `command` into, then
-  // `label` when given, while `scope` is in force. Each is made once: the
-  // anchor is disposed when notes stops.
+  // A new element the core draws the keys of `command` into while `scope` is
+  // in force. Each is made once: the anchor is disposed when notes stops.
   const anchored = (
     command: NotesPageCommand,
     scope: NotesScope,
-    label?: string,
   ): HTMLElement => {
     const node = element('span', 'notes-hint');
-    deps.keys.anchor(node, `notes.${command}`, {
-      scope: `notes.${scope}`,
-      label,
-    });
+    deps.keys.anchor(node, `notes.${command}`, { scope: `notes.${scope}` });
     return node;
   };
 
@@ -227,11 +222,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   let slots = new Map<NoteField, HTMLElement>();
   const slot = (field: NoteField) => slots.get(field) as HTMLElement;
 
-  // The cursor prompt, moved to the selected field's row on each draw.
-  const cursorPrompt = element('span', 'notes-cursor-prompt');
-  const editHint = anchored('editBox', 'popup', 'edit');
-  const removeHint = anchored('remove', 'popup', 'remove');
-  cursorPrompt.append(editHint, removeHint);
+  // What the `cursorPrompt` part last drew: its field and each action's
+  // target. Null while none is drawn, so the next render draws it.
+  let promptDrawn: { field: NoteField; hasTargets: string } | null = null;
 
   // The title and body boxes are made once; each row draw moves them into
   // the new value slot.
@@ -296,6 +289,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     rows = nextRows;
     slots = nextSlots;
     drawn = null;
+    promptDrawn = null;
   };
   drawRows();
 
@@ -427,19 +421,39 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     placeCursorPrompt(state);
   };
 
-  // Moves the cursor prompt to the end of the selected field's row, showing
-  // the keys that act on that field and keeping the others' space. It hides,
-  // keeping its space, while the keys are off the rows.
+  // Draws the `cursorPrompt` part at the end of the selected field's row, its
+  // actions marked with the target they act on. It draws again only when the
+  // field or a target changed, or after `drawRows` drew new rows; no row
+  // draws again, so the boxes keep focus.
   const placeCursorPrompt = (state: PopupState) => {
     const { field } = state;
+    const row = rows.get(field);
+    if (row === undefined) {
+      return;
+    }
     const holdsImage = field === 'images' && state.images.length > 0;
     const holdsSession = field === 'session' && state.fields.session !== null;
-    editHint.classList.toggle(
-      'is-no-target',
-      field !== 'title' && field !== 'body',
-    );
-    removeHint.classList.toggle('is-no-target', !holdsImage && !holdsSession);
-    rows.get(field)?.append(cursorPrompt);
+    const editHasTarget = field === 'title' || field === 'body';
+    const removeHasTarget = holdsImage || holdsSession;
+    const hasTargets = `${editHasTarget}/${removeHasTarget}`;
+    if (promptDrawn?.field === field && promptDrawn.hasTargets === hasTargets) {
+      return;
+    }
+    parts.cursorPrompt(row, {
+      actions: [
+        {
+          command: 'notes.editBox',
+          label: 'edit',
+          hasTarget: editHasTarget,
+        },
+        {
+          command: 'notes.remove',
+          label: 'remove',
+          hasTarget: removeHasTarget,
+        },
+      ],
+    });
+    promptDrawn = { field, hasTargets };
   };
   const rendering = store.subscribe(render);
 

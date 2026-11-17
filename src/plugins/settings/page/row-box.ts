@@ -24,7 +24,8 @@ export interface BoxRequest {
 
 // `expectedText` is the file's text the box writes against; a refused stale
 // write replaces it with the text now on disk. `showMessage` shows a line
-// under the box until the next. `keepFocusAcross` runs `move`, which may move
+// under the box until the next; `redrawMessage` draws the last one again, for
+// a new layout, and does nothing before the first. `keepFocusAcross` runs `move`, which may move
 // the box's element, and gives the box back the focus and the selection it
 // held. `accept` runs the request's accept on a line box and focuses a
 // document box, whose own ex commands accept it.
@@ -35,6 +36,7 @@ export interface RowBox {
   text(): string;
   accept(): void;
   showMessage(text: string): void;
+  redrawMessage(): void;
   focus(): void;
   keepFocusAcross(move: () => void): void;
   destroy(): void;
@@ -44,6 +46,9 @@ export interface RowBoxDeps {
   editor: EditorHost;
   // `:q` or `:q!` in a document box.
   quit(): void;
+  // Draws the message `text` into `parent`, the box's message slot, and
+  // returns the dispose that takes it out again.
+  drawMessage(parent: HTMLElement, text: string): () => void;
 }
 
 // A line box opens focused with its whole text selected, so typing replaces
@@ -55,13 +60,27 @@ export function createRowBox(
 ): RowBox {
   const root = element('div', 'settings-box');
   const frame = inputFrame();
-  const message = element('div', 'settings-box-message');
-  message.hidden = true;
+  // The slot the layout's `boxMessage` is drawn into; the app keeps it.
+  const message = element('div', 'settings-box-message-slot');
+  let messageText: string | null = null;
+  let disposeMessage: (() => void) | null = null;
   root.append(frame);
 
+  const clearMessage = () => {
+    const dispose = disposeMessage;
+    disposeMessage = null;
+    dispose?.();
+  };
+  const redrawMessage = () => {
+    if (messageText === null) {
+      return;
+    }
+    clearMessage();
+    disposeMessage = deps.drawMessage(message, messageText);
+  };
   const showMessage = (text: string) => {
-    message.textContent = text;
-    message.hidden = false;
+    messageText = text;
+    redrawMessage();
   };
 
   if (request.editor.type === 'document') {
@@ -76,6 +95,7 @@ export function createRowBox(
       text: () => editor?.text() ?? request.text,
       accept: () => editor?.focus(),
       showMessage,
+      redrawMessage,
       focus: () => editor?.focus(),
       keepFocusAcross(move) {
         const hadFocus = root.contains(document.activeElement);
@@ -85,6 +105,7 @@ export function createRowBox(
         }
       },
       destroy() {
+        clearMessage();
         editor?.destroy();
         root.remove();
       },
@@ -125,6 +146,7 @@ export function createRowBox(
     text: () => input.value,
     accept: () => request.accept(box),
     showMessage,
+    redrawMessage,
     focus() {
       input.focus();
       input.select();
@@ -142,7 +164,10 @@ export function createRowBox(
         );
       }
     },
-    destroy: () => root.remove(),
+    destroy() {
+      clearMessage();
+      root.remove();
+    },
   };
   return box;
 }

@@ -14,7 +14,7 @@
 // over a footer holding other plugins' row parts (`contributedParts`): the parts
 // ordered below 2 on the second line, and those ordered 2 and later always on
 // a third, then, on the list cursor's row, the cursor prompt on a line of its
-// own (`cursorPrompt`),
+// own (one key hint per action of `prompt`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt, split prompts and close-pane control, each tab's icon with no label, each session
@@ -118,8 +118,11 @@ const layout = {
     }
     const foot = kit.el(element, 'div', 'session-row-foot');
     kit.contributedParts(foot);
-    if (input.isPrompted) {
-      kit.cursorPrompt(element);
+    if (input.prompt.length > 0) {
+      const prompt = kit.el(element, 'span', 'session-row-actions');
+      for (const action of input.prompt) {
+        kit.keyHint(prompt, action.command, { label: action.label });
+      }
     }
     return { element };
   },

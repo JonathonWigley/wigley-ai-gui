@@ -139,7 +139,12 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     const trailing = atCursor ? (request?.cursorEndAt(index) ?? null) : null;
     const choose = () =>
       deps.run(PICKER_CHOOSE_ROW.id, { owner: deps.owner, index });
-    let drawn = request?.drawRowAt(list, index, { label, trailing }) ?? null;
+    let drawn =
+      request?.drawRowAt(list, index, {
+        label,
+        trailing,
+        isCursor: atCursor,
+      }) ?? null;
     if (drawn === null) {
       const builtIn = row({
         density: 'list',
