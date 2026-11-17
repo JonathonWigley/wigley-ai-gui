@@ -1784,24 +1784,30 @@ describe('session-fold', () => {
       case: 'no model has a value',
       models: { models: [{ displayName: 'No value' }] },
     },
-  ])('foldPipeLine_InitializeAnswer_NoModels_KeepsChoices ($case)', ({ models }) => {
-    const state = foldedState([inLine(initializeRequest('wigley-1'))]);
-    const choicesBefore = controlOfState(state, 'model')?.choices;
+  ])(
+    'foldPipeLine_InitializeAnswer_NoModels_KeepsChoices ($case)',
+    ({ models }) => {
+      const state = foldedState([inLine(initializeRequest('wigley-1'))]);
+      const choicesBefore = controlOfState(state, 'model')?.choices;
 
-    const { effects } = foldPipeLine(
-      state,
-      outLine(
-        initializeReply('wigley-1', { commands: [FEATURE_COMMAND], ...models }),
-      ),
-    );
+      const { effects } = foldPipeLine(
+        state,
+        outLine(
+          initializeReply('wigley-1', {
+            commands: [FEATURE_COMMAND],
+            ...models,
+          }),
+        ),
+      );
 
-    expect(controlOfState(state, 'model')?.choices).toEqual(choicesBefore);
-    expect(effects).toContainEqual({
-      kind: 'log',
-      text: 'initialize listed no models',
-    });
-    expect(effects.map((effect) => effect.kind)).not.toContain('controls');
-  });
+      expect(controlOfState(state, 'model')?.choices).toEqual(choicesBefore);
+      expect(effects).toContainEqual({
+        kind: 'log',
+        text: 'initialize listed no models',
+      });
+      expect(effects.map((effect) => effect.kind)).not.toContain('controls');
+    },
+  );
 
   it('foldPipeLine_InitializeAnswer_ReadsModelsWithNoCommandList', () => {
     const { state, step } = answered(
@@ -1823,7 +1829,9 @@ describe('session-fold', () => {
   it('foldPipeLine_TypedModelCommand_ChecksTheRefreshedChoices', () => {
     const { state } = answered(
       initializeReply('wigley-1', {
-        models: [{ value: 'opus[1m]', displayName: 'Opus 1M', description: '' }],
+        models: [
+          { value: 'opus[1m]', displayName: 'Opus 1M', description: '' },
+        ],
       }),
     );
     foldPipeLine(state, inLine(send('/model opus[1m]', 'u1')));

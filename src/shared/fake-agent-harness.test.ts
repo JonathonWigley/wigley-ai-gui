@@ -1600,7 +1600,9 @@ describe('createFakeAgentHarness', () => {
     };
 
     expect(
-      harness.controls(null).map(({ id, role, value }) => ({ id, role, value })),
+      harness
+        .controls(null)
+        .map(({ id, role, value }) => ({ id, role, value })),
     ).toEqual([
       { id: 'mode', role: 'permissionMode', value: 'auto' },
       { id: 'effort', role: 'effort', value: 'medium' },

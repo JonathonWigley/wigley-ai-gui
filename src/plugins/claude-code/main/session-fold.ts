@@ -1156,8 +1156,7 @@ function foldInitializeAnswer(
     effects.push({ kind: 'log', text: 'initialize listed no models' });
   }
   const hasChoicesChanged =
-    modelChoices.length > 0 &&
-    setControlChoices(state, 'model', modelChoices);
+    modelChoices.length > 0 && setControlChoices(state, 'model', modelChoices);
   const permissionMode = asString(reply.current_permission_mode);
   const hasModeChanged =
     permissionMode !== '' &&

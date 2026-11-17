@@ -61,18 +61,21 @@ describe('claude-controls', () => {
     { id: 'model', value: 'opus[1m]', expected: true },
     { id: 'model', value: 'opus', expected: false },
     { id: 'effort', value: 'high', expected: false },
-  ])('isChoice_ReadsTheGivenControls ($id $value)', ({ id, value, expected }) => {
-    const controls: SessionControl[] = [
-      {
-        id: 'model',
-        label: 'Model',
-        choices: [{ value: 'opus[1m]', label: 'Opus 1M' }],
-        value: null,
-      },
-    ];
+  ])(
+    'isChoice_ReadsTheGivenControls ($id $value)',
+    ({ id, value, expected }) => {
+      const controls: SessionControl[] = [
+        {
+          id: 'model',
+          label: 'Model',
+          choices: [{ value: 'opus[1m]', label: 'Opus 1M' }],
+          value: null,
+        },
+      ];
 
-    expect(isChoice(controls, id, value)).toBe(expected);
-  });
+      expect(isChoice(controls, id, value)).toBe(expected);
+    },
+  );
 
   it('CLAUDE_CONTROLS_DeclareRoles', () => {
     expect(

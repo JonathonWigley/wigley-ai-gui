@@ -523,7 +523,12 @@ describe('createClaudeCodeHarness declarations', () => {
     const controls = idleHarness().controls(null);
 
     expect(
-      controls.map(({ id, label, role, value }) => ({ id, label, role, value })),
+      controls.map(({ id, label, role, value }) => ({
+        id,
+        label,
+        role,
+        value,
+      })),
     ).toEqual([
       { id: 'mode', label: 'Mode', role: 'permissionMode', value: 'auto' },
       { id: 'effort', label: 'Effort', role: 'effort', value: null },
