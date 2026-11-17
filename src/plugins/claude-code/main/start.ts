@@ -9,8 +9,9 @@ import { createPermissionRoute, PERMISSION_TOOLS } from './permission-route';
 // against that home, or `claude` looked up on PATH, then in `~/.local/bin`,
 // when the setting is empty; its profile folders expand `~` against that home
 // too. A `.cmd` or `.bat` command set on Windows reaches the session host's
-// spawn unwrapped, so it starts the one-shots but no session. A settings change refreshes the registration, so the registry re-reads
-// the `profiles` setting. Contributes `permission_prompt` to every session,
+// spawn unwrapped, so it starts the one-shots but no session. A settings
+// change refreshes the registration, so the registry re-reads the `profiles`
+// setting. Contributes `permission_prompt` to every session,
 // routed by the row id to the row's process; the contribution lives and dies
 // with the part, and its dispose ends every tool session, cancelling each
 // waiting call while the hosted processes run on.

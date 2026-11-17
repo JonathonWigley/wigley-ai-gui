@@ -38,7 +38,10 @@ export interface DetachedStartOptions {
   setEnv?: Readonly<Record<string, string>>;
 }
 
-// Runs the machine's programs.
+// Runs the machine's programs. On Windows a bare command is looked up over
+// PATH × PATHEXT first, and a `.cmd` or `.bat` starts through
+// `cmd.exe /d /s /c`; there "no shell" below means no shell of the app's
+// choosing.
 export interface ProcessRunner {
   // Runs `command` with `args`, no shell, in `cwd` when given, in the app's
   // environment without the names in `unsetEnv`, then with `setEnv`'s names
@@ -70,9 +73,10 @@ export interface ProcessRunner {
   // and streams it: no shell; stdin, stdout and stderr are pipes; output
   // arrives as UTF-8 text, a character never split across chunks. `closed` is
   // called exactly once, on the first of the program's exit and its failure to
-  // start or run. A failure sets `startError` with the OS's message as it is,
-  // `notFound` true for `ENOENT` (a missing program or `cwd`), and `code` and
-  // `signal` null. `kill()` sends `SIGTERM`. A `write`, `endInput` or `kill`
+  // start or run. A failure sets `startError` with the OS's message as it is
+  // (or the lookup's refusal of an argument cmd.exe cannot pass), `notFound`
+  // true for `ENOENT` (a missing program or `cwd`), and `code` and `signal`
+  // null. `kill()` sends `SIGTERM`. A `write`, `endInput` or `kill`
   // after `closed` does nothing, and an error on stdin (`EPIPE` after the
   // exit) is dropped. A plugin's stop kills it with `SIGKILL`.
   spawn(
@@ -89,8 +93,9 @@ export interface ProcessRunner {
 
 export type SpawnSignal = 'SIGTERM' | 'SIGKILL';
 
-// Why a spawned program did not start or run: the OS's message as it is, and
-// whether it was `ENOENT`.
+// Why a spawned program did not start or run: the OS's message as it is, or
+// the lookup's refusal of an argument cmd.exe cannot pass, and whether it was
+// `ENOENT`.
 export interface SpawnStartError {
   message: string;
   notFound: boolean;

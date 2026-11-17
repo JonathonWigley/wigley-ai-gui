@@ -215,7 +215,8 @@ export interface SessionSourceSpec {
 
 // A fresh index for one session on each load. A Claude session whose
 // `session` run fails, as before its transcript exists, falls back to
-// `context` on its project folder, unless no script was found to run.
+// `context` on its project folder, unless no script or no Python was found to
+// run.
 export function createSessionSource(
   deps: IndexSourcesDeps,
   sessionId: string,
