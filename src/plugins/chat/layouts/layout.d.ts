@@ -14,6 +14,12 @@ export type EntryKind =
   | 'raw'
   | 'compaction';
 
+// A harness's own entry kind, `<harness id>:<kind>`; no known kind holds a `:`.
+export type HarnessEntryKind = `${string}:${string}`;
+
+// Any entry kind a builder may draw: a known one, or a harness's own.
+export type AnyEntryKind = EntryKind | HarnessEntryKind;
+
 // What started a compaction: `app`, the app itself; `manual`, the user's `/compact`; `harness`, the harness on its own.
 export type CompactionTrigger = 'app' | 'manual' | 'harness';
 
@@ -85,8 +91,9 @@ export interface NoticeInput {
   tone: 'info' | 'error';
   raw: unknown[];
 }
+// `default`'s `raw` builder also draws an entry of a harness kind no layout or renderer names; `kind` is then that kind.
 export interface RawInput {
-  kind: 'raw';
+  kind: 'raw' | HarnessEntryKind;
   id: string;
   raw: unknown[];
 }
@@ -114,7 +121,17 @@ export interface EntryInputs {
   raw: RawInput;
   compaction: CompactionInput;
 }
-export type EntryInput<K extends EntryKind> = EntryInputs[K];
+// An entry of a harness's own kind: it carries only `raw`, the harness events it was built from, oldest first. `at` is
+// epoch ms.
+export interface HarnessEntryInput {
+  kind: HarnessEntryKind;
+  id: string;
+  at: number;
+  raw: unknown[];
+}
+export type EntryInput<K extends AnyEntryKind> = K extends EntryKind
+  ? EntryInputs[K]
+  : HarnessEntryInput;
 
 // The entry kinds an activity line groups.
 export type StepInput = ToolInput | ThinkingInput | RawInput;
@@ -241,7 +258,7 @@ export interface CompletionDescriptionInput {
   description: string;
 }
 
-export interface EntryView<K extends EntryKind = EntryKind> {
+export interface EntryView<K extends AnyEntryKind = EntryKind> {
   element: HTMLElement;
   // Runs with each later version of the entry (same id) while it shows. A view with no update is built again and its element replaced.
   update?(input: EntryInput<K>): void;
@@ -507,7 +524,7 @@ export interface SideSectionKit extends BaseKit {
 // the text with `kit.markdown`; an entry with no marked block has one stop, and a body drawn later is not read until
 // the next redraw. Copy reads the entry's source lines by a block's position, so copy per block needs the layout to
 // draw `input.text` itself.
-export type EntryBuilder<K extends EntryKind> = (
+export type EntryBuilder<K extends AnyEntryKind> = (
   parent: HTMLElement,
   input: EntryInput<K>,
   kit: ChatKit,
@@ -521,7 +538,11 @@ export interface ChatLayout {
   // the list and the entry cursor. A user layout that wants the activity lines sets it
   // `true`. Left out, the layout takes `default`'s.
   activityInTranscript?: boolean;
-  entries?: { [K in EntryKind]?: EntryBuilder<K> };
+  // A builder per known kind it changes; it may also name a harness's own kind (`<harness id>:<kind>`), which it then
+  // draws over any renderer a plugin adds for that kind.
+  entries?: { [K in EntryKind]?: EntryBuilder<K> } & {
+    [kind: HarnessEntryKind]: EntryBuilder<HarnessEntryKind> | undefined;
+  };
   // One run of the agent's steps (tool, thinking, raw entries between two other entries), drawn into its slot; the
   // app keeps the cursor, the click that opens it and the step rows.
   activity?(

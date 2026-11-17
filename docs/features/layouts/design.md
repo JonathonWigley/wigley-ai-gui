@@ -117,6 +117,12 @@ CSS-only: the five chrome areas (`CHROME_AREAS`: title bar, activity bar, side b
 shell layout's attributes, and its JS parts draw only what the core puts in them. The app-wide look of the primitives
 stays in themes.
 
+Chat's entries take one source between a user layout and `default`: the renderers plugins add through chat's
+`addEntryRenderer`. An entry draws with the user's layout when it names the entry's kind, else with the latest-added
+renderer whose `kind` matches and whose `match` passes, else with `default`, which draws a harness kind
+(`<harness id>:<kind>`) with its `raw` builder. A renderer that throws draws with `default`, as a user layout's builder
+does.
+
 ## Adopters
 
 | Owner | Setting | Surfaces |

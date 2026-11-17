@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-  type ChatEntry,
-  type ChatEntryKind,
-  MAIN_AGENT_ID,
-} from '../../../contracts/agent';
+import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
+import type { EntryKind } from '../layouts/layout';
 import { cursorStops, type ListRow, listRows, runIdOf } from './activity-runs';
 
-function entry(kind: ChatEntryKind, id: string, at = 1000): ChatEntry {
+function entry(kind: EntryKind, id: string, at = 1000): ChatEntry {
   switch (kind) {
     case 'user':
       return { kind, id, at, text: 'ask', images: [], delivery: null, raw: [] };
@@ -78,7 +75,7 @@ function entries(...specs: string[]): ChatEntry[] {
     const [kindAndId, at] = spec.split('@');
     const [kind, id] = kindAndId.split(':');
     return entry(
-      kind as ChatEntryKind,
+      kind as EntryKind,
       id,
       at === undefined ? 1000 : Number(at),
     );
@@ -122,6 +119,17 @@ describe('activity runs', () => {
       list: entries('user:u', 'assistant:a'),
       working: true,
       expected: ['entry:u', 'entry:a'],
+    },
+    {
+      given: 'a harness entry between two tools while working',
+      // Built directly: a spec splits on `:`, which a harness kind holds.
+      list: [
+        entry('tool', 't1'),
+        { kind: 'fake:card', id: 'h', at: 1000, raw: [] },
+        entry('tool', 't2'),
+      ] satisfies ChatEntry[],
+      working: true,
+      expected: ['run:activity:t1:false', 'entry:h', 'run:activity:t2:true'],
     },
   ])('listRows of $given → $expected', ({ list, working, expected }) => {
     expect(listRows(list, working).map(rowLabel)).toEqual(expected);

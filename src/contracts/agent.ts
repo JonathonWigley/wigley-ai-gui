@@ -153,7 +153,13 @@ export type ChatEntry =
       durationMs: number | null;
       raw: unknown[];
     }
-  | { kind: 'raw'; id: string; at: number; raw: unknown[] };
+  | { kind: 'raw'; id: string; at: number; raw: unknown[] }
+  // A kind a harness adds, named `<harness id>:<kind>`. It carries only `raw`, which a renderer the harness's plugin
+  // adds decodes; `default` draws it with its `raw` builder.
+  | { kind: HarnessEntryKind; id: string; at: number; raw: unknown[] };
+
+// A harness's own entry kind, `<harness id>:<kind>`; no known kind holds a `:`, so the two never meet.
+export type HarnessEntryKind = `${string}:${string}`;
 
 export type ChatEntryKind = ChatEntry['kind'];
 

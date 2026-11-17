@@ -20,6 +20,7 @@ import type {
 } from '../../contracts/plugin';
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
 import type { SessionTitles } from '../sessions/contract';
+import type { AnyEntryKind, EntryBuilder, EntryInput } from './layouts/layout';
 
 // The layout preview's row host session id; no harness holds a session by it.
 export const CHAT_PREVIEW_HOST_ID = 'chat-layout-preview';
@@ -849,6 +850,11 @@ export type CompletionRowDraw = (
 // channel's `setHeadless`; the flag shows in `chat.session`.
 // `mountChat` draws the Chat tab's view of a session whose row has an owner
 // into `element`, in place of a Sessions tab (`ChatMount`).
+// `addEntryRenderer` adds a renderer for entries of `kind` until its
+// `dispose`; an entry draws with the user's layout when it names the kind,
+// else with the latest-added renderer whose `kind` matches and whose `match`
+// passes, else with `default`; adding or disposing one redraws every Chat
+// tab's entries.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   addCompletionRow(draw: CompletionRowDraw): Disposable;
@@ -859,6 +865,20 @@ export interface ChatPageExports {
   activeTime(sessionId: string): ActiveTime | null;
   setHeadless(sessionId: string, headless: boolean): Promise<void>;
   mountChat(element: HTMLElement, sessionId: string): ChatMount;
+  addEntryRenderer<K extends AnyEntryKind>(
+    renderer: ChatEntryRenderer<K>,
+  ): Disposable;
+}
+
+// Draws entries of `kind`, a known kind or a harness's own
+// (`<harness id>:<kind>`), whose `match`, when given, returns true; `build`
+// takes a chat layout's entry builder's arguments. A `build` or view `update`
+// that throws leaves the entry to `default`; a `match` that throws counts as
+// false.
+export interface ChatEntryRenderer<K extends AnyEntryKind = AnyEntryKind> {
+  kind: K;
+  match?(input: EntryInput<K>): boolean;
+  build: EntryBuilder<K>;
 }
 
 // A session's chat view drawn into another plugin's element by `mountChat`:

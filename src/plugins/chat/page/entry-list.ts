@@ -21,10 +21,10 @@ import { chatCommand, chatScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   ActivityInput,
+  AnyEntryKind,
   ChatLayout,
   EntryBuilder,
   EntryInput,
-  EntryKind,
   EntryView,
   PartView,
   QueuedMessageInput,
@@ -53,8 +53,10 @@ import {
   type ChatPartDraws,
   chatPartDraws,
   DEFAULT_ENTRY_PICK,
+  defaultBuilderKind,
+  type EntryDrawPick,
   isActivityInTranscript,
-  pickEntry,
+  pickEntryDraw,
   surfaceBaseKit,
 } from './chat-layouts';
 import {
@@ -76,11 +78,13 @@ import {
   START_FOCUS,
   toggleAnchor,
 } from './entry-focus';
+import { ENTRY_RENDERER_NAME, type EntryRenderers } from './entry-renderers';
 import { resultStepCount } from './working-turn';
 
 // `layouts` are the ones every session's entries, activity lines and pending
 // rows are built with, and say whether runs, steps and results show at all;
-// `toastedKinds` the kinds whose failed draw has toasted since they were
+// `renderers` the plugins' entry renderers, which draw an entry whose kind
+// the user's layout does not name, ahead of `default`; `toastedKinds` the kinds whose failed draw has toasted since they were
 // shown, shared by every session's list. `timers` and `clock` tick a live
 // activity line's time. A click calls `pullBack` on a pending row with its
 // message's id, `runClicked` on an activity line with its run's id, and
@@ -92,6 +96,7 @@ import { resultStepCount } from './working-turn';
 // stop at once, inside the call that moved it.
 export interface EntryListDeps {
   layouts: ChatLayouts;
+  renderers: Pick<EntryRenderers, 'pick'>;
   toastedKinds: Set<ChatEntryKind>;
   kit: KitDeps;
   log: PluginLog;
@@ -266,25 +271,27 @@ export interface EntryList {
 // recorded, which disposes the kit. `isDefaultView` holds while the view is
 // a `default` layout's (the bundled or a live one) or the bare line;
 // `isBundledView` while it is the bundled default layout's or the bare line;
-// `isBareLine` while it is the bare line.
+// `isBareLine` while it is the bare line. `pickName` names what the draw
+// picked: a layout, or `entry renderer`.
 interface DrawnEntry {
-  view: EntryView | null;
+  view: EntryView<AnyEntryKind> | null;
   kit: EntryKit;
   isDefaultView: boolean;
   isBundledView: boolean;
   isBareLine: boolean;
+  pickName: string;
   dispose(): void;
 }
 
 // One drawn entry and its slot. `drawsWithDefault` holds once an update of a
-// layout other than the bundled default has thrown, and the slot is drawn
+// layout or renderer other than the bundled default has thrown, and the slot is drawn
 // with the bundled default layout from then on. `blocks` are the cursor's block
 // elements as last read from the drawn entry. `input` is what the slot last drew
 // or updated with.
 interface Slot extends DrawnEntry {
   element: HTMLLIElement;
   entry: ChatEntry;
-  input: EntryInput<EntryKind>;
+  input: EntryInput<AnyEntryKind>;
   drawsWithDefault: boolean;
   blocks: HTMLElement[];
 }
@@ -292,11 +299,11 @@ interface Slot extends DrawnEntry {
 // What a builder's draw returns to `drawPart`.
 interface BuiltEntry {
   element: HTMLElement;
-  view: EntryView;
+  view: EntryView<AnyEntryKind>;
   kit: EntryKit;
 }
 
-type AnyBuilder = EntryBuilder<EntryKind>;
+type AnyBuilder = EntryBuilder<AnyEntryKind>;
 
 // Who changed the list's place: the user, or the list itself (following the
 // latest stop, drawing an entry, putting the last page's place back).
@@ -1119,13 +1126,14 @@ function transcriptEntries(
   return entries.filter((entry) => isInTranscript(entry, activityInTranscript));
 }
 
-// What a layout draws `entry` from: the entry; a result with its turn's step
-// count from the session's `entries`, steps out of the transcript included; a
-// user entry with whether it is the latest delivery entry.
+// What a layout draws `entry` from: the entry, a harness kind's included; a
+// result with its turn's step count from the session's `entries`, steps out of
+// the transcript included; a user entry with whether it is the latest delivery
+// entry.
 function entryInput(
   entry: ChatEntry,
   entries: readonly ChatEntry[],
-): EntryInput<EntryKind> {
+): EntryInput<AnyEntryKind> {
   if (entry.kind === 'result') {
     return { ...entry, stepCount: resultStepCount(entries, entry.id) };
   }
@@ -1150,8 +1158,8 @@ function isLatestDeliveryEntry(
 }
 
 function isDeliveryChanged(
-  last: EntryInput<EntryKind>,
-  next: EntryInput<EntryKind>,
+  last: EntryInput<AnyEntryKind>,
+  next: EntryInput<AnyEntryKind>,
 ): boolean {
   return (
     last.kind === 'user' &&
@@ -1447,7 +1455,7 @@ function drawSlotPart<K extends SlotPartName>(
 
 function buildSlot(
   entry: ChatEntry,
-  input: EntryInput<EntryKind>,
+  input: EntryInput<AnyEntryKind>,
   deps: EntryListDeps,
 ): Slot {
   const slot = element('li', 'chat-entry-slot');
@@ -1464,13 +1472,14 @@ function buildSlot(
 
 // A view with an update runs it after the kit's own parts updated; a view
 // with none is drawn again, its new expanders opening as the old ones were.
-// An update that throws from a user layout or a live default is logged, and
-// the slot is drawn with the bundled default layout from then on; the bundled
-// default's is logged and the entry drawn again.
+// An update that throws from a user layout, a renderer or a live default is
+// logged under the name of what the slot drew with, and the slot is drawn with
+// the bundled default layout from then on; the bundled default's is logged and
+// the entry drawn again.
 function redrawSlot(
   slot: Slot,
   entry: ChatEntry,
-  input: EntryInput<EntryKind>,
+  input: EntryInput<AnyEntryKind>,
   deps: EntryListDeps,
 ) {
   slot.entry = entry;
@@ -1487,9 +1496,8 @@ function redrawSlot(
           `default layout ${entry.kind} entry update failed: ${errorText(error)}`,
         );
       } else {
-        const { name } = pickEntry(deps.layouts.shown(), entry.kind);
         deps.log(
-          `layout ${name} ${entry.kind} entry update failed: ${errorText(error)}`,
+          `layout ${slot.pickName} ${entry.kind} entry update failed: ${errorText(error)}`,
         );
         slot.drawsWithDefault = true;
       }
@@ -1511,52 +1519,62 @@ function redrawSlot(
   slot.isDefaultView = drawn.isDefaultView;
   slot.isBundledView = drawn.isBundledView;
   slot.isBareLine = drawn.isBareLine;
+  slot.pickName = drawn.pickName;
   slot.dispose = drawn.dispose;
 }
 
-// The entry drawn into `slot`, and, when the kind's shown layout did not draw
-// it, a toast once per kind naming what drew it: the default layout, or a
-// bare line.
+// The entry drawn into `slot` with what `pickEntryDraw` picks, or with the
+// bundled default when `drawsWithDefault`, and, when the pick did not draw it,
+// a toast once per kind naming the pick and what drew it: the default layout,
+// or a bare line.
 function drawEntry(
   slot: HTMLElement,
   entry: ChatEntry,
-  input: EntryInput<EntryKind>,
+  input: EntryInput<AnyEntryKind>,
   deps: EntryListDeps,
   drawsWithDefault: boolean,
 ): DrawnEntry {
-  const drawn = buildEntry(slot, entry, input, deps, drawsWithDefault);
-  const { name } = pickEntry(deps.layouts.shown(), entry.kind);
+  const picked = pickEntryDraw(deps.layouts.shown(), deps.renderers, input);
+  const draw: EntryDrawPick = drawsWithDefault
+    ? {
+        pick: DEFAULT_ENTRY_PICK,
+        builderKind: defaultBuilderKind(entry.kind),
+      }
+    : picked;
+  const drawn = buildEntry(slot, entry, input, deps, draw);
+  const { name } = picked.pick;
+  const source =
+    name === ENTRY_RENDERER_NAME ? 'Chat entry renderer' : `Chat layout ${name}`;
   const isFallback = name !== DEFAULT_ENTRY_PICK.name && drawn.isDefaultView;
   if (drawn.isBareLine) {
     toastKindOnce(
       entry.kind,
       deps,
-      `Chat layout ${name}: ${entry.kind} entries drawn as bare lines`,
+      `${source}: ${entry.kind} entries drawn as bare lines`,
     );
   } else if (isFallback) {
     toastKindOnce(
       entry.kind,
       deps,
-      `Chat layout ${name}: ${entry.kind} entries drawn with default`,
+      `${source}: ${entry.kind} entries drawn with default`,
     );
   }
   return drawn;
 }
 
-// The entry drawn into `slot` through the page host, with the user's layout
-// when it defines the kind, unless `drawsWithDefault`; the host logs a user
-// builder's failure and draws with the default layout. A default builder that
-// fails is logged and leaves a bare line naming the kind.
+// The entry drawn into `slot` through the page host with `draw`'s pick and
+// builder; the host logs a user builder's or a renderer's failure and draws
+// with the default layout, whose `raw` builder draws a harness kind. A default
+// builder that fails is logged and leaves a bare line naming the kind.
 function buildEntry(
   slot: HTMLElement,
   entry: ChatEntry,
-  input: EntryInput<EntryKind>,
+  input: EntryInput<AnyEntryKind>,
   deps: EntryListDeps,
-  drawsWithDefault: boolean,
+  draw: EntryDrawPick,
 ): DrawnEntry {
-  const pick = drawsWithDefault
-    ? DEFAULT_ENTRY_PICK
-    : pickEntry(deps.layouts.shown(), entry.kind);
+  const { pick, builderKind } = draw;
+  const defaultKind = defaultBuilderKind(entry.kind);
   try {
     const drawn = drawPart<ChatLayout, AnyBuilder, BuiltEntry>({
       owner: 'chat',
@@ -1564,7 +1582,10 @@ function buildEntry(
       pick,
       defaultLayout,
       // TypeScript cannot narrow the builder to the entry's own kind.
-      part: (layout) => layout.entries?.[entry.kind] as AnyBuilder | undefined,
+      part: (layout) =>
+        layout.entries?.[
+          layout === defaultLayout ? defaultKind : builderKind
+        ] as AnyBuilder | undefined,
       build(builder, parent, rollback) {
         const kit = createEntryKit(entry, deps.kit);
         rollback.recordBox(() => kit.dispose());
@@ -1580,6 +1601,7 @@ function buildEntry(
       isDefaultView: drawn.layoutName === DEFAULT_ENTRY_PICK.name,
       isBundledView: !drawn.drewPick || pick.layout === defaultLayout,
       isBareLine: false,
+      pickName: pick.name,
       dispose: drawn.dispose,
     };
   } catch (error) {
@@ -1592,6 +1614,7 @@ function buildEntry(
       isDefaultView: true,
       isBundledView: true,
       isBareLine: true,
+      pickName: pick.name,
       dispose: () => kit.dispose(),
     };
   }

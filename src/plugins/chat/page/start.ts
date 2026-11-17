@@ -52,6 +52,7 @@ import {
 } from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { createChatLayouts } from './chat-layouts';
+import { createEntryRenderers } from './entry-renderers';
 import { addClearCommands } from './clear-commands';
 import { clipboardWriter } from './clipboard';
 import { createCompletionRows, descriptionDraw } from './completion-rows';
@@ -186,6 +187,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const run = (command: string) => api.commands.run(command);
     const runKey = keyRunner(api.commands, services.log);
     const layouts = createChatLayouts(services.log);
+    const entryRenderers = createEntryRenderers(services.log);
     // What every surface's layout kit reads.
     const partDeps = {
       layouts,
@@ -317,6 +319,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       platform: api.platform.os,
       state: api.state.forLayouts,
       layouts,
+      renderers: entryRenderers,
       composerParts,
       statusParts,
       sideParts,
@@ -411,6 +414,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         api.channel.invoke('setHeadless', sessionId, headless),
       mountChat: (element, sessionId) =>
         consumer.track(view.mount(element, sessionId)),
+      addEntryRenderer: (renderer) =>
+        consumer.track(entryRenderers.add(renderer)),
     });
     return {
       commands: {

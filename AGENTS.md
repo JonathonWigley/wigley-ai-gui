@@ -999,7 +999,12 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the activity lines and their steps; a layout that leaves it out takes `default`'s, `false`.
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
-  drew it: `default`, or a bare line when `default` throws too.
+  drew it: `default`, or a bare line when `default` throws too. An entry of a harness kind (`<harness id>:<kind>`)
+  carries only `raw`. A plugin draws entries of any kind, known or a harness's, through the `chat` page export
+  `addEntryRenderer({ kind, match?, build })`, whose `build` takes an entry builder's arguments. An entry draws with
+  the user's layout when it names the kind; else with the plugin renderers, the latest added first, the first whose
+  `kind` matches and whose `match` passes when given; else with `default`, whose `raw` builder draws a harness kind. A
+  harness kind joins no activity run.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
   `rail`, `review` and `notices` panes. The `notices` pane is the round's one notices page, after every finding and
   question: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and

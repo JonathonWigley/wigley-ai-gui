@@ -39,8 +39,9 @@ const PREVIEW_ENTRY_STEP_MS = 2000;
 const previewAt = (index: number) =>
   PREVIEW_START_AT + index * PREVIEW_ENTRY_STEP_MS;
 
-// One entry of every kind, a user message in each delivery state, a tool and a
-// permission in each of their states, both notice tones, a reply holding two
+// One entry of every kind, a harness's own kind among them, a user message in
+// each delivery state, a tool and a permission in each of their states, both
+// notice tones, a reply holding two
 // visuals, and a streaming reply last, its visual still open.
 export function previewEntries(): ChatEntry[] {
   return [
@@ -192,6 +193,12 @@ export function previewEntries(): ChatEntry[] {
       afterTokens: 24000,
       durationMs: 9000,
       raw: [{ preview: 'compaction' }],
+    },
+    {
+      kind: 'preview:sample',
+      id: 'preview-harness',
+      at: previewAt(13) + PREVIEW_ENTRY_STEP_MS / 2,
+      raw: [{ preview: 'harness kind' }],
     },
     {
       kind: 'assistant',

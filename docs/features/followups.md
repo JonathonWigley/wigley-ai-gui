@@ -247,10 +247,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 - **The drive `wait-log` misses lines logged before it starts** — *agent-ready*: a driver waiting on a line a page
   start already logged never sees it. Read earlier lines back with `drive log`, or let `wait-log` scan the log it
   already holds.
-- **Open chat entry kinds and entry renderers** — *agent-ready*: `ChatEntry.kind` (`src/contracts/agent.ts`) opens
-  for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout names them. Chat page
-  exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default. A partial
-  chat layout already falls back to `default` per entry kind (`pickEntry` in `src/plugins/chat/page/chat-layouts.ts`).
 - **Agent settings through an adapter** — *needs a feature plan*: Settings mode edits only the app's own
   `settings.json`, so changing an agent's config (Claude's model, effort, permissions, hooks, env, per profile and per
   user, project and local scope) still needs a terminal: in print mode `/config` takes only `key=value`

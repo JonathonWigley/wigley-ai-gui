@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  type ChatEntry,
-  type ChatEntryKind,
-  MAIN_AGENT_ID,
-} from '../../../contracts/agent';
+import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { SessionCompaction } from '../contract';
-import type { WorkingState } from '../layouts/layout';
+import type { EntryKind, WorkingState } from '../layouts/layout';
 import {
   dockSummary,
   doneInput,
@@ -15,7 +11,7 @@ import {
 
 const SUBAGENT_ID = 'agent-1';
 
-function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
+function entry(kind: EntryKind, id: string, at: number): ChatEntry {
   switch (kind) {
     case 'user':
       return { kind, id, at, text: 'ask', images: [], delivery: null, raw: [] };
@@ -94,7 +90,7 @@ function entries(...specs: string[]): ChatEntry[] {
       throw new Error(`bad spec ${spec}`);
     }
     const [, kindName, open, subagent, id, at, cost, stopReason] = match;
-    const kind = kindName as ChatEntryKind;
+    const kind = kindName as EntryKind;
     const built = entry(kind, id, Number(at));
     const hasAgent =
       built.kind === 'tool' ||

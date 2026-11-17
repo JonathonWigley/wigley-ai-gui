@@ -131,7 +131,7 @@ conversion of chat to slots and its chat events also edited; that conversion has
 3. Then ∥:
    - [x] Harness settings with the harness, then [x] Docs reads harness config roots from the adapter
    - Chat pass, in sequence (all edit chat): [x] Chat picks a harness → [x] Control roles → [x] Clear aliases from
-     the adapter → [x] Harness-neutral UI copy → [ ] Open chat entry kinds and entry renderers
+     the adapter → [x] Harness-neutral UI copy → [x] Open chat entry kinds and entry renderers
    - [x] Permission behind the harness
    - [x] Sessions stops naming Claude
    - [x] Structured round results
