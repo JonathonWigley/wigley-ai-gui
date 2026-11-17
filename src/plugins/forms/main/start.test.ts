@@ -2,15 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentFormListener,
   AgentFormPresenter,
+  PresentedAgentForm,
 } from '../../../contracts/agent-forms';
 import type { MainPart } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
+  fakeDependency,
   noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
+import { createRegistrations } from '../../../shared/registrations';
 import {
   fakeChat,
   fakeEndedEvent,
@@ -18,9 +21,20 @@ import {
   previewSessions,
   SUBMITTED,
 } from '../../agent-form-fakes.test-support';
-import { sessionsMainKey } from '../../sessions/contract';
+import {
+  type AgentSession,
+  type SessionsMainExports,
+  sessionsMainKey,
+  type ToolSession,
+} from '../../sessions/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
-import { SAVED_ROUNDS_FOLDER } from '../contract';
+import {
+  type ConfirmRequest,
+  type FormBody,
+  type FormsMainExports,
+  type Round,
+  SAVED_ROUNDS_FOLDER,
+} from '../contract';
 import type { formsManifest } from '../manifest';
 import {
   addDriveActions,
@@ -129,6 +143,98 @@ function registrationSetup(failure: Error | null = null) {
 // Lets the settled promises' handlers run.
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// Sessions faked so a test starts forms' tool session for an app session, as
+// a connecting session does: `connect(id)` runs the start forms contributed
+// and returns its tool session.
+function toolSessions() {
+  let start: ((session: AgentSession) => ToolSession) | null = null;
+  const dependency = fakeDependency(
+    sessionsMainKey,
+    (consumer) =>
+      ({
+        contributeTools: (
+          _tools: unknown,
+          contributed: (session: AgentSession) => ToolSession,
+        ) => {
+          start = contributed;
+          return consumer.track({ dispose() {} });
+        },
+        addCloseGuard: () => consumer.track({ dispose() {} }),
+        mark() {},
+        label: () => null,
+        release() {},
+      }) as unknown as SessionsMainExports,
+  );
+  return {
+    dependency,
+    connect(id: string): ToolSession {
+      if (start === null) {
+        throw new Error('forms contributed no tools');
+      }
+      return start({
+        id,
+        info: {
+          sessionId: `host-${id}`,
+          projectDir: '/work',
+          harness: 'claude',
+          rowId: null,
+        },
+      });
+    },
+  };
+}
+
+// Forms over `toolSessions`, with the main exports a dependent gets.
+function startWithToolSessions() {
+  const sessions = toolSessions();
+  const harness = startMainPart(formsMainPart, {
+    dependencies: [fakeChat(), sessions.dependency],
+    services: {
+      homeDir: '/home/user',
+      alerts: { setOpenCount() {} },
+      git: { originRepoName: () => Promise.resolve(null) } as never,
+    },
+  });
+  const forms = harness.started().exports?.(
+    createRegistrations(),
+  ) as FormsMainExports;
+  return { harness, sessions, forms };
+}
+
+const CONFIRM_REQUEST: ConfirmRequest = {
+  title: 'Trash notes.md',
+  detail: 'Moves docs/notes.md to the trash.',
+};
+
+// The confirm round's one question answered Allow.
+const ALLOW_BODY: FormBody = {
+  note: '',
+  answers: [
+    {
+      index: 1,
+      choice: 1,
+      not_applicable: false,
+      notes: '',
+      dont_ask: false,
+      dont_ask_reason: '',
+    },
+  ],
+  finding_answers: [],
+  notice_comments: [],
+};
+
+function shownRounds(
+  sent: readonly { message: string; data: unknown }[],
+): PresentedAgentForm<Round, FormBody>[] {
+  return sent
+    .filter((each) => each.message === 'formShown')
+    .map((each) => each.data as PresentedAgentForm<Round, FormBody>);
+}
+
+function live(): AbortSignal {
+  return new AbortController().signal;
 }
 
 describe('forms main part', () => {
@@ -377,6 +483,79 @@ describe('forms main part', () => {
     expect(register).not.toHaveBeenCalled();
     expect(harness.counts().registrations).toBe(0);
     expect(harness.sent).toEqual([]);
+  });
+
+  it("confirm opens the round in the caller's own forms session", async () => {
+    const { harness, sessions, forms } = startWithToolSessions();
+    sessions.connect('app-a');
+    sessions.connect('app-b');
+
+    const allowed = forms.confirm('app-b', CONFIRM_REQUEST, live(), null);
+    await flush();
+    const shown = shownRounds(harness.sent);
+    expect(shown.map(({ sessionId }) => sessionId)).toEqual(['app-b']);
+    expect(shown[0]?.form.heading).toBe(CONFIRM_REQUEST.title);
+    harness.invoke('finish', shown[0]?.formId, {
+      kind: 'submitted',
+      body: ALLOW_BODY,
+    });
+
+    await expect(allowed).resolves.toBe(true);
+    await harness.stop();
+  });
+
+  it.each([
+    { case: 'an unknown id', sessionId: 'app-unknown', endsFirst: false },
+    {
+      case: 'an id after its tool session ended',
+      sessionId: 'app-a',
+      endsFirst: true,
+    },
+  ])(
+    'confirm rejects for a session with no tool session: $case',
+    async ({ sessionId, endsFirst }) => {
+      const { harness, sessions, forms } = startWithToolSessions();
+      const toolSession = sessions.connect('app-a');
+      if (endsFirst) {
+        toolSession.end();
+      }
+
+      await expect(
+        forms.confirm(sessionId, CONFIRM_REQUEST, live(), null),
+      ).rejects.toThrow(`no forms session for ${sessionId}`);
+      await harness.stop();
+    },
+  );
+
+  // Breaks if the confirm's round matches an earlier one: the service would
+  // hand back the Allow at once, or pre-pick it in the new round's draft.
+  it('a second identical confirm after an Allow opens a fresh round with no pre-picked choice', async () => {
+    const { harness, sessions, forms } = startWithToolSessions();
+    sessions.connect('app-a');
+    const first = forms.confirm('app-a', CONFIRM_REQUEST, live(), null);
+    await flush();
+    harness.invoke('finish', shownRounds(harness.sent)[0]?.formId, {
+      kind: 'submitted',
+      body: ALLOW_BODY,
+    });
+    await expect(first).resolves.toBe(true);
+
+    const abort = new AbortController();
+    let isSettled = false;
+    const second = forms
+      .confirm('app-a', CONFIRM_REQUEST, abort.signal, null)
+      .finally(() => {
+        isSettled = true;
+      });
+    await flush();
+
+    const shown = shownRounds(harness.sent);
+    expect(shown).toHaveLength(2);
+    expect(isSettled).toBe(false);
+    expect(shown[1]?.draft?.answers[0]?.choice ?? 0).toBe(0);
+    abort.abort();
+    await expect(second).resolves.toBe(false);
+    await harness.stop();
   });
 });
 

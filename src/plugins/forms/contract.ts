@@ -319,6 +319,33 @@ export interface FormsChannel extends ChannelShape {
   messages: AgentFormMessages<Round, FormBody>;
 }
 
+// What a confirm asks the user: `title` heads the round, `detail` says what
+// the action does.
+export interface ConfirmRequest {
+  title: string;
+  detail: string;
+}
+
+// The main part's exports. `confirm` asks the user Allow or Deny in a fresh
+// round, Deny recommended, in the forms session forms started for the app
+// session `sessionId`; it queues behind that session's open round. It resolves
+// true only on a submitted Allow of that round, and false on any other answer
+// or once `signal` aborts. It rejects with `no forms session for <sessionId>`
+// when that session has no live forms tool session.
+export interface FormsMainExports {
+  confirm(
+    sessionId: string,
+    request: ConfirmRequest,
+    signal: AbortSignal,
+    toolUseId: string | null,
+  ): Promise<boolean>;
+}
+
+export const formsMainKey: DependencyKey<FormsMainExports, 'main', 'forms'> = {
+  id: 'forms',
+  process: 'main',
+};
+
 // The page part's exports and events.
 
 // What the forms page shows: a round's cards, its review, the cancel prompt

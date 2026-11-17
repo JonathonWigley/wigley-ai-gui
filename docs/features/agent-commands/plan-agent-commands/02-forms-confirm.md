@@ -1,6 +1,6 @@
 # 02 — Forms confirm export
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · async form lifecycle, queue, replay and abort rules that gate risky commands
 Wave: 1 · Depends on: none

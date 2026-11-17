@@ -1,6 +1,6 @@
 # 01 — Command run context: target, caller, reporting runs, the list and the two flags
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · crosses the main and page processes through async IPC, and every later task consumes its contract
 Wave: 1 · Depends on: none

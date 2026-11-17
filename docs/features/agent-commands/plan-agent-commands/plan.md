@@ -219,10 +219,11 @@ Critical path: 01 → 06 → 08 → 09
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 8d829c42c
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Preflight: the relay hello now carries row_id (Lane H, 6fb763cb3, merged after plan time), so the plan-time precondition "no row id" is stale; nothing in 01-08 rests on it, and 09 checks AGENTS.md § Architecture relay paragraph against the row-id join — lead
 ### Review rounds
 ### Test gate
