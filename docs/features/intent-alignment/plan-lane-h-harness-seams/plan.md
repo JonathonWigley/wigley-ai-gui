@@ -376,7 +376,7 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 - [x] [Chat follows a harness leaving and returning](15-harness-leave-and-return.md) — after 14
 
 ### Wave 13
-- [ ] [Doc re-read](16-doc-re-read.md) — after 15
+- [x] [Doc re-read](16-doc-re-read.md) — after 15
 
 ### Wave 14
 - [ ] [Final verification](17-final-verification.md) — after 16
@@ -401,6 +401,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 13 · hard · abb65711e · diff read: exitNoticeText(harnessLabel, code, error), processEvents takes the harness label, Claude wording replaced in chat-sessions, session-fold, claude-code-harness and setting descriptions; wave compile (typecheck, lint) passes; oxfmt · concerns: src/main/drive/drive-commands.ts:67 still says 'hosted Claude processes' (outside Files); done-when grep keeps four new hits judged harness-specific (main.ts:43, lookups.ts:8, defaultHarness description, sessions-view-fakes.ts); comments in chat/main/start.ts, usage/main/start.ts, docs layout.d.ts already neutral from earlier groups
 - 14 · hard · a7bf98ec5 · Diff read: HarnessEntryKind, AnyEntryKind, HarnessEntryInput, ChatEntryRenderer, addEntryRenderer, createEntryRenderers, pickEntryDraw present; typecheck and lint pass after 45e141e9e (test-site kind narrowing, check-layers grant for chat contract → layouts) · concerns: entry-renderers.ts holds two casts; KNOWN_KINDS_ARE_NOT_HARNESS_KINDS relies on TS reducing the intersection to never (compiled fine); renderer match runs and logs on every draw; toast source chosen by comparing pick name with 'entry renderer' (a user layout of that name toasts as a renderer); working-turn.test.ts edited beyond Files
 - 15 · hard · f7b3afb8d · Diff read: harnessLeft, harnessReturned, harnessLabelOf, FakeHarnessIdentity and createFakeAgentHarness identity param present; typecheck and lint pass first time · concerns: resume's prefix match (09) still misses new-scheme process ids — return path uses settleUnheld's exact id match instead; a row whose harness leaves before its host id is reported fails its re-attach on return (attach rejects a null sessionId); self-test history read adds a harmless error notice to the return fixture row; hostSessionIdSettled waiters still pending after detachAll
+- 16 · standard · 4c9570a3b · Every claim in the Approach checked against the landed tree; design.md, AGENTS.md, drive SKILL.md and the worktree forms README agree; one followups line rewritten · concerns: drive-commands.ts:67 and :378 still say Claude in user copy; old names remain only in Lane P's open plan docs
 ### Contract changes
 - IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
 - docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01

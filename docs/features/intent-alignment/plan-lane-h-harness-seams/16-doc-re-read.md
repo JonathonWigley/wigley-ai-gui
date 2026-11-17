@@ -1,6 +1,6 @@
 # 16 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 13 · Depends on: 15
 Plan: [plan.md](plan.md)
@@ -44,3 +44,4 @@ Commit:    one commit in wigley-ai-gui ("Doc re-read after Lane H: …" naming e
 
 ## Proof
 
+Commit 4c9570a3b · proof: Every claim in the Approach checked against the landed tree; design.md, AGENTS.md, drive SKILL.md and the worktree forms README agree; one followups line rewritten · concerns: drive-commands.ts:67 and :378 still say Claude in user copy; old names remain only in Lane P's open plan docs
