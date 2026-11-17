@@ -597,6 +597,20 @@ because the earlier items rewrite many of these tests anyway.
   (`src/plugins/primer/page/primer-view.ts`, the cancel prompt). When the primer part stops with the prompt open, the scrim and the Keep/Cancel key anchors stay.
   Give `ConfirmPrompt` a `dispose` and have each of its 4 callers (forms among them) dispose it, and the overlay
   contribution, with the part. Pre-existing: found by the Lane L review (#30).
+- **Old plugin revisions are deleted on the launch path** — *agent-ready*: `nextRevision` and the `loadAll` sweep in
+  `src/main/plugin-catalog/user-folder-source.ts` delete old revision folders, and the catalog start awaits `loadAll`
+  (`src/main/main.ts`). The first launch after this change deletes every revision ever made (each a full copy with
+  `node_modules`); later launches delete one launch's worth. Measure the first-launch cost, and if it is noticeable,
+  run the deletes after `loadAll` returns.
+- **`channelMayHaveListener` has no connect timeout** — *agent-ready*: in `scripts/drive-runs.mts` the socket connect
+  has no timeout, and the check now runs every 250 ms in `waitForHostEnd` and once per idle run on every start. A
+  connect that neither connects nor errors (a Windows named pipe is the likelier case) would hang the drive. Give the
+  connect a timeout that answers "no listener". Pre-existing.
+- **`removeExtraTask` never clamps `reviewRow`** — *agent-ready*: `removeExtraTask` in
+  `src/plugins/primer/page/primer-state.ts` leaves `reviewRow` as it was, so the live state can hold a cursor past
+  the last review row until the next `openReview` or restore clamps it. First check whether any path shows the review
+  without `openReview` (for example a confirm Cancel back to the review); if one does, clamp in `removeExtraTask`.
+  Pre-existing.
 - **A reload can stop a main part as a `restart` that never restarts** — *needs a feature plan*: `reloadRunning`
   (`src/main/plugins/plugin-switch.ts`) picks each stop's `PartStop` before it knows whether a start follows.
   `removeMain(id, 'restart')` stops the old main part as a `restart` even when the new version has no main part. The

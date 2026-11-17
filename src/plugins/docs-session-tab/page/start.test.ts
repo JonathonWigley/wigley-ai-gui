@@ -239,16 +239,29 @@ describe('docsSessionTabPagePart', () => {
   );
 
   it.each([
-    { state: 'no unsaved edits', hasUnsavedEdits: false, expected: null },
+    {
+      state: 'no unsaved edits',
+      label: 's1',
+      hasUnsavedEdits: false,
+      expected: null,
+    },
     {
       state: 'unsaved edits',
+      label: 's1',
       hasUnsavedEdits: true,
       expected: "Save or discard the edits in s1's Docs tab first",
     },
+    {
+      state: 'unsaved edits under a row label',
+      label: 'Fix login',
+      hasUnsavedEdits: true,
+      expected: "Save or discard the edits in Fix login's Docs tab first",
+    },
   ])(
     'refuses a switch-off only over unsaved edits ($state)',
-    async ({ hasUnsavedEdits, expected }) => {
-      const { harness, seen } = startWithRows(['s1']);
+    async ({ label, hasUnsavedEdits, expected }) => {
+      const { harness, rows, seen } = startWithRows([]);
+      rows.set('s1', sessionRow('s1', { label, projectDir: '/p' }));
       seen.hasUnsavedEdits = hasUnsavedEdits;
 
       expect(harness.started().mayStop?.()).toBe(expected);

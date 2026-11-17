@@ -265,6 +265,39 @@ describe('createUserFolderSource', () => {
     expect(removed).toEqual([`${CODE_ROOT}/old`]);
   });
 
+  // Breaks if a failed removal aborts loadAll or goes unlogged.
+  it('loads and logs when a gone plugin code folder cannot be deleted', async () => {
+    await code.makeFolder('old/3');
+    await writePlugin('notes');
+    failingRemovals.add(`${CODE_ROOT}/old`);
+
+    const loads = await createSource().loadAll();
+
+    expect(loads).toMatchObject([{ kind: 'loaded' }]);
+    expect(logLines).toContain(
+      '[plugin-catalog] plugin code old not deleted: busy',
+    );
+  });
+
+  // Breaks if a failed root listing aborts loadAll or goes unlogged.
+  it('loads and logs when the plugin code folder cannot be listed', async () => {
+    await writePlugin('notes');
+    const list = code.list.bind(code);
+    vi.spyOn(code, 'list').mockImplementation(async (folder, options) => {
+      if (folder === '') {
+        throw new Error('unreadable');
+      }
+      return list(folder, options);
+    });
+
+    const loads = await createSource().loadAll();
+
+    expect(loads).toMatchObject([{ kind: 'loaded' }]);
+    expect(logLines).toContain(
+      '[plugin-catalog] plugin code not listed: unreadable',
+    );
+  });
+
   // Breaks if the sweep reads only the listed names, deleting the running
   // copy of a plugin a reload loaded this launch.
   it('keeps the code of a plugin loaded this launch on loadAll', async () => {

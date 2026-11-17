@@ -65,12 +65,30 @@ describe('idleRunIds', () => {
 });
 
 describe('waitForHostEnd', () => {
-  it.each<[string, readonly boolean[], boolean, number, number]>([
-    ['true, true, then false', [true, true, false], true, 3, 500],
-    ['true until the deadline', [true], false, 6, 1250],
+  it.each<{
+    name: string;
+    answers: readonly boolean[];
+    ended: boolean;
+    probeCount: number;
+    clockAfter: number;
+  }>([
+    {
+      name: 'true, true, then false',
+      answers: [true, true, false],
+      ended: true,
+      probeCount: 3,
+      clockAfter: 500,
+    },
+    {
+      name: 'true until the deadline',
+      answers: [true],
+      ended: false,
+      probeCount: 6,
+      clockAfter: 1250,
+    },
   ])(
-    'GIVEN a host whose probe answers %s THEN the wait answers %s',
-    async (_, answers, ended, probeCount, clockAfter) => {
+    'GIVEN a host whose probe answers $name THEN the wait answers $ended',
+    async ({ answers, ended, probeCount, clockAfter }) => {
       let clock = 0;
       let probes = 0;
       const deps: HostEndDeps = {
