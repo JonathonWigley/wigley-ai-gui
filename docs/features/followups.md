@@ -52,10 +52,6 @@ Core seams that most items below assume.
   ids, selection and filter, the view a new tree shows first (the wiki with `hasWiki`, else All pages)
   (`page/tree-view.ts`, `place` and `restorePlace`). The other tree view starts over on a page reload. Keep a place
   per tree view.
-- **The primer self-test fails one step on its own** — *agent-ready*: run alone, the primer self-test fails the step
-  that expects `[sessions] activated Layout preview` after a send (`src/plugins/primer/main/selftest-script.ts`),
-  because the Layout preview session it falls back to is opened by forms' script. It passes as `forms,primer`. Open
-  that session in the primer script, or drop the expectation when forms did not run.
 - **Built-in plugin hot reload** — *needs a feature plan*: built-ins still need a rebuild to change. Reloading one
   with new code compiles TypeScript inside the running app, so a compiler ships with it (a third-party ask). The
   runtime loader's `PluginSource` seam and `reload` are the base: a third source over the repo clone.
@@ -80,21 +76,20 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
   restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
   (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
-  (`src/main/claude-code/transcripts.ts`, `let lastAt = 0` at line 127, a second copy at 151) stamps every entry
+  (`src/main/claude-code/transcripts.ts`, `let lastAt = 0` at line 174, a second copy at 214) stamps every entry
   before the transcript's first timestamped line with `at` 0, raw entries from unparsed or untimed lines included,
-  and those are steps; `listRows` (`src/plugins/chat/page/activity-runs.ts:60`, `startedAt: previousAt ?? steps[0].at`)
-  opens a run at 0 and closes it at the next timed entry. Two fixes: backfill the untimed leading lines with the first
-  later timestamp in `transcripts.ts`, or have `listRows` treat `at` 0 as unknown and draw no duration. Default: the
-  backfill, unless an existing test pins `0` for those entries; then say so in the report and take the `listRows`
-  fix. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
-- **Chat self-test fails the minimum-width fit on the session tab bar** — *agent-ready*:
+  and those are steps; `listRows` (`src/plugins/chat/page/activity-runs.ts:86`, `startedAt: previousAt ?? steps[0].at`)
+  opens a run at 0 and closes it at the next timed entry. Fix: have `listRows` treat `at` 0 as unknown and draw no
+  duration (check `working-turn.ts:39,81` too), since `transcripts.test.ts:284-313,329,477` pin `at: 0` for those
+  entries; leave `transcripts.ts` as it is. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
+- **Chat self-test fails the minimum-width fit on the session tab bar** — *needs a feature plan*:
   `npm run selftest -- --plugin chat` fails 8 steps with `<keys> fits the minimum width: nav.ui-tabs.session-tabs
   holds 120px in 99px` (groups: permission round Cmd+Enter, transcript focus Enter twice, controls e and Escape,
   interrupt and close three times). It fails the same on base 46f417b5, so it predates the usage change. The session
   tab bar (`.ui-tabs.session-tabs`, `src/plugins/sessions/page/sessions.css` near line 348, with the usage line from
   `usage-tab-line` in its tab line) does not fit at the minimum width. Find what grew it (check recent commits
   touching the sessions tab bar or the usage tab line, such as 4c8a2b0b and 4b7f175a) and make the bar fit or
-  scroll. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
+  scroll. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui. Needs a repro before a fix: the rule is now at `sessions/layouts/default/layout.css:397,414` and the bar was reworked since (ed63f147f, 370a47974); re-run `npm run selftest -- --plugin chat`.
 - **Window adapter misses page load 1** — *agent-ready*: the window adapter numbers page loads from 1 only because both
   `electronDrivenWindow` calls (`src/main/main.ts` `createWindow`, `src/main/selftest.ts` `startSelfTest`) run in the
   same synchronous pass that starts the first load (`src/main/window.ts` `loadURL`); an `await` added between them
@@ -113,11 +108,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   primer tool calls fail until the cleared row ends. Options: retire the id only until the old process ends, or give
   a hello after that a plain connected row. Source session: Claude Code b8ee3503-3c04-48fc-bd7d-bc4f2ec56c17 in
   wigley-ai-gui.
-- **Concurrent resumes of one past session** — *agent-ready*: chat's `resume`
-  (`src/plugins/chat/main/chat-sessions.ts`) checks whether a host session already has a row only before it awaits
-  the history read, so two resumes of the same past session started together can each open a row for one host id.
-  Re-check `holding` and `isOpenOnOtherRow` after the await, as `send` re-checks its row after its pending-history
-  read, with a row in the resume tests.
 - **A note opening with "Shipped" files as done** — *needs a feature plan*: Notes files a follow-up whose one line is
   the body's first sentence (`src/plugins/notes/main/note-sender.ts`), and Backlog reads an item whose one line
   starts with "shipped" as done (`startsWithShipped`, `src/shared/followups/followup-file.ts`), so such a note never
@@ -137,15 +127,15 @@ Defects seen in a drive run, a transcript or the user's own use.
   `editingSection` at about a dozen sites across the section editor, the conflict flow, `closeEditor` and `writeEditor`.
   An editor-session module owning those, with the mode as data (full text from the edit, saved text, restore, reload),
   would collapse most of them; it also moves the paste and drop code, so it is its own plan.
-- **One newest-wins open rule** — *agent-ready*: docs opens race each other with no shared rule: `openDoc` and `gh` drop
+- **One newest-wins open rule** — *agent-ready*: docs opens race each other with no shared rule: `openDoc` and `openMain` drop
   a waiting request only for a newer one of either, so a doc the user opens from the tree or a link while it waits on a
   rebuild is replaced when the rebuild lands. One open-intent sequence shared by `openDoc`, tree leaf opens and
   in-doc links, checked where the open happens, gives one newest-wins rule (`src/plugins/docs/page/docs-view.ts`
   `openDoc`, `followFile`). A path snapshot was tried and dropped: it could not tell an earlier `openDoc`'s own open
   from a user's.
-- **Missed rebuild on a rules folder write** — *agent-ready*: in a drive run, a doc written into the temp home's
+- **Missed rebuild on a rules folder write** — *needs a feature plan*: in a drive run, a doc written into the temp home's
   `.claude/rules/` from outside the app started no rebuild until Rescan. Check whether the docs watches cover that
-  folder or the change was debounced away (`src/plugins/docs/main/view-watches.ts`, which watches one file per view).
+  folder or the change was debounced away (`src/plugins/docs/main/view-watches.ts`, which watches one file per view). Open: no folder or source watch exists, so decide between source-folder watches and Rescan as the route.
 - **Composer status line cut off in a very short Chat tab** — *needs a feature plan*: the composer's activity slot
   (`.chat-working-slot`, `flex-shrink: 0`) once held the live activity dock, about 97px, and with the box and a wrapped
   status line it outgrew the composer's cap in a tab under about 318px (a 900x360 window, or a pane after `splitDown`
@@ -161,11 +151,11 @@ Defects seen in a drive run, a transcript or the user's own use.
   before planning. To decide: raise the cap or lower the box's floor. Source session: Claude Code
   c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
 
-- **`/clear` then relaunch loses the row's selection** — *agent-ready*: select a row, `/clear` it (running or idle),
+- **`/clear` then relaunch loses the row's selection** — *needs a feature plan*: select a row, `/clear` it (running or idle),
   and restart; no row is selected and the main pane says `Pick a session in the side bar`, though
   `open-sessions.json`'s `selectedHostSessionId` holds the row's new host id. A selected row with no `/clear` stays
   selected. Seen on the fake harness through a drive `restart`; the cause isn't traced, and it may be fixture-only,
-  since the fake has no saved history for the new id.
+  since the fake has no saved history for the new id. Needs a repro before a fix: Lane H rewrites the clear path.
 - **Tabs lose their first click in an unfocused pane** — *agent-ready*: the first click on a tab in an unfocused pane
   focuses the pane but does not select the tab. Pane focus moves on the release, and `drawFrame`
   (`src/plugins/sessions/page/session-tabs-view.ts`) then rebuilds the strip with `strip.replaceChildren()`, so the
@@ -179,21 +169,21 @@ Defects seen in a drive run, a transcript or the user's own use.
   selection and the box takes no keys. Each costs one extra key; typing never reaches the wrong pane. Read, not driven.
   Record at the press whether a selection already existed. Source session: Claude Code
   368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
-- **A re-attach on the real harness reports `Earlier conversation not read: ENOENT`** — *agent-ready*: after a drive
+- **A re-attach on the real harness reports `Earlier conversation not read: ENOENT`** — *needs a feature plan*: after a drive
   `restart` with `--harness claude`, the first transcript entry read that, for
   `~/.claude/projects/-tmp-claude-session-hub-p3/<id>.jsonl`; later entries stayed. The text comes from
   `src/plugins/chat/main/chat-sessions.ts`. Cause not traced: one lead is a Claude config folder other than `~/.claude`,
-  which this machine's profile uses. Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
-- **The `chat: visuals` self-test step failed once** — *agent-ready*: `v -> [visual] visual overlay showing 2 of 2`
+  which this machine's profile uses. Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui. Needs a repro before a fix: a real-harness run, since Lane H rewrites the history path.
+- **The `chat: visuals` self-test step failed once** — *needs a feature plan*: `v -> [visual] visual overlay showing 2 of 2`
   (`src/plugins/chat/main/selftest-script.ts`) failed in 1 of 4 filtered runs at 914024cd, with no page reload in the
   log, then passed twice under `--plugin chat` and once under the same wider filter. The cause isn't traced; a late
   rest position on the reply's last block is one lead, since `d3ca10c9` had just changed the chat cursor's band move.
-  Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
-- **Skills lists a slash the CLI did not recognise** — *agent-ready*: on the real harness, `/tiny` drew a Skills row
+  Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui. Needs a repro before a fix: re-run it after the chat cursor fixes land.
+- **Skills lists a slash the CLI did not recognise** — *needs a feature plan*: on the real harness, `/tiny` drew a Skills row
   `tiny main` while the agent replied that `/tiny` isn't a command in this session. The skill's file was written after
   the session started, so a loaded skill was not seen doing this. The event source is not traced; start at
-  `foldAgentEvent` (`src/plugins/agents/roster.ts`). Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in
-  wigley-ai-gui.
+  the decoder and fold (`src/main/claude-code/session-fold.ts:368`, `stream-decoder.ts:276`), not the roster. Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in
+  wigley-ai-gui. Needs a repro before a fix: a real-harness run.
 - **A clamped key on a too-tall last block stops following** — *agent-ready*: with the cursor following at the bottom on
   a last stop taller than the band, `j`, `J` or `k` takes `scrollIntoView({ block: 'nearest' })`, which pulls the list up
   a few pixels and ends following, so a streaming reply is left behind until `G`. Read from `entry-list.ts`
@@ -233,12 +223,12 @@ Defects seen in a drive run, a transcript or the user's own use.
   close queues it (`afterClose` in `retro-queue.ts`). Fix: the post-close selection skips rows a plugin section
   claims, falling to the next row outside a claimed section. Add a row to the session-list tests: GIVEN a selected
   row with a claimed row beside it WHEN the selected row closes THEN the selection lands on an unclaimed row.
-- **The right bar overlays the main cell at a narrow window** — *agent-ready*: at a narrow window the shell's right
+- **The right bar overlays the main cell at a narrow window** — *needs a feature plan*: at a narrow window the shell's right
   bar (`.shell-right-bar`, System stats; `src/renderer/shell/shell.css`, `shell-layout.ts`) overlays the mode's main
   cell instead of stacking under it or hiding. At the 420px minimum it covers the right half of Backlog (seen at x 220,
   200 wide, in the backlog launcher's live check), so the filter bar is cut off. `fit` does not report the overlap, only
   truncated cells. Fix: below the width the main cell needs, the right bar stacks or hides, as a split's stacked panes
-  do; add an overlap check to `fit`.
+  do; add an overlap check to `fit`. Open: the overlay is deliberate (`src/renderer/shell/shell.css:202`), so decide stack, hide or keep over.
 
 ## Harness seams
 
@@ -362,9 +352,9 @@ What Windows support and installers need.
   privacy setting. The likely cause, not yet confirmed, is that the app is ad hoc signed with no team ID, so macOS
   ties the folder permission to one build and each `npm run install-app` can drop it for every running agent. Confirm
   the cause, then decide which signing identity `install-app` uses.
-- **The app install waits while `main` holds half-finished work** — *agent-ready*: a half-finished state on `main`,
+- **The app install waits while `main` holds half-finished work** — *needs a feature plan*: a half-finished state on `main`,
   such as an in-progress merge, blocks `npm run install-app`: one install rebuilt mid-merge and broke. Make the
-  install wait until `main` is clean of it.
+  install wait until `main` is clean of it. Open: `scripts/install-app.mts` packages a committed ref and never reads working-tree or merge state, so the observed failure and what "wait" means need settling first.
 - **Native window vibrancy** — *needs a feature plan*: macOS `vibrancy` and Windows 11 mica behind a window adapter,
   in place of the CSS backdrop under L1 glass (`docs/features/ui-design/design.md`).
 - **A shareable build without the user's workflow** — *needs a feature plan*: the user wants to give the app to other
@@ -501,10 +491,10 @@ User-facing features, those other work builds on first.
 - **Step and tool-call durations in the activity line** — *agent-ready*: every chat entry carries `at`, so a step row
   in an open activity line shows the time from its `at` to the next entry's, and a tool call shows how long it took;
   the activity line already shows its run's time (`src/plugins/chat/page/activity-runs.ts`).
-- **Ctrl+j/k cursor keys in the remaining list views** — *agent-ready*: `<C-j>`/`<C-k>` are bound for primer, chat,
+- **Ctrl+j/k cursor keys in the remaining list views** — *needs a feature plan*: `<C-j>`/`<C-k>` are bound for primer, chat,
   workflow, forms, docs, backlog and gallery (`src/plugins/keymap.ts`). Still missing: settings sections and rows, the
   chat, docs and settings pickers, and the chat session list. `Ctrl+j`/`Ctrl+k` move the cursor a line and
-  `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, so the scroll keys (`docs/keymap.md`, Layers) reach every view.
+  `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, so the scroll keys (`docs/keymap.md`, Layers) reach every view. Open: pickers have no half-page commands, so the `Ctrl+Shift` keys need new commands, and new keys are the user's call.
 - **Layout name picker in Settings mode** — *agent-ready*: each `<owner>.layout` setting (and `shell.layout`) draws as
   a plain text row; a picker listing the owner's layout names, as the theme row lists themes, would read main's
   `api.layouts.names()`.
@@ -545,11 +535,12 @@ Duplication and drift with no user-visible defect.
   the primer's two splits), so a new split owner cannot forget it.
 - **One native-input reset in the input frame** — *agent-ready*: five plugins copy the same eight-declaration reset
   for the plain `<input>` that `textBoxInput` puts in an `inputFrame` (transparent background, no border,
-  `font: inherit`, no outline, no padding, full width, `min-width: 0`): `.docs-box` (`src/plugins/docs/page/docs.css`),
-  `.settings-box-input` (`settings/page/settings.css`), `.backlog-filter-input` (`backlog/page/backlog.css`),
-  `.notes-title` (`notes/page/notes.css`) and the sessions rename dialog's box. Move it into the primitive (a rule on
-  `.ui-input > input` in `src/shared/page/ui/input-frame.css`, or a class `textBoxInput` adds) and delete the five
-  copies, checking each box's look in a drive capture.
+  `font: inherit`, no outline, no padding, full width, `min-width: 0`): `.docs-box` (`src/plugins/docs/page/docs.css:32`),
+  `.settings-box-input` (`settings/page/settings.css:85`), `.backlog-filter-input` (`backlog/page/backlog.css:82`, shared
+  with `.backlog-rename-input`: confirm that box sits in an `inputFrame`), `.notes-title` (`notes/page/notes.css:68`;
+  keep the `::placeholder` rule at :79) and the sessions rename dialog's box (`sessions/page/sessions.css:206`). Move it
+  into the primitive (`src/shared/page/ui/input-frame.css` has no `.ui-input > input` rule yet; add one, or a class
+  `textBoxInput` adds) and delete the five copies, checking each box's look in a drive capture.
 - **Forms' cancel confirm through the forms layout** — *agent-ready*: the forms cancel confirm passes neither
   `drawFrame` nor `drawBody` to `createConfirmPrompt` (`src/plugins/forms/page/forms-view.ts`), so its frame and body
   are drawn in code; the primer, the audio picker, practice and the session stash already draw theirs through
@@ -567,8 +558,8 @@ Duplication and drift with no user-visible defect.
 - **ownsRoot helper** — *agent-ready*: "a `repo` or `features` entry owns its root" is spelled inline in four places;
   one `ownsRoot(entry)` beside `isKnownSource` gives it one home (`src/plugins/docs/tree.ts` `buildTree`,
   `path-guard.ts`, `page/docs-state.ts`, `index-document.ts`).
-- **isStringArray reuse** — *agent-ready*: two inline string-array checks repeat `isStringArray` from
-  `src/shared/json.ts` (`src/plugins/docs/main/script-locator.ts`, `src/shared/drive-args.ts`).
+- **isStringArray reuse** — *agent-ready*: one inline string-array check repeats `isStringArray` from
+  `src/shared/json.ts` (`src/shared/drive-args.ts:99`).
 - **Redundant docs.css rule** — *agent-ready*: `src/plugins/docs/page/docs.css` keeps
   `.docs-tree.is-pane-inactive .ui-row.is-selected`, which the one rule in `src/shared/page/ui/row.css`
   (`.is-pane-inactive .ui-row.is-selected`) now covers.
@@ -611,11 +602,11 @@ Duplication and drift with no user-visible defect.
   `src/plugins/forms/main/kinds/question/question-format.ts`, its filter in the missing-field check, the error for both
   fields present, and the two legacy rows in `question-format.test.ts`.
 - **Promote the audio picker's waveform to a shared ui primitive** — *agent-ready*: the audio picker draws its
-  waveform with a plugin-local helper in `src/plugins/audio-picker/page/layout/picker-kit.ts`, while `DESIGN.md`
+  waveform with a plugin-local helper (`waveform(peaks)` at line 130 of `src/plugins/audio-picker/page/layout/picker-kit.ts`, a kit member at :97; its CSS is `audio-picker/layouts/default/layout.css:76-88`), while `DESIGN.md`
   § Primitives puts a reusable visual piece in the shared primitives with a gallery entry. The audio-picker review
   (finding 6) left it local because one surface uses it. When a second surface wants a waveform, or as a tidy-up
   before then, move it into the shared ui primitives, add its gallery entry and its `DESIGN.md` § Primitives row, and
-  point the audio picker at it; its size stays a `calc` of space tokens. Source session: Claude Code
+  point the audio picker at it; its size stays a `calc` of space tokens. `audio-picker/page/audio/waveform.ts` is an unrelated peaks module and stays. Source session: Claude Code
   6c8ae463-d34c-4c99-ae9e-8a92d1952360 in new-games-prototypes.
 
 ## Latent defects and tests
@@ -667,9 +658,10 @@ because the earlier items rewrite many of these tests anyway.
   `[sessions] activated Layout preview` (`src/plugins/primer/main/selftest-script.ts`). That line needs forms' Layout
   preview session, so the script passes only with `--plugin forms,primer` (from eb6f544b8). Either drop the wait, or
   have the script open the session it waits on.
-- **A failing worktree list goes unreported** — *agent-ready*: `planCopies` (`src/shared/plan-copies.ts`) falls back to
+- **A failing worktree list goes unreported** — *agent-ready*: `planCopies` (`src/shared/plan-copies.ts:88`) falls back to
   the plan's own copy, with no log, when `git.worktrees` rejects, so a list that keeps failing hides every worktree
-  copy from Large in silence. Log the rejection once per clone.
+  copy from Large in silence. `PlanCopyDeps` has no log: add an optional `log` dep, have callers pass the plugin log,
+  and log the rejection once per clone.
 - **`Git.commitPaths` has no caller** — *agent-ready*: `Git.commitPaths` (`src/contracts/git.ts`,
   `src/main/git/process-git.ts`) is called only from tests now that Backlog's Commit is gone, and `AGENTS.md`'s git
   adapter entry still lists "a commit of named paths only". Remove the method, its adapter, its tests and the
@@ -708,8 +700,8 @@ because the earlier items rewrite many of these tests anyway.
   errors after `all passed`: `watchDoc`, `pluginStatus`, `loadIndex`, `loadHistory`. The live switch stops page parts
   before main parts, but a restart leaves running the page part of a plugin that depends on the restarted one only in
   main, so a restart has the same invoke gap, and a quit produces these lines too: quiet them.
-- **Withdrawn tools reach live hosts late** — *agent-ready*: at a stop, withdrawn tools and shrinking tool lists need
-  to reach live hosts before `relay.close`, and the relay's second notice arrives only on the host's next `tools/call`.
+- **Withdrawn tools reach live hosts late** — *needs a feature plan*: at a stop, withdrawn tools and shrinking tool lists need
+  to reach live hosts before `relay.close`, and the relay's second notice arrives only on the host's next `tools/call`. Open: this states a requirement, not a fix, so decide how withdrawn tools reach a host before `relay.close` (`src/plugins/sessions/main/start.ts:321`, `mcp/mcp-server.ts:59`); re-read after Lane H.
 - **A stop drops unsaved text** — notes' popup and a forms draft lose what the user typed when their part stops. A
   switch-off asks `mayStop` first and refuses while their text is unsaved or a round is open, so a restart (drive-only) is the stop that still
   drops it.
@@ -726,8 +718,8 @@ because the earlier items rewrite many of these tests anyway.
 - **A disposed layout preview still opens** — after `dispose`, the layout preview's `show` can open a preview, because
   it does not check. Make a disposed service refuse, as `track` does for a registration made after the stop.
 - **A throwing teardown step skips the rest** — *agent-ready*: these remain plain sequences: chat's `detachAll` (a
-  throwing `detach` or `kill` cannot happen today), `disposeAnchors`, `dispose` in the docs view, and the sessions tabs view's
-  `drop`, `disposeText` and `disposeTabs`, where a throw leaves a half-disposed frame in the map. Run the remaining steps
+  throwing `detach` or `kill` cannot happen today) and the sessions tabs view's
+  `drop`, `disposeText` and `disposeTabs` (`sessions/page/session-tabs-view.ts:299,306,660`), where a throw leaves a half-disposed frame in the map. Run the remaining steps
   through `callEach`, the way `Registrations.dispose` does. Grep every plain teardown sequence in one pass: the fixes so
   far patched sites as each review found them.
 - **Every view's dispose against what it drew** — *agent-ready*: the sessions side bar and the gallery's drag reorder
@@ -766,10 +758,6 @@ because the earlier items rewrite many of these tests anyway.
 - **Memory Files folder watch events** — *agent-ready*: the memory Files adapter reports nothing to a watch when it
   makes, removes or trashes an empty folder, where Node's `fs.watch` on the parent reports the folder's name
   (`src/shared/memory-files.ts` `makeFolder`, the `removeKey` callers). No caller depends on it yet.
-- **Primer self-test start-order dependence** — *agent-ready*: the primer self-test's last step
-  (`src/plugins/primer/main/selftest-script.ts`) expects `[sessions] activated Layout preview`. That line depends on
-  forms' self-test running just before and leaving its preview row to the left, so a change in plugin start order
-  breaks it. Fix: a close log line of its own in the sessions page, or activate a known session first.
 - **Restored row with a missing profile never gets its saved usage** — `restoreRecord`
   (`src/plugins/chat/main/chat-sessions.ts`, near line 1337; the `lastUsage` read at 1353) reads `harness.lastUsage`
   only when the profile is found at restore. History recovers once the profile returns (`loadHistory` retries, pinned
@@ -823,22 +811,19 @@ because the earlier items rewrite many of these tests anyway.
   path to the table test `sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone` in
   `src/plugins/auto-retro/main/start.test.ts`, and read the capture afresh for correctness.
 - **Primer tests on a full task's add-item box** — *agent-ready*: `src/plugins/primer/page/primer-commands.test.ts`
-  (the two tests at "from a task holding 20 items" and "from an add-item box on a task holding 20 items") mounts an
+  (the test at line 608, "from an add-item box on a task holding 20 items") mounts an
   add-item box on a full task. The page no longer reaches that state, since a full task shows no add-item box
-  (`hasAddItemBox`, `src/plugins/primer/page/boxes.ts`). Retarget them at a stale box, or drop them.
-- **form-service test over the memory store** — *agent-ready*: `form-service.test.ts` (`src/shared/agent-forms/`)
-  runs its logic over `createMemoryFormStore`, leaving disk behaviour to `form-store.test.ts`.
+  (`hasAddItemBox`, `src/plugins/primer/page/boxes.ts`). Retarget it at a stale box, or drop it. The test at :495 stays,
+  since the command refusing is valid.
 - **Tests that restate shipped text** — *agent-ready*: drop or rewrite tests that restate shipped tables and authored
-  text: `forms/manifest.test.ts` (every bind), `finding-origins.test.ts` and `tool-definitions.test.ts` (action
-  words, `maxItems`, description sentences; build a local origin table and assert the derived functions),
-  `verdict.test.ts` chip text, `formats.test.ts` `F1`/`N2`, `view-model.test.ts` `Saving…`, sessions' `harnessText`
-  and `markToastText`, `languages.test.ts`'s `@codemirror/language-data` aliases, and docs'
-  `nameProblem_Rules_PinnedMessages` unless those messages are a contract.
-- **One test naming style** — *agent-ready*: sentences. `Name_Case_Result` names remain in `main-api.test.ts`,
-  `layout-loader.test.ts`, `layout-registry.test.ts`, `card-input.test.ts`, `which-key.test.ts`,
-  `help-sections.test.ts` and `docs-state.test.ts`.
+  text. What remains: `forms/page/kinds/formats.test.ts:6-7` (`F1`/`N2`), `forms/page/kinds/finding/verdict.test.ts` chip
+  text, `forms/main/tool-definitions.test.ts` (`maxItems`), `audio-picker/main/tool-definitions.test.ts:51-59` and
+  `sessions/page/tabs.test.ts:283`.
+- **One test naming style** — *agent-ready*: sentences. `Name_Case_Result` names remain in `main/plugins/main-api.test.ts`,
+  `shared/page/layout-host/layout-loader.test.ts`, `shared/layouts/layout-registry.test.ts`,
+  `keys/page/which-key.test.ts` and `docs/page/docs-state.test.ts`.
 - **`$name_<suffix>` vitest titles lose their case name** — *agent-ready*: vitest reads `$name_BadId…` as one key
-  `name_BadId…`, so each row's title loses its name (the repo's own note, `src/shared/fake-agent-harness.test.ts:999`).
+  `name_BadId…`, so each row's title loses its name (the repo's own note, `src/shared/fake-agent-harness.test.ts:1014`).
   Three sites: `src/plugins/usage/main/drive-actions.test.ts:101` and
   `src/main/drive/drive-commands.test.ts:132` and `:153`. Fix as the note says: each row carries its whole name, and
   the title is `'$name'`. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
@@ -921,10 +906,10 @@ because the earlier items rewrite many of these tests anyway.
 - **`[chat] session <id> closed (code 0)` after a session's close** — *needs a decision*: main's record of the turn it
   ended logs after `[chat] session closed: <label>`, by id, since the row is gone. To decide: keep it as main's record, or
   name the session from what main still holds.
-- **Each chat tab draws twice per page load** — *agent-ready*: each load logs `Chat tab shown` twice and mounts each
+- **Each chat tab draws twice per page load** — *needs a feature plan*: each load logs `Chat tab shown` twice and mounts each
   visual frame twice, the same on the base of plan-commands-and-state. By reading and log order, not confirmed:
   `show-layouts.ts` always calls `setLayouts` on a first load, which runs sessions' `checkVisible(true)` and chat's rebuild
-  of the entries.
+  of the entries. Needs a repro before a fix: the double draw is unconfirmed.
 - **A user layout logs `layout st shown` then `layout default shown`** — *needs a decision*: `layout-loader.ts` loads
   `default` on every load and `show-layouts.ts` logs each one, though the user's layout draws. To decide: log only the
   layout in use, or log the default as loaded.
@@ -952,10 +937,10 @@ because the earlier items rewrite many of these tests anyway.
   the model). Pre-existing before keyboard-reach (it ran synchronously then). Source: the keyboard-reach
   re-review. Source session: Claude Code f1855e19-7de7-4e8f-a22a-ca873386605d in
   /Users/jonathonwigley/Documents/ai-dev.
-- **Self-test `forms: cancelled preview` fails on main** — *agent-ready*: `npm run selftest -- --plugin forms`; after
+- **Self-test `forms: cancelled preview` fails on main** — *needs a feature plan*: `npm run selftest -- --plugin forms`; after
   `<D-w>` closes the Layout preview session the app selects `selftest 3` (its right neighbour in main's rows) where the
   step expects `Codex session`, and the `R` and `<A-o>` steps after it fail on that. Fails the same on a plain `main`
-  checkout (b72c74a3): decide whether the close picks the left neighbour or the step follows main's rows.
+  checkout (b72c74a3): decide whether the close picks the left neighbour or the step follows main's rows. Open: that choice (`src/plugins/forms/main/selftest-script.ts:770-790`).
 - **Primer `placeRestored` may restore a stale review cursor** — *agent-ready*: since keyboard-reach met hot-reload,
   `primer-state.ts`'s reducer restores a stored place without resetting the review view's `reviewRow`, so a restored
   review could hold a row past the list's end. Trace it and pin it with a row in the primer-state tests.
