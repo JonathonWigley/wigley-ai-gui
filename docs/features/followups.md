@@ -597,11 +597,22 @@ because the earlier items rewrite many of these tests anyway.
   (`src/plugins/primer/page/primer-view.ts`, the cancel prompt). When the primer part stops with the prompt open, the scrim and the Keep/Cancel key anchors stay.
   Give `ConfirmPrompt` a `dispose` and have each of its 4 callers (forms among them) dispose it, and the overlay
   contribution, with the part. Pre-existing: found by the Lane L review (#30).
-- **Old plugin revisions are deleted on the launch path** — *agent-ready*: `nextRevision` and the `loadAll` sweep in
-  `src/main/plugin-catalog/user-folder-source.ts` delete old revision folders, and the catalog start awaits `loadAll`
-  (`src/main/main.ts`). The first launch after this change deletes every revision ever made (each a full copy with
-  `node_modules`); later launches delete one launch's worth. Measure the first-launch cost, and if it is noticeable,
+- **Old plugin revisions are deleted on the launch path** — *agent-ready*: in
+  `src/main/plugin-catalog/user-folder-source.ts` the `loadAll` sweep deletes the whole code folders of plugins that
+  are gone (their revisions included), and `nextRevision` deletes a plugin's earlier revisions before its first copy
+  this launch. The catalog start awaits `loadAll` (`src/main/main.ts`). The first launch after this change deletes
+  every revision ever made (each a full copy with `node_modules`); later launches delete one launch's worth. Measure the first-launch cost, and if it is noticeable,
   run the deletes after `loadAll` returns.
+- **A refused review click returns focus to the assistant pane's frame, not its ask box** — *needs a feature plan*
+  (it adds a seam): in `src/plugins/backlog/page/backlog-view.ts` (844-849) a click into the review with no row
+  selected, while the assistant holds the keys, calls `pane.element.focus()`. In the real pane that is the
+  `scoped-agents-pane` body (`src/plugins/scoped-agents/page/agent-pane.ts`, 98-99 and 382), while the assistant's
+  keys act in the ask box editor (`askBox.editor.focus`, 160-161) or the chat mount. A user typing in the ask box who
+  clicks the empty review loses the caret. The `AgentPane` contract (`src/plugins/scoped-agents/contract.ts`, 96-108)
+  has no member that returns DOM focus to where the pane's keys act; the fix is one (for example running
+  `holdKeys(true)`), and the view test's fake should then assert that element. Test gap: the backlog view test's fake
+  `pushScope` returns an `onBaseChanged` that never fires (`backlog-view.test.ts`, 353 and 362), so a box-close chain
+  through a scope change is not modelled; a fake that fires it on `setScope` would.
 - **`channelMayHaveListener` has no connect timeout** — *agent-ready*: in `scripts/drive-runs.mts` the socket connect
   has no timeout, and the check now runs every 250 ms in `waitForHostEnd` and once per idle run on every start. A
   connect that neither connects nor errors (a Windows named pipe is the likelier case) would hang the drive. Give the

@@ -161,4 +161,5 @@ Review base: 34e4782344fb8ae4e6246859c522c2a5bb9abc53
 - 18: inOrder drops an id with no admitted entry; every caller passes admitted ids · group 18
 - item 01 stays in followups.md: Lane H's unmerged hunk rewrites a path inside it; its removal moves to plan-followups-after-lane-h task 26 · group 17
 ### Review rounds
+- Round 1 (34e478234..5ee29f14d): NEEDS FIXES — 1 Critical (backlog rename from the table closes its box), 8 Minor, 2 pre-existing; 4 lead-applied (5e9942aab); fixes b9f42ac6e, 1ebef1f46. Fix range tier: Medium (focus-handling behaviour in backlog-view) — re-review, correctness lane, over 5e9942aab..1ebef1f46
 ### Test gate
