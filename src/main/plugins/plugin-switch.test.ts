@@ -1121,6 +1121,43 @@ describe('createPluginSwitch', () => {
     expect(switched.row('u')?.problem).toBe(null);
   });
 
+  // Built-in `y` depends on user plugin `x` on the page.
+  const X = user('x');
+  const Y = entry('y', { manifest: { dependsOn: { main: [], page: ['x'] } } });
+
+  it('names a running dependent again when its dependency starts on the page after it', async () => {
+    const switched = setup({ entries: [X, Y], applied: ['x', 'y'] });
+    await switched.pluginSwitch.settled();
+    switched.calls.length = 0;
+
+    await switched.pluginSwitch.apply([]);
+
+    expect(
+      switched.calls.filter((call) => call.startsWith('page start')),
+    ).toEqual(['page start y', 'page start x,y']);
+  });
+
+  it('leaves a withheld dependent to its own page start when its dependency reloads and starts', async () => {
+    const switched = setup({
+      entries: [X, Y],
+      applied: heldAtStart([X, Y]),
+      disabled: [],
+    });
+    switched.main.startErrors = { x: ['boom'] };
+    await switched.pluginSwitch.settled();
+    expect(switched.row('y')?.problem).toBe(
+      'Needs plugin "x", which did not start',
+    );
+    switched.calls.length = 0;
+
+    const calls = await changeCatalog(switched, [user('x', { revision: 2 }), Y]);
+
+    expect(calls.filter((call) => call.startsWith('page start'))).toEqual([
+      'page start x',
+      'page start y',
+    ]);
+  });
+
   // `d1` and `d2` depend on `u` in main and the page, so their main parts
   // restart too, and `d1`'s page part failed at launch. The page fails `d1`
   // again, or starts nothing as a gone page does.
