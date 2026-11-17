@@ -1,6 +1,6 @@
 # 03 — Sessions pane clicks and presses
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · changes when a tab bar draw replaces DOM under a live click, and what a release reads of a press it did not see begin
 Wave: 1 · Depends on: none
@@ -111,3 +111,4 @@ own press's selection, so the first click in an unfocused pane lands (follow-ups
 
 ## Proof
 
+Commit f89425e18 7628ffdcc · proof: diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: drawStrip assumes the tab strip holds only tab elements (user layouts unchecked); start.test.ts selection test relies on fireWindow and the stubbed getSelection sharing one window

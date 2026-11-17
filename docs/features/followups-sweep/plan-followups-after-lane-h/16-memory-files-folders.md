@@ -1,6 +1,6 @@
 # 16 — Memory Files reports folder events
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · one test double reports three more kinds of change; every test that watches it reruns
 Wave: 1 · Depends on: none
@@ -75,3 +75,7 @@ Done when: compiles (`npm run typecheck`); `npm test` (whole suite, Decisions) g
 
 Commit: one commit for the group, e.g. "Memory Files reports made, removed and renamed folders to its watches
 (follow-up: Memory Files folder watch events)"
+
+## Proof
+
+Commit 51f0ce8e5 · proof: diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: watch-based tests may hear an extra folder key (plan-watch, workflow-large-main, pool-watch, layout-registry, docs doc-files and start, user-folder-source, audio-reads, problem-store): test gate scope; four new test titles use subject_Case_Result form

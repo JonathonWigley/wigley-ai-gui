@@ -1,6 +1,6 @@
 # 19 — Claude adapter: interrupt and hand-back
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · two stream-protocol edge cases in the adapter's pure state machines; each fix moves when a working state or an events entry opens, against measured CLI line orders
 Wave: 1 · Depends on: none
@@ -138,3 +138,7 @@ Done when: compiles (`npm run typecheck`); `npm test` runs `turn-tracker.test.ts
 Commit: one commit for the group, e.g. "Claude adapter: a started message stays working through an interrupt reply,
 and the init after a hand-back joins it only when the next result is empty (follow-ups: interrupt before a message's
 init, hand-back join)"
+
+## Proof
+
+Commit a1b694bf3 b3c225cb0 · proof: diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: a subagent's own content line inside the held window after a hand-back's init also opens a new events entry

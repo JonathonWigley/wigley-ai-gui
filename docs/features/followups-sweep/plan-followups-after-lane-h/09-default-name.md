@@ -1,6 +1,6 @@
 # 09 — One DEFAULT_NAME
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · one exported constant replacing nine private copies, after the exported constants `src/contracts/core-state.ts` already holds; behaviour unchanged
 Wave: 1 · Depends on: none
@@ -67,3 +67,4 @@ copies (follow-up: One DEFAULT_NAME for the layout host)".
 
 ## Proof
 
+Commit 31b786cf7 · proof: diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: none

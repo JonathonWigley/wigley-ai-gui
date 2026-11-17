@@ -124,16 +124,16 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 
 ### Wave 1
 - [ ] [Docs view state](01-docs-view-state.md)
-- [ ] [One ownsRoot helper](02-docs-owns-root.md)
-- [ ] [Sessions pane clicks and presses](03-sessions-pane-presses.md)
+- [x] [One ownsRoot helper](02-docs-owns-root.md)
+- [x] [Sessions pane clicks and presses](03-sessions-pane-presses.md)
 - [ ] [Step and tool-call durations](07-step-durations.md)
-- [ ] [One DEFAULT_NAME](09-default-name.md)
+- [x] [One DEFAULT_NAME](09-default-name.md)
 - [ ] [Window adapter hears page load 1](12-window-page-load.md)
 - [ ] [Drive wait-log and test titles](13-drive-wait-log.md)
-- [ ] [Memory Files reports folder events](16-memory-files-folders.md)
-- [ ] [Auto-retro claims restored rows](17-auto-retro-rows.md)
+- [x] [Memory Files reports folder events](16-memory-files-folders.md)
+- [x] [Auto-retro claims restored rows](17-auto-retro-rows.md)
 - [ ] [Chat close after dispose](18-chat-close-after-dispose.md)
-- [ ] [Claude adapter: interrupt and hand-back](19-claude-adapter-fixes.md)
+- [x] [Claude adapter: interrupt and hand-back](19-claude-adapter-fixes.md)
 - [ ] [Terminal session name from its own profile](21-terminal-session-name.md)
 
 ### Wave 2
@@ -168,7 +168,17 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 
 ### Groups
+- 02 · standard; compile error back on standard (JsonObject lacks typed source) · 7ab23142d b3c225cb0 · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: none
+- 03 · hard; compile error back on hard (test name shadowed) · f89425e18 7628ffdcc · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: drawStrip assumes the tab strip holds only tab elements (user layouts unchecked); start.test.ts selection test relies on fireWindow and the stubbed getSelection sharing one window
+- 09 · standard · 31b786cf7 · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: none
+- 16 · standard · 51f0ce8e5 · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: watch-based tests may hear an extra folder key (plan-watch, workflow-large-main, pool-watch, layout-registry, docs doc-files and start, user-folder-source, audio-reads, problem-store): test gate scope; four new test titles use subject_Case_Result form
+- 17 · deep · c1fb07efb · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: the first-message claim also runs on a row chat's resume adds, so a resumed old retro session mid-run is claimed and closed finished once idle
+- 19 · deep · a1b694bf3 b3c225cb0 · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: a subagent's own content line inside the held window after a hand-back's init also opens a new events entry
 ### Contract changes
 ### Rulings
+- 02: the raw-JSON site in malformedEntryField passes { source } to ownsRoot rather than widening its parameter · group 02
+- 09: layout-url.ts's local DEFAULT_NAME comment dropped; the exported constant's comment covers it · group 09
+- 16: foldersAtOrUnder also reports the implicit ancestors of each made folder, not only of files · group 16
+- 19: releaseHeld sends the events entry once after every held line joins it, not once per held line, as the task's own test needs · group 19
 ### Review rounds
 ### Test gate

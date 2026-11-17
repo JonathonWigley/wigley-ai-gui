@@ -1,6 +1,6 @@
 # 02 — One ownsRoot helper
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · a pure helper beside `isKnownSource` in `src/plugins/docs/index-document.ts`, swapped in at four call sites
 Wave: 1 · Depends on: none
@@ -55,3 +55,4 @@ Commit: one commit for the group: "Docs: one ownsRoot helper for the repo-or-fea
 
 ## Proof
 
+Commit 7ab23142d b3c225cb0 · proof: diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: none

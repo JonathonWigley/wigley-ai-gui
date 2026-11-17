@@ -1,6 +1,6 @@
 # 17 — Auto-retro claims restored rows
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · the settle wait becomes per-row state cleared on three paths, across chat's synchronous close and the serial event chain
 Wave: 1 · Depends on: none
@@ -101,3 +101,7 @@ Done when: compiles (`npm run typecheck`); `npm test` runs `src/plugins/auto-ret
 
 Commit: one commit for the group, e.g. "Auto-retro claims and closes a retro row the queue lost; test the row-drop
 path of the lost-retro capture (follow-ups: restored retro row unclaimed, lost-retro second path untested)"
+
+## Proof
+
+Commit c1fb07efb · proof: diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: the first-message claim also runs on a row chat's resume adds, so a resumed old retro session mid-run is claimed and closed finished once idle
