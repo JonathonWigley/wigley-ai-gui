@@ -3711,8 +3711,9 @@ describe('createClaudeCodeHarness on the session host', () => {
   });
 
   // The end request waits for the command, then reaches the hosted process
-  // after the queued writes, inside the grace window and before any kill.
-  it('start_EndBeforeCommandResolves_EndsInputAfterTheWrites', async () => {
+  // inside the grace window and before any kill. The pending pipe's own test
+  // pins the order of the queued writes and the end.
+  it('start_EndBeforeCommandResolves_EndsInputOnTheHostedProcess', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const host = createFakeSessionHost(clock);
     const held = heldCommandHarness(host);
