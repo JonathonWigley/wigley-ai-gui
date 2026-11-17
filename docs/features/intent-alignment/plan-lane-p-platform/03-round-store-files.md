@@ -1,6 +1,6 @@
 # 03 — Round store through Files
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 02 (shared `channel-presenter.ts` and its test, forms' and primer's `main/start.ts`,
 `master-plan.md`, `followups.md`)

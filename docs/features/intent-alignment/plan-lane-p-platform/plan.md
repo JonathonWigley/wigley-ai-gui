@@ -278,7 +278,7 @@ through `api.services`; the page reads the Platform record from the served confi
 - [x] [Per-platform chord matching](01-chord-matching.md)
 
 ### Wave 2
-- [ ] [Per-source alert descriptions](02-alert-descriptions.md) — after 01 (shared master plan and follow-ups)
+- [x] [Per-source alert descriptions](02-alert-descriptions.md) — after 01 (shared master plan and follow-ups)
 
 ### Wave 3
 - [ ] [Round store through Files](03-round-store-files.md) — after 02
@@ -301,6 +301,7 @@ Review base: e6c894d93
 
 ### Groups
 - 01 · hard · 07bec5457 · diff read against Produces (all present, no contract changes); typecheck and lint pass after an oxfmt pass on three files · concerns: done-when grep 'keys:' finds only the parameter, the records are positional (optionMatchesByCode finds all three); capture test row Ctrl+[ swapped for Dead since <C-[> is now a chord; check-layers lets src/renderer/fabric import src/shared/page for isChordPress; settings design.md:34 reworded off the comma reason
+- 02 · hard · 36a249aa7 · Diff read: AlertNoun and setOpenCount(source, count, noun) in contracts/alerts.ts; describeOpenCounts and OpenCounts {total, parts} in open-counts.ts; windows-alerts uses describeOpenCounts with no inline 'open agent form' string; alertNoun passed in forms, primer and audio-picker start.ts. typecheck and lint pass. · concerns: Part order rests on Map insertion order (a source enters on its first count above 0 and keeps its place); tests follow the task doc's table [count, noun] over its prose [count, singular]; primer and audio-picker noun literals wrapped for oxfmt.
 ### Contract changes
 ### Rulings
 - the matcher compares the press's chordTokenFor token with the bind's token rather than five fields — one token per chord, so equal — and named-key checks ask chordToken, keeping one list of chord keys · group 01
