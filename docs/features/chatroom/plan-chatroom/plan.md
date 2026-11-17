@@ -294,5 +294,13 @@ Review base: 7c3eb9665
 - 09: asks-you activity reads every room's userAsks by from.rowId; the badge counts only the row's own project room · group 09
 - 10: the fixture polls roomsSlot.get for the board rows rather than subscribing; PEER_LABEL lives in the script and LEAD_LABEL is dropped, since nothing reads it · group 10 · group 10
 - Review range is e23142c0e..0b2771d12, not 7c3eb9665..HEAD: the run rebased onto Lane H's landing (e23142c0e), so the old base would sweep Lane H's 88 commits into the review — lead
+- Headless picks at review round 1: hook hellos get their own protocol number 2 so an older app refuses them before the hold (finding 7) — lead
+- resolveThread keeps no caller this run: 05 named 09's viewer and 09 specified none; design.md says no action resolves a thread yet; a viewer resolve action is a follow-up (finding 8) — lead
+- Delivery holds every wake for a resting row (isIdle requires running): a wake never restarts a process the user stopped (finding 15) — lead
+- A repeated sessions.connected refreshes the row's room, as 08 says, though correctness-main judged it unreachable past the seed (finding 14, lanes disagreed) — lead
+- Nested tracked roots keep their touches when the outer root is read, restoring 06's /r/o/d.ts row (finding 10) — lead
+- The user's mirror posts are the user's own word and count as read for the user (finding 22) — lead
+- Follow-ups at close: a viewer resolve action (8); a cap or hash for long room file names (21); hook.py following cd and other git globals (26); a room rewrite when a claim expires (32); the learning-candidate pointer check_pointers fails on (40) — lead
 ### Review rounds
+- Round 1 · implementation review of e23142c0e..0b2771d12 · six lanes (3 correctness, 3 plan-and-design) · NEEDS FIXES: 40 findings (9 Important, 30 Minor, 1 pre-existing), report scratchpad review-0b2771d12.md · lead-applied f8c1e3654 (36, 37, 38, 40's note in 12) · five fix workers dispatched (store, main-a, main-b, page, relay)
 ### Test gate
