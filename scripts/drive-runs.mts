@@ -1,8 +1,8 @@
 // What a drive run leaves behind, and the rules that follow from it: `quit`
 // deletes a run's scratch folders and keeps its captures, `quit --keep-sessions`
 // keeps them with its session host, a `start` of a kept run takes the flags it
-// recorded, every `start` deletes the run folders gone idle, and what `quit` and
-// `start` refuse.
+// recorded, every `start` deletes the run folders gone idle, a plain `quit`
+// waits on its session host's end, and what `quit` and `start` refuse.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import path from 'node:path';
@@ -25,6 +25,8 @@ export interface RunFolder {
   lastUsedMs: number;
   // Whether an app process the run recorded is still running.
   isLive: boolean;
+  // Whether the run's session host may still be listening (`hostMayBeRunning`).
+  hostMayBeRunning: boolean;
 }
 
 export interface StartOptions {
@@ -34,19 +36,54 @@ export interface StartOptions {
   userConfig: boolean;
 }
 
-// The ids of `runs` a start of `startingRun` deletes: each other run with no
-// live app, untouched for longer than `RUN_IDLE_MS`.
+// The ids of `runs` a start of `startingRun` deletes: each other idle run with
+// no live app and no session host that may still be listening.
 export function idleRunIds(
   runs: readonly RunFolder[],
   startingRun: string,
   nowMs: number,
 ): string[] {
   return runs
-    .filter((run) => {
-      const isIdle = nowMs - run.lastUsedMs > RUN_IDLE_MS;
-      return run.id !== startingRun && !run.isLive && isIdle;
-    })
+    .filter(
+      (run) =>
+        run.id !== startingRun &&
+        !run.isLive &&
+        !run.hostMayBeRunning &&
+        isIdleRun(run, nowMs),
+    )
     .map((run) => run.id);
+}
+
+// Whether the run has gone untouched for longer than `RUN_IDLE_MS`.
+export function isIdleRun(
+  run: Pick<RunFolder, 'lastUsedMs'>,
+  nowMs: number,
+): boolean {
+  return nowMs - run.lastUsedMs > RUN_IDLE_MS;
+}
+
+export interface HostEndDeps {
+  probe(runDir: string): Promise<boolean>;
+  pollMs: number;
+  timeoutMs: number;
+  now(): number;
+  wait(ms: number): Promise<void>;
+}
+
+// Whether the run's session host stops answering `probe` within `timeoutMs`,
+// asking every `pollMs`.
+export async function waitForHostEnd(
+  runDir: string,
+  deps: HostEndDeps,
+): Promise<boolean> {
+  const deadline = deps.now() + deps.timeoutMs;
+  while (await deps.probe(runDir)) {
+    if (deps.now() > deadline) {
+      return false;
+    }
+    await deps.wait(deps.pollMs);
+  }
+  return true;
 }
 
 // What a `start` runs with. `kept` is what the run recorded when its folder
