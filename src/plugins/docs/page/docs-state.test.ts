@@ -1943,14 +1943,14 @@ describe('detailFields', () => {
 
   it('detailFields_UnregisteredHarness_RawId', () => {
     const plugin = entry({
-      path: '/Users/u/.codex/plugins/cache/m/p/1',
+      path: '/Users/u/.gemini/plugins/cache/m/p/1',
       kind: 'plugin',
-      meta: { harness: 'codex' },
+      meta: { harness: 'gemini' },
     });
 
     expect(detailFields(plugin, '/Users/u', posixPaths, HARNESSES)[0]).toEqual([
       'Harness',
-      'codex',
+      'gemini',
     ]);
   });
 });
