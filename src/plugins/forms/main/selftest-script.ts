@@ -64,6 +64,11 @@ const MOVED_NOT_APPLICABLE_KEYMAP = JSON.stringify({
 // A user keymap making `,` the leader, on the page and in a text box.
 const COMMA_LEADER_KEYMAP = JSON.stringify({ leader: ',' });
 
+// A user keymap binding the punctuation chord `<C-/>` to the key help.
+const PUNCTUATION_CHORD_KEYMAP = JSON.stringify({
+  binds: [{ keys: '<C-/>', scope: 'any', command: 'keys.toggleHelp' }],
+});
+
 // An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
 
@@ -646,6 +651,18 @@ const USER_KEYMAP_STEPS: SelfTestStep[] = [
   },
   { keys: [' ', 'a', 'x'], expect: '[forms] not applicable on question 2' },
   { keys: ['Escape'], expect: '[forms] left the box' },
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: PUNCTUATION_CHORD_KEYMAP },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
+  { keys: ['<C-/>'], expect: '[page] <C-/> ran keys.toggleHelp' },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: '{}' },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
 ];
 
 const CHOICES_STEPS: SelfTestStep[] = [
@@ -1432,7 +1449,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'user keymap',
-        why: "The user's keymap.json applies live; one refused whole keeps the last good keys and an unknown command drops its bind alone; it can move a box bind and change the leader, and {} restores both.",
+        why: "The user's keymap.json applies live; one refused whole keeps the last good keys and an unknown command drops its bind alone; it can move a box bind and change the leader, and {} restores both; a punctuation chord (<C-/>) binds and fires.",
         steps: USER_KEYMAP_STEPS,
       },
       {

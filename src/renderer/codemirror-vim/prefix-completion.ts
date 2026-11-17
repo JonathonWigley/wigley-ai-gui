@@ -121,8 +121,8 @@ const POPUP_COMMANDS: Record<PopupAction, Command> = {
 };
 
 // What `event` does to an open popup: Tab without Shift accepts, Ctrl+n and ArrowDown move
-// down, Ctrl+p and ArrowUp move up. The Ctrl forms read the physical key and
-// exact modifiers, as the page's chords do.
+// down, Ctrl+p and ArrowUp move up. The Ctrl forms keep to the physical key and
+// exact modifiers on purpose, though the page's chords match the typed character.
 export function popupActionOf(
   event: Pick<
     KeyboardEvent,

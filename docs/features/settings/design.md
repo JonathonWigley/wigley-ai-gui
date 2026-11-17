@@ -31,7 +31,7 @@ plan is written from them. A decision here stands unless the user changes it.
 - `<Leader>k,` (page command `settings.showMode`) shows the mode, and pressed while it shows, toggles its side bar, as
   `<Leader>ks` and `<Leader>kd` do. `Cmd+,` on macOS and `Ctrl+,` on Windows is an app menu accelerator
   (`CommandOrControl+,`) on main command `settings.show`, which asks the page part over the plugin's channel to show
-  the mode. A page chord cannot hold `,`, so the accelerator is the route.
+  the mode. `Cmd+,` is the Settings item of the app menu, the macOS place for it, so the accelerator is the route.
 - The side bar lists sections: Core, then one per plugin that declares settings, in catalog order, then Plugins,
   then Keybindings, then Leader menu.
   `j`/`k` move the cursor and Enter opens the section in the content sheet. In a window too narrow for the side bar it

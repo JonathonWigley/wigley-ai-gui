@@ -1,6 +1,7 @@
 import type {
   OsName,
   Platform,
+  PlatformKeys,
   PlatformLifecycle,
   PlatformPrograms,
   PlatformRelay,
@@ -36,11 +37,13 @@ export function launchCommand(
 function platformRecord(
   os: OsName,
   lifecycle: PlatformLifecycle,
+  keys: PlatformKeys,
   inputs: PlatformInputs,
 ): Platform {
   return {
     os,
     lifecycle,
+    keys,
     programs: DEFAULT_PROGRAMS,
     relay: {
       username: inputs.username,
@@ -63,6 +66,7 @@ export function createMacPlatform(inputs: PlatformInputs): Platform {
       toastsNeedAppUserModelId: false,
       hidesFromDockBesideApp: true,
     },
+    { optionMatchesByCode: true, altGraphTypes: false },
     inputs,
   );
 }
@@ -75,6 +79,7 @@ export function createWindowsPlatform(inputs: PlatformInputs): Platform {
       toastsNeedAppUserModelId: true,
       hidesFromDockBesideApp: false,
     },
+    { optionMatchesByCode: false, altGraphTypes: true },
     inputs,
   );
 }
@@ -87,6 +92,7 @@ export function createLinuxPlatform(inputs: PlatformInputs): Platform {
       toastsNeedAppUserModelId: false,
       hidesFromDockBesideApp: false,
     },
+    { optionMatchesByCode: false, altGraphTypes: true },
     inputs,
   );
 }

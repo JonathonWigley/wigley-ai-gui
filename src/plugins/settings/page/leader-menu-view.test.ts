@@ -531,7 +531,18 @@ describe('createLeaderMenuView', () => {
       keys: '<C-x>',
       expected: {
         type: 'refused',
-        note: 'A leader item is one key with no Ctrl, Alt or Cmd',
+        note: 'A leader item is one key with no Ctrl, Alt or Cmd, and not Tab or F1 to F12',
+        reason: 'chord',
+      },
+    },
+    {
+      case: 'F-key chord',
+      on: (menu) => onSessionItem(menu, 0),
+      start: (menu) => menu.view.commands.changeKey(),
+      keys: '<F5>',
+      expected: {
+        type: 'refused',
+        note: 'A leader item is one key with no Ctrl, Alt or Cmd, and not Tab or F1 to F12',
         reason: 'chord',
       },
     },

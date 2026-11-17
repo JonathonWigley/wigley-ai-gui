@@ -29,7 +29,11 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   and a chord on the page fires inside a box too. `where` (`page`, `box` or `both`) sets where a
   bind fires in place of that default, and a chord takes only `page`. Tab and Shift+Tab are chords
   in any spelling (`<tab>`, `<s-tab>`), so neither can be the leader or sit inside a longer sequence. A bind with `mode` fires in
-  a box, in that vim mode.
+  a box, in that vim mode. A chord's key is a lowercase letter, a digit or symbol written as the
+  character it types (`<C-/>`, `<C-?>`), Enter, Tab, F1–F12, an arrow, Home, End, PageUp, PageDown,
+  BS or Del, and a chord matches the character typed rather than the key's place (`AGENTS.md`
+  § Architecture, the **A key** bullet, holds the full rule). Shift is in the character (`<C-!>`,
+  not `<C-S-1>`), and a `keymap.json` holding the old form is refused whole.
 - `arg` hands the command its argument: a number, a string or a small record of numbers and
   strings. A command that declares an argument needs one on each of its binds, and a command that
   declares none takes no `arg`; `binds`, `app`, `intercept` and `global` entries take it, `unbind`
@@ -136,7 +140,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   matches LeetCode's own key, beside its `Cmd+Enter` Submit. The two
   bind in `scoped-agents.ask`, and do nothing while Practice is hidden, since Backlog's
   assistant box shares that scope. `Cmd+,` is an app menu accelerator
-  (`CommandOrControl+,`), since a page chord cannot hold `,`, so on Windows it is `Ctrl+,`, where
+  (`CommandOrControl+,`): it is the Settings item of the app menu, the macOS place for it, so it
+  works through the menu. On Windows it is `Ctrl+,`, where
   `Win+,` belongs to the OS. `D-` is the Win key on Windows, so these binds are Win
   chords there: the user holds the four modifiers the same way on both OSes.
 - **Leader (Space)** changes scope or holds named actions. Inside a text box raw keys belong to

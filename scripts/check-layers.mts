@@ -881,7 +881,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     packages: ['fzf'],
   },
   'src/renderer/fabric': {
-    layers: ['src/contracts', 'src/shared'],
+    layers: ['src/contracts', 'src/shared', 'src/shared/page'],
     packages: ['fabric'],
   },
   'src/renderer/visual-frames': {

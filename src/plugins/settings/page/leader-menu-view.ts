@@ -178,7 +178,8 @@ const PANE_SCOPES: Record<LeaderPane, LeaderScope> = {
   items: 'leaderItems',
 };
 
-const CHORD_NOTE = 'A leader item is one key with no Ctrl, Alt or Cmd';
+const CHORD_NOTE =
+  'A leader item is one key with no Ctrl, Alt or Cmd, and not Tab or F1 to F12';
 const ITEMS_FIRST_NOTE = 'Move or clear its items first';
 
 function groupRowKey(group: LeaderGroup): string {

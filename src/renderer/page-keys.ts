@@ -3,7 +3,9 @@ import type { Disposable } from '../contracts/disposable';
 import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
+import type { PlatformKeys } from '../contracts/platform';
 import type { PageCommandContext } from '../contracts/plugin';
+import { chordToken } from '../shared/chord-notation';
 import { type KeyCommands, runBound } from '../shared/command-router';
 import { vimTokenForPageKey } from '../shared/key-notation';
 import { createListeners } from '../shared/listeners';
@@ -19,34 +21,59 @@ import {
 
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
 
-// A key holding Control, Alt or Meta is a chord: chord binds take it ahead of
-// this check, and the rest belong to the app and intercept keymaps.
-function isPageKey(event: KeyboardEvent): boolean {
-  const isModifierAlone = MODIFIER_KEYS.has(event.key);
-  const isChord = event.ctrlKey || event.altKey || event.metaKey;
-  return !isModifierAlone && !isChord;
+// The parts of `event` a chord matches on.
+function chordPressOf(event: KeyboardEvent): ChordPress {
+  return {
+    key: event.key,
+    code: event.code,
+    ctrl: event.ctrlKey,
+    alt: event.altKey,
+    shift: event.shiftKey,
+    meta: event.metaKey,
+    altGraph: event.getModifierState('AltGraph'),
+  };
 }
 
-// The parts of a key event a capture spells a key from.
-export type CapturedPress = Pick<
-  KeyboardEvent,
-  'key' | 'code' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'
->;
+// Whether `press` holds Control, Alt or Meta as a chord, not as AltGr typing a
+// character where `keys` says AltGr types.
+function holdsChordModifier(press: ChordPress, keys: PlatformKeys): boolean {
+  const isAltGraphTyping = press.altGraph && keys.altGraphTypes;
+  const holdsModifier = press.ctrl || press.alt || press.meta;
+  return holdsModifier && !isAltGraphTyping;
+}
+
+// A key holding Control, Alt or Meta is a chord: chord binds take it ahead of
+// this check, and the rest belong to the app and intercept keymaps. An AltGr
+// press where AltGr types is a typed character, so it is a page key.
+function isPageKey(press: ChordPress, keys: PlatformKeys): boolean {
+  const isModifierAlone = MODIFIER_KEYS.has(press.key);
+  return !isModifierAlone && !holdsChordModifier(press, keys);
+}
 
 // The key `press` is, in the keymap's vim notation, spelled as a bind that
 // fires on it is written: a press holding Control, Alt or Meta, Shift+Enter,
-// or Tab is the chord on its physical key (`<A-o>`, `<S-Enter>`, `<S-Tab>`); any other press is
-// its `KeyboardEvent.key` (`T`, `<Space>`, `<lt>`). Null for a press no bind
+// Tab or an F key is the chord it names (`<A-o>`, `<C-?>`, `<S-Enter>`,
+// `<S-Tab>`, `<F5>`); any other press, AltGr typing included, is its
+// `KeyboardEvent.key` (`T`, `<Space>`, `<lt>`, `@`). Null for a press no bind
 // can take: a bare modifier, or a key the notation has no name for.
-export function capturedKeys(press: CapturedPress): string | null {
-  const isChord = press.ctrlKey || press.altKey || press.metaKey;
-  const isShiftEnter = press.shiftKey && press.key === 'Enter';
-  const isTab = press.key === 'Tab';
-  if (isChord || isShiftEnter || isTab) {
-    return chordTokenFor(press);
-  }
+export function capturedKeys(
+  press: ChordPress,
+  keys: PlatformKeys,
+): string | null {
   if (MODIFIER_KEYS.has(press.key)) {
     return null;
+  }
+  const isShiftEnter = press.shift && press.key === 'Enter';
+  const isChordAlone =
+    chordToken({
+      ctrl: false,
+      alt: false,
+      shift: false,
+      meta: false,
+      key: press.key,
+    }) !== null;
+  if (holdsChordModifier(press, keys) || isShiftEnter || isChordAlone) {
+    return chordTokenFor(press, keys);
   }
   const token = vimTokenForPageKey(press.key);
   const isNamed = press.key.length === 1 || token !== press.key;
@@ -66,6 +93,8 @@ interface KeyCapture {
 // bind can take passes on and leaves it armed.
 function takeCapturedKey(
   event: KeyboardEvent,
+  press: ChordPress,
+  keys: PlatformKeys,
   armed: KeyCapture | null,
   disarm: () => void,
 ): boolean {
@@ -78,17 +107,17 @@ function takeCapturedKey(
     return true;
   }
   const isCancel = event.key === 'Escape';
-  const keys = isCancel ? null : capturedKeys(event);
-  if (!isCancel && keys === null) {
+  const captured = isCancel ? null : capturedKeys(press, keys);
+  if (!isCancel && captured === null) {
     return false;
   }
   event.preventDefault();
   event.stopPropagation();
   disarm();
-  if (keys === null) {
+  if (captured === null) {
     armed.onCancel();
   } else {
-    armed.onKey(keys);
+    armed.onKey(captured);
   }
   return true;
 }
@@ -240,7 +269,8 @@ export function createPendingTimeout(
 // key ahead of every bind, a pending sequence, an editor and a text box, as
 // `PageApi['keys'].captureKey` says, and arms before it cancels the one it
 // replaces, so a capture that cancel arms is the one left armed; it leaves the
-// pending keys alone.
+// pending keys alone. `platformKeys` says how a chord matches the OS's
+// keyboard and whether an AltGr press types.
 export function installPageKeys(
   timeoutMs: number,
   currentScope: () => ViewScope,
@@ -249,6 +279,7 @@ export function installPageKeys(
   log: Log,
   timers: Timers,
   boxFocus: BoxFocus,
+  platformKeys: PlatformKeys,
 ): {
   hold(): void;
   cancel(): void;
@@ -261,7 +292,7 @@ export function installPageKeys(
   const pendingKeys = createListeners<{ keys: string[]; scope: ViewScope }>();
   const reportKeys = (keys: string[]) =>
     pendingKeys.tell({ keys, scope: currentScope() });
-  let chords = createChordMatcher([]);
+  let chords = createChordMatcher([], platformKeys);
   let matcher = createSequenceMatcher([], timeoutMs);
   let timeout = createPendingTimeout(matcher, timers, timeoutMs, reportKeys);
   let armed: KeyCapture | null = null;
@@ -285,13 +316,14 @@ export function installPageKeys(
   document.addEventListener(
     'keydown',
     (event) => {
-      if (takeCapturedKey(event, armed, disarm)) {
+      const press = chordPressOf(event);
+      if (takeCapturedKey(event, press, platformKeys, armed, disarm)) {
         return;
       }
       if (editors.takesChordKey(event)) {
         return;
       }
-      const isConsumed = feedChordKey(chords, matcher, event, {
+      const isConsumed = feedChordKey(chords, matcher, press, {
         scope: currentScope,
         run: runBind,
         report: reportKeys,
@@ -309,7 +341,7 @@ export function installPageKeys(
       dropPending();
       return;
     }
-    if (!isPageKey(event)) {
+    if (!isPageKey(chordPressOf(event), platformKeys)) {
       return;
     }
     const isConsumed = feedPageKey(matcher, event.key, event.timeStamp, {
@@ -353,7 +385,7 @@ export function installPageKeys(
       };
     },
     setBinds(nextBinds, nextTimeoutMs) {
-      const nextChords = createChordMatcher(nextBinds);
+      const nextChords = createChordMatcher(nextBinds, platformKeys);
       const nextMatcher = createSequenceMatcher(nextBinds, nextTimeoutMs);
       dropPendingKeys(matcher, reportKeys);
       // Stops the old wait: with nothing pending, arming sets no new one.

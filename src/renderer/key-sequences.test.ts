@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PageBind } from '../contracts/keymap';
+import type { PlatformKeys } from '../contracts/platform';
 import {
   type ChordPress,
   createChordMatcher,
@@ -212,15 +213,30 @@ describe('createSequenceMatcher', () => {
   });
 });
 
-// A key event on `code` holding only the modifiers named.
-function press(code: string, modifiers: Partial<ChordPress>): ChordPress {
+const MAC_KEYS: PlatformKeys = {
+  optionMatchesByCode: true,
+  altGraphTypes: false,
+};
+const PC_KEYS: PlatformKeys = {
+  optionMatchesByCode: false,
+  altGraphTypes: true,
+};
+
+// A press of `key` on `code` holding only the modifiers `held` sets.
+function press(
+  key: string,
+  code: string,
+  held: Partial<ChordPress> = {},
+): ChordPress {
   return {
+    key,
     code,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    metaKey: false,
-    ...modifiers,
+    ctrl: false,
+    alt: false,
+    shift: false,
+    meta: false,
+    altGraph: false,
+    ...held,
   };
 }
 
@@ -231,98 +247,105 @@ describe('createChordMatcher', () => {
     command: 'test.nextTab',
   };
 
-  it('matches a chord on its physical key and exact modifiers', () => {
-    const chords = createChordMatcher([nextTab]);
+  it('matches a chord on its key and exact modifiers', () => {
+    const chords = createChordMatcher([nextTab], MAC_KEYS);
     expect(
-      chords.match(press('KeyO', { altKey: true }), 'forms')?.command,
+      chords.match(press('o', 'KeyO', { alt: true }), 'forms')?.command,
     ).toBe('test.nextTab');
   });
 
   it('ignores a chord with an extra or missing modifier', () => {
-    const chords = createChordMatcher([nextTab]);
+    const chords = createChordMatcher([nextTab], MAC_KEYS);
     expect(
-      chords.match(press('KeyO', { altKey: true, shiftKey: true }), 'forms'),
+      chords.match(press('O', 'KeyO', { alt: true, shift: true }), 'forms'),
     ).toBeUndefined();
-    expect(chords.match(press('KeyO', {}), 'forms')).toBeUndefined();
+    expect(chords.match(press('o', 'KeyO'), 'forms')).toBeUndefined();
   });
 
   it('tells a Ctrl+Shift letter chord from the Ctrl one on its key', () => {
-    const chords = createChordMatcher([
-      { keys: ['<C-j>'], scope: 'forms', command: 'test.lineDown' },
-      { keys: ['<C-S-j>'], scope: 'forms', command: 'test.halfPageDown' },
-    ]);
+    const chords = createChordMatcher(
+      [
+        { keys: ['<C-j>'], scope: 'forms', command: 'test.lineDown' },
+        { keys: ['<C-S-j>'], scope: 'forms', command: 'test.halfPageDown' },
+      ],
+      MAC_KEYS,
+    );
     expect(
-      chords.match(press('KeyJ', { ctrlKey: true }), 'forms')?.command,
+      chords.match(press('j', 'KeyJ', { ctrl: true }), 'forms')?.command,
     ).toBe('test.lineDown');
     expect(
-      chords.match(press('KeyJ', { ctrlKey: true, shiftKey: true }), 'forms')
+      chords.match(press('J', 'KeyJ', { ctrl: true, shift: true }), 'forms')
         ?.command,
     ).toBe('test.halfPageDown');
   });
 
-  it('matches a digit chord on its top-row code', () => {
-    const chords = createChordMatcher([
-      { keys: ['<C-1>'], scope: 'forms', command: 'test.first' },
-    ]);
+  it('matches a digit chord on the digit it types', () => {
+    const chords = createChordMatcher(
+      [{ keys: ['<C-1>'], scope: 'forms', command: 'test.first' }],
+      MAC_KEYS,
+    );
     expect(
-      chords.match(press('Digit1', { ctrlKey: true }), 'forms')?.command,
+      chords.match(press('1', 'Digit1', { ctrl: true }), 'forms')?.command,
     ).toBe('test.first');
     expect(
-      chords.match(press('Numpad1', { ctrlKey: true }), 'forms'),
-    ).toBeUndefined();
+      chords.match(press('1', 'Numpad1', { ctrl: true }), 'forms')?.command,
+    ).toBe('test.first');
   });
 
   it.each([
-    ['<A-;>', 'Semicolon'],
-    ["<A-'>", 'Quote'],
-  ])('matches the punctuation chord %s on code %s', (keys, code) => {
-    const chords = createChordMatcher([
-      { keys: [keys], scope: 'forms', command: 'test.split' },
-    ]);
-    expect(chords.match(press(code, { altKey: true }), 'forms')?.command).toBe(
-      'test.split',
+    ['<A-;>', ';', 'Semicolon'],
+    ["<A-'>", "'", 'Quote'],
+  ])('matches the punctuation chord %s on %s', (keys, key, code) => {
+    const chords = createChordMatcher(
+      [{ keys: [keys], scope: 'forms', command: 'test.split' }],
+      MAC_KEYS,
     );
+    expect(
+      chords.match(press(key, code, { alt: true }), 'forms')?.command,
+    ).toBe('test.split');
   });
 
-  it('matches an Enter chord on code Enter', () => {
-    const chords = createChordMatcher([
-      { keys: ['<D-Enter>'], scope: 'chat.chat', command: 'test.send' },
-    ]);
+  it('matches an Enter chord on key Enter', () => {
+    const chords = createChordMatcher(
+      [{ keys: ['<D-Enter>'], scope: 'chat.chat', command: 'test.send' }],
+      MAC_KEYS,
+    );
     expect(
-      chords.match(press('Enter', { metaKey: true }), 'chat.chat')?.command,
+      chords.match(press('Enter', 'Enter', { meta: true }), 'chat.chat')
+        ?.command,
     ).toBe('test.send');
     expect(
       chords.match(
-        press('Enter', { metaKey: true, ctrlKey: true }),
+        press('Enter', 'Enter', { meta: true, ctrl: true }),
         'chat.chat',
       ),
     ).toBeUndefined();
   });
 
-  it('tells a bare Tab chord from Shift+Tab on code Tab', () => {
-    const chords = createChordMatcher([
-      { keys: ['<Tab>'], scope: 'forms.forms', command: 'test.next' },
-      { keys: ['<S-Tab>'], scope: 'forms.forms', command: 'test.prev' },
-    ]);
-    expect(chords.match(press('Tab', {}), 'forms.forms')?.command).toBe(
+  it('tells a bare Tab chord from Shift+Tab on key Tab', () => {
+    const chords = createChordMatcher(
+      [
+        { keys: ['<Tab>'], scope: 'forms.forms', command: 'test.next' },
+        { keys: ['<S-Tab>'], scope: 'forms.forms', command: 'test.prev' },
+      ],
+      MAC_KEYS,
+    );
+    expect(chords.match(press('Tab', 'Tab'), 'forms.forms')?.command).toBe(
       'test.next',
     );
     expect(
-      chords.match(press('Tab', { shiftKey: true }), 'forms.forms')?.command,
+      chords.match(press('Tab', 'Tab', { shift: true }), 'forms.forms')
+        ?.command,
     ).toBe('test.prev');
   });
 
   it('matches a chord holding every modifier', () => {
-    const chords = createChordMatcher([
-      { keys: ['<C-A-S-D-k>'], scope: 'forms', command: 'test.all' },
-    ]);
-    const allHeld = {
-      ctrlKey: true,
-      altKey: true,
-      shiftKey: true,
-      metaKey: true,
-    };
-    expect(chords.match(press('KeyK', allHeld), 'forms')?.command).toBe(
+    const chords = createChordMatcher(
+      [{ keys: ['<C-A-S-D-k>'], scope: 'forms', command: 'test.all' }],
+      MAC_KEYS,
+    );
+    const allHeld = { ctrl: true, alt: true, shift: true, meta: true };
+    expect(chords.match(press('˚', 'KeyK', allHeld), 'forms')?.command).toBe(
       'test.all',
     );
   });
@@ -333,43 +356,181 @@ describe('createChordMatcher', () => {
       scope: 'any',
       command: 'test.closeTab',
     };
-    const chords = createChordMatcher([
-      { keys: ['<C-h>'], scope: 'forms', command: 'test.left' },
-      closeTab,
-    ]);
+    const chords = createChordMatcher(
+      [{ keys: ['<C-h>'], scope: 'forms', command: 'test.left' }, closeTab],
+      MAC_KEYS,
+    );
     expect(
-      chords.match(press('KeyH', { ctrlKey: true }), 'review'),
+      chords.match(press('h', 'KeyH', { ctrl: true }), 'review'),
     ).toBeUndefined();
-    expect(chords.match(press('KeyW', { metaKey: true }), 'idle')).toBe(
+    expect(chords.match(press('w', 'KeyW', { meta: true }), 'idle')).toBe(
       closeTab,
     );
   });
 
+  it.each<{
+    case: string;
+    keys: PlatformKeys;
+    bind: string;
+    press: ChordPress;
+    runs: boolean;
+  }>([
+    {
+      case: 'AZERTY Ctrl+A',
+      keys: PC_KEYS,
+      bind: '<C-a>',
+      press: press('a', 'KeyQ', { ctrl: true }),
+      runs: true,
+    },
+    {
+      case: 'AZERTY Ctrl+A on the Q key',
+      keys: PC_KEYS,
+      bind: '<C-q>',
+      press: press('a', 'KeyQ', { ctrl: true }),
+      runs: false,
+    },
+    {
+      case: 'Dvorak Ctrl+O',
+      keys: PC_KEYS,
+      bind: '<C-o>',
+      press: press('o', 'KeyS', { ctrl: true }),
+      runs: true,
+    },
+    {
+      case: 'mac Option',
+      keys: MAC_KEYS,
+      bind: '<A-o>',
+      press: press('ø', 'KeyO', { alt: true }),
+      runs: true,
+    },
+    {
+      case: 'mac Option+Shift',
+      keys: MAC_KEYS,
+      bind: '<A-S-o>',
+      press: press('Ø', 'KeyO', { alt: true, shift: true }),
+      runs: true,
+    },
+    {
+      case: 'mac Option symbol',
+      keys: MAC_KEYS,
+      bind: '<A-/>',
+      press: press('÷', 'Slash', { alt: true }),
+      runs: true,
+    },
+    {
+      case: 'Cyrillic Ctrl+J',
+      keys: PC_KEYS,
+      bind: '<C-j>',
+      press: press('о', 'KeyJ', { ctrl: true }),
+      runs: true,
+    },
+    {
+      case: 'non-ASCII letter on a digit key',
+      keys: PC_KEYS,
+      bind: '<C-2>',
+      press: press('é', 'Digit2', { ctrl: true }),
+      runs: true,
+    },
+    {
+      case: 'US Ctrl+/',
+      keys: PC_KEYS,
+      bind: '<C-/>',
+      press: press('/', 'Slash', { ctrl: true }),
+      runs: true,
+    },
+    {
+      case: 'German Ctrl+/',
+      keys: PC_KEYS,
+      bind: '<C-/>',
+      press: press('/', 'Digit7', { ctrl: true, shift: true }),
+      runs: true,
+    },
+    {
+      case: 'Ctrl+?',
+      keys: PC_KEYS,
+      bind: '<C-?>',
+      press: press('?', 'Slash', { ctrl: true, shift: true }),
+      runs: true,
+    },
+    {
+      case: 'F5 alone',
+      keys: PC_KEYS,
+      bind: '<F5>',
+      press: press('F5', 'F5'),
+      runs: true,
+    },
+    {
+      case: 'Ctrl+F5',
+      keys: PC_KEYS,
+      bind: '<F5>',
+      press: press('F5', 'F5', { ctrl: true }),
+      runs: false,
+    },
+    {
+      case: 'mac Option+Up',
+      keys: MAC_KEYS,
+      bind: '<A-Up>',
+      press: press('ArrowUp', 'ArrowUp', { alt: true }),
+      runs: true,
+    },
+    {
+      case: 'Ctrl+<',
+      keys: PC_KEYS,
+      bind: '<C-lt>',
+      press: press('<', 'Comma', { ctrl: true, shift: true }),
+      runs: true,
+    },
+    {
+      case: 'AltGr typing',
+      keys: PC_KEYS,
+      bind: '<C-A-q>',
+      press: press('@', 'KeyQ', { ctrl: true, alt: true, altGraph: true }),
+      runs: false,
+    },
+    {
+      case: 'Ctrl+Alt without AltGr',
+      keys: PC_KEYS,
+      bind: '<C-A-q>',
+      press: press('q', 'KeyQ', { ctrl: true, alt: true }),
+      runs: true,
+    },
+  ])('$case runs $bind: $runs', ({ keys, bind, press: pressed, runs }) => {
+    const bound: PageBind = { keys: [bind], scope: 'any', command: 'test.x' };
+    const chords = createChordMatcher([bound], keys);
+
+    expect(chords.match(pressed, 'any') === bound).toBe(runs);
+  });
+
   it('rejects a chord inside a longer sequence', () => {
     expect(() =>
-      createChordMatcher([
-        { keys: ['g', '<C-h>'], scope: 'forms', command: 'test.x' },
-      ]),
+      createChordMatcher(
+        [{ keys: ['g', '<C-h>'], scope: 'forms', command: 'test.x' }],
+        MAC_KEYS,
+      ),
     ).toThrow(/test\.x.*<C-h>/);
   });
 
-  it.each(['<A-C-h>', '<C-H>', '<C-,>', '<C-F1>', '<S-h>', '<h>'])(
+  it.each(['<A-C-h>', '<C-H>', '<S-h>', '<h>', '<C-S-/>', '<Up>'])(
     'rejects a malformed chord %s',
     (token) => {
       expect(() =>
-        createChordMatcher([
-          { keys: [token], scope: 'forms', command: 'test.x' },
-        ]),
+        createChordMatcher(
+          [{ keys: [token], scope: 'forms', command: 'test.x' }],
+          MAC_KEYS,
+        ),
       ).toThrow(/test\.x/);
     },
   );
 
   it('leaves a lone < or > a plain key', () => {
     expect(() =>
-      createChordMatcher([
-        { keys: ['<'], scope: 'forms', command: 'test.less' },
-        { keys: ['>'], scope: 'forms', command: 'test.more' },
-      ]),
+      createChordMatcher(
+        [
+          { keys: ['<'], scope: 'forms', command: 'test.less' },
+          { keys: ['>'], scope: 'forms', command: 'test.more' },
+        ],
+        MAC_KEYS,
+      ),
     ).not.toThrow();
   });
 });

@@ -10,6 +10,13 @@ export interface PlatformLifecycle {
   readonly hidesFromDockBesideApp: boolean;
 }
 
+export interface PlatformKeys {
+  // An Option (Alt) chord matches the physical key, since Option changes the typed character.
+  readonly optionMatchesByCode: boolean;
+  // A press with AltGr down types a character and is never a chord.
+  readonly altGraphTypes: boolean;
+}
+
 export interface PlatformPrograms {
   // The default of the `claude.command` setting.
   readonly claude: string;
@@ -32,6 +39,7 @@ export interface PlatformRelay {
 export interface Platform {
   readonly os: OsName;
   readonly lifecycle: PlatformLifecycle;
+  readonly keys: PlatformKeys;
   readonly programs: PlatformPrograms;
   readonly relay: PlatformRelay;
 }

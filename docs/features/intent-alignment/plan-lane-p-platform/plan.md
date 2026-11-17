@@ -297,7 +297,7 @@ through `api.services`; the page reads the Platform record from the served confi
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: e6c894d93
 
 ### Groups
 ### Contract changes

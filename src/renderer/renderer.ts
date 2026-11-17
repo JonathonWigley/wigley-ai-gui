@@ -396,6 +396,7 @@ async function start() {
     log,
     timers,
     boxFocus,
+    config.platform.keys,
   );
   const pendingKeys = createPendingKeys({
     page: pageKeys,

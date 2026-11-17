@@ -19,6 +19,16 @@ import {
 // it cuts off at a given width.
 
 const KEY_CODES: Record<string, string> = { ' ': 'Space' };
+// The Electron accelerator key code of each chord key whose `Chord.key` is not
+// one; `sendInputEvent`'s `keyCode` takes only accelerator names.
+const CHORD_KEY_CODES: Partial<Record<string, string>> = {
+  ' ': 'Space',
+  '+': 'Plus',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+};
 export const STEP_TIMEOUT_MS = 5000;
 // The longest `waitFor` waits on one check before polling again.
 const CHECK_TIMEOUT_MS = 2000;
@@ -33,9 +43,10 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// A chord sends no `char`: its modifiers make it a command, not typed text.
+// A chord sends no `char`: its modifiers make it a command, not typed text. A
+// shifted symbol (`?`) adds no Shift, since Electron sets Shift for it.
 function pressChord(window: DrivenWindow, chord: Chord) {
-  const keyCode = chord.key;
+  const keyCode = CHORD_KEY_CODES[chord.key] ?? chord.key;
   const modifiers: Modifier[] = [
     ...(chord.ctrl ? ['control' as const] : []),
     ...(chord.alt ? ['alt' as const] : []),

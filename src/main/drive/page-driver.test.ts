@@ -344,6 +344,29 @@ describe('press', () => {
 
     expect(() => press(window, '<X-q>')).toThrow(CHORD_NOTATION_RULE);
   });
+
+  it.each([
+    { token: '<C-/>', keyCode: '/', modifiers: ['control'] },
+    { token: '<C-?>', keyCode: '?', modifiers: ['control'] },
+    { token: '<C-Space>', keyCode: 'Space', modifiers: ['control'] },
+    { token: '<C-+>', keyCode: 'Plus', modifiers: ['control'] },
+    { token: '<A-Up>', keyCode: 'Up', modifiers: ['alt'] },
+    { token: '<F5>', keyCode: 'F5', modifiers: [] },
+    { token: '<C-lt>', keyCode: '<', modifiers: ['control'] },
+    { token: '<D-BS>', keyCode: 'Backspace', modifiers: ['meta'] },
+  ])(
+    'press_NewChordTokens_SendsElectronKeyCodes $token',
+    ({ token, keyCode, modifiers }) => {
+      const { window, inputs } = fakeDrivenWindow();
+
+      press(window, token);
+
+      expect(inputs).toEqual([
+        { type: 'keyDown', keyCode, modifiers },
+        { type: 'keyUp', keyCode, modifiers },
+      ]);
+    },
+  );
 });
 
 // A page whose element the press script finds centred at (60, 40), with
