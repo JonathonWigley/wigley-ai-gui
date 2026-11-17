@@ -249,7 +249,7 @@ function toolCounts(steps) {
 // alone, then the failed count, then the time.
 /**
  * @param {import('../layout').ActivityInput} input
- * @param {HTMLElement} time
+ * @param {HTMLElement | null} time
  */
 function activitySummary(input, time) {
   const summary = el('div', 'chat-activity-summary');
@@ -269,12 +269,14 @@ function activitySummary(input, time) {
   if (failed > 0) {
     summary.append(el('span', 'chat-activity-failed', `· ${failed} failed`));
   }
-  summary.append(time);
+  if (time !== null) {
+    summary.append(time);
+  }
   return summary;
 }
 
 // The summary line, live or finished, open or closed; a live run's time
-// runs to now.
+// runs to now, and a run with no known start draws no time.
 /**
  * @param {HTMLElement} line
  * @param {import('../layout').ActivityInput} input
@@ -283,11 +285,14 @@ function activitySummary(input, time) {
 function fillActivity(line, input, kit) {
   line.replaceChildren();
   line.classList.toggle('is-live', input.live);
-  const time = el(
-    'span',
-    'chat-activity-time',
-    `· ${kit.duration((input.endedAt ?? input.now) - input.startedAt)}`,
-  );
+  const time =
+    input.startedAt === null
+      ? null
+      : el(
+          'span',
+          'chat-activity-time',
+          `· ${kit.duration((input.endedAt ?? input.now) - input.startedAt)}`,
+        );
   line.append(activitySummary(input, time));
 }
 

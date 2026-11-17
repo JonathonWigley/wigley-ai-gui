@@ -745,6 +745,22 @@ describe('default chat layout activity', () => {
         'span.chat-activity-steps:7 steps · Read 2 · Grep · Edit · Bash span.chat-activity-failed:· 1 failed span.chat-activity-time:· 20s',
       ],
     },
+    {
+      state: 'UnknownStart',
+      input: {
+        ...finishedRun([toolStep('Read', 'a.ts')], 8000),
+        startedAt: null,
+      },
+      lines: ['chat-activity', 'span.chat-activity-steps:1 step · Read'],
+    },
+    {
+      state: 'UnknownStartLive',
+      input: {
+        ...liveRun([toolStep('Read', 'a.ts', null)], false, 3000),
+        startedAt: null,
+      },
+      lines: ['chat-activity is-live', 'span.chat-activity-steps:1 step · Read'],
+    },
   ] as {
     state: string;
     input: ActivityInput;

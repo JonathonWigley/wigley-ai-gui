@@ -593,7 +593,8 @@ interview on 2026-10-23; this file is the record of both.
   strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `pickerHeading` (a heading in a picker's list, which the cursor skips), `signIn`, `reasonBox` (the deny
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
   (each the step's entry input), the current step (the last), whether the run is live, whether it is open, and its times:
-  `startedAt`, `endedAt` (null while live) and `now`, which the app sends again each second while the run is live, so a
+  `startedAt` (null when the transcript holds no time for the run's start, and the default layout then draws no
+  time), `endedAt` (null while live) and `now`, which the app sends again each second while the run is live, so a
   user layout formats its own time; the part draws the summary line open or closed, and the app places the step rows
   under it when open. The built-in step builders draw a plain one-line row through the kit's `collapsibleRow`; a user layout that redraws `tool`, `thinking` or `raw` draws the
   open line's rows. Each part's kit extends the base kit with the app parts it places (the editor frame, the

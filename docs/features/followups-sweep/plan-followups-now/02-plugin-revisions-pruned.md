@@ -1,6 +1,6 @@
 # 02 — Old plugin code revisions are pruned
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds a folder-removal dependency to the user folder source and deletes folders on disk during a load
 Wave: 1 · Depends on: none

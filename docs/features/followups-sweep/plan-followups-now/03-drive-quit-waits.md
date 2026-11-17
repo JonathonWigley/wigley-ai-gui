@@ -1,6 +1,6 @@
 # 03 — Drive quit waits on the host's end
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses the app and session-host processes through a bounded wait and folder deletion; the host-exit claim is marked low-confidence in task 19
 Wave: 1 · Depends on: none

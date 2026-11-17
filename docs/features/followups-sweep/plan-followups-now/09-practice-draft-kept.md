@@ -1,6 +1,6 @@
 # 09 — Practice keeps a draft saved during an open read
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · an async read/save race across the view, the workspace and main's `open` and save calls
 Wave: 1 · Depends on: none

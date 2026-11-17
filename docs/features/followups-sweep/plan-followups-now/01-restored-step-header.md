@@ -1,6 +1,6 @@
 # 01 — Restored step header shows no duration for an unknown time
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · changes the chat layout contract (`ActivityInput.startedAt` becomes nullable), which every user chat layout reads
 Wave: 1 · Depends on: none

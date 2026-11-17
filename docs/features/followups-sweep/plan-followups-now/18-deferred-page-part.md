@@ -1,6 +1,6 @@
 # 18 — A deferred page part waits on its withheld dependency
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses main's plugin switch and the page's part host through the start lifecycle of two processes
 Wave: 1 · Depends on: none

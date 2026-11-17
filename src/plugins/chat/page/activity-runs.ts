@@ -29,7 +29,9 @@ export function isStepsChanged(
 // One row of a session's list: an entry shown on its own, or a run of steps.
 // A run starts at the entry before it (its first step when it opens the list)
 // and ends at the entry after it; a live run has no end yet, and a finished
-// run with nothing after it ends at its last step.
+// run with nothing after it ends at its last step. An `at` of 0 is an entry
+// restored from a line with no time: a run whose entry before it and first
+// step are both untimed has a null start.
 export type ListRow =
   | { kind: 'entry'; entry: ChatEntry }
   | {
@@ -37,7 +39,7 @@ export type ListRow =
       runId: string;
       steps: StepEntry[];
       live: boolean;
-      startedAt: number;
+      startedAt: number | null;
       endedAt: number | null;
     };
 
@@ -78,12 +80,13 @@ export function listRows(
   let steps: StepEntry[] = [];
   let previousAt: number | null = null;
   const closeRun = (endedAt: number | null, live: boolean): void => {
+    const startedAt = previousAt || steps[0].at;
     rows.push({
       kind: 'run',
       runId: runIdOf(steps[0].id),
       steps,
       live,
-      startedAt: previousAt ?? steps[0].at,
+      startedAt: startedAt === 0 ? null : startedAt,
       endedAt,
     });
     steps = [];
