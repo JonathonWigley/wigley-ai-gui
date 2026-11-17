@@ -162,4 +162,6 @@ Review base: 34e4782344fb8ae4e6246859c522c2a5bb9abc53
 - item 01 stays in followups.md: Lane H's unmerged hunk rewrites a path inside it; its removal moves to plan-followups-after-lane-h task 26 · group 17
 ### Review rounds
 - Round 1 (34e478234..5ee29f14d): NEEDS FIXES — 1 Critical (backlog rename from the table closes its box), 8 Minor, 2 pre-existing; 4 lead-applied (5e9942aab); fixes b9f42ac6e, 1ebef1f46. Fix range tier: Medium (focus-handling behaviour in backlog-view) — re-review, correctness lane, over 5e9942aab..1ebef1f46
+- Round 2 re-review (5e9942aab..1ebef1f46, correctness): every round-1 fix closed; one repeat (a refused review click focuses the assistant pane's frame, not its ask box: needs an AgentPane member) → follow-up 9cac33c22, no further patch. Review closed.
 ### Test gate
+- vitest, filtered to every group's tests, their source siblings and the touched plugins' folders: 173 files, 4130 tests pass after 1273c425b. First pass: 2 failures — group 11's strip-click row targeted a card the strip redraw detaches (test fixed to target the strip pane), and plan-copies' readPlanCopy row predating plan-progress's verification field (pre-existing at 34e478234, fixed).
