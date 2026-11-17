@@ -19,8 +19,7 @@ tests' to gamma 2" and the agent finds the row, sends the text, and the target c
 
 ## Status
 
-Planned in `plan-agent-commands`, not built yet. Every behaviour below is the plan's target; until the plan's code
-lands, the app has none of the three tools, no `risky` or `targets` flag, no `chat.sendTo` and no run target.
+Built.
 
 ## What it is
 
@@ -101,7 +100,7 @@ The set:
 - `sessions.closeSession`, `sessions.listClose`, `sessions.closePane`, `session-stash.noteAccept`
 - `chat.stopAll`, `chat.endSession`, `chat.allowOrCopy`, `chat.allowEntry`, `chat.removeImage`, `chat.removeImageAt`,
   `chat.removeShownImage`
-- `docs.trash`, `docs.conflictReload`
+- `docs.trash`, `docs.conflictReload`, `docs.confirmYes`
 - `notes.remove`, `notes.removeSession`, `notes.discard`, `notes.confirmYes`
 - `settings.reset`, `settings.removeBind`
 - `workflow.mainAction`, `workflow.stageAction`, `workflow-large.clearAndMake`, `workflow-large.resumeMake`
