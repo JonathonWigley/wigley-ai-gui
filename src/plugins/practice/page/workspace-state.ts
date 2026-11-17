@@ -69,8 +69,9 @@ export type WorkspaceAction =
       problemTab: Exclude<ProblemTab, 'solution'>;
       consoleTab: ConsoleTab;
     }
-  // The shown problem read again: each saved draft takes the new text.
-  | { type: 'refreshed'; problem: OpenedProblem }
+  // The shown problem read again, with `mark` taken as the read began: each
+  // draft saved then and not saved since takes the new text.
+  | { type: 'refreshed'; problem: OpenedProblem; mark: DraftMark }
   | { type: 'nextTab'; pane: 'problem' | 'console' }
   | { type: 'prevTab'; pane: 'problem' | 'console' }
   | { type: 'showTab'; tab: ProblemTab | ConsoleTab }
@@ -94,6 +95,24 @@ export type WorkspaceAction =
   | { type: 'judgeStarted'; kind: JudgeKind }
   | { type: 'judgeDone'; slug: string; result: JudgeResult }
   | { type: 'judgeFailed'; slug: string; message: string };
+
+// The slug the workspace showed and each draft's `savedRevision`, as a read
+// of the problem began.
+export interface DraftMark {
+  readonly slug: string | null;
+  readonly savedRevisions: Readonly<Record<DraftId, number>>;
+}
+
+export function draftMark(state: WorkspaceState): DraftMark {
+  return {
+    slug: state.problem?.summary.slug ?? null,
+    savedRevisions: {
+      code: state.drafts.code.savedRevision,
+      notes: state.drafts.notes.savedRevision,
+      customCases: state.drafts.customCases.savedRevision,
+    },
+  };
+}
 
 export function initialWorkspaceState(): WorkspaceState {
   return {
@@ -127,7 +146,7 @@ export function workspaceReducer(
     case 'opened':
       return opened(action.problem, action.problemTab, action.consoleTab);
     case 'refreshed':
-      return refreshed(state, action.problem);
+      return refreshed(state, action.problem, action.mark);
     case 'nextTab':
     case 'prevTab':
       return cycledTab(state, action.pane, action.type === 'nextTab' ? 1 : -1);
@@ -228,11 +247,13 @@ function savedDraft(id: DraftId, slug: string, text: string): Draft {
 }
 
 // The problem read again; another slug than the shown one changes nothing. A
-// draft takes the read's text only while it is saved, so an unsaved edit is
-// never overwritten.
+// draft takes the read's text only while it is saved and its save is the one
+// `mark` holds, so neither an unsaved edit nor a save that landed during the
+// read is overwritten. A mark of another problem keeps every draft's text.
 function refreshed(
   state: WorkspaceState,
   problem: OpenedProblem,
+  mark: DraftMark,
 ): WorkspaceState {
   if (state.problem?.summary.slug !== problem.summary.slug) {
     return state;
@@ -242,11 +263,18 @@ function refreshed(
     notes: problem.notes,
     customCases: problem.customCases,
   };
+  const isMarkOfThisProblem = mark.slug === problem.summary.slug;
   const drafts = { ...state.drafts };
   for (const id of DRAFT_IDS) {
     const draft = drafts[id];
     const isSaved = draft.savedRevision === draft.revision;
-    if (isSaved && draft.text !== texts[id]) {
+    const isSavedDuringRead = draft.savedRevision !== mark.savedRevisions[id];
+    const takesRead =
+      isSaved &&
+      isMarkOfThisProblem &&
+      !isSavedDuringRead &&
+      draft.text !== texts[id];
+    if (takesRead) {
       drafts[id] = { ...draft, text: texts[id] };
     }
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { OpenedProblem, SubmissionRecord } from '../contract';
 import {
   type ConsoleTab,
+  draftMark,
   initialWorkspaceState,
   type PeekState,
   type ProblemTab,
@@ -183,6 +184,8 @@ describe('workspaceReducer', () => {
   it.each<{
     case: string;
     edits: readonly WorkspaceAction[];
+    duringRead: readonly WorkspaceAction[];
+    markedSlug: string;
     diskNotes: string;
     notes: string;
     isSameDraft: boolean;
@@ -190,6 +193,8 @@ describe('workspaceReducer', () => {
     {
       case: 'a saved draft takes the new text',
       edits: [],
+      duringRead: [],
+      markedSlug: SLUG,
       diskNotes: 'new notes',
       notes: 'new notes',
       isSameDraft: false,
@@ -197,6 +202,8 @@ describe('workspaceReducer', () => {
     {
       case: 'an unsaved draft is kept',
       edits: [{ type: 'draftChanged', id: 'notes', slug: SLUG, text: 'typed' }],
+      duringRead: [],
+      markedSlug: SLUG,
       diskNotes: 'new notes',
       notes: 'typed',
       isSameDraft: true,
@@ -204,22 +211,75 @@ describe('workspaceReducer', () => {
     {
       case: 'the same text changes nothing',
       edits: [],
+      duringRead: [],
+      markedSlug: SLUG,
       diskNotes: 'old notes',
+      notes: 'old notes',
+      isSameDraft: true,
+    },
+    {
+      case: 'a draft saved during the read keeps its text',
+      edits: [
+        { type: 'draftChanged', id: 'notes', slug: SLUG, text: 'typed' },
+        { type: 'saveStarted', id: 'notes', slug: SLUG, revision: 1 },
+      ],
+      duringRead: [
+        {
+          type: 'saveFinished',
+          id: 'notes',
+          slug: SLUG,
+          revision: 1,
+          error: null,
+        },
+      ],
+      markedSlug: SLUG,
+      diskNotes: 'old notes',
+      notes: 'typed',
+      isSameDraft: true,
+    },
+    {
+      case: 'a draft saved before the read takes the new text',
+      edits: [
+        { type: 'draftChanged', id: 'notes', slug: SLUG, text: 'typed' },
+        { type: 'saveStarted', id: 'notes', slug: SLUG, revision: 1 },
+        {
+          type: 'saveFinished',
+          id: 'notes',
+          slug: SLUG,
+          revision: 1,
+          error: null,
+        },
+      ],
+      duringRead: [],
+      markedSlug: SLUG,
+      diskNotes: 'new notes',
+      notes: 'new notes',
+      isSameDraft: false,
+    },
+    {
+      case: 'a mark of another problem keeps a saved draft',
+      edits: [],
+      duringRead: [],
+      markedSlug: 'other-problem',
+      diskNotes: 'new notes',
       notes: 'old notes',
       isSameDraft: true,
     },
   ])(
     'refresh keeps unsaved drafts: $case',
-    ({ edits, diskNotes, notes, isSameDraft }) => {
+    ({ edits, duringRead, markedSlug, diskNotes, notes, isSameDraft }) => {
       const before = stateAfter(edits);
+      const mark = { ...draftMark(before), slug: markedSlug };
+      const atRead = duringRead.reduce(workspaceReducer, before);
 
-      const next = workspaceReducer(before, {
+      const next = workspaceReducer(atRead, {
         type: 'refreshed',
         problem: problem({ notes: diskNotes }),
+        mark,
       });
 
       expect(next.drafts.notes.text).toBe(notes);
-      expect(next.drafts.notes === before.drafts.notes).toBe(isSameDraft);
+      expect(next.drafts.notes === atRead.drafts.notes).toBe(isSameDraft);
     },
   );
 

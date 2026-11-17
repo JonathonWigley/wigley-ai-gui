@@ -985,6 +985,43 @@ describe('practicePagePart', () => {
     expect(live).toMatchObject({ doc: 'Two pointers', isDestroyed: false });
   });
 
+  it('keeps a notes draft saved while a changed read was pending', async () => {
+    const save = deferred<undefined>();
+    const read = deferred<OpenedProblem>();
+    let opensOfSecond = 0;
+    const { harness, calls, commands, editors, boxEditors } =
+      await startWithProblemOpen((method, args) => {
+        if (method === 'saveNotes') {
+          return save.promise;
+        }
+        if (method === 'open' && args[0] === SECOND) {
+          opensOfSecond += 1;
+          return opensOfSecond === 2 ? read.promise : undefined;
+        }
+        return undefined;
+      });
+    commands.showTab({ arg: 'notes' });
+    editors.type('typed');
+    harness.advance(AUTOSAVE_DELAY_MS);
+    await settle();
+    const notesSaves = calls
+      .filter((call) => call.method === 'saveNotes')
+      .map((call) => call.args);
+
+    harness.send('changed', { slug: SECOND });
+    await settle();
+    save.resolve(undefined);
+    await settle();
+    read.resolve({ ...opened(HARD), notes: '' });
+    await settle();
+    await settle();
+
+    expect(notesSaves).toEqual([[SECOND, 'typed']]);
+    const notesEditors = editorsOf(boxEditors, 'notes');
+    expect(notesEditors).toHaveLength(1);
+    expect(notesEditors[0].isDestroyed).toBe(false);
+  });
+
   it('problemChange_ShownCustomCasesBox_MountsANewEditor', async () => {
     const { commands, boxEditors } = await startWithProblemOpen(
       (method, args) =>
