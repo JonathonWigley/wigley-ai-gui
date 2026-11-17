@@ -139,7 +139,7 @@ export function createTurnTracker(): TurnTracker {
       if (turnOpen) {
         return;
       }
-      for (const uuid of [...open.keys()]) {
+      for (const uuid of open.keys()) {
         if (!takenIn.has(uuid)) {
           close(uuid);
         }

@@ -179,7 +179,7 @@ function malformedEntryField(entry: unknown): string | null {
     return 'entry';
   }
   const { source } = entry;
-  const ownedByRepo = ownsRoot(entry);
+  const ownedByRepo = ownsRoot({ source });
   const ownedByPlugin = source === 'plugin';
   const checks: [string, boolean][] = [
     ['id', typeof entry.id === 'string'],
