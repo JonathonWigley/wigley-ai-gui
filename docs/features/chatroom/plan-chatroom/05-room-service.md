@@ -1,6 +1,6 @@
 # 05 — Room service
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · keeps cursors, claims and threads in save files, serializes concurrent posts per room, and fans out to mirrors asynchronously
 Wave: 2 · Depends on: 01

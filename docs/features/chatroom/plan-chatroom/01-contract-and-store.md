@@ -1,6 +1,6 @@
 # 01 — Contract and room store
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · sets the jsonl save format and serializes concurrent appends, and adds the contract every later task consumes
 Wave: 1 · Depends on: none
@@ -78,3 +78,5 @@ Done when: compiles; the layer check passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit bed909cf0 · proof: diff read: every Produces present; typecheck passes; oxfmt clean; layer check waits on 08's manifest · concerns: layer check needs 08's manifest; read('') rejects in jsonl, [] in memory; lone-surrogate room names; a line's room field not checked against its file

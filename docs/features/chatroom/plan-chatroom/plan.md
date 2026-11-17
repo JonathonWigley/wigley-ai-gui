@@ -210,7 +210,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Contract and room store](01-contract-and-store.md)
+- [x] [Contract and room store](01-contract-and-store.md)
 - [ ] [Sessions hook route](02-sessions-hook-route.md)
 - [ ] [Relay endpoint module and Codex id](03-relay-endpoint-and-codex-id.md)
 - [x] ~~[Stale harness doc lines](04-stale-harness-docs.md)~~ — dropped: Lane H (plan-lane-h-harness-seams) is running, at task 10 of 17 on branch lane-h-harness-seams; its landing makes the AGENTS.md passages true and its task 16 re-reads them, so a rewrite to today's shape would be undone and conflict at merge
@@ -240,8 +240,14 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 Review base: 7c3eb9665
 
 ### Groups
+- 01 · deep · bed909cf0 · diff read: every Produces present; typecheck passes; oxfmt clean; layer check waits on 08's manifest · concerns: layer check needs 08's manifest; read('') rejects in jsonl, [] in memory; lone-surrogate room names; a line's room field not checked against its file
 ### Contract changes
+- room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 ### Rulings
 - Task 04 struck: its cause (Lane H not started) no longer holds; Lane H runs and rewrites the same passages — a stale-doc window stays until Lane H lands — lead
+- Order agreed with the Lane H session: Lane H lands on main first (several hours; it bumps wigley to 2.13.1 and adds row_id to relay.py's hello); this run builds only new files (01, 05, 06) until Lane H's landed-sha notice, then rebases onto main and re-checks 02, 03, 07 and 08 against Lane H's code before dispatch — a wrong order would mean merge conflicts across sessions, relay and chat — lead
+- roomFileName_EmptyRoom_Throws sits in main/room-store.test.ts, not contract.test.ts: the root layer may not import main/ — group 01 · group 01
+- jsonl read() and rooms() run through the room's serial queue, so a read waits for earlier appends — group 01 · group 01
+- Task 06 held with 02, 03, 07, 08: it consumes sessions' Harness and chat's ChatSessionInfo, which Lane H changes (Harness list removed, ChatSessionInfo gains harness) — dispatching it now would build on types about to change — lead
 ### Review rounds
 ### Test gate
