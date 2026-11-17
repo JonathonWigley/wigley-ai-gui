@@ -23,13 +23,16 @@ import {
   WIGLEY_AGENTS_FOLDER,
 } from '../kinds';
 import { changeRefusal, type GuardFolders } from '../path-guard';
-import { installedPluginsFile, readClaudeConfigDirs } from './script-locator';
+import type { HarnessFolders } from './harness-folders';
 
 export interface DocFilesDeps {
   files: Files;
   homeDir: string;
   log: PluginLog;
   paths: Paths;
+  // The registered profiles' folders and installs, read at each guard and
+  // lookup.
+  folders: HarnessFolders;
   // Every loaded view's entries (the machine index's and each session's), for
   // the guard.
   entries(): readonly IndexEntry[];
@@ -79,6 +82,8 @@ export interface DocFiles {
   list(folder: string): Promise<FolderEntry[]>;
   // Calls `changed` after the file at `path` changes or is replaced.
   watch(path: string, changed: () => void): Promise<FileWatch>;
+  // The `listedAt` of the first install of `key` under `harness` that has
+  // one; null when none does or no adapter is registered under `harness`.
   pluginConfigFile(
     key: string,
     harness: IndexHarness,
@@ -86,14 +91,14 @@ export interface DocFiles {
 }
 
 export function createDocFiles(deps: DocFilesDeps): DocFiles {
-  const { files, homeDir, log, paths } = deps;
+  const { files, homeDir, log, paths, folders } = deps;
 
   const absolute = (path: string) => absolutePath(path, homeDir, paths);
 
   // `target`, once the guard allows a change there.
   async function allowed(target: string): Promise<string> {
-    const folders = await guardFolders(files, homeDir, log, paths);
-    const refusal = changeRefusal(target, deps.entries(), folders, paths);
+    const guarded = await guardFolders(files, homeDir, folders, paths);
+    const refusal = changeRefusal(target, deps.entries(), guarded, paths);
     if (refusal !== null) {
       throw new Error(refusal);
     }
@@ -308,25 +313,11 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     key: string,
     harness: IndexHarness,
   ): Promise<{ path: string; line: number } | null> {
-    const candidates =
-      harness === 'claude'
-        ? (await readClaudeConfigDirs(files, homeDir, log, paths)).map((dir) =>
-            installedPluginsFile(dir, paths),
-          )
-        : [paths.join(homeDir, '.codex', 'config.toml')];
-    const quotedKeys = quotedKeyForms(key, harness);
-    for (const path of candidates) {
-      const text = await readIfPresent(files, path);
-      const index = text
-        ?.split('\n')
-        .findIndex((line) =>
-          quotedKeys.some((quoted) => line.includes(quoted)),
-        );
-      if (index !== undefined && index >= 0) {
-        return { path, line: index + 1 };
-      }
-    }
-    return null;
+    const listing = (await folders.installedPlugins()).find(
+      ({ harnessId, plugin }) =>
+        harnessId === harness && plugin.key === key && plugin.listedAt !== null,
+    );
+    return listing?.plugin.listedAt ?? null;
   }
 
   return {
@@ -348,13 +339,6 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     watch,
     pluginConfigFile,
   };
-}
-
-// `key` as the harness's config file writes it: a JSON string in
-// `installed_plugins.json`, a quoted TOML key (basic or literal) in Codex's
-// `config.toml`, since `@` is not allowed in a bare one.
-function quotedKeyForms(key: string, harness: IndexHarness): string[] {
-  return harness === 'claude' ? [`"${key}"`] : [`"${key}"`, `'${key}'`];
 }
 
 // What a trash of the doc at `path` moves: a skill's whole folder for its
@@ -453,28 +437,33 @@ async function realPathOrSelf(files: Files, path: string): Promise<string> {
   }
 }
 
-// The folders the index walks for global docs (each Claude config folder,
-// `~/.codex`, `~/.agents` and `~/wigley-agents`), the plugin caches (each
-// config folder's and Codex's) and the synced skill folders (each config
-// folder's `skills/synced`), all real. A docs folder at or above the home
-// folder is dropped, so the home folder itself never becomes writable.
+// The folders the index walks for global docs (each registered profile's
+// config folder, `~/.agents` and `~/wigley-agents`), the plugin caches each
+// profile's harness declares and the synced skill folders (each config
+// folder's `skills/synced`), all real. Each declared folder is `~` expanded
+// and normalized, and one that is not absolute then is dropped. A docs folder
+// at or above the home folder is dropped, so the home folder itself never
+// becomes writable.
 async function guardFolders(
   files: Files,
   homeDir: string,
-  log: PluginLog,
+  folders: Pick<HarnessFolders, 'roots'>,
   paths: Paths,
 ): Promise<GuardFolders> {
-  const configDirs = await readClaudeConfigDirs(files, homeDir, log, paths);
+  const declared = (folder: string): string[] => {
+    const full = paths.expandTilde(folder, homeDir);
+    return paths.isAbsolute(full) ? [paths.normalize(full)] : [];
+  };
+  const roots = folders.roots().map((profile) => profile.roots);
+  const configDirs = roots.flatMap((root) => declared(root.configDir));
   const docFolders = [
     ...configDirs,
-    paths.join(homeDir, '.codex'),
     paths.join(homeDir, '.agents'),
     paths.join(homeDir, WIGLEY_AGENTS_FOLDER),
   ];
-  const caches = [
-    ...configDirs.map((dir) => paths.join(dir, 'plugins', 'cache')),
-    paths.join(homeDir, '.codex', 'plugins', 'cache'),
-  ];
+  const caches = roots.flatMap((root) =>
+    root.pluginCacheDirs.flatMap((folder) => declared(folder)),
+  );
   const syncedSkills = configDirs.map((dir) =>
     paths.join(dir, 'skills', 'synced'),
   );

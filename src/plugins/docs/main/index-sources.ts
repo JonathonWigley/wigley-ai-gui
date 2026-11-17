@@ -14,6 +14,7 @@ import {
   sessionSourceId,
 } from '../contract';
 import { parseIndexDocument } from '../index-document';
+import type { HarnessFolders } from './harness-folders';
 import { locateScript } from './script-locator';
 
 // The machine index `docs_index.py build` writes, under the home folder.
@@ -37,6 +38,8 @@ export interface IndexSourcesDeps {
   homeDir: string;
   // Read at each index run.
   scriptPath(): string;
+  // Where an empty `scriptPath` finds the script, at each index run.
+  folders: Pick<HarnessFolders, 'installedPlugins'>;
   log: PluginLog;
   paths: Paths;
 }
@@ -251,7 +254,8 @@ async function sessionIndex(
 }
 
 // Codex sets no Claude session id, so a Codex session runs `context`; a relay
-// that sends no harness is taken as Claude's.
+// that sends no harness is taken as Claude's. `codex` is `docs_index.py`'s
+// harness value: its `session` command reads a Claude transcript.
 function sessionRun(
   spec: SessionSourceSpec,
 ): { command: ScriptCommand; argument: string } | null {
@@ -279,7 +283,7 @@ async function runScript(
     deps.files,
     deps.homeDir,
     deps.scriptPath(),
-    deps.log,
+    deps.folders,
     deps.paths,
   );
   if (script === null) {

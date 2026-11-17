@@ -42,8 +42,13 @@ export interface CreateTarget {
 
 interface KindRule {
   // The folder a new doc of this kind goes in, from an indexed one; null
-  // when this entry gives no place.
-  placeFolder(entry: IndexEntry, paths: Paths): string | null;
+  // when this entry gives no place. `projectConfigFolders` are the registered
+  // harnesses' project config folder names (`.claude`).
+  placeFolder(
+    entry: IndexEntry,
+    paths: Paths,
+    projectConfigFolders: readonly string[],
+  ): string | null;
   targetPath(place: CreatePlace, name: string, paths: Paths): string;
   contents(
     name: string,
@@ -107,12 +112,14 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
 
 // The places a doc of `kind` may be created: the folders the index finds
 // that kind in, outside plugins, third-party docs and sources the app does
-// not know; global places first, then by title.
+// not know; global places first, then by title. A repo's instructions in a
+// folder named in `projectConfigFolders` place their doc in its parent.
 export function placesFor(
   kind: CreateKind,
   entries: readonly IndexEntry[],
   homeDir: string,
   paths: Paths,
+  projectConfigFolders: readonly string[],
 ): CreatePlace[] {
   const places = new Map<string, CreatePlace>();
   for (const entry of entries) {
@@ -122,7 +129,11 @@ export function placesFor(
     if (entry.kind !== kind || !isPlaceSource || isThirdParty) {
       continue;
     }
-    const folder = KIND_RULES[kind].placeFolder(entry, paths);
+    const folder = KIND_RULES[kind].placeFolder(
+      entry,
+      paths,
+      projectConfigFolders,
+    );
     if (folder === null || places.has(folder)) {
       continue;
     }
@@ -194,17 +205,23 @@ function fileInFolder(place: CreatePlace, name: string, paths: Paths): string {
   return paths.join(place.folder, `${name}.md`);
 }
 
-// An instruction file's folder, a trailing `.claude` dropped for a repo's
-// own. A global one gives a place only in the wigley-agents folder, whatever
-// path it resolves to, since the index reads no other global folder's new
-// files.
-function instructionsFolder(entry: IndexEntry, paths: Paths): string | null {
+// An instruction file's folder, a trailing project config folder (one of
+// `projectConfigFolders`) dropped for a repo's own. A global one gives a place
+// only in the wigley-agents folder, whatever path it resolves to, since the
+// index reads no other global folder's new files.
+function instructionsFolder(
+  entry: IndexEntry,
+  paths: Paths,
+  projectConfigFolders: readonly string[],
+): string | null {
   const folder = paths.parent(entry.path);
   const folderName = paths.base(folder);
   if (entry.source === 'global') {
     return folderName === WIGLEY_AGENTS_FOLDER ? folder : null;
   }
-  return folderName === '.claude' ? paths.parent(folder) : folder;
+  return projectConfigFolders.includes(folderName)
+    ? paths.parent(folder)
+    : folder;
 }
 
 // A reference doc's folder. A global one in the wigley-agents folder gives no

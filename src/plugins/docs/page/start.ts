@@ -221,6 +221,13 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         picker: docsPicker.forView(viewId),
         paths: services.paths,
         harnesses: () => harnesses.all(),
+        projectConfigFolders: () => [
+          ...new Set(
+            [...harnesses.all().values()].map(
+              (info) => info.projectConfigFolder,
+            ),
+          ),
+        ],
         toast: services.toast,
         openExternal: services.openExternal,
         runKey: keyRunner(api.commands, log),

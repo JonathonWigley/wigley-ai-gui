@@ -744,24 +744,48 @@ describe('chips', () => {
       states: { e: { claude: { state: 'launch', reason: 'user CLAUDE.md' } } },
     };
 
-    expect(chips(withStates, 'e', false, HARNESSES)).toMatchObject({
-      claude: { tooltip: 'user CLAUDE.md', state: 'launch' },
-      codex: { tooltip: '', state: 'none' },
-    });
+    expect(chips(withStates, 'e', false, HARNESSES)).toEqual([
+      {
+        harness: 'claude',
+        text: 'Claude Code launch',
+        tooltip: 'user CLAUDE.md',
+        state: 'launch',
+      },
+    ]);
   });
 
   it('chips_Pending_PendingText', () => {
     const result = chips(context('/Users/u'), 'e', true, HARNESSES);
 
-    expect(result.claude.state).toBe('pending');
-    expect(result.codex.state).toBe('pending');
+    expect(result.map((chip) => chip.state)).toEqual(['pending']);
   });
 
   it('chips_NoContext_Dashes', () => {
     const result = chips(null, 'e', false, HARNESSES);
 
-    expect(result.claude.state).toBe('none');
-    expect(result.codex.state).toBe('none');
+    expect(result.map((chip) => chip.state)).toEqual(['none']);
+  });
+
+  it('chips_TwoHarnesses_RegistrationOrderAndLabels', () => {
+    const harnesses = new Map([
+      ['b', harnessInfo({ label: 'Bee' })],
+      ['claude', harnessInfo({ label: 'Claude Code' })],
+    ]);
+    const withCodex: IndexContext = {
+      ...context('/Users/u'),
+      states: { e: { codex: { state: 'launch', reason: 'r' } } },
+    };
+
+    const result = chips(withCodex, 'e', false, harnesses);
+
+    expect(result.map((chip) => [chip.harness, chip.text])).toEqual([
+      ['b', 'Bee —'],
+      ['claude', 'Claude Code —'],
+    ]);
+  });
+
+  it('chips_NoHarnesses_Empty', () => {
+    expect(chips(context('/Users/u'), 'e', false, new Map())).toEqual([]);
   });
 });
 
@@ -1916,6 +1940,18 @@ describe('detailFields', () => {
       ['Installs', 'user, project · ~/dev/r'],
     ]);
   });
+
+  it('detailFields_UnregisteredHarness_RawId', () => {
+    const plugin = entry({
+      path: '/Users/u/.codex/plugins/cache/m/p/1',
+      kind: 'plugin',
+      meta: { harness: 'codex' },
+    });
+
+    expect(detailFields(plugin, '/Users/u', posixPaths, HARNESSES)[0]).toEqual(
+      ['Harness', 'codex'],
+    );
+  });
 });
 
 describe('readOnlyReason', () => {
@@ -2060,11 +2096,10 @@ describe('statusTexts', () => {
         HARNESSES,
       ),
     ).toEqual([
-      expect.any(String),
-      expect.any(String),
-      expect.stringContaining('Claude Code'),
-      expect.stringContaining('codex'),
-      expect.any(String),
+      'Uncommitted',
+      'Unpushed',
+      'Not installed · Claude Code',
+      'Session stale',
     ]);
   });
 
@@ -2104,6 +2139,11 @@ describe('statusTexts', () => {
 });
 
 describe('rollupText', () => {
+  const BOTH = new Map([
+    ['claude', harnessInfo({ label: 'Claude Code' })],
+    ['codex', harnessInfo({ label: 'Codex' })],
+  ]);
+
   it('rollupText_Counts_InOrderZerosLeftOut', () => {
     const counts = {
       uncommitted: 3,
@@ -2111,7 +2151,7 @@ describe('rollupText', () => {
       notInstalled: { claude: 0, codex: 12 },
     };
 
-    expect(rollupText(counts, HARNESSES)).toMatch(/3.*1.*12.*codex/);
+    expect(rollupText(counts, BOTH)).toMatch(/3.*1.*12.*Codex/);
   });
 
   it('rollupText_BothHarnesses_ClaudeFirst', () => {
@@ -2121,7 +2161,7 @@ describe('rollupText', () => {
       notInstalled: { claude: 2, codex: 5 },
     };
 
-    expect(rollupText(counts, HARNESSES)).toMatch(/2.*Claude Code.*5.*codex/);
+    expect(rollupText(counts, BOTH)).toMatch(/2.*Claude Code.*5.*Codex/);
   });
 
   it('rollupText_AllZero_Null', () => {
@@ -2131,7 +2171,7 @@ describe('rollupText', () => {
       notInstalled: { claude: 0, codex: 0 },
     };
 
-    expect(rollupText(counts, HARNESSES)).toBe(null);
+    expect(rollupText(counts, BOTH)).toBe(null);
   });
 });
 

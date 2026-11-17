@@ -137,8 +137,11 @@ async function setUp() {
     paths: posixPaths,
     log: (message: string) => logged.push(message),
   };
-  const read = (entries: readonly IndexEntry[], fetch = false) =>
-    readPluginStatus(entries, deps, { fetch });
+  const read = (
+    entries: readonly IndexEntry[],
+    fetch = false,
+    harnesses: readonly string[] = ['claude', 'codex'],
+  ) => readPluginStatus(entries, deps, { fetch, harnesses });
   return { files, git, logged, read };
 }
 
@@ -276,6 +279,15 @@ describe('readPluginStatus', () => {
     const files = await filesOf(test.read);
 
     expect(files[A.id].notInstalled).toEqual(['codex']);
+  });
+
+  it('readPluginStatus_UnregisteredHarness_NotChecked', async () => {
+    const test = await setUp();
+    await test.files.write(`${CODEX_CACHE}/skills/a/SKILL.md`, 'old\n');
+
+    const status = await test.read(EVERY_ENTRY, false, ['claude']);
+
+    expect(status.clones[0].files[A.id]).toBeUndefined();
   });
 
   it('readPluginStatus_NoCopies_NotInstalledEveryHarness', async () => {

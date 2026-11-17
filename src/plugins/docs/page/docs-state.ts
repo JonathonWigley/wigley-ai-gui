@@ -22,18 +22,13 @@ import {
   type IndexContext,
   type IndexDocument,
   type IndexEntry,
-  type IndexHarness,
   type IndexHeading,
   type LoadState,
   type LoadStateRecord,
   type PluginStatusRead,
   UNSAVED_TEXT,
 } from '../contract';
-import {
-  INDEX_HARNESSES,
-  installedCopies,
-  metaString,
-} from '../index-document';
+import { installedCopies, metaString } from '../index-document';
 import { skillFolder } from '../kinds';
 import type { docsManifest } from '../manifest';
 import {
@@ -358,20 +353,27 @@ export interface Chip {
   state: LoadState | 'none' | 'pending';
 }
 
+// A chip with the id of the harness it is for.
+export interface HarnessChip extends Chip {
+  harness: string;
+}
+
 const PENDING_TOOLTIP = 'Changed since the last build';
 
-// Each chip names its harness by its label in `harnesses`, else its id.
+// One chip per registered harness in `harnesses`, in its key order, each
+// named by the harness's label; a load state for any other harness draws no
+// chip.
 export function chips(
   context: IndexContext | null,
   entryId: string,
   isPending: boolean,
   harnesses: ReadonlyMap<string, AgentHarnessInfo>,
-): { claude: Chip; codex: Chip } {
+): HarnessChip[] {
   const states = context?.states[entryId] ?? {};
-  return {
-    claude: chip(harnessLabel(harnesses, 'claude'), states.claude, isPending),
-    codex: chip(harnessLabel(harnesses, 'codex'), states.codex, isPending),
-  };
+  return [...harnesses].map(([harness, info]) => ({
+    harness,
+    ...chip(info.label, states[harness], isPending),
+  }));
 }
 
 function chip(
@@ -939,8 +941,9 @@ export function fileStatuses(
   return merged;
 }
 
-// The status chips' texts for `entry`, in their fixed order, each harness
-// named by its label in `harnesses`, else its id.
+// The status chips' texts for `entry`, in their fixed order: one not
+// installed text per registered harness in `harnesses`, in its key order,
+// named by its label.
 export function statusTexts(
   entry: IndexEntry,
   status: FileStatus | undefined,
@@ -954,9 +957,9 @@ export function statusTexts(
   if (status?.unpushed === true) {
     texts.push('Unpushed');
   }
-  for (const harness of INDEX_HARNESSES) {
+  for (const [harness, info] of harnesses) {
     if (status?.notInstalled.includes(harness) === true) {
-      texts.push(`Not installed · ${harnessLabel(harnesses, harness)}`);
+      texts.push(`Not installed · ${info.label}`);
     }
   }
   if (isSessionStale(entry, loadedPlugins)) {
@@ -966,7 +969,7 @@ export function statusTexts(
 }
 
 // The session loaded a version of the entry's plugin other than its Claude
-// copy's.
+// copy's. `claude` is `docs_index.py`'s harness value for an installed copy.
 function isSessionStale(
   entry: IndexEntry,
   loadedPlugins: Readonly<Record<string, string>>,
@@ -987,12 +990,14 @@ function isSessionStale(
 export interface StatusCounts {
   uncommitted: number;
   unpushed: number;
-  notInstalled: Record<IndexHarness, number>;
+  // By harness id; a harness no leaf counts is absent.
+  notInstalled: Record<string, number>;
 }
 
 // `<n> uncommitted · <n> unpushed · <n> not installed for <harness>`, each
-// part only when its count is above 0, each harness named by its label in
-// `harnesses`, else its id; null when every count is 0.
+// part only when its count is above 0, one not installed part per registered
+// harness in `harnesses`, in its key order, named by its label; null when
+// every count is 0.
 export function rollupText(
   counts: StatusCounts,
   harnesses: ReadonlyMap<string, AgentHarnessInfo>,
@@ -1000,9 +1005,9 @@ export function rollupText(
   const parts: [number, string][] = [
     [counts.uncommitted, 'uncommitted'],
     [counts.unpushed, 'unpushed'],
-    ...INDEX_HARNESSES.map((harness): [number, string] => [
-      counts.notInstalled[harness],
-      `not installed for ${harnessLabel(harnesses, harness)}`,
+    ...[...harnesses].map(([harness, info]): [number, string] => [
+      counts.notInstalled[harness] ?? 0,
+      `not installed for ${info.label}`,
     ]),
   ];
   const shown = parts
@@ -1076,7 +1081,7 @@ function statusCounts(
   const counts: StatusCounts = {
     uncommitted: 0,
     unpushed: 0,
-    notInstalled: { claude: 0, codex: 0 },
+    notInstalled: {},
   };
   const pending: TreeNode[] = [...group.children];
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
@@ -1094,7 +1099,7 @@ function statusCounts(
     counts.uncommitted += status.uncommitted ? 1 : 0;
     counts.unpushed += status.unpushed ? 1 : 0;
     for (const harness of status.notInstalled) {
-      counts.notInstalled[harness] += 1;
+      counts.notInstalled[harness] = (counts.notInstalled[harness] ?? 0) + 1;
     }
   }
   return counts;

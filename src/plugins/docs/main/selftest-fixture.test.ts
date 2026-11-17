@@ -5,7 +5,11 @@ import type { IndexDocument } from '../contract';
 import { parseIndexDocument } from '../index-document';
 import { buildWikiTree, type TreeNode } from '../tree';
 import { parseWikiMain } from '../wiki-main';
-import { WIKI_MAIN_TEXT, writeDocsFixture } from './selftest-fixture';
+import {
+  docsFixtureInstalls,
+  WIKI_MAIN_TEXT,
+  writeDocsFixture,
+} from './selftest-fixture';
 
 const HOME = '/home';
 const LOAD_STATES = `${HOME}/.claude/load-states`;
@@ -155,6 +159,19 @@ describe('writeDocsFixture', () => {
     );
     for (const doc of LOAD_STATE_DOCS) {
       expect(indexedPaths).not.toContain(doc.path);
+    }
+  });
+
+  it('docsFixtureInstalls_ListedAt_TheWrittenLineHoldsTheKey', async () => {
+    const files = await homeFiles();
+    await writeDocsFixture(files, HOME, posixPaths);
+
+    for (const { key, listedAt } of docsFixtureInstalls(HOME, posixPaths)) {
+      if (listedAt === null) {
+        throw new Error(`${key} lists no line`);
+      }
+      const lines = (await files.read(listedAt.path)).split('\n');
+      expect(lines[listedAt.line - 1]).toContain(`"${key}"`);
     }
   });
 });

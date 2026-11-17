@@ -55,9 +55,9 @@ import { createDocAside, type DocAside } from './doc-aside';
 import { createDocHistory, type DocPlace } from './doc-history';
 import { docLinkOf, docLinksText, pastedImagePath } from './doc-links';
 import {
-  type Chip,
   codeFence,
   type DocsAnchor,
+  type HarnessChip,
   type ReadOnlyReason,
   readOnlyText,
   topVisibleLine,
@@ -139,7 +139,7 @@ export interface DocViewDeps {
   // Epoch milliseconds, for naming pasted files.
   now(): number;
   // The chips of the doc at `path` whose entry is `entryId`.
-  chipsOf(entryId: string, path: string): { claude: Chip; codex: Chip };
+  chipsOf(entryId: string, path: string): HarnessChip[];
   // The plugin-source status texts of the entry `entryId`, in chip order.
   statusesOf(entryId: string): string[];
   // The last-loaded line of the entry `entryId`; null when it was never
@@ -713,19 +713,12 @@ export function createDocView(deps: DocViewDeps): DocView {
   const headerInput = (target: DocTarget): DocHeaderInput => {
     const { entryId } = target;
     const isIndexed = entryId !== null;
-    const chips = isIndexed ? deps.chipsOf(entryId, target.path) : null;
     return {
       title: target.title,
       path: deps.paths.tilde(target.path, deps.homeDir),
       fullPath: target.path,
       readOnly: target.readOnly === null ? null : readOnlyText(target.readOnly),
-      chips:
-        chips === null
-          ? []
-          : [
-              { harness: 'claude', ...chips.claude },
-              { harness: 'codex', ...chips.codex },
-            ],
+      chips: isIndexed ? deps.chipsOf(entryId, target.path) : [],
       statuses: isIndexed ? deps.statusesOf(entryId) : [],
       loaded: isIndexed ? deps.loadedOf(entryId) : null,
     };

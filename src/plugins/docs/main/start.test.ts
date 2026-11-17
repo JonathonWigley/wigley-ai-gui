@@ -3,6 +3,15 @@ import type { Disposable, Registrations } from '../../../contracts/disposable';
 import type { Git } from '../../../contracts/git';
 import type { RunMode } from '../../../contracts/plugin';
 import type { ProcessResult } from '../../../contracts/processes';
+import {
+  harnessInfo,
+  harnessRegistryOf,
+} from '../../../shared/agent-harness-registry.test-support';
+import {
+  createFakeAgentHarness,
+  FAKE_MICROTASK_TIMERS,
+  type FakeAgentHarness,
+} from '../../../shared/fake-agent-harness';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
@@ -21,6 +30,7 @@ import {
 } from '../../sessions/contract';
 import type { DocsMainExports, IndexDocument } from '../contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
+import { docsFixtureInstalls } from './selftest-fixture';
 import { addDriveActions, docsMainPart, startDocs } from './start';
 
 const HOME = '/home';
@@ -31,7 +41,21 @@ function setUpFiles() {
   return files.makeFolder(HOME).then(() => files);
 }
 
-function start(files: ReturnType<typeof createMemoryFiles>, runMode: RunMode) {
+function fakeHarness(): FakeAgentHarness {
+  return createFakeAgentHarness(
+    { now: () => 1000 },
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
+}
+
+// Docs started over `files` with `harness` registered, its profiles
+// `FAKE_PROFILES`.
+function start(
+  files: ReturnType<typeof createMemoryFiles>,
+  runMode: RunMode,
+  harness: FakeAgentHarness = fakeHarness(),
+) {
   return startDocs(
     {
       files,
@@ -40,9 +64,11 @@ function start(files: ReturnType<typeof createMemoryFiles>, runMode: RunMode) {
       homeDir: HOME,
       runMode,
       paths: posixPaths,
+      agentHarnesses: harnessRegistryOf([harness]),
     },
     () => '/script.py',
     () => [],
+    () => new Map([[harness.id, harness.info()]]),
   );
 }
 
@@ -72,6 +98,25 @@ describe('startDocs', () => {
 
     expect(await files.stat(`${HOME}/${MACHINE_INDEX_FILE}`)).toBeNull();
   });
+
+  it.each([
+    { runMode: 'drive', isSet: true },
+    { runMode: 'live', isSet: false },
+  ] as const)(
+    'startDocs_NonLiveRun_SetsTheFixtureInstallsOnEachFakeProfile ($runMode)',
+    async ({ runMode, isSet }) => {
+      const files = await setUpFiles();
+      const harness = fakeHarness();
+
+      await start(files, runMode, harness);
+
+      const expected = isSet ? docsFixtureInstalls(HOME, posixPaths) : [];
+      expect(await harness.installedPlugins('~/.claude')).toEqual(expected);
+      expect(await harness.installedPlugins('~/.claude-personal')).toEqual(
+        expected,
+      );
+    },
+  );
 });
 
 // The docs drive actions over a fresh home, whose sessions throw on open,
@@ -188,6 +233,12 @@ function startDocsPart() {
       runMode: 'live',
       paths: posixPaths,
       selfTest: null,
+      agentHarnesses: harnessRegistryOf([]),
+    },
+    state: {
+      read: () => ({
+        all: () => new Map([['claude', harnessInfo({ label: 'Claude Code' })]]),
+      }),
     },
     dependency: () => ({}),
     drive: null,

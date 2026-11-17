@@ -18,6 +18,8 @@ import {
 
 const HOME = '/Users/u';
 const SCRIPT = '/s/docs_index.py';
+// No profile lists an install, so an empty script path finds no script.
+const NO_INSTALLS = { installedPlugins: async () => [] };
 const INDEX_FILE = '/Users/u/.agents/wigley-docs/index.json';
 const BUILD = ['-X', 'utf8', SCRIPT, 'build'];
 
@@ -71,6 +73,7 @@ function setUp(scriptPath = SCRIPT) {
     processes,
     homeDir: HOME,
     scriptPath: () => scriptPath,
+    folders: NO_INSTALLS,
     log: (message: string) => logged.push(message),
     paths: posixPaths,
   };
@@ -118,6 +121,7 @@ describe('machine source', () => {
       },
       homeDir: HOME,
       scriptPath: () => SCRIPT,
+      folders: NO_INSTALLS,
       log: () => undefined,
       paths: posixPaths,
     });

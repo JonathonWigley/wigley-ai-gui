@@ -321,6 +321,9 @@ export interface DocsViewDeps {
   // Each registered harness's info by id, read at each draw of a harness's
   // label.
   harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
+  // Each registered harness's project config folder name, in registration
+  // order, each once; read at each create.
+  projectConfigFolders(): readonly string[];
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
   // Whether the tree shows now as this view's own pane, beside the doc; false
@@ -495,13 +498,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const pluginFile = async (entry: IndexEntry) => {
-    const harness =
-      metaString(entry, 'harness') === 'codex' ? 'codex' : 'claude';
-    const found = await deps.channel.invoke(
-      'pluginConfigFile',
-      entry.title,
-      harness,
-    );
+    const harness = metaString(entry, 'harness');
+    const found =
+      harness === null
+        ? null
+        : await deps.channel.invoke('pluginConfigFile', entry.title, harness);
     if (found === null) {
       toast(`No config file lists ${entry.title}`, 'info');
       return null;
@@ -972,6 +973,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     parts: newParts(),
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],
+    projectConfigFolders: () => deps.projectConfigFolders(),
     changed: (record, selectPath) => applyDocChange(record, selectPath),
     openInEditor,
     dialogClosed: restoreFocus,

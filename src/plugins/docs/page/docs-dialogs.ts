@@ -430,6 +430,8 @@ export interface DocsDialogsDeps {
   pushScope(scope: DialogScope): PushedScope;
   // The view's entries now.
   entries(): readonly IndexEntry[];
+  // Each registered harness's project config folder name, read at each create.
+  projectConfigFolders(): readonly string[];
   // Applies a change main made; `selectPath` names the doc to select after
   // a rename.
   changed(record: DocChangeRecord, selectPath: string | null): void;
@@ -533,7 +535,13 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
 
   const pickPlace = (kind: CreateKind) => {
     const kindTitle = CREATE_KIND_TITLES[kind];
-    const places = placesFor(kind, deps.entries(), deps.homeDir, paths);
+    const places = placesFor(
+      kind,
+      deps.entries(),
+      deps.homeDir,
+      paths,
+      deps.projectConfigFolders(),
+    );
     if (places.length === 0) {
       toast(noPlaceText(kindTitle), 'info');
       createCancelled();

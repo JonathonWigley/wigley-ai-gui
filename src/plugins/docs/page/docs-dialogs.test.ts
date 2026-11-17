@@ -74,6 +74,7 @@ function dialogsOver(
     parts,
     pushScope: fakePushedScope,
     entries: () => [],
+    projectConfigFolders: () => ['.claude'],
     changed: () => undefined,
     openInEditor: async () => undefined,
     dialogClosed: () => undefined,

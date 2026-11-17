@@ -1,3 +1,4 @@
+import type { InstalledPlugin } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -6,7 +7,7 @@ import type {
   IndexEntry,
   LoadStateRecord,
 } from '../contract';
-import { installedPluginsFile, WIGLEY_PLUGIN_KEY } from './script-locator';
+import { WIGLEY_PLUGIN_KEY } from './script-locator';
 import { MACHINE_INDEX_FILE } from './index-sources';
 
 const FIXTURE_PLUGIN_KEY = 'selftest-plugin@selftest-market';
@@ -132,7 +133,7 @@ export async function writeDocsFixture(
       doc.path,
       `# ${doc.title}\n`,
     ]),
-    [installedPluginsFile(fixture.claudeDir, paths), installedPlugins(fixture)],
+    [fixture.installedPlugins, installedPluginsText(fixture)],
     [paths.join(fixture.scriptFolder, 'index.fixture.json'), json(index)],
     [
       paths.join(fixture.scriptFolder, 'session.fixture.json'),
@@ -180,6 +181,11 @@ function fixturePaths(home: string, paths: Paths) {
     rules: paths.join(claudeDir, 'rules'),
     loadStates: paths.join(claudeDir, 'load-states'),
     claudeMd: paths.join(claudeDir, 'CLAUDE.md'),
+    installedPlugins: paths.join(
+      claudeDir,
+      'plugins',
+      'installed_plugins.json',
+    ),
     styleRule: paths.join(claudeDir, 'rules', KEPT_RULE),
     settings: paths.join(claudeDir, 'settings.json'),
     repo,
@@ -214,8 +220,32 @@ function fixturePaths(home: string, paths: Paths) {
   };
 }
 
-// The plugin's key sits on line 3.
-function installedPlugins(fixture: FixturePaths): string {
+// The installs the fixture's `installed_plugins.json` lists, as a harness's
+// `installedPlugins` gives them: what a run on the fake harness hands it for
+// each profile, since the fake reads no file.
+export function docsFixtureInstalls(
+  home: string,
+  paths: Paths,
+): InstalledPlugin[] {
+  const fixture = fixturePaths(home, paths);
+  return [
+    {
+      key: WIGLEY_PLUGIN_KEY,
+      installDir: fixture.wigleyInstall,
+      version: '0.0.0',
+      listedAt: { path: fixture.installedPlugins, line: 2 },
+    },
+    {
+      key: FIXTURE_PLUGIN_KEY,
+      installDir: fixture.pluginRoot,
+      version: '1.0.0',
+      listedAt: { path: fixture.installedPlugins, line: 3 },
+    },
+  ];
+}
+
+// The wigley key sits on line 2, the fixture plugin's on line 3.
+function installedPluginsText(fixture: FixturePaths): string {
   const install = (installPath: string) =>
     `[{"scope":"user","installPath":${JSON.stringify(installPath)}}]`;
   return (

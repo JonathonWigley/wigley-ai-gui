@@ -12,11 +12,7 @@ import type {
   InstalledCopy,
   PluginStatusRead,
 } from '../contract';
-import {
-  INDEX_HARNESSES,
-  installedCopies,
-  metaString,
-} from '../index-document';
+import { installedCopies, metaString } from '../index-document';
 
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -50,15 +46,17 @@ const runningFetches: { root: string; failed: Promise<boolean> }[] = [];
 // capped at 15 s; `fetchFailed` reports that fetch alone. Any other git
 // failure stops that clone's statuses where they stand and logs
 // `plugin status <root>: <reason>` under `docs`; it never rejects the read.
+// Not installed is judged only for `options.harnesses`, the registered
+// harness ids, in their order.
 export async function readPluginStatus(
   entries: readonly IndexEntry[],
   deps: PluginStatusDeps,
-  options: { fetch: boolean },
+  options: { fetch: boolean; harnesses: readonly string[] },
 ): Promise<PluginStatusRead> {
   const clones = clonesOf(entries, deps.paths);
   return {
     clones: await Promise.all(
-      clones.map((clone) => readClone(clone, entries, deps, options.fetch)),
+      clones.map((clone) => readClone(clone, entries, deps, options)),
     ),
   };
 }
@@ -84,16 +82,18 @@ async function readClone(
   clone: Clone,
   entries: readonly IndexEntry[],
   deps: PluginStatusDeps,
-  fetch: boolean,
+  options: { fetch: boolean; harnesses: readonly string[] },
 ): Promise<CloneStatus> {
   const marks: StatusMarks = {
     uncommitted: new Set(),
     unpushed: new Set(),
     notInstalled: new Map(),
   };
-  const fetchFailed = fetch ? await sharedFetch(clone.root, deps) : false;
+  const fetchFailed = options.fetch
+    ? await sharedFetch(clone.root, deps)
+    : false;
   try {
-    await markStatuses(clone, entries, deps, marks);
+    await markStatuses(clone, entries, deps, marks, options.harnesses);
   } catch (error) {
     deps.log(`plugin status ${clone.root}: ${errorText(error)}`);
   }
@@ -130,6 +130,7 @@ async function markStatuses(
   entries: readonly IndexEntry[],
   deps: PluginStatusDeps,
   marks: StatusMarks,
+  harnesses: readonly string[],
 ): Promise<void> {
   const { root } = clone;
   const scope = scopeOf(clone, deps.paths);
@@ -154,6 +155,7 @@ async function markStatuses(
       entries,
       upstreamBlobs.get(entry.id) ?? null,
       deps.files,
+      harnesses,
     );
     if (notInstalled.length > 0) {
       marks.notInstalled.set(entry.id, notInstalled);
@@ -205,17 +207,18 @@ function upstreamBlobsOf(
 }
 
 // The harnesses the entry's plugin is installed for whose copies do not all
-// match the upstream blob, in `INDEX_HARNESSES`; every one of them when the
+// match the upstream blob, in `harnesses` order; every one of them when the
 // file is absent upstream.
 async function harnessesNotInstalled(
   entry: IndexEntry,
   entries: readonly IndexEntry[],
   upstreamSha: string | null,
   files: Files,
+  harnesses: readonly string[],
 ): Promise<IndexHarness[]> {
   const copies = installedCopies(entry) ?? [];
   const notInstalled: IndexHarness[] = [];
-  for (const harness of pluginHarnesses(entry.plugin, entries)) {
+  for (const harness of pluginHarnesses(entry.plugin, entries, harnesses)) {
     const harnessCopies = copies.filter((copy) => copy.harness === harness);
     const isInstalled =
       upstreamSha !== null &&
@@ -228,10 +231,12 @@ async function harnessesNotInstalled(
   return notInstalled;
 }
 
-// The `meta.harness` of each `plugin` entry for `plugin`, in `INDEX_HARNESSES`.
+// Each of `harnesses` that is the `meta.harness` of a `plugin` entry for
+// `plugin`, in `harnesses` order.
 function pluginHarnesses(
   plugin: string | null,
   entries: readonly IndexEntry[],
+  harnesses: readonly string[],
 ): IndexHarness[] {
   if (plugin === null) {
     return [];
@@ -239,7 +244,7 @@ function pluginHarnesses(
   const named = entries
     .filter((entry) => entry.kind === 'plugin' && entry.plugin === plugin)
     .map((entry) => metaString(entry, 'harness'));
-  return INDEX_HARNESSES.filter((harness) => named.includes(harness));
+  return harnesses.filter((harness) => named.includes(harness));
 }
 
 async function allCopiesMatch(

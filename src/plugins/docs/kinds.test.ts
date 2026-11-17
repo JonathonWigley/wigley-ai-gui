@@ -59,7 +59,7 @@ describe('placesFor', () => {
       entry({ path: '/Users/u/.claude/skills/b/SKILL.md', kind: 'skill' }),
     ];
 
-    expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([
+    expect(placesFor('skill', entries, HOME, posixPaths, ['.claude'])).toEqual([
       {
         title: 'Global · ~/.claude/skills',
         folder: '/Users/u/.claude/skills',
@@ -83,7 +83,7 @@ describe('placesFor', () => {
       entry({ path: '/Users/u/.claude/skills/a/SKILL.md', kind: 'skill' }),
     ];
 
-    expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([
+    expect(placesFor('skill', entries, HOME, posixPaths, ['.claude'])).toEqual([
       {
         title: 'Global · ~/.claude/skills',
         folder: '/Users/u/.claude/skills',
@@ -104,7 +104,7 @@ describe('placesFor', () => {
       '/Users/u/wigley-agents/Unity.md',
     ].map((path) => entry({ path, kind: 'instructions' }));
 
-    expect(placesFor('instructions', entries, HOME, posixPaths)).toEqual([
+    expect(placesFor('instructions', entries, HOME, posixPaths, ['.claude'])).toEqual([
       {
         title: 'Global · ~/wigley-agents',
         folder: '/Users/u/wigley-agents',
@@ -146,7 +146,7 @@ describe('placesFor', () => {
   ] as const)('placesFor $given offers no place', ({ kind, fields }) => {
     const entries = [entry({ ...fields, kind })];
 
-    expect(placesFor(kind, entries, HOME, posixPaths)).toEqual([]);
+    expect(placesFor(kind, entries, HOME, posixPaths, ['.claude'])).toEqual([]);
   });
 
   it('placesFor_ProjectReference_EntryFolder', () => {
@@ -160,7 +160,7 @@ describe('placesFor', () => {
       }),
     ];
 
-    expect(placesFor('reference', entries, HOME, posixPaths)).toEqual([
+    expect(placesFor('reference', entries, HOME, posixPaths, ['.claude'])).toEqual([
       {
         title: 'r · ~/dev/r/docs',
         folder: '/Users/u/dev/r/docs',
@@ -178,25 +178,53 @@ describe('placesFor', () => {
     ];
 
     expect(
-      placesFor('instructions', entries, HOME, posixPaths).map((p) => p.folder),
+      placesFor('instructions', entries, HOME, posixPaths, ['.claude']).map((p) => p.folder),
     ).toEqual(['/Users/u/dev/personal/wigley-agents']);
   });
 
-  it('placesFor_InstructionsInDotClaude_DropsDotClaude', () => {
-    const entries = [
-      entry({
-        path: '/Users/u/dev/r/.claude/CLAUDE.md',
-        kind: 'instructions',
-        source: 'repo',
-        repo: 'r',
-        root: '/Users/u/dev/r',
-      }),
-    ];
+  it.each([
+    {
+      given: 'a .claude file with .claude registered',
+      projectConfigFolders: ['.claude'],
+      path: '/Users/u/dev/r/.claude/CLAUDE.md',
+      folder: '/Users/u/dev/r',
+    },
+    {
+      given: 'a .agentx file with .agentx registered',
+      projectConfigFolders: ['.agentx'],
+      path: '/Users/u/dev/r/.agentx/AGENTS.md',
+      folder: '/Users/u/dev/r',
+    },
+    {
+      given: 'a .claude file with none registered',
+      projectConfigFolders: [],
+      path: '/Users/u/dev/r/.claude/CLAUDE.md',
+      folder: '/Users/u/dev/r/.claude',
+    },
+  ])(
+    'placesFor_RepoInstructions_given $given',
+    ({ projectConfigFolders, path, folder }) => {
+      const entries = [
+        entry({
+          path,
+          kind: 'instructions',
+          source: 'repo',
+          repo: 'r',
+          root: '/Users/u/dev/r',
+        }),
+      ];
 
-    expect(
-      placesFor('instructions', entries, HOME, posixPaths).map((p) => p.folder),
-    ).toEqual(['/Users/u/dev/r']);
-  });
+      expect(
+        placesFor(
+          'instructions',
+          entries,
+          HOME,
+          posixPaths,
+          projectConfigFolders,
+        ).map((p) => p.folder),
+      ).toEqual([folder]);
+    },
+  );
 
   it('placesFor_Followup_OnlyFollowupsMdFiles', () => {
     const root = '/Users/u/wigley-features/r';
@@ -221,7 +249,7 @@ describe('placesFor', () => {
       }),
     ];
 
-    expect(placesFor('followup', entries, HOME, posixPaths)).toEqual([
+    expect(placesFor('followup', entries, HOME, posixPaths, ['.claude'])).toEqual([
       {
         title: 'r features · ~/wigley-features/r',
         folder: root,
@@ -404,7 +432,7 @@ describe('kinds on Windows', () => {
     ];
 
     expect(
-      placesFor('instructions', entries, 'C:\\Users\\u', windowsPaths),
+      placesFor('instructions', entries, 'C:\\Users\\u', windowsPaths, ['.claude']),
     ).toEqual([
       {
         title: 'Global · ~\\wigley-agents',

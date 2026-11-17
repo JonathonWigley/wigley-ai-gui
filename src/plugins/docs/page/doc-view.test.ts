@@ -36,7 +36,7 @@ import {
   type DocViewDeps,
 } from './doc-view';
 import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
-import { readOnlyText } from './docs-state';
+import { type HarnessChip, readOnlyText } from './docs-state';
 import type { ListPageContent } from './list-page';
 import {
   fencePlaceholder,
@@ -936,10 +936,15 @@ describe('createDocView', () => {
         return { element: kit.el(parent, 'div') };
       },
     };
-    const chip = { text: '', tooltip: '', state: 'none' } as const;
+    const chip = {
+      harness: 'claude',
+      text: '',
+      tooltip: '',
+      state: 'none',
+    } as const;
     const { view } = docViewOver(
       () => withUser(defaultLayout, header),
-      () => ({ claude: chip, codex: chip }),
+      () => [chip],
     );
     await view.open(target(entryId));
 
@@ -1063,6 +1068,28 @@ describe('createDocView', () => {
     expect(headers.map(({ chips, statuses }) => ({ chips, statuses }))).toEqual(
       [{ chips: [], statuses: [] }],
     );
+  });
+
+  it('open_IndexedDoc_DrawsItsChips', async () => {
+    const headers: DocHeaderInput[] = [];
+    const header: Layout = {
+      docHeader(parent, input, kit) {
+        headers.push(input);
+        return { element: kit.el(parent, 'div') };
+      },
+    };
+    const drawn: HarnessChip[] = [
+      { harness: 'b', text: 'Bee launch', tooltip: 'r', state: 'launch' },
+      { harness: 'claude', text: 'Claude Code —', tooltip: '', state: 'none' },
+    ];
+    const { view } = docViewOver(
+      () => withUser(defaultLayout, header),
+      () => drawn,
+    );
+
+    await view.open(target('e'));
+
+    expect(headers.map(({ chips }) => chips)).toEqual([drawn]);
   });
 
   it('redraw_NoEditor_KeepsThePaneScrollAndFocus', async () => {

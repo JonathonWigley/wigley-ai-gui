@@ -93,7 +93,8 @@ export interface EmptyDocInput {
 }
 // One load-state chip.
 export interface ChipInput {
-  harness: 'claude' | 'codex';
+  // The id of the harness the chip is for.
+  harness: string;
   text: string;
   tooltip: string;
   state:
@@ -112,7 +113,7 @@ export interface DocHeaderInput {
   fullPath: string;
   // The read-only line's text; null for a doc that may be edited.
   readOnly: string | null;
-  // Claude's chip, then Codex's; empty for a file no index entry names.
+  // One chip per registered harness, in registration order; empty for a file no index entry names.
   chips: ChipInput[];
   // The plugin-source status texts, in chip order.
   statuses: string[];
