@@ -32,8 +32,9 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   a box, in that vim mode. A chord's key is a lowercase letter, a digit or symbol written as the
   character it types (`<C-/>`, `<C-?>`) except `<`, `\`, `|` and space, written `lt`, `Bslash`,
   `Bar` and `Space` (`<C-lt>`), Enter, Tab, F1–F12, an arrow, Home, End, PageUp, PageDown,
-  BS or Del, and a chord matches the character typed rather than the key's place (`AGENTS.md`
-  § Architecture, the **A key** bullet, holds the full rule). Shift is in the character (`<C-!>`,
+  BS or Del, and a chord matches the character typed, except an Option chord on macOS and a key
+  that types no ASCII character, which match the physical key (`AGENTS.md` § Architecture, the
+  **A key** bullet, holds the full rule). Shift is in the character (`<C-!>`,
   not `<C-S-1>`), and a `keymap.json` holding the old form is refused whole.
 - `arg` hands the command its argument: a number, a string or a small record of numbers and
   strings. A command that declares an argument needs one on each of its binds, and a command that

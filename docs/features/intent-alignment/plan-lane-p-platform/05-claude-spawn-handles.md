@@ -1,6 +1,6 @@
 # 05 — Claude adapter and session host start through ProcessRunner
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -258,3 +258,5 @@ One commit for the group: "Claude adapter and session host start through Process
 claude.command looks claude up on PATH, then ~/.local/bin; close Lane P's program lookup item".
 
 ## Proof
+
+Commit 8138eba0b · proof: Diff read: command(): Promise<ProgramCandidate|null> in start.ts via resolveProgram('claude'); createPendingPipe in pending-pipe.ts; session host via processes.startDetached with setEnv ELECTRON_RUN_AS_NODE; main.ts drops node:child_process; Done-when greps print nothing. typecheck and lint pass. · concerns: harness tests adjusted by reading alone (settle() awaits); start_ThenDetach_ReportsNoSessionId row removed, its claim moved to start_DetachBeforeCommandResolves_SpawnsNothing; one-shots split into async claudeProgram + sync spawnCli with CliEvents so a cancel before spawn spawns nothing
