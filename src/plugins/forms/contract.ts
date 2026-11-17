@@ -320,7 +320,9 @@ export interface FormsChannel extends ChannelShape {
 }
 
 // What a confirm asks the user: `title` heads the round, `detail` says what
-// the action does.
+// the action does. The round's overview shows the detail's first paragraph,
+// the text before its first blank line, so that paragraph is plain prose; the
+// question's context shows the whole detail, markdown blocks included.
 export interface ConfirmRequest {
   title: string;
   detail: string;

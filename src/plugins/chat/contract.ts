@@ -991,3 +991,11 @@ export const chatMoveFocusCommand: CommandKey<
   { sessionId: string; stopId: string },
   'chat.moveFocus'
 > = { id: 'chat.moveFocus' };
+
+// Sends `text` to the chat session `sessionId`, framed as the calling agent's
+// message when an agent runs it; the one command that names its target
+// session in its argument.
+export const chatSendToCommand: CommandKey<
+  { sessionId: string; text: string },
+  'chat.sendTo'
+> = { id: 'chat.sendTo' };

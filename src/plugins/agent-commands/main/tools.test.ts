@@ -89,6 +89,13 @@ const SLOTS: Record<string, SlotSnapshot> = {
   },
 };
 
+// The confirm CALLER's forms.submit asks.
+const SUBMIT_CONFIRM: ConfirmRequest = {
+  title: 'Run send answers?',
+  detail:
+    'The agent in session "gamma 1" asks to run forms.submit (send answers).',
+};
+
 const context = (signal = new AbortController().signal) => ({
   toolUseId: 'tu-1',
   signal,
@@ -138,6 +145,12 @@ describe('createAgentCommandTools', () => {
     text: string;
     asksConfirm: boolean;
   }>([
+    {
+      given: 'arguments that are not an object',
+      args: 'x',
+      text: 'arguments must be an object',
+      asksConfirm: false,
+    },
     {
       given: 'no command',
       args: {},
@@ -264,10 +277,13 @@ describe('createAgentCommandTools', () => {
     },
   );
 
+  // `earlierConfirm` answers the confirm of a docs.trash run from OTHER_CALLER
+  // that settles first, so its waiting count must be gone by the row's run.
   it.each<{
     given: string;
     args: unknown;
     runFor?: AgentCommandToolDeps['runFor'];
+    earlierConfirm?: AgentCommandToolDeps['confirm'];
     ran: [string, unknown, CommandSessions];
     confirmed: ConfirmRequest | null;
     result: ToolResult;
@@ -330,17 +346,49 @@ describe('createAgentCommandTools', () => {
       confirmed: null,
       result: errorResult('boom'),
     },
+    {
+      given: "forms.submit after another caller's confirm was denied",
+      args: { command: 'forms.submit' },
+      earlierConfirm: () => Promise.resolve(false),
+      ran: ['forms.submit', undefined, { callerSessionId: CALLER }],
+      confirmed: SUBMIT_CONFIRM,
+      result: textResult('Ran forms.submit.'),
+    },
+    {
+      given: "forms.submit after another caller's confirm rejected",
+      args: { command: 'forms.submit' },
+      earlierConfirm: () => Promise.reject(new Error('no forms session')),
+      ran: ['forms.submit', undefined, { callerSessionId: CALLER }],
+      confirmed: SUBMIT_CONFIRM,
+      result: textResult('Ran forms.submit.'),
+    },
+    {
+      given: "forms.submit after another caller's confirm allowed and ran",
+      args: { command: 'forms.submit' },
+      earlierConfirm: () => Promise.resolve(true),
+      ran: ['forms.submit', undefined, { callerSessionId: CALLER }],
+      confirmed: SUBMIT_CONFIRM,
+      result: textResult('Ran forms.submit.'),
+    },
   ])(
     'run_command runs and reports: $given',
-    async ({ args, runFor, ran, confirmed, result }) => {
+    async ({ args, runFor, earlierConfirm, ran, confirmed, result }) => {
       const tools = startTools(runFor === undefined ? {} : { runFor });
+      if (earlierConfirm !== undefined) {
+        tools.confirm.mockImplementationOnce(earlierConfirm);
+        await tools
+          .toolsFor(OTHER_CALLER)
+          .call('run_command', { command: 'docs.trash' }, context());
+      }
+      const runsBefore = tools.runFor.mock.calls.length;
+      const confirmsBefore = tools.confirm.mock.calls.length;
       const callContext = context();
 
       const answer = await tools.caller.call('run_command', args, callContext);
 
       expect(answer).toEqual(result);
-      expect(tools.runFor.mock.calls).toEqual([ran]);
-      expect(tools.confirm.mock.calls).toEqual(
+      expect(tools.runFor.mock.calls.slice(runsBefore)).toEqual([ran]);
+      expect(tools.confirm.mock.calls.slice(confirmsBefore)).toEqual(
         confirmed === null
           ? []
           : [[CALLER, confirmed, callContext.signal, 'tu-1']],
@@ -348,30 +396,48 @@ describe('createAgentCommandTools', () => {
     },
   );
 
-  it.each<{ given: string; args: unknown; text: string }>([
+  it.each<{ given: string; args: unknown; result: ToolResult }>([
     {
       given: 'no filter',
       args: {},
-      text: '[{"id":"a.x","label":"alpha","group":"one","runsIn":"main"},{"id":"b.y","label":"beta","group":"two","runsIn":"page","arg":"string","risky":true,"targets":true}]',
+      result: textResult(
+        '[{"id":"a.x","label":"alpha","group":"one","runsIn":"main"},{"id":"b.y","label":"beta","group":"two","runsIn":"page","arg":"string","risky":true,"targets":true}]',
+      ),
     },
     {
       given: 'an id, case ignored',
       args: { filter: 'B' },
-      text: '[{"id":"b.y","label":"beta","group":"two","runsIn":"page","arg":"string","risky":true,"targets":true}]',
+      result: textResult(
+        '[{"id":"b.y","label":"beta","group":"two","runsIn":"page","arg":"string","risky":true,"targets":true}]',
+      ),
     },
     {
       given: 'a label',
       args: { filter: 'ALP' },
-      text: '[{"id":"a.x","label":"alpha","group":"one","runsIn":"main"}]',
+      result: textResult(
+        '[{"id":"a.x","label":"alpha","group":"one","runsIn":"main"}]',
+      ),
     },
     {
       given: 'a group',
       args: { filter: 'two' },
-      text: '[{"id":"b.y","label":"beta","group":"two","runsIn":"page","arg":"string","risky":true,"targets":true}]',
+      result: textResult(
+        '[{"id":"b.y","label":"beta","group":"two","runsIn":"page","arg":"string","risky":true,"targets":true}]',
+      ),
     },
-  ])('list_commands filters by id, label or group: $given', async ({
+    {
+      given: 'a filter that is not a string',
+      args: { filter: 7 },
+      result: errorResult('filter must be a string'),
+    },
+    {
+      given: 'arguments that are not an object',
+      args: 'x',
+      result: errorResult('arguments must be an object'),
+    },
+  ])('list_commands filters by id, label or group, or refuses its input: $given', async ({
     args,
-    text,
+    result,
   }) => {
     const { caller } = startTools({
       list: () => [
@@ -397,7 +463,7 @@ describe('createAgentCommandTools', () => {
     });
 
     expect(await caller.call('list_commands', args, context())).toEqual(
-      textResult(text),
+      result,
     );
   });
 
@@ -465,7 +531,22 @@ describe('createAgentCommandTools', () => {
       args: { key: 'c1' },
       result: errorResult('key needs slot'),
     },
-  ])('read_state reads ids, a slot or one entry: $given', async ({
+    {
+      given: 'a slot that is not a string',
+      args: { slot: 7 },
+      result: errorResult('slot must be a string'),
+    },
+    {
+      given: 'a key that is not a string',
+      args: { slot: 'sessions.rows', key: 7 },
+      result: errorResult('key must be a string'),
+    },
+    {
+      given: 'arguments that are not an object',
+      args: 'x',
+      result: errorResult('arguments must be an object'),
+    },
+  ])('read_state reads ids, a slot or one entry, or refuses its input: $given', async ({
     args,
     result,
   }) => {

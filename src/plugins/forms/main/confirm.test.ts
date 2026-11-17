@@ -10,7 +10,8 @@ import { roundType } from './round-type';
 
 const REQUEST: ConfirmRequest = {
   title: 'Trash notes.md',
-  detail: 'Moves docs/notes.md to the trash.',
+  detail:
+    'Moves docs/notes.md to the trash.\n\nArgument:\n```json\n"notes.md"\n```',
 };
 
 // A payload of the round `Allow or deny n1` submitted with Allow; each part
@@ -151,22 +152,42 @@ describe('confirm', () => {
   });
 
   it.each([
-    { case: 'aborted before the call', abortsFirst: true, openCount: 0 },
-    { case: 'aborted while the open waits', abortsFirst: false, openCount: 1 },
+    {
+      case: 'aborted before the call',
+      abortsFirst: true,
+      allowsOnAbort: false,
+      openCount: 0,
+    },
+    {
+      case: 'aborted while the open waits',
+      abortsFirst: false,
+      allowsOnAbort: false,
+      openCount: 1,
+    },
+    {
+      case: 'an open that resolves Allow after the abort',
+      abortsFirst: false,
+      allowsOnAbort: true,
+      openCount: 1,
+    },
   ])(
     'askConfirm resolves false on an abort: $case',
-    async ({ abortsFirst, openCount }) => {
+    async ({ abortsFirst, allowsOnAbort, openCount }) => {
       const abort = new AbortController();
       // An open made on an aborted signal answers Allow, so a confirm that
       // opens after the abort resolves true; a waiting open rejects on the
-      // abort, as the host's cancel does.
+      // abort, as the host's cancel does, or answers Allow when
+      // `allowsOnAbort` is set.
       const { session, opens } = fakeSession((_args, _toolUseId, signal) =>
         signal.aborted
           ? Promise.resolve(payload())
-          : new Promise<AnswersPayload>((_resolve, reject) => {
+          : new Promise<AnswersPayload>((resolve, reject) => {
               signal.addEventListener(
                 'abort',
-                () => reject(new Error('cancelled by the host')),
+                () =>
+                  allowsOnAbort
+                    ? resolve(payload())
+                    : reject(new Error('cancelled by the host')),
                 { once: true },
               );
             }),
@@ -183,12 +204,14 @@ describe('confirm', () => {
     },
   );
 
-  it("confirmRoundArgs passes forms' round parser and recommends Deny", () => {
+  it("confirmRoundArgs passes forms' round parser, recommends Deny and keeps the detail's blocks out of the overview", () => {
     const round = roundType.parse(confirmRoundArgs(REQUEST, 'n1'));
 
     const [question] = round.questions;
     expect(round.questions).toHaveLength(1);
     expect(question.title).toBe('Allow or deny n1');
     expect(question.choices[question.recommend - 1]).toBe('Deny');
+    expect(round.overview).toBe('Moves docs/notes.md to the trash.');
+    expect(question.context).toBe(REQUEST.detail);
   });
 });

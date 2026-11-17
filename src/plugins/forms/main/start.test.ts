@@ -485,15 +485,34 @@ describe('forms main part', () => {
     expect(harness.sent).toEqual([]);
   });
 
-  it("confirm opens the round in the caller's own forms session", async () => {
+  it.each([
+    {
+      case: "the caller's own of two sessions",
+      connects: ['app-a', 'app-b'],
+      endsFirst: false,
+      sessionId: 'app-b',
+    },
+    {
+      case: "a newer tool session's, after the older one ended",
+      connects: ['app-a', 'app-a'],
+      endsFirst: true,
+      sessionId: 'app-a',
+    },
+  ])("confirm opens the round in the caller's live forms session: $case", async ({
+    connects,
+    endsFirst,
+    sessionId,
+  }) => {
     const { harness, sessions, forms } = startWithToolSessions();
-    sessions.connect('app-a');
-    sessions.connect('app-b');
+    const [first] = connects.map((id) => sessions.connect(id));
+    if (endsFirst) {
+      first?.end();
+    }
 
-    const allowed = forms.confirm('app-b', CONFIRM_REQUEST, live(), null);
+    const allowed = forms.confirm(sessionId, CONFIRM_REQUEST, live(), null);
     await flush();
     const shown = shownRounds(harness.sent);
-    expect(shown.map(({ sessionId }) => sessionId)).toEqual(['app-b']);
+    expect(shown.map((round) => round.sessionId)).toEqual([sessionId]);
     expect(shown[0]?.form.heading).toBe(CONFIRM_REQUEST.title);
     harness.invoke('finish', shown[0]?.formId, {
       kind: 'submitted',

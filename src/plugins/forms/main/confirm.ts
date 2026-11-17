@@ -15,14 +15,16 @@ function questionTitle(nonce: string): string {
 }
 
 // The ask_round args of a confirm: one Allow or Deny question, Deny
-// recommended, so a stray Enter and the headless auto-answer never allow.
+// recommended, so a stray Enter and the headless auto-answer never allow. The
+// overview, which renders inline markdown only, is the detail's first
+// paragraph; the question's context holds the whole detail.
 export function confirmRoundArgs(
   request: ConfirmRequest,
   nonce: string,
 ): unknown {
   return {
     heading: request.title,
-    overview: request.detail,
+    overview: firstParagraph(request.detail),
     questions: [
       {
         title: questionTitle(nonce),
@@ -35,6 +37,11 @@ export function confirmRoundArgs(
       },
     ],
   };
+}
+
+// The text before the first blank line, or all of it when it has none.
+function firstParagraph(text: string): string {
+  return text.split('\n\n', 1)[0] ?? text;
 }
 
 // True for a submitted Allow of the confirm round `nonce` names, false for any
@@ -60,8 +67,9 @@ export function confirmAllowed(
 
 // Opens the confirm round in `session` until it returns this round's own
 // answer, re-sending the same args after a draft or another round's answers,
-// and never collecting. Resolves false once `signal` aborts; rejects with the
-// open's error when the open fails unaborted (the session ended).
+// and never collecting. Resolves false once `signal` aborts, an Allow that
+// lands after the abort included; rejects with the open's error when the open
+// fails unaborted (the session ended).
 export async function askConfirm(
   session: FormsSession,
   request: ConfirmRequest,
@@ -79,6 +87,9 @@ export async function askConfirm(
         return false;
       }
       throw error;
+    }
+    if (signal.aborted) {
+      return false;
     }
     const allowed =
       payload.outcome === 'draft' ? null : confirmAllowed(payload, nonce);

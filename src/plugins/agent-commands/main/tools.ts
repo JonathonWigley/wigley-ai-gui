@@ -6,6 +6,7 @@ import type { CommandInfo } from '../../../contracts/plugin';
 import type { SlotSnapshot } from '../../../contracts/state';
 import { errorText } from '../../../shared/error-text';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
+import { chatSendToCommand } from '../../chat/contract';
 import { type ConfirmRequest, formsMainKey } from '../../forms/contract';
 import {
   errorResult,
@@ -20,12 +21,10 @@ const LIST_COMMANDS = 'list_commands';
 const RUN_COMMAND = 'run_command';
 const READ_STATE = 'read_state';
 
-// The one command that names its target session in its argument, as `sessionId`.
-const CHAT_SEND_TO = 'chat.sendTo';
-
-// What the tools read and run, each a plain function over the app: the command
-// catalog and a reporting run, the app ids of `sessions.rows`, chat's name and
-// flags of a session, forms' Allow or Deny round in a session, and any slot by id.
+// What the tools read and run, each a plain function over the app: the
+// command catalog and a reporting run, the app ids of `sessions.rows`, chat's
+// name and flags of a session, forms' Allow or Deny round in a session, and
+// any slot by id.
 export interface AgentCommandToolDeps {
   list(): readonly CommandInfo[];
   runFor(
@@ -314,7 +313,9 @@ function namedSessions(
 ): string[] {
   const named = session === undefined ? [] : [session];
   const sendToTarget =
-    id === CHAT_SEND_TO && isJsonObject(arg) ? arg.sessionId : undefined;
+    id === chatSendToCommand.id && isJsonObject(arg)
+      ? arg.sessionId
+      : undefined;
   return typeof sendToTarget === 'string' ? [...named, sendToTarget] : named;
 }
 
@@ -338,9 +339,8 @@ function confirmRequest(
 }
 
 // Asks the user in the caller's forms session, counted as waiting until it
-// settles; null on an Allow, else the error result that stops the run. An
-// Allow after the call aborted counts as a denial, since forms can resolve
-// true for an Allow that landed after the abort.
+// settles; null on an Allow, else the error result that stops the run. A
+// confirm that resolves true after the call aborted still counts as a denial.
 async function confirmRun(
   deps: AgentCommandToolDeps,
   confirms: ConfirmCount,
