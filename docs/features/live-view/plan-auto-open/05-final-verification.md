@@ -27,7 +27,7 @@ the user does no browser testing.
 
 ## Dropped
 
-- Pairing orders, replays, restores, folder order, precedence and interrupted shows: pinned by 02's tests
+- Pairing orders, replays, restores, the missing `--project-path`, precedence and interrupted shows: pinned by 02's tests
   (`playtestStart_OpensTheWholeEditor_given`, `playtestCommand_WritesNoPick_given`,
   `editorStop_ClosesOnlyTheAppsPick_given`, `playtestShow_InterruptedWhileTheWindowsList_given`).
 - Command forms: pinned by 01's `parsePlaytestCommand_ReadsTheSignal_given`.

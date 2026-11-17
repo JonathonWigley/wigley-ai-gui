@@ -22,11 +22,13 @@ of an app-opened pick (a whole-editor stream) is existing behaviour, so the page
 ## A. The fake harness's playtest turn
 
 - Add `FAKE_PLAYTEST_TEXT = 'fake: playtest'`, exported, with a comment in the style of `FAKE_TOOL_TEXT`'s: a send of
-  this text runs one Bash tool of the main agent whose command is `unity command editor_play --result-only`, finished
+  this text runs one Bash tool of the main agent whose command is
+  `unity command editor_play --result-only --project-path '<project folder>'`, the process's own project folder
+  (the `projectDir` it started with) in single quotes, as the playtest skill names its editor (plan decision 5), finished
   with result `{ text: 'Entered Play Mode.', isError: false }`, then the reply `fake agent entered Play Mode` and the
   turn's end.
 - It follows `emitToolTurn` exactly (entry, `toolStarted`, finished entry, `toolFinished`, assistant entry,
-  `emitTurnEnd`); the `summary` is the command text. Reuse `emitToolTurn` with the call's command, result and reply as
+  `emitTurnEnd`); the `summary` is the command's first line, as the Claude Code decoder's summary is. Reuse `emitToolTurn` with the call's command, result and reply as
   arguments rather than a second copy, keeping `FAKE_TOOL_TEXT`'s values the same.
 - Add its branch beside `text === FAKE_TOOL_TEXT` in the send handler.
 

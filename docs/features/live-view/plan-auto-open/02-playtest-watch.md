@@ -17,15 +17,13 @@ Files:
 
 Consumes:  `parsePlaytestCommand(command: string): PlaytestSignal | null` ← 01
            `PlaytestSignal` ← 01
-           `chatEntriesSlot`, `chatSessionSlot`, `ChatAgentEvent`, `CHAT_PREVIEW_HOST_ID` (tree: `src/plugins/chat/contract.ts`)
-           `unityPoolSnapshotSlot`, `PoolSnapshot` (tree: `src/plugins/unity-pool/contract.ts`)
+           `chatEntriesSlot`, `ChatAgentEvent`, `CHAT_PREVIEW_HOST_ID` (tree: `src/plugins/chat/contract.ts`)
            `ChatEntry` (tree: `src/contracts/agent.ts`)
 Produces:  `playtestStarted(sessionId: string, projectPath: string): Promise<void>` on `LiveTools` in `…/live-view/main/live-tools.ts`
            `playtestStopped(sessionId: string): void` on `LiveTools` in `…/live-view/main/live-tools.ts`
            `export function createPlaytestWatch(deps: PlaytestWatchDeps): PlaytestWatch` in `…/live-view/main/playtest-watch.ts`
            `export interface PlaytestWatch { agentEvent(event: ChatAgentEvent): void; sessionEnded(sessionId: string): void }` in `…/live-view/main/playtest-watch.ts`
-           `reads: { main: ['unity-pool'], page: ['sessions'] }` in `…/live-view/manifest.ts`
-Decisions: plan decisions 2–6, 10, 11, 12 · the live guard, the pool path `pools[].clones[]`, the blocked app pick and
+Decisions: plan decisions 2–6 (5 as the user replaced it), 10, 11 · the live guard, the blocked app pick and
            `--project-path` used as given (plan, Decided)
 
 ## A. LiveTools: the app's pick (decision 4 and 10)
@@ -64,9 +62,9 @@ comments to name the app's playtest picks.
 ## B. The playtest watch (decision 11, the live guard pinned)
 
 `createPlaytestWatch(deps)` in `main/playtest-watch.ts`. Deps (exact names are the worker's; these are the inputs):
-the `chat.entries` list reader (`ListSlotReader<ChatEntry>`), the `chat.session` keyed reader
-(`KeyedSlotReader<ChatSessionInfo>`), the `unity-pool.snapshot` value reader (`SlotReader<PoolSnapshot>`),
-`Pick<LiveTools, 'playtestStarted' | 'playtestStopped'>`, and the plugin log. It registers its `entries.on`
+the `chat.entries` list reader (`ListSlotReader<ChatEntry>`),
+`Pick<LiveTools, 'playtestStarted' | 'playtestStopped'>`, and the plugin log. It reads no other folder source
+(decision 5). It registers its `entries.on`
 listener itself, through the reader `api.state.read` returned, so the plugin API disposes it.
 
 Why this guard: chat's `noteBashCommand` (`src/plugins/chat/main/chat-sessions.ts`) acts only when its private
@@ -94,23 +92,18 @@ Read `input.command` as chat's `commandOf` does: an object with a `command` stri
 **Act** = `parsePlaytestCommand(command)`:
 - `null`: nothing.
 - `stop`: `liveTools.playtestStopped(R)`.
-- `start`: the folder (decision 5), first that is present:
-  1. the signal's `projectPath`, used as given;
-  2. the `path` of the first clone, in the snapshot's order, across `snapshot.pools[].clones[]`, whose
-     `claim?.row === R`;
-  3. `chatSession.get(R)?.projectDir`.
-  With none, log `<R> opened no Live view for a playtest: no project folder` and stop. Else
-  `void liveTools.playtestStarted(R, folder)`.
+- `start` with `projectPath` null: log `<R> opened no Live view for a playtest: the command names no --project-path`
+  and stop (decision 5).
+- `start` with a `projectPath`: `void liveTools.playtestStarted(R, projectPath)`, the path used as given.
 
 ## C. Wiring and comments
 
-- `main/start.ts`: build the readers with `api.state.read(chatEntriesSlot)`, `api.state.read(chatSessionSlot)`,
-  `api.state.read(unityPoolSnapshotSlot)`; create the watch after `liveTools`; call `watch.agentEvent` from the
+- `main/start.ts`: build the reader with `api.state.read(chatEntriesSlot)`; create the watch after `liveTools`; call `watch.agentEvent` from the
   `chat.agentEvent` listener (beside the preview sample code, which stays as it is) and `watch.sessionEnded` from the
   `sessions.ended` listener (beside `liveTools.sessionEnded`). Update the part's header comment to name the watch.
-- `manifest.ts`: `reads: { main: ['unity-pool'], page: ['sessions'] }`. Header comment: main also opens a session's
-  Live view on its live `unity command editor_play` and `capture.py start` Bash calls and closes the view it opened
-  on `unity command editor_stop`; it reads `unity-pool` for the clone a session holds, optional.
+- `manifest.ts`: `dependsOn` and `reads` unchanged. Header comment: main also opens a session's Live view on its
+  live `unity command editor_play` and `capture.py start` Bash calls, on the editor their `--project-path` names, and
+  closes the view it opened on `unity command editor_stop`; it reads chat's entries and agent events for them.
 - `contract.ts`, the `livePicksSlot` comment: each session's pick, from its agent's last `show_live_view` or the
   app's playtest watch, until `hide_live_view`, an `editor_stop` for a pick the app opened, or the session's end; no
   key means the section is hidden.
@@ -121,8 +114,7 @@ Read `input.command` as chat's `commandOf` does: an object with a `command` stri
 
 ## GIVEN / WHEN / THEN
 
-Fixtures: `startPart()` in `start.test.ts` gains the published slots: `chatEntriesSlot`, `chatSessionSlot` (SESSION →
-`projectDir` per row, default PROJECT) and `unityPoolSnapshotSlot` (unset by default), through
+Fixtures: `startPart()` in `start.test.ts` gains the published `chatEntriesSlot`, through
 `harness.state.publish(key)`. A Bash entry is
 `{ kind: 'tool', id: 'tool-1', at: 0, agentId: 'main', toolUseId: 'use-1', name: 'Bash', input: { command }, summary: '', result: null, raw: [] }`;
 a live start is `harness.emit('chat.agentEvent', { sessionId: SESSION, profileDir: null, hostSessionId: 'host-1', event: { type: 'toolStarted', at: 0, agentId: 'main', toolUseId: 'use-1', tool: 'Bash', summary: '' }, replayed: false })`.
@@ -133,14 +125,12 @@ Each test awaits `settle()` after its last emit.
 
    | given | command | order / setup | pick |
    |---|---|---|---|
-   | entry first | `unity command editor_play --result-only` | put, then toolStarted | `EDITOR_PICK` |
+   | entry first | `unity command editor_play --result-only --project-path /home/Game` | put, then toolStarted | `EDITOR_PICK` |
    | event first | same | toolStarted, then put | `EDITOR_PICK` |
    | a subagent's call | same | entry and event with `agentId: 'agent-1'` | `EDITOR_PICK` |
    | partial input first | same | put with `input: {}`, toolStarted, put with the command | `EDITOR_PICK` |
-   | capture.py start with its path | `python3 /s/capture.py start --project-path /home/Game` | chat.session projectDir `/home/Elsewhere` | `EDITOR_PICK` |
-   | the row's pool clone | `unity command editor_play` | projectDir `/home/Elsewhere`; snapshot clone `{ path: '/home/Game', claim: { row: 'row-1', … } }` | `EDITOR_PICK` |
-   | another row's pool clone | `unity command editor_play` | projectDir `/home/Game`; snapshot clone `/home/Elsewhere` claimed by `row-9` | `EDITOR_PICK` |
-   | Screen Recording off | `unity command editor_play` | `capture.list = BLOCKED.listWindows` | `{ kind: 'blocked' }` |
+   | capture.py start | `python3 /s/capture.py start --project-path /home/Game` | put, then toolStarted | `EDITOR_PICK` |
+   | Screen Recording off | `unity command editor_play --project-path /home/Game` | `capture.list = BLOCKED.listWindows` | `{ kind: 'blocked' }` |
 
 2. GIVEN a Bash call the guard or the folder rules refuse WHEN its entry and events arrive THEN no pick is written,
    and live-view logs exactly the row's lines:
@@ -151,7 +141,8 @@ Each test awaits `settle()` after its last emit.
    | a restored entry | `replace` holding the entry; no toolStarted | none |
    | a restore then a replayed start | `replace`, then toolStarted with `replayed: true` | none |
    | a live start with no entry | toolStarted only | none |
-   | an unrelated unity command | `unity command editor_status`, put and live toolStarted | none |
+   | an unrelated unity command | `unity command editor_status --project-path /home/Game`, put and live toolStarted | none |
+   | no --project-path | `unity command editor_play --result-only`, put and live toolStarted | `row-1 opened no Live view for a playtest: the command names no --project-path` |
    | chat's preview row | put, then toolStarted with `hostSessionId: CHAT_PREVIEW_HOST_ID` | none |
    | no editor in the folder | `unity command editor_play --project-path /home/Other` | `row-1 opened no Live view for a playtest: No Unity editor has Other open: /home/Other/Library/EditorInstance.json is missing or has no process_id.` |
    | a relative path | `unity command editor_play --project-path Game` | `row-1 opened no Live view for a playtest: projectPath must be the absolute path of a Unity project folder.` |
@@ -199,7 +190,7 @@ All in `src/plugins/live-view/main/start.test.ts`, on the existing `startPart` h
 - `streamPick_IsDeletedBy_given $given` — existing test; add the rows of GIVEN 5.
 - `playtestShow_InterruptedWhileTheWindowsList_given $given` — table 6.
 
-Done when: compiles; `reads.main` holds `unity-pool`; the test gate runs the tests above.
+Done when: compiles; the test gate runs the tests above.
 Commit:    one commit for the group
 
 ## Proof

@@ -16,13 +16,13 @@ ask for the screen share. It works for any Unity project that uses the `unity` C
 All code is in the `live-view` plugin's main part (`wigley-ai-gui/src/plugins/live-view/`), plus one fake send text in
 the shared fake agent harness for the self-test.
 
-- **Reads:** chat's `chat.entries` list slot (the Bash call's full `input.command`), chat's `chat.agentEvent` event
-  (the live marker: `toolStarted` with `replayed: false`), chat's `chat.session` keyed slot (`projectDir`),
-  unity-pool's `unity-pool.snapshot` value slot (the clone a session's row holds), and `sessions.ended`.
+- **Reads:** chat's `chat.entries` list slot (the Bash call's full `input.command`, which holds the
+  `--project-path`), chat's `chat.agentEvent` event (the live marker: `toolStarted` with `replayed: false`), and
+  `sessions.ended`.
 - **Writes:** only the `live-view.picks` slot, through `LiveTools`, which owns the pick.
 - **New module:** `playtest-command.ts`, a pure parser from a Bash command text to a playtest signal.
-- **Manifest:** `reads.main` gains `unity-pool`. chat is already in `dependsOn.main`, so its slots and events are
-  readable now.
+- **Manifest:** `dependsOn` and `reads` stay as they are: chat is already in `dependsOn.main`, so its slots and
+  events are readable now. Only the header comment changes.
 
 ## Preconditions
 
@@ -31,9 +31,6 @@ the shared fake agent harness for the self-test.
   `git -C /Users/jonathonwigley/Documents/ai rev-parse main origin/main` and
   `git -C /Users/jonathonwigley/Documents/.worktrees/ai-live-auto-open rev-parse 694e2682c~1` (the docs-ahead
   commit's parent).
-- A main plugin may list a plugin in `reads.main` that is disabled: its slots then read `undefined`
-  (`src/contracts/plugin.ts`, the comment above `PluginManifest`: "a disabled or unlisted plugin there is no problem
-  and reads `undefined`"). Precedent: `src/plugins/system-stats/manifest.ts` (`reads: { main: ['chat', 'sessions'] }`).
 - Chat tells a live Bash call from a replayed one only through its private `replay.isReplaying`
   (`src/plugins/chat/main/chat-sessions.ts`, `processEvents` → `entry(entry)` → `noteBashCommand(session, entry,
   replay.isReplaying)`); the `chat.entries` slot carries no such flag. The public live marker is
@@ -48,6 +45,8 @@ the shared fake agent harness for the self-test.
 - The `ChatEntry` tool shape holds `toolUseId`, `name`, `input`, `result` (`src/contracts/agent.ts`, `kind: 'tool'`).
 - The fake agent harness carries a Bash call's `input` through to the entry (`emitToolTurn` in
   `src/shared/fake-agent-harness.ts`: `input: { command: 'echo fake' }`).
+- The `unity` CLI takes `--project-path <path>` on `unity command` (checked by the coordinator with
+  `unity command --help`: `--project-path <path>  Path to Unity project (auto-detected if not …`).
 - A test publishes another plugin's slot with `harness.state.publish(key)` (precedent:
   `src/plugins/agent-strip/page/start.test.ts`, `harness.state.publish(agentsRostersSlot)`).
 
@@ -55,8 +54,12 @@ the shared fake agent harness for the self-test.
 
 - `wigley-ai-gui/docs/features/live-view/design.md` — "What it is" no longer says the agent alone starts and stops
   Live; new section "The playtest watch"; Rejected rewritten and gains "A setting to turn the playtest watch off".
-  Commit `694e2682c`. Each new behaviour is marked "planned in `plan-auto-open`, not built yet"; task 04 drops the
-  marks.
+  Commit `694e2682c`; its folder rule rewritten to the command's `--project-path` only, and Rejected gains
+  "Guessing the playtest's project folder", in commit `dfe96e014`. Each new behaviour is marked "planned in
+  `plan-auto-open`, not built yet"; task 04 drops the marks.
+- `wigley-ai-marketplace/plugins/wigley/skills/unity-playtest/SKILL.md` § Session setup — `unity command editor_play`
+  takes `--project-path <dir>`, and a bullet gives the reason (the editor among several; the app reads the path to
+  open Live, marked planned). wigley 2.16.0 → 2.16.1. Commit `dfe96e014`.
 
 The comments in `contract.ts` and `manifest.ts`, the header comment of `main/start.ts`, and the live-view line of
 `wigley-ai-gui/AGENTS.md`'s source layout land with the code in task 02.
@@ -83,8 +86,8 @@ The comments in `contract.ts` and `manifest.ts`, the header comment of `main/sta
            parsePlaytestCommand(command)            (playtest-command.ts, pure)
                    |
         start {projectPath|null}                 stop
-                   |                                |
-   projectPath ?? pool clone of R ?? chat.session(R).projectDir
+                   |                                |                                |
+   projectPath null -> log line, no call            |
                    |                                |
    LiveTools.playtestStarted(R, folder)    LiveTools.playtestStopped(R)
      no pick for R -> show whole editor       app-opened pick -> delete it
@@ -108,10 +111,9 @@ The comments in `contract.ts` and `manifest.ts`, the header comment of `main/sta
    `hide_live_view`, or the session ending.
 4. The agent's pick always wins: the app opens the view only when the session has no pick; an agent
    `show_live_view` replaces an app-opened pick and the pick becomes the agent's, so a later `editor_stop` leaves it.
-5. Project folder: the command's `--project-path <p>` when present; else the unity-pool clone whose claim row is this
-   session (`unity-pool.snapshot` slot, `clones[].claim.row`, `.path`); else the session's project folder
-   (`chat.session` slot `projectDir`). A folder whose editor cannot be found (no Library/EditorInstance.json) writes
-   no pick, only a log line.
+5. Project folder: only the command's `--project-path <dir>`. The agent names its editor in the command that starts
+   the playtest; the app guesses no folder. A trigger command with no `--project-path` writes no pick, only a log
+   line. The pool-clone and session-folder fallbacks are dropped. (Replaced by the user after the first draft.)
 6. The app-opened view streams the whole editor window (show with no gameRect). The agent's later `show_live_view`
    with the Game View rect crops it; the playtest skill keeps that step.
 7. No setting to turn it off.
@@ -128,8 +130,8 @@ The comments in `contract.ts` and `manifest.ts`, the header comment of `main/sta
 11. The watch reads the full Bash command from the `chat.entries` list slot (the `toolStarted` event's summary is cut
     to 80 chars), following chat's own `noteBashCommand` pattern for telling live entries from replays. Verify that
     pattern and pin the exact guard in the task.
-12. live-view's manifest adds `unity-pool` to `reads.main` (and `chat` slot reads as needed). Verify that the plugin
-    system allows an optional read of a plugin that may be disabled, and how a missing unity-pool slot reads.
+12. Superseded by the new decision 5: live-view reads no unity-pool slot and no `chat.session` folder, so its
+    manifest's `reads` stay as they are.
 
 ### Decisions settled while planning (Decided)
 
@@ -137,26 +139,24 @@ The comments in `contract.ts` and `manifest.ts`, the header comment of `main/sta
   no slot carries. The watch's equivalent: a Bash entry acts only when a `chat.agentEvent` with `replayed: false`,
   `event.type === 'toolStarted'`, `event.tool === 'Bash'` came for the same row id and `toolUseId`. A list `replace`
   change never acts. Each `toolUseId` acts at most once. Details in task 02.
-- **The `unity-pool.snapshot` path is `pools[].clones[]`**, not `clones[]` at the top: `PoolSnapshot` is
-  `{ pools: PoolState[] }`. With several clones claimed by the row (an `--extra` claim), the first in the snapshot's
-  order (pools sorted by name, clones by number) is the folder.
 - **An app-opened pick may be the blocked pick.** With Screen Recording off, the app's show writes
   `{ kind: 'blocked' }` as the agent's would, so the user sees the line and the settings button; it counts as
   app-opened, so `editor_stop` deletes it.
 - **A `--project-path` value is used as given.** A relative or `~` path reaches `LiveTools`, whose absolute-path check
-  refuses it: no pick, one log line. The watch does not fall back to the next folder source.
+  refuses it: no pick, one log line.
 - **`capture.py command -- editor_play` is no trigger**: decision 2 names `unity command editor_play` and
   `capture.py start`; the playtest skill calls `unity command editor_play` directly.
 - **Self-test: yes, through `open` and `problems`.** AGENTS.md § Running and testing asks for a self-test step for a
   key behaviour. The new behaviour is main-side: a real chat row's live Bash entry reaching live-view through the
   real chat plugin, which the unit tests fake. The fake harness gains a `fake: playtest` send text that runs
-  `unity command editor_play --result-only`; the live-view self-test launches its session with that text, waits for
+  `unity command editor_play --result-only --project-path '<the process's project folder>'`; the live-view self-test launches its session with that text, waits for
   the app-opened pick, then calls `show` with the Game View rect as before. Its page steps stay as they are: the page
   side (a whole-editor stream) is existing behaviour. Task 03.
 
 ### Out of scope
 
-- Any change to the `wigley:unity-playtest` skill or `capture.py` (the skill keeps its `show_live_view` step).
+- Any change to `capture.py`, and to the `wigley:unity-playtest` skill past the docs-ahead commit (the skill keeps
+  its `show_live_view` step).
 - The page part, the layout, and `window-pick.ts`: the app's show uses the existing whole-window pick.
 - A setting to turn the watch off (decision 7).
 - `spike.md`: it records the spike's result as it was.
@@ -168,13 +168,14 @@ Existing files modified (all under `wigley-ai-gui/`):
 - `src/plugins/live-view/main/live-tools.ts` — `LiveTools` gains `playtestStarted` and `playtestStopped`, and the
   app-opened mark (task 02)
 - `src/plugins/live-view/main/start.ts` — wires the watch, the slot readers, and the self-test's new dep (tasks 02, 03)
-- `src/plugins/live-view/manifest.ts` — `reads.main: ['unity-pool']`, the header comment (task 02)
+- `src/plugins/live-view/manifest.ts` — the header comment (task 02)
 - `src/plugins/live-view/contract.ts` — the `livePicksSlot` comment (task 02)
 - `src/plugins/live-view/main/start.test.ts` — the watch and precedence tests (task 02)
 - `src/plugins/live-view/main/selftest-script.ts` — launches with the playtest text, checks the app-opened pick (task 03)
 - `src/shared/fake-agent-harness.ts` — `FAKE_PLAYTEST_TEXT` (task 03)
 - `AGENTS.md` — the `live-view/` source layout entry (task 02)
 - `docs/features/live-view/design.md` — planned marks dropped, stale lines fixed (task 04)
+- `../wigley-ai-marketplace/plugins/wigley/skills/unity-playtest/SKILL.md` — its planned mark dropped (task 04)
 
 New files:
 
@@ -197,8 +198,7 @@ Boundary rules:
 - Only `LiveTools` reads or writes `live-view.picks` for a real session and holds the app-opened mark. The watch
   never touches the picks slot.
 - `playtest-command.ts` imports nothing from the plugin or the contracts: text in, signal out.
-- live-view imports `src/plugins/unity-pool/contract.ts` for `unityPoolSnapshotSlot` and its types only, allowed by
-  the `reads` entry (AGENTS.md, "A plugin talks").
+- The watch reads no folder source but the command: no `chat.session`, no unity-pool import.
 
 ## Tasks
 
