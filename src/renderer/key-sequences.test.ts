@@ -404,6 +404,13 @@ describe('createChordMatcher', () => {
       runs: true,
     },
     {
+      case: 'mac Option with AltGraph set',
+      keys: MAC_KEYS,
+      bind: '<A-o>',
+      press: press('ø', 'KeyO', { alt: true, altGraph: true }),
+      runs: true,
+    },
+    {
       case: 'mac Option+Shift',
       keys: MAC_KEYS,
       bind: '<A-S-o>',

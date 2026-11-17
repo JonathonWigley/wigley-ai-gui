@@ -250,6 +250,9 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       if (isFolder(key)) {
         throw codedError(`${path} is a folder`, 'ERR_FS_EISDIR');
       }
+      if (hasFileAbove(key)) {
+        throw codedError(`a file lies above ${path}`, 'ENOTDIR');
+      }
       if (contents.has(key)) {
         removeKey(key);
       }

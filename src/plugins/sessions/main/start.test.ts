@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
@@ -237,7 +238,7 @@ function startSessionsPart(
       randomHex: () => (++hex).toString(16),
       log,
       runMode,
-      paths: { join: (...parts: string[]) => parts.join('/') },
+      paths: posixPaths,
       homeDir,
       files,
       appInstance: { id: 'app', isDev: false },
@@ -264,6 +265,21 @@ const HARNESS_APP_ID = 'wigley-ai-gui-dev';
 
 // The record of the OS the tests run on, so a test's relay opens the channel this OS's relays use.
 const platform = fakePlatform(osPlatform(process.platform));
+
+// A home the relay can listen in and memory files accept. On Windows the relay
+// listens on a named pipe, which needs no folder, so the home is a POSIX path
+// of its own; elsewhere it is a new temp folder, which holds the relay's socket.
+function relayHome(): { homeDir: string; remove: () => void } {
+  if (platform.os === 'windows') {
+    return { homeDir: `/home/${randomUUID()}`, remove: () => undefined };
+  }
+  // macOS caps a socket path near 104 bytes, so the folder name stays short.
+  const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
+  return {
+    homeDir,
+    remove: () => rmSync(homeDir, { recursive: true, force: true }),
+  };
+}
 
 const RELAY_HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
@@ -495,7 +511,7 @@ describe('sessions main part', () => {
   });
 
   it('keeps a contribution live when the endpoint files cannot be written', async () => {
-    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'sessions-start-'));
+    const { homeDir, remove } = relayHome();
     const logged: string[] = [];
     const memory = createMemoryFiles();
     let isRefusing = false;
@@ -530,7 +546,7 @@ describe('sessions main part', () => {
       );
     } finally {
       await started.dispose?.('end');
-      rmSync(homeDir, { recursive: true });
+      remove();
     }
   });
 
@@ -557,7 +573,7 @@ describe('sessions main part', () => {
   });
 
   it('stop_ToolSessionEndThrows_ClosesTheRelayAndThrows', async () => {
-    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
+    const { homeDir, remove } = relayHome();
     const harness = startMainPart(sessionsMainPart, {
       services: { runMode: 'live', homeDir, platform },
     });
@@ -585,13 +601,12 @@ describe('sessions main part', () => {
       );
       await expect(once(socket, 'connect')).rejects.toThrow();
     } finally {
-      rmSync(homeDir, { recursive: true, force: true });
+      remove();
     }
   });
 
   it('stop_ConnectedThroughRelay_EndsOnce', async () => {
-    // macOS caps a socket path near 104 bytes, so the folder name stays short.
-    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
+    const { homeDir, remove } = relayHome();
     const harness = startMainPart(sessionsMainPart, {
       services: { runMode: 'live', homeDir, platform },
     });
@@ -626,7 +641,48 @@ describe('sessions main part', () => {
       });
     } finally {
       socket.destroy();
-      rmSync(homeDir, { recursive: true, force: true });
+      remove();
+    }
+  });
+
+  // Breaks if the stop does not wait for the queued endpoint writes.
+  it('stop_EndpointWriteHeld_SettlesOnceItLands', async () => {
+    const { homeDir, remove } = relayHome();
+    const memory = createMemoryFiles();
+    const held = Promise.withResolvers<void>();
+    const harness = startMainPart(sessionsMainPart, {
+      services: {
+        runMode: 'live',
+        homeDir,
+        platform,
+        files: {
+          ...memory,
+          write: async (file, text) => {
+            await held.promise;
+            await memory.write(file, text);
+          },
+        },
+      },
+    });
+    try {
+      let isStopped = false;
+      const stopped = harness.stop().then(() => {
+        isStopped = true;
+      });
+      // Long enough for the relay to close, which ends a stop that does not wait.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(isStopped).toBe(false);
+
+      held.resolve();
+      await stopped;
+
+      expect(
+        await memory.read(
+          posixPaths.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
+        ),
+      ).toContain(`"pid": 4242`);
+    } finally {
+      remove();
     }
   });
 });

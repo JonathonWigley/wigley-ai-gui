@@ -326,6 +326,16 @@ export function describeFilesContract(current: () => FilesUnderTest): void {
       await expect(files.deleteFile(at('none.md'))).resolves.toBeUndefined();
     });
 
+    it('deleteFile_UnderAFile_RejectsWithEnotdirAndKeepsIt', async () => {
+      const { files, at } = current();
+      await files.write(at('a.md'), 'one');
+
+      const error = await rejectionOf(files.deleteFile(at('a.md/x')));
+
+      expect(errorCode(error)).toBe('ENOTDIR');
+      expect(await files.read(at('a.md'))).toBe('one');
+    });
+
     // Breaks on a recursive delete.
     it('deleteFile_Folder_RejectsAndKeepsIt', async () => {
       const { files, at } = current();

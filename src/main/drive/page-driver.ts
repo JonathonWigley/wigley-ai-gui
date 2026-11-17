@@ -22,7 +22,7 @@ const KEY_CODES: Record<string, string> = { ' ': 'Space' };
 // The Electron accelerator key code of each chord key whose `Chord.key` is not
 // one; `sendInputEvent`'s `keyCode` takes only accelerator names.
 const CHORD_KEY_CODES: Partial<Record<string, string>> = {
-  ' ': 'Space',
+  ...KEY_CODES,
   '+': 'Plus',
   ArrowUp: 'Up',
   ArrowDown: 'Down',

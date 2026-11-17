@@ -5,7 +5,6 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { appEndpointDir } from '../../../shared/app-endpoint-dir';
-import { errorText } from '../../../shared/error-text';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import {
   argsObject,
@@ -262,6 +261,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       api.services.runMode === 'selfTest' ? null : openRelay(api, list, hold);
     const endpointWriter = createEndpointWriter(
       api.services.files,
+      api.services.paths,
       appEndpointDir(
         api.services.paths,
         api.services.homeDir,
@@ -273,14 +273,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       contributeTools(tools, start, options) {
         const contribution = list.contributeTools(tools, start, options);
         if (opened !== null) {
-          let listed;
-          try {
-            listed = list.tools();
-          } catch (error) {
-            api.services.log(`endpoint files not written: ${errorText(error)}`);
-            return contribution;
-          }
-          endpointWriter.write(opened.endpoint, listed);
+          endpointWriter.write(opened.endpoint, list.tools());
         }
         return contribution;
       },

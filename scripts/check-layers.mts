@@ -245,6 +245,17 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: ['node:'],
       },
+      // Writes the endpoint files through the POSIX paths double.
+      'src/plugins/sessions/main/relay/endpoint.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/paths',
+          'src/plugins/sessions/contract.ts',
+          'src/plugins/sessions/main/relay',
+        ],
+        packages: [],
+      },
       'src/plugins/sessions/main/mcp': {
         layers: [
           'src/contracts',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Files } from '../../../../contracts/files';
 import { createMemoryFiles } from '../../../../shared/memory-files';
+import { posixPaths } from '../../../../shared/paths/posix-paths';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
 import { createEndpointWriter, endedDriveRunLaunch } from './endpoint';
 
@@ -59,7 +60,9 @@ describe('createEndpointWriter', () => {
 
   function writerOver(files: Files) {
     logged = [];
-    return createEndpointWriter(files, dir, (line) => logged.push(line));
+    return createEndpointWriter(files, posixPaths, dir, (line) =>
+      logged.push(line),
+    );
   }
 
   it('writes the endpoint and the tool list into a folder it creates', async () => {

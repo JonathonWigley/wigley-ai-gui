@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { Files } from '../../../../contracts/files';
 import type { PluginLog } from '../../../../contracts/log';
+import type { Paths } from '../../../../contracts/paths';
 import type { OsName } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
 import { createSerialQueue } from '../../../../shared/serial-queue';
@@ -42,12 +43,13 @@ export interface EndpointWriter {
 
 export function createEndpointWriter(
   files: Files,
+  paths: Paths,
   dir: string,
   log: PluginLog,
 ): EndpointWriter {
   const queue = createSerialQueue();
   const writeJson = (name: string, value: unknown) =>
-    files.write(path.join(dir, name), `${JSON.stringify(value, null, 2)}\n`);
+    files.write(paths.join(dir, name), `${JSON.stringify(value, null, 2)}\n`);
   return {
     write(endpoint, tools) {
       queue
