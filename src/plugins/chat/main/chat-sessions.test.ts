@@ -6399,8 +6399,7 @@ describe('createChatSessions attaching', () => {
       calls: [],
       ownedEnds: 0,
       callsAtOwnedEnd: [],
-      resting:
-        'stopped (exit code 0). Your next message resumes this session.',
+      resting: 'stopped (exit code 0). Your next message resumes this session.',
     },
   ])(
     'attach_LateResult_DetachesOrEnds given $given',
