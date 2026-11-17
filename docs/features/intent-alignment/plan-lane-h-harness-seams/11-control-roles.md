@@ -1,6 +1,6 @@
 # 11 — Control roles
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -140,3 +140,5 @@ Commit: one commit. It removes the "Control roles" item from `docs/features/foll
 line 133 at plan time).
 
 ## Proof
+
+Commit 2728bd986 · proof: diff read: ROLE_COMMANDS replaces CONTROL_IDS, role lookups in controlCommand/chipKeyCommands/composerInputOf/controlChip/pickControlOf, MODE_CONTROL_ID gone, ComposerControlInput.role, preview-session roles; wave compile (typecheck, lint) passes · concerns: none beyond formatting left to oxfmt

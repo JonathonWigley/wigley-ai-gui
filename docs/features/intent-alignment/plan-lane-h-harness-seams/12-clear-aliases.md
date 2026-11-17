@@ -1,6 +1,6 @@
 # 12 — Clear aliases from the adapter
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 9 · Depends on: 11
 Plan: [plan.md](plan.md)

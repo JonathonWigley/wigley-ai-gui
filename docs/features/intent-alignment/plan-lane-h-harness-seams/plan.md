@@ -361,7 +361,7 @@ profile: string }` and `harness: string` on `ChatSessionInfo` (task 10); setting
 - [x] [Chat picks a harness](10-chat-picks-a-harness.md) — after 09
 
 ### Wave 8
-- [ ] [Control roles](11-control-roles.md) — after 10
+- [x] [Control roles](11-control-roles.md) — after 10
 
 ### Wave 9
 - [ ] [Clear aliases from the adapter](12-clear-aliases.md) — after 11
@@ -396,6 +396,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 08 · hard · 8c942653e · diff read: PermissionDecision, PermissionRequest, AgentProcessEvents.permission, AgentProcess.answerPermission in contracts/agent.ts; permission-route.ts with route/toolSession; claude-code contributes permission_prompt; permission-tool.ts deleted; no CLAUDE_PERMISSION_TOOL in contracts, chat or main; wave compile (typecheck, lint) passes · concerns: two new oxlint no-useless-spread warnings (cancelWaitingPermissions in claude-code-harness.ts:507 and fake-agent-harness.ts:1350, a keys snapshot while settling deletes); test cases most likely to need a touch-up at the gate: harness permission_Cancelled on close, fake send_PermissionText microtask order, chat permission_sessionEnds/rowCloses; chat-sessions permission_abortAfterDetachAll and NoLiveRow cases deleted as now owned by the route and adapter
 - 09 · hard · 6fb763cb3 · diff read: AgentStart.sessionId nullable, AgentProcessEvents.sessionId, SessionInfo.rowId, RelayHello.row_id, hostSessionIdSettled, ClaudeStart present; relay.py sends row_id; wave compile passes after one same-rung fix (rowId on two 06 test literals) and oxfmt · concerns: resume finds a running hosted process by hosted.id.startsWith(hostSessionId-) while new process ids start with the row id, so resume of an unheld session no longer finds a process started under the new scheme; hostSessionIdSettled waiters stay pending after detachAll; ~9k-line chat-sessions.test edited unrun, event-order expectations may shift; a pending clear's snapshot pairs the old host id with the new processId for one microtask; workflow hears hostSessionChanged null to id before chat.sessionOpened for a new row
 - 10 · hard · eeb2e337e · diff read: chat defaultHarness setting, FAKE_HARNESS_ID = 'fake', composition-root override in selftest-config, CHAT_HARNESS_ID gone, lookups harness resolution present; wave compile passes after one same-rung fix (harness on RecentFolder test literals) and oxfmt · concerns: restore with an unregistered harness now rests with a notice; two start.test restore tests now throw through an artificial infoFails stub; chat-sessions.test setUp patches the fake's info() in place; docs self-test i step still opens its session as 'claude' (docs only tells codex apart)
+- 11 · hard · 2728bd986 · diff read: ROLE_COMMANDS replaces CONTROL_IDS, role lookups in controlCommand/chipKeyCommands/composerInputOf/controlChip/pickControlOf, MODE_CONTROL_ID gone, ComposerControlInput.role, preview-session roles; wave compile (typecheck, lint) passes · concerns: none beyond formatting left to oxfmt
 ### Contract changes
 - IndexHarness (docs contract): 'claude' | 'codex' → string alias kept · why: keeps docs call sites; chips still { claude, codex } until task 07 · consumers: 07 · group 01
 - docs-state chips/detailFields/statusTexts/rollupText/treeRowStatus: each takes harnesses: ReadonlyMap<string, AgentHarnessInfo> as last param · why: labels from the slot · consumers: 07 · group 01
@@ -436,5 +437,6 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - No harness step in the start prompt: target is defaultHarness, a picked recent folder's recorded registered harness, or a pinned profile's harness · group 10
 - ChatSessionsDeps gains no defaultHarness (no reader); drive deps take defaultProfile() in place of profileNames() · group 10
 - UNRECORDED_HARNESS_ID = 'claude' is the harness of a record or recent folder saved without one · group 10
+- ComposerControlInput.role is left out of the fixture object when null (verbosity has no role) · group 11
 ### Review rounds
 ### Test gate
