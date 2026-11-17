@@ -94,8 +94,7 @@ export function liveViewSelfTestScript(
     // ellipsis in their row, as their CSS says: the preview's hub shows Skills
     // and Context beside Live. So do the activity dock's tool calls and its
     // done line; the tab bar's parts and the dock's one line clip in their own
-    // box. Live's own notice wraps. The hub's drag handle holds its resize
-    // prompt, hidden until hovered, over the hub and the transcript.
+    // box. Live's own notice wraps.
     scrollsItself: [
       '.agent-skills-name',
       '.context-sources-name',
@@ -104,7 +103,6 @@ export function liveViewSelfTestScript(
       '.chat-working-action',
       '.chat-working-line',
       '.chat-working-done',
-      '.chat-side-handle',
     ],
     open() {
       made ??= makeProject().catch((error: unknown) => {
