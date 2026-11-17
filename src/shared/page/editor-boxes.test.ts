@@ -301,21 +301,57 @@ describe('createEditorBoxes', () => {
     expect(changes).toEqual([]);
   });
 
-  it('place_AfterRelease_RestoresTheScroll', () => {
-    const { boxes } = emptySetup();
-    const frame = boxes.place(div(), notes, 'a');
-    // Stands for the scroller the host's editor DOM holds.
-    const scroller = div();
-    scroller.className = 'cm-scroller';
-    frame.append(scroller);
-    scroller.scrollTop = 40;
+  // Each row starts on the box placed with its scroller at 40.
+  it.each<{
+    steps: string;
+    act: (
+      boxes: ReturnType<typeof emptySetup>['boxes'],
+      scroller: HTMLElement,
+    ) => void;
+    scrollTop: number;
+  }>([
+    {
+      steps: 'release, then place',
+      act: (boxes, scroller) => {
+        boxes.release(notes);
+        expect(scroller.scrollTop).toBe(0);
+        boxes.place(div(), notes, 'a');
+      },
+      scrollTop: 40,
+    },
+    {
+      steps: 'place again with no release',
+      act: (boxes) => {
+        boxes.place(div(), notes, 'a');
+      },
+      scrollTop: 40,
+    },
+    {
+      steps: 'release, place, scroll to 70, place again with no release',
+      act: (boxes, scroller) => {
+        boxes.release(notes);
+        boxes.place(div(), notes, 'a');
+        scroller.scrollTop = 70;
+        boxes.place(div(), notes, 'a');
+      },
+      scrollTop: 70,
+    },
+  ])(
+    'place_AfterRelease_RestoresTheScroll: $steps',
+    ({ act, scrollTop }) => {
+      const { boxes } = emptySetup();
+      const frame = boxes.place(div(), notes, 'a');
+      // Stands for the scroller the host's editor DOM holds.
+      const scroller = div();
+      scroller.className = 'cm-scroller';
+      frame.append(scroller);
+      scroller.scrollTop = 40;
 
-    boxes.release(notes);
-    expect(scroller.scrollTop).toBe(0);
-    boxes.place(div(), notes, 'a');
+      act(boxes, scroller);
 
-    expect(scroller.scrollTop).toBe(40);
-  });
+      expect(scroller.scrollTop).toBe(scrollTop);
+    },
+  );
 
   it('release_FocusedBox_DetachesItsFrameAndClearsTheFocus', () => {
     const { boxes, created } = emptySetup();
@@ -466,17 +502,64 @@ describe('keepFocusedBox', () => {
     expect(created[2].editor.focusOptions).toEqual([undefined]);
   });
 
-  it('keepFocusedBox_InsertingBox_FocusesItInInsertMode', () => {
-    const { boxes, created, rebuildWith } = keepSetup();
-    boxes.mount(parent, notes, '');
-    boxes.focus(notes);
-    created[0].events.modeChanged({ mode: 'insert', subMode: '' });
+  // `focused` is the index in `created` of the editor the refocus lands on.
+  it.each<{
+    steps: string;
+    first: 'mount' | 'place';
+    rebuild: (boxes: ReturnType<typeof emptySetup>['boxes']) => void;
+    focused: number;
+    options: FocusOptions;
+  }>([
+    {
+      steps: 'mounted anew',
+      first: 'mount',
+      rebuild: (boxes) => {
+        boxes.destroyForm('f1');
+        boxes.mount(parent, notes, '');
+      },
+      focused: 1,
+      options: { insertAtEnd: true },
+    },
+    {
+      steps: 'placed anew',
+      first: 'place',
+      rebuild: (boxes) => {
+        boxes.destroyBox(notes);
+        boxes.place(div(), notes, '');
+      },
+      focused: 1,
+      options: { insertAtEnd: true },
+    },
+    {
+      steps: 'kept through release and place',
+      first: 'place',
+      rebuild: (boxes) => {
+        boxes.release(notes);
+        boxes.place(div(), notes, '');
+      },
+      focused: 0,
+      options: { insert: true },
+    },
+  ])(
+    'keepFocusedBox_InsertingBox_FocusesItInInsertMode: $steps',
+    ({ first, rebuild, focused, options }) => {
+      const { boxes, created } = keepSetup();
+      if (first === 'mount') {
+        boxes.mount(parent, notes, '');
+      } else {
+        boxes.place(div(), notes, '');
+      }
+      // A click, so the editor's focus options hold only the refocus.
+      created[0].events.focused();
+      created[0].events.modeChanged({ mode: 'insert', subMode: '' });
 
-    keepFocusedBox(boxes, 'f1', rebuildWith([notes]));
+      keepFocusedBox(boxes, 'f1', () => rebuild(boxes));
 
-    expect(boxes.active()).toEqual(notes);
-    expect(created[1].editor.focusOptions).toEqual([{ insert: true }]);
-  });
+      expect(boxes.active()).toEqual(notes);
+      expect(created).toHaveLength(focused + 1);
+      expect(created[focused].editor.focusOptions).toEqual([options]);
+    },
+  );
 
   it.each<{ mode: string; options: (FocusOptions | undefined)[] }>([
     { mode: 'normal', options: [undefined] },

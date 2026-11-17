@@ -82,6 +82,7 @@ export interface RoundViewDeps {
     | 'destroyForm'
     | 'destroyReleased'
     | 'isMounted'
+    | 'editorOf'
     | 'active'
     | 'activeMode'
     | 'focus'

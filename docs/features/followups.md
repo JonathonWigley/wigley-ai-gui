@@ -410,11 +410,13 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   not break a user settings layout. The layout name picker (Features) is then one such kind.
 - **Layout hot reload keeps the user's place** — *agent-ready*: `round-view.ts` `rebuild` (run by `setLayouts` when a
   reload changes a layout it draws with, and by a card part or review column added or disposed) destroys and
-  remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's start when
-  it was inserting, and keeps the main column's scroll, but loses the cursor, a visual mode and undo. Move its boxes
-  to `EditorBoxes.place` and `release` (`src/shared/page/editor-boxes.ts`), as the primer, practice and the audio
-  picker do, so a redraw keeps each box's editor. Redraw only the cards a changed layout draws, reading `LayoutSet.changed` (kept unread for this, by the
-  user's ruling). Forms is the owner this covers: chat's composer keeps its box and draft across a redraw, and docs'
+  remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it
+  was inserting, and keeps the main column's scroll, but loses the cursor, a visual mode and undo. Move its boxes to
+  `EditorBoxes.place` and `release` (`src/shared/page/editor-boxes.ts`), as the primer, practice and the audio picker
+  do, so a redraw keeps each box's editor. Redraw only the parts whose layout pick changed: compare each card's,
+  notice card's and pane's pick (name and layout object) with the last draw's, in place of `setLayouts`' one
+  `picksEqual` over the whole round, and redraw each changed part alone in its place (task 13 of the Lane L plan,
+  `changedPicks`). Forms is the owner this covers: chat's composer keeps its box and draft across a redraw, and docs'
   doc pane redraws its frame only after the editor closes.
 
 ## Features
@@ -515,18 +517,16 @@ Duplication and drift with no user-visible defect.
   `.notes-title` (`notes/page/notes.css`) and the sessions rename dialog's box. Move it into the primitive (a rule on
   `.ui-input > input` in `src/shared/page/ui/input-frame.css`, or a class `textBoxInput` adds) and delete the five
   copies, checking each box's look in a drive capture.
-- **Dialog frames and confirms through the opener's layout** — *agent-ready*: `createDialog`
-  (`src/shared/page/ui/dialog.ts`) draws every dialog's frame and title in code, the keys help dialog's Close button
-  included, and the forms and primer cancel confirms pass no `drawBody` to `createConfirmPrompt`
-  (`src/plugins/forms/page/forms-view.ts`, `src/plugins/primer/page/primer-view.ts`). Give the dialog a frame hook
-  each owner fills, as `drawRow` and `drawBody` already are, and pass `drawBody` in forms and the primer. Then drop
-  "the cancel dialog" from what AGENTS.md § A forms layout says the app keeps.
-- **Forms and primer column chrome through their layouts** — *agent-ready*: forms' rail head, item pager and rail
-  foot (`src/plugins/forms/page/round-view.ts`), the primer's column heads, tasks foot and card edge strip
-  (`src/plugins/primer/page/primer-view.ts`), and the shared status line both use (`createStatusLine`,
-  `src/shared/page/status-line.ts`) are built in code. Add their parts to the forms and primer layout contracts and
-  `default` layouts. Then drop the carve-outs for status lines and column strips from
-  `docs/features/layouts/design.md` (§ What a layout draws, § The primer's columns).
+- **Forms' cancel confirm through the forms layout** — *agent-ready*: the forms cancel confirm passes neither
+  `drawFrame` nor `drawBody` to `createConfirmPrompt` (`src/plugins/forms/page/forms-view.ts`), so its frame and body
+  are drawn in code; the primer, the audio picker, practice and the session stash already draw theirs through
+  `dialogFrame` and `confirmBody`. Add those two parts to the forms layout contract and `default` layout and pass
+  both hooks, as `src/plugins/primer/page/primer-view.ts` does. Then drop "the cancel dialog" from what AGENTS.md
+  § A forms layout says the app keeps.
+- **Forms column chrome through the forms layout** — *agent-ready*: forms' rail head, item pager and rail foot
+  (`src/plugins/forms/page/round-view.ts`), and the status line in it (`createStatusLine`,
+  `src/shared/page/status-line.ts`), are built in code. Add their parts to the forms layout contract and `default`
+  layout, as the primer's column strips (`tasksHead`, `itemsHead`, `tasksFoot`, `cardEdge`, `reviewFooter`) are.
 - **Info tone for the on-demand tag** — *agent-ready*: the `on-demand` load-state tag uses the accent tone
   (`CHIP_TONES`, `src/plugins/docs/layouts/default/layout.js`), against DESIGN.md's rule that colour at rest means a
   status; it was `status-info` before docs-browser plan C, and `listed` now reads the same as `not-loaded`. Needs an

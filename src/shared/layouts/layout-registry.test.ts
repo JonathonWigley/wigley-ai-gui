@@ -338,8 +338,8 @@ describe('watch', () => {
     await writeLayouts('alpha');
 
     await vi.waitFor(() => expect(sent).toHaveLength(2));
-    expect(entryIn(sent[1], 'alpha')?.revision).toBeGreaterThan(2);
-    expect(entryIn(sent[1], 'alpha')?.styleRevision).toBeGreaterThan(2);
+    expect(entryIn(sent[1], 'alpha')?.revision).toBe(3);
+    expect(entryIn(sent[1], 'alpha')?.styleRevision).toBe(3);
   });
 
   it('watch_NewFolder_JoinsTheSet', async () => {

@@ -26,8 +26,9 @@ export interface LayoutLoaderDeps<L> {
 // names asked for, and every other layout the set lists whose good version is
 // at the set's revision; the entries this load imported and read; the entries
 // whose import, read or part check failed in this load; and, in the set's
-// order, the entries in `layouts` whose stylesheet link this load moved, added
-// or removed without importing their script, a built-in `default` left out.
+// order, the entries whose good version is at that entry and whose stylesheet
+// link this load moved, added or removed without importing their script, a
+// built-in `default` left out.
 export interface LayoutLoad<L> {
   layouts: ReadonlyMap<string, L>;
   loaded: LayoutEntry[];
@@ -169,12 +170,13 @@ export function createLayoutLoader<L>(
         relinked.add(DEFAULT_NAME);
       }
       const imported = new Set(toImport.map((entry) => entry.name));
+      // A built-in entry, or one whose good version is older, is never the
+      // good version's entry.
       const restyled = set.layouts.filter(
         (entry) =>
           relinked.has(entry.name) &&
           !imported.has(entry.name) &&
-          !entry.builtIn &&
-          layouts.has(entry.name),
+          good.get(entry.name)?.entry === entry,
       );
       return { layouts, loaded, failed, restyled };
     },

@@ -209,10 +209,13 @@ describe('createLayoutLoader', () => {
   });
 
   // Each row loads a set holding `first`, then one holding `second`, asking for
-  // its name both times; `failing` lists the script URLs whose import throws.
+  // its name both times, with a load of a set holding each of `between`, asked
+  // for when `isAsked`, in between; `failing` lists the script URLs whose
+  // import throws, and `imports` those the load of `second` imports.
   it.each<{
     row: string;
     first: LayoutEntry;
+    between?: { held: LayoutEntry; isAsked: boolean }[];
     second: LayoutEntry;
     failing: string[];
     imports: string[];
@@ -280,10 +283,25 @@ describe('createLayoutLoader', () => {
       links: [{ layout: 'mine', href: 'url:mine/layout.css@2' }],
       restyled: [],
     },
+    {
+      row: 'a name re-added at an older good version',
+      first: entry('mine', 4, true),
+      between: [
+        { held: entry('mine', 5, true), isAsked: true },
+        { held: entry('mine', 5, true), isAsked: false },
+      ],
+      second: entry('mine', 5, true),
+      failing: ['url:mine/layout.js@5'],
+      imports: [],
+      isSameLayout: true,
+      links: [{ layout: 'mine', href: 'url:mine/layout.css@4' }],
+      restyled: [],
+    },
   ])(
     'load_StyleOnlyChange_RelinksWithNoImport ($row)',
     async ({
       first,
+      between = [],
       second,
       failing,
       imports: secondImports,
@@ -295,6 +313,9 @@ describe('createLayoutLoader', () => {
       const setHolding = (held: LayoutEntry): LayoutSet =>
         held.name === 'default' ? { layouts: [held] } : setOf(held);
       const before = await loader.load(setHolding(first), [first.name]);
+      for (const { held, isAsked } of between) {
+        await loader.load(setHolding(held), isAsked ? [held.name] : []);
+      }
       const importedBefore = imports.length;
 
       const after = await loader.load(setHolding(second), [second.name]);
