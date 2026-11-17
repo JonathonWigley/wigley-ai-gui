@@ -453,4 +453,5 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - A return drops the row's entries and rebuilds them from the attach replay and history, since the attach numbers entries under a new process start · group 15
 ### Review rounds
 - Round 1 (review dfead4027): NEEDS FIXES, 9 Important, 28 Minor, 2 pre-existing. Fix range e7cd5ade1..41eb06ce4, 6 worker commits + oxfmt. Tier: High — chat-sessions resume/process-id/leave/waiter logic and the chat main profile seam change behaviour on session lifecycle paths. Re-review: correctness lanes over the fix range.
+- Round 2 (re-review 41eb06ce4): NEEDS FIXES, 1 Important (doc), 7 Minor (3 repeats: label-fallback prose, renderer match logging, comment wraps). Fix range 4b0d068a4..309404c12: comments/docs, test rows, adoptHostId drops a stale map entry, throwing match logged once, start-prompt label via harnessLabel. Tier: Low — two one-branch behaviour edits, each pinned by a test row; the rest prose and tests. Closed by commit and compile; no re-review.
 ### Test gate
