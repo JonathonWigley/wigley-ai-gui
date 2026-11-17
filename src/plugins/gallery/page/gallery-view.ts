@@ -39,6 +39,7 @@ import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { sparkline } from '../../../shared/page/ui/sparkline';
+import { waveform } from '../../../shared/page/ui/waveform';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
@@ -222,6 +223,7 @@ function sectionSpecs(
     section('StatusDot', statusDotCells),
     section('Meter', meterCells),
     section('Sparkline', sparklineCells),
+    section('Waveform', waveformCells),
     section('InputFrame', inputFrameCells),
     section('Row, list', listRowCells),
     section('Row, tree', treeRowCells),
@@ -542,6 +544,21 @@ function sparklineCells(): SampleCell[][] {
     samples.map(({ caption, values, tone }) =>
       cell(sparkline(values, tone), caption, true),
     ),
+  ];
+}
+
+// Not wide: the waveform has a fixed size.
+function waveformCells(): SampleCell[][] {
+  const peaks = Array.from(
+    { length: 32 },
+    (_, index) => 0.1 + 0.9 * Math.abs(Math.sin(index / 4)),
+  );
+  return [
+    [
+      cell(waveform(peaks), 'Peaks'),
+      cell(waveform(new Array<number>(32).fill(0)), 'Silence'),
+      cell(waveform(null), 'Loading'),
+    ],
   ];
 }
 

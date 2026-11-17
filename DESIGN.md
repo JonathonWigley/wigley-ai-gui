@@ -304,6 +304,10 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Sparkline** (`sparkline`): an SVG line of recent values from 0 to 100, in the tone of the Meter beside it; a fixed
   height and no axes. A layout draws one with `kit.sparkline(parent, values, tone)` and redraws it by calling that again
   in a fresh parent part.
+- **Waveform** (`waveform`): an SVG bar per peak (each 0 to 1), centred on its box's middle, in `fg-tertiary`; a fixed
+  size, `space-4` high and twice `space-8` wide, and a line for silence. It is empty, with `is-loading`, until its
+  peaks arrive. The audio picker's candidate row draws one through its kit's `waveform`, which turns it `accent` on the
+  cursor row.
 - **InputFrame** (`inputFrame`): the frame around a text box.
 - **Row** (`row`): a list or tree row, density `list` or `tree`.
 - **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab. The `ui-tabs--scroll` strip scrolls

@@ -11,6 +11,7 @@ import {
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
 import { iconButton } from '../../../../shared/page/ui/icon-button';
 import { boxHint } from '../../../../shared/page/ui/key-anchors';
+import { waveform } from '../../../../shared/page/ui/waveform';
 import {
   type AudioPickerCommandName,
   audioPickerCommand,
@@ -23,11 +24,6 @@ import type {
   PickerKit,
 } from '../../layouts/layout';
 import { audioPickerManifest } from '../../manifest';
-
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
-// The least bar height in the waveform's 2-high box, so silence draws a line.
-const MIN_BAR_HEIGHT = 0.04;
-const BAR_WIDTH = 0.7;
 
 // One notes box: the picker it belongs to and its 0-based moment.
 export type PickerBox = { formId: string; moment: number };
@@ -94,7 +90,11 @@ export function createCandidateKit(
       node.addEventListener('click', (event) => event.stopPropagation());
       return appended(parent, node);
     },
-    waveform: (parent) => appended(parent, waveform(peaks)),
+    waveform(parent) {
+      const node = waveform(peaks);
+      node.classList.add('audio-picker-waveform');
+      return appended(parent, node);
+    },
   };
 }
 
@@ -123,28 +123,6 @@ export function createNotesKit(
       }
     },
   };
-}
-
-// `span.audio-picker-waveform`: an SVG bar per peak at `x = i`, centred on the
-// box's middle; no bars and `is-loading` while `peaks` is null.
-function waveform(peaks: readonly number[] | null): HTMLElement {
-  const node = element('span', 'audio-picker-waveform');
-  node.setAttribute('aria-hidden', 'true');
-  node.classList.toggle('is-loading', peaks === null);
-  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${Math.max(peaks?.length ?? 0, 1)} 2`);
-  svg.setAttribute('preserveAspectRatio', 'none');
-  for (const [index, peak] of (peaks ?? []).entries()) {
-    const height = Math.max(2 * peak, MIN_BAR_HEIGHT);
-    const bar = document.createElementNS(SVG_NAMESPACE, 'rect');
-    bar.setAttribute('x', String(index));
-    bar.setAttribute('y', String(1 - height / 2));
-    bar.setAttribute('width', String(BAR_WIDTH));
-    bar.setAttribute('height', String(height));
-    svg.append(bar);
-  }
-  node.append(svg);
-  return node;
 }
 
 // The notes field: the box's input frame, then its `⇧⇥ ⇥` keys, which show on
