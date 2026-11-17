@@ -611,19 +611,6 @@ because the earlier items rewrite many of these tests anyway.
   `restoreLastGood` starts it only while the config store admits that version. A part told `restart` keeps state for
   a successor. Chat keeps its rows until `KEPT_SESSION_MS` expires them. Decide whether the stop kind is settled
   after the start is known, or whether a `restart` with no successor is part of the contract.
-- **Plugin main-part file watchers can miss a save on macOS** — *agent-ready*: a watch opening or closing in the main
-  process drops the other watches' pending events. `WatchOptions.onMissed` (`src/contracts/files.ts`) reports it, and
-  the user plugin folder source, the config store and the layout registry rescan on it. Plugin main parts that watch
-  through `api.files` do not use it yet: workflow-large's plan watch, unity-pool's pool watch, backlog's start watch,
-  docs' doc-files and practice's problems watch. Give each an `onMissed` rescan.
-- **The Node files watcher can lose a rename's target** — *agent-ready*: the Node Files adapter
-  (`src/main/files/node-files.ts`, `TEMP_FILE` and its check in the watch handler) drops every event whose name has
-  its own temp shape `.<name>.<8 hex>.tmp`. When macOS FSEvents reports a temp-then-rename `write` under the temp name
-  only, the target is never reported, which breaks the `Files.watch` promise in `src/contracts/files.ts` that a write
-  reports its target. Seen as the self-test losing the target about 1 run in 5 with `files.write` (it switched to
-  `append`), and why plan.py writes its plan-runs report in place. When a temp-shaped name arrives and its target
-  exists, report the target instead of dropping the event; else correct the contract line. Exposure: every
-  `files.watch` consumer whose folder receives a `Files.write`, about 17 non-test call sites, unscoped.
 - **A repeated `forms.openRound` shows nothing** — a second `forms.openRound` of a default round already submitted in
   that session gets its stored answers back from form-service's `replaysLastSubmitted`
   (`src/shared/agent-forms/form-service.ts`). Nothing shows and nothing logs, so a drive run that opens the same

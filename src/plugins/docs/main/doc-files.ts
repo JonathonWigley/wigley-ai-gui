@@ -284,22 +284,47 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   }
 
   // Watches the file's folder, not the file, so an atomic replace is seen;
-  // one level only, since only the file's own name is reported.
+  // one level only, since only the file's own name is reported. When the
+  // watch may have missed changes, calls `changed` only when the file's
+  // modified time differs from the one last seen, so a caller that watches
+  // again on each change does not set off another missed burst.
   async function watch(path: string, changed: () => void): Promise<FileWatch> {
     const requested = absolute(path);
     const real = await realPathOrSelf(files, requested);
     const name = paths.base(real);
+    // Null when the file is missing or its time cannot be read.
+    const modifiedNow = () =>
+      files.modified(real).then(
+        (time) => time,
+        () => null,
+      );
+    let seen = await modifiedNow();
+    // Takes the file's modified time; true when it differs from `seen`.
+    const isChangedSinceSeen = async () => {
+      const time = await modifiedNow();
+      const differs = time !== seen;
+      seen = time;
+      return differs;
+    };
     return files.watch(
       paths.parent(real),
       (changedPath) => {
         if (paths.samePath(changedPath, name)) {
           changed();
+          void isChangedSinceSeen();
         }
       },
       {
         recursive: false,
         onError: (error) =>
           log(`watch ${requested} stopped: ${errorText(error)}`),
+        onMissed: () => {
+          void isChangedSinceSeen().then((differs) => {
+            if (differs) {
+              changed();
+            }
+          });
+        },
       },
     );
   }

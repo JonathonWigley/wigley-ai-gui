@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { WatchOptions } from '../../../contracts/files';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { createPlanReports } from './plan-reports';
@@ -80,6 +81,47 @@ describe('createPlanReports', () => {
       expect.stringContaining('watcher refused') as string,
     ]);
     expect(() => reports.dispose()).not.toThrow();
+  });
+
+  // Breaks if a missed burst applies a report from before the watch opened,
+  // applies one again with no new write, or skips one written since.
+  it('createPlanReports_OnMissed_AppliesNewReportsOnce', async () => {
+    let time = 900;
+    const memory = createMemoryFiles({ now: () => time });
+    await memory.write(`${FOLDER}/a.json`, '{"planDir": "/w/p/plan-a"}\n');
+    let watchOptions: WatchOptions | undefined;
+    const files = {
+      ...memory,
+      watch: (
+        _folder: string,
+        _onChange: (path: string) => void,
+        options?: WatchOptions,
+      ) => {
+        watchOptions = options;
+        return { dispose: () => undefined };
+      },
+    };
+    const reported: string[] = [];
+    createPlanReports({
+      files,
+      paths: posixPaths,
+      log: () => undefined,
+      folder: FOLDER,
+      reportPlan: async (rowId) => {
+        reported.push(rowId);
+        return true;
+      },
+      now: () => 1000,
+    });
+    time = 1500;
+    await memory.write(`${FOLDER}/b.json`, '{"planDir": "/w/p/plan-b"}\n');
+
+    watchOptions?.onMissed?.();
+    await settled();
+    watchOptions?.onMissed?.();
+    await settled();
+
+    expect(reported).toEqual(['b']);
   });
 
   it('createPlanReports_DisposedMidRead_ReportsNothing', async () => {

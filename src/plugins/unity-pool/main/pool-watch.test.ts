@@ -281,6 +281,23 @@ describe('createPoolWatch', () => {
     expect(hand.counts()).toEqual({ opened: 2, closed: 1, lists: 2 });
   });
 
+  // Breaks if a missed burst reads nothing, or reopens the watch, which on
+  // macOS tells every other watch it may have missed changes.
+  it('poolWatch_OnMissed_ReadsAgainOnTheOpenWatch', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${ROOT}/a/state.json`, stateText('a', ONE_CLONE));
+    const hand = handWatchedFiles(files);
+    const { watch } = startWatch(hand.files);
+    await settled();
+
+    await files.write(`${ROOT}/b/state.json`, stateText('b', ONE_CLONE));
+    hand.watches[0].options?.onMissed?.();
+    await settled();
+
+    expect(poolNames(watch.snapshot())).toEqual(['a', 'b']);
+    expect(hand.counts()).toEqual({ opened: 1, closed: 0, lists: 2 });
+  });
+
   it('poolWatch_FirstScan_CallsChangedWithPools', async () => {
     const files = createMemoryFiles();
     await files.write(`${ROOT}/p/state.json`, stateText('p', ONE_CLONE));

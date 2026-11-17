@@ -94,9 +94,11 @@ export interface Files {
   // `folder`, a change inside a subfolder reported by the subfolder's own name
   // (by the Node adapter when the OS reports one). The Node adapter reports a
   // burst of events for one path once, 100 ms after its last event; the
-  // memory adapter reports each change at once. A temp file `write` makes
-  // never reports, so a write reports only its target. Creates `folder` when
-  // it is missing. When watching fails the watch disposes itself, dropping any
+  // memory adapter reports each change at once. A `write` reports its target
+  // and never its temp file; the Node adapter reports the target also when
+  // the OS reports only the temp file's name, once the target exists. Creates
+  // `folder` when it is missing. When watching fails the watch disposes
+  // itself, dropping any
   // change not yet reported, and calls the options' `onError` once; with no
   // `onError` it disposes itself silently. A failure to start watching,
   // creating `folder` or starting the watcher, throws from `watch` and never

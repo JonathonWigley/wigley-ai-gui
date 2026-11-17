@@ -17,7 +17,8 @@ const MISSING_ROOT_CHECK_MS = 60_000;
 // Holds every pool under unity-pool's state folder `stateRoot`, one folder per pool holding its `state.json`, and
 // calls `changed` with the new snapshot after each change. Only reads: a missing root is checked again each minute
 // and never created, since `Files.watch` creates the folder it watches. `rescan` closes the watch, lists the pools
-// again and reads each one, for a change the OS watcher missed. A file that does not parse keeps the pool's last good
+// again and reads each one, for a change the OS watcher missed; when the watch reports it may have missed changes,
+// the pools are listed and read again on the open watch. A file that does not parse keeps the pool's last good
 // state; one of an unknown version drops the pool. A read that settles after a newer read of its folder started is
 // dropped. `rescan` after `dispose` does nothing.
 export interface PoolWatch {
@@ -154,7 +155,18 @@ export function createPoolWatch(deps: {
     watch = files.watch(stateRoot, onChange, {
       recursive: true,
       onError: () => rescan(),
+      onMissed: () => {
+        readPools(current).catch((error: unknown) => {
+          log(`state folder not read: ${errorText(error)}`);
+        });
+      },
     });
+    await readPools(current);
+  };
+
+  // Lists the pools and reads each one, dropping the pools gone; does nothing
+  // once a newer scan started.
+  const readPools = async (current: number) => {
     const entries = await files.list(stateRoot);
     if (current !== scanNumber) {
       return;

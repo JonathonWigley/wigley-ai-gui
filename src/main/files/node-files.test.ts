@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   utimesSync,
@@ -262,6 +263,77 @@ describe('createNodeFiles', () => {
 
     expect(reports).toEqual(['z.txt']);
   });
+
+  // Breaks if an event naming only a write's temp file drops the target,
+  // reports the temp file's name, or reports a target a failed write never
+  // made.
+  it.each<{
+    name: string;
+    targetBefore: boolean;
+    act: (temp: string, target: string) => void;
+    reports: string[];
+  }>([
+    {
+      name: 'temp file then rename',
+      targetBefore: false,
+      act: (temp, target) => {
+        writeFileSync(temp, 'new');
+        renameSync(temp, target);
+      },
+      reports: ['tasks.json'],
+    },
+    {
+      name: 'temp file only, target present',
+      targetBefore: true,
+      act: (temp) => writeFileSync(temp, 'new'),
+      reports: ['tasks.json'],
+    },
+    {
+      name: 'temp file only, no target',
+      targetBefore: false,
+      act: (temp) => {
+        writeFileSync(temp, 'new');
+        rmSync(temp);
+      },
+      reports: [],
+    },
+    {
+      name: 'target and temp file in one window',
+      targetBefore: false,
+      act: (temp, target) => {
+        writeFileSync(target, 'new');
+        writeFileSync(temp, 'newer');
+      },
+      reports: ['tasks.json'],
+    },
+  ])(
+    'watch_TempFileEvent_ReportsItsTargetOnceWhenPresent: $name',
+    { timeout: 10000 },
+    async ({ targetBefore, act, reports: expected }) => {
+      const target = path.join(root, 'tasks.json');
+      const temp = path.join(root, '.tasks.json.0a1b2c3d.tmp');
+      if (targetBefore) {
+        writeFileSync(target, 'old');
+      }
+      const reports: string[] = [];
+      const watch = files.watch(root, (changed) => reports.push(changed));
+      try {
+        act(temp, target);
+        // Reported after every earlier event, so the wait covers them.
+        writeFileSync(path.join(root, 'done.txt'), '');
+        await vi.waitFor(() => expect(reports).toContain('done.txt'), {
+          timeout: 5000,
+        });
+        await waitMs(3 * QUIET_MS);
+      } finally {
+        watch.dispose();
+      }
+
+      expect(reports.filter((changed) => changed !== 'done.txt')).toEqual(
+        expected,
+      );
+    },
+  );
 
   it(
     'watch_NotRecursive_ReportsOnlyTheFolderOwnEntries',

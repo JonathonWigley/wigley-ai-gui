@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { WatchOptions } from '../../../contracts/files';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { SubmissionRecord } from '../contract';
@@ -108,6 +109,30 @@ describe('createProblemStore', () => {
     watch.dispose();
 
     expect(slugs).toEqual(startsFirst ? ['early', 'late'] : ['late']);
+  });
+
+  it('watch reports null when the watch may have missed changes', () => {
+    const memory = createMemoryFiles();
+    let watchOptions: WatchOptions | undefined;
+    const store = createProblemStore({
+      files: {
+        ...memory,
+        watch: (_folder, _onChange, options) => {
+          watchOptions = options;
+          return { dispose: () => undefined };
+        },
+      },
+      paths: posixPaths,
+      log: () => undefined,
+      folder: () => PRACTICE_FOLDER,
+    });
+    const slugs: (string | null)[] = [];
+    store.watch((slug) => slugs.push(slug));
+    store.startWatching();
+
+    watchOptions?.onMissed?.();
+
+    expect(slugs).toEqual([null]);
   });
 
   it('submissions come newest first', async () => {
