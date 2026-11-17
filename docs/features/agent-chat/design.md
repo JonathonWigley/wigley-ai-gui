@@ -79,7 +79,7 @@ interview on 2026-10-23; this file is the record of both.
  chat main ─► sessions.open(info with a fresh host session id, or the saved one's on resume) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
                                             --include-partial-messages --verbose --session-id <id> (--resume <id> on resume)
-                                            --permission-mode <the row's mode, auto without one> --permission-prompt-tool <chat's tool>
+                                            --permission-mode <the row's mode, auto without one> --permission-prompt-tool <the claude-code plugin's tool>
                                             (--model <m> and --effort <e> when the user picked them and Claude confirmed)
                                             (--append-system-prompt <the registered instructions>, none when no plugin added any)
                  │ claude starts the wigley plugin's relay.py, whose hello carries the same session id
@@ -288,7 +288,7 @@ interview on 2026-10-23; this file is the record of both.
   with the session's record so a relaunch that re-attaches the session shows and sends them,
   `docs/features/session-host/design.md` § Re-attach), and the Chat tab shows it as a pending row after the last entry, drawn by the layout's `queuedMessage` part:
   dim, with a `pending` label on its own line above the text (`pending · 2 images` when it carries images; `sending` in place of `pending` once sent now). The code names these **queued**
-  messages, after claude-stream.md § Queued messages, since `pending` already names chat main's permission calls and a
+  messages, after claude-stream.md § Queued messages, since `pending` already names chat main's waiting permission cards and a
   restored session's unread history.
   - **Sending**: when the harness reports the turn ended (activity `idle`) and a message is queued, chat main writes
     the oldest unsent queued message to the agent and swallows that `idle`: the activity the session shows does not change,
@@ -494,8 +494,9 @@ interview on 2026-10-23; this file is the record of both.
 - **Completion popup**: the editor adapter draws CodeMirror's popups on the page body, so the composer's scroll box
   does not clip the slash completion list.
 - **Permissions**: a session runs in the `mode` its row holds, `auto` when it holds none; anything that mode would
-  still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
-  and shows as a permission entry. `y` allows (with no range open), `n` denies and opens a box for an optional reason Claude reads, each
+  still prompt reaches Claude's `permission_prompt` MCP tool, which the `claude-code` plugin contributes to sessions
+  and routes by the row id to the session's process; the process raises a permission request and chat shows it as a
+  permission entry. `y` allows (with no range open), `n` denies and opens a box for an optional reason Claude reads, each
   answering the oldest pending permission of the session on screen. A row launched `unattended` answers each
   prompt itself with a deny at once, naming the unattended run as the reason, and shows the denied entry.
 - **Status**: a row's activity reads what the chat is doing — `working`, or a needs-you word while it waits for a

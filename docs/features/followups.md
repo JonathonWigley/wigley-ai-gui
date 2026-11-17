@@ -253,16 +253,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 - **Control roles** — *agent-ready*: controls carry a `role` (`model`, `permissionMode`, `effort`) that chat's pick
   commands find them by (`src/plugins/chat/page/control-commands.ts`), rather than the fixed ids `mode` / `effort` /
   `model`.
-- **Permission behind the harness** — *agent-ready*: `AgentProcessEvents.permission(request)` and
-  `AgentProcess.answerPermission(id, decision)`; the adapter mints the entry and owns the reply JSON, and the MCP
-  `permission_prompt` route becomes the Claude adapter's private wiring. `CLAUDE_PERMISSION_TOOL` leaves
-  `src/contracts/agent.ts` for `src/plugins/claude-code/main/`.
-- **Docs reads harness config roots from the adapter** — *agent-ready*: docs knows each harness's config layout
-  itself: `installedPluginsFile` under Claude's config dirs or `~/.codex/config.toml` with TOML key quoting
-  (`src/plugins/docs/main/doc-files.ts`), the `~/.codex` and `~/.codex/plugins/cache` index roots, the closed
-  `{ claude, codex }` chip record (`src/plugins/docs/page/docs-state.ts`, `doc-view.ts`) and the `.claude` folder
-  rule (`src/plugins/docs/kinds.ts`). Each harness adapter declares its config, plugin-manifest and plugin-cache
-  roots and its label, and docs reads them. Builds on harness settings with the harness and AgentHarnessRegistry.
 - **Open chat entry kinds and entry renderers** — *agent-ready*: `ChatEntry.kind` (`src/contracts/agent.ts`) opens
   for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout names them. Chat page
   exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default. A partial

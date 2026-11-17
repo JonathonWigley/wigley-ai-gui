@@ -12,6 +12,7 @@ import {
   type CompactionTrigger,
   type HarnessProfile,
   MAIN_AGENT_ID,
+  type PermissionDecision,
   type ProcessActivity,
   type SessionControl,
   type UserMessage,
@@ -21,12 +22,14 @@ import type { HostedProcessInfo } from '../../../contracts/session-host';
 import {
   createFakeAgentHarness,
   FAKE_AGENT_PID,
+  FAKE_CANCELLED_REASON,
   FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   type FakeAgentCall,
   type FakeAgentHarness,
+  type FakePermissionCall,
   fakePlanRowUpdate,
   fakeUsageEvent,
 } from '../../../shared/fake-agent-harness';
@@ -40,7 +43,6 @@ import type {
   SessionInfo,
   SessionTitles,
   TitleSource,
-  ToolResult,
 } from '../../sessions/contract';
 import {
   chatCommandsSlot,
@@ -69,13 +71,13 @@ import {
   type ChatSessions,
   type ChatSessionsDeps,
   createChatSessions,
+  UNATTENDED_REASON,
 } from './chat-sessions';
 import type {
   OpenSessions,
   SavedSession,
   SavedSessions,
 } from './open-sessions';
-import { CANCELLED_REASON, UNATTENDED_REASON } from './permission-tool';
 import { createRecentFolders, RECENT_FOLDERS_FILE } from './recent-folders';
 import { createChatSlots } from './chat-slots';
 
@@ -247,10 +249,10 @@ const HOSTED_PAST_ONE: HostedProcessInfo = {
   current: true,
 };
 
-const BASH_ARGS = {
-  tool_name: 'Bash',
+const BASH_CALL: FakePermissionCall = {
+  toolName: 'Bash',
   input: { command: 'ls' },
-  tool_use_id: 'tu-1',
+  toolUseId: 'tu-1',
 };
 
 const NO_TITLES: SessionTitles = {
@@ -575,14 +577,6 @@ function setUp(
     homeDir: '/home/me',
     paths: posixPaths,
   });
-  const agentSession: AgentSession = {
-    id: ROW_ID,
-    info: {
-      sessionId: 'uuid-1',
-      projectDir: PROJECT_DIR,
-      harness: 'claude',
-    },
-  };
   return {
     chat,
     harness,
@@ -600,7 +594,6 @@ function setUp(
     messages: () => messagesFrom(timeline),
     emitted,
     notesAndEmits,
-    agentSession,
     archived,
     saved,
     titleCalls,
@@ -773,27 +766,27 @@ function sendCall(message: UserMessage) {
   };
 }
 
-function signal(): AbortController {
-  return new AbortController();
-}
-
-// The call's result, or 'pending' when it has not settled after a flush.
-async function settled(
-  call: Promise<ToolResult>,
-): Promise<ToolResult | 'pending'> {
-  let result: ToolResult | 'pending' = 'pending';
-  void call.then((value) => {
-    result = value;
+// Raises a permission request for `BASH_CALL` on the row's live fake process,
+// as a tool call in it would, and flushes so the request reaches chat.
+// Returns a reader of the request's decision: 'pending' until it settles.
+async function askBash(
+  test: { harness: FakeAgentHarness },
+  rowId = ROW_ID,
+): Promise<() => PermissionDecision | 'pending'> {
+  let decision: PermissionDecision | 'pending' = 'pending';
+  void test.harness.askPermission(rowId, BASH_CALL).then((value) => {
+    decision = value;
   });
   await flush();
-  return result;
+  return () => decision;
 }
 
-function replyText(result: ToolResult | 'pending'): string {
-  if (result === 'pending') {
-    throw new Error('the call is still pending');
-  }
-  return result.content[0].text;
+// The `answerPermission` calls chat made on the fake process.
+function permissionAnswers(process: { calls: FakeAgentCall[] }) {
+  return process.calls.filter(
+    (call): call is Extract<FakeAgentCall, { method: 'answerPermission' }> =>
+      call.method === 'answerPermission',
+  );
 }
 
 describe('createChatSessions', () => {
@@ -2483,12 +2476,7 @@ describe('createChatSessions', () => {
 
   it('send_HarnessIdleWithPermissionWaiting_WritesAtOnce', async () => {
     const test = await started();
-    void test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: null,
-        signal: signal().signal,
-      });
+    await askBash(test);
     const message: UserMessage = { text: 'go on', images: [] };
 
     test.chat.send(ROW_ID, message);
@@ -3038,24 +3026,20 @@ describe('createChatSessions', () => {
   it('permission_callAddsAWaitingEntry', async () => {
     const test = await started();
     test.activity('working');
-    const tools = test.chat.permissionToolSession(test.agentSession);
 
-    const call = tools.call('permission_prompt', BASH_ARGS, {
-      toolUseId: 'tu-1',
-      signal: signal().signal,
-    });
+    const decision = await askBash(test);
 
     expect(test.sent('entry')).toEqual([
       {
         sessionId: ROW_ID,
         entry: {
           kind: 'permission',
-          id: 'permission-1',
+          id: 'fake-permission-1',
           at: 1000,
           toolName: 'Bash',
           input: { command: 'ls' },
           answer: null,
-          raw: [BASH_ARGS],
+          raw: [{ fake: 'permission', toolUseId: 'tu-1' }],
         },
       },
     ]);
@@ -3063,27 +3047,33 @@ describe('createChatSessions', () => {
       sessionId: ROW_ID,
       activity: 'waiting',
     });
-    expect(await settled(call)).toBe('pending');
+    expect(decision()).toBe('pending');
   });
 
-  it.each([
+  it.each<{
+    given: string;
+    flag: { unattended?: boolean };
+    decision: PermissionDecision | 'pending';
+    answers: PermissionDecision[];
+    sentByPrompt: string[];
+  }>([
     {
       given: 'unattended: true',
       flag: { unattended: true },
-      reply: JSON.stringify({ behavior: 'deny', message: UNATTENDED_REASON }),
-      answer: { allowed: false, reason: UNATTENDED_REASON },
+      decision: { allowed: false, reason: UNATTENDED_REASON },
+      answers: [{ allowed: false, reason: UNATTENDED_REASON }],
       sentByPrompt: [],
     },
     {
       given: 'unattended absent',
       flag: {},
-      reply: 'pending',
-      answer: null,
+      decision: 'pending',
+      answers: [],
       sentByPrompt: ['waiting'],
     },
   ])(
-    'permission_LaunchedRow_AnswersByUnattended: $given → $reply',
-    async ({ flag, reply, answer, sentByPrompt }) => {
+    'permission_LaunchedRow_AnswersByUnattended: $given',
+    async ({ flag, decision, answers, sentByPrompt }) => {
       const test = setUp();
       test.chat.launch({
         projectDir: PROJECT_DIR,
@@ -3092,22 +3082,24 @@ describe('createChatSessions', () => {
         ...flag,
       });
       await flush();
-      test.harness.processes[0].events.activity('working');
+      const process = test.harness.processes[0];
+      process.events.activity('working');
       const activitiesBefore = test.sent('activity').length;
 
-      const call = test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: signal().signal,
-        });
-      const result = await settled(call);
+      const settled = await askBash(test);
 
-      expect(result === 'pending' ? result : replyText(result)).toBe(reply);
-      expect(test.sent('entry').at(-1)?.entry).toMatchObject({
-        kind: 'permission',
-        answer,
-      });
+      expect(settled()).toEqual(decision);
+      expect(
+        permissionAnswers(process).map((call) => call.decision),
+      ).toEqual(answers);
+      expect(
+        test.sent('entry').filter((sent) => sent.entry.kind === 'permission'),
+      ).toEqual(
+        answers.map((answer) => ({
+          sessionId: ROW_ID,
+          entry: expect.objectContaining({ answer }),
+        })),
+      );
       expect(
         test
           .sent('activity')
@@ -3120,23 +3112,24 @@ describe('createChatSessions', () => {
   it('permission_allow_repliesWithTheInput', async () => {
     const test = await started();
     test.activity('working');
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
 
-    test.chat.answerPermission(ROW_ID, 'permission-1', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
       allowed: true,
       reason: null,
     });
+    await flush();
 
-    expect(replyText(await settled(call))).toBe(
-      '{"behavior":"allow","updatedInput":{"command":"ls"}}',
-    );
+    expect(permissionAnswers(test.process)).toEqual([
+      {
+        method: 'answerPermission',
+        requestId: 'fake-permission-1',
+        decision: { allowed: true, reason: null },
+      },
+    ]);
+    expect(decision()).toEqual({ allowed: true, reason: null });
     expect(test.sent('entry').at(-1)?.entry).toMatchObject({
-      id: 'permission-1',
+      id: 'fake-permission-1',
       answer: { allowed: true, reason: null },
     });
     expect(test.sent('activity').at(-1)).toEqual({
@@ -3147,265 +3140,123 @@ describe('createChatSessions', () => {
 
   it('permission_deny_defaultAndReason', async () => {
     const test = await started();
-    const tools = test.chat.permissionToolSession(test.agentSession);
-    const context = { toolUseId: null, signal: signal().signal };
-    const plainDeny = tools.call('permission_prompt', BASH_ARGS, context);
-    const reasonDeny = tools.call('permission_prompt', BASH_ARGS, context);
+    await askBash(test);
+    await askBash(test);
 
-    test.chat.answerPermission(ROW_ID, 'permission-1', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
       allowed: false,
       reason: null,
     });
-    test.chat.answerPermission(ROW_ID, 'permission-2', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-2', {
       allowed: false,
       reason: 'use rg',
     });
 
-    expect(replyText(await settled(plainDeny))).toBe(
-      '{"behavior":"deny","message":"The user denied this tool call."}',
-    );
-    expect(replyText(await settled(reasonDeny))).toBe(
-      '{"behavior":"deny","message":"use rg"}',
-    );
+    expect(
+      permissionAnswers(test.process).map(({ requestId, decision }) => ({
+        requestId,
+        decision,
+      })),
+    ).toEqual([
+      {
+        requestId: 'fake-permission-1',
+        decision: { allowed: false, reason: null },
+      },
+      {
+        requestId: 'fake-permission-2',
+        decision: { allowed: false, reason: 'use rg' },
+      },
+    ]);
   });
 
   it('permission_twoPending_staysWaiting', async () => {
     const test = await started();
-    const tools = test.chat.permissionToolSession(test.agentSession);
-    const context = { toolUseId: null, signal: signal().signal };
-    void tools.call('permission_prompt', BASH_ARGS, context);
-    void tools.call('permission_prompt', BASH_ARGS, context);
+    await askBash(test);
+    await askBash(test);
     const activitiesBefore = test.sent('activity').length;
 
-    test.chat.answerPermission(ROW_ID, 'permission-1', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
       allowed: true,
       reason: null,
     });
+    await flush();
 
     expect(test.sent('activity')).toHaveLength(activitiesBefore);
     expect(test.chat.sessions()[0].activity).toBe('waiting');
   });
 
-  it('permission_abort_answersDenied', async () => {
-    const test = await started();
-    const controller = signal();
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: controller.signal,
-      });
-
-    controller.abort();
-
-    expect(replyText(await settled(call))).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
-    expect(test.sent('entry').at(-1)?.entry).toMatchObject({
-      id: 'permission-1',
-      answer: { allowed: false, reason: CANCELLED_REASON },
-    });
-  });
-
-  it.each([
-    { given: 'its turn running', harnessActivity: 'working' as const },
-    { given: 'a card left after its turn', harnessActivity: 'idle' as const },
-  ])(
-    'permission_abortAfterDetachAll_AnswersTheCallAndChangesNothing given $given',
-    async ({ harnessActivity }) => {
-      const test = setUp();
-      test.chat.restore(NOTHING_SAVED, []);
-      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
-      await flush();
-      test.setFocused(false);
-      const { events } = test.harness.processes[0];
-      events.activity('working');
-      const controller = signal();
-      const call = test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: controller.signal,
-        });
-      await flush();
-      events.activity(harnessActivity);
-      test.chat.detachAll();
-      const savesBefore = test.saved.saves();
-      const messagesBefore = test.messages().length;
-
-      controller.abort();
-
-      expect(replyText(await settled(call))).toBe(
-        JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-      );
-      expect(test.saved.saves()).toBe(savesBefore);
-      expect(test.saved.last()?.sessions[0].busy).toBe(true);
-      expect(test.messages()).toHaveLength(messagesBefore);
-      expect(test.marked).toEqual([]);
-    },
-  );
-
   it('permission_sessionEnds_answersCancelledAndShowsIt', async () => {
     const test = await started();
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
 
-    test.process.events.ended({ code: 0, error: null });
+    await test.chat.send(ROW_ID, { text: FAKE_END_TEXT, images: [] });
+    await flush();
 
-    expect(replyText(await settled(call))).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
+    expect(decision()).toEqual({
+      allowed: false,
+      reason: FAKE_CANCELLED_REASON,
+    });
     expect(test.chat.sessions()[0].entries).toContainEqual(
       expect.objectContaining({
-        id: 'permission-1',
-        answer: { allowed: false, reason: CANCELLED_REASON },
+        id: 'fake-permission-1',
+        answer: { allowed: false, reason: FAKE_CANCELLED_REASON },
       }),
     );
+    expect(test.chat.sessions()[0].activity).not.toBe('waiting');
   });
-
-  it.each([
-    {
-      case: 'a resting session',
-      arrange: (test: Awaited<ReturnType<typeof started>>) =>
-        test.process.events.ended({ code: 0, error: null }),
-    },
-    {
-      case: 'after detachAll',
-      arrange: (test: Awaited<ReturnType<typeof started>>) =>
-        void test.chat.detachAll(),
-    },
-  ])(
-    'permission_NoLiveRow_answersCancelledWithNoEntry ($case)',
-    async ({ arrange }) => {
-      const test = await started();
-      arrange(test);
-      const entriesBefore = test.sent('entry').length;
-
-      const result = await test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: signal().signal,
-        });
-
-      expect(replyText(result)).toBe(
-        JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-      );
-      expect(test.sent('entry')).toHaveLength(entriesBefore);
-    },
-  );
 
   it('permission_rowCloses_answersCancelledWithNoEntry', async () => {
     const test = await started();
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
     const entriesBefore = test.sent('entry').length;
 
     test.chat.closed(ROW_ID, 'user');
-
-    expect(replyText(await settled(call))).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
-    expect(test.sent('entry')).toHaveLength(entriesBefore);
-  });
-
-  it('permission_alreadyAborted_noEntry', async () => {
-    const test = await started();
-    const controller = signal();
-    controller.abort();
-
-    const result = await test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: controller.signal,
-      });
-
-    expect(replyText(result)).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
-    expect(test.sent('entry')).toEqual([]);
-  });
-
-  it('permission_unownedSession_errorResult', async () => {
-    const test = await started();
-
-    const result = await test.chat
-      .permissionToolSession({ ...test.agentSession, id: 'row-relay' })
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: null,
-        signal: signal().signal,
-      });
-
-    expect(result).toEqual({
-      content: [
-        {
-          type: 'text',
-          text: 'permission_prompt answers only for sessions the wigley-ai-gui app started.',
-        },
-      ],
-      isError: true,
-    });
-  });
-
-  it('permission_toolSessionBeforeStart_reachesFlowAfterStart', async () => {
-    const test = setUp();
-    const tools = test.chat.permissionToolSession(test.agentSession);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' });
     await flush();
 
-    const call = tools.call('permission_prompt', BASH_ARGS, {
-      toolUseId: 'tu-1',
-      signal: signal().signal,
+    expect(decision()).toEqual({
+      allowed: false,
+      reason: FAKE_CANCELLED_REASON,
     });
-
-    expect(test.sent('entry')).toHaveLength(1);
-    expect(await settled(call)).toBe('pending');
-  });
-
-  it('permission_badArgs_errorResult', async () => {
-    const test = await started();
-
-    const result = await test.chat
-      .permissionToolSession(test.agentSession)
-      .call(
-        'permission_prompt',
-        { tool_name: 7, input: {} },
-        { toolUseId: null, signal: signal().signal },
-      );
-
-    expect(result).toEqual({
-      content: [
-        { type: 'text', text: 'permission_prompt: tool_name must be a string' },
-      ],
-      isError: true,
-    });
-    expect(test.sent('entry')).toEqual([]);
+    expect(test.sent('entry')).toHaveLength(entriesBefore);
+    expect(permissionAnswers(test.process)).toEqual([]);
   });
 
   it('permission_unknownEntry_ignored', async () => {
     const test = await started();
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
 
-    test.chat.answerPermission(ROW_ID, 'permission-9', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-9', {
       allowed: true,
       reason: null,
     });
+    await flush();
 
-    expect(await settled(call)).toBe('pending');
+    expect(decision()).toBe('pending');
+    expect(permissionAnswers(test.process)).toEqual([]);
+    expect(test.logged).toContain(
+      'answerPermission for unknown entry fake-permission-9 ignored',
+    );
+  });
+
+  it('permission_AnswerForAnOldProcess_Ignored', async () => {
+    const test = await started();
+    test.activity('working');
+    await askBash(test);
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
+      allowed: true,
+      reason: null,
+    });
+    await flush();
+
+    expect(
+      test.harness.processes.flatMap((process) => permissionAnswers(process)),
+    ).toEqual([]);
+    expect(test.logged).toContain(
+      'answerPermission for unknown entry fake-permission-1 ignored',
+    );
   });
 });
 
@@ -4061,20 +3912,19 @@ describe('createChatSessions saved sessions', () => {
     await test.chat.send(ROW_ID, { text: 'hi', images: [] });
     await flush();
 
-    const result = await settled(
-      test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: signal().signal,
-        }),
-    );
+    const decision = await askBash(test);
 
-    expect(result).not.toBe('pending');
-    expect(JSON.parse(replyText(result))).toEqual({
-      behavior: 'deny',
-      message: UNATTENDED_REASON,
-    });
+    const unattended = { allowed: false, reason: UNATTENDED_REASON };
+    expect(decision()).toEqual(unattended);
+    expect(
+      permissionAnswers(test.harness.processes[0]).map((call) => call.decision),
+    ).toEqual([unattended]);
+    expect(
+      test
+        .sent('entry')
+        .filter((sent) => sent.entry.kind === 'permission')
+        .map((sent) => (sent.entry as { answer: unknown }).answer),
+    ).toEqual([unattended]);
   });
 
   it.each([
@@ -4971,12 +4821,7 @@ describe('createChatSessions clear', () => {
   it('clear_MidTurn_StopsOldProcessAndIgnoresItsLateEvents', async () => {
     const test = await started();
     test.activity('working');
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
 
     test.chat.clear(ROW_ID);
     await flush();
@@ -4987,9 +4832,10 @@ describe('createChatSessions clear', () => {
       { method: 'interrupt' },
       { method: 'end' },
     ]);
-    expect(replyText(await settled(call))).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
+    expect(decision()).toEqual({
+      allowed: false,
+      reason: FAKE_CANCELLED_REASON,
+    });
     expect(test.chat.sessions()[0].entries).toEqual([CLEARED]);
     expect(test.chat.sessions()[0].running).toBe(true);
     expect(test.sent('sessionRested')).toEqual([]);
@@ -5225,14 +5071,21 @@ function runClockSteps(
     } else if ('background' in step) {
       test.process.events.agentEvent(backgroundEvent(step.at, step.background));
     } else if (step.permission === 'asked') {
-      void test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: signal().signal,
-        });
+      // Raised straight through the process's events, as the fake would one
+      // microtask later, so the step lands at its own clock time.
+      test.process.events.permission({
+        entry: {
+          kind: 'permission',
+          id: 'fake-permission-1',
+          at: step.at,
+          toolName: 'Bash',
+          input: { command: 'ls' },
+          answer: null,
+          raw: [],
+        },
+      });
     } else {
-      test.chat.answerPermission(ROW_ID, 'permission-1', {
+      test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
         allowed: true,
         reason: null,
       });
@@ -6671,28 +6524,6 @@ describe('createChatSessions attaching', () => {
     expect(attachedOf(test)[0].calls).toEqual([sendCall(message)]);
   });
 
-  it('permission_RowAttaching_WaitsThenAsks', async () => {
-    const test = setUp();
-    test.harness.scriptAttach('p1', {
-      outcome: 'process',
-      turns: 0,
-      replay() {},
-    });
-    restoreOne(test, hostedRecord(), [hostedP1()]);
-
-    void test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: null,
-        signal: signal().signal,
-      });
-    expect(test.chat.sessions()[0].entries).toEqual([]);
-    await flush();
-
-    expect(test.chat.sessions()[0].entries).toEqual([
-      expect.objectContaining({ kind: 'permission', answer: null }),
-    ]);
-  });
 });
 
 describe('createChatSessions unheld processes', () => {

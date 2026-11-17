@@ -8,6 +8,7 @@ import {
   type AgentStart,
   type ChatEntry,
   type LogInEvents,
+  type PermissionDecision,
 } from '../contracts/agent';
 import type { Timers } from '../contracts/ambient';
 import type { Files } from '../contracts/files';
@@ -19,6 +20,7 @@ import {
   FAKE_AGENTS_TEXT,
   FAKE_BLOCKS_REPLY,
   FAKE_BLOCKS_TEXT,
+  FAKE_CANCELLED_REASON,
   FAKE_COLD_TEXT,
   FAKE_COMPACT_TEXT,
   FAKE_END_TEXT,
@@ -91,6 +93,7 @@ function recordingEvents() {
       timeline.push(['agentEvent', event]);
     },
     messageDropped: (entryId) => hear('messageDropped', entryId),
+    permission: (permissionRequest) => hear('permission', permissionRequest),
     ended: (end) => hear('ended', end),
   };
   return { heard, agentEvents, timeline, events };
@@ -393,50 +396,26 @@ describe('createFakeAgentHarness', () => {
   it.each([
     {
       given: 'allowed',
-      ask: () => Promise.resolve(true),
+      decision: { allowed: true, reason: null },
       result: { text: 'fake', isError: false },
       reply: 'fake agent ran an allowed tool',
     },
     {
-      given: 'refused',
-      ask: () => Promise.resolve(false),
+      given: 'denied',
+      decision: { allowed: false, reason: null },
       result: { text: 'Permission denied', isError: true },
-      reply: 'fake agent was refused',
-    },
-    {
-      given: 'the ask failing',
-      ask: () => Promise.reject(new Error('no chat session')),
-      result: { text: 'no chat session', isError: true },
-      reply: 'fake agent was refused',
-    },
-    {
-      given: 'no ask set',
-      ask: null,
-      result: {
-        text: 'fake harness has no permission ask',
-        isError: true,
-      },
       reply: 'fake agent was refused',
     },
   ])(
     'send_PermissionText_AsksThenFinishesTheTool given $given',
-    async ({ ask, result, reply }) => {
-      const { harness, agent, heard } = await startedProcess();
-      const asked: unknown[][] = [];
-      let answer: () => void = () => undefined;
-      if (ask !== null) {
-        harness.askPermissionsWith((...args) => {
-          asked.push(args);
-          return new Promise<boolean>((resolve, reject) => {
-            answer = () => ask().then(resolve, reject);
-          });
-        });
-      }
+    async ({ decision, result, reply }) => {
+      const { agent, heard } = await startedProcess();
 
       agent.send({ text: FAKE_PERMISSION_TEXT, images: [] });
       await flush();
+      await flush();
       const whileAsking = heard.map(timelineLine);
-      answer();
+      agent.answerPermission('fake-permission-1', decision);
       await flush();
       await flush();
 
@@ -450,25 +429,25 @@ describe('createFakeAgentHarness', () => {
         input: { command: 'rm fake.txt' },
         summary: 'rm fake.txt',
       };
-      if (ask !== null) {
-        expect(whileAsking).toEqual([
-          'user user-1',
-          'activity working',
-          'tool tool-1',
-        ]);
-        expect(asked).toEqual([
-          [
-            request,
-            {
-              toolName: 'Bash',
-              input: tool.input,
-              toolUseId: 'fake-permission-1',
-            },
-          ],
-        ]);
-      }
-      expect(heard.slice(2, 5)).toEqual([
+      const permission = {
+        kind: 'permission',
+        id: 'fake-permission-1',
+        at: 1000,
+        toolName: 'Bash',
+        input: tool.input,
+        answer: null,
+        raw: [{ fake: 'permission', toolUseId: 'fake-permission-1' }],
+      };
+      expect(whileAsking).toEqual([
+        'user user-1',
+        'activity working',
+        'tool tool-1',
+        'permission',
+      ]);
+      expect(heard.slice(2, 7)).toEqual([
         ['entry', { ...tool, result: null, raw: [{ fake: 'tool' }] }],
+        ['permission', { entry: permission }],
+        ['entry', { ...permission, answer: decision }],
         [
           'entry',
           {
@@ -495,26 +474,113 @@ describe('createFakeAgentHarness', () => {
   );
 
   it('send_PermissionText_InterruptedWhileAsking_EmitsNothingOnTheAnswer', async () => {
-    const { harness, agent, heard } = await startedProcess();
-    let allow: (allowed: boolean) => void = () => undefined;
-    harness.askPermissionsWith(
-      () =>
-        new Promise<boolean>((resolve) => {
-          allow = resolve;
-        }),
-    );
+    const { agent, heard } = await startedProcess();
     agent.send({ text: FAKE_PERMISSION_TEXT, images: [] });
+    await flush();
     await flush();
     agent.interrupt();
     await flush();
+    await flush();
     const interrupted = heard.length;
 
-    allow(true);
+    agent.answerPermission('fake-permission-1', {
+      allowed: true,
+      reason: null,
+    });
+    await flush();
     await flush();
 
     expect(heard.slice(interrupted)).toEqual([]);
+    expect(heard).toContainEqual([
+      'entry',
+      expect.objectContaining({
+        id: 'fake-permission-1',
+        answer: { allowed: false, reason: FAKE_CANCELLED_REASON },
+      }),
+    ]);
     expect(heard.at(-1)).toEqual(['activity', 'idle']);
   });
+
+  const ALLOW: PermissionDecision = { allowed: true, reason: null };
+  const CANCELLED: PermissionDecision = {
+    allowed: false,
+    reason: FAKE_CANCELLED_REASON,
+  };
+
+  it.each<{
+    given: string;
+    rowId: string;
+    act: (agent: AgentProcess) => void;
+    outcome: { resolves: PermissionDecision } | { rejects: string };
+    raised: number;
+    shown: PermissionDecision[];
+  }>([
+    {
+      given: 'a live row, answered',
+      rowId: 'row-1',
+      act: (agent: AgentProcess) =>
+        agent.answerPermission('fake-permission-1', ALLOW),
+      outcome: { resolves: ALLOW },
+      raised: 1,
+      shown: [ALLOW],
+    },
+    {
+      given: 'no live record',
+      rowId: 'r9',
+      act: () => undefined,
+      outcome: { rejects: 'fake harness has no live process for row r9' },
+      raised: 0,
+      shown: [],
+    },
+    {
+      given: 'the process ending first',
+      rowId: 'row-1',
+      act: (agent: AgentProcess) => void agent.end(),
+      outcome: { resolves: CANCELLED },
+      raised: 1,
+      shown: [CANCELLED],
+    },
+  ])(
+    'askPermission_RaisesOnTheRowsLiveProcess given $given',
+    async ({ rowId, act, outcome, raised, shown }) => {
+      const { harness, agent, heard } = await startedProcess();
+      const entry = {
+        kind: 'permission',
+        id: 'fake-permission-1',
+        at: 1000,
+        toolName: 'Bash',
+        input: { command: 'ls' },
+        answer: null,
+        raw: [{ fake: 'permission', toolUseId: 'tu-1' }],
+      };
+      const settled = harness
+        .askPermission(rowId, {
+          toolName: 'Bash',
+          input: { command: 'ls' },
+          toolUseId: 'tu-1',
+        })
+        .then(
+          (decision) => ({ resolves: decision }),
+          (error: Error) => ({ rejects: error.message }),
+        );
+      await flush();
+
+      act(agent);
+      await flush();
+      await flush();
+
+      expect(await settled).toEqual(outcome);
+      expect(heard.filter(([name]) => name === 'permission')).toEqual(
+        Array.from({ length: raised }, () => ['permission', { entry }]),
+      );
+      expect(
+        heard.filter(
+          ([name, payload]) =>
+            name === 'entry' && (payload as ChatEntry).kind === 'permission',
+        ),
+      ).toEqual(shown.map((answer) => ['entry', { ...entry, answer }]));
+    },
+  );
 
   it('send_VisualText_StreamsAnOpenBlockThenBothVisuals', async () => {
     const timers = heldTimers();
@@ -2188,14 +2254,8 @@ describe('createFakeAgentHarness compaction', () => {
 
   it('heldCompaction_LateAnswerToAnInterruptedPermissionTurn_LeavesItOpen', async () => {
     const { harness, agent, timeline } = await startedProcess();
-    let allow: (allowed: boolean) => void = () => undefined;
-    harness.askPermissionsWith(
-      () =>
-        new Promise<boolean>((resolve) => {
-          allow = resolve;
-        }),
-    );
     sendText(agent, FAKE_PERMISSION_TEXT);
+    await flush();
     await flush();
     agent.interrupt();
     await flush();
@@ -2204,7 +2264,10 @@ describe('createFakeAgentHarness compaction', () => {
     await flush();
     timeline.length = 0;
 
-    allow(true);
+    agent.answerPermission('fake-permission-1', {
+      allowed: true,
+      reason: null,
+    });
     await flush();
     await flush();
 

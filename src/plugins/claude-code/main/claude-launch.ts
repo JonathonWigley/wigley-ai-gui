@@ -5,6 +5,7 @@ import {
   SESSION_ROW_ENV,
 } from '../../../shared/session-env';
 import { launchMode } from './claude-controls';
+import { CLAUDE_PERMISSION_TOOL } from './permission-route';
 
 export interface ClaudeLaunch {
   args: string[];
@@ -54,14 +55,13 @@ export function defaultConfigFolder(homeDir: string, paths: Paths): string {
 // The arguments, folder and environment `claude` runs one session with:
 // stream-json both ways, partial messages streamed, the request's `mode`
 // control as the permission mode (`launchMode`) with what it would still
-// prompt sent to `permissionTool`, its `model` and `effort` controls as
+// prompt sent to `CLAUDE_PERMISSION_TOOL`, its `model` and `effort` controls as
 // `--model` and `--effort`, and the request's `instructions`, when there are
 // any, as one `--append-system-prompt` joined with a blank line, and
 // `claudeEnv`'s environment, plus the request's `idleCompactMinTokens` when it
 // is not null and its `rowId` as `WIGLEY_SESSION_ROW`.
 export function claudeLaunch(
   request: AgentStart,
-  permissionTool: string,
   env: Readonly<Record<string, string>>,
   homeDir: string,
   paths: Paths,
@@ -94,7 +94,7 @@ export function claudeLaunch(
       '--permission-mode',
       launchMode(request.controls),
       '--permission-prompt-tool',
-      permissionTool,
+      CLAUDE_PERMISSION_TOOL,
       ...modelArgs,
       ...effortArgs,
       ...instructionArgs,

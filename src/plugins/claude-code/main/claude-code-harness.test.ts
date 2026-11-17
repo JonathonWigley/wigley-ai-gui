@@ -35,11 +35,24 @@ import type {
   SpawnExit,
 } from '../../../contracts/processes';
 import {
+  type AgentSession,
+  errorResult as toolErrorResult,
+  textResult,
+} from '../../sessions/contract';
+import {
   CLAUDE_IDLE_RULE,
   createClaudeCodeHarness,
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, controlOf, userMessage } from './claude-controls';
+import {
+  CANCELLED_REASON,
+  CLAUDE_PERMISSION_TOOL,
+  createPermissionRoute,
+  DEFAULT_DENY_MESSAGE,
+  NO_PROCESS_TEXT,
+  type PermissionRoute,
+} from './permission-route';
 import {
   appCommandUuid,
   createSessionFoldState,
@@ -263,6 +276,7 @@ function recordingEvents() {
     },
     messageDropped: (entryId, message) =>
       hear('messageDropped', { entryId, message }),
+    permission: (permissionRequest) => hear('permission', permissionRequest),
     ended: (end) => hear('ended', end),
   };
   return { heard, agentEvents, timeline, events };
@@ -338,7 +352,7 @@ function started(
   const log: Log = (source, message) => logged.push([source, message]);
   const harness = createClaudeCodeHarness({
     command: () => '/bin/claude',
-    permissionTool: 'tool',
+    permissions: createPermissionRoute(),
     profiles: () => [],
     env: {},
     log,
@@ -494,7 +508,7 @@ function idleHarness(
 ) {
   return createClaudeCodeHarness({
     command: () => '/bin/claude',
-    permissionTool: 'tool',
+    permissions: createPermissionRoute(),
     profiles,
     env: { CLAUDE_CONFIG_DIR: '/c' },
     log,
@@ -2879,7 +2893,7 @@ describe('createClaudeCodeHarness past sessions', () => {
     );
     const harness = createClaudeCodeHarness({
       command: () => '/bin/claude',
-      permissionTool: 'tool',
+      permissions: createPermissionRoute(),
       profiles: () => [],
       env,
       log: () => {},
@@ -2920,7 +2934,7 @@ describe('createClaudeCodeHarness past sessions', () => {
     ({ profileDir, folder }) => {
       const harness = createClaudeCodeHarness({
         command: () => '/bin/claude',
-        permissionTool: 'tool',
+        permissions: createPermissionRoute(),
         profiles: () => [],
         env: { CLAUDE_CONFIG_DIR: '/c' },
         log: () => {},
@@ -2989,7 +3003,7 @@ describe('createClaudeCodeHarness accounts', () => {
     const processes = childProcesses(children.map((child) => child.child));
     const harness = createClaudeCodeHarness({
       command: () => '/bin/claude',
-      permissionTool: 'tool',
+      permissions: createPermissionRoute(),
       profiles: () => [],
       env: { HOME: '/Users/u', CLAUDECODE: '1' },
       log: () => {},
@@ -3392,15 +3406,17 @@ describe('createClaudeCodeHarness on the session host', () => {
       env?: Readonly<Record<string, string>>;
       paths?: Paths;
       files?: Files;
+      permissions?: PermissionRoute;
+      log?: Log;
     } = {},
   ) {
     let uuidCount = 0;
     return createClaudeCodeHarness({
       command: () => '/bin/claude',
-      permissionTool: 'tool',
+      permissions: overrides.permissions ?? createPermissionRoute(),
       profiles: () => [],
       env: overrides.env ?? {},
-      log: () => {},
+      log: overrides.log ?? (() => {}),
       host,
       processes: childProcesses([]),
       files: overrides.files ?? createMemoryFiles(),
@@ -3481,7 +3497,7 @@ describe('createClaudeCodeHarness on the session host', () => {
         '--permission-mode',
         'auto',
         '--permission-prompt-tool',
-        'tool',
+        CLAUDE_PERMISSION_TOOL,
       ],
       cwd: '/proj',
       env: { WIGLEY_SESSION_ROW: 'row-1' },
@@ -3522,6 +3538,228 @@ describe('createClaudeCodeHarness on the session host', () => {
       ),
     ).toEqual([]);
   });
+
+  const PERMISSION_ARGS = {
+    tool_name: 'Bash',
+    input: { command: 'ls' },
+    tool_use_id: 'toolu_1',
+  };
+  const rowSession: AgentSession = {
+    id: 'row-1',
+    info: { sessionId: 's-1', projectDir: '/proj', harness: 'claude' },
+  };
+  const callContext = (signal = new AbortController().signal) => ({
+    toolUseId: 'toolu_1',
+    signal,
+  });
+  const permissionEntry = (
+    answer: { allowed: boolean; reason: string | null } | null,
+  ): ChatEntry => ({
+    kind: 'permission',
+    id: 'permission-1',
+    at: 1000,
+    toolName: 'Bash',
+    input: { command: 'ls' },
+    answer,
+    raw: [PERMISSION_ARGS],
+  });
+  const CANCELLED = { allowed: false, reason: CANCELLED_REASON };
+
+  // A started process on the fake host with one `permission_prompt` call on
+  // its row waiting; `reply()` is the call's result, or 'pending'.
+  async function askingProcess() {
+    const host = createFakeSessionHost(clock);
+    const permissions = createPermissionRoute();
+    const logged: [string, string][] = [];
+    const recorded = recordingEvents();
+    const agent = hostHarness(host, clock, {
+      permissions,
+      log: (source, message) => logged.push([source, message]),
+    }).start(request, recorded.events);
+    host.spawned('p-1', 4321);
+    await settle();
+    const tools = permissions.toolSession(rowSession);
+    const abort = new AbortController();
+    let reply: unknown = 'pending';
+    void tools
+      .call('permission_prompt', PERMISSION_ARGS, callContext(abort.signal))
+      .then((result) => {
+        reply = result;
+      });
+    await settle();
+    return { ...recorded, host, agent, tools, abort, logged, reply: () => reply };
+  }
+
+  const permissionEntries = (heard: [string, unknown][]) =>
+    heard.filter(
+      ([name, payload]) =>
+        name === 'entry' && (payload as ChatEntry).kind === 'permission',
+    );
+
+  it('permission_CallRaisesRequestWithMintedEntry', async () => {
+    const run = await askingProcess();
+    void run.tools.call('permission_prompt', PERMISSION_ARGS, callContext());
+    await settle();
+
+    expect(run.heard.filter(([name]) => name === 'permission')).toEqual([
+      ['permission', { entry: permissionEntry(null) }],
+      ['permission', { entry: { ...permissionEntry(null), id: 'permission-2' } }],
+    ]);
+    expect(permissionEntries(run.heard)).toEqual([]);
+    expect(run.reply()).toBe('pending');
+  });
+
+  it.each([
+    {
+      decision: { allowed: true, reason: null },
+      text: JSON.stringify({
+        behavior: 'allow',
+        updatedInput: { command: 'ls' },
+      }),
+    },
+    {
+      decision: { allowed: false, reason: null },
+      text: JSON.stringify({ behavior: 'deny', message: DEFAULT_DENY_MESSAGE }),
+    },
+    {
+      decision: { allowed: false, reason: 'not now' },
+      text: JSON.stringify({ behavior: 'deny', message: 'not now' }),
+    },
+  ])(
+    'answerPermission_RepliesAndEmitsTheAnsweredEntry: $decision',
+    async ({ decision, text }) => {
+      const run = await askingProcess();
+
+      run.agent.answerPermission('permission-1', decision);
+      await settle();
+
+      expect(run.reply()).toEqual(textResult(text));
+      expect(permissionEntries(run.heard)).toEqual([
+        ['entry', permissionEntry(decision)],
+      ]);
+    },
+  );
+
+  it('answerPermission_NotWaiting_LogsAndIgnores', async () => {
+    const run = await askingProcess();
+
+    run.agent.answerPermission('permission-9', { allowed: true, reason: null });
+    await settle();
+
+    expect(run.logged).toContainEqual([
+      'claude',
+      'answerPermission for permission-9 ignored: not waiting',
+    ]);
+    expect(permissionEntries(run.heard)).toEqual([]);
+    expect(run.reply()).toBe('pending');
+  });
+
+  type AskingRun = Awaited<ReturnType<typeof askingProcess>>;
+
+  it.each<{ cancel: string; act: (run: AskingRun) => void; after: string[] }>([
+    {
+      cancel: 'the call aborts',
+      act: (run: AskingRun) => run.abort.abort(),
+      after: ['answered'],
+    },
+    {
+      cancel: 'the tool session ends',
+      act: (run: AskingRun) => run.tools.end(),
+      after: ['answered'],
+    },
+    {
+      cancel: 'the process closes',
+      act: (run: AskingRun) =>
+        run.host.close('p-1', { code: 0, signal: null, error: null }),
+      after: ['answered', 'sessionEnded', 'ended'],
+    },
+    {
+      cancel: 'the process detaches',
+      act: (run: AskingRun) => run.agent.detach(),
+      after: [],
+    },
+  ])('permission_Cancelled when $cancel', async ({ act, after }) => {
+    const run = await askingProcess();
+    run.timeline.length = 0;
+
+    act(run);
+    await settle();
+
+    expect(run.reply()).toEqual(
+      textResult(
+        JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
+      ),
+    );
+    const order = run.timeline.flatMap(([name, payload]) => {
+      if (name === 'entry' && (payload as ChatEntry).kind === 'permission') {
+        return ['answered'];
+      }
+      if (name === 'agentEvent' && (payload as AgentEvent).type === 'sessionEnded') {
+        return ['sessionEnded'];
+      }
+      return name === 'ended' ? ['ended'] : [];
+    });
+    expect(order).toEqual(after);
+    expect(permissionEntries(run.timeline)).toEqual(
+      after.includes('answered') ? [['entry', permissionEntry(CANCELLED)]] : [],
+    );
+  });
+
+  it.each([
+    {
+      given: 'the host holds the process',
+      isRunning: true,
+      raised: [['permission', { entry: permissionEntry(null) }]],
+      reply: 'pending',
+    },
+    {
+      given: 'the host holds no process',
+      isRunning: false,
+      raised: [],
+      reply: toolErrorResult(NO_PROCESS_TEXT),
+    },
+  ])(
+    'permission_AttachingRow_WaitsThenAsks when $given',
+    async ({ isRunning, raised, reply }) => {
+      const host = createFakeSessionHost(clock);
+      if (isRunning) {
+        host.addRunning(running(logOf(ENDED_TURN_LOG)));
+      }
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const gatedHost: SessionHost = {
+        ...host,
+        attach: async (id, events) => {
+          await gate;
+          return host.attach(id, events);
+        },
+      };
+      const permissions = createPermissionRoute();
+      const { heard, events } = recordingEvents();
+      const attaching = hostHarness(gatedHost, clock, { permissions }).attach(
+        request,
+        events,
+      );
+      let result: unknown = 'pending';
+      void permissions
+        .toolSession(rowSession)
+        .call('permission_prompt', PERMISSION_ARGS, callContext())
+        .then((settled) => {
+          result = settled;
+        });
+      await settle();
+      expect(result).toBe('pending');
+
+      release();
+      await attaching;
+      await settle();
+
+      expect(heard.filter(([name]) => name === 'permission')).toEqual(raised);
+      expect(result).toEqual(reply);
+    },
+  );
 
   it.each([
     {

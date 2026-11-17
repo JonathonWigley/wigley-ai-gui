@@ -3,8 +3,20 @@ import type {
   AgentHarness,
   AgentHarnessRegistry,
 } from '../../../contracts/agent';
-import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
+import {
+  type AgentSession,
+  errorResult,
+  type SessionsMainExports,
+  sessionsMainKey,
+  type ToolDefinition,
+  type ToolSession,
+} from '../../sessions/contract';
 import { claudeCodeManifest, DEFAULT_PROFILES } from '../manifest';
+import { NO_PROCESS_TEXT, PERMISSION_TOOLS } from './permission-route';
 import { claudeCodeMainPart, claudeCommand } from './start';
 
 // A registry that records: `register` adds the harness and returns a handle
@@ -31,6 +43,47 @@ function recordingRegistry() {
   return { registry, harnesses, counts };
 }
 
+// A sessions provider whose `contributeTools` records each contribution and
+// returns a handle, tracked on the consumer as the real one is, whose dispose
+// counts and ends every tool session the contribution built.
+function recordingSessions() {
+  const contributed: {
+    tools: ToolDefinition[];
+    start: (session: AgentSession) => ToolSession;
+  }[] = [];
+  const built: ToolSession[] = [];
+  const counts = { toolDisposes: 0, toolEnds: 0 };
+  const dependency = fakeDependency(
+    sessionsMainKey,
+    (consumer) =>
+      ({
+        contributeTools(
+          tools: ToolDefinition[],
+          start: (session: AgentSession) => ToolSession,
+        ) {
+          contributed.push({
+            tools,
+            start: (session) => {
+              const toolSession = start(session);
+              built.push(toolSession);
+              return toolSession;
+            },
+          });
+          return consumer.track({
+            dispose: () => {
+              counts.toolDisposes += 1;
+              for (const toolSession of built) {
+                counts.toolEnds += 1;
+                toolSession.end();
+              }
+            },
+          });
+        },
+      }) as unknown as SessionsMainExports,
+  );
+  return { dependency, contributed, toolCounts: counts };
+}
+
 function started(
   overrides: {
     settings?: typeof claudeCodeManifest.settings;
@@ -39,8 +92,10 @@ function started(
   } = {},
 ) {
   const registry = recordingRegistry();
+  const sessions = recordingSessions();
   const harness = startMainPart(claudeCodeMainPart, {
     settings: overrides.settings,
+    dependencies: [sessions.dependency],
     services: {
       agentHarnesses: registry.registry,
       ...(overrides.agentHomeDir === undefined
@@ -51,7 +106,12 @@ function started(
         : { agentEnvironment: overrides.agentEnvironment }),
     },
   });
-  return { harness, ...registry };
+  return {
+    harness,
+    ...registry,
+    contributed: sessions.contributed,
+    toolCounts: sessions.toolCounts,
+  };
 }
 
 describe('claudeCodeMainPart', () => {
@@ -80,6 +140,28 @@ describe('claudeCodeMainPart', () => {
 
     expect(harnesses).toEqual([]);
     expect(counts.disposes).toBe(1);
+  });
+
+  it('start_ContributesPermissionTools_StopDisposesThem', async () => {
+    const { harness, contributed, toolCounts } = started();
+    expect(contributed.map(({ tools }) => tools)).toEqual([PERMISSION_TOOLS]);
+    // No process routes row-1, so the built tool session answers the call at
+    // once with the no-process error.
+    const reply = await contributed[0]
+      .start({
+        id: 'row-1',
+        info: { sessionId: 's-1', projectDir: '/p', harness: 'claude' },
+      })
+      .call(
+        'permission_prompt',
+        { tool_name: 'Bash', input: {} },
+        { toolUseId: null, signal: new AbortController().signal },
+      );
+    expect(reply).toEqual(errorResult(NO_PROCESS_TEXT));
+
+    await harness.stop();
+
+    expect(toolCounts).toEqual({ toolDisposes: 1, toolEnds: 1 });
   });
 
   it('accountStatus_CommandSetting_SpawnsItInTheAgentHomeWithTheAgentEnvironment', () => {

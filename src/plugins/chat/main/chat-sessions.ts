@@ -8,6 +8,7 @@ import type {
   AgentProcessEvents,
   ChatEntry,
   HarnessProfile,
+  PermissionDecision,
   ProcessActivity,
   SessionControl,
   UsageAgentEvent,
@@ -36,15 +37,11 @@ import { refusalOf } from '../image-rules';
 import { isWorkRunning } from '../session-work';
 import {
   type AgentSession,
-  errorResult,
   type OpenOptions,
   type OwnedSession,
   type SessionsMainExports,
   type SessionTitles,
-  textResult,
   TITLE_SOURCES,
-  type ToolResult,
-  type ToolSession,
 } from '../../sessions/contract';
 import {
   CHAT_HARNESS_ID,
@@ -80,15 +77,6 @@ import {
   type SavedSession,
   type SavedSessions,
 } from './open-sessions';
-import {
-  CANCELLED_REASON,
-  NOT_OWNED_TEXT,
-  PERMISSION_TOOL_NAME,
-  type PermissionRequest,
-  permissionReplyText,
-  readPermissionRequest,
-  UNATTENDED_REASON,
-} from './permission-tool';
 import type { RecentFolders } from './recent-folders';
 import type { ToolCallers } from './tool-callers';
 import {
@@ -134,8 +122,8 @@ export interface ChatSessionsDeps {
   // Told the agent of each `toolStarted`, before chat emits it.
   toolCallers: Pick<ToolCallers, 'noteToolStarted'>;
   log: PluginLog;
-  // Stamps the `at` of the notices and permission entries chat makes itself,
-  // and times each session's active time.
+  // Stamps the `at` of the notices chat makes itself, and times each
+  // session's active time.
   clock: Clock;
   // Lists the host's processes before a resume, and before a send or history
   // read on an unheld row.
@@ -253,7 +241,7 @@ export interface ChatSessions {
   // host, so a session never runs two processes. While the harness reports
   // its turn running, a compaction runs or a hold is up, the message is queued
   // instead, and each `idle` the harness reports writes the oldest queued
-  // message not sent now until none is left; a permission call left waiting
+  // message not sent now until none is left; a permission request left waiting
   // after the turn ended queues nothing. An idle send asks the send gates once
   // the process runs: a verdict queues the message as the held row and compacts,
   // and the row is written when the compaction ends, whatever its outcome, or
@@ -275,7 +263,7 @@ export interface ChatSessions {
   // Ends the session's process, interrupting a running turn first, and starts a
   // fresh one at once under a new host session id with the row's held mode and
   // the model and effort the user picked that a report confirmed. Waiting
-  // permission calls are cancelled, a running compaction's end goes out as an
+  // permission requests end with the old process, a running compaction's end goes out as an
   // `interrupted` `agentEvent`, since the old process's own is dropped, and
   // messages written but not taken in and every queued message, the held row
   // included, returned in the order written; the old
@@ -318,6 +306,9 @@ export interface ChatSessions {
   // report confirms before the process ends, or a newer pick replaces, is
   // never passed.
   setControl(sessionId: string, controlId: string, value: string): void;
+  // Hands the answer to the permission card `entryId` to the row's process,
+  // whose answered entry then replaces the card; logs and does nothing for an
+  // entry no request of the row's running process waits on.
   answerPermission(
     sessionId: string,
     entryId: string,
@@ -352,8 +343,6 @@ export interface ChatSessions {
   // The sessions plugin's `ended` event: the session's host id is no longer
   // open.
   sessionEnded(sessionId: string): void;
-  // The `start` chat hands `sessions.contributeTools` with PERMISSION_TOOLS.
-  permissionToolSession(session: AgentSession): ToolSession;
   // Registers `text` for every process start from now on, in registration
   // order; a running process keeps what it started with. Disposing the
   // registration drops it from later starts; a second dispose does nothing.
@@ -381,15 +370,14 @@ export interface ChatSessions {
   addResumeSection(section: ResumeSection): Disposable;
 }
 
-type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
+export const UNATTENDED_REASON =
+  'This session runs unattended: nobody answers its permission prompts, so the app denied this tool call. Work without it, and report what it would have done.';
 
-// A permission call waiting on the user; `resolve` settles the call's promise
-// with its reply text.
+// A permission card waiting on the user: the `processStart`th process's
+// request `requestId`.
 interface PendingPermission {
-  entry: PermissionEntry;
-  resolve(text: string): void;
-  signal: AbortSignal;
-  onAbort(): void;
+  processStart: number;
+  requestId: string;
 }
 
 interface WrittenMessage {
@@ -416,8 +404,8 @@ interface HeldSession {
   // Ids of the subagents and background tasks the running process has started
   // that have not finished.
   backgroundIds: Set<string>;
+  // By the card's row entry id.
   pending: Map<string, PendingPermission>;
-  permissionCount: number;
   noticeCount: number;
   // Messages ever queued in this row, numbering their ids.
   queuedCount: number;
@@ -715,7 +703,7 @@ function isRowIdHeldError(error: unknown, rowId: string): boolean {
 
 // Chat's owned sessions: each one's agent process while it runs, its chat
 // entries, controls and commands, the activity it shows, the permission
-// calls waiting on the user, the messages queued behind its running turn or its
+// requests waiting on the user, the messages queued behind its running turn or its
 // compaction, the compaction running and the send gates that start one, and
 // the messages written to the agent it has not taken in yet;
 // the folder's saved sessions it can resume; and
@@ -981,28 +969,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
-  // Resolves every pending call as cancelled, sending no entry.
-  function cancelPending(session: HeldSession) {
-    const cancelled = permissionReplyText(
-      { allowed: false, reason: CANCELLED_REASON },
-      null,
-    );
-    for (const pending of session.pending.values()) {
-      pending.signal.removeEventListener('abort', pending.onAbort);
-      pending.resolve(cancelled);
-    }
-    session.pending.clear();
-  }
-
-  // Writes each waiting permission card its cancelled answer, for a session
-  // whose tab stays open after its calls are cancelled.
-  function showPendingCancelled(session: HeldSession) {
-    for (const pending of session.pending.values()) {
-      session.slots.putEntry({
-        ...pending.entry,
-        answer: { allowed: false, reason: CANCELLED_REASON },
-      });
-    }
+  // Hands `decision` to the request `requestId` of the row's `processStart`th
+  // process, once a running attach has settled; nothing when the row has moved
+  // on to a later process.
+  function answerRequest(
+    session: HeldSession,
+    processStart: number,
+    requestId: string,
+    decision: PermissionDecision,
+  ) {
+    void afterAttach(session, () => {
+      if (session.processStarts === processStart) {
+        session.process?.answerPermission(requestId, decision);
+      }
+    });
   }
 
   // Puts messages in `chat.returned` for the page to place in the box. Each stays
@@ -1285,7 +1265,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   function drop(session: HeldSession) {
     session.slots.close();
     held.delete(session.sessionId);
-    cancelPending(session);
+    session.pending.clear();
   }
 
   // Runs before the owned session ends: a resting row's titles end with it.
@@ -1316,31 +1296,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
-  // Answers the waiting call. After `detachAll`, as when quit closes the relay,
-  // only the call hears it: the saved row stands, so a relaunch asks again.
-  function settlePermission(
-    session: HeldSession,
-    pending: PendingPermission,
-    answer: PermissionAnswer,
-  ) {
-    pending.signal.removeEventListener('abort', pending.onAbort);
-    session.pending.delete(pending.entry.id);
-    pending.resolve(permissionReplyText(answer, pending.entry.input));
-    if (isDetached) {
-      return;
-    }
-    const entry: PermissionEntry = {
-      ...pending.entry,
-      answer: { allowed: answer.allowed, reason: answer.reason },
-    };
-    session.slots.putEntry(entry);
-    updateActivity(session);
-  }
-
   // The events of the row's `processStart`th process, started or attached under
   // `profileDir`; `started.process` is that process once the harness's `start`
   // returns or its `attach` settles. While `replay.isReplaying` holds, events
-  // show the session's state and act on nothing that already happened.
+  // show the session's state and act on nothing that already happened. A
+  // permission request shows as a waiting card, pending by its row entry id
+  // until chat answers it or its answered entry arrives; an unattended row
+  // denies it at once and shows only the answered entry.
   function processEvents(
     session: HeldSession,
     processStart: number,
@@ -1353,11 +1315,35 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const hostSessionId = session.hostId;
     return {
       entry(entry) {
-        if (isLive(session, processStart)) {
-          session.slots.putEntry(rowEntryOf(entry, processStart));
-          takeIn(session, entry.id);
-          noteBashCommand(session, entry, replay.isReplaying);
+        if (!isLive(session, processStart)) {
+          return;
         }
+        const rowEntry = rowEntryOf(entry, processStart);
+        session.slots.putEntry(rowEntry);
+        takeIn(session, entry.id);
+        noteBashCommand(session, entry, replay.isReplaying);
+        const isAnsweredCard =
+          entry.kind === 'permission' && entry.answer !== null;
+        if (isAnsweredCard && session.pending.delete(rowEntry.id)) {
+          updateActivity(session, replay.isReplaying);
+        }
+      },
+      permission(request) {
+        if (!isLive(session, processStart)) {
+          return;
+        }
+        const requestId = request.entry.id;
+        if (session.unattended) {
+          answerRequest(session, processStart, requestId, {
+            allowed: false,
+            reason: UNATTENDED_REASON,
+          });
+          return;
+        }
+        const card = rowEntryOf(request.entry, processStart);
+        session.slots.putEntry(card);
+        session.pending.set(card.id, { processStart, requestId });
+        updateActivity(session, replay.isReplaying);
       },
       controls(controls) {
         if (isLive(session, processStart)) {
@@ -1482,8 +1468,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         session.slots.setInfo({ running: false, pid: null });
         session.process = null;
         forgetCompaction(session);
-        showPendingCancelled(session);
-        cancelPending(session);
+        // The process sent each waiting card's cancelled entry before `ended`.
+        session.pending.clear();
         // During a replay the queue holds only saved messages, which stay saved.
         if (!replay.isReplaying) {
           returnAllHeld(session);
@@ -1615,7 +1601,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       harnessActivity: 'idle',
       backgroundIds: new Set(),
       pending: new Map(),
-      permissionCount: 0,
       noticeCount: 0,
       queuedCount: 0,
       returnedCount: 0,
@@ -3331,87 +3316,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session.sessionId;
   }
 
-  function askPermission(
-    session: HeldSession,
-    request: PermissionRequest,
-    args: unknown,
-    signal: AbortSignal,
-  ): Promise<ToolResult> {
-    session.permissionCount += 1;
-    const entry: PermissionEntry = {
-      kind: 'permission',
-      id: `permission-${session.permissionCount}`,
-      at: deps.clock.now(),
-      toolName: request.toolName,
-      input: request.input,
-      answer: null,
-      raw: [args],
-    };
-    if (session.unattended) {
-      const denied: PermissionAnswer = {
-        allowed: false,
-        reason: UNATTENDED_REASON,
-      };
-      session.slots.putEntry({ ...entry, answer: denied });
-      return Promise.resolve(
-        textResult(permissionReplyText(denied, request.input)),
-      );
-    }
-    return new Promise<ToolResult>((resolve) => {
-      const pending: PendingPermission = {
-        entry,
-        resolve: (text) => resolve(textResult(text)),
-        signal,
-        onAbort: () =>
-          settlePermission(session, pending, {
-            allowed: false,
-            reason: CANCELLED_REASON,
-          }),
-      };
-      session.pending.set(entry.id, pending);
-      signal.addEventListener('abort', pending.onAbort, { once: true });
-      session.slots.putEntry(entry);
-      updateActivity(session);
-    });
-  }
-
-  async function permissionCall(
-    sessionId: string,
-    name: string,
-    args: unknown,
-    signal: AbortSignal,
-  ): Promise<ToolResult> {
-    const session = held.get(sessionId);
-    if (!session) {
-      return errorResult(NOT_OWNED_TEXT);
-    }
-    if (name !== PERMISSION_TOOL_NAME) {
-      throw new Error(`chat has no tool "${name}"`);
-    }
-    let request: PermissionRequest;
-    try {
-      request = readPermissionRequest(args);
-    } catch (error) {
-      return errorResult(errorText(error));
-    }
-    if (isDetached || signal.aborted || !session.slots.info().running) {
-      return textResult(
-        permissionReplyText(
-          { allowed: false, reason: CANCELLED_REASON },
-          request.input,
-        ),
-      );
-    }
-    return askPermission(session, request, args, signal);
-  }
-
-  function settleAllAsAborted(session: HeldSession) {
-    // Each `onAbort` deletes its own entry, which a Map's iteration allows.
-    for (const pending of session.pending.values()) {
-      pending.onAbort();
-    }
-  }
-
   // Ends the session's process, interrupting its turn first, and rests the
   // row with no exit notice and no mark; the process's later events are no
   // longer live. Does nothing for a resting session.
@@ -3458,7 +3362,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     endForClear(session);
     session.slots.setInfo({ activeTime: NO_ACTIVE_TIME });
     clearCompaction(session, profileDirOf(profile));
-    cancelPending(session);
+    session.pending.clear();
     returnAllHeld(session);
     const oldHostId = session.hostId;
     const wasSent = session.sent;
@@ -3698,7 +3602,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         log(`answerPermission for unknown entry ${entryId} ignored`);
         return;
       }
-      settlePermission(session, pending, answer);
+      session.pending.delete(entryId);
+      answerRequest(session, pending.processStart, pending.requestId, {
+        allowed: answer.allowed,
+        reason: answer.reason,
+      });
+      updateActivity(session);
     },
     closed(sessionId, reason) {
       const session = held.get(sessionId);
@@ -3789,23 +3698,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       return {
         dispose() {
           idleCompactRegistrations.delete(registration);
-        },
-      };
-    },
-    // The chat state is looked up on every call: sessions builds the tool
-    // session inside `open`, before `openRow` stores the state.
-    permissionToolSession(agentSession) {
-      return {
-        async call(name, args, { signal }) {
-          return afterAttach(held.get(agentSession.id), () =>
-            permissionCall(agentSession.id, name, args, signal),
-          );
-        },
-        end() {
-          const session = held.get(agentSession.id);
-          if (session) {
-            settleAllAsAborted(session);
-          }
         },
       };
     },

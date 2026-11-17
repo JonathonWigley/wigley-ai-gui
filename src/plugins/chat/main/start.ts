@@ -1,5 +1,8 @@
 import path from 'node:path';
-import type { AgentHarnessRegistry } from '../../../contracts/agent';
+import type {
+  AgentHarnessRegistry,
+  PermissionDecision,
+} from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
@@ -24,7 +27,6 @@ import {
   type SessionsMainExports,
   sessionsMainKey,
   sessionsSelectionSlot,
-  type ToolResult,
 } from '../../sessions/contract';
 import {
   CHAT_HARNESS_ID,
@@ -48,7 +50,6 @@ import { askFixturePermission } from './fixtures';
 import { createFolderChoices } from './folder-choices';
 import { requireChatHarness } from './lookups';
 import { createOpenSessions } from './open-sessions';
-import { PERMISSION_TOOLS } from './permission-tool';
 import { createChatPreview } from './preview/chat-preview';
 import { createPoolProviders, projectOf, readProjects } from './projects';
 import { createRecentFolders } from './recent-folders';
@@ -111,7 +112,7 @@ const DEFAULT_PERMISSION_INPUT = { command: 'ls' };
 // Where a permission `chat.askPermission` raised stands.
 type DrivePermission =
   | { state: 'pending' }
-  | { state: 'answered'; reply: ToolResult }
+  | { state: 'answered'; decision: PermissionDecision }
   | { state: 'failed'; error: unknown };
 
 interface ChatDriveDeps {
@@ -127,7 +128,6 @@ interface ChatDriveDeps {
     | 'hostSessionIdOf'
     | 'closed'
     | 'sessions'
-    | 'permissionToolSession'
   >;
   sessions: Pick<SessionsMainExports, 'activate'>;
   harnesses: AgentHarnessRegistry;
@@ -135,7 +135,7 @@ interface ChatDriveDeps {
 
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
 // selects its row, `chat.askPermission` raises a permission card in one whose
-// process runs, `chat.permissionAnswer` reads that card's reply, and
+// fake process runs, `chat.permissionAnswer` reads that card's decision, and
 // `chat.holdCompactions` and `chat.releaseCompactions` hold a fake harness's
 // compactions open and end them.
 export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
@@ -179,7 +179,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
     },
   });
   drive.add('askPermission', {
-    description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once, which chat.permissionAnswer reads the reply by; the main output logs the reply once the user answers. Fails when chat holds no session sessionId, or when that session has no running process.`,
+    description: `Under the fake harness, raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}), through the session's fake process. Returns the call's toolUseId at once, which chat.permissionAnswer reads the decision by; the main output logs the decision once the user answers. Fails when chat holds no session sessionId, when that session has no running process, or when chat runs on no fake harness.`,
     args: '{ sessionId: string; toolName?: string; input?: unknown }',
     async run(rawArgs) {
       const args = argsObject(rawArgs);
@@ -193,17 +193,18 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
       if (!state.running) {
         throw new Error(`session ${sessionId} has no running process`);
       }
+      const fake = fakeHarness();
       const toolUseId = services.randomUuid();
       permissions.set(toolUseId, { state: 'pending' });
-      askFixturePermission(chat, sessionId, state.projectDir, {
+      askFixturePermission(fake, sessionId, {
         toolName: optionalString(args, 'toolName') ?? DEFAULT_PERMISSION_TOOL,
         input: args.input === undefined ? DEFAULT_PERMISSION_INPUT : args.input,
         toolUseId,
       }).then(
-        (reply) => {
-          permissions.set(toolUseId, { state: 'answered', reply });
+        (decision) => {
+          permissions.set(toolUseId, { state: 'answered', decision });
           services.log(
-            `drive permission ${toolUseId} answered: ${reply.content[0]?.text}`,
+            `drive permission ${toolUseId} answered: ${JSON.stringify(decision)}`,
           );
         },
         (error: unknown) => {
@@ -218,7 +219,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
   });
   drive.add('permissionAnswer', {
     description:
-      "The permission_prompt tool's reply to the card chat.askPermission raised under toolUseId once the user answered it, else { pending: true }.",
+      'The decision { allowed, reason } on the card chat.askPermission raised under toolUseId once the user answered it, else { pending: true }.',
     args: '{ toolUseId: string }',
     async run(rawArgs) {
       const toolUseId = requiredString(argsObject(rawArgs), 'toolUseId');
@@ -230,7 +231,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
         throw permission.error;
       }
       return permission.state === 'answered'
-        ? permission.reply
+        ? permission.decision
         : { pending: true };
     },
   });
@@ -261,8 +262,8 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // their rows for the restarted part's restore to adopt; stops every process on
 // request, leaves them running on quit, tells the host how long to keep idle
 // ones, asks every session it starts to name its row, lists and archives
-// the saved ones, answers their permission prompts through the
-// `permission_prompt` tool, starts a session for any agent that calls the
+// the saved ones, shows their processes' permission requests and hands the
+// user's answers back, starts a session for any agent that calls the
 // `start_session` tool, sets a session's headless flag for its main agent's
 // `set_headless` call, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
@@ -490,9 +491,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     );
     // The registration lives and dies with the part.
     chat.addInstructions(SESSION_TITLE_INSTRUCTION);
-    sessions.contributeTools(PERMISSION_TOOLS, (session) =>
-      chat.permissionToolSession(session),
-    );
     const holds = (sessionId: string) =>
       chat.sessions().some((held) => held.sessionId === sessionId);
     const profileOf = (sessionId: string) =>

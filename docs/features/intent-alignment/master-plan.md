@@ -129,10 +129,10 @@ conversion of chat to slots and its chat events also edited; that conversion has
 1. [x] AgentHarnessRegistry [ready]
 2. [x] AgentHarness grows what a second harness needs [ready]
 3. Then ∥:
-   - [x] Harness settings with the harness, then [ ] Docs reads harness config roots from the adapter
+   - [x] Harness settings with the harness, then [x] Docs reads harness config roots from the adapter
    - Chat pass, in sequence (all edit chat): [ ] Chat picks a harness → [ ] Control roles → [ ] Clear aliases from
      the adapter → [ ] Harness-neutral UI copy → [ ] Open chat entry kinds and entry renderers
-   - [ ] Permission behind the harness
+   - [x] Permission behind the harness
    - [x] Sessions stops naming Claude
    - [x] Structured round results
    - [ ] Owned sessions join by an adapter key [plan]

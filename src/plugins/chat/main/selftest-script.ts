@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { AgentHarnessRegistry } from '../../../contracts/agent';
+import type {
+  AgentHarnessRegistry,
+  PermissionDecision,
+} from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
 import type {
   SelfTestGroup,
@@ -23,7 +26,6 @@ import {
   FAKE_VISUAL_TEXT,
   type FakeAgentCall,
   type FakeAgentProcessRecord,
-  type FakePermissionAsk,
   isFakeAgentHarness,
   markRun,
   type RunMark,
@@ -40,7 +42,6 @@ import type {
 } from '../../sessions/contract';
 import type { ChatSessions } from './chat-sessions';
 import { askFixturePermission } from './fixtures';
-import { PERMISSION_TOOL_NAME } from './permission-tool';
 
 // The names of the self-test's project folders, made under the self-test's
 // home so the start prompt's folder step, which leaves out missing folders,
@@ -66,7 +67,6 @@ export interface ChatSelfTestDeps {
     ChatSessions,
     | 'start'
     | 'closed'
-    | 'permissionToolSession'
     | 'sessions'
     | 'setArchived'
     | 'addSendGate'
@@ -80,7 +80,9 @@ export interface ChatSelfTestDeps {
 interface ChatSelfTestResult {
   // The self-test project's folder.
   selftest: string;
-  permission: ToolResult;
+  // The fixture's permission decision; null when no fake process was found to
+  // ask it through.
+  permission: PermissionDecision | null;
   // Null when no fake process was found to join.
   round: ToolResult | null;
 }
@@ -88,10 +90,6 @@ interface ChatSelfTestResult {
 const ROUND_HEADING = 'Chat self-test round';
 
 const PERMISSION_INPUT = { command: 'rm selftest.txt' };
-const ALLOW_REPLY = JSON.stringify({
-  behavior: 'allow',
-  updatedInput: PERMISSION_INPUT,
-});
 
 // Types the text in insert mode, Esc to normal mode, where Enter in the box
 // sends.
@@ -1221,7 +1219,22 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: 'one\ntwo', imageCount: 0 },
   { method: 'send', text: 'hello', imageCount: 0 },
   { method: 'send', text: FAKE_PERMISSION_TEXT, imageCount: 0 },
+  {
+    method: 'answerPermission',
+    requestId: 'fake-permission-2',
+    decision: { allowed: true, reason: null },
+  },
   { method: 'send', text: FAKE_PERMISSION_TEXT, imageCount: 0 },
+  {
+    method: 'answerPermission',
+    requestId: 'fake-permission-3',
+    decision: { allowed: false, reason: null },
+  },
+  {
+    method: 'answerPermission',
+    requestId: 'fake-permission-1',
+    decision: { allowed: true, reason: null },
+  },
   { method: 'send', text: FAKE_TOOL_TEXT, imageCount: 0 },
   { method: 'send', text: FAKE_STEPS_TEXT, imageCount: 0 },
   { method: 'interrupt' },
@@ -1306,13 +1319,10 @@ function fixtureProblems(
   process: FakeAgentProcessRecord | null,
   projectDir: string,
 ): string[] {
-  const reply = permission.content[0]?.text;
   const problems: string[] = [];
-  if (permission.isError === true) {
-    problems.push(`${PERMISSION_TOOL_NAME} failed: ${reply}`);
-  }
-  if (reply !== ALLOW_REPLY) {
-    problems.push(`permission reply ${reply}`);
+  const isAllowed = permission?.allowed === true && permission.reason === null;
+  if (!isAllowed) {
+    problems.push(`permission answer ${JSON.stringify(permission)}`);
   }
   if (process === null || round === null) {
     problems.push(`no fake process for ${projectDir}`);
@@ -1380,36 +1390,6 @@ function pastSessionProblems(
   return [`past session calls ${JSON.stringify(calls)}`];
 }
 
-// Asks a fake process's permission through chat's tool in the running chat
-// session in the process's project folder, as Claude Code would; allowed when
-// the reply's behavior is allow.
-function fakePermissionAsk(
-  chat: Pick<ChatSessions, 'permissionToolSession' | 'sessions'>,
-): FakePermissionAsk {
-  return async (request, call) => {
-    const session = chat
-      .sessions()
-      .find(
-        (state) => state.running && state.projectDir === request.projectDir,
-      );
-    if (session === undefined) {
-      throw new Error(`no running chat session in ${request.projectDir}`);
-    }
-    const reply = await askFixturePermission(
-      chat,
-      session.sessionId,
-      request.projectDir,
-      call,
-    );
-    const text = reply.content[0]?.text ?? '';
-    if (reply.isError === true) {
-      throw new Error(text);
-    }
-    const { behavior } = JSON.parse(text) as { behavior: string };
-    return behavior === 'allow';
-  };
-}
-
 // The self-test's three project folders.
 interface SelfTestProjects {
   selftest: string;
@@ -1422,14 +1402,13 @@ interface SelfTestProjects {
 // closing every session chat holds in a self-test project (a resumed one
 // included) and unarchiving the fake's saved sessions: the second project's,
 // the images project's, whose box it fills with two returned images, then the
-// self-test's, whose Chat tab it shows. Asks one permission prompt through
-// chat's tool in the self-test's session, which the steps allow; the answer
-// asks a forms round there over a relay that joins the session, which the
-// steps submit. The result is both calls' replies and the self-test project's
-// folder; problems reads the fake processes, whose records the steps keep
-// changing in place, when it runs, reading only the records this run added.
-// Each fake harness asks a `fake: permission` turn's permission through
-// chat's tool too. The run waits on the session's Chat tab being shown. A
+// self-test's, whose Chat tab it shows. Raises one permission request through
+// the fake that started the self-test's process, which the steps allow; the
+// answer asks a forms round there over a relay that joins the session, which
+// the steps submit. The result is the decision, the round's reply and the
+// self-test project's folder; problems reads the fake processes, whose records
+// the steps keep changing in place, when it runs, reading only the records this
+// run added. The run waits on the session's Chat tab being shown. A
 // fixture send gate, registered here once for every run, holds a send to the
 // self-test's session that follows `fake: cold`, with the fake holding the
 // compaction until problems reads the run; it needs no auto-compact plugin.
@@ -1530,14 +1509,22 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     await attachImages(imagesId);
     sessions.activate(id);
     const process = selftestProcess(marks, selftest, false);
-    const permission = askFixturePermission(chat, id, selftest, {
-      toolName: 'Bash',
-      input: PERMISSION_INPUT,
-      toolUseId: 'selftest-tool-use',
-    });
-    return permission.then(async (reply): Promise<ChatSelfTestResult> => {
+    const fake =
+      process === null
+        ? undefined
+        : marks.find((mark) => mark.harness.processes.includes(process))
+            ?.harness;
+    const permission =
+      fake === undefined
+        ? Promise.resolve(null)
+        : askFixturePermission(fake, id, {
+            toolName: 'Bash',
+            input: PERMISSION_INPUT,
+            toolUseId: 'selftest-tool-use',
+          });
+    return permission.then(async (decision): Promise<ChatSelfTestResult> => {
       if (process === null) {
-        return { selftest, permission: reply, round: null };
+        return { selftest, permission: decision, round: null };
       }
       const relay = sessions.connect({
         sessionId: process.request.sessionId,
@@ -1550,7 +1537,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         chatRound(run),
         toolCallContext(),
       );
-      return { selftest, permission: reply, round };
+      return { selftest, permission: decision, round };
     });
   }
 
@@ -1573,9 +1560,6 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
       marks = markRun(harnesses.list());
-      for (const mark of marks) {
-        mark.harness.askPermissionsWith(fakePermissionAsk(chat));
-      }
       previousRelay?.end();
       const failures: string[] = [];
       archiveResetFailures = failures;

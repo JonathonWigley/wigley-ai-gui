@@ -10,14 +10,15 @@ export const DEFAULT_PROFILES: HarnessProfile[] = [
 
 // The Claude Code harness: the adapter that runs agent sessions on the `claude`
 // CLI, registered in the core's harness registry. Main only: it has no surface,
-// no commands and no layout, and reads only services. Its `command` setting names
-// the `claude` program, empty for the platform's; its `profiles` setting is the
-// harness's profiles.
+// no commands and no layout, and reads only services. It depends on sessions,
+// whose sessions it serves the `permission_prompt` tool. Its `command` setting
+// names the `claude` program, empty for the platform's; its `profiles` setting is
+// the harness's profiles.
 export const claudeCodeManifest = definePlugin({
   id: 'claude-code',
   label: 'Claude Code',
   description: 'Runs agent sessions on the Claude Code CLI.',
-  dependsOn: { main: [], page: [] },
+  dependsOn: { main: ['sessions'], page: [] },
   reads: { main: [], page: [] },
   commands: {},
   scopes: {},

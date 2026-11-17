@@ -148,9 +148,9 @@ Conventions:
   <selector> is held; release it first`; `release` with nothing held rejects with `No drag is
   held; drag --hold first`.
 - `wait-log` matches a whole page log line, its source prefix included (`[page] …`), logged after the call starts; a line already in the log does not count.
-- `chat.askPermission` returns a `toolUseId` at once; `chat.permissionAnswer` with that id answers
-  `{ pending: true }` until the card is answered, then the reply, as `forms.answers` does for a
-  round.
+- `chat.askPermission` under the fake harness returns a `toolUseId` at once; `chat.permissionAnswer`
+  with that id answers `{ pending: true }` until the card is answered, then the decision
+  `{ allowed, reason }`, as `forms.answers` does for a round.
 - `eval` runs its script in a block of its own: `const`, `let` and `class` end with the call, while
   `var` and `function` reach the page's globals and persist to the next `eval`.
 - Flags come before a lone `--`; every argument after it is positional, for a value that begins

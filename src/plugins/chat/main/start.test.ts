@@ -3,6 +3,7 @@ import type {
   AgentEvent,
   AgentHarness,
   AgentStart,
+  PermissionRequest,
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
@@ -40,7 +41,6 @@ import {
   type TitleSource,
   type ToolCallGuard,
   type ToolDefinition,
-  type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
 import {
@@ -57,30 +57,15 @@ import { OPEN_SESSIONS_FILE } from './open-sessions';
 import { addDriveActions, chatMainPart } from './start';
 import { CALLER_WAIT_MS, SUBAGENT_CALL_TEXT } from './tool-callers';
 
-// A chat holding one session, `held`, whose permission calls wait until the
-// test replies to them, and `held` resting when `running` is false; `calls`
-// holds each call's tool args.
+// A chat holding one session, `held`, resting when `running` is false.
 function fakeChat(running = true) {
-  const replies: ((result: ToolResult) => void)[] = [];
-  const calls: unknown[] = [];
   return {
-    replies,
-    calls,
     closed: vi.fn<(sessionId: string, reason: SessionCloseReason) => void>(),
     start: () => 'started',
     hostSessionIdOf: () => 'host-started',
     sessions: () => [
       { sessionId: 'held', projectDir: '/p', running } as ChatSessionState,
     ],
-    permissionToolSession: () => ({
-      call: (_name: string, args: unknown) => {
-        calls.push(args);
-        return new Promise<ToolResult>((resolve) => {
-          replies.push(resolve);
-        });
-      },
-      end: () => undefined,
-    }),
   };
 }
 
@@ -105,7 +90,49 @@ function chatDriveActions(
   return drive;
 }
 
-const ALLOWED: ToolResult = { content: [{ type: 'text', text: 'allow' }] };
+// A fake harness with one live process for the row `held`; `requests` holds
+// each permission request the process raises, which `process` answers.
+function heldFake() {
+  const fake = createFakeAgentHarness(
+    { now: () => 1000 },
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
+  const requests: PermissionRequest[] = [];
+  const ignore = () => undefined;
+  const process = fake.start(
+    {
+      processId: 'p-1',
+      sessionId: 's-1',
+      resume: false,
+      projectDir: '/p',
+      profileDir: null,
+      controls: {},
+      instructions: [],
+      idleCompactMinTokens: null,
+      rowId: 'held',
+    },
+    {
+      entry: ignore,
+      controls: ignore,
+      activity: ignore,
+      pid: ignore,
+      commands: ignore,
+      planUsage: ignore,
+      agentEvent: ignore,
+      messageDropped: ignore,
+      permission: (request) => requests.push(request),
+      ended: ignore,
+    },
+  );
+  return { fake, process, requests };
+}
+
+async function flushMicrotasks() {
+  for (let turn = 0; turn < 10; turn++) {
+    await Promise.resolve();
+  }
+}
 
 describe('chat drive actions', () => {
   it('start returns the session it started and its host session id', async () => {
@@ -127,49 +154,64 @@ describe('chat drive actions', () => {
     expect(chat.closed).toHaveBeenCalledWith('started', 'start-failed');
   });
 
-  it('permissionAnswer is pending until the user answers, then the reply', async () => {
-    const chat = fakeChat();
-    const drive = chatDriveActions(chat);
+  it('permissionAnswer is pending until the user answers, then the decision', async () => {
+    const { fake, process, requests } = heldFake();
+    const drive = chatDriveActions(fakeChat(), undefined, [fake]);
     expect(await drive.run('askPermission', { sessionId: 'held' })).toEqual({
       toolUseId: 'use-1',
     });
+    await flushMicrotasks();
 
     expect(await drive.run('permissionAnswer', { toolUseId: 'use-1' })).toEqual(
       { pending: true },
     );
-    chat.replies[0]?.(ALLOWED);
-    await Promise.resolve();
+    process.answerPermission(requests[0].entry.id, {
+      allowed: true,
+      reason: null,
+    });
+    await flushMicrotasks();
 
     expect(await drive.run('permissionAnswer', { toolUseId: 'use-1' })).toEqual(
-      ALLOWED,
+      { allowed: true, reason: null },
     );
   });
 
   it.each([
     { given: 'an explicit null input', input: null, sent: null },
     { given: 'no input', input: undefined, sent: { command: 'ls' } },
-  ])('askPermission given $given sends $sent', async ({ input, sent }) => {
-    const chat = fakeChat();
-    const drive = chatDriveActions(chat);
+  ])('askPermission given $given raises $sent', async ({ input, sent }) => {
+    const { fake, requests } = heldFake();
+    const drive = chatDriveActions(fakeChat(), undefined, [fake]);
     const args = input === undefined ? {} : { input };
 
     await drive.run('askPermission', { sessionId: 'held', ...args });
+    await flushMicrotasks();
 
-    expect(chat.calls[0]).toEqual({
-      tool_name: 'Bash',
-      input: sent,
-      tool_use_id: 'use-1',
-    });
+    expect(
+      requests.map(({ entry }) => ({
+        toolName: entry.toolName,
+        input: entry.input,
+      })),
+    ).toEqual([{ toolName: 'Bash', input: sent }]);
   });
 
   it('askPermission rejects a resting session and raises no card', async () => {
-    const chat = fakeChat(false);
-    const drive = chatDriveActions(chat);
+    const { fake, requests } = heldFake();
+    const drive = chatDriveActions(fakeChat(false), undefined, [fake]);
 
     await expect(
       drive.run('askPermission', { sessionId: 'held' }),
     ).rejects.toThrow('held');
-    expect(chat.calls).toEqual([]);
+    await flushMicrotasks();
+    expect(requests).toEqual([]);
+  });
+
+  it('askPermission_NoFakeHarness_Rejects', async () => {
+    const drive = chatDriveActions(fakeChat());
+
+    await expect(
+      drive.run('askPermission', { sessionId: 'held' }),
+    ).rejects.toThrow('chat runs on no fake harness');
   });
 
   it('permissionAnswer rejects a toolUseId askPermission never returned', async () => {
@@ -760,6 +802,14 @@ describe('chat main part', () => {
       });
     },
   );
+
+  it('contributions_LeaveOutPermissionPrompt', () => {
+    const chat = startChatPart();
+
+    expect(
+      chat.contributions.flatMap(({ tools }) => tools.map((tool) => tool.name)),
+    ).not.toContain('permission_prompt');
+  });
 
   it('setHeadlessTool_CallOnAStartedRow_FlipsItsFlag_AsAMainAgentOnlyContribution', async () => {
     const chat = startChatPart();

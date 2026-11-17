@@ -1,12 +1,5 @@
 import type { Disposable } from './disposable';
 
-// The MCP tool that answers a harness's permission prompts, served to every
-// session by the app's MCP server. Claude Code names a plugin's MCP tool
-// `mcp__plugin_<plugin>_<server>__<tool>`: the server is `wigley-forms` in the
-// marketplace's `wigley` plugin.
-export const PERMISSION_TOOL_NAME = 'permission_prompt';
-export const CLAUDE_PERMISSION_TOOL = `mcp__plugin_wigley_wigley-forms__${PERMISSION_TOOL_NAME}`;
-
 export interface ControlChoice {
   value: string;
   label: string;
@@ -125,7 +118,7 @@ export type ChatEntry =
       at: number;
       toolName: string;
       input: unknown;
-      answer: { allowed: boolean; reason: string | null } | null;
+      answer: PermissionDecision | null;
       raw: unknown[];
     }
   | {
@@ -163,6 +156,19 @@ export type ChatEntry =
   | { kind: 'raw'; id: string; at: number; raw: unknown[] };
 
 export type ChatEntryKind = ChatEntry['kind'];
+
+// The user's answer to a tool call's permission request; `reason` is what a deny tells the agent, null for the
+// harness's own default.
+export interface PermissionDecision {
+  allowed: boolean;
+  reason: string | null;
+}
+
+// A tool call waiting on the user. `entry` is the permission entry the adapter minted for it, `answer`
+// null; `entry.id` is the id `answerPermission` takes, unique among the process's entries.
+export interface PermissionRequest {
+  entry: Extract<ChatEntry, { kind: 'permission' }>;
+}
 
 // `sessionId` is the host's session id: fresh for a new session, the old one when `resume` is true.
 // `profileDir` is the config folder of the profile the session runs under, as that harness's profiles setting writes
@@ -422,6 +428,10 @@ export interface AgentProcessEvents {
   // every such message in the process's log, including one the caller heard
   // before the attach.
   messageDropped(entryId: string, message: UserMessage): void;
+  // A tool call waits on the user's answer. A request still waiting when the process closes is cancelled, and its
+  // answered entry comes before `ended`. After `detach` nothing comes. No `entry` comes for a waiting request: its
+  // answered entry (same id, `answer` set) comes through `entry` once it is answered or cancelled.
+  permission(request: PermissionRequest): void;
   ended(end: { code: number | null; error: string | null }): void;
 }
 
@@ -467,6 +477,9 @@ export interface AgentProcess {
   // running; a pending `end` settles, with no `ended`. Chat calls it on quit and on
   // a chat plugin stop, in place of `kill`.
   detach(): void;
+  // Answers the request `requestId` that `permission` raised. Does nothing for an id that is not waiting (answered,
+  // cancelled or unknown), logging it; it does not throw after `end`, since an answer may race the process's end.
+  answerPermission(requestId: string, decision: PermissionDecision): void;
 }
 
 // A session the harness saved for a folder. `title` is its first user message, whitespace collapsed to

@@ -11,10 +11,12 @@ import {
   type InstalledPlugin,
   type LogInEvents,
   type LogInProcess,
+  type PermissionDecision,
   type PlanUsage,
   type ProcessActivity,
 } from '../../../contracts/agent';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
+import type { Disposable } from '../../../contracts/disposable';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
@@ -61,6 +63,12 @@ import {
   readSavedReplies,
   readSessionName,
 } from './past-sessions';
+import {
+  CANCELLED_REASON,
+  permissionReplyText,
+  type PermissionRoute,
+  type PermissionTarget,
+} from './permission-route';
 import { readPlanUsage } from './plan-usage';
 import {
   advanceFold,
@@ -97,8 +105,8 @@ export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 // `host` runs each session's `claude` process, so it outlives the app;
 // `processes` spawns the one-shot commands, which must not. `command` reads the
 // `claude` binary's path, once per process spawned;
-// `permissionTool` the MCP tool Claude asks what the session's permission mode
-// would still prompt; `env` the environment every process starts from; `files` reads
+// `permissions` routes each row's `permission_prompt` calls to the row's
+// process; `env` the environment every process starts from; `files` reads
 // saved transcripts, `homeDir` holds the default config folder `.claude`, is
 // what a `~` profile folder resolves against and is where `claude auth` and
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
@@ -110,7 +118,7 @@ export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   profiles(): readonly HarnessProfile[];
-  permissionTool: string;
+  permissions: PermissionRoute;
   env: Readonly<Record<string, string>>;
   log: Log;
   host: SessionHost;
@@ -241,6 +249,26 @@ interface ClaudeSession {
   // Starts the `settings.json` read no pipe line records.
   readConfiguredPercent(): void;
   foldSavedReplies(replies: readonly SavedReply[]): void;
+  // Asks the user about the row's `permission_prompt` calls through this
+  // process.
+  permissions: PermissionTarget;
+  // Holds the row's route record, disposed when the process closes or
+  // detaches, at once when it already has.
+  keepRoute(record: Disposable): void;
+}
+
+const CANCELLED: PermissionDecision = {
+  allowed: false,
+  reason: CANCELLED_REASON,
+};
+
+type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
+
+// A `permission_prompt` call waiting on the user; `reply` settles the call
+// with its reply text.
+interface WaitingPermission {
+  entry: PermissionEntry;
+  reply(text: string): void;
 }
 
 // One `claude` process in stream-json mode, its state a fold over its pipe lines
@@ -257,7 +285,13 @@ interface ClaudeSession {
 // nothing more is emitted or written; a detached process keeps running on the
 // host. `compact` writes `/compact` under an app command uuid, as a control pick
 // does, so a replay also reads it as the app's; the fold owns the compaction's
-// events. The caller delivers `pipe`'s events to `pipeEvents`.
+// events. The caller delivers `pipe`'s events to `pipeEvents`. Each
+// `permission_prompt` call the route hands `permissions` mints a permission
+// entry `permission-<n>`, counted per process outside the fold (a replay
+// cannot rebuild it, as with `control-notice-kill`), and waits; an answer, the
+// call's abort or the process's close settles it and emits its answered entry,
+// a close before `sessionEnded`, and a detach settles it emitting nothing.
+// Every settle that is no answer replies cancelled.
 function createClaudeSession(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -275,6 +309,9 @@ function createClaudeSession(
   // Armed for `armedGraceDeadline`, which follows `nextFoldDeadline(state)`.
   let graceTimer: ReturnType<typeof setTimeout> | null = null;
   let armedGraceDeadline: number | null = null;
+  const waitingPermissions = new Map<string, WaitingPermission>();
+  let permissionCount = 0;
+  let routeRecord: Disposable | null = null;
 
   // Every emission goes through the microtask queue, so events keep the
   // order of the calls and lines that caused them; one still queued at a detach
@@ -438,9 +475,74 @@ function createClaudeSession(
     }
   };
 
+  const releaseRoute = () => {
+    routeRecord?.dispose();
+    routeRecord = null;
+  };
+
+  // Replies to the waiting call `id` with `decision`, emitting its answered
+  // entry when `isShown`. False when `id` is not waiting.
+  const settlePermission = (
+    id: string,
+    decision: PermissionDecision,
+    isShown: boolean,
+  ): boolean => {
+    const waiting = waitingPermissions.get(id);
+    if (waiting === undefined) {
+      return false;
+    }
+    waitingPermissions.delete(id);
+    waiting.reply(permissionReplyText(decision, waiting.entry.input));
+    if (isShown) {
+      const answered: PermissionEntry = {
+        ...waiting.entry,
+        answer: { allowed: decision.allowed, reason: decision.reason },
+      };
+      emit(() => events.entry(answered));
+    }
+    return true;
+  };
+
+  const cancelWaitingPermissions = (isShown: boolean) => {
+    for (const id of [...waitingPermissions.keys()]) {
+      settlePermission(id, CANCELLED, isShown);
+    }
+  };
+
+  const permissions: PermissionTarget = {
+    ask(call, signal) {
+      if (signal.aborted || hasClosed || isDetached) {
+        return Promise.resolve(permissionReplyText(CANCELLED, call.input));
+      }
+      permissionCount += 1;
+      const entry: PermissionEntry = {
+        kind: 'permission',
+        id: `permission-${permissionCount}`,
+        at: deps.clock.now(),
+        toolName: call.toolName,
+        input: call.input,
+        answer: null,
+        raw: [call.args],
+      };
+      return new Promise<string>((resolve) => {
+        const onAbort = () => settlePermission(entry.id, CANCELLED, true);
+        waitingPermissions.set(entry.id, {
+          entry,
+          reply(text) {
+            signal.removeEventListener('abort', onAbort);
+            resolve(text);
+          },
+        });
+        signal.addEventListener('abort', onAbort, { once: true });
+        emit(() => events.permission({ entry }));
+      });
+    },
+  };
+
   // `end()` resolves after the `ended` emission it follows.
   const markClosed = () => {
     hasClosed = true;
+    releaseRoute();
     state.heldMessages.clear();
     state.graceDeadline = null;
     stopTimers();
@@ -487,6 +589,7 @@ function createClaudeSession(
         : exitError(exit.code, exit.signal, state.lastStderr);
       const end = { code: exit.code, error: exit.error ?? exitFailure };
       runStep(foldProcessClosed(state, deps.clock.now()));
+      cancelWaitingPermissions(true);
       emitAgentEvent({ type: 'sessionEnded', at: deps.clock.now() });
       emit(() => events.ended(end));
       markClosed();
@@ -655,8 +758,18 @@ function createClaudeSession(
       isDetached = true;
       pipe.detach();
       stopTimers();
+      cancelWaitingPermissions(false);
+      releaseRoute();
       for (const resolve of closeWaiters.splice(0)) {
         resolve();
+      }
+    },
+    answerPermission(requestId, decision) {
+      if (!settlePermission(requestId, decision, true)) {
+        deps.log(
+          'claude',
+          `answerPermission for ${requestId} ignored: not waiting`,
+        );
       }
     },
   };
@@ -669,6 +782,14 @@ function createClaudeSession(
     answerOwed,
     readConfiguredPercent,
     foldSavedReplies,
+    permissions,
+    keepRoute(record) {
+      if (hasClosed || isDetached) {
+        record.dispose();
+        return;
+      }
+      routeRecord = record;
+    },
   };
 }
 
@@ -754,13 +875,7 @@ function startClaudeProcess(
   request: AgentStart,
   events: AgentProcessEvents,
 ): AgentProcess {
-  const launch = claudeLaunch(
-    request,
-    deps.permissionTool,
-    deps.env,
-    deps.homeDir,
-    deps.paths,
-  );
+  const launch = claudeLaunch(request, deps.env, deps.homeDir, deps.paths);
   const command = deps.command();
   const forwarder = createPipeForwarder();
   const pipe = deps.host.spawn(
@@ -777,6 +892,9 @@ function startClaudeProcess(
   );
   const state = createSessionFoldState(request);
   const session = createClaudeSession(deps, request, events, state, pipe);
+  session.keepRoute(
+    deps.permissions.route(request.rowId, Promise.resolve(session.permissions)),
+  );
   session.open();
   forwarder.goLive(session.pipeEvents);
   session.readConfiguredPercent();
@@ -801,16 +919,37 @@ function startClaudeProcess(
 // attached: a refusal for each unanswered host request, the context request of a
 // turn that ended, and the settings request of a turn that ended or of a log that
 // has none. Rejects, having detached from the host, when a step after the host's
-// attach fails; it never fires `ended` for that.
+// attach fails; it never fires `ended` for that. The row's `permission_prompt`
+// calls are routed here from the start of the attach and wait for it: they reach
+// the process once it resolves, and get no process when it resolves null or
+// rejects.
 async function attachClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
   events: AgentProcessEvents,
 ): Promise<AgentProcess | null> {
+  let settleTarget: (target: PermissionTarget | null) => void = () => {};
+  const record = deps.permissions.route(
+    request.rowId,
+    new Promise<PermissionTarget | null>((resolve) => {
+      settleTarget = resolve;
+    }),
+  );
+  const giveUpRoute = () => {
+    settleTarget(null);
+    record.dispose();
+  };
   // The host may deliver during the reads, ahead of the replay.
   const forwarder = createPipeForwarder();
-  const attached = await deps.host.attach(request.processId, forwarder.events);
+  let attached: Awaited<ReturnType<SessionHost['attach']>>;
+  try {
+    attached = await deps.host.attach(request.processId, forwarder.events);
+  } catch (error) {
+    giveUpRoute();
+    throw error;
+  }
   if (attached === null) {
+    giveUpRoute();
     return null;
   }
   try {
@@ -845,13 +984,16 @@ async function attachClaudeProcess(
     if (attached.process.pid !== null) {
       events.pid(attached.process.pid);
     }
+    session.keepRoute(record);
     forwarder.goLive(session.pipeEvents);
     session.syncGraceTimer();
     session.answerOwed();
     session.readConfiguredPercent();
+    settleTarget(session.permissions);
     return session.process;
   } catch (error) {
     attached.process.detach();
+    giveUpRoute();
     throw error;
   }
 }
