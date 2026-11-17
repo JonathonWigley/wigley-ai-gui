@@ -102,14 +102,12 @@ function startPart(
     settleSeconds: DEFAULT_SETTLE_SECONDS,
   };
   const state = createSlotStore(() => undefined);
-  state
-    .publish(coreAgentHarnessesSlot)
-    .set(
-      'claude',
-      harnessInfo({
-        profiles: [{ name: 'work', configDir: '~/.claude-work' }],
-      }),
-    );
+  state.publish(coreAgentHarnessesSlot).set(
+    'claude',
+    harnessInfo({
+      profiles: [{ name: 'work', configDir: '~/.claude-work' }],
+    }),
+  );
   const harness = startMainPart(autoRetroMainPart, {
     settings,
     state,

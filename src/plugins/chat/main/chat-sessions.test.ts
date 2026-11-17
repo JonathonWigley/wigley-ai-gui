@@ -6704,10 +6704,7 @@ describe('createChatSessions unheld processes', () => {
       restoreOne(test, hostedRecord({ sent: true, profile: 'gone' }), [
         hostedP1(),
       ]);
-      test.setProfiles([
-        ...PROFILES,
-        { name: 'gone', configDir: '/gone' },
-      ]);
+      test.setProfiles([...PROFILES, { name: 'gone', configDir: '/gone' }]);
     } else {
       test.harness.scriptAttach('p1', {
         outcome: 'reject',

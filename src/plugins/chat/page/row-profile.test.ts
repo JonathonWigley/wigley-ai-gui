@@ -75,9 +75,7 @@ describe('profileNameOf', () => {
     { folder: '~/.claude-personal', name: 'personal' },
     { folder: `${HOME}/.claude-other`, name: '.claude-other' },
   ])('$folder reads as $name', ({ folder, name }) => {
-    expect(profileNameOf(folder, PROFILES, posixPaths, HOME)).toBe(
-      name,
-    );
+    expect(profileNameOf(folder, PROFILES, posixPaths, HOME)).toBe(name);
   });
 });
 

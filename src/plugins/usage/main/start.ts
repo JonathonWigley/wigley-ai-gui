@@ -134,9 +134,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
       planUsage: (profile) => {
         const harness = services.agentHarnesses.get(profile.harnessId);
         return harness === null
-          ? Promise.reject(
-              new Error(`no agent harness "${profile.harnessId}"`),
-            )
+          ? Promise.reject(new Error(`no agent harness "${profile.harnessId}"`))
           : harness.planUsage(profile.configDir);
       },
       roundStarted: (roundProfiles) => {

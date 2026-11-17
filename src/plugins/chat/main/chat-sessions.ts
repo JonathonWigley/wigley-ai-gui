@@ -2988,7 +2988,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
-  function restoreSavedUsageOrLog(session: HeldSession, profile: HarnessProfile) {
+  function restoreSavedUsageOrLog(
+    session: HeldSession,
+    profile: HarnessProfile,
+  ) {
     const { hostId } = session;
     restoreSavedUsage(session, profile).catch((error: unknown) =>
       log(`saved usage of ${hostId} not read: ${errorText(error)}`),
@@ -2997,7 +3000,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Emits the session's saved usage as its row's `agentEvent`, unless the row
   // closed or cleared, or chat stopped, while it was read.
-  async function restoreSavedUsage(session: HeldSession, profile: HarnessProfile) {
+  async function restoreSavedUsage(
+    session: HeldSession,
+    profile: HarnessProfile,
+  ) {
     const { sessionId } = session;
     const { hostId } = session;
     const profileDir = profileDirOf(profile);

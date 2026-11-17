@@ -529,7 +529,12 @@ describe('createClaudeCodeHarness declarations', () => {
 
   it('info_Profiles_ReadAtEachCall', () => {
     let profiles: readonly HarnessProfile[] = [];
-    const harness = idleHarness(undefined, undefined, undefined, () => profiles);
+    const harness = idleHarness(
+      undefined,
+      undefined,
+      undefined,
+      () => profiles,
+    );
     expect(harness.info().profiles).toEqual([]);
 
     profiles = [{ name: 'lab', configDir: '~/.lab' }];

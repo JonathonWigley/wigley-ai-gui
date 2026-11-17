@@ -308,7 +308,10 @@ describe('usageMainPart', () => {
   });
 
   it('usageMainPart_NoHarness_NoPlansAndNoLog', async () => {
-    const usage = startOverSlot(createSlotStore(() => undefined), []);
+    const usage = startOverSlot(
+      createSlotStore(() => undefined),
+      [],
+    );
     await settled();
 
     expect(usage.logs).toEqual([]);

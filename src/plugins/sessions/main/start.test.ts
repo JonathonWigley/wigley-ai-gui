@@ -37,11 +37,7 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../contract';
-import {
-  addDriveActions,
-  harnessToolUseId,
-  sessionsMainPart,
-} from './start';
+import { addDriveActions, harnessToolUseId, sessionsMainPart } from './start';
 import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
 
 function fakeSessions() {
@@ -196,7 +192,11 @@ describe('harnessToolUseId', () => {
           return 'toolu_01';
         },
       } as unknown as AgentHarness;
-      const info: SessionInfo = { sessionId: 'host-1', projectDir: null, harness };
+      const info: SessionInfo = {
+        sessionId: 'host-1',
+        projectDir: null,
+        harness,
+      };
 
       const toolUseId = harnessToolUseId(harnessRegistryOf([claude]), info, {
         k: 'v',
@@ -208,7 +208,7 @@ describe('harnessToolUseId', () => {
   );
 });
 
-const CONTEXT ={ toolUseId: null, signal: new AbortController().signal };
+const CONTEXT = { toolUseId: null, signal: new AbortController().signal };
 
 const ASK_TOOL = { name: 'ask', description: 'Ask.', inputSchema: {} };
 

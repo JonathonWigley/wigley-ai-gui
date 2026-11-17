@@ -19,8 +19,7 @@ function harnessDouble(
   const double = { label, profiles };
   const harness = {
     id,
-    info: () =>
-      harnessInfo({ label: double.label, profiles: double.profiles }),
+    info: () => harnessInfo({ label: double.label, profiles: double.profiles }),
   } as unknown as AgentHarness;
   return { harness, double };
 }

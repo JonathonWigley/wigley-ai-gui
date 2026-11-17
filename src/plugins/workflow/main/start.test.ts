@@ -138,10 +138,7 @@ function startWorkflowPart(
   let launchedHeadless = false;
   const chat: Pick<
     ChatMainExports,
-    | 'activeTime'
-    | 'addInstructions'
-    | 'isHeadless'
-    | 'launchedHeadless'
+    'activeTime' | 'addInstructions' | 'isHeadless' | 'launchedHeadless'
   > = {
     activeTime: () => activeTime,
     isHeadless: () => headless,

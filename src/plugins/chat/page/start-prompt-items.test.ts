@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { HarnessProfile } from '../../../contracts/agent';
-import type {
-  ChatProject,
-  RecentFolder,
-  ResumeSectionRow,
-} from '../contract';
+import type { ChatProject, RecentFolder, ResumeSectionRow } from '../contract';
 import {
   displayPath,
   FOLDERS_HEADING,

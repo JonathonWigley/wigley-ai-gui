@@ -166,7 +166,10 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         const profiles = deps.profiles();
         if (profiles.length === 0) {
           log("chat's harness has no profiles");
-          deps.toast("Add a profile to the harness's profiles setting first", 'error');
+          deps.toast(
+            "Add a profile to the harness's profiles setting first",
+            'error',
+          );
           return;
         }
         for (const { title, rows } of sections) {
