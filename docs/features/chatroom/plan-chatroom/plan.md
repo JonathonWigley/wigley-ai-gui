@@ -218,7 +218,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 ### Wave 2
 - [x] [Room service](05-room-service.md) — after 01
 - [x] [Board](06-board.md) — after 01
-- [ ] [Hook script and hooks.json](07-hook-script.md) — after 02, 03
+- [x] [Hook script and hooks.json](07-hook-script.md) — after 02, 03
 
 ### Wave 3
 - [ ] [Main part: tools, hooks, delivery, entries](08-main-part.md) — after 01, 02, 05, 06
@@ -245,6 +245,7 @@ Review base: 7c3eb9665
 - 02 · deep · 3df0458c1 · diff read: every Produces present (addHookHandler, project, HookHandler, HookReply, RelayHello.hook, createHookRoutes, SessionList.sessionOf); wave typecheck passes; oxfmt, oxlint, check-styles clean; layer check waits on 08's manifest · concerns: sessionOf_ConnectOrder's 'owned over connected with one host id' row cannot be built (open/connect/setHostSessionId keep host ids unique), so the owned-first branch is untested; the client-left test leans on two 20 ms real-time pauses
 - 03 · hard · e4d5ff8bc · diff read: endpoint.py holds RELAY_PROTOCOL, HELLO_TIMEOUT_SECONDS, READ_SIZE, both channels with timeout and set_timeout, open_channel, channel_path; relay hello sends codex- id only with WIGLEY_SESSION_ROW unset; manifests 2.17.0; unittests wait for the test gate · concerns: PipeChannel's timeout now also bounds writes before hello_done, untested (Windows only); the forms README names the chatroom hook script before 07 adds it
 - 06 · hard · b94a871b2 · diff read: BoardState, BoardClone, BoardFile, BoardRow in contract.ts; BoardSession, GitFolderState, Touch, BoardInputs, buildBoard, readGitFolder, TouchTracker, createTouchTracker in board.ts; wave typecheck passes; oxfmt applied · concerns: the stale-touch test copies 08's forgetting rule (a staleTouchPaths export would be the deeper seam); the spec's 'other root' touch /r/o/d.ts sat under root /r, so the test uses /o/d.ts
+- 07 · deep · d8a9fe6e7 · diff read: every Produces present in hook.py (HOOK_DEADLINE_SECONDS, GIT_TIMEOUT_SECONDS, git_runner, request_from_input, commit_paths, ask_app, output_for, main); hooks.json parses; py_compile passes; unittests and plugin validate wait for the test gate · concerns: the Bash matcher also fires on Monitor commands and starts python3 on every Bash call; python3 may be missing on Windows; a git add -A earlier on the line adds no paths; AGENTS.md wording differs slightly from the spec's dictated text; low-confidence (a) MultiEdit, (a2) notebook_path, (a4) additionalContext delivery, (b), (c) still need task 12's live probe
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 - 02 Produces: SessionList.sessionOfHost(hostId) → sessionOf(info: SessionInfo); createHookRoutes takes sessionOf · why: row-id-first lookup (Lane H's connect order) · consumers: 02 only (08 consumes the routes, not the lookup) · lead, before dispatch
@@ -272,5 +273,9 @@ Review base: 7c3eb9665
 - PipeChannel applies its timeout to writes as well as reads until hello_done, matching SocketChannel and the Produces line — group 03 · group 03
 - BoardInputs.chat and .flows are keyed by row id; 08 must key flows by row id or the flow-driven working and done states never fire — group 06 · group 06
 - A resting row with a finishing flow shows done, not idle — group 06 · group 06
+- A failed git call stops the remaining git reads, but the pathspecs already found are still sent — group 07 · group 07
+- git commit -o drops an earlier git add's pathspec; each git add pathspec resolves against that add's own -C folder — group 07 · group 07
+- A hook input with no cwd sends nothing — group 07 · group 07
+- Vendor docs checked (code.claude.com): hooks/hooks.json loads with no manifest field, closing (a3); matcher semantics, agent_id on subagent tool calls, quoted CLAUDE_PLUGIN_ROOT shell form, timeout and exit-0 handling confirmed — group 07 · group 07
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 07 — Hook script and hooks.json
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses Claude Code's hook contract, a git subprocess and the app's socket under a hard time budget, and rests on hook fields marked low-confidence below
 Wave: 2 · Depends on: 02, 03
@@ -78,3 +78,5 @@ Done when: `(cd plugins/wigley/scripts/chatroom && python3 -m unittest discover)
 Commit:    one commit for the group
 
 ## Proof
+
+Commit d8a9fe6e7 · proof: diff read: every Produces present in hook.py (HOOK_DEADLINE_SECONDS, GIT_TIMEOUT_SECONDS, git_runner, request_from_input, commit_paths, ask_app, output_for, main); hooks.json parses; py_compile passes; unittests and plugin validate wait for the test gate · concerns: the Bash matcher also fires on Monitor commands and starts python3 on every Bash call; python3 may be missing on Windows; a git add -A earlier on the line adds no paths; AGENTS.md wording differs slightly from the spec's dictated text; low-confidence (a) MultiEdit, (a2) notebook_path, (a4) additionalContext delivery, (b), (c) still need task 12's live probe
