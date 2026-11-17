@@ -5,15 +5,21 @@ import type { Clock, Timers } from '../contracts/ambient';
 import type {
   HostedExit,
   HostedSpawn,
+  IdleRule,
   PipeLine,
 } from '../contracts/session-host';
 import type { ProcessSubscriber } from './process-table';
 
-export const IDLE_RULE = {
+export const IDLE_RULE: IdleRule = {
   key: 'type',
   value: 'result',
   busyStdoutValues: ['assistant', 'stream_event'],
   busyStdinValues: ['user'],
+  sideKey: null,
+  messageIdKey: null,
+  messageEnd: null,
+  turnEndIdsKey: null,
+  background: null,
 };
 
 export function spawnRequest(id: string): HostedSpawn {

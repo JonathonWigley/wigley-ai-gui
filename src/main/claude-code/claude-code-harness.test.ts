@@ -3264,12 +3264,7 @@ describe('createClaudeCodeHarness on the session host', () => {
         'WIGLEY_SESSION_ROW',
       ],
       stdin: [],
-      idleRule: {
-        key: 'type',
-        value: 'result',
-        busyStdoutValues: expect.arrayContaining(['assistant', 'stream_event']),
-        busyStdinValues: expect.arrayContaining(['user']),
-      },
+      idleRule: CLAUDE_IDLE_RULE,
       droppedOutKeys: [
         ['response', 'response', 'effective'],
         ['response', 'response', 'sources'],

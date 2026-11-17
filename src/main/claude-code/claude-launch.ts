@@ -9,14 +9,32 @@ import { APP_ENDPOINT_ENV } from '../../shared/app-endpoint-dir';
 import { NESTED_SESSION_ENV, SESSION_ROW_ENV } from '../../shared/session-env';
 import { launchMode } from './claude-controls';
 
-// A stdout line of type `result` ends a turn. The app's `user` line starts one,
-// and `assistant` or `stream_event` shows one Claude started by itself, after a
-// background task ended. `system` and the rest also print between turns.
+// A stdout line of type `result` ends a turn. A main `assistant` or
+// `stream_event` line shows one, Claude's own after a background task ended
+// included; a subagent's carries `parent_tool_use_id`. The app's `user` lines
+// carry `uuid`, and each stays open until its `command_lifecycle` end or a
+// `result` that lists it. Only a background subagent holds the process busy:
+// a background Bash ends with it at the keep window.
 export const CLAUDE_IDLE_RULE: IdleRule = {
   key: 'type',
   value: 'result',
   busyStdoutValues: ['assistant', 'stream_event'],
   busyStdinValues: ['user'],
+  sideKey: 'parent_tool_use_id',
+  messageIdKey: 'uuid',
+  messageEnd: {
+    value: 'command_lifecycle',
+    idKey: 'command_uuid',
+    stateKey: 'state',
+    endStates: ['completed', 'cancelled', 'discarded', 'refused'],
+  },
+  turnEndIdsKey: 'user_message_uuids',
+  background: {
+    match: { type: 'system', subtype: 'background_tasks_changed' },
+    listKey: 'tasks',
+    kindKey: 'task_type',
+    kinds: ['local_agent'],
+  },
 };
 // A `get_settings` reply's settings-file copies, which hold the `env` block's
 // values. The fold reads only the reply's `applied`.

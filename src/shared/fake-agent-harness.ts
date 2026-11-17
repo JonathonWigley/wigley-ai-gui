@@ -259,6 +259,11 @@ const FAKE_IDLE_RULE: IdleRule = {
   value: 'result',
   busyStdoutValues: [],
   busyStdinValues: ['user'],
+  sideKey: null,
+  messageIdKey: null,
+  messageEnd: null,
+  turnEndIdsKey: null,
+  background: null,
 };
 
 export interface FakeAgentHarness extends AgentHarness {

@@ -33,7 +33,7 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
 - **Pipe log** — the host's append-only record of every line a hosted process read on stdin or wrote on stdout or
   stderr, each with its direction and time.
 - **Replay** — the harness reading a pipe log from its first line to rebuild a session's state, writing nothing.
-- **Drain** — telling a host to end each process at its turn end, take no new process, and exit once empty.
+- **Drain** — telling a host to end each process once it reads idle, take no new process, and exit once empty.
 - **Pending entry** — a spawn the app hands the host to start at a later time (`PendingSpawn`), with the app's own
   record of it.
 - **Run** — what the host records when a pending entry's time comes: the spawn it started or skipped (`HostedRun`).
@@ -50,7 +50,7 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
 
  quit / install-app ──▶ app disconnects; host keeps every process running
  chat switched off live ──▶ chat's stop detaches its processes as a quit does; the app stays connected and the host keeps them
- turn ends while no app is connected ──▶ idle timer (chat.keepIdleMinutes) ──▶ host ends the process
+ process turns idle while no app is connected ──▶ idle timer (chat.keepIdleMinutes) ──▶ host ends the process
  pending entry's `at` comes ──▶ host spawns it, or skips it while its task's last run is busy ──▶ runStarted to every app
  host has no process, no pending entry, no run and no app ──▶ host exits
  host dies ──▶ rows rest; next host ends what its record left ──▶ only then serves a spawn
@@ -65,23 +65,38 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
   `unsetEnv` and `env` takes `env`'s value. A live start inherits nothing from the host, whose environment can be an
   older app's or launchd's. The spawn's `stdin` lines are written right after the spawn,
   in order, each logged as `in` like a `write`. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
-  and one **idle rule**: a top-level JSON key, the value that marks a stdout line as the end of a turn (for Claude
-  `"type": "result"`), and the values of that key that start a turn on each pipe (for Claude `user` on stdin,
-  `assistant` and `stream_event` on stdout, the last for a turn Claude starts by itself after a background task).
+  and one **idle rule** (`IdleRule`), the top-level JSON keys and values that open and close the three parts of the
+  busy state below: the value that marks a stdout line as a turn end (for Claude `"type": "result"`), the values that
+  open a turn on each pipe (`user` on stdin, `assistant` and `stream_event` on stdout), the key that marks a stdout
+  line as side work (`parent_tool_use_id`), a stdin message's id (`uuid`), the line that ends a message
+  (`command_lifecycle` in an end state) and the turn end's list of the messages it took in (`user_message_uuids`), and
+  the line that lists background work (`system/background_tasks_changed`) with the kinds that count (`local_agent`).
+  A part whose fields are null is off.
 - The adapter also hands it **dropped keys**: JSON key paths from a stdout line's root (for Claude, the settings copies
   in one control reply, which hold the profile's `env` values). The host drops them from the line before it logs or
-  delivers it, so a replay reads what a live subscriber read. It searches each line for the quoted last key and parses
-  only on a hit; a line that holds no such path or is not JSON passes byte for byte.
-- A process starts **idle**, reads busy on a line that starts a turn, and turns idle on a stdout line that ends one.
+  delivers it, so a replay reads what a live subscriber read. It reads them from the one parse each stdout line gets
+  for the idle rule; a line that holds no such path or is not JSON passes byte for byte.
+- A process is **busy** while any of three parts holds, and **idle** when none does; it starts idle.
+  - **A main turn is open**: opened by a stdout line that opens a turn and is not side work (for Claude a main
+    `assistant` or `stream_event` line, a turn Claude starts by itself after background work included; a subagent's
+    own lines carry `parent_tool_use_id` and open nothing), or by a stdin line that opens a turn with no message id;
+    closed by a turn-end line.
+  - **A message is open**: opened by a stdin line that opens a turn with a message id (every user line the Claude
+    adapter writes carries `uuid`); closed by its end line in an end state (`completed`, `cancelled`, `discarded` or
+    `refused`), or by a turn-end line that lists it. So a message written during a turn stays open past that turn's
+    `result` until its own end.
+  - **Background work runs**: the last background line counted more than 0 items of the kinds the rule names. For
+    Claude only a background subagent counts; a background Bash does not.
+
   Every other line leaves the state alone, on any pipe and whatever its shape, so a `system` line after a mode change
   or from a start hook, or the context request and its answer, keeps no process alive. While no app is connected, an
-  idle process is ended once the keep window has passed since the later of its turn end and the app's last disconnect:
-  stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends the window
+  idle process is ended once the keep window has passed since the later of the moment it turned idle and the app's
+  last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends the window
   (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change. The host sees only pipe
-  lines, so a background shell that stays silent past the window ends with its process, and so does a background
-  subagent that has printed only `system` lines since the turn's `result`; one whose own `assistant` lines have reached
-  stdout reads busy until the `result` of the turn its end starts. A process ending this way, or through a drain, lists
-  as not running and refuses an attach: its stdin is closed, so its row rests and the next message resumes the session.
+  lines, so a background shell that stays silent past the window ends with its process. An interrupt that stops a
+  background subagent prints no `result`, and the process turns idle at the background line that lists none. A
+  process ending this way, or through a drain, lists as not running and refuses an attach: its stdin is closed, so its
+  row rests and the next message resumes the session.
 - The host outlives its logs: a pipe log that cannot be created fails only that spawn; one whose append fails stops
   appending, keeps delivering lines live, and refuses an attach, since it can no longer rebuild the state, so the
   process runs on with its row unheld. That holds after a relaunch too: such a process cannot be re-attached, so its
@@ -178,7 +193,7 @@ any older one fired.
 - `hello` — the host's protocol version.
 - `list` — each hosted process: id, start time, running (false once it is ending) or its exit code and signal, its
   pipe log path.
-- `drain` — end each process at its turn end, refuse new ones, exit once empty.
+- `drain` — end each process once it reads idle, refuse new ones, exit once empty.
 - `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
   protocol version.
 - `setPending`, `listRuns`, `forgetRuns`, and the pushed `runStarted` — the pending queue (§ Pending runs), since

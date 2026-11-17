@@ -782,15 +782,6 @@ because the earlier items rewrite many of these tests anyway.
   Three sites: `src/plugins/usage/main/drive-actions.test.ts:101` and
   `src/main/drive/drive-commands.test.ts:132` and `:153`. Fix as the note says: each row carries its whole name, and
   the title is `'$name'`. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
-- **Hosted process reads busy with no way out** — *needs a feature plan*: a process that reads busy leaves only on a
-  `result`. Reached by a background subagent's `assistant` line after `result`, then an interrupt that prints no
-  `result`, then a quit: the keep window never arms, a drain never finishes, and process and host run on. A crossing
-  `user` line also reads idle at the earlier `result` until the first `stream_event`, which matters only under a drain
-  or a window of 0. To decide: bound the busy state while no app is connected, weighed against long silent tools, after
-  measuring what Claude prints after an interrupt. Mechanism: turn state read from pipe lines
-  (`src/session-host/process-table.ts`, `CLAUDE_IDLE_RULE`), stacked on twice (`73bdb0c8` ignored lists, `540fb434` busy
-  lists, which the user chose as the step back). Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in
-  wigley-ai-gui.
 - **One rule for returning a dropped message once** — *needs a feature plan*: `clear` silently loses a message a replay
   left held, since the row has moved to a new process when the harness reports it at close (`chat-sessions.ts` `clear`,
   `claude-code-harness.ts` close). A resume that attaches has no `returnedDrops`, so its replay returns placed messages

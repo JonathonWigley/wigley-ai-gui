@@ -77,9 +77,11 @@ export interface ProcessTable {
   stopAll(done: () => void): void;
 }
 
-interface DroppedKey {
-  path: KeyPath;
-  quotedKey: string;
+// The parts the idle rule reads busy from; a process is idle when none holds.
+interface TurnState {
+  isTurnOpen: boolean;
+  openMessages: Set<string>;
+  backgroundCount: number;
 }
 
 interface TableProcess {
@@ -88,9 +90,11 @@ interface TableProcess {
   pid: number | null;
   log: PipeLog;
   idleRule: IdleRule;
-  droppedOutKeys: readonly DroppedKey[];
+  droppedOutKeys: readonly KeyPath[];
   startedAt: number;
   subscriber: ProcessSubscriber | null;
+  turnState: TurnState;
+  // True while no part of `turnState` holds.
   isIdle: boolean;
   idleSince: number;
   keepTimer: number | null;
@@ -98,19 +102,155 @@ interface TableProcess {
   isEnding: boolean;
 }
 
-function valueAtKey(text: string, key: string): unknown {
+// The line's JSON value when it is an object, else null.
+function lineObject(text: string): Record<string, unknown> | null {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(text);
-    return typeof parsed === 'object' && parsed !== null
-      ? (parsed as Record<string, unknown>)[key]
-      : undefined;
+    parsed = JSON.parse(text);
   } catch {
-    return undefined;
+    return null;
+  }
+  return typeof parsed === 'object' && parsed !== null
+    ? (parsed as Record<string, unknown>)
+    : null;
+}
+
+function isOneOf(value: unknown, values: readonly string[]): boolean {
+  return typeof value === 'string' && values.includes(value);
+}
+
+function isTurnStateBusy(state: TurnState): boolean {
+  return (
+    state.isTurnOpen ||
+    state.openMessages.size > 0 ||
+    state.backgroundCount > 0
+  );
+}
+
+function isSideLine(
+  line: Record<string, unknown>,
+  sideKey: string | null,
+): boolean {
+  return (
+    sideKey !== null && line[sideKey] !== undefined && line[sideKey] !== null
+  );
+}
+
+function countOfKinds(
+  list: unknown,
+  kindKey: string,
+  kinds: readonly string[],
+): number {
+  if (!Array.isArray(list)) {
+    return 0;
+  }
+  return list.filter(
+    (item: unknown) => isRecord(item) && isOneOf(item[kindKey], kinds),
+  ).length;
+}
+
+// A turn end closes the main turn and the messages it lists, a main busy line opens the turn, a message end closes
+// its message, and a background line sets the count.
+function readStdoutLine(
+  line: Record<string, unknown>,
+  rule: IdleRule,
+  state: TurnState,
+) {
+  const value = line[rule.key];
+  if (value === rule.value) {
+    state.isTurnOpen = false;
+    const listedIds =
+      rule.turnEndIdsKey === null ? undefined : line[rule.turnEndIdsKey];
+    if (Array.isArray(listedIds)) {
+      for (const id of listedIds) {
+        if (typeof id === 'string') {
+          state.openMessages.delete(id);
+        }
+      }
+    }
+  } else if (
+    isOneOf(value, rule.busyStdoutValues) &&
+    !isSideLine(line, rule.sideKey)
+  ) {
+    state.isTurnOpen = true;
+  }
+  const { messageEnd, background } = rule;
+  const endedMessageId =
+    messageEnd !== null &&
+    value === messageEnd.value &&
+    isOneOf(line[messageEnd.stateKey], messageEnd.endStates)
+      ? line[messageEnd.idKey]
+      : undefined;
+  if (typeof endedMessageId === 'string') {
+    state.openMessages.delete(endedMessageId);
+  }
+  const isBackgroundLine =
+    background !== null &&
+    Object.entries(background.match).every(
+      ([key, matchValue]) => line[key] === matchValue,
+    );
+  if (isBackgroundLine) {
+    state.backgroundCount = countOfKinds(
+      line[background.listKey],
+      background.kindKey,
+      background.kinds,
+    );
   }
 }
 
-function isBusyValue(value: unknown, busyValues: readonly string[]): boolean {
-  return typeof value === 'string' && busyValues.includes(value);
+// A busy stdin line opens its message when it carries an id, else the main turn.
+function readStdinLine(
+  line: Record<string, unknown>,
+  rule: IdleRule,
+  state: TurnState,
+) {
+  if (!isOneOf(line[rule.key], rule.busyStdinValues)) {
+    return;
+  }
+  const messageId =
+    rule.messageIdKey === null ? undefined : line[rule.messageIdKey];
+  if (typeof messageId === 'string') {
+    state.openMessages.add(messageId);
+  } else {
+    state.isTurnOpen = true;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringRecord(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((item) => typeof item === 'string')
+  );
+}
+
+function isNullOrString(value: unknown): boolean {
+  return value === null || typeof value === 'string';
+}
+
+function isMessageEndShape(value: unknown): boolean {
+  return (
+    value === null ||
+    (isRecord(value) &&
+      typeof value.value === 'string' &&
+      typeof value.idKey === 'string' &&
+      typeof value.stateKey === 'string' &&
+      isStringArray(value.endStates))
+  );
+}
+
+function isBackgroundShape(value: unknown): boolean {
+  return (
+    value === null ||
+    (isRecord(value) &&
+      isStringRecord(value.match) &&
+      typeof value.listKey === 'string' &&
+      typeof value.kindKey === 'string' &&
+      isStringArray(value.kinds))
+  );
 }
 
 // Every line reads the rule, so a bad one would otherwise throw far from the request that carried it.
@@ -119,7 +259,12 @@ function requireIdleRule({ id, idleRule }: HostedSpawn) {
     typeof idleRule?.key === 'string' &&
     typeof idleRule.value === 'string' &&
     Array.isArray(idleRule.busyStdoutValues) &&
-    Array.isArray(idleRule.busyStdinValues);
+    Array.isArray(idleRule.busyStdinValues) &&
+    isNullOrString(idleRule.sideKey) &&
+    isNullOrString(idleRule.messageIdKey) &&
+    isNullOrString(idleRule.turnEndIdsKey) &&
+    isMessageEndShape(idleRule.messageEnd) &&
+    isBackgroundShape(idleRule.background);
   if (!isWellFormed) {
     throw new Error(`process ${id} has no well-formed idle rule`);
   }
@@ -154,12 +299,7 @@ function requireSpawnShape({
   unsetEnv,
   stdin,
 }: HostedSpawn) {
-  const isEnvWellFormed =
-    typeof env === 'object' &&
-    env !== null &&
-    !Array.isArray(env) &&
-    Object.values(env).every((value) => typeof value === 'string');
-  if (!isEnvWellFormed) {
+  if (!isStringRecord(env)) {
     throw new Error(`process ${id} has no well-formed env`);
   }
   if (typeof inheritEnv !== 'boolean') {
@@ -196,13 +336,6 @@ function childEnvOf(
   return { ...childEnv, ...env };
 }
 
-function droppedKeysOf(paths: readonly KeyPath[]): DroppedKey[] {
-  return paths.map((path) => ({
-    path,
-    quotedKey: JSON.stringify(path[path.length - 1]),
-  }));
-}
-
 // True when `root` held the value at `path`, now gone.
 function deleteAtPath(root: unknown, path: KeyPath): boolean {
   let parent = root;
@@ -224,25 +357,15 @@ function deleteAtPath(root: unknown, path: KeyPath): boolean {
   return true;
 }
 
+// `text` less the dropped keys that `parsed`, its parse, holds, deleting them from `parsed`; `text` itself when it
+// holds none.
 function withoutDroppedKeys(
   text: string,
-  droppedKeys: readonly DroppedKey[],
+  parsed: Record<string, unknown>,
+  droppedKeys: readonly KeyPath[],
 ): string {
-  // Every stdout line comes here; only a line naming a dropped key is worth parsing.
-  const mayHoldKey = droppedKeys.some(({ quotedKey }) =>
-    text.includes(quotedKey),
-  );
-  if (!mayHoldKey) {
-    return text;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return text;
-  }
   let droppedAny = false;
-  for (const { path } of droppedKeys) {
+  for (const path of droppedKeys) {
     droppedAny = deleteAtPath(parsed, path) || droppedAny;
   }
   return droppedAny ? JSON.stringify(parsed) : text;
@@ -320,20 +443,31 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     cancelKeepTimer(hosted);
   }
 
+  // Turns the process busy or idle when its turn state changed what it reads.
+  function settleIdle(hosted: TableProcess) {
+    const isBusy = isTurnStateBusy(hosted.turnState);
+    if (isBusy && hosted.isIdle) {
+      turnBusy(hosted);
+    } else if (!isBusy) {
+      turnIdle(hosted);
+    }
+  }
+
   function childLine(hosted: TableProcess, dir: PipeDirection, text: string) {
+    // Only stdout reads the idle rule; its line is parsed once.
+    const parsed = dir === 'out' ? lineObject(text) : null;
+    if (parsed !== null) {
+      // Before the drop, which may delete a key the rule reads.
+      readStdoutLine(parsed, hosted.idleRule, hosted.turnState);
+    }
     const delivered =
-      dir === 'out' ? withoutDroppedKeys(text, hosted.droppedOutKeys) : text;
+      parsed === null
+        ? text
+        : withoutDroppedKeys(text, parsed, hosted.droppedOutKeys);
     const line = hosted.log.append(dir, delivered);
     hosted.subscriber?.line(hosted.id, line);
-    if (dir !== 'out') {
-      return;
-    }
-    const rule = hosted.idleRule;
-    const value = valueAtKey(text, rule.key);
-    if (value === rule.value) {
-      turnIdle(hosted);
-    } else if (isBusyValue(value, rule.busyStdoutValues)) {
-      turnBusy(hosted);
+    if (parsed !== null) {
+      settleIdle(hosted);
     }
   }
 
@@ -405,12 +539,13 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     });
   }
 
-  // Logs `text` as `in`, reads the idle rule's busy values on it, then writes it with its newline.
+  // Logs `text` as `in`, reads the idle rule on it, then writes it with its newline.
   function writeLine(hosted: TableProcess, text: string) {
     hosted.log.append('in', text);
-    const value = valueAtKey(text, hosted.idleRule.key);
-    if (isBusyValue(value, hosted.idleRule.busyStdinValues)) {
-      turnBusy(hosted);
+    const parsed = lineObject(text);
+    if (parsed !== null) {
+      readStdinLine(parsed, hosted.idleRule, hosted.turnState);
+      settleIdle(hosted);
     }
     hosted.child.stdin.write(`${text}\n`);
   }
@@ -450,9 +585,14 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
           pid: child.pid ?? null,
           log,
           idleRule: request.idleRule,
-          droppedOutKeys: droppedKeysOf(request.droppedOutKeys),
+          droppedOutKeys: request.droppedOutKeys,
           startedAt,
           subscriber,
+          turnState: {
+            isTurnOpen: false,
+            openMessages: new Set(),
+            backgroundCount: 0,
+          },
           isIdle: true,
           idleSince: startedAt,
           keepTimer: null,

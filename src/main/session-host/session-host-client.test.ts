@@ -295,6 +295,11 @@ function spawnRequest(id: string): HostedSpawn {
       value: 'result',
       busyStdoutValues: [],
       busyStdinValues: [],
+      sideKey: null,
+      messageIdKey: null,
+      messageEnd: null,
+      turnEndIdsKey: null,
+      background: null,
     },
     droppedOutKeys: [],
   };

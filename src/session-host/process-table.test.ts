@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { HostedExit } from '../contracts/session-host';
+import type { HostedExit, IdleRule } from '../contracts/session-host';
 import { HOST_END_GRACE_MS } from '../contracts/session-host-protocol';
 import {
   createProcessTable,
@@ -22,6 +22,7 @@ import {
 import {
   type FakeChild,
   fakeChild,
+  IDLE_RULE,
   manualTime,
   recordingSubscriber,
   spawnRequest,
@@ -33,6 +34,59 @@ type ManualTime = ReturnType<typeof manualTime>;
 const USER = '{"type":"user"}';
 const RESULT = '{"type":"result"}';
 const SYSTEM = '{"type":"system"}';
+
+// Every part of the rule on, in Claude's shape (claude-stream.md § Message lifecycle, § Subagents).
+const TURN_STATE_RULE: IdleRule = {
+  ...IDLE_RULE,
+  sideKey: 'parent_tool_use_id',
+  messageIdKey: 'uuid',
+  messageEnd: {
+    value: 'command_lifecycle',
+    idKey: 'command_uuid',
+    stateKey: 'state',
+    endStates: ['completed', 'cancelled', 'discarded', 'refused'],
+  },
+  turnEndIdsKey: 'user_message_uuids',
+  background: {
+    match: { type: 'system', subtype: 'background_tasks_changed' },
+    listKey: 'tasks',
+    kindKey: 'task_type',
+    kinds: ['local_agent'],
+  },
+};
+const userLine = (uuid: string) => JSON.stringify({ type: 'user', uuid });
+const lifecycle = (uuid: string, state: string) =>
+  JSON.stringify({ type: 'command_lifecycle', command_uuid: uuid, state });
+const resultFor = (...uuids: string[]) =>
+  JSON.stringify({ type: 'result', user_message_uuids: uuids });
+const backgroundTasks = (...kinds: string[]) =>
+  JSON.stringify({
+    type: 'system',
+    subtype: 'background_tasks_changed',
+    tasks: kinds.map((kind, index) => ({
+      task_id: `t${index}`,
+      task_type: kind,
+    })),
+  });
+const MAIN_ASSISTANT = '{"type":"assistant","parent_tool_use_id":null}';
+const SUBAGENT_ASSISTANT = '{"type":"assistant","parent_tool_use_id":"tu_1"}';
+const SUBAGENT_STREAM_EVENT =
+  '{"type":"stream_event","parent_tool_use_id":"tu_1"}';
+const SUBAGENT_MARKER = '{"type":"user","parent_tool_use_id":"tu_1"}';
+const TASK_KILLED = '{"type":"system","subtype":"task_updated"}';
+const TASK_STOPPED = '{"type":"system","subtype":"task_notification"}';
+const CONTROL_REPLY = '{"type":"control_response"}';
+const INIT = '{"type":"system","subtype":"init"}';
+// A turn on message A that launched a background subagent and ended.
+const SUBAGENT_LAUNCHED: [string, string][] = [
+  ['in', userLine('A')],
+  ['out', lifecycle('A', 'started')],
+  ['out', MAIN_ASSISTANT],
+  ['out', backgroundTasks('local_agent')],
+  ['out', resultFor('A')],
+  ['out', lifecycle('A', 'completed')],
+  ['out', SUBAGENT_ASSISTANT],
+];
 const folders: string[] = [];
 
 afterEach(() => {
@@ -456,6 +510,182 @@ describe('process table', () => {
     },
   );
 
+  it.each<{ label: string; steps: [string, string][]; busy: boolean }>([
+    {
+      label: 'a background subagent at work after its turn ended',
+      steps: SUBAGENT_LAUNCHED,
+      busy: true,
+    },
+    {
+      label: 'a background subagent stopped by an interrupt, with no result',
+      steps: [
+        ...SUBAGENT_LAUNCHED,
+        ['in', '{"type":"control_request"}'],
+        ['out', TASK_KILLED],
+        ['out', TASK_STOPPED],
+        ['out', backgroundTasks()],
+        ['out', CONTROL_REPLY],
+        ['out', SUBAGENT_MARKER],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a self-started turn after a background end',
+      steps: [
+        ...SUBAGENT_LAUNCHED,
+        ['out', backgroundTasks()],
+        ['out', INIT],
+        ['out', MAIN_ASSISTANT],
+      ],
+      busy: true,
+    },
+    {
+      label: 'a self-started turn after a background end, ended',
+      steps: [
+        ...SUBAGENT_LAUNCHED,
+        ['out', backgroundTasks()],
+        ['out', INIT],
+        ['out', MAIN_ASSISTANT],
+        ['out', RESULT],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a message written during a turn, past the result of that turn',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', lifecycle('B', 'queued')],
+        ['out', resultFor('A')],
+        ['out', lifecycle('A', 'completed')],
+      ],
+      busy: true,
+    },
+    {
+      label: 'that message, at its own lifecycle end',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', lifecycle('B', 'queued')],
+        ['out', resultFor('A')],
+        ['out', lifecycle('A', 'completed')],
+        ['out', lifecycle('B', 'started')],
+        ['out', lifecycle('B', 'completed')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a folded message ended before the turn result, turn running',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', lifecycle('B', 'started')],
+        ['out', lifecycle('B', 'completed')],
+      ],
+      busy: true,
+    },
+    {
+      label: 'a folded message ended before the turn result, turn ended',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', lifecycle('B', 'started')],
+        ['out', lifecycle('B', 'completed')],
+        ['out', resultFor('A', 'B')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a message the turn end lists, before its lifecycle end',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['out', resultFor('A')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a message started, not ended',
+      steps: [
+        ['in', userLine('A')],
+        ['out', lifecycle('A', 'started')],
+      ],
+      busy: true,
+    },
+    {
+      label: 'a discarded message',
+      steps: [
+        ['in', userLine('A')],
+        ['out', lifecycle('A', 'queued')],
+        ['out', lifecycle('A', 'discarded')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'an interrupted message, cancelled after the error result',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', '{"type":"control_request"}'],
+        ['out', CONTROL_REPLY],
+        ['out', RESULT],
+        ['out', lifecycle('A', 'cancelled')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a stdin user line with no id, then silence',
+      steps: [['in', USER]],
+      busy: true,
+    },
+    {
+      label: 'a subagent stream_event',
+      steps: [['out', SUBAGENT_STREAM_EVENT]],
+      busy: false,
+    },
+    {
+      label: 'a turn that ended with a background Bash running',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['out', backgroundTasks('local_bash')],
+        ['out', resultFor('A')],
+        ['out', lifecycle('A', 'completed')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a background subagent beside a background Bash',
+      steps: [['out', backgroundTasks('local_bash', 'local_agent')]],
+      busy: true,
+    },
+  ])(
+    'turnState_LineSequences_BusyWhileATurnAMessageOrBackgroundWorkIsOpen: $label → busy $busy',
+    async ({ steps, busy }) => {
+      const { table, time, children } = setUp();
+      table.spawn(
+        { ...spawnRequest('a'), idleRule: TURN_STATE_RULE },
+        recordingSubscriber().subscriber,
+      );
+      for (const [dir, text] of steps) {
+        if (dir === 'in') {
+          table.write('a', text);
+        } else {
+          children[0].stdout.write(`${text}\n`);
+        }
+      }
+      await streamsDelivered();
+
+      expect(table.isBusy('a')).toBe(busy);
+      time.advanceTo(HOUR_MS);
+      expect(children[0].stdin.writableEnded).toBe(!busy);
+    },
+  );
+
   it('keepWindow_IdleNoClient_EndsAfterTheWindowThenGraces', async () => {
     const { table, time, children } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
@@ -573,6 +803,29 @@ describe('process table', () => {
       expect(children[0].stdin.writableEnded).toBe(ends);
     },
   );
+
+  it('drain_BackgroundWork_EndsTheProcessWhenItsCountReachesZero', async () => {
+    const { table, children } = setUp();
+    table.spawn(
+      { ...spawnRequest('a'), idleRule: TURN_STATE_RULE },
+      recordingSubscriber().subscriber,
+    );
+    for (const [dir, text] of SUBAGENT_LAUNCHED) {
+      if (dir === 'in') {
+        table.write('a', text);
+      } else {
+        children[0].stdout.write(`${text}\n`);
+      }
+    }
+    await streamsDelivered();
+
+    table.drain();
+    expect(children[0].stdin.writableEnded).toBe(false);
+
+    children[0].stdout.write(`${backgroundTasks()}\n`);
+    await streamsDelivered();
+    expect(children[0].stdin.writableEnded).toBe(true);
+  });
 
   it('setKeepIdle_LongerWindow_ReArmsTheTimer', () => {
     const { table, time, children } = setUp();
@@ -832,6 +1085,48 @@ describe('process table', () => {
       spawnFails: () => fakeChild().child,
       request: { ...spawnRequest('a'), idleRule: undefined as never },
       error: 'idle rule',
+    },
+    {
+      label: 'the idle rule has no side key, as an older one',
+      spawnFails: () => fakeChild().child,
+      request: {
+        ...spawnRequest('a'),
+        idleRule: { ...IDLE_RULE, sideKey: undefined as never },
+      },
+      error: 'process a has no well-formed idle rule',
+    },
+    {
+      label: 'the message end has no end states',
+      spawnFails: () => fakeChild().child,
+      request: {
+        ...spawnRequest('a'),
+        idleRule: {
+          ...TURN_STATE_RULE,
+          messageEnd: {
+            value: 'command_lifecycle',
+            idKey: 'command_uuid',
+            stateKey: 'state',
+          } as never,
+        },
+      },
+      error: 'process a has no well-formed idle rule',
+    },
+    {
+      label: 'the background match holds a value that is not a string',
+      spawnFails: () => fakeChild().child,
+      request: {
+        ...spawnRequest('a'),
+        idleRule: {
+          ...TURN_STATE_RULE,
+          background: {
+            match: { type: 1 },
+            listKey: 'tasks',
+            kindKey: 'task_type',
+            kinds: ['local_agent'],
+          } as never,
+        },
+      },
+      error: 'process a has no well-formed idle rule',
     },
     {
       label: 'the dropped keys are missing',

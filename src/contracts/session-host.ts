@@ -9,13 +9,42 @@ export interface PipeLine {
   at: number;
   text: string;
 }
-// A stdout line whose top-level JSON `key` equals `value` ends a turn (Claude: `type` is `result`).
-// A line whose `key` holds a value its direction's list names starts one; every other line leaves the state alone.
+// How the host reads a process busy from its pipe lines: busy while a main turn is open, a message is open, or
+// background work runs; idle when none holds. Every key is a top-level key of a JSON line, and a nullable field set
+// to null turns its part off. A stdout line whose `key` equals `value` ends the main turn (Claude: `type` is
+// `result`); a stdout line whose `key` holds a value of `busyStdoutValues` opens it, as a stdin line whose `key`
+// holds a value of `busyStdinValues` does.
 export interface IdleRule {
   key: string;
   value: string;
   busyStdoutValues: readonly string[];
   busyStdinValues: readonly string[];
+  // A stdout line whose top-level `sideKey` holds a value that is not null belongs to side work and opens no turn
+  // (Claude: `parent_tool_use_id`, set on a subagent's own lines).
+  sideKey: string | null;
+  // A busy stdin line whose top-level `messageIdKey` holds a string opens that message (Claude: `uuid`). A busy
+  // stdin line with no id opens the turn, as a busy stdout line does.
+  messageIdKey: string | null;
+  // Ends an open message: a stdout line whose `key` equals `value`, whose `idKey` names the message and whose
+  // `stateKey` holds one of `endStates` (Claude: `command_lifecycle`, `command_uuid`, `state`, `completed`,
+  // `cancelled`, `discarded`, `refused`). A turn-end line also ends each message its `turnEndIdsKey` list names
+  // (Claude: `user_message_uuids`).
+  messageEnd: {
+    value: string;
+    idKey: string;
+    stateKey: string;
+    endStates: readonly string[];
+  } | null;
+  turnEndIdsKey: string | null;
+  // Background work: a stdout line whose top-level keys equal every pair of `match` sets the background count to
+  // the number of items of its `listKey` array whose `kindKey` holds one of `kinds` (Claude: `{ type: 'system',
+  // subtype: 'background_tasks_changed' }`, `tasks`, `task_type`, `local_agent`).
+  background: {
+    match: Readonly<Record<string, string>>;
+    listKey: string;
+    kindKey: string;
+    kinds: readonly string[];
+  } | null;
 }
 // The keys leading from a JSON line's root to one value, the last key naming the value.
 export type KeyPath = readonly string[];

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
 import {
+  CLAUDE_IDLE_RULE,
   claudeConfigFolder,
   claudeEnv,
   claudeLaunch,
@@ -9,6 +10,32 @@ import {
 } from './claude-launch';
 
 const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
+
+describe('CLAUDE_IDLE_RULE', () => {
+  it('claudeIdleRule_Fields_ReadTurnsMessagesAndBackgroundSubagents', () => {
+    expect(CLAUDE_IDLE_RULE).toEqual({
+      key: 'type',
+      value: 'result',
+      busyStdoutValues: ['assistant', 'stream_event'],
+      busyStdinValues: ['user'],
+      sideKey: 'parent_tool_use_id',
+      messageIdKey: 'uuid',
+      messageEnd: {
+        value: 'command_lifecycle',
+        idKey: 'command_uuid',
+        stateKey: 'state',
+        endStates: ['completed', 'cancelled', 'discarded', 'refused'],
+      },
+      turnEndIdsKey: 'user_message_uuids',
+      background: {
+        match: { type: 'system', subtype: 'background_tasks_changed' },
+        listKey: 'tasks',
+        kindKey: 'task_type',
+        kinds: ['local_agent'],
+      },
+    });
+  });
+});
 
 describe('claudeLaunch', () => {
   it('claudeLaunch_NewSession_PinnedArgsAndProfileEnv', () => {
