@@ -28,7 +28,8 @@ Otherwise it is the repo name its folder's git
 `origin` URL ends in, with `.git` dropped
 (`git@github-personal:JonathonWigley/ai.git` → `ai`), read through `Git.originRepoName`.
 A folder in no clone or with no origin takes its folder name, and a session with no folder takes its row's
-no-folder label (`session`, `Codex session`). Main resolves the name once per folder for the app's life and sets
+no-folder label: `<harness label> session` (`Claude Code session`, `Codex session`), or `session` for a session that
+names no harness. Main resolves the name once per folder for the app's life and sets
 it on the session's row as `project`; until the lookup lands the row carries the folder-name fallback, so a
 clone's first session can move groups once.
 

@@ -136,12 +136,11 @@ function setUp(
     projectName,
     hostSessionName,
     configFolder: resolvedFolder,
+    // As the real registry: claude registered, codex unregistered and labelled
+    // by the shared helper's stand-in.
     harnessLabel: (id) =>
       harnessLabel(
-        new Map([
-          ['claude', harnessInfo({ label: 'Claude Code' })],
-          ['codex', harnessInfo({ label: 'Codex' })],
-        ]),
+        new Map([['claude', harnessInfo({ label: 'Claude Code' })]]),
         id,
       ),
   });

@@ -7,13 +7,20 @@ import {
 } from './agent-harness-registry.test-support';
 
 describe('harnessLabel', () => {
-  const infos = new Map([['claude', harnessInfo({ label: 'Claude Code' })]]);
+  const claudeOnly = new Map([
+    ['claude', harnessInfo({ label: 'Claude Code' })],
+  ]);
+  const codexRegistered = new Map([
+    ['codex', harnessInfo({ label: 'Codex CLI' })],
+  ]);
 
   it.each([
-    { id: 'claude', label: 'Claude Code' },
-    { id: 'codex', label: 'codex' },
-    { id: 'constructor', label: 'constructor' },
-  ])('labels $id as $label', ({ id, label }) => {
+    { infos: claudeOnly, id: 'claude', label: 'Claude Code' },
+    { infos: claudeOnly, id: 'codex', label: 'Codex' },
+    { infos: codexRegistered, id: 'codex', label: 'Codex CLI' },
+    { infos: claudeOnly, id: 'gemini', label: 'gemini' },
+    { infos: claudeOnly, id: 'constructor', label: 'constructor' },
+  ])('labels $id as $label', ({ infos, id, label }) => {
     expect(harnessLabel(infos, id)).toBe(label);
   });
 });

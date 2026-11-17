@@ -26,9 +26,11 @@ or output format. Every decision below serves that.
   settings change.
 - The registry writes the core slot `core.agentHarnesses`, keyed by harness id, holding each harness's
   `AgentHarnessInfo`: label, capabilities, clear aliases, profiles and project config folder name. Pages and layouts
-  read labels and declarations from it; there is no label map outside an adapter. The slot's `on` is the change
-  signal, so the registry has no listener API of its own.
-- A harness id no adapter registered (a relay hello from a Codex terminal session today) shows as its raw id.
+  read labels and declarations from it, through `harnessLabel` (`src/shared/agent-harness-label.ts`). The slot's `on`
+  is the change signal, so the registry has no listener API of its own.
+- A harness id no adapter registered shows a stand-in label from `harnessLabel`'s small table of known ids (`codex` →
+  `Codex`, for a Codex terminal session's relay hello), else its raw id. The table is a stand-in until the Codex
+  adapter lands and registers its own label; an adapter's label always wins over it.
 - `capabilities` is a closed record of required booleans. Every reader is chat code that branches per flag, so the
   compiler checking that each adapter declares each flag is worth more than an open set nobody reads.
 

@@ -4,7 +4,7 @@ import { harnessLabel } from '../../shared/agent-harness-label';
 import type { NoteSession } from './contract';
 
 // The label, `shownId`, and the tilde folder, each null when the session
-// lacks it; the label is the harness's in `harnesses`, else its raw id.
+// lacks it; the label is `harnessLabel`'s for the session's harness.
 function sessionParts(
   session: NoteSession,
   harnesses: ReadonlyMap<string, AgentHarnessInfo>,

@@ -30,7 +30,10 @@ const SECOND_SAVED = {
   notices: [{ title: 'Two', context: 'One line.' }],
 };
 const UNPARSEABLE = { heading: 'Broken', notices: [] };
-const NAMING_GONE = { ...FIRST_SAVED, layout: 'gone' };
+const NAMING_GONE = {
+  ...FIRST_SAVED,
+  notices: [{ ...FIRST_SAVED.notices[0], layout: 'gone' }],
+};
 
 let connects: SessionInfo[];
 let activated: string[];
@@ -184,7 +187,7 @@ describe('open', () => {
     expect(logLines[0]).toMatch(/preview skipped a saved round/);
   });
 
-  it('open_SavedArgsNameMissingLayout_SkipsAndLogs', () => {
+  it('open_SavedArgsNameMissingLayout_SkipsAndLogsItsLocation', () => {
     saved = [NAMING_GONE, SECOND_SAVED];
     layoutNames = ['default'];
     const subject = preview();
@@ -194,7 +197,9 @@ describe('open', () => {
 
     expect(calls.at(-1)?.args).toBe(SECOND_SAVED);
     expect(logLines).toHaveLength(1);
-    expect(logLines[0]).toMatch(/preview skipped a saved round/);
+    expect(logLines[0]).toMatch(
+      /^preview skipped a saved round: Notice 1: layout 'gone'/,
+    );
   });
 
   it('open_NoSavedArgsParse_AsksSampleAgain', () => {

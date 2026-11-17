@@ -27,10 +27,10 @@ describe('sessionLine', () => {
     );
   });
 
-  it('sessionLine_UnregisteredHarness_RawId', () => {
+  it('sessionLine_UnregisteredCodex_StandInLabel', () => {
     const codex: NoteSession = { ...BARE, harness: 'codex' };
     expect(sessionLine(codex, HARNESSES, posixPaths, HOME)).toBe(
-      'Source session: codex a1b2c3d4-0000-4000-8000-000000000001',
+      'Source session: Codex a1b2c3d4-0000-4000-8000-000000000001',
     );
   });
 });
