@@ -290,6 +290,61 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   saved in `SavedSession`) still leave two gaps: a workflow main restart loses the line state, and an agent that
   calls neither workflow tool never hears the flag went off. Chosen direction: chat owns the off note and sends it
   with the user's next prompt (or on the next tool result of any kind), so the workflow tools carry no line state.
+- **Clear aliases are app-wide** — *needs a decision*: `clearAliasesOf` (`src/plugins/chat/page/clear-commands.ts:70`)
+  takes the union of every registered harness's `clearAliases`, and `registerAliases` (`:44`) registers each as an
+  alias of `/clear` for every row. So one harness's alias clears the rows of other harnesses and shadows a native
+  command of another harness with the same name. Task 12 of lane H chose this global slash-command pattern on purpose.
+  Decide per-row scoping (an alias that applies only to rows of its harness) when a second harness lands.
+- **The docs write guard and a `--harness claude` drive run** — *needs a decision*: in a drive run with
+  `--harness claude` the guard (`guardFolders`, `src/plugins/docs/main/doc-files.ts:447-468`) admits the user's real
+  `~/.claude*`, because the adapter resolves `configDir` against the agent home, and refuses a create in the run
+  home's `.claude`. Options: expand each profile folder against the docs home dir (`docs/main/start.ts:104-131`), or
+  settle `HarnessConfigRoots.configDir` as adapter-resolved. Either way, say which in `docs-browser/design.md`.
+- **Entry renderers take precedence over a chosen or live default layout** — *needs a decision*: `pickEntryDraw`
+  (`src/plugins/chat/page/chat-layouts.ts:106-122`) returns a layout's named entry first, then any renderer, and
+  only then the default layout. With no renderer, `defaultBuilderKind` (`:133`) forces the builder kind to `raw`, so
+  a live default layout's own `entries['<id>:<kind>']` never runs. To decide: whether the default layout's entry
+  outranks a renderer, and whether the builder kind follows the layout that draws.
+- **The start prompt opens nothing for a default harness that is missing or has no profiles** — *needs a decision*:
+  `src/plugins/chat/page/start-prompt.ts:193-202` reports and returns unless `defaultHarness` is registered with
+  profiles. That blocks the resume rows, the recents and the projects of every other harness. To decide: whether the
+  prompt falls back to the first harness that declares profiles, or shows the sections of each harness.
+- **A clear alias dropped for a conflicting command does not return when that command goes** — *agent-ready*:
+  `addAlias` (`src/plugins/chat/page/clear-commands.ts:31-43`) drops an alias whose name another command holds, and
+  `registerAliases` runs only on a `core.agentHarnesses` change (`:56`). When the conflicting command is disposed,
+  the alias stays gone until the next harness change. Re-run `registerAliases` when the conflicting command is
+  disposed.
+- **Claude Code's `configRoots(null)` and `installedPlugins(null)` ignore `CLAUDE_CONFIG_DIR`** — *needs a decision*:
+  both resolve a null profile through `defaultConfigFolder`
+  (`src/plugins/claude-code/main/claude-code-harness.ts:1292-1296`, `:1358-1359`), while the sessions' launch env
+  honours an inherited `CLAUDE_CONFIG_DIR` (`claude-launch.ts:123`). Decide whether the contract's `configDir` follows
+  the launch env (the docs guard and the plugin list then read the folder the sessions use) or stays the default
+  folder.
+- **Chat's host-id → process-id map lives one chat run** — *needs a decision*: `processIdsOfHost`
+  (`src/plugins/chat/main/chat-sessions.ts:829`, read at `:3779`) is filled at `adoptHostId`, attach and restore. After
+  a page reload resume falls back to the `${hostSessionId}-` prefix, so a row-prefixed process left running unheld, or
+  one never saved before a crash, still gets a second `--resume`. Options: persist the map in chat's data, or have the
+  session host record the conversation id per hosted process (a contract change). Also, `adoptHostId` moving a row
+  from host id X to Y with no pending clear could delete the stale X entry (`:1854-1856`).
+- **Pending plans name removed symbols** — *agent-ready*: re-read these before running them.
+  `intent-alignment/plan-lane-l-layouts/03-sessions-picker-rows.md` uses `harnessText` (lines 16 and 98), where lane H
+  left `harnessLabel` (`src/shared/agent-harness-label.ts`).
+  `intent-alignment/plan-lane-e-extension-points/06-forms-kinds-main.md` and `08-finding-origins.md` use `arraySchema`,
+  `argsErrorName` (now `describe()`) and `argsErrorText`. Update each plan to the landed names before `wigley:make`
+  runs it.
+- **`AgentHarnessRegistry.register` pushes the harness before it calls `info()`** — *agent-ready*:
+  `src/main/agent-harness-registry.ts:75` pushes to `harnesses`, then `setChangedEntries` (`:52-53`) runs
+  `computeEntries` (`:20-23`), which calls `info()`. A throwing `info()` leaves the harness listed with no slot key.
+  Compute the entries first, and push once they succeed.
+- **The sessions sidebar does not redraw on a `core.agentHarnesses` change** — *agent-ready*:
+  `src/plugins/sessions/page/sidebar-view.ts:431-434` reads `harnessLabel(harnesses(), …)` at each draw only, so a row
+  drawn before a harness registers keeps its raw id label until the row next redraws. Redraw the rows on the slot's
+  change.
+- **`harnessToolUseId` lets a relay without a `harness` field past the `mainAgentOnly` guard** — *needs a decision*:
+  `harnessToolUseId` (`src/plugins/sessions/main/start.ts:84-90`) returns null when the session's `info.harness` is
+  null, and `callerGuard` (`src/plugins/chat/main/tool-callers.ts:109-111`) runs a call whose tool-use id is null. A
+  relay that predates the `harness` field therefore bypasses the `mainAgentOnly` guard. Decide whether a null harness
+  falls back to the app's default harness, or the guard refuses the call.
 
 ## Platform and packaging
 
@@ -935,3 +990,9 @@ because the earlier items rewrite many of these tests anyway.
   `src/main/drive/page-driver.ts`, since every split's prompt overflows its handle by design; then drop the two
   per-plugin entries; then run the filtered agent-skills, context-sources, agent-lines and live-view self-tests.
   Source session: Claude Code 8bbb8a20-7952-4e78-af3b-888ed8197fde in new-games-prototypes.
+- **The harness-return self-test never re-attaches and leaves a detached fake per run** — *agent-ready*:
+  `runHarnessReturn` (`src/plugins/chat/main/selftest-script.ts:1602`) detaches the fake harness's processes, but they
+  are not on the session host, so the return finds none to re-attach and the re-attach path goes untested. Each run
+  also leaves one detached fake record in the fake's records (`record.detached`,
+  `src/shared/fake-agent-harness.ts:2063`). Add an end API to `fake-agent-harness.ts` for the self-test to call, and
+  host the fake's processes on the session host so the return attaches.
