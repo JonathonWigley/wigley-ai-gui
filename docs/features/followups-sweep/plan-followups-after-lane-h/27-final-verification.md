@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Wave: 7 · Depends on: every group (runs after `wigley:make`'s test gate)
+Wave: 8 · Depends on: every group (runs after `wigley:make`'s test gate)
 Plan: [plan.md](plan.md)
 
 Files: none (checks only; a fix a check calls for goes back to its group).
@@ -40,8 +40,12 @@ Chat and the layout host:
    than the view; press `j` / `J`: the view keeps following the stream.
 7. **06, hidden tab** (low-confidence: hard to time an overflowing run in a hidden tab). Let a turn end while its chat
    tab is hidden, then show the tab: the cursor is on screen.
-8. **07, durations** (expected). Open an activity line after a turn: each tool and thinking row ends with a dim
-   `· Ns`, and the last running step shows none until its next entry arrives.
+8. **07, durations** (expected). The bundled `default` chat layout sets `activityInTranscript: false` and draws no
+   step rows, so first add a user layout to the drive run's own home (never the user's `~/.config`):
+   `<run>/home/.config/wigley-ai-gui/layouts/chat/steps/layout.js` holding
+   `export default { activityInTranscript: true };`, then `setting chat.layout "steps"`. Open an activity line after
+   a turn: each tool and thinking row ends with a dim `· Ns`, and the last running step shows none until its next
+   entry arrives.
 9. **08, bundled fallback** (expected, low risk). A user chat entry layout that lacks a part still draws through the
    bundled default; the primer card falls back the same way.
 10. **10, split width** (expected). Drag the split in one docs tab, switch to a second docs tab: it shows the new width
@@ -81,9 +85,12 @@ Self-tests and teardown:
     (`/^\[docs\] session index( rebuilt| read)?: /`) after `<A-i>` showed its Docs tab.
 21. **24, no late handler lines** (expected). `npm run selftest -- --plugin docs --plugin chat` ends with no
     `no main handler` line after its last PASS.
-22. **24, restart with a Docs tab open** (low-confidence: an invoke to a stopped part that never settles is new; only a
-    live restart shows whether a surviving page part looks stuck). In a drive run, restart docs (or switch it off and
-    on) with a session's Docs tab open: no `no main handler` or late-draw lines, and the page stays responsive.
+22. **24, docs switched off and on with a Docs tab open** (low-confidence: a parked invoke to a stopped main part is
+    new; only a live switch shows whether a page part looks stuck). In a drive run, with a session's Docs tab open, set
+    the `plugins.disabled` config to include `docs` (the drive config command), then clear it. A drive `restart` does
+    not exercise this case: it restarts the whole app and reloads the page, so no page part runs over a stopped main
+    part. Expect no `no main handler` or late-draw lines, the Docs tab reads its index again once docs is back, and the
+    page stays responsive.
 
 ## Dropped
 

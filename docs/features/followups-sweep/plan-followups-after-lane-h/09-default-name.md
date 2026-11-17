@@ -3,10 +3,11 @@
 Status: not started
 Type: Task
 Rung: standard · one exported constant replacing nine private copies, after the exported constants `src/contracts/core-state.ts` already holds; behaviour unchanged
-Wave: 4 · Depends on: 08
+Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
-Fixes follow-up L559 (`docs/features/followups.md`, main at 9b671bd16), **One `DEFAULT_NAME` for the layout host**:
+Fixes follow-up **One `DEFAULT_NAME` for the layout host** (`docs/features/followups.md`; find it with `grep -n -F`
+on the title):
 `const DEFAULT_NAME = 'default'` has nine private copies. Export one from `src/contracts/layouts.ts` and import it at
 every site.
 
@@ -30,7 +31,7 @@ Preconditions (run from the `wigley-ai-gui/` folder of the merged `main`):
 | The contract module holds no constant yet, and contracts may export runtime constants | `grep -c 'export const' src/contracts/layouts.ts src/contracts/core-state.ts` | `layouts.ts:0`, `core-state.ts` above 0 |
 | Every site may import `src/contracts` | `grep -n "'src/contracts'" scripts/layer-rules.mts \| head -3` | `src/contracts` in the rules every layer shares |
 
-Consumes: nothing. Follows 08 in `draw-part.ts` (same file).
+Consumes: nothing. Task 08 follows this one in `draw-part.ts` (same file).
 
 Produces: `export const DEFAULT_LAYOUT_NAME = 'default';` in `src/contracts/layouts.ts`.
 
@@ -62,7 +63,7 @@ Done when: compiles (`npm run typecheck`); `npm run lint` passes (the layer chec
 green; `grep -rn "const DEFAULT_NAME" src` prints nothing.
 
 Commit: one commit, "Layout host: one exported DEFAULT_LAYOUT_NAME in contracts/layouts.ts in place of nine private
-copies (follow-up L559)".
+copies (follow-up: One DEFAULT_NAME for the layout host)".
 
 ## Proof
 

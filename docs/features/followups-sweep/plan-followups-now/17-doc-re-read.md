@@ -16,16 +16,31 @@ Decisions:
 - Each landed group's follow-up items leave `followups.md` (the file's rule: remove an item when its work lands). Go by
   item title, never by line number: the triage commit and the scheduled-tasks run both moved lines. A group struck by
   a ruling leaves its items in place, with the item text corrected if the ruling found it untrue.
-- Items per group: 01 restored step header (L80) · 02 old plugin code revisions (L62) · 03 drive quit waits on the
-  host (L828) · 04 fit check flags split handle prompts (L953) · 05 docs-session-tab switch-off (L683), session-stash
-  switch-off (L688) · 06 failing worktree list unreported (L637) · 07 `[config] applied a new config` every start
-  (L651) · 08 primer `placeRestored` stale review cursor (L926) · 09 re-picked problem's read overwrites a draft
-  (L929) · 10 `findScript` failed stat (L939) · 11 backlog review pane click (L912) · 12 sessions header at least
-  width, agent-lines row overflow, sessions title letter wrap (L855, L885, L909) · 13 native-input reset (L513),
-  redundant docs.css rule (L539) · 14 info tone for the on-demand tag (L530) · 15 waveform to a shared primitive (L580)
-  · 16 primer full-task tests (L792), tests restating shipped text (L798), isStringArray reuse (L537), and the three
-  files of "one test naming style" this plan covers (L804: correct that item to list only `main-api.test.ts` and
-  `docs-state.test.ts`, which the after-Lane-H plan takes) · 18 deferred built-in page part (L593).
+- Items per group, by their exact bold titles (find each with `grep -n -F '**<title>**' docs/features/followups.md`;
+  line numbers drift, so none are given):
+  - 01 "A restored chat's first step header reads hundreds of thousands of hours"
+  - 02 "Old plugin code revisions stay on disk"
+  - 03 "Drive quit should wait on the host's actual end"
+  - 04 "Self-test fit check flags every split handle's resize prompt"
+  - 05 "Switching off docs-session-tab drops unsaved Docs tab edits", "Switching off session-stash drops a note being typed"
+  - 06 "A failing worktree list goes unreported"
+  - 07 "Each page start logs `[config] applied a new config` again"
+  - 08 "Primer `placeRestored` may restore a stale review cursor"
+  - 09 "A re-picked problem's open read can overwrite a just-saved draft"
+  - 10 "`findScript` lets a failed `stat` reject the pool runner"
+  - 11 "A click into the Backlog review pane is pulled back to the table"
+  - 12 "Sessions header wraps at the side bar's least width", "The Sessions title wraps letter by letter at the least
+    width". Not "Agent-lines row overflows at the side bar's least width": 12 fixes only its header half, and the row
+    half is proved only by task 19's check 6, so 19 removes that item on a pass (or corrects it to the row half on a
+    fail).
+  - 13 "One native-input reset in the input frame", "Redundant docs.css rule"
+  - 14 "Info tone for the on-demand tag"
+  - 15 "Promote the audio picker's waveform to a shared ui primitive"
+  - 16 "Primer tests on a full task's add-item box", "Tests that restate shipped text", "isStringArray reuse" (its text
+    names `drive-args.ts`; the `retro-queue.ts` copy is pinned in `../plan-followups-after-lane-h/17-auto-retro-rows.md`
+    by its own Decision, so the item goes whole), and "One test naming style" is corrected, not removed: it lists only
+    `main-api.test.ts` and `docs-state.test.ts`, which the after-Lane-H plan takes.
+  - 18 "A deferred built-in page part that page-depends on a user plugin withheld at launch stays unstarted"
 - Every doc line a group added or changed (`DESIGN.md`'s Tag and waveform rows, any `AGENTS.md` line) is read line by
   line against the landed code. A stale line is fixed.
 - Leave the scheduled-tasks run's six items and every item outside this list untouched.

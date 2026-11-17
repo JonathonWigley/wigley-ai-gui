@@ -96,7 +96,9 @@ Tests:
   primitive's test owns the geometry now) and replaced by one test,
   `it("draws the row's waveform from its peaks, classed for the layout")`: a kit over peaks `[0.5, 1]`; the node
   `kit.waveform(parent)` returns is the parent's last child, has classes `ui-waveform` and `audio-picker-waveform`,
-  and its `svg` holds 2 `RECT` children.
+  and its `svg` holds 2 `RECT` children; it does not have `is-loading`. A second row of the same test (an `it.each`
+  titled `"draws the row's waveform from its peaks, classed for the layout: $case"`) is a kit over `null` peaks: the
+  node has `is-loading` and its `svg` holds 0 `RECT` children.
 Done when: compiles (`npm run typecheck`); `npm run lint` passes (`scripts/check-styles.mts`: the moved CSS uses only
            tokens); `npm test` runs `src/shared/page/ui/waveform.test.ts`,
            `src/plugins/audio-picker/page/layout/picker-kit.test.ts` and

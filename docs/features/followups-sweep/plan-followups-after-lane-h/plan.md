@@ -101,14 +101,16 @@ Each group's files are in its task document. Names that more than one group read
 - `src/shared/pending-tick.ts`: `createPendingTick(timers, ms, run): PendingTick` with `setNeeded(isNeeded)` (11).
 - `src/shared/fake-timers.test-support.ts`: `fakeTimers()` returning `{ timers, armed, cleared, fireAll(), runAfter(ms) }`
   (11; it replaces ten test copies, among them `split.test.ts`'s, after 10 lands).
-- `DrawnPart.drewBundled` (08), read by 09's layout host edits.
+- `DrawnPart.drewBundled` (08).
 - `DEFAULT_LAYOUT_NAME` in `src/contracts/layouts.ts` (09).
-- `StepDuration`, and `trailing` on `CollapsibleCardOptions` (07), read by 08.
+- `StepDuration`, and `trailing` on `CollapsibleCardOptions` (07).
 - The drive command `wait-log` takes `{ line, timeoutMs?, since? }` (13); the final verification task uses it.
 - `SelfTestStep.click?: string` in `src/contracts/plugin.ts`, and `stepToSessionRow(key, until, max)` in
   `src/plugins/sessions/contract.ts` replacing forms' `stepToRow` and sessions' `stepNextTo` (23).
 - `startFormEvents`, `startFormsEvents` and `startPrimerEvents` return a `Disposable`; `FinishFormDeps.isStopped()` in
   `src/shared/page/session-forms.ts` (24).
+- `PluginChannels.dropParked(pluginId)` in `src/main/plugins/plugin-channel.ts`, called by the plugin switch when a
+  page part stops (24).
 - `AGENTS.md` is edited by 01 (§ A mode), 05 (the `sessions/` entry), 15 (the `git/` entry), 23 (the self-test
   paragraph) and 25 (the "A registration" bullet, with 24's rules), each in its own wave.
 
@@ -117,13 +119,15 @@ Each group's files are in its task document. Names that more than one group read
 > `wigley:make` ticks a box once its group is committed and proved, and sets `Status: done` in the
 > task document in the same change. The run is done when every box is ticked.
 
-Critical path: 06 → 07 → 08 → 10 → 11 (and 24 → 25, placed after the code waves for its sweeps).
+Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs after the last code wave because its sweeps edit
+`dispose` bodies no Files line names.
 
 ### Wave 1
 - [ ] [Docs view state](01-docs-view-state.md)
 - [ ] [One ownsRoot helper](02-docs-owns-root.md)
 - [ ] [Sessions pane clicks and presses](03-sessions-pane-presses.md)
-- [ ] [Chat cursor follows tall blocks and hidden tabs](06-chat-cursor.md)
+- [ ] [Step and tool-call durations](07-step-durations.md)
+- [ ] [One DEFAULT_NAME](09-default-name.md)
 - [ ] [Window adapter hears page load 1](12-window-page-load.md)
 - [ ] [Drive wait-log and test titles](13-drive-wait-log.md)
 - [ ] [Memory Files reports folder events](16-memory-files-folders.md)
@@ -134,27 +138,28 @@ Critical path: 06 → 07 → 08 → 10 → 11 (and 24 → 25, placed after the c
 
 ### Wave 2
 - [ ] [Sessions page model](05-sessions-page-model.md) — after 03
-- [ ] [Step and tool-call durations](07-step-durations.md) — after 06
+- [ ] [Chat cursor follows tall blocks and hidden tabs](06-chat-cursor.md) — after 07
 - [ ] [Test naming, the rest](14-test-naming-rest.md) — after 01, 02
 - [ ] [Local commands do not title a row](20-local-command-titles.md) — after 13
 
 ### Wave 3
-- [ ] [DrawnPart reports drewBundled](08-drawn-part-bundled.md) — after 07
+- [ ] [Split subscribes to its width key](10-split-width.md) — after 01, 05, 07
 - [ ] [Git.commitPaths removed](15-git-commit-paths.md) — after 01, 05
 
 ### Wave 4
-- [ ] [One DEFAULT_NAME](09-default-name.md) — after 08
-- [ ] [Split subscribes to its width key](10-split-width.md) — after 01, 08
+- [ ] [DrawnPart reports drewBundled](08-drawn-part-bundled.md) — after 07, 09, 10
+- [ ] [Self-test click step and step helpers](23-selftest-steps.md) — after 15
 
 ### Wave 5
-- [ ] [Shared tick and fake timers](11-shared-tick.md) — after 07, 10
-- [ ] [Self-test click step and step helpers](23-selftest-steps.md)
-- [ ] [Teardown rules after a stop](24-teardown-rules.md)
+- [ ] [Shared tick and fake timers](11-shared-tick.md) — after 07, 08, 10
 
 ### Wave 6
-- [ ] [Every view's dispose against what it drew](25-view-dispose-audit.md) — after 24
+- [ ] [Teardown rules after a stop](24-teardown-rules.md) — after 08, 11, 23
 
 ### Wave 7
+- [ ] [Every view's dispose against what it drew](25-view-dispose-audit.md) — after 24
+
+### Wave 8
 - [ ] [Doc re-read and follow-up removal](26-doc-re-read.md) — after every group
 - [ ] [Final verification](27-final-verification.md)
 

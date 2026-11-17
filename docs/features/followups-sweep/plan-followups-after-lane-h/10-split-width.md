@@ -3,10 +3,11 @@
 Status: not started
 Type: Task
 Rung: hard · adds a member to the `UiState` contract every implementer and fake must carry, moves four owners off a manual reload, and the subscription must not fight a drag in progress
-Wave: 4 · Depends on: 01, 08
+Wave: 3 · Depends on: 01 (`docs/page/start.ts`), 05 (`sessions/page/session-fakes.ts`), 07 (`DESIGN.md`, another section)
 Plan: [plan.md](plan.md)
 
-Fixes follow-up L510 (`docs/features/followups.md`, main at 9b671bd16), **Split subscribes to its width key**:
+Fixes follow-up **Split subscribes to its width key** (`docs/features/followups.md`; find it with `grep -n -F` on
+the title):
 `Split` (`src/shared/page/ui/split.ts`) subscribes to its ui-state key instead of each owner calling `reloadWidth()`
 when shown, so a new split owner cannot forget it. Forms' `round-view.ts` caller is left as it is (plan.md Decision:
 Lane L tasks 12–13 rewrite it); its split follows the key through the divider all the same.
@@ -47,8 +48,9 @@ Preconditions (run from the `wigley-ai-gui/` folder of the merged `main`):
 | The `UiState` implementers and fakes this change must extend | `grep -rln 'UiState' src --include='*.ts' \| xargs grep -ln 'get: (key) =>\|get: () => undefined'` plus the inline fakes `grep -rn "uiState: { get: () => undefined" src` | the files listed above as test/modify (notes' `popup.test.ts` casts `as unknown as PageServices` and needs no edit) |
 | No subscription exists yet | `grep -rn 'uiState.on(\|UiState.*on(' src --include='*.ts' \| wc -l` | `0` |
 
-Consumes: nothing from another group. Follows 01 in `src/plugins/docs/page/start.ts` and 08 in
-`src/plugins/primer/page/primer-view.ts` (same files, earlier waves).
+Consumes: nothing from another group. Follows 01 in `src/plugins/docs/page/start.ts`, 05 in
+`src/plugins/sessions/page/session-fakes.ts` and 07 in `DESIGN.md` (same files, earlier waves); task 08 follows this
+one in `src/plugins/primer/page/primer-view.ts`.
 
 Produces:
 - `on(key: string, listener: () => void): Disposable` on `UiState` in `src/contracts/ui-state.ts`
@@ -65,11 +67,14 @@ Decisions:
   own included, and returns the `Disposable` that stops it; a set in another window's page is not heard."
 - **The page store.** `createPageUiState` keeps one `Map<string, Set<() => void>>` keyed by the qualified key, shared
   by every `scoped` object of the page, so two `scoped('docs')` objects hear each other. `set` updates `values`,
-  calls `write`, then calls a copy of that key's listeners (a listener that disposes during the call does not skip
-  another). The comment's first sentence gains "and calls the key's `on` listeners".
+  calls `write`, then calls each listener of a copy of that key's set through `callEach`
+  (`src/shared/call-each.ts`), so a listener that disposes another during the call does not skip it, and a listener
+  that throws does not stop the rest (`callEach` throws the first error once every listener has run). The comment's first sentence gains "and calls the key's `on` listeners".
 - **The divider subscribes.** `createSplitDivider` subscribes `options.uiState.on(options.stateKey, …)` with the body
   of `reloadWidth` (shows the stored width unless a drag holds the pointer) and disposes the subscription in its
-  `dispose`. The writer hears its own set: at a drag's end and after a nudge the stored width equals the drawn one, so
+  `dispose`. The listener returns at once while the divider's own `isDisposed` is true: a listener earlier in the
+  store's copy may dispose this split (an owner's teardown reacting to the width), and the copy still calls it.
+  `reloadWidth`'s existing `isDisposed || handle.isDragging()` guard is that check; the listener calls through it. The writer hears its own set: at a drag's end and after a nudge the stored width equals the drawn one, so
   the redraw shows the same width. `createSplit` gets the subscription through the divider; nothing in it changes but
   comments.
 - **`reloadWidth` stays on both interfaces.** `SplitDivider.reloadWidth` is still needed: the shell's
@@ -95,6 +100,8 @@ Decisions:
   callers), `system-stats` `start.test.ts` and `starred-docs.test.ts` (their recording `set` moves into `onSet`). The
   four inline `{ get: () => undefined, set: () => undefined }` fakes (`backlog-view.test.ts`, `gallery-parts.test.ts`,
   `forms-view.test.ts`, `round-view.test.ts`) and `chat-view.test.ts`'s become `uiStateOver(new Map())`.
+  Sessions' `fakeUiState` stored `undefined` on `set(key, undefined)` where `uiStateOver` deletes the key; through
+  `UiState` (`get` only) both read back `undefined`, so no sessions test changes meaning.
 - **Docs.** `DESIGN.md`'s **Split** entry, after "written when a drag ends and on each keyboard resize": add "; every
   split over the same key follows a width any of them writes".
 
@@ -109,6 +116,10 @@ GIVEN two splits over one key WHEN the second holds a drag at 300 and the first 
 
 GIVEN a disposed split WHEN another split writes its key THEN the disposed one's width is unchanged.
 
+GIVEN two splits over one key, the first's owner listening to the key and disposing the second when it hears a set,
+subscribed before the second WHEN a set of the key runs THEN the second's width is unchanged: the store's copy still
+calls the second's listener, which returns because its split is disposed.
+
 GIVEN two docs views WHEN a split width is stored under the docs split's key by one of them THEN the other's split
 shows it before its next `shown` (proved through the split test above; the docs page holds no width test today and
 the harness does not drive a drag).
@@ -116,12 +127,22 @@ the harness does not drive a drag).
 Tests:
 - `ui-state.test.ts`: `it.each` `'on hears a set of its own key only: $case'` — rows `same scope` (1 call), `another
   scope object of the prefix` (1), `another key` (0), `another prefix` (0), `after dispose` (0).
+- `ui-state.test.ts`, describe `UiState stores`: `it.each` over both the real page store (`createPageUiState(…)
+  .scoped('forms')`) and `uiStateOver(new Map())`, `'$store: $case'`, rows `a set reads back` (`set('rail', 300)`,
+  `get` 300), `a set of undefined deletes the key` (`set('rail', 300)`, `set('rail', undefined)`, `get` undefined),
+  `a set calls the key's listener once` (`on('rail', l)`, `set('rail', 300)`, `l` called 1), `a disposed listener is
+  not called` (0). The new split and side-sections tests rest on `uiStateOver`; this pins that it behaves as the page
+  store does.
 - `split.test.ts`, describe `createSplit follows its key`: `'a split takes the width another split over its key
   stores'` (two splits on one `uiStateOver`, nudge the first `right`, second `width()` `limits.initial +
   SPLIT_NUDGE_STEP`, i.e. 264); `'a drag in progress
   keeps its width when another split stores one'` (second pressed and moved to 300, first's store `set('side', 350)`,
   second `width()` 300); `'a disposed split no longer follows its key'` (dispose, `set('side', 350)`, width stays
-  240). The two `createSplit reloadWidth` tests stay, now storing through `state.set`.
+  240); `'a split disposed from inside another listener of its key keeps its width'` (dispose one split from inside
+  another's listener, then a set: the disposed one's width unchanged). The two `createSplit reloadWidth` tests stay
+  as they are, writing straight into the map (`saved.set('side', 350)`) with no `state.set`: the map write notifies
+  no listener, so each still fails if `reloadWidth` alone does nothing. The `follows its key` tests prove the
+  subscription.
 - `side-sections.test.ts`: `'a drag on one hub handle widens every tab, keeps the width, and a later tab reads it'`
   passes unchanged over the notifying fake (it fails if the divider does not subscribe, since the loop is gone).
 - `primer-view.test.ts`'s `primer column widths` table passes unchanged (writes `tasks-width` 300 and
@@ -134,7 +155,7 @@ and sessions `start.test.ts` suites and every other edited test file green; `gre
 | grep -v test` lists only `shell.ts` (two) and `round-view.ts` (one) besides `split.ts`.
 
 Commit: one commit, "Split follows its ui-state key: UiState gains on(key), every split over one key takes a width
-any of them stores, and primer, docs and chat's hub drop their manual reloads (follow-up L510)".
+any of them stores, and primer, docs and chat's hub drop their manual reloads (follow-up: Split subscribes to its width key)".
 
 ## Proof
 

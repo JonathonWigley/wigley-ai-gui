@@ -67,12 +67,24 @@ Decisions (B):
     with the held lines (`gathered(first, true)`, then `gathered(rest)`), then draws its divider;
   - any line of the turn's content before a result (`assistant`, `stream_event`, `user`, `tool_progress`, or a system
     line outside `GATHERED_SYSTEM_SUBTYPES`): the held lines open a new events entry first, then the line decodes.
-    Lines that carry no turn content (`command_lifecycle`, `control_response`, `control_request`,
-    `rate_limit_event`) pass without flushing. The flush runs in `decode` before the line's decoder, through one
-    helper `releaseHeld(out, opensTurn: boolean)` that pushes each `gathered` snapshot to `out.entries`.
+  The flush runs in `decode` before the line's decoder, through one helper `releaseHeld(out, opensTurn: boolean)` that
+  pushes each `gathered` snapshot to `out.entries` and sets `heldEvents` back to null.
   `gathered`'s `startsTurn` call in `decodeSystem` becomes `gathered(event, event.subtype === 'init')` when nothing
   is held. This keys the join on the next result being empty, as the item says, and a second hand-back right after
   the first gets its own events entry because its turn's content flushes its init.
+- **Lines with no turn content are held too, in wire order.** `command_lifecycle`, `control_response`,
+  `control_request` and `rate_limit_event` do not flush, but while `heldEvents` is not null their events-entry line
+  joins `heldEvents` instead of the hand-back turn's entry; every other field their decoder sets (`lifecycle`,
+  `controlResponse`, `hostRequest`, `planRows`) is set at once. Reason: they call `gathered(event)` today, which would
+  put them in the hand-back entry while the init that came before them lands in a later one, out of wire order. One
+  helper `gatherOrHold(event, out)` (push to `heldEvents` when it is not null, else `out.entries.push(gathered(event))`)
+  replaces the `out.entries.push(gathered(event))` in those four decoders and in `decodeSystem`'s gathered branch
+  (whose init, when `isAfterHandback` and nothing is held, starts `heldEvents` as `[event]`). A `control_response`
+  `isKeptOut` skips stays skipped.
+- **One empty-follow-up test.** `releaseHeld` for a `result` line runs in `decode` before `decodeResult`, so before
+  `decodeResult` resets `isAfterHandback`. Today's `isEmptyFollowUp` expression (`isAfterHandback`, `origin.kind ===
+  'task-notification'`, `result === ''`, `num_turns === 0`) moves into one local function `isEmptyFollowUp(event:
+  Json): boolean`, called by `decode` (to pick the flush) and by `decodeResult` (to pick the entry); no second copy.
 - **A process that ends while lines are held** loses only those init and status lines' events entry. Accepted: the
   measured follow-up is an init and an empty result, a few milliseconds apart.
 
@@ -99,6 +111,22 @@ Tests:
   `INIT_LINE` (expect `entries` `[]`), then an assistant line built with `assistantEvent` → its first entry's id is
   `turn-events-2`. New row or test for a second hand-back: `INIT_LINE`, `handbackResult('a')`, `INIT_LINE`, an
   assistant line, `handbackResult('b')` → the second hand-back turn's init sits in `turn-events-2`.
+  New test `'keeps the lines after a hand-back's init in wire order ($given)'` (a sentence title, `typescript-vitest.md`
+  § Naming; the file's existing titles keep their form), an `it.each` whose rows each decode `INIT_LINE`,
+  `handbackResult('a')`, then the row's `after` lines; it collects every entry the `after` lines return, keeps the
+  last entry per id, and asserts each kept entry's `raw` mapped to `subtype ?? type`:
+  - `given: 'status lines, then an empty result'`: `after` = `INIT_LINE`, `line({ type: 'system', subtype: 'status'
+    })`, `line({ type: 'system', subtype: 'hook_started' })`, the empty task-notification result (`subtype:
+    'success'`, `result: ''`, `num_turns: 0`, `origin: { kind: 'task-notification', producer: 'session-task' }`, as the
+    table above builds it) → `turn-events-1` raw `['init', 'init', 'status', 'hook_started', 'success']`, and no
+    `result-2` id.
+  - `given: 'a lifecycle frame, then an empty result'`: `after` = `INIT_LINE`, `line({ type: 'command_lifecycle',
+    command_uuid: 'u1', state: 'started' })`, the same empty result → `turn-events-1` raw `['init', 'init',
+    'command_lifecycle', 'success']`, no `result-2` id; the lifecycle line's own decode returns no entry and its
+    `lifecycle` is `{ uuid: 'u1', state: 'started' }`.
+  - `given: 'a status line, then a result with replies'`: `after` = `INIT_LINE`, the status line, the task-notification
+    result with `result: 'done'`, `num_turns: 1` → the result line's entries' ids are `['turn-events-2', 'result-2']`
+    in that order, and `turn-events-2` raw is `['init', 'status']`.
 - The rest of both files and `session-fold.test.ts` pass unchanged; a fold test that pinned the old idle after an
   interrupt with a `started` uuid stops the task and is reported (none found at plan time:
   `foldPipeLine_CompactQueuedBehindAnInterruptedTurn_StillRuns` writes `/compact` with no `started` frame before the

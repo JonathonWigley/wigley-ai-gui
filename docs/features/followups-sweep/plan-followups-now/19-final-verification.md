@@ -5,7 +5,8 @@ Type: Task
 Wave: 3 · Depends on: every group (runs after `wigley:make`'s test gate)
 Plan: [plan.md](plan.md)
 
-Files: none (checks only; a fix a check calls for goes back to its group).
+Files: `docs/features/followups.md` (check 6's outcome only); otherwise none (a fix a check calls for goes back to
+its group).
 
 Run every check in one live session of the app, driven offscreen through the `drive` project skill
 (`.agents/skills/drive/SKILL.md`). Self-test runs are filtered, one plugin at a time
@@ -33,7 +34,10 @@ group) or **low-confidence** (the reason is given; a failure is first re-checked
 6. **12, sessions header width** (low-confidence: no unit seam covers it, and L885 is fixed only "most likely" by
    later commits). Filtered self-test `--plugin agent-lines` with the side bar at its least width (160px): "Sessions"
    stays on one line, its prompts sit beside it or wrap under it, and the drive fit check passes, the session row
-   (L885) included.
+   included. Also take one still at the default side-bar width (before the narrowing steps): the header is one line,
+   title left, prompts right, as before 12. On a pass, remove the item "Agent-lines row overflows at the side bar's
+   least width" from `followups.md`; on a row-overflow fail, correct that item to name only the session row (12 fixed
+   its header half), and commit either edit as "Follow-ups sweep (now): agent-lines row item after the live check".
 7. **13, input frame reset** (expected). Each framed text box (docs, settings, backlog, notes, sessions,
    session-stash, practice, and the rest 13 lists) shows no border, background or outline of its own, uses the frame's
    font and fills the frame's width. An unfocused docs tree keeps its inactive selection fill.

@@ -2,17 +2,17 @@
 
 Status: not started
 Type: Task
-Rung: standard · two small helpers in `src/shared` and mechanical moves of four production blocks and ten test copies onto them; behaviour unchanged
-Wave: 5 · Depends on: 07, 10 (both list `src/shared/page/ui/split.test.ts`)
+Rung: hard · adds the shared tick and fakeTimers seam other tests consume and moves four timer lifecycles
+Wave: 5 · Depends on: 07, 08 (each lists `src/plugins/chat/page/entry-list.test.ts`), 10 (both list `src/shared/page/ui/split.test.ts`)
 Plan: [plan.md](plan.md)
 
-Fixes follow-up L571 (`docs/features/followups.md`, main at 9b671bd16), **One shared tick and one shared
-`fakeTimers`**: the block "one pending one-shot, set while needed, clear when not" has four copies (`pendingTick` in
+Fixes follow-up **One shared tick and one shared `fakeTimers`** (`docs/features/followups.md`; find it with
+`grep -n -F` on the title): the block "one pending one-shot, set while needed, clear when not" has four copies (`pendingTick` in
 `chat/page/row-clock.ts`, `agent-strip/page/agent-strip.ts`, `workflow/page/workflow-view.ts`,
 `agent-lines/page/working-lines.ts`), and the `fakeTimers` test helper has many. Give each one home in `src/shared`.
 
-**Shared file**: `src/shared/page/ui/split.test.ts` is also in task 10's Files, so this task runs in wave 5, on
-task 10's landed copy of it.
+**Shared file**: `src/shared/page/ui/split.test.ts` is also in task 10's Files, so this task runs in wave 4, on
+task 10's landed copy of it (wave 3).
 
 Files:
 - create `src/shared/pending-tick.ts`
@@ -44,7 +44,7 @@ Preconditions (run from the `wigley-ai-gui/` folder of the merged `main`):
 | No shared home yet; `tracked-timers.ts` is a plugin's tracked view of timers, not a tick | `ls src/shared/pending-tick.ts src/shared/fake-timers.test-support.ts 2>&1 \| grep -c 'No such'`; `grep -n '^export' src/shared/tracked-timers.ts` | `2`; `MAX_TIMER_MS` and `trackedTimers` only |
 | Every importer's layer admits `src/shared` | `grep -n "'src/shared'" scripts/check-layers.mts scripts/layer-rules.mts \| head` | listed for `src/main`, the renderer and page layers, and every plugin |
 
-Consumes: nothing from another group. Follows 07 in `entry-list.test.ts` (same file, wave 2) and task 10 in
+Consumes: nothing from another group. Follows 07 (wave 1) and 06 (wave 2) in `entry-list.test.ts` (same file) and task 10 in
 `split.test.ts` (above).
 
 Produces:
@@ -86,6 +86,10 @@ Decisions:
   that came too late would"), which is the case that suite proves `trackedTimers` guards; the shared fake honours
   `clear`, so that suite keeps its own and renames it `lateClearTimers` with its comment, so the grep for the shared
   name finds one home.
+- **Left out, other `Timers` fakes**: `workflow-large/main/countdown.test.ts`, `system-stats/main/poller.test.ts`,
+  `usage/main/plan-poller.test.ts`, `unity-pool/main/pool-watch.test.ts`, `chat/main/tool-callers.test.ts`,
+  `chat/main/start.test.ts` and `main/plugins/plugin-switch.test.ts` (`const fakeTimers`) keep their own: they carry
+  other members and names, and are not the item's `function fakeTimers()` copies the precondition grep lists.
 
 GIVEN a pending tick with `setNeeded(true)` called twice WHEN the timers are read THEN one timer is armed, for `ms`.
 GIVEN an armed tick WHEN `setNeeded(false)` THEN its handle is cleared and nothing is armed; a further
@@ -109,7 +113,7 @@ Done when: compiles (`npm run typecheck`); `npm run lint` passes (the layer chec
 `grep -rn 'pendingTick' src` prints nothing; `grep -rn 'function fakeTimers' src` prints only the shared file.
 
 Commit: one commit, "Shared createPendingTick for the four set-while-needed ticks, and one fakeTimers in
-src/shared for ten test copies (follow-up L571)".
+src/shared for ten test copies (follow-up: One shared tick and one shared fakeTimers)".
 
 ## Proof
 

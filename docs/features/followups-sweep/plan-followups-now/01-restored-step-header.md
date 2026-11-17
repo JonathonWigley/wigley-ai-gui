@@ -43,9 +43,11 @@ Decisions:
   `transcripts.ts`, unless a test pins `0` for them. `transcripts.test.ts` pins `at: 0` for leading entries, and Lane H
   moves that file, so the fix is the other route the item names: a time of 0 is unknown, and the run draws no duration.
 - **0 means unknown.** The Claude adapter stamps an entry before the transcript's first timestamped line with `at` 0,
-  and every later entry carries the last time seen, so times never fall after the first real one. A run's start is
-  unknown exactly when `previousAt ?? steps[0].at` is 0; its end is then also 0 or a real time, and either way no
-  duration is true. `listRows` sets `startedAt: null` in that case and leaves `endedAt` as it is now.
+  and every later entry carries the last time seen. A run's start is the first non-zero of `previousAt` and
+  `steps[0].at`; when both are 0 (or `previousAt` is null and `steps[0].at` is 0), the start is unknown and no
+  duration is true. `listRows` sets `startedAt` to `previousAt || steps[0].at` when that is non-zero, else null, and
+  leaves `endedAt` as it is now. An untimed entry before a timed step falls back to the step's time: it is a real
+  time, a little later than the run's true start.
 - **The contract carries the unknown.** `ActivityInput.startedAt` becomes `number | null`; the comment above it says
   null means the transcript held no time for the run's start (an entry restored from a line with no timestamp), and
   that the default layout then draws no time. `entry-list.ts` passes `row.startedAt` through as it does now, with no
@@ -53,18 +55,25 @@ Decisions:
 - **The default layout draws the summary without its time span.** `fillActivity` builds the
   `span.chat-activity-time` only when `input.startedAt !== null`; `activitySummary` takes the time element as
   `HTMLElement | null` and appends it only when not null. Nothing else in the line changes.
-- **The dock and the turn line stay as they are.** `workingInput` and `doneInput` (`working-turn.ts`) start a turn at
-  the last user entry, which the transcript always times; a turn starting at 0 needs a transcript with no user entry
-  at all. Out of scope.
+- **The dock and the turn line stay as they are.** `workingInput` and `doneInput` (`working-turn.ts:39,81`, checked as
+  the follow-up asks) start a turn at the last user entry, or at the first entry after the last result. Claude Code
+  writes a `timestamp` on every user, assistant and result line, and the adapter carries the last time seen forward,
+  so any entry after a timed line has a real time. A turn starts at 0 only when its first entry comes before every
+  timed line, which needs an untimed user line (or a session with no user entry). Neither occurs in a real
+  transcript; the untimed leading lines the bug comes from are raw entries, which are steps. Out of scope, and no
+  test row below builds an untimed user entry.
 - **No user layout to migrate.** `~/.config/wigley-ai-gui/layouts/chat/` holds only the app-written `layout.d.ts`, so
   the AGENTS.md rule on a contract change orphans nothing; the report says so.
 
-GIVEN a restored session whose first run's steps and the entry before them have `at` 0, and the entry after the run
-has `at` 43000
+GIVEN a restored session whose list opens with a run of steps at `at` 0, and the entry after the run has `at` 43000
 WHEN `listRows` folds the entries
 THEN that run's `startedAt` is null and its `endedAt` is 43000
 
-GIVEN the same run drawn by the default layout
+GIVEN an untimed entry before a run whose first step has `at` 5000
+WHEN `listRows` folds the entries
+THEN that run's `startedAt` is 5000
+
+GIVEN a run with a null `startedAt`, finished or live
 WHEN `layout.activity` draws it
 THEN the summary line holds the step text and no `span.chat-activity-time`
 
@@ -76,11 +85,15 @@ Tests:
 - `activity-runs.test.ts`, rows added to the `listRows times a run with $given → $expected` table:
   - `'a run opening a restored list at 0'`: `entries('tool:t1@0', 'thinking:k@0', 'assistant:a@43000')`, working
     false → `{ startedAt: null, endedAt: 43000 }`
-  - `'a run after an untimed user entry'`: `entries('user:u@0', 'tool:t1@0', 'assistant:a@5000')`, working false →
+  - `'a run after an untimed notice'`: `entries('notice:n@0', 'tool:t1@0', 'assistant:a@5000')`, working false →
     `{ startedAt: null, endedAt: 5000 }`
-- `layout.test.ts`, a row added to the `activity_Default_$state` table: `state: 'Unknown start'`, input
-  `{ ...finishedRun([toolStep('Read', 'a.ts')], 8000), startedAt: null }`, lines
-  `['chat-activity', 'span.chat-activity-steps:1 step · Read']`
+  - `'a timed run after an untimed notice'`: `entries('notice:n@0', 'tool:t1@5000', 'assistant:a@9000')`, working
+    false → `{ startedAt: 5000, endedAt: 9000 }`
+- `layout.test.ts`, two rows added to the `activity_Default_$state` table:
+  - `state: 'UnknownStart'`, input `{ ...finishedRun([toolStep('Read', 'a.ts')], 8000), startedAt: null }`, lines
+    `['chat-activity', 'span.chat-activity-steps:1 step · Read']`
+  - `state: 'UnknownStartLive'`, input `{ ...liveRun([toolStep('Read', 'a.ts', null)], false, 3000), startedAt: null }`,
+    lines `['chat-activity is-live', 'span.chat-activity-steps:1 step · Read']`
 
 Done when: compiles (`npm run typecheck` passes, `layout-contracts.test.ts` included); `npm test` runs the rows
 above and they pass; `docs/features/agent-chat/design.md` § the `activity` part's input (≈line 575) reads

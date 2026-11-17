@@ -7,8 +7,9 @@ Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
 Follow-ups:
-- **The drive `wait-log` misses lines logged before it starts** (`followups.md` L247).
-- **`$name_<suffix>` vitest titles lose their case name** (`followups.md` L807). The item names three sites; the tree
+- **The drive `wait-log` misses lines logged before it starts** (`docs/features/followups.md`; find each with
+  `grep -n -F` on its title).
+- **`$name_<suffix>` vitest titles lose their case name** (`docs/features/followups.md`). The item names three sites; the tree
   holds 31 of the same break (Decisions). This group fixes every one outside the files other Wave 1 groups edit.
 
 Files:
@@ -57,17 +58,22 @@ Decisions:
 - **The mark from the cursor.** With `since` given, `run` builds `const mark: LogMark = { navigation:
   window.navigationCount(), length: since }` in place of `await markLog(window)` and hands it to
   `waitForNewLogLine` unchanged. `linesSince` already reads a log shorter than the mark as reloaded and counts all
-  of it, the same rule `log` uses for a `since` past its end. No change in `page-driver.ts`.
-- **Validation.** `since` is read with `optionalNumber(args, 'since')`; a value that is not a whole number of 0 or
-  more rejects with `wait-log since must be a whole number of 0 or more`, before any read.
+  of it, the same rule `log` uses for a `since` past its end. So a `since` greater than the log's length counts every
+  line, old ones included: a driver that kept `next` across a page reload then reads the new page's whole log. No
+  change in `page-driver.ts`.
+- **Validation.** `since` is read with `optionalNumber(args, 'since')`; a value that is not a number (a string, `null`)
+  rejects inside it with `requiredNumber`'s own message, `since must be a number`; a number that is not a whole
+  number of 0 or more rejects with `wait-log since must be a whole number of 0 or more`. Both before any read.
 - **The description and the usage line.** The command's `description` becomes: `'waits for a page log line equal to
   the whole line, its source prefix included (`[page] …`): one logged after the call, or with `since` (the `next` a
-  `log` call returned) one at that index or later, already logged or not'`. `scripts/drive-args.mts`' usage becomes
+  `log` call returned) one at that index or later, already logged or not; a `since` past the log's end (the page
+  reloaded) counts every line, as `log` does'`. `scripts/drive-args.mts`' usage becomes
   `wait-log <line> [{"timeoutMs":n,"since":n}]`; the parse is unchanged (it passes the JSON object through).
 - **SKILL.md.** The `wait-log` line becomes: "`wait-log` matches a whole page log line, its source prefix included
   (`[page] …`), logged after the call starts; a line already in the log does not count unless `since` is given:
   `{"since":n}` with the `next` an earlier `log` returned counts every line from there on, so a driver reads a line a
-  page start already logged with `log` once, then `wait-log` from its `next`."
+  page start already logged with `log` once, then `wait-log` from its `next`; a `since` past the log's end (the page
+  reloaded) counts every line, as `log` does."
 - **Titles: the whole category.** Vitest reads `$key` up to the first character outside `[\w.$]`, so `$name_Sets…`
   reads the key `name_Sets…` and prints `undefined` for it. The fix follows the repo's note in
   `fake-agent-harness.test.ts` (`agentsTurn_$case`): the variable part sits at the end of the title, or the row
@@ -81,9 +87,13 @@ Decisions:
     `NestedNewKey_SetsItAtItsDottedPathKeepsTheRestAndIsApplied`,
     `NewObject_SetsItAtItsDottedPathKeepsTheRestAndIsApplied`, then `TrailingDot_IsRefusedAndTheFileIsUnchanged`,
     `LeadingDot_IsRefusedAndTheFileIsUnchanged`, `ParentNotAnObject_IsRefusedAndTheFileIsUnchanged`;
-  - every other site picks one of the two by the same rule, and a title with several variables
-    (`sidePane_Checked$checked_Of$total_FillsTheBarTo$percent`) moves every variable but the last into a trailing
-    `($a of $b)`-style suffix or a `case` field, so no `$key` is followed by a word character.
+  - every other site picks one of the two by the same rule, and a title with several variables moves every variable
+    but the last into a trailing suffix or a `case` field, so no `$key` is followed by a word character. The worked
+    example, which the other multi-variable sites copy: `workflow-large/layouts/default/layout.test.ts`'
+    `'sidePane_Checked$checked_Of$total_FillsTheBarTo$percent'` becomes
+    `'sidePane_CheckedOfTotal_FillsTheBarToPercent ($checked of $total, $percent)'`; the rows
+    (`{ checked, total, percent }`) are unchanged, and the first row prints
+    `sidePane_CheckedOfTotal_FillsTheBarToPercent (1 of 3, 33.33)`.
   No test's body, rows' data or assertion changes.
 
 GIVEN a page whose log already holds `[a] done` WHEN `wait-log` runs with `{ line: '[a] done', since: 0 }` THEN it
@@ -91,18 +101,26 @@ returns `{ found: true }` without waiting.
 GIVEN the same log WHEN `wait-log` runs with no `since` THEN it still returns `{ found: false }` after its timeout.
 GIVEN a log of two lines WHEN `wait-log` runs with `since: 2` and the matching line is logged later THEN it returns
 `{ found: true }`; WHEN the line was the first of the two THEN `{ found: false }`.
+GIVEN a log of two lines WHEN `wait-log` runs with `since: 5` and the line is one of the two THEN it returns
+`{ found: true }` (a cursor past the end reads the log as reloaded).
+GIVEN `since: 'two'` WHEN `wait-log` runs THEN it rejects with `since must be a number`.
 
 Tests (in `drive-commands.test.ts`, beside `waitLog_MatchingLineLoggedBeforeTheCall_ResolvesNotFound`, which stays):
 - `waitLog_SinceZeroLineAlreadyLogged_ResolvesFound`: log `['[a] done']`, args `{ line: '[a] done', since: 0,
   timeoutMs: 100 }` → `{ found: true }`.
 - `waitLog_SinceAfterTheMatchingLine_ResolvesNotFound`: log (newest first) `['[a] other', '[a] done']`, args
   `{ line: '[a] done', since: 1, timeoutMs: 100 }` → `{ found: false }`.
+- `'a since at the end of the log finds the line logged after the call'`: log (newest first) `['[a] other',
+  '[a] first']`, args `{ line: '[a] done', since: 2, timeoutMs: 1000 }`; after the first read the fake log grows by
+  `'[a] done'` → `{ found: true }`.
+- `'a since past the end of the log counts every line, as after a reload'`: log `['[a] other', '[a] done']`, args
+  `{ line: '[a] done', since: 5, timeoutMs: 100 }` → `{ found: true }`.
 - `waitLog_SinceNotAWholeNumber_Rejects`: `it.each` over `-1`, `1.5` → rejects with
-  `wait-log since must be a whole number of 0 or more`.
+  `wait-log since must be a whole number of 0 or more`; a row `'two'` → rejects with `since must be a number`.
 - B: no new test; each renamed title is checked by reading `npm test`'s output for the file (no `undefined` in a
   title the file prints).
 
-Done when: compiles (`npm run typecheck`); `npm test` runs `src/main/drive/drive-commands.test.ts` with the three new
+Done when: compiles (`npm run typecheck`); `npm test` runs `src/main/drive/drive-commands.test.ts` with the five new
 tests green and every file in B green; the precondition grep prints only the leftover sites in the two files named
 there and the fake-agent-harness comment; `npm run lint` clean.
 

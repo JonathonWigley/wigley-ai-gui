@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Rung: standard · one flag and one guard on two exports, with a table test
+Rung: hard · a disposed flag changes how two async exports behave across the part's stop
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 

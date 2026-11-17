@@ -43,8 +43,11 @@ Decisions:
   null.
 - **Only a switch-off asks.** The contract's rule stands: a restart and quit do not ask `mayStop`, so neither part
   changes how it stops.
-- **The session-stash test file.** It follows `src/plugins/notes/page/start.test.ts`: `installFakeDom` with
-  `vi.stubGlobal`, `startPagePart(sessionStashPagePart, { dependencies: [<sessions fake>], invoke })`, where the
+- **The session-stash test file.** It follows `src/plugins/notes/page/start.test.ts`, with
+  `installFocusFakeDom(vi.stubGlobal)` in place of `installFakeDom`, as `note-dialog.test.ts` does: `noteDialog.open`
+  reads `document.activeElement` and focuses the input. `layoutShow` is left unset: the part ignores the show's
+  `draw`, and the dialog draws through `createSessionStashParts`' default layout until `setLayouts` runs.
+  `startPagePart(sessionStashPagePart, { dependencies: [<sessions fake>], invoke })`, where the
   sessions fake (`fakeDependency(sessionsPageKey, …)`) answers `shownSessionId()` with `'s1'` and `closeSession`
   with a resolved promise, `invoke` resolves `undefined` for `forgetKept`, and the harness publishes
   `sessionsRowsSlot` with a row for `'s1'` (`sessionRow` from `src/plugins/sessions/contract.test-support.ts`).

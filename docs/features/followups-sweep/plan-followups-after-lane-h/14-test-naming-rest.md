@@ -6,14 +6,15 @@ Rung: standard · renames test titles to the sentence form `typescript-vitest.md
 Wave: 2 · Depends on: 01 (both list `src/plugins/docs/page/tree-view.test.ts`), 02 (02's Tests and Done when name `docs-state.test.ts` rows by their old titles)
 Plan: [plan.md](plan.md)
 
-Follow-up **One test naming style** (L804, `followups.md` on main at 9b671bd16), for the two files Lane H edits:
+Follow-up **One test naming style** (`docs/features/followups.md`; find it with `grep -n -F` on the title), for the
+two files Lane H edits:
 `main-api.test.ts` and `docs-state.test.ts`. `plan-followups-now` renames the other files the item lists.
 
 Files:
 - test `src/main/plugins/main-api.test.ts`
 - test `src/plugins/docs/page/docs-state.test.ts`
-- test `src/plugins/docs/page/tree-view.test.ts` (only its two `$name_<suffix>` titles, for task 13's L807 sweep,
-  which leaves this file because task 01 edits it in Wave 1)
+- test `src/plugins/docs/page/tree-view.test.ts` (only its two `$name_<suffix>` titles, for task 13's sweep of
+  **`$name_<suffix>` vitest titles lose their case name**, which leaves this file because task 01 edits it in Wave 1)
 
 Preconditions (run from the `wigley-ai-gui/` folder of the merged tree; checked 2026-11-17 on the Lane H branch):
 
@@ -21,7 +22,7 @@ Preconditions (run from the `wigley-ai-gui/` folder of the merged tree; checked 
 |---|---|---|
 | Old-form titles in `main-api.test.ts` | `grep -nE "['\"\`][a-z][A-Za-z0-9]*_[A-Z\$][A-Za-z0-9\$]*" src/main/plugins/main-api.test.ts` | 11 lines, the titles in the table below. Lane P (tasks 02 and 04) also edits this file; on the merged code, rename every line this grep prints by the same rule |
 | Old-form titles in `docs-state.test.ts` | `grep -cE "['\"\`][a-z][A-Za-z0-9]*_[A-Z\$][A-Za-z0-9\$]*" src/plugins/docs/page/docs-state.test.ts` | about 110 (titles, four `name:` row values, and `expandNewGroups_$name`) |
-| No doc or source line names an old title | `grep -rnE "provisionalEntry_\|applyChange_\|visibleRows_\|createMainApi_\|onDidRun_PartStops" src docs --include=*.ts --include=*.md \| grep -v "\.test\.ts:" \| grep -v "docs/features/followups"` | only this plan's own task documents (`02-docs-owns-root.md`, this one), left as they are |
+| No doc or source line names an old title | `grep -rnE 'provisionalEntry_\|applyChange_\|visibleRows_\|createMainApi_\|onDidRun_PartStops' src docs --include='*.ts' --include='*.md' \| grep -v '\.test\.ts:' \| grep -v 'docs/features/followups'` (the `\|` inside the pattern is the table's escape: the shell gets `-E 'a_|b_|…'`) | nothing (on the Lane H tree, 2026-11-17; the last filter also drops this plan's own task documents under `docs/features/followups-sweep/`) |
 
 Consumes: nothing.
 
@@ -33,8 +34,8 @@ Decisions:
   `createMainApi commands`), so a title drops its `subject_` prefix and turns `Case_Result` into one lower-case
   sentence stating the result under the case. A title's interpolation stays at its end (`… ($filter)`).
 - **Table rows.** `expandNewGroups_$name` becomes `'$name'`, and each row's `name` becomes the sentence. This also
-  avoids the `$name_<suffix>` trap (L807): vitest would read `$name_…` as one key.
-- **`tree-view.test.ts`'s two broken titles** (L807: vitest reads `$name_…` as one key, so the title prints the
+  avoids the `$name_<suffix>` trap (**`$name_<suffix>` vitest titles lose their case name**): vitest would read `$name_…` as one key.
+- **`tree-view.test.ts`'s two broken titles** (the same follow-up: vitest reads `$name_…` as one key, so the title prints the
   literal): `'rowInput_$name_SelectedRowHoldsItsFields'` becomes `'the selected row holds its fields: $name'`, and
   `'$key_WikiLinkRow_CallsOpenWikiLinkWithFocusDoc_$focusDoc'` becomes
   `'$key on a wiki link row calls openWikiLink with focusDoc $focusDoc'`. Find them on the merged code with
@@ -81,7 +82,7 @@ Done when: compiles; `npm test` passes `main-api.test.ts` and `docs-state.test.t
 the change (compare the two files' counts in the run's output); both old-form greps in Preconditions print nothing;
 `tree-view.test.ts` passes with its test count unchanged; `git diff --stat` lists only the three files.
 
-Commit: one commit for the group: "Tests: sentence titles in main-api and docs-state tests (follow-up L804, the files
+Commit: one commit for the group: "Tests: sentence titles in main-api and docs-state tests (follow-up: One test naming style, the files
 Lane H edits)".
 
 ## Proof

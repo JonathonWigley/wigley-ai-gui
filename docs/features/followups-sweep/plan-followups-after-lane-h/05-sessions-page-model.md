@@ -41,7 +41,9 @@ Produces, in `src/plugins/sessions/page/sessions-page-model.ts`:
   - `readRows(): Iterable<SessionRow>` (main's rows, owners included; the model filters them)
   - `readSelection(): string | null`
   - `active: { get(): string | null | undefined; set(sessionId: string | null): void }`
-  - `activateInMain(sessionId: string): Promise<SessionsState>` (the `activate` channel invoke)
+  - `activateInMain(sessionId: string): Promise<boolean>` (the `activate` channel invoke; true when main wrote the
+    rows or the selection, as `contract.ts`'s `activate` says; `echoesAfterReply` keeps the pending echo on true and
+    drops it on false)
   - `restores: Pick<PageRestores, 'track'>`
   - `setContext(focused: SessionRow | undefined): void` (the title bar; `start.ts` formats the detail path)
   - `markToast(mark: MarkOptions): void` (`start.ts` builds the text with the `showMode` keys and toasts it)
@@ -94,13 +96,24 @@ Decisions:
 GIVEN saved panes `a` and `b` showing `host-s1` and `host-s2`, `a` focused WHEN `ready` runs on rows `s1`, `s2` with `s1` selected THEN pane `a` shows `s1`, pane `b` shows `s2`, one restore is tracked, and after a microtask `active` is `s1` and the restore has settled.
 GIVEN two panes showing `s1` and `s2`, `s2`'s focused and published WHEN a notice drops row `s2` with the selection still `s2` THEN `s2`'s pane closes at once but nothing publishes until the notice that selects a held row.
 GIVEN one pane showing `s1` WHEN a notice drops row `s1` and selects `s2` THEN the last pane shows `s2` and `tabs.drop` hears `s1`.
-GIVEN the model asked main to activate `s2` WHEN the notice selecting `s2` arrives THEN it places nothing and `activateInMain` was called once.
+GIVEN the model asked main to activate `s2` and `activateInMain`'s reply (true) has not settled WHEN the notice selecting `s2` arrives THEN it places nothing and `activateInMain` was called once.
 
 Tests:
-- `sessions-page-model.test.ts`, `describe('sessions page model')`, over a fake `SessionsPageModelView` whose panes
-  hold a `PaneTree` changed through `shared/page/pane-tree` (`leafIds`, `closePane`), whose `tabs` hold no tabs and
-  record `drop` ids, and whose list holds no keys; `readRows` and `readSelection` read test-held values;
-  `activateInMain` records its ids and resolves the state it was given:
+- `sessions-page-model.test.ts`, `describe('sessions page model')`, over a fake `SessionsPageModelView`. Its panes
+  hold a `PaneTree` and a pane-to-session map, changed through `shared/page/pane-tree` (`leafIds`, `closePane`), and
+  behave as the real `SessionPanes` does, calling the model's callbacks the same way:
+  - `restore(tree, sessions)` sets the tree (focus from `tree.focusedId`) and each leaf's session from `sessions`
+    (null when left out), then calls `model.panesChanged()`; it calls no `paneFocused`.
+  - `load(paneId, sessionId)` sets the pane's session, then calls `model.panesChanged()`.
+  - `focus(paneId)` does nothing for the focused pane; else it sets `focusedId`, then calls `model.panesChanged()`,
+    then `model.paneFocused(paneId)`.
+  - `close(paneId)` returns false for the last pane and changes nothing; else it drops the pane's session, sets the
+    tree to `closePane(tree, paneId)`, calls `model.panesChanged()`, then `model.paneFocused(<new focusedId>)` when
+    the focused id changed, and returns true.
+  - `tree`, `sessions`, `focusedPaneId` and `focusedSessionId` read the held tree and map.
+  Its `tabs` hold no tabs and record `drop` ids, and its list holds no keys. The fake reaches the model through a
+  `let model` the test assigns right after `createSessionsPageModel`, as `start.ts` does. `readRows` and
+  `readSelection` read test-held values; `activateInMain` records its ids and resolves `true`:
   - `'places the saved panes at ready and settles the restore after its microtask'`: `savedSplit('a')`, rows
     `hostRow('s1')`, `hostRow('s2')`, selection `s1` → panes `{ a: 's1', b: 's2' }`, `restores.track` called once;
     after `await settle()`, the tracked promise has resolved and `active.get()` is `'s1'`.
@@ -110,8 +123,11 @@ Tests:
     with selection `s1` → after `await settle()` `active.get()` is `'s1'`.
   - `'empties nothing and loads the next row into the last pane when its row leaves'`: one pane on `s1`, rows `s2`
     only with selection `s2` → the pane shows `s2`; `drop` heard `['s1']`.
-  - `'places nothing for the echo of its own activate'`: `savedSplit('a')` placed at `ready`; the fake focuses `b`, then
-    `paneFocused('b')` → `activateInMain` heard `['s2']`; the notice selecting `s2` → focused pane still `b`, panes unchanged.
+  - `'places nothing for the echo of its own activate'`: `savedSplit('a')`, rows `hostRow('s1')`, `hostRow('s2')`,
+    selection `s1`, `ready`, `await settle()`; the fake's `focus('b')` (which calls `paneFocused('b')`) →
+    `activateInMain` heard `['s2']`; then, before any `await` (the reply's microtask has not settled), set the
+    selection to `s2` and call `applyNotice` → focused pane still `b`, panes still `{ a: 's1', b: 's2' }`, and
+    `activateInMain` heard `['s2']` only; after `await settle()` the same holds.
 - `start.test.ts` (sessions) passes unchanged but for its fixture import: it is the net for the move.
 
 Done when: compiles; `npm test` runs `sessions-page-model.test.ts` and passes it with `start.test.ts`,

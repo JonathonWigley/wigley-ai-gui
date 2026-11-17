@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Rung: hard · the first-message title moves from the send to the harness's delivery report, across process starts, drops and harnesses that track no delivery
+Rung: deep · per-process candidate state fed by the harness's async delivery events, cleared on process start, clear and drop
 Wave: 2 · Depends on: 13 (both list `src/plugins/chat/main/chat-sessions.test.ts`)
 Plan: [plan.md](plan.md)
 
@@ -43,7 +43,9 @@ Decisions:
   - null on its first version → a harness or mode that tracks no delivery (the fake, Claude's fallback mode): title
     at once, as today.
   `messageDropped` for a held id deletes it. The map is cleared when a new process starts (entry ids are per process)
-  and when the row is cleared. `setFirstMessageTitle` keeps its guards (row gone, title already set, whitespace only).
+  and when the row is cleared: one `session.titleCandidates.clear()` in `beginProcess`, which every `startProcess`
+  runs, the clear's included (`grep -n "function beginProcess" src/plugins/chat/main/chat-sessions.ts`).
+  `setFirstMessageTitle` keeps its guards (row gone, title already set, whitespace only).
 - **`session.sent` is unchanged.** It still turns true at the first write and is saved: auto-retro and the close flow
   read it as "the conversation sent something". Whether a local-command-only session should queue a retro is not this
   item.
@@ -64,13 +66,27 @@ second message's text.
 Tests (in `chat-sessions.test.ts`, `describe('createChatSessions titles')`):
 - `deliver_FirstMessage_SetsItsTitle given $given` (existing table): each row's act awaits the fake's entry
   (`await flush()` after the sends) and keeps its expectation; the fake's null delivery takes the "no delivery" path.
-- `deliver_LocalCommandThenMessage_TitlesFromTheMessage`: drive the process's `entry` events directly through
-  `test.process.events.entry(…)` (the seam the file's entry tests already use), with user entries whose ids are the
-  ids `send` returned: entry `sent` then delivery null for `/effort auto`, then `sent`
-  then `received` for `fix the login bug` → `titleCalls` is `[[ROW_ID, 'firstMessage', 'fix the login bug']]`.
+- The fake harness emits each sent message's user entry itself, with delivery null, a microtask after the send, which
+  takes the "no delivery" path and titles at once. The tests below that drive delivery therefore start through one
+  local helper `startedSilent()`, built as `startedRefusing` is (`grep -n "async function startedRefusing"
+  src/plugins/chat/main/chat-sessions.test.ts`): it wraps the fake's `start` so the process's `send` emits nothing and
+  returns `user-<n>`, `n` counting from 1 per started process (as Claude's ids restart per process); the helper returns
+  the test plus `processes`, the fake's `processes`, so a test drives `processes[i].events.entry(…)` and
+  `processes[i].events.ended(…)`. Each driven user entry carries the text sent, `images: []` and `raw: []`.
+- `deliver_LocalCommandThenMessage_TitlesFromTheMessage`: on `startedSilent()`, send `/effort auto` (`user-1`), drive
+  `user-1` with delivery `sent` then null; send `fix the login bug` (`user-2`), drive `user-2` `sent` then `received`
+  → `titleCalls` is `[[ROW_ID, 'firstMessage', 'fix the login bug']]`, and `test.saved.last()?.sessions[0]?.sent` is
+  `true` (a held local command still marks the row sent).
 - `deliver_FirstMessageNotReceived_StillTitles`: `sent` then `notReceived` → titled.
 - `deliver_FirstMessageDropped_TitlesFromTheNext`: `messageDropped` for the first id, then `received` for the second
   → titled from the second.
+- `'titles nothing from a message the ended process sent, after $given'` (a sentence title, `typescript-vitest.md`
+  § Naming), `it.each` over two rows, each on `startedSilent()`:
+  send `/effort auto` (`user-1`) and `hello` (`user-2`) with no entry driven, then the row's `act`, `await flush()`,
+  then drive `processes[1]`'s user entry `user-2` (text `'replayed'`) with delivery `received` → `titleCalls` is `[]`.
+  Rows: `{ given: 'a relaunch', act: end `processes[0]` (`ended({ code: 0, error: null })`), then send `fix the login
+  bug`, which starts `processes[1]` }` and `{ given: 'a clear', act: `test.chat.clear(ROW_ID)` }`. Without the clear
+  in `beginProcess`, the old process's `user-2` (`hello`) would title the row.
 - `deliver_FirstMessageAfterClear_KeepsTheTitle` (existing) passes unchanged.
 
 Done when: compiles (`npm run typecheck`); `npm test` runs `src/plugins/chat/main/chat-sessions.test.ts` green, and the

@@ -2,8 +2,8 @@
 
 Status: not started
 Type: Parallel
-Rung: hard · a teardown audit of 25 views, each checked against one pinned rule; every fix is local to one view's lifecycle, but a missed gap leaks DOM or listeners past a stop
-Wave: 6 · Depends on: 24 (both list `session-tabs-view.ts`, `backlog-view.ts` and `settings-view.ts`; this audit reads 24's teardown rules as landed)
+Rung: deep · a teardown audit across every plugin's view lifecycle (observers, timers, listeners, subscriptions): each of 26 views is checked for the undo of each, and a missed undo leaks DOM or listeners past a stop
+Wave: 7 · Depends on: 24 (both list `session-tabs-view.ts`, `backlog-view.ts` and `settings-view.ts`; this audit reads 24's teardown rules as landed)
 Plan: [plan.md](plan.md)
 
 Follow-up (`followups.md`): **Every view's dispose against what it drew** (L700).
@@ -11,7 +11,7 @@ Follow-up (`followups.md`): **Every view's dispose against what it drew** (L700)
 ## The views
 
 Enumerated at plan time with
-`find src/plugins src/shared/page -name '*-view.ts' -not -name '*.test.ts' | sort` (27 files). Re-run it on merged
+`find src -name '*-view.ts' -not -name '*.test.ts' | sort` (28 files). Re-run it on merged
 `main` first: a view the scheduled-tasks run added (its Schedules mode) joins the lot of its nearest plugin below,
 under the same rule, and is named in the commit message. Left out, with the reason:
 
@@ -19,12 +19,14 @@ under the same rule, and is named in the commit message. Left out, with the reas
   for Lane L).
 - `src/plugins/sessions/main/consumer-view.ts` — a main-process view: it draws nothing.
 
-The 25 views, in four lots of about 40k tokens of reading each. Each lot is one worker's; no file sits in two lots.
+Added, though the name pattern misses it: `src/plugins/chat/page/image-viewer.ts`, a drawn viewer (lot B).
+
+The 27 views, in four lots of about 40k tokens of reading each. Each lot is one worker's; no file sits in two lots.
 
 | Lot | Views (`src/plugins/…` unless shown) |
 |---|---|
 | A — docs | `docs/page/doc-view.ts` · `docs/page/docs-view.ts` · `docs/page/tree-view.ts` |
-| B — chat, sessions, panes | `chat/page/chat-view.ts` · `sessions/page/session-tabs-view.ts` · `sessions/page/sessions-view.ts` · `sessions/page/sidebar-view.ts` · `sessions/page/consumer-view.ts` · `src/shared/page/pane-tree/pane-tree-view.ts` |
+| B — chat, sessions, panes | `chat/page/chat-view.ts` · `sessions/page/session-tabs-view.ts` · `sessions/page/sessions-view.ts` · `sessions/page/sidebar-view.ts` · `sessions/page/consumer-view.ts` · `src/shared/page/pane-tree/pane-tree-view.ts` · `src/renderer/log-view.ts` · `chat/page/image-viewer.ts` |
 | C — settings, keys, gallery, notes | `settings/page/settings-view.ts` · `settings/page/leader-menu-view.ts` · `settings/page/keymap-view.ts` · `settings/page/plugin-rows-view.ts` · `settings/page/sections-view.ts` · `settings/page/setting-rows-view.ts` · `gallery/page/gallery-view.ts` · `keys/page/help-view.ts` · `keys/page/which-key-view.ts` · `notes/page/markup-view.ts` |
 | D — forms, primer, backlog, pickers, practice, workflow | `audio-picker/page/picker-view.ts` · `backlog/page/backlog-view.ts` · `forms/page/forms-view.ts` · `practice/page/practice-view.ts` · `primer/page/primer-view.ts` · `workflow/page/workflow-view.ts` |
 
@@ -35,7 +37,8 @@ Files:
 - modify `src/plugins/docs/page/doc-view.ts` · `src/plugins/docs/page/docs-view.ts` · `src/plugins/docs/page/tree-view.ts`
 - modify `src/plugins/chat/page/chat-view.ts` · `src/plugins/sessions/page/session-tabs-view.ts` ·
   `src/plugins/sessions/page/sessions-view.ts` · `src/plugins/sessions/page/sidebar-view.ts` ·
-  `src/plugins/sessions/page/consumer-view.ts` · `src/shared/page/pane-tree/pane-tree-view.ts`
+  `src/plugins/sessions/page/consumer-view.ts` · `src/shared/page/pane-tree/pane-tree-view.ts` ·
+  `src/renderer/log-view.ts` (no test file today) · `src/plugins/chat/page/image-viewer.ts`
 - modify `src/plugins/settings/page/settings-view.ts` · `src/plugins/settings/page/leader-menu-view.ts` ·
   `src/plugins/settings/page/keymap-view.ts` · `src/plugins/settings/page/plugin-rows-view.ts` ·
   `src/plugins/settings/page/sections-view.ts` · `src/plugins/settings/page/setting-rows-view.ts` ·
@@ -48,7 +51,7 @@ Files:
 - modify `AGENTS.md` (the "A registration" bullet; lot A's worker makes this edit)
 
 Preconditions (Lane H tree, 2026-11-17; re-run on merged `main`):
-- The `find` above lists the 27 files named here.
+- The `find` above lists the 28 files named here: the 26 in the lots and the two left out.
 - `grep -n "A plugin's own \`dispose\` undoes only what \`api\` cannot see" AGENTS.md` → one line in the "A
   registration" bullet of § Architecture.
 - Task 24 has landed: `grep -n "isStopped\|isDisposed" src/plugins/backlog/page/backlog-view.ts` → the flag it added.

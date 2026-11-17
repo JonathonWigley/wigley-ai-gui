@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Batch
-Rung: hard · adds the `Mode.sideBarNarrowed` core member and changes the `docs.place` value's shape
+Rung: deep · an async open race and the `docs.place` data format, with a core mode-registry change
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
@@ -16,10 +16,10 @@ Four docs-page follow-ups, each a fix to what one docs view keeps or loses (`fol
 Files:
 - modify `src/plugins/docs/contract.ts` (A: `DocsPlace`, its comment, a new `DocsTreePlace`)
 - modify `src/plugins/docs/page/tree-view.ts` (A: `place`, `restorePlace`, `TreePlace`; C: two new `TreeView` members)
-- modify `src/plugins/docs/page/docs-view.ts` (A: `writePlace`; C: `outsideChange`; D: `askedOpens` and every open path)
-- modify `src/plugins/docs/page/start.ts` (B: Docs mode's `sideBarNarrowed`)
+- modify `src/plugins/docs/page/docs-view.ts` (A: `writePlace`; C: `outsideChange`; D: `askedOpens` and each open that D's Decision lists)
+- modify `src/plugins/docs/page/start.ts` (B: Docs mode's `sideBarNarrowed`, the comment above `onWindowResize`)
 - modify `src/contracts/plugin.ts` (B: `Mode.sideBarNarrowed`, the `Mode` comment)
-- modify `src/renderer/shell/modes.ts` (B: `narrowChanged`, the `CoreModes` comment)
+- modify `src/renderer/shell/modes.ts` (B: `narrowChanged` and its inline comment, the `CoreModes` comment)
 - modify `AGENTS.md` (B: § A mode, the line "a window narrowing hides it without telling")
 - test `src/plugins/docs/page/tree-view.test.ts`
 - test `src/plugins/docs/page/start.test.ts`
@@ -63,24 +63,41 @@ Decisions:
   implements it as `machineView.dismissFilter()`, which pops the box scope and moves no focus. The docs-only route
   (dismissing in `onWindowResize`'s frame) was rejected: the page-part harness never runs a frame, so no test could
   reach it. No other mode implements the member: Sessions, Settings and Practice keep no text box in their side bars.
+- **B, the comments that go untrue.** `narrowChanged`'s inline comment in `modes.ts` ("A narrowing hides the side bar
+  without telling the mode, so focus stays across a narrow-and-widen round trip.") becomes: "A narrowing tells the
+  shown mode only through `sideBarNarrowed`, which moves no focus, so focus stays across a narrow-and-widen round
+  trip." The comment above `onWindowResize` in `src/plugins/docs/page/start.ts` ("A narrowing hides the side bar
+  without telling the mode, so the machine view's edge prompt follows the window too, once the core has laid out.")
+  becomes: "A narrowing tells the mode only to close its filter box (`sideBarNarrowed`), so the machine view's edge
+  prompt follows the window here, once the core has laid out." The resize frame and its `showTreeEdge` call stay.
 - **C, the rule.** Before `showChange`, `outsideChange` reads, for each view (`wiki`, `all`), the selected node
-  (`tree.selectedIn(view)`) and the row ids (`tree.rowIdsIn(view)`). After it, for each view whose selected node was
-  an `entry` leaf (its usual row or its Starred row) that the change reached:
-  - `renamed`: `tree.selectEntryIn(view, movedEntryId(node.entryId, change.from, change.to, deps.paths))`, which
-    selects the doc's usual row, as `starChange` does for a dropped Starred row.
-  - `trashed` (reached: `isEntryIdInside(node.entryId, path, deps.paths)` for one of `change.paths`):
+  (`tree.selectedIn(view)`) and the row ids (`tree.rowIdsIn(view)`). The selected node names a doc by its entry id:
+  `node.entryId` for an `entry` leaf (its usual row or its Starred row) and for a `headingMatch` row; `target.path`
+  for a `wikiLink` row whose `target.type` is `'path'`. Any other node names no doc and is left. After `showChange`,
+  for each view whose selected node named a doc the change reached, and whose rows (`tree.rowIdsIn(view)`) no longer
+  hold that node's id:
+  - `renamed` (reached: `movedEntryId(entryId, change.from, change.to, deps.paths)` is not null):
+    `tree.selectEntryIn(view, <that moved id>)`, which selects the doc's leaf (its usual row), as `starChange` does
+    for a dropped Starred row. When `tree.selectedIn(view)` is then still null (the view holds no such leaf),
     `tree.selectNearestIn(view, rowIdsBefore, node.id)`.
-  A `created` change keeps today's path (no reselect). A view whose `showChange` returns false (no document yet)
-  reselects nothing.
+  - `trashed` (reached: `isEntryIdInside(entryId, path, deps.paths)` for one of `change.paths`):
+    `tree.selectNearestIn(view, rowIdsBefore, node.id)`.
+  So a selected heading-match row or wiki-link row of the renamed or trashed doc counts as that doc's row: a rename
+  selects the doc's leaf, a trash the nearest row. A `created` change keeps today's path (no reselect). A view whose
+  `showChange` returns false (no document yet) reselects nothing.
 - **C, where nearest lives.** `selectNearestIn` is a `TreeView` member, not a `docs-state.ts` helper, since task 02
   edits `docs-state.ts` in the same wave. It selects the first id after `goneId` in `rowIdsBefore` that `view`'s rows
   show now, else the nearest id before `goneId` that they show, else nothing; it draws the shown view as
   `selectEntryIn` does. `rowIdsIn` returns the node ids of the rows `view` shows (`rowsOf(slots[view])`), shown or
   not.
-- **D, one sequence.** `askedOpens` stays the one counter; its comment names every taker. Each open the user or a
-  caller asks for takes the next number at its start: `openDoc`, `openMain`, `restorePlace` (as now), and also the
-  tree's `openLeaf`, `openHeading` and `openWikiLink` deps, and the doc's `followFile`, `followPlace` and
-  `openListEntry` deps and `followWikiLink` when it returns true. `openOnceRead` checks `number !== askedOpens` once,
+- **D, one sequence.** `askedOpens` stays the one counter; its comment names every taker. This list of takers is
+  exhaustive; each takes the next number at its start: `openDoc`, `openMain`, `restorePlace` (as now); the tree's
+  `openLeaf`, `openHeading` and `openWikiLink` deps; the doc's `followFile`, `followPlace` and `openListEntry` deps,
+  and `followWikiLink` when it returns true; `openInEditor`; and `showMain`'s `openFile` case (whichever cause reaches
+  it). `openInEditor` and the `openFile` case each open a doc, so they take a number like the others. `openLeaf`'s
+  early return, which only focuses the doc already shown (`focusesDoc && isShownDoc`), takes no number: it opens
+  nothing. `openMain` checks its own number before it calls `showMain('picked')`, so the newer number its `openFile`
+  case then takes does not cancel it. `openOnceRead` checks `number !== askedOpens` once,
   right before its `openListed` call, after both the first-read wait and the rebuild wait, in place of the check
   inside the rebuild branch. `openMain`'s own check after its wait stays. The tree and in-doc opens themselves wait
   on nothing, so they check nothing.
@@ -91,6 +108,7 @@ B — GIVEN Docs mode shown with its side bar beside the doc and the filter box 
 B — GIVEN Docs mode with the side bar hidden by the user WHEN the window narrows THEN nothing is called.
 C — GIVEN two docs views showing doc X's row selected in the second WHEN the first view renames X to Y THEN the second view's All pages selects Y's usual row, whether X's usual row or its Starred row was selected.
 C — GIVEN the second view's selected row is X with rows `[W, X, Z]` WHEN the first view trashes X THEN Z is selected; with rows `[W, X]`, W is selected.
+C — GIVEN the second view's All pages under a filter with a heading-match row of X selected WHEN the first view renames X to Y THEN Y's leaf is selected.
 D — GIVEN an `openDoc` of a path the first index read does not list, waiting on the first show's rebuild WHEN the user opens another doc from the tree, then the rebuild lands listing the waited path THEN the tree's doc stays open and the waited path never opens.
 
 Tests:
@@ -111,13 +129,19 @@ Tests:
   round trip'` becomes `['side bar narrowed a.one']` for the shown mode only (`b.two` hidden hears nothing), retitled
   `'narrowChanged tells only the narrowing, and only to the shown mode, across a round trip'`. `'narrowChanged tells
   nothing of a side bar the user already hid'` stays as is and covers the hidden case.
+- `modes.test.ts`, the existing `'tells a hidden mode nothing'` (~L619): `setup(true)`, `b.two`'s side bar toggled
+  and picked, then `narrowChanged(false)` and `narrowChanged(true)`. The second call takes the shown `a.one` from
+  `beside` to `hidden`, so its expectation becomes `['side bar narrowed a.one']` (`b.two` hears nothing). Retitle it
+  `'a narrowing tells only the shown mode, and a hidden mode hears nothing'`.
 - `start.test.ts` (docs), new `'a narrowing closes the filter box and keeps focus'`: start the page, show Docs mode's
   machine view, run `filter`, then call `harness.mode('docs.docs').sideBarNarrowed!()`; the `.docs-filter` element
   is hidden, a second `filter` run opens the box again (its scope was popped), and `document.activeElement` is what
   it was before the call.
 - `start.test.ts` (docs), new `it.each` `'an outside $change reselects the doc in the other view'`: rows `rename`
-  (expects the renamed doc's leaf selected), `rename from Starred` (expects the usual row), `trash with a row after`
-  (expects the next row), `trash of the last row` (expects the previous row). Two views over sources serving the same
+  (expects the renamed doc's leaf selected), `rename from Starred` (expects the usual row), `rename from a heading
+  match` (the other view's filter set to a heading of the doc, its heading-match row selected; expects the renamed
+  doc's leaf selected), `trash with a row after` (expects the next row), `trash of the last row` (expects the
+  previous row). Two views over sources serving the same
   index (the machine view and `sessionView`), the change made in one through its `rename` or `trash` command with
   `renameDoc` / `trashDoc` answered by the invoke fake, the selection read from the other view's tree rows
   (`is-selected`).
@@ -128,7 +152,7 @@ Tests:
 - `start.test.ts` (docs), `placeAt` builds the new shape (`trees: { wiki: null, all: null }`).
 
 Done when: compiles; `npm test` runs the tests above, and `tree-view.test.ts`, `start.test.ts` (docs),
-`modes.test.ts` and every other suite pass unchanged elsewhere; `AGENTS.md` § A mode says a narrowing tells the
+`modes.test.ts` and every other suite pass, with no test changed beyond those the Tests list names; `AGENTS.md` § A mode says a narrowing tells the
 shown mode through `sideBarNarrowed`, which moves no focus, so focus still survives a narrow-and-widen round trip.
 
 Commit: one commit for the group: "Docs view state: a place per tree view, a narrowing closes the filter box,

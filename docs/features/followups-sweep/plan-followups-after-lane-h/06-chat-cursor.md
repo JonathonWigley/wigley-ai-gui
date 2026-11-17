@@ -3,7 +3,7 @@
 Status: not started
 Type: Batch
 Rung: hard · the cursor's scroll rules interact (following, the visible band, the saved place), and no existing pattern settles which callers of `scrollToFocus` settle the cursor
-Wave: 1 · Depends on: none
+Wave: 2 · Depends on: 07 (both list `entry-list.ts`, `entry-list.test.ts` and `agent-chat/design.md`)
 Plan: [plan.md](plan.md)
 
 Fixes two follow-ups (`docs/features/followups.md`, main at 9b671bd16):
@@ -68,6 +68,10 @@ cursor moves to the nearest step in the band and follows: a step put after it ta
 
 GIVEN the same list still hidden WHEN `scrollToFocus()` runs THEN the cursor stays on the run's line.
 
+GIVEN a shown list that follows at its bottom and overflows, and a `restorePlace` whose focus names a stop the first
+`rebuild` does not hold WHEN that `rebuild` runs and settles, then a second `rebuild` holds the stop THEN the cursor
+is on the saved stop (the settle by the list kept `savedPlace`).
+
 Tests (all in `src/plugins/chat/page/entry-list.test.ts`):
 - `move_OntoTheLastStop ($case)`: add a `from` field (the scrollTop the row starts at, fired as a scroll before the
   move) to every row; the three existing rows take `from: 100`. Add the row
@@ -82,6 +86,13 @@ Tests (all in `src/plugins/chat/page/entry-list.test.ts`):
   `'moves the cursor into the band and follows'` (`shownHeight: 100`, focused `{ kind: 'entry', entry: tool('t2') }`,
   after `put(tool('t3'))` focused `tool('t3')`) and `'on a list still hidden stays on the line'` (`shownHeight: 0`,
   focused the `activity:t1` stop with steps t1, t2; after the put, that stop with steps t1, t2, t3).
+- New `'a restored place whose stop is not drawn yet survives the settle of a following overflowing list'`: set up
+  under `activityShown()` with the scroller geometry of `latest_AtTheBottomOverAnOverflowingOpenRun` (shown,
+  overflowing, at its bottom, following). `list.restorePlace({ focus: { stopId: 't3', following: false, anchorId:
+  null }, openRuns: ['activity:t1'], openExpanders: {} })`; `list.rebuild` over `user('u1'), tool('t1'), tool('t2')`
+  (no `t3`), so `scrollToFocus` runs its settle; then `list.rebuild` over `user('u1'), tool('t1'), tool('t2'),
+  tool('t3')` → `cursorLabel(list)` is `'t3'`. It fails when the settle passes
+  `'user'`, which clears `savedPlace`.
 - `scrollToFocus_FollowingOnAStopTooTall_ScrollsToTheBottom` and `latest_AtTheBottomOverAnOverflowingOpenRun` stay
   unchanged and pass.
 

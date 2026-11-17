@@ -37,6 +37,10 @@ Decisions:
   true `syncFocus` still records `shownFocus` and logs, and skips only the `.focus()` call. Practice passes
   `movesFocus: false` for the same reason; Backlog's `render` has no such parameter, and the flag keeps the change
   inside `syncFocus`.
+- **A refused click.** When the reducer refuses the pane (the review with no row selected), the store's focus stays
+  where it was. After the listener's `setFocus`, when `store.get().focus` is not the clicked pane's focus, the flag is
+  already false (the `finally`), and the listener calls `syncFocus` so the DOM focus goes back to the pane that holds
+  the keys, as today: scope and DOM focus never part.
 - No listener on the assistant's column: scoped-agents' pane takes the keys itself (`tookKeys`).
 
 GIVEN the table holds the keys WHEN a click focuses an element inside the review pane THEN the scope is `review`, the
@@ -60,6 +64,9 @@ Tests:     in `backlog-view.test.ts`, under `describe('backlog pane targets')`, 
              `setup.logs` contains `` `${pane} focused` ``, and `fakeDocument.activeElement === target`.
            - `'focusMain after a click in the review gives the review the keys'`: `focusIn` the `backlog-review-body`
              element from the table, then `setup.view.focusMain()`; assert `lastScope(setup) === 'review'`.
+           - `'a click into the review with no row selected leaves the keys and the focus on the table'`: no row
+             selected, `focusIn` the `backlog-review-body` element; assert `lastScope(setup) === 'table'` and
+             `fakeDocument.activeElement` is the table pane element.
 Done when: compiles; `npm test` runs `src/plugins/backlog/page/backlog-view.test.ts` green.
 Commit:    one commit: "Backlog: a click into a pane hands it the keys before focusMain runs (follow-up: a click
            into the Backlog review pane is pulled back to the table)".

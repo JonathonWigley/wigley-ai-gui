@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Batch
-Rung: hard · the claim rule and the done watch change together in a serial event chain where emit-time capture matters
+Rung: deep · the settle wait becomes per-row state cleared on three paths, across chat's synchronous close and the serial event chain
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
@@ -36,6 +36,12 @@ Decisions:
   `opensWithRetroCommand(row.titles)`. Both join the Retro section, count as started (`startedRows`), and are checked
   for done at once. A first-message claim leaves `queue.json` as it is: the first message already marks the row at
   every start, and a queue file that failed to load is not written that run.
+- **A lost row counts as started, as a restored launched row does.** It is claimed through the same `added` path, so
+  a lost row resting idle at start closes `finished` after `settleSeconds`, though its retro may never have run.
+  This accepts, for lost rows, the harm `followups.md` L750 ("A restored retro row resting idle reads done", *needs a
+  feature plan*) records for launched ones; L750's fix then covers both. Reason: the follow-up's bug is a lost row
+  that stays open, and waiting for a turn this run would leave a lost row whose retro finished before the restart
+  open for good, since nothing relaunches it.
 - **Every claimed row is watched for done, not only the running one.** The single `settle` becomes
   `const settles = new Map<string, number>()` (row id → timer). `checkDone`'s and the `sessionSlot.on` handler's guard
   `rowId !== runningRowId()` becomes `!rows.includes(rowId)`. `clearSettle(rowId)`, `closeIfStillDone(rowId)` (deletes
@@ -69,12 +75,26 @@ New titles are sentences (`typescript-vitest.md` § Naming); the existing table 
   before `restart`, as `unreadableQueueFile_IsNeverOverwritten` does) and a row `retro-9` (host `retro-host-9`) whose
   `titles.firstMessage` is `'/wigley:retro auto h1'` (build it with `sessionRow` and `titles`); after `restart` and
   `settled()`, `state().rows` is `['retro-9']`; set its session idle, advance `SETTLE_MS` → `closes` is
-  `[['retro-9', 'finished']]`; `part.close('retro-host-9', 'finished')` → `launches` is `[]`.
+  `[['retro-9', 'finished']]` (the restored-idle case: no turn this run); then emit a user close of it,
+  `part.harness.emit('chat.sessionClosed', { ...closedEvent('retro-host-9', 'user'), sessionId: 'retro-9', titles: {
+  user: null, agent: null, firstMessage: '/wigley:retro auto h1' } })` (`sent` stays true from `closedEvent`), and
+  `await settled()` → `launches` is `[]`. A user close of a sent row queues a retro unless its first message is a retro
+  command, so only that rule keeps `launches` empty.
 - `'leaves a restored row that is not a retro unclaimed'`: same start with a row whose first message is `'hi'` → `state().rows` is `[]`.
+- `'closes two claimed rows that settle together'`: same start as the first test (lost row `retro-9`); after `restart`
+  and `settled()`, set `retro-9`'s session idle; `await part.close('h1')` launches `retro-1`; `await
+  part.startedThenIdle('retro-1')`; advance `SETTLE_MS` → `closes`, sorted, is `[['retro-1', 'finished'], ['retro-9',
+  'finished']]`.
+- `'keeps one claimed row settling when another reads not done'`: same steps up to both rows idle, then
+  `part.sessions.set('retro-1', sessionInfo('retro-1', 'working'))`; advance `SETTLE_MS` → `closes` is `[['retro-9',
+  'finished']]`. It fails if `checkDone` clears every row's wait rather than its own.
 - `sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone` (existing table) gains a `rowDropped` column (false
   on the four existing rows, which run as today) and a fifth row `{ reason: 'user', inSettle: true, rowDropped: true,
-  logsLostRetro: false }`: after the emit and `part.sessions.delete('retro-1')`, it also runs
-  `part.rows.delete('retro-1')` before `settled()`. The title gains `, row dropped: $rowDropped` before the arrow.
+  logsLostRetro: false }`: after the emit it runs `part.rows.delete('retro-1')` in place of
+  `part.sessions.delete('retro-1')` (the sessions delete becomes `if (!rowDropped)`), before `settled()`. The sessions
+  delete alone already clears the wait through `checkDone(undefined)`, so leaving it out makes `leaveRow` the only path
+  that clears it before the step: the row fails if the emit-time capture is removed. The title gains
+  `, row dropped: $rowDropped` before the arrow.
 
 Done when: compiles (`npm run typecheck`); `npm test` runs `src/plugins/auto-retro/main/start.test.ts` and
 `retro-queue.test.ts` green; `npm run lint` clean.

@@ -3,7 +3,7 @@
 Status: not started
 Type: Task
 Rung: hard · adds a field to the chat layout contract and an option to the shared collapsible, and the entry list must redraw a step whose end arrives later
-Wave: 2 · Depends on: 06
+Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
 Fixes follow-up L468 (`docs/features/followups.md`, main at 9b671bd16), **Step and tool-call durations in the activity
@@ -34,7 +34,8 @@ Preconditions (run from the `wigley-ai-gui/` folder of the merged `main`):
 | `kit.duration` formats spans | `grep -n 'duration(ms: number): string' src/shared/page/layout-host/kit.d.ts` | one line |
 | Plan `plan-followups-now` task 01 landed (a step's `at` of 0 reads as unknown) | `grep -n '=== 0\|!== 0\|> 0' src/plugins/chat/page/activity-runs.ts src/plugins/chat/page/working-turn.ts` | the check task 01 added for an `at` of 0; read it and reuse it below |
 
-Consumes: nothing from another group. Builds on 06's `entry-list.ts` (same file, wave 1).
+Consumes: nothing from another group. Task 06 edits `entry-list.ts`, `entry-list.test.ts` and
+`agent-chat/design.md` after this task (wave 2), so this task edits them first.
 
 Produces:
 - `export function stepDurationMs(entries: readonly ChatEntry[], index: number): number | null` in
@@ -54,6 +55,12 @@ Decisions:
   check, not a second copy. Calls the agent made together (one message, several tool calls) each end at the next
   call's `at`, a near-zero span for all but the last: the contract carries no result time, and this plan does not add
   one (out of scope; the next entry is the item's own rule).
+- **Where the times show.** The bundled `default` layout sets `activityInTranscript: false`
+  (`src/plugins/chat/layouts/default/layout.js`), so under it the entry list builds no step slot and draws no `tool`
+  or `thinking` row in the transcript. The step times show only under a layout that sets `activityInTranscript: true`
+  and takes `default`'s `tool` and `thinking` builders (a user layout that leaves `entries` out). This task does not
+  change `default`'s flag. The tests reach the builders directly (`layout.test.ts`) and through `activityShown()`
+  (`entry-list.test.ts`).
 - **Where it lives.** `stepDurationMs` in `activity-runs.ts`, beside `listRows`, which owns the other run times.
 - **The contract.** Only the entry builders' `tool` and `thinking` inputs gain `durationMs`, through the
   `StepDuration` intersection in `EntryInputs`; `StepInput`, `ActivityInput.steps` and the working inputs' `steps`
@@ -76,10 +83,11 @@ Decisions:
   time look: `color: var(--wg-fg-tertiary)`, `font-variant-numeric: tabular-nums`, `flex: none` (the summary
   ellipsizes before the time does). The `raw` builder is unchanged.
 - **Docs.** `design.md` § Activity line › Open, after "each drawn by the `tool`, `thinking` or `raw` entry builder":
-  add "; the built-in tool and thinking rows end with the step's time (`· 4s`), from the step to the next entry that is
-  not another agent's, shown once that entry arrives". `DESIGN.md`, the opened activity line's rows ("a tool's status
-  dot and its mono summary, `Thinking`, `Raw event`"): add "each tool and thinking row ending with its time, dim, in
-  tabular numerals".
+  add "; under a layout that sets `activityInTranscript`, the built-in tool and thinking rows end with the step's time
+  (`· 4s`), from the step to the next entry that is not another agent's, shown once that entry arrives". `DESIGN.md`,
+  the opened activity line's rows ("a tool's status dot and its mono summary, `Thinking`, `Raw event`"): add "under a
+  layout that sets `activityInTranscript`, each tool and thinking row ending with its time, dim, in tabular
+  numerals".
 
 GIVEN entries `user u@1000, tool t1@2000 (main), assistant a@6200 (main)` WHEN `stepDurationMs(entries, 1)` THEN 4200.
 

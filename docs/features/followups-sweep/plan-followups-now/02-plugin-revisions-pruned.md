@@ -41,9 +41,14 @@ Decisions:
   computing the next number from them. Revisions copied during this launch stay until the next launch's first load:
   a page part, a lazy import or a stylesheet may still read the running one, and a failed reload keeps the last good
   revision running.
-- **Plugins that are gone.** `loadAll` (once per launch), after its loads, removes each folder directly under the code
-  folder (`codeFolder.list('')`, kind `folder`) whose name is not among the plugin names it listed. A plugin folder
-  deleted mid-launch keeps its copies until the next launch.
+- **Plugins that are gone.** `loadAll` (once per launch), after its loads, runs one more step through
+  `loads.run`, so no load copies while it sweeps: it removes each folder directly under the code folder
+  (`codeFolder.list('')`, kind `folder`) whose name is not among the plugin names it listed and has no `revisions`
+  entry. A plugin the watch or a `reload` loaded this launch, even one added after the listing, has a `revisions`
+  entry and keeps its code. A plugin folder deleted mid-launch keeps its copies until the next launch.
+- **Absolute paths.** `removeFolder` gets `paths.join(deps.codeRoot, id, String(n))` for an old revision and
+  `paths.join(deps.codeRoot, name)` for a gone plugin, as the import path at line ≈270 is built. `codeFolder` paths
+  are scoped and never reach `removeFolder`.
 - **A dependency, not the `Files` contract.** `Files` has no folder delete, `contracts/files.ts` is the
   scheduled-tasks run's to edit (plan.md § Decisions), and `trash` would fill the user's Trash with a folder per save.
   The source takes `removeFolder` as a dependency, as it takes `importModule`; the composition root wires Node's `rm`.
@@ -66,6 +71,10 @@ GIVEN `plugin-code/old/3` on disk and no `plugins/old` folder
 WHEN `loadAll` runs
 THEN `removeFolder` received `/data/plugin-code/old`
 
+GIVEN `notes` loaded by `reload` and then its plugin folder removed, and `plugin-code/old/3` on disk
+WHEN `loadAll` runs
+THEN `removeFolder` received only `/data/plugin-code/old`
+
 GIVEN `removeFolder` rejects with `busy` for `/data/plugin-code/notes/1`
 WHEN the first load of `notes` runs
 THEN the load is `loaded` at revision 2 and the log holds `[plugin-catalog] plugin notes old revision 1 not deleted: busy`
@@ -76,6 +85,9 @@ Tests (in `user-folder-source.test.ts`; `createSource` gains a fake `removeFolde
   `removed` to equal `['/data/plugin-code/notes/1', '/data/plugin-code/notes/4']` after all four reloads
 - `loadAll_RemovesCodeOfPluginsNoLongerPresent`: `code.makeFolder('old/3')`, `writePlugin('notes')`, `loadAll` →
   `removed` equals `['/data/plugin-code/old']` (no `notes` path: it had no revision on disk)
+- `loadAll_KeepsCodeOfAPluginLoadedThisLaunch`: `writePlugin('notes')`, `source.reload('notes')`,
+  `plugins.remove('notes')`, `code.makeFolder('old/3')`, `loadAll` → `removed` equals `['/data/plugin-code/old']`
+  (`notes` is not listed, but its revision 1 was copied this launch)
 - `reload_RemovalFails_LoadsAndLogs`: `code.makeFolder('notes/1')`, `failingRemovals` holds
   `/data/plugin-code/notes/1` → the load's revision is 2 and `logLines` contains
   `[plugin-catalog] plugin notes old revision 1 not deleted: busy`

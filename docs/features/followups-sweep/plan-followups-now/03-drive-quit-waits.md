@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Rung: hard · changes when the drive CLI deletes run folders, waiting on another process's end
+Rung: deep · crosses the app and session-host processes through a bounded wait and folder deletion; the host-exit claim is marked low-confidence in task 19
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
@@ -31,13 +31,19 @@ Consumes: `hostMayBeRunning(runDir)` and `quitRefusal(runId, run)` in `scripts/d
 
 Produces:
 - `RunFolder.hostMayBeRunning: boolean` in `scripts/drive-runs.mts`
+- `export function isIdleRun(run: Pick<RunFolder, 'lastUsedMs'>, nowMs: number): boolean` in `scripts/drive-runs.mts`
+- `export async function waitForHostEnd(runDir: string, deps: HostEndDeps): Promise<boolean>` and
+  `export interface HostEndDeps { probe(runDir: string): Promise<boolean>; pollMs: number; timeoutMs: number;
+  now(): number; wait(ms: number): Promise<void> }` in `scripts/drive-runs.mts`
 - `HOST_END_TIMEOUT_MS = 15_000` in `scripts/drive.mts`
-- `async function waitForHostEnd(runDir: string): Promise<boolean>` in `scripts/drive.mts`
 
 Decisions:
 - **The bounded wait.** A plain `quit` (no `--keep-sessions`), after `stop` resolves and before `removeQuitEntries`,
-  calls `waitForHostEnd(runDir)`: it polls `hostMayBeRunning(runDir)` every `POLL_MS` until it answers false, true
-  when it did within `HOST_END_TIMEOUT_MS`, false otherwise (the shape of `waitForExit`). The host exits once it holds
+  calls `waitForHostEnd(runDir, { probe: hostMayBeRunning, pollMs: POLL_MS, timeoutMs: HOST_END_TIMEOUT_MS, now:
+  Date.now, wait })`. It lives in `drive-runs.mts` with its clock, sleep and probe passed in, so a test pins the
+  deadline. Its body has the shape of `waitForExit`: `deadline = now() + timeoutMs`; while `await probe(runDir)`
+  answers true, return false once `now() > deadline`, else `await wait(pollMs)`; return true when the probe answers
+  false. The host exits once it holds
   no process and no client (`src/session-host/host-server.ts`, `checkExitRule`), which takes seconds after the app's
   plain quit ends its sessions; 15 s covers that with room.
 - **Then refuse.** When the wait answers false, `quit` throws `quitRefusal(runId, { liveAppPids: [],
@@ -45,13 +51,17 @@ Decisions:
   host still runs, so quit deleted nothing; to end it, … start --run <id>, then … quit --run <id>"). The folders stay.
   This covers a plain quit during a kept quit's hold and a quit `stop` ended by SIGTERM, the two cases the follow-up
   names. The refusal before `stop` stays as it is.
-- **The idle sweep skips a live host.** `RunFolder` gains `hostMayBeRunning`, `idleRunIds` keeps a run only when
-  `!run.isLive && !run.hostMayBeRunning` (besides its other conditions), and `removeIdleRuns` becomes async: it builds
-  each run's folder with `hostMayBeRunning: await hostMayBeRunning(runDir)` (only for a run idle past `RUN_IDLE_MS`
-  and not live, so a sweep connects to no fresh run's host), and its caller awaits it. `kept` (a home and
-  `start.json`) is not the signal: it also holds for a crashed run, so only the host check counts.
-- **The pure rule is tested; the wait is a live check.** `idleRunIds` takes the new field in its table; `quit`'s wait
-  runs against real processes and is in the final verification's live checks.
+- **The idle sweep skips a live host.** `RunFolder` gains `hostMayBeRunning`, and `idleRunIds` keeps a run only when
+  `!run.isLive && !run.hostMayBeRunning` (besides its other conditions). The idle test moves into `isIdleRun`
+  (`nowMs - run.lastUsedMs > RUN_IDLE_MS`), which `idleRunIds` calls, so the rule has one copy. `runFolderOf` stays
+  synchronous and returns `Omit<RunFolder, 'hostMayBeRunning'>`. `removeIdleRuns` becomes async and its caller in
+  `start` awaits it: it takes `nowMs = Date.now()` once, and for each folder in turn sets `hostMayBeRunning:
+  !folder.isLive && isIdleRun(folder, nowMs) && (await hostMayBeRunning(runDirOf(folder.id)))`, so a sweep connects
+  to no fresh or live run's host; it passes the same `nowMs` to `idleRunIds`. `kept` (a home and `start.json`) is not
+  the signal: it also holds for a crashed run, so only the host check counts.
+- **The rules are tested; the real host's end is a live check.** `idleRunIds` takes the new field in its table, and
+  `waitForHostEnd` runs against a fake probe and clock. The wait against a real host is in the final verification's
+  live checks.
 
 GIVEN a run idle past `RUN_IDLE_MS` with no live app whose session host still answers
 WHEN a `start` sweeps idle runs
@@ -61,8 +71,23 @@ GIVEN a plain `quit` whose app exits but whose host still answers 15 s later
 WHEN `quit` runs
 THEN it throws the `quitRefusal` text naming `start --run <id>` and the run's `home/` and `user-data/` remain
 
-Tests: `drive-runs.test.mts`, `idleRunIds` table: the base run gains `hostMayBeRunning: false`, and a row is added,
-`['idle but its session host may still run', false, { hostMayBeRunning: true }, 'other']`.
+GIVEN a host whose probe answers true twice, then false
+WHEN `waitForHostEnd` runs
+THEN it answers true after two waits
+
+GIVEN a host whose probe always answers true
+WHEN `waitForHostEnd` runs with `timeoutMs` 1000 and `pollMs` 250
+THEN it answers false once the fake clock passes the deadline, with no real sleep
+
+Tests (in `drive-runs.test.mts`):
+- `idleRunIds` table: the base run gains `hostMayBeRunning: false`, and a row is added,
+  `['idle but its session host may still run', false, { hostMayBeRunning: true }, 'other']`.
+- a new `describe('waitForHostEnd')` with an `it.each` table, titled
+  `'GIVEN a host whose probe answers %s THEN the wait answers %s'`. Each row's deps: a clock at 0, `now` reading it,
+  `wait(ms)` adding `ms` to it and resolving, `pollMs: 250`, `timeoutMs: 1000`, and `probe` answering the row's list
+  in turn (the last answer repeating), counting its calls. Rows:
+  - `'true, true, then false'`, answers `[true, true, false]` → `true`, 3 probes, clock 500
+  - `'true until the deadline'`, answers `[true]` → `false`, 6 probes, clock 1250
 
 Done when: compiles (`npm run typecheck` covers `scripts/`); `npm test` runs `drive-runs.test.mts` and it passes;
 `.agents/skills/drive/SKILL.md` step 5 says a plain `quit` waits up to 15 s after its app exits for the session host

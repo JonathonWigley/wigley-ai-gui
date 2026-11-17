@@ -3,8 +3,7 @@
 Status: not started
 Type: Batch
 Rung: deep · rests on two low-confidence claims the worker checks in a filtered self-test run: a runtime main command bound by a script's page bind crosses page → main → page through the Bridge, and a click on an unfocused pane's hub head reaches the head on the first press
-Wave: 5 · Depends on: none (it runs beside 24, whose sweeps skip this task's files; both wait for waves 1–4 for
-that reason)
+Wave: 4 · Depends on: 15 (each lists `AGENTS.md`)
 Plan: [plan.md](plan.md)
 
 Follow-ups (`followups.md`): **Self-test has no click step** (L869) · **Chat self-test steps by single presses** (L850) ·
@@ -21,6 +20,7 @@ Files:
 - modify `src/plugins/forms/main/start.ts`
 - modify `src/plugins/chat/main/selftest-script.ts`
 - modify `src/plugins/app-update/main/selftest-script.ts` (one comment)
+- modify `docs/features/app-update/design.md` (one sentence)
 - modify `AGENTS.md`
 
 Preconditions (Lane H tree, 2026-11-17; re-run on merged `main`; the scheduled-tasks branch changes none of these files):
@@ -37,6 +37,15 @@ Preconditions (Lane H tree, 2026-11-17; re-run on merged `main`; the scheduled-t
   `sourceReplaced` rebuilds only `if (hasRun)`; docs-session-tab calls it on a row's host id change.
 - `grep -n "SESSION_SOURCE_TITLE =" src/plugins/docs/main/index-sources.ts` → `'session index'`; `resultLine` in
   `docs-view.ts` logs `<title> rebuilt: <n> entries`, `<title> read: <n> entries` or `<title>: <message>`.
+- `grep -n "runIndex(" src/plugins/docs/page/docs-view.ts` → `runIndex` is the only caller of `resultLine`. It runs
+  from `showFirstTime` (once per view, behind `hasRun`), `rescan`, `outsideChange` and `sourceReplaced`.
+  `grep -n "outsideChange(" src/plugins/docs/page/start.ts` → called only from `changedIn`, when another view saves,
+  creates, moves or trashes a doc in the app. `grep -n "title: SESSION_SOURCE_TITLE" -A3 src/plugins/docs/main/index-sources.ts`
+  → a session source has `load` and no `rebuild`, so `canRebuild` is false and `showFirstTime` runs one load only.
+  `grep -n "MACHINE_SOURCE_TITLE =" src/plugins/docs/main/index-sources.ts` → `'machine index'`: Docs mode's view
+  logs another title. Docs main logs no `session index` line.
+- `grep -n "cannot click" docs/features/app-update/design.md` → line ~112: `app-update.pressButton` "clicks the drawn
+  button, since the self-test cannot click".
 - `grep -n "order: [0-9]" src/plugins/docs-session-tab/page/start.ts src/plugins/chat/page/chat-view.ts` → Docs tab
   `order: 1`, Chat tab `order: 2`: `<A-i>` (`sessions.prevTab`) from a Chat tab shows its Docs tab.
 - `grep -rn "commands.register(" src/plugins --include=*.ts | grep -v test` → nothing: no plugin registers a runtime
@@ -102,6 +111,16 @@ Decisions:
   `SESSION_INDEX_LINE` and a `why`: "The new host id rebuilds the Docs tab that has shown." `SESSION_INDEX_LINE` is a
   chat-script constant `/^\[docs\] session index( rebuilt| read)?: /` with a comment naming docs' `resultLine` and
   `SESSION_SOURCE_TITLE` (chat main may not import docs, so the title is written out).
+- **Why the `/reset` step's session index line comes only from `sourceReplaced`.** The line names no session. So the
+  step proves the rebuild only while no other view can log the line between the `/reset` send and its expect. No other
+  view can, by the Preconditions. `resultLine` logs only from `runIndex`. `showFirstTime` runs once per view, and
+  chat-second's single load logs before the `<A-i>` step passes (its `alsoExpect` waits for the line). A session
+  source has no rebuild, so no second run follows that load. `rescan` runs only on its key. `outsideChange` runs only
+  when a view saves, creates, moves or trashes a doc in the app, and chat's steps edit no doc. `sourceReplaced` runs
+  on a row's host id change, and in this window only chat-second's `/reset` changes one. Docs mode's view logs
+  `machine index`, not `session index`. Main's `docChanged` events reach only the doc pane, not `runIndex`. So the
+  expect stays as written. If the filtered run shows a `session index` line in that window from another cause, treat
+  it as a finding under **A failing proving step** below.
 - **`forms.choose` across the Bridge (L224).** Forms' main part, when `selfTest` is not null, registers a runtime main
   command before handing the script: `api.commands.register('selfTestChoose', { label: 'choose from main (self-test)', group: 'items', runsIn: 'main', arg: 'number' }, ({ arg }) => api.commands.run(formsChooseCommand, arg))`,
   its Disposable filed by the API. Forms' script `PAGE_BINDS` gains `{ keys: [' ', 'z', 'f', 'c'], scope: formsScope('forms'), command: 'forms.selfTestChoose', arg: 2 }`
@@ -112,8 +131,16 @@ Decisions:
   and `{ keys: [' ', 'z', 'f', 'c'], expect: '[forms] cleared the choice on finding 1', why: 'The same number from main clears the pick, so the steps after start as before.' }`.
   This is the self-test's form of the item's live proof (a round showing the row, the command run from the page and
   from main): it runs on every forms self-test.
-- **Left alone:** app-update's script binds `Space z a u` because "it cannot click"; its comment becomes untrue once
-  the click step lands, so reword it to "the button has no key" without changing the step.
+- **App-update's wording.** App-update's script binds `Space z a u` because "it cannot click". That comment becomes
+  untrue once the click step lands, so reword it to "the button has no key" without changing the step. Reword the same
+  reason in `docs/features/app-update/design.md` (line ~112, "since the self-test cannot click") to "since the button
+  has no key".
+- **A failing proving step.** The click steps, the `Space z f c` steps and the `/reset` step's `alsoExpect` prove
+  claims. When one fails in the filtered run, it is an app bug: report it as a finding in the group's report. Never
+  rewrite, soften or drop the step to make the run pass (another selector, another expected line, a removed
+  `alsoExpect`). Fix the app within this task when the fix is in this task's Files or in the click path task 03
+  changed. When the worker cannot fix it within the task, strike the step, and write the step, the failure and the
+  reason in plan.md's Run log (§ Rulings).
 
 GIVEN a step with `click` WHEN it runs THEN the click lands before its keys, a line it alone causes counts, and a
 selector that cannot be clicked fails the step naming why, pressing nothing.
@@ -135,7 +162,7 @@ over `page(…)`, whose fake gains an `elementFromPoint` answer as `pageWithTarg
   failure), no `keyDown` is sent, and the report line ends `: .target is covered at its centre by div.scrim`.
 
 Done when: compiles (`npm run typecheck`); `npm test` runs `src/main/selftest-steps.test.ts` green; `npm run lint`
-clean; `npm run selftest -- --plugin chat --plugin forms --plugin sessions --plugin app-update` passes. The click and
+clean; `npm run selftest -- --plugin chat --plugin forms --plugin sessions --plugin app-update` passes, or a failing proving step is reported and struck under **A failing proving step**. The click and
 Bridge steps are proved by that run; the final verification task re-reads its report.
 
 Commit:    one commit for the group, e.g. "Self-test click step, one row-step helper, a Docs tab rebuild step and

@@ -29,11 +29,16 @@ Decisions:
   - `makeFolder(path)`: the folders it creates, shallowest first, from the first one missing down to `path`. A folder
     that already existed reports nothing, as a recursive `mkdir` over an existing folder fires no event. Compute the
     list before adding: walk from `key` up with `parentOf` while `statKey(folder) === null`.
-  - `removeKey` (`remove` and `trash`): the target when it was a folder (`statKey(target)?.isFolder` read before the
-    delete), every made folder at or under it, then the removed files, in one `report` call.
-  - `rename`: when `from` is a folder, its key and the new key, plus each made folder moved (old and new keys),
-    with the moved files, in one `report` call. The item names `makeFolder` and the `removeKey` callers; `rename` of an
-    empty folder is the same gap (it reports nothing today), so it is fixed with them.
+  - `removeKey` (`remove` and `trash`): every folder at or under the target, then the removed files, in one `report`
+    call. "Every folder" is what `statKey` reads as a folder before the delete, implicit ones included, so the report
+    does not depend on whether the tree was built with `makeFolder` or by writing files: the target when
+    `statKey(target)?.isFolder`, each made folder at or under it, and each ancestor folder of a removed file between the
+    target and the file (`/h/s/sub/f.md` alone, trashing `/h/s`, reports `s` and `s/sub`). One local helper
+    `foldersAtOrUnder(target): string[]` builds the list, deduplicated and sorted shallowest first, read before any
+    delete.
+  - `rename`: when `from` is a folder, each folder `foldersAtOrUnder(fromKey)` returns, under its old key and its moved
+    key, with the moved files, in one `report` call. The item names `makeFolder` and the `removeKey` callers; `rename`
+    of an empty folder is the same gap (it reports nothing today), so it is fixed with them.
 - **The header comment** of `MemoryFiles` changes "report each changed file's path" to "report each changed file's
   and folder's path", and names `makeFolder` with the reporting calls.
 - **Other tests.** Many plugin tests watch this double. A watch that now also hears a folder key may run its handler
@@ -58,6 +63,11 @@ Tests (in `memory-files.test.ts`):
 - `rename_Folder_MovesSubtreeAndReports` (existing): its expected list gains the folder keys: sorted
   `['s', 's/SKILL.md', 's/ref.md', 't', 't/SKILL.md', 't/ref.md']`. The three `watch_NotRecursive_*` tests stay as they
   are.
+- `it.each` over `trash` and `remove`: `'reports a folder that only files made when removing its parent with
+  $method'` (a sentence title, `typescript-vitest.md` § Naming): write `/h/s/sub/f.md` only (no `makeFolder`),
+  recursive watch on `/h`, remove `/h/s` → sorted reports `['s', 's/sub', 's/sub/f.md']`.
+- `'reports a folder that only files made under both names when its parent is renamed'`: write `/h/s/sub/f.md` only,
+  rename `/h/s` to `/h/t` → sorted reports `['s', 's/sub', 's/sub/f.md', 't', 't/sub', 't/sub/f.md']`.
 
 Done when: compiles (`npm run typecheck`); `npm test` (whole suite, Decisions) green, with
 `src/shared/memory-files.test.ts`' new tests among them and the shared `describeFilesContract` rows still green;

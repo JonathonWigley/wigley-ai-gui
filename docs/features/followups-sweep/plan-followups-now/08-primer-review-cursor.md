@@ -36,8 +36,9 @@ Decisions:
   (it clamps to `[0, max(reviewEntries(primer).length - 1, 0)]` and returns the same object when nothing moves). The
   clamp applies whatever `place.view` is, so a primer restored into view `primer` also holds a cursor in range for
   its next restore into the review.
-- `isSamePlace` gains `a.reviewRow === b.reviewRow`, so a restore that moves nothing still returns the same primer
-  object (the existing identity rule of the reducer).
+- `isSamePlace` gains `a.reviewRow === b.reviewRow`, so a restore whose place is unchanged but whose cursor clamps
+  keeps the clamp, and a restore that moves nothing still returns the same primer object (the existing identity rule
+  of the reducer).
 
 GIVEN a primer that reviewed to its last row (2 of `1`, `s1`, `extra-1`), jumped back to `extra-1` and removed it
 WHEN `placeRestored` puts it back in view `review`
@@ -55,6 +56,14 @@ Tests:     one new `it` in `describe('placeRestored')` of `primer-state.test.ts`
            pane: 'tasks', cardColumn: 'tasks', view: 'review', confirmReturnView: 'review' } }` and assert
            `restored.view === 'review'`, `primerOf(restored).reviewRow === 1`, and that
            `apply(restored, { type: 'reviewJump' })` selects `{ kind: 'task', entryId: 's1' }`.
+           Two more `it`s in the same `describe`:
+           - `'clamps the cursor when the restored place matches the primer's own'`: the same setup, then
+             `placeRestored` with `place: primerPlace(state, primerOf(state))` (exported from `primer-state.ts`);
+             assert `primerOf(restored).reviewRow === 1`. This pins the `isSamePlace` clause: without it the
+             unchanged place hands back the old primer with the cursor still at 2.
+           - `'keeps the same primer when the place and cursor are already in range'`: `before = applyAll(stateWith(),
+             [{ type: 'openReview' }, { type: 'reviewBottom' }])` (cursor 2 of three rows); `placeRestored` with
+             `place: primerPlace(before, primerOf(before))`; assert `primerOf(restored) === primerOf(before)`.
            The existing `placeRestored` table keeps passing unchanged.
 Done when: compiles; `npm test` runs `src/plugins/primer/page/primer-state.test.ts` green.
 Commit:    one commit: "Primer: a restored review clamps its cursor into the review's rows (follow-up: placeRestored
