@@ -1,6 +1,6 @@
 # 17 — Doc re-read and follow-up removal
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · a doc-only task: prose checked against settled code
 Wave: 3 · Depends on: every group
@@ -53,3 +53,5 @@ Done when: the diff holds only the removals, the L804 correction and stale doc-l
 Commit: one commit, "Follow-ups sweep (now): remove the landed items; doc re-read".
 
 ## Proof
+
+Commit 2367ef193 · proof: diff read: 21 items removed by title, naming-style item narrowed, item 01 kept and its removal added to after-lane-h 26; drive SKILL.md idle-sweep line checked against idleRunIds · concerns: after-lane-h plan.md line 11 still counts 36 items (26 now lists 37)

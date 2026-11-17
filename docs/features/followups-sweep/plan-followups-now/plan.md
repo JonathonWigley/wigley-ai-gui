@@ -123,7 +123,7 @@ Critical path: 14 → 15 → 17.
 - [x] [Shared waveform primitive](15-waveform-primitive.md) — after 14
 
 ### Wave 3
-- [ ] [Doc re-read and follow-up removal](17-doc-re-read.md) — after every group
+- [x] [Doc re-read and follow-up removal](17-doc-re-read.md) — after every group
 - [ ] [Final verification](19-final-verification.md)
 
 ## Run log
@@ -148,6 +148,7 @@ Review base: 34e4782344fb8ae4e6246859c522c2a5bb9abc53
 - 16 · standard · 42675ea78 · diff read against Produces; wave 1 typecheck clean · concerns: none
 - 18 · deep · 236bdc88a · diff read against Produces; wave 1 typecheck clean · concerns: none
 - 15 · standard · 0a96f9660, a5770279b · diff read against Produces; wave 2 typecheck and lint clean after one compile fix on the same rung · concerns: none
+- 17 · standard · 2367ef193 · diff read: 21 items removed by title, naming-style item narrowed, item 01 kept and its removal added to after-lane-h 26; drive SKILL.md idle-sweep line checked against idleRunIds · concerns: after-lane-h plan.md line 11 still counts 36 items (26 now lists 37)
 ### Contract changes
 ### Rulings
 - 01: listRows treats an at of 0 (previousAt || steps[0].at) as unknown; no source writes epoch 0 · group 01
@@ -158,5 +159,6 @@ Review base: 34e4782344fb8ae4e6246859c522c2a5bb9abc53
 - 13: session-stash.css held only the reset, so it and its import are deleted · group 13
 - 16: titles rewritten as sentences in the worker's wording, interpolations kept · group 16
 - 18: inOrder drops an id with no admitted entry; every caller passes admitted ids · group 18
+- item 01 stays in followups.md: Lane H's unmerged hunk rewrites a path inside it; its removal moves to plan-followups-after-lane-h task 26 · group 17
 ### Review rounds
 ### Test gate
