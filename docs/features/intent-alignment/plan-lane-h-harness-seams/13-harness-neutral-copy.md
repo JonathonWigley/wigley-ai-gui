@@ -1,6 +1,6 @@
 # 13 — Harness-neutral UI copy
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 10 · Depends on: 12
 Plan: [plan.md](plan.md)

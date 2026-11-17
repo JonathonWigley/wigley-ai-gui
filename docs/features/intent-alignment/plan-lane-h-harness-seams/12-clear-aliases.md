@@ -1,6 +1,6 @@
 # 12 — Clear aliases from the adapter
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 9 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -143,3 +143,5 @@ seams and ticks `[ ] Clear aliases from` to `[x] Clear aliases from` in
 `docs/features/intent-alignment/master-plan.md` (the chat-pass line, line 133 at plan time).
 
 ## Proof
+
+Commit 4eb8decc2 · proof: diff read: addClearCommands returns one Disposable, aliases from core.agentHarnesses re-registered on slot change, SlashCommands.addAlias present; self-test clear step sends /reset; wave compile (typecheck, lint) passes, oxfmt clean · concerns: clear aliases register app-wide from every harness, not per the session's harness; it.each row typed never[] (compiled clean)
