@@ -169,7 +169,14 @@ describe('process table', () => {
     BOTH: 'host',
   };
 
-  it.each([
+  it.each<{
+    label: string;
+    hostEnv: NodeJS.ProcessEnv;
+    inheritEnv: boolean;
+    unsetEnv: string[];
+    env: Readonly<Record<string, string>>;
+    childEnv: NodeJS.ProcessEnv;
+  }>([
     {
       label: 'unset names under an overlay',
       hostEnv: HOST_ENV,
@@ -266,9 +273,7 @@ describe('process table', () => {
         recordingSubscriber().subscriber,
       );
       const written: string[] = [];
-      fake.stdin.on('data', (chunk: Buffer) =>
-        written.push(chunk.toString()),
-      );
+      fake.stdin.on('data', (chunk: Buffer) => written.push(chunk.toString()));
       await streamsDelivered();
 
       const records = logRecords('a.jsonl')

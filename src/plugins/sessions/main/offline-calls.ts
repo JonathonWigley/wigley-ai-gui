@@ -104,7 +104,9 @@ export async function replayOfflineCalls(
     }
     const call = parseCallLine(line);
     if (typeof call === 'string') {
-      log(`offline call line ${index + 1} of ${hostSessionId} not read: ${call}`);
+      log(
+        `offline call line ${index + 1} of ${hostSessionId} not read: ${call}`,
+      );
       continue;
     }
     if (!call.replay) {

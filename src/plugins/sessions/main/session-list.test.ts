@@ -727,10 +727,7 @@ describe('createSessionList', () => {
       { ...replayed, toolUseId: 'toolu_live', replayed: false },
       replayed,
     ]);
-    expect(handler.calls.map((each) => each.args)).toEqual([
-      { step: 'x' },
-      {},
-    ]);
+    expect(handler.calls.map((each) => each.args)).toEqual([{ step: 'x' }, {}]);
     await expect(list.replayCall('host-2', call)).rejects.toThrow(
       'No session holds host host-2',
     );

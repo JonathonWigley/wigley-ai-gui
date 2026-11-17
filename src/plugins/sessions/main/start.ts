@@ -300,7 +300,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       titles: (sessionId) => list.titles(sessionId),
       addProjectNamer: (namer) => list.addProjectNamer(namer),
       holdConnects: (until) => hold.hold(until),
-      offlineEnv: () =>
+      offlineEnv: (): Readonly<Record<string, string>> =>
         opened === null ? {} : { [OFFLINE_ENV]: offlineCallsFolder },
       replayCalls: (hostSessionId) =>
         replayOfflineCalls(

@@ -53,19 +53,17 @@ export function readTaskFile(text: string): TaskFile | string {
 
 // The file's text: two-space JSON with a trailing newline.
 export function taskFileText(file: TaskFile): string {
-  const tasks = file.tasks.map(
-    (task): ScheduledTask => ({
-      id: task.id,
-      name: task.name,
-      target: task.target,
-      profile: task.profile,
-      prompt: task.prompt,
-      schedule: orderedSchedule(task.schedule),
-      controls: task.controls,
-      paused: task.paused,
-      updatedAt: task.updatedAt,
-    }),
-  );
+  const tasks = file.tasks.map((task): ScheduledTask => ({
+    id: task.id,
+    name: task.name,
+    target: task.target,
+    profile: task.profile,
+    prompt: task.prompt,
+    schedule: orderedSchedule(task.schedule),
+    controls: task.controls,
+    paused: task.paused,
+    updatedAt: task.updatedAt,
+  }));
   return `${JSON.stringify({ tasks }, null, 2)}\n`;
 }
 
@@ -101,9 +99,7 @@ function readTaskFields(
   value: JsonObject,
   seenIds: ReadonlyMap<string, number>,
 ): ScheduledTask | string {
-  const unknownKey = Object.keys(value).find(
-    (key) => !TASK_KEYS.includes(key),
-  );
+  const unknownKey = Object.keys(value).find((key) => !TASK_KEYS.includes(key));
   if (unknownKey !== undefined) {
     return `unknown key ${shown(unknownKey)}; a task holds ${TASK_KEYS.join(', ')}`;
   }
@@ -183,7 +179,7 @@ function readTarget(value: unknown): StartTarget | string {
 
 // `schedule` with `kind` first, then its fields as the caller gave them.
 function orderedSchedule(schedule: TaskSchedule): TaskSchedule {
-  return { kind: schedule.kind, ...schedule };
+  return Object.assign({ kind: schedule.kind }, schedule);
 }
 
 function isFilledString(value: unknown): value is string {
