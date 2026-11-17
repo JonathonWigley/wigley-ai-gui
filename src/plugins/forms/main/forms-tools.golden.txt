@@ -1,0 +1,252 @@
+[
+  {
+    "name": "ask_round",
+    "description": "Ask the user a whole round of interview questions and review findings in the wigley-ai-gui app and wait for the answers. Send every item whose prerequisites are already settled in one call. How each item's text is worded: ~/wigley-agents/forms.md. The app draws the not-applicable control, the Notes box, the round note and the Don't ask me this control by itself — do not describe them as questions or choices. Use 'findings' for review findings that need the user's decision: a finding's origin sets its card — a Defect (caused or pre_existing; actions Fix now, Follow-up, Leave it), a Decision (design; actions Decide now, Plan it, Drop it) or a Nit (nit; actions Fix anyway, Leave it). A card shows the finding and a brief proof, then a verdict: the origin and severity and the impact. Under it the card's actions show in order, each with its choices and their reasons under it; an action with no choices shows as a header the user picks alone, with its action_reasons entry when you sent one. One pick sets the choice and its action. Each choice and header takes a number key, so a finding holds at most 9 of them together and a question at most 9 choices; more fails the call. The recommended choice, or the recommended action's header when it has no choices, is badged; the user takes it with Accept or picks any other entry. A choice never opens with an action's label. Use 'questions' for any other open decision. Pass 'notices' for anything already fixed, dispatched, decided by you alone, or otherwise settled before this round opened: each one draws as one line on the round's notices page, after every finding and question, badged 'Applied', 'Dispatched' or 'Decided', and opens to its context and one comment box — no choices and nothing to decide. Never bundle a decided fix into a question or a finding. A round and each item may name a layout in 'layout', a folder in the app's forms layouts folder: an item's layout draws its card, the round's draws the rest, and the user's own layout draws what neither names. A name the folder lacks fails the call with the names it holds. For a look no layout has, write a new layout folder, name it in the round, and list each layout file you wrote or changed in a notice on that round. A round needs at least one question, finding or notice, and may carry any mix of the three. Re-sending a round is safe (leave out a layout the folder no longer holds): the same questions, findings and notices re-attach to the round still open, return the answers of the round just submitted, or open pre-filled with the user's saved answers. When the result carries 'earlier_heading', those answers belong to an earlier round you never received; read them, then send your round again. Answers to questions come back in 'answers' and answers to findings in 'findings'. A finding answer's 'action' is the picked action and its 'choice' the picked choice's 1-based number in 'choices', 0 when the user picked an action with no choices. An answer may carry 'notes', the user's own answer or reasoning, and 'dont_ask' (true), with 'dont_ask_reason' when the user gave one: the user pressed Don't ask me this, so settle that kind of item yourself for the rest of the session and show each such decision as a 'Decided' notice. The choice on that answer still counts. Outcome 'needs_manual_open' means the relay could not start the app and no round exists: send the same round again with ask_round once, which tries the start again; if it comes back a second time, tell the user the reason in its 'summary' and ask the round's questions and findings in your reply. collect_last_round is never the answer to it. While the user is still answering another round of this session, an ask_round for a different round waits until the user submits or cancels that round in the app; if its deadline passes first, it returns a 'draft' whose 'next' says the round was not opened: send it again with ask_round, not collect_last_round. Outcome 'auto_answered' means the session is headless: the app showed no form and answered every question and finding with its recommendation; follow its 'next'. A new round never closes an unfinished one: the user cancels a round you abandon.",
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "heading",
+        "overview"
+      ],
+      "properties": {
+        "heading": {
+          "type": "string",
+          "description": "One line naming what this round settles."
+        },
+        "overview": {
+          "type": "string",
+          "description": "One or two short sentences, low detail, shown under the heading: the work underway, then what this round focuses on. Inline markdown only."
+        },
+        "layout": {
+          "type": "string",
+          "description": "The layout that draws this round: a folder name in the app's forms layouts folder. An item's own layout wins over it, and the user's forms.layout setting draws what neither names. A name the folder lacks fails the call with the names it holds."
+        },
+        "notices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "context"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "One line saying what changed, in plain words: not a commit ref, not \"already done\". For a 'Decided' notice, the decision itself."
+              },
+              "context": {
+                "type": "string",
+                "description": "What changed, already done; a notice is not a question. Markdown. A `:::tree` block and nothing else: one line per place, then under it indented two spaces one line per change, starting `+` added, `~` changed or `x` removed. Each change line says in plain words what the user now gets, never the markup, symbol or commit behind it. Close the block with a line holding only `:::`. A notice touching one place may use a `:::changes` block instead (the change lines alone). No prose paragraph and no evidence. A 'Decided' notice instead carries one plain line: what was decided and why."
+              },
+              "badge": {
+                "type": "string",
+                "enum": [
+                  "Applied",
+                  "Dispatched",
+                  "Decided"
+                ],
+                "default": "Applied",
+                "description": "'Applied' (the default) for a fix already landed, 'Dispatched' for one still in flight, 'Decided' for a decision you took alone. A comment on a 'Decided' notice overrides the decision."
+              },
+              "layout": {
+                "type": "string",
+                "description": "The layout that draws this item's card, over the round's layout: a folder name in the app's forms layouts folder."
+              }
+            }
+          },
+          "description": "Fixes already made, dispatched, decisions you took alone, or anything otherwise settled before this round opened — one object per notice. Each draws as one line, its badge and title, on the round's notices page, after every finding and question; the line opens to its context and one comment box. Each is badged 'Applied', 'Dispatched' or 'Decided', and has no choices, no recommendation, nothing for the user to decide."
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "origin",
+              "impact",
+              "finding",
+              "proof",
+              "choices",
+              "recommend_action"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "A short name for the finding."
+              },
+              "origin": {
+                "type": "string",
+                "enum": [
+                  "caused",
+                  "pre_existing",
+                  "design",
+                  "nit"
+                ],
+                "description": "Sets the card the finding draws as. 'caused' (Defect): a defect the change under review introduced. 'pre_existing' (Defect): a real defect in code the change read but did not cause. 'design' (Decision): a design call, options to weigh now or in a feature plan. 'nit' (Nit): nothing builds on it, and it cannot be shown happening."
+              },
+              "impact": {
+                "type": "string",
+                "description": "One plain sentence: what goes wrong, and for whom."
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "important",
+                  "minor"
+                ],
+                "description": "Required on a caused or pre_existing finding (a Defect); no other origin accepts it."
+              },
+              "finding": {
+                "type": "string",
+                "description": "What is wrong, in plain words; for a Decision, what is to decide. Markdown."
+              },
+              "proof": {
+                "type": "string",
+                "description": "The evidence, in brief: short bullets naming the file, line, output or behaviour that shows the finding. Titled Context on a Decision and Why it's safe on a Nit. No prose paragraphs. Markdown."
+              },
+              "choices": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 9,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text",
+                    "reason"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "Opens with one plain sentence saying what the user gets, before any symbol name or term of art. Never opens with an action label. Inline markdown only."
+                    },
+                    "reason": {
+                      "type": "string",
+                      "description": "Why one would pick this choice. Shown under it. Markdown."
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "fix_now",
+                        "follow_up",
+                        "leave_it"
+                      ],
+                      "default": "fix_now",
+                      "description": "The action this choice sits under on the card, one the finding's origin offers; fix_now when left out. A Nit offers no follow_up."
+                    }
+                  }
+                },
+                "description": "One object per choice: a Defect takes 1 to 9 choices, its solutions; a Decision takes 2 to 9 choices, the options a plan would weigh; a Nit takes exactly 1 choice, the fix. The card draws each choice under its action (its action field; fix_now when left out), and an action with no choices as a header the user picks alone. At least one choice is a fix_now choice. The card numbers its choices and headers alike, one number key each, so a finding takes at most 9 of them together; one past that fails the call. A choice names a solution only: a choice whose text opens with an action's label (Fix now, Follow-up, Leave it, Decide now, Plan it, Drop it, Fix anyway) fails the call."
+              },
+              "recommend": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The 1-based number, in choices, of the recommended choice: a choice of recommend_action. Leave it out, or send null, only when no choice has recommend_action."
+              },
+              "recommend_action": {
+                "type": "string",
+                "enum": [
+                  "fix_now",
+                  "follow_up",
+                  "leave_it"
+                ],
+                "description": "The recommended action. The values are the same three on every card, each card labelling them its own way — fix_now: Fix now (Defect), Decide now (Decision), Fix anyway (Nit); follow_up: Follow-up (Defect), Plan it (Decision); leave_it: Leave it (Defect), Drop it (Decision), Leave it (Nit). A Nit offers no follow_up."
+              },
+              "action_reasons": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "follow_up": {
+                    "type": "string",
+                    "description": "Drawn under the follow-up action. Markdown."
+                  },
+                  "leave_it": {
+                    "type": "string",
+                    "description": "Drawn under the leave-it action. Markdown."
+                  }
+                },
+                "description": "Why to take a deferral action, drawn under that action's header. Only an action the origin offers takes an entry. Send the entry for the action you recommend when it is a deferral; null reads as none. A Nit offers no follow_up."
+              },
+              "layout": {
+                "type": "string",
+                "description": "The layout that draws this item's card, over the round's layout: a folder name in the app's forms layouts folder."
+              }
+            }
+          },
+          "description": "Review findings and deferred items that need the user's decision — one object per finding. Each draws as its own card before the questions; its origin sets the card and the fields it takes. A finding missing a field its origin requires, or carrying one its origin forbids, fails the call with an error naming each. A finding already fixed or decided goes in notices instead; an open decision that is not a review finding goes in questions."
+        },
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "summary",
+              "context",
+              "choices",
+              "recommend",
+              "rationale"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "A short name for the decision. It is the item's name in the rail, and the card does not draw it."
+              },
+              "summary": {
+                "type": "string",
+                "description": "One or two plain sentences: what the user is asked to decide, and why it needs deciding now. It is the card's headline, drawn first, so it stands alone; the context does not repeat it. Inline markdown."
+              },
+              "context": {
+                "type": "string",
+                "description": "The rundown: what the user needs to know to answer, in a few short paragraphs of plain prose with no headings and no labelled parts. Add a visual only when the question is about a shape, such as a flow or a layout. Put the evidence last, in a `:::details Sources` block. A question about concrete changes opens instead with a `:::changes` block for a few changes, or a `:::tree` block when they span several places. Close each block with a line holding only `:::`. Markdown. Wording: ~/wigley-agents/forms.md § Questions."
+              },
+              "choices": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 9,
+                "items": {
+                  "type": "string"
+                },
+                "description": "2 to 9 choices, one per number key. Each choice opens with one plain sentence saying what the user would get, before any symbol name or term of art."
+              },
+              "recommend": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The 1-based number of the recommended choice."
+              },
+              "rationale": {
+                "type": "string",
+                "description": "Why the recommended choice, in a sentence or two. It draws under that choice with no label, so it reads on from the choice and does not repeat it."
+              },
+              "layout": {
+                "type": "string",
+                "description": "The layout that draws this item's card, over the round's layout: a folder name in the app's forms layouts folder."
+              }
+            }
+          },
+          "description": "Open decisions that are not review findings — one object per question. Each draws as its own card after the findings and before the notices page: the summary, the context, then the choices with the rationale under the recommended one. The card draws no section labels."
+        }
+      }
+    }
+  },
+  {
+    "name": "collect_last_round",
+    "description": "Re-attach to the round already open in the app and wait for the answers, or return the last finished round's answers again. Takes no required arguments. Call this after ask_round returns outcome 'draft', and after any failure that lost the answers. Outcome 'no_round' means no round is open and no finished answers are waiting: send the round again with ask_round, and the user's saved answers fill in. After an 'auto_answered' round it returns that result again.",
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wait": {
+          "type": "boolean",
+          "default": true,
+          "description": "false returns the current draft at once instead of waiting."
+        }
+      }
+    }
+  }
+]
