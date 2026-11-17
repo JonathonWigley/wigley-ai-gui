@@ -322,11 +322,9 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
   session host record the conversation id per hosted process (a contract change). Also, `adoptHostId` moving a row
   from host id X to Y with no pending clear could delete the stale X entry (`:1854-1856`).
 - **Pending plans name removed symbols** — *agent-ready*: re-read these before running them.
-  `intent-alignment/plan-lane-l-layouts/03-sessions-picker-rows.md` uses `harnessText` (lines 16 and 98), where lane H
-  left `harnessLabel` (`src/shared/agent-harness-label.ts`).
-  `intent-alignment/plan-lane-e-extension-points/06-forms-kinds-main.md` and `08-finding-origins.md` use `arraySchema`,
-  `argsErrorName` (now `describe()`) and `argsErrorText`. Update each plan to the landed names before `wigley:make`
-  runs it.
+  `intent-alignment/plan-lane-e-extension-points/06-forms-kinds-main.md` and `08-finding-origins.md` use `arraySchema`
+  and `argsErrorName`, which lane H replaced with `describe()` and `argsErrorText`. Update each plan to the landed names
+  before `wigley:make` runs it.
 - **`AgentHarnessRegistry.register` pushes the harness before it calls `info()`** — *agent-ready*:
   `src/main/agent-harness-registry.ts:75` pushes to `harnesses`, then `setChangedEntries` (`:52-53`) runs
   `computeEntries` (`:20-23`), which calls `info()`. A throwing `info()` leaves the harness listed with no slot key.
