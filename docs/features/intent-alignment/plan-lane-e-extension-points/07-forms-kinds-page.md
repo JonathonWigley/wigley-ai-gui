@@ -1,6 +1,6 @@
 # 07 — Forms item kinds register on the page
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 (Part A) and 3 (Part B) · Depends on: 06
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 02 — EditorHost.defineEx
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 07 Part A
 Plan: [plan.md](plan.md)
