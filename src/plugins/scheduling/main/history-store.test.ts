@@ -146,7 +146,9 @@ describe('createHistoryStore', () => {
     await store.settled();
 
     expect(store.entries()).toEqual([runAt('3f9a01bc', 1)]);
-    expect(logs).toEqual([expect.stringContaining('history.json not written:')]);
+    expect(logs).toEqual([
+      expect.stringContaining('history.json not written:'),
+    ]);
 
     isWriteFailing = false;
     store.add(runAt('3f9a01bc', 2));

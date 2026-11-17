@@ -8,7 +8,11 @@ const RULE: PermissionRule = {
 };
 
 describe('capPermission', () => {
-  it.each([
+  it.each<{
+    controls: Record<string, string>;
+    cap: Record<string, string>;
+    expected: Record<string, string>;
+  }>([
     {
       controls: { mode: 'high', x: '1' },
       cap: { mode: 'mid', x: '2' },

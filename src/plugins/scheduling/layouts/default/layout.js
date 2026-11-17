@@ -39,7 +39,11 @@ const layout = {
     return { element: root };
   },
   detail(parent, kit) {
-    const root = kit.el(parent, 'div', 'scheduling-pane scheduling-pane--detail');
+    const root = kit.el(
+      parent,
+      'div',
+      'scheduling-pane scheduling-pane--detail',
+    );
     kit.notices(root);
     kit.body(root);
     kit.history(root);
@@ -83,7 +87,9 @@ const layout = {
     kit.cursorActions(end);
     const detail = input.paused
       ? input.scheduleText
-      : [input.scheduleText, input.next].filter((part) => part !== '').join(' · ');
+      : [input.scheduleText, input.next]
+          .filter((part) => part !== '')
+          .join(' · ');
     return kit.row(parent, {
       density: 'list',
       tag: 'li',
@@ -140,10 +146,7 @@ const layout = {
       detail: input.text,
       trailing: end,
     });
-    row.classList.add(
-      'scheduling-run',
-      `scheduling-run--${input.outcome}`,
-    );
+    row.classList.add('scheduling-run', `scheduling-run--${input.outcome}`);
     row.classList.toggle('is-linked', input.linked);
     return row;
   },

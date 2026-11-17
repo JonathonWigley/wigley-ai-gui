@@ -172,29 +172,26 @@ describe('pending queue', () => {
     { label: 'a busy process', skipWhileBusy: 'p', busy: true, spawns: false },
     { label: 'an idle process', skipWhileBusy: 'p', busy: false, spawns: true },
     { label: 'an unknown id', skipWhileBusy: 'x', busy: false, spawns: true },
-  ])(
-    'fire_SkipWhileBusy_Cases: $label',
-    ({ skipWhileBusy, busy, spawns }) => {
-      const { queue, time, spawnedIds, busyIds, started, savedRuns } = setUp();
-      if (busy) {
-        busyIds.add('p');
-      }
-      queue.load();
-      queue.start();
-      queue.setPending([entry('a', 3000, skipWhileBusy)]);
+  ])('fire_SkipWhileBusy_Cases: $label', ({ skipWhileBusy, busy, spawns }) => {
+    const { queue, time, spawnedIds, busyIds, started, savedRuns } = setUp();
+    if (busy) {
+      busyIds.add('p');
+    }
+    queue.load();
+    queue.start();
+    queue.setPending([entry('a', 3000, skipWhileBusy)]);
 
-      time.advanceTo(3000);
+    time.advanceTo(3000);
 
-      const expected = run('a', {
-        startedAt: 3000,
-        skipped: !spawns,
-        exit: null,
-      });
-      expect(spawnedIds).toEqual(spawns ? ['a'] : []);
-      expect(started).toEqual([expected]);
-      expect(savedRuns()).toEqual([expected]);
-    },
-  );
+    const expected = run('a', {
+      startedAt: 3000,
+      skipped: !spawns,
+      exit: null,
+    });
+    expect(spawnedIds).toEqual(spawns ? ['a'] : []);
+    expect(started).toEqual([expected]);
+    expect(savedRuns()).toEqual([expected]);
+  });
 
   it('fire_SpawnRefused_RunHoldsTheError', () => {
     const refused: HostedExit = { code: null, signal: null, error: 'refused' };
@@ -352,7 +349,8 @@ describe('pending queue', () => {
       lines: 2,
     },
     {
-      label: 'an entry with no spawn and one with a null spawn beside a good one',
+      label:
+        'an entry with no spawn and one with a null spawn beside a good one',
       pending: JSON.stringify([
         { at: 0, record: null, skipWhileBusy: null },
         { ...entry('bad', 0), spawn: null },
@@ -427,14 +425,8 @@ describe('pending queue', () => {
   });
 
   it('drop_DeletesThePendingFileKeepsTheRunsFileAndRefusesSetPending', () => {
-    const {
-      queue,
-      time,
-      spawnedIds,
-      diagnosticLines,
-      pendingPath,
-      runsPath,
-    } = startedWithARun();
+    const { queue, time, spawnedIds, diagnosticLines, pendingPath, runsPath } =
+      startedWithARun();
     queue.setPending([entry('later', 9000)]);
     const runsText = readFileSync(runsPath, 'utf8');
 

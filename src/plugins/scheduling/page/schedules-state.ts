@@ -272,7 +272,9 @@ export function selectedView(state: SchedulesState): ScheduledTaskView | null {
 
 // What the details pane draws in place of the details and history: no task at all, or the "+ New task" row selected;
 // null while a task is selected.
-export function emptyReason(state: SchedulesState): EmptyInput['reason'] | null {
+export function emptyReason(
+  state: SchedulesState,
+): EmptyInput['reason'] | null {
   if (state.scheduling.tasks.length === 0) {
     return 'noTasks';
   }
@@ -444,7 +446,9 @@ export function taskEditor(
   const fields: EditorFields = {
     name: task.name,
     project:
-      'projectDir' in task.target ? task.target.projectDir : task.target.project,
+      'projectDir' in task.target
+        ? task.target.projectDir
+        : task.target.project,
     profile: task.profile,
     schedule: fieldsOf(task.schedule),
     controls: Object.fromEntries(
@@ -536,9 +540,7 @@ function scheduleRows(schedule: ScheduleFields): EditorRow[] {
         timeRow,
       ];
     case 'once':
-      return [
-        boxRow('at', 'Date and time', schedule.at, 'YYYY-MM-DD HH:MM'),
-      ];
+      return [boxRow('at', 'Date and time', schedule.at, 'YYYY-MM-DD HH:MM')];
     case 'cron':
       return [
         boxRow(
@@ -598,7 +600,10 @@ function fieldsWith(
         schedule: { ...fields.schedule, kind: value as ScheduleKind },
       };
     case 'day':
-      return { ...fields, schedule: { ...fields.schedule, day: Number(value) } };
+      return {
+        ...fields,
+        schedule: { ...fields.schedule, day: Number(value) },
+      };
     case 'minute':
     case 'time':
     case 'at':

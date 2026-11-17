@@ -760,10 +760,7 @@ describe('host lifetime', () => {
       entries: [pendingEntry('fired', 0), pendingEntry('later', 1e12)],
     });
     await settled(connection);
-    const runsPath = path.join(
-      running.folder,
-      runsFile(SESSION_HOST_PROTOCOL),
-    );
+    const runsPath = path.join(running.folder, runsFile(SESSION_HOST_PROTOCOL));
     const runsText = readFileSync(runsPath, 'utf8');
 
     connection.send({ type: 'drain' });

@@ -69,6 +69,10 @@ function createHostLink(socket: Socket, deps: HostLinkDeps): HostLink {
       deps.pushed(message);
       return;
     }
+    // Routed by the runStarted dependency task 13 adds.
+    if (message.type === 'runStarted') {
+      return;
+    }
     pending.get(message.requestId)?.settle(message);
   };
 

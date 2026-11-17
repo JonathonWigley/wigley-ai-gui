@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { LoginStartStatus } from '../../../contracts/login-start';
 import type {
   EditorChoices,
-  LoginStartStatus,
   RunHistoryEntry,
   RunOutcome,
   ScheduledTask,
@@ -100,10 +100,10 @@ function validEditor(): TaskEditor {
 }
 
 function edited(field: string, value: string): TaskEditor {
-  const state = reduce(
-    [{ type: 'fieldChanged', field, value }],
-    { ...initialSchedulesState(), editor: validEditor() },
-  );
+  const state = reduce([{ type: 'fieldChanged', field, value }], {
+    ...initialSchedulesState(),
+    editor: validEditor(),
+  });
   return state.editor!;
 }
 
@@ -238,7 +238,12 @@ describe('the editor across a state change', () => {
 });
 
 describe('cancel', () => {
-  it.each<{ name: string; changes: SchedulesAction[]; editor: boolean; confirm: string | null }>([
+  it.each<{
+    name: string;
+    changes: SchedulesAction[];
+    editor: boolean;
+    confirm: string | null;
+  }>([
     {
       name: 'changed draft asks the confirm',
       changes: [{ type: 'fieldChanged', field: 'name', value: 'x' }],
@@ -269,7 +274,12 @@ describe('list rows', () => {
   // 2026-11-20 14:30 in New York.
   const NEXT = Date.UTC(2026, 10, 20, 19, 30);
 
-  it.each<{ name: string; row: ScheduledTaskView; fires: boolean; next: string }>([
+  it.each<{
+    name: string;
+    row: ScheduledTaskView;
+    fires: boolean;
+    next: string;
+  }>([
     {
       name: 'paused',
       row: view({ paused: true }, { nextRun: NEXT }),
@@ -333,21 +343,24 @@ describe('history rows', () => {
       reason: 'no such profile',
       text: 'Failed to start: no such profile',
     },
-  ])('historyRowInput_Outcome_GivesItsText: $outcome', ({ outcome, reason, text }) => {
-    expect(historyRowInput(entry(outcome, { reason }), [])).toMatchObject({
-      when: '2026-11-20 14:30',
-      text,
-    });
-  });
+  ])(
+    'historyRowInput_Outcome_GivesItsText: $outcome',
+    ({ outcome, reason, text }) => {
+      expect(historyRowInput(entry(outcome, { reason }), [])).toMatchObject({
+        when: '2026-11-20 14:30',
+        text,
+      });
+    },
+  );
 
   it.each<{ name: string; rowId: string | null; linked: boolean }>([
     { name: 'row open', rowId: 's1', linked: true },
     { name: 'row closed', rowId: 's2', linked: false },
     { name: 'no row', rowId: null, linked: false },
   ])('historyRowInput_RunRow_LinksWhileOpen: $name', ({ rowId, linked }) => {
-    expect(
-      historyRowInput(entry('finished', { rowId }), ['s1']).linked,
-    ).toBe(linked);
+    expect(historyRowInput(entry('finished', { rowId }), ['s1']).linked).toBe(
+      linked,
+    );
   });
 });
 
@@ -357,7 +370,11 @@ describe('notices', () => {
     detail: string | null,
   ): LoginStartStatus => ({ state, detail });
 
-  it.each<{ name: string; state: Partial<SchedulingState>; expected: string[] }>([
+  it.each<{
+    name: string;
+    state: Partial<SchedulingState>;
+    expected: string[];
+  }>([
     { name: 'none', state: {}, expected: [] },
     {
       name: 'dev and file error, in order',
@@ -394,7 +411,9 @@ describe('notices', () => {
     {
       name: 'unsupported',
       state: { loginStart: login('unsupported', null) },
-      expected: ['neutral: Tasks do not run after a restart until the app opens.'],
+      expected: [
+        'neutral: Tasks do not run after a restart until the app opens.',
+      ],
     },
     { name: 'on', state: { loginStart: login('on', null) }, expected: [] },
   ])('notices_State_GivesTheLines: $name', ({ state, expected }) => {
@@ -410,16 +429,18 @@ describe('selection', () => {
   const C = view({ id: 'cccc3333', name: 'C' });
 
   const shown = (tasks: ScheduledTaskView[], from?: SchedulesState) =>
-    reduce(
-      [{ type: 'stateChanged', scheduling: scheduling({ tasks }) }],
-      from,
-    );
+    reduce([{ type: 'stateChanged', scheduling: scheduling({ tasks }) }], from);
 
   it('stateChanged_FirstTasks_SelectsTheFirstTask', () => {
     expect(shown([A, B]).selectedId).toBe('aaaa1111');
   });
 
-  it.each<{ name: string; before: string | null; tasks: ScheduledTaskView[]; after: string | null }>([
+  it.each<{
+    name: string;
+    before: string | null;
+    tasks: ScheduledTaskView[];
+    after: string | null;
+  }>([
     { name: 'kept', before: 'bbbb2222', tasks: [A, B, C], after: 'bbbb2222' },
     {
       name: 'dropped: the row at its index',
@@ -433,14 +454,17 @@ describe('selection', () => {
       tasks: [],
       after: null,
     },
-  ])('stateChanged_Selected_KeepsOrMoves: $name', ({ before, tasks, after }) => {
-    const selected = reduce(
-      [{ type: 'select', id: before }],
-      shown([A, B, C]),
-    );
+  ])(
+    'stateChanged_Selected_KeepsOrMoves: $name',
+    ({ before, tasks, after }) => {
+      const selected = reduce(
+        [{ type: 'select', id: before }],
+        shown([A, B, C]),
+      );
 
-    expect(shown(tasks, selected).selectedId).toBe(after);
-  });
+      expect(shown(tasks, selected).selectedId).toBe(after);
+    },
+  );
 
   it('emptyReason_NewTaskRowWithTasks_IsNewTask', () => {
     const state = reduce([{ type: 'select', id: null }], shown([A, B]));

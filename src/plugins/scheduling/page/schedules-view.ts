@@ -173,9 +173,11 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
   const dispatch = (action: SchedulesAction) => store.dispatch(action);
 
   // ── Layouts ────────────────────────────────────────────────────────────
-  const parts = createLayoutParts<SchedulingLayout, CompleteSchedulingLayout>(
-    { owner: PLUGIN_ID, defaultLayout, log },
-  );
+  const parts = createLayoutParts<SchedulingLayout, CompleteSchedulingLayout>({
+    owner: PLUGIN_ID,
+    defaultLayout,
+    log,
+  });
   const kitFor = (
     scope: SchedulesKitScope,
     rollback: RollbackDeps,
@@ -295,7 +297,10 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     const rowsScroll = rowsList.scrollTop;
     parts.redraw('list', listPane, (list, into, rollback) => {
       const rows = appSlot(rowsList, 'rows', rollback);
-      const pane = list(into, { ...kitFor('list', rollback), rows: rows.place });
+      const pane = list(into, {
+        ...kitFor('list', rollback),
+        rows: rows.place,
+      });
       rows.placeIfLeftOut(requireElementIn(into, pane.element, 'list'));
       return pane;
     });
@@ -352,21 +357,25 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
       for (const row of rows) {
         const drawn =
           row.kind === 'new'
-            ? parts.draw('newTaskRow', rowsList, (newTaskRow, into, rollback) => {
-                const actions = actionsSlot(
-                  [['open', 'new task']],
-                  'list',
-                  rollback,
-                );
-                const root = newTaskRow(into, {
-                  ...kitFor('list', rollback),
-                  cursorActions: actions.place,
-                });
-                actions.placeIfLeftOut(
-                  requireElementIn(into, root, 'newTaskRow'),
-                );
-                return { element: root };
-              })
+            ? parts.draw(
+                'newTaskRow',
+                rowsList,
+                (newTaskRow, into, rollback) => {
+                  const actions = actionsSlot(
+                    [['open', 'new task']],
+                    'list',
+                    rollback,
+                  );
+                  const root = newTaskRow(into, {
+                    ...kitFor('list', rollback),
+                    cursorActions: actions.place,
+                  });
+                  actions.placeIfLeftOut(
+                    requireElementIn(into, root, 'newTaskRow'),
+                  );
+                  return { element: root };
+                },
+              )
             : parts.draw('taskRow', rowsList, (taskRow, into, rollback) => {
                 const actions = actionsSlot(
                   taskActions(row.view),
@@ -443,40 +452,44 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     if (input === null) {
       return;
     }
-    bodyDraw = parts.draw('taskDetail', bodySlot, (taskDetail, into, rollback) => {
-      const root = taskDetail(into, input, {
-        ...kitFor('detail', rollback),
-        editButton: detailButton(
-          'editButton',
-          'Edit',
-          'edit',
-          'secondary',
-          rollback,
-        ),
-        pauseButton: detailButton(
-          'pauseButton',
-          input.paused ? 'Resume' : 'Pause',
-          'togglePaused',
-          'secondary',
-          rollback,
-        ),
-        runNowButton: detailButton(
-          'runNowButton',
-          'Run now',
-          'runNow',
-          'secondary',
-          rollback,
-        ),
-        removeButton: detailButton(
-          'removeButton',
-          'Remove',
-          'remove',
-          'danger',
-          rollback,
-        ),
-      });
-      return { element: requireElementIn(into, root, 'taskDetail') };
-    });
+    bodyDraw = parts.draw(
+      'taskDetail',
+      bodySlot,
+      (taskDetail, into, rollback) => {
+        const root = taskDetail(into, input, {
+          ...kitFor('detail', rollback),
+          editButton: detailButton(
+            'editButton',
+            'Edit',
+            'edit',
+            'secondary',
+            rollback,
+          ),
+          pauseButton: detailButton(
+            'pauseButton',
+            input.paused ? 'Resume' : 'Pause',
+            'togglePaused',
+            'secondary',
+            rollback,
+          ),
+          runNowButton: detailButton(
+            'runNowButton',
+            'Run now',
+            'runNow',
+            'secondary',
+            rollback,
+          ),
+          removeButton: detailButton(
+            'removeButton',
+            'Remove',
+            'remove',
+            'danger',
+            rollback,
+          ),
+        });
+        return { element: requireElementIn(into, root, 'taskDetail') };
+      },
+    );
   };
 
   const drawHistory = (state: SchedulesState) => {
@@ -505,9 +518,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
               ...kitFor('detail', rollback),
               cursorActions: actions.place,
             });
-            actions.placeIfLeftOut(
-              requireElementIn(into, root, 'historyRow'),
-            );
+            actions.placeIfLeftOut(requireElementIn(into, root, 'historyRow'));
             return { element: root };
           },
         );
@@ -867,7 +878,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
       ),
       drawRow: (
         list: HTMLElement,
-        _choice: unknown,
+        _choice,
         input: DrawRowInput,
       ): DrawnPickerRow => {
         const drawn = parts.draw(
@@ -884,7 +895,11 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
         return { element: drawn.built.element, dispose: drawn.dispose };
       },
       chosen(choice) {
-        dispatch({ type: 'fieldChanged', field: row.field, value: choice.value });
+        dispatch({
+          type: 'fieldChanged',
+          field: row.field,
+          value: choice.value,
+        });
         pickerClosed();
       },
       cancelled: pickerClosed,

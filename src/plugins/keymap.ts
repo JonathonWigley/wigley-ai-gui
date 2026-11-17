@@ -1090,7 +1090,11 @@ export const defaultKeymap = {
       scope: 'scheduling.editor',
       command: 'scheduling.previousField',
     },
-    { keys: '<D-Enter>', scope: 'scheduling.editor', command: 'scheduling.save' },
+    {
+      keys: '<D-Enter>',
+      scope: 'scheduling.editor',
+      command: 'scheduling.save',
+    },
     {
       keys: '<Esc>',
       scope: 'scheduling.editor',
@@ -1103,7 +1107,11 @@ export const defaultKeymap = {
       command: 'scheduling.cancelEdit',
       where: 'page',
     },
-    { keys: 'y', scope: 'scheduling.confirm', command: 'scheduling.confirmYes' },
+    {
+      keys: 'y',
+      scope: 'scheduling.confirm',
+      command: 'scheduling.confirmYes',
+    },
     { keys: 'n', scope: 'scheduling.confirm', command: 'scheduling.confirmNo' },
     {
       keys: '<Esc>',

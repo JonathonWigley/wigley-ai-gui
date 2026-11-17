@@ -125,8 +125,9 @@ function startSchedulesPage(
     },
   });
   const commands = harness.started().commands;
-  const run = (command: Exclude<keyof typeof commands, 'selectTask' | 'openRunRow'>) =>
-    commands[command]({ arg: undefined });
+  const run = (
+    command: Exclude<keyof typeof commands, 'selectTask' | 'openRunRow'>,
+  ) => commands[command]({ arg: undefined });
   return { harness, calls, boxes, activated, run };
 }
 
@@ -156,7 +157,10 @@ describe('scheduling page part', () => {
   it('draws one task row per task under the "+ New task" row', () => {
     const page = startSchedulesPage(
       schedulingState({
-        tasks: [taskView('aaaa1111', 'Nightly'), taskView('cccc3333', 'Weekly')],
+        tasks: [
+          taskView('aaaa1111', 'Nightly'),
+          taskView('cccc3333', 'Weekly'),
+        ],
       }),
     );
     page.run('showMode');
@@ -175,9 +179,7 @@ describe('scheduling page part', () => {
     page.run('save');
     await settle();
 
-    expect(
-      page.calls.filter((call) => call.method === 'saveTask'),
-    ).toEqual([
+    expect(page.calls.filter((call) => call.method === 'saveTask')).toEqual([
       {
         method: 'saveTask',
         args: [

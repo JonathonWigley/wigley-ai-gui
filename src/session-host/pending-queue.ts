@@ -266,9 +266,7 @@ export function createPendingQueue(deps: PendingQueueDeps): PendingQueue {
     try {
       deps.runStarted(run);
     } catch (error) {
-      diagnostics.append(
-        `run started ${run.id}: ${(error as Error).message}`,
-      );
+      diagnostics.append(`run started ${run.id}: ${(error as Error).message}`);
     }
   }
 
