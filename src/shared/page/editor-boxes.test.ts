@@ -391,7 +391,7 @@ describe('createEditorBoxes', () => {
       },
       scrollTop: 70,
     },
-  ])('place_AfterRelease_RestoresTheScroll: $steps', ({ act, scrollTop }) => {
+  ])('place_HeldBox_KeepsItsLastScroll: $steps', ({ act, scrollTop }) => {
     const { boxes } = emptySetup();
     const frame = boxes.place(div(), notes, 'a');
     // Stands for the scroller the host's editor DOM holds.

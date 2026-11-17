@@ -1,8 +1,8 @@
 // The session-stash layout contract: what a layout in `layouts/session-stash/<name>/layout.js` draws the stash dialog
 // with. The app keeps the stash dialog's scrim, keys and focus, and its `Stash session` title text; `dialogFrame`
 // draws its panel and title; `noteDialog` draws the dialog's body each time the dialog opens and again whenever the
-// layouts change. The app sets `data-layout-owner="session-stash"` and `data-layout="<name>"` on the element the part returns, `<name>` being the
-// layout that drew it, so `[data-layout-owner="session-stash"][data-layout="<name>"] …` in a layout's CSS selects
+// layouts change. The app sets `data-layout-owner="session-stash"` and `data-layout="<name>"` on the element the
+// part returns, `<name>` being the layout that drew it, so `[data-layout-owner="session-stash"][data-layout="<name>"] …` in a layout's CSS selects
 // only its own parts.
 //
 // The app keeps the note box, its text and focus, and the keys: Enter stashes and Esc cancels, in scope
