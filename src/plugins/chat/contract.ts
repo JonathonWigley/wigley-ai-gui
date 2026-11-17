@@ -872,9 +872,10 @@ export interface ChatPageExports {
 
 // Draws entries of `kind`, a known kind or a harness's own
 // (`<harness id>:<kind>`), whose `match`, when given, returns true; `build`
-// takes a chat layout's entry builder's arguments. A `build` or view `update`
-// that throws leaves the entry to `default`; a `match` that throws counts as
-// false.
+// takes a chat layout's entry builder's arguments. `match` is asked again at
+// each update of the entry, and an answer that changes what draws it draws
+// the entry anew. A `build` or view `update` that throws leaves the entry to
+// `default`; a `match` that throws counts as false.
 export interface ChatEntryRenderer<K extends AnyEntryKind = AnyEntryKind> {
   kind: K;
   match?(input: EntryInput<K>): boolean;

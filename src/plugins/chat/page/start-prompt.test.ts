@@ -1271,7 +1271,7 @@ describe('start prompt', () => {
       statusAsked: [],
       toasts: [
         {
-          text: "Profile gone of New Games is not in the harness's profiles setting",
+          text: 'Profile gone of New Games is not a profile of any registered harness',
           tone: 'error',
         },
       ],

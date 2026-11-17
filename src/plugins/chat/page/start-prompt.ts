@@ -68,18 +68,19 @@ export interface StartPromptDeps {
 
 // `open` asks for a project — or, through `Other folder…` or with no
 // projects, a folder — then a profile of the target's harness unless the
-// project fixes one or that harness has one, then signs a signed-out profile in through the sign-in dialog,
-// then asks for a new session or one of the project's or folder's saved
-// sessions, and starts or resumes a chat session there, revealing its Chat
-// tab. With no saved sessions to list, archived ones counted, it skips that
-// step and starts a new session at once. Its first step also lists the resume
-// sections' rows at the top, a pick resuming that session at once, and its
-// session step those of its folders and profile. Esc at any step starts
-// nothing. Opening the prompt again drops the earlier one: an answer or a
-// sign-in that arrives for it is logged and goes no further. The target's
-// harness is chat's `defaultHarness`, a picked recent folder's recorded harness
-// while it is registered, or a fixed profile's harness; with `defaultHarness`
-// not registered the prompt toasts and opens nothing.
+// project fixes one or that harness has one, then signs a signed-out profile
+// in through the sign-in dialog, then asks for a new session or one of the
+// project's or folder's saved sessions, and starts or resumes a chat session
+// there, revealing its Chat tab. With no saved sessions to list, archived
+// ones counted, it skips that step and starts a new session at once. Its
+// first step also lists the resume sections' rows at the top, a pick resuming
+// that session at once, and its session step those of its folders and
+// profile. Esc at any step starts nothing. Opening the prompt again drops the
+// earlier one: an answer or a sign-in that arrives for it is logged and goes
+// no further. The target's harness is chat's `defaultHarness`, a picked recent
+// folder's recorded harness while it is registered, or a fixed profile's
+// harness; with `defaultHarness` not registered the prompt toasts and opens
+// nothing.
 // `openForNewSession` asks the same way but lists no sections and no saved
 // sessions, so it starts a new session once the profile is signed in.
 // `toggleArchive` and `showArchived` act on the session step while it is open.
@@ -157,13 +158,12 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       return [];
     });
 
-  // Logs and toasts that the harness has no profiles to start under.
+  // Logs and toasts that the harness has no profiles to start under, the
+  // toast naming it by its label, else its id.
   const reportNoProfiles = (harness: string) => {
     log(`harness ${harness} has no profiles`);
-    deps.toast(
-      "Add a profile to the harness's profiles setting first",
-      'error',
-    );
+    const label = deps.harnesses().get(harness)?.label ?? harness;
+    deps.toast(`Add a profile to ${label}'s profiles setting first`, 'error');
   };
 
   // Chat's projects; none when they cannot be read.
@@ -394,7 +394,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     if (fixed !== undefined) {
       return fixed;
     }
-    const text = `Profile ${project.profile} of ${project.name} is not in the harness's profiles setting`;
+    const text = `Profile ${project.profile} of ${project.name} is not a profile of any registered harness`;
     log(text);
     deps.toast(text, 'error');
     return false;

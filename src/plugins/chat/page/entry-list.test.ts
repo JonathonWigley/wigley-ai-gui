@@ -318,6 +318,41 @@ const rows: Row[] = [
     disposedAnchors: [],
   },
   {
+    name: 'renderer match turns true on an update',
+    shown: 'default',
+    renderers: [
+      {
+        kind: 'notice',
+        match: (input) => input.kind === 'notice' && input.tone === 'error',
+        build: drawsPlugin,
+      },
+    ],
+    puts: [notice('n1'), notice('n1', 'error')],
+    slots: [['plugin@entry renderer']],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    name: 'renderer match turns false on an update',
+    shown: 'default',
+    renderers: [
+      {
+        kind: 'notice',
+        match: (input) => input.kind === 'notice' && input.tone === 'error',
+        build: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'plugin'),
+          update: () => undefined,
+        }),
+      },
+    ],
+    puts: [notice('n1', 'error'), notice('n1')],
+    slots: [['chat-entry chat-notice chat-notice-info@default']],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
     name: 'renderer throws',
     shown: 'default',
     renderers: [
@@ -439,8 +474,9 @@ function fakeTimers() {
 }
 
 // A list over `shown`, its layouts, entry renderers, logs, toasts, disposed
-// anchors, timers, a clock whose `time` the test sets, the ids each pending row click pulled back,
-// and the counts of `placeChanged` and `focusChanged` calls.
+// anchors, timers, a clock whose `time` the test sets, the ids each pending
+// row click pulled back, and the counts of `placeChanged` and `focusChanged`
+// calls.
 // `put` puts an entry into the session's list, replacing the one holding its
 // id.
 const TURN_LINE_CLASS = 'chat-turn-line-slot';

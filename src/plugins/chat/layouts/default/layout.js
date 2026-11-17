@@ -894,8 +894,8 @@ const layout = {
     };
   },
   // The session hub's header: the repo with its branch, the folder, then a tag
-  // per worktree, the harness's label and the model · effort. An update that changes
-  // nothing draws nothing, keeping an open tooltip and a selection.
+  // per worktree, the harness's label and the model · effort. An update that
+  // changes nothing draws nothing, keeping an open tooltip and a selection.
   sessionFacts(parent, input, kit) {
     const header = el('div', 'chat-session-header');
     parent.append(header);

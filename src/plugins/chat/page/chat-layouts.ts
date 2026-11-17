@@ -95,10 +95,12 @@ export function pickEntry(
 
 // What draws an entry, and the builder it reads: the user's layout when it
 // names the entry's kind; else the latest-added renderer that draws the
-// entry; else `default`, whose `raw` builder draws a harness kind.
+// entry; else `default`, whose `raw` builder draws a harness kind. `source`
+// says whether the pick is a layout or a renderer.
 export interface EntryDrawPick {
   pick: PartPick<ChatLayout>;
   builderKind: AnyEntryKind;
+  source: 'layout' | 'renderer';
 }
 
 export function pickEntryDraw(
@@ -108,13 +110,22 @@ export function pickEntryDraw(
 ): EntryDrawPick {
   const named = pickEntry(shown, input.kind);
   if (named.name !== DEFAULT_ENTRY_PICK.name) {
-    return { pick: named, builderKind: input.kind };
+    return { pick: named, builderKind: input.kind, source: 'layout' };
   }
   const rendered = renderers.pick(input);
   if (rendered !== null) {
-    return { pick: rendered, builderKind: input.kind };
+    return { pick: rendered, builderKind: input.kind, source: 'renderer' };
   }
-  return { pick: named, builderKind: defaultBuilderKind(input.kind) };
+  return {
+    pick: named,
+    builderKind: defaultBuilderKind(input.kind),
+    source: 'layout',
+  };
+}
+
+// Whether `a` and `b` draw with the same layout and builder.
+export function isSameEntryDraw(a: EntryDrawPick, b: EntryDrawPick): boolean {
+  return a.pick.layout === b.pick.layout && a.builderKind === b.builderKind;
 }
 
 // The kind whose builder `default` draws an entry of `kind` with: `raw` for a
