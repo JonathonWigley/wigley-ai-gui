@@ -1,6 +1,6 @@
 # 02 — Old plugin code revisions are pruned
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds a folder-removal dependency to the user folder source and deletes folders on disk during a load
 Wave: 1 · Depends on: none
@@ -101,3 +101,5 @@ next launch's first load of the plugin deletes it".
 Commit: one commit, "plugin catalog: delete the revision copies an earlier launch left (old plugin code revisions follow-up)".
 
 ## Proof
+
+Commit 626b6540d · proof: diff read against Produces; wave 1 typecheck clean · concerns: AGENTS.md sentence kept on one line for clean merges with running branches

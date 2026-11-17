@@ -1,6 +1,6 @@
 # 01 — Restored step header shows no duration for an unknown time
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · changes the chat layout contract (`ActivityInput.startedAt` becomes nullable), which every user chat layout reads
 Wave: 1 · Depends on: none
@@ -103,3 +103,5 @@ time)".
 Commit: one commit, "chat: a run with no known start draws no duration (restored 498246h header follow-up)".
 
 ## Proof
+
+Commit cc4f72119 · proof: diff read against Produces; wave 1 typecheck clean · concerns: none

@@ -1,6 +1,6 @@
 # 04 — Fit check passes split handle prompts
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · adds one selector to an existing list (`PRIMITIVE_CLIPPING_SELECTORS`) and drops two workarounds
 Wave: 1 · Depends on: none
@@ -52,3 +52,5 @@ naming a `ui-split-handle` (run one at a time; never the whole self-test).
 Commit: one commit, "self-test fit: split handles clip their resize prompt as a primitive (fit check split handle follow-up)".
 
 ## Proof
+
+Commit 49857f3c4 · proof: diff read against Produces; wave 1 typecheck clean · concerns: none

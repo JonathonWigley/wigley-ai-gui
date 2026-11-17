@@ -1,6 +1,6 @@
 # 03 — Drive quit waits on the host's end
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses the app and session-host processes through a bounded wait and folder deletion; the host-exit claim is marked low-confidence in task 19
 Wave: 1 · Depends on: none
@@ -97,3 +97,5 @@ untouched for over a day whose app and session host are not running.
 Commit: one commit, "drive: quit waits on the session host's end and the idle sweep skips a live host (drive quit follow-up)".
 
 ## Proof
+
+Commit d8d8353ae · proof: diff read against Produces; wave 1 typecheck clean · concerns: none

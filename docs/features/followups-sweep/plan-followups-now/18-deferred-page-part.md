@@ -1,6 +1,6 @@
 # 18 — A deferred page part waits on its withheld dependency
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses main's plugin switch and the page's part host through the start lifecycle of two processes
 Wave: 1 · Depends on: none
@@ -76,3 +76,5 @@ the rule above.
 Commit: one commit, "plugin switch: a page start also names the running dependents of its ids (deferred page part follow-up)".
 
 ## Proof
+
+Commit 236bdc88a · proof: diff read against Produces; wave 1 typecheck clean · concerns: none

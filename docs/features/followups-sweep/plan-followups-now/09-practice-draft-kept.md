@@ -1,6 +1,6 @@
 # 09 — Practice keeps a draft saved during an open read
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · an async read/save race across the view, the workspace and main's `open` and save calls
 Wave: 1 · Depends on: none
@@ -108,3 +108,4 @@ Commit:    one commit: "Practice: an open read keeps a draft saved after the rea
 
 ## Proof
 
+Commit 2e53a0a7d · proof: diff read against Produces; wave 1 typecheck clean · concerns: page test assumes editors.type hits the notes box

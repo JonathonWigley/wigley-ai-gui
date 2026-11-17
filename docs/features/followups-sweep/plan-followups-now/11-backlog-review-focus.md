@@ -1,6 +1,6 @@
 # 11 — Backlog review pane keeps a click
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · follows Practice's `focusin` loop over its panes in `src/plugins/practice/page/practice-view.ts` (near line 630)
 Wave: 1 · Depends on: none
@@ -73,3 +73,4 @@ Commit:    one commit: "Backlog: a click into a pane hands it the keys before fo
 
 ## Proof
 
+Commit 96855bc26 · proof: diff read against Produces; wave 1 typecheck clean · concerns: test class names and default selected row unverified until the test gate

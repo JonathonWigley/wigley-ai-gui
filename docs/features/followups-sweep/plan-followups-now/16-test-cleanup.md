@@ -1,6 +1,6 @@
 # 16 — Test cleanup sweep
 
-Status: not started
+Status: done
 Type: Batch
 Rung: standard · test-only edits and one helper reuse, each following a named pattern: sentence titles per `wigley:writing-tests` `typescript-vitest.md` § Naming (as `src/plugins/keys/page/which-key.test.ts`'s `'lists in a box only the editor binds firing in the pending scope'`), copy-free assertions as the 2026-10-27 audit left `src/plugins/forms/page/kinds/finding/verdict.test.ts` (`expect.any(String)` for chip text), and `isStringArray` from `src/shared/json.ts`
 Wave: 1 · Depends on: none
@@ -86,3 +86,5 @@ Commit:    one commit: "Tests: retarget the full-task add-item test at a stale b
            tests that restate shipped text, one test naming style, isStringArray reuse)".
 
 ## Proof
+
+Commit 42675ea78 · proof: diff read against Produces; wave 1 typecheck clean · concerns: none

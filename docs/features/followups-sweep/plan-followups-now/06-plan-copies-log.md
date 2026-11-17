@@ -1,6 +1,6 @@
 # 06 — A failing worktree list is logged
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · adds an optional callback to `PlanCopyDeps` and logs it the way `plan-watch.ts`'s `logFailure` logs
 Wave: 1 · Depends on: none
@@ -58,3 +58,5 @@ Done when: compiles; `npm test` runs both tests and they pass.
 Commit: one commit, "plan copies: log a failing worktree list once per clone (failing worktree list follow-up)".
 
 ## Proof
+
+Commit 3a036f014 · proof: diff read against Produces; wave 1 typecheck clean; diff read sent back once for a non-sentence test title and a comment wrap · concerns: none

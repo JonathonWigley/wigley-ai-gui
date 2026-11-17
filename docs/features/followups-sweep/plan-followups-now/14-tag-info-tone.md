@@ -1,6 +1,6 @@
 # 14 — Tag gains the info tone
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · adds a tone the way the existing ones are added (`ui-tag--running` over `status-running-tint` in `src/shared/page/ui/tag.css`) and a core token by `DESIGN.md` § Tokens and themes › Adding a token
 Wave: 1 · Depends on: none
@@ -68,3 +68,4 @@ Commit:    one commit: "Tag: an info tone over a new status-info-tint token; doc
 
 ## Proof
 
+Commit b273cdb4e · proof: diff read against Produces; wave 1 typecheck clean; diff read sent back once to re-wrap the DESIGN.md Tag bullet · concerns: Colour row padded by hand

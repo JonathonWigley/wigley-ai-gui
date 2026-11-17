@@ -1,6 +1,6 @@
 # 05 — Switch-off refuses while unsaved work is open
 
-Status: not started
+Status: done
 Type: Batch
 Rung: hard · adds stop refusals to two page parts' lifecycle and builds a new part-harness test for session-stash
 Wave: 1 · Depends on: none
@@ -80,3 +80,5 @@ Done when: compiles; `npm test` runs both tests and they pass.
 Commit: one commit, "docs-session-tab, session-stash: refuse a switch-off over unsaved edits or an open note (switch-off drops follow-ups)".
 
 ## Proof
+
+Commit 0af63d7e5 · proof: diff read against Produces; wave 1 typecheck clean · concerns: the folder pathspec of 05's commit swept in 13's emptied session-stash.css; 13's commit deletes it

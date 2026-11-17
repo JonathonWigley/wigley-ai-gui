@@ -1,6 +1,6 @@
 # 15 — Shared waveform primitive
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · promotes a plugin-local SVG builder to a shared primitive the way Sparkline is built (`src/shared/page/ui/sparkline.ts`: a pure shape function plus a builder, its CSS beside it, a gallery section and a `DESIGN.md` § Primitives row)
 Wave: 2 · Depends on: 14 (both list `src/plugins/gallery/page/gallery-view.ts` and `DESIGN.md`)

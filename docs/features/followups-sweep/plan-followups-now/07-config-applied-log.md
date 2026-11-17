@@ -1,6 +1,6 @@
 # 07 — Config applied is logged only on a change
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · one guard on an existing log line with `isSameJson`, as `applyKeys` in the same file compares
 Wave: 1 · Depends on: none
@@ -52,3 +52,5 @@ Done when: compiles; `npm test` runs `config-push.test.ts` and it passes.
 Commit: one commit, "config push: log applied only when the installed config changed (repeated config log follow-up)".
 
 ## Proof
+
+Commit bfcd0a7f6 · proof: diff read against Produces; wave 1 typecheck clean · concerns: self-test scripts that wait on the line are checked at the live session (check 2)

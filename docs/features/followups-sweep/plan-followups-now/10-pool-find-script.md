@@ -1,6 +1,6 @@
 # 10 — The pool runner survives a failed stat
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · wraps one call in the try/catch shape `runPoolCommand` already uses, answering `cli-failed`
 Wave: 1 · Depends on: none
@@ -43,3 +43,5 @@ Done when: compiles; `npm test` runs `pool-cli.test.ts` and it passes.
 Commit: one commit, "unity-pool: a failed stat of the CLI answers cli-failed (findScript follow-up)".
 
 ## Proof
+
+Commit 5af596fd4 · proof: diff read against Produces; wave 1 typecheck clean · concerns: none

@@ -102,22 +102,22 @@ there, each with disjoint hunks, checked before dispatch), and no task edits `fo
 Critical path: 14 → 15 → 17.
 
 ### Wave 1
-- [ ] [Restored step header shows no duration for an unknown time](01-restored-step-header.md)
-- [ ] [Old plugin code revisions are pruned](02-plugin-revisions-pruned.md)
-- [ ] [Drive quit waits on the host's end](03-drive-quit-waits.md)
-- [ ] [Fit check passes split handle prompts](04-fit-check-split-handles.md)
-- [ ] [Switch-off refuses while unsaved work is open](05-maystop-refusals.md)
-- [ ] [A failing worktree list is logged](06-plan-copies-log.md)
-- [ ] [Config applied is logged only on a change](07-config-applied-log.md)
-- [ ] [Primer restores a review cursor in range](08-primer-review-cursor.md)
-- [ ] [Practice keeps a draft saved during an open read](09-practice-draft-kept.md)
-- [ ] [The pool runner survives a failed stat](10-pool-find-script.md)
-- [ ] [Backlog review pane keeps a click](11-backlog-review-focus.md)
-- [ ] [Sessions header holds at the side bar's least width](12-sessions-header-width.md)
-- [ ] [One native-input reset in the input frame](13-input-frame-reset.md)
-- [ ] [Tag gains the info tone](14-tag-info-tone.md)
-- [ ] [Test cleanup sweep](16-test-cleanup.md)
-- [ ] [A deferred page part waits on its withheld dependency](18-deferred-page-part.md)
+- [x] [Restored step header shows no duration for an unknown time](01-restored-step-header.md)
+- [x] [Old plugin code revisions are pruned](02-plugin-revisions-pruned.md)
+- [x] [Drive quit waits on the host's end](03-drive-quit-waits.md)
+- [x] [Fit check passes split handle prompts](04-fit-check-split-handles.md)
+- [x] [Switch-off refuses while unsaved work is open](05-maystop-refusals.md)
+- [x] [A failing worktree list is logged](06-plan-copies-log.md)
+- [x] [Config applied is logged only on a change](07-config-applied-log.md)
+- [x] [Primer restores a review cursor in range](08-primer-review-cursor.md)
+- [x] [Practice keeps a draft saved during an open read](09-practice-draft-kept.md)
+- [x] [The pool runner survives a failed stat](10-pool-find-script.md)
+- [x] [Backlog review pane keeps a click](11-backlog-review-focus.md)
+- [x] [Sessions header holds at the side bar's least width](12-sessions-header-width.md)
+- [x] [One native-input reset in the input frame](13-input-frame-reset.md)
+- [x] [Tag gains the info tone](14-tag-info-tone.md)
+- [x] [Test cleanup sweep](16-test-cleanup.md)
+- [x] [A deferred page part waits on its withheld dependency](18-deferred-page-part.md)
 
 ### Wave 2
 - [ ] [Shared waveform primitive](15-waveform-primitive.md) — after 14
@@ -131,7 +131,31 @@ Critical path: 14 → 15 → 17.
 Review base: 34e4782344fb8ae4e6246859c522c2a5bb9abc53
 
 ### Groups
+- 01 · hard · cc4f72119 · diff read against Produces; wave 1 typecheck clean · concerns: none
+- 02 · hard · 626b6540d · diff read against Produces; wave 1 typecheck clean · concerns: AGENTS.md sentence kept on one line for clean merges with running branches
+- 03 · deep · d8d8353ae · diff read against Produces; wave 1 typecheck clean · concerns: none
+- 04 · standard · 49857f3c4 · diff read against Produces; wave 1 typecheck clean · concerns: none
+- 05 · hard · 0af63d7e5 · diff read against Produces; wave 1 typecheck clean · concerns: the folder pathspec of 05's commit swept in 13's emptied session-stash.css; 13's commit deletes it
+- 06 · standard · 3a036f014 · diff read against Produces; wave 1 typecheck clean; diff read sent back once for a non-sentence test title and a comment wrap · concerns: none
+- 07 · standard · bfcd0a7f6 · diff read against Produces; wave 1 typecheck clean · concerns: self-test scripts that wait on the line are checked at the live session (check 2)
+- 08 · standard · cbda19cd2 · diff read against Produces; wave 1 typecheck clean · concerns: test setup reaching reviewRow 2 over two rows is asserted by its helper
+- 09 · deep · 2e53a0a7d · diff read against Produces; wave 1 typecheck clean · concerns: page test assumes editors.type hits the notes box
+- 10 · standard · 5af596fd4 · diff read against Produces; wave 1 typecheck clean · concerns: none
+- 11 · standard · 96855bc26 · diff read against Produces; wave 1 typecheck clean · concerns: test class names and default selected row unverified until the test gate
+- 12 · standard · bdc8ac292 · diff read against Produces; wave 1 typecheck clean · concerns: a wrapped prompts line spreads with space-between; checked at the live session (check 6)
+- 13 · standard · 0f3ea326f · diff read against Produces; wave 1 typecheck clean; diff read sent back once to delete the emptied session-stash.css and its import · concerns: none
+- 14 · standard · b273cdb4e · diff read against Produces; wave 1 typecheck clean; diff read sent back once to re-wrap the DESIGN.md Tag bullet · concerns: Colour row padded by hand
+- 16 · standard · 42675ea78 · diff read against Produces; wave 1 typecheck clean · concerns: none
+- 18 · deep · 236bdc88a · diff read against Produces; wave 1 typecheck clean · concerns: none
 ### Contract changes
 ### Rulings
+- 01: listRows treats an at of 0 (previousAt || steps[0].at) as unknown; no source writes epoch 0 · group 01
+- 02: a failed listing of the code root in loadAll's sweep is logged (plugin code not listed) and loadAll does not reject · group 02
+- 03: quit's second refusal reuses quitRefusal with liveAppPids [] and hostMayBeRunning !hostEnded · group 03
+- 06: plan-watch logs the worktree failure through log directly, not logFailure, whose 'in <planDir>' prefix the pinned text lacks · group 06
+- 09: a mark of another problem still refreshes the summary and submission cursor; only draft texts are skipped · group 09
+- 13: session-stash.css held only the reset, so it and its import are deleted · group 13
+- 16: titles rewritten as sentences in the worker's wording, interpolations kept · group 16
+- 18: inOrder drops an id with no admitted entry; every caller passes admitted ids · group 18
 ### Review rounds
 ### Test gate

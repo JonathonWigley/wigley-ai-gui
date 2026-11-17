@@ -1,6 +1,6 @@
 # 12 — Sessions header holds at the side bar's least width
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · a CSS rule scoped like the existing `.session-side > .ui-section-header` rule in `src/plugins/sessions/layouts/default/layout.css`
 Wave: 1 · Depends on: none
@@ -57,3 +57,4 @@ Commit:    one commit: "Sessions layout: the Sessions title stays on one line at
 
 ## Proof
 
+Commit bdc8ac292 · proof: diff read against Produces; wave 1 typecheck clean · concerns: a wrapped prompts line spreads with space-between; checked at the live session (check 6)

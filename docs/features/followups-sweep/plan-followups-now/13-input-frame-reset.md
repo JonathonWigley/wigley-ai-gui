@@ -1,6 +1,6 @@
 # 13 — One native-input reset in the input frame
 
-Status: not started
+Status: done
 Type: Batch
 Rung: standard · moves an identical CSS block into the primitive's stylesheet beside its `.ui-input .cm-editor` rules in `src/shared/page/ui/input-frame.css`
 Wave: 1 · Depends on: none
@@ -78,3 +78,4 @@ Commit:    one commit: "Input frame: one native-input reset for every plain text
 
 ## Proof
 
+Commit 0f3ea326f · proof: diff read against Produces; wave 1 typecheck clean; diff read sent back once to delete the emptied session-stash.css and its import · concerns: none

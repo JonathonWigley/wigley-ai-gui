@@ -1,6 +1,6 @@
 # 08 — Primer restores a review cursor in range
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · a reducer-only clamp through the existing `moveReviewRow` helper in `src/plugins/primer/page/primer-state.ts`
 Wave: 1 · Depends on: none
@@ -71,3 +71,4 @@ Commit:    one commit: "Primer: a restored review clamps its cursor into the rev
 
 ## Proof
 
+Commit cbda19cd2 · proof: diff read against Produces; wave 1 typecheck clean · concerns: test setup reaching reviewRow 2 over two rows is asserted by its helper
