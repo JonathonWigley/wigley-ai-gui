@@ -1,6 +1,6 @@
 # 04 — AgentHarness grows what a second harness needs
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -247,3 +247,4 @@ Commit:    one commit for the group; it also removes "AgentHarness grows what a 
 
 ## Proof
 
+Commit 920835082 · proof: diff read: HarnessCapabilities, HarnessConfigRoots, InstalledPlugin, CONTROL_ROLES, SessionControl.role, info's capabilities/clearAliases/projectConfigFolder, controls/toolUseIdOf/configRoots/installedPlugins present in contracts/agent.ts and both adapters; wave compile (typecheck, lint) passes; oxfmt 4c4cb1bd6 · concerns: foldPipeLine_InitializeWithoutList_KeepsHeldList now expects a second 'initialize listed no models' log; info_Label_* tests replaced by declaration tests; model-choice reader sits in session-fold.ts (commandRecordsOf is in claude-commands.ts); preview-session.ts controls carry no role (task 11); agent definitions now skip an install record with no installPath before picking project-or-user, so a pathless project install falls to the user install where it used to give none

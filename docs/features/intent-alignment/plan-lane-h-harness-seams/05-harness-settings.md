@@ -1,6 +1,6 @@
 # 05 — Harness settings with the harness
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
