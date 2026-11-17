@@ -283,23 +283,78 @@ describe('createEditorBoxes', () => {
     },
   );
 
-  it.each<{ state: string; releases: boolean }>([
-    { state: 'placed', releases: false },
-    { state: 'released', releases: true },
-  ])('place_HeldBoxWithNewText_SetsTheEditorText: $state', ({ releases }) => {
-    const { boxes, created, changes } = emptySetup();
-    const frame = boxes.place(div(), notes, 'a');
-    if (releases) {
-      boxes.release(notes);
-    }
+  // Each row starts on the box placed in `first` with text `a`, and focused.
+  it.each<{
+    steps: string;
+    act: (
+      boxes: ReturnType<typeof emptySetup>['boxes'],
+      second: HTMLElement,
+    ) => void;
+    setTexts: string[];
+    frameIn: 'first' | 'second' | 'nothing';
+    isFocused: boolean;
+  }>([
+    {
+      steps: 'place b again with no release',
+      act: (boxes, second) => boxes.place(second, notes, 'b'),
+      setTexts: ['b'],
+      frameIn: 'second',
+      isFocused: true,
+    },
+    {
+      steps: 'release, then place b',
+      act: (boxes, second) => {
+        boxes.release(notes);
+        boxes.place(second, notes, 'b');
+      },
+      setTexts: ['b'],
+      frameIn: 'second',
+      isFocused: false,
+    },
+    {
+      steps: 'setText b',
+      act: (boxes) => boxes.setText(notes, 'b'),
+      setTexts: ['b'],
+      frameIn: 'first',
+      isFocused: true,
+    },
+    {
+      steps: 'setText a, the text it holds',
+      act: (boxes) => boxes.setText(notes, 'a'),
+      setTexts: [],
+      frameIn: 'first',
+      isFocused: true,
+    },
+    {
+      steps: 'release, then setText b',
+      act: (boxes) => {
+        boxes.release(notes);
+        boxes.setText(notes, 'b');
+      },
+      setTexts: [],
+      frameIn: 'nothing',
+      isFocused: false,
+    },
+  ])(
+    'newText_HeldBox_SetsThePlacedEditorsText: $steps',
+    ({ act, setTexts, frameIn, isFocused }) => {
+      const { boxes, created, changes } = emptySetup();
+      const first = div();
+      const second = div();
+      const frame = boxes.place(first, notes, 'a');
+      boxes.focus(notes);
 
-    const moved = boxes.place(div(), notes, 'b');
+      act(boxes, second);
 
-    expect(created).toHaveLength(1);
-    expect(moved).toBe(frame);
-    expect(created[0].editor.setTexts).toEqual(['b']);
-    expect(changes).toEqual([]);
-  });
+      const parents = { first, second, nothing: null };
+      expect(created).toHaveLength(1);
+      expect(created[0].editor.setTexts).toEqual(setTexts);
+      expect(changes).toEqual([]);
+      expect(frame.parentNode).toBe(parents[frameIn]);
+      expect(boxes.active()).toEqual(isFocused ? notes : null);
+      expect(created[0].editor.blurCalls).toBe(0);
+    },
+  );
 
   // Each row starts on the box placed with its scroller at 40.
   it.each<{

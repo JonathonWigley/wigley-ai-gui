@@ -809,9 +809,8 @@ describe('primer add-item box', () => {
     typeNewItem(setup, 'Test the store');
     const held = setup.editorOf(newItem1);
     held.editor.setText('Test the store');
-    setup.run('leaveBox');
 
-    setup.view.setLayouts(withUser<PrimerLayout>(defaultLayout, BARE_TASK));
+    setup.run('leaveBox');
 
     expect(itemCount(setup)).toBe(3);
     expect(setup.editorOf(newItem1)).toBe(held);

@@ -44,6 +44,10 @@ export interface EditorBoxes<Box> {
   // cursor, vim mode, undo and scroll, and sets its text when `text` differs
   // from it (no `changed`). Throws for a box `mount` made.
   place(parent: HTMLElement, box: Box, text: string): HTMLElement;
+  // Sets the placed box's editor text when `text` differs from it (no
+  // `changed`), leaving its frame, scroll and focus where they are. Does
+  // nothing for a box that is not placed.
+  setText(box: Box, text: string): void;
   // Detaches the box's frame and keeps its editor, and blurs it when focused.
   // Does nothing for a box already released or held by no editor; throws for
   // a box `mount` made.
@@ -217,13 +221,17 @@ export function createEditorBoxes<Box>(
       }
       parent.append(frame);
       entry.isPlaced = true;
-      if (text !== entry.editor.text()) {
-        entry.editor.setText(text);
-      }
+      setTextIfChanged(entry.editor, text);
       if (scroller !== null && entry.scrollTop !== null) {
         scroller.scrollTop = entry.scrollTop;
       }
       return frame;
+    },
+    setText(box, text) {
+      const entry = placedEntry(identity.keyOf(box));
+      if (entry !== undefined) {
+        setTextIfChanged(entry.editor, text);
+      }
     },
     release(box) {
       const key = identity.keyOf(box);
@@ -342,6 +350,12 @@ export function createEditorBoxes<Box>(
       listeners.push(listener);
     },
   };
+}
+
+function setTextIfChanged(editor: TextEditor, text: string): void {
+  if (text !== editor.text()) {
+    editor.setText(text);
+  }
 }
 
 // Runs `rebuild`, which releases and places again the boxes of form `formId`,

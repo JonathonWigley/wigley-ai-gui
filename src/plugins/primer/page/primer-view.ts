@@ -1311,8 +1311,8 @@ type CardBuilder<Kit, Input> = (
 ) => PrimerLayoutCard<Input>;
 
 // The card the spec builds through `pick`: the layout's card, then each box it
-// left out at its end. `update` brings the kit's own parts up to date, then
-// runs the card's own `update`, whose throw is logged once per layout object
+// left out at its end. `update` brings the kit's own parts and its boxes' text
+// up to date, then runs the card's own `update`, whose throw is logged once per layout object
 // and part and keeps the card.
 function drawCardPart<Kit, Input>(
   parent: HTMLElement,
@@ -1355,7 +1355,7 @@ function drawCardPart<Kit, Input>(
       if (next === null) {
         return;
       }
-      kit.update(next);
+      kit.update(next, current);
       try {
         card.update?.(next);
       } catch (error) {
