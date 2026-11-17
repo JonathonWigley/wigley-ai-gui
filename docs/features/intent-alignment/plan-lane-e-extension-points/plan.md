@@ -275,5 +275,6 @@ Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 - ConfigStore.userRemaps() returns the kept keymap slice's remaps — a broken keymap.json serves its last good remaps, as binds do — group 03 · group 03
 - 04: controlKindsChanged redraws the open section and relies on drawRows' early return before load; the onChanged listener in start.ts is not filed with api (the registry goes with the part) · group 04
 - 05: every registration's first dispose tells namesChanged (toldNames starts as ['default'], so every registration has told names); names compared with isSameJson · group 05
+- Ruling (user, 2026-11-17): the run paused at the forms gate after 01, 03, 04, 05; the branch lane-e-extension-points and its worktree are held unmerged until Lane H ticks Structured round results, then the run resumes at task 06
 ### Review rounds
 ### Test gate
