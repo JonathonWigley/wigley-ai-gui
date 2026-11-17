@@ -1,8 +1,11 @@
-import { type Files, readIfPresent } from '../../../contracts/files';
+import type { Files } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
-import { asArray, asJson, asString, type Json, parsed } from './json-fields';
+import {
+  type PluginInstallRecord,
+  readInstalledPlugins,
+} from './installed-plugins';
 
 // What an agent definition file sets for the agents of its type; each null when the file sets none.
 export interface AgentDefinition {
@@ -104,65 +107,45 @@ async function addFolder(
   }
 }
 
-// The install a session in `projectDir` loads: this folder's project install, else the user install.
+// The folder of the install a session in `projectDir` loads: this folder's project install, else the user install;
+// null when neither is listed.
 function installPathOf(
-  installs: Json[],
+  installs: readonly PluginInstallRecord[],
   projectDir: string,
   paths: Paths,
 ): string | null {
   const projectInstall = installs.find(
     (install) =>
       install.scope !== 'user' &&
-      typeof install.projectPath === 'string' &&
+      install.projectPath !== null &&
       paths.samePath(install.projectPath, projectDir),
   );
   const install =
     projectInstall ?? installs.find((candidate) => candidate.scope === 'user');
-  const installPath = asString(install?.installPath);
-  return installPath === '' ? null : installPath;
+  return install?.installDir ?? null;
 }
 
 // Each installed plugin's name (its `installed_plugins.json` key up to `@`) and the folder of the install a session
-// in `projectDir` loads; [] when the file is missing or unreadable.
+// in `projectDir` loads, in file order; [] when the file is missing or unreadable.
 async function pluginInstalls(
   deps: DefinitionDeps,
   projectDir: string,
   configFolder: string,
 ): Promise<{ plugin: string; installPath: string }[]> {
-  const path = deps.paths.join(
-    configFolder,
-    'plugins',
-    'installed_plugins.json',
-  );
-  let text: string | null;
-  try {
-    text = await readIfPresent(deps.files, path);
-  } catch (error) {
-    deps.log('claude', `installed plugins not read: ${errorText(error)}`);
-    return [];
+  const installsByKey = new Map<string, PluginInstallRecord[]>();
+  for (const record of await readInstalledPlugins(deps, configFolder)) {
+    const installs = installsByKey.get(record.key) ?? [];
+    installs.push(record);
+    installsByKey.set(record.key, installs);
   }
-  if (text === null) {
-    return [];
-  }
-  const json = parsed(text);
-  if (!json.ok) {
-    deps.log('claude', `installed plugins not read: ${path} is not JSON`);
-    return [];
-  }
-  const installs: { plugin: string; installPath: string }[] = [];
-  for (const [key, value] of Object.entries(
-    asJson(asJson(json.value).plugins),
-  )) {
-    const installPath = installPathOf(
-      asArray(value).map(asJson),
-      projectDir,
-      deps.paths,
-    );
+  const chosen: { plugin: string; installPath: string }[] = [];
+  for (const [key, installs] of installsByKey) {
+    const installPath = installPathOf(installs, projectDir, deps.paths);
     if (installPath !== null) {
-      installs.push({ plugin: key.split('@')[0], installPath });
+      chosen.push({ plugin: key.split('@')[0], installPath });
     }
   }
-  return installs;
+  return chosen;
 }
 
 // The agent definitions a Claude session in `projectDir` with config folder `configFolder` loads: the project's

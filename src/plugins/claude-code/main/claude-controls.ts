@@ -1,7 +1,9 @@
-import type {
-  AgentStart,
-  ControlChoice,
-  UserMessage,
+import {
+  type AgentStart,
+  type ControlChoice,
+  CONTROL_ROLES,
+  type SessionControl,
+  type UserMessage,
 } from '../../../contracts/agent';
 import { asJson, asString, type Json } from './json-fields';
 
@@ -15,15 +17,18 @@ const MODEL_CHOICES: ControlChoice[] = [
 ];
 
 // `bypassPermissions` is left out: Claude refuses it mid-session unless the
-// process was launched with `--dangerously-skip-permissions`.
+// process was launched with `--dangerously-skip-permissions`. The model choices
+// are the ones a process starts with; its `initialize` answer replaces them.
 export const CLAUDE_CONTROLS: readonly {
   id: ClaudeControlId;
   label: string;
   choices: ControlChoice[];
+  role: string;
 }[] = [
   {
     id: 'mode',
     label: 'Mode',
+    role: CONTROL_ROLES.permissionMode,
     choices: [
       { value: 'auto', label: 'Auto' },
       { value: 'acceptEdits', label: 'Accept edits' },
@@ -35,6 +40,7 @@ export const CLAUDE_CONTROLS: readonly {
   {
     id: 'effort',
     label: 'Effort',
+    role: CONTROL_ROLES.effort,
     choices: [
       { value: 'low', label: 'Low' },
       { value: 'medium', label: 'Medium' },
@@ -46,6 +52,7 @@ export const CLAUDE_CONTROLS: readonly {
   {
     id: 'model',
     label: 'Model',
+    role: CONTROL_ROLES.model,
     choices: MODEL_CHOICES,
   },
 ];
@@ -58,6 +65,23 @@ export function launchMode(controls: AgentStart['controls']): string {
   return controls.mode ?? 'auto';
 }
 
+// The controls a process launched with `controls` starts with: the mode it
+// launches in (`launchMode`), and the model and effort `controls` holds, else
+// null.
+export function startingControls(
+  controls: AgentStart['controls'],
+): SessionControl[] {
+  const launched: Readonly<Record<string, string>> = {
+    ...controls,
+    mode: launchMode(controls),
+  };
+  return CLAUDE_CONTROLS.map((control) => ({
+    ...control,
+    choices: [...control.choices],
+    value: launched[control.id] ?? null,
+  }));
+}
+
 // A typed `/effort <value>` or `/model <value>`.
 export const CONTROL_COMMAND = /^\/(effort|model) (\S+)$/;
 
@@ -67,25 +91,38 @@ export function controlOf(
   return CLAUDE_CONTROLS.find((control) => control.id === id);
 }
 
-export function isChoice(id: ClaudeControlId, value: string): boolean {
-  const choices = controlOf(id)?.choices ?? [];
+// Whether control `id` in `controls` offers `value`; false when `controls`
+// holds no control `id`.
+export function isChoice(
+  controls: readonly SessionControl[],
+  id: ClaudeControlId,
+  value: string,
+): boolean {
+  const choices = controls.find((control) => control.id === id)?.choices ?? [];
   return choices.some((choice) => choice.value === value);
 }
 
 // Claude reports the `manual` mode as `default`.
 const REPORTED_MODES: Readonly<Record<string, string>> = { default: 'manual' };
 
-// The control value a value Claude reported stands for: a full model name
-// (`claude-opus-5-5[1m]`) becomes the alias it contains (`opus`).
-export function controlValue(id: ClaudeControlId, reported: string): string {
+// The control value a value Claude reported stands for, given the control's
+// current `choices`: a model name that is a choice stays itself, and a full
+// model name (`claude-opus-5-5[1m]`) becomes the first choice it contains
+// (`opus`).
+export function controlValue(
+  id: ClaudeControlId,
+  reported: string,
+  choices: readonly ControlChoice[],
+): string {
   if (id === 'mode') {
     return REPORTED_MODES[reported] ?? reported;
   }
   if (id === 'effort') {
     return reported;
   }
+  const exact = choices.find((choice) => choice.value === reported);
   const name = reported.toLowerCase();
-  const alias = MODEL_CHOICES.find((choice) => name.includes(choice.value));
+  const alias = exact ?? choices.find((choice) => name.includes(choice.value));
   return alias?.value ?? reported;
 }
 

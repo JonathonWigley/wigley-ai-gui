@@ -189,7 +189,9 @@ The inner `response` keys: `commands`, `agents`, `output_style`, `available_outp
   word and the alias the qualified one (`docx` → `anthropic-skills:docx`), while `init.slash_commands` lists the
   qualified one.
 - Anthropic's Agent SDK sends this request at every start; the app's Claude adapter sends it too, as the first stdin
-  line of a started process, and reads `commands` from its answer.
+  line of a started process, and reads `commands`, `models` (the model control's choices) and
+  `current_permission_mode` (the mode control's value) from its answer; `models` follows the Agent SDK's `ModelInfo`,
+  documented, not measured here.
 
 ## Stream events
 

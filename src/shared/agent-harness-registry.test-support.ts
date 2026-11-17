@@ -34,5 +34,16 @@ export function harnessRegistryOf(
 export function harnessInfo(
   overrides?: Partial<AgentHarnessInfo>,
 ): AgentHarnessInfo {
-  return { label: 'Harness', ...overrides };
+  return {
+    label: 'Harness',
+    capabilities: {
+      interrupt: true,
+      resume: true,
+      images: true,
+      midTurnSend: true,
+    },
+    clearAliases: [],
+    projectConfigFolder: '.claude',
+    ...overrides,
+  };
 }

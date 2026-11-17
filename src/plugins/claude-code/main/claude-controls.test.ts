@@ -1,21 +1,85 @@
 import { describe, expect, it } from 'vitest';
+import type { ControlChoice, SessionControl } from '../../../contracts/agent';
 import {
   appliedControlsOf,
+  CLAUDE_CONTROLS,
   controlMessage,
+  controlOf,
   controlValue,
+  isChoice,
   userMessage,
 } from './claude-controls';
 
+const choicesOf = (...values: string[]): ControlChoice[] =>
+  values.map((value) => ({ value, label: value }));
+
 describe('claude-controls', () => {
-  it('controlValue_Model_MapsFullNameToAlias', () => {
-    expect(controlValue('model', 'claude-sonnet-5')).toBe('sonnet');
-    expect(controlValue('model', 'claude-opus-5-5[1m]')).toBe('opus');
-    expect(controlValue('model', 'custom-x')).toBe('custom-x');
-  });
+  it.each<{ reported: string; choices: ControlChoice[]; expected: string }>([
+    {
+      reported: 'claude-sonnet-5',
+      choices: controlOf('model')?.choices ?? [],
+      expected: 'sonnet',
+    },
+    {
+      reported: 'claude-opus-5-5[1m]',
+      choices: controlOf('model')?.choices ?? [],
+      expected: 'opus',
+    },
+    {
+      reported: 'custom-x',
+      choices: controlOf('model')?.choices ?? [],
+      expected: 'custom-x',
+    },
+    {
+      reported: 'opus[1m]',
+      choices: choicesOf('opus', 'opus[1m]'),
+      expected: 'opus[1m]',
+    },
+    {
+      reported: 'claude-opus-5-5[1m]',
+      choices: choicesOf('default', 'opus'),
+      expected: 'opus',
+    },
+    {
+      reported: 'claude-haiku-4-5',
+      choices: choicesOf('default', 'opus'),
+      expected: 'claude-haiku-4-5',
+    },
+  ])(
+    'controlValue_Model_MapsFullNameToAlias ($reported → $expected)',
+    ({ reported, choices, expected }) => {
+      expect(controlValue('model', reported, choices)).toBe(expected);
+    },
+  );
 
   it('controlValue_ModeDefault_IsManual', () => {
-    expect(controlValue('mode', 'default')).toBe('manual');
-    expect(controlValue('mode', 'plan')).toBe('plan');
+    expect(controlValue('mode', 'default', [])).toBe('manual');
+    expect(controlValue('mode', 'plan', [])).toBe('plan');
+  });
+
+  it.each<{ id: 'model' | 'effort'; value: string; expected: boolean }>([
+    { id: 'model', value: 'opus[1m]', expected: true },
+    { id: 'model', value: 'opus', expected: false },
+    { id: 'effort', value: 'high', expected: false },
+  ])('isChoice_ReadsTheGivenControls ($id $value)', ({ id, value, expected }) => {
+    const controls: SessionControl[] = [
+      {
+        id: 'model',
+        label: 'Model',
+        choices: [{ value: 'opus[1m]', label: 'Opus 1M' }],
+        value: null,
+      },
+    ];
+
+    expect(isChoice(controls, id, value)).toBe(expected);
+  });
+
+  it('CLAUDE_CONTROLS_DeclareRoles', () => {
+    expect(
+      Object.fromEntries(
+        CLAUDE_CONTROLS.map((control) => [control.id, control.role]),
+      ),
+    ).toEqual({ mode: 'permissionMode', effort: 'effort', model: 'model' });
   });
 
   it.each([

@@ -4,6 +4,7 @@ import {
   type AgentStart,
   type ChatEntry,
   type CompactionTrigger,
+  type ControlChoice,
   MAIN_AGENT_ID,
   type PlanRowUpdate,
   type ProcessActivity,
@@ -24,13 +25,12 @@ import {
 } from './claude-commands';
 import {
   appliedControlsOf,
-  CLAUDE_CONTROLS,
   type ClaudeControlId,
   CONTROL_COMMAND,
   controlValue,
   EFFORT_CLEARING_VALUE,
   isChoice,
-  launchMode,
+  startingControls,
 } from './claude-controls';
 import { contextBreakdownOf } from './context-breakdown';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
@@ -241,10 +241,6 @@ export interface FoldStep {
 // passes; model and effort at the request's value, else null.
 export function createSessionFoldState(request: AgentStart): SessionFoldState {
   const pendingRequests = new Map<string, PendingRequest>();
-  const launchedControls: Readonly<Record<string, string>> = {
-    ...request.controls,
-    mode: launchMode(request.controls),
-  };
   const state: SessionFoldState = {
     // The adapter's own `get_context_usage`, `get_settings` and `initialize` replies
     // stay out of the chat.
@@ -261,10 +257,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     ),
     tracker: createTurnTracker(),
     definitions: new Map(),
-    controls: CLAUDE_CONTROLS.map((control) => ({
-      ...control,
-      value: launchedControls[control.id] ?? null,
-    })),
+    controls: startingControls(request.controls),
     commandRecords: [],
     activity: 'idle',
     sendCount: 0,
@@ -412,6 +405,29 @@ function setControlValue(
   }
   state.controls = state.controls.map((control) =>
     control.id === id ? { ...control, value } : control,
+  );
+  return true;
+}
+
+// The choices control `id` offers now; [] when the state holds no control `id`.
+function controlChoices(
+  state: SessionFoldState,
+  id: ClaudeControlId,
+): ControlChoice[] {
+  return state.controls.find((control) => control.id === id)?.choices ?? [];
+}
+
+// True when the choices changed.
+function setControlChoices(
+  state: SessionFoldState,
+  id: ClaudeControlId,
+  choices: ControlChoice[],
+): boolean {
+  if (isSameJson(controlChoices(state, id), choices)) {
+    return false;
+  }
+  state.controls = state.controls.map((control) =>
+    control.id === id ? { ...control, choices } : control,
   );
   return true;
 }
@@ -1005,15 +1021,22 @@ function foldControlValues(
   let hasChanged = false;
   for (const [id, value] of Object.entries(decoded.reported)) {
     const controlId = id as ClaudeControlId;
-    hasChanged =
-      setControlValue(state, controlId, controlValue(controlId, value)) ||
-      hasChanged;
+    const held = controlValue(
+      controlId,
+      value,
+      controlChoices(state, controlId),
+    );
+    hasChanged = setControlValue(state, controlId, held) || hasChanged;
   }
   if (command !== null && command.id !== 'compact' && !decoded.turnFailed) {
-    const value = controlValue(command.id, command.value);
+    const value = controlValue(
+      command.id,
+      command.value,
+      controlChoices(state, command.id),
+    );
     const clearsEffort =
       command.id === 'effort' && value === EFFORT_CLEARING_VALUE;
-    if (isChoice(command.id, value)) {
+    if (isChoice(state.controls, command.id, value)) {
       setControlValue(state, command.id, value);
       hasChanged = true;
     } else if (clearsEffort) {
@@ -1070,20 +1093,39 @@ function foldAppliedSettings(
   const hasModelChanged = setControlValue(
     state,
     'model',
-    controlValue('model', model),
+    controlValue('model', model, controlChoices(state, 'model')),
   );
   const hasEffortChanged = setControlValue(
     state,
     'effort',
-    effort === null ? null : controlValue('effort', effort),
+    effort === null
+      ? null
+      : controlValue('effort', effort, controlChoices(state, 'effort')),
   );
   if (hasModelChanged || hasEffortChanged) {
     effects.push({ kind: 'controls', controls: reportedControls(state) });
   }
 }
 
-// A failed answer only logs: the list waits for `init`, and the user lost nothing
-// they can act on.
+// The `models` of an `initialize` answer's data as model choices, in order: each
+// item with a `value`, labelled by its `displayName`, else by its `value`. []
+// when the field is no list or no item has a `value`.
+function modelChoicesOf(initializeReply: Json): ControlChoice[] {
+  return asArray(initializeReply.models).flatMap((item) => {
+    const model = asJson(item);
+    const value = asString(model.value);
+    if (value === '') {
+      return [];
+    }
+    const displayName = asString(model.displayName);
+    return [{ value, label: displayName === '' ? value : displayName }];
+  });
+}
+
+// A failed answer only logs: the list waits for `init`, the controls keep what
+// they hold, and the user lost nothing they can act on. A success answer sets
+// the command list, the model control's choices and the mode control's value
+// from whichever of `commands`, `models` and `current_permission_mode` it holds.
 function foldInitializeAnswer(
   state: SessionFoldState,
   response: NonNullable<DecodedLine['controlResponse']>,
@@ -1096,18 +1138,37 @@ function foldInitializeAnswer(
     });
     return;
   }
-  if (!Array.isArray(response.response.commands)) {
+  const reply = response.response;
+  if (Array.isArray(reply.commands)) {
+    state.commandRecords = commandRecordsOf(reply);
+    effects.push({
+      kind: 'commands',
+      commands: withNameAfterPlugin(state.commandRecords),
+    });
+  } else {
     effects.push({
       kind: 'log',
       text: 'Could not list commands: no list in the answer',
     });
-    return;
   }
-  state.commandRecords = commandRecordsOf(response.response);
-  effects.push({
-    kind: 'commands',
-    commands: withNameAfterPlugin(state.commandRecords),
-  });
+  const modelChoices = modelChoicesOf(reply);
+  if (modelChoices.length === 0) {
+    effects.push({ kind: 'log', text: 'initialize listed no models' });
+  }
+  const hasChoicesChanged =
+    modelChoices.length > 0 &&
+    setControlChoices(state, 'model', modelChoices);
+  const permissionMode = asString(reply.current_permission_mode);
+  const hasModeChanged =
+    permissionMode !== '' &&
+    setControlValue(
+      state,
+      'mode',
+      controlValue('mode', permissionMode, controlChoices(state, 'mode')),
+    );
+  if (hasChoicesChanged || hasModeChanged) {
+    effects.push({ kind: 'controls', controls: reportedControls(state) });
+  }
 }
 
 // An `init` with no names leaves the held list, so a malformed line cannot empty

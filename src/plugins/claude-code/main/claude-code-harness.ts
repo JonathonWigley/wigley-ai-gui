@@ -6,6 +6,8 @@ import {
   type AgentProcessEvents,
   type AgentStart,
   type ChatEntry,
+  type HarnessConfigRoots,
+  type InstalledPlugin,
   type LogInEvents,
   type LogInProcess,
   type PlanUsage,
@@ -46,8 +48,10 @@ import {
   controlMessage,
   controlOf,
   isChoice,
+  startingControls,
   userMessage,
 } from './claude-controls';
+import { readInstalledPlugins } from './installed-plugins';
 import {
   listPastSessions,
   listProjectFolders,
@@ -82,6 +86,12 @@ import { projectFolderName } from './transcripts';
 
 // The harness id relay hellos and saved sessions carry for Claude Code.
 export const CLAUDE_HARNESS_ID = 'claude';
+
+// The `_meta` key Claude Code puts a tool call's id under in an MCP call.
+export const CLAUDE_TOOL_USE_ID_META_KEY = 'claudecode/toolUseId';
+
+// The other names of Claude's built-in `clear` command.
+export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 
 // `host` runs each session's `claude` process, so it outlives the app;
 // `processes` spawns the one-shot commands, which must not. `command` reads the
@@ -588,7 +598,7 @@ function createClaudeSession(
       if (control === undefined) {
         throw new Error(`Claude Code has no control ${id}`);
       }
-      if (!isChoice(control.id, value)) {
+      if (!isChoice(state.controls, control.id, value)) {
         throw new Error(`Claude Code control ${id} has no choice ${value}`);
       }
       if (control.id === 'mode') {
@@ -1118,6 +1128,53 @@ function projectsFolder(
   );
 }
 
+// The config folder `profileDir` names: the default `.claude` under `homeDir`
+// for null, whatever the environment sets, else `profileDir` with `~` expanded.
+function profileConfigFolder(
+  deps: ClaudeCodeHarnessDeps,
+  profileDir: string | null,
+): string {
+  return profileDir === null
+    ? defaultConfigFolder(deps.homeDir, deps.paths)
+    : deps.paths.expandTilde(profileDir, deps.homeDir);
+}
+
+function configRoots(
+  deps: ClaudeCodeHarnessDeps,
+  profileDir: string | null,
+): HarnessConfigRoots {
+  const configDir = profileConfigFolder(deps, profileDir);
+  return {
+    configDir,
+    pluginCacheDirs: [deps.paths.join(configDir, 'plugins', 'cache')],
+  };
+}
+
+async function listInstalledPlugins(
+  deps: ClaudeCodeHarnessDeps,
+  profileDir: string | null,
+): Promise<InstalledPlugin[]> {
+  const records = await readInstalledPlugins(
+    { files: deps.files, paths: deps.paths, log: deps.log },
+    configRoots(deps, profileDir).configDir,
+  );
+  return records.map(({ key, installDir, version, listedAt }) => ({
+    key,
+    installDir,
+    version,
+    listedAt,
+  }));
+}
+
+// The tool-use id under `CLAUDE_TOOL_USE_ID_META_KEY`; null when it is no
+// non-empty string.
+function toolUseIdOf(
+  meta: Readonly<Record<string, unknown>> | null,
+): string | null {
+  const id = meta?.[CLAUDE_TOOL_USE_ID_META_KEY];
+  return typeof id === 'string' && id !== '' ? id : null;
+}
+
 // The Claude Code CLI behind `AgentHarness`: one `claude` process per
 // session on the session host, the one-shot runs, the only place the app asks
 // for either, the sessions and project folders
@@ -1127,7 +1184,21 @@ export function createClaudeCodeHarness(
 ): AgentHarness {
   return {
     id: CLAUDE_HARNESS_ID,
-    info: () => ({ label: 'Claude Code' }),
+    info: () => ({
+      label: 'Claude Code',
+      capabilities: {
+        interrupt: true,
+        resume: true,
+        images: true,
+        midTurnSend: true,
+      },
+      clearAliases: CLAUDE_CLEAR_ALIASES,
+      projectConfigFolder: '.claude',
+    }),
+    controls: () => startingControls({}),
+    toolUseIdOf,
+    configRoots: (profileDir) => configRoots(deps, profileDir),
+    installedPlugins: (profileDir) => listInstalledPlugins(deps, profileDir),
     start: (request, events) => startClaudeProcess(deps, request, events),
     attach: (request, events) => attachClaudeProcess(deps, request, events),
     listSessions: (projectDir, profileDir) =>
@@ -1158,10 +1229,7 @@ export function createClaudeCodeHarness(
         projectsFolder(deps, projectDir, profileDir),
         sessionId,
       ),
-    configFolder: (profileDir) =>
-      profileDir === null
-        ? defaultConfigFolder(deps.homeDir, deps.paths)
-        : deps.paths.expandTilde(profileDir, deps.homeDir),
+    configFolder: (profileDir) => profileConfigFolder(deps, profileDir),
     accountStatus: (profileDir) => readAuthStatus(deps, profileDir),
     logIn: (profileDir, events) => startLogIn(deps, profileDir, events),
     logOut: (profileDir) => logOut(deps, profileDir),

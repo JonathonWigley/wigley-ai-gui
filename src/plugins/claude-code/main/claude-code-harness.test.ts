@@ -38,7 +38,7 @@ import {
   createClaudeCodeHarness,
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
-import { controlMessage, userMessage } from './claude-controls';
+import { controlMessage, controlOf, userMessage } from './claude-controls';
 import {
   appCommandUuid,
   createSessionFoldState,
@@ -483,25 +483,117 @@ const SAVED_REPLY_LINE = JSON.stringify({
   },
 });
 
-describe('createClaudeCodeHarness', () => {
-  it('info_Label_ClaudeCode', () => {
-    const harness = createClaudeCodeHarness({
-      command: () => '/bin/claude',
-      permissionTool: 'tool',
-      env: {},
-      log: () => {},
-      host: createFakeSessionHost(clock),
-      processes: childProcesses([fakeChild().child]),
-      files: createMemoryFiles(),
-      homeDir: '/Users/u',
-      paths: posixPaths,
-      clock,
-      randomUuid: () => 'uuid-1',
-    });
+// A harness that starts no process, for its declarations and file reads.
+function idleHarness(
+  homeDir = '/Users/u',
+  files: Files = createMemoryFiles(),
+  log: Log = () => {},
+) {
+  return createClaudeCodeHarness({
+    command: () => '/bin/claude',
+    permissionTool: 'tool',
+    env: { CLAUDE_CONFIG_DIR: '/c' },
+    log,
+    host: createFakeSessionHost(clock),
+    processes: childProcesses([fakeChild().child]),
+    files,
+    homeDir,
+    paths: posixPaths,
+    clock,
+    randomUuid: () => 'uuid-1',
+  });
+}
 
-    expect(harness.info().label).toBe('Claude Code');
+describe('createClaudeCodeHarness declarations', () => {
+  it('info_DeclaresCapabilitiesAliasesAndProjectFolder', () => {
+    expect(idleHarness().info()).toEqual({
+      label: 'Claude Code',
+      capabilities: {
+        interrupt: true,
+        resume: true,
+        images: true,
+        midTurnSend: true,
+      },
+      clearAliases: ['reset', 'new'],
+      projectConfigFolder: '.claude',
+    });
   });
 
+  it('controls_BeforeStart_DeclaresClaudesControls', () => {
+    const controls = idleHarness().controls(null);
+
+    expect(
+      controls.map(({ id, label, role, value }) => ({ id, label, role, value })),
+    ).toEqual([
+      { id: 'mode', label: 'Mode', role: 'permissionMode', value: 'auto' },
+      { id: 'effort', label: 'Effort', role: 'effort', value: null },
+      { id: 'model', label: 'Model', role: 'model', value: null },
+    ]);
+    for (const control of controls) {
+      expect(control.choices).toEqual(controlOf(control.id)?.choices);
+    }
+  });
+
+  it.each<{ meta: Record<string, unknown> | null; expected: string | null }>([
+    { meta: { 'claudecode/toolUseId': 'toolu_1' }, expected: 'toolu_1' },
+    { meta: null, expected: null },
+    { meta: {}, expected: null },
+    { meta: { 'claudecode/toolUseId': 7 }, expected: null },
+  ])('toolUseIdOf_ReadsClaudesMetaKey ($meta)', ({ meta, expected }) => {
+    expect(idleHarness().toolUseIdOf(meta)).toBe(expected);
+  });
+
+  it.each([
+    { profileDir: '~/work-claude', configDir: '/home/u/work-claude' },
+    { profileDir: '/abs/dir', configDir: '/abs/dir' },
+    { profileDir: null, configDir: '/home/u/.claude' },
+  ])(
+    'configRoots_ResolvesTheProfileFolder ($profileDir)',
+    ({ profileDir, configDir }) => {
+      expect(idleHarness('/home/u').configRoots(profileDir)).toEqual({
+        configDir,
+        pluginCacheDirs: [`${configDir}/plugins/cache`],
+      });
+    },
+  );
+
+  it('installedPlugins_ReadsTheProfilesFile', async () => {
+    const files = createMemoryFiles();
+    const installed = '/home/u/work-claude/plugins/installed_plugins.json';
+    await files.write(
+      installed,
+      [
+        '{',
+        '  "plugins": {',
+        '    "p@m": [',
+        '      { "scope": "user", "installPath": "/cache/p/1.0", "version": "1.0" },',
+        '      { "scope": "project", "projectPath": "/repo", "installPath": "/cache/p/2.0" }',
+        '    ]',
+        '  }',
+        '}',
+      ].join('\n'),
+    );
+    const harness = idleHarness('/home/u', files);
+
+    expect(await harness.installedPlugins('~/work-claude')).toEqual([
+      {
+        key: 'p@m',
+        installDir: '/cache/p/1.0',
+        version: '1.0',
+        listedAt: { path: installed, line: 3 },
+      },
+      {
+        key: 'p@m',
+        installDir: '/cache/p/2.0',
+        version: null,
+        listedAt: { path: installed, line: 3 },
+      },
+    ]);
+    expect(await harness.installedPlugins(null)).toEqual([]);
+  });
+});
+
+describe('createClaudeCodeHarness', () => {
   it('start_EmitsLaunchedControlsThenIdle', async () => {
     const run = started();
     expect(run.heard).toEqual([]);
@@ -845,6 +937,34 @@ describe('createClaudeCodeHarness', () => {
       expect.objectContaining({ id: 'effort', value: 'high' }),
     );
     expect(run.heard[run.heard.length - 1]).toEqual(['activity', 'idle']);
+  });
+
+  it('setControl_ModelFromInitialize_WritesTheCommand', async () => {
+    const run = await startedQuiet();
+    writeLine(run.stdout, {
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'wigley-1',
+        response: {
+          commands: [],
+          models: [
+            { value: 'opus[1m]', displayName: 'Opus 1M', description: '' },
+          ],
+        },
+      },
+    });
+    await settle();
+
+    run.agent.setControl('model', 'opus[1m]');
+    await settle();
+
+    expect(run.written.at(-1)).toEqual(
+      controlMessage('model', 'opus[1m]', '00000000-1'),
+    );
+    expect(() => run.agent.setControl('model', 'nope')).toThrow(
+      'Claude Code control model has no choice nope',
+    );
   });
 
   it('interrupt_AfterErrorResult_UsesDistinctNoticeIds', async () => {

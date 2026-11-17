@@ -1586,14 +1586,50 @@ describe('createFakeAgentHarness', () => {
     expect(isFakeAgentHarness(other)).toBe(false);
   });
 
-  it('info_Label_Fake', () => {
+  it('declarations_AnswerEveryNewMember', async () => {
     const harness = createFakeAgentHarness(
       clock,
       createMemoryFiles(),
       FAKE_MICROTASK_TIMERS,
     );
+    const plugin = {
+      key: 'p@m',
+      installDir: '/cache/p',
+      version: '1.0',
+      listedAt: { path: '~/p/plugins/installed_plugins.json', line: 3 },
+    };
 
-    expect(harness.info().label).toBe('Fake');
+    expect(
+      harness.controls(null).map(({ id, role, value }) => ({ id, role, value })),
+    ).toEqual([
+      { id: 'mode', role: 'permissionMode', value: 'auto' },
+      { id: 'effort', role: 'effort', value: 'medium' },
+      { id: 'model', role: 'model', value: 'fake-small' },
+      { id: 'verbosity', role: undefined, value: 'brief' },
+    ]);
+    expect(harness.info()).toEqual({
+      label: 'Fake',
+      capabilities: {
+        interrupt: true,
+        resume: true,
+        images: true,
+        midTurnSend: true,
+      },
+      clearAliases: ['reset'],
+      projectConfigFolder: '.claude',
+    });
+    expect(harness.toolUseIdOf({ 'fake/toolUseId': 'u' })).toBe('u');
+    expect(harness.toolUseIdOf(null)).toBeNull();
+    expect(harness.configRoots('~/p')).toEqual({
+      configDir: '~/p',
+      pluginCacheDirs: ['~/p/plugins/cache'],
+    });
+    expect(await harness.installedPlugins('~/p')).toEqual([]);
+
+    harness.setInstalledPlugins('~/p', [plugin]);
+
+    expect(await harness.installedPlugins('~/p')).toEqual([plugin]);
+    expect(await harness.installedPlugins(null)).toEqual([]);
   });
 });
 

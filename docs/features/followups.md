@@ -247,12 +247,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 - **The drive `wait-log` misses lines logged before it starts** — *agent-ready*: a driver waiting on a line a page
   start already logged never sees it. Read earlier lines back with `drive log`, or let `wait-log` scan the log it
   already holds.
-- **AgentHarness grows what a second harness needs** — *agent-ready*: `label`, `capabilities` (interrupt, resume,
-  images, mid-turn send), `controls()` readable before start with `AgentStart.initialControls` (model chosen at
-  start), a harness-minted session id (`events.sessionId` or returned from `start`), resume listing, and `costUsd`
-  defined per turn with the adapter normalising Claude's cumulative value. The Claude adapter's `initialize` answer
-  carries `models` and `current_permission_mode` (`claude-stream.md` § Initialize), so its model and mode controls
-  read them at start instead of waiting for the first `init`.
 - **Chat picks a harness** — *agent-ready*: `StartRequest.harness`, a harness step in the start prompt (skipped with
   one harness), replacing `CHAT_HARNESS_ID = 'claude'` (`src/plugins/chat/contract.ts`; also used by chat's
   `lookups.ts`, `chat-sessions.ts` and the usage plugin).

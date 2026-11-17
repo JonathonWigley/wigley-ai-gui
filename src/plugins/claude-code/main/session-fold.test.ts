@@ -1739,6 +1739,102 @@ describe('session-fold', () => {
     ]);
   });
 
+  const controlOfState = (state: SessionFoldState, id: string) =>
+    state.controls.find((control) => control.id === id);
+
+  it('foldPipeLine_InitializeAnswer_RefreshesModelChoicesAndMode', () => {
+    const { step } = answered(
+      initializeReply('wigley-1', {
+        commands: [FEATURE_COMMAND],
+        models: [
+          {
+            value: 'default',
+            displayName: 'Default (recommended)',
+            description: '',
+          },
+          { value: 'opus', displayName: 'Opus', description: '' },
+          { value: 'haiku', displayName: '', description: '' },
+        ],
+        current_permission_mode: 'default',
+      }),
+    );
+
+    expect(step.effects.map((effect) => effect.kind)).toEqual([
+      'commands',
+      'controls',
+    ]);
+    const controls = step.effects.find((effect) => effect.kind === 'controls');
+    const reported = controls?.kind === 'controls' ? controls.controls : [];
+    expect(reported.find((control) => control.id === 'model')?.choices).toEqual(
+      [
+        { value: 'default', label: 'Default (recommended)' },
+        { value: 'opus', label: 'Opus' },
+        { value: 'haiku', label: 'haiku' },
+      ],
+    );
+    expect(reported.find((control) => control.id === 'mode')?.value).toBe(
+      'manual',
+    );
+  });
+
+  it.each<{ case: string; models: object }>([
+    { case: 'models absent', models: {} },
+    { case: 'models not a list', models: { models: 'x' } },
+    {
+      case: 'no model has a value',
+      models: { models: [{ displayName: 'No value' }] },
+    },
+  ])('foldPipeLine_InitializeAnswer_NoModels_KeepsChoices ($case)', ({ models }) => {
+    const state = foldedState([inLine(initializeRequest('wigley-1'))]);
+    const choicesBefore = controlOfState(state, 'model')?.choices;
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine(
+        initializeReply('wigley-1', { commands: [FEATURE_COMMAND], ...models }),
+      ),
+    );
+
+    expect(controlOfState(state, 'model')?.choices).toEqual(choicesBefore);
+    expect(effects).toContainEqual({
+      kind: 'log',
+      text: 'initialize listed no models',
+    });
+    expect(effects.map((effect) => effect.kind)).not.toContain('controls');
+  });
+
+  it('foldPipeLine_InitializeAnswer_ReadsModelsWithNoCommandList', () => {
+    const { state, step } = answered(
+      initializeReply('wigley-1', {
+        models: [{ value: 'opus', displayName: 'Opus', description: '' }],
+      }),
+    );
+
+    expect(controlOfState(state, 'model')?.choices).toEqual([
+      { value: 'opus', label: 'Opus' },
+    ]);
+    expect(step.effects).toContainEqual({
+      kind: 'log',
+      text: 'Could not list commands: no list in the answer',
+    });
+    expect(step.effects.map((effect) => effect.kind)).toContain('controls');
+  });
+
+  it('foldPipeLine_TypedModelCommand_ChecksTheRefreshedChoices', () => {
+    const { state } = answered(
+      initializeReply('wigley-1', {
+        models: [{ value: 'opus[1m]', displayName: 'Opus 1M', description: '' }],
+      }),
+    );
+    foldPipeLine(state, inLine(send('/model opus[1m]', 'u1')));
+    foldPipeLine(state, outLine(lifecycleInit));
+    foldPipeLine(state, outLine(lifecycle('u1', 'started')));
+
+    foldPipeLine(state, outLine(successResult('Set', ['u1'])));
+
+    expect(controlOfState(state, 'model')?.value).toBe('opus[1m]');
+  });
+
   it.each<{ case: string; reply: object }>([
     { case: 'absent', reply: {} },
     { case: 'not a list', reply: { commands: 'compact' } },
@@ -1754,7 +1850,10 @@ describe('session-fold', () => {
       outLine(initializeReply('wigley-1', reply)),
     );
 
-    expect(effects).toEqual([{ kind: 'log', text: expect.any(String) }]);
+    expect(effects).toEqual([
+      { kind: 'log', text: expect.any(String) },
+      { kind: 'log', text: 'initialize listed no models' },
+    ]);
     expect(state.commandRecords).toBe(held);
     expect(held.map((command) => command.name)).toEqual(['compact']);
   });

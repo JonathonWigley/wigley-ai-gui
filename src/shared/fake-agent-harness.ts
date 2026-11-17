@@ -1,4 +1,5 @@
 import {
+  CONTROL_ROLES,
   MAIN_AGENT_ID,
   type AccountStatus,
   type AgentEvent,
@@ -10,6 +11,7 @@ import {
   type ChatImage,
   type CompactionTrigger,
   type ContextBreakdownAgentEvent,
+  type InstalledPlugin,
   type LogInEvents,
   type LogInProcess,
   type PastSession,
@@ -234,7 +236,11 @@ export interface FakePastSessionCall {
 // order, failed ones included. The fake's processes emit no startup `usage`.
 // `timers` runs the `fake: visual` hold. `askPermissionsWith` sets the ask a
 // `fake: permission` turn calls, replacing any earlier one; with none set, the
-// turn's tool fails.
+// turn's tool fails. `controls` declares the starting controls a process with
+// no launch values begins with; `toolUseIdOf` reads `FAKE_TOOL_USE_ID_META_KEY`;
+// `configRoots` names `configFolder`'s folder and its `plugins/cache`.
+// `installedPlugins` resolves what `setInstalledPlugins` last set for the
+// profile's `configFolder`, [] before.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
   readonly attachCalls: readonly AgentStart[];
@@ -252,7 +258,14 @@ export interface FakeAgentHarness extends AgentHarness {
   holdCompactions(): void;
   releaseCompactions(): void;
   askPermissionsWith(ask: FakePermissionAsk): void;
+  setInstalledPlugins(
+    configDir: string,
+    plugins: readonly InstalledPlugin[],
+  ): void;
 }
+
+// The `_meta` key the fake reads a tool call's id under.
+export const FAKE_TOOL_USE_ID_META_KEY = 'fake/toolUseId';
 
 // Timers for tests that never look at a fake's hold: each `set` runs its `run`
 // in a microtask, whatever its `ms`, unless `clear` took its handle first.
@@ -323,6 +336,7 @@ function startingControls(
     {
       id: 'mode',
       label: 'Mode',
+      role: CONTROL_ROLES.permissionMode,
       choices: [
         { value: 'auto', label: 'Auto' },
         { value: 'plan', label: 'Plan' },
@@ -332,6 +346,7 @@ function startingControls(
     {
       id: 'effort',
       label: 'Effort',
+      role: CONTROL_ROLES.effort,
       choices: [
         { value: 'low', label: 'Low' },
         { value: 'medium', label: 'Medium' },
@@ -342,6 +357,7 @@ function startingControls(
     {
       id: 'model',
       label: 'Model',
+      role: CONTROL_ROLES.model,
       choices: [
         { value: 'fake-small', label: 'Small' },
         { value: 'fake-large', label: 'Large' },
@@ -1163,6 +1179,10 @@ export function createFakeAgentHarness(
   // run outlives a clear.
   const workflowPlans = new Map<string, WorkflowPlan>();
   let permissionAsk: FakePermissionAsk | null = null;
+  // By config folder.
+  const installedPlugins = new Map<string, readonly InstalledPlugin[]>();
+  const configFolder = (profileDir: string | null) =>
+    profileDir ?? FAKE_DEFAULT_CONFIG_FOLDER;
 
   const statusOf = (profileDir: string | null): AccountStatus =>
     signedOutProfiles.has(profileDir)
@@ -1944,7 +1964,32 @@ export function createFakeAgentHarness(
 
   const harness: FakeAgentHarness = {
     id: 'claude',
-    info: () => ({ label: 'Fake' }),
+    info: () => ({
+      label: 'Fake',
+      capabilities: {
+        interrupt: true,
+        resume: true,
+        images: true,
+        midTurnSend: true,
+      },
+      clearAliases: ['reset'],
+      projectConfigFolder: '.claude',
+    }),
+    controls: () => startingControls({}),
+    toolUseIdOf(meta) {
+      const id = meta?.[FAKE_TOOL_USE_ID_META_KEY];
+      return typeof id === 'string' && id !== '' ? id : null;
+    },
+    configRoots(profileDir) {
+      const configDir = configFolder(profileDir);
+      return { configDir, pluginCacheDirs: [`${configDir}/plugins/cache`] };
+    },
+    async installedPlugins(profileDir) {
+      return [...(installedPlugins.get(configFolder(profileDir)) ?? [])];
+    },
+    setInstalledPlugins(configDir, plugins) {
+      installedPlugins.set(configDir, [...plugins]);
+    },
     processes,
     attachCalls,
     pastSessionCalls,
@@ -2065,7 +2110,7 @@ export function createFakeAgentHarness(
       });
       return () => release();
     },
-    configFolder: (profileDir) => profileDir ?? FAKE_DEFAULT_CONFIG_FOLDER,
+    configFolder,
     async accountStatus(profileDir) {
       return statusOf(profileDir);
     },
