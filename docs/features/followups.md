@@ -254,9 +254,6 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 - **Harness-neutral UI copy** — *agent-ready*: UI copy says "the agent" or the harness label rather than Claude
   (chat's `default` layout's reason box and close confirm, the exit notice in `chat-sessions.ts`, chat's setting
   descriptions and `start-session-tool.ts`, and the Claude adapter's notices and toasts that reach chat).
-- **Clear aliases from the adapter** — *agent-ready*: chat registers Claude's other names for `/clear`, `/reset`
-  and `/new` (`src/plugins/chat/page/clear-commands.ts`), which is harness CLI knowledge in chat. The adapter
-  declares its clear command's aliases, and chat registers whatever it declares.
 - **Agent settings through an adapter** — *needs a feature plan*: Settings mode edits only the app's own
   `settings.json`, so changing an agent's config (Claude's model, effort, permissions, hooks, env, per profile and per
   user, project and local scope) still needs a terminal: in print mode `/config` takes only `key=value`

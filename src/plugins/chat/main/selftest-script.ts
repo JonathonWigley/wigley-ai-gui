@@ -249,7 +249,7 @@ const NOTES_MOVED_TO_NEW_HOST = new RegExp(
 const CLEAR_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   {
-    keys: sendKeys('/clear'),
+    keys: sendKeys('/reset'),
     expect: '[chat] conversation cleared in chat-second',
     alsoExpect: [NOTES_MOVED_TO_NEW_HOST],
     checksFit: true,
@@ -1053,7 +1053,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'clear',
-    why: '/clear in the second session empties its Chat tab to one notice and restarts its agent, and the notes page moves the row to its new host session id.',
+    why: "/reset, the fake harness's clear alias, in the second session empties its Chat tab to one notice and restarts its agent, and the notes page moves the row to its new host session id.",
     steps: CLEAR_STEPS,
   },
   {

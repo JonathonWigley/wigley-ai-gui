@@ -226,7 +226,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       signIn,
       channel: api.channel,
     });
-    addClearCommands({ commands: slashCommands, channel: api.channel });
+    addClearCommands({
+      commands: slashCommands,
+      channel: api.channel,
+      harnesses: api.state.read(coreAgentHarnessesSlot),
+      log: services.log,
+    });
     const completionRows = createCompletionRows(services.log);
     const picker = createPicker({
       ...partDeps,

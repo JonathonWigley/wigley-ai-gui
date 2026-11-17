@@ -54,8 +54,8 @@ interview on 2026-10-23; this file is the record of both.
   **connected session** is one a relay connection brought (a terminal session), as today.
 - **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
   agent. Any plugin registers one through chat's page exports. Chat registers `/login`, `/logout` and `/status`, the
-  terminal-only commands print mode refuses (`claude-stream.md` § Terminal-only commands), and `/clear` with Claude's
-  names for it, `/reset` and `/new` (§ Flow, Clear).
+  terminal-only commands print mode refuses (`claude-stream.md` § Terminal-only commands), and `/clear` with each name
+  a registered harness declares for it (`clearAliases`: Claude's are `/reset` and `/new`) (§ Flow, Clear).
 - **Sign-in** — signing a profile in to its harness account, run by the harness adapter (`claude auth login` for
   Claude) and shown by chat in the sign-in dialog. **Account status** is whether a profile is signed in, and as whom.
 - **Attached image** — an image pasted or dropped on the Chat tab, shown as a thumbnail above the message box and
@@ -450,7 +450,7 @@ interview on 2026-10-23; this file is the record of both.
   cannot start toasts `Sign-in not started: <reason>`. Opening the dialog while it is open cancels its sign-in and
   starts the new one. Each open calls its caller back exactly once, so a start prompt opened again since never runs
   the old prompt's next step.
-- **Clear**: `/clear`, `/reset` and `/new` (registered by the page's `clear-commands.ts`, each calling chat's `clear`
+- **Clear**: `/clear` and each harness's clear aliases (registered by the page's `clear-commands.ts` from `core.agentHarnesses`; an alias clears any session, whatever its harness), each calling chat's `clear`
   channel call) end the row's process and start a fresh one at once in the same row, as a new conversation whose host
   session id the harness reports, and with the row's mode and the model and effort the user picked (§ Saved sessions), so the harness loads its plugins,
   skills, MCP servers and settings again. A running turn is interrupted first; waiting permission calls are cancelled
