@@ -281,7 +281,7 @@ through `api.services`; the page reads the Platform record from the served confi
 - [x] [Per-source alert descriptions](02-alert-descriptions.md) — after 01 (shared master plan and follow-ups)
 
 ### Wave 3
-- [ ] [Round store through Files](03-round-store-files.md) — after 02
+- [x] [Round store through Files](03-round-store-files.md) — after 02
 
 ### Wave 4 — gate: Lane H's AgentHarnessRegistry, Permission behind the harness, Harness settings with the harness
 - [ ] [Program lookup and spawn behind ProcessRunner](04-program-lookup-spawn.md) — after 03 and the gate
@@ -302,6 +302,7 @@ Review base: e6c894d93
 ### Groups
 - 01 · hard · 07bec5457 · diff read against Produces (all present, no contract changes); typecheck and lint pass after an oxfmt pass on three files · concerns: done-when grep 'keys:' finds only the parameter, the records are positional (optionMatchesByCode finds all three); capture test row Ctrl+[ swapped for Dead since <C-[> is now a chord; check-layers lets src/renderer/fabric import src/shared/page for isChordPress; settings design.md:34 reworded off the comma reason
 - 02 · hard · 36a249aa7 · Diff read: AlertNoun and setOpenCount(source, count, noun) in contracts/alerts.ts; describeOpenCounts and OpenCounts {total, parts} in open-counts.ts; windows-alerts uses describeOpenCounts with no inline 'open agent form' string; alertNoun passed in forms, primer and audio-picker start.ts. typecheck and lint pass. · concerns: Part order rests on Map insertion order (a source enters on its first count above 0 and keeps its place); tests follow the task doc's table [count, noun] over its prose [count, singular]; primer and audio-picker noun literals wrapped for oxfmt.
+- 03 · hard · fbfd81e40 · Diff read: Files.deleteFile in contract, node, memory and scoped adapters; Node write retries EPERM/EBUSY renames; createFolderFormStore over Files with load/flushed and an indexed, watched folder, prune queued after the first scan; saveBody and draft return promises; afterLoad wraps the folder-backed services; SAVED_ROUNDS_FOLDER, SAVED_PRIMERS_FOLDER, SAVED_PICKERS_FOLDER constants; createEndpointWriter in relay/endpoint.ts. typecheck and lint pass; the worker ran 17 touched test files (425 tests) green. · concerns: Out-of-list edits: audio-reads.test.ts listener fake, and check-layers.mts sublayers for forms/primer start tests (shared/paths, own contract, node: dropped). The done-when grep 'store.prune' still hits backlog's unrelated chunk-store prune. Rescan test reordered because the spec's order could not fail. Forms and primer start tests flush() after a drive open. Selftest and drive scripts may need a wait after an open, since open now waits for load; not run.
 ### Contract changes
 ### Rulings
 - the matcher compares the press's chordTokenFor token with the bind's token rather than five fields — one token per chord, so equal — and named-key checks ask chordToken, keeping one list of chord keys · group 01

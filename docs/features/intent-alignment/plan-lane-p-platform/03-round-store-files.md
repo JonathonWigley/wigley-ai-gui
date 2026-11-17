@@ -1,6 +1,6 @@
 # 03 — Round store through Files
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02 (shared `channel-presenter.ts` and its test, forms' and primer's `main/start.ts`,
 `master-plan.md`, `followups.md`)
@@ -362,3 +362,4 @@ follow-up removal.
 
 ## Proof
 
+Commit fbfd81e40 · proof: Diff read: Files.deleteFile in contract, node, memory and scoped adapters; Node write retries EPERM/EBUSY renames; createFolderFormStore over Files with load/flushed and an indexed, watched folder, prune queued after the first scan; saveBody and draft return promises; afterLoad wraps the folder-backed services; SAVED_ROUNDS_FOLDER, SAVED_PRIMERS_FOLDER, SAVED_PICKERS_FOLDER constants; createEndpointWriter in relay/endpoint.ts. typecheck and lint pass; the worker ran 17 touched test files (425 tests) green. · concerns: Out-of-list edits: audio-reads.test.ts listener fake, and check-layers.mts sublayers for forms/primer start tests (shared/paths, own contract, node: dropped). The done-when grep 'store.prune' still hits backlog's unrelated chunk-store prune. Rescan test reordered because the spec's order could not fail. Forms and primer start tests flush() after a drive open. Selftest and drive scripts may need a wait after an open, since open now waits for load; not run.
