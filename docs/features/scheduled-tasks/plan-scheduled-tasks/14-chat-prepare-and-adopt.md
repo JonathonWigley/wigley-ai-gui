@@ -1,6 +1,6 @@
 # 14 — Chat prepare and adopt
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 08, 09
 Plan: [plan.md](plan.md)
@@ -289,3 +289,4 @@ One commit for the group, for example: `Chat: launch controls, prepareLaunch and
 
 ## Proof
 
+Commit e0c4e038a · proof: diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: adopt rejects if a control id vanished between prepare and adopt (17 must forget such a run); onInstructionsChanged listener throws are not caught; holdConnects with a rejecting promise unchecked

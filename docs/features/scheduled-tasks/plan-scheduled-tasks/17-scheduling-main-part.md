@@ -1,6 +1,6 @@
 # 17 — Scheduling main part
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 05, 06, 10, 11, 12, 13, 14, 15
 Plan: [plan.md](plan.md)

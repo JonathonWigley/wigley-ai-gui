@@ -1,6 +1,6 @@
 # 18 — Login-start adapters
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 01, 06, 08, 13
 Plan: [plan.md](plan.md)

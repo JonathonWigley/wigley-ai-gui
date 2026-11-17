@@ -1,6 +1,6 @@
 # 13 — Host client queue members and `sessionHostLaunch`
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -145,3 +145,4 @@ runs, and hears run starts".
 
 ## Proof
 
+Commit 9ecbd6a1d · proof: diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: links to older or newer hosts also feed runStarted; never-set row proves by waiting, not a sync point

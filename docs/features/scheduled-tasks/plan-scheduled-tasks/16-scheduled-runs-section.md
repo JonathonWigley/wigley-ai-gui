@@ -1,6 +1,6 @@
 # 16 — Scheduled runs section
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 12
 Plan: [plan.md](plan.md)
@@ -85,3 +85,5 @@ mark are checked by task 19's self-test and task 21 (Final verification).
 Commit: one commit for the group — "Add the Scheduled runs side bar section and the done mark on unviewed run rows".
 
 ## Proof
+
+Commit 4a75e0fc9 · proof: diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: section cleanup done by both the part and sessions' tracking (harmless)

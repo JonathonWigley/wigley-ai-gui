@@ -914,11 +914,11 @@ is the task's name, or its id when the task is gone.
 - [x] [Schedules mode](12-schedules-mode.md) — after 03
 
 ### Wave 3
-- [ ] [Host client queue](13-host-client-queue.md) — after 07
-- [ ] [Chat prepare and adopt](14-chat-prepare-and-adopt.md) — after 08, 09
-- [ ] [Scheduling MCP tools](15-task-tools.md) — after 05, 08, 11
-- [ ] [Scheduled runs section](16-scheduled-runs-section.md) — after 12
-- [ ] [Session list fixes](23-session-list-fixes.md) — after 05, 09
+- [x] [Host client queue](13-host-client-queue.md) — after 07
+- [x] [Chat prepare and adopt](14-chat-prepare-and-adopt.md) — after 08, 09
+- [x] [Scheduling MCP tools](15-task-tools.md) — after 05, 08, 11
+- [x] [Scheduled runs section](16-scheduled-runs-section.md) — after 12
+- [x] [Session list fixes](23-session-list-fixes.md) — after 05, 09
 
 ### Wave 4
 - [ ] [Scheduling main part](17-scheduling-main-part.md) — after 05, 06, 10, 11, 12, 13, 14, 15
@@ -959,6 +959,11 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - 10 · hard · f204b9689 · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: a schedule function throw aborts the whole plan; relies on readTaskFile filtering bad schedules
 - 11 · hard · b9e0581be · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: a throwing listener logs a line the plan does not pin
 - 12 · hard; compile fix ba5ff01d8 · 4e7b0a90f · diff read: Produces present; wave 2 typecheck and lint pass after ba5ff01d8 · concerns: layout contract gained RowKit.cursorActions and FieldRowKit.textBox throw; History header and empty line are the app's
+- 13 · hard · 9ecbd6a1d · diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: links to older or newer hosts also feed runStarted; never-set row proves by waiting, not a sync point
+- 14 · hard · e0c4e038a · diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: adopt rejects if a control id vanished between prepare and adopt (17 must forget such a run); onInstructionsChanged listener throws are not caught; holdConnects with a rejecting promise unchecked
+- 15 · hard · 759c6353d · diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: remove's description makes no claim about a run in progress
+- 16 · hard · 4a75e0fc9 · diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: section cleanup done by both the part and sessions' tracking (harmless)
+- 23 · hard; compile fix 29482b015 · fb012319f · diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: edited agent-form-drive.test.ts and sessions-view-fakes.ts for the new required claimed member; a deadline setting change now reaches live sessions
 ### Contract changes
 ### Rulings
 - Waves keep 05 beside 04 and 15 beside 14: both dependencies are on plan-pinned formats or injected deps, with no code wait — 05 writes offline.json to the plan's shape, 15 reaches projects through a dep 17 fills — if wrong, a worker finds a missing name and reports BLOCKED · lead
@@ -970,5 +975,7 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - A spawn that throws after its run is recorded puts the error in that run's exit, not a second run — one run per pending entry — history shows failed, not two entries · group 07 · group 07
 - skipWhileBusy is set on Run now and catch-up runs too — the overlap rule holds for every run — a Run now pressed while the previous run is busy is skipped by the host · group 10 · group 10
 - Task store runs watch reads, onMissed reads, load and every mutation on one queue — its own write then emits one change — none · group 11 · group 11
+- setPending while adopt waits on its drain only stores the list; adopt sends the latest once the drain settles — two hosts never hold the queue at once — a list set mid-drain goes out late · group 13 · group 13
+- An update giving folder or project without profile takes the new project's own profile, else keeps the old — follows schedule_task's default — a project switch can keep a profile the user did not expect · group 15 · group 15
 ### Review rounds
 ### Test gate

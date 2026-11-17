@@ -1,6 +1,6 @@
 # 15 — Scheduling MCP tools
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 05 (contributes tools through 05's options), 08, 11
 Plan: [plan.md](plan.md)
@@ -146,3 +146,5 @@ Done when: compiles; the test gate runs `task-tools.test.ts`.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 759c6353d · proof: diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: remove's description makes no claim about a run in progress

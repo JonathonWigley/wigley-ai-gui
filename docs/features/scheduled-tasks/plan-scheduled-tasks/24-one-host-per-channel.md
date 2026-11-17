@@ -1,6 +1,6 @@
 # 24 — One host per channel: a listen lock, and a shutdown that touches only its own record
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 02, 07
 Rung: deep · concurrency between two host processes racing for one Unix socket, over the host's start and shutdown

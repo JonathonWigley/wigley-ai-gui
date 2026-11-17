@@ -1,6 +1,6 @@
 # 23 — Session list: no selection on a claimed row after a close, and a joined relay's host fields
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 05, 09
 Rung: hard · adds the page-owned `sessionsClaimedSlot` that main reads, and changes when forms reads a deadline
@@ -95,3 +95,4 @@ Commit:    one commit for the group: "Sessions: post-close selection skips claim
 
 ## Proof
 
+Commit fb012319f · proof: diff read: Produces present; wave 3 typecheck and lint pass after 29482b015 · concerns: edited agent-form-drive.test.ts and sessions-view-fakes.ts for the new required claimed member; a deadline setting change now reaches live sessions
