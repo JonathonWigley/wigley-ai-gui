@@ -1,6 +1,6 @@
 # 19 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: every group (runs after `wigley:make`'s test gate)
 Plan: [plan.md](plan.md)
@@ -59,3 +59,5 @@ Done when: every check above passes, or its failure is fixed in its group and th
 with its result, and attach the stills of checks 6–9.
 
 ## Proof
+
+Commit 05d89838b · proof: live drive session (runs fv1, fv2): checks 1, 3, 5, 6, 7, 9 pass; added check 10 (backlog rename from the table, review click focus) passes; check 2 passes after the rebase onto main (chat self-test all passed; the first run failed on a stale EXPECTED_CALLS main has since fixed); check 8 gallery half passes, its Docs-tab chip not reachable (loadStates fixture seeds only the home context); check 4 not reachable (no fixture seeds an untimed transcript; unit tests in 01 pin it). Stills in the session scratchpad live/. · concerns: checks 4 and 8's Docs-tab half left to the user's run

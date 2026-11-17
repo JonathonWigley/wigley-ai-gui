@@ -124,7 +124,7 @@ Critical path: 14 → 15 → 17.
 
 ### Wave 3
 - [x] [Doc re-read and follow-up removal](17-doc-re-read.md) — after every group
-- [ ] [Final verification](19-final-verification.md)
+- [x] [Final verification](19-final-verification.md)
 
 ## Run log
 
@@ -149,6 +149,7 @@ Review base: 34e4782344fb8ae4e6246859c522c2a5bb9abc53
 - 18 · deep · 236bdc88a · diff read against Produces; wave 1 typecheck clean · concerns: none
 - 15 · standard · 0a96f9660, a5770279b · diff read against Produces; wave 2 typecheck and lint clean after one compile fix on the same rung · concerns: none
 - 17 · standard · 2367ef193 · diff read: 21 items removed by title, naming-style item narrowed, item 01 kept and its removal added to after-lane-h 26; drive SKILL.md idle-sweep line checked against idleRunIds · concerns: after-lane-h plan.md line 11 still counts 36 items (26 now lists 37)
+- 19 · opus-low · 05d89838b · live drive session (runs fv1, fv2): checks 1, 3, 5, 6, 7, 9 pass; added check 10 (backlog rename from the table, review click focus) passes; check 2 passes after the rebase onto main (chat self-test all passed; the first run failed on a stale EXPECTED_CALLS main has since fixed); check 8 gallery half passes, its Docs-tab chip not reachable (loadStates fixture seeds only the home context); check 4 not reachable (no fixture seeds an untimed transcript; unit tests in 01 pin it). Stills in the session scratchpad live/. · concerns: checks 4 and 8's Docs-tab half left to the user's run
 ### Contract changes
 ### Rulings
 - 01: listRows treats an at of 0 (previousAt || steps[0].at) as unknown; no source writes epoch 0 · group 01
@@ -160,6 +161,7 @@ Review base: 34e4782344fb8ae4e6246859c522c2a5bb9abc53
 - 16: titles rewritten as sentences in the worker's wording, interpolations kept · group 16
 - 18: inOrder drops an id with no admitted entry; every caller passes admitted ids · group 18
 - item 01 stays in followups.md: Lane H's unmerged hunk rewrites a path inside it; its removal moves to plan-followups-after-lane-h task 26 · group 17
+- Rebased onto main mid-run (Lane H had merged): followups.md conflict resolved by dropping 04's landed split-handle item and keeping main's new harness-return item; compile and the full gate re-ran clean (179 files, 4273 tests); item 01 then removed here and after-lane-h task 26 restored to 36 items
 ### Review rounds
 - Round 1 (34e478234..5ee29f14d): NEEDS FIXES — 1 Critical (backlog rename from the table closes its box), 8 Minor, 2 pre-existing; 4 lead-applied (5e9942aab); fixes b9f42ac6e, 1ebef1f46. Fix range tier: Medium (focus-handling behaviour in backlog-view) — re-review, correctness lane, over 5e9942aab..1ebef1f46
 - Round 2 re-review (5e9942aab..1ebef1f46, correctness): every round-1 fix closed; one repeat (a refused review click focuses the assistant pane's frame, not its ask box: needs an AgentPane member) → follow-up 9cac33c22, no further patch. Review closed.
