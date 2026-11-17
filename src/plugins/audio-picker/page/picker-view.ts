@@ -25,6 +25,7 @@ import {
   type DrawnPart,
   drawPart,
   type PartPick,
+  requireDialogFrame,
   requireElementIn,
   type RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
@@ -37,6 +38,7 @@ import {
 } from '../../../shared/page/session-forms';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
+import type { DialogFramePart } from '../../../shared/page/ui/dialog';
 import {
   disposeAnchors,
   recordingAnchor,
@@ -67,6 +69,7 @@ import type {
 } from '../layouts/layout';
 import {
   createCandidateKit,
+  createConfirmKit,
   createNotesKit,
   createPickerKit,
   type PickerBox,
@@ -222,6 +225,14 @@ export function mountPickerPopups(deps: PickerViewDeps): PickerPopups {
       ),
   });
   const statusPart = deps.sessions.addRowPart(popups.statusPart);
+  let shownLayouts: ShownLayouts<AudioPickerLayout> = {
+    layouts: new Map([['default', defaultLayout]]),
+    user: 'default',
+  };
+  // The last draw of each cancel prompt part, disposed once the next draw of
+  // that part returns.
+  let drawnPromptBody: DrawnPart<{ element: HTMLElement }> | null = null;
+  let drawnPromptFrame: DrawnPart<DialogFramePart> | null = null;
   const confirm = createConfirmPrompt({
     title: 'Cancel this picker?',
     body: 'The agent is told the picker was cancelled. Your choices stay saved.',
@@ -241,12 +252,49 @@ export function mountPickerPopups(deps: PickerViewDeps): PickerPopups {
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => store.dispatch({ type: 'dismissConfirm' }),
     log: deps.log,
+    drawFrame(parent, input) {
+      const drawn = drawPart({
+        owner: 'audio-picker',
+        parent,
+        pick: pickPart(shownLayouts, 'dialogFrame'),
+        defaultLayout,
+        part: (layout) => layout.dialogFrame,
+        build: (builder, into, rollback) =>
+          requireDialogFrame(
+            builder(into, input, createConfirmKit(deps, rollback)),
+            input,
+            'dialogFrame',
+          ),
+        log: deps.log,
+        partName: 'dialogFrame',
+      });
+      drawnPromptFrame?.dispose();
+      drawnPromptFrame = drawn;
+      return drawn.built;
+    },
+    drawBody(body, promptParts) {
+      const drawn = drawLayoutPart(
+        body,
+        pickPart(shownLayouts, 'confirmBody'),
+        deps,
+        {
+          name: 'confirmBody',
+          part: (layout) => layout.confirmBody,
+          input: { body: promptParts.body },
+          kit: (rollback) => ({
+            kit: {
+              ...createConfirmKit(deps, rollback),
+              keepButton: promptParts.keepButton,
+              confirmButton: promptParts.confirmButton,
+            },
+          }),
+        },
+      );
+      drawnPromptBody?.dispose();
+      drawnPromptBody = drawn;
+    },
   });
   areas.overlay.contribute(confirm.element);
-  let shownLayouts: ShownLayouts<AudioPickerLayout> = {
-    layouts: new Map([['default', defaultLayout]]),
-    user: 'default',
-  };
 
   const destroyView = (formId: string) => {
     const view = views.get(formId);
@@ -344,12 +392,15 @@ export function mountPickerPopups(deps: PickerViewDeps): PickerPopups {
     },
     setLayouts(shown) {
       shownLayouts = shown;
+      confirm.redraw();
       render();
     },
     isShown: () => popups.isShown(),
     dispose() {
       statusPart.dispose();
       storeSubscription.dispose();
+      drawnPromptBody?.dispose();
+      drawnPromptFrame?.dispose();
       for (const formId of views.keys()) {
         destroyView(formId);
       }

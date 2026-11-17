@@ -31,6 +31,7 @@ import {
   type DrawnPart,
   disposeDraws,
   type RollbackDeps,
+  requireDialogFrame,
   requireElementIn,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
@@ -322,6 +323,18 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     log: deps.log,
     toast: deps.toast,
     pushScope: () => deps.pushScope('import'),
+    drawFrame: (parent, input) =>
+      parts.redraw(
+        'dialogFrame',
+        parent,
+        (dialogFrame, into, rollback) =>
+          requireDialogFrame(
+            dialogFrame(into, input, kitFor('import', rollback)),
+            input,
+            'dialogFrame',
+          ),
+        'dialogFrame:import',
+      ).built,
     drawBody: (parent, input, frame) =>
       parts.draw('importBox', parent, (importPart, into, rollback) => {
         const slot = appSlot(frame, 'textBox', rollback);

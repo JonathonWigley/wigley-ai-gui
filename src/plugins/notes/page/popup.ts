@@ -160,7 +160,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
   const parts = createNotesParts(partsDeps);
 
-  const dialog = createDialog('Note');
+  const dialog = createDialog('Note', {
+    drawFrame: (parent, input) =>
+      parts.dialogFrame(parent, input, 'popup').built,
+  });
   dialog.element.classList.add('notes-popup');
   deps.overlay.contribute(dialog.element);
 
@@ -649,7 +652,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   // ── The discard confirmation ──────────────────────────────────────────────
   // Its text and buttons are the `confirm` part, drawn into its body.
-  const confirm = createDialog('Discard this note?', { hasActions: false });
+  const confirm = createDialog('Discard this note?', {
+    hasActions: false,
+    drawFrame: (parent, input) =>
+      parts.dialogFrame(parent, input, 'confirm').built,
+  });
   parts.confirm(confirm.body);
   deps.overlay.contribute(confirm.element);
   let confirmScope: PushedScope | null = null;
@@ -1259,6 +1266,8 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   const setLayouts = (shown: ShownLayouts<Layout>) => {
     const box = focusedBox;
     parts.setLayouts(shown);
+    dialog.redrawFrame();
+    confirm.redrawFrame();
     drawRows();
     parts.actions(dialog.actions);
     parts.confirm(confirm.body);

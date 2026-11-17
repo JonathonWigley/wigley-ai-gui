@@ -1,8 +1,18 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
-import { createDialog, type Dialog } from '../../../shared/page/ui/dialog';
+import {
+  type DrawnPart,
+  requireDialogFrame,
+} from '../../../shared/page/layout-host/draw-part';
+import {
+  createDialog,
+  type Dialog,
+  type DialogFramePart,
+} from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import type { ChatScopeName } from '../ids';
+import { chatPartDraws, surfaceBaseKit } from './chat-layouts';
 import {
   createCloseConfirmPart,
   createReasonBoxPart,
@@ -12,8 +22,8 @@ import {
   type DialogPartDeps,
 } from './dialog-kits';
 
-// `keys` anchors the action buttons' key hints; the dialog's body draws
-// through the chat layout, again on each layout change.
+// `keys` anchors the action buttons' key hints; the dialog's frame and body
+// draw through the chat layout, again on each layout change.
 export interface DialogDeps extends DialogPartDeps {
   overlay: PluginAreas['overlay'];
   run(command: CommandId): void;
@@ -74,10 +84,10 @@ const CONFIRM_ACTIONS: readonly DialogAction[] = [
 export function createReasonBox(
   deps: DialogDeps & { editor: EditorHost },
 ): ReasonBox {
-  const dialog = createChatDialog('Deny', deps);
+  const dialog = createChatDialog('Deny', 'reason', deps);
   const box = inputFrame();
   box.classList.add('chat-reason-box');
-  const part = createReasonBoxPart(deps, dialog.body, {
+  const part = createReasonBoxPart(deps, () => dialog.body, {
     reasonBox: box,
     actions: dialogActions(REASON_ACTIONS, deps),
   });
@@ -88,7 +98,7 @@ export function createReasonBox(
     blurred: () => undefined,
     modeChanged: () => undefined,
   });
-  redrawOnLayoutChange(deps, part, box, editor);
+  redrawOnLayoutChange(deps, dialog, part, box, editor);
 
   let open: { send(reason: string | null): void; scope: PushedScope } | null =
     null;
@@ -135,12 +145,15 @@ export function createReasonBox(
 }
 
 export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
-  const dialog = createChatDialog('End this session?', deps);
-  const part = createCloseConfirmPart(deps, dialog.body, {
+  const dialog = createChatDialog('End this session?', 'confirm', deps);
+  const part = createCloseConfirmPart(deps, () => dialog.body, {
     actions: dialogActions(CONFIRM_ACTIONS, deps),
   });
   part.draw({ session: '' });
-  deps.layouts.onChange(() => part.redraw());
+  deps.layouts.onChange(() => {
+    dialog.redrawFrame();
+    part.redraw();
+  });
 
   let open: {
     name: string;
@@ -187,27 +200,48 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
   return confirm;
 }
 
-// A dialog in the overlay whose part draws its actions inside its body, so
-// the dialog's own actions row leaves the frame.
+// A dialog in the overlay whose frame draws through the chat layout's
+// `dialogFrame` in the kit of `scope`, and whose part draws its actions inside
+// its body, so the frame has no actions row. Each draw of the frame disposes
+// the one before it.
 export function createChatDialog(
   title: string,
-  deps: Pick<DialogDeps, 'overlay'>,
+  scope: ChatScopeName,
+  deps: DialogDeps,
 ): Dialog {
-  const dialog = createDialog(title, { hasActions: false });
+  const draws = chatPartDraws(deps.layouts, 'dialogFrame', deps.log);
+  let lastDrawn: DrawnPart<DialogFramePart> | null = null;
+  const dialog = createDialog(title, {
+    hasActions: false,
+    drawFrame(parent, input) {
+      const drawn = draws.draw(parent, (builder, at, rollback) =>
+        requireDialogFrame(
+          builder(at, input, surfaceBaseKit(deps, scope, rollback)),
+          input,
+          'dialogFrame',
+        ),
+      );
+      lastDrawn?.dispose();
+      lastDrawn = drawn;
+      return drawn.built;
+    },
+  });
   deps.overlay.contribute(dialog.element);
   return dialog;
 }
 
-// Draws the dialog's part again on each layout change; a box that held focus
-// is focused again once it has moved into the new part.
+// Draws the dialog's frame and part again on each layout change; a box that
+// held focus is focused again once it has moved into the new part.
 export function redrawOnLayoutChange(
   deps: Pick<DialogDeps, 'layouts'>,
+  dialog: Pick<Dialog, 'redrawFrame'>,
   part: Pick<DialogPart<unknown>, 'redraw'>,
   box: HTMLElement,
   editor: Pick<TextEditor, 'focus'>,
 ): void {
   deps.layouts.onChange(() => {
     const hadFocus = box.contains(document.activeElement);
+    dialog.redrawFrame();
     part.redraw();
     if (hadFocus) {
       editor.focus();

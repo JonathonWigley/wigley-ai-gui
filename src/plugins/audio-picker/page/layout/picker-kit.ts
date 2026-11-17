@@ -60,6 +60,17 @@ export function createPickerKit(
   );
 }
 
+// The base kit for the cancel prompt's parts in scope `audio-picker.confirm`,
+// each anchor it names recorded in `rollback`.
+export function createConfirmKit(
+  deps: PickerKitDeps,
+  rollback: RollbackDeps,
+): PickerKit {
+  return createBaseKit(
+    ownerBaseKitDeps(audioPickerManifest, deps, 'confirm', rollback),
+  );
+}
+
 // The kit of candidate row `input`, its waveform drawn from `peaks` (each 0 to
 // 1; null until the sound decodes).
 export function createCandidateKit(

@@ -1,4 +1,4 @@
-/* The default Keys layout: the which-key shelf, the help dialog's sections, and the title bar's Keys button. */
+/* The default Keys layout: the which-key shelf, the help dialog's frame and sections, and the title bar's Keys button. */
 
 /* Which-key: the keys pressed and their group's name, then up to four
    columns of entries, each its key and its label; a group's label and its
@@ -58,6 +58,12 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* Help: every bound key, in a dialog wider than a prose one so its sections
+   sit side by side. */
+.ui-dialog.keys-help-dialog {
+  width: min(100%, calc(var(--wg-space-8) * 28));
 }
 
 /* The title bar's Keys button, its key prompt inside it after the icon. */

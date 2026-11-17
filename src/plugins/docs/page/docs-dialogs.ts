@@ -12,7 +12,10 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
-import { createDialog } from '../../../shared/page/ui/dialog';
+import {
+  createDialog,
+  type DrawDialogFrame,
+} from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import {
   type CreateKind,
@@ -45,6 +48,18 @@ import { textBoxInput } from '../../../shared/page/text-box';
 // The scopes the dialogs push over the view's pane scope.
 export type DialogScope = 'box' | 'confirm';
 
+// Draws a dialog's frame through the layout's `dialogFrame` in `scope`,
+// disposing the earlier draw once the next returns.
+function frameDrawer(parts: DocsParts, scope: DialogScope): DrawDialogFrame {
+  let last: { dispose(): void } | null = null;
+  return (parent, input) => {
+    const next = parts.dialogFrame(parent, input, scope);
+    last?.dispose();
+    last = next;
+    return next.frame;
+  };
+}
+
 interface BoxRequest {
   label: string;
   text: string;
@@ -68,7 +83,7 @@ interface TextBox {
   cancel(): void;
   // Closes the box without hearing a cancel.
   close(): void;
-  // Draws the open box's body and completions again.
+  // Draws the frame again, then the open box's body and completions.
   redraw(): void;
 }
 
@@ -83,7 +98,9 @@ interface TextBoxDeps {
 }
 
 function createTextBox(deps: TextBoxDeps): TextBox {
-  const dialog = createDialog('');
+  const dialog = createDialog('', {
+    drawFrame: frameDrawer(deps.parts, 'box'),
+  });
   const frame = inputFrame();
   const input = textBoxInput('docs-box');
   frame.append(input);
@@ -265,6 +282,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
       }
     },
     redraw() {
+      dialog.redrawFrame();
       if (request === null) {
         return;
       }
@@ -287,7 +305,7 @@ interface Confirm {
   no(): void;
   // Closes the prompt without an answer.
   close(): void;
-  // Draws the open prompt's body and buttons again.
+  // Draws the frame again, then the open prompt's body and buttons.
   redraw(): void;
 }
 
@@ -315,7 +333,9 @@ function createConfirm(
   parts: DocsParts,
   viewId: string,
 ): Confirm {
-  const dialog = createDialog('Move to the Trash');
+  const dialog = createDialog('Move to the Trash', {
+    drawFrame: frameDrawer(parts, 'confirm'),
+  });
 
   let answers: { yes(): void; no(): void } | null = null;
   let pushed: PushedScope | null = null;
@@ -394,6 +414,7 @@ function createConfirm(
       }
     },
     redraw() {
+      dialog.redrawFrame();
       if (answers !== null) {
         draw();
       }

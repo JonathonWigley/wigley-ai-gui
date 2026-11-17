@@ -14,6 +14,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   confirm: true,
   markupToolbar: true,
   pickerRow: true,
+  dialogFrame: true,
 };
 
 // The notes layout a user's `layout.js` module exports as its default. A

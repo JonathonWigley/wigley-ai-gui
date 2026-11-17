@@ -20,8 +20,8 @@
 // close prompt, split prompts and close-pane control, each tab's icon with no label, each session
 // popup's sheet around its body, the hidden popups' bar (each entry's icon and
 // status, or its title with no status, then the toggle key), and the rename
-// dialog's title box over why a title was refused and the hint, in the class
-// names its `layout.css` styles, and each split picker row as the kit's list
+// dialog's frame (its panel and title) and its title box over why a title was
+// refused and the hint, in the class names its `layout.css` styles, and each split picker row as the kit's list
 // row holding its label alone.
 
 const UNTITLED_ROW_TEXT = 'New Chat';
@@ -227,6 +227,20 @@ const layout = {
       trailing: kit.trailing(),
     });
     return { element };
+  },
+
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog',
+    );
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    return { element: panel, body, actions };
   },
 };
 

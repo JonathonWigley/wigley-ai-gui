@@ -1,4 +1,9 @@
-import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+  DotStatus,
+} from '../../../shared/page/layout-host/kit';
 
 // The status dot's states and the base kit, for a layout's JSDoc to import from here.
 export type { BaseKit, DotStatus };
@@ -510,8 +515,8 @@ export type EntryBuilder<K extends EntryKind> = (
 ) => EntryView<K>;
 
 // The chat layout a user writes: a builder for each entry kind it changes, and the other surfaces' parts it changes;
-// a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; the app keeps the
-// dialog's frame and title.
+// a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; `dialogFrame` draws
+// the panel and title around it, and the app keeps the dialog's scrim, keys and focus.
 export interface ChatLayout {
   // Whether the entry list draws the agent's steps (activity lines and their step rows); `false` leaves them out of
   // the list and the entry cursor. A user layout that wants the activity lines sets it
@@ -603,6 +608,15 @@ export interface ChatLayout {
     input: CloseConfirmInput,
     kit: CloseConfirmKit,
   ): PartView<CloseConfirmInput>;
+  // The frame of the sign-in, deny-reason and end-session dialogs: the panel, its title (`input.title`) and, when
+  // `input.hasActions`, its actions row. Return the panel, appended to `parent`, with `body` and `actions` inside it;
+  // the app fills them. The app keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions`
+  // is not inside its panel, or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: BaseKit,
+  ): DialogFramePart;
   // The image and its place on the viewer's scrim.
   imageViewer?(
     parent: HTMLElement,

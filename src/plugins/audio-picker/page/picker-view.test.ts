@@ -10,7 +10,10 @@ import type { CommandHandler } from '../../../contracts/plugin';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
-import { withUser } from '../../../shared/page/layout-host/test-layouts';
+import {
+  USER_LAYOUT,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
   asFake,
@@ -84,7 +87,12 @@ function fakeHost(
   };
 }
 
-type PartName = keyof AudioPickerLayout;
+// The parts that draw the picker's own rows; the cancel prompt's two parts
+// draw apart from them.
+type PartName = Exclude<
+  keyof AudioPickerLayout,
+  'confirmBody' | 'dialogFrame'
+>;
 type PartCounts = Record<PartName, number>;
 
 type PickerCommand = keyof ReturnType<typeof pickerCommandHandlers>;
@@ -168,6 +176,7 @@ function pickerPopupSetup(
   const popups = new Map<string, FakeElement>();
   const disposed: string[] = [];
   const activities: [string, string, RowActivity | null][] = [];
+  const overlay: FakeElement[] = [];
   const ran: [CommandId, CommandArg | undefined][] = [];
   const runCommand = (id: CommandId, arg: CommandArg | undefined) => {
     ran.push([id, arg]);
@@ -176,7 +185,12 @@ function pickerPopupSetup(
   };
   const view = mountPickerPopups({
     areas: {
-      overlay: { contribute: () => ({ dispose: () => undefined }) },
+      overlay: {
+        contribute: (node) => {
+          overlay.push(asFake(node));
+          return { dispose: () => undefined };
+        },
+      },
     },
     sessions: {
       addPopup: (sessionId, popup) => {
@@ -249,6 +263,8 @@ function pickerPopupSetup(
     boxes,
     handlers,
     popup,
+    // The areas' overlay contributions, the cancel prompt's scrim first.
+    overlay,
     surface,
     added,
     disposed,
@@ -458,6 +474,34 @@ describe('mountPickerPopups', () => {
       expect(drawn).toEqual(counts);
     },
   );
+
+  it('setLayouts_ChangedLayout_RedrawsTheCancelConfirmBodyAndFrame', () => {
+    const h = pickerPopupSetup();
+    const [prompt] = h.overlay;
+
+    h.view.setLayouts(
+      withUser<AudioPickerLayout>(defaultLayout, {
+        dialogFrame: (parent, input, kit) =>
+          defaultLayout.dialogFrame(parent, input, kit),
+        confirmBody: (parent, input, kit) =>
+          defaultLayout.confirmBody(parent, input, kit),
+      }),
+    );
+
+    const [panel] = findAll(prompt, 'ui-dialog');
+    const [body] = findAll(prompt, 'ui-dialog-body');
+    expect({
+      panel: panel.dataset.layout,
+      bodyRoot: body.children[0].dataset.layout,
+      buttons: findAll(panel, 'ui-button').length,
+      panels: findAll(prompt, 'ui-dialog').length,
+    }).toEqual({
+      panel: USER_LAYOUT,
+      bodyRoot: USER_LAYOUT,
+      buttons: 2,
+      panels: 1,
+    });
+  });
 
   it('mountPickerPopups_NotesRedraw_KeepsTheFocusedBox', () => {
     const h = pickerPopupSetup();

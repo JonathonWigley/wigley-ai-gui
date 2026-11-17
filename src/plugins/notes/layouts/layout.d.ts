@@ -1,5 +1,7 @@
 import type {
   BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
   KitRowOptions,
 } from '../../../shared/page/layout-host/kit';
 
@@ -9,8 +11,9 @@ import type {
 // `data-layout-owner="notes"` on that root. A layout's `layout.css` restyles under
 // `[data-layout-owner="notes"][data-layout="<name>"]`.
 //
-// The app keeps the dialog frames and titles, the title box and the body editor, the markup editor, the cursor
+// The app keeps the dialogs' scrims, keys and focus, the title box and the body editor, the markup editor, the cursor
 // prompt (moved to the selected row), `is-cursor` on the rows, and the picker's panel, title, filter and cursor.
+// `dialogFrame` draws each dialog's panel, title and actions row.
 //
 // The app's container lays out each part's root as one item: the fields grid a `row`, the row's value slot (a
 // wrapping flex line) a value part, the dialog's actions row `actions`, the confirmation's body `confirm`, and the
@@ -32,7 +35,8 @@ import type {
 // `onClick`.
 //
 // Kit scopes: rows, values, images and actions `notes.popup`; `confirm` `notes.confirm`; `markupToolbar`
-// `notes.markup`; `pickerRow` `notes.picker`.
+// `notes.markup`; `pickerRow` `notes.picker`; `dialogFrame` `notes.popup` for the Note popup, `notes.confirm` for the
+// discard confirmation.
 
 export type NoteField =
   | 'target'
@@ -162,6 +166,16 @@ export interface Layout {
     input: PickerRowInput,
     kit: PickerRowKit,
   ): NotesPart;
+  // The frame of the Note popup and the discard confirmation: the panel, its title (`input.title`) and, when
+  // `input.hasActions`, its actions row. Return the panel, appended to `parent`, with `body` and `actions` inside it;
+  // the app fills them. The app keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or
+  // `actions` is not inside its panel, or whose `actions` is not null exactly when `hasActions` is false, draws with
+  // `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: NotesKit,
+  ): DialogFramePart;
 }
 
 // The built-in `default` layout defines every part.

@@ -16,7 +16,7 @@ import type { SessionStashParts } from './layout/session-stash-parts';
 export interface NoteDialogDeps {
   pushScope(): PushedScope;
   stash(sessionId: string, note: string | null): void;
-  parts: Pick<SessionStashParts, 'noteDialog'>;
+  parts: Pick<SessionStashParts, 'noteDialog' | 'dialogFrame'>;
 }
 
 // The session `open` asks to stash: its id, and its name as the side-bar row
@@ -31,7 +31,8 @@ export interface StashTarget {
 // trimmed note, null for an empty one. `cancel` closes it and changes nothing,
 // as the base scope changing under it does. Closing gives focus back to what
 // held it as the dialog opened, unless focus moved elsewhere meanwhile.
-// `redraw` draws the open dialog's body again, for changed layouts.
+// `redraw` draws the dialog's frame again, and the body while stashing, for
+// changed layouts.
 export interface NoteDialog {
   element: HTMLElement;
   open(target: StashTarget): void;
@@ -52,7 +53,11 @@ const HINT =
   'The note shows beside the session under Stashed in the start prompt; empty stashes with none.';
 
 export function createNoteDialog(deps: NoteDialogDeps): NoteDialog {
-  const dialog = createDialog(TITLE, { hasActions: false });
+  const dialog = createDialog(TITLE, {
+    hasActions: false,
+    drawFrame: (parent, frameInput) =>
+      deps.parts.dialogFrame(parent, frameInput).built,
+  });
   const frame = inputFrame();
   const input = textBoxInput('session-stash-box');
   frame.append(input);
@@ -121,6 +126,7 @@ export function createNoteDialog(deps: NoteDialogDeps): NoteDialog {
       }
     },
     redraw() {
+      dialog.redrawFrame();
       if (stashing !== null) {
         drawBody(stashing.target);
       }

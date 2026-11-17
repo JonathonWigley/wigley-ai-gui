@@ -524,6 +524,32 @@ describe('note popup', () => {
     },
   );
 
+  it('setLayouts_ChangedFrameLayout_KeepsFieldsAndActionsInTheNewFrame', async () => {
+    const harness = await openPopup();
+    const frame: Layout = {
+      dialogFrame(parent, input, kit) {
+        const panel = kit.el(parent, 'div', 'mine-frame');
+        kit.el(panel, 'h2', '', input.title);
+        const body = kit.el(panel, 'div', 'mine-body');
+        const actions = input.hasActions
+          ? kit.el(panel, 'div', 'mine-actions')
+          : null;
+        return { element: panel, body, actions };
+      },
+    };
+
+    harness.popup.setLayouts(withUser<Layout>(defaultLayout, frame));
+
+    const [panel] = findAll(harness.root, 'mine-frame');
+    const [body] = findAll(harness.root, 'mine-body');
+    const [actions] = findAll(harness.root, 'mine-actions');
+    const [fields] = findAll(harness.root, 'notes-fields');
+    const [actionsPart] = findAll(harness.root, 'notes-actions');
+    expect(panel.dataset.layout).toBe(USER_LAYOUT);
+    expect(body.contains(fields)).toBe(true);
+    expect(actions.contains(actionsPart)).toBe(true);
+  });
+
   it.each([
     {
       case: 'session picker',

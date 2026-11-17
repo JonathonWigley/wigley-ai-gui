@@ -16,6 +16,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   popupBar: true,
   renameDialog: true,
   pickerRow: true,
+  dialogFrame: true,
 };
 
 // The sessions layout a user's `layout.js` module exports as its default. A

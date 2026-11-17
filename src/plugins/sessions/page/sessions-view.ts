@@ -180,7 +180,7 @@ export interface SessionPanes {
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
-  parts: Pick<SessionsParts, 'renameDialog' | 'pickerRow'>;
+  parts: Pick<SessionsParts, 'renameDialog' | 'pickerRow' | 'dialogFrame'>;
   pickerItem(row: SessionRow): PickerItemInput;
   tabs: SessionTabsView;
   panes: SessionPanes;

@@ -1,4 +1,9 @@
-import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+  DotStatus,
+} from '../../../shared/page/layout-host/kit';
 
 // The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar,
 // its chat panes, each session's tab bar and each session's popups with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
@@ -60,7 +65,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // `popupBar` whose entries, are not children of its `element` are drawn by `default` instead, and so is a `popupBar`
 // returning another count of entries than its input holds.
 //
-// Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
+// Dialogs. The app keeps the rename dialog's scrim, keys and focus; `dialogFrame` draws its panel and title, and
+// `renameDialog` draws its body.
 // `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input or the layouts
 // change. `pickerRow` draws each row of the split picker each time the picker draws its rows, and again when the
 // layouts change while it is open.
@@ -366,6 +372,15 @@ export interface Layout {
     input: PickerRowInput,
     kit: PickerRowKit,
   ): SessionsPart;
+  // The frame of the rename dialog: the panel, its title (`input.title`) and, when `input.hasActions`, its actions
+  // row. Return the panel, appended to `parent`, with `body` and `actions` inside it; the app fills them. The app
+  // keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions` is not inside its panel,
+  // or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: SessionsKit,
+  ): DialogFramePart;
 }
 
 // A layout with every part defined, as `default` is.

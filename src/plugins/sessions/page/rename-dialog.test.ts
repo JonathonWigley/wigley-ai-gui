@@ -324,6 +324,34 @@ describe('createRenameDialog', () => {
     },
   );
 
+  it('redraw_ChangedLayout_DrawsTheFrameAndKeepsTheBox', () => {
+    const { dialog, view, box, bodies } = dialogSetup();
+    dialog.open(row());
+    box().value = 'Half typed';
+
+    view.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        dialogFrame: (parent, input, kit) => {
+          const panel = kit.el(parent, 'div', 'mine-panel');
+          kit.el(panel, 'h2', 'mine-title', input.title);
+          const body = kit.el(panel, 'div', 'mine-body');
+          return { element: panel, body, actions: null };
+        },
+      }),
+    );
+    dialog.redraw();
+
+    expect(bodies('ui-dialog')).toEqual([]);
+    const [panel] = bodies('mine-panel');
+    const [frameBody] = bodies('mine-body');
+    expect(panel?.dataset.layout).toBe('mine');
+    // The box sits in its input frame, inside the body part's root.
+    expect(box().parentNode?.parentNode?.parentNode).toBe(frameBody);
+    expect(frameBody?.parentNode).toBe(panel);
+    expect(box().value).toBe('Half typed');
+    expect(doc.activeElement).toBe(box());
+  });
+
   it('open_FirstMessageOnly_PrefillsTheUncutText', () => {
     const { dialog, box } = dialogSetup();
     const message =

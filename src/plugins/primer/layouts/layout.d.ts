@@ -1,4 +1,9 @@
-import type { BaseKit } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  ConfirmButtonsKit,
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../shared/page/layout-host/kit';
 
 // The primer layout contract: what a layout in `layouts/primer/<name>/layout.js` draws the primer popup with. A layout
 // defines only the parts it changes; every part it leaves out, and every part that throws or returns no element
@@ -9,7 +14,8 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // The app keeps the two nested splits (tasks | (items | card)), their widths and their handles' resize prompt
 // (`⌥⇧H ◂ ▸ ⌥⇧L`); the tasks column header (save state, `⌃H ▲ ▼ ⌃L`, `⌥L items ›`) and foot (the Review button); the
 // items column header (`‹ tasks ⌥H`, `⌃H ▲ ▼ ⌃L`, `⌥L card ›`); the card edge strip (`‹ items ⌥H`); the review footer
-// (Back, Cancel primer, Send), the cancel prompt, selection, each column's selected row prompt, the text boxes and
+// (Back, Cancel primer, Send), the cancel prompt's scrim, keys and focus (`dialogFrame` and `confirmBody` draw its
+// panel, title, body and buttons), selection, each column's selected row prompt, the text boxes and
 // scrolling.
 
 export type PrimerNeed = 'yes' | 'no' | 'unclear';
@@ -222,6 +228,12 @@ export interface ItemsKit extends PrimerKit {
 
 export type ReviewKit = PrimerKit;
 
+// The cancel confirm's body text.
+export interface ConfirmBodyInput {
+  body: string;
+}
+export interface ConfirmBodyKit extends PrimerKit, ConfirmButtonsKit {}
+
 export interface PrimerLayout {
   cards?: Partial<PrimerLayoutCards>;
   // The tasks column's body, under the app's header and over its Review button, drawn again on each primer change.
@@ -243,6 +255,22 @@ export interface PrimerLayout {
     input: ReviewInput,
     kit: ReviewKit,
   ): PrimerLayoutPane;
+  // The cancel confirm's body, scope `primer.confirm`: `input.body` and the prompt's two buttons. A button the part
+  // leaves out goes at the end of the frame's actions row.
+  confirmBody?(
+    parent: HTMLElement,
+    input: ConfirmBodyInput,
+    kit: ConfirmBodyKit,
+  ): HTMLElement;
+  // The frame of the cancel confirm: the panel, its title (`input.title`) and, when `input.hasActions`, its actions
+  // row. Return the panel, appended to `parent`, with `body` and `actions` inside it; the app fills them. The app
+  // keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions` is not inside its panel,
+  // or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: PrimerKit,
+  ): DialogFramePart;
 }
 
 // The built-in `default` layout, which defines every part.
@@ -263,4 +291,14 @@ export interface CompletePrimerLayout extends PrimerLayout {
     input: ReviewInput,
     kit: ReviewKit,
   ): PrimerLayoutPane;
+  confirmBody(
+    parent: HTMLElement,
+    input: ConfirmBodyInput,
+    kit: ConfirmBodyKit,
+  ): HTMLElement;
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: PrimerKit,
+  ): DialogFramePart;
 }

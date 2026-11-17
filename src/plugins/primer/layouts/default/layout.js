@@ -12,6 +12,8 @@
 //   selected row's prompt is appended at the end of the part) and `addPrompt`
 // - items: `itemRow` (the same as `taskRow`)
 // - review: every part, which then draws nothing
+// - confirmBody: either button (a button left out is appended at the end of
+//   the frame's actions row)
 
 /** @typedef {import('../layout').PrimerKit} PrimerKit */
 
@@ -209,6 +211,18 @@ const layout = {
       reviewTask(review, task, kit);
     }
     return { element: review };
+  },
+  confirmBody(parent, input, kit) {
+    return kit.el(parent, 'p', '', input.body);
+  },
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(parent, 'div', 'ui-floating material-floating ui-dialog');
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    return { element: panel, body, actions };
   },
 };
 

@@ -5,6 +5,10 @@ import {
 } from '../../../../contracts/panes';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import { errorText } from '../../../../shared/error-text';
+import type {
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../../shared/page/layout-host/kit';
 import {
   type ContributedPartsPlace,
   type PartStore,
@@ -21,6 +25,7 @@ import {
 import {
   type DrawnPart,
   type RollbackDeps,
+  requireDialogFrame,
   requireElementIn,
 } from '../../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
@@ -154,6 +159,12 @@ export interface SessionsParts {
     input: PickerRowInput,
     trailing: HTMLElement | null,
   ): DrawnPart<SessionsPart>;
+  // The rename dialog's frame, drawn into its scrim. Each draw disposes the
+  // earlier one and removes its element.
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+  ): DrawnPart<DialogFramePart>;
 }
 
 export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
@@ -513,6 +524,14 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         };
         return builder(into, input, kit);
       }),
+    dialogFrame: (parent, input) =>
+      parts.redraw('dialogFrame', parent, (builder, into, rollback) =>
+        requireDialogFrame(
+          builder(into, input, sessionsKit(rollback)),
+          input,
+          'dialogFrame',
+        ),
+      ),
   };
 }
 

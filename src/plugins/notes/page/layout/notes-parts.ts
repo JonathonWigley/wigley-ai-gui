@@ -9,10 +9,16 @@ import {
   ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
 import {
+  type DrawnPart,
+  requireDialogFrame,
   requireElementIn,
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
-import type { BaseKit } from '../../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../../shared/page/layout-host/kit';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import {
   type ButtonVariant,
@@ -187,6 +193,13 @@ export interface NotesParts {
     input: PickerRowInput,
     trailing: HTMLElement | null,
   ): DrawnPickerRow;
+  // The frame of the Note popup or the discard confirmation, appended to
+  // `parent`; each dialog keeps its own draw.
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    dialog: 'popup' | 'confirm',
+  ): DrawnPart<DialogFramePart>;
 }
 
 export function createNotesParts(deps: NotesPartsDeps): NotesParts {
@@ -358,6 +371,18 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
       );
       return { element: drawn.built.element, dispose: drawn.dispose };
     },
+    dialogFrame: (parent, input, dialog) =>
+      parts.redraw(
+        'dialogFrame',
+        parent,
+        (dialogFrame, into, rollback) =>
+          requireDialogFrame(
+            dialogFrame(into, input, kitFor(deps, dialog, rollback)),
+            input,
+            'dialogFrame',
+          ),
+        `dialogFrame:${dialog}`,
+      ),
   };
 }
 

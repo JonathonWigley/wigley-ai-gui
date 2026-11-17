@@ -1,10 +1,14 @@
 // The keys layout contract: the parts a keys layout draws for the help overlay, the which-key panel, the leader
-// search's rows and the title bar's Keys button, and the kit each part gets. The app keeps the help dialog (its title,
-// scrim and Close button), the which-key panel's placement and timers, the leader search's list picker (its filter,
+// search's rows and the title bar's Keys button, and the kit each part gets. The app keeps the help dialog's scrim,
+// keys and focus (its `dialogFrame` draws the panel, title and Close button), the which-key panel's placement and timers, the leader search's list picker (its filter,
 // cursor and clicks), the Keys button's slot in the title bar, and every key and scope.
 //
 // Keys reach a part already printed for the platform: draw them with `kit.kbd(parent, keys)`.
-import type { BaseKit } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../shared/page/layout-host/kit';
 
 // One key in help: its keys as the user reads them, and what it does.
 export interface HelpHint {
@@ -91,6 +95,17 @@ export interface Layout {
     kit: KeysKit,
   ): HTMLElement;
   titleBarButton?(parent: HTMLElement, kit: KeysKit): HTMLElement;
+  // The frame of the help overlay: the panel, its title (`input.title`) and, when `input.hasActions`, its actions row.
+  // Return the panel, appended to `parent`, with `body` and `actions` inside it; the app fills them. The app keeps the
+  // scrim, showing and hiding, keys and focus. A frame whose `body` or `actions` is not inside its panel, or whose
+  // `actions` is not null exactly when `hasActions` is false, draws with `default`. Its actions row holds the Close
+  // button, `kit.button(actions, 'Close', 'keys.closeHelp')`; a frame that leaves it out has none, and the close key
+  // still closes help.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: KeysKit,
+  ): DialogFramePart;
 }
 // Every member of Layout, required: the built-in `default` defines them all.
 export interface CompleteLayout extends Required<Layout> {}

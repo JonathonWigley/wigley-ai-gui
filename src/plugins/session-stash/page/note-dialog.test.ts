@@ -178,12 +178,22 @@ describe('createNoteDialog', () => {
   });
 
   it('redraw_ChangedLayout_KeepsOneBodyAndTheTypedNote', () => {
-    const { dialog, box, bodies } = dialogSetup();
+    const { dialog, box, bodies } = dialogSetup({
+      dialogFrame(parent, input, kit) {
+        const panel = kit.el(parent, 'div', 'frame-mine', input.title);
+        const body = kit.el(panel, 'div', 'ui-dialog-body');
+        return { element: panel, body, actions: null };
+      },
+    });
     dialog.open(TARGET);
     box().value = 'half typed';
 
     dialog.redraw();
 
+    const panels = bodies('frame-mine');
+    expect(panels).toHaveLength(1);
+    expect(panels[0].dataset.layout).toBe('mine');
+    expect(findAll(panels[0], 'session-stash-note')).toHaveLength(1);
     expect(bodies('session-stash-note')).toHaveLength(1);
     expect(box().value).toBe('half typed');
   });

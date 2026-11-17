@@ -35,6 +35,7 @@ import {
   type DrawnPart,
   drawPart,
   type PartPick,
+  requireDialogFrame,
   requireElementIn,
   type RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
@@ -56,6 +57,7 @@ import {
 } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { textButton } from '../../../shared/page/ui/button';
+import type { DialogFramePart } from '../../../shared/page/ui/dialog';
 import {
   disposeAnchors,
   keyChevron,
@@ -107,9 +109,11 @@ import {
   createFeatureKit,
   createItemKit,
   createItemsKit,
+  createPrimerKit,
   createReviewKit,
   createTaskKit,
   createTasksKit,
+  type PrimerKitDeps,
   type PrimerPartKitDeps,
 } from './layout/primer-kit';
 import { primerFocusTarget } from './primer-commands';
@@ -326,6 +330,24 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
   });
   const statusPart = deps.sessions.addRowPart(popups.statusPart);
   const dispatch = (action: PrimerAction) => store.dispatch(action);
+  // The layouts the user's setting names; the cancel prompt draws its body and
+  // frame while it is made, so this is declared before it.
+  let shownLayouts: ShownLayouts<PrimerLayout> = {
+    layouts: new Map([['default', defaultLayout]]),
+    user: 'default',
+  };
+  const confirmKitDeps: PrimerKitDeps = {
+    markdown: deps.markdown,
+    keys: deps.keys,
+    commands: deps.commands,
+    platform: deps.platform,
+    state: deps.state,
+    log: deps.log,
+  };
+  // The last draw of the prompt's frame and body, disposed after the next draw
+  // returns so the anchors of the last draw do not stay alive.
+  let drawnFrame: DrawnPart<DialogFramePart> | null = null;
+  let drawnBody: DrawnPart<{ element: HTMLElement }> | null = null;
   const confirm = createConfirmPrompt({
     title: 'Cancel this primer?',
     body: 'The agent is told the primer was cancelled. Your edits stay saved.',
@@ -342,12 +364,60 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
     log: deps.log,
+    drawFrame(parent, input) {
+      const previous = drawnFrame;
+      drawnFrame = drawPart({
+        owner: 'primer',
+        parent,
+        pick: pickPart(shownLayouts, (layout) => layout.dialogFrame),
+        defaultLayout,
+        part: (layout: PrimerLayout) => layout.dialogFrame,
+        build: (builder, into, rollback) =>
+          requireDialogFrame(
+            builder(
+              into,
+              input,
+              createPrimerKit(confirmKitDeps, 'confirm', rollback),
+            ),
+            input,
+            'dialogFrame',
+          ),
+        log: deps.log,
+        partName: 'dialogFrame',
+      });
+      previous?.dispose();
+      return drawnFrame.built;
+    },
+    drawBody(body, promptParts) {
+      const previous = drawnBody;
+      drawnBody = drawPart({
+        owner: 'primer',
+        parent: body,
+        pick: pickPart(shownLayouts, (layout) => layout.confirmBody),
+        defaultLayout,
+        part: (layout: PrimerLayout) => layout.confirmBody,
+        build: (builder, into, rollback) => ({
+          element: requireElementIn(
+            into,
+            builder(
+              into,
+              { body: promptParts.body },
+              {
+                ...createPrimerKit(confirmKitDeps, 'confirm', rollback),
+                keepButton: promptParts.keepButton,
+                confirmButton: promptParts.confirmButton,
+              },
+            ),
+            'confirmBody',
+          ),
+        }),
+        log: deps.log,
+        partName: 'confirmBody',
+      });
+      previous?.dispose();
+    },
   });
   areas.overlay.contribute(confirm.element);
-  let shownLayouts: ShownLayouts<PrimerLayout> = {
-    layouts: new Map([['default', defaultLayout]]),
-    user: 'default',
-  };
 
   const renderOnce = () => {
     if (!confirm.settleOwedDismiss()) {
@@ -405,6 +475,7 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
     },
     setLayouts(shown) {
       shownLayouts = shown;
+      confirm.redraw();
       render();
     },
     dispose() {

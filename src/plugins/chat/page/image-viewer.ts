@@ -64,7 +64,7 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
   backdrop.setAttribute('role', 'dialog');
   backdrop.setAttribute('aria-modal', 'true');
   deps.overlay.contribute(backdrop);
-  const part = createImageViewerPart(deps, backdrop);
+  const part = createImageViewerPart(deps, () => backdrop);
   deps.layouts.onChange(() => part.redraw());
 
   let open: OpenImages | null = null;

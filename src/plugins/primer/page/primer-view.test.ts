@@ -158,6 +158,7 @@ function primerPopupSetup(
     PRIMER_BOX_IDENTITY,
   );
   const anchors: NamedAnchor[] = [];
+  const overlays: FakeElement[] = [];
   const resizeTargets: (ResizeTarget | null)[] = [];
   const focusTargets: (FocusTarget | null)[] = [];
   const uiValues = new Map(Object.entries(parts.uiState ?? {}));
@@ -170,7 +171,12 @@ function primerPopupSetup(
   let isPopupHidden = false;
   const view = mountPrimerPopups({
     areas: {
-      overlay: { contribute: () => ({ dispose: () => undefined }) },
+      overlay: {
+        contribute: (element) => {
+          overlays.push(asFake(element));
+          return { dispose: () => undefined };
+        },
+      },
     },
     sessions: {
       addPopup: (sessionId, view, options) => {
@@ -276,6 +282,8 @@ function primerPopupSetup(
     boxes,
     logs,
     anchors,
+    // Each element the view contributed to the overlay area: the cancel prompt's scrim.
+    overlays,
     resizeTargets,
     focusTargets,
     uiWrites,
@@ -1097,6 +1105,37 @@ describe('primer layout', () => {
       tasks: 'default',
       items: 'default',
     });
+  });
+
+  it('setLayouts_ChangedLayout_RedrawsTheCancelConfirmBodyAndFrame', () => {
+    const { view, overlays } = primerPopupSetup();
+    const userConfirm: PrimerLayout = {
+      confirmBody(parent, input, kit) {
+        const root = kit.el(parent, 'p', 'user-confirm-body', input.body);
+        kit.keepButton(root);
+        kit.confirmButton(root);
+        return root;
+      },
+      dialogFrame(parent, input, kit) {
+        const panel = kit.el(parent, 'div', 'user-frame');
+        kit.el(panel, 'h2', '', input.title);
+        const body = kit.el(panel, 'div', 'user-frame-body');
+        const actions = input.hasActions
+          ? kit.el(panel, 'div', 'user-frame-actions')
+          : null;
+        return { element: panel, body, actions };
+      },
+    };
+
+    view.setLayouts(withUser<PrimerLayout>(defaultLayout, userConfirm));
+
+    const [panel] = findAll(overlays[0], 'user-frame');
+    const [bodyRoot] = findAll(panel, 'user-confirm-body');
+    expect({
+      panel: panel.dataset.layout,
+      bodyRoot: bodyRoot.dataset.layout,
+      buttons: findAll(panel, 'ui-button').length,
+    }).toEqual({ panel: USER_LAYOUT, bodyRoot: USER_LAYOUT, buttons: 2 });
   });
 
   it('falls back to default when a user card throws after mounting a box, mounting each box once', () => {

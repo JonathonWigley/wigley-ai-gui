@@ -3,7 +3,7 @@
 // The built-in chat look: the entries, the activity lines (each one summary
 // line, live or finished), the activity dock, its one line and that line's place
 // just above the composer's box, the pending messages' rows, the composer, the
-// list rows and headings, a / completion row's description, the dialogs' bodies, the image viewer, the run time under a session's
+// list rows and headings, a / completion row's description, the dialogs' frames and bodies, the image viewer, the run time under a session's
 // row, and the session hub's section frames and Session header. Every collapsible
 // row's body is built on its first open and kept, so an update refills it in
 // place whether it is open or closed.
@@ -1020,6 +1020,19 @@ const layout = {
     kit.reasonBox(body);
     kit.actions(body);
     return { element: body };
+  },
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog',
+    );
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    return { element: panel, body, actions };
   },
   closeConfirm(parent, _input, kit) {
     const body = root(parent, 'chat-dialog-part');

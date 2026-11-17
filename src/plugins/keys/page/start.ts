@@ -14,7 +14,6 @@ import { element } from '../../../shared/page/dom';
 import { listPickerCommands } from '../../../shared/page/list-picker';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
-import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageEvents } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -91,16 +90,9 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
 
     const currentHelpSections = () =>
       helpSections(keys.keymap(), keys.scopes, keys.label, platform);
-    const closeHelpCommand = qualify(keysManifest.id, 'closeHelp');
-    const closeHint = element('span', 'keys-close-hint');
-    keys.anchor(closeHint, closeHelpCommand, {
-      scope: qualify(keysManifest.id, 'help'),
-    });
     const help = mountHelpView(
       api.areas.overlay,
       currentHelpSections(),
-      () => api.commands.run(closeHelpCommand),
-      closeHint,
       parts,
     );
     // The pushed `help` scope while help is open, `null` while it is closed.

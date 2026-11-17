@@ -12,8 +12,13 @@ import {
 import {
   type DrawnPart,
   type RollbackDeps,
+  requireDialogFrame,
   requireElementIn,
 } from '../../../../shared/page/layout-host/draw-part';
+import type {
+  DialogFrameInput,
+  DialogFramePart,
+} from '../../../../shared/page/layout-host/kit';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
@@ -45,7 +50,8 @@ export interface SampleCell {
 // shown set when it defines the part, else in `default`, and returns the drawn
 // part. The head and each section keep one draw: drawing one again disposes
 // its last draw, releasing the anchors it named, and removes its root. A
-// section's draw covers its cells. The shown set is `default` alone until the
+// section's draw covers its cells. The Dialog sample's frame keeps one draw
+// too, in one slot. The shown set is `default` alone until the
 // first `setLayouts`.
 export interface GalleryParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
@@ -63,6 +69,10 @@ export interface GalleryParts {
     input: GalleryFramedInput,
     sample: HTMLElement,
   ): DrawnPart<GalleryPart>;
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+  ): DrawnPart<DialogFramePart>;
 }
 
 export function createGalleryParts(deps: GalleryPartsDeps): GalleryParts {
@@ -155,6 +165,14 @@ export function createGalleryParts(deps: GalleryPartsDeps): GalleryParts {
           return withSample(sectionParent, part, slot, 'framedSection');
         },
         `framedSection:${input.name}`,
+      ),
+    dialogFrame: (parent, input) =>
+      parts.redraw('dialogFrame', parent, (builder, frameParent, rollback) =>
+        requireDialogFrame(
+          builder(frameParent, input, createGalleryKit(deps, rollback)),
+          input,
+          'dialogFrame',
+        ),
       ),
   };
 }

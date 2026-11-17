@@ -1,6 +1,7 @@
 import type { PushedScope } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import type { DrawDialogFrame } from '../../../shared/page/ui/dialog';
 import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 import { textBoxInput } from '../../../shared/page/text-box';
 import {
@@ -16,12 +17,13 @@ const HINT =
 
 // `pushScope` pushes the `import` scope, whose Enter and Esc run `accept` and
 // `cancel`; `drawBody` draws the `importBox` part into `parent`, `frame` its
-// `textBox`.
+// `textBox`; `drawFrame` draws the dialog's frame, the `dialogFrame` part.
 export interface ImportBoxDeps extends Pick<
   PracticeViewDeps,
   'channel' | 'log' | 'toast'
 > {
   pushScope(): PushedScope;
+  drawFrame: DrawDialogFrame;
   drawBody(
     parent: HTMLElement,
     input: ImportBoxInput,
@@ -36,8 +38,8 @@ export interface ImportBoxDeps extends Pick<
 // reason under the box, until the next edit. `cancel` closes it and starts
 // nothing, as the base scope changing under it does. Closing gives focus back
 // to what held it as the dialog opened, unless focus moved elsewhere
-// meanwhile. `redraw` draws the open dialog's body again, for changed
-// layouts.
+// meanwhile. `redraw` draws the dialog's frame again, and the open dialog's
+// body, for changed layouts.
 export interface ImportBox {
   element: HTMLElement;
   open(): void;
@@ -54,7 +56,10 @@ interface Importing {
 
 export function createImportBox(deps: ImportBoxDeps): ImportBox {
   const { log } = deps;
-  const dialog = createDialog('Import problems', { hasActions: false });
+  const dialog = createDialog('Import problems', {
+    hasActions: false,
+    drawFrame: deps.drawFrame,
+  });
   const frame = inputFrame();
   const input = textBoxInput('practice-import-input');
   frame.append(input);
@@ -160,6 +165,7 @@ export function createImportBox(deps: ImportBoxDeps): ImportBox {
       }
     },
     redraw() {
+      dialog.redrawFrame();
       if (importing !== null) {
         drawBody();
       }

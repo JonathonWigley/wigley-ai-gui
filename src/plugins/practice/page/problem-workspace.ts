@@ -45,6 +45,7 @@ import type { OwnerKitServices } from '../../../shared/page/layout-host/base-kit
 import {
   type DrawnPart,
   disposeDraws,
+  requireDialogFrame,
   type RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
@@ -871,6 +872,18 @@ export function createProblemWorkspace(
     isSending: () => false,
     dismiss: () => dispatch({ type: 'confirmNo' }),
     log,
+    drawFrame: (parent, input) =>
+      parts.redraw(
+        'dialogFrame',
+        parent,
+        (dialogFrame, into, rollback) =>
+          requireDialogFrame(
+            dialogFrame(into, input, kitFor('confirm', rollback)),
+            input,
+            'dialogFrame',
+          ),
+        'dialogFrame:confirm',
+      ).built,
     drawBody(body, promptParts) {
       parts.redraw('confirmBody', body, (confirmBody, into, rollback) => ({
         element: confirmBody(

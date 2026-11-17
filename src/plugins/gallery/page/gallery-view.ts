@@ -11,7 +11,7 @@ import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { card, createCollapsibleCard } from '../../../shared/page/ui/card';
 import { chip } from '../../../shared/page/ui/chip';
-import { createDialog } from '../../../shared/page/ui/dialog';
+import { createDialog, type DrawDialogFrame } from '../../../shared/page/ui/dialog';
 import {
   createDragReorder,
   type DragReorder,
@@ -134,6 +134,7 @@ export function createGalleryView(
   const keptDragReorder: KeptDragReorder = { reorder: null };
   const specs = sectionSpecs(
     deps.platform,
+    (frameParent, input) => parts.dialogFrame(frameParent, input).built,
     {
       uiState: deps.uiState,
       anchor: deps.keys.anchor,
@@ -199,6 +200,7 @@ export function createGalleryView(
 // DragReorder sample made last.
 function sectionSpecs(
   platform: OsName,
+  drawFrame: DrawDialogFrame,
   splitDeps: SplitSampleDeps,
   kept: KeptSplit,
   hScrollers: { log: PluginLog; kept: KeptHScrollers },
@@ -226,7 +228,7 @@ function sectionSpecs(
     section('Card', cardCells),
     section('Collapsible card', collapsibleCells),
     framed('FloatingPanel', () => floatingPanelSample(platform)),
-    framed('Dialog', dialogSample, true),
+    framed('Dialog', () => dialogSample(drawFrame), true),
     section('EmptyState', () => emptyStateCells(platform)),
     section('SectionHeader', () => sectionHeaderCells(platform)),
     section('DragReorder', () => dragReorderCells(keptDragReorder)),
@@ -795,8 +797,8 @@ function floatingPanelSample(platform: OsName): HTMLElement {
   return panel;
 }
 
-function dialogSample(): HTMLElement {
-  const dialog = createDialog('Cancel the round?');
+function dialogSample(drawFrame: DrawDialogFrame): HTMLElement {
+  const dialog = createDialog('Cancel the round?', { drawFrame });
   dialog.body.append(element('p', '', 'The agent gets no answers.'));
   dialog.actions.append(
     textButton('Keep it', ignore),

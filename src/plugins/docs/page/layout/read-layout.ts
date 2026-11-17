@@ -13,6 +13,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   conflictPrompt: true,
   docBody: true,
   editorFrame: true,
+  dialogFrame: true,
   boxDialog: true,
   completion: true,
   confirmDialog: true,

@@ -10,6 +10,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   whichKeyEntry: true,
   leaderSearchRow: true,
   titleBarButton: true,
+  dialogFrame: true,
 };
 
 // The keys layout a user's `layout.js` module exports as its default. A

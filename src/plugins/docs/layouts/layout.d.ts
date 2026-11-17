@@ -11,6 +11,8 @@
 import type {
   BaseKit,
   ButtonVariant,
+  DialogFrameInput,
+  DialogFramePart,
 } from '../../../shared/page/layout-host/kit';
 
 export interface LayoutPart {
@@ -155,7 +157,8 @@ export interface EditorFrameKit extends DocsKit {
   editor(parent: HTMLElement): HTMLElement;
 }
 
-// Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
+// Dialogs. The app keeps each dialog's scrim, keys and focus; `dialogFrame` draws its panel, title and actions row, and
+// a part draws its body.
 // The name and path box, scope `docs.box`. `completes`: the box completes a path with Tab.
 export interface BoxDialogInput {
   label: string;
@@ -171,7 +174,7 @@ export interface BoxDialogKit extends DocsKit {
 export interface CompletionInput {
   text: string;
 }
-// The Trash confirmation, scope `docs.confirm`. The dialog's title stays the app's.
+// The Trash confirmation, scope `docs.confirm`. The app sets the dialog's title; `dialogFrame` draws it.
 export interface ConfirmDialogInput {
   question: string;
 }
@@ -337,6 +340,15 @@ export interface Layout {
     input: EditorFrameInput,
     kit: EditorFrameKit,
   ): LayoutPart;
+  // The frame of the path box dialog and the Trash confirmation: the panel, its title (`input.title`) and, when
+  // `input.hasActions`, its actions row. Return the panel, appended to `parent`, with `body` and `actions` inside it;
+  // the app fills them. The app keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions`
+  // is not inside its panel, or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: DocsKit,
+  ): DialogFramePart;
   boxDialog?(
     parent: HTMLElement,
     input: BoxDialogInput,

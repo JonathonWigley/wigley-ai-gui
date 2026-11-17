@@ -1,5 +1,8 @@
 import type {
   BaseKit,
+  ConfirmButtonsKit,
+  DialogFrameInput,
+  DialogFramePart,
   KitRowOptions,
 } from '../../../shared/page/layout-host/kit';
 
@@ -175,11 +178,7 @@ export interface ImportBoxKit extends PracticeKit {
   // A second call throws `textBox placed twice`, so the part draws with `default`.
   textBox(parent: HTMLElement): HTMLElement;
 }
-export interface ConfirmBodyKit extends PracticeKit {
-  // The prompt's own buttons (label, variant, key anchor in `practice.confirm`), each appended to `parent`.
-  keepButton(parent: HTMLElement): HTMLButtonElement;
-  confirmButton(parent: HTMLElement): HTMLButtonElement;
-}
+export interface ConfirmBodyKit extends PracticeKit, ConfirmButtonsKit {}
 
 // A user layout defines only the parts it changes; `default` draws the rest. The `list` pane is drawn into the side
 // bar once per layout set; `listHeader`, the rows and `empty` on every render, one call per row; `noProblem` into the
@@ -187,11 +186,12 @@ export interface ConfirmBodyKit extends PracticeKit {
 // column's three panes once per layout set; the shown tab's part into its pane's `body` when what it shows
 // changes, one `submissionRow` per submission (or `empty` with `noSubmissions`), and `caseResult` into the
 // `resultTab`'s `failingCase`. `confirmBody` draws the Solution tab's confirm. `importBox` draws the import
-// dialog's body (the Dialog primitive's scrim, panel and title stay the app's) each time it opens and again whenever
-// its input or the layouts change. Kit scopes: `list`, `listHeader`, `problemRow` and `empty` `practice.list`;
-// `noProblem`, `problemPane`, the problem pane's tabs and `empty` with `noSubmissions` `practice.problem`;
-// `editorPane` `practice.editor`; `consolePane`, `testcaseTab`, `resultTab` and `caseResult` `practice.console`;
-// `confirmBody` `practice.confirm`; `importBox` `practice.import`. A user layout's `list`
+// dialog's body (`dialogFrame` draws the dialog's panel and title; the app keeps its scrim, keys and focus) each time
+// it opens and again whenever its input or the layouts change. Kit scopes: `list`, `listHeader`, `problemRow` and
+// `empty` `practice.list`; `noProblem`, `problemPane`, the problem pane's tabs and `empty` with `noSubmissions`
+// `practice.problem`; `editorPane` `practice.editor`; `consolePane`, `testcaseTab`, `resultTab` and `caseResult`
+// `practice.console`; `confirmBody` and the Solution confirm's `dialogFrame` `practice.confirm`; `importBox` and the
+// import dialog's `dialogFrame` `practice.import`. A user layout's `list`
 // part draws the `filter` hint itself: `/` is not a vim key; its `problemPane` and `consolePane` draw the `prevTab` and `nextTab` hints, and its `notesTab` and `testcaseTab` the
 // `editBox` hint.
 export interface PracticeLayout {
@@ -257,6 +257,15 @@ export interface PracticeLayout {
     input: ImportBoxInput,
     kit: ImportBoxKit,
   ): PracticePane;
+  // The frame of the import dialog and the Solution confirm: the panel, its title (`input.title`) and, when
+  // `input.hasActions`, its actions row. Return the panel, appended to `parent`, with `body` and `actions` inside it;
+  // the app fills them. The app keeps the scrim, showing and hiding, keys and focus. A frame whose `body` or `actions`
+  // is not inside its panel, or whose `actions` is not null exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: PracticeKit,
+  ): DialogFramePart;
 }
 
 // A layout with every part defined, as `default` is.

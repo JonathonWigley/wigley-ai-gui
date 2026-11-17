@@ -4,6 +4,7 @@ import type { Layout } from '../../layouts/layout';
 // Every part a session-stash layout may define, so a part added to the
 // contract and missed here fails to compile.
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
+  dialogFrame: true,
   noteDialog: true,
 };
 
