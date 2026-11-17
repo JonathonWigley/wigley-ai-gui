@@ -464,10 +464,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Cmd+Enter accepts it. A playing row shows a `status-running` mark. Each section ends in a None of these row and a
   notes box in an InputFrame.
 - **Chat:** user turns are a `card-background` block, not a bubble. A user turn another session's agent sent opens
-  with a neutral Tag, `from <session>`, over its text. Assistant
-  prose is markdown on the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
-  (tool calls, thinking, raw events) show in the **session hub**'s **activity dock**. The hub is
-  a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
+  with a neutral Tag, `from <session>`, over its text, and its pending row shows the Tag between the order label and
+  the text. Assistant prose is markdown on the sheet. The transcript shows the messages, permission prompts, notices,
+  turn dividers and pending rows only: the agent's steps (tool calls, thinking, raw events) show in the **session
+  hub**'s **activity dock**. The hub is a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
   under `640px` and by `Space b h`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
   chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
   `border-subtle` line parts the sections. The hub opens on the Session header, which has no title or chevron: the

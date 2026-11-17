@@ -66,7 +66,8 @@ any other. The set:
 
 - **chat** — `send`, `sendNow`, `interrupt`, `allowOrCopy`: the target's chat session, whichever tab shows.
 - **sessions** — `closeSession` and `renameSession`: the target's row. A target passes the Sessions-mode-shown guard;
-  `renameSession` shows Sessions mode, since its dialog waits on the user's typing.
+  `renameSession` shows Sessions mode, since its dialog waits on the user's typing. A targeted `closeSession` closes
+  at once, with no end-session confirm, since the agent's run already asked the user.
 - **workflow** — `mainAction`, `toggleHeadless`; **workflow-large** — `clearAndMake`, `cancelCountdown`,
   `makeInNewSession`, `resumeMake`, `retro`, `dismiss`: the stage action runs for the target.
 
@@ -82,8 +83,9 @@ no target. Run without `session`, it acts as a key does.
 - no started page, and a page that goes before the run settles
 
 Every other run — keys, clicks, `api.commands.run` — keeps the old rule: a failure is logged under its owner and the run
-resolves. Every run resolves `'ran'` or `'skipped'`. A page command run from main sends its outcome and error text back
-with the done message (`bridge:command-run-done`), so a main caller hears a page handler's failure.
+resolves, with no value for a plugin's plain `api.commands.run`. The core router's and registry's runs and `runFor`
+resolve `'ran'` or `'skipped'`. A page command run from main sends its outcome and error text back with the done
+message (`bridge:command-run-done`), so a main caller hears a page handler's failure.
 
 A workflow stage command runs its stage action through the key runner, so a failure inside the stage action stays
 log-only: the command's handler finishes and `run_command` answers `Ran`.
@@ -96,12 +98,12 @@ cannot give back, closes or stops a session, installs or restarts, opens somethi
 answers on the user's behalf. Every route to such an action is flagged, a generic command that reaches it included.
 The set:
 
-- `app-update.install`
+- `app-update.install`, `app-update.pressButton`
 - `sessions.closeSession`, `sessions.listClose`, `sessions.closePane`, `session-stash.noteAccept`
 - `chat.stopAll`, `chat.endSession`, `chat.allowOrCopy`, `chat.allowEntry`, `chat.removeImage`, `chat.removeImageAt`,
   `chat.removeShownImage`
-- `docs.trash`, `docs.conflictReload`, `docs.confirmYes`
-- `notes.remove`, `notes.removeSession`, `notes.discard`, `notes.confirmYes`
+- `docs.trash`, `docs.conflictReload`, `docs.conflictOverwrite`, `docs.confirmYes`, `docs.answerConfirm`
+- `notes.remove`, `notes.removeSession`, `notes.removeImageAt`, `notes.discard`, `notes.confirmYes`
 - `settings.reset`, `settings.removeBind`
 - `workflow.mainAction`, `workflow.stageAction`, `workflow-large.clearAndMake`, `workflow-large.resumeMake`
 - `forms.submit`, `forms.confirmCancel`, `primer.submit`, `primer.confirmCancel`, `audio-picker.submit`,
@@ -109,7 +111,8 @@ The set:
 - `unity-pool.open`, `live-view.openScreenSettings`, `core.openLink`
 - `core.reloadPlugin`
 
-`chat.send`, `chat.sendTo` and `chat.interrupt` are not risky.
+`chat.send`, `chat.sendTo` and `chat.interrupt` are not risky. Neither are `chat.denyPermission`, `chat.denyEntry`
+and `chat.submitReason`, since a deny is the safe direction.
 
 A risky command run by `run_command` asks the user first, through the `forms` main export `confirm`: a round over the
 calling session's tabs, as `ask_round` shows, or, for a caller with no tab (a terminal session), its row marked as a
@@ -143,9 +146,9 @@ type it:
 each whitespace run collapsed to one space, trimmed, capped at 80 characters with a trailing `…`, and `\` and `"`
 escaped. A run with no caller (a user's key or click) sends the text as typed.
 
-The chat page shows a framed message as a neutral Tag `from <name>` over the rest of the text, wherever it shows the
-message: the entry, a pending row, a copy or range, and the box when the message comes back to it (the body only). The
-tag comes from the message text itself, so it survives a transcript rebuild on resume. A first message sent this way,
+The chat page draws a neutral Tag `from <name>` over the rest of the text on the entry and on a pending row. A copy, a
+range and the box take the message body without its frame line, and no Tag. The Tag comes from the message text
+itself, so it survives a transcript rebuild on resume. A first message sent this way,
 or resumed, titles the row from the text after the frame line.
 
 ## Reading any slot

@@ -330,11 +330,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  contract and `default` layout); `docs/features/session-stash/design.md`
   window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
                  `services.window.summon`)
-  agent-commands/ manifest.ts (declares `readsEverySlot`) and main/ only
-                 (the `list_commands`, `run_command` and `read_state` tools through sessions' `contributeTools`, for every
-                 session, subagents included; a risky command asks the user through forms' `confirm` and is refused
-                 for a headless or unattended caller; its drive actions call a tool as a session);
-                 `docs/features/agent-commands/design.md`
+  agent-commands/ manifest.ts (declares `readsEverySlot`) and main/ only (the `list_commands`, `run_command` and
+                 `read_state` tools through sessions' `contributeTools`, for every session, subagents included; a
+                 risky command asks the user through forms' `confirm` and is refused for a headless or unattended
+                 caller; its drive actions call a tool as a session); `docs/features/agent-commands/design.md`
   claude-code/   manifest.ts (the `command` and `profiles` settings), main/ (the Claude Code CLI adapter behind
                  AgentHarness, registered through `services.agentHarnesses`: it resolves a profile's config folder,
                  lists and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and
@@ -343,11 +342,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  Claude's `permission_prompt` MCP tool, routed to the session's process; an empty `command` looks
                  `claude` up on PATH, then in `~/.local/bin`) → the only place the app spawns `claude`;
                  `docs/features/agent-harnesses/design.md`
-  forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
-                 round; the agents' service auto-answers a headless chat session's rounds with every item's
-                 recommendation, outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout);
-                 main exports `confirm` (an Allow or Deny round in the
-                 calling session's own forms session, a fresh round each call) to agent-commands
+  forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview round; the
+                 agents' service auto-answers a headless chat session's rounds with every item's recommendation,
+                 outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the
+                 Layout contract and the built-in `default` layout); main exports `confirm` (an Allow or Deny round
+                 in the calling session's own forms session, a fresh round each call) to agent-commands
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
@@ -402,16 +401,17 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  first message, then the session's chat view through chat's `mountChat`; the `scoped-agents.ask`
                  keys), layouts/ (the scoped-agents Layout contract with its `askBox` part and the built-in `default`
                  layout); `docs/features/scoped-agents/design.md`
-  chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
-                 `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
-                 start_session and set_headless MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
-                 layout preview's sample session, held with no process), page/ (the
-                 Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
-                 the start prompt with its project, folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
-                 and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
-                 parts share; `agent-frame.ts` at the root holds the frame
-                 line an agent's `chat.sendTo` opens its text with and the page reads back as a "from" tag, `chat.sendTo`
-                 runs in main, and main exports `isHeadless`, `isUnattended` and `senderName` (the frame's cleaned sender name) to agent-commands; main exports `launch` (a background session with a first message) and
+  chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the
+                 `chat.session`, `chat.entries`, `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned`
+                 slots through `chat-slots.ts`, the start_session and set_headless MCP tools, recent folders,
+                 archived sessions, resume, sign-in, preview/: the layout preview's sample session, held with no
+                 process), page/ (the Chat tab with its attached images and image viewer, app slash commands and the
+                 sign-in dialog, the start prompt with its project, folder, profile, sign-in and session steps),
+                 layouts/ (the chat Layout contract and the built-in `default` chat layout); `image-rules.ts` at the
+                 root holds the attach rules both parts share; `agent-frame.ts` at the root holds the frame line an
+                 agent's `chat.sendTo` opens its text with and the page reads back as a "from" tag, `chat.sendTo` runs
+                 in main, and main exports `isHeadless`, `isUnattended` and `senderName` (the frame's cleaned sender
+                 name) to agent-commands; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
                  to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to scoped-agents, `launch` and `defaultProfile` to practice (its import session), `launch`, `defaultProfile`, `profileOf` and `restored` (settles once chat's restore of saved sessions has run) to backlog, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to scoped-agents, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
@@ -505,11 +505,12 @@ again once every close guard allows, as the form presenter does after every form
 any other close (the close guard of a session's other open form keeps the row). The user may also close the row,
 which `mark` or `activate` brings back; it leaves for good when the session disconnects. A row `release` closed
 while selected comes back selected when the session's next form marks it within 30 seconds (a back-to-back
-round), unless the user picked another row first; later, it comes back marked. A session the
-app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries
-the owned row's app id (the hello's `row_id`, when its host session id is unset or the row's) or the host session id the owned session holds (the hello's `session_id`) joins that row instead of adding one, and the host
-session id moves when the harness reports a new one (a newer relay takes the join from an older one still
-connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
+round), unless the user picked another row first; later, it comes back marked. A session the app starts (`open`) is an
+owned session: its row exists from start, the relay connection whose hello carries the owned row's app id (the hello's
+`row_id`, when the row has no host session id yet, the hello carries none, or the two match) or the host session id the
+owned session holds (the hello's `session_id`) joins that row instead of adding one, and the host session id moves when
+the harness reports a new one (a newer relay takes the join from an older one still connected, as when the harness
+restarts its MCP connection), and the row ends when its owner ends it: chat keeps
 its rows through its own restart or reload, its stop `keep`ing each one for the restarted part's restore to adopt
 (`OwnedSession.keep`), so the places of the session's tabs survive it, and across a relaunch, re-attaching each one whose process the session host still runs, and after a process
 exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
@@ -612,28 +613,31 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   base change before the window settles is a restore's, so notes' restored popup stays open through it.
   `sessions.activity` clears itself at each page start, since its sources set their activities again, and
   `sessions.active` goes back to null until the first panes are placed. A new start publishes the same key and reads the
-  last value. Slot values are JSON; what is not stays in the owner's closure. A main part whose manifest declares `readsEverySlot: true` reads any slot by id through `api.state.readAny`
-  and lists the ids through `api.state.slotIds`, page-owned slots included; `agent-commands` alone declares it. A plugin that only reads a slot or hears
-  an event lists its owner in the manifest's `reads`, which carries no start order. A value belongs in a slot and a
-  moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`, `core.windowFocused`,
-  `core.agentHarnesses` (each registered harness's label and declarations, keyed by harness id),
-  `core.plugins` (each catalog plugin's label, origin, whether it runs, what depends on it and its load problem, then each plugin that failed its first load) and the two runtime command
+  last value. Slot values are JSON; what is not stays in the owner's closure. A main part whose manifest declares
+  `readsEverySlot: true` reads any slot by id through `api.state.readAny` and lists the ids through `api.state.slotIds`,
+  page-owned slots included; `agent-commands` alone declares it. A plugin that only reads a slot or hears an event lists
+  its owner in the manifest's `reads`, which carries no start order. A value belongs in a slot and a moment in an event.
+  The core's own slots are `core.mode`, `core.scope`, `core.theme`, `core.windowFocused`, `core.agentHarnesses` (each
+  registered harness's label and declarations, keyed by harness id), `core.plugins` (each catalog plugin's label,
+  origin, whether it runs, what depends on it and its load problem, then each plugin that failed its first load) and the
+  two runtime command
   catalogs (`src/contracts/core-state.ts`) (`docs/features/plugin-framework/design.md` § Commands and state).
 - **A command** takes at most one argument, declared in the manifest as a number, a string or a small record;
   a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
   process the command runs in. `commands.register` and `keys.bind` add commands and binds at runtime as a layer under
   the user's `keymap.json`; `commands.intercept` wraps a command and `commands.onDidRun` hears it. A bind carries the
   argument as `arg`, checked at load. A click runs a command too: a layout's `kit.button(parent, label, command, { arg })`
-  and `kit.command(qualifiedId, arg)` name one by id, and a view's own click handler runs the command a key would.
-  A run also carries two optional session ids beside its argument,
-  `targetSessionId` (the session the command acts on) and `callerSessionId` (the session whose agent asked), on
-  `PageCommandContext` and `MainCommandContext` and across the page hop both ways. Only a command whose declaration
-  carries `targets: true` (it acts on a session without that session's UI shown or focused) reads the target, and a
-  target passes a mode-shown guard; a run that gives any other command a target is refused. Every run resolves `'ran'`
-  or `'skipped'` (an intercept kept the handler from running). `commands.runFor(id, arg, sessions)` is a reporting
-  run, which rejects with the failure where `run` logs and resolves, a page handler's failure coming back to main with
-  the done message; `commands.list()` gives every live command the process knows. A declaration's `risky: true` marks
-  a command an agent runs only on the user's Allow (`docs/features/agent-commands/design.md`).
+  and `kit.command(qualifiedId, arg)` name one by id, and a view's own click handler runs the command a key would. A run
+  also carries two optional session ids beside its argument, `targetSessionId` (the session the command acts on) and
+  `callerSessionId` (the session whose agent asked), on `PageCommandContext` and `MainCommandContext` and across the
+  page hop both ways. Only a command whose declaration carries `targets: true` (it acts on a session without that
+  session's UI shown or focused) reads the target, and a target passes a mode-shown guard; a run that gives any other
+  command a target is refused. The core router's and registry's runs and `commands.runFor` resolve `'ran'` or
+  `'skipped'` (an intercept kept the handler from running); a plugin's plain `api.commands.run` resolves no value.
+  `commands.runFor(id, arg, sessions)` is a reporting run, which rejects with the failure where `run` logs and resolves,
+  a page handler's failure coming back to main with the done message; `commands.list()` gives every live command the
+  process knows. A declaration's `risky: true` marks a command an agent runs only on the user's Allow
+  (`docs/features/agent-commands/design.md`).
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`closed` in plugin
   `sessions` is `sessions.closed`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`, and the core has no events of its own: a part that needs
@@ -933,14 +937,15 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool. Before it runs a call, sessions asks each **tool-call guard** (`addToolCallGuard`, beside
-  `addCloseGuard`), so a rule over calls is one registration. A contribution marks its tools main-agent-only with `{ mainAgentOnly: true }` (the
-  workflow tools and `set_session_title`); chat's guard, which it registers through `addToolCallGuard`, answers a subagent's call of such a tool with a success that
-  changes nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
+  `addCloseGuard`), so a rule over calls is one registration. A contribution marks its tools main-agent-only with
+  `{ mainAgentOnly: true }` (the workflow tools and `set_session_title`); chat's guard, which it registers through
+  `addToolCallGuard`, answers a subagent's call of such a tool with a success that changes nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away. Claude Code keeps the tool schemas a session
-  started with, so a new tool reaches only sessions started after it lands. An agent reaches every app action through `agent-commands`' three tools, `list_commands`, `run_command` and
-  `read_state`, so a new agent ability is a new command, never a new tool.
+  started with, so a new tool reaches only sessions started after it lands. An agent reaches every app action through
+  `agent-commands`' three tools, `list_commands`, `run_command` and `read_state`, so a new agent ability is a new
+  command, never a new tool.
 - **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
