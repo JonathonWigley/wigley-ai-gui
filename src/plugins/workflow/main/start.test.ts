@@ -1498,4 +1498,27 @@ describe('workflowMainPart', () => {
       { activeMs: 0, costUsd: null },
     ]);
   });
+
+  it.each([
+    {
+      name: 'a stage with finishes',
+      workflow: 'stub',
+      stage: 'done',
+      expected: true,
+    },
+    {
+      name: 'another stage',
+      workflow: 'stub',
+      stage: 'scope',
+      expected: false,
+    },
+    { name: 'no workflow', workflow: null, stage: 'done', expected: false },
+  ])('stageFinishes ($name)', ({ workflow: workflowId, stage, expected }) => {
+    const workflow = startWorkflowPart();
+    workflow.exported().addWorkflow(finishingWorkflow());
+
+    const flow = { ...newFlow('s1', '/r'), workflow: workflowId, stage };
+
+    expect(workflow.exported().stageFinishes(flow)).toBe(expected);
+  });
 });

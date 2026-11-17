@@ -10,6 +10,7 @@ import { autoCompactManifest } from './auto-compact/manifest';
 import { autoRetroManifest } from './auto-retro/manifest';
 import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
+import { chatroomManifest } from './chatroom/manifest';
 import { claudeCodeManifest } from './claude-code/manifest';
 import { docsManifest } from './docs/manifest';
 import { docsSessionTabManifest } from './docs-session-tab/manifest';
@@ -60,6 +61,7 @@ export const builtInManifests = [
   agentSkillsManifest,
   contextSourcesManifest,
   liveViewManifest,
+  chatroomManifest,
   keysManifest,
   docsManifest,
   docsSessionTabManifest,

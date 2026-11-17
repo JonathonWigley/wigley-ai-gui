@@ -1,5 +1,6 @@
 import type { Disposable } from '../../contracts/disposable';
-import type { DependencyKey } from '../../contracts/plugin';
+import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
+import type { KeyedSlotKey } from '../../contracts/state';
 
 // What an agent posts in a room.
 export type PostKind =
@@ -78,6 +79,14 @@ export interface MessageRef {
   readonly type: 'file' | 'branch' | 'commit' | 'plan' | 'message';
   readonly value: string;
 }
+
+export const MESSAGE_REF_TYPES: readonly MessageRef['type'][] = [
+  'file',
+  'branch',
+  'commit',
+  'plan',
+  'message',
+];
 
 export interface RoomMessage {
   readonly id: number; // given by the store, monotonic per room
@@ -191,3 +200,91 @@ export const chatroomMainKey: DependencyKey<
   'main',
   'chatroom'
 > = { id: 'chatroom', process: 'main' };
+
+// The chatroom hooks' names on sessions' hook route: before and after an
+// agent's edit, write or commit.
+export const HOOK_PRE = 'chatroom.pre';
+export const HOOK_POST = 'chatroom.post';
+
+// One hook call's request line. `paths` are full paths: the edited or written
+// file, or a commit's staged paths and pathspecs, a folder included. `agentId`
+// is the subagent's id, null for the main agent; `cwd` is the agent's folder.
+export interface ChatroomHookRequest {
+  readonly tool: 'edit' | 'write' | 'commit';
+  readonly paths: readonly string[];
+  readonly agentId: string | null;
+  readonly cwd: string;
+}
+
+// A thread of a room as the user sees it: `userUnread` counts the user's
+// unread posts in it, and `userMentions` those of them addressed to `you`.
+export interface ThreadView {
+  readonly thread: string;
+  readonly resolved: boolean;
+  readonly lastId: number;
+  readonly userUnread: number;
+  readonly userMentions: number;
+}
+
+// The user's unread posts from one session row's agents, main and subagents:
+// `mentions` counts those addressed to `you`, and `newestThread` is the
+// thread of the newest one, null when none is unread.
+export interface RowUnread {
+  readonly rowId: string;
+  readonly unread: number;
+  readonly mentions: number;
+  readonly newestThread: string | null;
+}
+
+// A room as the page draws it. `rowUnread` holds one item per board row;
+// `userAsks` holds each `question` and `blocker` addressed to `you` that no
+// `answer` replies to, oldest first.
+export interface RoomView {
+  readonly room: string;
+  readonly threads: readonly ThreadView[];
+  readonly board: readonly BoardRow[];
+  readonly claims: readonly Claim[];
+  readonly rowUnread: readonly RowUnread[];
+  readonly userAsks: readonly RoomMessage[];
+}
+
+// Main's view of each room, keyed by the room's name: every room holding a
+// message, and every room a live session sits in.
+export const chatroomRoomsSlot: KeyedSlotKey<RoomView, 'main', 'chatroom'> = {
+  id: 'chatroom.rooms',
+  process: 'main',
+  kind: 'keyed',
+};
+
+// A post the user writes in the viewer; `to` holds participant names.
+export interface UserPost {
+  readonly kind: 'note' | 'answer';
+  readonly body: string;
+  readonly to: readonly string[];
+  readonly replyTo: number | null;
+}
+
+export type UserPostResult =
+  | { readonly ok: true; readonly id: number }
+  | { readonly ok: false; readonly reason: string };
+
+// `readThread` returns the thread's messages above `afterId`, entries and
+// `progress` included. `postAsUser` posts as `you`, the user's word, and
+// returns the room's refusal unchanged. `markUserRead` moves the thread's
+// user cursor up to `upToId` and rewrites the room's `chatroom.rooms` key.
+export interface ChatroomChannel extends ChannelShape {
+  invoke: {
+    readThread(
+      room: string,
+      thread: string,
+      afterId: number,
+    ): Promise<RoomMessage[]>;
+    postAsUser(
+      room: string,
+      thread: string,
+      post: UserPost,
+    ): Promise<UserPostResult>;
+    markUserRead(room: string, thread: string, upToId: number): Promise<void>;
+  };
+  messages: Record<never, never>;
+}

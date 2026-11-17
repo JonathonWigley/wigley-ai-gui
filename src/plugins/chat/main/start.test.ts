@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  AgentEvent,
-  AgentHarness,
-  AgentStart,
-  PermissionRequest,
+import {
+  type AgentEvent,
+  type AgentHarness,
+  type AgentStart,
+  MAIN_AGENT_ID,
+  type PermissionRequest,
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
@@ -745,6 +746,43 @@ describe('chat main part', () => {
       since: null,
     });
     expect(chat.exports.activeTime('none')).toBeNull();
+  });
+
+  it.each([
+    { name: 'a subagent', agentId: 'subagent-1' },
+    { name: 'the main agent', agentId: MAIN_AGENT_ID },
+  ])('toolCaller_NamesStreamAgent ($name)', async ({ agentId }) => {
+    const chat = startChatPart();
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    await settle();
+    chat.processEvents[0].agentEvent({
+      type: 'toolStarted',
+      at: 0,
+      agentId,
+      toolUseId: 't1',
+      tool: 'mcp__wigley-forms__chatroom_post',
+      summary: '',
+    });
+
+    await expect(chat.exports.toolCaller('row-1', 't1')).resolves.toBe(agentId);
+  });
+
+  it('toolCaller_NamesStreamAgent (a row chat does not hold)', async () => {
+    const chat = startChatPart();
+    const timersBefore = new Set(chat.timerDelays.keys());
+
+    await expect(
+      chat.exports.toolCaller('terminal-1', 't1'),
+    ).resolves.toBeNull();
+    expect(
+      [...chat.timerDelays.keys()].filter(
+        (handle) => !timersBefore.has(handle),
+      ),
+    ).toEqual([]);
   });
 
   // Breaks if chat main reads a harness's own `info()` profiles again rather

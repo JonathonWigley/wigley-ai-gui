@@ -628,6 +628,11 @@ export interface ChatMainExports {
   profileOf(sessionId: string): string | null;
   // The clock of a session chat owns; null for any other session id.
   activeTime(sessionId: string): ActiveTime | null;
+  // The agent that made a tool call, by its host tool-use id: MAIN_AGENT_ID or
+  // a subagent's id, as the session's stream names it. For a call the stream
+  // has not named yet it waits a short while, then resolves null; for a
+  // session chat does not hold it resolves null at once.
+  toolCaller(sessionId: string, toolUseId: string): Promise<string | null>;
   // Whether a session chat owns is headless; false for any other session id.
   isHeadless(sessionId: string): boolean;
   // Whether the harness process of a session chat owns started with the

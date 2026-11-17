@@ -319,7 +319,8 @@ export function createHarnessFollower(
 // chat layouts, opens the layout preview's sample session (held apart from
 // chat's sessions, with no process), offers a drive run its fixtures, and
 // exports to other plugins a background launch, a send, clear and active time
-// read on the sessions it holds, a close of every session in a folder or of one
+// read on the sessions it holds, the agent that made a tool call in one of
+// them, a close of every session in a folder or of one
 // session, a registration of
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, one of the resume
@@ -412,11 +413,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         )?.name ?? null,
     );
     namer.changed();
+    // True for a row whose stream chat reads, which names its calls' agents.
+    const readsStreamOf = (sessionId: string) =>
+      chat.activeTimeOf(sessionId) !== null;
     sessions.addToolCallGuard(
-      callerGuard({
-        callers: toolCallers,
-        owns: (sessionId) => chat.activeTimeOf(sessionId) !== null,
-      }),
+      callerGuard({ callers: toolCallers, owns: readsStreamOf }),
     );
     const preview = createChatPreview({
       sessions,
@@ -639,6 +640,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       resume: (request) => chat.resume(request),
       profileOf,
       activeTime: (sessionId) => chat.activeTimeOf(sessionId),
+      toolCaller: (sessionId, toolUseId) =>
+        readsStreamOf(sessionId)
+          ? toolCallers.agentOf(sessionId, toolUseId)
+          : Promise.resolve(null),
       isHeadless: (sessionId) => chat.isHeadless(sessionId),
       launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
       defaultProfile,

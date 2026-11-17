@@ -494,7 +494,9 @@ session id is set when the harness reports it (a newer relay takes the join from
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
 its rows through its own restart or reload, its stop `keep`ing each one for the restarted part's restore to adopt
 (`OwnedSession.keep`), so the places of the session's tabs survive it, and across a relaunch, re-attaching each one whose process the session host still runs, and after a process
-exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
+exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A relay
+hello carrying a `hook` field is one request, routed to the handler a plugin registers with `sessions.addHookHandler`
+and answered with one line, opening no session (the chatroom's edit and commit hooks). A plugin's close
 guard (`addCloseGuard`) refuses a close while the plugin still has something open there (forms: an open round; primer:
 an open primer; audio-picker: an open picker), since main, not the page, decides. The user's close key ends the hold
 first: a tab or popup that `closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through

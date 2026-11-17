@@ -10,6 +10,7 @@ import { autoCompactMainPart } from './auto-compact/main/start';
 import { autoRetroMainPart } from './auto-retro/main/start';
 import { backlogMainPart } from './backlog/main/start';
 import { chatMainPart } from './chat/main/start';
+import { chatroomMainPart } from './chatroom/main/start';
 import { claudeCodeMainPart } from './claude-code/main/start';
 import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
@@ -57,6 +58,7 @@ export const mainParts: readonly MainPart[] = [
   agentSkillsMainPart,
   contextSourcesMainPart,
   liveViewMainPart,
+  chatroomMainPart,
   docsMainPart,
   settingsMainPart,
   scopedAgentsMainPart,
