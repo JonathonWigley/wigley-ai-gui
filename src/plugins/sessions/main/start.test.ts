@@ -550,6 +550,79 @@ describe('sessions main part', () => {
     }
   });
 
+  it.each([
+    { case: 'live', runMode: 'live', isNamed: true },
+    { case: 'selfTest', runMode: 'selfTest', isNamed: false },
+  ] as const)(
+    'offlineEnv names the calls folder in a live run and is empty in the self-test: $case',
+    async ({ runMode, isNamed }) => {
+      const { homeDir, remove } = relayHome();
+      const started = startSessionsPart(10, { runMode, homeDir });
+      try {
+        expect(viewOf(started).offlineEnv()).toEqual(
+          isNamed
+            ? { WIGLEY_FORMS_OFFLINE: `${homeDir}/.agents/app/offline-calls` }
+            : {},
+        );
+      } finally {
+        await started.dispose?.('end');
+        remove();
+      }
+    },
+  );
+
+  it('replayCalls routes a calls file to the owned session holding its host id', async () => {
+    const { homeDir, remove } = relayHome();
+    const files = createMemoryFiles();
+    const started = startSessionsPart(10, { runMode: 'live', homeDir, files });
+    const callsFile = `${homeDir}/.agents/app/offline-calls/host-1.jsonl`;
+    try {
+      const view = viewOf(started);
+      const calls: unknown[] = [];
+      view.contributeTools([ASK_TOOL], () => ({
+        call: async (_, args) => {
+          calls.push(args);
+          return ASK_RESULT;
+        },
+        end: () => undefined,
+      }));
+      view.open(hostInfo('host-1'));
+      const logged = {
+        tool: 'ask',
+        arguments: { q: 1 },
+        toolUseId: null,
+        at: 1,
+        replay: true,
+      };
+      await files.write(callsFile, `${JSON.stringify(logged)}\n`);
+
+      expect(await view.replayCalls('host-1')).toBe(1);
+      expect(calls).toEqual([{ q: 1 }]);
+      expect(await files.stat(callsFile)).toBeNull();
+    } finally {
+      await started.dispose?.('end');
+      remove();
+    }
+  });
+
+  it("writes each contribution's offline answers to offline.json", async () => {
+    const { homeDir, remove } = relayHome();
+    const files = createMemoryFiles();
+    const started = startSessionsPart(10, { runMode: 'live', homeDir, files });
+    try {
+      viewOf(started).contributeTools([ASK_TOOL], fakeAskStart().start, {
+        offline: { ask: { result: ASK_RESULT, replay: false } },
+      });
+    } finally {
+      await started.dispose?.('end');
+      remove();
+    }
+
+    expect(
+      JSON.parse(await files.read(`${homeDir}/.agents/app/offline.json`)),
+    ).toEqual({ tools: { ask: { result: ASK_RESULT, replay: false } } });
+  });
+
   it('stops with nothing live and starts again', async () => {
     const harness = startMainPart(sessionsMainPart);
 

@@ -32,6 +32,11 @@ import { sessionsManifest } from '../manifest';
 import { titleLimit } from '../session-title';
 import { sessionsMainView } from './consumer-view';
 import { serveMcp } from './mcp/mcp-server';
+import {
+  OFFLINE_CALLS_FOLDER,
+  OFFLINE_ENV,
+  replayOfflineCalls,
+} from './offline-calls';
 import { createEndpointWriter, endedDriveRunLaunch } from './relay/endpoint';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
@@ -243,10 +248,12 @@ export function addDriveActions(
 // rows and the project each row groups under, from the namers other plugins
 // register, and the sessions layouts.
 // A contribution reaches every live session, and each one added queues a
-// rewrite of the endpoint files, so a relay that starts the app finds every
-// tool listed. A disposal and a stop leave the files, which a relay serves
-// while the app is away; a stop waits for the queued writes. A failed write is
-// logged and keeps the contribution. Each dependent gets
+// rewrite of the endpoint files, the offline table among them, so a relay that
+// starts the app, or answers while it is closed, finds every tool listed. A
+// disposal and a stop leave the files, which a relay serves while the app is
+// away; a stop waits for the queued writes. A failed write is logged and keeps
+// the contribution. `replayCalls` routes a calls file the relay wrote while the
+// app was closed through the session list's normal call path. Each dependent gets
 // its own view of the exports, which files its registrations under it. In the
 // self-test it opens no relay and writes
 // no file, and hands its pane keys' script; a drive run opens it in the run's
@@ -259,21 +266,23 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
     const hold = createConnectHold(api.services.timers, api.services.log);
     const opened =
       api.services.runMode === 'selfTest' ? null : openRelay(api, list, hold);
-    const endpointWriter = createEndpointWriter(
-      api.services.files,
-      api.services.paths,
-      appEndpointDir(
-        api.services.paths,
-        api.services.homeDir,
-        api.services.appInstance.id,
-      ),
-      api.services.log,
+    const { files, paths, log } = api.services;
+    const endpointDir = appEndpointDir(
+      paths,
+      api.services.homeDir,
+      api.services.appInstance.id,
     );
+    const offlineCallsFolder = paths.join(endpointDir, OFFLINE_CALLS_FOLDER);
+    const endpointWriter = createEndpointWriter(files, paths, endpointDir, log);
     const exports: SessionsMainExports = {
       contributeTools(tools, start, options) {
         const contribution = list.contributeTools(tools, start, options);
         if (opened !== null) {
-          endpointWriter.write(opened.endpoint, list.tools());
+          endpointWriter.write(
+            opened.endpoint,
+            list.tools(),
+            list.offlineTable(),
+          );
         }
         return contribution;
       },
@@ -291,6 +300,19 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       titles: (sessionId) => list.titles(sessionId),
       addProjectNamer: (namer) => list.addProjectNamer(namer),
       holdConnects: (until) => hold.hold(until),
+      offlineEnv: () =>
+        opened === null ? {} : { [OFFLINE_ENV]: offlineCallsFolder },
+      replayCalls: (hostSessionId) =>
+        replayOfflineCalls(
+          {
+            files,
+            paths,
+            folder: offlineCallsFolder,
+            route: (call) => list.replayCall(hostSessionId, call),
+            log,
+          },
+          hostSessionId,
+        ),
     };
     exports.contributeTools(
       [SET_SESSION_TITLE_TOOL],

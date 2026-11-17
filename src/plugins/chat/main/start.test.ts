@@ -824,6 +824,7 @@ describe('chat main part', () => {
       tool: 'set_workflow_step',
       toolUseId: 't1',
       mainAgentOnly: true,
+      replayed: false,
     };
 
     await expect(guard(call)).resolves.toEqual({

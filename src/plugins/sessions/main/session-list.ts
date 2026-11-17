@@ -10,6 +10,7 @@ import { createListeners } from '../../../shared/listeners';
 import {
   type AgentSession,
   type ConnectedSession,
+  type OfflineAnswer,
   type OwnedSession,
   type ProjectNamer,
   type SessionInfo,
@@ -26,6 +27,7 @@ import {
   textResult,
 } from '../contract';
 import { normalizedTitle, titleProblem } from '../session-title';
+import type { OfflineCall } from './offline-calls';
 
 export interface SessionListDeps {
   randomHex: RandomHex;
@@ -52,11 +54,18 @@ export interface SessionListDeps {
 // one disposed, once each.
 export interface SessionList extends Omit<
   SessionsMainExports,
-  'holdConnects' | 'activate'
+  'holdConnects' | 'activate' | 'offlineEnv' | 'replayCalls'
 > {
   // `SessionsMainExports.activate`; true when it wrote the rows or the selection.
   activate(sessionId: string): boolean;
   tools(): ToolDefinition[];
+  // The live contributions' offline answers merged by tool name, in
+  // contribution order.
+  offlineTable(): Record<string, OfflineAnswer>;
+  // Routes a call the relay logged while the app was closed through the normal
+  // call path, every guard seeing it `replayed`, to the owned session holding
+  // `hostSessionId`, else a connected one; rejects when no session holds it.
+  replayCall(hostSessionId: string, call: OfflineCall): Promise<ToolResult>;
   onToolsChanged(listener: () => void): Disposable;
   state(): SessionsState;
   // The user's close, which every close guard must allow; with `atOnce` it
@@ -83,6 +92,7 @@ export interface SessionList extends Omit<
 interface Contribution {
   tools: ToolDefinition[];
   start(session: AgentSession): ToolSession;
+  offline: Readonly<Record<string, OfflineAnswer>>;
 }
 
 // One connected or owned session: one tool session per contribution, and each
@@ -563,15 +573,16 @@ export function createSessionList(deps: SessionListDeps): SessionList {
 
   // Asks each guard registered when the call came, in order, then calls the
   // tool's handler; `SessionsMainExports.addToolCallGuard` states the rules.
-  // `callerRefusal` returns the error refusing the caller, or null; it is asked
-  // before the guards and again after a guard wait. The ended, refusal and
-  // abort checks follow only a guard wait: with no guard the handler is called
-  // in the same tick.
+  // `replayed` goes on the call the guards see. `callerRefusal` returns the
+  // error refusing the caller, or null; it is asked before the guards and again
+  // after a guard wait. The ended, refusal and abort checks follow only a guard
+  // wait: with no guard the handler is called in the same tick.
   const routeCall = async (
     entry: SessionEntry,
     name: string,
     args: unknown,
     context: ToolCallContext,
+    replayed: boolean,
     callerRefusal: () => Error | null = () => null,
   ): Promise<ToolResult> => {
     const refusalBeforeGuards = callerRefusal();
@@ -586,6 +597,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       tool: name,
       toolUseId: context.toolUseId,
       mainAgentOnly: mainAgentOnlyByTool.get(name) ?? false,
+      replayed,
     };
     const registrations = [...toolCallGuards];
     for (const registration of registrations) {
@@ -762,7 +774,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     return {
       session: entry.session,
       call: (name, args, context) =>
-        routeCall(entry, name, args, context, () => {
+        routeCall(entry, name, args, context, false, () => {
           const hostId = entry.session.info.sessionId;
           if (hostId === joinedHostId) {
             return null;
@@ -800,7 +812,15 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         }
         namesInThisContribution.add(tool.name);
       }
-      const contribution: Contribution = { tools, start };
+      const offline = options?.offline ?? {};
+      for (const name of Object.keys(offline)) {
+        if (!namesInThisContribution.has(name)) {
+          throw new Error(
+            `Offline answer names the tool "${name}", which the contribution does not list`,
+          );
+        }
+      }
+      const contribution: Contribution = { tools, start, offline };
       const started = startAllOrNone(
         entries.values(),
         (entry) => contribution.start(entry.session),
@@ -860,7 +880,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       deps.emit('connected', { ...entry.session, owned: false });
       return {
         session: entry.session,
-        call: (name, args, context) => routeCall(entry, name, args, context),
+        call: (name, args, context) =>
+          routeCall(entry, name, args, context, false),
         end: () => end(entry),
       };
     },
@@ -1038,6 +1059,26 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       setTitle(sessionId, 'user', title);
     },
     tools: () => contributions.flatMap((contribution) => contribution.tools),
+    offlineTable: () =>
+      Object.fromEntries(
+        contributions.flatMap((contribution) =>
+          Object.entries(contribution.offline),
+        ),
+      ),
+    async replayCall(hostSessionId, call) {
+      const holders = entriesHolding(hostSessionId);
+      const entry = holders.find((holder) => holder.owned) ?? holders[0];
+      if (entry === undefined) {
+        throw new Error(`No session holds host ${hostSessionId}`);
+      }
+      return routeCall(
+        entry,
+        call.tool,
+        call.arguments,
+        { toolUseId: call.toolUseId, signal: new AbortController().signal },
+        true,
+      );
+    },
     onToolsChanged: (listener) => toolsChanged.add(listener),
     state,
     endAll() {

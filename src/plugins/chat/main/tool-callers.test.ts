@@ -116,6 +116,7 @@ describe('callerGuard', () => {
     tool: 'set_workflow_step',
     toolUseId: 't1',
     mainAgentOnly: true,
+    replayed: false,
   };
 
   it.each<{

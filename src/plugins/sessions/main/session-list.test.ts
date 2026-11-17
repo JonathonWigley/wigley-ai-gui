@@ -531,6 +531,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: 't1',
         mainAgentOnly: true,
+        replayed: false,
       },
     },
     {
@@ -544,6 +545,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: null,
         mainAgentOnly: false,
+        replayed: false,
       },
     },
     {
@@ -563,6 +565,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: 't1',
         mainAgentOnly: false,
+        replayed: false,
       },
     },
     {
@@ -581,6 +584,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: 't2',
         mainAgentOnly: true,
+        replayed: false,
       },
     },
     {
@@ -600,6 +604,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: 't3',
         mainAgentOnly: true,
+        replayed: false,
       },
     },
   ])(
@@ -640,6 +645,95 @@ describe('createSessionList', () => {
       list.contributeTools([tool('a'), tool('a')], fakeContribution().start),
     ).toThrow(/"a"/);
     expect(list.tools().map((each) => each.name)).toEqual(['x']);
+  });
+
+  it('throws on an offline answer naming a tool the contribution does not list, adding none of it', async () => {
+    const { list } = setUp();
+    list.contributeTools([tool('x')], fakeContribution().start);
+    const connected = list.connect(info('/work/x'));
+    const handler = fakeContribution();
+
+    expect(() =>
+      list.contributeTools([tool('a')], handler.start, {
+        offline: { b: { result: RESULT, replay: false } },
+      }),
+    ).toThrow('Offline answer names the tool "b"');
+    expect(list.tools().map((each) => each.name)).toEqual(['x']);
+    expect(handler.started).toEqual([]);
+    await expect(connected.call('a', {}, CONTEXT)).rejects.toThrow(
+      'Unknown tool: a',
+    );
+  });
+
+  it("offlineTable lists each live contribution's offline answers by tool name", () => {
+    const { list } = setUp();
+    const asked: ToolResult = { content: [{ type: 'text', text: 'closed' }] };
+    const first = list.contributeTools(
+      [tool('a'), tool('b'), tool('c')],
+      fakeContribution().start,
+      {
+        offline: {
+          a: { result: asked, replay: false },
+          b: { result: RESULT, replay: true },
+        },
+      },
+    );
+    list.contributeTools([tool('d')], fakeContribution().start);
+
+    expect(list.offlineTable()).toEqual({
+      a: { result: asked, replay: false },
+      b: { result: RESULT, replay: true },
+    });
+
+    first.dispose();
+
+    expect(list.offlineTable()).toEqual({});
+  });
+
+  it("replayCall routes through every guard with the line's toolUseId", async () => {
+    const { list } = setUp();
+    const handler = fakeContribution();
+    list.contributeTools([tool('a')], handler.start, { mainAgentOnly: true });
+    const ownedSession = list.open(owned('host-1'));
+    const relay = list.connect(owned('host-1'));
+    const seen: GuardedToolCall[] = [];
+    let verdict: ToolCallVerdict = { kind: 'run' };
+    list.addToolCallGuard(async (call) => {
+      seen.push(call);
+      return verdict;
+    });
+    const call = {
+      tool: 'a',
+      arguments: { step: 'x' },
+      toolUseId: 'toolu_sub',
+      at: 1,
+      replay: true,
+    };
+
+    await list.replayCall('host-1', call);
+    await relay.call('a', {}, { ...CONTEXT, toolUseId: 'toolu_live' });
+    verdict = { kind: 'skip', text: 'not the main agent' };
+    await list.replayCall('host-1', call);
+
+    const replayed: GuardedToolCall = {
+      sessionId: ownedSession.session.id,
+      tool: 'a',
+      toolUseId: 'toolu_sub',
+      mainAgentOnly: true,
+      replayed: true,
+    };
+    expect(seen).toEqual([
+      replayed,
+      { ...replayed, toolUseId: 'toolu_live', replayed: false },
+      replayed,
+    ]);
+    expect(handler.calls.map((each) => each.args)).toEqual([
+      { step: 'x' },
+      {},
+    ]);
+    await expect(list.replayCall('host-2', call)).rejects.toThrow(
+      'No session holds host host-2',
+    );
   });
 
   it('lists contributed tools in contribution order', () => {

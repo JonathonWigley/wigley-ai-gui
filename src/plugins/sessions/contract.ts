@@ -204,6 +204,8 @@ export interface GuardedToolCall {
   readonly tool: string;
   readonly toolUseId: string | null;
   readonly mainAgentOnly: boolean;
+  // True for a call `replayCalls` routes from a calls file; false for every live call.
+  readonly replayed: boolean;
 }
 
 export type ToolCallVerdict =
@@ -212,8 +214,16 @@ export type ToolCallVerdict =
 
 export type ToolCallGuard = (call: GuardedToolCall) => Promise<ToolCallVerdict>;
 
+// A tool's answer while the app is closed, and whether the call replays onto its row when the app adopts the run.
+export interface OfflineAnswer {
+  readonly result: ToolResult;
+  readonly replay: boolean;
+}
+
 export interface ContributeToolsOptions {
   readonly mainAgentOnly?: boolean;
+  // Each listed tool's offline answer, by tool name. A tool left out answers that it did not run, and does not replay.
+  readonly offline?: Readonly<Record<string, OfflineAnswer>>;
 }
 
 // A project name for a session folder, or null when the namer names none.
@@ -229,12 +239,14 @@ export interface SessionsMainExports {
   // Starts the contribution's tool session in every live session, and in each
   // session that connects later. The handle's `dispose` ends those tool
   // sessions and frees the tool names; a second `dispose` does nothing. Throws
-  // on a tool name another contribution already holds, or one this contribution
-  // lists twice. A `start` that throws for a live session ends the tool sessions
+  // on a tool name another contribution already holds, one this contribution
+  // lists twice, or an `offline` key naming a tool this contribution does not
+  // list. A `start` that throws for a live session ends the tool sessions
   // already started, leaves no contribution, and rethrows. `mainAgentOnly` true
   // marks each of the contribution's tools main-agent-only, which every
-  // tool-call guard reads from the call; absent or false marks none. The marks
-  // go with the tool names when the handle disposes.
+  // tool-call guard reads from the call; absent or false marks none. `offline`
+  // joins the offline table written beside the tool list. The marks and the
+  // offline answers go with the tool names when the handle disposes.
   contributeTools(
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
@@ -329,6 +341,12 @@ export interface SessionsMainExports {
   // relaunched relay joins the row a plugin is about to open rather than
   // opening its own. Only a relay's hello waits: `connect` does not.
   holdConnects(until: Promise<unknown>): void;
+  // The environment a run the host may start while the app is closed carries: `WIGLEY_FORMS_OFFLINE` set to the
+  // calls folder. Empty in the self-test, which writes no endpoint files.
+  offlineEnv(): Readonly<Record<string, string>>;
+  // Routes each replayable call the relay logged for `hostSessionId` to that session's tool sessions, in order,
+  // through the guards, results dropped; then deletes the calls file. Resolves to the count routed; 0 with no file.
+  replayCalls(hostSessionId: string): Promise<number>;
 }
 
 export const sessionsMainKey: DependencyKey<
