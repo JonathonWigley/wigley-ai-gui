@@ -266,12 +266,12 @@ every part its contract adds.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Toasts through the shell layout](01-toast-part.md)
-- [ ] [Shell layout swap failure tests](02-shell-swap-failure-tests.md)
-- [ ] [Sessions split picker rows](03-sessions-picker-rows.md)
-- [ ] [Dialog frame hook and shared kit types](04-dialog-frame-hook.md)
-- [ ] [Style-only layout reload](05-style-only-reload.md)
-- [ ] [Editor boxes kept across a redraw](06-editor-boxes-keep.md)
+- [x] [Toasts through the shell layout](01-toast-part.md)
+- [x] [Shell layout swap failure tests](02-shell-swap-failure-tests.md)
+- [x] [Sessions split picker rows](03-sessions-picker-rows.md)
+- [x] [Dialog frame hook and shared kit types](04-dialog-frame-hook.md)
+- [x] [Style-only layout reload](05-style-only-reload.md)
+- [x] [Editor boxes kept across a redraw](06-editor-boxes-keep.md)
 
 ### Wave 2
 - [ ] [Dialog frames through each opener's layout](07-dialog-frames.md) — after 03, 04
@@ -303,7 +303,14 @@ every part its contract adds.
 Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 
 ### Groups
+- 01 · hard · 30b395aae · diff read + wave 1 compile (typecheck, lint clean after ff56db41b) · concerns: base kit spread assumes no this; default toast throw relies on createToasts catching; followups.md line 534 stale until task 10; the ToastTone type test moved to src/renderer/shell/toast-tone.test-d.ts (layer check), 01's Files lines still name the old path
+- 02 · hard · ec7888b62 · diff read + wave 1 compile · concerns: expected values read from the code, not a run
+- 03 · hard · 31d64c03a · diff read + wave 1 compile · concerns: test fakes need an overlay div and a stubbed getComputedStyle
+- 04 · hard · 5fcdb2c18 · diff read + wave 1 compile (layer check clean on dialog-frame.test-d.ts) · concerns: none
+- 05 · hard · 4cc9e04a1 · diff read + wave 1 compile · concerns: restyled narrowed to entries still in layouts; the leave-and-rejoin test is weaker
+- 06 · hard · 9dcfa2c14 · diff read + wave 1 compile (forms Pick fixed in ff56db41b) · concerns: keepFocusedBox Pick now needs destroyReleased (forms RoundViewDeps fixed); followups.md ~line 424 'at the text's end' stale
 ### Contract changes
 ### Rulings
+- 01: the ToastTone equality test lives in src/renderer/shell/toast-tone.test-d.ts, not layouts/layout.test-d.ts — the layer check bars layouts from importing src/contracts · group 01
 ### Review rounds
 ### Test gate

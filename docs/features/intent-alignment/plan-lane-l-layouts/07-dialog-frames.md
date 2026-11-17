@@ -1,6 +1,6 @@
 # 07 — Dialog frames through each opener's layout
 
-Status: not started
+Status: in progress
 Type: Parallel
 Wave: 2 · Depends on: 03, 04
 Plan: [plan.md](plan.md)

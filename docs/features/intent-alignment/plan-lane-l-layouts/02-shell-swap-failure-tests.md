@@ -1,6 +1,6 @@
 # 02 — Shell layout swap failure tests
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -79,3 +79,4 @@ Assertions, each row as one `expected` object compared whole:
 
 ## Proof
 
+Commit ec7888b62 · proof: diff read + wave 1 compile · concerns: expected values read from the code, not a run

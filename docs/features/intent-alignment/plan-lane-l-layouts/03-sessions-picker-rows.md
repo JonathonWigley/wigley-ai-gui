@@ -1,6 +1,6 @@
 # 03 — Sessions split picker rows
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -113,3 +113,4 @@ Commit:    one commit for the group: `src/plugins/sessions/layouts/layout.d.ts`
 
 ## Proof
 
+Commit 31d64c03a · proof: diff read + wave 1 compile · concerns: test fakes need an overlay div and a stubbed getComputedStyle
