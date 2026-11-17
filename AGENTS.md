@@ -268,7 +268,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `sessions.activity` and `sessions.place` slots, the last holding each session's selected tab, selection
                  count and hidden popups, `followRows`, and the row's `owner`: the plugin a row with no place in the side bar belongs to), session-title.ts (the title rules main and page share), main/ (the
                  session list — rows, their titles and project names (a registered namer's, chat's projects, else the origin repo's), the selected session, written to the `rows` and `selection` slots, tool routing — the
-                 `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
+                 `set_session_title` tool, relay, the hook route (`addHookHandler`: a relay hello with a `hook` field is one request and one reply, opening no session), endpoint files, MCP adapter → the only @modelcontextprotocol import),
                  page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections, then
                  the sections other plugins register through `addSection`, each claiming its own rows —
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
@@ -452,6 +452,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `unity-pool hold|release|open` for the panel, gives chat its pools' clone folders, hands its self-test script), page/ (the clone badge under
                  each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
                  Layout contract and the built-in `default` layout); `docs/features/unity-pool/design.md`
+  chatroom/      manifest.ts, contract.ts (the records, the `chatroom.rooms` slot holding each room's view and board, and the
+                 page's `chatroom.place` slot), main/ (the store behind `RoomStore` with its jsonl and memory adapters, the room
+                 service, the board, the five `chatroom_*` tools through sessions' `contributeTools`, the `chatroom.pre` and
+                 `chatroom.post` hook handlers through sessions' `addHookHandler`, delivery through chat's `send`, the dispatch
+                 and hand-back entries from `chat.agentEvent`, `addMirror`, its self-test script and the `seed` drive action),
+                 page/ (Chatroom mode, the row badge through sessions' `addRowPart`, the row activity, the layout preview),
+                 layouts/ (its Layout contract and `default` layout); `docs/features/chatroom/design.md`
   system-stats/  manifest.ts, contract.ts (the `system-stats.snapshot` slot), main/ (polls `services.systemStats` while a
                  page shows the panel, folds two samples into the snapshot with rates, groups and 60 s history, joins
                  `chat.session` pids with `sessions.rows` titles into one group per session's process tree, hands its
@@ -728,8 +735,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
   `Space z l`: forms' on `Space z l o`, the primer's on `Space z l p`, sessions' on `Space z l s`, chat's on
-  `Space z l c`, agents' on `Space z l a`, workflow's (Large's sample session in every stage) on `Space z l w` and
-  the audio picker's on `Space z l m`; the gallery's `Space z g`, which shows Gallery
+  `Space z l c`, agents' on `Space z l a`, workflow's (Large's sample session in every stage) on `Space z l w`,
+  the audio picker's on `Space z l m` and chatroom's on `Space z l r`; the gallery's `Space z g`, which shows Gallery
   mode, and its `Space z s`, which swaps the shell to a test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
@@ -1158,7 +1165,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/audio-picker/main/selftest-script.ts` for the audio picker,
   `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
-  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
   write and before the keys, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
