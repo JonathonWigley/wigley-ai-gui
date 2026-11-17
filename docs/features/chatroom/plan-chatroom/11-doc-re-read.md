@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · doc-only: a re-read of the docs written ahead against the landed code
 Wave: 6 · Depends on: 01, 02, 03, 05, 06, 07, 08, 09, 10 (04 struck)
@@ -80,3 +80,5 @@ Done when: the `plan-chatroom` grep, run as `grep -rn "plan-chatroom" wigley-ai-
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 62550ac3a · proof: diff read: 4 planned marks removed, the Done grep prints nothing; check_manifests and --against origin/main pass; check_pointers fails on a learning/candidates pointer that fails the same on origin/main · concerns: no code resolves a thread (design.md now says so); postHuman's comment says uncapped but bodyCap applies to the user's posts; check_pointers fails on main already (learning/candidates/ngc-capability-free-for-every-game.md:4)

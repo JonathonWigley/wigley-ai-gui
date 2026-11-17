@@ -230,7 +230,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 - [x] [Self-test script and drive fixture](10-selftest.md) — after 08, 09
 
 ### Wave 6
-- [ ] [Doc re-read](11-doc-re-read.md) — after 01–10
+- [x] [Doc re-read](11-doc-re-read.md) — after 01–10
 
 ### Wave 7
 - [ ] [Final verification](12-final-verification.md) — after 01–11
@@ -249,6 +249,7 @@ Review base: 7c3eb9665
 - 08 · deep · f53249933 · diff read: every Produces present (manifest, chatroomMainPart, roster, tools, hook handlers, delivery, agent entries, room views, board feed, contract additions, chat.toolCaller, workflow.stageFinishes); typecheck passes; layer check now passes; oxfmt applied; oxlint one warning (no-useless-spread, board-feed.ts:400) · concerns: rebuilds_InOrder passes without the per-room chain (loads cached); 01/05 keep private ref-type lists beside MESSAGE_REF_TYPES; stale-touch rule sits in board-feed.ts, not board.ts; board-feed.test copies board.test fixtures; AGENTS.md plugin folder map lacks chatroom/; a repeated sessions.connected for a tracked row does not refresh; oxlint no-useless-spread warning
 - 09 · hard · c8d08397f · diff read: mode, side bar, board, log, composer, row badge, asks-you activity, chatroom.place, layouts and zlr preview present; typecheck and lint clean (one prior 08 warning); tests wait for the test gate · concerns: nothing run before the gate; start.test.ts leans on harness assumptions (mode element, disposed writer value persists, default layout drawn before showLayouts); composer tests find the box by class through kit.textBox; i/r hints sit in the board part for want of a log-header part; main/start.ts top comment line runs long; AGENTS.md lacks chatroom/ in the folder map and zlr in Space z l (task 11)
 - 10 · hard · 9e87c6852 · diff read: seedChatroomFixture, chatroomSelfTestScript, chatroom.seed drive action present; every page line and command matches 09; typecheck and lint clean; self-test waits for the test gate · concerns: open() must finish two launches, three waits and two posts inside the runner's 5 s shown-line wait; board rows reach chatroom.rooms only on a board-feed refresh; <A-h> from the composer and from the log not checked against the keys plugin
+- 11 · standard · 62550ac3a · diff read: 4 planned marks removed, the Done grep prints nothing; check_manifests and --against origin/main pass; check_pointers fails on a learning/candidates pointer that fails the same on origin/main · concerns: no code resolves a thread (design.md now says so); postHuman's comment says uncapped but bodyCap applies to the user's posts; check_pointers fails on main already (learning/candidates/ngc-capability-free-for-every-game.md:4)
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 - 02 Produces: SessionList.sessionOfHost(hostId) → sessionOf(info: SessionInfo); createHookRoutes takes sessionOf · why: row-id-first lookup (Lane H's connect order) · consumers: 02 only (08 consumes the routes, not the lookup) · lead, before dispatch
