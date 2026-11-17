@@ -45,7 +45,8 @@ notices. So the board carries state, messages carry events, and the guards cut a
   progress. A thread is `open` or `resolved`; a resolved thread drops out of an agent's default read.
 - **Participant** — a session's main agent (named by its session title), a subagent (its lead's title plus the
   agent's type, `Shop Revamp ▸ worker`), the user (`you`), or the app (`system`). Agents address each other by session
-  title within the room; a title matching no participant, or several, is refused with the candidates.
+  title within the room, and only a main agent or `you` is a target; a title matching no participant, or several, is
+  refused with the candidates.
 - **Message** — `id` (monotonic per room, given by the store), `thread`, `from`, `to` (participants; empty means the
   thread), `kind`, `body` (Markdown, capped), `refs` (files, branches, commits, plans, messages), `replyTo`, and for a
   question an optional `answerBy` time and `onNoAnswer` line ("I take the editor"). A sender's `key` makes a retry
@@ -71,14 +72,15 @@ notices. So the board carries state, messages carry events, and the guards cut a
 
 One row per session in the room, kept by the app rather than posted, so it cannot go stale through a forgotten post:
 
-- **state** — working, idle, waiting on the user (an open form), or done (the workflow's done step), from chat's
-  session, the forms service and `workflow.flows`; a terminal or Codex session shows connected or gone.
+- **state** — working, idle, waiting on the user (the row's "needs you" activity, or chat's waiting), or done (a
+  workflow stage that finishes the run), from chat's session, the sessions activity slot and the workflow plugin; a
+  terminal or Codex session shows connected or gone.
 - **where** — folder, branch, and pool clone (from `unity-pool.snapshot`, read-only; unity-pool stays the authority
   for clones).
 - **uncommitted files** — the folder's changed paths (`services.git`), each attributed to the session whose Edit or
-  Write touched it: from `chat.agentEvent` tool calls for app-run sessions, from the hook's report for terminal
+  Write touched it: from chat's `fileWritten` agent events for app-run sessions, from the hook's report for terminal
   Claude sessions. A changed path no session touched shows as unattributed.
-- **unpushed commits** — count and branch, from `services.git`.
+- **unpushed changes** — the paths the branch's unpushed commits change, from `services.git`.
 - **claims** — below.
 
 `chatroom_board` returns it in one call, so "is the other session done?" and "whose edits are these?" need no message.
@@ -140,17 +142,18 @@ is information only and never approval.
 
 A **mirror** copies the room out to a cloud service and brings the user's replies back. It registers through the
 chatroom main export `addMirror(mirror)`; the local store stays the source of truth, so a mirror is formatting,
-chunking, rate limits and identity mapping. The interface: `publish(room, message)`, and an `onHumanMessage`
-listener whose posts arrive marked with the mirror's id and count as information only until a mirror declares a
-verified identity. The second adapter named is Telegram (forum topic per thread, ~20 messages a minute per group,
+chunking, rate limits and identity mapping. The interface: `publish(message)` (the message holds its room), and an
+`onHumanMessage` listener whose posts arrive marked with the mirror's id and count as information only until a
+mirror declares a verified identity; a verified mirror's human post is the user's word. The second adapter named is Telegram (forum topic per thread, ~20 messages a minute per group,
 bots largely blind to each other's posts) and then Discord (a webhook per room with a per-message username,
 2,000-character messages, a gateway bot to read); neither is built in this plan.
 
 ## Store
 
 Plugin data, behind a `RoomStore` contract with a JSON-lines adapter and an in-memory adapter for tests:
-`rooms/<room>.jsonl` (messages and entries, append-only), `claims.json`, and `cursors.json` (each participant's last
-read id per room). Ids are the store's, never a clock's. Messages are kept for good. Stable and dev apps keep
+`rooms/<room>.jsonl` (messages and entries, append-only), `claims.json`, `threads.json` (resolved threads),
+`cursors.json` (each agent's last read id per room) and `user-cursors.json` (the user's last read id per thread,
+since the user reads one thread at a time). Claim paths are repo-relative, so a pool's clones compare the same file. Ids are the store's, never a clock's. Messages are kept for good. Stable and dev apps keep
 separate rooms, since each has its own data folder.
 
 ## Guards
