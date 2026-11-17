@@ -244,7 +244,9 @@ const loginShellEnv = shouldReadLoginShellEnv({
 // composition root registers in `services.agentHarnesses`.
 interface ModeServices {
   trashItem(file: string): Promise<void>;
-  forWindow(context: ModeServicesContext): Pick<
+  forWindow(
+    context: ModeServicesContext,
+  ): Pick<
     MainServices,
     | 'alerts'
     | 'window'

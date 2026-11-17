@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentHarness, AgentHarnessRegistry } from '../../../contracts/agent';
+import type {
+  AgentHarness,
+  AgentHarnessRegistry,
+} from '../../../contracts/agent';
 import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
 import { claudeCodeMainPart, claudeCommand } from './start';
 

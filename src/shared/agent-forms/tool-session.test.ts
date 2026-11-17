@@ -112,7 +112,10 @@ describe('createAgentFormToolSession', () => {
 
     expect(result).toEqual({
       content: [
-        { type: 'text', text: 'Bad form: questions must hold at most 20 items' },
+        {
+          type: 'text',
+          text: 'Bad form: questions must hold at most 20 items',
+        },
       ],
       isError: true,
     });

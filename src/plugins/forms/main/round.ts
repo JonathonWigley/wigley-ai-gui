@@ -467,7 +467,6 @@ export function recommendedBody(round: Round): FormBody {
   };
 }
 
-
 // Python's json.dumps(value, sort_keys=True, ensure_ascii=False) for the
 // strings, integers, lists and objects a fingerprint holds.
 function pythonJsonDumps(value: PythonJsonValue): string {

@@ -69,9 +69,9 @@ describe('questionFormat.parse', () => {
   ])(
     "reads the summary from summary, or from a saved round's question: $summary",
     ({ fields, summary }) => {
-      expect(
-        questionFormat.parse(withFields(fields), QUESTION_1).summary,
-      ).toBe(summary);
+      expect(questionFormat.parse(withFields(fields), QUESTION_1).summary).toBe(
+        summary,
+      );
     },
   );
 
@@ -136,8 +136,7 @@ describe('questionFormat.parse', () => {
 
   it('accepts an optional layout', () => {
     expect(
-      questionFormat.parse(question({ layout: 'compact' }), QUESTION_1)
-        .layout,
+      questionFormat.parse(question({ layout: 'compact' }), QUESTION_1).layout,
     ).toBe('compact');
     expect(questionFormat.parse(question(), QUESTION_1).layout).toBeNull();
   });

@@ -676,8 +676,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   },
   {
     name: 'a draft',
-    payload: () =>
-      roundType.payload(ROUND, 'draft', readFormBody(ROUND, {})),
+    payload: () => roundType.payload(ROUND, 'draft', readFormBody(ROUND, {})),
     expected: {
       outcome: 'draft',
       summary: DRAFT_SUMMARY,

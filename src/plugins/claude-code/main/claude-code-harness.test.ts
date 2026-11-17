@@ -1572,7 +1572,9 @@ describe('createClaudeCodeHarness', () => {
         'ended',
         {
           code: null,
-          error: expect.stringMatching(/\/bin\/claude.*\/proj.*set claude-code\.command$/),
+          error: expect.stringMatching(
+            /\/bin\/claude.*\/proj.*set claude-code\.command$/,
+          ),
         },
       ],
     ]);

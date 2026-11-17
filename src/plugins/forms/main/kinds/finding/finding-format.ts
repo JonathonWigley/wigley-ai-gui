@@ -466,17 +466,10 @@ function parseFindingRecommend(
       problem:
         `recommend names a choice, but no choice has action ` +
         `${recommendAction}, the recommend_action.`,
-      detail:
-        'Leave recommend out when the recommended action has no choices.',
+      detail: 'Leave recommend out when the recommended action has no choices.',
     });
   }
-  const recommend = parseRecommend(
-    raw,
-    title,
-    choices.length,
-    'solution',
-    at,
-  );
+  const recommend = parseRecommend(raw, title, choices.length, 'solution', at);
   const choiceAction = choices[recommend - 1].action;
   if (choiceAction !== recommendAction) {
     throw new RoundError({

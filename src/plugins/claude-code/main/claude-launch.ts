@@ -1,6 +1,9 @@
 import type { AgentStart } from '../../../contracts/agent';
 import type { Paths } from '../../../contracts/paths';
-import { NESTED_SESSION_ENV, SESSION_ROW_ENV } from '../../../shared/session-env';
+import {
+  NESTED_SESSION_ENV,
+  SESSION_ROW_ENV,
+} from '../../../shared/session-env';
 import { launchMode } from './claude-controls';
 
 export interface ClaudeLaunch {

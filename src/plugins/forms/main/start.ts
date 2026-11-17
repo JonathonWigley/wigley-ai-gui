@@ -33,11 +33,7 @@ import { formsManifest } from '../manifest';
 import { createLayoutPreview } from './preview/layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
 import { recommendedBody } from './round';
-import {
-  autoAnsweredPayload,
-  roundType,
-  withKnownLayouts,
-} from './round-type';
+import { autoAnsweredPayload, roundType, withKnownLayouts } from './round-type';
 import {
   FORMS_LAYOUTS_FOLDER,
   formsSelfTestScript,

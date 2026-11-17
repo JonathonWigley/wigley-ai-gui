@@ -1016,7 +1016,11 @@ describe('roundType.payload notices', () => {
   }
 
   it('gives an uncommented notice no comment key', () => {
-    const payload = roundType.payload(roundWithNotices(2), 'submitted', body([]));
+    const payload = roundType.payload(
+      roundWithNotices(2),
+      'submitted',
+      body([]),
+    );
 
     expect(payload.notices).toEqual([
       { index: 1, title: 'Fix 0', badge: 'Applied' },

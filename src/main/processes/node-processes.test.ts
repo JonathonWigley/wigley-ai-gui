@@ -11,10 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type {
-  ProcessRunOptions,
-  SpawnExit,
-} from '../../contracts/processes';
+import type { ProcessRunOptions, SpawnExit } from '../../contracts/processes';
 import { createNodeProcesses } from './node-processes';
 
 const processes = createNodeProcesses();
