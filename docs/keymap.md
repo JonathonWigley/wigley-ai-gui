@@ -140,8 +140,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
   `Alt+Shift+o`/`Alt+Shift+i`, the pane keys, `<Leader>bp`, `br`, `bd`, `bs`, `;`, `'`, and the `<Leader>w` and
   `<Leader>p` keys) does nothing outside Sessions mode, and a mode's
   view key (Backlog's and Practice's `<Leader>v` keys) does nothing while that mode is hidden: in another mode the key
-  belongs to that mode, never jumping the user away. Only keys that move focus on purpose switch modes or areas:
-  `<Leader>k` and `Alt+hjkl`.
+  belongs to that mode, never jumping the user away. A key switches modes or areas only when that is its job:
+  `<Leader>k`, `Alt+hjkl`, `<Leader>bn` (a new session), `<Leader>wo` (opens the plan in Docs), the `<Leader>z`
+  previews and `Cmd+,` (Settings).
 - **Cmd** is for OS-convention app actions only: `Cmd+Enter` send or submit, `Cmd+w` close, the
   summon chord, `Cmd+,` Settings. Nothing else takes Cmd, but Practice's `Cmd+'` Run, which
   matches LeetCode's own key, beside its `Cmd+Enter` Submit. The two

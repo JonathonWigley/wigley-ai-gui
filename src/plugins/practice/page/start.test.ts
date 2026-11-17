@@ -701,7 +701,7 @@ describe('practicePagePart', () => {
 
   it.each<{
     case: string;
-    start: 'hidden' | 'shown' | 'open' | 'holding';
+    start: 'shown' | 'open' | 'holding';
     refusals: string[];
     toggles: string[];
   }>([

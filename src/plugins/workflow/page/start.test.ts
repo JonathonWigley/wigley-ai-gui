@@ -413,6 +413,25 @@ describe('workflow page part', () => {
     },
   );
 
+  // Breaks: a workflow key acting on a session the user cannot see, from
+  // another mode.
+  it.each([
+    'mainAction',
+    'toggleFinishedWaves',
+    'toggleHeadless',
+    'toggleSidePane',
+  ] as const)('engineKeys_NoShownSession_DoNothing %s', async (command) => {
+    const { harness, runs } = startWorkflow();
+
+    harness.started().commands[command]({ arg: undefined });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(runs).toEqual([]);
+    expect(harness.logs.map((line) => line.message)).not.toContain(
+      'side pane hidden',
+    );
+  });
+
   // Chat's `chat.session` value for s1, as chat writes it.
   function chatInfo(fields: Partial<ChatSessionInfo> = {}): ChatSessionInfo {
     return {

@@ -41,7 +41,7 @@ import {
 
 type WorkflowApi = PageApi<typeof workflowManifest, ChannelShape>;
 
-// The engine's commands a key runs on the selected session.
+// The engine's commands a key runs on the session Sessions mode shows.
 type SessionCommand = 'mainAction' | 'toggleFinishedWaves' | 'toggleHeadless';
 
 const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
@@ -53,10 +53,11 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // drawn until its row leaves and drawing no flow whose row has left, and holds the
 // page half of each workflow, which `addWorkflow` extends; each workflow takes one
 // side part. `stageAction` runs the view's gate for the session and action its arg
-// names; each engine key runs it on the selected session, each button on the
-// session it draws. A `chat.session` change that flips a session's headless
-// flag draws its parts again. `toggleSidePane` shows or hides the pane in
-// every session, kept in `uiState`. `openPreview` steps chat's preview session
+// names; each engine key runs it on the session Sessions mode shows, each
+// button on the session it draws. A `chat.session` change that flips a
+// session's headless flag draws its parts again. `toggleSidePane` shows or
+// hides the pane in every session, kept in `uiState`, and does nothing while
+// Sessions mode shows no session. `openPreview` steps chat's preview session
 // through every workflow's samples (`createPreview`).
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
@@ -190,6 +191,10 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       runKey(workflowStageActionCommand, { sessionId, action: command });
     };
     const toggleSidePane = () => {
+      if (sessions.shownSessionId() === null) {
+        log('side pane key ignored: no shown session');
+        return;
+      }
       const isHidden = services.uiState.get(SIDE_PANE_HIDDEN_KEY) !== true;
       services.uiState.set(SIDE_PANE_HIDDEN_KEY, isHidden);
       view.setSidePaneHidden(isHidden);

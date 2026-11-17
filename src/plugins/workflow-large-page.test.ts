@@ -235,8 +235,8 @@ function countingEngineTimers(live: Set<number>): PagePart {
 // live timers and `advance` moves its clock, `setLayouts` shows Large's layouts.
 // `invoked` records Large's `runAction` calls; `logged` reads the engine's lines;
 // `largeLogged` Large's; every session named `a`, `b` or `s1` reads as `proj`.
-// `selected` sets the session Sessions mode shows, the one the commands run on; `stageActions` reads the arg
-// of each `workflow.stageAction` run heard; `commands` is another plugin's.
+// `selected` sets the session Sessions mode shows, the one the commands run on;
+// `stageActions` reads the arg of each `workflow.stageAction` run heard; `commands` is another plugin's.
 function setUp() {
   const invoked: LargeActionRequest[] = [];
   const openedDocs: string[] = [];
@@ -319,7 +319,11 @@ function setUp() {
     setSidePaneHidden(hidden: boolean) {
       if (hidden !== isPaneHidden) {
         isPaneHidden = hidden;
+        // The key acts only while Sessions mode shows a session.
+        const wasShown = shown;
+        shown ??= 'a';
         void commands().run('workflow.toggleSidePane');
+        shown = wasShown;
       }
     },
     // A session leaving and coming back: the engine forgets what it kept for it.
