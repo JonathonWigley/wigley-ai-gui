@@ -56,7 +56,7 @@ changes with the plugin. The registry is core, as the agent-harness registry is,
 depends on `demo`: the demo plugin reads the registry, and turning it off turns off nothing else.
 
 **Coverage.** Every built-in plugin registers at least one step or declares why it has none, in
-its manifest's `demoSkip` (`demoSkip: 'the global summon shortcut acts outside the window'`).
+its manifest's `demoSkip` (`demoSkip: 'Its global summon shortcut acts from outside the window.'`).
 The demo's self-test script (`npm run selftest -- --plugin demo`) starts the demo and fails on
 each plugin that does neither. A new plugin lands with its step or its skip reason.
 
@@ -75,16 +75,21 @@ registers it when the demo starts and disposes it at Stop, in the live app as in
   their folder among recent folders.
 - They run in the demo's scratch folder, in the demo plugin's data, and Stop closes every one
   through chat's `closeSessionsIn`.
-- They draw in their own **Demo** section at the top of the side bar. While the demo runs the
-  side bar shows only that section; `Space d h` shows the real sessions again.
-- A step drives its sessions through the fake's triggers (`fake: tool`, `fake: permission`,
-  `fake: workflow feature`, …) and, for anything else, by emitting entries on the session's fake
-  process from its main half.
+- They draw in their own **Demo** section. While the demo runs the side bar shows only that
+  section (a step may show its own section instead for its length, as the Retro step does);
+  `Space d h` shows the real sessions again, with the Demo section after Favorites and Recent.
+- Leaving a step closes the sessions it launched.
+- A step drives its sessions through the fake's triggers (`fake: tool`, `fake: permission`, …)
+  and, for anything else, by emitting entries on the session's fake process from its main half.
+  The `fake: workflow …` triggers are not used: they write the user's workflow state, so the
+  workflow steps show sample flows on the page instead, and workflow opens no flow for a demo
+  session.
 
 ## Real state stays untouched
 
-No step reads or writes the user's real state. Each plugin's step shows sample data, and its
-actions do nothing on that data:
+No step writes the user's real state, and none shows the user's sessions, rounds, schedules,
+follow-ups or docs. Each plugin's step shows sample data, and its actions do nothing on that data.
+The Settings and keys steps show the user's own settings and keymap, read only:
 
 - **Unity pool**: the badge and panel show sample clones; Hold, Release and Open do nothing on
   them.
@@ -97,7 +102,7 @@ actions do nothing on that data:
 - **Docs**: sample pages from the scratch folder; the user's docs index is never rebuilt.
 
 **Off-by-default plugins** (agent lines, the usage tab line, the docs session tab, and any later
-one) start in memory for the demo's run, through the plugin switch's `runForNow`, so their steps
+one) start in memory for the demo's run, through the plugin switch's `runDisabledForNow`, so their steps
 can show; `settings.json` is never written, and Stop restores the user's list.
 
 The **Live view** step streams a real window — the Unity editor when one is running, else the
@@ -108,9 +113,9 @@ left.
 
 Under the step list, the Demo panel holds the current step's **step agent**: a real Claude
 session, one conversation per step (scoped-agents, scope = the step id), working in the clone the
-app was built from (the dev app's own repo in the dev app). Each message carries the step's id,
-plugin, files, caption and current beat, so the user can ask for a change to the feature on
-screen. Through agent-commands' `run_command` the agent can jump the demo (`demo.goTo`), step it,
+app was built from (the dev app's own repo in the dev app). Its instructions carry the step's
+id, plugin, title, caption and files, and tell it to read the `demo.run` slot (agent-commands'
+`read_state`) for the current beat, so the user can ask for a change to the feature on screen. Through agent-commands' `run_command` the agent can jump the demo (`demo.goTo`), step it,
 reset the step or stop the demo. The conversations persist across demo runs, as Backlog's
 assistant does; Stop leaves them.
 

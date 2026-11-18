@@ -428,7 +428,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   demo/          manifest.ts, contract.ts (the `demo.run` slot: running, step, beat, autoplay), main/ (the run: the
                  demo harness registered while it runs, the scratch folder, demo sessions through chat's ephemeral
                  `launch`, the main halves of steps from `services.demoSteps`, off-by-default plugins through the
-                 plugin switch's `runForNow`, one scoped-agents step agent per step, the real-session step, its
+                 plugin switch's `runDisabledForNow`, one scoped-agents step agent per step, the real-session step, its
                  self-test script with the coverage check), page/ (the Demo panel in the right bar: the step list over
                  the step agent's pane; the caption in the status bar; the Demo side-bar section through sessions'
                  `addSection` and `showOnly`; autoplay; the `Space d` commands), layouts/ (the demo Layout contract and
