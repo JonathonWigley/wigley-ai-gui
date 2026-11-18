@@ -1,6 +1,6 @@
 # 27 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: every group (runs after `wigley:make`'s test gate)
 Plan: [plan.md](plan.md)
@@ -104,3 +104,5 @@ it is reported not reached with its reason. Report each check with its result, a
 8 and 10.
 
 ## Proof
+
+Commit ffa21a081 · proof: 22 checks: 18 pass after fixes (1 via 1efa57db1, 15 via 715fe728f, 19-20 via ffa21a081 step fixes, 22 via 938f257a4), 6 and 13 approximated, 16 and 18 not reached (CLI cancels /compact on Ctrl+C; needs two real profiles). Full suite 16531/16531 after the fixes. · concerns: check 19's Space z f c step was struck by group 23; check 22 needs a non-docs-owned session (chat.start)

@@ -863,3 +863,9 @@ because the earlier items rewrite many of these tests anyway.
   one window", "temp file only, target present" and "temp file then rename". They fail on `main` as well, 2 of 5 runs
   alone and once in a full suite run, with no change to the watcher. They depend on real file-system event timing.
   Options: drive the watcher with a fake event source, or widen the window the rows wait on.
+- **Every session open runs a Docs index load** — *needs a feature plan*: each session's Docs tab (docs-session-tab) is
+  shown as its row opens, before the Chat tab takes over. Its first-show load (`showFirstTime`, `hasRun` in
+  `src/plugins/docs/page/docs-view.ts`) therefore runs a `docs_index.py` index read and a status fetch for every session
+  that opens, even one where the user never opens Docs. The chat self-test log shows `Docs tab shown` then `session
+  index read` for each of its 4 sessions. This may be intended. Options: defer the first load until the Docs tab is
+  shown by the user, or keep it and confirm the cost is fine.
