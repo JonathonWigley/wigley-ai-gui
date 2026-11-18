@@ -55,14 +55,15 @@ function openRound(): FormsState {
   });
 }
 
-// Pane deps over `contributions` whose commands register every forms
-// command, each run recorded.
 // Appends a new frame to `parent` and returns it, as placing a new box does.
 function placeFakeFrame(parent: HTMLElement): HTMLElement {
   const frame = asHtml(new FakeElement('div'));
   parent.append(frame);
   return frame;
 }
+
+// Pane deps over `contributions` whose commands register every forms
+// command, each run recorded.
 
 function fakePaneDeps(contributions: FormsContributions) {
   const keysFor = vi.fn(() => null);

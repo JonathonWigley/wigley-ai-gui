@@ -73,8 +73,9 @@ import { sessionTitle } from './view-model';
 // `uiState` keeps the rail's dragged width, which every round's rail opens at;
 // `timers` runs each round's split resize prompt linger. `commands`,
 // `contributions` and `state` reach every round view's kits and cards, and
-// `commands` and `state` the cancel prompt's kits. Each round view is a drop target through `drops`, typing files into the round's
-// box used last. `savedPlaces` holds the places the last page saved, read once
+// `commands` and `state` the cancel prompt's kits. Each round view is a drop
+// target through `drops`, typing files into the round's box used last.
+// `savedPlaces` holds the places the last page saved, read once
 // at start: a round it holds was shown before the reload, and its popup comes
 // back hidden or shown as that page left it.
 export interface FormsViewDeps {

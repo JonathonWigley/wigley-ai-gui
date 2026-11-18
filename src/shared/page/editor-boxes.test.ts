@@ -231,7 +231,7 @@ describe('createEditorBoxes', () => {
     expect(boxes.boxOf(created[3].editor)).toEqual(notes);
   });
 
-  it('refuses a box mounted twice, and focusing a box never mounted', () => {
+  it('refuses to focus a box never placed, or one released', () => {
     const { boxes } = setup();
     expect(() => boxes.focus({ formId: 'f9', key: 'f9/note' })).toThrow(
       /f9\/note/,

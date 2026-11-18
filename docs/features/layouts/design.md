@@ -107,8 +107,8 @@ A layout draws every pane, and every repeated row, card or entry of its owner's 
 - the lifecycle of dialogs, prompts and toasts: the scrim, showing and hiding, keys, focus, timing and removal; the
   layout draws their frames and bodies (each owner's `dialogFrame` and `confirmBody`, and the shell's `toast`)
 - the saved state a status line shows, which a layout places through its kit (`saveStatus`)
-- which keys a cursor row's prompt shows; the layout draws each one from the row's `prompt` input through
-  `kit.keyHint`, and forms' review row and notice line carry their prompts inside the kit's part
+- which keys a cursor row's prompt shows; the layout draws each one from its input through `kit.keyHint`: the row's
+  `prompt`, or, where the row is kept across a cursor move (settings, notes), the `cursorPrompt` part's `actions`; and forms' review row and notice line carry their prompts inside the kit's part
 
 A layout's CSS restyles only under its own root: every part root carries `data-layout="<name>"` and
 `data-layout-owner="<owner>"`, so two owners' layouts of one name never share selectors. The default's
@@ -129,7 +129,7 @@ does.
 | Owner | Setting | Surfaces |
 | --- | --- | --- |
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; each toast; the five chrome frames take the layout's CSS |
-| `forms` | `forms.layout` | question, finding and notice cards, `cards.kinds` (a card per plugin kind id) and `cards.other` (the card of a plugin kind with no `kinds` builder); head, rail, review and notices panes; the cancel prompt's frame (`dialogFrame`) and body (`confirmBody`), picked by the setting alone |
+| `forms` | `forms.layout` | question, finding and notice cards, `cards.kinds` (a card per plugin kind id) and `cards.other` (the card of a plugin kind with no `kinds` builder); head, rail, review and notices panes; the rail's head and foot strips (`railHead`, `railFoot`) and the item pager (`pager`); the cancel prompt's frame (`dialogFrame`) and body (`confirmBody`), picked by the setting alone |
 | `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session header; the composer and its status line, a `/` completion row's description (`completionDescription`), the attachments, the picker rows and section headings (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time and profile on its side-bar row (`rowClock`, `rowProfile`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes; the column strips (`tasksHead`, `itemsHead`, `tasksFoot`, `cardEdge`, `reviewFooter`); the cancel confirm's frame (`dialogFrame`) and body (`confirmBody`) |
 | `audio-picker` | `audio-picker.layout` | the head, moment, candidate, None of these and notes parts; the cancel prompt's frame (`dialogFrame`) and body (`confirmBody`) |
@@ -198,7 +198,8 @@ can be iterated in place. The sample sends nothing and raises no notification or
   so its text, cursor, vim mode and undo survive, as chat's composer box always has.
   `src/shared/page/editor-boxes.ts` holds each box's frame and editor: a redraw releases the boxes the old draw placed
   and places them again, and destroys a box it does not place again. Forms, the primer and the audio picker redraw only
-  the parts whose picked layout changed. A save that changes only a layout's `.css` files raises its style revision
+  the cards, panes and strips whose picked layout changed; the primer's and audio picker's cancel prompts draw again
+  on every reload, and forms' only when its pick changed. A save that changes only a layout's `.css` files raises its style revision
   alone, which re-links `layout.css` with no redraw; a stylesheet the layout's own JS loads follows the module's
   revision, so a save of it shows only after a code file is saved too. A page reload restores chat's draft and the attached images from chat's page slots
   (`chatPlaceSlot`, `chatDraftImagesSlot`). Boxes are kept, not snapshotted: a snapshot through `TextEditor` would

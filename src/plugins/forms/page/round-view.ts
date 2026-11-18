@@ -120,9 +120,11 @@ export interface RoundViewDeps {
 // its editor kept; the round's focused box takes focus again, the main column
 // keeps its scroll while the round shows the same item, and the rail shows
 // the focused item's entry. `setLayouts` picks the round's layouts again from
-// `shown` and draws again only the cards and panes whose pick changed, in
-// place, keeping every other part's element, boxes and anchors, the focused
-// box and the main column's scroll; nothing when no pick changed.
+// `shown` and draws again only the head, cards, panes and strips whose pick
+// changed, in place, keeping every other part's element, boxes and anchors,
+// the focused box and the main column's scroll; nothing when no pick changed.
+// A round whose page kinds differ from the built ones is rebuilt whole, as
+// `rebuild` does.
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
 // `resizeTarget` is the view's rail | main split, which the resize keys move
 // while the round shows.
@@ -192,7 +194,8 @@ interface ChromeStrip<Input extends object> {
 // from `shown`. A render only updates it, each strip (the rail head and foot,
 // the item pager) drawing again when its input changed, the
 // rail taking the latest dragged width of any round; new layouts draw again
-// only the cards, panes and strips whose pick changed, keeping the rail's
+// only the head, cards, panes and strips whose pick changed (every part when
+// the round's page kinds changed), keeping the rail's
 // dragged width, every box's editor, the focused box and the main column's
 // scroll. Every key hint is an
 // anchor, which redraws itself on a keymap change; the change draws the

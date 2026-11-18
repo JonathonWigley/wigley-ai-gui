@@ -341,10 +341,12 @@ export interface ConfirmBodyKit extends FormsBaseKit, ConfirmButtonsKit {}
 // returns no element appended to `parent`, is drawn by `default` instead (a plugin kind's card by its `other`).
 export interface Layout {
   cards?: Partial<LayoutCards>;
-  // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
+  // Drawn above the cards in the forms view, once per round and again after each keymap change and when a reload changes
+  // its layout, into a slot carrying
   // `data-layout-owner="forms"` and `data-layout="<name>"`.
   head?(parent: HTMLElement, round: RoundInfo, kit: FormsBaseKit): void;
-  // The rail beside the cards, between the `railHead` and `railFoot` parts, built once per round.
+  // The rail beside the cards, between the `railHead` and `railFoot` parts, built once per round and again when a reload
+  // changes its layout.
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   // Over the rail, drawn again when its input changes.
   railHead?(
@@ -360,10 +362,11 @@ export interface Layout {
   ): LayoutPane;
   // Over the cards, under the head, drawn again when its input changes.
   pager?(parent: HTMLElement, input: PagerInput, kit: PagerKit): LayoutPane;
-  // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.
+  // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round and again
+  // when a reload changes its layout.
   review?(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
   // The round's one notices page, the last stop after every other rail stop, plugin kinds' included, shown in place of
-  // the cards while its stop is focused, built once per round.
+  // the cards while its stop is focused, built once per round and again when a reload changes its layout.
   notices?(
     parent: HTMLElement,
     input: NoticesInput,
