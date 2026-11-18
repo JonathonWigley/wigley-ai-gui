@@ -1,6 +1,6 @@
 # 03 — Self-test runs a playtest command
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · async wait on a slot in the self-test fixture, and a new fake harness turn other scripts may meet
 Wave: 3 · Depends on: 02

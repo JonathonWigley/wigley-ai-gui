@@ -1,6 +1,6 @@
 # 02 — Playtest watch and the app's pick in LiveTools
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · crosses chat's replay lifecycle and LiveTools' async show (in-flight picks, generations)
 Wave: 2 · Depends on: 01
@@ -218,4 +218,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 74a7701c7 · proof: diff read: playtestStarted, playtestStopped, createPlaytestWatch, PlaytestWatch present; wave 2 tsc --noEmit passes · concerns: commandOf copied from chat-sessions.ts (drift risk); tests rely on entries.on hearing puts after a late publish; table 6 agent-first row answers lists by index
