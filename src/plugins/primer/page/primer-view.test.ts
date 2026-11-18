@@ -109,6 +109,7 @@ function fakeHost(inserted: Inserted[], created: CreatedEditor[]): EditorHost {
     typeInto: () => {},
     onPendingKeys: () => ({ dispose: () => {} }),
     cancelPendingKeys: () => {},
+    defineEx: () => ({ dispose() {} }),
     setKeymap: () => {},
   };
 }

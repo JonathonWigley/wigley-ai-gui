@@ -169,6 +169,15 @@ export interface EditorOptions {
   hidesModeLine?: boolean;
 }
 
+// What vim read after an ex command's name: `bang` for a `!` straight after
+// it, and the rest of the text, trimmed.
+export interface ExCall {
+  argString: string;
+  bang: boolean;
+}
+
+export type ExHandler = (editor: TextEditor, command: ExCall) => void;
+
 export interface EditorHost {
   // A small prose box: no gutter, no language; it reports focus and blur, and
   // offers `options.completions` when given.
@@ -207,6 +216,14 @@ export interface EditorHost {
   // Discards the unfinished sequence, as Esc does, without running the bind
   // on Esc; does nothing when no keys are pending.
   cancelPendingKeys(): void;
+  // Defines `:name` in every editor this host created or will create: vim
+  // runs it when the typed name is a start of `name` no shorter than `prefix`,
+  // and `handler` hears the editor it ran in. Throws on a name that is not
+  // letters only, on a name defined already (`write`, `quit`, `wq` and `xit`
+  // among them), on a prefix another definition holds, and on a name or
+  // prefix that would take one of vim's own commands. After the returned
+  // handle's `dispose`, `:name` reports an unknown command.
+  defineEx(name: string, prefix: string, handler: ExHandler): Disposable;
   // Replaces the keymap every editor follows, at once in every open editor and
   // in every editor created after. The caller has checked the keymap with
   // `requireUnambiguousEditorBinds`.

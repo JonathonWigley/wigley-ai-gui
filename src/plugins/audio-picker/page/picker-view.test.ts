@@ -101,6 +101,7 @@ function fakeHost(
     typeInto: () => {},
     onPendingKeys: () => ({ dispose: () => {} }),
     cancelPendingKeys: () => {},
+    defineEx: () => ({ dispose() {} }),
     setKeymap: () => {},
   };
 }

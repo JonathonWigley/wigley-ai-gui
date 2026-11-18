@@ -18,6 +18,7 @@ import {
   type EditorEvents,
   type EditorScroll,
   type EditorOptions,
+  type ExHandler,
   type FileChipDrawing,
   type FocusOptions,
   type ScrollStep,
@@ -34,12 +35,10 @@ import type {
 } from '../../contracts/keymap';
 import type { Disposable } from '../../contracts/disposable';
 import type { FuzzyMatcher } from '../../contracts/fuzzy';
+import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
-import {
-  DOCUMENT_EX_COMMANDS,
-  type DocumentExEvent,
-  documentExEvent,
-} from './document-ex-commands';
+import { DOCUMENT_COMMANDS } from './document-ex-commands';
+import { errorText } from '../../shared/error-text';
 import { fileChipsIn } from '../../shared/page/file-drop/file-chips';
 import {
   type EditMode,
@@ -52,6 +51,11 @@ import { defineChipMotions } from './chip-motions';
 import { codeColours } from './code-colours';
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
+import {
+  type ExDefinition,
+  exCallOf,
+  exDefinitionProblem,
+} from './ex-definitions';
 import { isScrolledToEnd, scrollStepPx } from '../../shared/content-scroll';
 import { createListeners } from '../../shared/listeners';
 import { findLanguageByFile, loadLanguage } from './languages';
@@ -65,11 +69,13 @@ import {
 
 type VimEditor = Parameters<typeof Vim.handleEx>[0];
 
-// `answerEx` raises a document editor's ex command events; a box has none.
+type ExCommand = Parameters<typeof Vim.defineEx>[2];
+
+// `documentEvents` hears a document editor's ex commands; a box has none.
 interface HostedEditor {
   view: EditorView;
   editor: TextEditor;
-  answerEx?: (event: DocumentExEvent) => void;
+  documentEvents?: DocumentEditorEvents;
 }
 
 function vimEditorOf(view: EditorView): VimEditor {
@@ -156,33 +162,71 @@ function defineBindCommands(
   });
 }
 
+// Files `name` in `defined` and gives vim `command` for it. Vim
+// (@replit/codemirror-vim-core 0.1.0) has no call to remove or read back an ex
+// command, so the dispose, while `defined` still holds this definition, leaves
+// a stub that reports `:name` as unknown.
+function defineHostEx(
+  defined: Map<string, ExDefinition>,
+  name: string,
+  prefix: string,
+  command: ExCommand,
+): Disposable {
+  const definition: ExDefinition = { prefix };
+  Vim.defineEx(name, prefix, command);
+  defined.set(name, definition);
+  return {
+    dispose: () => {
+      if (defined.get(name) !== definition) {
+        return;
+      }
+      defined.delete(name);
+      Vim.defineEx(name, prefix, () => {
+        throw new Error(`Not an editor command ":${name}"`);
+      });
+    },
+  };
+}
+
+// A plugin's ex command: `handler` hears the editor it ran in, and a throw
+// from it is logged rather than left to vim's prompt.
+function definePluginEx(
+  defined: Map<string, ExDefinition>,
+  hosted: HostedEditor[],
+  log: Log,
+  name: string,
+  prefix: string,
+  handler: ExHandler,
+): Disposable {
+  const problem = exDefinitionProblem(name, prefix, defined);
+  if (problem !== null) {
+    throw new Error(problem);
+  }
+  return defineHostEx(defined, name, prefix, (cm, params) => {
+    const { editor } = hostedEntryOf(cm, hosted);
+    try {
+      handler(editor, exCallOf(params.argString));
+    } catch (error) {
+      log('editor', `ex command ${name} failed: ${errorText(error)}`);
+    }
+  });
+}
+
 // Each document ex command raises its event in the document editor it ran in,
 // and does nothing in a box. Defining one replaces vim's own command of that
 // name, such as `write`, which saves through a handler the adapter leaves unset.
-function defineDocumentExCommands(hosted: HostedEditor[]) {
-  for (const { name, prefix } of DOCUMENT_EX_COMMANDS) {
-    Vim.defineEx(
-      name,
-      prefix,
-      (cm: VimEditor, params: { argString?: string }) => {
-        const event = documentExEvent(name, params.argString);
-        hostedEntryOf(cm, hosted).answerEx?.(event);
-      },
-    );
-  }
-}
-
-function raiseDocumentEx(events: DocumentEditorEvents, event: DocumentExEvent) {
-  switch (event.kind) {
-    case 'write':
-      events.write();
-      break;
-    case 'quit':
-      events.quit(event.force);
-      break;
-    case 'writeQuit':
-      events.writeQuit();
-      break;
+// The host never disposes them.
+function defineDocumentCommands(
+  defined: Map<string, ExDefinition>,
+  hosted: HostedEditor[],
+) {
+  for (const command of DOCUMENT_COMMANDS) {
+    defineHostEx(defined, command.name, command.prefix, (cm, params) => {
+      const { documentEvents } = hostedEntryOf(cm, hosted);
+      if (documentEvents !== undefined) {
+        command.raise(documentEvents, exCallOf(params.argString));
+      }
+    });
   }
 }
 
@@ -898,7 +942,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     isKeymapApplied = true;
   };
 
-  defineDocumentExCommands(hosted);
+  const exDefinitions = new Map<string, ExDefinition>();
+  defineDocumentCommands(exDefinitions, hosted);
   defineChipMotions();
   const leaving = (left: EditorView) =>
     discardUnfinishedInput(vimEditorOf(left));
@@ -910,7 +955,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     view: EditorView,
     modeChanged: (mode: VimMode) => void,
     editorOf: (shared: TextEditor) => E,
-    answerEx?: (event: DocumentExEvent) => void,
+    documentEvents?: DocumentEditorEvents,
   ): E {
     const cm = vimEditorOf(view);
     requireKeyBuffer(cm);
@@ -956,7 +1001,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
         queueMicrotask(() => view.destroy());
       },
     });
-    hosted.push({ view, editor, answerEx });
+    hosted.push({ view, editor, documentEvents });
     return editor;
   }
 
@@ -990,7 +1035,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
           scrollBy: (step, direction) =>
             scrollEditor(view, vimEditorOf(view), step, direction),
         }),
-        (event) => raiseDocumentEx(events, event),
+        events,
       );
       goToLine(view, options.line);
       loadDocumentLanguage(view, options.fileName, language, () =>
@@ -1015,6 +1060,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     },
     onPendingKeys: (listener) => pendingKeys.listen(listener),
     cancelPendingKeys: () => pendingKeys.cancel(),
+    defineEx: (name, prefix, handler) =>
+      definePluginEx(exDefinitions, hosted, log, name, prefix, handler),
     // Unmaps the old keymap's mappings, redefines each group's command under
     // its index, and applies the new keymap through a hosted editor, or through
     // the next one created. A changed leader's old key keeps no mapping, since

@@ -54,6 +54,7 @@ function fakeHost(inserted: Inserted[]): EditorHost {
     typeInto: () => {},
     onPendingKeys: () => ({ dispose: () => {} }),
     cancelPendingKeys: () => {},
+    defineEx: () => ({ dispose() {} }),
     setKeymap: () => {},
   };
 }

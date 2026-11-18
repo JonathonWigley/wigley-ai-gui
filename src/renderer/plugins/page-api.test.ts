@@ -772,6 +772,15 @@ const RECORDED_ROWS: RecordedRow[] = [
     }),
     register: (api) => api.services.editor.onPendingKeys(() => {}),
   },
+  {
+    member: 'services.editor.defineEx',
+    dep: (handle) => ({
+      services: {
+        editor: { defineEx: () => handle } as unknown as EditorHost,
+      } as PageApiDeps['services'],
+    }),
+    register: (api) => api.services.editor.defineEx('hello', 'he', () => {}),
+  },
 ];
 
 // One listener registered through `api`, and what makes the source speak:

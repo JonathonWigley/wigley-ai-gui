@@ -158,7 +158,8 @@ export function trackedUserConfig(
 
 // The live editors are one store entry, so a destroyed editor's view is not
 // held. An editor made after the store's `dispose` is destroyed at once, and an
-// editor's `destroy` runs its own once.
+// editor's `destroy` runs its own once. A plugin's ex commands are removed when
+// it stops.
 export function trackedEditor(
   editor: EditorHost,
   registrations: Registrations,
@@ -176,6 +177,8 @@ export function trackedEditor(
     createDocument: (...args) => recorded(editor.createDocument(...args)),
     onPendingKeys: (listener) =>
       registrations.track(editor.onPendingKeys(listener)),
+    defineEx: (name, prefix, handler) =>
+      registrations.track(editor.defineEx(name, prefix, handler)),
   };
 }
 

@@ -904,6 +904,12 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       '@codemirror/autocomplete',
     ],
   },
+  // Reads the vim engine's source text, to check the ex command list the host
+  // pins against the installed engine's.
+  'src/renderer/codemirror-vim/ex-definitions.test.ts': {
+    layers: ['src/contracts', 'src/renderer/codemirror-vim'],
+    packages: ['@replit/codemirror-vim-core'],
+  },
   'src/renderer/markdown-it': {
     layers: ['src/contracts'],
     packages: ['markdown-it'],

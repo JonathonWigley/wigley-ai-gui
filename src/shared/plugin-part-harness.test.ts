@@ -925,6 +925,7 @@ describe('plugin part harness', () => {
       api.services.editor.create(element, 'text', {} as EditorEvents);
       api.services.markdown.addFence(sampleFence);
       api.services.markdown.addBlock(sampleBlock);
+      api.services.editor.defineEx('sample', 's', () => {});
       return { commands: { run() {} } };
     });
     const harness = startPagePart(part, {
@@ -937,12 +938,14 @@ describe('plugin part harness', () => {
       },
     });
     expect(editors.live()).toBe(1);
+    expect(editors.exCommands()).toBe(1);
     expect(fenceDisposed).not.toHaveBeenCalled();
     expect(blockDisposed).not.toHaveBeenCalled();
 
     await harness.stop();
 
     expect(editors.live()).toBe(0);
+    expect(editors.exCommands()).toBe(0);
     expect(fenceDisposed).toHaveBeenCalledTimes(1);
     expect(blockDisposed).toHaveBeenCalledTimes(1);
   });

@@ -1927,12 +1927,13 @@ export function deferred<T>() {
 
 // An editor host that counts the editors it holds live and every one it made,
 // boxes and document editors alike; `type` edits the last one made, and
-// `typeDocument` the last document editor made. After `stop()`, `live` cannot
-// fail, as the per-plugin view destroys what the part left: it is only
-// meaningful mid-life.
+// `typeDocument` the last document editor made; `exCommands` counts the live
+// ex command definitions. After `stop()`, `live` cannot fail, as the
+// per-plugin view destroys what the part left: it is only meaningful mid-life.
 export function countingEditors() {
   let live = 0;
   let made = 0;
+  let exCommands = 0;
   let type: (text: string) => void = () => undefined;
   let typeDocument: (text: string) => void = () => undefined;
   const host: EditorHost = {
@@ -1988,12 +1989,25 @@ export function countingEditors() {
     typeInto() {},
     onPendingKeys: () => ({ dispose() {} }),
     cancelPendingKeys() {},
+    defineEx() {
+      exCommands += 1;
+      let isDisposed = false;
+      return {
+        dispose() {
+          if (!isDisposed) {
+            isDisposed = true;
+            exCommands -= 1;
+          }
+        },
+      };
+    },
     setKeymap() {},
   };
   return {
     host,
     live: () => live,
     made: () => made,
+    exCommands: () => exCommands,
     type: (text: string) => type(text),
     typeDocument: (text: string) => typeDocument(text),
   };
