@@ -293,6 +293,39 @@ describe('unityPoolPagePart', () => {
     );
   });
 
+  it.each([
+    { method: 'originName', act: () => undefined },
+    {
+      method: 'run',
+      act: (harness: ReturnType<typeof startOnHarness>) =>
+        harness.started().commands.hold({ arg: { pool: 'p', clone: 1 } }),
+    },
+  ])(
+    'a $method call rejecting after the part stops logs nothing',
+    async ({ method, act }) => {
+      const reply = deferred<unknown>();
+      const calls: string[] = [];
+      const harness = startOnHarness(async (invoked) => {
+        calls.push(invoked);
+        return invoked === method ? reply.promise : null;
+      });
+      captureLayout(harness);
+      harness.state.publish(unityPoolSnapshotSlot).set(SNAPSHOT);
+      harness.ready();
+      harness.state.publish(sessionsActiveSlot).set(ROW_ID);
+      harness.state.publish(sessionsRowsSlot).set(ROW_ID, ROW);
+      act(harness);
+      await vi.waitFor(() => expect(calls).toContain(method));
+      await harness.stop();
+      const logsBefore = harness.logs.map((line) => line.message);
+
+      reply.reject(new Error('late'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(harness.logs.map((line) => line.message)).toEqual(logsBefore);
+    },
+  );
+
   // Clones 1 and 2 claimed by rows A and B, B shown, the panel drawn, over
   // the fake DOM with focus.
   function twoHolders() {

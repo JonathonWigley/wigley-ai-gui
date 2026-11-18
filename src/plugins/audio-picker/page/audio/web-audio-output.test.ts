@@ -18,6 +18,8 @@ type FakeOptions = {
   state?: 'running' | 'suspended';
   decodeError?: Error;
   resumeFails?: boolean;
+  // The first source's `stop` counts, then throws.
+  firstStopFails?: boolean;
 };
 
 // An AudioContext that records what the output asks of it. Its decoded
@@ -63,6 +65,9 @@ function fakeWebAudio(options: FakeOptions = {}) {
         },
         stop() {
           source.stops++;
+          if (options.firstStopFails === true && sources[0] === source) {
+            throw new Error('stop refused');
+          }
         },
       };
       sources.push(source);
@@ -241,6 +246,18 @@ describe('createWebAudioOutput', () => {
     };
 
     expect(() => fake.output.play(foreign, PLAN)).toThrow();
+  });
+
+  it('disposing with one sound whose stop throws still stops the rest and closes the context', async () => {
+    const fake = fakeWebAudio({ firstStopFails: true });
+    const audio = await fake.output.decode(countingBytes(8));
+    fake.output.play(audio, LOOP_PLAN);
+    fake.output.play(audio, LOOP_PLAN);
+
+    expect(() => fake.output.dispose()).toThrow('stop refused');
+
+    expect(fake.sources.map((source) => source.stops)).toEqual([1, 1]);
+    expect(fake.closes()).toBe(1);
   });
 
   it('createWebAudioOutput_Dispose_StopsPlayingAndClosesTheContext', async () => {

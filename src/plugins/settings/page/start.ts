@@ -1,6 +1,7 @@
 import './settings.css';
 import { corePluginsSlot } from '../../../contracts/core-state';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   keyRunner,
@@ -77,7 +78,9 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       plugins: () => plugins.get() ?? [],
       controlKind: (id) => controlKinds.get(id),
     });
-    controlKinds.onChanged(() => view.controlKindsChanged());
+    const kindsChange = controlKinds.onChanged(() =>
+      view.controlKindsChanged(),
+    );
     const savedPlace = placeWriter.get();
     if (savedPlace !== undefined) {
       view.restorePlace(savedPlace);
@@ -114,7 +117,11 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
     api.channel.on('changed', () => view.reread());
     plugins.on(() => view.pluginsChanged());
     api.channel.on('show', () => mode.show());
+    let isStopped = false;
     view.load().catch((error) => {
+      if (isStopped) {
+        return;
+      }
       log(`not loaded: ${errorText(error)}`);
       services.toast(errorText(error), 'error');
     });
@@ -150,6 +157,12 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       exports: (consumer): SettingsPageExports => ({
         addControlKind: (kind) => consumer.track(controlKinds.add(kind)),
       }),
+      dispose() {
+        isStopped = true;
+        callEach<{ dispose(): void }>([view, kindsChange], (each) =>
+          each.dispose(),
+        );
+      },
     };
   },
 };

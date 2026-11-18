@@ -44,7 +44,8 @@ interface FakeLink {
 }
 
 // A `head` recording the links appended to it; each link records its removal.
-function fakeHead() {
+// With `appendError`, each append throws it instead.
+function fakeHead(appendError?: Error) {
   const appended: FakeLink[] = [];
   const head = {
     ownerDocument: {
@@ -58,7 +59,12 @@ function fakeHead() {
         },
       }),
     },
-    append: (link: FakeLink) => appended.push(link),
+    append: (link: FakeLink) => {
+      if (appendError !== undefined) {
+        throw appendError;
+      }
+      appended.push(link);
+    },
   };
   return { head: head as unknown as HTMLElement, appended };
 }
@@ -67,10 +73,12 @@ function fakeHead() {
 // on `answers`, and whose imports go to `importModule` (by default a module
 // whose layout is tagged `<name>@<revision>`), recording every URL imported,
 // each log line and each toast. `changeConfig` tells each config listener.
+// `appendError` makes each stylesheet link's append throw it.
 function pageLayoutsWith(
   importModule: (url: string) => Promise<unknown> = async (url) => ({
     default: { tag: tagOf(url) },
   }),
+  appendError?: Error,
 ) {
   const answers = new Map<string, PromiseWithResolvers<LayoutSet | null>>();
   const answerFor = (owner: string) => {
@@ -80,7 +88,7 @@ function pageLayoutsWith(
   };
   let listener: (owner: string, set: LayoutSet) => void = () => undefined;
   const configListeners = new Set<() => void>();
-  const { head, appended } = fakeHead();
+  const { head, appended } = fakeHead(appendError);
   const page = {
     configListeners,
     changeConfig: () => configListeners.forEach((heard) => heard()),
@@ -436,4 +444,43 @@ describe('createPageLayouts', () => {
     expect(page.appended.filter((link) => !link.removed)).toEqual([]);
     expect(show.shown).toEqual([]);
   });
+
+  // Breaks if a read or load failing after dispose still logs.
+  it.each([
+    {
+      row: 'the answer rejects',
+      fail: (late: LateFailure) =>
+        late.show.answer.reject(new Error('not started')),
+    },
+    {
+      row: 'a load rejects',
+      fail: (late: LateFailure) =>
+        late.script.resolve({ default: { tag: 'mine@3' } }),
+    },
+  ])(
+    'a show failing after its dispose logs nothing ($row)',
+    async ({ fail }) => {
+      const script = Promise.withResolvers<unknown>();
+      const page = pageLayoutsWith(
+        () => script.promise,
+        new Error('head gone'),
+      );
+      const show = showing(page, 'mine');
+      show.change(setOf(entry('mine', 3, true)));
+      await settle();
+
+      show.dispose();
+      fail({ show, script });
+      await settle();
+
+      expect(page.logLines).toEqual([]);
+    },
+  );
 });
+
+// What a late failure acts on: the show, and the import of its layout script,
+// whose stylesheet link then fails to append.
+interface LateFailure {
+  show: ReturnType<typeof showing>;
+  script: PromiseWithResolvers<unknown>;
+}

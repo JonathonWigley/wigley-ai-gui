@@ -273,9 +273,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             .filter((path) => path !== null),
         placeChanged: (value) => place.write(value),
       });
-      const savedPlace = placeWriter.get(sourceId);
-      if (savedPlace !== undefined) {
-        view.restorePlace(savedPlace);
+      // A place of the older shape, with no `trees`, which a page reloaded
+      // under a running main can find, is dropped.
+      const savedPlace: Partial<DocsPlace> | undefined =
+        placeWriter.get(sourceId);
+      if (savedPlace?.trees !== undefined) {
+        view.restorePlace(savedPlace as DocsPlace);
       }
       return view;
     };
@@ -413,6 +416,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         treeHiddenIn(machineView);
         showTreeEdge(machineView);
       },
+      sideBarNarrowed: () => machineView.dismissFilter(),
       sideBarOpenedOver: () => {
         treeOpenedOverIn(machineView);
         showTreeEdge(machineView);
@@ -423,8 +427,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         modeView().focusMain();
       },
     });
-    // A narrowing hides the side bar without telling the mode, so the machine
-    // view's edge prompt follows the window too, once the core has laid out.
+    // A narrowing tells the mode only to close its filter box
+    // (`sideBarNarrowed`), so the machine view's edge prompt follows the window
+    // here, once the core has laid out.
     let pendingResizeFrame: number | null = null;
     const onWindowResize = () => {
       pendingResizeFrame ??= requestAnimationFrame(() => {
@@ -513,9 +518,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return {
         element: split.element,
         shown() {
-          // Another view's drag may have stored a new width since this one
-          // last showed.
-          split.reloadWidth();
           closeOverlaysBesides(added.view);
           api.keys.setScope(added.view.focusScope());
           api.panes.setResizeTarget(split);

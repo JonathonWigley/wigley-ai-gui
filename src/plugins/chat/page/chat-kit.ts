@@ -1,5 +1,6 @@
 import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
+import { callEach } from '../../../shared/call-each';
 import { formatTokens } from '../../../shared/format-tokens';
 import { appended, element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
@@ -128,10 +129,13 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       }
     },
     dispose() {
-      disposeAnchors(anchors);
-      for (const part of permissionParts) {
-        part.dispose();
-      }
+      callEach<() => void>(
+        [
+          () => disposeAnchors(anchors),
+          ...[...permissionParts].map((part) => () => part.dispose()),
+        ],
+        (step) => step(),
+      );
     },
     expanders: {
       count: () => expanders.length,

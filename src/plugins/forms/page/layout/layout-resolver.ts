@@ -1,3 +1,4 @@
+import { DEFAULT_LAYOUT_NAME } from '../../../../contracts/layouts';
 import type { PartPick } from '../../../../shared/page/layout-host/draw-part';
 import { pickLayout as pickHostLayout } from '../../../../shared/page/layout-host/pick';
 import type { BuiltInItemKind, ItemKind } from '../../contract';
@@ -64,7 +65,6 @@ export interface RoundPicks {
   panes: Record<LayoutPane, LayoutPick>;
 }
 
-const DEFAULT_NAME = 'default';
 const PANES: readonly LayoutPane[] = [
   'head',
   'rail',
@@ -98,7 +98,7 @@ export function layoutChain(
   roundLayout: string | null,
   userLayout: string,
 ): string[] {
-  const names = [itemLayout, roundLayout, userLayout, DEFAULT_NAME];
+  const names = [itemLayout, roundLayout, userLayout, DEFAULT_LAYOUT_NAME];
   return [...new Set(names.filter((name) => name !== null))];
 }
 
@@ -130,7 +130,8 @@ export function pickLayout(
     ),
   );
   return (
-    picks.find((pick) => pick.name !== DEFAULT_NAME) ?? picks[picks.length - 1]
+    picks.find((pick) => pick.name !== DEFAULT_LAYOUT_NAME) ??
+    picks[picks.length - 1]
   );
 }
 

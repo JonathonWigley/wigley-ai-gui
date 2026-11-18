@@ -114,6 +114,26 @@ describe('createLayoutParts', () => {
     ]);
   });
 
+  it('dispose still disposes every other draw when one throws, then rethrows', () => {
+    const undone: string[] = [];
+    const { parts } = partsSetup(undone);
+    const parent = asHtml(new FakeElement('div'));
+    parts.redraw('rail', parent, (part, host, rollback) => {
+      const element = part(host, rollback);
+      rollback.recordAnchor({
+        dispose: () => {
+          throw new Error('stuck');
+        },
+      });
+      return { element };
+    });
+    parts.redraw('head', parent, build);
+
+    expect(() => parts.dispose()).toThrow('stuck');
+
+    expect(undone).toEqual(['default rail disposed', 'default head disposed']);
+  });
+
   it('redraw_LastDrawsDisposeThrows_ItsElementRemovedAndRethrown', () => {
     const { parts, defaultLayout } = partsSetup();
     parts.setLayouts(

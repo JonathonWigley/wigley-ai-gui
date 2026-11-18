@@ -1,3 +1,7 @@
+// The name of an owner's built-in layout, drawn when no other is picked or loaded,
+// and served from the owner's default folder.
+export const DEFAULT_LAYOUT_NAME = 'default';
+
 // The owner of a layouts folder: a plugin id, or 'shell'.
 export type LayoutOwner = string;
 

@@ -66,8 +66,8 @@ user runs /clear  ──► chat.sessionCleared (sent true)
 ## The Retro section
 
 The sessions plugin draws its side bar as sections: Favorites, Recent, and every section a plugin registers through
-the sessions page export `addSection`. `auto-retro` registers Retro, always last, which claims the rows it launched.
-A plugin's section shows only while it claims a row.
+the sessions page export `addSection`. `auto-retro` registers Retro, always last, which claims the rows it launched
+and every row whose first message is a retro command. A plugin's section shows only while it claims a row.
 
 - Rows sit flat, with no project groups: every retro runs in the `folder` setting, `~/wigley-agents` by default, the
   clone that holds the ledger.
@@ -110,8 +110,8 @@ sessions seen, so the next manual retro's backfill analyzes them and its report 
   hold a row open.
 - **A retro row is known by its first message too.** `launched` alone loses a row when `queue.json` fails to load, a
   quit lands in the instant after a launch, or the restore wait or a gone profile drops the run; that row's close
-  would then queue a retro of a retro session. Such a row still shows as an ordinary row and stays open until the
-  user closes it.
+  would then queue a retro of a retro session. Such a row is claimed into Retro at start and closed once it reads
+  done, as a launched one is.
 - **Deny, not allow, in an unattended row.** An allowed prompt would let an unwatched run do what the user's rules hold
   back; a denied one costs at most a retro that stops short, which the next manual run catches up.
 - **The closed session's profile.** Its config folder holds the transcript, and `digest.py` reads

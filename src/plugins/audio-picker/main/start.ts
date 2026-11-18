@@ -17,6 +17,7 @@ import {
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { chatMainKey } from '../../chat/contract';
 import {
@@ -222,10 +223,19 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
       mayStop: () => presenter.mayStop(),
       dispose: (stop) => {
         isDisposed = true;
-        if (stop === 'quit') {
-          service.detach();
+        try {
+          callEach<() => void>(
+            [
+              ...(stop === 'quit' ? [() => service.detach()] : []),
+              () => preview.dispose(),
+            ],
+            (step) => step(),
+          );
+        } catch (error) {
+          return store.flushed().then(() => {
+            throw error;
+          });
         }
-        preview.dispose();
         return store.flushed();
       },
     };

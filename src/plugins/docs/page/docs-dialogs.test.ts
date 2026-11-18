@@ -68,10 +68,12 @@ const settled = () => new Promise((resolve) => setTimeout(resolve));
 
 // The docs dialogs over a channel listing no folder and `TRASHED_ENTRY`'s path as
 // the one trash target, drawing with the layouts `layouts` returns.
-// Each kit command a button runs is recorded in `runs`.
+// Each kit command a button runs is recorded in `runs`; `overrides` replaces
+// those deps.
 function dialogsOver(
   layouts: () => ShownLayouts<Layout>,
   runs: [CommandId, CommandArg | undefined][] = [],
+  overrides: Partial<Record<keyof DocsDialogsDeps, unknown>> = {},
 ) {
   const { parts } = fakeDocsParts(layouts, (id, arg) => {
     runs.push([id, arg]);
@@ -94,6 +96,7 @@ function dialogsOver(
     changed: () => undefined,
     openInEditor: async () => undefined,
     dialogClosed: () => undefined,
+    ...overrides,
   } as unknown as DocsDialogsDeps;
   return createDocsDialogs(deps);
 }
@@ -267,4 +270,133 @@ describe('createDocsDialogs', () => {
     expect(input.value).toBe('notes');
     expect(document.activeElement).toBe(input);
   });
+
+  // Breaks: a continuation of a call begun before the dispose changing a
+  // doc, opening the confirm, logging or toasting once it lands.
+  it.each<{
+    case: string;
+    held: string;
+    isRejected?: boolean;
+    reply?: unknown;
+    act(dialogs: DocsDialogs): void;
+  }>([
+    {
+      case: 'a create by path answered',
+      held: 'createDoc',
+      reply: { path: '/home/new.md', line: 1 },
+      act: (dialogs) => {
+        dialogs.createByPath(null);
+        dialogs.boxAccept();
+      },
+    },
+    {
+      case: 'a create by path refused',
+      held: 'createDoc',
+      isRejected: true,
+      act: (dialogs) => {
+        dialogs.createByPath(null);
+        dialogs.boxAccept();
+      },
+    },
+    {
+      case: "a created doc's editor opened",
+      held: 'openInEditor',
+      act: (dialogs) => {
+        dialogs.createByPath(null);
+        dialogs.boxAccept();
+      },
+    },
+    {
+      case: 'a rename answered',
+      held: 'renameDoc',
+      reply: '/home/b.md',
+      act: (dialogs) => {
+        dialogs.rename(TRASHED_ENTRY);
+        dialogs.boxAccept();
+      },
+    },
+    {
+      case: 'a rename refused',
+      held: 'renameDoc',
+      isRejected: true,
+      act: (dialogs) => {
+        dialogs.rename(TRASHED_ENTRY);
+        dialogs.boxAccept();
+      },
+    },
+    {
+      case: 'the trash targets answered',
+      held: 'trashTargets',
+      reply: [TRASHED_ENTRY.path],
+      act: (dialogs) => dialogs.trash(TRASHED_ENTRY),
+    },
+    {
+      case: 'the trash targets refused',
+      held: 'trashTargets',
+      isRejected: true,
+      act: (dialogs) => dialogs.trash(TRASHED_ENTRY),
+    },
+    {
+      case: 'a trash answered',
+      held: 'trashDoc',
+      reply: { trashed: [TRASHED_ENTRY.path], error: null },
+      act: (dialogs) => dialogs.trash(TRASHED_ENTRY),
+    },
+    {
+      case: 'a trash refused',
+      held: 'trashDoc',
+      isRejected: true,
+      act: (dialogs) => dialogs.trash(TRASHED_ENTRY),
+    },
+    {
+      case: 'a completion listing refused',
+      held: 'listFolder',
+      isRejected: true,
+      act: (dialogs) => dialogs.createByPath(null),
+    },
+  ])(
+    'a call landing after the dispose changes, logs and toasts nothing ($case)',
+    async ({ held, isRejected = false, reply, act }) => {
+      const answer = Promise.withResolvers<unknown>();
+      const heard: string[] = [];
+      const dialogs = dialogsOver(
+        () => withUser<Layout>(defaultLayout, {}),
+        [],
+        {
+          channel: {
+            invoke: async (name: string) => {
+              if (name === held) {
+                return answer.promise;
+              }
+              return name === 'trashTargets' ? [TRASHED_ENTRY.path] : [];
+            },
+          },
+          toast: (text: string) => heard.push(`toast ${text}`),
+          log: (line: string) => heard.push(line),
+          changed: () => heard.push('changed'),
+          openInEditor: () =>
+            held === 'openInEditor' ? answer.promise : Promise.resolve(),
+        },
+      );
+      act(dialogs);
+      await settled();
+      if (held === 'trashDoc') {
+        dialogs.confirmYes();
+      }
+
+      dialogs.dispose();
+      heard.length = 0;
+      if (isRejected) {
+        answer.reject(new Error('main stopped'));
+      } else {
+        answer.resolve(reply);
+      }
+      await settled();
+
+      expect({ heard, isOpen: dialogs.isAnyOpen() }).toEqual({
+        heard: [],
+        isOpen: false,
+      });
+    },
+  );
 });

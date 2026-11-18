@@ -34,6 +34,7 @@ import {
   scrollText,
   scrollToEdge,
 } from '../../../shared/content-scroll';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
@@ -358,6 +359,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   // The input the open box types into.
   const openBoxInput = (box: NonNullable<typeof openBox>) =>
     box.kind === 'filter' ? filterBox : renameBox;
+  let isDisposed = false;
   let loadCount = 0;
   let loadedCount = 0;
   // The saved place's assistant pane waits to open: at the end of the first
@@ -530,7 +532,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     });
 
   const drawRows = (state: BacklogState) => {
-    rowDraws = disposeDraws(rowDraws);
+    const heldRowDraws = rowDraws;
+    rowDraws = [];
+    disposeDraws(heldRowDraws);
     rowsList.replaceChildren();
     for (const shown of visibleRows(state, matcher)) {
       const drawn = drawRow(state, shown);
@@ -588,7 +592,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     const request = commitsRequest;
     channel.invoke('commitsSince', wanted).then(
       (commits) => {
-        if (request !== commitsRequest) {
+        if (isDisposed || request !== commitsRequest) {
           return;
         }
         commitsShown = {
@@ -602,6 +606,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         drawReview(store.get());
       },
       (error: unknown) => {
+        if (isDisposed) {
+          return;
+        }
         deps.log(`commitsSince failed: ${errorText(error)}`);
         if (request !== commitsRequest) {
           return;
@@ -635,7 +642,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     reviewDrawKey = drawKey;
     reviewRowKey = rowKeyShown;
     keptReviewScroll = null;
-    reviewDraws = disposeDraws(reviewDraws);
+    const heldReviewDraws = reviewDraws;
+    reviewDraws = [];
+    disposeDraws(heldReviewDraws);
     reviewBody.replaceChildren();
     if (row !== null) {
       reviewDraws.push(drawReviewItem(row, staleness));
@@ -683,7 +692,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   // Draws one card per shown chunk, then New chunk, into the scroller's
   // track; reveals the cursor card when the cursor moved since the last draw.
   const drawStrip = (state: BacklogState) => {
-    stripDraws = disposeDraws(stripDraws);
+    const heldStripDraws = stripDraws;
+    stripDraws = [];
+    disposeDraws(heldStripDraws);
     scroller.track.replaceChildren();
     let cursorCard: HTMLElement | null = null;
     for (const chunk of shownChunks(state)) {
@@ -906,8 +917,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   });
 
   // ── Reads and writes ───────────────────────────────────────────────────
-  // Logs a rejected invoke; a write's text toasts too.
+  // Logs a rejected invoke; a write's text toasts too. Once disposed, it
+  // does nothing.
   const failed = (invoke: string, error: unknown, isWrite: boolean) => {
+    if (isDisposed) {
+      return;
+    }
     deps.log(`${invoke} failed: ${errorText(error)}`);
     if (isWrite) {
       deps.toast(errorText(error), 'error');
@@ -916,14 +931,22 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
 
   const readStaleness = () => {
     channel.invoke('staleness').then(
-      (entries) => dispatch({ type: 'stalenessRead', entries }),
+      (entries) => {
+        if (!isDisposed) {
+          dispatch({ type: 'stalenessRead', entries });
+        }
+      },
       (error: unknown) => failed('staleness', error, false),
     );
   };
 
   const readChunks = () => {
     channel.invoke('chunks').then(
-      (chunks) => dispatch({ type: 'chunksChanged', chunks }),
+      (chunks) => {
+        if (!isDisposed) {
+          dispatch({ type: 'chunksChanged', chunks });
+        }
+      },
       (error: unknown) => failed('chunks', error, false),
     );
   };
@@ -945,7 +968,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const read = async (method: 'load' | 'rescan') => {
     const count = ++loadCount;
     const result = await channel.invoke(method);
-    if (count !== loadCount) {
+    if (isDisposed || count !== loadCount) {
       return;
     }
     loadedCount += 1;
@@ -972,6 +995,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   // Logs and toasts a failed read in place of throwing it.
   const readQuietly = (method: 'load' | 'rescan'): Promise<void> =>
     read(method).catch((error) => {
+      if (isDisposed) {
+        return;
+      }
       deps.log(`not loaded: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
     });
@@ -984,6 +1010,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   ) => {
     channel.invoke('editChunks', edit).then(
       (chunks) => {
+        if (isDisposed) {
+          return;
+        }
         dispatch({ type: 'chunksChanged', chunks });
         applied(chunks);
       },
@@ -1006,6 +1035,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       )
       .then(
         (starts) => {
+          if (isDisposed) {
+            return;
+          }
           for (const start of starts) {
             const name = names.get(start.chunkId) ?? start.chunkId;
             if ('sessionId' in start) {
@@ -1280,6 +1312,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       }
       channel.invoke('sweep', repo).then(
         () => {
+          if (isDisposed) {
+            return;
+          }
           if (!pane.isShown()) {
             pane.toggle();
           }
@@ -1368,17 +1403,29 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       pane.redraw();
     },
     dispose() {
-      rowDraws = disposeDraws(rowDraws);
-      reviewDraws = disposeDraws(reviewDraws);
-      stripDraws = disposeDraws(stripDraws);
-      statusDraw?.dispose();
+      isDisposed = true;
+      const draws = [
+        ...rowDraws,
+        ...reviewDraws,
+        ...stripDraws,
+        ...(statusDraw === null ? [] : [statusDraw]),
+      ];
+      rowDraws = [];
+      reviewDraws = [];
+      stripDraws = [];
       statusDraw = null;
-      parts.dispose();
-      pane.dispose();
-      scroller.dispose();
-      tableSplit.dispose();
-      stripSplit.dispose();
-      assistantSplit.dispose();
+      callEach<{ dispose(): void }>(
+        [
+          ...draws,
+          parts,
+          pane,
+          scroller,
+          tableSplit,
+          stripSplit,
+          assistantSplit,
+        ],
+        (each) => each.dispose(),
+      );
     },
     commands,
     selectRow(key) {

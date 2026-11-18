@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UiState } from '../../../contracts/ui-state';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { provisionalEntry } from './docs-state';
 import { createStarredDocs, type StarredDocs } from './starred-docs';
@@ -11,15 +12,11 @@ function fakeUiState(saved: unknown): { state: UiState; sets: unknown[] } {
     values.set('starred', saved);
   }
   const sets: unknown[] = [];
-  const state: UiState = {
-    get: (key) => values.get(key),
-    set: (key, value) => {
-      if (key === 'starred') {
-        sets.push(value);
-      }
-      values.set(key, value);
-    },
-  };
+  const state = uiStateOver(values, (key, value) => {
+    if (key === 'starred') {
+      sets.push(value);
+    }
+  });
   return { state, sets };
 }
 

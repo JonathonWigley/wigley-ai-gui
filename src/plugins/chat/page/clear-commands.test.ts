@@ -7,8 +7,8 @@ import { addClearCommands } from './clear-commands';
 import { createSlashCommands } from './slash-commands';
 
 // A `core.agentHarnesses` reader over a map; `set` and `remove` call its
-// listeners.
-function harnessSlot() {
+// listeners. With `refusesUnlisten`, a listener's handle throws once disposed.
+function harnessSlot(refusesUnlisten = false) {
   const entries = new Map<string, AgentHarnessInfo>();
   const listeners = new Set<
     (key: string, value: AgentHarnessInfo | undefined) => void
@@ -18,7 +18,14 @@ function harnessSlot() {
     all: () => entries,
     on(listener) {
       listeners.add(listener);
-      return { dispose: () => listeners.delete(listener) };
+      return {
+        dispose: () => {
+          listeners.delete(listener);
+          if (refusesUnlisten) {
+            throw new Error('listener refused');
+          }
+        },
+      };
     },
   };
   const set = (id: string, clearAliases: readonly string[]) => {
@@ -38,16 +45,18 @@ function harnessSlot() {
 }
 
 // The clear commands over a slot holding `harnesses` (each a harness's clear
-// aliases) and a registry that may hold `before` first.
+// aliases) and a registry that may hold `before` first; `refusesUnlisten` as
+// `harnessSlot`.
 function clearCommands(
   harnesses: (readonly string[])[],
   before: AppSlashCommand[] = [],
+  refusesUnlisten = false,
 ) {
   const commands = createSlashCommands();
   for (const command of before) {
     commands.add(command);
   }
-  const slot = harnessSlot();
+  const slot = harnessSlot(refusesUnlisten);
   harnesses.forEach((aliases, at) => slot.set(`harness-${at}`, aliases));
   const invoked: unknown[][] = [];
   const logged: string[] = [];
@@ -135,11 +144,19 @@ describe('clear commands', () => {
     expect(clear.commands.list()).toEqual([reset]);
   });
 
-  it('addClearCommands_Dispose_RemovesEveryName', () => {
-    const clear = clearCommands([['reset']]);
+  it.each([
+    { case: 'every handle disposes', refusesUnlisten: false },
+    { case: 'the harness listener throws', refusesUnlisten: true },
+  ])('dispose removes every name when $case', ({ refusesUnlisten }) => {
+    const clear = clearCommands([['reset']], [], refusesUnlisten);
 
-    clear.handle.dispose();
+    const dispose = () => clear.handle.dispose();
 
+    if (refusesUnlisten) {
+      expect(dispose).toThrow('listener refused');
+    } else {
+      dispose();
+    }
     expect(clear.commands.list()).toEqual([]);
   });
 });

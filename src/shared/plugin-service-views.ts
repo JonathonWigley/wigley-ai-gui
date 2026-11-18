@@ -10,6 +10,7 @@ import type {
   SpawnOptions,
 } from '../contracts/processes';
 import type { UserConfig } from '../contracts/user-config';
+import { callEach } from './call-each';
 import { createRegistrations } from './registrations';
 
 // One plugin's view of `files`: `registrations` disposing it disposes the
@@ -43,10 +44,9 @@ export function abortableProcesses(
   registrations.track({
     dispose: () => {
       stopping.abort();
-      for (const spawned of liveSpawns) {
-        spawned.kill('SIGKILL');
-      }
+      const spawns = [...liveSpawns];
       liveSpawns.clear();
+      callEach(spawns, (spawned) => spawned.kill('SIGKILL'));
     },
   });
   const spawnTracked = (

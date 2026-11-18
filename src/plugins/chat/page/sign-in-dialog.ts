@@ -24,6 +24,8 @@ export interface SignInDialogDeps extends DialogDeps {
   channel: Pick<PageChannel<ChatChannel>, 'invoke' | 'on'>;
   writeClipboard: WriteClipboard;
   toast(text: string, tone: ToastTone): void;
+  // True once chat's page part stopped: a reply landing later does nothing.
+  isStopped(): boolean;
 }
 
 // The sign-in dialog, one at a time, belonging to a profile rather than a
@@ -35,9 +37,10 @@ export interface SignInDialogDeps extends DialogDeps {
 // dialog. The sign-in's end closes the dialog and toasts the outcome: signed in
 // only when it finished with no error and the profile reads signed in. A
 // `logIn` that rejects closes it too. Each does nothing while the dialog is
-// closed. `finished` is called exactly once per open: with whether the profile
-// is now signed in at the sign-in's end, and false on a cancel, a replacing
-// `open` or a rejected `logIn`.
+// closed. `finished` is called once per open: with whether the profile is now
+// signed in at the sign-in's end, and false on a cancel, a replacing `open` or
+// a rejected `logIn`. After chat stops, a rejected `logIn` returns before it
+// calls `finished`, so an open pending then may never finish.
 export interface SignInDialog {
   open(profile: string, finished?: (signedIn: boolean) => void): void;
   submitCode(): void;
@@ -122,5 +125,6 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     writeClipboard: deps.writeClipboard,
     toast: deps.toast,
     log: deps.log,
+    isStopped: deps.isStopped,
   });
 }

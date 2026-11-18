@@ -5,6 +5,7 @@ import {
   PANE_RESIZE_COMMANDS,
   type PaneDirection,
 } from '../../../contracts/panes';
+import { callEach } from '../../call-each';
 import { element, moveConnected } from '../dom';
 import type { AnchorNamer } from '../ui/key-anchors';
 import { createDividerHandle, type DividerHandle } from '../ui/split';
@@ -469,10 +470,9 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       window.removeEventListener('pointerup', focusOnRelease, true);
       window.removeEventListener('pointercancel', forgetPress, true);
       observer.disconnect();
-      for (const box of boxes.values()) {
-        box.divider.dispose();
-      }
+      const held = [...boxes.values()];
       boxes.clear();
+      callEach(held, (box) => box.divider.dispose());
     },
   };
 }

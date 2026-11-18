@@ -69,6 +69,8 @@ export interface FormsCommandDeps {
   scrollForm(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  // Whether the page part stopped.
+  isStopped(): boolean;
 }
 
 // How the forms page's log and toasts name a round.
@@ -126,6 +128,9 @@ export function formsCommandHandlers(
     (invoke: () => Promise<unknown>): Handler =>
     () =>
       void invoke().catch((error) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`layout command failed: ${errorText(error)}`);
         deps.toast(`Layout command failed: ${errorText(error)}`, 'error');
       });

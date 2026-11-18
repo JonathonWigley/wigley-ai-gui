@@ -316,8 +316,9 @@ export interface DocView {
   // Opens the whole-file editor on the shown doc holding a reloaded page's
   // `edits`, which then read as unsaved. When the file on disk is no longer
   // `edits.baseText`, the changed-on-disk prompt opens. Logs and does nothing
-  // while an editor is open or the shown file is not `edits.path`.
-  restoreEdits(edits: DocsEdits): void;
+  // while an editor is open or the shown file is not `edits.path`. Returns
+  // whether it put the edits in the editor.
+  restoreEdits(edits: DocsEdits): boolean;
   // Toasts and logs the refusal when the editor holds unsaved edits.
   refuseWithUnsavedEdits(): boolean;
   conflictReload(): void;
@@ -1166,8 +1167,16 @@ export function createDocView(deps: DocViewDeps): DocView {
       case 'external':
         deps
           .openExternal(target.url)
-          .then(() => deps.log(`opened link ${target.url}`))
-          .catch((error) => deps.toast(errorText(error), 'error'));
+          .then(() => {
+            if (!isDisposed) {
+              deps.log(`opened link ${target.url}`);
+            }
+          })
+          .catch((error) => {
+            if (!isDisposed) {
+              deps.toast(errorText(error), 'error');
+            }
+          });
         break;
       case 'heading':
         moveWithinDoc(null, target.fragment);
@@ -1211,9 +1220,11 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   const watchFile = (path: string | null, name: string) => {
-    deps.channel
-      .invoke('watchDoc', deps.viewId, path)
-      .catch((error) => deps.log(`not watching ${name}: ${errorText(error)}`));
+    deps.channel.invoke('watchDoc', deps.viewId, path).catch((error) => {
+      if (!isDisposed) {
+        deps.log(`not watching ${name}: ${errorText(error)}`);
+      }
+    });
   };
 
   // Points `doc` at its target's file and watches it.
@@ -1226,9 +1237,11 @@ export function createDocView(deps: DocViewDeps): DocView {
   const rereadLogging = (doc: ShownDoc, after?: () => void) => {
     reread(doc)
       .then(after)
-      .catch((error) =>
-        deps.log(`not reloaded ${doc.name}: ${errorText(error)}`),
-      );
+      .catch((error) => {
+        if (!isDisposed) {
+          deps.log(`not reloaded ${doc.name}: ${errorText(error)}`);
+        }
+      });
   };
 
   // Reads the target's file over an emptied body and text, so nothing of the file
@@ -1343,7 +1356,11 @@ export function createDocView(deps: DocViewDeps): DocView {
           after?.();
         }
       })
-      .catch((error) => deps.log(`not rendered: ${errorText(error)}`));
+      .catch((error) => {
+        if (!isDisposed) {
+          deps.log(`not rendered: ${errorText(error)}`);
+        }
+      });
   };
 
   // The whole file's text with the editor's `edited` text in place: a
@@ -1391,6 +1408,9 @@ export function createDocView(deps: DocViewDeps): DocView {
         }
       })
       .catch((error) => {
+        if (isDisposed) {
+          return;
+        }
         deps.toast(errorText(error), 'error');
         deps.log(`not written ${doc.name}: ${errorText(error)}`);
       })
@@ -1484,7 +1504,11 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   const relinkLogging = (doc: ShownDoc) => {
-    relink(doc).catch((error) => deps.log(`not rendered: ${errorText(error)}`));
+    relink(doc).catch((error) => {
+      if (!isDisposed) {
+        deps.log(`not rendered: ${errorText(error)}`);
+      }
+    });
   };
 
   // The index each pasted file of a take at `now` is named with, in order;
@@ -1517,10 +1541,20 @@ export function createDocView(deps: DocViewDeps): DocView {
       deps.paths,
     );
     try {
-      await deps.channel.invoke('writeBytes', path, await file.bytes());
+      const bytes = await file.bytes();
+      if (isDisposed) {
+        return null;
+      }
+      await deps.channel.invoke('writeBytes', path, bytes);
+      if (isDisposed) {
+        return null;
+      }
       deps.log(`saved pasted ${file.name} as ${path}`);
       return path;
     } catch (error) {
+      if (isDisposed) {
+        return null;
+      }
       deps.toast(errorText(error), 'error');
       deps.log(`not saved pasted ${file.name}: ${errorText(error)}`);
       return null;
@@ -1541,6 +1575,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     const links: string[] = [];
     const savedPaths: string[] = [];
     for (const file of files) {
+      if (isDisposed) {
+        return;
+      }
       const isPasted = file.path === '';
       const path = isPasted
         ? await writePasted(doc, file, now, pasteIndexes.shift()!)
@@ -1552,6 +1589,9 @@ export function createDocView(deps: DocViewDeps): DocView {
         savedPaths.push(path);
       }
       links.push(docLinkOf(path, doc.filePath, file.mediaType, deps.paths));
+    }
+    if (isDisposed) {
+      return;
     }
     if (shown !== doc || editor !== taking) {
       deps.log(`not linked: the editor on ${doc.name} closed`);
@@ -1575,9 +1615,11 @@ export function createDocView(deps: DocViewDeps): DocView {
     dropTarget = deps.drops.addTarget({
       element: pane,
       take: (files) => {
-        takeFiles(files).catch((error) =>
-          deps.log(`not linked: ${errorText(error)}`),
-        );
+        takeFiles(files).catch((error) => {
+          if (!isDisposed) {
+            deps.log(`not linked: ${errorText(error)}`);
+          }
+        });
       },
     });
     showEditHint();
@@ -1834,6 +1876,9 @@ export function createDocView(deps: DocViewDeps): DocView {
           rendered = detailRendered(target.detail);
         }
       } catch (error) {
+        if (isDisposed) {
+          return false;
+        }
         const failure = `Could not open ${deps.paths.tilde(target.path, deps.homeDir)}: ${errorText(error)}`;
         deps.toast(failure, 'error');
         deps.log(failure);
@@ -2189,7 +2234,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         deps.paths.samePath(doc.filePath, edits.path);
       if (!isEditable) {
         deps.log(`edits on ${edits.path} not restored`);
-        return;
+        return false;
       }
       openEditor(doc, 1);
       editor?.setText(edits.text);
@@ -2199,6 +2244,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         deps.log(`changed on disk: ${doc.name}`);
       }
       deps.editsChanged();
+      return true;
     },
     refuseWithUnsavedEdits() {
       if (!view.hasUnsavedEdits()) {

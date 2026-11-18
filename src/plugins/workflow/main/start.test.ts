@@ -1413,6 +1413,26 @@ describe('workflowMainPart', () => {
     }).toEqual({ holdsFlow: opens, wroteFlows: opens });
   });
 
+  it('changes no flow on an event heard after the part is disposed', async () => {
+    const workflow = startWorkflowPart();
+    const closed: string[] = [];
+    workflow.exported().observe({
+      folded: () => undefined,
+      opened: () => undefined,
+      closed: (sessionId) => closed.push(sessionId),
+      replaying: () => undefined,
+    });
+    await workflow.openS1();
+    const before = workflow.exported().flowOf('s1');
+
+    await workflow.dispose();
+    await workflow.agentEvent({ type: 'turnStarted', at: 1 });
+    await workflow.emit('sessions.ended', { sessionId: 's1' });
+
+    expect(workflow.exported().flowOf('s1')).toBe(before);
+    expect(closed).toEqual([]);
+  });
+
   it('Observer_Disposed_HearsNothing', async () => {
     const workflow = startWorkflowPart();
     const opened: string[] = [];

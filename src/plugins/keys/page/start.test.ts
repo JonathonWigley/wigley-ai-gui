@@ -99,6 +99,40 @@ describe('keys page part', () => {
     await harness.stop();
   });
 
+  it("stop disposes every anchor of the title bar button in the part's own dispose", async () => {
+    // The host disposes the registrations after the part's dispose, so an
+    // anchor disposed only there would pass a count; this records the ones
+    // disposed while the part's own `dispose` runs.
+    let isInOwnDispose = false;
+    let disposedInOwn = 0;
+    const harness = startKeys({
+      anchorDispose() {
+        if (isInOwnDispose) {
+          disposedInOwn += 1;
+        }
+      },
+    });
+    const started = harness.started();
+    const ownDispose = started.dispose?.bind(started);
+    if (ownDispose === undefined) {
+      throw new Error('the part has no dispose');
+    }
+    started.dispose = () => {
+      isInOwnDispose = true;
+      try {
+        ownDispose();
+      } finally {
+        isInOwnDispose = false;
+      }
+    };
+    const anchors = harness.anchors.length;
+    expect(anchors).toBeGreaterThan(0);
+
+    await harness.stop();
+
+    expect(disposedInOwn).toBe(anchors);
+  });
+
   it('toggleHelp_OpenAndClose_FiresOnOpenOnly', async () => {
     const harness = startKeys();
     const { toggleHelp } = harness.started().commands;
@@ -187,15 +221,18 @@ describe('keys page part', () => {
     },
     { command: 'scrollTop', line: 'scrolled the key help to the top' },
     { command: 'scrollEnd', line: 'scrolled the key help to the end' },
-  ] as const)('helpScroll_$command_LogsItsLine', async ({ command, line }) => {
-    helpScroller.scrollTop = 100;
-    const harness = startKeys();
+  ] as const)(
+    'the help scroll logs its line ($command)',
+    async ({ command, line }) => {
+      helpScroller.scrollTop = 100;
+      const harness = startKeys();
 
-    harness.started().commands[command]({ arg: undefined });
+      harness.started().commands[command]({ arg: undefined });
 
-    expect(harness.logs.map(({ message }) => message)).toContain(line);
-    await harness.stop();
-  });
+      expect(harness.logs.map(({ message }) => message)).toContain(line);
+      await harness.stop();
+    },
+  );
 
   it('searchLeader_Chosen_RunsTheCommandWithItsArg', async () => {
     const ran: unknown[] = [];

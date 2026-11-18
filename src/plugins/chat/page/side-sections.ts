@@ -117,7 +117,8 @@ export interface SideTab {
 // width, which a drag on its start edge or a nudge of a tab's `divider` sets,
 // apply to every tab and session and are kept in `uiState`; a frame change
 // updates the frame in place and never rebuilds the part. A `shrinksLast`
-// part's wrapper carries `data-shrinks-last`, which the hub's height rules read.
+// part's wrapper carries `data-shrinks-last` and a `keepsHeight` part's
+// `data-keeps-height`, which the hub's height rules read.
 // The hub is hidden while `uiState` hides it and no hold lives; a section is
 // collapsed while `uiState` collapses it and no live hold names its part.
 export interface SideSections {
@@ -184,16 +185,15 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
   const isCollapsed = (partId: string) =>
     readCollapsed(uiState).includes(partId) && !isHeld(partId);
 
-  // Every tab's divider writes through this, so one drag moves every tab's hub.
+  // Every tab's divider writes through this and follows the key, so one drag
+  // moves every tab's hub.
   const sharedWidthState: UiState = {
     get: (key) => uiState.get(key),
     set(key, value) {
       uiState.set(key, value);
       log(`session hub width ${String(value)}`);
-      for (const tab of openTabs) {
-        tab.widthDivider.reloadWidth();
-      }
     },
+    on: (key, listener) => uiState.on(key, listener),
   };
 
   const inputOf = (frame: Frame): SideSectionInput => ({
@@ -371,6 +371,9 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         );
         if (wrapper !== null && part.shrinksLast === true) {
           wrapper.dataset.shrinksLast = '';
+        }
+        if (wrapper !== null && part.keepsHeight === true) {
+          wrapper.dataset.keepsHeight = '';
         }
         return {
           wrapper,

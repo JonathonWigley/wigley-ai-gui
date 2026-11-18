@@ -1,6 +1,7 @@
 import type { ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
 import '../../../shared/page/ui/dialog.css';
 import { imageUrl } from './attachments';
@@ -23,7 +24,8 @@ export interface ImageRemoval {
 // then shows the image now at its place, else the one before it, else closes;
 // `close`, the pushed scope's base changing, and a change of the removal's
 // images the viewer did not make, hide it and pop the scope.
-// Each does nothing while the viewer is closed.
+// Each does nothing while the viewer is closed. `dispose` closes it and stops
+// it drawing again on a layout change.
 export interface ImageViewer {
   open(
     images: readonly ChatImage[],
@@ -34,6 +36,7 @@ export interface ImageViewer {
   previous(): void;
   removeShown(): void;
   close(): void;
+  dispose(): void;
 }
 
 export interface ImageViewerDeps extends DialogPartDeps {
@@ -65,7 +68,7 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
   backdrop.setAttribute('aria-modal', 'true');
   deps.overlay.contribute(backdrop);
   const part = createImageViewerPart(deps, () => backdrop);
-  deps.layouts.onChange(() => part.redraw());
+  const layoutChanges = deps.layouts.onChange(() => part.redraw());
 
   let open: OpenImages | null = null;
   // Draws the open image with `draw` (the part's `draw` or `update`).
@@ -155,6 +158,12 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
       part.clear();
       held.scope.pop();
       log('image viewer closed');
+    },
+    dispose() {
+      callEach<() => void>(
+        [() => viewer.close(), () => layoutChanges.dispose()],
+        (step) => step(),
+      );
     },
   };
   return viewer;

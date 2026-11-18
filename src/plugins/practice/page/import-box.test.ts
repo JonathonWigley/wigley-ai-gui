@@ -26,6 +26,7 @@ function boxSetup() {
   let frame: FakeElement | null = null;
   let pushes = 0;
   let pops = 0;
+  let isStopped = false;
   let onBaseChanged: (base: string) => void = () => undefined;
   const channel = {
     invoke(_method: string, request: string) {
@@ -39,6 +40,7 @@ function boxSetup() {
     channel,
     log: (line) => logs.push(line),
     toast: (text, tone) => toasts.push([text, tone]),
+    isStopped: () => isStopped,
     pushScope: () => {
       pushes += 1;
       return {
@@ -69,7 +71,7 @@ function boxSetup() {
       return {
         built: { element: textBox },
         layoutName: 'default',
-        drewPick: false,
+        drewBundled: true,
         dispose: () => undefined,
       };
     },
@@ -84,6 +86,9 @@ function boxSetup() {
     pushes: () => pushes,
     pops: () => pops,
     baseChanged: () => onBaseChanged('practice.list'),
+    stop() {
+      isStopped = true;
+    },
     type(text: string) {
       (frame!.children[0] as FocusFakeElement).value = text;
     },
@@ -213,6 +218,27 @@ describe('createImportBox', () => {
     expect(setup.logs).toEqual(['import box opened', 'import box closed']);
     expect(setup.invokes).toEqual([]);
   });
+
+  it.each<{ case: string; answer: 'resolve' | { error: string } }>([
+    { case: 'started', answer: 'resolve' },
+    { case: 'failed', answer: { error: 'no profile' } },
+  ])(
+    'toasts and logs nothing when the import $case after the view stopped',
+    async (row) => {
+      const setup = boxSetup();
+      setup.box.open();
+      setup.type('add two sum');
+      setup.box.accept();
+      setup.stop();
+      setup.box.cancel();
+      const logsAtStop = [...setup.logs];
+
+      await setup.answer(row.answer);
+
+      expect(setup.toasts).toEqual([]);
+      expect(setup.logs).toEqual(logsAtStop);
+    },
+  );
 
   it('redraw_ChangedLayout_DrawsTheFrameAndKeepsTheBox', () => {
     const setup = boxSetup();

@@ -9,6 +9,7 @@ import type {
 } from '../../../contracts/plugin';
 import type { HostedRun, PendingSpawn } from '../../../contracts/session-host';
 import { registeredInfos } from '../../../shared/agent-harness-label';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   listedHarnesses,
@@ -797,18 +798,31 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
 
     return {
       commands: {},
+      // A step that throws skips none of the rest, and the first error
+      // rethrows once the last step ran.
       async dispose(stop) {
         isDisposing = true;
-        for (const subscription of subscriptions) {
-          subscription.dispose();
-        }
-        await chain;
+        const errors: unknown[] = [];
+        const step = async (run: () => unknown) => {
+          try {
+            await run();
+          } catch (error) {
+            errors.push(error);
+          }
+        };
+        await step(() =>
+          callEach(subscriptions, (subscription) => subscription.dispose()),
+        );
+        await step(() => chain);
         if (stop === 'end' && fires) {
-          sessionHost.setPending([]);
-          await services.loginStart.set(false);
+          await step(() => sessionHost.setPending([]));
+          await step(() => services.loginStart.set(false));
         }
-        taskStore.dispose();
-        await Promise.all([taskStore.settled(), history.settled()]);
+        await step(() => taskStore.dispose());
+        await step(() => Promise.all([taskStore.settled(), history.settled()]));
+        if (errors.length > 0) {
+          throw errors[0];
+        }
       },
     };
   },

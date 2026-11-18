@@ -17,6 +17,8 @@ export interface WorkflowActionsDeps {
   flowOf(sessionId: string): SessionFlow | null;
   signal(sessionId: string, signal: WorkflowSignal): void;
   cancelCountdown(sessionId: string): void;
+  // Whether the part that runs the actions has stopped.
+  isStopped(): boolean;
 }
 
 type Action = (sessionId: string, flow: SessionFlow) => Promise<void>;
@@ -29,7 +31,8 @@ const IDLE_ONLY_COMMANDS = new Set(['clearAndMake', 'resumeMake', 'retro']);
 // flow with no plan, and a chat call that rejects; a plan command checks the
 // plan before any chat call. It resolves true once the command ran; an
 // idle-only command on a busy flow is logged and resolves false, having done
-// nothing.
+// nothing. A command whose chat call settles once the part stopped does
+// nothing after it.
 export function createWorkflowActions(deps: WorkflowActionsDeps): {
   run(sessionId: string, command: string): Promise<boolean>;
 } {
@@ -38,6 +41,9 @@ export function createWorkflowActions(deps: WorkflowActionsDeps): {
   const clearAndMake: Action = async (sessionId, flow) => {
     const planDir = requirePlanDir(flow);
     await chat.clear(sessionId);
+    if (deps.isStopped()) {
+      return;
+    }
     await chat.send(sessionId, message(makeText(planDir)));
   };
 
@@ -56,6 +62,9 @@ export function createWorkflowActions(deps: WorkflowActionsDeps): {
         message: message(makeText(planDir)),
         headless: chat.isHeadless(sessionId),
       });
+      if (deps.isStopped()) {
+        return;
+      }
       deps.signal(sessionId, largeSignal({ type: 'handedOff' }));
     },
     retro: (sessionId) => chat.send(sessionId, message('/wigley:retro')),

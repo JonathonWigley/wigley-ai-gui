@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { asFake, asHtml, FakeElement, installFakeDom } from '../test-dom';
 import {
+  type DrawnPart,
   type DrawPartOptions,
+  disposeDraws,
   drawPart,
   type RollbackDeps,
   requireDialogFrame,
@@ -83,7 +85,7 @@ describe('drawPart', () => {
     {
       row: 'user layout draws',
       pick: { name: 'fancy', layout: { rail: drawsArticle('fancy') } },
-      drewPick: true,
+      drewBundled: false,
       layoutName: 'fancy',
       text: 'fancy',
       dataset: { layout: 'fancy', layoutOwner: 'forms' },
@@ -92,7 +94,7 @@ describe('drawPart', () => {
     {
       row: 'user layout lacks the part',
       pick: { name: 'bare', layout: {} },
-      drewPick: false,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -101,7 +103,7 @@ describe('drawPart', () => {
     {
       row: 'user layout throws',
       pick: { name: 'fancy', layout: { rail: throwsBoom } },
-      drewPick: false,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -110,7 +112,7 @@ describe('drawPart', () => {
     {
       row: 'the bundled default picked as default',
       pick: { name: 'default', layout: DEFAULT_LAYOUT },
-      drewPick: true,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -119,7 +121,7 @@ describe('drawPart', () => {
     {
       row: 'a live default draws',
       pick: { name: 'default', layout: { rail: drawsArticle('live') } },
-      drewPick: true,
+      drewBundled: false,
       layoutName: 'default',
       text: 'live',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -128,7 +130,7 @@ describe('drawPart', () => {
     {
       row: 'a live default throws',
       pick: { name: 'default', layout: { rail: throwsBoom } },
-      drewPick: false,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -137,25 +139,25 @@ describe('drawPart', () => {
     {
       row: 'a live default lacks the part',
       pick: { name: 'default', layout: {} },
-      drewPick: false,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
       logLines: [],
     },
   ])(
-    'drawPart_DrewPick_TrueOnlyWhenThePickedLayoutDrew: $row',
-    ({ pick, drewPick, layoutName, text, dataset, logLines }) => {
+    'drewBundled is true only when the bundled default drew ($row)',
+    ({ pick, drewBundled, layoutName, text, dataset, logLines }) => {
       const rail = drawRail(pick);
 
       const drawn = rail.call();
 
       expect({
-        drewPick: drawn.drewPick,
+        drewBundled: drawn.drewBundled,
         layoutName: drawn.layoutName,
         text: asFake(drawn.built.element).textContent,
         dataset: asFake(drawn.built.element).dataset,
-      }).toEqual({ drewPick, layoutName, text, dataset });
+      }).toEqual({ drewBundled, layoutName, text, dataset });
       expect(rail.logLines).toEqual(logLines);
     },
   );
@@ -378,6 +380,41 @@ describe('drawPart', () => {
       'default',
     ]);
   });
+});
+
+describe('disposeDraws', () => {
+  // Breaks if a throwing dispose skips the draws after it, or swallows the
+  // error.
+  it.each<{ row: string; throwing: string[]; error: string | null }>([
+    { row: 'none throws', throwing: [], error: null },
+    { row: 'the first throws', throwing: ['a'], error: 'a failed' },
+    { row: 'two throw', throwing: ['a', 'c'], error: 'a failed' },
+  ])(
+    'disposes every draw and throws the first error after ($row)',
+    ({ throwing, error }) => {
+      const disposed: string[] = [];
+      const draws = ['a', 'b', 'c'].map((name): DrawnPart<null> => ({
+        built: null,
+        layoutName: 'default',
+        drewBundled: true,
+        dispose() {
+          disposed.push(name);
+          if (throwing.includes(name)) {
+            throw new Error(`${name} failed`);
+          }
+        },
+      }));
+
+      const run = () => disposeDraws(draws);
+
+      if (error === null) {
+        run();
+      } else {
+        expect(run).toThrow(error);
+      }
+      expect(disposed).toEqual(['a', 'b', 'c']);
+    },
+  );
 });
 
 describe('requireElementIn', () => {

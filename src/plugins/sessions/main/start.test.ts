@@ -378,13 +378,23 @@ describe('sessions main part', () => {
       harness: 'claude',
       sessionId: 'host-1',
       projectDir: '/work/folder',
+      profileDir: '/home/.claude-work',
       asked: [['host-1', '/work/folder', '/home/.claude-work']],
+    },
+    {
+      case: 'a session with no config folder asks the harness default',
+      harness: 'claude',
+      sessionId: 'host-1',
+      projectDir: '/work/folder',
+      profileDir: undefined,
+      asked: [['host-1', '/work/folder', '/resolved']],
     },
     {
       case: 'a harness the app does not run asks nothing',
       harness: 'codex',
       sessionId: 'host-1',
       projectDir: '/work/folder',
+      profileDir: '/home/.claude-work',
       asked: [],
     },
     {
@@ -392,6 +402,7 @@ describe('sessions main part', () => {
       harness: 'claude',
       sessionId: null,
       projectDir: '/work/folder',
+      profileDir: '/home/.claude-work',
       asked: [],
     },
     {
@@ -399,11 +410,12 @@ describe('sessions main part', () => {
       harness: 'claude',
       sessionId: 'host-1',
       projectDir: null,
+      profileDir: '/home/.claude-work',
       asked: [],
     },
   ] as const)(
     'a marked connected session: $case',
-    async ({ harness, sessionId, projectDir, asked }) => {
+    async ({ harness, sessionId, projectDir, profileDir, asked }) => {
       const sessionName = vi.fn(async () => null);
       const exports = viewOf(
         startSessionsPart(30, {
@@ -422,7 +434,7 @@ describe('sessions main part', () => {
         projectDir,
         harness,
         rowId: null,
-        profileDir: '/home/.claude-work',
+        ...(profileDir === undefined ? {} : { profileDir }),
       });
 
       exports.mark(session.id, { text: 'Round from folder', action: 'answer' });

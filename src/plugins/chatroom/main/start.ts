@@ -3,6 +3,7 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { argsObject, optionalString } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -162,6 +163,9 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       const queue = rebuilds.get(roomName) ?? createSerialQueue();
       rebuilds.set(roomName, queue);
       queue.run(rebuild).catch((error: unknown) => {
+        if (isStopped) {
+          return;
+        }
         log(`room view of ${roomName} not written: ${errorText(error)}`);
       });
     };
@@ -296,7 +300,9 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
           }
         })
         .catch((error: unknown) => {
-          log(`claims of ${rowId} not ended: ${errorText(error)}`);
+          if (!isStopped) {
+            log(`claims of ${rowId} not ended: ${errorText(error)}`);
+          }
         });
       roster.ended(rowId);
       boardFeed.untrack(rowId);
@@ -404,7 +410,9 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       .rooms()
       .then((roomNames) => roomNames.forEach(rewriteRoom))
       .catch((error: unknown) => {
-        log(`rooms not read: ${errorText(error)}`);
+        if (!isStopped) {
+          log(`rooms not read: ${errorText(error)}`);
+        }
       });
 
     api.channel.handle('readThread', async (roomName, thread, afterId) =>
@@ -498,12 +506,17 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       }),
       async dispose() {
         isStopped = true;
-        boardFeed.stop();
-        delivery.dispose();
-        await Promise.all([
-          room.settled(),
-          ...[...rebuilds.values()].map((queue) => queue.settled()),
-        ]);
+        try {
+          callEach<() => void>(
+            [() => boardFeed.stop(), () => delivery.dispose()],
+            (step) => step(),
+          );
+        } finally {
+          await Promise.all([
+            room.settled(),
+            ...[...rebuilds.values()].map((queue) => queue.settled()),
+          ]);
+        }
       },
     };
   },

@@ -1,6 +1,10 @@
 import type { Bridge } from '../../../contracts/bridge';
 import type { Disposable } from '../../../contracts/disposable';
-import type { LayoutOwner, LayoutSet } from '../../../contracts/layouts';
+import {
+  DEFAULT_LAYOUT_NAME,
+  type LayoutOwner,
+  type LayoutSet,
+} from '../../../contracts/layouts';
 import type { Log } from '../../../contracts/log';
 import type {
   LayoutShow,
@@ -8,6 +12,7 @@ import type {
   ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
+import { callEach } from '../../call-each';
 import { errorText } from '../../error-text';
 import { layoutUrl } from '../../layout-url';
 import { createLayoutLoader, type LayoutLoader } from './layout-loader';
@@ -28,8 +33,6 @@ export interface PageLayoutsDeps {
 export interface PageLayouts {
   show<L>(owner: LayoutOwner, options: ShowLayoutOptions<L>): LayoutShow;
 }
-
-const DEFAULT_NAME = 'default';
 
 // What a load was queued for: the set, the names to load, and the setting's
 // name when the set lists it, else null.
@@ -99,7 +102,7 @@ function showLayouts<L>(
     }
     if (missingLogged !== user) {
       missingLogged = user;
-      log(owner, `layout ${user} not found, drawing ${DEFAULT_NAME}`);
+      log(owner, `layout ${user} not found, drawing ${DEFAULT_LAYOUT_NAME}`);
     }
   };
 
@@ -130,7 +133,7 @@ function showLayouts<L>(
     const isUserLoaded = listedUser !== null && result.layouts.has(listedUser);
     const shown: ShownLayouts<L> = {
       layouts: result.layouts,
-      user: isUserLoaded ? listedUser : DEFAULT_NAME,
+      user: isUserLoaded ? listedUser : DEFAULT_LAYOUT_NAME,
     };
     if (lastShown === null || shownChanged(lastShown, shown)) {
       options.setLayouts(shown);
@@ -160,9 +163,11 @@ function showLayouts<L>(
     lastQueued = queued;
     queue = queue
       .then(() => loadAndShow(queued))
-      .catch((error: unknown) =>
-        log(owner, `layouts not shown: ${errorText(error)}`),
-      );
+      .catch((error: unknown) => {
+        if (!isDisposed) {
+          log(owner, `layouts not shown: ${errorText(error)}`);
+        }
+      });
   };
 
   const stopHearing = hear(owner, (set) => {
@@ -179,16 +184,19 @@ function showLayouts<L>(
         update();
       }
     })
-    .catch((error: unknown) =>
-      log(owner, `layout not read: ${errorText(error)}`),
-    );
+    .catch((error: unknown) => {
+      if (!isDisposed) {
+        log(owner, `layout not read: ${errorText(error)}`);
+      }
+    });
   return {
     refresh: update,
     dispose() {
       isDisposed = true;
-      stopHearing();
-      configHeard.dispose();
-      loader.dispose();
+      callEach<() => void>(
+        [stopHearing, () => configHeard.dispose(), () => loader.dispose()],
+        (step) => step(),
+      );
     },
   };
 }

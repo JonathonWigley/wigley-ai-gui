@@ -166,8 +166,11 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
             return;
           }
           workflows.delete(added.id);
-          sidePart.dispose();
-          view.redraw();
+          try {
+            sidePart.dispose();
+          } finally {
+            view.redraw();
+          }
         },
       };
     };

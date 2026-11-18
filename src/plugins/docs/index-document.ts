@@ -54,6 +54,11 @@ export function isKnownSource(source: string): source is DocSource {
   return (DOC_SOURCES as readonly string[]).includes(source);
 }
 
+// A `repo` or `features` entry owns its root folder.
+export function ownsRoot(entry: { source: unknown }): boolean {
+  return entry.source === 'repo' || entry.source === 'features';
+}
+
 export type ParsedIndex =
   | { ok: true; document: IndexDocument }
   | { ok: false; message: string };
@@ -174,7 +179,7 @@ function malformedEntryField(entry: unknown): string | null {
     return 'entry';
   }
   const { source } = entry;
-  const ownedByRepo = source === 'repo' || source === 'features';
+  const ownedByRepo = ownsRoot({ source });
   const ownedByPlugin = source === 'plugin';
   const checks: [string, boolean][] = [
     ['id', typeof entry.id === 'string'],

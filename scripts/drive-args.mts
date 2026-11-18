@@ -119,7 +119,7 @@ const POSITIONAL_FORMS: Record<string, PositionalForm> = {
     },
   },
   'wait-log': {
-    usage: 'wait-log <line> [{"timeoutMs":n}]',
+    usage: 'wait-log <line> [{"timeoutMs":n,"since":n}]',
     parse: (rest) => {
       requireCount(rest, 1, 2, 'wait-log <line> [json]');
       return { line: rest[0], ...optionalJsonObject(rest[1], 'wait-log') };

@@ -198,6 +198,7 @@ describe('createSessionRecency', () => {
       const writes: string[] = [];
       const recording: UiState = {
         get: (key) => state.get(key),
+        on: (key, listener) => state.on(key, listener),
         set: (key, value) => {
           writes.push(key);
           state.set(key, value);

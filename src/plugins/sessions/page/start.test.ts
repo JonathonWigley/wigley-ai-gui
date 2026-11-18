@@ -39,14 +39,11 @@ import {
 import { sessionRow } from '../contract.test-support';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { fakeUiState } from './session-fakes';
+import { fakeUiState, hostRow, savedSplit } from './session-fakes';
 import { sessionsPagePart } from './start';
 
 // Lets a queued microtask and a settled read's `then` run.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-const hostRow = (sessionId: string) =>
-  sessionRow(sessionId, { hostSessionId: `host-${sessionId}` });
 
 function outermostAncestor(node: FakeElement): FakeElement {
   let top = node;
@@ -54,28 +51,6 @@ function outermostAncestor(node: FakeElement): FakeElement {
     top = top.parentNode;
   }
   return top;
-}
-
-// Saved panes `a` and `b` side by side, showing `s1` and `s2`.
-function savedSplit(focusedId: 'a' | 'b'): UiState {
-  return fakeUiState([
-    [
-      'panes',
-      {
-        tree: {
-          focusedId,
-          root: {
-            kind: 'split',
-            axis: 'row',
-            ratio: 0.5,
-            first: { kind: 'leaf', id: 'a' },
-            second: { kind: 'leaf', id: 'b' },
-          },
-        },
-        sessions: { a: 'host-s1', b: 'host-s2' },
-      },
-    ],
-  ]);
 }
 
 // The part with `chat.focusBox` known to its keys; `runs` holds each command
@@ -139,6 +114,10 @@ interface StartOptions {
   part?: typeof sessionsPagePart;
   // The list picker service; a fake with no place for its lists when left out.
   picker?: ListPickerService;
+  // What main's `activate` answers; true when left out.
+  activateReply?: () => Promise<unknown>;
+  // What main's `closeSession` answers, in place of `closeRefusal`.
+  closeReply?: () => Promise<unknown>;
 }
 
 // `part` on the harness, its rows and selection written, up to the first
@@ -154,6 +133,8 @@ async function startApplied(
     parts = [],
     part = sessionsPagePart,
     picker = fakeListPickerService(),
+    activateReply = async () => true,
+    closeReply = async () => closeRefusal,
   }: StartOptions = {},
 ) {
   const activations: unknown[] = [];
@@ -163,10 +144,11 @@ async function startApplied(
     invoke: async (method, ...args) => {
       if (method === 'activate') {
         activations.push(args[0]);
+        return activateReply();
       }
       if (method === 'closeSession') {
         closes.push(args);
-        return closeRefusal;
+        return closeReply();
       }
       return true;
     },
@@ -1256,7 +1238,7 @@ describe('sessions page part', () => {
       logged: 'tab keys ignored: the shown mode has no tabs',
     },
   ] as const)(
-    '$command_ModeHidden_DoesNothing',
+    'does nothing while the mode is hidden ($command)',
     async ({ command, logged }) => {
       const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
         withOtherMode: true,
@@ -1299,6 +1281,42 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
+  // Breaks: a release that reads the selection it finds as the press's own.
+  it('a press that leaves an older selection sends the keys to the Chat box', async () => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+    const focusBox = vi.fn();
+    const setup = await startApplied(['s1', 's2'], 's1', savedSplit('a'), {
+      parts: [chatFocusBoxPart(focusBox)],
+    });
+    const pressed = document.createElement('div');
+    setup.exports.addTab('s2', {
+      id: 'chat',
+      title: 'Chat',
+      icon: 'comment',
+      element: pressed,
+      beforeClose: () => true,
+      shown: () => undefined,
+    });
+    const older = {
+      isCollapsed: false,
+      anchorNode: pressed,
+      anchorOffset: 2,
+      focusNode: pressed,
+      focusOffset: 7,
+    };
+    // The harness stubs its own copy of the window the fake DOM stubbed.
+    (window as unknown as { getSelection(): unknown }).getSelection = () => ({
+      ...older,
+    });
+
+    setup.harness.fireWindow('pointerdown', { target: pressed });
+    setup.harness.fireWindow('pointerup');
+
+    expect(setup.exports.shownSessionId()).toBe('s2');
+    expect(focusBox).toHaveBeenCalledTimes(1);
+    await setup.harness.stop();
+  });
+
   it('closeSession_PopupRefuses_KeepsTheSession', async () => {
     const setup = await startApplied(['s1'], 's1');
     setup.addTab('s1');
@@ -1307,6 +1325,99 @@ describe('sessions page part', () => {
     expect(await setup.exports.closeSession('s1')).toBe(false);
     await setup.harness.stop();
   });
+
+  // Breaks: a continuation of an ask begun before the stop logging,
+  // toasting or asking main again once it lands.
+  it.each<{
+    case: string;
+    isRejected: boolean;
+    reply?: unknown;
+    // How many closes main was asked, all before the stop.
+    closes: number;
+    // Holds the ask's answer in `answer`, then asks.
+    act(
+      answer: Promise<unknown>,
+    ): Promise<Awaited<ReturnType<typeof startApplied>>>;
+  }>([
+    {
+      case: 'an activate reply rejects',
+      isRejected: true,
+      closes: 0,
+      act: async (answer) => {
+        const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+          activateReply: () => answer,
+        });
+        setup.exports.activate('s2');
+        return setup;
+      },
+    },
+    {
+      case: 'main refuses a close',
+      isRejected: false,
+      reply: "Finish or cancel label s1's round first",
+      closes: 1,
+      act: async (answer) => {
+        const setup = await startApplied(['s1'], 's1', fakeUiState(), {
+          closeReply: () => answer,
+        });
+        void setup.exports.closeSession('s1');
+        await settle();
+        return setup;
+      },
+    },
+    {
+      case: 'a close ask fails',
+      isRejected: true,
+      closes: 1,
+      act: async (answer) => {
+        const setup = await startApplied(['s1'], 's1', fakeUiState(), {
+          closeReply: () => answer,
+        });
+        void setup.exports.closeSession('s1');
+        await settle();
+        return setup;
+      },
+    },
+    {
+      case: "a tab's close guard answers",
+      isRejected: false,
+      reply: true,
+      closes: 0,
+      act: async (answer) => {
+        const setup = await startApplied(['s1'], 's1');
+        setup.exports.addTab('s1', {
+          id: 'tab',
+          title: 'Tab',
+          icon: 'book',
+          element: document.createElement('div'),
+          beforeClose: () => answer as Promise<boolean>,
+          shown: () => undefined,
+        });
+        void setup.exports.closeSession('s1');
+        return setup;
+      },
+    },
+  ])(
+    'an ask landing after the part stopped does nothing ($case)',
+    async ({ isRejected, reply, closes, act }) => {
+      const answer = Promise.withResolvers<unknown>();
+      const setup = await act(answer.promise);
+
+      await setup.harness.stop();
+      const logCount = setup.harness.logs.length;
+      if (isRejected) {
+        answer.reject(new Error('main stopped'));
+      } else {
+        answer.resolve(reply);
+      }
+      await settle();
+
+      expect({
+        logs: setup.logsSince(logCount),
+        closes: setup.closes.length,
+      }).toEqual({ logs: [], closes });
+    },
+  );
 });
 
 describe('the sessions list in the page part', () => {
@@ -1388,6 +1499,44 @@ describe('the sessions list in the page part', () => {
     expect(setup.harness.scope()).toBe('sessions.sidebar');
     await setup.harness.stop();
   });
+
+  // Breaks: a listClose whose close lands after the part stopped still
+  // focusing the list, or one that lands live leaving the keys where they went.
+  it.each([
+    { case: 'the part is live', stopsFirst: false, refocused: true },
+    { case: 'the part stopped first', stopsFirst: true, refocused: false },
+  ])(
+    'a list close that lands refocuses the list only while the part runs ($case)',
+    async ({ stopsFirst, refocused }) => {
+      const answer = Promise.withResolvers<null>();
+      const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+        closeReply: () => answer.promise,
+      });
+      setup.harness.setSideBarShown(true);
+      setup.harness.mode(MODE_ID).focusSideBar?.();
+      const focused = () =>
+        (document as unknown as FocusFakeDocument).activeElement;
+      setup.harness.started().commands.listClose({ arg: undefined });
+      await settle();
+      const outside = document.createElement('textarea') as unknown as {
+        focus(): void;
+      };
+      outside.focus();
+      const elsewhere = focused();
+      expect(setup.closes).toHaveLength(1);
+
+      if (stopsFirst) {
+        await setup.harness.stop();
+      }
+      answer.resolve(null);
+      await settle();
+
+      expect(focused() === elsewhere).toBe(!refocused);
+      if (!stopsFirst) {
+        await setup.harness.stop();
+      }
+    },
+  );
 
   it('focusMain_SetsIdle_WhenThePaneShowsNoTab', async () => {
     const setup = await startWithList(['s1'], 's1');

@@ -67,6 +67,8 @@ export interface StartPromptDeps {
   homeDir: string;
   log: PluginLog;
   toast(text: string, tone: ToastTone): void;
+  // True once chat's page part stopped: a reply landing later does nothing.
+  isStopped(): boolean;
 }
 
 // `open` asks for a project — or, through `Other folder…` or with no
@@ -146,9 +148,12 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // Counts the prompt's opens, so an answer can tell its own open is gone.
   let opens = 0;
 
-  // True, logging `what` as dropped, once the prompt has opened again since
-  // the open `isCurrent` belongs to.
+  // True once chat's page part stopped, and, logging `what` as dropped, once
+  // the prompt has opened again since the open `isCurrent` belongs to.
   const isStale = (isCurrent: () => boolean, what: string) => {
+    if (deps.isStopped()) {
+      return true;
+    }
     if (isCurrent()) {
       return false;
     }
@@ -159,7 +164,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // The sections' rows; none when they cannot be read.
   const readSections = (): Promise<ResumeSectionRows[]> =>
     channel.invoke('resumeSections').catch((error: unknown) => {
-      log(`resume sections not read: ${errorText(error)}`);
+      if (!deps.isStopped()) {
+        log(`resume sections not read: ${errorText(error)}`);
+      }
       return [];
     });
 
@@ -174,7 +181,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // Chat's projects; none when they cannot be read.
   const readProjects = (): Promise<ChatProject[]> =>
     channel.invoke('projects').catch((error: unknown) => {
-      log(`projects not read: ${errorText(error)}`);
+      if (!deps.isStopped()) {
+        log(`projects not read: ${errorText(error)}`);
+      }
       return [];
     });
 
@@ -234,6 +243,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         }
       },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`start prompt not opened: ${errorText(error)}`);
         deps.toast(`Start prompt not opened: ${errorText(error)}`, 'error');
       },
@@ -353,6 +365,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         });
       },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`folder dialog failed: ${errorText(error)}`);
         deps.toast(`Folder dialog failed: ${errorText(error)}`, 'error');
       },
@@ -483,6 +498,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         });
       },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`account status not read: ${errorText(error)}`);
         if (isStale(context.isCurrent, `${profile.name}'s status`)) {
           return;
@@ -539,6 +557,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         openWith(rows);
       },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`saved sessions not listed: ${errorText(error)}`);
         if (isStale(context.isCurrent, 'saved sessions')) {
           return;
@@ -659,7 +680,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       () => {
         shown.isWriting = false;
         shown.rows = withArchived(shown.rows, hostSessionId, archived);
-        if (shownStep() !== shown) {
+        if (deps.isStopped() || shownStep() !== shown) {
           return;
         }
         reopenSessionStep(shown, shown.items, deps.picker.cursorIndex());
@@ -667,6 +688,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       },
       (error: unknown) => {
         shown.isWriting = false;
+        if (deps.isStopped()) {
+          return;
+        }
         log(`archive failed: ${errorText(error)}`);
         deps.toast(`Archive failed: ${errorText(error)}`, 'error');
       },
@@ -723,8 +747,15 @@ function resumeSession(
       headless,
     })
     .then(
-      (sessionId) => deps.reveal(sessionId),
+      (sessionId) => {
+        if (!deps.isStopped()) {
+          deps.reveal(sessionId);
+        }
+      },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         deps.log(`session not resumed: ${errorText(error)}`);
         deps.toast(`Session not resumed: ${errorText(error)}`, 'error');
       },
@@ -748,8 +779,15 @@ function startSession(
       profile: profile.name,
     })
     .then(
-      (sessionId) => deps.reveal(sessionId),
+      (sessionId) => {
+        if (!deps.isStopped()) {
+          deps.reveal(sessionId);
+        }
+      },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         deps.log(`session not started: ${errorText(error)}`);
         deps.toast(`Session not started: ${errorText(error)}`, 'error');
       },

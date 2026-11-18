@@ -28,6 +28,7 @@ import {
   scrollText,
   scrollToEdge,
 } from '../../../shared/content-scroll';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   saveLabel,
@@ -872,7 +873,9 @@ export function createProblemWorkspace(
     keepFocusedBox(boxes, FORM_ID, () => {
       if (problemKey !== drawnProblemKey) {
         drawnProblemKey = problemKey;
-        problemDraws = disposeDraws(problemDraws);
+        const heldProblemDraws = problemDraws;
+        problemDraws = [];
+        disposeDraws(heldProblemDraws);
         problemBody.replaceChildren();
         if (problem !== null) {
           drawProblemTab(state, problem);
@@ -880,7 +883,9 @@ export function createProblemWorkspace(
       }
       if (consoleKey !== drawnConsoleKey) {
         drawnConsoleKey = consoleKey;
-        consoleDraws = disposeDraws(consoleDraws);
+        const heldConsoleDraws = consoleDraws;
+        consoleDraws = [];
+        disposeDraws(heldConsoleDraws);
         consoleBody.replaceChildren();
         if (problem !== null) {
           drawConsoleTab(state, problem);
@@ -1021,11 +1026,17 @@ export function createProblemWorkspace(
     try {
       await saveText(id, slug, text);
     } catch (error) {
+      if (isDisposed) {
+        return false;
+      }
       const message = errorText(error);
       dispatch({ type: 'saveFinished', id, slug, revision, error: message });
       log(`draft not saved for ${id}: ${message}`);
       deps.toast(message, 'error');
       return false;
+    }
+    if (isDisposed) {
+      return true;
     }
     dispatch({ type: 'saveFinished', id, slug, revision, error: null });
     log(SAVED_LINES[id]);
@@ -1056,9 +1067,11 @@ export function createProblemWorkspace(
           dispatch({ type: 'draftChanged', id: 'code', slug, text }),
         write: () => void saveNow('code'),
         writeQuit() {
-          void saveNow('code').then(() =>
-            setPane('problem', { movesFocus: true }),
-          );
+          void saveNow('code').then(() => {
+            if (!isDisposed) {
+              setPane('problem', { movesFocus: true });
+            }
+          });
         },
         quit: () => setPane('problem', { movesFocus: true }),
         modeChanged: () => undefined,
@@ -1095,7 +1108,7 @@ export function createProblemWorkspace(
       const isSaved = await saveAllNow(
         kind === 'run' ? ['code', 'customCases'] : ['code'],
       );
-      if (!isSaved) {
+      if (!isSaved || isDisposed) {
         return;
       }
       dispatch({ type: 'judgeStarted', kind });
@@ -1107,8 +1120,14 @@ export function createProblemWorkspace(
             ? await channel.invoke('run', slug)
             : await channel.invoke('submit', slug);
       } catch (error) {
+        if (isDisposed) {
+          return;
+        }
         dispatch({ type: 'judgeFailed', slug, message: errorText(error) });
         log(`${kind} failed ${slug}: ${errorText(error)}`);
+        return;
+      }
+      if (isDisposed) {
         return;
       }
       dispatch({ type: 'judgeDone', slug, result });
@@ -1118,7 +1137,7 @@ export function createProblemWorkspace(
     } finally {
       isJudging = false;
     }
-    if (kind === 'submit') {
+    if (kind === 'submit' && !isDisposed) {
       await reopen(slug, judgedShow);
     }
   };
@@ -1132,7 +1151,9 @@ export function createProblemWorkspace(
     try {
       problem = await channel.invoke('open', slug);
     } catch (error) {
-      log(`not refreshed ${slug}: ${errorText(error)}`);
+      if (!isDisposed) {
+        log(`not refreshed ${slug}: ${errorText(error)}`);
+      }
       return;
     }
     const isStillShown =
@@ -1148,6 +1169,9 @@ export function createProblemWorkspace(
     isPeeking = true;
     try {
       const answer = await channel.invoke('peek', slug);
+      if (isDisposed) {
+        return;
+      }
       const state = store.get();
       const isStillWanted =
         state.problem?.summary.slug === slug &&
@@ -1157,6 +1181,9 @@ export function createProblemWorkspace(
         dispatch({ type: 'peeked', ...answer });
       }
     } catch (error) {
+      if (isDisposed) {
+        return;
+      }
       log(`not peeked ${slug}: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
       dispatch({ type: 'peekFailed' });
@@ -1357,19 +1384,25 @@ export function createProblemWorkspace(
     },
     dispose() {
       isDisposed = true;
-      autosave.dispose();
-      problemDraws = disposeDraws(problemDraws);
-      consoleDraws = disposeDraws(consoleDraws);
-      boxes.destroyForm(FORM_ID);
-      docEditor?.destroy();
+      const draws = [...problemDraws, ...consoleDraws];
+      problemDraws = [];
+      consoleDraws = [];
+      const editor = docEditor;
       docEditor = null;
-      for (const anchor of actionAnchors) {
-        anchor.dispose();
-      }
-      parts.dispose();
-      outer.dispose();
-      inner.dispose();
-      interviewerSplit.dispose();
+      callEach<() => void>(
+        [
+          () => autosave.dispose(),
+          ...draws.map((draw) => () => draw.dispose()),
+          () => boxes.destroyForm(FORM_ID),
+          () => editor?.destroy(),
+          ...[...actionAnchors].map((anchor) => () => anchor.dispose()),
+          () => parts.dispose(),
+          () => outer.dispose(),
+          () => inner.dispose(),
+          () => interviewerSplit.dispose(),
+        ],
+        (step) => step(),
+      );
     },
   };
 }

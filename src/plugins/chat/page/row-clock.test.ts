@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
-import type { Timers } from '../../../contracts/ambient';
+import { fakeTimers } from '../../../shared/fake-timers.test-support';
 import {
   recordingAnchors,
   withUser,
@@ -19,29 +19,6 @@ import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-stat
 
 const NOW = 50_000_000;
 const SESSION = 's1';
-
-// Timers that run only when the test fires them.
-function fakeTimers() {
-  let nextHandle = 1;
-  const armed = new Map<number, () => void>();
-  const timers: Timers = {
-    set: (run) => {
-      armed.set(nextHandle, run);
-      return nextHandle++;
-    },
-    clear: (handle) => {
-      armed.delete(handle);
-    },
-  };
-  const fireAll = () => {
-    const runs = [...armed.values()];
-    armed.clear();
-    for (const run of runs) {
-      run();
-    }
-  };
-  return { timers, armed, fireAll };
-}
 
 // A row clock over a clock and records the test sets and timers it fires.
 function setUp() {

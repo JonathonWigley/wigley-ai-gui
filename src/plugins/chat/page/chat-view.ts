@@ -202,7 +202,8 @@ export interface ChatTabs extends ChatView {
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
   ready(): void;
-  // Ends every held tab; no tab starts after it.
+  // Ends every held tab and the view's subscriptions to the layouts and part
+  // stores; no tab starts after it.
   dispose(): void;
   composerOf(sessionId: string): ComposerSurface | null;
   sessionFactsSource(sessionId: string): SessionFactsSource | null;
@@ -437,34 +438,38 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       hubToEntries(tab, deps);
     }
   };
-  deps.layouts.onChange(() => {
-    toastedKinds.clear();
-    for (const tab of tabs.values()) {
-      tab.entries.rebuild(tab.state.entries);
-      drawComposer(tab);
-      tab.side.rebuild();
-      leaveUnreachableHub(tab);
-    }
-  });
-  deps.renderers.onChanged(() => {
-    toastedKinds.clear();
-    for (const tab of tabs.values()) {
-      tab.entries.rebuild(tab.state.entries);
-    }
-  });
   const drawEveryComposer = () => {
     for (const tab of tabs.values()) {
       drawComposer(tab);
     }
   };
-  deps.composerParts.onChanged(drawEveryComposer);
-  deps.statusParts.onChanged(drawEveryComposer);
-  deps.sideParts.onChanged(() => {
-    for (const tab of tabs.values()) {
-      tab.side.sync();
-      leaveUnreachableHub(tab);
-    }
-  });
+  // The view's subscriptions to the layouts and part stores, which `dispose`
+  // ends.
+  const storeSubscriptions: Disposable[] = [
+    deps.layouts.onChange(() => {
+      toastedKinds.clear();
+      for (const tab of tabs.values()) {
+        tab.entries.rebuild(tab.state.entries);
+        drawComposer(tab);
+        tab.side.rebuild();
+        leaveUnreachableHub(tab);
+      }
+    }),
+    deps.renderers.onChanged(() => {
+      toastedKinds.clear();
+      for (const tab of tabs.values()) {
+        tab.entries.rebuild(tab.state.entries);
+      }
+    }),
+    deps.composerParts.onChanged(drawEveryComposer),
+    deps.statusParts.onChanged(drawEveryComposer),
+    deps.sideParts.onChanged(() => {
+      for (const tab of tabs.values()) {
+        tab.side.sync();
+        leaveUnreachableHub(tab);
+      }
+    }),
+  ];
   let pendingReveal: string | null = null;
   let lastShown: HeldTab | null = null;
   let isDisposed = false;
@@ -501,7 +506,11 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
     // `tabs` holds a tab once `createTab` mounted its box.
     const session = sessionOf(tab, tab.box!, deps.composerParts);
-    placeReturned({ tabs: view, channel, log }, session, fresh);
+    placeReturned(
+      { tabs: view, channel, log, isStopped: () => isDisposed },
+      session,
+      fresh,
+    );
   };
 
   const tabView: TabView = {
@@ -512,7 +521,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     shown: (shownTab) => {
       shownTab.stop.leave();
       takeKeys(shownTab, 'chat', deps);
-      askHistory(shownTab, deps);
+      askHistory(shownTab, deps, () => isDisposed);
       if (lastShown !== null && lastShown.sessionId !== shownTab.sessionId) {
         deps.otherSessionShown();
       }
@@ -889,8 +898,17 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       mounts.clear();
       awaitingRow.clear();
       writeFocus();
-      callEach(held, tearDownTab);
-      callEach(mounted, (mount) => mount.tab?.root.remove());
+      callEach<() => void>(
+        [
+          () =>
+            callEach(storeSubscriptions, (subscription) =>
+              subscription.dispose(),
+            ),
+          () => callEach(held, tearDownTab),
+          () => callEach(mounted, (mount) => mount.tab?.root.remove()),
+        ],
+        (step) => step(),
+      );
     },
     composerOf: (sessionId) => tabs.get(sessionId)?.composer ?? null,
     sessionFactsSource: (sessionId) => {
@@ -1139,11 +1157,19 @@ function hubToEntries(tab: HeldTab, deps: PaneDeps) {
 }
 
 // Asks main for the session's earlier conversation each time its tab shows;
-// main reads it once, and it arrives as a `replace` in `chat.entries`.
-function askHistory(tab: HeldTab, deps: ChatViewDeps) {
+// main reads it once, and it arrives as a `replace` in `chat.entries`. A
+// failure landing once the view is disposed says nothing.
+function askHistory(
+  tab: HeldTab,
+  deps: ChatViewDeps,
+  isDisposed: () => boolean,
+) {
   void deps.channel
     .invoke('loadHistory', tab.sessionId)
     .catch((error: unknown) => {
+      if (isDisposed()) {
+        return;
+      }
       deps.log(`history not loaded: ${errorText(error)}`);
       deps.toast(`history not loaded: ${errorText(error)}`, 'error');
     });

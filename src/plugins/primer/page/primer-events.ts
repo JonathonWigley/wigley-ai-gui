@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import { startFormEvents } from '../../../shared/page/session-forms';
 import type { PresentedPrimer, PrimerPageEvents } from '../contract';
@@ -46,12 +47,12 @@ export function primerEventsBetween(
 }
 
 // Emits the events of each store change, queued as startFormEvents queues
-// them.
+// them, until disposed.
 export function startPrimerEvents(
   store: PrimerStore,
   emit: (event: PrimerPageEvent) => void,
-): void {
-  startFormEvents(store, primerEventsBetween, emit);
+): Disposable {
+  return startFormEvents(store, primerEventsBetween, emit);
 }
 
 // Logs each event's line, source `primer`: `event primerShown <primerId>`,

@@ -5,6 +5,7 @@ import { fakeListPickerService } from '../../../shared/page/fake-list-picker-ser
 import { asFake, installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
   countingEditors,
+  deferred,
   providerManifest,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
@@ -64,14 +65,22 @@ interface FakeBox {
   type(text: string): void;
 }
 
-// The Schedules page on the harness, drawing its layout for real, with `state` published to `scheduling.state`.
-// `saveTask` answers with `save`, else `bbbb2222`; `calls` holds each invoke, `boxes` each box made in order,
-// `activated` each row sessions' `activate` got, `sections` each section sessions' `addSection` got, and
-// `sessionsShows` one entry per run of sessions' `showMode`.
+// The Schedules page on the harness, drawing its layout for real, with `state`
+// published to `scheduling.state`. `saveTask` answers with `save`, else
+// `bbbb2222`; `calls` holds each invoke, `boxes` each box made in order,
+// `activated` each row sessions' `activate` got, `sections` each section
+// sessions' `addSection` got, and `sessionsShows` one entry per run of
+// sessions' `showMode`.
 function startSchedulesPage(
   state: SchedulingState | undefined,
   save: () => Promise<string> = async () => 'bbbb2222',
   firstModeTaken = true,
+  options: {
+    // Answers an invoke in place of the page's own answer; undefined leaves it to the page.
+    held?: (method: string) => Promise<unknown> | undefined;
+    // Makes the Scheduled runs section's `dispose` throw it.
+    sectionDisposeError?: Error;
+  } = {},
 ) {
   installFocusFakeDom(vi.stubGlobal);
   const calls: { method: string; args: unknown[] }[] = [];
@@ -79,10 +88,12 @@ function startSchedulesPage(
   const activated: string[] = [];
   const sections: SidebarSection[] = [];
   const sessionsShows: string[] = [];
+  const live = { boxes: 0 };
   const editor: EditorHost = {
     ...countingEditors().host,
     create(_parent, doc, events) {
       let text = doc;
+      live.boxes += 1;
       boxes.push({
         type(typed) {
           text = typed;
@@ -98,7 +109,9 @@ function startSchedulesPage(
         charBeforeCursor: () => '',
         focus: () => undefined,
         blur: () => undefined,
-        destroy: () => undefined,
+        destroy() {
+          live.boxes -= 1;
+        },
       };
     },
   };
@@ -136,7 +149,13 @@ function startSchedulesPage(
               },
               addSection(section: SidebarSection) {
                 sections.push(section);
-                return { dispose: () => undefined };
+                return {
+                  dispose() {
+                    if (options.sectionDisposeError !== undefined) {
+                      throw options.sectionDisposeError;
+                    }
+                  },
+                };
               },
               setActivity: () => undefined,
             }) as unknown as SessionsPageExports,
@@ -145,6 +164,10 @@ function startSchedulesPage(
     ],
     invoke: async (method, ...args) => {
       calls.push({ method, args });
+      const answer = options.held?.(method);
+      if (answer !== undefined) {
+        return answer;
+      }
       if (method === 'editorChoices') {
         return CHOICES;
       }
@@ -158,7 +181,18 @@ function startSchedulesPage(
   const run = (
     command: Exclude<keyof typeof commands, 'selectTask' | 'openRunRow'>,
   ) => commands[command]({ arg: undefined });
-  return { harness, calls, boxes, activated, sections, sessionsShows, run };
+  const selectTask = (id: string) => commands.selectTask({ arg: id });
+  return {
+    harness,
+    calls,
+    boxes,
+    live,
+    activated,
+    sections,
+    sessionsShows,
+    run,
+    selectTask,
+  };
 }
 
 async function settle() {
@@ -340,6 +374,159 @@ describe('scheduling page part', () => {
       true,
       false,
     ]);
+  });
+
+  it.each<{
+    case: string;
+    method: string;
+    outcome: 'resolve' | 'reject';
+    start: (page: ReturnType<typeof startSchedulesPage>) => Promise<void>;
+  }>([
+    {
+      case: 'setPaused rejects',
+      method: 'setPaused',
+      outcome: 'reject',
+      start: async (page) => {
+        page.selectTask('aaaa1111');
+        page.run('togglePaused');
+      },
+    },
+    {
+      case: 'runNow resolves',
+      method: 'runNow',
+      outcome: 'resolve',
+      start: async (page) => {
+        page.selectTask('aaaa1111');
+        page.run('runNow');
+      },
+    },
+    {
+      case: 'runNow rejects',
+      method: 'runNow',
+      outcome: 'reject',
+      start: async (page) => {
+        page.selectTask('aaaa1111');
+        page.run('runNow');
+      },
+    },
+    {
+      case: 'removeTask resolves',
+      method: 'removeTask',
+      outcome: 'resolve',
+      start: async (page) => {
+        page.selectTask('aaaa1111');
+        page.run('remove');
+        page.run('confirmYes');
+      },
+    },
+    {
+      case: 'removeTask rejects',
+      method: 'removeTask',
+      outcome: 'reject',
+      start: async (page) => {
+        page.selectTask('aaaa1111');
+        page.run('remove');
+        page.run('confirmYes');
+      },
+    },
+    {
+      case: 'editorChoices resolves',
+      method: 'editorChoices',
+      outcome: 'resolve',
+      start: async (page) => page.run('newTask'),
+    },
+    {
+      case: 'editorChoices rejects',
+      method: 'editorChoices',
+      outcome: 'reject',
+      start: async (page) => page.run('newTask'),
+    },
+    {
+      case: 'saveTask resolves',
+      method: 'saveTask',
+      outcome: 'resolve',
+      start: async (page) => page.run('save'),
+    },
+    {
+      case: 'saveTask rejects',
+      method: 'saveTask',
+      outcome: 'reject',
+      start: async (page) => page.run('save'),
+    },
+  ])(
+    'a reply landing after the part stops logs, toasts and draws nothing: $case',
+    async ({ method, outcome, start }) => {
+      const reply = deferred<unknown>();
+      let isArmed = false;
+      const page = startSchedulesPage(
+        schedulingState({ tasks: [taskView('aaaa1111', 'Nightly')] }),
+        undefined,
+        true,
+        {
+          held: (invoked) =>
+            isArmed && invoked === method ? reply.promise : undefined,
+        },
+      );
+      page.run('showMode');
+      if (method === 'saveTask') {
+        page.run('newTask');
+        await settle();
+        page.boxes[0]!.type('Nightly');
+        page.boxes[1]!.type('~/dev/app');
+        page.boxes[3]!.type('Run the checks.');
+      }
+      isArmed = true;
+      await start(page);
+      await vi.waitFor(() =>
+        expect(page.calls.map((call) => call.method)).toContain(method),
+      );
+      await page.harness.stop();
+      const logsBefore = page.harness.logs.map((line) => line.message);
+      const callsBefore = page.calls.length;
+
+      if (outcome === 'resolve') {
+        reply.resolve(method === 'saveTask' ? 'bbbb2222' : undefined);
+      } else {
+        reply.reject(new Error('late'));
+      }
+      await settle();
+
+      expect(page.harness.logs.map((line) => line.message)).toEqual(logsBefore);
+      expect(page.calls).toHaveLength(callsBefore);
+    },
+  );
+
+  it('stop with the runs section dispose throwing still disposes the view after it', async () => {
+    const page = startSchedulesPage(
+      schedulingState({ tasks: [taskView('aaaa1111', 'Nightly')] }),
+      undefined,
+      true,
+      { sectionDisposeError: new Error('section dispose failed') },
+    );
+    // The view disposes after the runs section: it destroys the open editor's
+    // boxes. The host destroys what a part leaves, so the count is read inside
+    // the part's own dispose.
+    page.run('showMode');
+    page.run('newTask');
+    await settle();
+    expect(page.live.boxes).toBeGreaterThan(0);
+    const started = page.harness.started();
+    const ownDispose = started.dispose?.bind(started);
+    if (ownDispose === undefined) {
+      throw new Error('the part has no dispose');
+    }
+    let liveAfterOwnDispose: number | null = null;
+    started.dispose = () => {
+      try {
+        ownDispose();
+      } finally {
+        liveAfterOwnDispose = page.live.boxes;
+      }
+    };
+
+    await expect(page.harness.stop()).rejects.toThrow('section dispose failed');
+
+    expect(liveAfterOwnDispose).toBe(0);
   });
 
   it('mayStop refuses while the draft changed', async () => {

@@ -207,7 +207,7 @@ interview on 2026-10-23; this file is the record of both.
   copies the range as markdown source while one is open (a range with nothing to copy, on an activity line or a permission card, toasts that and stays open), else allows a waiting permission, else copies the block, page `Esc` cancels the range, and a
   plain click moves the cursor to the block under it. A block is a paragraph, heading, top-level list item, code block,
   table or quote of a user or assistant message; any other row is one stop, and the turn and compaction dividers are
-  none. When the transcript scrolls away from the cursor, it moves to the nearest block wholly in view; a block too tall for the view counts while any of it shows; with no such block, it moves to the nearest that shows. `j` or `J` onto the last stop scrolls to the bottom and follows, unless the stop is too tall for the view: then its start shows, and it follows only once a scroll lands on the bottom. A layout gets block stops when it draws the text with `kit.markdown`; an entry with no marked block has one stop; a body drawn later is not read until the next redraw; copy reads source lines by position, so copy per block needs the layout to draw `input.text` itself. `Enter` opens or closes
+  none. When the transcript scrolls away from the cursor, it moves to the nearest block wholly in view; a block too tall for the view counts while any of it shows; with no such block, it moves to the nearest that shows. `j` or `J` onto the last stop scrolls to the bottom and follows, unless the stop is too tall for the view: then its start shows, and it follows only once a scroll lands on the bottom; a `j` or `J` that stays on a too-tall last stop while the list follows at its bottom leaves the list there, still following. A layout gets block stops when it draws the text with `kit.markdown`; an entry with no marked block has one stop; a body drawn later is not read until the next redraw; copy reads source lines by position, so copy per block needs the layout to draw `input.text` itself. `Enter` opens or closes
   the entry holding the cursor or the focused activity line and pulls back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
   (§ Pending messages). The transcript shows the messages, permission prompts, notices, turn dividers and pending rows; the agent's
   steps show in the session hub's activity dock (§ Activity dock), and in the transcript as
@@ -236,7 +236,8 @@ interview on 2026-10-23; this file is the record of both.
     `· 1 failed` in the error colour before the time.
   - **Open**: Enter on the focused activity line, or a click on it, opens it, and again closes it. The open line keeps
     its summary line and lists one plain row per step under it, each drawn by the `tool`, `thinking` or `raw` entry
-    builder; each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and
+    builder; under a layout that sets `activityInTranscript`, the built-in tool and thinking rows end with the step's
+    time (`· 4s`), from the step to the next entry that is not another agent's, shown once that entry arrives; each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and
     result in place. Closing the line makes it one stop again; a cursor on one of its steps moves to the line. A cursor
     following the last activity line stays on it as steps arrive, and `G` lands on that line, until the open run
     overflows: at the bottom, whether or not the list had to scroll there, the cursor moves to the nearest step in view, and it follows the last step from there. A line stays open or

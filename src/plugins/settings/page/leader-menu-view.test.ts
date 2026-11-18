@@ -76,6 +76,9 @@ function shownMenu(
   schema: UserConfigSchema = SCHEMA,
 ) {
   let current = layer;
+  // Set to make each cursor prompt's removal throw it, after removing it.
+  let promptRemoveError: Error | undefined;
+  const removedPrompts: HTMLElement[] = [];
   const committed: Commit[] = [];
   const recordings: RecordRequest[] = [];
   const pickers: PickRequest<unknown>[] = [];
@@ -130,7 +133,13 @@ function shownMenu(
     drawPrompt(at) {
       const prompt = document.createElement('span');
       at.append(prompt);
-      return () => prompt.remove();
+      return () => {
+        prompt.remove();
+        removedPrompts.push(prompt);
+        if (promptRemoveError !== undefined) {
+          throw promptRemoveError;
+        }
+      };
     },
     setScope: (scope) => scopes.push(scope),
     setFocusTarget: (target) => targets.push(target),
@@ -159,6 +168,10 @@ function shownMenu(
     logs,
     scopes,
     targets,
+    removedPrompts,
+    failPromptRemoval(error: Error) {
+      promptRemoveError = error;
+    },
     land,
     cursor,
     redraw: () => view.draw(parent),
@@ -707,6 +720,18 @@ describe('createLeaderMenuView', () => {
     expect([promptsIn('group top'), promptsIn('opens <Leader>b')]).toEqual([
       1, 1,
     ]);
+  });
+
+  it('dispose removes the items prompt when the groups prompt removal throws, then rethrows', () => {
+    const error = new Error('prompt removal failed');
+    const menu = shownMenu();
+    menu.view.commands.open();
+    menu.removedPrompts.length = 0;
+    menu.failPromptRemoval(error);
+
+    expect(() => menu.view.dispose()).toThrow(error);
+
+    expect(menu.removedPrompts).toHaveLength(2);
   });
 
   it('leaderMenu_CursorFollowsTheMovedBind', () => {

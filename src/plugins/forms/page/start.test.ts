@@ -183,6 +183,32 @@ describe('forms page part', () => {
     await harness.stop();
   });
 
+  it('stopping with one dispose throwing still releases every other part', async () => {
+    const editors = countingEditors();
+    let isThrowOwed = true;
+    const harness = startPagePart(formsPagePart, {
+      parts: [sessionsPagePart],
+      anchorDispose() {
+        if (isThrowOwed) {
+          isThrowOwed = false;
+          throw new Error('anchor gone');
+        }
+      },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
+    });
+    harness.send('formShown', openForm());
+    expect(harness.anchors.length).toBeGreaterThan(0);
+
+    await expect(harness.stop()).rejects.toThrow('anchor gone');
+
+    expect(editors.live()).toBe(0);
+    expect(harness.counts()).toEqual(noCounts);
+  });
+
   // The stop-order ruling: the kinds and origins listeners leave before the
   // built-ins do.
   it('stop throws nothing and rebuilds nothing', async () => {
@@ -346,7 +372,7 @@ describe('forms page part', () => {
     await harness.stop();
   });
 
-  it('a finish that rejects after stop draws nothing', async () => {
+  it('a finish that rejects after stop draws and logs nothing', async () => {
     const finishing = deferred<void>();
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
@@ -374,12 +400,11 @@ describe('forms page part', () => {
 
     await harness.stop();
     const made = editors.made();
+    const logged = harness.logs.length;
     finishing.reject(new Error('main is gone'));
     await settle();
 
-    expect(harness.logs.map((line) => line.message)).toContainEqual(
-      expect.stringContaining('not finished'),
-    );
+    expect(harness.logs).toHaveLength(logged);
     expect(editors.made()).toBe(made);
   });
 

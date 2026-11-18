@@ -502,10 +502,13 @@ export interface ModeContext {
 // shows: by `toggleSideBar`, `picked`, or the window widening with its
 // overlay open, and after `shown` when the mode shows with its side bar
 // hidden; the plugin moves focus out of the side bar there. A window
-// narrowing hides the side bar without it. `sideBarOpenedOver` runs each time
-// the side bar opens over the content while the mode shows, by
+// narrowing hides the side bar without it. `sideBarNarrowed` runs instead when
+// a window narrowing hides this shown mode's side bar from beside the content;
+// the plugin closes what the side bar held open there, moving no focus, so
+// focus survives a narrow-and-widen round trip. `sideBarOpenedOver` runs each
+// time the side bar opens over the content while the mode shows, by
 // `toggleSideBar` or after `shown`; the plugin moves focus into the side bar
-// there. Neither
+// there. None of the three
 // runs for a hidden mode, a mode without a side bar, or a side bar already
 // in that state.
 // `focusSideBar` runs when the core's Alt+h leaves main's left edge while
@@ -529,6 +532,7 @@ export interface Mode {
   shown(): void;
   hidden(): void;
   sideBarHidden?(): void;
+  sideBarNarrowed?(): void;
   sideBarOpenedOver?(): void;
   focusSideBar?(): void;
   focusMain(): void;
@@ -990,8 +994,13 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // the file or folder at `path` (relative to the self-test's temp home, as
 // `writeFile`'s path is) after the write and before the keys, as an outside
 // program deleting it would; one that resolves outside the home fails the
-// self-test. `expect` is a line the page logs once the write, the removal and
-// the keys have run, and `alsoExpect`, when set, holds
+// self-test. `click`, when set, is a CSS selector whose first match is
+// clicked once with the left button after the write and the removal and
+// before the keys; a repeating step clicks once, before its first press, and
+// a click that cannot land (no match, no size, outside the window, covered at
+// its centre) fails the step without pressing its keys. `expect` is a line the
+// page logs once the write, the removal, the click and the keys have run, and
+// `alsoExpect`, when set, holds
 // patterns that each match a line logged after the step began, before or
 // after `expect`, for a line carrying a value the script cannot know, such as
 // a random id, or a second line the step's keys cause, in either order; a
@@ -1015,6 +1024,7 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 export interface SelfTestStep {
   writeFile?: { path: string; text: string };
   remove?: string;
+  click?: string;
   keys: string[];
   expect: string;
   alsoExpect?: RegExp[];

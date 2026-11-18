@@ -4,6 +4,7 @@ import type { PluginLog } from '../../../contracts/log';
 import { activeMsAt } from '../../../shared/active-time';
 import { callEach } from '../../../shared/call-each';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import { createPendingTick } from '../../../shared/pending-tick';
 import type { SessionPart } from '../../sessions/contract';
 import type { PartView, RowClockInput } from '../layouts/layout';
 import {
@@ -61,7 +62,7 @@ export function createRowClock(deps: RowClockDeps): RowClock {
   const { duration } = surfaceBaseKit(deps.kit, 'chat', {
     recordAnchor: () => undefined,
   });
-  let pendingTick: number | null = null;
+  const ticker = createPendingTick(timers, TICK_MS, () => tick());
 
   const isRunning = (sessionId: string) => {
     const time = deps.activeTime(sessionId);
@@ -120,18 +121,9 @@ export function createRowClock(deps: RowClockDeps): RowClock {
 
   // Sets the tick while a kept row's clock runs and none is pending; clears a
   // pending one once none runs.
-  const updateTick = () => {
-    const isAnyRunning = [...rows.keys()].some(isRunning);
-    if (isAnyRunning && pendingTick === null) {
-      pendingTick = timers.set(tick, TICK_MS);
-    } else if (!isAnyRunning && pendingTick !== null) {
-      timers.clear(pendingTick);
-      pendingTick = null;
-    }
-  };
+  const updateTick = () => ticker.setNeeded([...rows.keys()].some(isRunning));
 
   const tick = () => {
-    pendingTick = null;
     try {
       const running = [...rows.values()].filter((row) =>
         isRunning(row.sessionId),

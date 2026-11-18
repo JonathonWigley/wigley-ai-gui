@@ -20,6 +20,7 @@ import type {
 } from '../../../contracts/plugin';
 import type { LayoutState } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
@@ -326,6 +327,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     channel,
     log: deps.log,
     toast: deps.toast,
+    isStopped: () => isDisposed,
     pushScope: () => deps.pushScope('import'),
     drawFrame: (parent, input) =>
       parts.redraw(
@@ -389,6 +391,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   let loadCount = 0;
   let loadedCount = 0;
   let openRequest = 0;
+  let isDisposed = false;
   let shownSelectedSlug: string | null = null;
   let shownFocus: PracticeFocus | null = null;
   let headerDraw: DrawnRoot | null = null;
@@ -448,7 +451,9 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
 
   const drawRows = (state: PracticeState) => {
     const rows = visibleProblems(state, matcher);
-    rowDraws = disposeDraws(rowDraws);
+    const heldRowDraws = rowDraws;
+    rowDraws = [];
+    disposeDraws(heldRowDraws);
     rowsList.replaceChildren();
     for (const problem of rows) {
       const drawn = parts.draw(
@@ -678,7 +683,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     }
     workspaceSlug = slug;
     void workspace.show(problem).then((result) => {
-      if (result === 'overtaken') {
+      if (isDisposed || result === 'overtaken') {
         return;
       }
       if (result === 'kept' && shownSlug !== null) {
@@ -706,11 +711,14 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     try {
       problem = await channel.invoke('open', slug);
     } catch (error) {
+      if (isDisposed) {
+        return;
+      }
       deps.log(`not opened ${slug}: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
       return;
     }
-    if (request !== openRequest) {
+    if (isDisposed || request !== openRequest) {
       return;
     }
     dispatch({ type: 'opened', slug });
@@ -736,11 +744,15 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     try {
       problem = await channel.invoke('open', openSlug);
     } catch (error) {
-      deps.log(`not refreshed ${openSlug}: ${errorText(error)}`);
+      if (!isDisposed) {
+        deps.log(`not refreshed ${openSlug}: ${errorText(error)}`);
+      }
       return;
     }
     const isOvertaken =
-      request !== openRequest || store.get().openSlug !== openSlug;
+      isDisposed ||
+      request !== openRequest ||
+      store.get().openSlug !== openSlug;
     if (!isOvertaken) {
       applyOpened(problem, mark);
     }
@@ -750,7 +762,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   const read = async () => {
     const count = ++loadCount;
     const problems = await channel.invoke('list');
-    if (count !== loadCount) {
+    if (isDisposed || count !== loadCount) {
       return;
     }
     loadedCount += 1;
@@ -769,6 +781,9 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   // Logs and toasts a failed read in place of throwing it.
   const readQuietly = (): Promise<void> =>
     read().catch((error) => {
+      if (isDisposed) {
+        return;
+      }
       dispatch({ type: 'loadFailed', message: errorText(error) });
       deps.log(`not loaded: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
@@ -932,16 +947,26 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
       }
     },
     dispose() {
-      headerDraw?.dispose();
+      isDisposed = true;
+      const draws = [
+        ...(headerDraw === null ? [] : [headerDraw]),
+        ...rowDraws,
+        ...(noProblemDraw === null ? [] : [noProblemDraw]),
+      ];
       headerDraw = null;
-      rowDraws = disposeDraws(rowDraws);
-      noProblemDraw?.dispose();
+      rowDraws = [];
       noProblemDraw = null;
-      importAnchor.dispose();
-      importBox.cancel();
-      interviewer.dispose();
-      workspace.dispose();
-      parts.dispose();
+      callEach<() => void>(
+        [
+          ...draws.map((draw) => () => draw.dispose()),
+          () => importAnchor.dispose(),
+          () => importBox.cancel(),
+          () => interviewer.dispose(),
+          () => workspace.dispose(),
+          () => parts.dispose(),
+        ],
+        (step) => step(),
+      );
     },
     commands,
     openProblemRow(slug) {

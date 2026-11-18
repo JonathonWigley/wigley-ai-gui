@@ -13,11 +13,14 @@ const START_WIDTH = 800;
 // A page over the fake window: its log (newest first) answers `#log li`, its
 // width is the window's content width, every redraw lands at once, and each
 // key pressed runs `onKey`, which may log lines and navigate the page. The
-// keys plugin's placement check logs `placementLines`, oldest first.
-// `widthsAtKeys` holds the content width at each key press.
+// keys plugin's placement check logs `placementLines`, oldest first. A click
+// lands on a shown target at (60, 40), covered there by `cover` when set.
+// `widthsAtKeys` holds the content width at each key press, and `inputs` every
+// input sent.
 function page(
   onKey: (key: string, log: string[], navigate: () => void) => void,
   placementLines: readonly string[] = [],
+  cover: string | null = null,
 ) {
   const log: string[] = [];
   const widthsAtKeys: number[] = [];
@@ -29,6 +32,10 @@ function page(
     ],
     ['innerWidth', () => fake.window.contentSize().width],
     ['redrawFrames', () => 3],
+    [
+      'elementFromPoint',
+      () => ({ x: 60, y: 40, isShown: true, isInWindow: true, cover }),
+    ],
   ]);
   fake.screen.captured = new Uint8Array([1]);
   const window: DrivenWindow = {
@@ -41,7 +48,7 @@ function page(
       }
     },
   };
-  return { window, log, widthsAtKeys };
+  return { window, log, widthsAtKeys, inputs: fake.inputs };
 }
 
 // Runs one script of `groups` for plugin `t` over `window`, its fixture
@@ -613,6 +620,127 @@ describe('runScript', () => {
     expect(order).toEqual(['write p/a.txt', 'trash p/old', 'key j']);
     expect(lines).toContain(
       '[selftest] PASS write p/a.txt, remove p/old, j -> [t] j',
+    );
+  });
+
+  it("clicks a step's selector after its write and before its keys", async () => {
+    const order: string[] = [];
+    const { window, log } = page((key, pageLog) => {
+      order.push(`key ${key}`);
+      pageLog.unshift(`[t] ${key}`);
+    });
+    const recordingWindow: DrivenWindow = {
+      ...window,
+      sendInput: (input) => {
+        if (input.type === 'mouseDown' || input.type === 'mouseUp') {
+          order.push(input.type);
+        }
+        window.sendInput(input);
+      },
+    };
+    const homeFiles = {
+      write: async (path: string) => {
+        order.push(`write ${path}`);
+      },
+    } as unknown as Files;
+
+    const failures = await runScript(
+      recordingWindow,
+      homeFiles,
+      {
+        pluginId: 't',
+        script: {
+          pageBinds: [],
+          settings: {},
+          open: () => {
+            log.unshift('[t] shown');
+            return { shownLine: '[t] shown', result: Promise.resolve(null) };
+          },
+          groups: [
+            {
+              name: 'click',
+              why: 'a click lands between the write and the keys',
+              steps: [
+                {
+                  writeFile: { path: 'p/a.txt', text: 'a' },
+                  click: '.target',
+                  keys: ['j'],
+                  expect: '[t] j',
+                },
+              ],
+            },
+          ],
+          scrollsItself: [],
+          problems: () => [],
+        },
+        checksResult: true,
+      },
+      new Map(),
+      START_WIDTH,
+      1,
+      () => true,
+      50,
+    );
+
+    expect(failures).toBe(0);
+    expect(order).toEqual(['write p/a.txt', 'mouseDown', 'mouseUp', 'key j']);
+    expect(lines).toContain(
+      '[selftest] PASS write p/a.txt, click .target, j -> [t] j',
+    );
+  });
+
+  it('passes a click step with no keys on a line the click alone logs', async () => {
+    const { window, log } = page(echo);
+    const clickedWindow: DrivenWindow = {
+      ...window,
+      sendInput: (input) => {
+        window.sendInput(input);
+        if (input.type === 'mouseUp') {
+          log.unshift('[t] clicked');
+        }
+      },
+    };
+
+    const failures = await runGroups(
+      clickedWindow,
+      log,
+      [
+        {
+          name: 'click',
+          why: 'a click logs a line',
+          steps: [{ click: '.target', keys: [], expect: '[t] clicked' }],
+        },
+      ],
+      new Map(),
+      () => true,
+      50,
+    );
+
+    expect(failures).toBe(0);
+  });
+
+  it('fails a step whose click target is covered, naming the cover and pressing none of its keys', async () => {
+    const { window, log, inputs } = page(echo, [], 'div.scrim');
+
+    const failures = await runGroups(
+      window,
+      log,
+      [
+        {
+          name: 'click',
+          why: 'a covered target is not clicked',
+          steps: [{ click: '.target', keys: ['j'], expect: '[t] j' }],
+        },
+      ],
+      new Map(),
+      () => true,
+      50,
+    );
+
+    expect(failures).toBe(1);
+    expect(inputs.filter((input) => input.type === 'keyDown')).toEqual([]);
+    expect(lines).toContain(
+      '[selftest] FAIL click .target, j -> [t] j: .target is covered at its centre by div.scrim',
     );
   });
 });

@@ -45,6 +45,7 @@ import {
   leaderTree,
 } from './leader-tree';
 import type { CommitVia, RowContext } from './settings-view';
+import { callEach } from '../../../shared/call-each';
 
 export type LeaderMenuCommand =
   | 'down'
@@ -772,8 +773,7 @@ export function createLeaderMenuView(deps: LeaderMenuDeps): LeaderMenuView {
 
   // Disposes both panes' cursor prompts, so no prompt anchor outlives its row.
   const disposePrompts = () => {
-    prompts.groups.dispose();
-    prompts.items.dispose();
+    callEach([prompts.groups, prompts.items], (prompt) => prompt.dispose());
   };
 
   // Marks each pane's cursor row selected, ringed while its pane holds the

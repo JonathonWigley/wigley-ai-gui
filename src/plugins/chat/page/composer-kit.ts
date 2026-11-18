@@ -325,15 +325,20 @@ export function createComposerSurface(
       dock.set(entries, working, compaction);
     },
     dispose() {
-      dock.dispose();
-      composer?.dispose();
-      statusLine?.dispose();
-      attachments?.dispose();
-      dockPart.dispose();
-      linePart.dispose();
-      turnLinePart.dispose();
-      dockListeners.clear();
-      disposeAnchors(parts.anchors);
+      callEach<() => void>(
+        [
+          () => dock.dispose(),
+          () => composer?.dispose(),
+          () => statusLine?.dispose(),
+          () => attachments?.dispose(),
+          () => dockPart.dispose(),
+          () => linePart.dispose(),
+          () => turnLinePart.dispose(),
+          () => dockListeners.clear(),
+          () => disposeAnchors(parts.anchors),
+        ],
+        (step) => step(),
+      );
     },
   };
 

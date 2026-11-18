@@ -6,6 +6,7 @@ import {
 } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { registeredProfiles } from '../../../shared/harness-profiles';
 import type { ChatImage } from '../../../contracts/agent';
@@ -119,11 +120,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
     const { services } = api;
-    void api.channel
-      .invoke('loaded')
-      .catch((error: unknown) =>
-        services.log(`chat page load not sent: ${errorText(error)}`),
-      );
+    let isStopped = false;
+    void api.channel.invoke('loaded').catch((error: unknown) => {
+      if (!isStopped) {
+        services.log(`chat page load not sent: ${errorText(error)}`);
+      }
+    });
     // The restore window waits for main's restore of the saved rows.
     api.restores.track(api.channel.invoke('restored'));
     const sessions = api.dependency(sessionsPageKey);
@@ -223,12 +225,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       channel: api.channel,
       writeClipboard,
       toast: services.toast,
+      isStopped: () => isStopped,
     });
     const slashCommands = createSlashCommands();
     addAccountCommands({
       commands: slashCommands,
       signIn,
       channel: api.channel,
+      isStopped: () => isStopped,
     });
     addClearCommands({
       commands: slashCommands,
@@ -250,6 +254,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       channel: api.channel,
       reasonBox,
       log: services.log,
+      isStopped: () => isStopped,
     });
     // The pickers and dialogs that act on the visible session.
     const closeSessionDialogs = () => {
@@ -390,6 +395,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       homeDir: services.homeDir,
       log: services.log,
       toast: services.toast,
+      isStopped: () => isStopped,
     });
     completionRows.add(
       descriptionDraw({
@@ -461,6 +467,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           writeClipboard,
           toast: services.toast,
           log: services.log,
+          isStopped: () => isStopped,
         }),
         newSession: () => startPrompt.open(),
         startNewSession: () => startPrompt.openForNewSession(),
@@ -487,7 +494,13 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         view.ready();
       },
       mayStop: () => view.mayStop(rows.all().values()),
-      dispose: () => view.dispose(),
+      dispose: () => {
+        isStopped = true;
+        callEach<() => void>(
+          [() => view.dispose(), () => viewer.dispose()],
+          (step) => step(),
+        );
+      },
     };
   },
 };

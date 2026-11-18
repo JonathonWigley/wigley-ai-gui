@@ -4,6 +4,11 @@ export type PlaytestSignal =
 
 type Runner = 'unity' | 'capture';
 
+type Variables = ReadonlyMap<string, string>;
+
+const UNITY_PROJECT_PATH_VARIABLE = 'UNITY_PROJECT_PATH';
+const VARIABLE = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
+
 const UNITY_VALUE_FLAGS: ReadonlySet<string> = new Set([
   '--timeout',
   '--port',
@@ -206,23 +211,26 @@ function readDoubleQuoted(
   return i;
 }
 
-// The runner a segment's words invoke, and the index of the first word after
-// `command` (unity) or after the script word (capture); null for any other.
+// The runner a segment's words invoke, the index of its program word (the
+// words before it are `NAME=value` assignments), and the index of the first
+// word after `command` (unity) or after the script word (capture); null for
+// any other. The program and script words expand from `variables`.
 function runnerOf(
   words: readonly string[],
-): { runner: Runner; argsStart: number } | null {
+  variables: Variables,
+): { runner: Runner; programAt: number; argsStart: number } | null {
   let i = 0;
   while (i < words.length && ASSIGNMENT.test(words[i] ?? '')) {
     i += 1;
   }
-  const program = words[i];
-  if (program === undefined) {
+  const program = expand(words[i] ?? '', variables);
+  if (program === null || program === '') {
     return null;
   }
   const isUnity = program === 'unity' || program.endsWith('/unity');
   if (isUnity) {
     return words[i + 1] === 'command'
-      ? { runner: 'unity', argsStart: i + 2 }
+      ? { runner: 'unity', programAt: i, argsStart: i + 2 }
       : null;
   }
   if (!PYTHON_PROGRAM.test(program)) {
@@ -232,9 +240,9 @@ function runnerOf(
   while (script < words.length && (words[script] ?? '').startsWith('-')) {
     script += 1;
   }
-  const scriptWord = words[script];
-  return scriptWord !== undefined && CAPTURE_SCRIPT.test(scriptWord)
-    ? { runner: 'capture', argsStart: script + 1 }
+  const scriptWord = expand(words[script] ?? '', variables);
+  return scriptWord !== null && CAPTURE_SCRIPT.test(scriptWord)
+    ? { runner: 'capture', programAt: i, argsStart: script + 1 }
     : null;
 }
 
@@ -278,38 +286,132 @@ function readArgs(
   return { positionals, projectPath };
 }
 
-function signalOfSegment(words: readonly string[]): PlaytestSignal | null {
-  const invocation = runnerOf(words);
-  if (invocation === null) {
-    return null;
-  }
-  const isUnity = invocation.runner === 'unity';
-  const { positionals, projectPath } = readArgs(
-    words.slice(invocation.argsStart),
-    isUnity ? UNITY_VALUE_FLAGS : CAPTURE_VALUE_FLAGS,
+// `text` with each `$NAME` and `${NAME}` replaced by its value in
+// `variables`; null when it names a variable with no value or holds any other
+// `$` form (`$(…)`, `$1`). A `$` the command single-quoted reads the same,
+// since the words carry no quotes.
+function expand(text: string, variables: Variables): string | null {
+  let unknown = false;
+  const expanded = text.replace(
+    VARIABLE,
+    (_match: string, braced?: string, bare?: string) => {
+      const value = variables.get(braced ?? bare ?? '');
+      if (value === undefined) {
+        unknown = true;
+        return '';
+      }
+      return value;
+    },
   );
-  const name = positionals[0];
-  if (isUnity && name === 'editor_play') {
-    return { kind: 'start', projectPath };
+  return unknown || expanded.includes('$') ? null : expanded;
+}
+
+// Notes in `variables` what a segment sets for the segments after it: a
+// segment of only `NAME=value` words, after an optional `export`, sets each
+// name in order, and `cd <dir>` sets `PWD`. A value that does not expand
+// drops its name, as does a bare `cd`.
+function noteVariables(
+  words: readonly string[],
+  variables: Map<string, string>,
+): void {
+  if (words[0] === 'cd') {
+    const dir = words[1] === undefined ? null : expand(words[1], variables);
+    if (dir === null) {
+      variables.delete('PWD');
+    } else {
+      variables.set('PWD', dir);
+    }
+    return;
   }
-  if (isUnity && name === 'editor_stop') {
-    return { kind: 'stop', projectPath };
+  const assignments = words[0] === 'export' ? words.slice(1) : words;
+  if (!assignments.every((word) => ASSIGNMENT.test(word))) {
+    return;
   }
-  if (!isUnity && name === 'start') {
-    return { kind: 'start', projectPath };
+  for (const word of assignments) {
+    const equals = word.indexOf('=');
+    const name = word.slice(0, equals);
+    const value = expand(word.slice(equals + 1), variables);
+    if (value === null) {
+      variables.delete(name);
+    } else {
+      variables.set(name, value);
+    }
+  }
+}
+
+// The playtest a runner's positionals name: Pipeline 0.8's `editor_play` and
+// `editor_stop`, the grouped `editor.playmode start` and `stop` of 0.9 and
+// above, and capture's `start`.
+function kindOf(
+  runner: Runner,
+  [name, verb]: readonly string[],
+): PlaytestSignal['kind'] | null {
+  if (runner === 'capture') {
+    return name === 'start' ? 'start' : null;
+  }
+  const isPlayMode = name === 'editor.playmode';
+  if (name === 'editor_play' || (isPlayMode && verb === 'start')) {
+    return 'start';
+  }
+  if (name === 'editor_stop' || (isPlayMode && verb === 'stop')) {
+    return 'stop';
   }
   return null;
 }
 
-// Whether a Bash command's text starts a playtest (`unity command editor_play`,
-// `capture.py start`) or stops one (`unity command editor_stop`), with the
-// `--project-path` it names; the last segment that signals wins. Variables and
-// command substitution are read as written, not expanded, and a heredoc's body
-// signals nothing.
+function signalOfSegment(
+  words: readonly string[],
+  variables: Variables,
+): PlaytestSignal | null {
+  const invocation = runnerOf(words, variables);
+  if (invocation === null) {
+    return null;
+  }
+  const { runner, programAt, argsStart } = invocation;
+  const { positionals, projectPath } = readArgs(
+    words.slice(argsStart),
+    runner === 'unity' ? UNITY_VALUE_FLAGS : CAPTURE_VALUE_FLAGS,
+  );
+  const kind = kindOf(runner, positionals);
+  if (kind === null) {
+    return null;
+  }
+  if (projectPath !== null) {
+    return { kind, projectPath: expand(projectPath, variables) };
+  }
+  if (runner === 'capture') {
+    return { kind, projectPath: null };
+  }
+  // The unity CLI falls back to `UNITY_PROJECT_PATH`, set by an assignment
+  // before the program or earlier on the line, then to the project holding
+  // the working folder, read here as the folder the line `cd`s into: one that
+  // holds no editor opens nothing.
+  const environment = new Map(variables);
+  noteVariables(words.slice(0, programAt), environment);
+  return {
+    kind,
+    projectPath:
+      environment.get(UNITY_PROJECT_PATH_VARIABLE) ??
+      environment.get('PWD') ??
+      null,
+  };
+}
+
+// Whether a Bash command's text starts a playtest (`unity command
+// editor.playmode start` or `editor_play`, `capture.py start`) or stops one
+// (`unity command editor.playmode stop` or `editor_stop`), with the project
+// folder it names; the last segment that signals wins. The folder is the
+// `--project-path`, else for unity the `UNITY_PROJECT_PATH` the line sets,
+// else the folder it `cd`s into. `$NAME` and `${NAME}` expand from plain
+// assignments and `cd`s in earlier segments; a path naming any other variable
+// or a command substitution reads as no path. A heredoc's body signals
+// nothing.
 export function parsePlaytestCommand(command: string): PlaytestSignal | null {
+  const variables = new Map<string, string>();
   let signal: PlaytestSignal | null = null;
   for (const words of segmentsOf(command)) {
-    signal = signalOfSegment(words) ?? signal;
+    signal = signalOfSegment(words, variables) ?? signal;
+    noteVariables(words, variables);
   }
   return signal;
 }

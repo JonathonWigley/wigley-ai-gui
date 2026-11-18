@@ -17,6 +17,7 @@ import type {
 } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { scrollContent } from '../../../shared/content-scroll';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import { element } from '../../../shared/page/dom';
@@ -503,13 +504,18 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
       render();
     },
     dispose() {
-      statusPart.dispose();
-      drawnBody?.dispose();
-      drawnFrame?.dispose();
-      storeSubscription.dispose();
-      for (const primerId of primerViews.keys()) {
-        destroyPrimerView(primerId, shownPrimers, deps);
-      }
+      callEach<() => void>(
+        [
+          () => statusPart.dispose(),
+          () => drawnBody?.dispose(),
+          () => drawnFrame?.dispose(),
+          () => storeSubscription.dispose(),
+          ...[...primerViews.keys()].map(
+            (primerId) => () => destroyPrimerView(primerId, shownPrimers, deps),
+          ),
+        ],
+        (step) => step(),
+      );
     },
     scrollBy(step, direction) {
       const state = store.get();
@@ -745,9 +751,6 @@ function createPrimerFormView(
   return {
     element: root,
     update(current, viewName) {
-      // Every primer's columns share their stored widths.
-      outer.reloadWidth();
-      inner.reloadWidth();
       statusLine.update(true, saveContent(current));
       const layouts = shown();
       updateStrips(strips, current, layouts);
@@ -793,15 +796,18 @@ function createPrimerFormView(
     },
     resizeTarget: (pane) => (pane === 'tasks' ? outer : inner),
     dispose() {
-      card.dispose();
-      tasks.drawn?.dispose();
-      items.drawn?.dispose();
-      reviewPart?.dispose();
-      for (const strip of Object.values(strips)) {
-        disposeStrip(strip);
-      }
-      inner.dispose();
-      outer.dispose();
+      callEach<() => void>(
+        [
+          () => card.dispose(),
+          () => tasks.drawn?.dispose(),
+          () => items.drawn?.dispose(),
+          () => reviewPart?.dispose(),
+          ...Object.values(strips).map((strip) => () => disposeStrip(strip)),
+          () => inner.dispose(),
+          () => outer.dispose(),
+        ],
+        (step) => step(),
+      );
     },
   };
 }
@@ -1321,7 +1327,7 @@ function drawCardPart<Kit, Input>(
     log: deps.log,
     partName,
   });
-  const layout = drawn.drewPick ? pick.layout : defaultLayout;
+  const layout = drawn.drewBundled ? defaultLayout : pick.layout;
   const { card, kit } = drawn.built;
   return {
     pick,

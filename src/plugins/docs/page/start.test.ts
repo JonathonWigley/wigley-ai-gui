@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { coreModeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
   asFake,
   type FakeElement,
   findAll,
+  type FocusFakeElement,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import {
@@ -24,7 +26,10 @@ import {
   MACHINE_SOURCE_ID,
   sessionSourceId,
 } from '../contract';
-import type { EditorHost } from '../../../contracts/editor';
+import type {
+  DocumentEditorEvents,
+  EditorHost,
+} from '../../../contracts/editor';
 import { docsPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { DocsView } from './docs-view';
@@ -65,11 +70,32 @@ vi.mock('./docs-view', async (importOriginal) => {
 const projectRow = (sessionId: string) =>
   sessionRow(sessionId, { label: sessionId, projectDir: '/p' });
 
-// A document editor host whose editors hold the text set or typed last.
-function documentEditors(): EditorHost {
-  return {
-    createDocument(_parent: HTMLElement, text: string) {
+// A document editor host whose editors hold the text set or typed last;
+// `type` types `text` into the newest editor, as the user would, and `text`
+// reads it.
+function documentEditors() {
+  let newest: { text(): string; type(text: string): void } | null = null;
+  const opened = () => {
+    if (newest === null) {
+      throw new Error('no editor open');
+    }
+    return newest;
+  };
+  const host = {
+    createDocument(
+      _parent: HTMLElement,
+      text: string,
+      _options: unknown,
+      events: DocumentEditorEvents,
+    ) {
       let current = text;
+      newest = {
+        text: () => current,
+        type: (next) => {
+          current = next;
+          events.changed(next);
+        },
+      };
       return {
         text: () => current,
         setText: (next: string) => {
@@ -81,6 +107,11 @@ function documentEditors(): EditorHost {
       };
     },
   } as unknown as EditorHost;
+  return {
+    host,
+    type: (text: string) => opened().type(text),
+    text: () => opened().text(),
+  };
 }
 
 // An index entry for the doc at `path`.
@@ -143,9 +174,7 @@ const placeAt = (
   edits: DocsEdits | null = null,
 ): DocsPlace => ({
   openPath,
-  expanded: [],
-  selectedId: null,
-  filter: '',
+  trees: { wiki: null, all: null },
   edits,
 });
 
@@ -156,10 +185,12 @@ function startDocsPage(
 ) {
   installFocusFakeDom(vi.stubGlobal);
   const picker = fakeListPickerService();
+  const editors = documentEditors();
   const harness = startPagePart(docsPagePart, {
     services: {
       picker,
-      editor: documentEditors(),
+      fuzzy: fakeFuzzyMatcher,
+      editor: editors.host,
       markdown: {
         block: (text) => text,
         inline: (text) => text,
@@ -174,7 +205,7 @@ function startDocsPage(
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
-  return { harness, exportsTo, picker };
+  return { harness, exportsTo, picker, editors };
 }
 
 type DocsPage = ReturnType<typeof startDocsPage>;
@@ -636,7 +667,10 @@ describe('docs page part lifecycle', () => {
     const { harness } = page;
     const saved = {
       ...placeAt('/p/kept.md', restoredEdits),
-      expanded: ['shelf:x'],
+      trees: {
+        wiki: null,
+        all: { expanded: ['shelf:x'], selectedId: null, filter: '' },
+      },
     };
 
     await reloadWith(page, { [sessionSourceId('s1')]: saved }, ['s1']);
@@ -649,6 +683,32 @@ describe('docs page part lifecycle', () => {
         .all()
         .get(sessionSourceId('s1')),
     ).toEqual(saved);
+    await harness.stop();
+  });
+
+  // The open doc's row is not where the place left the tree: the restored open
+  // must not reveal it over the place.
+  it('a restored open keeps the tree place the reload put back', async () => {
+    const page = startDocsPage(servingIndexOf(['/p/kept.md'], []));
+    const { harness } = page;
+    const trackedBefore = harness.restores.length;
+    const saved = {
+      ...placeAt('/p/kept.md'),
+      trees: {
+        wiki: null,
+        all: { expanded: [], selectedId: 'owner:mine', filter: '' },
+      },
+    };
+
+    await reloadWith(page, { [sessionSourceId('s1')]: saved }, ['s1']);
+    const view = sessionView(page, 's1');
+    view.shown();
+    await Promise.all(harness.restores.slice(trackedBefore));
+
+    expect(selectedTreeRow(view.element)).toEqual({
+      label: 'Mine',
+      isUsualRow: true,
+    });
     await harness.stop();
   });
 
@@ -1147,3 +1207,672 @@ describe('docs view focus', () => {
     await view.harness.stop();
   });
 });
+
+const W_DOC = '/p/w.md';
+const X_DOC = '/p/x.md';
+const Y_DOC = '/p/y.md';
+const Z_DOC = '/p/z.md';
+
+// Main's side over an index of w.md, x.md (with a `Gamma` heading on line 3)
+// and z.md, each titled by its base name, which `renameDoc` (to y.md) and
+// `trashDoc` change as the disk would.
+function changingIndex() {
+  let entries = [
+    ownDoc(W_DOC, 'w.md'),
+    {
+      ...ownDoc(X_DOC, 'x.md'),
+      headings: [{ level: 2, text: 'Gamma', line: 3 }],
+    },
+    ownDoc(Z_DOC, 'z.md'),
+  ];
+  return async (method: string, ...args: unknown[]): Promise<unknown> => {
+    switch (method) {
+      case 'loadIndex':
+      case 'rebuildIndex':
+        return {
+          document: {
+            schemaVersion: 5,
+            generatedAt: '2026-11-05T00:00:00Z',
+            entries,
+            contexts: [],
+          },
+          message: null,
+          title: 'index',
+          canRebuild: false,
+        };
+      case 'renameDoc':
+        entries = entries.map((entry) =>
+          entry.path === args[0]
+            ? { ...entry, id: Y_DOC, path: Y_DOC, title: 'y.md' }
+            : entry,
+        );
+        return Y_DOC;
+      case 'trashTargets':
+        return [args[0]];
+      case 'trashDoc':
+        entries = entries.filter((entry) => entry.path !== args[0]);
+        return { trashed: [args[0]], error: null };
+      case 'readDoc':
+        return '# Doc\n\n## Gamma\n';
+      case 'wikiMainPath':
+        return '/p/wiki/Main.md';
+      case 'readDocIfPresent':
+        return null;
+      default:
+        return { clones: [] };
+    }
+  };
+}
+
+// The label of the selected row in the tree under `element`, and whether it is
+// the last row with that label, as a doc's usual row is below its Starred row;
+// null with no row selected.
+function selectedTreeRow(element: HTMLElement) {
+  const rows = findAll(asFake(element), 'docs-rows').flatMap((list) =>
+    findAll(list, 'ui-row'),
+  );
+  const labels = rows.map((row) => findAll(row, 'ui-row-label')[0].textContent);
+  const at = rows.findIndex((row) => row.classList.contains('is-selected'));
+  return at === -1
+    ? null
+    : { label: labels[at], isUsualRow: labels.lastIndexOf(labels[at]) === at };
+}
+
+describe('docs view state', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Breaks: the narrowing not closing the box, leaving its scope pushed, or
+  // moving focus as `sideBarHidden` does.
+  it('a narrowing closes the filter box and keeps focus', async () => {
+    const { harness } = startDocsPage(servingIndexOf([], []));
+    const { commands } = harness.started();
+    commands.showMode({ arg: undefined });
+    harness.setSideBarShown(true);
+    commands.filter({ arg: undefined });
+    const mode = harness.mode('docs.docs');
+    const [filterFrame] = findAll(
+      asFake(mode.sideBar as HTMLElement),
+      'docs-filter',
+    );
+    const focusedBefore = document.activeElement;
+
+    mode.sideBarNarrowed!();
+
+    const narrowed = {
+      isBoxHidden: filterFrame.hidden,
+      isFocusKept: document.activeElement === focusedBefore,
+    };
+    commands.filter({ arg: undefined });
+    expect({ ...narrowed, isBoxHiddenOnFilter: filterFrame.hidden }).toEqual({
+      isBoxHidden: true,
+      isFocusKept: true,
+      isBoxHiddenOnFilter: false,
+    });
+    await harness.stop();
+  });
+
+  // The change is made in `view:1` while `view:2` shows the selected row
+  // `picked`. Breaks: the other view keeping a selection that names a row gone,
+  // or a rename selecting the Starred row in place of the usual one.
+  it.each([
+    {
+      change: 'rename',
+      action: 'rename',
+      picked: `entry:${X_DOC}`,
+      stars: false,
+      filter: null,
+      changed: X_DOC,
+      expected: 'y.md',
+    },
+    {
+      change: 'rename from Starred',
+      action: 'rename',
+      picked: `owner:starred/entry:${X_DOC}`,
+      stars: true,
+      filter: null,
+      changed: X_DOC,
+      expected: 'y.md',
+    },
+    {
+      change: 'rename from a heading match',
+      action: 'rename',
+      picked: `entry:${X_DOC}/heading:3`,
+      stars: false,
+      filter: 'Gamma',
+      changed: X_DOC,
+      expected: 'y.md',
+    },
+    {
+      change: 'trash with a row after',
+      action: 'trash',
+      picked: `entry:${X_DOC}`,
+      stars: false,
+      filter: null,
+      changed: X_DOC,
+      expected: 'z.md',
+    },
+    {
+      change: 'trash of the last row',
+      action: 'trash',
+      picked: `entry:${Z_DOC}`,
+      stars: false,
+      filter: null,
+      changed: Z_DOC,
+      expected: 'x.md',
+    },
+  ])(
+    'an outside $change reselects the doc in the other view',
+    async ({ action, picked, stars, filter, changed, expected }) => {
+      const { harness, exportsTo } = startDocsPage(changingIndex());
+      const { commands } = harness.started();
+      let activeViewId = '';
+      const addView = (viewId: string) =>
+        exportsTo(createRegistrations()).addView(`source:${viewId}`, {
+          isVisible: () => activeViewId === viewId,
+        });
+      const changing = addView('view:1');
+      const other = addView('view:2');
+      changing.shown();
+      other.shown();
+      const click = (viewId: string, nodeId: string) =>
+        commands.openNode({ arg: { viewId, nodeId } });
+      await vi.waitFor(() =>
+        expect(
+          [changing, other].map((handle) => selectedTreeRow(handle.element)),
+        ).not.toContain(null),
+      );
+      click('view:1', 'global/instructions');
+      click('view:2', 'global/instructions');
+
+      activeViewId = 'view:2';
+      if (stars) {
+        click('view:2', `entry:${X_DOC}`);
+        commands.toggleStar({ arg: undefined });
+      }
+      if (filter !== null) {
+        commands.filter({ arg: undefined });
+        const [box] = findAll(asFake(other.element), 'docs-box');
+        (box as FocusFakeElement).value = filter;
+        box.fire('input');
+        commands.boxAccept({ arg: undefined });
+      }
+      click('view:2', picked);
+      activeViewId = 'view:1';
+      click('view:1', `entry:${changed}`);
+      if (action === 'rename') {
+        commands.rename({ arg: undefined });
+        commands.boxAccept({ arg: undefined });
+      } else {
+        commands.trash({ arg: undefined });
+        await vi.waitFor(() =>
+          expect(
+            harness.logs.some(({ message }) =>
+              message.startsWith('asked to move'),
+            ),
+          ).toBe(true),
+        );
+        commands.confirmYes({ arg: undefined });
+      }
+
+      await vi.waitFor(() =>
+        expect(selectedTreeRow(other.element)).toEqual({
+          label: expected,
+          isUsualRow: true,
+        }),
+      );
+      await harness.stop();
+    },
+  );
+
+  // Breaks: a tree open taking no open number, or the waiting open checking
+  // its number before the rebuild wait ends.
+  it('a tree open while an openDoc waits on the rebuild wins', async () => {
+    const rebuilt = Promise.withResolvers<unknown>();
+    let isRebuildAsked = false;
+    const page = startDocsPage(
+      rebuildingMain(rebuilt.promise, () => {
+        isRebuildAsked = true;
+      }),
+    );
+    const { harness } = page;
+    const { commands } = harness.started();
+    openByMessage(page, TARGET);
+    await vi.waitFor(() => expect(isRebuildAsked).toBe(true));
+    commands.switchTreeView({ arg: { viewId: 'machine' } });
+    commands.openNode({
+      arg: { viewId: 'machine', nodeId: 'global/instructions' },
+    });
+
+    commands.openNode({ arg: { viewId: 'machine', nodeId: `entry:${PLAIN}` } });
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
+    rebuilt.resolve(listingOf([PLAIN, TARGET]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const opened = openedPaths(page);
+    expect({
+      last: opened.at(-1),
+      hasTarget: opened.includes(TARGET),
+    }).toEqual({ last: PLAIN, hasTarget: false });
+    await harness.stop();
+  });
+
+  // Breaks: a restore a newer open beat dropping its unsaved edits from the
+  // next place written, toasting them as not restored, or not putting them
+  // back once their doc opens.
+  it('a restore a tree open beat keeps its edits until the user opens their doc', async () => {
+    const rebuilt = Promise.withResolvers<unknown>();
+    let isRebuildAsked = false;
+    const edits = {
+      path: TARGET,
+      text: 'Edited.\n',
+      baseText: TEXTS[TARGET],
+    };
+    const page = startDocsPage(
+      rebuildingMain(rebuilt.promise, () => {
+        isRebuildAsked = true;
+      }),
+    );
+    const { harness } = page;
+    await reloadWith(page, { [MACHINE_SOURCE_ID]: placeAt(TARGET, edits) }, []);
+    const { commands } = harness.started();
+    commands.showMode({ arg: undefined });
+    await vi.waitFor(() => expect(isRebuildAsked).toBe(true));
+    commands.switchTreeView({ arg: { viewId: 'machine' } });
+    commands.openNode({
+      arg: { viewId: 'machine', nodeId: 'global/instructions' },
+    });
+    commands.openNode({ arg: { viewId: 'machine', nodeId: `entry:${PLAIN}` } });
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
+    rebuilt.resolve(listingOf([PLAIN, TARGET]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // A tree draw writes the place again.
+    commands.openNode({
+      arg: { viewId: 'machine', nodeId: 'global/instructions' },
+    });
+    const place = harness.state
+      .read(docsPlaceSlot, 'test')
+      .all()
+      .get(MACHINE_SOURCE_ID);
+
+    expect({
+      openPath: place?.openPath,
+      edits: place?.edits,
+      mayStop: harness.started().mayStop?.(),
+      toasted: harness.logs.filter(({ message }) =>
+        message.includes('edits not restored'),
+      ),
+    }).toEqual({
+      openPath: PLAIN,
+      edits,
+      mayStop: 'Save or discard the edits to target.md in Docs mode first',
+      toasted: [],
+    });
+    openByMessage(page, TARGET);
+    await vi.waitFor(() =>
+      expect(harness.logs.map(({ message }) => message)).toContain(
+        'restored edits on target.md',
+      ),
+    );
+    await harness.stop();
+  });
+
+  // Breaks: a beaten restore's edits held for a doc the rebuilt index no
+  // longer lists, which no open reaches, so `mayStop` refuses for good.
+  it("a beaten restore's edits for a doc the index does not list are toasted and let the page stop", async () => {
+    const rebuilt = Promise.withResolvers<unknown>();
+    let isRebuildAsked = false;
+    const edits = { path: TARGET, text: 'Edited.\n', baseText: TEXTS[TARGET] };
+    const page = startDocsPage(
+      rebuildingMain(rebuilt.promise, () => {
+        isRebuildAsked = true;
+      }),
+    );
+    const { harness } = page;
+    await reloadWith(page, { [MACHINE_SOURCE_ID]: placeAt(TARGET, edits) }, []);
+    harness.started().commands.showMode({ arg: undefined });
+    await vi.waitFor(() => expect(isRebuildAsked).toBe(true));
+    openByMessage(page, PLAIN);
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
+    rebuilt.resolve(listingOf([PLAIN]));
+    await vi.waitFor(() =>
+      expect(
+        harness.logs.filter(({ message }) =>
+          message.includes('edits not restored'),
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          message: `toast error: Unsaved edits not restored: ${TARGET}`,
+        }),
+      ]),
+    );
+
+    expect(harness.started().mayStop?.()).toBeNull();
+    await harness.stop();
+  });
+
+  // Breaks: a beaten restore's edits going over the edits the user typed in
+  // their doc meanwhile, or dropped with no toast.
+  it("a beaten restore's edits are toasted and dropped when the user already typed in their doc", async () => {
+    const restoreRead = Promise.withResolvers<string>();
+    let targetReads = 0;
+    const serve = servingIndexOf([PLAIN, TARGET], []);
+    const page = startDocsPage(async (method, ...args) => {
+      if (method === 'readDoc' && args[0] === TARGET && targetReads++ === 0) {
+        return restoreRead.promise;
+      }
+      return serve(method, ...args);
+    });
+    const { harness, editors } = page;
+    const edits = { path: TARGET, text: 'Restored.\n', baseText: '# Doc' };
+    await reloadWith(page, { [MACHINE_SOURCE_ID]: placeAt(TARGET, edits) }, []);
+    const { commands } = harness.started();
+    commands.showMode({ arg: undefined });
+    await vi.waitFor(() => expect(targetReads).toBe(1));
+    openByMessage(page, TARGET);
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(TARGET));
+    commands.edit({ arg: undefined });
+    editors.type('Typed.\n');
+    restoreRead.resolve('# Doc');
+    await vi.waitFor(() =>
+      expect(
+        harness.logs.filter(({ message }) =>
+          message.includes('edits not restored'),
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          message: `toast error: Unsaved edits not restored: ${TARGET}`,
+        }),
+      ]),
+    );
+    // A keystroke writes the place again.
+    editors.type('Typed more.\n');
+    const place = harness.state
+      .read(docsPlaceSlot, 'test')
+      .all()
+      .get(MACHINE_SOURCE_ID);
+
+    expect({ editor: editors.text(), edits: place?.edits?.text }).toEqual({
+      editor: 'Typed more.\n',
+      edits: 'Typed more.\n',
+    });
+    await harness.stop();
+  });
+
+  // Breaks: a held draft left out of its doc's editor when the doc opens by
+  // a followed link, so it counts as unsaved until another open reaches it.
+  it('a held draft goes back in its doc editor when the doc opens by a link', async () => {
+    const rebuilt = Promise.withResolvers<unknown>();
+    let isRebuildAsked = false;
+    const edits = { path: TARGET, text: 'Edited.\n', baseText: TEXTS[TARGET] };
+    const page = startDocsPage(
+      rebuildingMain(rebuilt.promise, () => {
+        isRebuildAsked = true;
+      }),
+    );
+    const { harness, editors } = page;
+    await reloadWith(page, { [MACHINE_SOURCE_ID]: placeAt(TARGET, edits) }, []);
+    const { commands } = harness.started();
+    commands.showMode({ arg: undefined });
+    await vi.waitFor(() => expect(isRebuildAsked).toBe(true));
+    openByMessage(page, PLAIN);
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
+    rebuilt.resolve(listingOf([PLAIN, GUIDE, TARGET]));
+    openByMessage(page, GUIDE);
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(GUIDE));
+    expect(openedPaths(page)).not.toContain(TARGET);
+
+    commands.followLink({
+      arg: { viewId: 'machine', href: 'target.md', title: '' },
+    });
+
+    await vi.waitFor(() =>
+      expect(harness.logs.map(({ message }) => message)).toContain(
+        'restored edits on target.md',
+      ),
+    );
+    expect({
+      opened: openedPaths(page).at(-1),
+      editor: editors.text(),
+      toasted: harness.logs.filter(({ message }) =>
+        message.includes('edits not restored'),
+      ),
+    }).toEqual({ opened: TARGET, editor: 'Edited.\n', toasted: [] });
+    await harness.stop();
+  });
+
+  // Breaks: a page reloaded under a running main throwing on a place an
+  // older page wrote, before docs places held `trees`.
+  it('a saved place of the older shape is dropped and the page starts', async () => {
+    const readDocs: unknown[] = [];
+    const page = startDocsPage(servingIndexOf([PLAIN], readDocs));
+    const oldShape = {
+      openPath: PLAIN,
+      expanded: [],
+      selectedId: null,
+      filter: '',
+      edits: null,
+    } as unknown as DocsPlace;
+
+    await reloadWith(page, { [MACHINE_SOURCE_ID]: oldShape }, []);
+    page.harness.started().commands.showMode({ arg: undefined });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(readDocs).toEqual([]);
+    await page.harness.stop();
+  });
+});
+
+// An index read listing `paths`, each titled by its path, that can rebuild.
+const listingOf = (paths: readonly string[]) => ({
+  document: {
+    schemaVersion: 5,
+    generatedAt: '2026-11-05T00:00:00Z',
+    entries: paths.map((path) => ownDoc(path, path)),
+    contexts: [],
+  },
+  message: null,
+  title: 'index',
+  canRebuild: true,
+});
+
+// Main's side over an index listing `PLAIN`, `Main.md` missing, each doc
+// reading its `TEXTS`, whose rebuild calls `asked` and answers `rebuilt`.
+function rebuildingMain(rebuilt: Promise<unknown>, asked: () => void) {
+  return async (method: string, ...args: unknown[]): Promise<unknown> => {
+    switch (method) {
+      case 'loadIndex':
+        return listingOf([PLAIN]);
+      case 'rebuildIndex':
+        asked();
+        return rebuilt;
+      case 'wikiMainPath':
+        return '/p/wiki/Main.md';
+      case 'readDocIfPresent':
+        return null;
+      case 'readDoc':
+        return TEXTS[args[0] as string];
+      default:
+        return { clones: [] };
+    }
+  };
+}
+
+// Main's side over an index listing `PLAIN` that can rebuild, `Main.md`
+// missing, whose `held` method, or the `createDoc` reply's `writeDoc`, answers
+// only through `answer`; `invoked` holds each method asked.
+function heldMain(held: string) {
+  const answer = Promise.withResolvers<unknown>();
+  const invoked: string[] = [];
+  const invoke = async (method: string, ...args: unknown[]) => {
+    invoked.push(method);
+    if (method === held) {
+      return answer.promise;
+    }
+    switch (method) {
+      case 'loadIndex':
+      case 'rebuildIndex':
+        return {
+          document: {
+            schemaVersion: 5,
+            generatedAt: '2026-11-05T00:00:00Z',
+            entries: [ownDoc(PLAIN, PLAIN)],
+            contexts: [],
+          },
+          message: null,
+          title: 'index',
+          canRebuild: true,
+        };
+      case 'wikiMainPath':
+        return '/p/wiki/Main.md';
+      case 'readDocIfPresent':
+        return null;
+      case 'readDoc':
+        return TEXTS[args[0] as string];
+      case 'createDoc':
+        return { path: '/p/wiki/Main.md', line: 1 };
+      default:
+        return { clones: [] };
+    }
+  };
+  return { answer, invoked, invoke };
+}
+
+const INDEX_READ = {
+  document: null,
+  message: null,
+  title: 'index',
+  canRebuild: false,
+};
+
+const showDocsMode = (page: DocsPage) => {
+  page.harness.started().commands.showMode({ arg: undefined });
+};
+
+describe('docs view after the page stops', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Breaks: a continuation of a call begun before the stop drawing, logging,
+  // toasting, telling `docOpened` or asking main again once it lands.
+  it.each<{
+    case: string;
+    held: string;
+    isRejected?: boolean;
+    reply?: unknown;
+    // `invoked` holds each method main was asked.
+    act(page: DocsPage, invoked: readonly string[]): Promise<void> | void;
+  }>([
+    {
+      case: 'the first index read answered',
+      held: 'loadIndex',
+      reply: INDEX_READ,
+      act: showDocsMode,
+    },
+    {
+      case: 'the first index read failed',
+      held: 'loadIndex',
+      isRejected: true,
+      act: showDocsMode,
+    },
+    {
+      case: 'the first rebuild answered',
+      held: 'rebuildIndex',
+      reply: INDEX_READ,
+      act: showDocsMode,
+    },
+    {
+      case: 'a status read answered',
+      held: 'pluginStatus',
+      reply: { clones: [] },
+      act: showDocsMode,
+    },
+    {
+      case: 'a status read failed',
+      held: 'pluginStatus',
+      isRejected: true,
+      act: showDocsMode,
+    },
+    {
+      case: "an asked doc's read answered",
+      held: 'readDoc',
+      reply: TEXTS[PLAIN],
+      act: (page) => openByMessage(page, PLAIN),
+    },
+    {
+      case: "an asked doc's read failed",
+      held: 'readDoc',
+      isRejected: true,
+      act: (page) => openByMessage(page, PLAIN),
+    },
+    {
+      case: "a restore's read answered",
+      held: 'readDoc',
+      reply: TEXTS[PLAIN],
+      act: async (page) => {
+        await reloadWith(
+          page,
+          {
+            [MACHINE_SOURCE_ID]: placeAt(PLAIN, {
+              path: PLAIN,
+              text: 'Edited.\n',
+              baseText: TEXTS[PLAIN],
+            }),
+          },
+          [],
+        );
+        showDocsMode(page);
+      },
+    },
+    {
+      case: "creating Main.md's write answered",
+      held: 'writeDoc',
+      act: createMainOnceRead,
+    },
+    {
+      case: "creating Main.md's write failed",
+      held: 'writeDoc',
+      isRejected: true,
+      act: createMainOnceRead,
+    },
+  ])(
+    'a call landing after the stop does nothing ($case)',
+    async ({ held, isRejected = false, reply, act }) => {
+      const main = heldMain(held);
+      const page = startDocsPage(main.invoke);
+      const { harness } = page;
+      await act(page, main.invoked);
+      await vi.waitFor(() => expect(main.invoked).toContain(held));
+
+      await harness.stop();
+      const logged = harness.logs.length;
+      const asked = main.invoked.length;
+      const opened = openedPaths(page).length;
+      if (isRejected) {
+        main.answer.reject(new Error('main stopped'));
+      } else {
+        main.answer.resolve(reply);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect({
+        logs: harness.logs.slice(logged).map(({ message }) => message),
+        asked: main.invoked.slice(asked),
+        opened: openedPaths(page).slice(opened),
+      }).toEqual({ logs: [], asked: [], opened: [] });
+    },
+  );
+});
+
+// Shows Docs mode, waits for `Main.md`'s read, and creates it.
+async function createMainOnceRead(page: DocsPage, invoked: readonly string[]) {
+  showDocsMode(page);
+  await vi.waitFor(() => expect(invoked).toContain('readDocIfPresent'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  page.harness.started().commands.createMain({ arg: { viewId: 'machine' } });
+}

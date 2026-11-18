@@ -4,9 +4,9 @@ import { createModes } from './modes';
 // The test environment has no DOM, so each mode's element and side bar are
 // plain objects holding `hidden`; `calls` records the deps the registry drives,
 // each mode's `shown` and `hidden`, and each change heard; `told` records each
-// mode's `sideBarHidden`, `sideBarOpenedOver`, `focusSideBar` and `focusMain`,
-// and the `sideBarOpened` dep. A mode added with `focusesSideBar` gives
-// `focusSideBar`.
+// mode's `sideBarHidden`, `sideBarNarrowed`, `sideBarOpenedOver`,
+// `focusSideBar` and `focusMain`, and the `sideBarOpened` dep. A mode added
+// with `focusesSideBar` gives `focusSideBar`.
 function setup(isNarrow = false) {
   const logs: string[] = [];
   const calls: string[] = [];
@@ -41,6 +41,7 @@ function setup(isNarrow = false) {
       shown: () => calls.push(`shown ${id}`),
       hidden: () => calls.push(`hidden ${id}`),
       sideBarHidden: () => told.push(`side bar hidden ${id}`),
+      sideBarNarrowed: () => told.push(`side bar narrowed ${id}`),
       sideBarOpenedOver: () => told.push(`opened over ${id}`),
       focusSideBar: focusesSideBar
         ? () => told.push(`focus side bar ${id}`)
@@ -579,7 +580,16 @@ describe('side bar callbacks', () => {
     expect(told).toEqual(['side bar hidden a.one']);
   });
 
-  it('narrowChanged tells nothing across a narrow-and-widen round trip', () => {
+  it('narrowChanged tells a shown mode its side bar narrowed away', () => {
+    const { modes, told, add } = setup();
+    add('a.one', 'One', true);
+
+    modes.narrowChanged(true);
+
+    expect(told).toEqual(['side bar narrowed a.one']);
+  });
+
+  it('narrowChanged tells only the narrowing, and only to the shown mode, across a round trip', () => {
     const { modes, told, add } = setup();
     add('a.one', 'One', true);
     add('b.two', 'Two', true);
@@ -587,7 +597,7 @@ describe('side bar callbacks', () => {
     modes.narrowChanged(true);
     modes.narrowChanged(false);
 
-    expect(told).toEqual([]);
+    expect(told).toEqual(['side bar narrowed a.one']);
   });
 
   it('narrowChanged tells the shown mode its overlay closed as widening hides its side bar', () => {
@@ -616,7 +626,7 @@ describe('side bar callbacks', () => {
     expect(told).toEqual([]);
   });
 
-  it('tells a hidden mode nothing', () => {
+  it('a narrowing tells only the shown mode, and a hidden mode hears nothing', () => {
     const { modes, told, add } = setup(true);
     add('a.one', 'One', true);
     const two = add('b.two', 'Two', true);
@@ -627,7 +637,7 @@ describe('side bar callbacks', () => {
     modes.narrowChanged(false);
     modes.narrowChanged(true);
 
-    expect(told).toEqual([]);
+    expect(told).toEqual(['side bar narrowed a.one']);
   });
 
   it('tells each mode as it shows whether its side bar starts hidden or over', () => {

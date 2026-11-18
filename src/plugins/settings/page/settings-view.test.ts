@@ -30,6 +30,7 @@ import type {
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { SettingsLayout } from '../layouts/layout';
+import { deferred } from '../../../shared/plugin-part-harness.test-support';
 import { BUILT_IN_CONTROL_KINDS } from './built-in-control-kinds';
 import { createSettingsView, type SettingsView } from './settings-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
@@ -79,6 +80,7 @@ function fakeChannel(
   keymapRead?: UserConfigRead['keymap'],
   refusals: string[] = [],
   settingsLayer: Record<string, unknown> | null = null,
+  held?: (method: string) => Promise<unknown> | undefined,
 ) {
   const written: Record<string, unknown>[] = [];
   const writtenKeymaps: UserKeymap[] = [];
@@ -90,6 +92,10 @@ function fakeChannel(
     layoutNames: {},
   };
   const invoke = async (method: string, ...args: unknown[]) => {
+    const answer = held?.(method);
+    if (answer !== undefined) {
+      return answer;
+    }
     switch (method) {
       case 'schema':
         return schema;
@@ -135,6 +141,12 @@ interface ShownViewOptions {
   controlKind?: (id: string) => SettingControlKind | undefined;
   // Runs on the created view before its load.
   beforeLoad?: (view: SettingsView) => void;
+  // Answers an invoke in place of the channel's own answer; undefined leaves
+  // it to the channel.
+  held?: (method: string) => Promise<unknown> | undefined;
+  // Leaves the load running instead of awaiting it, and skips the shown view's
+  // first focus; `loading` is the pending load.
+  isLoadUnawaited?: boolean;
 }
 
 const builtInKind = (id: string) =>
@@ -157,6 +169,8 @@ async function shownView({
   settingsLayer = null,
   controlKind = builtInKind,
   beforeLoad = () => undefined,
+  held,
+  isLoadUnawaited = false,
 }: ShownViewOptions = {}) {
   const { channel, written, writtenKeymaps, asked, read } = fakeChannel(
     schema,
@@ -165,6 +179,7 @@ async function shownView({
     keymapRead,
     refusals,
     settingsLayer,
+    held,
   );
   const overlay = asFake(document.createElement('div'));
   const { anchors, keys } = recordingAnchors();
@@ -221,8 +236,11 @@ async function shownView({
     view.restorePlace(restored);
   }
   beforeLoad(view);
-  await view.load();
-  view.shown();
+  const loading = view.load();
+  if (!isLoadUnawaited) {
+    await loading;
+    view.shown();
+  }
   const move = (direction: PaneDirection): boolean => {
     const target = handed.at(-1);
     if (typeof target !== 'object') {
@@ -230,9 +248,12 @@ async function shownView({
     }
     return target.move(direction);
   };
-  move('right');
+  if (!isLoadUnawaited) {
+    move('right');
+  }
   picked.count = 0;
   return {
+    loading,
     view,
     overlay,
     read,
@@ -327,6 +348,33 @@ describe('createSettingsView', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('draws and logs nothing when a read lands after dispose', async () => {
+    const setup = await shownView();
+    const logsBefore = [...setup.logs];
+
+    setup.view.reread();
+    setup.view.dispose();
+    await settle();
+
+    expect(setup.logs).toEqual(logsBefore);
+    expect(setup.toasts).toEqual([]);
+  });
+
+  it('dispose disposes every anchor the side bar, the rows pane and its rows named', async () => {
+    const { view, anchors } = await shownView();
+    expect(anchors.map((anchor) => anchor.command)).toEqual(
+      expect.arrayContaining([
+        'panes.focusRight',
+        'panes.focusLeft',
+        'settings.edit',
+      ]),
+    );
+
+    view.dispose();
+
+    expect(anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
   });
 
   it.each([
@@ -1109,6 +1157,147 @@ describe('createSettingsView', () => {
     expect(written).toEqual([]);
     expect(logs).toContain('write failed: main is gone');
     expect(toasts).toEqual([['main is gone', 'error']]);
+  });
+
+  it.each([
+    {
+      case: 'mayDisable rejects',
+      held: 'mayDisable',
+      outcome: 'reject',
+      value: () => undefined,
+      before: {},
+    },
+    {
+      case: 'the write resolves',
+      held: 'writeSettings',
+      outcome: 'resolve',
+      value: () => ({ type: 'written' }),
+      before: {},
+    },
+    {
+      case: 'the write rejects',
+      held: 'writeSettings',
+      outcome: 'reject',
+      value: () => undefined,
+      before: {},
+    },
+    {
+      case: 'the read after a write changed on disk resolves',
+      held: 'read',
+      outcome: 'resolve',
+      value: (setup: { read: UserConfigRead }) => setup.read,
+      before: { writeSettings: { type: 'changedOnDisk' } },
+    },
+  ] as const)(
+    'a reply landing after dispose logs, toasts and writes nothing: $case',
+    async ({ held, outcome, value, before }) => {
+      const reply = deferred<unknown>();
+      let isArmed = false;
+      let isHeldCalled = false;
+      const setup = await pickerOnPlugin('gallery', {
+        schema: pluginsSchema([]),
+        plugins: () => [status('gallery', 'Gallery', true)],
+        held(method) {
+          if (isArmed && method === held) {
+            isHeldCalled = true;
+            return reply.promise;
+          }
+          return isArmed && method in before
+            ? Promise.resolve(before[method as keyof typeof before])
+            : undefined;
+        },
+      });
+      isArmed = true;
+      setup.view.commands.pickerDown();
+      setup.view.commands.pickerChoose();
+      await settle();
+      expect(isHeldCalled).toBe(true);
+      setup.view.dispose();
+      const logsBefore = [...setup.logs];
+      const toastsBefore = [...setup.toasts];
+      const writtenBefore = [...setup.written];
+      const handedBefore = setup.handed.length;
+
+      if (outcome === 'resolve') {
+        reply.resolve(value(setup));
+      } else {
+        reply.reject(new Error('late'));
+      }
+      await settle();
+
+      expect(setup.logs).toEqual(logsBefore);
+      expect(setup.toasts).toEqual(toastsBefore);
+      expect(setup.written).toEqual(writtenBefore);
+      expect(setup.handed).toHaveLength(handedBefore);
+    },
+  );
+
+  it.each([
+    { case: 'resolves', outcome: 'resolve' },
+    { case: 'rejects', outcome: 'reject' },
+  ] as const)(
+    'the read before a row action that $case after dispose opens and logs nothing',
+    async ({ outcome }) => {
+      const reply = deferred<unknown>();
+      let isArmed = false;
+      let isHeldCalled = false;
+      const setup = await shownView({
+        held(method) {
+          if (isArmed && method === 'read') {
+            isHeldCalled = true;
+            return reply.promise;
+          }
+          return undefined;
+        },
+      });
+      isArmed = true;
+      setup.view.commands.edit();
+      await settle();
+      expect(isHeldCalled).toBe(true);
+      setup.view.dispose();
+      const logsBefore = [...setup.logs];
+      const toastsBefore = [...setup.toasts];
+
+      if (outcome === 'resolve') {
+        reply.resolve(setup.read);
+      } else {
+        reply.reject(new Error('late'));
+      }
+      await settle();
+
+      expect(setup.logs).toEqual(logsBefore);
+      expect(setup.toasts).toEqual(toastsBefore);
+      expect(findAll(setup.sheet, 'settings-box')).toEqual([]);
+    },
+  );
+
+  it('the schema reply of a load that lands after dispose draws, logs and toasts nothing', async () => {
+    const reply = deferred<unknown>();
+    let isSchemaAsked = false;
+    const setup = await shownView({
+      isLoadUnawaited: true,
+      held(method) {
+        if (method === 'schema') {
+          isSchemaAsked = true;
+          return reply.promise;
+        }
+        return undefined;
+      },
+    });
+    await settle();
+    expect(isSchemaAsked).toBe(true);
+    setup.view.dispose();
+    const handedBefore = setup.handed.length;
+
+    reply.resolve(SCHEMA);
+    await setup.loading;
+    await settle();
+
+    expect(setup.logs).toEqual([]);
+    expect(setup.toasts).toEqual([]);
+    expect(setup.places).toEqual([]);
+    expect(setup.handed).toHaveLength(handedBefore);
+    expect(findAll(setup.sheet, 'settings-box')).toEqual([]);
   });
 
   it('pluginRow_PickTrue_WritesWithoutAsking', async () => {

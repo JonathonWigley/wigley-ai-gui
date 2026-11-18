@@ -22,6 +22,7 @@ import {
   type SampleCell,
 } from './gallery-parts';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import { uiStateOver } from '../../../../shared/fake-ui-state.test-support';
 import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 
 function fakeDeps(
@@ -220,7 +221,7 @@ describe('galleryView', () => {
     createGalleryView(
       {
         ...deps,
-        uiState: { get: () => undefined, set: () => undefined },
+        uiState: uiStateOver(new Map()),
         timers: { set: () => 0, clear: () => undefined },
       },
       'reduced',
@@ -239,6 +240,18 @@ describe('galleryView', () => {
         anchor.command === 'gallery.toggleTransparency' && !anchor.isDisposed,
     );
     expect(live).toHaveLength(1);
+  });
+
+  it("dispose disposes every anchor the head's and the sections' draws named", () => {
+    const recorded = recordingAnchors();
+    const gallery = view(fakeDeps(recorded.keys));
+    expect(recorded.anchors.map((anchor) => anchor.command)).toContain(
+      'gallery.toggleTransparency',
+    );
+
+    gallery.dispose();
+
+    expect(recorded.anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
   });
 
   it('draws the head with the starting transparency', () => {

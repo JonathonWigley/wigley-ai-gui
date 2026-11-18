@@ -117,6 +117,13 @@
   color: var(--wg-fg-tertiary);
 }
 
+/* A step row's time after its summary, which ellipsizes before it does. */
+.chat-step-time {
+  color: var(--wg-fg-tertiary);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
 /* The activity dock: while the turn runs, its time and state, a card of its
    latest tool calls (the newest in fg), then a chip per tool with its count;
    while a compaction runs, its time, state and trigger over a sliding bar; once

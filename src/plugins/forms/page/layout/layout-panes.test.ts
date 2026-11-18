@@ -600,24 +600,27 @@ describe('notices pane', () => {
     { case: 'index 1.5', index: 1.5, twice: false },
     { case: 'index 3', index: 3, twice: false },
     { case: 'line 1 twice', index: 1, twice: true },
-  ])('noticesKit_BadLine_$case_FallsBackToDefault', ({ index, twice }) => {
-    const { pane, log } = drawNoticesPane({
-      name: 'test',
-      layout: {
-        notices(parent, _input, kit) {
-          const section = kit.el(parent, 'section', 'notices');
-          kit.line(section, index);
-          if (twice) {
+  ])(
+    'a bad notices line falls back to the default ($case)',
+    ({ index, twice }) => {
+      const { pane, log } = drawNoticesPane({
+        name: 'test',
+        layout: {
+          notices(parent, _input, kit) {
+            const section = kit.el(parent, 'section', 'notices');
             kit.line(section, index);
-          }
-          return { element: section };
+            if (twice) {
+              kit.line(section, index);
+            }
+            return { element: section };
+          },
         },
-      },
-    });
+      });
 
-    expect(log).toHaveBeenCalledWith(expect.stringContaining(String(index)));
-    expect(pane.element.dataset.layout).toBe('default');
-  });
+      expect(log).toHaveBeenCalledWith(expect.stringContaining(String(index)));
+      expect(pane.element.dataset.layout).toBe('default');
+    },
+  );
 
   it('noticesPane_Throws_ReleasesEachBodysBoxOnce', () => {
     const { pane, deps, log } = drawNoticesPane({

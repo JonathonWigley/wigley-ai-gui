@@ -258,6 +258,20 @@ describe('notes parts', () => {
     expect(asFake(actions).children).toHaveLength(1);
   });
 
+  it('disposing the parts leaves no anchor of any kept draw live', () => {
+    const { deps, anchors } = notesPartsDeps();
+    const parts = createNotesParts(deps);
+    parts.setLayouts(withUser<Layout>(defaultLayout, {}));
+    parts.actions(container());
+    parts.confirm(container());
+    parts.markupToolbar(container());
+
+    parts.dispose();
+
+    expect(anchors.length).toBeGreaterThan(0);
+    expect(anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
+  });
+
   it('notesParts_PickerRowDispose_DisposesItsAnchors', () => {
     const { deps, anchors } = notesPartsDeps();
     const parts = createNotesParts(deps);

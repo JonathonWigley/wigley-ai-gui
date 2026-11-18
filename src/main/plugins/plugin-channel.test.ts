@@ -85,7 +85,7 @@ describe('createPluginChannels', () => {
     );
   });
 
-  it('drops a disposed handler, so an invoke rejects and the method registers again', () => {
+  it('parks an invoke to a disposed handler and answers it once the method registers again', async () => {
     const ipc = fakeIpc();
     const page = fakePage();
     const channel = createPluginChannels(ipc, () => page).forPlugin('p');
@@ -94,11 +94,95 @@ describe('createPluginChannels', () => {
     handle.dispose();
     handle.dispose();
 
-    expect(() => ipc.invoke('p', 'save', [])).toThrow(
-      'Plugin "p" has no main handler for "save"',
-    );
+    const parked = ipc.invoke('p', 'save', []);
+    expect(await settledWithin(parked)).toBe(PENDING);
     channel.handle('save', () => 'second');
     handle.dispose();
+    await expect(parked).resolves.toBe('second');
     expect(ipc.invoke('p', 'save', [])).toBe('second');
   });
+
+  it('answers a call parked while the main part was stopped with the restarted handler, once', async () => {
+    const ipc = fakeIpc();
+    const channels = createPluginChannels(ipc, () => fakePage());
+    const channel = channels.forPlugin('p');
+    channel.handle('m', () => 'stopped').dispose();
+    const received: unknown[][] = [];
+
+    const parked = ipc.invoke('p', 'm', [3, 'x']);
+    channel.handle('m', (...args: unknown[]) => {
+      received.push(args);
+      return 'restarted';
+    });
+
+    await expect(parked).resolves.toBe('restarted');
+    expect(received).toEqual([[3, 'x']]);
+  });
+
+  it('drops a parked call once its calling page part stops', async () => {
+    const ipc = fakeIpc();
+    const channels = createPluginChannels(ipc, () => fakePage());
+    const channel = channels.forPlugin('p');
+    channel.handle('m', () => 'stopped').dispose();
+    let calls = 0;
+
+    const parked = ipc.invoke('p', 'm', []);
+    channels.dropParked('p');
+    channel.handle('m', () => {
+      calls += 1;
+      return 'restarted';
+    });
+
+    expect(await settledWithin(parked)).toBe(PENDING);
+    expect(calls).toBe(0);
+  });
+
+  // Breaks if a straggler of a switched-off page part parks again after the
+  // drop: it would wait forever, or run on the main part re-enabled later.
+  it('refuses an invoke after its parked calls were dropped while the main part was stopped, until a handler registers again', async () => {
+    const ipc = fakeIpc();
+    const channels = createPluginChannels(ipc, () => fakePage());
+    const channel = channels.forPlugin('p');
+    channel.handle('m', () => 'stopped').dispose();
+    let calls = 0;
+
+    channels.dropParked('p');
+
+    expect(() => ipc.invoke('p', 'm', [])).toThrow(/"p" has stopped.*"m"/);
+    channel.handle('m', () => {
+      calls += 1;
+      return 'restarted';
+    });
+    await Promise.resolve();
+    expect(calls).toBe(0);
+    expect(ipc.invoke('p', 'm', [])).toBe('restarted');
+    expect(calls).toBe(1);
+  });
+
+  it('keeps parking for a plugin whose parked calls were dropped while its handlers ran', async () => {
+    const ipc = fakeIpc();
+    const channels = createPluginChannels(ipc, () => fakePage());
+    const channel = channels.forPlugin('p');
+    const handle = channel.handle('m', () => 'first');
+
+    channels.dropParked('p');
+    handle.dispose();
+    const parked = ipc.invoke('p', 'm', []);
+
+    expect(await settledWithin(parked)).toBe(PENDING);
+    channel.handle('m', () => 'second');
+    await expect(parked).resolves.toBe('second');
+  });
 });
+
+const PENDING = Symbol('pending');
+
+// The value `promise` resolved to within two microtask turns, else PENDING.
+async function settledWithin(promise: unknown): Promise<unknown> {
+  const sentinel = (async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    return PENDING;
+  })();
+  return Promise.race([promise, sentinel]);
+}

@@ -1,6 +1,7 @@
 import type { Timers } from '../../contracts/ambient';
 import type { Disposable } from '../../contracts/disposable';
 import type { PluginLog } from '../../contracts/log';
+import { callEach } from '../call-each';
 import { errorText } from '../error-text';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved';
@@ -93,10 +94,10 @@ interface PendingSave {
 
 // Saves a draft once its edits pause for `delayMs`. A save is in flight until
 // `save` settles; a failed one leaves the draft unsaved with its message, and
-// the next edit schedules a save again. On page hide every unsaved draft saves at
-// once, `save` called inside the listener. Its `Disposable` clears every scheduled
-// save, the subscription and the page hide listener; a save still in flight then
-// only logs a failure.
+// the next edit schedules a save again. On page hide every unsaved draft saves
+// at once, `save` called inside the listener. Its `Disposable` clears every
+// scheduled save, the subscription and the page hide listener; a save still in
+// flight then logs and reports nothing when it settles.
 export function startAutosave<Draft extends DraftRevisions, Body>(
   deps: AutosaveDeps<Draft, Body>,
 ): Disposable {
@@ -151,8 +152,7 @@ export function startAutosave<Draft extends DraftRevisions, Body>(
         cancel(deps.timers, entry);
       }
       pending.clear();
-      subscription.dispose();
-      pageHide.dispose();
+      callEach([subscription, pageHide], (each) => each.dispose());
     },
   };
 }
@@ -173,11 +173,11 @@ async function saveDraft<Draft extends DraftRevisions, Body>(
   try {
     await deps.save(id, deps.bodyOf(draft));
   } catch (error) {
-    const message = errorText(error);
-    deps.log(`draft not saved for ${id}: ${message}`);
     if (isDisposed()) {
       return;
     }
+    const message = errorText(error);
+    deps.log(`draft not saved for ${id}: ${message}`);
     // An edit made during the save has its own save scheduled already.
     if (!pending.has(id)) {
       pending.set(id, { revision, handle: null });

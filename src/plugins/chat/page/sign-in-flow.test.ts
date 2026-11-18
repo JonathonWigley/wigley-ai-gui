@@ -12,8 +12,14 @@ async function flush() {
   }
 }
 
-// `logIn` answers `logInAnswer` each call; every other invoke resolves.
-function setUp(logInAnswer: () => Promise<void> = () => Promise.resolve()) {
+// `logIn` answers `logInAnswer` each call; every other invoke resolves but
+// those named in `failing`, which reject. `stop` marks chat's page part
+// stopped.
+function setUp(
+  logInAnswer: () => Promise<void> = () => Promise.resolve(),
+  failing: readonly string[] = [],
+) {
+  let isStopped = false;
   const invoked: { method: string; args: unknown[] }[] = [];
   const listeners = new Map<string, (data: never) => void>();
   const toasts: { text: string; tone: ToastTone }[] = [];
@@ -24,7 +30,12 @@ function setUp(logInAnswer: () => Promise<void> = () => Promise.resolve()) {
   const channel: SignInFlowDeps['channel'] = {
     invoke: ((method: string, ...args: unknown[]) => {
       invoked.push({ method, args });
-      return method === 'logIn' ? logInAnswer() : Promise.resolve();
+      if (method === 'logIn') {
+        return logInAnswer();
+      }
+      return failing.includes(method)
+        ? Promise.reject(new Error(`${method} refused`))
+        : Promise.resolve();
     }) as SignInFlowDeps['channel']['invoke'],
     on: ((message: string, listener: (data: never) => void) => {
       listeners.set(message, listener);
@@ -59,6 +70,7 @@ function setUp(logInAnswer: () => Promise<void> = () => Promise.resolve()) {
     },
     toast: (text, tone) => toasts.push({ text, tone }),
     log: (message) => logs.push(message),
+    isStopped: () => isStopped,
   });
   const emit = <K extends keyof Messages & string>(
     message: K,
@@ -73,6 +85,9 @@ function setUp(logInAnswer: () => Promise<void> = () => Promise.resolve()) {
     emit,
     shownProfile: () => shownProfile,
     pushedScopes: () => pushedScopes,
+    stop: () => {
+      isStopped = true;
+    },
   };
 }
 
@@ -204,4 +219,53 @@ describe('createSignInFlow', () => {
     });
     expect(run.copied).toEqual(['https://x']);
   });
+
+  it.each([
+    {
+      reply: 'a rejected logIn',
+      failing: [],
+      logInFails: true,
+      act: () => undefined,
+    },
+    {
+      reply: 'a rejected logInCode',
+      failing: ['logInCode'],
+      logInFails: false,
+      act: (run: ReturnType<typeof setUp>) => run.flow.submitCode(),
+    },
+    {
+      reply: 'a rejected cancelLogIn',
+      failing: ['cancelLogIn'],
+      logInFails: false,
+      act: (run: ReturnType<typeof setUp>) => run.flow.cancel(),
+    },
+    {
+      reply: 'a copied link',
+      failing: [],
+      logInFails: false,
+      act: (run: ReturnType<typeof setUp>) => {
+        run.emit('logInLink', { id: 1, profile: 'work', url: 'https://x' });
+        run.flow.copyLink();
+      },
+    },
+  ])(
+    'logs and toasts nothing for $reply landing after chat stopped',
+    async ({ failing, logInFails, act }) => {
+      const run = setUp(
+        logInFails
+          ? () => Promise.reject(new Error('busy'))
+          : () => Promise.resolve(),
+        failing,
+      );
+      run.flow.open('work');
+      act(run);
+      const logged = run.logs.length;
+
+      run.stop();
+      await flush();
+
+      expect(run.logs.slice(logged)).toEqual([]);
+      expect(run.toasts).toEqual([]);
+    },
+  );
 });

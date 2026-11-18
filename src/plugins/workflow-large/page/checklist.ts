@@ -1,19 +1,21 @@
-import type {
-  ChecklistGroup,
-  ChecklistItem,
-  ChecklistView,
-  SessionFlow,
+import {
+  type ChecklistGroup,
+  type ChecklistItem,
+  type ChecklistView,
+  defaultChecklist,
+  type SessionFlow,
 } from '../../workflow/contract';
 import { largeStateOf } from '../contract';
 import type { PlanProgress } from '../../../shared/plan-progress';
 
 const TASKS_GROUP_TITLE = 'Tasks';
 
-// The read plan as a checklist; null until the plan is read.
+// The read plan as a checklist; until the plan is read, the agent's own
+// checklist (`defaultChecklist`).
 export function largeChecklist(flow: SessionFlow): ChecklistView | null {
   const { progress } = largeStateOf(flow);
   return progress === null
-    ? null
+    ? defaultChecklist(flow)
     : {
         title: progress.title,
         checked: progress.checked,

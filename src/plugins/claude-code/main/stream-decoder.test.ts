@@ -952,7 +952,7 @@ describe('createStreamDecoder', () => {
       given: "a hand-back's result, then a turn with replies",
       before: [handbackResult('a4e45e22d2e0fef8f')],
       result: { result: 'done', num_turns: 1 },
-      expected: ['turn-events-1', 'result-2'],
+      expected: ['turn-events-2', 'result-2'],
     },
     {
       given: 'a user turn',
@@ -983,6 +983,130 @@ describe('createStreamDecoder', () => {
       expect(
         [...init.entries, ...ended.entries].map((entry) => entry.id),
       ).toEqual(expected);
+    },
+  );
+
+  it('opens a new events entry at the first content of the turn after a hand-back', () => {
+    const decoder = createStreamDecoder();
+    decoder.decode(INIT_LINE);
+    decoder.decode(handbackResult('a'));
+
+    const init = decoder.decode(INIT_LINE);
+    const reply = decoder.decode(
+      line(assistantEvent('m1', [{ type: 'text', text: 'ok' }])),
+    );
+
+    expect(init.entries).toEqual([]);
+    expect(reply.entries[0]).toMatchObject({
+      id: 'turn-events-2',
+      raw: [{ type: 'system', subtype: 'init' }],
+    });
+  });
+
+  it('gives a second hand-back turn its own events entry', () => {
+    const decoder = createStreamDecoder();
+    const decoded = [
+      INIT_LINE,
+      handbackResult('a'),
+      INIT_LINE,
+      line(assistantEvent('m1', [{ type: 'text', text: 'ok' }])),
+      handbackResult('b'),
+    ].map((text) => decoder.decode(text));
+
+    const eventsIds = decoded
+      .slice(2)
+      .flatMap((out) => out.entries)
+      .filter((entry) => entry.id.startsWith('turn-events-'))
+      .map((entry) => entry.id);
+
+    expect(eventsIds).toEqual(['turn-events-2']);
+  });
+
+  const STATUS_LINE = line({ type: 'system', subtype: 'status' });
+  const followUpResult = (result: string, numTurns: number) =>
+    line({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result,
+      num_turns: numTurns,
+      origin: { kind: 'task-notification', producer: 'session-task' },
+    });
+  // A raw event's subtype, else its type.
+  const rawKind = (event: unknown) => {
+    const { type, subtype } = event as { type: string; subtype?: string };
+    return subtype ?? type;
+  };
+
+  it.each<{
+    given: string;
+    after: string[];
+    expected: [string, string[]][];
+    lifecycles: { uuid: string; state: string }[];
+  }>([
+    {
+      given: 'status lines, then an empty result',
+      after: [
+        INIT_LINE,
+        STATUS_LINE,
+        line({ type: 'system', subtype: 'hook_started' }),
+        followUpResult('', 0),
+      ],
+      expected: [
+        [
+          'turn-events-1',
+          ['init', 'init', 'status', 'hook_started', 'success'],
+        ],
+      ],
+      lifecycles: [],
+    },
+    {
+      given: 'a lifecycle frame, then an empty result',
+      after: [
+        INIT_LINE,
+        line({
+          type: 'command_lifecycle',
+          command_uuid: 'u1',
+          state: 'started',
+        }),
+        followUpResult('', 0),
+      ],
+      expected: [
+        ['turn-events-1', ['init', 'init', 'command_lifecycle', 'success']],
+      ],
+      lifecycles: [{ uuid: 'u1', state: 'started' }],
+    },
+    {
+      given: 'a status line, then a result with replies',
+      after: [INIT_LINE, STATUS_LINE, followUpResult('done', 1)],
+      expected: [
+        ['turn-events-2', ['init', 'status']],
+        ['result-2', ['success']],
+      ],
+      lifecycles: [],
+    },
+  ])(
+    "keeps the lines after a hand-back's init in wire order ($given)",
+    ({ after, expected, lifecycles }) => {
+      const decoder = createStreamDecoder();
+      decoder.decode(INIT_LINE);
+      decoder.decode(handbackResult('a'));
+
+      const decoded = after.map((text) => decoder.decode(text));
+      const kept = new Map<string, unknown[]>();
+      for (const entry of decoded.flatMap((out) => out.entries)) {
+        kept.set(entry.id, entry.raw);
+      }
+
+      expect(decoded.slice(0, -1).flatMap((out) => out.entries)).toEqual([]);
+      expect([...kept].map(([id, raw]) => [id, raw.map(rawKind)])).toEqual(
+        expected,
+      );
+      expect(
+        decoded.flatMap((out) =>
+          out.lifecycle === null ? [] : [out.lifecycle],
+        ),
+      ).toEqual(lifecycles);
     },
   );
 

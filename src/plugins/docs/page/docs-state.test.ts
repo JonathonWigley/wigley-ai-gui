@@ -145,7 +145,7 @@ function context(folder: string): IndexContext {
 }
 
 describe('visibleRows', () => {
-  it('visibleRows_CollapsedGroup_HidesChildren', () => {
+  it("hides a collapsed group's children", () => {
     const rows = visibleRows(
       NESTED,
       state({ expanded: new Set(['a']) }),
@@ -160,7 +160,7 @@ describe('visibleRows', () => {
     ]);
   });
 
-  it('visibleRows_Filter_ShowsMatchesUnderExpandedGroups', () => {
+  it('shows filter matches under expanded groups', () => {
     const rows = visibleRows(
       FILTER_TREE,
       state({ filter: 'STYLE' }),
@@ -176,7 +176,7 @@ describe('visibleRows', () => {
     ]);
   });
 
-  it('visibleRows_FilterMatchesPath_Shown', () => {
+  it('shows a doc whose path matches the filter', () => {
     const rows = visibleRows(
       FILTER_TREE,
       state({ filter: 'rules/' }),
@@ -192,7 +192,7 @@ describe('visibleRows', () => {
   it.each([
     { filter: ' RULES/style ', expected: ['style'] },
     { filter: 'rstyl', expected: [] },
-  ])('visibleRows_PathIsSubstringOnly ($filter)', ({ filter, expected }) => {
+  ])('matches a path only as a substring ($filter)', ({ filter, expected }) => {
     const rows = visibleRows(
       FILTER_TREE,
       state({ filter }),
@@ -206,7 +206,7 @@ describe('visibleRows', () => {
     ).toEqual(expected);
   });
 
-  it('visibleRows_FuzzyTitle_ShowsLeafUnderGroups', () => {
+  it('shows a fuzzy title match as a leaf under its groups', () => {
     const tree = [
       group('root', 'Root', [
         group('docs', 'Docs', [leaf('stream', 'claude-stream', 'e:stream')]),
@@ -229,7 +229,7 @@ describe('visibleRows', () => {
     ]);
   });
 
-  it('visibleRows_SpacesOnlyFilter_IsNoFilter', () => {
+  it('treats a filter of only spaces as no filter', () => {
     const rows = visibleRows(
       FILTER_TREE,
       state({ expanded: new Set(['root']), filter: '   ' }),
@@ -314,19 +314,22 @@ describe('visibleRows', () => {
           ['c', 1],
         ],
       },
-    ])('visibleRows_HeadingMatch ($filter)', ({ filter, cTitle, expected }) => {
-      const rows = visibleRows(
-        treeTitling(cTitle),
-        state({ expanded: new Set(['root']), filter }),
-        pathOf,
-        headingsOf,
-        fakeFuzzyMatcher,
-      );
+    ])(
+      "lists a doc's heading matches under it ($filter)",
+      ({ filter, cTitle, expected }) => {
+        const rows = visibleRows(
+          treeTitling(cTitle),
+          state({ expanded: new Set(['root']), filter }),
+          pathOf,
+          headingsOf,
+          fakeFuzzyMatcher,
+        );
 
-      expect(rows.map((row) => [row.node.id, row.depth])).toEqual(expected);
-    });
+        expect(rows.map((row) => [row.node.id, row.depth])).toEqual(expected);
+      },
+    );
 
-    it('visibleRows_HeadingMatch_NamesTitleAndDoc', () => {
+    it('names the title and the doc for a heading match', () => {
       const rows = visibleRows(
         treeTitling('Gamma'),
         state({ filter: 'alpha' }),
@@ -351,29 +354,32 @@ describe('visibleRows', () => {
     { filter: '', expected: ['shelf', 'label', 'link', 'page'] },
     { filter: 'page', expected: ['shelf', 'page'] },
     { filter: 'zzz', expected: [] },
-  ])('visibleRows_WikiRows ($filter)', ({ filter, expected }) => {
-    const tree = [
-      group('shelf', 'Shelf', [
-        WIKI_LABEL,
-        WIKI_LINK,
-        leaf('page', 'Page', 'e:page'),
-      ]),
-    ];
+  ])(
+    'filters wiki shelves, labels, links and pages ($filter)',
+    ({ filter, expected }) => {
+      const tree = [
+        group('shelf', 'Shelf', [
+          WIKI_LABEL,
+          WIKI_LINK,
+          leaf('page', 'Page', 'e:page'),
+        ]),
+      ];
 
-    const rows = visibleRows(
-      tree,
-      state({ expanded: new Set(['shelf']), filter }),
-      pathOf,
-      noHeadings,
-      fakeFuzzyMatcher,
-    );
+      const rows = visibleRows(
+        tree,
+        state({ expanded: new Set(['shelf']), filter }),
+        pathOf,
+        noHeadings,
+        fakeFuzzyMatcher,
+      );
 
-    expect(rows.map((row) => row.node.id)).toEqual(expected);
-  });
+      expect(rows.map((row) => row.node.id)).toEqual(expected);
+    },
+  );
 });
 
 describe('stepSelection', () => {
-  it('stepSelection_AtEnds_Clamps', () => {
+  it('clamps at either end', () => {
     const rows = rowsOf('a', 'b', 'c');
 
     expect(stepSelection(rows, 'c', 1)).toBe('c');
@@ -381,7 +387,7 @@ describe('stepSelection', () => {
     expect(stepSelection(rows, 'b', 1)).toBe('c');
   });
 
-  it('stepSelection_SelectedNotShown_FirstRow', () => {
+  it('selects the first row when the selected row is not shown', () => {
     expect(stepSelection(rowsOf('a', 'b', 'c'), 'z', 1)).toBe('a');
     expect(stepSelection([], 'z', 1)).toBeNull();
   });
@@ -401,7 +407,7 @@ describe('edgeSelection', () => {
 });
 
 describe('parentId', () => {
-  it('parentId_LeafInGroup_GroupId', () => {
+  it('returns the group id for a leaf in a group', () => {
     expect(parentId(NESTED, 'c')).toBe('b');
     expect(parentId(NESTED, 'a')).toBeNull();
   });
@@ -515,7 +521,7 @@ describe('treeRowAction', () => {
     },
   );
 
-  it('treeRowAction_OpenExpandedEmptyGroup_Nothing', () => {
+  it('does nothing for open on an expanded empty group', () => {
     const withEmpty = [
       group('a', 'A', [group('b', 'B', []), leaf('c', 'C', 'e:c')]),
     ];
@@ -587,7 +593,7 @@ describe('treeRowAction', () => {
       key: 'close',
       expected: { type: 'select', id: 'page' },
     },
-  ])('treeRowAction_WikiRows ($given)', ({ node, key, expected }) => {
+  ])('acts on a wiki row ($given)', ({ node, key, expected }) => {
     const shelves = [
       group('shelf', 'Shelf', [
         WIKI_LABEL,
@@ -602,7 +608,7 @@ describe('treeRowAction', () => {
 });
 
 describe('defaultExpandedIds', () => {
-  it('defaultExpandedIds_MineAndChildren_ThirdPartyCollapsed', () => {
+  it('expands mine and its children and leaves third-party collapsed', () => {
     const tree = [
       group('owner:mine', 'Mine', [
         group('global', 'Global', []),
@@ -620,7 +626,7 @@ describe('defaultExpandedIds', () => {
     ]);
   });
 
-  it('defaultExpandedIds_StarredRoot_Expanded', () => {
+  it('expands the starred root', () => {
     const tree = [
       group('owner:starred', 'Starred', [
         leaf('owner:starred/entry:/a', 'A', '/a'),
@@ -637,7 +643,7 @@ describe('defaultExpandedIds', () => {
     expect(expanded.has('owner:third-party')).toBe(false);
   });
 
-  it('defaultExpandedIds_WikiShelves_EachExpanded', () => {
+  it('expands each wiki shelf', () => {
     const tree = [
       group('shelf:A', 'A', [WIKI_LABEL, WIKI_LINK]),
       group('shelf:B', 'B', []),
@@ -651,7 +657,7 @@ describe('expandNewStarred', () => {
   const mine = group('owner:mine', 'Mine', []);
   const starred = group('owner:starred', 'Starred', []);
 
-  it('expandNewStarred_StarredAppears_Added', () => {
+  it('adds the starred group when it appears', () => {
     const expanded = expandNewStarred(
       [mine],
       [starred, mine],
@@ -661,7 +667,7 @@ describe('expandNewStarred', () => {
     expect([...expanded].sort()).toEqual(['owner:mine', 'owner:starred']);
   });
 
-  it('expandNewStarred_StarredWasThere_Unchanged', () => {
+  it('leaves the ids unchanged when the starred group was already there', () => {
     const expanded = expandNewStarred(
       [starred, mine],
       [starred, mine],
@@ -671,13 +677,13 @@ describe('expandNewStarred', () => {
     expect([...expanded]).toEqual(['owner:mine']);
   });
 
-  it('expandNewStarred_BackAfterAnEmptyTree_Unchanged', () => {
+  it('leaves the ids unchanged when the tree comes back after an empty one', () => {
     const before = new Set(['owner:mine']);
 
     expect(expandNewStarred([], [starred, mine], before)).toBe(before);
   });
 
-  it('expandNewStarred_NoStarred_Unchanged', () => {
+  it('leaves the ids unchanged when there is no starred group', () => {
     const before = new Set(['owner:mine']);
 
     expect(expandNewStarred([starred, mine], [mine], before)).toBe(before);
@@ -699,30 +705,30 @@ describe('expandNewGroups', () => {
     expected: string[];
   }>([
     {
-      name: 'NewGroup_ExpandedAndCollapsedStays',
+      name: 'expands a new group and keeps a collapsed one collapsed',
       seen: ['shelf:Kept', 'shelf:Shut'],
       next: [kept, collapsed, added],
       expected: ['shelf:Kept', 'shelf:New'],
     },
     {
-      name: 'NestedNewGroup_BothExpanded',
+      name: 'expands a nested new group and its parent',
       seen: ['shelf:Kept'],
       next: [kept, nestedAdded],
       expected: ['shelf:Inner', 'shelf:Kept', 'shelf:Outer'],
     },
     {
-      name: 'GroupGone_KeepsTheIds',
+      name: 'keeps the ids of a group that is gone',
       seen: ['shelf:Kept', 'shelf:Shut'],
       next: [collapsed],
       expected: ['shelf:Kept'],
     },
     {
-      name: 'NewLeaf_AddsNothing',
+      name: 'adds nothing for a new leaf',
       seen: ['shelf:Kept'],
       next: [kept, leaf('page', 'Page', 'e:page')],
       expected: ['shelf:Kept'],
     },
-  ])('expandNewGroups_$name', ({ seen, next, expected }) => {
+  ])('$name', ({ seen, next, expected }) => {
     const expanded = expandNewGroups(
       new Set(seen),
       next,
@@ -736,7 +742,7 @@ describe('expandNewGroups', () => {
 const HARNESSES = new Map([['claude', harnessInfo({ label: 'Claude Code' })]]);
 
 describe('chips', () => {
-  it('chips_StatesPresent_TextAndReason', () => {
+  it('gives the text and reason for each state present', () => {
     const withStates: IndexContext = {
       folder: '/Users/u',
       sessionId: null,
@@ -754,19 +760,19 @@ describe('chips', () => {
     ]);
   });
 
-  it('chips_Pending_PendingText', () => {
+  it('gives the pending text for a pending state', () => {
     const result = chips(context('/Users/u'), 'e', true, HARNESSES);
 
     expect(result.map((chip) => chip.state)).toEqual(['pending']);
   });
 
-  it('chips_NoContext_Dashes', () => {
+  it('gives dashes when there is no context', () => {
     const result = chips(null, 'e', false, HARNESSES);
 
     expect(result.map((chip) => chip.state)).toEqual(['none']);
   });
 
-  it('chips_TwoHarnesses_RegistrationOrderAndLabels', () => {
+  it('lists two harnesses in registration order with their labels', () => {
     const harnesses = new Map([
       ['b', harnessInfo({ label: 'Bee' })],
       ['claude', harnessInfo({ label: 'Claude Code' })],
@@ -784,13 +790,13 @@ describe('chips', () => {
     ]);
   });
 
-  it('chips_NoHarnesses_Empty', () => {
+  it('gives no chips when there are no harnesses', () => {
     expect(chips(context('/Users/u'), 'e', false, new Map())).toEqual([]);
   });
 });
 
 describe('contextChoices', () => {
-  it('contextChoices_HomeFirstThenByFolder', () => {
+  it('lists home first, then the rest by folder', () => {
     const document: IndexDocument = {
       schemaVersion: 5,
       generatedAt: '2026-10-20T00:00:00Z',
@@ -809,7 +815,7 @@ describe('contextChoices', () => {
     expect(folders).toEqual(['/Users/u', '/Users/u/dev/a', '/Users/u/dev/b']);
   });
 
-  it('contextChoices_WindowsHomeOtherCase_First', () => {
+  it('lists a Windows home in another case first', () => {
     const document = documentOf(
       [],
       [
@@ -832,7 +838,7 @@ describe('contextChoices', () => {
 });
 
 describe('topVisibleLine', () => {
-  it('topVisibleLine_LastBlockAtOrAboveScroll', () => {
+  it('returns the last block at or above the scroll', () => {
     const blocks = [
       { line: 1, top: 0 },
       { line: 5, top: 100 },
@@ -845,7 +851,7 @@ describe('topVisibleLine', () => {
 });
 
 describe('codeFence', () => {
-  it('codeFence_LongestRunPlusOne', () => {
+  it('fences one longer than the longest backtick run', () => {
     expect(codeFence('a ```` b `` c')).toBe('`````');
     expect(codeFence('plain text')).toBe('```');
   });
@@ -887,7 +893,7 @@ const pathsOf = (document: IndexDocument) =>
   document.entries.map((each) => each.path);
 
 describe('applyChange', () => {
-  it('applyChange_Created_AddsEntry', () => {
+  it('adds an entry for a created file', () => {
     const before = documentOf([entry({ path: '/Users/u/dev/r/a.md' })]);
 
     const after = applyChange(
@@ -905,7 +911,7 @@ describe('applyChange', () => {
     ]);
   });
 
-  it('applyChange_RenamedFile_PathIdAndTitle', () => {
+  it('updates the path, id and title of a renamed file', () => {
     const before = documentOf([
       entry({ path: '/r/a.md', title: 'a.md' }),
       entry({ path: '/r/c.md', title: 'Alpha' }),
@@ -938,7 +944,7 @@ describe('applyChange', () => {
     expect(renamedC.entries[1].title).toBe('Alpha');
   });
 
-  it('applyChange_RenamedHashFolder_IdFollowsPath', () => {
+  it('makes the id follow the path of a renamed folder with a hash', () => {
     const before = documentOf([
       entry({ path: '/Users/u/dev/C#/AGENTS.md' }),
       entry({ id: '/Users/u/dev/C#/f.md#L3', path: '/Users/u/dev/C#/f.md' }),
@@ -956,7 +962,7 @@ describe('applyChange', () => {
     ]);
   });
 
-  it('applyChange_Renamed_KeepsLastLoaded', () => {
+  it('keeps the last-loaded state of a renamed entry', () => {
     const before = documentOf([
       entry({
         path: '/Users/u/.claude/rules/a.md',
@@ -980,7 +986,7 @@ describe('applyChange', () => {
     expect(moved?.lastLoaded).toBe('2026-10-26T09:00:00Z');
   });
 
-  it('applyChange_RenamedFolder_MovesEntriesInside', () => {
+  it('moves the entries inside a renamed folder', () => {
     const before = documentOf([
       entry({ path: '/r/skills/s/SKILL.md', kind: 'skill', title: 's' }),
     ]);
@@ -998,7 +1004,7 @@ describe('applyChange', () => {
     expect(pathsOf(after)).toEqual(['/r/skills/t/SKILL.md']);
   });
 
-  it('applyChange_WindowsRenamedFolder_MovesEntriesInside', () => {
+  it('moves the entries inside a renamed Windows folder', () => {
     const before = documentOf([
       entry({ path: 'C:\\r\\.claude\\skills\\old\\SKILL.md', title: 'old' }),
       entry({
@@ -1023,7 +1029,7 @@ describe('applyChange', () => {
     ]);
   });
 
-  it('applyChange_WindowsRenamedFromOtherCase_PathAndIdMove', () => {
+  it('moves the path and id of a Windows entry renamed from another case', () => {
     const launch = { claude: { state: 'launch' as const, reason: 'r' } };
     const before = documentOf(
       [
@@ -1063,7 +1069,7 @@ describe('applyChange', () => {
     expect(after.contexts[0].states).toEqual({ 'C:\\R\\Notes\\a.md': launch });
   });
 
-  it('applyChange_Renamed_StatesFollowId', () => {
+  it('makes the states follow the id of a renamed entry', () => {
     const launch = { claude: { state: 'launch' as const, reason: 'r' } };
     const before = documentOf(
       [entry({ path: '/r/a.md' })],
@@ -1090,7 +1096,7 @@ describe('applyChange', () => {
     expect(after.contexts[0].states).toEqual({ '/r/sub/b.md': launch });
   });
 
-  it('applyChange_TrashedFolder_DropsEntriesInside', () => {
+  it('drops the entries inside a trashed folder', () => {
     const before = documentOf([
       entry({ path: '/r/skills/s/SKILL.md' }),
       entry({ path: '/r/skills/s/ref.md' }),
@@ -1109,7 +1115,7 @@ describe('applyChange', () => {
     expect(pathsOf(after)).toEqual(['/r/other.md']);
   });
 
-  it('applyChange_TrashedLinkAndTarget_DropsEntriesUnderBoth', () => {
+  it('drops the entries under a trashed link and its target', () => {
     const before = documentOf([
       entry({ path: '/r/skills/s/SKILL.md' }),
       entry({ path: '/h/.claude/skills/s/SKILL.md' }),
@@ -1130,13 +1136,13 @@ describe('applyChange', () => {
 });
 
 describe('movedEntryId', () => {
-  it('movedEntryId_FileItself_ToPath', () => {
+  it("moves a file's own id to the new path", () => {
     expect(movedEntryId('/r/a.md', '/r/a.md', '/r/b.md', posixPaths)).toBe(
       '/r/b.md',
     );
   });
 
-  it('movedEntryId_ItemOfFile_KeepsSuffix', () => {
+  it('keeps the suffix of an item of a moved file', () => {
     expect(
       movedEntryId(
         '/f/followups.md#L3',
@@ -1147,13 +1153,13 @@ describe('movedEntryId', () => {
     ).toBe('/f/later.md#L3');
   });
 
-  it('movedEntryId_InsideFolder_Joined', () => {
+  it('joins the new path for an entry inside a moved folder', () => {
     expect(movedEntryId('/r/s/ref/x.md', '/r/s', '/r/t', posixPaths)).toBe(
       '/r/t/ref/x.md',
     );
   });
 
-  it('movedEntryId_HashInFolderName_KeepsPath', () => {
+  it('keeps the path when a folder name holds a hash', () => {
     expect(
       movedEntryId(
         '/Users/u/dev/C#/AGENTS.md',
@@ -1167,7 +1173,7 @@ describe('movedEntryId', () => {
     ).toBeNull();
   });
 
-  it('movedEntryId_HashInFileName_KeepsPathAndSuffix', () => {
+  it('keeps the path and suffix when a file name holds a hash', () => {
     expect(
       movedEntryId(
         '/r/docs/#drafts.md#L3',
@@ -1186,7 +1192,7 @@ describe('movedEntryId', () => {
     ).toBe('/r/D/settings.json#hook:PreToolUse:0');
   });
 
-  it('movedEntryId_Outside_Null', () => {
+  it('returns null for an entry outside the moved path', () => {
     expect(
       movedEntryId('/r/a.md', '/r/x.md', '/r/y.md', posixPaths),
     ).toBeNull();
@@ -1195,7 +1201,7 @@ describe('movedEntryId', () => {
     ).toBeNull();
   });
 
-  it('movedEntryId_WindowsItemOtherCase_Moves', () => {
+  it('moves a Windows item written in another case', () => {
     expect(
       movedEntryId(
         'C:\\R\\a.md#L4',
@@ -1208,7 +1214,7 @@ describe('movedEntryId', () => {
 });
 
 describe('isEntryIdInside', () => {
-  it('isEntryIdInside_AtInsideItemOutside', () => {
+  it('tells an id at, inside, an item of and outside a path apart', () => {
     expect(isEntryIdInside('/r/a.md', '/r/a.md', posixPaths)).toBe(true);
     expect(isEntryIdInside('/r/s/x.md', '/r/s', posixPaths)).toBe(true);
     expect(
@@ -1217,7 +1223,7 @@ describe('isEntryIdInside', () => {
     expect(isEntryIdInside('/r/ab.md', '/r/a', posixPaths)).toBe(false);
   });
 
-  it('isEntryIdInside_HashInPath_WholePathCompared', () => {
+  it('compares the whole path when it holds a hash', () => {
     expect(isEntryIdInside('/u/C#notes/x.md', '/u/C#notes', posixPaths)).toBe(
       true,
     );
@@ -1227,7 +1233,7 @@ describe('isEntryIdInside', () => {
     ).toBe(true);
   });
 
-  it('isEntryIdInside_WindowsItemOtherCase_True', () => {
+  it('returns true for a Windows item in another case', () => {
     expect(isEntryIdInside('C:\\R\\a.md#L4', 'c:\\r\\a.md', windowsPaths)).toBe(
       true,
     );
@@ -1235,7 +1241,7 @@ describe('isEntryIdInside', () => {
 });
 
 describe('reapplyChange', () => {
-  it('reapplyChange_CreatedIdListed_KeepsRunEntry', () => {
+  it("keeps the run's entry for a created id that is listed", () => {
     const built = entry({
       path: '/r/rules/a.md',
       kind: 'rule',
@@ -1256,7 +1262,7 @@ describe('reapplyChange', () => {
     expect(after.entries).toEqual([built]);
   });
 
-  it('reapplyChange_CreatedIdMissing_AddsEntry', () => {
+  it('adds an entry for a created id that is missing', () => {
     const created = entry({ path: '/r/b.md' });
 
     const after = reapplyChange(
@@ -1271,7 +1277,7 @@ describe('reapplyChange', () => {
     expect(pathsOf(after)).toEqual(['/r/a.md', '/r/b.md']);
   });
 
-  it('reapplyChange_RenamedToListed_FileMadeAtFromStays', () => {
+  it('keeps the file made at the from path when the rename target is listed', () => {
     const before = documentOf([
       entry({ path: '/r/x.md' }),
       entry({ path: '/r/y.md' }),
@@ -1290,7 +1296,7 @@ describe('reapplyChange', () => {
     expect(pathsOf(after)).toEqual(['/r/x.md', '/r/y.md']);
   });
 
-  it('reapplyChange_RenamedToMissing_Moves', () => {
+  it('moves the entry when the rename target is missing', () => {
     const after = reapplyChange(
       documentOf([entry({ path: '/r/x.md' })]),
       {
@@ -1304,7 +1310,7 @@ describe('reapplyChange', () => {
     expect(pathsOf(after)).toEqual(['/r/y.md']);
   });
 
-  it('reapplyChange_RenamedFolderToListed_Skipped', () => {
+  it('skips a renamed folder whose target is listed', () => {
     const before = documentOf([entry({ path: '/r/skills/t/SKILL.md' })]);
 
     const after = reapplyChange(
@@ -1320,7 +1326,7 @@ describe('reapplyChange', () => {
     expect(pathsOf(after)).toEqual(['/r/skills/t/SKILL.md']);
   });
 
-  it('reapplyChange_TrashedLinkAndTargetStillListed_DropsBoth', () => {
+  it('drops a trashed link and its target that are still listed', () => {
     const before = documentOf([
       entry({ path: '/r/skills/s/SKILL.md' }),
       entry({ path: '/h/.claude/skills/s/SKILL.md' }),
@@ -1341,7 +1347,7 @@ describe('reapplyChange', () => {
 });
 
 describe('renameRecord', () => {
-  it('renameRecord_File_NamesFiles', () => {
+  it('names files for a file', () => {
     expect(renameRecord('/r/rules/a.md', '/r/rules/b.md', posixPaths)).toEqual({
       type: 'renamed',
       from: '/r/rules/a.md',
@@ -1349,7 +1355,7 @@ describe('renameRecord', () => {
     });
   });
 
-  it('renameRecord_Skill_NamesFolders', () => {
+  it('names folders for a skill', () => {
     expect(
       renameRecord(
         '/r/.claude/skills/s/SKILL.md',
@@ -1399,11 +1405,11 @@ describe('changeableEntry', () => {
       posixPaths,
     );
 
-  it('changeableEntry_Doc_Allowed', () => {
+  it('allows a doc', () => {
     expect(check(rule.id)).toEqual({ entry: rule });
   });
 
-  it('changeableEntry_NothingSelectedOrGone_Null', () => {
+  it('returns null when nothing is selected or the entry is gone', () => {
     const none = changeableEntry(
       null,
       (id) => byId.get(id),
@@ -1422,7 +1428,7 @@ describe('changeableEntry', () => {
     { node: WIKI_LABEL },
     { node: HEADING_MATCH },
   ])(
-    'changeableEntry_NotALeaf_RefusedWithGroupText ($node.type)',
+    'refuses a row that is not a leaf with the group text ($node.type)',
     ({ node }) => {
       const checked = changeableEntry(
         node,
@@ -1438,7 +1444,7 @@ describe('changeableEntry', () => {
     },
   );
 
-  it('changeableEntry_ItemInsideFile_Refused', () => {
+  it('refuses an item inside a file', () => {
     const refusedText = (id: string) => {
       const checked = check(id);
       return checked !== null && 'refusal' in checked
@@ -1450,20 +1456,20 @@ describe('changeableEntry', () => {
     expect(refusedText(hook.id)).toMatch(/PreToolUse.*settings\.json/);
   });
 
-  it('changeableEntry_ReadOnlyCopy_RefusedWithItsReadOnlyText', () => {
+  it('refuses a read-only copy with its read-only text', () => {
     expect(check(cached.id)).toEqual({
       refusal: { text: expect.stringContaining('p@m'), tone: 'info' },
     });
   });
 
-  it('changeableEntry_UnsavedEditsOnFile_Refused', () => {
+  it('refuses a file with unsaved edits', () => {
     expect(check(rule.id, ['/r/rules/a.md'])).toEqual({
       refusal: { text: UNSAVED_TEXT, tone: 'error' },
     });
     expect(check(rule.id, ['/r/rules/b.md'])).toEqual({ entry: rule });
   });
 
-  it('changeableEntry_UnsavedEditsInSkillFolder_Refused', () => {
+  it('refuses a skill folder with unsaved edits', () => {
     expect(check(skill.id, ['/r/.claude/skills/s/reference.md'])).toEqual({
       refusal: { text: UNSAVED_TEXT, tone: 'error' },
     });
@@ -1471,13 +1477,13 @@ describe('changeableEntry', () => {
 });
 
 describe('prompt texts', () => {
-  it('trashQuestion_OneTarget_QuestionAlone', () => {
+  it('asks the question alone for one target', () => {
     expect(trashQuestion(['/h/a.md'], '/h', posixPaths)).toBe(
       'Move a.md to the Trash?',
     );
   });
 
-  it('trashQuestion_TwoTargets_NamesLink', () => {
+  it('names the link for two targets', () => {
     const targets = ['/h/r/skills/s', '/h/.claude/skills/s'];
 
     expect(trashQuestion(targets, '/h', posixPaths)).toBe(
@@ -1485,7 +1491,7 @@ describe('prompt texts', () => {
     );
   });
 
-  it('trashQuestion_ThreeTargets_NamesLinks', () => {
+  it('names the links for three targets', () => {
     const targets = [
       '/h/repo/skills/s',
       '/h/.claude/skills/s',
@@ -1497,7 +1503,7 @@ describe('prompt texts', () => {
     );
   });
 
-  it('trashQuestion_WindowsLinkAndTarget_TildePaths', () => {
+  it('shows tilde paths for a Windows link and target', () => {
     const targets = [
       'C:\\Users\\u\\wigley-agents\\CLAUDE.md',
       'C:\\Users\\u\\.claude\\CLAUDE.md',
@@ -1678,7 +1684,7 @@ describe('provisionalEntry', () => {
     }),
   ];
 
-  it('provisionalEntry_InsideRepoRoot_CopiesOwnerAndIsMineNeverLoaded', () => {
+  it('copies the owner of a path inside a repo root, marks it mine and never loaded', () => {
     const made = provisionalEntry(
       '/Users/u/dev/r/nested/x.md',
       null,
@@ -1700,7 +1706,7 @@ describe('provisionalEntry', () => {
     });
   });
 
-  it('provisionalEntry_GuessesKindFromPath', () => {
+  it('guesses the kind from the path', () => {
     const guessed = (path: string) =>
       provisionalEntry(path, null, repoEntries, posixPaths);
 
@@ -1715,7 +1721,7 @@ describe('provisionalEntry', () => {
     expect(guessed('/Users/u/dev/r/web/AGENTS.md').kind).toBe('instructions');
   });
 
-  it('provisionalEntry_FeaturesOwner_FeatureDoc', () => {
+  it('makes a feature doc for a features owner', () => {
     const owner = entry({
       path: '/Users/u/wigley-features/r/followups.md',
       source: 'features',
@@ -1733,7 +1739,7 @@ describe('provisionalEntry', () => {
     expect(made.kind).toBe('feature-doc');
   });
 
-  it('provisionalEntry_InsideUnknownSourceRoot_OwnedGlobal', () => {
+  it('owns a path inside an unknown source root as global', () => {
     const owner = entry({
       path: '/Users/u/scratch/a.md',
       source: 'scratch',
@@ -1758,7 +1764,7 @@ describe('provisionalEntry', () => {
     });
   });
 
-  it('provisionalEntry_OutsideEveryRoot_Global', () => {
+  it('makes a path outside every root global', () => {
     const made = provisionalEntry(
       '/Users/u/.claude/rules/x.md',
       'rule',
@@ -1774,7 +1780,7 @@ describe('provisionalEntry', () => {
     });
   });
 
-  it('provisionalEntry_PluginRootIgnored', () => {
+  it('ignores a plugin root', () => {
     const pluginEntry = entry({
       path: '/Users/u/.claude/plugins/cache/m/p/1/skills/a/SKILL.md',
       source: 'plugin',
@@ -1792,7 +1798,7 @@ describe('provisionalEntry', () => {
     expect(made.source).toBe('global');
   });
 
-  it('provisionalEntry_WindowsRulesFolder_Rule', () => {
+  it('makes a Windows rules folder a rule', () => {
     const made = provisionalEntry(
       'C:\\Users\\u\\.claude\\rules\\x.md',
       null,
@@ -1803,7 +1809,7 @@ describe('provisionalEntry', () => {
     expect(made).toMatchObject({ kind: 'rule', title: 'x.md' });
   });
 
-  it('provisionalEntry_WindowsFolderOtherCase_KindGuessed', () => {
+  it('guesses the kind of a Windows folder in another case', () => {
     const guessed = (path: string) =>
       provisionalEntry(path, null, [], windowsPaths).kind;
 
@@ -1812,7 +1818,7 @@ describe('provisionalEntry', () => {
     expect(guessed('C:\\Users\\u\\.claude\\Commands\\x.md')).toBe('command');
   });
 
-  it('provisionalEntry_PosixFolderOtherCase_Reference', () => {
+  it('makes a POSIX folder in another case a reference', () => {
     const made = provisionalEntry(
       '/Users/u/.claude/Rules/x.md',
       null,
@@ -1823,13 +1829,13 @@ describe('provisionalEntry', () => {
     expect(made.kind).toBe('reference');
   });
 
-  it('provisionalEntry_FileNamedLikeFolder_NotGuessedFromIt', () => {
+  it('does not guess the kind of a file from a folder it is named like', () => {
     const made = provisionalEntry('/Users/u/notes/rules', null, [], posixPaths);
 
     expect(made.kind).toBe('reference');
   });
 
-  it('provisionalEntry_InsideClonePluginFolder_TakesPluginKey', () => {
+  it("takes the plugin key for a path inside a clone's plugin folder", () => {
     const clone = '/Users/u/dev/m';
     const pluginEntries = [
       entry({
@@ -1868,7 +1874,7 @@ describe('provisionalEntry', () => {
 });
 
 describe('changedPaths', () => {
-  it('changedPaths_CreatedWithNoDocument_ListsItsPath', () => {
+  it('lists the path of a created file with no document', () => {
     const created = entry({ path: '/r/rules/tidy.md', kind: 'rule' });
 
     expect(
@@ -1876,7 +1882,7 @@ describe('changedPaths', () => {
     ).toEqual(['/r/rules/tidy.md']);
   });
 
-  it('changedPaths_Renamed_ListsEntriesInsideItsNewPath', () => {
+  it('lists the entries inside the new path of a rename', () => {
     const next = documentOf([
       entry({ path: '/r/skills/new/SKILL.md' }),
       entry({ path: '/r/skills/other/SKILL.md' }),
@@ -1893,7 +1899,7 @@ describe('changedPaths', () => {
 });
 
 describe('settlePending', () => {
-  it('settlePending_ClearsOnlySettledChanges', () => {
+  it('clears only the settled changes', () => {
     const pending = new Map([
       ['/a', 1],
       ['/b', 2],
@@ -1905,7 +1911,7 @@ describe('settlePending', () => {
 });
 
 describe('detailFields', () => {
-  it('detailFields_Hook_NullMatcherDash', () => {
+  it('shows a dash for a hook with a null matcher', () => {
     const hook = entry({
       path: '/Users/u/.claude/settings.json',
       kind: 'hook',
@@ -1919,7 +1925,7 @@ describe('detailFields', () => {
     ]);
   });
 
-  it('detailFields_Plugin_InstallsJoined', () => {
+  it("joins a plugin's installs", () => {
     const plugin = entry({
       path: '/Users/u/.claude/plugins/cache/m/p/1',
       kind: 'plugin',
@@ -1941,7 +1947,7 @@ describe('detailFields', () => {
     ]);
   });
 
-  it('detailFields_UnregisteredHarness_RawId', () => {
+  it('shows the raw id for an unregistered harness', () => {
     const plugin = entry({
       path: '/Users/u/.gemini/plugins/cache/m/p/1',
       kind: 'plugin',
@@ -1956,7 +1962,7 @@ describe('detailFields', () => {
 });
 
 describe('readOnlyReason', () => {
-  it('readOnlyReason_ThirdPartyPlugin_Downloaded', () => {
+  it('gives downloaded for a third-party plugin', () => {
     const plugin = entry({
       path: '/c/v/skills/s/SKILL.md',
       owner: 'third-party',
@@ -1971,7 +1977,7 @@ describe('readOnlyReason', () => {
     });
   });
 
-  it('readOnlyReason_SyncedSkill_DownloadedNoPlugin', () => {
+  it('gives downloaded without a plugin for a synced skill', () => {
     const synced = entry({
       path: '/Users/u/.claude/skills/synced/pdf/SKILL.md',
       owner: 'third-party',
@@ -1984,7 +1990,7 @@ describe('readOnlyReason', () => {
     });
   });
 
-  it('readOnlyReason_InstalledOnly_Installed', () => {
+  it('gives installed for an installed-only entry', () => {
     const installed = entry({
       path: '/c/p/skills/s/SKILL.md',
       source: 'plugin',
@@ -1998,7 +2004,7 @@ describe('readOnlyReason', () => {
     });
   });
 
-  it('readOnlyReason_OwnRepoFile_Null', () => {
+  it("returns null for a file in the user's own repo", () => {
     const own = entry({
       path: '/Users/u/dev/m/plugins/w/skills/f/SKILL.md',
       source: 'repo',
@@ -2047,7 +2053,7 @@ function cloneStatus(overrides: Partial<CloneStatus>): CloneStatus {
 }
 
 describe('fileStatuses', () => {
-  it('fileStatuses_TwoClones_MergedByEntryId', () => {
+  it("merges two clones' statuses by entry id", () => {
     const s1 = fileStatus({ uncommitted: true });
     const s2 = fileStatus({ notInstalled: ['codex'] });
     const read = {
@@ -2082,7 +2088,7 @@ describe('statusTexts', () => {
     path: '/Users/u/.claude/plugins/cache/m/w/1.9.1/skills/f/SKILL.md',
   };
 
-  it('statusTexts_EverySet_InPinnedOrder', () => {
+  it('lists every set status in the pinned order', () => {
     const status = fileStatus({
       uncommitted: true,
       unpushed: true,
@@ -2104,7 +2110,7 @@ describe('statusTexts', () => {
     ]);
   });
 
-  it('statusTexts_LoadedSameVersion_NotStale', () => {
+  it('is not stale when the loaded version is the same', () => {
     expect(
       statusTexts(
         pluginFile([claudeCopy]),
@@ -2115,13 +2121,13 @@ describe('statusTexts', () => {
     ).toEqual([]);
   });
 
-  it('statusTexts_KeyNotLoaded_NotStale', () => {
+  it('is not stale when the key is not loaded', () => {
     expect(
       statusTexts(pluginFile([claudeCopy]), undefined, {}, HARNESSES),
     ).toEqual([]);
   });
 
-  it('statusTexts_NoClaudeCopy_NotStale', () => {
+  it('is not stale when there is no Claude copy', () => {
     const codexCopy = {
       harness: 'codex',
       version: '0.17.1',
@@ -2145,7 +2151,7 @@ describe('rollupText', () => {
     ['codex', harnessInfo({ label: 'Codex' })],
   ]);
 
-  it('rollupText_Counts_InOrderZerosLeftOut', () => {
+  it('counts in order and leaves zeros out', () => {
     const counts = {
       uncommitted: 3,
       unpushed: 1,
@@ -2155,7 +2161,7 @@ describe('rollupText', () => {
     expect(rollupText(counts, BOTH)).toMatch(/3.*1.*12.*Codex/);
   });
 
-  it('rollupText_BothHarnesses_ClaudeFirst', () => {
+  it('lists Claude first when both harnesses are present', () => {
     const counts = {
       uncommitted: 0,
       unpushed: 0,
@@ -2165,7 +2171,7 @@ describe('rollupText', () => {
     expect(rollupText(counts, BOTH)).toMatch(/2.*Claude Code.*5.*Codex/);
   });
 
-  it('rollupText_AllZero_Null', () => {
+  it('returns null when every count is zero', () => {
     const counts = {
       uncommitted: 0,
       unpushed: 0,
@@ -2179,7 +2185,7 @@ describe('rollupText', () => {
 describe('fetchText', () => {
   const wrapped = (iso: string) => `T(${iso})`;
 
-  it('fetchText_FailedFetched_OriginAsOf', () => {
+  it('gives the origin and as-of time for a failed fetch that has fetched before', () => {
     const clone = cloneStatus({
       fetchFailed: true,
       fetchedAt: '2026-10-24T10:00:00Z',
@@ -2190,13 +2196,13 @@ describe('fetchText', () => {
     );
   });
 
-  it('fetchText_FailedNeverFetched_OriginNeverFetched', () => {
+  it('gives the origin and never fetched for a failed fetch that never fetched', () => {
     const clone = cloneStatus({ fetchFailed: true, fetchedAt: null });
 
     expect(fetchText(clone, wrapped)).toEqual(expect.any(String));
   });
 
-  it('fetchText_NotFailed_Null', () => {
+  it('returns null when the fetch did not fail', () => {
     const clone = cloneStatus({
       fetchFailed: false,
       fetchedAt: '2026-10-24T10:00:00Z',
@@ -2217,7 +2223,7 @@ describe('treeRowStatus', () => {
     files: { a: fileStatus({ uncommitted: true }) },
   });
 
-  it('treeRowStatus_StarredGroup_NoDetail', () => {
+  it('gives a starred group no detail', () => {
     const starredGroup = group('owner:starred', 'Starred', [
       leaf('owner:starred/entry:a', 'A', 'a'),
     ]);
@@ -2239,7 +2245,7 @@ describe('treeRowStatus', () => {
     { node: HEADING_MATCH, detail: 'Page' },
     { node: WIKI_LINK, detail: null },
     { node: WIKI_LABEL, detail: null },
-  ])('treeRowStatus_WikiRows ($node.type)', ({ node, detail }) => {
+  ])("draws a wiki row's status ($node.type)", ({ node, detail }) => {
     expect(
       treeRowStatus(
         node,
@@ -2253,7 +2259,7 @@ describe('treeRowStatus', () => {
     ).toEqual({ mark: null, detail });
   });
 
-  it('treeRowStatus_LeafWithTexts_MarkJoined', () => {
+  it('joins the mark and the texts for a leaf with texts', () => {
     const texts = () => ['Uncommitted', 'Not installed · codex'];
 
     expect(
@@ -2261,13 +2267,13 @@ describe('treeRowStatus', () => {
     ).toEqual({ mark: 'Uncommitted · Not installed · codex', detail: null });
   });
 
-  it('treeRowStatus_LeafNoTexts_Nothing', () => {
+  it('draws nothing for a leaf with no texts', () => {
     expect(
       treeRowStatus(leafA, noTexts, new Map(), [], asIs, posixPaths, HARNESSES),
     ).toEqual({ mark: null, detail: null });
   });
 
-  it('treeRowStatus_PluginNode_Rollup', () => {
+  it('gives a plugin node its rollup', () => {
     const plugin = group(
       'repo:m/plugin:w@m',
       'w@m',
@@ -2290,7 +2296,7 @@ describe('treeRowStatus', () => {
     ).toEqual({ mark: null, detail: expect.stringMatching(/2.*1/) });
   });
 
-  it('treeRowStatus_RepoNodeFetchFailed_RollupThenOrigin', () => {
+  it('gives a repo node whose fetch failed the rollup, then the origin', () => {
     const repo = group('repo:m', 'm', [leafA], { type: 'repo', clone: '/r' });
 
     const status = treeRowStatus(
@@ -2307,7 +2313,7 @@ describe('treeRowStatus', () => {
     expect(status.detail).toContain(fetchText(failedClone, asIs) as string);
   });
 
-  it('treeRowStatus_SplitRepoNode_RollupNoOrigin', () => {
+  it('gives a split repo node the rollup and no origin', () => {
     const repo = group('repo:m', 'm', [leafA], { type: 'repo', clone: null });
 
     const status = treeRowStatus(
@@ -2324,7 +2330,7 @@ describe('treeRowStatus', () => {
     expect(status.detail).not.toContain(fetchText(failedClone, asIs) as string);
   });
 
-  it('treeRowStatus_KindGroup_NoDetail', () => {
+  it('gives a kind group no detail', () => {
     const kind = group('repo:m/skill', 'Skills', [leafA]);
 
     expect(

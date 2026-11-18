@@ -1,35 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Timers } from '../../../contracts/ambient';
+import { fakeTimers } from '../../../shared/fake-timers.test-support';
 import type { PendingKeys } from '../../../contracts/keymap';
 import type { WhichKeyModel } from './which-key';
 import { startWhichKey } from './which-key-controller';
 
 const DELAY_MS = 200;
 const TIMEOUT_MS = 1000;
-
-function fakeTimers() {
-  let nextHandle = 1;
-  const scheduled = new Map<number, { run: () => void; ms: number }>();
-  const timers: Timers = {
-    set: (run, ms) => {
-      const handle = nextHandle++;
-      scheduled.set(handle, { run, ms });
-      return handle;
-    },
-    clear: (handle) => {
-      scheduled.delete(handle);
-    },
-  };
-  // Runs every timer set for exactly `ms`, none set while they run.
-  const runAfter = (ms: number) => {
-    const due = [...scheduled].filter(([, timer]) => timer.ms === ms);
-    for (const [handle, timer] of due) {
-      scheduled.delete(handle);
-      timer.run();
-    }
-  };
-  return { timers, scheduled, runAfter };
-}
 
 function modelOf(pending: PendingKeys): WhichKeyModel {
   return { title: pending.keys.join(' '), name: null, entries: [] };
@@ -110,7 +86,7 @@ describe('startWhichKey', () => {
 
     expect(run.calls).toEqual([]);
     expect(run.logs).toEqual([]);
-    expect(run.scheduled.size).toBe(0);
+    expect(run.armed.size).toBe(0);
   });
 
   it('startWhichKey_TimeoutSet_CancelsPending', () => {
@@ -129,7 +105,7 @@ describe('startWhichKey', () => {
     run.pend('Space');
     run.runAfter(DELAY_MS);
 
-    expect(run.scheduled.size).toBe(0);
+    expect(run.armed.size).toBe(0);
     expect(run.calls).not.toContain('cancel');
   });
 

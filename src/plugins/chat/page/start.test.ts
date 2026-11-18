@@ -85,7 +85,7 @@ interface FakeBox {
 // each editor's `destroy`, `setActivity` the fake's row activity call, and
 // `tabAdded` hears each added tab's element. `boxes` gets each box made, in
 // order, `invoked` each call to main, and `selected` the session id of each tab
-// selected.
+// selected. `answers` answers the main methods it names in place of resolving.
 function startChatPage(
   destroyEditor: () => void = () => undefined,
   isTabVisible: () => boolean = () => false,
@@ -97,17 +97,23 @@ function startChatPage(
     restored = Promise.resolve(),
     holdsRestores = false,
     selected = [],
+    answers = {},
   }: {
     boxes?: FakeBox[];
     invoked?: unknown[][];
     restored?: Promise<void>;
     holdsRestores?: boolean;
     selected?: string[];
+    answers?: Record<string, Promise<unknown>>;
   } = {},
 ) {
   return startPagePart(chatPagePart, {
     invoke: (...args: unknown[]) => {
       invoked.push(args);
+      const answer = answers[args[0] as string];
+      if (answer !== undefined) {
+        return answer;
+      }
       return args[0] === 'restored' ? restored : Promise.resolve();
     },
     holdsRestores,
@@ -302,18 +308,79 @@ describe('chat page part', () => {
   });
 
   it('stop_OneTabsDestroyThrows_TearsDownEveryTab', async () => {
+    // A tab whose entries hold a stop settles its cursor on its first draw,
+    // which reads the list's scroll padding.
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
     const destroyEditor = vi.fn<() => void>();
     destroyEditor.mockImplementationOnce(() => {
       throw new Error('box gone');
     });
     const harness = startChatPage(destroyEditor);
-    loadSessions(harness, [SESSION, { ...SESSION, sessionId: 's2' }]);
+    const withImage: ChatEntry = {
+      id: 'entry-1',
+      at: 1000,
+      kind: 'user',
+      text: 'hi',
+      images: [PNG],
+      delivery: null,
+      raw: [],
+    };
+    loadSessions(harness, [
+      { ...SESSION, entries: [withImage] },
+      { ...SESSION, sessionId: 's2' },
+    ]);
+    harness.started().commands.openImage({
+      arg: { sessionId: 's1', entryId: 'entry-1', index: 0 },
+    });
     expect(harness.counts().observers).toBeGreaterThan(0);
 
     await expect(harness.stop()).rejects.toThrow('box gone');
 
     expect(harness.counts()).toEqual(noCounts);
+    expect(harness.logs).toContainEqual({
+      source: 'chat',
+      message: 'image viewer closed',
+    });
   });
+
+  it.each<{
+    method: string;
+    act(harness: ReturnType<typeof startChatPage>): void;
+  }>([
+    { method: 'loaded', act: () => undefined },
+    {
+      method: 'stopAll',
+      act: (harness) => harness.started().commands.stopAll({ arg: undefined }),
+    },
+    {
+      method: 'recentFolders',
+      act: (harness) =>
+        harness.started().commands.newSession({ arg: undefined }),
+    },
+  ])(
+    'logs and toasts nothing for a $method failure landing after the part stopped',
+    async ({ method, act }) => {
+      let refuse: (error: Error) => void = () => undefined;
+      const answer = new Promise<unknown>((_resolve, reject) => {
+        refuse = reject;
+      });
+      const harness = startChatPage(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { answers: { [method]: answer } },
+      );
+      act(harness);
+      await harness.stop();
+      const logsAtStop = harness.logs.length;
+
+      refuse(new Error('main gone'));
+      await flushRuns();
+
+      expect(harness.logs.slice(logsAtStop)).toEqual([]);
+    },
+  );
 
   it('sessionRemoved_HeldTab_DestroysItsBoxOnce', async () => {
     const destroyEditor = vi.fn<() => void>();

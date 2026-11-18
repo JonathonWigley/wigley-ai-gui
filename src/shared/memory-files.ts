@@ -3,11 +3,12 @@ import type { FileEntry, Files, FileStat } from '../contracts/files';
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `append`, `rename`, `trash`, `deleteFile` and `remove` report each changed file's path to
-// the watches over it at once, with no debounce, so a test drives a save by
-// writing; a rename reports each moved file's old path and its new one. A
-// watch with `recursive: false` reports a change under a subfolder as the
-// subfolder's name, once per call. A watch never fails or misses a change, so
+// `append`, `makeFolder`, `rename`, `trash`, `deleteFile` and `remove` report
+// each changed file's and folder's path to the watches over it at once, with no
+// debounce, so a test drives a save by writing; a rename reports each moved
+// file's and folder's old path and its new one. A watch with
+// `recursive: false` reports a change under a subfolder as the subfolder's
+// name, once per call. A watch never fails or misses a change, so
 // it never calls its `onError` or `onMissed`. There are no links, so `stat`
 // reports none and `realPath` returns the path's stored spelling. Names are
 // case-sensitive.
@@ -101,7 +102,32 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
     }
   };
 
+  // Every folder at or under `target` that `statKey` reads as a folder,
+  // implicit ones included, each folder before the folders under it.
+  const foldersAtOrUnder = (target: string): string[] => {
+    const folders = new Set<string>();
+    if (target !== '' && statKey(target)?.isFolder) {
+      folders.add(target);
+    }
+    const addAncestorsUnder = (key: string) => {
+      for (let above = parentOf(key); above !== ''; above = parentOf(above)) {
+        if (isAtOrUnder(target, above)) {
+          folders.add(above);
+        }
+      }
+    };
+    for (const folder of atOrUnder(madeFolders, target)) {
+      folders.add(folder);
+      addAncestorsUnder(folder);
+    }
+    for (const file of atOrUnder(contents.keys(), target)) {
+      addAncestorsUnder(file);
+    }
+    return [...folders].sort();
+  };
+
   const removeKey = (target: string) => {
+    const folders = foldersAtOrUnder(target);
     if (statKey(target) !== null) {
       keepParentOf(target);
     }
@@ -113,7 +139,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       contents.delete(file);
       modifiedTimes.delete(file);
     }
-    report(removed);
+    report([...folders, ...removed]);
   };
 
   const contentOf = (path: string): string | Uint8Array => {
@@ -199,9 +225,18 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
     makeFolder: async (path) => {
       const key = keyOf(path);
       requireFolderCanBeMade(key, path);
+      const missingFolders: string[] = [];
+      for (
+        let folder = key;
+        folder !== '' && statKey(folder) === null;
+        folder = parentOf(folder)
+      ) {
+        missingFolders.unshift(folder);
+      }
       if (key !== '') {
         madeFolders.add(key);
       }
+      report(missingFolders);
     },
     rename: async (from, to) => {
       const fromKey = keyOf(from);
@@ -222,6 +257,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         throw new Error(`${from} cannot move inside itself to ${to}`);
       }
       const moved = (key: string) => toKey + key.slice(fromKey.length);
+      const movedFolders = foldersAtOrUnder(fromKey);
       keepParentOf(fromKey);
       for (const folder of atOrUnder(madeFolders, fromKey)) {
         madeFolders.delete(folder);
@@ -236,7 +272,10 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         modifiedTimes.set(moved(file), modifiedTimes.get(file) ?? 0);
         modifiedTimes.delete(file);
       }
-      report(movedContents.flatMap(([file]) => [file, moved(file)]));
+      report([
+        ...movedFolders.flatMap((folder) => [folder, moved(folder)]),
+        ...movedContents.flatMap(([file]) => [file, moved(file)]),
+      ]);
     },
     trash: async (path) => {
       const key = keyOf(path);

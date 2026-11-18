@@ -15,6 +15,7 @@ import type {
   EntryKind,
   HarnessEntryInput,
   HarnessEntryKind as LayoutHarnessEntryKind,
+  StepDuration,
 } from '../layouts/layout';
 import { type ChatPartName, isHarnessKind } from './chat-layouts';
 
@@ -37,13 +38,15 @@ const KIND_SET: Record<EntryKind, true> = {
 // variant missing or renaming an input's field, or a drifted kind, makes a
 // member `never`, which `true` cannot fill. Without strictNullChecks a field
 // turning nullable is not caught. A result's input also holds the step count
-// the entry list adds, and a user's the latest delivery flag and the sender it
-// adds.
+// the entry list adds, a user's the latest delivery flag and the sender it
+// adds, and a thinking or tool input the step duration it adds.
 type InputAddition<K extends EntryKind> = K extends 'result'
   ? { stepCount: number }
   : K extends 'user'
     ? { isLatestDelivery: boolean; from: string | null }
-    : unknown;
+    : K extends 'thinking' | 'tool'
+      ? StepDuration
+      : unknown;
 type VariantFitsInput = {
   [K in EntryKind]: Extract<ChatEntry, { kind: K }> &
     InputAddition<K> extends EntryInput<K>

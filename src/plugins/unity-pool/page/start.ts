@@ -226,7 +226,9 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         },
         (error: unknown) => {
           originNames.delete(folder);
-          log(`originName ${folder} not read: ${errorText(error)}`);
+          if (!isDisposed) {
+            log(`originName ${folder} not read: ${errorText(error)}`);
+          }
         },
       );
     };
@@ -431,7 +433,9 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
           ),
         (error: unknown) => {
           const text = errorText(error);
-          log(`${action} ${pool} ${clone} not run: ${text}`);
+          if (!isDisposed) {
+            log(`${action} ${pool} ${clone} not run: ${text}`);
+          }
           finish({ ok: false, text });
         },
       );

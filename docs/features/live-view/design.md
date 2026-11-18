@@ -43,30 +43,36 @@ a Unity playtest, so the user never asks the agent for the stream. It works for 
 drives, and knows nothing of a particular project.
 
 - **Open:** a Bash call of any agent of the session, the lead or a subagent (a subagent's calls arrive under the
-  lead's row), whose command runs `unity command editor_play` or `capture.py start`, once the call succeeds: a denied
-  or failed call opens nothing. A chained command counts (`cd <dir> && unity command editor_play --project-path
-  <dir>`); `echo`, text inside quotes, a subshell, `bash -c`, another `unity command`, and `capture.py stop` do not.
+  lead's row), whose command runs `unity command editor.playmode start` (Pipeline 0.9 and above), `unity command
+  editor_play` (0.8) or `capture.py start`, once the call succeeds: a denied or failed call opens nothing. A chained
+  command counts (`cd <dir> && unity command editor_play --project-path <dir>`); `echo`, text inside quotes, a
+  subshell, `bash -c`, another `unity command`, and `capture.py stop` do not.
   A heredoc's body does not count either: a command written into a file with `cat > play.sh <<'EOF'` never ran.
 - **Live calls only:** a replayed or restored entry never acts. The watch reads the call's full command from
   chat's `chat.entries` list, since a `toolStarted` event's summary is cut to 80 characters, and counts the entry as
   live only when chat's `agentEvent` `toolStarted` for its `toolUseId` came with `replayed: false`. A restore writes
   the list whole (a `replace`, which never acts) and fires no `toolStarted`. Each call acts once, and chat's layout
   preview row is left out.
-- **Project folder:** only the command's `--project-path <dir>`. The agent names its editor in the command that
-  starts the playtest, as the `wigley:unity-playtest` skill does; the app guesses no folder. When one command names
-  `--project-path` more than once, the last non-empty value counts; an empty or missing value keeps an earlier one. A
-  trigger command with no `--project-path`, a relative path, a folder with no editor (no
+- **Project folder:** the command's `--project-path <dir>`, else for a `unity command` the `UNITY_PROJECT_PATH` the
+  same command line sets (`export UNITY_PROJECT_PATH=…;` before it, or `UNITY_PROJECT_PATH=… unity command …`), else
+  the folder the line `cd`s into, as the CLI itself falls back (a folder with no editor opens nothing). The agent
+  names its editor in the command that starts the playtest, as the `wigley:unity-playtest` skill does; the app
+  guesses no folder. When one command names `--project-path` more than once, the last non-empty value counts; an
+  empty or missing value keeps an earlier one. `$NAME` and `${NAME}` in the path, the program or the capture script
+  expand from plain assignments (`P=<dir>`, `export P=<dir>`) and `cd <dir>` (as `$PWD`) in earlier segments of the
+  same command, since agents hold the folder in a variable; a variable the line never assigns, an assignment in the
+  same segment, and a command substitution read as no path. A trigger command with no project folder, a relative path, a folder with no editor (no
   `Library/EditorInstance.json` with a `process_id`), or no editor window writes no pick, only a log line.
 - **What streams:** the whole editor window, `Editor · <project folder>`, as `show_live_view` with no `gameRect`
   does. The agent's later `show_live_view` with the Game View rect crops it, as the `wigley:unity-playtest` skill
   already calls it. With Screen Recording off, the section shows that line and its button, as for the agent's call.
-- **Close:** a Bash call running `unity command editor_stop` that succeeds closes a view the app opened, when its
-  `--project-path` names the project the app opened the view for (one trailing `/` ignored); an `editor_stop` with no
-  path closes nothing. The agent's `hide_live_view` and the session ending
+- **Close:** a Bash call running `unity command editor.playmode stop` or `editor_stop` that succeeds closes a view the
+  app opened, when its project folder, read as for an opening, names the project the app opened the view for (one
+  trailing `/` ignored); a stop with no folder closes nothing. The agent's `hide_live_view` and the session ending
   close any view.
 - **The agent's pick wins:** the app opens the view only when the session has no pick. The agent's `show_live_view`
-  replaces an app-opened pick and makes the pick the agent's, so a later `editor_stop` leaves it. An app opening
-  still waiting on the window list writes nothing when a pick, a hide, an `editor_stop`, a later app opening, the
+  replaces an app-opened pick and makes the pick the agent's, so a later stop leaves it. An app opening
+  still waiting on the window list writes nothing when a pick, a hide, a stop, a later app opening, the
   agent's `show_live_view` or the session's end came first.
 - No setting turns it off.
 

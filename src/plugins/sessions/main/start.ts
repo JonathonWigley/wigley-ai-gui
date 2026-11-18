@@ -63,7 +63,8 @@ type SessionsApi = MainApi<
 >;
 
 // The name the session's harness shows for it; null when the app runs no such
-// harness or the session does not say which saved session it is.
+// harness or the session does not say which saved session it is. A session
+// whose relay named no config folder runs in the harness's default one.
 async function hostSessionName(
   api: SessionsApi,
   info: SessionInfo,
@@ -76,7 +77,11 @@ async function hostSessionName(
   if (harness === null || sessionId === null || projectDir === null) {
     return null;
   }
-  return harness.sessionName(sessionId, projectDir, info.profileDir ?? null);
+  return harness.sessionName(
+    sessionId,
+    projectDir,
+    info.profileDir ?? harness.configFolder(null),
+  );
 }
 
 // The session's config folder as its harness resolves it; null when the app

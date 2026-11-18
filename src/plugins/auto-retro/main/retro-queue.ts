@@ -1,4 +1,4 @@
-import { isJsonObject } from '../../../shared/json';
+import { isJsonObject, isStringArray } from '../../../shared/json';
 import { isUserClose, type SessionCloseReason } from '../../chat/contract';
 import { editableTitle, type SessionTitles } from '../../sessions/contract';
 
@@ -119,8 +119,8 @@ function afterClear(
     : { ...queue };
 }
 
-// A retro row `launched` lost still opens with its `RETRO_COMMAND`.
-function opensWithRetroCommand(titles: SessionTitles): boolean {
+// Whether a row's first message opens with `RETRO_COMMAND`, as every retro row's does, one `launched` lost included.
+export function opensWithRetroCommand(titles: SessionTitles): boolean {
   return titles.firstMessage?.startsWith(`${RETRO_COMMAND} `) ?? false;
 }
 
@@ -191,12 +191,6 @@ function withoutRun(queue: RetroQueue, host: string): RetroQueue {
     running: null,
     launched: queue.launched.filter((id) => id !== host),
   };
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === 'string')
-  );
 }
 
 function isRetroItem(value: unknown): value is RetroItem {

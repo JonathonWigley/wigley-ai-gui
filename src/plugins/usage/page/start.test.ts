@@ -171,7 +171,11 @@ describe('usagePagePart', () => {
     const written: string[] = [];
     const harness = startOnHarness({
       demoSteps,
-      uiState: { get: () => undefined, set: (key) => written.push(key) },
+      uiState: {
+        get: () => undefined,
+        set: (key) => written.push(key),
+        on: () => ({ dispose: () => undefined }),
+      },
     });
     harness.ready();
     harness.state.publish(usageSnapshotSlot).set(SNAPSHOT);

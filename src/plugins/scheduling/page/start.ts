@@ -5,6 +5,7 @@ import {
   keyRunner,
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
+import { callEach } from '../../../shared/call-each';
 import { sessionsPageKey } from '../../sessions/contract';
 import {
   type SchedulingChannel,
@@ -156,9 +157,14 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
       },
       mayStop: () => view.mayStop(),
       dispose() {
-        stateListener.dispose();
-        runRows?.dispose();
-        view.dispose();
+        callEach<() => void>(
+          [
+            () => stateListener.dispose(),
+            () => runRows?.dispose(),
+            () => view.dispose(),
+          ],
+          (step) => step(),
+        );
       },
     };
   },

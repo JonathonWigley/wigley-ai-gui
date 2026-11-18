@@ -119,11 +119,17 @@ export interface CompactionInput {
   raw: unknown[];
 }
 
+// How long the step took: from its `at` to the next entry that is not another agent's; null while nothing after it
+// marks its end, or when either time is unknown. Epoch ms span.
+export interface StepDuration {
+  durationMs: number | null;
+}
+
 export interface EntryInputs {
   user: UserInput;
   assistant: AssistantInput;
-  thinking: ThinkingInput;
-  tool: ToolInput;
+  thinking: ThinkingInput & StepDuration;
+  tool: ToolInput & StepDuration;
   permission: PermissionInput;
   result: ResultInput;
   notice: NoticeInput;
@@ -280,12 +286,13 @@ export interface EntryView<K extends AnyEntryKind = EntryKind> {
 // A status edge on a card's leading side: `attention` for a prompt that needs the user, `error` for a failure.
 export type CardEdge = 'attention' | 'error';
 
-// `summary` is the head's one line (mono in the code font), `leading` sits before it, `open` opens it at once,
-// and `body` builds the body afresh on each open.
+// `summary` is the head's one line (mono in the code font), `leading` sits before it, `trailing` after it, `open`
+// opens it at once, and `body` builds the body afresh on each open.
 export interface CollapsibleCardOptions {
   summary: string;
   mono?: boolean;
   leading?: HTMLElement | null;
+  trailing?: HTMLElement | null;
   open?: boolean;
   body(): HTMLElement;
 }
@@ -311,13 +318,13 @@ export interface ChatKit extends BaseKit {
     body: () => HTMLElement,
   ): HTMLElement;
   // A card whose head toggles its body, built closed unless `open`; Enter on the focused entry toggles it with the
-  // entry's expanders. Its `element` is appended to `parent`; `leading` moves into its head.
+  // entry's expanders. Its `element` is appended to `parent`; `leading` and `trailing` move into its head.
   collapsibleCard(
     parent: HTMLElement,
     options: CollapsibleCardOptions,
   ): CollapsibleCard;
   // A plain one-line row, no card, that opens `body()` in place under it; Enter on the focused entry toggles it with
-  // the entry's expanders. Its `element` is appended to `parent`; `leading` moves into its head.
+  // the entry's expanders. Its `element` is appended to `parent`; `leading` and `trailing` move into its head.
   collapsibleRow(
     parent: HTMLElement,
     options: CollapsibleCardOptions,

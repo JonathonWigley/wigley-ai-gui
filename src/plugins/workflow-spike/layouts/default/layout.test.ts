@@ -66,7 +66,11 @@ const groupOf = (...items: SideItemInput[]): SideGroupInput => ({
   items,
 });
 
-const done = (text: string): SideItemInput => ({ text, state: 'done' });
+const done = (number: number, text: string): SideItemInput => ({
+  number,
+  text,
+  state: 'done',
+});
 
 function drawPane(fields: Partial<SidePaneInput>): FakeElement {
   const { kit } = testWorkflowKit(KIT_MANIFEST);
@@ -152,15 +156,18 @@ describe('Spike default layout', () => {
     const pane = drawPane({
       checked: 1,
       total: 4,
-      finishedGroups: [groupOf(done('a'))],
+      finishedGroups: [groupOf(done(1, 'a'))],
       currentGroup: groupOf(
-        { text: 'b', state: 'running' },
-        { text: 'c', state: 'pending' },
+        { number: 2, text: 'b', state: 'running' },
+        { number: 3, text: 'c', state: 'pending' },
       ),
-      laterGroups: [groupOf({ text: 'd', state: 'pending' })],
+      laterGroups: [groupOf({ number: 4, text: 'd', state: 'pending' })],
     });
 
     expect(rowLabels(pane)).toEqual(['a', 'b', 'c', 'd']);
+    expect(
+      findAll(pane, 'workflow-side-number').map((n) => n.textContent),
+    ).toEqual(['1', '2', '3', '4']);
     expect(findAll(pane, 'workflow-side-count')[0].textContent).toBe('1/4');
     expect(findAll(pane, 'workflow-side-actions')).toEqual([]);
   });
@@ -169,7 +176,7 @@ describe('Spike default layout', () => {
     const pane = drawPane({
       checked: 2,
       total: 2,
-      finishedGroups: [groupOf(done('a'), done('b'))],
+      finishedGroups: [groupOf(done(1, 'a'), done(2, 'b'))],
     });
 
     expect(rowLabels(pane)).toEqual(['a', 'b']);

@@ -1,5 +1,6 @@
 import type { AudioOutput, DecodedAudio, Playing } from './audio-output';
 import type { PlayPlan } from './play-plan';
+import { callEach } from '../../../../shared/call-each';
 
 const DISPOSED = 'audio output disposed';
 
@@ -50,11 +51,12 @@ export function createWebAudioOutput(
         return;
       }
       disposed = true;
-      for (const stop of playing) {
-        stop();
-      }
-      if (context !== null) {
-        void context.close();
+      try {
+        callEach([...playing], (stop) => stop());
+      } finally {
+        if (context !== null) {
+          void context.close();
+        }
       }
     },
   };

@@ -1,4 +1,5 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
@@ -127,8 +128,9 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
       commands: {},
       dispose: () => {
         isStopped = true;
-        registration.dispose();
-        watch.dispose();
+        callEach<{ dispose(): void }>([registration, watch], (each) =>
+          each.dispose(),
+        );
       },
     };
   },

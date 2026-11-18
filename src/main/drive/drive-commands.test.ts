@@ -104,6 +104,7 @@ describe('createDriveCommands', () => {
 
   it.each([
     {
+      case: 'transparency is set at its dotted path, the rest kept, and applied',
       name: 'transparency',
       value: 'reduced',
       written: {
@@ -112,6 +113,7 @@ describe('createDriveCommands', () => {
       },
     },
     {
+      case: 'a nested new key is set at its dotted path, the rest kept, and applied',
       name: 'workflow-large.autoStartSeconds',
       value: 5,
       written: {
@@ -120,6 +122,7 @@ describe('createDriveCommands', () => {
       },
     },
     {
+      case: 'a new object is set at its dotted path, the rest kept, and applied',
       name: 'keys.whichKeyTimeoutMs',
       value: 50,
       written: {
@@ -128,40 +131,46 @@ describe('createDriveCommands', () => {
         keys: { whichKeyTimeoutMs: 50 },
       },
     },
-  ])(
-    'setting_$name_SetsItAtItsDottedPathKeepsTheRestAndIsApplied',
-    async ({ name, value, written }) => {
-      const { files, commands, changeConfigOnWrite } = setUp(() => []);
-      await files.write(
-        SETTINGS,
-        '{ "transparency": "full", "workflow-large": { "autoClearAndMake": true } }',
-      );
-      changeConfigOnWrite();
+  ])('setting: $case', async ({ name, value, written }) => {
+    const { files, commands, changeConfigOnWrite } = setUp(() => []);
+    await files.write(
+      SETTINGS,
+      '{ "transparency": "full", "workflow-large": { "autoClearAndMake": true } }',
+    );
+    changeConfigOnWrite();
 
-      const result = await commands.run('setting', { name, value });
+    const result = await commands.run('setting', { name, value });
 
-      expect(JSON.parse(await files.read(SETTINGS))).toEqual(written);
-      expect(result).toEqual({ lines: [], applied: true });
-    },
-  );
+    expect(JSON.parse(await files.read(SETTINGS))).toEqual(written);
+    expect(result).toEqual({ lines: [], applied: true });
+  });
 
   it.each([
-    { name: 'workflow.', error: '"workflow."' },
-    { name: '.autoStartSeconds', error: '".autoStartSeconds"' },
-    { name: 'transparency.level', error: 'transparency is not a JSON object' },
-  ])(
-    'setting_$name_IsRefusedAndTheFileIsUnchanged',
-    async ({ name, error }) => {
-      const { files, commands } = setUp(() => []);
-      const before = '{ "transparency": "full" }';
-      await files.write(SETTINGS, before);
-
-      await expect(commands.run('setting', { name, value: 1 })).rejects.toThrow(
-        error,
-      );
-      expect(await files.read(SETTINGS)).toBe(before);
+    {
+      case: 'a trailing dot is refused and the file is unchanged',
+      name: 'workflow.',
+      error: '"workflow."',
     },
-  );
+    {
+      case: 'a leading dot is refused and the file is unchanged',
+      name: '.autoStartSeconds',
+      error: '".autoStartSeconds"',
+    },
+    {
+      case: 'a parent that is not an object is refused and the file is unchanged',
+      name: 'transparency.level',
+      error: 'transparency is not a JSON object',
+    },
+  ])('setting: $case', async ({ name, error }) => {
+    const { files, commands } = setUp(() => []);
+    const before = '{ "transparency": "full" }';
+    await files.write(SETTINGS, before);
+
+    await expect(commands.run('setting', { name, value: 1 })).rejects.toThrow(
+      error,
+    );
+    expect(await files.read(SETTINGS)).toBe(before);
+  });
 
   it('setting_ConfigNeverChanges_ResolvesNotAppliedAfterTheStepTimeout', async () => {
     vi.useFakeTimers();
@@ -255,6 +264,75 @@ describe('createDriveCommands', () => {
 
     expect(result).toEqual({ found: true });
   });
+
+  it('wait-log with a since of zero finds a line already logged', async () => {
+    const { commands } = setUp(() => ['[a] done']);
+
+    const result = await commands.run('wait-log', {
+      line: '[a] done',
+      since: 0,
+      timeoutMs: 100,
+    });
+
+    expect(result).toEqual({ found: true });
+  });
+
+  it('wait-log with a since after the matching line does not find it', async () => {
+    const { commands } = setUp(() => ['[a] other', '[a] done']);
+
+    const result = await commands.run('wait-log', {
+      line: '[a] done',
+      since: 1,
+      timeoutMs: 100,
+    });
+
+    expect(result).toEqual({ found: false });
+  });
+
+  it('a since at the end of the log finds the line logged after the call', async () => {
+    let reads = 0;
+    const { commands } = setUp(() => {
+      reads += 1;
+      return reads <= 1
+        ? ['[a] other', '[a] first']
+        : ['[a] done', '[a] other', '[a] first'];
+    });
+
+    const result = await commands.run('wait-log', {
+      line: '[a] done',
+      since: 2,
+      timeoutMs: 1000,
+    });
+
+    expect(result).toEqual({ found: true });
+  });
+
+  it('a since past the end of the log counts every line, as after a reload', async () => {
+    const { commands } = setUp(() => ['[a] other', '[a] done']);
+
+    const result = await commands.run('wait-log', {
+      line: '[a] done',
+      since: 5,
+      timeoutMs: 100,
+    });
+
+    expect(result).toEqual({ found: true });
+  });
+
+  it.each([
+    { since: -1, error: 'wait-log since must be a whole number of 0 or more' },
+    { since: 1.5, error: 'wait-log since must be a whole number of 0 or more' },
+    { since: 'two', error: 'since must be a number' },
+  ])(
+    'wait-log rejects a since that is not a whole number ($since)',
+    async ({ since, error }) => {
+      const { commands } = setUp(() => []);
+
+      await expect(
+        commands.run('wait-log', { line: '[a] done', since }),
+      ).rejects.toThrow(error);
+    },
+  );
 
   it('ready_PageLoadedTwice_ReturnsTheSecondLoad', async () => {
     const { fake, commands } = setUp(() => []);

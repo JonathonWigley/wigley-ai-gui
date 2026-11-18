@@ -159,8 +159,8 @@ function openWidthToken(
 }
 
 // `uiState` with a missing or non-finite stored width read as `openWidth()`,
-// so a bar divider's `reloadWidth` takes up a reloaded token; writes go
-// through.
+// so a bar divider's `reloadWidth` takes up a reloaded token; writes and
+// subscriptions go through.
 function openWidthState(uiState: UiState, openWidth: () => number): UiState {
   return {
     get(key) {
@@ -168,6 +168,7 @@ function openWidthState(uiState: UiState, openWidth: () => number): UiState {
       return Number.isFinite(stored) ? stored : openWidth();
     },
     set: (key, value) => uiState.set(key, value),
+    on: (key, listener) => uiState.on(key, listener),
   };
 }
 

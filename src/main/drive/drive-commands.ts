@@ -31,6 +31,7 @@ import {
   dragAndHold,
   isReadyForKeys,
   linesAfter,
+  type LogMark,
   markLog,
   press,
   readLog,
@@ -253,13 +254,20 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       },
     },
     'wait-log': {
-      args: '{ line: string, timeoutMs?: number }',
+      args: '{ line: string, timeoutMs?: number, since?: number }',
       description:
-        'waits for a page log line, logged after the call, equal to the whole line, its source prefix included (`[page] …`)',
+        "waits for a page log line equal to the whole line, its source prefix included (`[page] …`): one logged after the call, or with `since` (the `next` a `log` call returned) one at that index or later, already logged or not; a `since` past the log's end (the page reloaded) counts every line, as `log` does",
       run: async (args) => {
         const line = requiredString(args, 'line');
         const timeoutMs = optionalNumber(args, 'timeoutMs') ?? STEP_TIMEOUT_MS;
-        const mark = await markLog(window);
+        const since = optionalNumber(args, 'since');
+        if (since !== undefined && !(Number.isInteger(since) && since >= 0)) {
+          throw new Error('wait-log since must be a whole number of 0 or more');
+        }
+        const mark: LogMark =
+          since === undefined
+            ? await markLog(window)
+            : { navigation: window.navigationCount(), length: since };
         return {
           found: await waitForNewLogLine(window, line, mark, timeoutMs),
         };

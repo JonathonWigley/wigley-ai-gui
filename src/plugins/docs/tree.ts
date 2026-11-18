@@ -6,6 +6,7 @@ import {
   isKnownKind,
   isKnownSource,
   metaString,
+  ownsRoot,
 } from './index-document';
 import { resolveLink } from './links';
 import type { WikiItem, WikiShelf, WikiTarget } from './wiki-main';
@@ -237,9 +238,7 @@ function mineChildren(
       (entry) => entry.plugin ?? '',
     ),
   );
-  const repoOwned = entries.filter(
-    (entry) => entry.source === 'repo' || entry.source === 'features',
-  );
+  const repoOwned = entries.filter((entry) => ownsRoot(entry));
   for (const [name, repoEntries] of groupedBy(repoOwned, (e) => e.repo ?? '')) {
     children.push(repoNode(name, repoEntries, unclaimed, homeDir, paths));
   }

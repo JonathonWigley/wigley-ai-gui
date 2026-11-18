@@ -3,8 +3,13 @@ import {
   type FileWatch,
   isMissingFile,
 } from '../../contracts/files';
-import type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
+import {
+  DEFAULT_LAYOUT_NAME,
+  type LayoutEntry,
+  type LayoutSet,
+} from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
+import { callEach } from '../call-each';
 import { errorText } from '../error-text';
 import { createSerialQueue } from '../serial-queue';
 
@@ -47,13 +52,12 @@ export interface LayoutRegistryDeps {
 
 // The folder's root, as its scoped `Files` names it.
 const ROOT = '';
-const DEFAULT_NAME = 'default';
 // The files directly in the default folder that make and style a live
 // default; any other file there changes nothing.
 const DEFAULT_CODE = 'layout.js';
 const DEFAULT_STYLE = 'layout.css';
 const BUILT_IN_DEFAULT: LayoutEntry = {
-  name: DEFAULT_NAME,
+  name: DEFAULT_LAYOUT_NAME,
   revision: 1,
   styleRevision: 1,
   hasCss: false,
@@ -248,7 +252,7 @@ export async function startLayoutRegistry(
       .filter((entry) => entry.kind === 'folder' && !entry.path.includes('/'))
       .map((entry) => entry.path)
       .filter((name) => files.has(`${name}/layout.js`));
-    if (userNames.includes(DEFAULT_NAME) && !defaultSkipLogged) {
+    if (userNames.includes(DEFAULT_LAYOUT_NAME) && !defaultSkipLogged) {
       defaultSkipLogged = true;
       log(
         logSource,
@@ -256,7 +260,7 @@ export async function startLayoutRegistry(
       );
     }
     return userNames
-      .filter((name) => name !== DEFAULT_NAME)
+      .filter((name) => name !== DEFAULT_LAYOUT_NAME)
       .sort((a, b) => a.localeCompare(b))
       .map((name) => ({ name, hasCss: files.has(`${name}/layout.css`) }));
   };
@@ -274,7 +278,7 @@ export async function startLayoutRegistry(
       const isLayoutFile =
         entry.kind === 'file' &&
         slash !== -1 &&
-        name !== DEFAULT_NAME &&
+        name !== DEFAULT_LAYOUT_NAME &&
         isLayoutFileName(fileName);
       if (!isLayoutFile) {
         continue;
@@ -313,7 +317,7 @@ export async function startLayoutRegistry(
   const defaultEntryOf = (files: DefaultFiles): LayoutEntry =>
     files.hasCode
       ? {
-          name: DEFAULT_NAME,
+          name: DEFAULT_LAYOUT_NAME,
           revision: defaultRevision,
           styleRevision: defaultStyleRevision,
           hasCss: files.hasCss,
@@ -417,14 +421,14 @@ export async function startLayoutRegistry(
   const onChange = (changed: string) => {
     const slash = changed.indexOf('/');
     if (slash === -1) {
-      if (changed !== DEFAULT_NAME) {
+      if (changed !== DEFAULT_LAYOUT_NAME) {
         relistInTurn(changed, 'both');
       }
       return;
     }
     const name = changed.slice(0, slash);
     const fileName = fileNameOf(changed);
-    if (name === DEFAULT_NAME || !isLayoutFileName(fileName)) {
+    if (name === DEFAULT_LAYOUT_NAME || !isLayoutFileName(fileName)) {
       return;
     }
     relistInTurn(name, changeKindOf(fileName));
@@ -504,10 +508,12 @@ export async function startLayoutRegistry(
 
   return {
     current: setOf,
-    names: () => [DEFAULT_NAME, ...listed.map((layout) => layout.name)],
+    names: () => [DEFAULT_LAYOUT_NAME, ...listed.map((layout) => layout.name)],
     dispose: () => {
-      watch.dispose();
-      defaultWatch?.dispose();
+      callEach<() => void>(
+        [() => watch.dispose(), () => defaultWatch?.dispose()],
+        (step) => step(),
+      );
     },
   };
 }

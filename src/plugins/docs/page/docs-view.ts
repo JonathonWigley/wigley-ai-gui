@@ -29,6 +29,7 @@ import {
   docsOpenNodeCommand,
   docsOpenRecentPageCommand,
   docsSwitchTreeViewCommand,
+  type DocsEdits,
   type DocsPlace,
   type IndexContext,
   type IndexDocument,
@@ -74,6 +75,8 @@ import {
   type DocsPaneScope,
   detailFields,
   fileStatuses,
+  isEntryIdInside,
+  movedEntryId,
   paneFocusedBy,
   provisionalEntry,
   readOnlyReason,
@@ -101,7 +104,7 @@ import {
   type MainShowCause,
 } from './main-page';
 import type { StarredDocs } from './starred-docs';
-import { createTreeView, type LeafMarks } from './tree-view';
+import { createTreeView, type LeafMarks, type SidebarView } from './tree-view';
 import { createWikiMainSource, type MainFileState } from './wiki-main-source';
 
 // The scopes a docs view pushes over its pane's scope.
@@ -186,7 +189,9 @@ export interface DocsView {
   rescan(): void;
   // Another view made `change`. A view not shown yet does nothing; else a
   // rename or trash shows at once, the doc pane following its file, and the
-  // index rebuilds, which lists a created doc.
+  // index rebuilds, which lists a created doc. A tree view whose selected row
+  // named the renamed or trashed doc, and whose rows no longer show it,
+  // selects the renamed doc's leaf, else the nearest row left.
   outsideChange(change: DocChangeRecord): void;
   // The source registered under the view's `sourceId` was replaced. A view
   // not shown yet does nothing, its first show reading the new source; else
@@ -196,16 +201,22 @@ export interface DocsView {
   // 1-based `line` and selects its row. When that read does not list `path`
   // and a rebuild is coming (the first show's) or running, waits for that one
   // rebuild to settle, resolved or rejected, and checks again; toasts when
-  // the index still does not list it.
+  // the index still does not list it. Opens nothing when a newer open was
+  // asked meanwhile.
   openDoc(path: string, line: number | null): void;
-  // Puts back a reloaded page's place: the tree's at once, before its first
-  // tree, and the open doc through `openDoc`'s path, its unsaved edits back in
-  // its editor once it opens. Until that open settles no place is written, so
-  // a place not restored yet stays in the slot, and its edits count as unsaved
-  // (`unsavedPath`); a doc the index no longer lists toasts as `openDoc` does,
-  // and an open that fails toasts that its edits were not restored. The open
-  // goes to `trackRestore` once the view has shown: an open waits on the
-  // view's first index read, which its first show starts.
+  // Puts back a reloaded page's place: each tree view's at once, before its
+  // first tree, and the open doc through `openDoc`'s path, its unsaved edits
+  // back in its editor once it opens. Until that open settles no place is
+  // written, so a place not restored yet stays in the slot, and its edits
+  // count as unsaved (`unsavedPath`); a doc the index no longer lists toasts
+  // as `openDoc` does, and an open that fails toasts that its edits were not
+  // restored. An open a newer open beats keeps its edits: they still count as
+  // unsaved and go into each place written, until their doc opens and they go
+  // back in its editor. They are toasted as not restored and dropped instead
+  // when the index stops listing their doc, or when the doc refuses them
+  // because its editor is already open, as when the user typed there first.
+  // The open goes to `trackRestore` once the view has shown: an open waits on
+  // the view's first index read, which its first show starts.
   restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
   // unless a newer open was asked, the empty Main page taking focus; nothing in a
@@ -401,6 +412,30 @@ interface AppliedChange {
   record: DocChangeRecord;
 }
 
+const SIDEBAR_VIEWS: readonly SidebarView[] = ['wiki', 'all'];
+
+// A tree view's selected row before an outside change, and the ids of the rows
+// the view showed then.
+interface SelectionBefore {
+  view: SidebarView;
+  node: TreeNode;
+  rowIdsBefore: string[];
+}
+
+// The entry id of the doc `node` names: a leaf's or a heading match's, or a
+// path wiki link's path; null for any other node.
+function namedEntryId(node: TreeNode): string | null {
+  switch (node.type) {
+    case 'entry':
+    case 'headingMatch':
+      return node.entryId;
+    case 'wikiLink':
+      return node.target.type === 'path' ? node.target.path : null;
+    default:
+      return null;
+  }
+}
+
 // One docs view over an index source: the tree pane and the doc pane, its
 // dialogs placed over the window through `addOverlay`. It reads nothing until
 // its first show. The machine source's view alone has the wiki view in its
@@ -411,6 +446,7 @@ interface AppliedChange {
 export function createDocsView(deps: DocsViewDeps): DocsView {
   const { log, toast } = deps;
   const isMachine = deps.sourceId === MACHINE_SOURCE_ID;
+  let isDisposed = false;
   let document: IndexDocument | null = null;
   let entriesById = new Map<string, IndexEntry>();
   let changeSeq = 0;
@@ -431,8 +467,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let firstShowRuns: Promise<unknown> | null = null;
   // The newest rebuild started, until it settles.
   let runningRebuild: Promise<unknown> | null = null;
-  // Each `openDoc` or `openMain` ask's number; one that waited opens only if it
-  // is still the newest.
+  // Each open's number, taken at its start by `openDoc`, `openMain`,
+  // `restorePlace`, the tree's `openLeaf`, `openHeading` and `openWikiLink`, the
+  // doc's `followFile`, `followPlace`, `openListEntry` and a followed
+  // `followWikiLink`, `openInEditor`, and `showMain`'s `openFile`; one that
+  // waited opens only if it is still the newest.
   let askedOpens = 0;
   // What `isFirstShowDue` reads besides the doc view's own count.
   let mainPaneOpens = 0;
@@ -462,6 +501,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // A reloaded page's place, and its open, while that open has not settled.
   let restoring: DocsPlace | null = null;
   let restoringOpen: Promise<void> | null = null;
+  // A reloaded page's unsaved edits whose open a newer open beat, until their
+  // doc opens.
+  let draft: DocsEdits | null = null;
 
   // Each pane and the dialogs track their own drawn parts.
   const newParts = () =>
@@ -503,6 +545,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       harness === null
         ? null
         : await deps.channel.invoke('pluginConfigFile', entry.title, harness);
+    if (isDisposed) {
+      return null;
+    }
     if (found === null) {
       toast(`No config file lists ${entry.title}`, 'info');
       return null;
@@ -620,9 +665,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         focusDocAndLog();
         return;
       }
+      askedOpens++;
       void openAndTell(targetFor(entry.path, entry, entry.line, null)).then(
         (opened) => {
-          if (opened) {
+          if (opened && !isDisposed) {
             openedFromTree(focusesDoc);
           }
         },
@@ -633,16 +679,20 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       if (entry === undefined) {
         return;
       }
+      askedOpens++;
       void doc
         .open(targetFor(entry.path, entry, match.line, null))
         .then((opened) => {
-          if (opened) {
+          if (opened && !isDisposed) {
+            applyDraft(entry.path);
             openedFromTree(focusesDoc);
           }
         });
     },
-    openWikiLink: (link: TreeWikiLink, focusesDoc: boolean) =>
-      openWikiLink(link, focusesDoc),
+    openWikiLink: (link: TreeWikiLink, focusesDoc: boolean) => {
+      askedOpens++;
+      openWikiLink(link, focusesDoc);
+    },
     switchView: () =>
       deps.runKey(docsSwitchTreeViewCommand, { viewId: deps.viewId }),
     rowClicked: (nodeId) =>
@@ -718,9 +768,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return lastLoaded === null ? null : loadedLine(lastLoaded, deps.now());
     },
     followFile: (path, line, fragment) => {
+      askedOpens++;
       void openThenFocusDoc(() => openListed(path, line, fragment));
     },
     followPlace: (path, line) => {
+      askedOpens++;
       const listTarget = listTargetOfPlace(path);
       if (listTarget === null) {
         void openListed(path, line, null, { isHistoryMove: true });
@@ -728,7 +780,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         openList(listTarget, listTitles.get(path)!, { isHistoryMove: true });
       }
     },
-    openListEntry: (entryId) => void openListEntry(entryId),
+    openListEntry: (entryId) => {
+      askedOpens++;
+      void openListEntry(entryId);
+    },
     createMain: () => void createMain(),
     linkClicked: (link) =>
       deps.runKey(docsFollowLinkCommand, { viewId: deps.viewId, ...link }),
@@ -740,7 +795,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       deps.runKey(docsOpenListRowCommand, { viewId: deps.viewId, entryId }),
     mainOfferClicked: () =>
       deps.runKey(docsCreateMainCommand, { viewId: deps.viewId }),
-    followWikiLink: (href, title) => followWikiLink(href, title),
+    followWikiLink: (href, title) => {
+      const isFollowed = followWikiLink(href, title);
+      if (isFollowed) {
+        askedOpens++;
+      }
+      return isFollowed;
+    },
     asideSightLost: () => asideSightLost(),
     asideSectionOpened: () => focusDocAndLog(),
     pushConflictScope: () => deps.pushScope('conflict'),
@@ -764,9 +825,37 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
     deps.placeChanged({
       openPath: doc.openPath(),
-      ...tree.place(),
-      edits: doc.edits(),
+      trees: tree.place(),
+      edits: doc.edits() ?? draft,
     });
+  };
+
+  // Puts the beaten restore's edits back in the editor once their doc at
+  // `path` shows, and drops them; toasts them as not restored when the doc
+  // refuses them, as when its editor is already open.
+  const applyDraft = (path: string) => {
+    const held = draft;
+    if (held === null || !deps.paths.samePath(held.path, path)) {
+      return;
+    }
+    draft = null;
+    if (!doc.restoreEdits(held)) {
+      toastEditsNotRestored(held);
+    }
+  };
+
+  const toastEditsNotRestored = (edits: DocsEdits) => {
+    toast(`Unsaved edits not restored: ${edits.path}`, 'error');
+  };
+
+  // Drops a held draft whose doc the index no longer lists, toasting it as
+  // not restored: no open can reach that doc, so the draft would otherwise
+  // count as unsaved for good.
+  const dropUnlistedDraft = () => {
+    if (draft !== null && !isListed(draft.path)) {
+      toastEditsNotRestored(draft);
+      draft = null;
+    }
   };
 
   const refreshRecentOnMain = () => {
@@ -782,8 +871,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     options?: Parameters<DocView['open']>[1],
   ): Promise<boolean> => {
     const opened = await doc.open(target, options);
+    if (isDisposed) {
+      return false;
+    }
     if (opened) {
       deps.docOpened(target.path);
+      applyDraft(target.path);
     }
     return opened;
   };
@@ -791,32 +884,38 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // Waits for the first index read and, when it does not list `path`, for a
   // rebuild coming or running, then opens `path` unless the open asked as
   // `number` is no longer the newest; resolves to whether it opened.
+  // `selectsRow` as `openListed` takes it.
   const openOnceRead = async (
     path: string,
     line: number | null,
     number: number,
+    selectsRow: boolean,
   ): Promise<boolean> => {
     await firstRead.promise;
     const awaitedRebuild = firstShowRuns ?? runningRebuild;
     if (!isListed(path) && awaitedRebuild !== null) {
       await awaitedRebuild;
-      if (number !== askedOpens) {
-        return false;
-      }
     }
-    return openListed(path, line, null);
+    if (isDisposed || number !== askedOpens) {
+      return false;
+    }
+    return openListed(path, line, null, { selectsRow });
   };
 
   const isListed = (path: string): boolean =>
     document !== null && isIndexedPath(path, document.entries, deps.paths);
 
-  // Opens `path` when the index lists it, selecting its entry's row; else
-  // toasts that it does not. Resolves to whether it opened.
+  // Opens `path` when the index lists it, selecting its entry's row unless
+  // `selectsRow` is false, as for a restore, whose tree place the reload put
+  // back; else toasts that it does not. Resolves to whether it opened.
   const openListed = async (
     path: string,
     line: number | null,
     fragment: string | null,
-    options?: { isHistoryMove?: boolean },
+    {
+      isHistoryMove,
+      selectsRow = true,
+    }: { isHistoryMove?: boolean; selectsRow?: boolean } = {},
   ): Promise<boolean> => {
     if (!isListed(path)) {
       toast(`Not an indexed doc: ${path}`, 'error');
@@ -826,11 +925,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       document?.entries.find((candidate) =>
         deps.paths.samePath(candidate.path, path),
       ) ?? null;
-    const opened = await openAndTell(
-      targetFor(path, entry, line, fragment),
-      options,
-    );
-    if (opened && entry !== null) {
+    const opened = await openAndTell(targetFor(path, entry, line, fragment), {
+      isHistoryMove,
+    });
+    if (opened && entry !== null && selectsRow) {
       tree.selectEntry(entry.id);
     }
     return opened;
@@ -955,6 +1053,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const openInEditor = async (entry: IndexEntry, line: number) => {
+    askedOpens++;
     if (await openAndTell(targetFor(entry.path, entry, line, null))) {
       doc.edit(line);
       focusDoc();
@@ -1007,6 +1106,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   const showDocument = (next: IndexDocument | null) => {
     document = next;
     entriesById = new Map(next?.entries.map((entry) => [entry.id, entry]));
+    if (next !== null) {
+      dropUnlistedDraft();
+    }
     if (next !== null && isMachine) {
       const choices = contextChoices(next, deps.homeDir, deps.paths);
       const kept = choices.some((choice) => choice.folder === contextFolder);
@@ -1221,12 +1323,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         }
         return;
       case 'openFile':
+        askedOpens++;
         runningMainOpens++;
         void askingMainPane(() =>
           openAndTell(targetFor(path, entryAt(path), null, null)),
         )
           .then((opened) => {
-            if (opened) {
+            if (opened && !isDisposed) {
               log('opened the Main page');
               mainReady();
             }
@@ -1241,7 +1344,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const showOwedMain = () => {
-    if (wikiMain === null) {
+    if (wikiMain === null || isDisposed) {
       return;
     }
     const isDue = isFirstShowDue({
@@ -1274,6 +1377,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         MAIN_STARTER_TEXT,
         '',
       );
+      if (isDisposed) {
+        return;
+      }
       const entry = provisionalEntry(
         created.path,
         'reference',
@@ -1283,8 +1389,14 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       applyDocChange({ type: 'created', entry }, null);
       await wikiMain.reread();
       await openInEditor(entry, created.line);
+      if (isDisposed) {
+        return;
+      }
       log('created Main.md');
     } catch (error) {
+      if (isDisposed) {
+        return;
+      }
       toast(errorText(error), 'error');
       log(`Main.md not created: ${errorText(error)}`);
     } finally {
@@ -1336,6 +1448,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       .invoke(run, deps.sourceId)
       .then((result) => {
         firstRead.resolve();
+        if (isDisposed) {
+          return result;
+        }
         void wikiMain?.reread();
         if (number < shownLoad) {
           return result;
@@ -1362,6 +1477,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       })
       .catch((error: unknown) => {
         firstRead.resolve();
+        if (isDisposed) {
+          return null;
+        }
         log(`${deps.sourceId}: ${errorText(error)}`);
         if (number === startedLoads) {
           tree.setStatus(errorText(error));
@@ -1380,7 +1498,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     return deps.channel
       .invoke('pluginStatus', deps.sourceId, fetch)
       .then((read) => {
-        if (number < shownStatusRead) {
+        if (isDisposed || number < shownStatusRead) {
           return;
         }
         shownStatusRead = number;
@@ -1392,7 +1510,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         doc.refreshChips();
       })
       .catch((error: unknown) => {
-        log(`plugin status: ${errorText(error)}`);
+        if (!isDisposed) {
+          log(`plugin status: ${errorText(error)}`);
+        }
       })
       .finally(() => {
         if (fetch) {
@@ -1407,7 +1527,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // carries what that fetch brought.
   const readStatuses = (fetches: boolean) => {
     void readStatus(runningFetchReads > 0).then(() => {
-      if (fetches) {
+      if (fetches && !isDisposed) {
         void readStatus(true);
       }
     });
@@ -1423,7 +1543,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       if (runningRebuild === started) {
         runningRebuild = null;
       }
-      readStatuses(fetches);
+      if (!isDisposed) {
+        readStatuses(fetches);
+      }
     });
     return started;
   };
@@ -1681,6 +1803,48 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   });
 
+  // Each tree view's selected row that names a doc, with the rows it showed.
+  const selectionsBefore = (): SelectionBefore[] =>
+    SIDEBAR_VIEWS.flatMap((sidebarView) => {
+      const node = tree.selectedIn(sidebarView);
+      return node === null || namedEntryId(node) === null
+        ? []
+        : [
+            {
+              view: sidebarView,
+              node,
+              rowIdsBefore: tree.rowIdsIn(sidebarView),
+            },
+          ];
+    });
+
+  // An outside rename or trash that reached the doc a view's selected row
+  // named, and took that row away: a rename selects the renamed doc's leaf,
+  // else the nearest row left; a trash the nearest row left.
+  const reselectAfterChange = (
+    { view: sidebarView, node, rowIdsBefore }: SelectionBefore,
+    change: Exclude<DocChangeRecord, { type: 'created' }>,
+  ) => {
+    const entryId = namedEntryId(node);
+    if (entryId === null || tree.rowIdsIn(sidebarView).includes(node.id)) {
+      return;
+    }
+    if (change.type === 'renamed') {
+      const movedId = movedEntryId(entryId, change.from, change.to, deps.paths);
+      if (movedId === null) {
+        return;
+      }
+      tree.selectEntryIn(sidebarView, movedId);
+      if (tree.selectedIn(sidebarView) === null) {
+        tree.selectNearestIn(sidebarView, rowIdsBefore, node.id);
+      }
+    } else if (
+      change.paths.some((path) => isEntryIdInside(entryId, path, deps.paths))
+    ) {
+      tree.selectNearestIn(sidebarView, rowIdsBefore, node.id);
+    }
+  };
+
   const listening = deps.channel.on('docChanged', (change) => {
     if (change.viewId === deps.viewId) {
       doc.diskChanged(change.path);
@@ -1701,6 +1865,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       }
       void wikiMain?.start();
       const runs = runIndex('loadIndex').then((result) => {
+        if (isDisposed) {
+          return null;
+        }
         readStatuses(true);
         return result?.canRebuild === true ? rebuild(false) : null;
       });
@@ -1719,7 +1886,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return;
       }
       if (change.type !== 'created') {
-        showChange(change);
+        const selections = selectionsBefore();
+        if (showChange(change)) {
+          for (const selection of selections) {
+            reselectAfterChange(selection, change);
+          }
+        }
       }
       void rebuild(false);
     },
@@ -1731,10 +1903,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     openDoc(path, line) {
       const number = ++askedOpens;
       isDocAsked = true;
-      void openOnceRead(path, line, number);
+      void openOnceRead(path, line, number, true);
     },
     restorePlace(place) {
-      tree.restorePlace(place);
+      tree.restorePlace(place.trees);
       const { openPath, edits } = place;
       if (openPath === null) {
         return;
@@ -1744,18 +1916,31 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       restoring = place;
       const toastEditsDropped = () => {
         if (edits !== null) {
-          toast(`Unsaved edits not restored: ${edits.path}`, 'error');
+          toastEditsNotRestored(edits);
         }
       };
-      restoringOpen = openOnceRead(openPath, null, number)
+      restoringOpen = openOnceRead(openPath, null, number, false)
         .then((opened) => {
-          if (!opened) {
+          if (isDisposed) {
+            return;
+          }
+          if (!opened && edits !== null && number !== askedOpens) {
+            draft = edits;
+            dropUnlistedDraft();
+            const shownPath = doc.openPath();
+            if (shownPath !== null) {
+              applyDraft(shownPath);
+            }
+          } else if (!opened) {
             toastEditsDropped();
-          } else if (edits !== null) {
-            doc.restoreEdits(edits);
+          } else if (edits !== null && !doc.restoreEdits(edits)) {
+            toastEditsDropped();
           }
         })
         .catch((error) => {
+          if (isDisposed) {
+            return;
+          }
           log(`place not restored: ${errorText(error)}`);
           toastEditsDropped();
         })
@@ -1792,7 +1977,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       runningMainOpens++;
       void Promise.all([wikiMain.start(), firstRead.promise]).then(() => {
         runningMainOpens--;
-        if (number === askedOpens) {
+        if (!isDisposed && number === askedOpens) {
           showMain('picked');
         }
       });
@@ -1836,8 +2021,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     hasUnsavedEdits: () => view.unsavedPath() !== null,
     unsavedPath: () =>
-      doc.hasUnsavedEdits() ? doc.openPath() : (restoring?.edits?.path ?? null),
+      doc.hasUnsavedEdits()
+        ? doc.openPath()
+        : ((restoring?.edits ?? draft)?.path ?? null),
     dispose() {
+      isDisposed = true;
       callEach<() => void>(
         [
           () => view.closeOverlays(),

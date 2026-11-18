@@ -59,10 +59,87 @@ describe('createMemoryFiles', () => {
     expect(await files.read('/h/t/ref.md')).toBe('ref');
     expect(await files.stat('/h/s')).toBeNull();
     expect(reports.sort()).toEqual([
+      's',
       's/SKILL.md',
       's/ref.md',
+      't',
       't/SKILL.md',
       't/ref.md',
+    ]);
+  });
+
+  it('makeFolder reports each folder a new nested folder made', async () => {
+    const recursive: string[] = [];
+    const topOnly: string[] = [];
+    files.watch('/h', (changed) => recursive.push(changed));
+    files.watch('/h', (changed) => topOnly.push(changed), { recursive: false });
+
+    await files.makeFolder('/h/a/b');
+
+    expect(recursive).toEqual(['a', 'a/b']);
+    expect(topOnly).toEqual(['a']);
+  });
+
+  it('makeFolder reports nothing for a folder that already exists', async () => {
+    await files.makeFolder('/h/a');
+    const reports: string[] = [];
+    files.watch('/h', (changed) => reports.push(changed));
+
+    await files.makeFolder('/h/a');
+
+    expect(reports).toEqual([]);
+  });
+
+  it.each(['trash', 'remove'] as const)(
+    '%s reports an empty folder once',
+    async (method) => {
+      await files.makeFolder('/h/e');
+      const reports: string[] = [];
+      files.watch('/h', (changed) => reports.push(changed));
+
+      await files[method]('/h/e');
+
+      expect(reports).toEqual(['e']);
+    },
+  );
+
+  it('rename reports both names of an empty folder', async () => {
+    await files.makeFolder('/h/e');
+    const reports: string[] = [];
+    files.watch('/h', (changed) => reports.push(changed));
+
+    await files.rename('/h/e', '/h/f');
+
+    expect(reports.sort()).toEqual(['e', 'f']);
+  });
+
+  it.each(['trash', 'remove'] as const)(
+    'reports a folder that only files made when removing its parent with %s',
+    async (method) => {
+      await files.write('/h/s/sub/f.md', 'f');
+      const reports: string[] = [];
+      files.watch('/h', (changed) => reports.push(changed));
+
+      await files[method]('/h/s');
+
+      expect(reports.sort()).toEqual(['s', 's/sub', 's/sub/f.md']);
+    },
+  );
+
+  it('reports a folder that only files made under both names when its parent is renamed', async () => {
+    await files.write('/h/s/sub/f.md', 'f');
+    const reports: string[] = [];
+    files.watch('/h', (changed) => reports.push(changed));
+
+    await files.rename('/h/s', '/h/t');
+
+    expect(reports.sort()).toEqual([
+      's',
+      's/sub',
+      's/sub/f.md',
+      't',
+      't/sub',
+      't/sub/f.md',
     ]);
   });
 

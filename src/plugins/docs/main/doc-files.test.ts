@@ -996,7 +996,7 @@ describe('wikiMainPath', () => {
       expected: '/Users/u/src/wa/wiki/Main.md',
     },
   ])(
-    'wikiMainPath_$name_ReturnsTheRealPath',
+    'the wiki main path is the real path ($name)',
     async ({ links, folders, written, expected }) => {
       const test = setUp();
       for (const folder of folders) {

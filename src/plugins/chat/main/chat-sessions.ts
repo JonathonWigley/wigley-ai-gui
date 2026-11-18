@@ -13,6 +13,7 @@ import {
   type ProcessActivity,
   type SessionControl,
   type UsageAgentEvent,
+  type UserDelivery,
   type UserMessage,
 } from '../../../contracts/agent';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
@@ -33,6 +34,7 @@ import {
   stopActiveTime,
 } from '../../../shared/active-time';
 import { bashCommandOf } from '../../../shared/bash-command';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import { createListeners } from '../../../shared/listeners';
@@ -310,7 +312,9 @@ export interface ChatSessions {
   // holding unsent queued messages queues behind them and writes the oldest. A
   // written message is held until its entry arrives, and returned when the
   // harness reports it dropped. The first message written in a row with no
-  // first-message title sets it. A row waiting on its harness rejects with
+  // first-message title that its harness reports reached the model sets it, at
+  // once from a harness that reports no delivery; a local command sets none. A
+  // row waiting on its harness rejects with
   // `<label> is not loaded. Send again once it is.` before anything queues.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries, as harness entries travel.
@@ -403,7 +407,9 @@ export interface ChatSessions {
   // write's promise, which never rejects: a write that fails or is cut short
   // leaves the last saved total. Nothing is saved or started after it, and
   // every later process event is ignored. Every `hostSessionIdSettled` call
-  // still waiting rejects.
+  // still waiting rejects. A detach or kill that throws skips none of the
+  // rest, and the returned promise rejects with the first such error once the
+  // save settles; `detachAll` itself never throws.
   detachAll(): Promise<void>;
   // Keeps every held row's owned session through chat's restart
   // (`OwnedSession.keep`), so the restarted chat's restore adopts the rows.
@@ -533,6 +539,10 @@ interface HeldSession {
   // stamp from `heldCount`, until its entry arrives; ids restart with each
   // process.
   writtenMessages: Map<string, WrittenMessage>;
+  // Harness entry id → the text of each message written in this process while
+  // the row had no first-message title, and whether its entry arrived `sent`,
+  // until its delivery shows whether it titles the row.
+  titleCandidates: Map<string, { text: string; wasSent: boolean }>;
   // Harness entry ids of the queued rows sent `now` in this process; a sent row
   // whose id is missing here was written plainly.
   sentNowIds: Set<string>;
@@ -1649,6 +1659,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         const rowEntry = rowEntryOf(entry, processStart);
         session.slots.putEntry(rowEntry);
         takeIn(session, entry.id);
+        if (entry.kind === 'user') {
+          settleTitleCandidate(session, entry.id, entry.delivery);
+        }
         noteBashCommand(session, entry, replay.isReplaying);
         const isAnsweredCard =
           entry.kind === 'permission' && entry.answer !== null;
@@ -1773,6 +1786,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       // Returns a written message the agent let go without taking it in.
       messageDropped(entryId, message) {
         if (isLive(session, processStart)) {
+          session.titleCandidates.delete(entryId);
           returnDropped(session, entryId, message);
         }
       },
@@ -1964,6 +1978,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       heldCount: 0,
       rowOrders: new Map(),
       writtenMessages: new Map(),
+      titleCandidates: new Map(),
       sentNowIds: new Set(),
       processStarts: 0,
       confirmedPicks: new Map(Object.entries(opening.confirmedPicks)),
@@ -2289,11 +2304,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Numbers the row's next process. A pick still pending, the background work,
-  // a stop request and a hold's stretch belong to the old process and are
-  // dropped.
+  // a stop request, a hold's stretch and the title candidates belong to the old
+  // process and are dropped.
   function beginProcess(session: HeldSession) {
     session.processStarts += 1;
     session.sentNowIds.clear();
+    session.titleCandidates.clear();
     session.pendingPicks.clear();
     clearBackground(session);
     session.isStopRequested = false;
@@ -3392,9 +3408,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       ? process.send(message, { now: true })
       : process.send(message);
     session.isOnlyAppCompaction = false;
+    if (firstMessageTitleToSet(session, message.text) !== null) {
+      session.titleCandidates.set(entryId, {
+        text: message.text,
+        wasSent: false,
+      });
+    }
     if (!session.sent) {
       session.sent = true;
-      setFirstMessageTitle(session, message.text);
       save();
     }
     deps.emit('messageSent', {
@@ -3414,21 +3435,54 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.writtenMessages.set(deliver(session, message), { message, order });
   }
 
-  // A row whose first-message title is already set, such as a cleared one,
+  // The written message under `entryId` titles the row once its harness reports
+  // it reached the model, even if its turn failed, or at once from a harness
+  // that reports no delivery; a local command, whose delivery goes from `sent`
+  // to null, titles nothing.
+  function settleTitleCandidate(
+    session: HeldSession,
+    entryId: string,
+    delivery: UserDelivery | null,
+  ) {
+    const candidate = session.titleCandidates.get(entryId);
+    if (candidate === undefined) {
+      return;
+    }
+    if (delivery === 'sent') {
+      candidate.wasSent = true;
+      return;
+    }
+    session.titleCandidates.delete(entryId);
+    const isLocalCommand = delivery === null && candidate.wasSent;
+    if (isLocalCommand) {
+      return;
+    }
+    const title = firstMessageTitleToSet(session, candidate.text);
+    session.titleCandidates.clear();
+    if (title !== null) {
+      sessions.setTitle(session.sessionId, 'firstMessage', title);
+      save();
+    }
+  }
+
+  // The first-message title `text` gives the row, or null when it gives none:
+  // a row whose first-message title is already set, such as a cleared one,
   // keeps it; a message with no text but whitespace, such as an images-only
   // one, or a row sessions no longer holds, sets none.
-  function setFirstMessageTitle(session: HeldSession, text: string) {
-    const { sessionId } = session;
-    const titles = sessions.titles(sessionId);
+  function firstMessageTitleToSet(
+    session: HeldSession,
+    text: string,
+  ): string | null {
+    const titles = sessions.titles(session.sessionId);
     const isRowGone = titles === null;
     const hasFirstMessageTitle =
       titles !== null && titles.firstMessage !== null;
     const title = firstMessageTitleOf(text);
     const isTextless = title === '';
     if (isRowGone || hasFirstMessageTitle || isTextless) {
-      return;
+      return null;
     }
-    sessions.setTitle(sessionId, 'firstMessage', title);
+    return title;
   }
 
   function launch(request: LaunchRequest): string {
@@ -4548,21 +4602,34 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     detachAll() {
       const lastSave = writeSaved();
       isDetached = true;
-      const heldProcesses = new Set<AgentProcess>();
-      for (const session of held.values()) {
-        rejectHostIdWaiters(
-          session,
-          `session ${session.sessionId} not settled: chat is stopping`,
+      const heldSessions = [...held.values()];
+      const heldProcesses = new Set(
+        heldSessions.flatMap((session) =>
+          session.process === null ? [] : [session.process],
+        ),
+      );
+      const unheld = [...running].filter(
+        (process) => !heldProcesses.has(process),
+      );
+      try {
+        callEach<() => void>(
+          [
+            () =>
+              callEach(heldSessions, (session) => {
+                rejectHostIdWaiters(
+                  session,
+                  `session ${session.sessionId} not settled: chat is stopping`,
+                );
+                session.process?.detach();
+              }),
+            () => callEach(unheld, (process) => process.kill()),
+          ],
+          (step) => step(),
         );
-        if (session.process !== null) {
-          heldProcesses.add(session.process);
-          session.process.detach();
-        }
-      }
-      for (const process of running) {
-        if (!heldProcesses.has(process)) {
-          process.kill();
-        }
+      } catch (error) {
+        return lastSave.then(() => {
+          throw error;
+        });
       }
       return lastSave;
     },

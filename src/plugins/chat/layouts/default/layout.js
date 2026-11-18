@@ -92,6 +92,17 @@ function toolStatus(input) {
   return input.result.isError ? 'error' : 'success';
 }
 
+// A step row's time after its summary, hidden and empty until its end is known.
+/**
+ * @param {HTMLElement} time
+ * @param {number | null} durationMs
+ * @param {import('../layout').BaseKit} kit
+ */
+function fillStepTime(time, durationMs, kit) {
+  time.textContent = durationMs === null ? '' : `· ${kit.duration(durationMs)}`;
+  time.hidden = durationMs === null;
+}
+
 // Whether the turn stopped because the agent finished, not on a limit or error.
 /** @param {string} stopReason */
 function isFinishedStop(stopReason) {
@@ -692,8 +703,11 @@ const layout = {
       /** @type {HTMLElement | null} */
       let md = null;
       const entry = root(parent, 'chat-entry chat-thinking');
+      const time = el('span', 'chat-step-time');
+      fillStepTime(time, input.durationMs, kit);
       kit.collapsibleRow(entry, {
         summary: 'Thinking',
+        trailing: time,
         body: () => {
           if (body === null) {
             body = el('div', 'chat-thinking-body');
@@ -713,21 +727,26 @@ const layout = {
             md = drawn;
           }
           entry.classList.toggle('chat-streaming', next.streaming);
+          fillStepTime(time, next.durationMs, kit);
         },
       };
     },
     // Built closed; the result arriving sets the dot and refills the body,
-    // leaving the row open or closed as it was.
+    // leaving the row open or closed as it was, and the step's end arriving
+    // shows its time.
     tool(parent, input, kit) {
       let current = input;
       /** @type {HTMLElement | null} */
       let body = null;
       const entry = root(parent, 'chat-entry chat-tool');
       const dot = kit.statusDot(entry, toolStatus(input));
+      const time = el('span', 'chat-step-time');
+      fillStepTime(time, input.durationMs, kit);
       kit.collapsibleRow(entry, {
         summary: toolLine(input),
         mono: true,
         leading: dot,
+        trailing: time,
         body: () => {
           if (body === null) {
             body = el('div', 'chat-tool-body');
@@ -744,6 +763,7 @@ const layout = {
             fillToolBody(next, kit, body);
           }
           kit.setDotStatus(dot, toolStatus(next));
+          fillStepTime(time, next.durationMs, kit);
         },
       };
     },

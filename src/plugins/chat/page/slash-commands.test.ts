@@ -125,20 +125,27 @@ describe('slash commands', () => {
 // The account commands over a channel whose every invoke resolves with
 // `answer`; `invoked` records each call to chat main, `signIns` each profile
 // the sign-in dialog opened for. `run` runs the typed command in session row-1
-// on profile work.
-function accountCommands(answer: unknown = undefined) {
+// on profile work. With `stopsOnFirstInvoke`, chat's page part stops as the
+// first invoke is made.
+function accountCommands(
+  answer: unknown = undefined,
+  stopsOnFirstInvoke = false,
+) {
   const commands = createSlashCommands();
   const invoked: unknown[][] = [];
   const signIns: string[] = [];
+  let isStopped = false;
   addAccountCommands({
     commands,
     signIn: { open: (profile) => signIns.push(profile) },
     channel: {
       invoke: (...args: unknown[]) => {
         invoked.push(args);
+        isStopped = stopsOnFirstInvoke;
         return Promise.resolve(answer);
       },
     } as unknown as Parameters<typeof addAccountCommands>[0]['channel'],
+    isStopped: () => isStopped,
   });
   const run = async (typed: string) => {
     const matched = commands.match(typed);
@@ -193,4 +200,21 @@ describe('account commands', () => {
     expect(account.signIns).toEqual(['work']);
     expect(account.invoked).toEqual([]);
   });
+
+  it.each([
+    { typed: '/logout', first: ['logOut', 'work'] },
+    { typed: '/status', first: ['accountStatus', 'work'] },
+  ])(
+    'sends no notice for $typed once chat stopped while its reply was pending',
+    async ({ typed, first }) => {
+      const account = accountCommands(
+        { signedIn: true, account: 'me@x.dev' },
+        true,
+      );
+
+      await account.run(typed);
+
+      expect(account.invoked).toEqual([first]);
+    },
+  );
 });

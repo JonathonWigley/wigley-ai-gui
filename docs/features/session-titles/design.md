@@ -28,7 +28,7 @@ A session holds up to three titles, one per source (`TitleSource`, `src/plugins/
 |---|---|---|
 | `user` | the rename dialog (`<Leader>br`) | the user submits a name; an empty submit clears it |
 | `agent` | the `set_session_title` MCP tool | the agent calls it |
-| `firstMessage` | chat main; sessions main for a connected session | the first message with text sent in a row that has none yet (leading whitespace dropped, then kept to 200 code points), or the resumed session's title on resume; a connected session's name in its harness (`AgentHarness.sessionName`), read each time a form opens or its row is activated |
+| `firstMessage` | chat main; sessions main for a connected session | the first message with text sent in a row that has none yet (leading whitespace dropped, then kept to 200 code points), once the harness reports it reached the model (or at once from a harness that reports no delivery), and a local command such as `/effort auto` sets none; or the resumed session's title on resume; a connected session's name in its harness (`AgentHarness.sessionName`), read each time a form opens or its row is activated |
 
 The row shows `user`, else `agent`, else `firstMessage` cut to the limit with `…`, else no title.
 A user title therefore locks out the agent's renames until the user clears it, and the agent's

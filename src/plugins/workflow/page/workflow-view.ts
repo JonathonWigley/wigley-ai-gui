@@ -5,6 +5,7 @@ import type { ToastTone } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { tag } from '../../../shared/page/ui/tag';
+import { createPendingTick } from '../../../shared/pending-tick';
 import type {
   ChatComposerPart,
   ChatSidePart,
@@ -94,7 +95,8 @@ export interface WorkflowViewDeps {
 // each changes; `forget` drops what it logged for a session that left and its
 // finished groups' fold.
 // `setSidePaneHidden` shows or hides the side pane in every session, and
-// `toggleFinishedWaves` opens or folds one session's finished groups, logging
+// `toggleFinishedWaves` opens or folds one session's finished groups, which
+// show open until it folds them, logging
 // `nothing to run` and changing nothing while the input holds no finished group.
 // `mainAction` is the spec the main action runs, and `runFor` the one path that
 // runs a stage action for a session, which `workflow.stageAction` runs, through the
@@ -160,12 +162,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const noWorkflowLogged = new Set<string>();
   const missingWorkflowsLogged = new Set<string>();
   const missingStagesLogged = new Set<string>();
-  const finishedOpen = new Set<string>();
+  const finishedFolded = new Set<string>();
   const drawnHeadless = new Map<string, boolean>();
   const busyDrawn = new Map<string, boolean>();
   const unseen = new Set<string>();
   let isSidePaneHidden = false;
-  let pendingTick: number | null = null;
+  const ticker = createPendingTick(timers, TICK_MS, () => tick());
 
   // The workflow that draws `flow`; null for a flow of none, or of one no plugin
   // holds.
@@ -342,7 +344,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       checklistTitle: checklist.title,
       checked: checklist.checked,
       total: checklist.total,
-      finishedOpen: finishedOpen.has(flow.sessionId),
+      finishedOpen: !finishedFolded.has(flow.sessionId),
       ...partitionedGroups(checklist.groups, openItemState),
     };
   };
@@ -431,15 +433,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
 
   // Sets the tick while a countdown shows and none is pending; clears a
   // pending one once none shows.
-  const updateTicker = () => {
-    const isShown = isCountdownShown();
-    if (isShown && pendingTick === null) {
-      pendingTick = timers.set(tick, TICK_MS);
-    } else if (!isShown && pendingTick !== null) {
-      timers.clear(pendingTick);
-      pendingTick = null;
-    }
-  };
+  const updateTicker = () => ticker.setNeeded(isCountdownShown());
 
   const drawEach = (chosen: readonly HeldPart[]) => {
     try {
@@ -455,7 +449,6 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     drawEach([...held].filter((part) => part.sessionId === sessionId));
 
   const tick = () => {
-    pendingTick = null;
     drawEach([...held].filter((part) => part.showsCountdown));
   };
 
@@ -598,6 +591,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       id: `${workflow.id}.sidePane`,
       title: workflow.draw.sideTitle,
       order: SIDE_PART_ORDER,
+      keepsHeight: true,
       build: (wrapper, sessionId, section) =>
         hold('sidePane', wrapper, sessionId, {
           workflow: workflow.id,
@@ -642,7 +636,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       loggedStages.delete(sessionId);
       loggedProgress.delete(sessionId);
       countdownShown.delete(sessionId);
-      finishedOpen.delete(sessionId);
+      finishedFolded.delete(sessionId);
       busyDrawn.delete(sessionId);
       unseen.delete(sessionId);
     },
@@ -669,9 +663,9 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         log(`nothing to run for ${TOGGLE_FINISHED_WAVES} in ${name}`);
         return;
       }
-      const isOpen = !finishedOpen.delete(sessionId);
-      if (isOpen) {
-        finishedOpen.add(sessionId);
+      const isOpen = finishedFolded.delete(sessionId);
+      if (!isOpen) {
+        finishedFolded.add(sessionId);
       }
       log(`finished waves ${isOpen ? 'open' : 'folded'} in ${name}`);
       drawSession(sessionId);
@@ -797,31 +791,41 @@ function checklistOf(
 
 // The checklist's groups in order: each with every item done is finished, the
 // first other is the current group, whose open items show `openItemState`
-// unless an item says it is not running, and the rest are later.
+// unless an item says it is not running, and the rest are later. Each item
+// keeps its number in the whole list, counted from 1 in the groups' order.
 function partitionedGroups(
   groups: readonly ChecklistGroup[],
   openItemState: MarkState,
 ): Pick<SidePaneInput, 'finishedGroups' | 'currentGroup' | 'laterGroups'> {
+  const firstNumbers = new Map<ChecklistGroup, number>();
+  let next = 1;
+  for (const group of groups) {
+    firstNumbers.set(group, next);
+    next += group.items.length;
+  }
+  const side = (group: ChecklistGroup, state: MarkState) =>
+    sideGroup(group, state, firstNumbers.get(group) ?? 1);
   const isFinished = (group: ChecklistGroup) =>
     group.items.every((item) => item.done);
   const [current, ...later] = groups.filter((group) => !isFinished(group));
   return {
     finishedGroups: groups
       .filter(isFinished)
-      .map((group) => sideGroup(group, PENDING)),
-    currentGroup:
-      current === undefined ? null : sideGroup(current, openItemState),
-    laterGroups: later.map((group) => sideGroup(group, PENDING)),
+      .map((group) => side(group, PENDING)),
+    currentGroup: current === undefined ? null : side(current, openItemState),
+    laterGroups: later.map((group) => side(group, PENDING)),
   };
 }
 
 function sideGroup(
   group: ChecklistGroup,
   openItemState: MarkState,
+  firstNumber: number,
 ): SideGroupInput {
   return {
     title: group.title,
-    items: group.items.map((item) => ({
+    items: group.items.map((item, index) => ({
+      number: firstNumber + index,
       text: item.text,
       state: itemState(item, openItemState),
     })),

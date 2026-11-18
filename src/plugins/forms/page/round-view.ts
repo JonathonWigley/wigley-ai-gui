@@ -8,6 +8,7 @@ import type { ResizeTarget } from '../../../contracts/panes';
 import type { OsName } from '../../../contracts/platform';
 import type { LayoutState } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { scrollContent } from '../../../shared/content-scroll';
 import type { FormsScreen } from '../contract';
@@ -251,9 +252,6 @@ export function createRoundView(
         view.rebuild(current);
         return;
       }
-      // Every round's rail shares one stored width, and the view is updated
-      // each time it is shown, so this picks up another round's drag.
-      split.reloadWidth();
       shownView = viewName;
       const isForms = viewName === 'forms';
       const isReview = viewName === 'review';
@@ -336,9 +334,9 @@ export function createRoundView(
     },
     resizeTarget: split,
     dispose() {
-      parts.dispose();
-      split.dispose();
-      keysChange.dispose();
+      callEach<{ dispose(): void }>([parts, split, keysChange], (each) =>
+        each.dispose(),
+      );
     },
   };
   const keysChange = deps.keys.onKeymapChanged(() => parts.redrawLayoutHead());

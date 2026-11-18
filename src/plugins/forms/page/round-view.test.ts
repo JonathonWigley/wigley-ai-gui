@@ -5,6 +5,7 @@ import type {
   EditorHost,
   FocusOptions,
 } from '../../../contracts/editor';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import {
   recordingAnchors,
@@ -157,7 +158,7 @@ function roundViewSetup(
     contributions: createFormsContributions(),
     platform: 'macos',
     state: noLayoutState,
-    uiState: { get: () => undefined, set: () => undefined },
+    uiState: uiStateOver(new Map()),
     timers: { set: () => 0, clear: () => undefined },
     log: vi.fn(),
   });

@@ -1,4 +1,7 @@
-import type { LayoutOwner } from '../../../contracts/layouts';
+import {
+  DEFAULT_LAYOUT_NAME,
+  type LayoutOwner,
+} from '../../../contracts/layouts';
 import type { PluginLog } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import {
@@ -7,6 +10,7 @@ import {
   type PartPick,
   type RollbackDeps,
 } from './draw-part';
+import { callEach } from '../../call-each';
 import { pickLayout } from './pick';
 
 // `defaultLayout` is the owner's built-in layout, defining every part. `owner`
@@ -50,23 +54,22 @@ export interface LayoutParts<L, C> {
     build: BuildPart<C[K], R>,
     slot?: string,
   ): DrawnPart<R>;
-  // Disposes every draw `redraw` keeps and forgets them; their elements stay.
+  // Disposes every draw `redraw` keeps and forgets them, a throw skipping none
+  // and the first error rethrown after; their elements stay.
   dispose(): void;
 }
-
-const DEFAULT_NAME = 'default';
 
 export function createLayoutParts<L extends object, C extends L>(
   deps: LayoutPartsDeps<C>,
 ): LayoutParts<L, C> {
   let shown: ShownLayouts<L> = {
-    layouts: new Map<string, L>([[DEFAULT_NAME, deps.defaultLayout]]),
-    user: DEFAULT_NAME,
+    layouts: new Map<string, L>([[DEFAULT_LAYOUT_NAME, deps.defaultLayout]]),
+    user: DEFAULT_LAYOUT_NAME,
   };
   const kept = new Map<string, DrawnPart<{ element: HTMLElement }>>();
   const pick = (key: keyof C & string): PartPick<L> =>
     pickLayout(
-      [shown.user, DEFAULT_NAME],
+      [shown.user, DEFAULT_LAYOUT_NAME],
       shown.layouts,
       (layout) => partOf(layout, key) !== undefined,
     );
@@ -109,9 +112,7 @@ export function createLayoutParts<L extends object, C extends L>(
     dispose() {
       const draws = [...kept.values()];
       kept.clear();
-      for (const drawn of draws) {
-        drawn.dispose();
-      }
+      callEach(draws, (drawn) => drawn.dispose());
     },
   };
 }

@@ -17,13 +17,15 @@ import type { SessionsParts } from './layout/sessions-parts';
 // `pushScope` pushes the `rename` scope, whose Enter and Esc run `accept` and
 // `cancel`; `setUserTitle` asks main to set the user title, null clearing it;
 // `titleMaxLength` reads the setting a typed title is checked against;
-// `parts` draws the dialog's frame and body through the sessions layout.
+// `parts` draws the dialog's frame and body through the sessions layout;
+// `isStopped` reads whether the plugin stopped.
 export interface RenameDialogDeps {
   pushScope(): PushedScope;
   setUserTitle(sessionId: string, title: string | null): Promise<void>;
   titleMaxLength(): number;
   parts: Pick<SessionsParts, 'renameDialog' | 'dialogFrame'>;
   log: PluginLog;
+  isStopped(): boolean;
 }
 
 // `open` shows the dialog for the row's session, the box holding the title
@@ -34,9 +36,11 @@ export interface RenameDialogDeps {
 // until the next edit. `cancel` closes it and changes nothing, as the base
 // scope changing under it does; a cancel after `accept` does not undo the
 // title main is already setting, and a refusal the closed dialog cannot show
-// is logged. Closing gives focus back to what held it as the dialog opened,
-// unless focus moved elsewhere meanwhile. `redraw` draws the frame again, open
-// or not, and the open dialog's body, for changed layouts.
+// is logged. An answer landing after the plugin stopped closes the dialog
+// still showing it and logs nothing. Closing gives focus back to what held it
+// as the dialog opened, unless focus moved elsewhere meanwhile. `redraw` draws
+// the frame again, open or not, and the open dialog's body, for changed
+// layouts.
 export interface RenameDialog {
   element: HTMLElement;
   open(row: SessionRow): void;
@@ -161,9 +165,17 @@ export function createRenameDialog(deps: RenameDialogDeps): RenameDialog {
           if (renaming === shown) {
             hide();
           }
-          deps.log(renamedLine(shown.label, title));
+          if (!deps.isStopped()) {
+            deps.log(renamedLine(shown.label, title));
+          }
         })
         .catch((error: unknown) => {
+          if (deps.isStopped()) {
+            if (renaming === shown) {
+              hide();
+            }
+            return;
+          }
           if (renaming !== shown) {
             deps.log(`rename failed: ${errorText(error)}`);
             return;

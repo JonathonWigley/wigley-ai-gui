@@ -22,13 +22,15 @@ export function withUser<L>(
   };
 }
 
-// One anchor the recording keys named, and whether it was disposed.
+// One anchor the recording keys named, and whether it was disposed; a test
+// sets `disposeError` to make its dispose throw that error once marked.
 export interface RecordedAnchor {
   element: HTMLElement;
   command: CommandId;
   scope: ViewScope | undefined;
   label: boolean | string | undefined;
   isDisposed: boolean;
+  disposeError?: Error;
 }
 
 // Base-kit keys whose `anchor` records each anchor in `anchors` and whose
@@ -53,6 +55,9 @@ export function recordingAnchors(): {
         return {
           dispose() {
             made.isDisposed = true;
+            if (made.disposeError !== undefined) {
+              throw made.disposeError;
+            }
           },
         };
       },

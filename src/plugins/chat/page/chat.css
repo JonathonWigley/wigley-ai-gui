@@ -25,6 +25,10 @@
    the floor (`--wg-chat-side-section-floor`) of body, a shorter body leaving
    blank to it; the `shrinksLast` section takes what is left, up to its content's
    height, and past that shrinks down to its head.
+   While a `keepsHeight` section (`data-keeps-height`) draws a body and is not
+   collapsed, every other section, a `shrinksLast` one included, gives up height
+   first the same way, and the `keepsHeight` section scrolls in its body only once
+   they are down to that floor.
    A section whose part draws nothing takes no space, and the hub with none left
    takes none either. Its width is the user's (`--chat-side-width`), and always
    leaves `.chat-main` its least width (`--chat-side-end-min`), both unitless
@@ -92,6 +96,19 @@
   )
   > .chat-side-part:not(
     [data-shrinks-last],
+    [data-keeps-height],
+    [data-part='chat.session'],
+    [data-part='chat.mainAgent'],
+    :has(.chat-side-section.is-collapsed)
+  ),
+.chat-side-parts:has(
+    > .chat-side-part[data-keeps-height]
+      .chat-side-section:not(.is-collapsed)
+      .chat-side-section-body
+      > :not([hidden])
+  )
+  > .chat-side-part:not(
+    [data-keeps-height],
     [data-part='chat.session'],
     [data-part='chat.mainAgent'],
     :has(.chat-side-section.is-collapsed)

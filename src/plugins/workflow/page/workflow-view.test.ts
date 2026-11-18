@@ -324,8 +324,16 @@ describe('workflow view', () => {
     await view.runFor('a', 'toggleFinishedWaves');
     await settle();
 
-    expect(logged.at(-1)).toBe('finished waves open in proj');
-    expect(small.sidePanes.at(-1)?.finishedOpen).toBe(true);
+    expect(logged.at(-1)).toBe('finished waves folded in proj');
+    expect(small.sidePanes.at(-1)?.finishedOpen).toBe(false);
+  });
+
+  it('the side part keeps its height in the hub', () => {
+    const { view, workflows } = setUp(['a']);
+    const small = stubWorkflow('small');
+    workflows.push(small.workflow);
+
+    expect(view.sidePartFor(small.workflow).keepsHeight).toBe(true);
   });
 
   it('hold_FirstDrawThrows_LetsThePartGo', () => {
@@ -722,8 +730,8 @@ describe('workflow view over several workflows', () => {
     put(flowOf('large'));
 
     expect(large.sidePanes.at(-1)?.currentGroup?.items).toEqual([
-      { text: 'a', state },
-      { text: 'b', state: 'pending' },
+      { number: 1, text: 'a', state },
+      { number: 2, text: 'b', state: 'pending' },
     ]);
   });
 
@@ -868,7 +876,7 @@ describe('workflow kit', () => {
     { state: 'ready', icon: 'codicon-play-circle' },
     { state: 'paused', icon: 'codicon-debug-pause' },
     { state: 'done', icon: 'codicon-pass-filled' },
-  ])('statusMark_$state_DrawsItsCodiconAtTheClock', ({ state, icon }) => {
+  ])('statusMark_DrawsItsCodiconAtTheClock ($state)', ({ state, icon }) => {
     const { kit } = smallKit();
     const parent = new FakeElement('div');
 
@@ -897,7 +905,7 @@ describe('workflow kit', () => {
   it.each([
     { main: false, command: 'workflow-small.go' },
     { main: true, command: 'workflow.mainAction' },
-  ])('actionButton_main$main_Anchors $command', ({ main, command }) => {
+  ])('actionButton_Anchors (main $main, $command)', ({ main, command }) => {
     const { kit, anchors } = smallKit();
 
     kit.actionButton(asHtml(new FakeElement('div')), {
@@ -1152,7 +1160,7 @@ describe('workflow view unseen word', () => {
       word: null,
     },
   ])(
-    'setFlow_$name_RowReads$word',
+    'setFlow_RowReadsItsWord ($name, word $word)',
     ({ stage, flows, activeAtEnd, viewed, word }) => {
       const { view, put, stages, rowActivities, active } = setUp();
       stages.add(

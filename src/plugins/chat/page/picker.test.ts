@@ -141,7 +141,7 @@ describe('chat picker', () => {
     { case: 'Closed', firstScope: null, keeps: false },
     { case: 'OpenInAnotherScope', firstScope: 'resume' as const, keeps: false },
   ])(
-    'open_KeepFilterWith$case_ReachesTheListAndKeepsFocus:$keeps',
+    'open_KeepFilter_ReachesTheListAndKeepsFocus ($case, keeps $keeps)',
     ({ firstScope, keeps }) => {
       const doc = installFocusFakeDom((name, value) =>
         vi.stubGlobal(name, value),

@@ -160,9 +160,11 @@ export interface DrawnToolbar {
 // it and removes that draw's root before it draws the same part again, so a
 // part holds one set of key anchors however often it draws; `cursorPrompt` is
 // one such single-instance part. A `pickerRow` draw hands its dispose to the
-// picker.
+// picker. `dispose` disposes every draw kept, the dialog frames' included;
+// their roots stay.
 export interface NotesParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
+  dispose(): void;
   // The field's row, appended to `parent`, with `box` (the title or body
   // frame, else null) moved into its value slot.
   row(
@@ -231,6 +233,7 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
 
   return {
     setLayouts: (shown) => parts.setLayouts(shown),
+    dispose: () => parts.dispose(),
     row: (parent, input, box) =>
       parts.redraw(
         'row',

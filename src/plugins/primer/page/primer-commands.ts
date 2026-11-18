@@ -64,6 +64,8 @@ export interface PrimerCommandDeps {
   openPreview(): Promise<unknown>;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  // Whether the page part stopped.
+  isStopped(): boolean;
 }
 
 // A handler's body, run once the box it fired in has its row shown; `box` is
@@ -162,6 +164,9 @@ export function primerCommandHandlers(
 
 function openPreview(deps: PrimerCommandDeps) {
   deps.openPreview().catch((error: unknown) => {
+    if (deps.isStopped()) {
+      return;
+    }
     deps.log(`layout preview failed: ${errorText(error)}`);
     deps.toast(`Layout preview failed: ${errorText(error)}`, 'error');
   });

@@ -1,6 +1,5 @@
+import { DEFAULT_LAYOUT_NAME } from '../../../contracts/layouts';
 import type { PartPick } from './draw-part';
-
-const DEFAULT_NAME = 'default';
 
 // The first layout in `chain` that `layouts` holds and that `defines`;
 // `default` ends the chain whatever it defines, so a part no earlier layout
@@ -11,12 +10,12 @@ export function pickLayout<L>(
   layouts: ReadonlyMap<string, L>,
   defines: (layout: L) => boolean,
 ): PartPick<L> {
-  const fallback = layouts.get(DEFAULT_NAME);
+  const fallback = layouts.get(DEFAULT_LAYOUT_NAME);
   if (fallback === undefined) {
-    throw new Error(`layout ${DEFAULT_NAME} is not loaded`);
+    throw new Error(`layout ${DEFAULT_LAYOUT_NAME} is not loaded`);
   }
   for (const name of chain) {
-    if (name === DEFAULT_NAME) {
+    if (name === DEFAULT_LAYOUT_NAME) {
       break;
     }
     const layout = layouts.get(name);
@@ -24,5 +23,5 @@ export function pickLayout<L>(
       return { name, layout };
     }
   }
-  return { name: DEFAULT_NAME, layout: fallback };
+  return { name: DEFAULT_LAYOUT_NAME, layout: fallback };
 }

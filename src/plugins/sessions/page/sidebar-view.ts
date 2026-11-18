@@ -1,6 +1,7 @@
 import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import { harnessLabel } from '../../../shared/agent-harness-label';
+import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
@@ -194,13 +195,12 @@ export function mountSidebarView(
   });
 
   const disposeRows = () => {
-    for (const drawn of [...rows, ...groups, ...sections]) {
-      drawn.dispose();
-    }
+    const drawns = [...rows, ...groups, ...sections];
     rows = [];
     groups = [];
     sections = [];
     dragReorder.clear();
+    callEach(drawns, (drawn) => drawn.dispose());
   };
 
   const drawGroup = (
@@ -320,8 +320,9 @@ export function mountSidebarView(
     },
     dispose() {
       heldDraw = null;
-      disposeRows();
-      pane.dispose();
+      callEach<() => void>([disposeRows, () => pane.dispose()], (step) =>
+        step(),
+      );
     },
     focus: () => pane.built.rows.focus(),
     render(state, nextSections, rowStateOf, skip, cursor) {

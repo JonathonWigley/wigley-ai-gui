@@ -134,7 +134,7 @@ describe('scrollToEdge', () => {
   it.each([
     { edge: 'top' as const, from: 300, top: 0 },
     { edge: 'end' as const, from: 300, top: 600 },
-  ])('scrollToEdge_$edge_LandsAtThatEdge', ({ edge, from, top }) => {
+  ])('scrollToEdge_LandsAtThatEdge ($edge)', ({ edge, from, top }) => {
     const box = scroller(from);
 
     scrollToEdge(box, edge);
@@ -147,7 +147,7 @@ describe('edgeText', () => {
   it.each([
     { edge: 'top' as const, text: 'scrolled the detail to the top' },
     { edge: 'end' as const, text: 'scrolled the detail to the end' },
-  ])('edgeText_$edge_NamesTheEdge', ({ edge, text }) => {
+  ])('edgeText_NamesTheEdge ($edge)', ({ edge, text }) => {
     expect(edgeText('the detail', edge)).toBe(text);
   });
 });

@@ -185,6 +185,54 @@ function outerRatio(view: PaneTreeView): number {
   return root.ratio;
 }
 
+describe('createPaneTreeView dispose', () => {
+  // Breaks if a divider whose dispose throws skips the dividers after it, or
+  // swallows the error.
+  it.each([
+    { row: 'the first divider throws', throwing: 0 },
+    { row: 'the last divider throws', throwing: 1 },
+  ])(
+    'disposes every divider and throws the first error ($row)',
+    ({ throwing }) => {
+      const anchors: { divider: number; isDisposed: boolean }[] = [];
+      const view = createPaneTreeView({
+        initialId: 'a',
+        anchor: () => {
+          const made = { divider: anchors.length >> 1, isDisposed: false };
+          anchors.push(made);
+          return {
+            dispose() {
+              made.isDisposed = true;
+              if (made.divider === throwing) {
+                throw new Error(`divider ${made.divider} failed`);
+              }
+            },
+          };
+        },
+        timers,
+        changed: () => undefined,
+        focused: () => undefined,
+        pressFocused: () => undefined,
+        keyFocused: () => undefined,
+        leaving: () => undefined,
+      });
+      view.restore({
+        root: row(0.5, leaf('a'), row(0.5, leaf('b'), leaf('c'))),
+        focusedId: 'a',
+      });
+
+      expect(() => view.dispose()).toThrow(`divider ${throwing} failed`);
+
+      expect(anchors.map(({ isDisposed }) => isDisposed)).toEqual([
+        true,
+        true,
+        true,
+        true,
+      ]);
+    },
+  );
+});
+
 describe('createPaneTreeView split', () => {
   it.each([
     { axis: 'row', width: 564, height: 0, splits: true },

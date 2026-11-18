@@ -15,6 +15,7 @@ import type {
 import type { AgentCommand, ChatEntry } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   asFake,
@@ -40,6 +41,7 @@ import {
   type ChatSessionState,
   chatSessionSlot,
   type ChatSidePart,
+  type ChatStatusPart,
   type ComposerStopExits,
   type QueuedMessage,
   type ReturnedMessage,
@@ -165,11 +167,13 @@ const returnedTwo: ReturnedMessage = {
 // tab's `shown` before it returns, as the sessions plugin may, and
 // `focusAtAddTab` gets the focus as `addTab` returns. `selects` holds the
 // session of each tab handle's `select`; `hasSavedPlace` answers whether
-// `savedPlaces` holds the session. `owners` holds each session's row owner as
-// `ownerOf` reads it, null for a session it does not name and undefined for a
-// row not yet arrived; `rowAdded` sets a row's owner and tells the view the row
-// arrived. `addTabs` records each `addTab` session id and `otherShown.count`
-// each `otherSessionShown` call.
+// `savedPlaces` holds the session. `boxDestroy.error`, once set, is thrown by
+// the next box `destroy` alone. `liveSubscriptions` counts the view's own
+// subscriptions to its layouts and part stores still held, by store. `owners`
+// holds each session's row owner as `ownerOf` reads it, null for a session it
+// does not name and undefined for a row not yet arrived; `rowAdded` sets a
+// row's owner and tells the view the row arrived. `addTabs` records each
+// `addTab` session id and `otherShown.count` each `otherSessionShown` call.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -177,6 +181,9 @@ function mounted(
   ) => void = () => undefined,
 ) {
   listCalls.length = 0;
+  // A tab's entry list reads its scroll padding when it settles a following
+  // cursor on a redraw; each describe's `afterEach` unstubs it.
+  vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
   const listeners = new Map<string, (data: unknown) => void>();
   const invoked: unknown[][] = [];
   const logs: string[] = [];
@@ -184,6 +191,7 @@ function mounted(
   const toasts: [string, string][] = [];
   const activities: (string | undefined)[] = [];
   const box = { text: null as string | null };
+  const boxDestroy = { error: null as Error | null };
   const tab = { element: null as FakeElement | null };
   const tabElements = new Map<string, FakeElement>();
   const keyCalls: [string, unknown][] = [];
@@ -233,6 +241,18 @@ function mounted(
   };
   const layouts = createChatLayouts(log);
   const renderers = createEntryRenderers(log);
+  const statusParts = createPartStore<ChatStatusPart>();
+  // The view's own subscriptions still held, by the store it subscribed to.
+  const liveSubscriptions = new Map<string, number>();
+  const counted = (store: string, handle: { dispose(): void }) => {
+    liveSubscriptions.set(store, (liveSubscriptions.get(store) ?? 0) + 1);
+    return {
+      dispose() {
+        liveSubscriptions.set(store, liveSubscriptions.get(store)! - 1);
+        handle.dispose();
+      },
+    };
+  };
   const kit = {
     markdown: {},
     keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
@@ -343,7 +363,13 @@ function mounted(
             boxCalls.push(['blur', options]);
             events.blurred();
           },
-          destroy: noEvent,
+          destroy: () => {
+            const error = boxDestroy.error;
+            boxDestroy.error = null;
+            if (error !== null) {
+              throw error;
+            }
+          },
         } as unknown as TextEditor;
       },
     },
@@ -356,17 +382,37 @@ function mounted(
       keyCalls.push(['setResizeTarget', target]),
     setFocusTarget: (target: FocusTarget | null) =>
       keyCalls.push(['setFocusTarget', target]),
-    layouts,
-    renderers,
-    composerParts,
-    statusParts: createPartStore(),
-    sideParts,
+    layouts: {
+      ...layouts,
+      onChange: (listener: () => void) =>
+        counted('layouts', layouts.onChange(listener)),
+    },
+    renderers: {
+      ...renderers,
+      onChanged: (listener: () => void) =>
+        counted('renderers', renderers.onChanged(listener)),
+    },
+    composerParts: {
+      ...composerParts,
+      onChanged: (listener: () => void) =>
+        counted('composerParts', composerParts.onChanged(listener)),
+    },
+    statusParts: {
+      ...statusParts,
+      onChanged: (listener: () => void) =>
+        counted('statusParts', statusParts.onChanged(listener)),
+    },
+    sideParts: {
+      ...sideParts,
+      onChanged: (listener: () => void) =>
+        counted('sideParts', sideParts.onChanged(listener)),
+    },
     sideSections: recordingSideTabs(
       createSideSections({
         layouts,
         kit,
         parts: sideParts,
-        uiState: { get: () => undefined, set: noEvent },
+        uiState: uiStateOver(new Map()),
         timers: { set: () => 0, clear: noEvent },
         toggleClicked: noEvent,
         log,
@@ -439,12 +485,14 @@ function mounted(
       activeSessionId = sessionId;
     },
     box,
+    boxDestroy,
     tab,
     tabElements,
     layouts,
     renderers,
     sideParts,
     composerParts,
+    liveSubscriptions,
     invoked,
     keyRuns,
     logs,
@@ -765,13 +813,17 @@ describe('mountChatView session facts source', () => {
   };
 
   it.each<{ case: string; user: ChatLayout; composerRedrawn: boolean }>([
-    { case: 'StatusLineDraws', user: {}, composerRedrawn: false },
     {
-      case: 'ComposerUpdateThrows',
+      case: 'StatusLineDraws_ListenerRunsOnce',
+      user: {},
+      composerRedrawn: false,
+    },
+    {
+      case: 'ComposerUpdateThrows_ListenerRunsOnce',
       user: COMPOSER_UPDATE_THROWS,
       composerRedrawn: true,
     },
-  ])('branchWrite_$case_ListenerRunsOnce', ({ user, composerRedrawn }) => {
+  ])('branchWrite_$case', ({ user, composerRedrawn }) => {
     const mount = mounted();
     mount.layouts.set({
       user: 'mine',
@@ -2279,5 +2331,56 @@ describe('mountChatView mounts', () => {
 
     expect(childCount(element)).toBe(0);
     expect(mount.keyCalls).toEqual([]);
+  });
+});
+
+describe('mountChatView dispose', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Breaks: a dispose that leaves the view listening to a store, or ends one
+  // subscription twice.
+  it.each([
+    'layouts',
+    'renderers',
+    'composerParts',
+    'statusParts',
+    'sideParts',
+  ])('dispose ends the view subscription to its %s once', (store) => {
+    const mount = mounted();
+    mount.open(stateOf([]));
+    expect(mount.liveSubscriptions.get(store)).toBe(1);
+
+    mount.view.dispose();
+
+    expect(mount.liveSubscriptions.get(store)).toBe(0);
+  });
+
+  // Breaks: a dispose that stops at the first tab whose teardown throws.
+  // A side part's throwing dispose is logged where it is placed, so the first
+  // tab's box destroy is what throws.
+  it('dispose tears down every tab when the first tab box destroy throws', () => {
+    const mount = mounted();
+    mount.pageLoad([
+      stateOf([], { sessionId: 'row-1' }),
+      stateOf([], { sessionId: 'row-2' }),
+    ]);
+    const disposed: string[] = [];
+    mount.sideParts.add({
+      id: 'part',
+      title: 'Part',
+      order: 10,
+      build: (_parent, sessionId) => ({
+        dispose: () => disposed.push(sessionId),
+      }),
+    });
+    mount.boxDestroy.error = new Error('box refused');
+
+    expect(() => mount.view.dispose()).toThrow('box refused');
+
+    expect(disposed).toEqual(['row-1', 'row-2']);
+    expect(mount.liveSubscriptions.get('sideParts')).toBe(0);
   });
 });

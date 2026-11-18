@@ -25,6 +25,7 @@ import type {
   UserConfigRead,
   UserConfigSchema,
 } from '../../../contracts/user-config';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import type { ListPickerCommand } from '../../../shared/list-picker-commands';
@@ -367,6 +368,10 @@ export interface SettingsView {
   // open box or picker staying open. Before `load` reads the schema it draws
   // nothing.
   controlKindsChanged(): void;
+  // The part stopped: a read, write or row action that settles after it draws,
+  // logs, toasts and invokes nothing; every part drawn in the rows pane, the
+  // pane itself and the side bar's draws are disposed.
+  dispose(): void;
   // The mode was hidden: a key recording in progress is cancelled.
   hidden(): void;
 }
@@ -471,6 +476,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     settings: null,
     keymap: null,
   };
+  let isDisposed = false;
   let readCount = 0;
   // Takes a newer read's items into the open picker; null when the request
   // the picker last opened has no `itemsOf`.
@@ -511,11 +517,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const disposes = entryDisposes;
     entryDisposes = [];
     drawnRows = new Map();
-    rowPrompt.dispose();
-    leaderMenu.dispose();
-    for (const dispose of disposes) {
-      dispose();
-    }
+    callEach<() => void>(
+      [() => rowPrompt.dispose(), () => leaderMenu.dispose(), ...disposes],
+      (step) => step(),
+    );
   };
 
   const drawPane = (): DrawnPart<BuiltRowsPane> =>
@@ -758,12 +763,12 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   // Reads both files and returns the read; redraws when `always`, else only
-  // when the read differs from the last. A read overtaken by a later one is
-  // returned without being held or drawn.
+  // when the read differs from the last. A read overtaken by a later one, or
+  // landing after dispose, is returned without being held or drawn.
   const refresh = async (always: boolean): Promise<UserConfigRead> => {
     const count = ++readCount;
     const read = await channel.invoke('read');
-    if (count !== readCount) {
+    if (isDisposed || count !== readCount) {
       return read;
     }
     const isChanged = !isSameJson(read, latest);
@@ -787,6 +792,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
 
   const refreshQuietly = (always: boolean) =>
     refresh(always).catch((error) => {
+      if (isDisposed) {
+        return;
+      }
       log(`read failed: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
     });
@@ -872,16 +880,27 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     (focus === 'rows' ? rowsSheet : sections.element).focus();
   };
 
+  // Takes the open box down: its scope disposed rather than popped, since the
+  // view's dispose closes it too, while the plugin stops. Cleared first, so a
+  // later `closeBox` of the same box finds it gone.
+  const dropOpenBox = () => {
+    const held = openBox;
+    if (held === null) {
+      return;
+    }
+    openBox = null;
+    callEach<() => void>(
+      [() => held.scope.dispose(), () => held.box.destroy()],
+      (step) => step(),
+    );
+    log(`box closed ${held.box.key}`);
+  };
+
   const closeBox = (box: RowBox) => {
     if (openBox?.box !== box) {
       return;
     }
-    const held = openBox;
-    openBox = null;
-    // A write landing after the plugin stopped closes here too, so no `pop`.
-    held.scope.dispose();
-    box.destroy();
-    log(`box closed ${box.key}`);
+    dropOpenBox();
     markCursor();
     restoreFocus();
   };
@@ -958,6 +977,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const name = FILE_NAMES[file];
     const isBoxOpen = () => box !== null && openBox?.box === box;
     const result = await write(expectedText);
+    if (isDisposed) {
+      return;
+    }
     switch (result.type) {
       case 'written':
         log(`wrote ${name}`);
@@ -978,6 +1000,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       case 'changedOnDisk': {
         log(`changed on disk ${name}`);
         const reread = await refresh(true);
+        if (isDisposed) {
+          return;
+        }
         const text =
           reread[file].state === 'broken'
             ? `${name} changed on disk and is now broken; the form shows the problem and closed any open box`
@@ -994,6 +1019,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
 
   const commitQuietly = (run: Promise<void>) =>
     run.catch((error) => {
+      if (isDisposed) {
+        return;
+      }
       log(`write failed: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
     });
@@ -1113,8 +1141,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       try {
         return await channel.invoke('mayDisable', pluginId);
       } catch (error) {
-        log(`write failed: ${errorText(error)}`);
-        deps.toast(errorText(error), 'error');
+        if (!isDisposed) {
+          log(`write failed: ${errorText(error)}`);
+          deps.toast(errorText(error), 'error');
+        }
         throw error;
       }
     },
@@ -1277,6 +1307,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
     if (readsFirst) {
       await refresh(false);
+      if (isDisposed) {
+        return;
+      }
     }
     const fresh = rows.find((each) => each.key === row.key);
     if (fresh === undefined || isBroken(fresh.file)) {
@@ -1290,6 +1323,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       return;
     }
     runRowAction(action, readsFirst).catch((error) => {
+      if (isDisposed) {
+        return;
+      }
       log(`${action} failed: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
     });
@@ -1515,9 +1551,28 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       picker.redraw();
     },
     async load() {
-      schema = await channel.invoke('schema');
+      const loadedSchema = await channel.invoke('schema');
+      if (isDisposed) {
+        return;
+      }
+      schema = loadedSchema;
       await refresh(true);
+      if (isDisposed) {
+        return;
+      }
       openFirstSection();
+    },
+    dispose() {
+      isDisposed = true;
+      callEach<() => void>(
+        [
+          dropOpenBox,
+          disposeEntries,
+          () => rowsPane.dispose(),
+          () => sections.dispose(),
+        ],
+        (step) => step(),
+      );
     },
     reread: () => refreshQuietly(true),
     shown() {

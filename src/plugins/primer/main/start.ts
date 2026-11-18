@@ -17,6 +17,7 @@ import {
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
+import { callEach } from '../../../shared/call-each';
 import { chatMainKey } from '../../chat/contract';
 import {
   DRIVE_SESSION_DEFAULTS,
@@ -155,10 +156,19 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       commands: {},
       mayStop: () => presenter.mayStop(),
       dispose: (stop) => {
-        if (stop === 'quit') {
-          primer.detach();
+        try {
+          callEach<() => void>(
+            [
+              ...(stop === 'quit' ? [() => primer.detach()] : []),
+              () => preview.dispose(),
+            ],
+            (step) => step(),
+          );
+        } catch (error) {
+          return store.flushed().then(() => {
+            throw error;
+          });
         }
-        preview.dispose();
         return store.flushed();
       },
     };

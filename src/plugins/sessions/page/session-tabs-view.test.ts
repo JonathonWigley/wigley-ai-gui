@@ -240,6 +240,54 @@ describe('session tabs view', () => {
     expect(view.tabs.selectedTabOf('s')?.id).toBe('docs');
   });
 
+  // Breaks: a draw that empties the strip and draws every tab again.
+  it('a draw keeps each unchanged tab element, so a release that moves pane focus leaves the click its target', () => {
+    const { view, area, runs } = sessionsViewSetup();
+    view.tabs.add('s', tabView('a'));
+    view.tabs.add('s', tabView('b'));
+    view.render(stateOf(['r', 's'], 'r'));
+    view.panes.restore(
+      TWO_PANES,
+      new Map([
+        ['pane-1', 'r'],
+        ['pane-2', 's'],
+      ]),
+    );
+    const tabB = () =>
+      findAll(area, 'ui-tab').find((tab) => tab.title === 'title b');
+    const pressed = tabB();
+
+    view.panes.focus('pane-2');
+    const afterFocus = tabB();
+    const runsBeforeClick = runs.length;
+    pressed!.click();
+
+    expect(afterFocus).toBe(pressed);
+    expect(runs.slice(runsBeforeClick)).toEqual([
+      ['sessions.selectTab', { sessionId: 's', tab: 'b' }],
+    ]);
+  });
+
+  // Breaks: a removal that draws the kept tabs again or leaves the removed
+  // one in the strip.
+  it('a removed tab leaves the strip while the others keep their elements', () => {
+    const { view, area } = sessionsViewSetup();
+    const [, b] = ['a', 'b', 'c'].map((id) => view.tabs.add('s', tabView(id)));
+    view.render(stateOf(['s'], 's'));
+    view.panes.restore(
+      { root: { kind: 'leaf', id: 'pane-1' }, focusedId: 'pane-1' },
+      new Map([['pane-1', 's']]),
+    );
+    const [tabA, , tabC] = findAll(area, 'ui-tab');
+
+    b.dispose();
+
+    const strip = findAll(area, 'ui-tab');
+    expect(strip).toHaveLength(2);
+    expect(strip[0]).toBe(tabA);
+    expect(strip[1]).toBe(tabC);
+  });
+
   it('sessionTabs_SelectedTabRemoved_SelectsItsStripNeighbour', () => {
     const { view } = sessionsViewSetup();
     const chat = view.tabs.add('s', tabView('chat', 2));
@@ -260,6 +308,18 @@ describe('session tabs view', () => {
     expect(pickHint.parentNode).toBeNull();
   });
 
+  // Breaks: a dispose that disposes each pane part but leaves its element in
+  // the pane tree's slot.
+  it("mountSessionTabsView's dispose removes each pane part from its slot", () => {
+    const { view, area } = viewWithFramedAndEmptyPane();
+    const paneParts = findAll(area, 'session-pane');
+    expect(paneParts).toHaveLength(2);
+
+    view.dispose();
+
+    expect(paneParts.map((part) => part.parentNode)).toEqual([null, null]);
+  });
+
   it.each([
     { case: "a frame's throw still drops the panes", throwing: 'session-area' },
     {
@@ -277,6 +337,47 @@ describe('session tabs view', () => {
 
     expect(liveFocusEdges()).toEqual([]);
     expect(pickHint.parentNode).toBeNull();
+  });
+
+  it("a dropped session whose tab's dispose throws still disposes the rest, leaves the page and redraws", () => {
+    const { view, area, anchors } = sessionsViewSetup();
+    area.isPageRoot = true;
+    view.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        tab: (parent, _input, kit) => {
+          const element = kit.el(parent, 'button', 'ui-tab');
+          kit.keyHint(element, 'selectTab');
+          return { element };
+        },
+      }),
+    );
+    const a = tabView('a');
+    view.tabs.add('s', a);
+    view.tabs.add('s', tabView('b'));
+    view.render(stateOf(['s'], 's'));
+    view.panes.restore(TWO_PANES, new Map([['pane-2', 's']]));
+    const frame = frameOf(a);
+    const frameAnchors = anchors.filter(
+      (anchor) => !anchor.isDisposed && frame.contains(asFake(anchor.element)),
+    );
+    const tabAnchors = frameAnchors.filter((anchor) =>
+      anchor.command.endsWith('selectTab'),
+    );
+    expect(tabAnchors).toHaveLength(2);
+    tabAnchors[0]!.disposeError = new Error('tab refused');
+    // The focused empty pane-1's text holds the pick hint; the redraw draws
+    // that text again and moves the hint into the new one.
+    const [emptyText] = findAll(area, 'sessions-empty');
+    const pickHint = findAll(area, 'sessions-pick-hint')[0]!;
+    expect(emptyText!.contains(pickHint)).toBe(true);
+
+    expect(() => view.tabs.drop('s')).toThrow('tab refused');
+
+    expect(frameAnchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
+    expect(frame.isConnected).toBe(false);
+    expect(view.tabs.tabsOf('s')).toEqual([]);
+    expect(emptyText!.parentNode).toBeNull();
+    expect(findAll(area, 'sessions-empty')[0]!.contains(pickHint)).toBe(true);
   });
 
   it.each<{ case: string; pane: Layout['pane']; keepsPart: boolean }>([
@@ -653,6 +754,29 @@ describe('session popups', () => {
     popup.hide();
 
     expect(popupsShown(area).bar).toEqual(['R1']);
+  });
+
+  // Breaks: a draw that disposes the popup bar and draws it again.
+  it("a draw keeps an unchanged popup bar, so the first click on an unfocused pane's bar entry reaches it", () => {
+    const { view, area } = sessionsViewSetup();
+    view.render(stateOf(['r', 's'], 'r'));
+    view.panes.restore(
+      TWO_PANES,
+      new Map([
+        ['pane-1', 'r'],
+        ['pane-2', 's'],
+      ]),
+    );
+    view.tabs.addPopup('s', popupView('p')).hide();
+    const entry = () => findAll(area, 'session-popup-bar-entry')[0];
+    const pressed = entry();
+
+    view.panes.focus('pane-2');
+    const afterFocus = entry();
+    pressed!.click();
+
+    expect(afterFocus).toBe(pressed);
+    expect(popupsShown(area).open).toEqual(['title p']);
   });
 
   it('sessionPopups_SecondPopupWithOneId_Throws', () => {

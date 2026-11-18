@@ -1,4 +1,4 @@
-import type { LayoutOwner } from '../contracts/layouts';
+import { DEFAULT_LAYOUT_NAME, type LayoutOwner } from '../contracts/layouts';
 import type { Paths } from '../contracts/paths';
 import {
   decodedPathSegments,
@@ -22,9 +22,6 @@ export function layoutUrl(
 ): string {
   return `${LAYOUT_SCHEME}://${owner}/${encodeURIComponent(name)}/~${revision}/${encodedPath(path)}`;
 }
-
-// The name served from the owner's default folder rather than `layoutsRoot`.
-const DEFAULT_NAME = 'default';
 
 // The file a `layoutUrl` names, joined by `paths` with the revision dropped:
 // `<defaultFolderOf(owner)>/<path>` for the name `default`, else
@@ -54,7 +51,7 @@ export function layoutFilePath(
   if (owner === null || name === null || pathSegments === null) {
     return null;
   }
-  if (name === DEFAULT_NAME) {
+  if (name === DEFAULT_LAYOUT_NAME) {
     const defaultFolder = defaultFolderOf(owner);
     return defaultFolder === null
       ? null

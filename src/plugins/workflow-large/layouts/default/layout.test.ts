@@ -130,6 +130,7 @@ function doneWave(title: string, tasks: number): SideGroupInput {
   return {
     title,
     items: Array.from({ length: tasks }, (_, index) => ({
+      number: index + 1,
       text: `${title} task ${index + 1}`,
       state: 'done' as const,
     })),
@@ -262,22 +263,16 @@ describe('default layout strip', () => {
 });
 
 describe('default layout sidePane', () => {
-  it.each([
-    {
-      name: 'one task reads its text',
-      tasks: 1,
-      line: 'row:Wave 4|Wave 4 task 1',
-    },
-    { name: 'two tasks read a count', tasks: 2, line: 'row:Wave 4|2 tasks' },
-  ])('sidePane_LaterWave_$name', ({ tasks, line }) => {
-    const parts = drawPane({ laterGroups: [doneWave('Wave 4', tasks)] });
+  it('sidePane_LaterWave_DrawsEveryTask', () => {
+    const parts = drawPane({ laterGroups: [doneWave('Wave 4', 2)] });
 
-    expect(parts).toContain('section:Up next');
-    expect(parts).toContain(line);
-  });
-
-  it('sidePane_NoLaterWaves_LeavesOutUpNext', () => {
-    expect(drawPane()).not.toContain('section:Up next');
+    expect(parts.slice(parts.indexOf('section:Wave 4'))).toEqual(
+      expect.arrayContaining([
+        'section:Wave 4',
+        'row:Wave 4 task 1',
+        'row:Wave 4 task 2',
+      ]),
+    );
   });
 
   it.each([
@@ -307,7 +302,7 @@ describe('default layout sidePane', () => {
     { finishedOpen: false, tasks: [] },
     { finishedOpen: true, tasks: ['row:Wave 1 task 1'] },
   ])(
-    'sidePane_FinishedOpen$finishedOpen_DrawsFinishedTasksOnlyWhenOpen',
+    'the side pane draws finished tasks only when open ($finishedOpen)',
     ({ finishedOpen, tasks }) => {
       const parts = drawPane({
         finishedGroups: [doneWave('Wave 1', 1)],
@@ -323,7 +318,7 @@ describe('default layout sidePane', () => {
     { checked: 3, total: 4, percent: 75 },
     { checked: 0, total: 0, percent: 0 },
   ])(
-    'sidePane_Checked$checked_Of$total_FillsTheBarTo$percent',
+    'the side pane fills the bar to the percent ($checked of $total, $percent)',
     ({ checked, total, percent }) => {
       const meter = drawPane({ checked, total }).find((part) =>
         part.startsWith('meter:'),
@@ -362,7 +357,7 @@ describe('default layout sidePane', () => {
       finishedGroups: [doneWave('Wave 1', 1)],
       currentGroup: {
         title: 'Wave 2',
-        items: [{ text: 'open task', state: 'running' }],
+        items: [{ number: 2, text: 'open task', state: 'running' }],
       },
       laterGroups: [doneWave('Wave 3', 2)],
     });
@@ -377,10 +372,20 @@ describe('default layout sidePane', () => {
       'fold:1 wave · 1 done:false',
       'section:Wave 2',
       'el:workflow-side-tasks',
+      'el:workflow-side-lead',
+      'el:workflow-side-number',
       'mark:running',
       'row:open task',
-      'section:Up next',
-      'row:Wave 3|2 tasks',
+      'section:Wave 3',
+      'el:workflow-side-tasks',
+      'el:workflow-side-lead',
+      'el:workflow-side-number',
+      'mark:done',
+      'row:Wave 3 task 1',
+      'el:workflow-side-lead',
+      'el:workflow-side-number',
+      'mark:done',
+      'row:Wave 3 task 2',
       'el:workflow-side-actions',
       'action:Resume make',
       'action:Open plan',

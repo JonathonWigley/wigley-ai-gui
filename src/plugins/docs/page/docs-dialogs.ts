@@ -9,6 +9,7 @@ import type {
   PushedScope,
   ToastTone,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
@@ -136,7 +137,11 @@ function createTextBox(deps: TextBoxDeps): TextBox {
     const listed = deps.channel
       .invoke('listFolder', folder)
       .catch((error: unknown) => {
-        deps.log(`not listed ${folder}: ${errorText(error)}`);
+        // A box closed meanwhile, as the dialogs' dispose closes it, logs
+        // nothing.
+        if (request !== null) {
+          deps.log(`not listed ${folder}: ${errorText(error)}`);
+        }
         return [];
       });
     listings.set(folder, listed);
@@ -199,10 +204,13 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   };
 
   const refreshQuietly = () => {
-    if (request?.completes === true) {
-      refresh().catch((error) =>
-        deps.log(`completion failed: ${errorText(error)}`),
-      );
+    const shown = request;
+    if (shown?.completes === true) {
+      refresh().catch((error) => {
+        if (request === shown) {
+          deps.log(`completion failed: ${errorText(error)}`);
+        }
+      });
     }
   };
 
@@ -263,9 +271,15 @@ function createTextBox(deps: TextBoxDeps): TextBox {
           input.value = completeTyped(typed, matches, deps.paths);
           cursorToEnd();
           await refresh();
-          deps.log(`completed to ${input.value}`);
+          if (request === shown) {
+            deps.log(`completed to ${input.value}`);
+          }
         })
-        .catch((error) => deps.log(`completion failed: ${errorText(error)}`));
+        .catch((error) => {
+          if (request === shown) {
+            deps.log(`completion failed: ${errorText(error)}`);
+          }
+        });
     },
     accept() {
       const shown = request;
@@ -563,7 +577,13 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
 
   const createCancelled = () => log('create cancelled');
 
-  const failed = (error: unknown) => toast(errorText(error), 'error');
+  let isDisposed = false;
+
+  const failed = (error: unknown) => {
+    if (!isDisposed) {
+      toast(errorText(error), 'error');
+    }
+  };
 
   // Whether a delete is waiting on main to name what it moves.
   let isTrashAsking = false;
@@ -618,6 +638,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
             place,
             name,
           });
+          if (isDisposed) {
+            return;
+          }
           box.close();
           const entry =
             kind === 'followup'
@@ -631,6 +654,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
               : provisionalEntry(created.path, kind, deps.entries(), paths);
           deps.changed({ type: 'created', entry }, null);
           await deps.openInEditor(entry, created.line);
+          if (isDisposed) {
+            return;
+          }
           log(
             kind === 'followup'
               ? `created follow-up ${name.trim()}`
@@ -682,6 +708,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
               type: 'path',
               path,
             });
+            if (isDisposed) {
+              return;
+            }
             box.close();
             const entry = provisionalEntry(
               created.path,
@@ -691,7 +720,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
             );
             deps.changed({ type: 'created', entry }, null);
             await deps.openInEditor(entry, created.line);
-            log(`created ${paths.base(created.path)}`);
+            if (!isDisposed) {
+              log(`created ${paths.base(created.path)}`);
+            }
           } catch (error) {
             failed(error);
           }
@@ -712,6 +743,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
               entry.path,
               typed,
             );
+            if (isDisposed) {
+              return;
+            }
             box.close();
             const record = renameRecord(entry.path, renamed, paths);
             deps.changed(record, renamed);
@@ -741,6 +775,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
           isTrashAsking = false;
         })
         .then((targets) => {
+          if (isDisposed) {
+            return;
+          }
           const name = paths.base(targets[targets.length - 1]);
           confirm.open(
             trashQuestion(targets, deps.homeDir, paths),
@@ -748,6 +785,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
               channel
                 .invoke('trashDoc', entry.path)
                 .then((result) => {
+                  if (isDisposed) {
+                    return;
+                  }
                   deps.changed(
                     { type: 'trashed', paths: result.trashed },
                     null,
@@ -790,9 +830,15 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       });
     },
     dispose() {
-      dialogs.close();
-      boxFrame.dispose();
-      confirmFrame.dispose();
+      isDisposed = true;
+      callEach<() => void>(
+        [
+          () => dialogs.close(),
+          () => boxFrame.dispose(),
+          () => confirmFrame.dispose(),
+        ],
+        (step) => step(),
+      );
     },
   };
   return dialogs;

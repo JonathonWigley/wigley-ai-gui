@@ -228,4 +228,20 @@ describe('primer main part', () => {
 
     expect(sessions.end).toHaveBeenCalledTimes(1);
   });
+
+  // Breaks if a preview that refuses to end is swallowed on a quit.
+  it('a quit whose preview refuses to end still rejects once stopped', async () => {
+    const sessions = previewSessions();
+    sessions.end.mockImplementation(() => {
+      throw new Error('end refused');
+    });
+    const harness = startMainPart(primerMainPart, {
+      dependencies: [fakeChat(), sessions.dependency],
+    });
+    harness.invoke('openPreview');
+
+    await expect(harness.stop('quit')).rejects.toThrow('end refused');
+
+    expect(sessions.end).toHaveBeenCalledTimes(1);
+  });
 });

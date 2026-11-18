@@ -380,6 +380,23 @@ describe('audio-picker main part', () => {
     ).toEqual([]);
   });
 
+  // Breaks if a preview that refuses to end is swallowed on a quit.
+  it('a quit whose preview refuses to end still rejects once stopped', async () => {
+    const sessions = previewSessions();
+    sessions.end.mockImplementation(() => {
+      throw new Error('end refused');
+    });
+    const harness = startMainPart(audioPickerMainPart, {
+      dependencies: [fakeChat(), sessions.dependency],
+      services: { homeDir },
+    });
+    harness.invoke('openPreview');
+
+    await expect(harness.stop('quit')).rejects.toThrow('end refused');
+
+    expect(sessions.end).toHaveBeenCalledTimes(1);
+  });
+
   it("stop ends the open preview's session", async () => {
     const sessions = previewSessions();
     const harness = startMainPart(audioPickerMainPart, {

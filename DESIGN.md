@@ -315,7 +315,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Sheet** (`sheet`): the solid L2 content sheet.
 - **Split** (`createSplit`): two panes with a drag handle, each pane with a least width and no most
   width, side by side or, with `axis: 'column'`, one above the other; the sized pane's width (or height) lives in
-  `uiState`, written when a drag ends and on each keyboard resize. The sized pane is the start pane unless
+  `uiState`, written when a drag ends and on each keyboard resize; every split over the same key follows a width
+  any of them writes. The sized pane is the start pane unless
   `sizedPane: 'end'` names the end one, and either pane can be hidden. The
   shell's side bar resizes through the same split core. Three columns are two nested splits, the
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
@@ -520,7 +521,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.
   The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second. An
   opened activity line lists one plain row per step (the plain collapsible: a tool's status dot and its mono
-  summary, `Thinking`, `Raw event`), and a step row opens its input and result in place under it,
+  summary, `Thinking`, `Raw event`; under a layout that sets `activityInTranscript`, each tool and thinking row ending
+  with its time, dim, in tabular numerals), and a step row opens its input and result in place under it,
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'

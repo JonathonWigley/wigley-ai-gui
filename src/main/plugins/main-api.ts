@@ -47,7 +47,7 @@ export type MainApiServices = Omit<MainServices, 'selfTest' | 'log'> & {
 // reaches under its id; `state` is the store of main's slot holder; `commands`
 // is main's commands, which each plugin reaches under its id.
 export interface MainApiDeps {
-  channels: PluginChannels;
+  channels: Pick<PluginChannels, 'forPlugin'>;
   pluginSettings(): Record<string, object>;
   onPluginSettingsChanged(
     listener: (settingsByPlugin: Record<string, object>) => void,

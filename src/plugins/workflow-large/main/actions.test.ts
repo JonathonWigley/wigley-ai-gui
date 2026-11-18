@@ -13,7 +13,8 @@ const NO_PLAN: SessionFlow = withLargeState(PLANNED, { planDir: null });
 const MAKE = { text: '/wigley:make /r/plan-a', images: [] };
 
 // Workflow actions over a chat fake that records each call in order;
-// `clearFails` makes `clear` reject. The flow `flowOf` returns is `flow`, and
+// `clearFails` makes `clear` reject, and `stopsDuringLaunch` stops the part
+// while `launch` runs. The flow `flowOf` returns is `flow`, and
 // `headless` names the sessions chat reads as headless.
 function startActions(
   flow: SessionFlow | null,
@@ -21,11 +22,13 @@ function startActions(
     profile?: string | null;
     clearFails?: boolean;
     headless?: readonly string[];
+    stopsDuringLaunch?: boolean;
   } = {},
 ) {
   const calls: unknown[][] = [];
   const signals: WorkflowSignal[] = [];
   const logs: string[] = [];
+  const stopped = { isStopped: false };
   const actions = createWorkflowActions({
     chat: {
       send: async (sessionId, message) => {
@@ -39,6 +42,7 @@ function startActions(
       },
       launch: async (request: LaunchRequest) => {
         calls.push(['launch', request]);
+        stopped.isStopped = options.stopsDuringLaunch === true;
         return 's2';
       },
       profileOf: () =>
@@ -49,8 +53,9 @@ function startActions(
     flowOf: () => flow,
     signal: (_sessionId, signal) => signals.push(signal),
     cancelCountdown: (sessionId) => calls.push(['cancelCountdown', sessionId]),
+    isStopped: () => stopped.isStopped,
   });
-  return { actions, calls, signals, logs };
+  return { actions, calls, signals, logs, stopped };
 }
 
 describe('createWorkflowActions', () => {
@@ -204,5 +209,13 @@ describe('createWorkflowActions', () => {
       'fresh process did not start',
     );
     expect(subject.calls).toEqual([['clear', 's1']]);
+  });
+
+  it('signals nothing when the part stops while the new session launches', async () => {
+    const subject = startActions(PLANNED, { stopsDuringLaunch: true });
+
+    await subject.actions.run('s1', 'makeInNewSession');
+
+    expect(subject.signals).toEqual([]);
   });
 });

@@ -771,11 +771,13 @@ export interface ChatMainExports {
   // does), a resting one included, as a `sessions.closed` would, without
   // asking the close guards: for a self-test that starts its project over.
   // Each fires `sessionClosed` with reason `project-closed`. Resolves once
-  // each one's owned session has ended and its row is gone, or chat stops.
+  // each one's owned session has ended and its row is gone, or when chat
+  // stops while it waits; a call made after chat has stopped rejects.
   closeSessionsIn(projectDir: string): Promise<void>;
   // Ends one session chat owns, as a sessions.closed would, without asking the
   // close guards; fires sessionClosed with `reason`. Resolves once its row is
-  // gone or chat stops; rejects for a session chat does not hold.
+  // gone, or when chat stops while it waits; rejects for a session chat does
+  // not hold, and a call made after chat has stopped rejects.
   close(sessionId: string, reason: SessionCloseReason): Promise<void>;
   // Text every session chat starts from now on carries to its harness, after
   // the texts registered before it; a running session keeps what it started
@@ -896,12 +898,15 @@ export interface ChatSideSection {
 // layout may frame one part its own way: the default draws `chat.session` as the
 // hub's header, with no head, which the hub's cursor then passes over. A part
 // marked `shrinksLast` keeps its height while the other sections give theirs up,
-// down to a few lines each.
+// down to a few lines each. A part marked `keepsHeight` keeps its height ahead of
+// every other section, a `shrinksLast` one included, and scrolls in its body only
+// once each other section is down to a few lines.
 export interface ChatSidePart {
   id: string;
   title: string;
   order: number;
   shrinksLast?: true;
+  keepsHeight?: true;
   build(
     parent: HTMLElement,
     sessionId: string,

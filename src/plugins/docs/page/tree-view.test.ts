@@ -18,7 +18,13 @@ import type {
 } from '../tree';
 import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
 import type { DocsParts } from './layout/docs-parts';
-import { createTreeView, type TreeView, type TreeViewDeps } from './tree-view';
+import type { DocsTreePlace } from '../contract';
+import {
+  createTreeView,
+  type TreePlace,
+  type TreeView,
+  type TreeViewDeps,
+} from './tree-view';
 
 // A tree pane marked `marker` that places every app part.
 function paneLayout(marker: string): Layout {
@@ -209,10 +215,26 @@ describe('createTreeView', () => {
     expect(anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
   });
 
+  it("dispose pops the open filter box's scope", () => {
+    const { parts } = fakeDocsParts(() =>
+      withUser(defaultLayout, paneLayout('pane')),
+    );
+    const pop = vi.fn();
+    const tree = createTreeView({
+      ...treeDeps(parts),
+      pushBoxScope: () => ({ ...fakePushedScope(), pop }),
+    });
+    tree.openFilter();
+
+    tree.dispose();
+
+    expect(pop).toHaveBeenCalledOnce();
+  });
+
   it.each([
     { text: 'Reading…', isHidden: false },
     { text: null, isHidden: true },
-  ])('setStatus_$text_DrawsOnlyTheStatusPart', ({ text, isHidden }) => {
+  ])('setStatus draws only the status part ($text)', ({ text, isHidden }) => {
     let paneDraws = 0;
     const counting: Layout = {
       treePane(parent, input, kit) {
@@ -533,7 +555,7 @@ describe('createTreeView', () => {
         isPrompted: false,
       },
     },
-  ])('rowInput_$name_SelectedRowHoldsItsFields', ({ node, expected }) => {
+  ])('the selected row holds its fields: $name', ({ node, expected }) => {
     const { tree, inputs, selected } = wikiSetUp();
     tree.setWikiTree([shelf('One', [node])], [], true);
     tree.down();
@@ -627,12 +649,14 @@ describe('createTreeView', () => {
     {
       name: 'wiki',
       hasWiki: true,
+      placeOf: (own: DocsTreePlace): TreePlace => ({ wiki: own, all: null }),
       setTree: (tree: TreeView, nodes: TreeNode[]) =>
         tree.setWikiTree(nodes, [], true),
     },
     {
       name: 'all pages',
       hasWiki: false,
+      placeOf: (own: DocsTreePlace): TreePlace => ({ wiki: null, all: own }),
       setTree: (tree: TreeView, nodes: TreeNode[]) =>
         tree.setTree(nodes, NOTHING, NO_HEADINGS, true),
     },
@@ -657,10 +681,17 @@ describe('createTreeView', () => {
     ]),
   )(
     'restored_place_holds_until_and_through_the_first_tree: $name $selectedId',
-    ({ hasWiki, setTree, selectedId, selected: selects, selectedAfter }) => {
+    ({
+      hasWiki,
+      placeOf,
+      setTree,
+      selectedId,
+      selected: selects,
+      selectedAfter,
+    }) => {
       const { tree, titles, selected } = wikiSetUp({ hasWiki });
       const restored = { expanded: ['shelf:Two'], selectedId, filter: '' };
-      tree.restorePlace(restored);
+      tree.restorePlace(placeOf(restored));
       // A tree with no rows draws, and reports its place, before the rows come.
       setTree(tree, []);
       const placeBeforeRows = tree.place();
@@ -670,9 +701,76 @@ describe('createTreeView', () => {
       expect(titles()).toEqual(['One', 'Two', 'b']);
       expect(selected()).toEqual(selects);
       expect({ placeBeforeRows, placeAfter: tree.place() }).toEqual({
-        placeBeforeRows: restored,
-        placeAfter: { ...restored, selectedId: selectedAfter },
+        placeBeforeRows: placeOf(restored),
+        placeAfter: placeOf({ ...restored, selectedId: selectedAfter }),
       });
+    },
+  );
+
+  it.each([
+    { name: 'wiki first', first: 'wiki', other: 'all' },
+    { name: 'all pages first', first: 'all', other: 'wiki' },
+  ] as const)(
+    'a reload puts back each tree view its own place: $name',
+    ({ first, other }) => {
+      const { tree } = wikiSetUp();
+      const restored: TreePlace = {
+        wiki: { expanded: ['shelf:Two'], selectedId: 'entry:e:b', filter: '' },
+        all: { expanded: [], selectedId: 'entry:e:a', filter: 'a' },
+      };
+      tree.restorePlace(restored);
+      tree.showView(first);
+      tree.setWikiTree(
+        [shelf('One', [page('a')]), shelf('Two', [page('b')])],
+        [],
+        true,
+      );
+      tree.setTree(
+        [shelf('Mine', [page('a'), page('b')])],
+        NOTHING,
+        NO_HEADINGS,
+        true,
+      );
+
+      tree.showView(other);
+
+      expect({
+        wiki: tree.selectedIn('wiki'),
+        all: tree.selectedIn('all'),
+        place: tree.place(),
+      }).toEqual({ wiki: page('b'), all: page('a'), place: restored });
+    },
+  );
+
+  it('a view whose tree never held rows has no place', () => {
+    const { tree } = wikiSetUp();
+
+    tree.setTree([shelf('Mine', [page('a')])], NOTHING, NO_HEADINGS, true);
+
+    expect(tree.place()).toEqual({
+      wiki: null,
+      all: { expanded: ['shelf:Mine'], selectedId: 'shelf:Mine', filter: '' },
+    });
+  });
+
+  it.each([
+    { case: 'the middle row', gone: 'b', after: ['a', 'c'], expected: 'c' },
+    { case: 'the last row', gone: 'c', after: ['a', 'b'], expected: 'b' },
+    { case: 'every row', gone: 'b', after: [], expected: 'b' },
+  ])(
+    'selectNearestIn selects the row after the gone one, else before: $case',
+    ({ gone, after, expected }) => {
+      const { tree } = wikiSetUp({ hasWiki: false });
+      const setLeaves = (titles: string[]) =>
+        tree.setTree(titles.map(page), NOTHING, NO_HEADINGS, true);
+      setLeaves(['a', 'b', 'c']);
+      tree.selectEntryIn('all', `e:${gone}`);
+      const rowIdsBefore = tree.rowIdsIn('all');
+      setLeaves(after);
+
+      tree.selectNearestIn('all', rowIdsBefore, `entry:e:${gone}`);
+
+      expect(tree.place().all?.selectedId).toBe(`entry:e:${expected}`);
     },
   );
 
@@ -704,7 +802,7 @@ describe('createTreeView', () => {
     { key: 'open', focusDoc: false },
     { key: 'toggle', focusDoc: true },
   ] as const)(
-    '$key_WikiLinkRow_CallsOpenWikiLinkWithFocusDoc_$focusDoc',
+    '$key on a wiki link row calls openWikiLink with focusDoc $focusDoc',
     ({ key, focusDoc }) => {
       const { tree, openWikiLink } = wikiSetUp();
       const link = wikiLink({});

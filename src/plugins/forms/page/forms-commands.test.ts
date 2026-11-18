@@ -94,6 +94,7 @@ function setup(
   const toastTones: ToastTone[] = [];
   const logs: string[] = [];
   let layoutFailure: Error | null = null;
+  let isStopped = false;
   let finishFailure: Error | null = null;
   // Each step and direction the form was scrolled, and what every scroll
   // returns.
@@ -137,6 +138,7 @@ function setup(
     },
     toast,
     log,
+    isStopped: () => isStopped,
   });
   const run = (
     command: FormsCommand,
@@ -160,6 +162,10 @@ function setup(
     toasts,
     toastTones,
     logs,
+    // The page part stopping.
+    stop: () => {
+      isStopped = true;
+    },
     // Makes every later openPreview reject with `error`.
     failLayouts: (error: Error) => {
       layoutFailure = error;
@@ -1268,5 +1274,17 @@ describe('formsCommandHandlers', () => {
     );
     expect(toastTones).toEqual(['error']);
     expect(logs).toContainEqual(expect.stringContaining('no preview round'));
+  });
+
+  it('a preview failure that lands after the part stopped logs and toasts nothing', async () => {
+    const { run, stop, failLayouts, toasts, logs } = setup();
+    failLayouts(new Error('no preview round'));
+
+    run('openPreview');
+    stop();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(toasts).toEqual([]);
+    expect(logs).toEqual([]);
   });
 });

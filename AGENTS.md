@@ -242,8 +242,7 @@ src/main/        core main process; main.ts is its composition root
                  but not wired in, for a Mac where the login item does not work; and a no-op for every other platform
                  and run
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), and a commit of named paths
-                 only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
+                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, and the commit that first added a text to a file (`firstAdded`) → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and two commits, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
                  `kit.d.ts` and each owner's `layout.d.ts` and sends each owner's set of layouts to the page
@@ -298,7 +297,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
                  sidebar-order.ts, the drawing in sidebar-view.ts — the pane tree of whole sessions with its split, swap and close commands and the
                  shared list picker's `picker` scope, each session's tabs and popups (`addTab`, `addPopup`, the hidden bar), the row and bar parts other plugins add,
-                 each row's activities, the rename dialog, and the layout preview rows),
+                 each row's activities, the rename dialog, and the layout preview rows;
+                 sessions-page-model.ts, DOM-free: the page's state and how a rows or selection notice applies to the panes),
                  layouts/ (the sessions Layout contract and the built-in `default` layout, with the `popup` and `popupBar` parts);
                  `docs/features/session-popups/design.md`, `docs/features/session-titles/design.md`, `docs/features/session-groups/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
@@ -323,8 +323,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  editor window lookup, the crop and the moved check, and `demoStreamPick`, the window the demo step streams: the Unity editor, else the app's own, as pure functions), playtest-command.ts (a Bash
                  command's playtest signal, a pure function), main/ (the `show_live_view` and `hide_live_view` tools,
                  the window list through `services.screenCapture`, the playtest watch: opens a session's Live view when
-                 a live `editor_play` / `capture.py start` Bash call succeeds, read through chat's entries, and closes
-                 the view it opened on `editor_stop` for the same project; the preview sample, its self-test script),
+                 a live `editor.playmode start` / `editor_play` / `capture.py start` Bash call succeeds, read through
+                 chat's entries, and closes the view it opened on `editor.playmode stop` / `editor_stop` for the same
+                 project; the preview sample, its self-test script),
                  page/ (live-section.ts, the session hub's Live section through chat's `addSidePart` with `shrinksLast`,
                  streaming only while on screen; stream-source.ts, the capture or `sample:` stream; layout/, the layout
                  reader), layouts/ (its Layout contract and `default` layout); `docs/features/live-view/design.md`
@@ -593,7 +594,13 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   records each registration a plugin makes through `api`, its per-plugin service views included (timers,
   `files.watch`, `processes.run`, editors and their ex commands, markdown fences and blocks, alert counts), and the host disposes them when the plugin stops. A
   registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
-  DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
+  DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on. A view's
+  `dispose` undoes everything it drew or added outside its own root, since a stop removes the root and nothing else:
+  an element appended to a parent it did not create, a listener on `window`, `document` or an element it did not
+  create, an observer, a timer or animation frame, a Disposable handed back to it (a drawn part, anchors, a pushed
+  scope, a child view) and an entry in state another module holds. A continuation a stop cannot cancel checks its
+  part's `isStopped` (a view's `isDisposed`), which `dispose` sets as its first line, and a teardown of several steps
+  that can throw runs them through `callEach` (`src/shared/call-each.ts`), so one throw skips none of the rest.
 - **A disabled plugin** is one named in the core setting `plugins.disabled`: none of its parts run, and the list applies
   live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list and follows the plugin
   catalog: a plugin that arrives starts, one that leaves stops as a switch-off does, and one with a new entry reloads
@@ -709,8 +716,9 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   handle sets the title bar's context. In a window too narrow for it the side bar opens over the content, and a plugin
   calls its handle's `picked()` when the user picks something in its side bar, which closes that overlay. The core tells the
   shown mode when its side bar hides (`sideBarHidden`) or opens over the content (`sideBarOpenedOver`), and its plugin
-  moves focus out of or into the side bar there; a window narrowing hides it without telling, so focus survives a
-  narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
+  moves focus out of or into the side bar there. A window narrowing that hides the side bar from beside the content
+  tells the shown mode only through `sideBarNarrowed`, which moves no focus (Docs closes its filter box there), so
+  focus survives a narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
   focuses its list, and every mode gives `focusMain`, which gives main's last pane back its scope and focus; the
   core's focus keys reach the side bar and the right bar only through these (A focus target, below). A hidden mode keeps its state,
   so leaving one never loses work in it, but it keeps no keys: each mode, each session tab and each session popup is told when it becomes
@@ -753,7 +761,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
   the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Large and `Checklist` for the others),
-  the agent-skills plugin's list, the context-sources plugin's breakdown and the live-view plugin's stream are four. A part marked `shrinksLast` keeps its height while the others give theirs up. A side part takes no key scope and no stop: the hub is a pane of chat's
+  the agent-skills plugin's list, the context-sources plugin's breakdown and the live-view plugin's stream are four. A part marked `shrinksLast` keeps its height while the others give theirs up, and one marked `keepsHeight` (the workflow's side pane) keeps its height ahead of every other, a `shrinksLast` one included. A side part takes no key scope and no stop: the hub is a pane of chat's
   own (Alt+l from the transcript or the box), whose cursor walks the section heads chat draws, `Enter` or `l`
   folding one.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
@@ -1266,7 +1274,9 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
   Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/plugins/scheduling/main/selftest-script.ts` for Schedules mode and the Scheduled runs section, `src/plugins/demo/main/selftest-script.ts` for the demo's keys, its walk through every step before the Live section and its coverage check (every built-in plugin has a demo step or a `demoSkip`, and no step failed), `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
-  write and before the keys, and a step's `screenshot` (a lowercase name in words joined by
+  write and before the keys, a step's `click` (a CSS selector) clicks its first match once with the left button
+  after the removal and before the keys, failing the step without pressing them when the click cannot land, and a
+  step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)
   for the agent to check against `DESIGN.md`. A script's steps sit in named groups, each with a `why` saying what
@@ -1280,7 +1290,9 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   next run resizes back on opening. A step's `repeat: { until, max }` presses its keys again after each `expect` line
   until the `until` line is logged; the first press counts toward `max` (a whole number of at least 2), and passing
   the cap without `until` fails. It reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one
-  PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each
+  PNG per press, `<plugin>-<name>-<n>.png`, file n after press n; its `click` lands once, before the first press. A
+  step to a session row uses sessions' `stepToSessionRow(key, until, max)`, which repeats `Alt+Shift+o` or
+  `Alt+Shift+i` until `until`, since rows can draw in any order. A step's `alsoExpect` holds patterns that must each
   match a line logged after the step began, before or after `expect`, for a line carrying a value the script cannot
   know (chat's clear step matches the notes line naming the row's random new host id) or a second line the step's keys
   cause, in either order. A line the fixture's opening causes goes in `open`'s `alsoShown` patterns, waited for with

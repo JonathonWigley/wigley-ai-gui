@@ -9,6 +9,7 @@ import type {
   PushedScope,
   ToastTone,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import type { NoteDraft, NotesChannel } from '../contract';
@@ -135,10 +136,15 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       return null;
     }
     shown = null;
-    held.session?.dispose();
-    host.replaceChildren();
-    held.scope.pop();
-    deps.closed();
+    callEach(
+      [
+        () => held.session?.dispose(),
+        () => host.replaceChildren(),
+        () => held.scope.pop(),
+        () => deps.closed(),
+      ],
+      (step) => step(),
+    );
     return held;
   };
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Timers } from '../../contracts/ambient';
+import { fakeTimers } from '../../shared/fake-timers.test-support';
 import type { Bridge } from '../../contracts/bridge';
 import type { DemoStep } from '../../contracts/demo';
 import type { Disposable } from '../../contracts/disposable';
@@ -858,20 +858,6 @@ const HEARING_ROWS: {
   },
 ];
 
-// Timers numbering their handles from 1, recording each clear.
-function fakeTimers() {
-  const cleared: number[] = [];
-  let last = 0;
-  const timers: Timers = {
-    set: () => {
-      last += 1;
-      return last;
-    },
-    clear: (handle) => cleared.push(handle),
-  };
-  return { timers, cleared };
-}
-
 // An editor host whose editors count their `destroy`, in creation order.
 function countingEditors() {
   const destroys: number[] = [];
@@ -1247,7 +1233,7 @@ describe('createPageApi recording', () => {
     { settles: 'resolves', restore: () => Promise.resolve() },
     { settles: 'rejects', restore: () => Promise.reject(new Error('gone')) },
   ])(
-    'restores.track_RestoreThat$settles_DisposesItsHandleOnce',
+    'restores.track_SettledRestore_DisposesItsHandleOnce ($settles)',
     async ({ restore }) => {
       let disposes = 0;
       const registrations = createRegistrations();

@@ -62,6 +62,7 @@ import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
 import type { SlotKey, SlotWriter } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
+import type { UiState } from '../contracts/ui-state';
 import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
@@ -72,6 +73,7 @@ import { gateExternalLinks } from './external-links';
 import { createFakeLoginStart } from './fake-login-start';
 import { FakeProcesses } from './fake-processes';
 import { fakeDriveHost } from './fake-drive-host';
+import { uiStateOver } from './fake-ui-state.test-support';
 import { createListeners, type Listeners } from './listeners';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
@@ -1141,12 +1143,14 @@ export function startMainPart<M extends PluginManifest>(
   };
 }
 
-// What the page's fake API writes to for one part; see `MainRecord`.
+// What the page's fake API writes to for one part; see `MainRecord`. One
+// `uiState` per record, as the page store keeps one per page, so a restarted
+// part still hears a key listener its stopped run leaked.
 interface PageRecord {
   counts: PartCounts;
   channelListeners: Map<string, Listeners<unknown>>;
   shows: Listeners<ShownLayouts<unknown>>;
-  uiState: Map<string, unknown>;
+  uiState: UiState;
   settings: object;
   settingsListeners: Listeners<object>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
@@ -1161,7 +1165,7 @@ function newPageRecord(
     counts,
     channelListeners: new Map(),
     shows: createListeners(),
-    uiState: new Map(),
+    uiState: uiStateOver(new Map()),
     settings,
     settingsListeners: createListeners(),
     invoke,
@@ -1652,16 +1656,7 @@ function fakePageApi(
       paths: posixPaths,
       homeDir: '/home',
       runMode: 'selfTest',
-      uiState: {
-        get: (key) => record.uiState.get(key),
-        set(key, value) {
-          if (value === undefined) {
-            record.uiState.delete(key);
-          } else {
-            record.uiState.set(key, value);
-          }
-        },
-      },
+      uiState: record.uiState,
       ...replaced,
       picker:
         replaced.picker === undefined

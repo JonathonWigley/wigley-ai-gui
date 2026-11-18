@@ -268,6 +268,7 @@ function pickerPopupSetup(
     openPreview: () => Promise.resolve(),
     toast: () => undefined,
     log,
+    isStopped: () => false,
   });
   const popup = popups.get(presented.sessionId);
   if (popup === undefined) {

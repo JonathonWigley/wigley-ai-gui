@@ -129,6 +129,22 @@ function withFailingWatch(
   };
 }
 
+// `inner` whose watch disposes as `inner`'s does, then throws `error`.
+function withThrowingWatchDispose(inner: Files, error: Error): Files {
+  return {
+    ...inner,
+    watch: (folder, onChange, options) => {
+      const watch = inner.watch(folder, onChange, options);
+      return {
+        dispose() {
+          watch.dispose();
+          throw error;
+        },
+      };
+    },
+  };
+}
+
 // `inner` whose watch reports no change and adds its options' `onMissed` to
 // `missed`.
 function withUnreportedWatch(inner: Files, missed: (() => void)[]): Files {
@@ -676,11 +692,23 @@ describe('watch', () => {
     expect(defaultIn(sent[0])).toEqual(defaultEntry(false, true));
   });
 
-  it('closes the default watch on dispose', async () => {
+  // Breaks if a throwing folder watch dispose skips the default watch's.
+  it.each([
+    { row: 'the folder watch disposes', error: null },
+    { row: 'the folder watch dispose throws', error: 'watch failed' },
+  ])('closes the default watch on dispose ($row)', async ({ error }) => {
     await writeDefaultFiles('layout.js');
-    const registry = await startWithDefault();
+    const folder =
+      error === null
+        ? files
+        : withThrowingWatchDispose(files, new Error(error));
+    const registry = await start(folder, LAYOUT_TYPES, defaultFolder);
 
-    registry.dispose();
+    if (error === null) {
+      registry.dispose();
+    } else {
+      expect(() => registry.dispose()).toThrow(error);
+    }
     await writeDefaultFiles('layout.js');
     // Lets a relist the write may have queued run to its send.
     await new Promise((resolve) => setTimeout(resolve, 0));

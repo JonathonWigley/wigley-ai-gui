@@ -6,7 +6,6 @@ import type { SelfTestHost, SelfTestStep } from '../contracts/plugin';
 import { errorText } from '../shared/error-text';
 import type { DrivenWindow } from './drive/driven-window';
 import { isReadyForKeys, readStartFailure, waitFor } from './drive/page-driver';
-import { electronDrivenWindow } from './electron-driven-window';
 import {
   checkGroups,
   type HandedScript,
@@ -207,8 +206,10 @@ export interface SelfTestDriver {
   closeHandover(): SelfTestConfig;
 }
 
-// `homeFiles` is the files service rooted at the self-test's temp home, which
-// steps' `writeFile` writes through. `cleanUp` closes what holds files there
+// `drivenWindow` is the driven window over `window`, made before the page's
+// first load; `window` carries the page-load listener. `homeFiles` is the
+// files service rooted at the self-test's temp home, which steps' `writeFile`
+// writes through. `cleanUp` closes what holds files there
 // and deletes what the self-test made outside the repo; the self-test awaits
 // it before it exits. `screenshotFolder` is emptied here, so it ends the run
 // holding only that run's PNGs. Each plugin hands at most one script while the
@@ -219,13 +220,13 @@ export interface SelfTestDriver {
 // width every script starts and ends on.
 export function startSelfTest(
   window: BrowserWindow,
+  drivenWindow: DrivenWindow,
   homeFiles: Files,
   cleanUp: () => Promise<void>,
   screenshotFolder: string,
   filter: SelfTestFilter,
 ): SelfTestDriver {
   emptyFolder(screenshotFolder);
-  const drivenWindow = electronDrivenWindow(window);
   const startWidth = drivenWindow.contentSize().width;
   const handed: HandedScript[] = [];
   let isHandoverClosed = false;

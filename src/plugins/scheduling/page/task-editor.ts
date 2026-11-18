@@ -162,7 +162,9 @@ export function createTaskEditor(deps: TaskEditorDeps): TaskEditorView {
 
   const clear = () => {
     disposePane();
-    rowDraws = disposeDraws(rowDraws);
+    const heldRowDraws = rowDraws;
+    rowDraws = [];
+    disposeDraws(heldRowDraws);
     fieldsList.replaceChildren();
     boxes.destroyForm(FORM_ID);
     drawnPaneKey = null;
@@ -201,7 +203,9 @@ export function createTaskEditor(deps: TaskEditorDeps): TaskEditorView {
         }
         if (always || rowsKey !== drawnRowsKey) {
           drawnRowsKey = rowsKey;
-          rowDraws = disposeDraws(rowDraws);
+          const heldRowDraws = rowDraws;
+          rowDraws = [];
+          disposeDraws(heldRowDraws);
           fieldsList.replaceChildren();
           rowDraws = rows.map(drawRow);
         }

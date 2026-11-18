@@ -147,6 +147,30 @@ describe('settings page part', () => {
     expect(lines.filter((line) => line.startsWith('toast'))).toEqual([]);
   });
 
+  it('a load rejecting after stop logs and toasts nothing', async () => {
+    let fail: (error: Error) => void = () => undefined;
+    const harness = startPagePart(settingsPagePart, {
+      firstModeTaken: true,
+      invoke: () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+      services: {
+        markdown: PLAIN_MARKDOWN,
+        fuzzy: fakeFuzzyMatcher,
+        picker: fakeListPickerService(),
+      },
+    });
+    await settle();
+    await harness.stop();
+    const linesBefore = harness.logs.map((line) => line.message);
+
+    fail(new Error('late'));
+    await settle();
+
+    expect(harness.logs.map((line) => line.message)).toEqual(linesBefore);
+  });
+
   it('recording_ModeHidden_DisposesTheCapture', async () => {
     const harness = startPagePart(settingsPagePart, {
       firstModeTaken: true,

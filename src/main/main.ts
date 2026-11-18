@@ -122,6 +122,7 @@ import {
   serveVisualScheme,
 } from './data-protocol/data-protocol';
 import { type DriveRun, startDriveRun } from './drive/drive-run';
+import type { DrivenWindow } from './drive/driven-window';
 import { electronDrivenWindow } from './electron-driven-window';
 import { createNodeFiles } from './files/node-files';
 import { createProcessGit } from './git/process-git';
@@ -163,7 +164,10 @@ import {
   type AppliedPlugins,
   createAppliedPlugins,
 } from './plugins/applied-plugins';
-import { createPluginChannels } from './plugins/plugin-channel';
+import {
+  createPluginChannels,
+  type PluginChannels,
+} from './plugins/plugin-channel';
 import {
   createPluginSwitch,
   heldAtStart,
@@ -214,6 +218,7 @@ import {
 import { loadUiStateFile, type UiStateFile } from './ui-state/ui-state-file';
 import {
   createMainWindow,
+  loadAppPage,
   offscreenWindowService,
   windowService,
 } from './window';
@@ -904,6 +909,18 @@ function livePage(window: BrowserWindow): WebContents | null {
   return isGone ? null : window.webContents;
 }
 
+// The driven window `createWindow` made for `run`, a run that reads the page
+// through one.
+function requireDrivenWindow(
+  window: DrivenWindow | null,
+  run: string,
+): DrivenWindow {
+  if (window === null) {
+    throw new Error(`driven window missing in ${run}`);
+  }
+  return window;
+}
+
 // The app's window, or null before it is made and once it is destroyed, as on
 // quit, when another start or an activate may still ask for it.
 function liveMainWindow(): BrowserWindow | null {
@@ -991,8 +1008,7 @@ function serveLayouts(
 }
 
 // Starts the main part of every plugin `store` admitted that `disabled` does
-// not name, each with its own API over one plugin channel router to the
-// window's page, the settings
+// not name, each with its own API over `channels`, the settings
 // `store` serves with no self-test layer, one event bus, the shared
 // `services`, its own host from `selfTest` (null outside the self-test, and
 // for a part started once `isLaunchStartDone` is true, since the handover has
@@ -1004,7 +1020,7 @@ function serveLayouts(
 // CLI keeps in the run's `app.log`, as the page has gone by the time a quit
 // stops the parts.
 function startMainParts(
-  window: BrowserWindow,
+  channels: PluginChannels,
   store: ConfigStore,
   dataRoot: string,
   layouts: LayoutService,
@@ -1016,11 +1032,6 @@ function startMainParts(
   commands: RuntimeCommands<MainCommandContext<any>>,
   state: SlotStore,
 ): PluginHost<MainStart<PluginManifest>, MainPart> {
-  // The stops a quit runs end the rows the next start restores, and a page told
-  // of it would save them as gone: panes, recency.
-  const channels = createPluginChannels(ipcMain, () =>
-    hasQuitStarted ? null : livePage(window),
-  );
   const bus = createEventBus();
   return startPlugins(
     store
@@ -1108,6 +1119,11 @@ function createWindow(
   window.webContents.on('did-start-loading', pageLog.pageLoading);
   window.webContents.on('did-finish-load', pageLog.pageLoaded);
   window.webContents.on('did-stop-loading', pageLog.pageLoaded);
+  // Only a self-test or drive run reads the page through a driven window.
+  const drivenWindow =
+    runMode === 'selfTest' || inputs.driveRunDir !== null
+      ? electronDrivenWindow(window)
+      : null;
   const recolour = () => {
     if (window.isDestroyed()) {
       return;
@@ -1131,6 +1147,7 @@ function createWindow(
     runMode === 'selfTest'
       ? startSelfTest(
           window,
+          requireDrivenWindow(drivenWindow, 'self-test run'),
           scopedFiles(files, inputs.homeDir, paths),
           cleanUpSelfTest,
           path.join(app.getAppPath(), '.selftest', 'screenshots'),
@@ -1155,7 +1172,7 @@ function createWindow(
     inputs.driveRunDir === null
       ? null
       : startDriveRun({
-          window: electronDrivenWindow(window),
+          window: requireDrivenWindow(drivenWindow, 'drive run'),
           runDir: inputs.driveRunDir,
           files,
           homeDir: inputs.homeDir,
@@ -1173,6 +1190,9 @@ function createWindow(
     onQuit(() => driveRun.dispose());
     driveRun.listening.catch(failStart);
   }
+  // The page loads only once every driven window over it exists, so its
+  // navigation count numbers the first load 1.
+  loadAppPage(window);
   const layouts = serveLayouts(
     window,
     inputs.homeDir,
@@ -1240,8 +1260,13 @@ function createWindow(
   // Main parts reach the switch through this forwarder, made before they start.
   let pluginSwitch: PluginSwitch | null = null;
   let isLaunchStartDone = false;
+  // The stops a quit runs end the rows the next start restores, and a page told
+  // of it would save them as gone: panes, recency.
+  const channels = createPluginChannels(ipcMain, () =>
+    hasQuitStarted ? null : livePage(window),
+  );
   const host = startMainParts(
-    window,
+    channels,
     store,
     inputs.dataRoot,
     layouts,
@@ -1419,6 +1444,7 @@ function createWindow(
   const liveSwitch = createPluginSwitch({
     main: host,
     page: pageParts.request,
+    dropParked: channels.dropParked,
     applied,
     slots: holder,
     status: slots.publish(corePluginsSlot),

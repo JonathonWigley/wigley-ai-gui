@@ -177,6 +177,41 @@ describe('createTurnTracker', () => {
       ],
     },
     {
+      name: 'interrupt after a message started, before its init',
+      steps: [
+        [{ read: lifecycleInit }, W],
+        [{ read: result(null, []) }, I],
+        [{ written: 'a' }, W],
+        [{ read: state('a', 'queued') }, W],
+        [{ read: state('a', 'started') }, W],
+        ['interruptAnswered', W],
+        [{ read: lifecycleInit }, W],
+        [{ read: result('a', ['a']) }, I],
+      ],
+    },
+    {
+      name: 'interrupt with a queued message',
+      steps: [
+        [{ read: lifecycleInit }, W],
+        [{ read: result(null, []) }, I],
+        [{ written: 'a' }, W],
+        [{ read: state('a', 'queued') }, W],
+        ['interruptAnswered', I],
+      ],
+    },
+    {
+      name: 'started then cancelled',
+      steps: [
+        [{ read: lifecycleInit }, W],
+        [{ read: result(null, []) }, I],
+        [{ written: 'a' }, W],
+        [{ read: state('a', 'queued') }, W],
+        [{ read: state('a', 'started') }, W],
+        ['interruptAnswered', W],
+        [{ read: state('a', 'cancelled') }, I],
+      ],
+    },
+    {
       name: 'interrupt while a turn is open',
       steps: [
         [{ written: 'a' }, W],

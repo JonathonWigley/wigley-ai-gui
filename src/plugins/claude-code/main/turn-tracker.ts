@@ -16,10 +16,10 @@ import type { DecodedLine } from './stream-decoder';
 //   uuid in `turnMessages`.
 // - Fallback, and before any `turnStarted`: a turn's end returns the oldest
 //   open uuid's command (null when `turnUnrequested`) and closes every uuid.
-// - `interruptAnswered` closes every uuid when no turn is open, and changes
-//   nothing while one is. A message the CLI still holds between an interrupted
-//   turn's result and its own init is closed too, so activity reads idle in
-//   that gap until the init reopens the turn.
+// - `interruptAnswered` closes every uuid no turn took in (`started`) when no
+//   turn is open, and changes nothing while one is. A message that `started`
+//   before its init, such as `/compact`'s or one queued behind the interrupted
+//   turn, stays open, so activity reads working until its own turn ends.
 // - `abandon` closes the turn and every uuid.
 //
 // The session host reads busy from the same lines through `CLAUDE_IDLE_RULE`
@@ -76,6 +76,18 @@ export function createTurnTracker(): TurnTracker {
   let mode: TurnMode = 'unknown';
   // In write order.
   const open = new Map<string, ControlCommand | null>();
+  // The open uuids a `started` frame took into a turn.
+  const takenIn = new Set<string>();
+
+  function close(uuid: string): void {
+    open.delete(uuid);
+    takenIn.delete(uuid);
+  }
+
+  function closeAll(): void {
+    open.clear();
+    takenIn.clear();
+  }
 
   function endTurn(line: TurnLine): ControlCommand | null {
     turnOpen = false;
@@ -83,17 +95,17 @@ export function createTurnTracker(): TurnTracker {
       const command =
         line.turnOpener === null ? null : (open.get(line.turnOpener) ?? null);
       if (line.turnOpener !== null) {
-        open.delete(line.turnOpener);
+        close(line.turnOpener);
       }
       for (const uuid of line.turnMessages) {
-        open.delete(uuid);
+        close(uuid);
       }
       return command;
     }
     const oldest = open.values().next();
     const command =
       line.turnUnrequested || oldest.done === true ? null : oldest.value;
-    open.clear();
+    closeAll();
     return command;
   }
 
@@ -112,23 +124,30 @@ export function createTurnTracker(): TurnTracker {
           fellBack = !hasLifecycle;
         }
       }
-      if (
-        line.lifecycle !== null &&
-        TERMINAL_STATES.has(line.lifecycle.state)
-      ) {
-        open.delete(line.lifecycle.uuid);
+      if (line.lifecycle !== null) {
+        const { uuid, state } = line.lifecycle;
+        if (TERMINAL_STATES.has(state)) {
+          close(uuid);
+        } else if (state === 'started' && open.has(uuid)) {
+          takenIn.add(uuid);
+        }
       }
       const command = line.turnEnded ? endTurn(line) : null;
       return { command, fellBack };
     },
     interruptAnswered() {
-      if (!turnOpen) {
-        open.clear();
+      if (turnOpen) {
+        return;
+      }
+      for (const uuid of open.keys()) {
+        if (!takenIn.has(uuid)) {
+          close(uuid);
+        }
       }
     },
     abandon() {
       turnOpen = false;
-      open.clear();
+      closeAll();
     },
     activity() {
       return turnOpen || open.size > 0 ? 'working' : 'idle';

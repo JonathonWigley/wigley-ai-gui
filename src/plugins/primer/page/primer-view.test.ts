@@ -20,6 +20,7 @@ import type {
 import type { AnchorOptions } from '../../../contracts/keymap';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import type { ShownLayouts } from '../../../contracts/plugin';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import {
@@ -272,13 +273,7 @@ function primerPopupSetup(
     }),
     platform: 'macos',
     state: noLayoutState,
-    uiState: {
-      get: (key) => uiValues.get(key),
-      set: (key, value) => {
-        uiWrites.push([key, value]);
-        uiValues.set(key, value);
-      },
-    },
+    uiState: uiStateOver(uiValues, (key, value) => uiWrites.push([key, value])),
     timers: { set: () => 0, clear: () => undefined },
     drops: {
       addTarget: (target) => {
@@ -308,6 +303,7 @@ function primerPopupSetup(
     openPreview: () => Promise.resolve(),
     toast: () => undefined,
     log,
+    isStopped: () => false,
   });
   return {
     view,
