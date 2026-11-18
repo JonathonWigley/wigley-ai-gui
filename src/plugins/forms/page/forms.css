@@ -280,25 +280,12 @@
 }
 
 /* Origin and severity tags: the plugin's full-strength colour as text and
-   border. */
-:where(.form-tab) .badge-origin[data-origin='caused'] {
-  border-color: var(--wg-forms-origin-caused);
-  color: var(--wg-forms-origin-caused);
-}
-
-:where(.form-tab) .badge-origin[data-origin='pre_existing'] {
-  border-color: var(--wg-forms-origin-pre-existing);
-  color: var(--wg-forms-origin-pre-existing);
-}
-
-:where(.form-tab) .badge-origin[data-origin='design'] {
-  border-color: var(--wg-forms-origin-design);
-  color: var(--wg-forms-origin-design);
-}
-
-:where(.form-tab) .badge-origin[data-origin='nit'] {
-  border-color: var(--wg-forms-origin-nit);
-  color: var(--wg-forms-origin-nit);
+   border. The origin chip's colour is its spec's theme token, set as
+   --forms-origin-color on the chip; a token no theme declares draws in the
+   tertiary text colour. */
+:where(.form-tab) .badge-origin {
+  border-color: var(--forms-origin-color, var(--wg-fg-tertiary));
+  color: var(--forms-origin-color, var(--wg-fg-tertiary));
 }
 
 :where(.form-tab) .badge-severity[data-severity='critical'] {

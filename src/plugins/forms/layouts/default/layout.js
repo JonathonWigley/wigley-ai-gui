@@ -53,7 +53,8 @@ const layout = {
       kit.verdict(card);
       kit.markdown(card, input.finding, 'context-body md');
       // A Nit's proof is why it cannot happen, the card's whole case; on the
-      // other cards the finding text carries the evidence the user needs.
+      // other cards the finding text carries the evidence the user needs. A
+      // card this layout does not know draws as a Defect does.
       if (input.card === 'nit') {
         const proof = kit.el(card, 'div', 'finding-proof');
         kit.section(proof, input.words.proof, input.proof);

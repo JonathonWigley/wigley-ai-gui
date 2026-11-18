@@ -83,3 +83,14 @@ export function completeFindingPick(
   }
   return { choice, action };
 }
+
+// The card's word for the pick when it is one of the finding's entries; ''
+// otherwise.
+export function findingActionLabel(
+  finding: PickableFinding,
+  choice: number,
+  action: FindingAction | '',
+): string {
+  const pick = completeFindingPick(finding, choice, action);
+  return pick === null ? '' : (actionLabel(finding.origin, pick.action) ?? '');
+}

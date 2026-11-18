@@ -1,103 +1,213 @@
+import type { Disposable } from '../../contracts/disposable';
+import { isSameJson } from '../../shared/json';
 import {
-  FINDING_ORIGINS,
-  MAX_ENTRIES,
-  type DefectFinding,
   type FindingAction,
-  type FindingCard,
-  type FindingOrigin,
+  type FindingOriginSpec,
+  MAX_ENTRIES,
 } from './contract';
 
-export interface OriginRules {
-  card: FindingCard;
-  minChoices: number;
-  maxChoices: number;
-  requiresSeverity: boolean;
-  // Each action the card offers, mapped to the card's word for it.
-  actions: Partial<Record<FindingAction, string>>;
-}
-
-const DEFECT_ACTIONS: Partial<Record<FindingAction, string>> = {
-  fix_now: 'Fix now',
-  follow_up: 'Follow-up',
-  leave_it: 'Leave it',
+const DEFECT_CARD = {
+  card: 'defect',
+  words: { kind: 'Defect', finding: 'Finding', proof: 'Proof' },
+  choiceNoun: 'its solutions',
+  minChoices: 1,
+  maxChoices: MAX_ENTRIES,
+  requiresSeverity: true,
+  requiresProof: false,
+  actions: { fix_now: 'Fix now', follow_up: 'Follow-up', leave_it: 'Leave it' },
 };
 
-// `satisfies` keeps each requiresSeverity a literal for the check below.
-const RULES = {
-  caused: {
-    card: 'defect',
-    minChoices: 1,
-    maxChoices: MAX_ENTRIES,
-    requiresSeverity: true,
-    actions: DEFECT_ACTIONS,
+// The origins forms itself registers, in registration order.
+export const FINDING_ORIGIN_SPECS: readonly FindingOriginSpec[] = [
+  {
+    id: 'caused',
+    ...DEFECT_CARD,
+    meaning: 'a defect the change under review introduced',
+    chip: 'Caused by this change',
+    themeToken: 'forms.origin-caused',
   },
-  pre_existing: {
-    card: 'defect',
-    minChoices: 1,
-    maxChoices: MAX_ENTRIES,
-    requiresSeverity: true,
-    actions: DEFECT_ACTIONS,
+  {
+    id: 'pre_existing',
+    ...DEFECT_CARD,
+    meaning: 'a real defect in code the change read but did not cause',
+    chip: 'Pre-existing',
+    themeToken: 'forms.origin-pre-existing',
   },
-  design: {
+  {
+    id: 'design',
     card: 'decision',
+    words: { kind: 'Decision', finding: 'Decision', proof: 'Context' },
+    choiceNoun: 'the options a plan would weigh',
+    meaning: 'a design call, options to weigh now or in a feature plan',
     minChoices: 2,
     maxChoices: MAX_ENTRIES,
     requiresSeverity: false,
+    requiresProof: false,
     actions: {
       fix_now: 'Decide now',
       follow_up: 'Plan it',
       leave_it: 'Drop it',
     },
+    chip: 'Design decision',
+    themeToken: 'forms.origin-design',
   },
-  nit: {
+  {
+    id: 'nit',
     card: 'nit',
+    words: { kind: 'Nit', finding: 'Finding', proof: "Why it's safe" },
+    choiceNoun: 'the fix',
+    meaning: 'nothing builds on it, and it cannot be shown happening',
     minChoices: 1,
     maxChoices: 1,
     requiresSeverity: false,
+    requiresProof: true,
     actions: { fix_now: 'Fix anyway', leave_it: 'Leave it' },
+    chip: 'Nit',
+    themeToken: 'forms.origin-nit',
   },
-} satisfies Record<FindingOrigin, OriginRules>;
+];
 
-export const FINDING_ORIGIN_RULES: Record<FindingOrigin, OriginRules> = RULES;
-
-// The origins whose rules require severity.
-type SeverityOrigin = {
-  [
-    Origin in FindingOrigin
-  ]: (typeof RULES)[Origin]['requiresSeverity'] extends true ? Origin : never;
-}[FindingOrigin];
-
-type SameType<A, B> = [A] extends [B]
-  ? [B] extends [A]
-    ? true
-    : false
-  : false;
-
-// The parser narrows a finding whose rules require severity to DefectFinding,
-// so the table and DefectFinding's origin union must name the same origins:
-// this assignment stops compiling when they differ.
-const _severityOriginsAreDefectOrigins: SameType<
-  SeverityOrigin,
-  DefectFinding['origin']
-> = true;
-
-export function isFindingOrigin(value: unknown): value is FindingOrigin {
-  return (FINDING_ORIGINS as readonly unknown[]).includes(value);
+export interface FindingOriginRegistry {
+  // Throws, registering nothing, on a spec that breaks a registration rule;
+  // the handle's first `dispose` retires the spec, and a second does nothing.
+  register(spec: FindingOriginSpec): Disposable;
+  // The registered spec, else the retired one, else undefined: a round
+  // parsed before its origin left keeps reading it.
+  spec(origin: string): FindingOriginSpec | undefined;
+  // The registered specs in registration order.
+  list(): readonly FindingOriginSpec[];
+  // Fires once per register and once per first dispose.
+  onChanged(listener: () => void): Disposable;
 }
 
-// The card's word for the action, or null when the origin does not offer it.
+// The fields every origin drawing as one card shares.
+const CARD_FIELDS = [
+  'words',
+  'choiceNoun',
+  'minChoices',
+  'maxChoices',
+  'actions',
+] as const;
+
+// What is wrong with registering `spec` beside `registered`, or null.
+function registrationProblem(
+  spec: FindingOriginSpec,
+  registered: readonly FindingOriginSpec[],
+): string | null {
+  const { id } = spec;
+  if (id.trim() === '') {
+    return 'finding origin id is blank';
+  }
+  if (registered.some((other) => other.id === id)) {
+    return `finding origin ${id} is already registered`;
+  }
+  const boundsFit =
+    spec.minChoices >= 1 &&
+    spec.maxChoices <= MAX_ENTRIES &&
+    spec.minChoices <= spec.maxChoices;
+  if (!boundsFit) {
+    return (
+      `finding origin ${id} takes ${spec.minChoices} to ${spec.maxChoices} ` +
+      `choices; a finding takes 1 to ${MAX_ENTRIES}, the fewest first`
+    );
+  }
+  if (spec.actions.fix_now === undefined) {
+    return (
+      `finding origin ${id} offers no fix_now action; every finding needs a ` +
+      'fix_now choice'
+    );
+  }
+  const blankAction = Object.entries(spec.actions).find(
+    ([, word]) => word === undefined || word.trim() === '',
+  );
+  if (blankAction !== undefined) {
+    return `finding origin ${id} has a blank word for ${blankAction[0]}`;
+  }
+  for (const other of registered) {
+    if (other.card !== spec.card) {
+      continue;
+    }
+    const field = CARD_FIELDS.find(
+      (each) => !isSameJson(spec[each], other[each]),
+    );
+    if (field !== undefined) {
+      return (
+        `finding origin ${id} draws as card ${spec.card}, whose ${field} ` +
+        `differs from ${other.id}'s`
+      );
+    }
+  }
+  return null;
+}
+
+// The finding origins one process reads, in registration order, with the
+// specs disposed since kept for the rounds parsed while they were registered.
+export function createFindingOriginRegistry(): FindingOriginRegistry {
+  let specs: readonly FindingOriginSpec[] = [];
+  const retired = new Map<string, FindingOriginSpec>();
+  const listeners = new Set<() => void>();
+  const changed = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+  return {
+    register(spec) {
+      const problem = registrationProblem(spec, specs);
+      if (problem !== null) {
+        throw new Error(problem);
+      }
+      retired.delete(spec.id);
+      specs = [...specs, spec];
+      changed();
+      let isDisposed = false;
+      return {
+        dispose() {
+          if (isDisposed) {
+            return;
+          }
+          isDisposed = true;
+          specs = specs.filter((each) => each !== spec);
+          retired.set(spec.id, spec);
+          changed();
+        },
+      };
+    },
+    spec: (origin) =>
+      specs.find((each) => each.id === origin) ?? retired.get(origin),
+    list: () => specs,
+    onChanged(listener) {
+      listeners.add(listener);
+      return { dispose: () => listeners.delete(listener) };
+    },
+  };
+}
+
+// This process's registry: main and the page each load their own copy of
+// this module.
+export const findingOrigins: FindingOriginRegistry =
+  createFindingOriginRegistry();
+
+// The card's word for the action, or null when the origin does not offer it
+// or no spec, registered or retired, holds the origin.
 export function actionLabel(
-  origin: FindingOrigin,
+  origin: string,
   action: FindingAction,
 ): string | null {
-  return FINDING_ORIGIN_RULES[origin].actions[action] ?? null;
+  return findingOrigins.spec(origin)?.actions[action] ?? null;
 }
 
-// Every distinct action word across the origins, in table order.
-export const ACTION_WORDS: readonly string[] = [
-  ...new Set(
-    FINDING_ORIGINS.flatMap((origin) =>
-      Object.values(FINDING_ORIGIN_RULES[origin].actions),
+// Every distinct action word of the registered origins, in list order.
+export function actionWords(): readonly string[] {
+  return [
+    ...new Set(
+      findingOrigins
+        .list()
+        .flatMap((spec) =>
+          Object.values(spec.actions).filter(
+            (word): word is string => word !== undefined,
+          ),
+        ),
     ),
-  ),
-];
+  ];
+}

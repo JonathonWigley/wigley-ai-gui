@@ -3,10 +3,8 @@ import {
   type Finding,
   type FindingAction,
   type FindingAnswerEntry,
-  type FindingCard,
   type PageKind,
 } from '../../../contract';
-import { actionLabel } from '../../../finding-origins';
 import {
   findingEntries,
   findingEntryNumber,
@@ -34,21 +32,11 @@ import {
   withAnswerText,
 } from '../item-answer';
 import type { CardInputs } from '../item-format';
-import { verdictOf } from './verdict';
+import { drawnOriginSpec, verdictOf } from './verdict';
 
 const RAIL_PREFIX = 'F';
 
 const UNTOUCHED_FINDING: FindingAnswer = { ...UNTOUCHED_ANSWER, ...NO_PICK };
-
-// Each card's kind label and the titles of its two sections.
-const CARD_TEXT: Record<
-  FindingCard,
-  { kind: string; finding: string; proof: string }
-> = {
-  defect: { kind: 'Defect', finding: 'Finding', proof: 'Proof' },
-  decision: { kind: 'Decision', finding: 'Decision', proof: 'Context' },
-  nit: { kind: 'Nit', finding: 'Finding', proof: "Why it's safe" },
-};
 
 // A finding with no draft entry starts with no pick. A draft's pick restores
 // only when it is one of the finding's entries; any other restores as no
@@ -68,11 +56,18 @@ function restoreFindingAnswer(
     : { ...answer, choice: 0, action: '' };
 }
 
+// The saved entry the page writes; main adds the action labels when it reads
+// the body.
+type PageFindingEntry = Omit<
+  FindingAnswerEntry,
+  'action_label' | 'recommend_action_label'
+>;
+
 // `i` is the answer's 0-based position.
 function findingAnswerEntry(
   answer: FindingAnswer,
   i: number,
-): FindingAnswerEntry {
+): PageFindingEntry {
   return { ...answerEntry(answer, i), action: answer.action };
 }
 
@@ -131,14 +126,16 @@ export const findingPageKind: PageKind<
     title: (finding) => finding.title,
     layout: (finding) => finding.layout,
     input(finding, index, round) {
+      const spec = drawnOriginSpec(finding.origin);
       const verdict = verdictOf(finding);
       return {
         label: labelFor(RAIL_PREFIX, index),
         title: finding.title,
         card: verdict.card,
         origin: finding.origin,
-        severity: 'severity' in finding ? finding.severity : null,
-        words: { ...CARD_TEXT[verdict.card] },
+        originToken: verdict.originToken,
+        severity: finding.severity,
+        words: { ...spec.words },
         originChip: verdict.origin,
         severityChip: verdict.severity,
         impact: verdict.impact,
@@ -157,8 +154,8 @@ export const findingPageKind: PageKind<
         recommendAction: finding.recommend_action,
         actionReasons: { ...finding.actionReasons },
         actions: FINDING_ACTIONS.flatMap((action: FindingAction) => {
-          const label = actionLabel(finding.origin, action);
-          return label === null ? [] : [{ action, label }];
+          const label = spec.actions[action];
+          return label === undefined ? [] : [{ action, label }];
         }),
         round: roundInfo(round),
       };

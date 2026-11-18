@@ -35,7 +35,8 @@ export interface NoticeCard {
   badge: string;
   round: RoundInfo;
 }
-export type FindingAction = 'fix_now' | 'follow_up' | 'leave_it';
+// Known: 'fix_now', 'follow_up', 'leave_it'.
+export type FindingAction = string;
 // One numbered pick down a finding card: a choice with the action it sits under, or the header of an action with no
 // choices, whose `choice` is 0. `choice` is otherwise the choice's 1-based position in `choices`; `number` is the
 // entry's 1-based position down the card, which its key picks through `forms.choose` with that number: draw the key
@@ -49,12 +50,17 @@ export interface FindingCardEntry {
 export interface FindingCard {
   label: string;
   title: string;
-  card: 'defect' | 'decision' | 'nit';
-  origin: 'caused' | 'pre_existing' | 'design' | 'nit';
-  severity: 'critical' | 'important' | 'minor' | null;
+  // The card the origin draws as; known: 'defect', 'decision', 'nit'. A plugin origin may name another.
+  card: string;
+  // The finding's origin; known: 'caused', 'pre_existing', 'design', 'nit'.
+  origin: string;
+  // Known: 'critical', 'important', 'minor'; null on an origin that takes none.
+  severity: string | null;
   // The card's own words: its kind label and the titles of its two sections.
   words: { kind: string; finding: string; proof: string };
   originChip: string;
+  // The CSS variable of the origin chip's colour (`--wg-forms-origin-caused`); '' when the origin names none.
+  originToken: string;
   severityChip: string | null;
   impact: string;
   finding: string;

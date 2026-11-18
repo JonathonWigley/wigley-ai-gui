@@ -34,6 +34,9 @@ import {
   roundSaveState,
   sessionTitle,
 } from './view-model';
+import { useBuiltInFindingOrigins } from '../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 // Questions Alpha (recommend 2), Beta (recommend 2), Gamma; no notices, so
 // rail position = question position.

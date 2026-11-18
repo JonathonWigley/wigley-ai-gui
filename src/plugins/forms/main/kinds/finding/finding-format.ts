@@ -1,15 +1,12 @@
 import {
   FINDING_ACTIONS,
-  FINDING_ORIGINS,
   MAX_ENTRIES,
   SEVERITIES,
-  type DefectFinding,
   type Finding,
   type FindingAction,
   type FindingAnswerEntry,
-  type FindingCard,
   type FindingChoice,
-  type FindingOrigin,
+  type FindingOriginSpec,
   type FindingResult,
   type MainItemKind,
   RoundError,
@@ -17,12 +14,13 @@ import {
   type Severity,
 } from '../../../contract';
 import {
-  ACTION_WORDS,
-  FINDING_ORIGIN_RULES,
-  isFindingOrigin,
+  actionLabel,
+  actionWords,
+  findingOrigins,
 } from '../../../finding-origins';
 import {
   completeFindingPick,
+  findingActionLabel,
   findingEntries,
   isFindingAction,
 } from '../../../finding-pick';
@@ -48,7 +46,7 @@ import type { AnswerSubject } from '../item-format';
 import {
   actionLabelsText,
   cardChoicesText,
-  cardName,
+  cardKindsText,
   choiceCountText,
   orList,
   originCardsText,
@@ -56,27 +54,24 @@ import {
 } from './finding-text';
 import { isJsonObject, type JsonObject } from '../../../../../shared/json';
 
-// The fewest choices any origin takes.
-const MIN_SOLUTIONS = Math.min(
-  ...FINDING_ORIGINS.map((origin) => FINDING_ORIGIN_RULES[origin].minChoices),
-);
-
-// Every finding carries these; severity is the one field an origin decides.
+// Every finding carries these; severity and proof are the fields an origin
+// decides.
 const FINDING_FIELDS = [
   'title',
   'origin',
   'impact',
   'finding',
-  'proof',
   'choices',
   'recommend_action',
 ];
 const SEVERITY_FIELD = 'severity';
+const PROOF_FIELD = 'proof';
 const RECOMMEND_FIELD = 'recommend';
 const ACTION_REASONS_FIELD = 'action_reasons';
 const KNOWN_FIELDS = [
   ...FINDING_FIELDS,
   SEVERITY_FIELD,
+  PROOF_FIELD,
   RECOMMEND_FIELD,
   ACTION_REASONS_FIELD,
   'layout',
@@ -95,31 +90,30 @@ const DEFERRAL_ACTIONS = FINDING_ACTIONS.filter(
   (action): action is DeferralAction => action !== DEFAULT_CHOICE_ACTION,
 );
 
-type DefectOrigin = DefectFinding['origin'];
-
-// The parts of a finding its origin decides: the origin and, on a Defect,
-// its severity.
-type OriginFields =
-  | { origin: DefectOrigin; severity: Severity }
-  | { origin: Exclude<FindingOrigin, DefectOrigin> };
-
-function isDefectOrigin(origin: FindingOrigin): origin is DefectOrigin {
-  return FINDING_ORIGIN_RULES[origin].requiresSeverity;
-}
-
 function isSeverity(value: unknown): value is Severity {
   return (SEVERITIES as readonly unknown[]).includes(value);
 }
 
-const SEVERITY_ORIGIN_LIST = FINDING_ORIGINS.filter(isDefectOrigin);
+// The fewest choices any registered origin takes.
+function minSolutions(): number {
+  return Math.min(
+    MAX_ENTRIES,
+    ...findingOrigins.list().map((spec) => spec.minChoices),
+  );
+}
+
+function severitySpecs(): FindingOriginSpec[] {
+  return findingOrigins.list().filter((spec) => spec.requiresSeverity);
+}
+
+function proofSpecs(): FindingOriginSpec[] {
+  return findingOrigins.list().filter((spec) => spec.requiresProof);
+}
 
 // 'caused or pre_existing'
-const SEVERITY_ORIGINS = orList(SEVERITY_ORIGIN_LIST);
-
-// 'a Defect'
-const SEVERITY_CARDS = orList([
-  ...new Set(SEVERITY_ORIGIN_LIST.map((origin) => `a ${cardName(origin)}`)),
-]);
+function originsText(specs: readonly FindingOriginSpec[]): string {
+  return orList(specs.map((spec) => spec.id));
+}
 
 const FINDINGS_DESCRIPTION =
   "Review findings and deferred items that need the user's decision — one " +
@@ -130,69 +124,102 @@ const FINDINGS_DESCRIPTION =
   'already fixed or decided goes in notices instead; an open decision that ' +
   'is not a review finding goes in questions.';
 
-const ORIGIN_MEANINGS: Record<FindingOrigin, string> = {
-  caused: 'a defect the change under review introduced',
-  pre_existing: 'a real defect in code the change read but did not cause',
-  design: 'a design call, options to weigh now or in a feature plan',
-  nit: 'nothing builds on it, and it cannot be shown happening',
-};
+function originDescription(): string {
+  return 'Sets the card the finding draws as. ' + originCardsText();
+}
 
-const ORIGIN_DESCRIPTION =
-  'Sets the card the finding draws as. ' + originCardsText(ORIGIN_MEANINGS);
+// The proof field's description; its first sentence names the origins that
+// require proof, and is left out when none does.
+function proofDescription(): string {
+  const specs = proofSpecs();
+  const rest =
+    'Short bullets naming the file, line, output or behaviour. No prose ' +
+    'paragraphs. Markdown.';
+  if (specs.length === 0) {
+    return `Optional on every origin, where the default card does not draw it. ${rest}`;
+  }
+  const titles = orList([...new Set(specs.map((spec) => spec.words.proof))]);
+  return (
+    `Required on a ${originsText(specs)} finding (${cardKindsText(specs)}): ` +
+    `why it cannot happen, shown under its ${titles} title. Optional on every ` +
+    `other origin, where the default card does not draw it. ${rest}`
+  );
+}
 
-const PROOF_DESCRIPTION =
-  'The evidence, in brief: short bullets naming the file, line, output or ' +
-  'behaviour that shows the finding. Titled Context on a Decision and ' +
-  "Why it's safe on a Nit. No prose paragraphs. Markdown.";
+function severityDescription(): string {
+  const specs = severitySpecs();
+  return `Required on a ${originsText(specs)} finding (${cardKindsText(specs)}); no other origin accepts it.`;
+}
 
 const CHOICE_TEXT_DESCRIPTION =
   'Opens with one plain sentence saying what the user gets, before any ' +
   'symbol name or term of art. Never opens with an action label. Inline ' +
   'markdown only.';
 
-// What each card's choices are.
-const CARD_CHOICES: Record<FindingCard, string> = {
-  defect: 'its solutions',
-  decision: 'the options a plan would weigh',
-  nit: 'the fix',
-};
+function choicesDescription(): string {
+  return (
+    `One object per choice: ${cardChoicesText()}. The card draws ` +
+    'each choice under its action (its action field; fix_now when left out), ' +
+    'and an action with no choices as a header the user picks alone. At least ' +
+    'one choice is a fix_now choice. The card numbers its choices and headers ' +
+    `alike, one number key each, so a finding takes at most ${MAX_ENTRIES} of ` +
+    'them together; one past that fails the call. A choice names a solution ' +
+    'only: a choice ' +
+    "whose text opens with an action's label " +
+    `(${actionWords().join(', ')}) fails the call.`
+  );
+}
 
-const CHOICES_DESCRIPTION =
-  `One object per choice: ${cardChoicesText(CARD_CHOICES)}. The card draws ` +
-  'each choice under its action (its action field; fix_now when left out), ' +
-  'and an action with no choices as a header the user picks alone. At least ' +
-  'one choice is a fix_now choice. The card numbers its choices and headers ' +
-  `alike, one number key each, so a finding takes at most ${MAX_ENTRIES} of ` +
-  'them together; one past that fails the call. A choice names a solution ' +
-  'only: a choice ' +
-  "whose text opens with an action's label " +
-  `(${ACTION_WORDS.join(', ')}) fails the call.`;
-
-const CHOICE_ACTION_DESCRIPTION =
-  "The action this choice sits under on the card, one the finding's origin " +
-  `offers; fix_now when left out. ${unofferedActionsText()}`;
+function choiceActionDescription(): string {
+  return (
+    "The action this choice sits under on the card, one the finding's origin " +
+    `offers; fix_now when left out. ${unofferedActionsText()}`
+  );
+}
 
 const RECOMMEND_DESCRIPTION =
   'The 1-based number, in choices, of the recommended choice: a choice of ' +
   'recommend_action. Leave it out, or send null, only when no choice has ' +
   'recommend_action.';
 
-const RECOMMEND_ACTION_DESCRIPTION =
-  'The recommended action. The values are the same three on every card, ' +
-  'each card labelling them its own way — ' +
-  `${actionLabelsText()}. ${unofferedActionsText()}`.trimEnd();
+function recommendActionDescription(): string {
+  return (
+    'The recommended action. The values are the same three on every card, ' +
+    'each card labelling them its own way — ' +
+    `${actionLabelsText()}. ${unofferedActionsText()}`.trimEnd()
+  );
+}
 
-const ACTION_REASONS_DESCRIPTION =
-  "Why to take a deferral action, drawn under that action's header. Only an " +
-  'action the origin offers takes an entry. Send the entry for the action ' +
-  `you recommend when it is a deferral; null reads as none. ` +
-  unofferedActionsText();
+function actionReasonsDescription(): string {
+  return (
+    "Why to take a deferral action, drawn under that action's header. Only an " +
+    'action the origin offers takes an entry. Send the entry for the action ' +
+    `you recommend when it is a deferral; null reads as none. ` +
+    unofferedActionsText()
+  );
+}
+
+// What a finding missing a required field is told it needs.
+function missingFieldsDetail(): string {
+  const severity = severitySpecs();
+  const proof = proofSpecs();
+  const alsoNeeds = [
+    ...(severity.length > 0
+      ? [`a ${originsText(severity)} finding also needs severity`]
+      : []),
+    ...(proof.length > 0
+      ? [`a ${originsText(proof)} finding also needs proof`]
+      : []),
+  ];
+  const needs = `Every finding needs ${FINDING_FIELDS.join(', ')}`;
+  return alsoNeeds.length === 0
+    ? `${needs}.`
+    : `${needs}; ${alsoNeeds.join(', and ')}.`;
+}
 
 // The actions the origin offers, in FINDING_ACTIONS order.
-function offeredActions(origin: FindingOrigin): FindingAction[] {
-  return FINDING_ACTIONS.filter(
-    (action) => FINDING_ORIGIN_RULES[origin].actions[action] !== undefined,
-  );
+function offeredActions(spec: FindingOriginSpec): FindingAction[] {
+  return FINDING_ACTIONS.filter((action) => spec.actions[action] !== undefined);
 }
 
 // A choice's action: fix_now when absent, else one of the three that the
@@ -200,7 +227,7 @@ function offeredActions(origin: FindingOrigin): FindingAction[] {
 function parseChoiceAction(
   raw: JsonObject,
   field: string,
-  origin: FindingOrigin,
+  spec: FindingOriginSpec,
   at: RoundItemPath,
 ): FindingAction {
   const action = Object.hasOwn(raw, CHOICE_ACTION_FIELD)
@@ -212,12 +239,12 @@ function parseChoiceAction(
       problem: `${field}.action must be one of ${quotedList(FINDING_ACTIONS)}.`,
     });
   }
-  const offered = offeredActions(origin);
+  const offered = offeredActions(spec);
   if (!offered.includes(action)) {
     throw new RoundError({
       path: at,
       problem:
-        `${field}.action is ${action}, which a ${origin} finding does not ` +
+        `${field}.action is ${action}, which a ${spec.id} finding does not ` +
         `offer; it offers ${offered.join(' or ')}.`,
     });
   }
@@ -227,7 +254,7 @@ function parseChoiceAction(
 function parseChoice(
   raw: unknown,
   number: number,
-  origin: FindingOrigin,
+  spec: FindingOriginSpec,
   at: RoundItemPath,
 ): FindingChoice {
   const field = `choices[${number}]`;
@@ -265,7 +292,7 @@ function parseChoice(
         'sits under.',
     });
   }
-  const action = parseChoiceAction(raw, field, origin, at);
+  const action = parseChoiceAction(raw, field, spec, at);
   return { text, reason, action };
 }
 
@@ -277,7 +304,7 @@ const INLINE_MARKS = /^[*_`~]+/;
 // word are skipped, since `**Fix now**` renders as the bare word.
 function openingActionWord(text: string): string | null {
   const opening = text.trim().replace(INLINE_MARKS, '').toLowerCase();
-  const word = ACTION_WORDS.find((candidate) => {
+  const word = actionWords().find((candidate) => {
     const lowered = candidate.toLowerCase();
     if (!opening.startsWith(lowered)) {
       return false;
@@ -293,7 +320,7 @@ function openingActionWord(text: string): string | null {
 
 function parseChoices(
   raw: unknown,
-  origin: FindingOrigin,
+  spec: FindingOriginSpec,
   at: RoundItemPath,
 ): FindingChoice[] {
   if (!Array.isArray(raw)) {
@@ -302,16 +329,14 @@ function parseChoices(
       problem: 'choices must be a list of objects, each with text and reason.',
     });
   }
-  const { minChoices, maxChoices } = FINDING_ORIGIN_RULES[origin];
+  const { minChoices, maxChoices } = spec;
   if (raw.length < minChoices || raw.length > maxChoices) {
     throw new RoundError({
       path: at,
-      problem: `a ${origin} finding ${choiceCountText(origin)}.`,
+      problem: `a ${spec.id} finding ${choiceCountText(spec.id)}.`,
     });
   }
-  const choices = raw.map((choice, i) =>
-    parseChoice(choice, i + 1, origin, at),
-  );
+  const choices = raw.map((choice, i) => parseChoice(choice, i + 1, spec, at));
   const hasFixNowChoice = choices.some(
     (choice) => choice.action === DEFAULT_CHOICE_ACTION,
   );
@@ -324,14 +349,14 @@ function parseChoices(
         'action is fix_now.',
     });
   }
-  requireEntriesWithinKeys(origin, choices, at);
+  requireEntriesWithinKeys(spec.id, choices, at);
   return choices;
 }
 
 // Each entry the card numbers takes a number key, so a finding with more
 // entries than keys is refused.
 function requireEntriesWithinKeys(
-  origin: FindingOrigin,
+  origin: string,
   choices: FindingChoice[],
   at: RoundItemPath,
 ): void {
@@ -350,28 +375,41 @@ function requireEntriesWithinKeys(
   }
 }
 
-function parseOriginFields(item: JsonObject, at: RoundItemPath): OriginFields {
-  const origin = item.origin;
-  if (!isFindingOrigin(origin)) {
+// The finding's registered origin spec; a retired origin is refused, so a
+// new round cannot name it.
+function parseOrigin(item: JsonObject, at: RoundItemPath): FindingOriginSpec {
+  const registered = findingOrigins.list();
+  const spec = registered.find((each) => each.id === item.origin);
+  if (spec === undefined) {
     throw new RoundError({
       path: at,
-      problem: `origin must be one of ${quotedList(FINDING_ORIGINS)}.`,
+      problem: `origin must be one of ${quotedList(registered.map((each) => each.id))}.`,
     });
   }
+  return spec;
+}
+
+// The finding's severity: required on an origin whose spec requires it,
+// refused on any other, which reads as null.
+function parseSeverity(
+  item: JsonObject,
+  spec: FindingOriginSpec,
+  at: RoundItemPath,
+): Severity | null {
   const hasSeverity = Object.hasOwn(item, SEVERITY_FIELD);
-  if (!isDefectOrigin(origin)) {
+  if (!spec.requiresSeverity) {
     if (hasSeverity) {
       throw new RoundError({
         path: at,
-        problem: `severity is only for a ${SEVERITY_ORIGINS} finding.`,
+        problem: `severity is only for a ${originsText(severitySpecs())} finding.`,
       });
     }
-    return { origin };
+    return null;
   }
   if (!hasSeverity) {
     throw new RoundError({
       path: at,
-      problem: `a ${origin} finding needs severity.`,
+      problem: `a ${spec.id} finding needs severity.`,
     });
   }
   const severity = item.severity;
@@ -381,12 +419,39 @@ function parseOriginFields(item: JsonObject, at: RoundItemPath): OriginFields {
       problem: `severity must be one of ${quotedList(SEVERITIES)}.`,
     });
   }
-  return { origin, severity };
+  return severity;
+}
+
+// The finding's proof: non-blank text on an origin whose spec requires it;
+// on any other, absent, null or blank reads as '' and other text is kept as
+// sent.
+function parseProof(
+  item: JsonObject,
+  spec: FindingOriginSpec,
+  at: RoundItemPath,
+): string {
+  const raw = item[PROOF_FIELD];
+  if (spec.requiresProof) {
+    if (!Object.hasOwn(item, PROOF_FIELD)) {
+      throw new RoundError({
+        path: at,
+        problem: `a ${spec.id} finding needs proof.`,
+      });
+    }
+    return requireText(raw, PROOF_FIELD, at);
+  }
+  if (raw === undefined || raw === null) {
+    return '';
+  }
+  if (typeof raw !== 'string') {
+    throw new RoundError({ path: at, problem: 'proof must be a string.' });
+  }
+  return raw.trim() === '' ? '' : raw;
 }
 
 function parseRecommendAction(
   raw: unknown,
-  origin: FindingOrigin,
+  spec: FindingOriginSpec,
   at: RoundItemPath,
 ): FindingAction {
   if (!isFindingAction(raw)) {
@@ -395,11 +460,11 @@ function parseRecommendAction(
       problem: `recommend_action must be one of ${quotedList(FINDING_ACTIONS)}.`,
     });
   }
-  const offered = offeredActions(origin);
+  const offered = offeredActions(spec);
   if (!offered.includes(raw)) {
     throw new RoundError({
       path: at,
-      problem: `a ${origin} finding offers ${offered.join(' or ')}.`,
+      problem: `a ${spec.id} finding offers ${offered.join(' or ')}.`,
     });
   }
   return raw;
@@ -409,7 +474,7 @@ function parseRecommendAction(
 // origin offers.
 function parseActionReasons(
   item: JsonObject,
-  origin: FindingOrigin,
+  spec: FindingOriginSpec,
   at: RoundItemPath,
 ): Finding['actionReasons'] {
   const raw = item[ACTION_REASONS_FIELD];
@@ -432,7 +497,7 @@ function parseActionReasons(
       detail: `It takes ${DEFERRAL_ACTIONS.join(' and ')}, the deferral actions.`,
     });
   }
-  const offered = offeredActions(origin);
+  const offered = offeredActions(spec);
   const reasons: Finding['actionReasons'] = {};
   for (const action of DEFERRAL_ACTIONS) {
     if (!Object.hasOwn(raw, action)) {
@@ -442,7 +507,7 @@ function parseActionReasons(
       throw new RoundError({
         path: at,
         problem:
-          `action_reasons.${action} is for an action a ${origin} finding ` +
+          `action_reasons.${action} is for an action a ${spec.id} finding ` +
           `does not offer; it offers ${offered.join(' or ')}.`,
       });
     }
@@ -512,9 +577,7 @@ function parseFinding(item: unknown, at: RoundItemPath): Finding {
     throw new RoundError({
       path: at,
       problem: `missing ${missing.join(', ')}.`,
-      detail:
-        `Every finding needs ${FINDING_FIELDS.join(', ')}; a ` +
-        `${SEVERITY_ORIGINS} finding also needs severity.`,
+      detail: missingFieldsDetail(),
     });
   }
   const extra = fieldsOutside(item, KNOWN_FIELDS);
@@ -527,19 +590,19 @@ function parseFinding(item: unknown, at: RoundItemPath): Finding {
         'itself; do not describe them.',
     });
   }
-  const originFields = parseOriginFields(item, at);
-  const { origin } = originFields;
+  const spec = parseOrigin(item, at);
+  const severity = parseSeverity(item, spec, at);
   const title = requireText(item.title, 'title', at);
   const impact = requireText(item.impact, 'impact', at);
   const finding = requireText(item.finding, 'finding', at);
-  const proof = requireText(item.proof, 'proof', at);
-  const choices = parseChoices(item.choices, origin, at);
+  const proof = parseProof(item, spec, at);
+  const choices = parseChoices(item.choices, spec, at);
   const recommend_action = parseRecommendAction(
     item.recommend_action,
-    origin,
+    spec,
     at,
   );
-  const actionReasons = parseActionReasons(item, origin, at);
+  const actionReasons = parseActionReasons(item, spec, at);
   const recommend = parseFindingRecommend(
     item,
     title,
@@ -549,8 +612,9 @@ function parseFinding(item: unknown, at: RoundItemPath): Finding {
   );
   const layout = parseLayoutField(item, at);
   return {
-    ...originFields,
     title,
+    origin: spec.id,
+    severity,
     impact,
     finding,
     proof,
@@ -587,14 +651,25 @@ export function findingAnswerSubject(finding: Finding): AnswerSubject {
   };
 }
 
-// A saved action outside the three, or none, reads as no action.
+// The card's word for the finding's recommended action.
+function recommendActionLabel(finding: Finding): string {
+  return actionLabel(finding.origin, finding.recommend_action) ?? '';
+}
+
+// A saved action outside the three, or none, reads as no action. Both labels
+// are computed from the pick and the finding; saved labels are ignored.
 function readFindingAnswerEntry(
   index: number,
   saved: Readonly<Record<string, unknown>>,
+  finding: Finding,
 ): FindingAnswerEntry {
+  const entry = readAnswerEntry(index, saved);
+  const action = isFindingAction(saved.action) ? saved.action : '';
   return {
-    ...readAnswerEntry(index, saved),
-    action: isFindingAction(saved.action) ? saved.action : '',
+    ...entry,
+    action,
+    action_label: findingActionLabel(finding, entry.choice, action),
+    recommend_action_label: recommendActionLabel(finding),
   };
 }
 
@@ -632,6 +707,7 @@ function findingResult(
   return result;
 }
 
+// The schema and its texts follow the registered origins, read on each call.
 export const findingKind: MainItemKind<
   Finding,
   FindingAnswerEntry,
@@ -652,8 +728,8 @@ export const findingKind: MainItemKind<
         },
         origin: {
           type: 'string',
-          enum: [...FINDING_ORIGINS],
-          description: ORIGIN_DESCRIPTION,
+          enum: findingOrigins.list().map((spec) => spec.id),
+          description: originDescription(),
         },
         impact: {
           type: 'string',
@@ -662,7 +738,7 @@ export const findingKind: MainItemKind<
         severity: {
           type: 'string',
           enum: [...SEVERITIES],
-          description: `Required on a ${SEVERITY_ORIGINS} finding (${SEVERITY_CARDS}); no other origin accepts it.`,
+          description: severityDescription(),
         },
         finding: {
           type: 'string',
@@ -670,10 +746,10 @@ export const findingKind: MainItemKind<
             'What is wrong, in plain words; for a Decision, what is to ' +
             'decide. Markdown.',
         },
-        proof: { type: 'string', description: PROOF_DESCRIPTION },
+        proof: { type: 'string', description: proofDescription() },
         choices: {
           type: 'array',
-          minItems: MIN_SOLUTIONS,
+          minItems: minSolutions(),
           maxItems: MAX_ENTRIES,
           items: {
             type: 'object',
@@ -690,11 +766,11 @@ export const findingKind: MainItemKind<
                 type: 'string',
                 enum: [...FINDING_ACTIONS],
                 default: DEFAULT_CHOICE_ACTION,
-                description: CHOICE_ACTION_DESCRIPTION,
+                description: choiceActionDescription(),
               },
             },
           },
-          description: CHOICES_DESCRIPTION,
+          description: choicesDescription(),
         },
         recommend: {
           type: 'integer',
@@ -704,7 +780,7 @@ export const findingKind: MainItemKind<
         recommend_action: {
           type: 'string',
           enum: [...FINDING_ACTIONS],
-          description: RECOMMEND_ACTION_DESCRIPTION,
+          description: recommendActionDescription(),
         },
         action_reasons: {
           type: 'object',
@@ -719,7 +795,7 @@ export const findingKind: MainItemKind<
               description: 'Drawn under the leave-it action. Markdown.',
             },
           },
-          description: ACTION_REASONS_DESCRIPTION,
+          description: actionReasonsDescription(),
         },
         layout: ITEM_LAYOUT_SCHEMA,
       },
@@ -728,18 +804,18 @@ export const findingKind: MainItemKind<
   }),
   parse: parseFinding,
   layout: (finding) => finding.layout,
-  // A fix_now choice action, a null recommend and empty action_reasons stay
-  // out, so a finding using none of them hashes as one sent before they
-  // existed; the layout never joins.
+  // A null severity, an empty proof, a fix_now choice action, a null
+  // recommend and empty action_reasons stay out, so a finding using none of
+  // them hashes as one sent before they existed; the layout never joins.
   fingerprintContent: (finding) => {
     const actionReasons = actionReasonsContent(finding.actionReasons);
     return {
       title: finding.title,
       origin: finding.origin,
-      ...('severity' in finding ? { severity: finding.severity } : {}),
+      ...(finding.severity !== null ? { severity: finding.severity } : {}),
       impact: finding.impact,
       finding: finding.finding,
-      proof: finding.proof,
+      ...(finding.proof !== '' ? { proof: finding.proof } : {}),
       choices: finding.choices.map((choice) => ({
         text: choice.text,
         reason: choice.reason,
@@ -758,6 +834,8 @@ export const findingKind: MainItemKind<
   recommendedEntry: (finding, index) => ({
     ...recommendedAnswerEntry(index, finding.recommend ?? 0),
     action: finding.recommend_action,
+    action_label: recommendActionLabel(finding),
+    recommend_action_label: recommendActionLabel(finding),
   }),
   finishedEntry: withoutDontAsk,
   result: findingResult,

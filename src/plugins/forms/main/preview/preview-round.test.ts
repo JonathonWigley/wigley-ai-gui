@@ -3,6 +3,9 @@ import type { Finding, Notice } from '../../contract';
 import { BUILT_IN_KINDS } from '../kinds/formats';
 import { parseRound } from '../round';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
+import { useBuiltInFindingOrigins } from '../../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 describe('PREVIEW_ROUND_ARGS', () => {
   it('parses, and holds every card kind, every notice badge, grouped choices and action reasons', () => {

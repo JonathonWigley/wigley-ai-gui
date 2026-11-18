@@ -41,6 +41,9 @@ import {
   questionAnswers,
   question,
 } from './test-rounds';
+import { useBuiltInFindingOrigins } from '../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 type FormsCommand = keyof ReturnType<typeof formsCommandHandlers>;
 

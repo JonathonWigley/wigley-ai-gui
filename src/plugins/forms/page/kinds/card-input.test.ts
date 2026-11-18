@@ -10,6 +10,13 @@ import {
 import { findingPageKind } from './finding/finding-card';
 import { noticePageKind } from './notice/notice-card';
 import { questionPageKind } from './question/question-card';
+import { findingOrigins } from '../../finding-origins';
+import {
+  SECURITY_ORIGIN,
+  useBuiltInFindingOrigins,
+} from '../../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 describe('cardInput', () => {
   it('questionCardInput_CarriesSummaryRationaleAndRound', () => {
@@ -108,6 +115,34 @@ describe('cardInput', () => {
 
     expect(input.actionReasons).toEqual({ follow_up: 'Needs a spike first' });
     expect(input.recommend).toBeNull();
+  });
+
+  it('findingCardInput_OriginToken_IsThemeVariable', () => {
+    const { round } = presentedRound('r1', { findings: [finding('Delta')] });
+
+    const input = cardInputOf(findingPageKind, round, 1);
+
+    expect(input.originToken).toBe('--wg-forms-origin-caused');
+  });
+
+  it('findingCardInput_PluginOrigin_UsesSpecWordsAndActions', () => {
+    const registration = findingOrigins.register(SECURITY_ORIGIN);
+    try {
+      const { round } = presentedRound('r1', {
+        findings: [finding('Delta', { origin: 'security' })],
+      });
+
+      const input = cardInputOf(findingPageKind, round, 1);
+
+      expect(input.card).toBe('risk');
+      expect(input.words).toEqual(SECURITY_ORIGIN.words);
+      expect(input.actions).toEqual([
+        { action: 'fix_now', label: 'Patch' },
+        { action: 'leave_it', label: 'Accept' },
+      ]);
+    } finally {
+      registration.dispose();
+    }
   });
 
   it('noticeCardInput_CarriesIndexAndBadge', () => {

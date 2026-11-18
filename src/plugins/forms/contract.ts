@@ -145,16 +145,10 @@ export const formsReviewJumpAtCommand: CommandKey<
   'forms.reviewJumpAt'
 > = { id: 'forms.reviewJumpAt' };
 
-// Where a finding comes from; it sets the card the finding draws as and the
-// fields it takes.
-export type FindingOrigin = 'caused' | 'pre_existing' | 'design' | 'nit';
-
-export const FINDING_ORIGINS: readonly FindingOrigin[] = [
-  'caused',
-  'pre_existing',
-  'design',
-  'nit',
-];
+// Where a finding comes from: a registered FindingOriginSpec's id. It sets the
+// card the finding draws as and the fields it takes. Known: 'caused',
+// 'pre_existing', 'design', 'nit'.
+export type FindingOrigin = string;
 
 export type Severity = 'critical' | 'important' | 'minor';
 
@@ -164,14 +158,45 @@ export const SEVERITIES: readonly Severity[] = [
   'minor',
 ];
 
-export type FindingCard = 'defect' | 'decision' | 'nit';
+// The card a finding draws as. Known: 'defect', 'decision', 'nit'.
+export type FindingCard = string;
 
-interface FindingFields {
+// One finding origin, registered unchanged in main and on the page. Card-level
+// fields (card, words, choiceNoun, minChoices, maxChoices, actions) are equal
+// across every origin that shares a card.
+export interface FindingOriginSpec {
+  // The wire `origin` value: 'caused'.
+  id: string;
+  // The card it draws as: 'defect'.
+  card: string;
+  // The card's kind label and its two section titles.
+  words: { kind: string; finding: string; proof: string };
+  // What the card's choices are, in the tool text: 'its solutions'.
+  choiceNoun: string;
+  // What the origin means, in the tool text.
+  meaning: string;
+  minChoices: number;
+  maxChoices: number;
+  requiresSeverity: boolean;
+  requiresProof: boolean;
+  // Each offered action, with the card's word for it.
+  actions: Readonly<Partial<Record<FindingAction, string>>>;
+  // The verdict's origin chip text.
+  chip: string;
+  // The qualified theme token of the chip colour: 'forms.origin-caused'.
+  themeToken: string;
+}
+
+export interface Finding {
   title: string;
   origin: FindingOrigin;
+  // Null on an origin that does not require severity.
+  severity: Severity | null;
   // One plain sentence: what goes wrong, and for whom.
   impact: string;
   finding: string;
+  // '' when the agent sent none, which only an origin not requiring proof
+  // allows.
   proof: string;
   // A Defect's solutions, a Decision's options, a Nit's one fix.
   choices: FindingChoice[];
@@ -185,21 +210,6 @@ interface FindingFields {
   // The layout that draws this item's card, over the round's; null for none.
   layout: string | null;
 }
-
-export interface DefectFinding extends FindingFields {
-  origin: 'caused' | 'pre_existing';
-  severity: Severity;
-}
-
-export interface DecisionFinding extends FindingFields {
-  origin: 'design';
-}
-
-export interface NitFinding extends FindingFields {
-  origin: 'nit';
-}
-
-export type Finding = DefectFinding | DecisionFinding | NitFinding;
 
 // A validated ask_round call.
 export interface Round {
@@ -231,8 +241,13 @@ export interface AnswerEntry {
 
 // `choice` is the picked choice's 1-based number in `choices`, 0 for an action
 // header; `action` is the picked entry's action, '' for no pick.
+// `action_label` is the card's word for the picked action, '' for no pick, and
+// `recommend_action_label` its word for `recommend_action`; main writes both
+// on every body it reads, and retro reads them.
 export interface FindingAnswerEntry extends AnswerEntry {
   action: FindingAction | '';
+  action_label: string;
+  recommend_action_label: string;
 }
 
 export interface NoticeComment {
@@ -378,8 +393,12 @@ export interface MainItemKind<
   layout(item: Item): string | null;
   fingerprintContent(item: Item): PythonJsonValue;
   // Never throws; `saved` is the saved entry with that 1-based index, `{}`
-  // when the body holds none.
-  readEntry(index: number, saved: Readonly<Record<string, unknown>>): Entry;
+  // when the body holds none, and `item` the round's item it answers.
+  readEntry(
+    index: number,
+    saved: Readonly<Record<string, unknown>>,
+    item: Item,
+  ): Entry;
   // The entry a headless session answers the item with.
   recommendedEntry(item: Item, index: number): Entry;
   // The entry a finished round's saved copy hands a re-sent round's draft;
@@ -512,8 +531,15 @@ export interface FormsChannel extends ChannelShape {
 // field holds, a `status` that disagrees with `spec.answerable`, or a
 // `fingerprintJoinsWhenEmpty` on a kind forms does not build in; its
 // `Disposable` removes the kind, and each change re-contributes the tools.
+// `registerFindingOrigin` throws, registering nothing, on a blank or taken id,
+// choice bounds outside 1 to MAX_ENTRIES, actions without fix_now or with a
+// blank word, or card-level fields that differ from another origin's on the
+// same card; its `Disposable` retires the origin, so new rounds refuse it and
+// rounds already open keep reading it, and each change re-contributes the
+// tools.
 export interface FormsMainExports {
   registerKind(kind: MainItemKind): Disposable;
+  registerFindingOrigin(spec: FindingOriginSpec): Disposable;
 }
 
 export const formsMainKey: DependencyKey<FormsMainExports, 'main', 'forms'> = {
@@ -605,13 +631,16 @@ export interface FormsReviewColumn {
 // on any id but `notice`, or a `reduce.pick` given when `spec.answerable` is
 // false or missing when it is true; its `Disposable` removes the kind, and
 // each change re-derives every open round, keeping a departed kind's draft
-// entries in its body.
+// entries in its body. `registerFindingOrigin` takes the spec main registers,
+// with main's checks; each register or dispose redraws every open round,
+// keeping its answers.
 export interface FormsPageExports {
   activeRound(): OpenRound | null;
   answers(roundId: string): FormBody | null;
   addCardPart(part: FormsCardPart): Disposable;
   addReviewColumn(column: FormsReviewColumn): Disposable;
   registerKind(kind: PageKind): Disposable;
+  registerFindingOrigin(spec: FindingOriginSpec): Disposable;
 }
 
 export const formsPageKey: DependencyKey<FormsPageExports, 'page', 'forms'> = {

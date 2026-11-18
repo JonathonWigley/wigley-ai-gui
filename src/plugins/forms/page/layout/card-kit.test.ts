@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnchorOptions } from '../../../../contracts/keymap';
 import type {
-  DefectFinding,
+  Finding,
   FindingChoice,
   FormsCardPart,
   ItemKind,
@@ -45,13 +45,16 @@ import {
 } from '../../../../shared/page/test-dom';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
+import { useBuiltInFindingOrigins } from '../../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 function choice(text: string, action: FindingChoice['action']): FindingChoice {
   return { text, reason: `${text} reason`, action };
 }
 
 // The card input of a caused finding, which offers every action.
-function cardOf(overrides: Partial<DefectFinding>) {
+function cardOf(overrides: Partial<Finding>) {
   const { round } = presentedRound('r1', {
     findings: [finding('Delta', overrides)],
   });
@@ -147,12 +150,25 @@ describe('choiceGroupsOf', () => {
       [2, true],
     ]);
   });
+
+  it('choiceGroups_UnofferedAction_LabelsValue', () => {
+    const input = cardOf({});
+    input.actions = input.actions.filter(
+      (offered) => offered.action !== 'follow_up',
+    );
+
+    expect(choiceGroupsOf(input).map((group) => group.label)).toEqual([
+      'Fix now',
+      'follow_up',
+      'Leave it',
+    ]);
+  });
 });
 
 // A round of one finding after `notices`, `overrides` over its defaults,
 // open and active.
 function findingRound(
-  overrides: Partial<DefectFinding> = {},
+  overrides: Partial<Finding> = {},
   notices: string[] = [],
 ): RoundState {
   const presented = presentedRound('r1', {
@@ -201,7 +217,7 @@ function fakeCardDeps(contributions: FormsContributions) {
   return { deps, keysFor, anchor, run, log };
 }
 
-function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
+function findingKit(deps: CardDeps, overrides: Partial<Finding> = {}) {
   const round = findingRound(overrides);
   const input = cardInputOf(findingPageKind, round.round, 1);
   return createCardKit('finding', 1, input, round, 0, deps);
@@ -375,6 +391,18 @@ describe('card kit', () => {
     expect(
       rows.map((row) => row.children.slice(1).map((part) => part.innerHTML)),
     ).toEqual([[], ['Out of scope']]);
+  });
+
+  it('verdict_SetsOriginColourFromToken', () => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    const verdict = asFake(kit.verdict(asHtml(new FakeElement('div'))));
+
+    const [origin] = findAll(verdict, 'badge-origin');
+    expect(origin.style['--forms-origin-color']).toBe(
+      'var(--wg-forms-origin-caused)',
+    );
   });
 
   it('kitKeysFor_ReadsTheCardScope', () => {

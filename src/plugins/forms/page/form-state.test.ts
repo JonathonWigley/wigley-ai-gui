@@ -41,6 +41,9 @@ import {
   roundOf,
   type RoundParts,
 } from './test-rounds';
+import { useBuiltInFindingOrigins } from '../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 function question(title: string, choiceCount = 3): Question {
   return {
@@ -98,11 +101,17 @@ function entry(index: number, fields: Partial<AnswerEntry>): AnswerEntry {
   };
 }
 
+// A finding entry as the page writes it: without the action labels, which
+// main adds when it reads the body.
 function findingEntry(
   index: number,
   fields: Partial<FindingAnswerEntry>,
 ): FindingAnswerEntry {
-  return { ...entry(index, fields), action: '', ...fields };
+  return {
+    ...entry(index, fields),
+    action: '',
+    ...fields,
+  } as FindingAnswerEntry;
 }
 
 function draft(fields: Partial<FormBody>): FormBody {
@@ -1893,7 +1902,7 @@ describe('saved shapes', () => {
         dont_ask: false,
         dont_ask_reason: '',
         action: 'fix_now',
-      },
+      } as FindingAnswerEntry,
     ],
     notice_comments: [{ index: 1, comment: 'look again' }],
   };

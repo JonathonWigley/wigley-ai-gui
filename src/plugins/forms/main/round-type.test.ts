@@ -26,6 +26,9 @@ import {
 import { BUILT_IN_KINDS } from './kinds/formats';
 import { fingerprint, parseRound } from './round';
 import { createRoundType, withKnownLayouts } from './round-type';
+import { useBuiltInFindingOrigins } from '../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 const roundType = createRoundType(() => BUILT_IN_KINDS);
 
@@ -400,6 +403,8 @@ describe('pre-fill', () => {
             dont_ask_reason: 'obvious',
           }),
           action: 'follow_up',
+          action_label: 'Follow-up',
+          recommend_action_label: 'Fix now',
         },
       ],
       notice_comments: [],
@@ -409,7 +414,12 @@ describe('pre-fill', () => {
     void startSession().open(FINDING_ARGS, null, live());
 
     expect(latestDraft().finding_answers).toEqual([
-      { ...answer({ choice: 2, notes: 'half done' }), action: 'follow_up' },
+      {
+        ...answer({ choice: 2, notes: 'half done' }),
+        action: 'follow_up',
+        action_label: '',
+        recommend_action_label: 'Fix now',
+      },
     ]);
   });
 

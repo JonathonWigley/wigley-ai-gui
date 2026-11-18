@@ -1017,7 +1017,6 @@ function fixtureRound(run: number) {
         severity: 'important',
         impact: `Callers of ${LONG_WORD} see the wrong result.`,
         finding: `- the code calls ${LONG_WORD}`,
-        proof: ['```', `proof ${LONG_WORD}`, '```'].join('\n'),
         choices: [
           { text: 'Fix it', reason: 'It is a small change.' },
           {
@@ -1043,7 +1042,6 @@ function fixtureRound(run: number) {
         origin: 'design',
         impact: 'Settings either follow the user or the machine.',
         finding: '- settings have no owner',
-        proof: '`settings.json` sits beside the app.',
         choices: [
           { text: 'Per user', reason: 'Each user keeps their own.' },
           {

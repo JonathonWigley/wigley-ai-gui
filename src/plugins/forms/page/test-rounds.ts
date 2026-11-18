@@ -1,10 +1,7 @@
 import type {
-  DecisionFinding,
-  DefectFinding,
   Finding,
   FindingChoice,
   ItemAnswer,
-  NitFinding,
   Notice,
   PageKind,
   PresentedRound,
@@ -56,15 +53,15 @@ function choices(texts: string[]): FindingChoice[] {
 
 export function finding(
   title: string,
-  overrides: Partial<DefectFinding> = {},
-): DefectFinding {
+  overrides: Partial<Finding> = {},
+): Finding {
   return {
     title,
     origin: 'caused',
     severity: 'important',
     impact: `${title} impact`,
     finding: `${title} finding`,
-    proof: `${title} proof`,
+    proof: '',
     choices: choices(['first', 'second', 'third']),
     recommend: 2,
     recommend_action: 'fix_now',
@@ -76,14 +73,15 @@ export function finding(
 
 export function decision(
   title: string,
-  overrides: Partial<DecisionFinding> = {},
-): DecisionFinding {
+  overrides: Partial<Finding> = {},
+): Finding {
   return {
     title,
     origin: 'design',
+    severity: null,
     impact: `${title} impact`,
     finding: `${title} finding`,
-    proof: `${title} proof`,
+    proof: '',
     choices: choices(['first', 'second']),
     recommend: null,
     recommend_action: 'follow_up',
@@ -93,13 +91,11 @@ export function decision(
   };
 }
 
-export function nit(
-  title: string,
-  overrides: Partial<NitFinding> = {},
-): NitFinding {
+export function nit(title: string, overrides: Partial<Finding> = {}): Finding {
   return {
     title,
     origin: 'nit',
+    severity: null,
     impact: `${title} impact`,
     finding: `${title} finding`,
     proof: `${title} proof`,

@@ -31,6 +31,7 @@ import {
   formsPlaceSlot,
   type RoundPlace,
 } from '../contract';
+import { FINDING_ORIGIN_SPECS, findingOrigins } from '../finding-origins';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
@@ -154,7 +155,10 @@ function listenForRounds(
 // and review columns through the exports, each add or removal rebuilding the
 // open rounds. Each item kind draws through its registered page kind: the
 // built-in kinds register first, and a dependent registers its own through
-// `registerKind`; each register or removal re-derives the open rounds. Each
+// `registerKind`; each register or removal re-derives the open rounds. The
+// built-in finding origins register first too, and a dependent's through
+// `registerFindingOrigin`; each register or removal redraws the open rounds,
+// keeping their answers. Each
 // open round's place (`formsPlaceSlot`) and its unsaved answers, saved at
 // once on page hide, outlive a page reload.
 export const formsPagePart: PagePart<typeof formsManifest> = {
@@ -162,6 +166,9 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
   start(api: FormsApi) {
     const { services } = api;
     const sessions = api.dependency(sessionsPageKey);
+    const builtInOrigins = FINDING_ORIGIN_SPECS.map((spec) =>
+      findingOrigins.register(spec),
+    );
     const kinds = createPageKinds();
     const builtInKinds = BUILT_IN_PAGE_KINDS.map((kind) =>
       kinds.register(kind),
@@ -223,6 +230,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       log: services.log,
     });
     contributions.onChanged(() => view.rebuild());
+    const originsChange = findingOrigins.onChanged(() => view.rebuild());
     const logEvent = createFormsEventLog(store.get, services.log);
     startFormsEvents(store, (event) => {
       logEvent(event);
@@ -254,18 +262,21 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         addReviewColumn: (column) =>
           consumer.track(contributions.addReviewColumn(column)),
         registerKind: (kind) => consumer.track(kinds.register(kind)),
+        registerFindingOrigin: (spec) =>
+          consumer.track(findingOrigins.register(spec)),
       }),
-      // The kinds listener goes first, so removing the built-in kinds after
-      // the view re-derives no round.
+      // The kinds and origins listeners go first, so removing the built-in
+      // kinds and origins after the view re-derives and redraws no round.
       dispose() {
         kindsChange.dispose();
+        originsChange.dispose();
         kindsWatch.dispose();
         roundsRead.dispose();
         places.dispose();
         autosave.dispose();
         layoutRefresh.dispose();
         view.dispose();
-        for (const registration of builtInKinds) {
+        for (const registration of [...builtInKinds, ...builtInOrigins]) {
           registration.dispose();
         }
       },

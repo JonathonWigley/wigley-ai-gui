@@ -4,6 +4,24 @@ import { BUILT_IN_KINDS } from './kinds/formats';
 import { POLL_SCHEMA, pollKind } from './kinds/poll-kind.test-support';
 import { parseRound } from './round';
 import { formsTools } from './tool-definitions';
+import { findingOrigins } from '../finding-origins';
+import {
+  SECURITY_ORIGIN,
+  useBuiltInFindingOrigins,
+} from '../finding-origins.test-support';
+import { findingCardsText } from './kinds/finding/finding-text';
+
+useBuiltInFindingOrigins();
+
+describe('findingCardsText', () => {
+  it('findingCardsText_BuiltIns_ListsEachCard', () => {
+    expect(findingCardsText()).toBe(
+      'a Defect (caused or pre_existing; actions Fix now, Follow-up, Leave ' +
+        'it), a Decision (design; actions Decide now, Plan it, Drop it) or a ' +
+        'Nit (nit; actions Fix anyway, Leave it)',
+    );
+  });
+});
 
 interface ArraySchema {
   maxItems?: number;
@@ -81,6 +99,20 @@ describe('formsTools ask_round schema', () => {
       }
     },
   );
+
+  it('askRoundSchema_ListsRegisteredOrigins', () => {
+    const originEnum = () => {
+      const findings = askRoundProperties(BUILT_IN_KINDS).findings as {
+        items: { properties: { origin: { enum: string[] } } };
+      };
+      return findings.items.properties.origin.enum;
+    };
+    const registration = findingOrigins.register(SECURITY_ORIGIN);
+
+    expect(originEnum()).toContain('security');
+    registration.dispose();
+    expect(originEnum()).toEqual(['caused', 'pre_existing', 'design', 'nit']);
+  });
 
   it("adds a registered kind's list, with its schema, after the questions", () => {
     const properties = askRoundProperties([...BUILT_IN_KINDS, pollKind]);

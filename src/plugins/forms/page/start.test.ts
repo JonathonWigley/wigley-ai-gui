@@ -18,13 +18,14 @@ import {
 import { sessionRow } from '../../sessions/contract.test-support';
 import { sessionsPagePart } from '../../sessions/page/start';
 import {
+  type FindingOriginSpec,
   type FormsPageExports,
   formsPlaceSlot,
   type RoundPlace,
 } from '../contract';
 import { formsPagePart } from './start';
 import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
-import { presentedRound, question } from './test-rounds';
+import { finding, presentedRound, question } from './test-rounds';
 
 // Lets a settled read's `then` run.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -42,6 +43,23 @@ function openForm() {
 }
 
 const PROBE_ID = 'probe';
+
+// A plugin's finding origin; the layer rules keep this file from the forms
+// root's `SECURITY_ORIGIN`.
+const SECURITY_ORIGIN: FindingOriginSpec = {
+  id: 'security',
+  card: 'risk',
+  words: { kind: 'Risk', finding: 'Risk', proof: 'Exposure' },
+  choiceNoun: 'its mitigations',
+  meaning: 'a hole an attacker could use',
+  minChoices: 1,
+  maxChoices: 3,
+  requiresSeverity: true,
+  requiresProof: false,
+  actions: { fix_now: 'Patch', leave_it: 'Accept' },
+  chip: 'Security',
+  themeToken: 'security.origin',
+};
 
 // Round `roundId` as main presents it, with three questions.
 function threeQuestionForm(roundId = 'r1') {
@@ -238,6 +256,52 @@ describe('forms page part', () => {
     expect(harness.logs).toHaveLength(logged);
   });
 
+  it('registerFindingOrigin_RedrawsOpenRoundsKeepingAnswers', async () => {
+    const drafts: unknown[] = [];
+    const editors = countingEditors();
+    const harness = startPagePart(formsPagePart, {
+      parts: [sessionsPagePart],
+      invoke: (method, ...args) => {
+        if (method === 'draft') {
+          drafts.push(args);
+          return Promise.resolve();
+        }
+        return new Promise(() => undefined);
+      },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
+    });
+    const round = presentedRound('r1', {
+      questions: [question('One')],
+      findings: [finding('Two', { origin: 'security' })],
+    });
+    harness.send('formShown', {
+      formId: round.roundId,
+      sessionId: round.sessionId,
+      label: round.label,
+      form: round.round,
+      draft: round.draft,
+    });
+    editors.type('typed');
+    const view = harness
+      .started()
+      .exports?.(createRegistrations()) as FormsPageExports;
+    const anchored = harness.anchors.length;
+
+    const registration = view.registerFindingOrigin(SECURITY_ORIGIN);
+    const anchoredAfterRegister = harness.anchors.length;
+    registration.dispose();
+
+    expect(anchoredAfterRegister).toBeGreaterThan(anchored);
+    expect(harness.anchors.length).toBeGreaterThan(anchoredAfterRegister);
+    harness.advance(formsPagePart.manifest.settings.autosaveDelayMs);
+    expect(JSON.stringify(drafts.at(-1))).toContain('typed');
+    await harness.stop();
+  });
+
   it('a finish that rejects after stop draws nothing', async () => {
     const finishing = deferred<void>();
     const editors = countingEditors();
@@ -400,6 +464,7 @@ describe('forms page part', () => {
   it.each<{
     member: string;
     add(view: FormsPageExports): void;
+    taken: string;
   }>([
     {
       member: 'addCardPart',
@@ -409,19 +474,27 @@ describe('forms page part', () => {
           kinds: ['question'],
           build: () => ({}),
         }),
+      taken: 'is already added',
     },
     {
       member: 'addReviewColumn',
       add: (view) =>
         view.addReviewColumn({ id: PROBE_ID, title: 'Probe', cell: () => '' }),
+      taken: 'is already added',
     },
     {
       member: 'registerKind',
       add: (view) => view.registerKind(pollPageKind(PROBE_ID)),
+      taken: 'is already added',
+    },
+    {
+      member: 'registerFindingOrigin',
+      add: (view) => view.registerFindingOrigin(SECURITY_ORIGIN),
+      taken: 'is already registered',
     },
   ])(
     "a dependent's contribution leaves when the dependent stops ($member)",
-    async ({ add }) => {
+    async ({ add, taken }) => {
       const harness = startPagePart(formsPagePart, {
         parts: [sessionsPagePart],
         services: { picker: fakeListPickerService() },
@@ -432,7 +505,7 @@ describe('forms page part', () => {
       const nextView = started.exports?.(
         createRegistrations(),
       ) as FormsPageExports;
-      expect(() => add(nextView)).toThrow('is already added');
+      expect(() => add(nextView)).toThrow(taken);
 
       dependent.dispose();
 

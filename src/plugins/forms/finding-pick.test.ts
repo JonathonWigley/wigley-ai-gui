@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { FindingAction, FindingOrigin } from './contract';
 import {
+  findingActionLabel,
   findingEntries,
   findingEntryNumber,
   findingPickIsComplete,
   findingSolution,
   type PickableFinding,
 } from './finding-pick';
+import { useBuiltInFindingOrigins } from './finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 function pickable(
   origin: FindingOrigin,
@@ -68,6 +72,17 @@ describe('findingPickIsComplete', () => {
     expect(findingPickIsComplete(GROUPED, 0, 'fix_now')).toBe(false);
     expect(findingPickIsComplete(GROUPED, 3, 'follow_up')).toBe(true);
     expect(findingPickIsComplete(GROUPED, 3, 'leave_it')).toBe(false);
+  });
+});
+
+describe('findingActionLabel', () => {
+  it('findingActionLabel_CompletePickOrEmpty', () => {
+    const design = pickable('design', ['fix_now', 'follow_up']);
+
+    expect(findingActionLabel(design, 2, 'follow_up')).toBe('Plan it');
+    expect(findingActionLabel(design, 0, 'leave_it')).toBe('Drop it');
+    expect(findingActionLabel(design, 0, 'follow_up')).toBe('');
+    expect(findingActionLabel(design, 0, '')).toBe('');
   });
 });
 

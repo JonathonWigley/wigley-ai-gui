@@ -21,6 +21,9 @@ import {
 } from './round';
 import { autoAnsweredPayload, createRoundType } from './round-type';
 import { formsTools } from './tool-definitions';
+import { useBuiltInFindingOrigins } from '../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 const roundType = createRoundType(() => BUILT_IN_KINDS);
 
@@ -473,10 +476,20 @@ const ERROR_ROWS: ErrorRow[] = [
     name: 'a finding missing fields',
     args: withFinding({ title: 'T' }),
     expected:
-      'Finding 1: missing choices, finding, impact, origin, proof, ' +
+      'Finding 1: missing choices, finding, impact, origin, ' +
       'recommend_action. Every finding needs title, origin, impact, finding, ' +
-      'proof, choices, recommend_action; a caused or pre_existing finding ' +
-      'also needs severity.',
+      'choices, recommend_action; a caused or pre_existing finding also ' +
+      'needs severity, and a nit finding also needs proof.',
+  },
+  {
+    name: 'a nit finding with no proof',
+    args: withFinding(without(nitFinding(), 'proof')),
+    expected: 'Finding 1: a nit finding needs proof.',
+  },
+  {
+    name: 'a proof that is not a string',
+    args: withFinding(finding({ proof: 3 })),
+    expected: 'Finding 1: proof must be a string.',
   },
   {
     name: 'a finding with an unknown field',
@@ -508,13 +521,16 @@ const ERROR_ROWS: ErrorRow[] = [
   },
 ];
 
-const ROUND = parseRound(BUILT_IN_KINDS, {
-  heading: 'Cache review',
-  overview: 'Reviewing the cache.',
-  notices: [notice()],
-  findings: [finding()],
-  questions: [question(), question({ title: 'Second' })],
-});
+// Parsed in each test, once the built-in origins are registered.
+function sampleRound() {
+  return parseRound(BUILT_IN_KINDS, {
+    heading: 'Cache review',
+    overview: 'Reviewing the cache.',
+    notices: [notice()],
+    findings: [finding()],
+    questions: [question(), question({ title: 'Second' })],
+  });
+}
 
 const ANSWERED: FormBody = {
   note: 'All good',
@@ -545,6 +561,8 @@ const ANSWERED: FormBody = {
       notes: '',
       dont_ask: true,
       dont_ask_reason: 'obvious',
+      action_label: 'Fix now',
+      recommend_action_label: 'Fix now',
     },
   ],
   notice_comments: [{ index: 1, comment: 'looks right' }],
@@ -669,7 +687,7 @@ interface PayloadRow {
 const PAYLOAD_ROWS: PayloadRow[] = [
   {
     name: 'a submitted round',
-    payload: () => roundType.payload(ROUND, 'submitted', ANSWERED),
+    payload: () => roundType.payload(sampleRound(), 'submitted', ANSWERED),
     expected: {
       outcome: 'submitted',
       summary: ANSWERED_SUMMARY,
@@ -679,7 +697,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   },
   {
     name: 'a cancelled round',
-    payload: () => roundType.payload(ROUND, 'cancelled', ANSWERED),
+    payload: () => roundType.payload(sampleRound(), 'cancelled', ANSWERED),
     expected: {
       outcome: 'cancelled',
       summary: ANSWERED_SUMMARY,
@@ -691,9 +709,9 @@ const PAYLOAD_ROWS: PayloadRow[] = [
     name: 'a draft',
     payload: () =>
       roundType.payload(
-        ROUND,
+        sampleRound(),
         'draft',
-        readFormBody(BUILT_IN_KINDS, ROUND, {}),
+        readFormBody(BUILT_IN_KINDS, sampleRound(), {}),
       ),
     expected: {
       outcome: 'draft',
@@ -707,7 +725,8 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   },
   {
     name: "an earlier round's answers",
-    payload: () => roundType.handedBackPayload(ROUND, 'submitted', ANSWERED),
+    payload: () =>
+      roundType.handedBackPayload(sampleRound(), 'submitted', ANSWERED),
     expected: {
       outcome: 'submitted',
       summary: ANSWERED_SUMMARY,
@@ -738,7 +757,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   },
   {
     name: 'a round not shown behind a named round',
-    payload: () => roundType.notShownPayload(ROUND, 'Other round'),
+    payload: () => roundType.notShownPayload(sampleRound(), 'Other round'),
     expected: {
       outcome: 'draft',
       summary:
@@ -750,7 +769,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   },
   {
     name: 'a round not shown behind an unnamed round',
-    payload: () => roundType.notShownPayload(ROUND, null),
+    payload: () => roundType.notShownPayload(sampleRound(), null),
     expected: {
       outcome: 'draft',
       summary:
@@ -765,8 +784,8 @@ const PAYLOAD_ROWS: PayloadRow[] = [
     payload: () =>
       autoAnsweredPayload(
         BUILT_IN_KINDS,
-        ROUND,
-        recommendedBody(BUILT_IN_KINDS, ROUND),
+        sampleRound(),
+        recommendedBody(BUILT_IN_KINDS, sampleRound()),
       ),
     expected: {
       outcome: 'auto_answered',

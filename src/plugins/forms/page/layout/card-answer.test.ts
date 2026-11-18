@@ -9,6 +9,9 @@ import {
   question,
 } from '../test-rounds';
 import { cardAnswer } from './layout-cards';
+import { useBuiltInFindingOrigins } from '../../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 // Finding Delta at rail position 0, question Alpha at 1. Delta's entries:
 // 1 fix_now/1, 2 fix_now/2, 3 follow_up/0, 4 leave_it/0.

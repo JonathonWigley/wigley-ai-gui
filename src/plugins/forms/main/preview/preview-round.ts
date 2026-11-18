@@ -36,9 +36,6 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
         'An agent whose row the user closed sends a round that never shows, so the agent waits until its deadline.',
       finding:
         'The router looks the session up by `sessionId` after the row is gone, and drops the round without a reply.',
-      proof:
-        '- `session-list.ts`: the closed row is removed before `mark` runs\n' +
-        "- the round's tool call never returns, so the agent waits until its deadline",
       choices: [
         {
           text: 'Bring the row back at the end of the list when a round arrives for it.',
@@ -64,8 +61,6 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
         'Every layout reads colours by token name, so moving them later breaks user layouts.',
       finding:
         'Decide whether layouts read tokens as CSS variables or from a JSON object.',
-      proof:
-        '- `layout.d.ts` exposes no token object today\n- the default layout uses `var(--…)` throughout',
       choices: [
         {
           text: 'CSS variables, as the default layout uses now.',

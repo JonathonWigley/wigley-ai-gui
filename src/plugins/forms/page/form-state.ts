@@ -21,9 +21,9 @@ import {
   type SessionFormsState,
   updateForm,
 } from '../../../shared/page/session-forms';
-import { actionLabel } from '../finding-origins';
 import { findingEntries } from '../finding-pick';
 import { isResponded } from '../item-response';
+import { drawnOriginSpec } from './kinds/finding/verdict';
 import type { PageKindTable } from './kinds/page-kinds';
 
 export type { ItemAnswer } from '../contract';
@@ -372,15 +372,15 @@ export function findingActionOf(
     : '';
 }
 
-// The finding card's word for `action` on finding `item` in `round`, or null
-// when the finding's origin does not offer it.
+// The finding card's word for `action` on finding `item` in `round`, as the
+// card draws its origin's spec, or null when the spec does not offer it.
 export function findingActionWord(
   round: RoundState,
   item: AnswerableItem,
   action: FindingAction,
 ): string | null {
   const finding = kindItem(round, item) as Finding;
-  return actionLabel(finding.origin, action);
+  return drawnOriginSpec(finding.origin).actions[action] ?? null;
 }
 
 // Whether the item's picks alone answer it, notes aside: the kind's

@@ -219,8 +219,9 @@ function bodyOf(
 }
 
 // Any body — from the window or from a file another version wrote — as one
-// entry per item of each registered kind, in order. Never throws: a field of
-// the wrong type reads as its empty value.
+// entry per item of each registered kind, in order, each read against its
+// item (a finding entry's action labels come from the pick, never the saved
+// body). Never throws: a field of the wrong type reads as its empty value.
 export function readFormBody(
   kinds: readonly MainItemKind[],
   round: Round,
@@ -229,8 +230,8 @@ export function readFormBody(
   const body = isJsonObject(raw) ? raw : {};
   return bodyOf(kinds, textOrEmpty(body.note), (kind) => {
     const saved = entriesByIndex(body[kind.spec.bodyKey]);
-    return itemsOf(round, kind).map((_, i) =>
-      kind.readEntry(i + 1, saved.get(i + 1) ?? {}),
+    return itemsOf(round, kind).map((item, i) =>
+      kind.readEntry(i + 1, saved.get(i + 1) ?? {}, item),
     );
   });
 }

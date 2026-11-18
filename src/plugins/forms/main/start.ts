@@ -40,6 +40,7 @@ import {
   type Round,
   SAVED_ROUNDS_FOLDER,
 } from '../contract';
+import { FINDING_ORIGIN_SPECS, findingOrigins } from '../finding-origins';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { BUILT_IN_KINDS } from './kinds/formats';
@@ -273,20 +274,24 @@ export function addDriveActions(
   });
 }
 
-// Registers the built-in item kinds and serves its two tools, their schema
-// following the registered kinds, to every agent session; shows each
+// Registers the built-in finding origins and item kinds and serves its two
+// tools, their schema following the registered origins and kinds, to every
+// agent session; shows each
 // session's rounds on the page, wakes a round's chat session when the round
 // finishes with no call waiting, registers its layouts and opens the layout
 // preview on the page's ask, and refuses a switch-off while an agent's round
 // is open; in the self-test it writes the fixture layouts and hands the driver
 // its script, and in a drive run it adds the drive actions. Its exports
-// register a dependent's item kinds.
+// register a dependent's item kinds and finding origins.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const layoutNames = () => api.layouts.names();
+    const builtInOrigins = FINDING_ORIGIN_SPECS.map((spec) =>
+      findingOrigins.register(spec),
+    );
     const registry = createKindRegistry();
     for (const kind of BUILT_IN_KINDS) {
       registry.register(kind);
@@ -302,14 +307,25 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       layoutNames,
     );
     api.channel.handle('openPreview', () => preview.open());
-    const tools = contributeFormsTools({
-      sessions,
-      tools: () => formsTools(kinds()),
-      startSession: (session) => forms.startSession(session),
-      type: roundType,
-      log: api.services.log,
-    });
+    // The origins live in a module registry the host does not undo, so a
+    // first contribution that throws takes them back out.
+    let tools: ReturnType<typeof contributeFormsTools>;
+    try {
+      tools = contributeFormsTools({
+        sessions,
+        tools: () => formsTools(kinds()),
+        startSession: (session) => forms.startSession(session),
+        type: roundType,
+        log: api.services.log,
+      });
+    } catch (error) {
+      for (const registration of builtInOrigins) {
+        registration.dispose();
+      }
+      throw error;
+    }
     const kindsChanged = registry.onChanged(() => tools.refresh());
+    const originsChanged = findingOrigins.onChanged(() => tools.refresh());
     const { selfTest } = api.services;
     // Written before forms registers, so its first set lists every self-test
     // layout.
@@ -340,10 +356,18 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       mayStop: () => presenter.mayStop(),
       exports: (consumer): FormsMainExports => ({
         registerKind: (kind) => consumer.track(registry.register(kind)),
+        registerFindingOrigin: (spec) =>
+          consumer.track(findingOrigins.register(spec)),
       }),
+      // The origins listener goes first, so removing the built-in origins
+      // republishes no tool.
       dispose: (stop) => {
         if (stop === 'quit') {
           forms.detach();
+        }
+        originsChanged.dispose();
+        for (const registration of builtInOrigins) {
+          registration.dispose();
         }
         kindsChanged.dispose();
         tools.dispose();

@@ -183,22 +183,21 @@ export function choiceGroupsOf(input: FindingCard): ChoiceGroup[] {
   return groups;
 }
 
-// The card's word for `action`; entries name only actions the card offers.
+// The card's word for `action`, or the action value itself when `actions`
+// lacks it, as when the page's spec for the origin differs from main's.
 function actionLabelOf(input: FindingCard, action: FindingAction): string {
   const offered = input.actions.find((each) => each.action === action);
-  if (offered === undefined) {
-    throw new Error(`finding card offers no ${action} action`);
-  }
-  return offered.label;
+  return offered === undefined ? action : offered.label;
 }
 
 // The round's reason for deferral `action`; null for none or blank text, and
-// for fix_now, which takes none.
+// for any other action, which takes none.
 function actionReasonOf(
   input: FindingCard,
   action: FindingAction,
 ): string | null {
-  const text = action === 'fix_now' ? undefined : input.actionReasons[action];
+  const isDeferral = action === 'follow_up' || action === 'leave_it';
+  const text = isDeferral ? input.actionReasons[action] : undefined;
   return text === undefined || text.trim() === '' ? null : text;
 }
 
@@ -815,6 +814,12 @@ function buildVerdict(
   const origin = tagPart(input.originChip);
   origin.classList.add('badge-origin');
   origin.dataset.origin = input.origin;
+  if (input.originToken !== '') {
+    origin.style.setProperty(
+      '--forms-origin-color',
+      `var(${input.originToken})`,
+    );
+  }
   chips.append(origin);
   if (input.severityChip !== null && input.severity !== null) {
     const severity = tagPart(input.severityChip);

@@ -10,6 +10,11 @@ import {
   type Question,
   RoundError,
 } from '../contract';
+import { findingOrigins } from '../finding-origins';
+import {
+  SECURITY_ORIGIN,
+  useBuiltInFindingOrigins,
+} from '../finding-origins.test-support';
 import { BUILT_IN_KINDS } from './kinds/formats';
 import { POLL, pollKind } from './kinds/poll-kind.test-support';
 import { createKindRegistry } from './kinds/registry';
@@ -28,6 +33,8 @@ import {
 import { autoAnsweredPayload, createRoundType } from './round-type';
 
 const roundType = createRoundType(() => BUILT_IN_KINDS);
+
+useBuiltInFindingOrigins();
 
 function question(overrides: Record<string, unknown> = {}) {
   return {
@@ -79,8 +86,24 @@ function answer(entry: Partial<AnswerEntry>): AnswerEntry {
   };
 }
 
+// A design finding, recommending fix_now on its first choice.
+function decisionFinding(overrides: Record<string, unknown> = {}) {
+  const { severity: _severity, ...rest } = finding({
+    origin: 'design',
+    ...overrides,
+  });
+  return rest;
+}
+
+// The labels default to a caused finding recommending fix_now, unpicked.
 function findingAnswer(entry: Partial<FindingAnswerEntry>): FindingAnswerEntry {
-  return { ...answer(entry), action: '', ...entry };
+  return {
+    ...answer(entry),
+    action: '',
+    action_label: '',
+    recommend_action_label: 'Fix now',
+    ...entry,
+  };
 }
 
 function body(answers: AnswerEntry[], extra: Partial<FormBody> = {}): FormBody {
@@ -385,11 +408,11 @@ describe('parseRound with findings', () => {
 
   it("numbers a finding's errors from 1", () => {
     const partial: Record<string, unknown> = finding();
-    delete partial.proof;
+    delete partial.impact;
 
     expect(
       roundError({ heading: 'H', findings: [finding(), partial] }),
-    ).toMatch(/^Finding 2: .*proof/);
+    ).toMatch(/^Finding 2: .*impact/);
   });
 });
 
@@ -610,6 +633,90 @@ describe('readFormBody', () => {
     ]);
   });
 
+  it.each([
+    {
+      name: 'a follow_up choice as Plan it',
+      saved: { choice: 2, action: 'follow_up' },
+      label: 'Plan it',
+    },
+    { name: 'no pick as none', saved: {}, label: '' },
+    {
+      name: 'an incomplete pick as none',
+      saved: { choice: 2, action: 'fix_now' },
+      label: '',
+    },
+    {
+      name: 'a saved label it ignores',
+      saved: { action_label: 'x', recommend_action_label: 'y' },
+      label: '',
+    },
+  ])(
+    "writes each finding entry's action_label from its pick: $name",
+    ({ saved, label }) => {
+      const round = parseRound(BUILT_IN_KINDS, {
+        heading: 'H',
+        findings: [
+          decisionFinding({
+            choices: [
+              { text: 'Cache per user', reason: 'Users differ.' },
+              {
+                text: 'Cache per machine',
+                reason: 'Machines differ.',
+                action: 'follow_up',
+              },
+            ],
+          }),
+        ],
+      });
+
+      const [entry] = readFormBody(BUILT_IN_KINDS, round, {
+        finding_answers: [{ index: 1, ...saved }],
+      }).finding_answers;
+
+      expect(entry.action_label).toBe(label);
+      expect(entry.recommend_action_label).toBe('Decide now');
+    },
+  );
+
+  it('reads a body and payload of a round whose origin was disposed as before', () => {
+    const registration = findingOrigins.register(SECURITY_ORIGIN);
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      findings: [
+        finding({
+          origin: 'security',
+          choices: [
+            { text: 'Escape the input', reason: 'Closes the hole.' },
+            { text: 'Log it', reason: 'Later.', action: 'leave_it' },
+          ],
+        }),
+      ],
+    });
+    const saved = {
+      finding_answers: [{ index: 1, choice: 2, action: 'leave_it' }],
+    };
+    const before = {
+      body: readFormBody(BUILT_IN_KINDS, round, saved),
+      payload: roundType.payload(
+        round,
+        'submitted',
+        readFormBody(BUILT_IN_KINDS, round, saved),
+      ),
+    };
+
+    registration.dispose();
+
+    expect(readFormBody(BUILT_IN_KINDS, round, saved)).toEqual(before.body);
+    expect(before.body.finding_answers[0].action_label).toBe('Accept');
+    expect(
+      roundType.payload(
+        round,
+        'submitted',
+        readFormBody(BUILT_IN_KINDS, round, saved),
+      ),
+    ).toEqual(before.payload);
+  });
+
   it('reads a body that is not an object as untouched', () => {
     expect(readFormBody(BUILT_IN_KINDS, roundOf(1), 'junk')).toEqual(
       body([answer({})]),
@@ -624,7 +731,8 @@ describe('readFormBody', () => {
       '{"note":"n","answers":[{"index":1,"choice":2,"not_applicable":false,' +
       '"notes":"","dont_ask":false,"dont_ask_reason":""}],' +
       '"finding_answers":[{"index":1,"choice":1,"not_applicable":false,' +
-      '"notes":"","dont_ask":false,"dont_ask_reason":"","action":"fix_now"}],' +
+      '"notes":"","dont_ask":false,"dont_ask_reason":"","action":"fix_now",' +
+      '"action_label":"Fix now","recommend_action_label":"Fix now"}],' +
       '"notice_comments":[{"index":1,"comment":"ok"}]}';
 
     expect(
@@ -1337,6 +1445,17 @@ describe('fingerprint', () => {
     ).toBe('fc3a3a26e21f0c6e85e8ad1f4d000380e032b3b52e3bc6b2ffae5226034e77b1');
   });
 
+  it('hashes a finding with no proof apart from one with proof', () => {
+    const { proof: _proof, ...unproved } = finding();
+    const hash = (item: Record<string, unknown>) =>
+      fingerprint(
+        BUILT_IN_KINDS,
+        parseRound(BUILT_IN_KINDS, { heading: 'H', findings: [item] }),
+      );
+
+    expect(hash(unproved)).not.toBe(hash(finding()));
+  });
+
   it('ignores an empty findings list', () => {
     expect(
       fingerprint(
@@ -1576,6 +1695,39 @@ describe('autoAnsweredPayload', () => {
       expect(item(payload)).toEqual(expected);
     },
   );
+});
+
+describe('recommendedBody', () => {
+  it("labels each finding entry with its recommended action's word", () => {
+    const round = parseRound(BUILT_IN_KINDS, {
+      heading: 'H',
+      findings: [
+        finding(),
+        decisionFinding({
+          choices: [
+            { text: 'Cache per user', reason: 'Users differ.' },
+            {
+              text: 'Cache per machine',
+              reason: 'Machines differ.',
+              action: 'follow_up',
+            },
+          ],
+          recommend: 2,
+          recommend_action: 'follow_up',
+        }),
+      ],
+    });
+
+    expect(
+      recommendedBody(BUILT_IN_KINDS, round).finding_answers.map((entry) => [
+        entry.action_label,
+        entry.recommend_action_label,
+      ]),
+    ).toEqual([
+      ['Fix now', 'Fix now'],
+      ['Plan it', 'Plan it'],
+    ]);
+  });
 });
 
 describe('roundType.noFormPayload', () => {

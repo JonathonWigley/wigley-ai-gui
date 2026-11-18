@@ -3,6 +3,13 @@ import { roundErrorText } from '../../mcp-wording';
 import { RoundError, type RoundItemPath } from '../../../contract';
 import { BUILT_IN_KINDS } from '../formats';
 import { findingAnswerSubject, findingKind } from './finding-format';
+import { findingOrigins } from '../../../finding-origins';
+import {
+  SECURITY_ORIGIN,
+  useBuiltInFindingOrigins,
+} from '../../../finding-origins.test-support';
+
+useBuiltInFindingOrigins();
 
 const FINDING_1: RoundItemPath = { at: 'item', kind: 'finding', number: 1 };
 
@@ -115,6 +122,7 @@ describe('findingKind.parse', () => {
     expect(findingKind.parse(raw, FINDING_1)).toEqual({
       title: 'Stale cache',
       origin: 'design',
+      severity: null,
       impact: 'Users see stale data after a reload.',
       finding: 'The cache keeps entries after a reload.',
       proof: '- `cache.ts:40` never clears',
@@ -137,6 +145,7 @@ describe('findingKind.parse', () => {
     expect(findingKind.parse(nitFinding(), FINDING_1)).toEqual({
       title: 'Stale cache',
       origin: 'nit',
+      severity: null,
       impact: 'Users see stale data after a reload.',
       finding: 'The cache keeps entries after a reload.',
       proof: '- `cache.ts:40` never clears',
@@ -152,6 +161,76 @@ describe('findingKind.parse', () => {
       actionReasons: {},
       layout: null,
     });
+  });
+
+  it('parses a caused finding with no proof as empty proof', () => {
+    const { proof: _proof, ...raw } = finding();
+
+    expect(findingKind.parse(raw, FINDING_1).proof).toBe('');
+  });
+
+  it('refuses a nit finding with no proof, naming proof', () => {
+    const { proof: _proof, ...raw } = nitFinding();
+
+    expect(parseError(raw)).toBe('Finding 1: a nit finding needs proof.');
+  });
+
+  it.each([
+    { name: 'null', proof: null },
+    { name: 'blank', proof: '  ' },
+  ])('reads a null or blank proof off a Nit as none: $name', ({ proof }) => {
+    const design = (overrides: Record<string, unknown>) =>
+      findingWithoutSeverity({
+        origin: 'design',
+        choices: TWO_ACTION_CHOICES,
+        ...overrides,
+      });
+    const { proof: _proof, ...withoutProof } = design({});
+    const parsed = findingKind.parse(design({ proof }), FINDING_1);
+
+    expect(parsed.proof).toBe('');
+    expect(JSON.stringify(findingKind.fingerprintContent(parsed))).toBe(
+      JSON.stringify(
+        findingKind.fingerprintContent(
+          findingKind.parse(withoutProof, FINDING_1),
+        ),
+      ),
+    );
+  });
+
+  it('refuses a proof that is not a string', () => {
+    expect(parseError(finding({ proof: 3 }))).toBe(
+      'Finding 1: proof must be a string.',
+    );
+  });
+
+  it('parses a registered plugin origin and refuses a choice opening with its action word', () => {
+    const registration = findingOrigins.register(SECURITY_ORIGIN);
+    try {
+      expect(
+        findingKind.parse(finding({ origin: 'security' }), FINDING_1).origin,
+      ).toBe('security');
+      expectRefusal(
+        finding({
+          origin: 'security',
+          choices: [{ text: 'Patch: bound the input', reason: 'r' }],
+        }),
+        'choices[1].text',
+        'Patch',
+      );
+    } finally {
+      registration.dispose();
+    }
+  });
+
+  it('refuses an origin disposed before the call', () => {
+    findingOrigins.register(SECURITY_ORIGIN).dispose();
+
+    expectRefusal(
+      finding({ origin: 'security' }),
+      'origin must be one of',
+      'nit',
+    );
   });
 
   it.each([
@@ -513,6 +592,12 @@ describe('findingKind.fingerprintContent', () => {
       contentOf(finding({ action_reasons: { leave_it: 'Rare.' } })),
     ).not.toBe(base);
     expect(contentOf(finding({ action_reasons: {} }))).toBe(base);
+  });
+
+  it('leaves an omitted proof out of the content', () => {
+    const { proof: _proof, ...raw } = finding();
+
+    expect(contentOf(raw)).not.toContain('proof');
   });
 
   it('is the same when only layout differs', () => {
