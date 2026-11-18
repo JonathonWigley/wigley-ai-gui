@@ -316,8 +316,9 @@ export interface DocView {
   // Opens the whole-file editor on the shown doc holding a reloaded page's
   // `edits`, which then read as unsaved. When the file on disk is no longer
   // `edits.baseText`, the changed-on-disk prompt opens. Logs and does nothing
-  // while an editor is open or the shown file is not `edits.path`.
-  restoreEdits(edits: DocsEdits): void;
+  // while an editor is open or the shown file is not `edits.path`. Returns
+  // whether it put the edits in the editor.
+  restoreEdits(edits: DocsEdits): boolean;
   // Toasts and logs the refusal when the editor holds unsaved edits.
   refuseWithUnsavedEdits(): boolean;
   conflictReload(): void;
@@ -1166,7 +1167,11 @@ export function createDocView(deps: DocViewDeps): DocView {
       case 'external':
         deps
           .openExternal(target.url)
-          .then(() => deps.log(`opened link ${target.url}`))
+          .then(() => {
+            if (!isDisposed) {
+              deps.log(`opened link ${target.url}`);
+            }
+          })
           .catch((error) => {
             if (!isDisposed) {
               deps.toast(errorText(error), 'error');
@@ -1537,6 +1542,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     );
     try {
       await deps.channel.invoke('writeBytes', path, await file.bytes());
+      if (isDisposed) {
+        return null;
+      }
       deps.log(`saved pasted ${file.name} as ${path}`);
       return path;
     } catch (error) {
@@ -1563,6 +1571,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     const links: string[] = [];
     const savedPaths: string[] = [];
     for (const file of files) {
+      if (isDisposed) {
+        return;
+      }
       const isPasted = file.path === '';
       const path = isPasted
         ? await writePasted(doc, file, now, pasteIndexes.shift()!)
@@ -2219,7 +2230,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         deps.paths.samePath(doc.filePath, edits.path);
       if (!isEditable) {
         deps.log(`edits on ${edits.path} not restored`);
-        return;
+        return false;
       }
       openEditor(doc, 1);
       editor?.setText(edits.text);
@@ -2229,6 +2240,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         deps.log(`changed on disk: ${doc.name}`);
       }
       deps.editsChanged();
+      return true;
     },
     refuseWithUnsavedEdits() {
       if (!view.hasUnsavedEdits()) {

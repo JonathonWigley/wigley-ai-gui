@@ -212,7 +212,9 @@ export interface DocsView {
   // as `openDoc` does, and an open that fails toasts that its edits were not
   // restored. An open a newer open beats keeps its edits: they still count as
   // unsaved and go into each place written, until their doc opens and they go
-  // back in its editor. The open goes to `trackRestore` once the view has
+  // back in its editor. They are toasted as not restored and dropped instead
+  // when the index stops listing their doc, when the user types in that doc
+  // first, or when the doc refuses them (its editor already open). The open goes to `trackRestore` once the view has
   // shown: an open waits on the view's first index read, which its first show
   // starts.
   restorePlace(place: DocsPlace): void;
@@ -805,7 +807,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
     parts: newParts(),
-    editsChanged: () => writePlace(),
+    editsChanged: () => {
+      dropTypedOverDraft();
+      writePlace();
+    },
   });
 
   const recent = createRecentReader({
@@ -829,14 +834,45 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   // Puts the beaten restore's edits back in the editor once their doc at
-  // `path` shows.
+  // `path` shows, and drops them; toasts them as not restored when the doc
+  // refuses them, as when its editor is already open.
   const applyDraft = (path: string) => {
     const held = draft;
     if (held === null || !deps.paths.samePath(held.path, path)) {
       return;
     }
-    doc.restoreEdits(held);
-    if (doc.hasUnsavedEdits()) {
+    draft = null;
+    if (!doc.restoreEdits(held)) {
+      toastEditsNotRestored(held);
+    }
+  };
+
+  const toastEditsNotRestored = (edits: DocsEdits) => {
+    toast(`Unsaved edits not restored: ${edits.path}`, 'error');
+  };
+
+  // Drops a held draft, toasting it as not restored, once the user types in
+  // its doc: the editor then holds the user's own edits, which a later save
+  // puts on disk, so the draft would only go over newer text.
+  const dropTypedOverDraft = () => {
+    const path = doc.openPath();
+    if (
+      draft !== null &&
+      path !== null &&
+      deps.paths.samePath(draft.path, path) &&
+      doc.hasUnsavedEdits()
+    ) {
+      toastEditsNotRestored(draft);
+      draft = null;
+    }
+  };
+
+  // Drops a held draft whose doc the index no longer lists, toasting it as
+  // not restored: no open can reach that doc, so the draft would otherwise
+  // count as unsaved for good.
+  const dropUnlistedDraft = () => {
+    if (draft !== null && !isListed(draft.path)) {
+      toastEditsNotRestored(draft);
       draft = null;
     }
   };
@@ -1084,6 +1120,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   const showDocument = (next: IndexDocument | null) => {
     document = next;
     entriesById = new Map(next?.entries.map((entry) => [entry.id, entry]));
+    if (next !== null) {
+      dropUnlistedDraft();
+    }
     if (next !== null && isMachine) {
       const choices = contextChoices(next, deps.homeDir, deps.paths);
       const kept = choices.some((choice) => choice.folder === contextFolder);
@@ -1891,7 +1930,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       restoring = place;
       const toastEditsDropped = () => {
         if (edits !== null) {
-          toast(`Unsaved edits not restored: ${edits.path}`, 'error');
+          toastEditsNotRestored(edits);
         }
       };
       restoringOpen = openOnceRead(openPath, null, number)
@@ -1901,14 +1940,15 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           }
           if (!opened && edits !== null && number !== askedOpens) {
             draft = edits;
+            dropUnlistedDraft();
             const shownPath = doc.openPath();
             if (shownPath !== null) {
               applyDraft(shownPath);
             }
           } else if (!opened) {
             toastEditsDropped();
-          } else if (edits !== null) {
-            doc.restoreEdits(edits);
+          } else if (edits !== null && !doc.restoreEdits(edits)) {
+            toastEditsDropped();
           }
         })
         .catch((error) => {

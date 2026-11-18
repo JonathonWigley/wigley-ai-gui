@@ -26,7 +26,10 @@ import {
   MACHINE_SOURCE_ID,
   sessionSourceId,
 } from '../contract';
-import type { EditorHost } from '../../../contracts/editor';
+import type {
+  DocumentEditorEvents,
+  EditorHost,
+} from '../../../contracts/editor';
 import { docsPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { DocsView } from './docs-view';
@@ -67,11 +70,32 @@ vi.mock('./docs-view', async (importOriginal) => {
 const projectRow = (sessionId: string) =>
   sessionRow(sessionId, { label: sessionId, projectDir: '/p' });
 
-// A document editor host whose editors hold the text set or typed last.
-function documentEditors(): EditorHost {
-  return {
-    createDocument(_parent: HTMLElement, text: string) {
+// A document editor host whose editors hold the text set or typed last;
+// `type` types `text` into the newest editor, as the user would, and `text`
+// reads it.
+function documentEditors() {
+  let newest: { text(): string; type(text: string): void } | null = null;
+  const opened = () => {
+    if (newest === null) {
+      throw new Error('no editor open');
+    }
+    return newest;
+  };
+  const host = {
+    createDocument(
+      _parent: HTMLElement,
+      text: string,
+      _options: unknown,
+      events: DocumentEditorEvents,
+    ) {
       let current = text;
+      newest = {
+        text: () => current,
+        type: (next) => {
+          current = next;
+          events.changed(next);
+        },
+      };
       return {
         text: () => current,
         setText: (next: string) => {
@@ -83,6 +107,11 @@ function documentEditors(): EditorHost {
       };
     },
   } as unknown as EditorHost;
+  return {
+    host,
+    type: (text: string) => opened().type(text),
+    text: () => opened().text(),
+  };
 }
 
 // An index entry for the doc at `path`.
@@ -156,11 +185,12 @@ function startDocsPage(
 ) {
   installFocusFakeDom(vi.stubGlobal);
   const picker = fakeListPickerService();
+  const editors = documentEditors();
   const harness = startPagePart(docsPagePart, {
     services: {
       picker,
       fuzzy: fakeFuzzyMatcher,
-      editor: documentEditors(),
+      editor: editors.host,
       markdown: {
         block: (text) => text,
         inline: (text) => text,
@@ -175,7 +205,7 @@ function startDocsPage(
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
-  return { harness, exportsTo, picker };
+  return { harness, exportsTo, picker, editors };
 }
 
 type DocsPage = ReturnType<typeof startDocsPage>;
@@ -1375,34 +1405,11 @@ describe('docs view state', () => {
   it('a tree open while an openDoc waits on the rebuild wins', async () => {
     const rebuilt = Promise.withResolvers<unknown>();
     let isRebuildAsked = false;
-    const listing = (paths: readonly string[]) => ({
-      document: {
-        schemaVersion: 5,
-        generatedAt: '2026-11-05T00:00:00Z',
-        entries: paths.map((path) => ownDoc(path, path)),
-        contexts: [],
-      },
-      message: null,
-      title: 'index',
-      canRebuild: true,
-    });
-    const page = startDocsPage(async (method, ...args) => {
-      switch (method) {
-        case 'loadIndex':
-          return listing([PLAIN]);
-        case 'rebuildIndex':
-          isRebuildAsked = true;
-          return rebuilt.promise;
-        case 'wikiMainPath':
-          return '/p/wiki/Main.md';
-        case 'readDocIfPresent':
-          return null;
-        case 'readDoc':
-          return TEXTS[args[0] as string];
-        default:
-          return { clones: [] };
-      }
-    });
+    const page = startDocsPage(
+      rebuildingMain(rebuilt.promise, () => {
+        isRebuildAsked = true;
+      }),
+    );
     const { harness } = page;
     const { commands } = harness.started();
     openByMessage(page, TARGET);
@@ -1414,7 +1421,7 @@ describe('docs view state', () => {
 
     commands.openNode({ arg: { viewId: 'machine', nodeId: `entry:${PLAIN}` } });
     await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
-    rebuilt.resolve(listing([PLAIN, TARGET]));
+    rebuilt.resolve(listingOf([PLAIN, TARGET]));
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1437,34 +1444,11 @@ describe('docs view state', () => {
       text: 'Edited.\n',
       baseText: TEXTS[TARGET],
     };
-    const listing = (paths: readonly string[]) => ({
-      document: {
-        schemaVersion: 5,
-        generatedAt: '2026-11-05T00:00:00Z',
-        entries: paths.map((path) => ownDoc(path, path)),
-        contexts: [],
-      },
-      message: null,
-      title: 'index',
-      canRebuild: true,
-    });
-    const page = startDocsPage(async (method, ...args) => {
-      switch (method) {
-        case 'loadIndex':
-          return listing([PLAIN]);
-        case 'rebuildIndex':
-          isRebuildAsked = true;
-          return rebuilt.promise;
-        case 'wikiMainPath':
-          return '/p/wiki/Main.md';
-        case 'readDocIfPresent':
-          return null;
-        case 'readDoc':
-          return TEXTS[args[0] as string];
-        default:
-          return { clones: [] };
-      }
-    });
+    const page = startDocsPage(
+      rebuildingMain(rebuilt.promise, () => {
+        isRebuildAsked = true;
+      }),
+    );
     const { harness } = page;
     await reloadWith(page, { [MACHINE_SOURCE_ID]: placeAt(TARGET, edits) }, []);
     const { commands } = harness.started();
@@ -1476,7 +1460,7 @@ describe('docs view state', () => {
     });
     commands.openNode({ arg: { viewId: 'machine', nodeId: `entry:${PLAIN}` } });
     await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
-    rebuilt.resolve(listing([PLAIN, TARGET]));
+    rebuilt.resolve(listingOf([PLAIN, TARGET]));
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
     // A tree draw writes the place again.
@@ -1510,6 +1494,88 @@ describe('docs view state', () => {
     await harness.stop();
   });
 
+  // Breaks: a beaten restore's edits held for a doc the rebuilt index no
+  // longer lists, which no open reaches, so `mayStop` refuses for good.
+  it("a beaten restore's edits for a doc the index does not list are toasted and let the page stop", async () => {
+    const rebuilt = Promise.withResolvers<unknown>();
+    let isRebuildAsked = false;
+    const edits = { path: TARGET, text: 'Edited.\n', baseText: TEXTS[TARGET] };
+    const page = startDocsPage(
+      rebuildingMain(rebuilt.promise, () => {
+        isRebuildAsked = true;
+      }),
+    );
+    const { harness } = page;
+    await reloadWith(page, { [MACHINE_SOURCE_ID]: placeAt(TARGET, edits) }, []);
+    harness.started().commands.showMode({ arg: undefined });
+    await vi.waitFor(() => expect(isRebuildAsked).toBe(true));
+    openByMessage(page, PLAIN);
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
+    rebuilt.resolve(listingOf([PLAIN]));
+    await vi.waitFor(() =>
+      expect(
+        harness.logs.filter(({ message }) =>
+          message.includes('edits not restored'),
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          message: `toast error: Unsaved edits not restored: ${TARGET}`,
+        }),
+      ]),
+    );
+
+    expect(harness.started().mayStop?.()).toBeNull();
+    await harness.stop();
+  });
+
+  // Breaks: a beaten restore's edits going over the edits the user typed in
+  // their doc meanwhile, or dropped with no toast.
+  it("a beaten restore's edits are toasted and dropped when the user already typed in their doc", async () => {
+    const restoreRead = Promise.withResolvers<string>();
+    let targetReads = 0;
+    const serve = servingIndexOf([PLAIN, TARGET], []);
+    const page = startDocsPage(async (method, ...args) => {
+      if (method === 'readDoc' && args[0] === TARGET && targetReads++ === 0) {
+        return restoreRead.promise;
+      }
+      return serve(method, ...args);
+    });
+    const { harness, editors } = page;
+    const edits = { path: TARGET, text: 'Restored.\n', baseText: '# Doc' };
+    await reloadWith(page, { [MACHINE_SOURCE_ID]: placeAt(TARGET, edits) }, []);
+    const { commands } = harness.started();
+    commands.showMode({ arg: undefined });
+    await vi.waitFor(() => expect(targetReads).toBe(1));
+    openByMessage(page, TARGET);
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(TARGET));
+    commands.edit({ arg: undefined });
+    editors.type('Typed.\n');
+    restoreRead.resolve('# Doc');
+    await vi.waitFor(() =>
+      expect(
+        harness.logs.filter(({ message }) =>
+          message.includes('edits not restored'),
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          message: `toast error: Unsaved edits not restored: ${TARGET}`,
+        }),
+      ]),
+    );
+    // A keystroke writes the place again.
+    editors.type('Typed more.\n');
+    const place = harness.state
+      .read(docsPlaceSlot, 'test')
+      .all()
+      .get(MACHINE_SOURCE_ID);
+
+    expect({ editor: editors.text(), edits: place?.edits?.text }).toEqual({
+      editor: 'Typed more.\n',
+      edits: 'Typed more.\n',
+    });
+    await harness.stop();
+  });
+
   // Breaks: a page reloaded under a running main throwing on a place an
   // older page wrote, before docs places held `trees`.
   it('a saved place of the older shape is dropped and the page starts', async () => {
@@ -1531,6 +1597,41 @@ describe('docs view state', () => {
     await page.harness.stop();
   });
 });
+
+// An index read listing `paths`, each titled by its path, that can rebuild.
+const listingOf = (paths: readonly string[]) => ({
+  document: {
+    schemaVersion: 5,
+    generatedAt: '2026-11-05T00:00:00Z',
+    entries: paths.map((path) => ownDoc(path, path)),
+    contexts: [],
+  },
+  message: null,
+  title: 'index',
+  canRebuild: true,
+});
+
+// Main's side over an index listing `PLAIN`, `Main.md` missing, each doc
+// reading its `TEXTS`, whose rebuild calls `asked` and answers `rebuilt`.
+function rebuildingMain(rebuilt: Promise<unknown>, asked: () => void) {
+  return async (method: string, ...args: unknown[]): Promise<unknown> => {
+    switch (method) {
+      case 'loadIndex':
+        return listingOf([PLAIN]);
+      case 'rebuildIndex':
+        asked();
+        return rebuilt;
+      case 'wikiMainPath':
+        return '/p/wiki/Main.md';
+      case 'readDocIfPresent':
+        return null;
+      case 'readDoc':
+        return TEXTS[args[0] as string];
+      default:
+        return { clones: [] };
+    }
+  };
+}
 
 // Main's side over an index listing `PLAIN` that can rebuild, `Main.md`
 // missing, whose `held` method, or the `createDoc` reply's `writeDoc`, answers

@@ -1448,6 +1448,55 @@ describe('createDocView', () => {
     });
   });
 
+  // Breaks: a link's open or a pasted file's write answering after the
+  // dispose logging, or the take writing its next file once disposed.
+  it.each<{
+    case: string;
+    act(shown: ReturnType<typeof docViewOver>): void;
+    writes: [string, number[]][];
+  }>([
+    {
+      case: 'an external link opened',
+      act: ({ view }) =>
+        view.followLink({ href: 'https://example.invalid/x', title: '' }),
+      writes: [],
+    },
+    {
+      case: 'a pasted file written, another to come',
+      act: ({ targets }) => targets[0].target.take([pasted([1]), pasted([2])]),
+      writes: [['/n/docs/images/guide-20261102-090507.png', [1]]],
+    },
+  ])(
+    'a call landing after the dispose logs and writes nothing more ($case)',
+    async ({ act, writes }) => {
+      const shown = docViewOver(() =>
+        withUser(defaultLayout, paneLayout('pane')),
+      );
+      const { view, deps, io } = shown;
+      io.now = new Date(2026, 10, 2, 9, 5, 7).getTime();
+      const answer = Promise.withResolvers<void>();
+      io.writeBytes = async () => {
+        await answer.promise;
+        return { type: 'written' };
+      };
+      deps.openExternal = () => answer.promise;
+      await view.open(target(null, '/n/docs/guide.md'));
+      view.edit(1);
+      act(shown);
+      await settled();
+
+      view.dispose();
+      const log = vi.spyOn(deps, 'log');
+      answer.resolve();
+      await settled();
+
+      expect({ logs: log.mock.calls, writes: shown.writes }).toEqual({
+        logs: [],
+        writes,
+      });
+    },
+  );
+
   describe('editSection', () => {
     it('editSection_TopOfSightInASection_OpensThatSectionsText', async () => {
       const { view, editors } = await sectionDoc(TWO_SECTIONS);
