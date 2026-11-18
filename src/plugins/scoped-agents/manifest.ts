@@ -10,6 +10,8 @@ export const scopedAgentsManifest = definePlugin({
   label: 'Scoped agents',
   description:
     "Runs the agent chats a plugin owns per scope, such as Practice's interviewer and Backlog's assistant, and the ask box and chat pane they show in.",
+  demoSkip:
+    'Its panes show in the Demo panel and the Backlog and Practice steps.',
   dependsOn: { main: ['sessions', 'chat'], page: ['chat'] },
   reads: { main: [], page: [] },
   commands: {

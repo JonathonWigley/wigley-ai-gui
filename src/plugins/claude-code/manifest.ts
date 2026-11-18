@@ -18,6 +18,7 @@ export const claudeCodeManifest = definePlugin({
   id: 'claude-code',
   label: 'Claude Code',
   description: 'Runs agent sessions on the Claude Code CLI.',
+  demoSkip: 'It runs every real session; the real-session step shows it.',
   dependsOn: { main: ['sessions'], page: [] },
   reads: { main: [], page: [] },
   commands: {},

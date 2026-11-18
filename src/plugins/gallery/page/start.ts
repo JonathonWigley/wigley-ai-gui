@@ -14,6 +14,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { galleryManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { createGalleryView } from './gallery-view';
 import { readGalleryLayout } from './layout/read-gallery-layout';
 import { testShellLayout } from './test-shell-layout';
@@ -35,6 +36,7 @@ type GalleryApi = PageApi<
 // to its top and end, and `j`/`k` and the line and half-page scrolls step it, logging
 // whether they reached the end or the top. `Space z s` swaps the whole shell to
 // the test layout and, pressed again, back; leaving the gallery keeps the swap.
+// Registers the `gallery.mode` demo step, which shares that swap.
 export const galleryPagePart: PagePart<typeof galleryManifest> = {
   manifest: galleryManifest,
   start(api: GalleryApi) {
@@ -92,9 +94,35 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
       title: 'Gallery',
       detail: 'Every primitive in every state',
     });
+    const showMode = () => {
+      if (!mode.isShown()) {
+        mode.show();
+      }
+    };
 
     // The swap in force, null while the default layout is mounted.
     let swappedLayout: Disposable | null = null;
+    const swap = () => {
+      swappedLayout = api.shell.setLayout(testShellLayout);
+      log('shell layout swapped');
+    };
+    const restore = () => {
+      swappedLayout?.dispose();
+      swappedLayout = null;
+      log('shell layout restored');
+    };
+    const setTransparency = (value: 'full' | 'reduced' | null) => {
+      api.transparency.override(value);
+      view.showTransparency(value);
+    };
+    registerDemoSteps(api.services, {
+      showMode,
+      transparency: () => api.transparency.overridden(),
+      setTransparency,
+      isSwapped: () => swappedLayout !== null,
+      swap,
+      restore,
+    });
     const scrollSheetTo = (edge: ScrollEdge) => {
       scrollToEdge(view.sheet, edge);
       log(edgeText('the gallery', edge));
@@ -112,26 +140,18 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
     return {
       dispose: () => view.dispose(),
       commands: {
-        showMode() {
-          if (!mode.isShown()) {
-            mode.show();
-          }
-        },
+        showMode,
         toggleTransparency() {
           const next = nextTransparency(api.transparency.overridden());
-          api.transparency.override(next);
-          view.showTransparency(next);
+          setTransparency(next);
           log(`transparency ${next}`);
         },
         swapShellLayout() {
           if (swappedLayout === null) {
-            swappedLayout = api.shell.setLayout(testShellLayout);
-            log('shell layout swapped');
+            swap();
             return;
           }
-          swappedLayout.dispose();
-          swappedLayout = null;
-          log('shell layout restored');
+          restore();
         },
         scrollTop: () => scrollSheetTo('top'),
         scrollEnd: () => scrollSheetTo('end'),

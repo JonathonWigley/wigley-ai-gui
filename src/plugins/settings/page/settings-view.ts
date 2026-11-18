@@ -345,12 +345,21 @@ export interface SettingsView {
   // then tells `sectionPicked`; an index no section holds logs
   // `no section <index>`.
   openSectionAt(index: number): void;
+  // `openSectionAt` for the section `id` names; an id no section holds logs
+  // `no section <id>` and opens nothing.
+  openSectionById(id: string): void;
   // Puts back a reloaded page's place, before `load`: the first show opens the
   // saved section with its filter applied, its box closed. A saved section the
   // schema no longer holds opens the first, and a saved cursor key no row
   // holds, the Leader menu's included, leaves that cursor where the first draw
   // sets it.
   restorePlace(place: SettingsPlace): void;
+  // Puts `place` back on a shown view, where `restorePlace` acts before the
+  // first show: its section opens with its filter, row cursor and Leader menu
+  // cursors, the sections cursor clamped to the sections there are, and focus
+  // stays where it is, with no `sectionPicked`. An undefined place, or one
+  // whose section the schema no longer holds, opens the first section.
+  returnToPlace(place: SettingsPlace | undefined): void;
   // The plugin switch wrote a new status list: the rows redraw while the
   // Plugins section is open.
   pluginsChanged(): void;
@@ -1207,7 +1216,18 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     openSection(0);
   };
 
-  const moveSections = (to: (count: number) => number) => {
+  const openSectionAt = (index: number) => {
+    if (sectionList()[index] === undefined) {
+      log(`no section ${index}`);
+      return;
+    }
+    sectionsCursor = index;
+    focusSections();
+    openSection(index);
+    deps.sectionPicked();
+  };
+
+  const moveSections =(to: (count: number) => number) => {
     const count = sectionList().length;
     sectionsCursor = Math.max(0, Math.min(count - 1, to(count)));
     markCursor();
@@ -1528,15 +1548,31 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       }
       focusRows();
     },
-    openSectionAt(index) {
-      if (sectionList()[index] === undefined) {
-        log(`no section ${index}`);
+    openSectionAt,
+    openSectionById(id) {
+      const index = sectionList().findIndex((section) => section.id === id);
+      if (index === -1) {
+        log(`no section ${id}`);
         return;
       }
-      sectionsCursor = index;
-      focusSections();
-      openSection(index);
-      deps.sectionPicked();
+      openSectionAt(index);
+    },
+    returnToPlace(place) {
+      const list = sectionList();
+      const index =
+        place === undefined
+          ? -1
+          : list.findIndex((section) => section.id === place.openSectionId);
+      if (place === undefined || index === -1) {
+        sectionsCursor = 0;
+        openSection(0);
+        return;
+      }
+      sectionsCursor = Math.max(
+        0,
+        Math.min(list.length - 1, place.sectionsCursor),
+      );
+      openSection(index, place.filter, place.cursorKey, place.leaderCursors);
     },
     restorePlace(place) {
       isPlaceRestored = true;

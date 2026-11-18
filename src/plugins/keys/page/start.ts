@@ -19,6 +19,8 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { keysManifest } from '../manifest';
+import { pageKeysFor } from '../../../shared/key-notation';
+import { registerDemoSteps } from './demo-steps';
 import { helpSections } from './help-sections';
 import { mountHelpView } from './help-view';
 import { type LeaderAction, leaderActions } from './leader-search';
@@ -51,7 +53,7 @@ type KeysApi = PageApi<
 // logging how far it went. The core holds the anchors: this part tells it the
 // `showHints` setting. Records each scope in force and checks it against the
 // core's placed anchors for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
-// `document` listener `dispose` removes.
+// `document` listener `dispose` removes. Registers the `keys.hints` demo step.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -69,6 +71,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       },
       log: services.log,
     });
+    const whichKey = mountWhichKeyView(api.areas.overlay, parts);
     startWhichKey({
       onPending: (listener) => keys.onPending(listener),
       holdPending: () => keys.holdPending(),
@@ -81,7 +84,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           keys.label,
           platform,
         ),
-      view: mountWhichKeyView(api.areas.overlay, parts),
+      view: whichKey,
       timers: services.timers,
       delayMs: () => api.settings().whichKeyDelayMs,
       timeoutMs: () => api.settings().whichKeyTimeoutMs,
@@ -107,6 +110,19 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       if (focused instanceof HTMLElement && focused.isConnected) {
         focused.focus();
       }
+    };
+    const openHelp = (editor: { blur(): void } | null) => {
+      focusedBeforeHelp = document.activeElement;
+      helpScope = keys.pushScope('help');
+      // A view that changes under help, such as a prompt opening, shows at
+      // once rather than behind help's scrim, and keeps the focus it took.
+      helpScope.onBaseChanged(() => {
+        focusedBeforeHelp = null;
+        hideHelp();
+      });
+      editor?.blur();
+      help.show();
+      api.events.emit('helpOpened', null);
     };
 
     const scrollHelp = (step: ScrollStep, direction: 1 | -1) => {
@@ -161,7 +177,8 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       );
       void api.commands.run({ id: action.command }, action.arg);
     };
-    const searchLeader = () => {
+    // The picker over the leader actions, its filter not focused.
+    const openLeaderSearch = () => {
       const title = 'Leader actions';
       picker.open({
         title,
@@ -175,8 +192,40 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
         chosen: runLeaderAction,
         cancelled: () => services.log(`picker closed: ${title}`),
       });
+    };
+    const searchLeader = () => {
+      openLeaderSearch();
       picker.focusFilter();
     };
+
+    registerDemoSteps(services, {
+      whichKey,
+      whichKeyModel: () =>
+        whichKeyModel(
+          {
+            where: 'page',
+            keys: pageKeysFor('<Leader>', keys.keymap().editor.leader),
+            scope: keys.scope(),
+          },
+          keys.keymap(),
+          keys.command,
+          keys.label,
+          platform,
+        ),
+      openHelp() {
+        if (helpScope === null) {
+          openHelp(null);
+        }
+      },
+      closeHelp,
+      isHelpOpen: () => helpScope !== null,
+      openLeaderSearch,
+      closeLeaderSearch() {
+        if (picker.isOpen()) {
+          picker.close();
+        }
+      },
+    });
 
     keys.onKeymapChanged(() => {
       help.setSections(currentHelpSections());
@@ -212,17 +261,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
             closeHelp();
             return;
           }
-          focusedBeforeHelp = document.activeElement;
-          helpScope = keys.pushScope('help');
-          // A view that changes under help, such as a prompt opening, shows at
-          // once rather than behind help's scrim, and keeps the focus it took.
-          helpScope.onBaseChanged(() => {
-            focusedBeforeHelp = null;
-            hideHelp();
-          });
-          context.editor?.blur();
-          help.show();
-          api.events.emit('helpOpened', null);
+          openHelp(context.editor ?? null);
         },
         closeHelp,
         lineDown: () => scrollHelp('line', 1),

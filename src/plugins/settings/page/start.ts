@@ -19,6 +19,7 @@ import type { SettingsLayout } from '../layouts/layout';
 import { settingsManifest } from '../manifest';
 import { BUILT_IN_CONTROL_KINDS } from './built-in-control-kinds';
 import { createControlKinds } from './control-kinds';
+import { registerDemoSteps } from './demo-steps';
 import { readSettingsLayout } from './layout/read-layout';
 import { createSettingsView } from './settings-view';
 
@@ -38,6 +39,7 @@ const TITLE = 'Settings';
 // Setting rows draw and edit through the control kinds the part registers: the
 // built-ins, then each one a dependent adds through `addControlKind`, which
 // redraws the open section on each change; the registry goes with the part.
+// Registers the `settings.mode` demo step.
 export const settingsPagePart: PagePart<typeof settingsManifest> = {
   manifest: settingsManifest,
   start(api: SettingsApi) {
@@ -125,6 +127,18 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       }
       mode.toggleSideBar();
     };
+
+    registerDemoSteps(services, {
+      showMode() {
+        if (!mode.isShown()) {
+          mode.show();
+        }
+      },
+      place: () => placeWriter.get(),
+      openSectionAt: (index) => view.openSectionAt(index),
+      openSectionById: (id) => view.openSectionById(id),
+      returnToPlace: (value) => view.returnToPlace(value),
+    });
 
     return {
       commands: {

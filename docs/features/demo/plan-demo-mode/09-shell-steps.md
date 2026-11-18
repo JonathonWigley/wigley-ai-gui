@@ -1,6 +1,6 @@
 # 09 — Shell steps and skips
 
-Status: not started
+Status: in progress
 Type: Parallel
 Rung: hard · the reference pattern (`page/demo-steps.ts` over `services.demoSteps`) has no instance in the tree yet, and three page parts change shape to hand their internals to the step
 Wave: 2 · Depends on: 01

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { coreScopeSlot } from '../../../contracts/core-state';
+import type { DemoStage, DemoStep } from '../../../contracts/demo';
 import type { Keymap } from '../../../contracts/keymap';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import type { PagePart } from '../../../contracts/plugin';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
@@ -218,6 +220,52 @@ describe('keys page part', () => {
         'picker closed: Leader actions',
       ]),
     );
+    await harness.stop();
+  });
+
+  type KeysHarness = ReturnType<typeof startKeys>;
+
+  it.each([
+    {
+      name: 'help the user opened stays open',
+      async run(harness: KeysHarness, enter: () => Promise<DemoStage>) {
+        const { toggleHelp } = harness.started().commands;
+        toggleHelp({ arg: undefined });
+        const stage = await enter();
+
+        await stage.beats[1].show();
+        stage.dispose();
+        // Closes help when the dispose left it open; else opens it again.
+        toggleHelp({ arg: undefined });
+
+        expect(dataEmitted(harness, 'keys.helpOpened')).toEqual([null]);
+      },
+    },
+    {
+      name: 'no leader binds',
+      async run(harness: KeysHarness, enter: () => Promise<DemoStage>) {
+        const stage = await enter();
+
+        await stage.beats[0].show();
+
+        expect(harness.logs.map(({ message }) => message)).toContain(
+          'which-key: no leader binds',
+        );
+      },
+    },
+  ])('keys demo stage: $name', async ({ run }) => {
+    const demoSteps = createDemoStepRegistry<DemoStep>();
+    const harness = startKeys({ services: { demoSteps } });
+    harness.pushKeymap(KEYMAP);
+    const enter = () => {
+      const step = demoSteps.list().find(({ id }) => id === 'keys.hints');
+      if (step === undefined) {
+        throw new Error('keys.hints is not registered');
+      }
+      return step.enter({ scratchDir: '/scratch', sessions: {} });
+    };
+
+    await run(harness, enter);
     await harness.stop();
   });
 });

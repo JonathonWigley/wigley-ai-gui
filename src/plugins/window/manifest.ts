@@ -7,6 +7,7 @@ export const windowManifest = definePlugin({
   label: 'Window',
   description:
     'Adds the command that brings the app forward from any other app.',
+  demoSkip: 'Its global summon shortcut acts from outside the window.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {

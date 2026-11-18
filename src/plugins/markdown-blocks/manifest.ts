@@ -9,6 +9,7 @@ export const markdownBlocksManifest = definePlugin({
   label: 'Markdown blocks',
   description:
     'Draws the :::changes, :::tree and :::details blocks agents write in markdown.',
+  demoSkip: 'Its blocks draw inside the chat, forms and docs steps.',
   dependsOn: { main: [], page: [] },
   reads: { main: [], page: [] },
   commands: {},

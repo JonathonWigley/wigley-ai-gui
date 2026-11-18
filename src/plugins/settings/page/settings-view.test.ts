@@ -836,6 +836,31 @@ describe('createSettingsView', () => {
     },
   );
 
+  it.each([
+    { name: 'a held id', id: 'keymap', opened: 'section keymap', picks: 1 },
+    {
+      name: 'an id with no section',
+      id: 'nope',
+      opened: 'no section nope',
+      picks: 0,
+    },
+  ])(
+    'openSectionById_Id_OpensAndCallsSectionPicked: $name',
+    async ({ id, opened, picks }) => {
+      const { view, logs, picked } = await shownView();
+      const logsBefore = logs.length;
+
+      view.openSectionById(id);
+
+      const added = logs.slice(logsBefore);
+      expect(added).toContain(opened);
+      expect(added.filter((line) => line.startsWith('section '))).toEqual(
+        picks === 0 ? [] : [opened],
+      );
+      expect(picked.count).toBe(picks);
+    },
+  );
+
   const NO_LEADER_CURSORS = { groups: null, items: null };
 
   // Section `q` sits after `p`, holding one row.
@@ -1220,6 +1245,83 @@ describe('createSettingsView', () => {
 
     expect(places.at(-1)?.cursorKey).toBe('p.a');
   });
+
+  // Keybindings holds `p.save`, `p.saveAll` and `p.other`, the filter `save`
+  // matching the first two.
+  const SAVE_COMMANDS_SCHEMA: UserConfigSchema = {
+    ...SCHEMA,
+    commands: Object.fromEntries(
+      ['p.save', 'p.saveAll', 'p.other'].map((id) => [
+        id,
+        { id, plugin: 'p', label: id, group: 'g', runsIn: 'page' } as const,
+      ]),
+    ),
+  };
+
+  it.each([
+    {
+      name: 'a held place',
+      place: {
+        sectionsCursor: KEYS_INDEX,
+        openSectionId: 'keymap',
+        cursorKey: 'p.saveAll',
+        filter: 'save',
+      },
+      opened: 'section keymap',
+      filter: 'save',
+      isPlaceReported: true,
+    },
+    {
+      name: 'no place',
+      place: undefined,
+      opened: 'section p',
+      filter: '',
+      isPlaceReported: false,
+    },
+    {
+      name: 'a section the schema lacks',
+      place: {
+        sectionsCursor: KEYS_INDEX,
+        openSectionId: 'gone',
+        cursorKey: 'p.saveAll',
+        filter: 'save',
+      },
+      opened: 'section p',
+      filter: '',
+      isPlaceReported: false,
+    },
+  ])(
+    'returnToPlace_Place_OpensItWithItsFilterAndCursors: $name',
+    async ({ place, opened, filter, isPlaceReported }) => {
+      const { view, logs, picked, places, sheet, move } = await shownView({
+        schema: SAVE_COMMANDS_SCHEMA,
+      });
+      view.openSectionById('plugins');
+      move('right');
+      picked.count = 0;
+      const leaderCursors = places.at(-1)?.leaderCursors ?? {
+        groups: null,
+        items: null,
+      };
+      const held =
+        place === undefined ? undefined : { ...place, leaderCursors };
+      const logsBefore = logs.length;
+
+      view.returnToPlace(held);
+
+      expect(logs.slice(logsBefore)).toContain(opened);
+      const filterBox = only(
+        only(sheet, 'settings-filter'),
+        'settings-box-input',
+      ) as FocusFakeElement;
+      expect(filterBox.value).toBe(filter);
+      expect(picked.count).toBe(0);
+      expect(fakeDocument.activeElement).toBe(asFake(view.sheet));
+      if (isPlaceReported) {
+        expect(places.at(-1)).toEqual(held);
+      }
+    },
+  );
 
   it('recording_Find_SurvivesRedraw', async () => {
     const { view, capture } = await keysView();
