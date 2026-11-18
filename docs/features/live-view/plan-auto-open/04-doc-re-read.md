@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · a doc-only task against landed code
 Wave: 4 · Depends on: 01 (its parser rules are re-read), 02 (AGENTS.md and the watch are re-read), 03 (the self-test claims are re-read)

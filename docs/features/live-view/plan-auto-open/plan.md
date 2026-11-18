@@ -242,7 +242,7 @@ Critical path: 01 → 02 → 03 → 04
 - [x] [Playtest watch and the app's pick in LiveTools](02-playtest-watch.md) — after 01
 
 ### Wave 3
-- [ ] [Self-test runs a playtest command](03-selftest-playtest.md) — after 02
+- [x] [Self-test runs a playtest command](03-selftest-playtest.md) — after 02
 
 ### Wave 4
 - [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
@@ -255,11 +255,13 @@ Review base: c4cbc082a0f39eaa57c3550b3f50f3513872e0e2
 ### Groups
 - 01 · hard · 16a017f9b · diff read: both Produces present in playtest-command.ts; wave 1 tsc --noEmit passes · concerns: tab is a separator, CR is not; TS narrowing through a const boolean
 - 02 · deep · 74a7701c7 · diff read: playtestStarted, playtestStopped, createPlaytestWatch, PlaytestWatch present; wave 2 tsc --noEmit passes · concerns: commandOf copied from chat-sessions.ts (drift risk); tests rely on entries.on hearing puts after a late publish; table 6 agent-first row answers lists by index
+- 03 · hard · b753dc8e5 · diff read: FAKE_PLAYTEST_TEXT exported, emitToolTurn takes the run, self-test waits on picks; wave 3 tsc --noEmit passes · concerns: problems copies live-tools pickText text; no test pins the toolStarted event of the fake tool turns
 ### Contract changes
 ### Rulings
 - A missing or empty --project-path value keeps an earlier path (rule 4 "sets no path" read as no assignment) — no table row covers it — a stale path in one edge case · group 01 · group 01
 - Bare redirection regex takes any fd digit (1>, 3<), same shape as the joined form — wider than the listed forms — none in practice · group 01 · group 01
 - Table 2 preview row runs with no --project-path and asserts the log, since the preview code writes its own sample pick — the pick cannot be undefined there — the row checks the filter by log only · group 02 · group 02
 - Shared lookup is a module-level lookUpPick returning {pick}|{error}; playtestStarted checks both generation and app counter though every generation bump also bumps the counter — matches the plan step 3 — none · group 02 · group 02
+- The 10 s pick wait uses global setTimeout, as chat and docs self-test scripts do, rather than a Timers dep — the plan lists none — a fake-timer test of the script would need the seam · group 03 · group 03
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 03 — Self-test runs a playtest command
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · async wait on a slot in the self-test fixture, and a new fake harness turn other scripts may meet
 Wave: 3 · Depends on: 02
@@ -86,4 +86,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit b753dc8e5 · proof: diff read: FAKE_PLAYTEST_TEXT exported, emitToolTurn takes the run, self-test waits on picks; wave 3 tsc --noEmit passes · concerns: problems copies live-tools pickText text; no test pins the toolStarted event of the fake tool turns
