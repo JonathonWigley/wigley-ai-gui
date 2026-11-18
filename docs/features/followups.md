@@ -537,6 +537,12 @@ User-facing features, those other work builds on first.
   started rests, and a message to it waits until the user starts it. Waking it means starting its process, which needs
   chat to expose "never started since the app opened" apart from "stopped by the user" (a stopped row must stay
   resting). Source session: Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **Wrap-up action chips act on click** — *needs a feature plan*: the wrap-up card (`wigley:wrap-up` § Your move)
+  draws standard actions — `push`, `install`, `/clear`, `restart`, `make`, `device build` — as chips, but a visual's
+  frame is sandboxed, so a chip only shows the word the user then types. A click could send that word to the
+  session, or run the command behind it (`install` through app-update's install line, `make` through workflow-large's
+  Clear & make). It needs a way for a visual to ask the page to act, and which chips may run without a confirm.
+  Source session: Claude Code 2d49f095-112d-44a6-acba-0359d2074186 in ai.
 
 ## Code cleanup
 
