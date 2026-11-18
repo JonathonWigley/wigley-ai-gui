@@ -10,7 +10,7 @@ import { programNotFoundMessage } from '../../../shared/program-lookup';
 import { SESSION_IDENTITY_ENV } from '../../../shared/session-env';
 import type { PoolAction, PoolActionResult } from '../contract';
 
-// Open may wait on `unity status` and then on the editor's `editor focus` (`editor_focus` on Pipeline 0.8), which the CLI gives 60 seconds.
+// Open may wait on `unity status`, then activates the editor by pid; when the desktop cannot, it falls back to `editor focus` (`editor_focus` on Pipeline 0.8), which the CLI gives 60 seconds.
 const RUN_TIMEOUT_MS: Record<PoolAction, number> = {
   hold: 30_000,
   release: 30_000,
