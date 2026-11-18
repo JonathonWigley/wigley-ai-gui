@@ -157,7 +157,7 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 - [x] [Teardown rules after a stop](24-teardown-rules.md) — after 08, 11, 23
 
 ### Wave 7
-- [ ] [Every view's dispose against what it drew](25-view-dispose-audit.md) — after 24
+- [x] [Every view's dispose against what it drew](25-view-dispose-audit.md) — after 24
 
 ### Wave 8
 - [ ] [Doc re-read and follow-up removal](26-doc-re-read.md) — after every group
@@ -190,6 +190,7 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 23 · deep · b1ce47c79 37a37f861 · diff read: SelfTestStep.click runs after write/remove and before keys; stepToSessionRow replaces forms' stepToRow and sessions' stepNextTo; chat steps by single presses and clicks an unfocused pane's hub head; compile fix 37a37f861 on the same rung; typecheck and lint pass · concerns: the cross-Bridge bind and the first click on an unfocused pane's hub head are checked only live (test gate and live session); chat and forms imports from sessions/contract are now value imports
 - 11 · hard · d17f69752 · diff read: createPendingTick replaces the four pendingTick copies (grep pendingTick src empty); shared fakeTimers replaces eleven suite copies (grep 'function fakeTimers' src prints only the shared file); typecheck and lint pass · concerns: toasts.test moved to the shared fake beyond Files; its draw-throws row now asserts armed.size 0, which also passes on a set-then-cleared timer
 - 24 · deep · 592af3fa5 · diff read of the Rule 2 router, switch wiring, detachAll, chat main dispose and session-tabs drop; the sweep sites checked against the worker's per-file list; typecheck and lint (after lead oxfmt over four files) clean · concerns: Rule 3 sweep sites have no test rows (task asks a row per changed site in a tested file); popup.test flipped: a note send landing after stop now toasts nothing; workflow-large countdown timers are guarded, not cancelled; scheduling main's nested finally lets a later error win; residual log-only continuations in rename-dialog, stash-flow, account-commands, sign-in-flow, attachments, and forms/main/start.ts untouched
+- 25 · deep · 212d80115 · diff read of all four lots: 10 gaps fixed with a test row each, 19 views reported clean with reasons; typecheck and lint (lead oxfmt over two test files) clean · concerns: chat's reason box, close-confirm and sign-in dialogs share image-viewer's undisposed layout subscription but sit outside the view list; notes popup never disposes its NotesParts draws and keys start never disposes its title-bar button Drawn; picker, forms and primer views drop their overlay contribute Disposable (harmless while view and part share a lifetime); doc-view's drawnPrompt is disposed only through endConflict; gallery-parts.ts edited outside the lot list
 ### Contract changes
 ### Rulings
 - 02: the raw-JSON site in malformedEntryField passes { source } to ownsRoot rather than widening its parameter · group 02
@@ -209,5 +210,7 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - toasts.test.ts joins group 11: a merge brought back its fakeTimers copy · group 11
 - Contract changes inside plugins: PluginChannels.dropParked and PluginSwitchDeps.dropParked; MainApiDeps.channels narrowed to Pick<PluginChannels,'forPlugin'>; startMainParts takes channels; isStopped deps on FinishFormDeps, the forms/primer/picker command deps, SessionsPageModelDeps, WorkflowActionsDeps, ChatCommandDeps, StartPromptDeps, ImportBoxDeps; SettingsView.dispose · group 24
 - A reload reply's reloaded ids count as stopped for dropParked; a parked invoke is answered a microtask after its method registers again · group 24
+- chatroom-view.ts joins lot C and schedules-view.ts lot D (the find's new views) · group 25
+- services.timers counts as registered through api (page-api's trackedTimers clears them at stop); a handed-back drawn part is a gap · group 25
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 25 — Every view's dispose against what it drew
 
-Status: not started
+Status: done
 Type: Parallel
 Rung: deep · a teardown audit across every plugin's view lifecycle (observers, timers, listeners, subscriptions): each of 26 views is checked for the undo of each, and a missed undo leaks DOM or listeners past a stop
 Wave: 7 · Depends on: 24 (both list `session-tabs-view.ts`, `backlog-view.ts` and `settings-view.ts`; this audit reads 24's teardown rules as landed)
@@ -105,3 +105,5 @@ Commit:    one commit for the group (the lots' changes together), e.g. "Every vi
            <views fixed> (follow-up: Every view's dispose against what it drew)"
 
 ## Proof
+
+Commit 212d80115 · proof: diff read of all four lots: 10 gaps fixed with a test row each, 19 views reported clean with reasons; typecheck and lint (lead oxfmt over two test files) clean · concerns: chat's reason box, close-confirm and sign-in dialogs share image-viewer's undisposed layout subscription but sit outside the view list; notes popup never disposes its NotesParts draws and keys start never disposes its title-bar button Drawn; picker, forms and primer views drop their overlay contribute Disposable (harmless while view and part share a lifetime); doc-view's drawnPrompt is disposed only through endConflict; gallery-parts.ts edited outside the lot list
