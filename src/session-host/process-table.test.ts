@@ -810,46 +810,44 @@ describe('process table', () => {
   const DRAIN = 'drain';
   // Each step at its time after the background line that lists none; `endsAt` null when only the report turn's
   // `result` ends the process.
-  it.each<{ label: string; steps: [number, string][]; endsAt: number | null }>(
-    [
-      {
-        label: 'no report turn',
-        steps: [],
-        endsAt: DRAIN_REPORT_GRACE_MS,
-      },
-      {
-        label: 'a report turn started within the grace',
-        steps: [
-          [DRAIN_REPORT_GRACE_MS / 2, INIT],
-          [DRAIN_REPORT_GRACE_MS / 2, MAIN_ASSISTANT],
-        ],
-        endsAt: null,
-      },
-      {
-        label: 'a report turn whose first busy line comes 3 s after its init',
-        steps: [
-          [DRAIN_REPORT_GRACE_MS - 1000, INIT],
-          [DRAIN_REPORT_GRACE_MS + 2000, MAIN_ASSISTANT],
-        ],
-        endsAt: null,
-      },
-      {
-        label: 'a main line within the grace, then silence',
-        steps: [[DRAIN_REPORT_GRACE_MS - 1000, INIT]],
-        endsAt: 2 * DRAIN_REPORT_GRACE_MS - 1000,
-      },
-      {
-        label: 'a subagent line within the grace',
-        steps: [[DRAIN_REPORT_GRACE_MS - 1000, SUBAGENT_ASSISTANT]],
-        endsAt: DRAIN_REPORT_GRACE_MS,
-      },
-      {
-        label: 'a drain sent within the grace',
-        steps: [[DRAIN_REPORT_GRACE_MS / 2, DRAIN]],
-        endsAt: DRAIN_REPORT_GRACE_MS,
-      },
-    ],
-  )(
+  it.each<{ label: string; steps: [number, string][]; endsAt: number | null }>([
+    {
+      label: 'no report turn',
+      steps: [],
+      endsAt: DRAIN_REPORT_GRACE_MS,
+    },
+    {
+      label: 'a report turn started within the grace',
+      steps: [
+        [DRAIN_REPORT_GRACE_MS / 2, INIT],
+        [DRAIN_REPORT_GRACE_MS / 2, MAIN_ASSISTANT],
+      ],
+      endsAt: null,
+    },
+    {
+      label: 'a report turn whose first busy line comes 3 s after its init',
+      steps: [
+        [DRAIN_REPORT_GRACE_MS - 1000, INIT],
+        [DRAIN_REPORT_GRACE_MS + 2000, MAIN_ASSISTANT],
+      ],
+      endsAt: null,
+    },
+    {
+      label: 'a main line within the grace, then silence',
+      steps: [[DRAIN_REPORT_GRACE_MS - 1000, INIT]],
+      endsAt: 2 * DRAIN_REPORT_GRACE_MS - 1000,
+    },
+    {
+      label: 'a subagent line within the grace',
+      steps: [[DRAIN_REPORT_GRACE_MS - 1000, SUBAGENT_ASSISTANT]],
+      endsAt: DRAIN_REPORT_GRACE_MS,
+    },
+    {
+      label: 'a drain sent within the grace',
+      steps: [[DRAIN_REPORT_GRACE_MS / 2, DRAIN]],
+      endsAt: DRAIN_REPORT_GRACE_MS,
+    },
+  ])(
     'drain_BackgroundWorkEnds_EndsAfterTheGraceOrAtTheReportTurnEnd: $label',
     async ({ steps, endsAt }) => {
       const { table, time, children } = setUp();
