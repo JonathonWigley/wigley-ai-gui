@@ -100,7 +100,7 @@ export interface RoundViewDeps {
     | 'place'
     | 'release'
     | 'destroyReleased'
-    | 'isMounted'
+    | 'isPlaced'
     | 'editorOf'
     | 'active'
     | 'activeMode'

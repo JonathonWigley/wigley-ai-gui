@@ -414,17 +414,17 @@ describe('createEditorBoxes', () => {
     expect(boxes.activeMode()).toBeNull();
     expect(boxes.boxOf(created[0].editor)).toBeUndefined();
     expect(calls).toBe(1);
-    expect(boxes.isMounted(notes)).toBe(false);
+    expect(boxes.isPlaced(notes)).toBe(false);
     expect(created[0].editor.isDestroyed).toBe(false);
     boxes.place(div(), notes, 'a');
-    expect(boxes.isMounted(notes)).toBe(true);
+    expect(boxes.isPlaced(notes)).toBe(true);
   });
 
   it.each<{
     steps: string;
     before: (boxes: ReturnType<typeof emptySetup>['boxes']) => void;
   }>([
-    { steps: 'never mounted', before: () => undefined },
+    { steps: 'never placed', before: () => undefined },
     {
       steps: 'already released',
       before: (boxes) => {
@@ -467,8 +467,8 @@ describe('createEditorBoxes', () => {
       false,
     ]);
     expect(notesFrame.parentNode).not.toBeNull();
-    expect(boxes.isMounted(notes)).toBe(true);
-    expect(boxes.isMounted(other)).toBe(false);
+    expect(boxes.isPlaced(notes)).toBe(true);
+    expect(boxes.isPlaced(other)).toBe(false);
     // `reason` mounts anew; `other` moves its kept editor.
     boxes.place(div(), reason, '');
     boxes.place(div(), other, '');
@@ -502,7 +502,7 @@ describe('createEditorBoxes', () => {
     steps: string;
     before: (boxes: ReturnType<typeof emptySetup>['boxes']) => void;
   }>([
-    { steps: 'never mounted', before: () => undefined },
+    { steps: 'never placed', before: () => undefined },
     {
       steps: 'already destroyed',
       before: (boxes) => {

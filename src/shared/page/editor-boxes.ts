@@ -20,7 +20,7 @@ import { inputFrame } from './ui/input-frame';
 export interface BoxIdentity<Box> {
   // The form a box belongs to; `destroyForm` drops a form's boxes together.
   formIdOf(box: Box): string;
-  // Unique among every mounted box.
+  // Unique among every placed box.
   keyOf(box: Box): string;
   // How the log names the box, e.g. `notes on question 1`.
   describe(box: Box): string;
@@ -52,7 +52,7 @@ export interface EditorBoxes<Box> {
   // released and did not place again.
   destroyReleased(formId: string): void;
   // Whether the box is placed; false once released or destroyed.
-  isMounted(box: Box): boolean;
+  isPlaced(box: Box): boolean;
   // Undefined for a released box's editor.
   boxOf(editor: TextEditor): Box | undefined;
   // The box's editor while it is placed, else undefined.
@@ -70,8 +70,8 @@ export interface EditorBoxes<Box> {
   destroyBox(box: Box): void;
   destroyForm(formId: string): void;
   // The editor files dropped on form `formId` go into: its box activated last
-  // while that box is placed and `isShown`, else its placed, shown box that
-  // mounted first; null when the form shows none. Both records outlive
+  // while that box is placed and `isShown`, else its placed, shown box whose
+  // editor was created first; null when the form shows none. Both records outlive
   // `release`, `destroyBox` and `destroyForm`, so a rebuilt form keeps them.
   fileEditor(formId: string, isShown: (box: Box) => boolean): TextEditor | null;
   // Drops the form's last-activated box and its boxes' first-mount order.
@@ -239,7 +239,7 @@ export function createEditorBoxes<Box>(
       }
       notify();
     },
-    isMounted(box) {
+    isPlaced(box) {
       return placedEntry(identity.keyOf(box)) !== undefined;
     },
     boxOf(editor) {
@@ -254,7 +254,7 @@ export function createEditorBoxes<Box>(
       const key = identity.keyOf(box);
       const entry = placedEntry(key);
       if (entry === undefined) {
-        throw new Error(`No box is mounted as ${key}`);
+        throw new Error(`No box is placed as ${key}`);
       }
       entry.editor.focus(options);
       activate(key, box);
@@ -343,7 +343,7 @@ export function keepFocusedBox<Box>(
     | 'active'
     | 'activeMode'
     | 'focus'
-    | 'isMounted'
+    | 'isPlaced'
     | 'editorOf'
     | 'formIdOf'
     | 'destroyReleased'
@@ -358,7 +358,7 @@ export function keepFocusedBox<Box>(
   const editorBefore = focused === null ? undefined : boxes.editorOf(focused);
   rebuild();
   boxes.destroyReleased(formId);
-  if (focused === null || !boxes.isMounted(focused)) {
+  if (focused === null || !boxes.isPlaced(focused)) {
     return;
   }
   const isKept = boxes.editorOf(focused) === editorBefore;

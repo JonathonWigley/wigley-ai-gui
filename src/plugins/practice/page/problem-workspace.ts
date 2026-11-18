@@ -808,7 +808,7 @@ export function createProblemWorkspace(
         ...kitFor(paneOfBox(id), rollback),
         textBox,
       });
-      if (!boxes.isMounted(id)) {
+      if (!boxes.isPlaced(id)) {
         textBox(root);
       }
       return { element: root };

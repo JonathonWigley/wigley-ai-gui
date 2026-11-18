@@ -85,7 +85,7 @@ interface CardContext {
   anchor: ScopedAnchor;
   mount: MarkdownMount;
   boxes: Map<string, ItemTextBox>;
-  mounted: Set<string>;
+  placed: Set<string>;
   updaters: ((round: RoundState) => void)[];
   placedParts: PlacedPart[] | null;
 }
@@ -134,7 +134,7 @@ export interface CardKit<T extends Kit = Kit> {
   updateContributedParts(): void;
   // Places each of the item's boxes no part placed, in its default field at
   // the end of `card`.
-  appendUnmountedBoxes(card: HTMLElement): void;
+  appendUnplacedBoxes(card: HTMLElement): void;
   // Places the contributed parts at the end of `card` when the card never
   // called `contributedParts`; nothing when no part names the card's kind.
   appendUnplacedParts(card: HTMLElement): void;
@@ -321,7 +321,7 @@ function cardContext(
     anchor: scopedAnchor(deps.keys, formsScope('forms')),
     mount,
     boxes: itemTextBoxes(round, item, pageKind),
-    mounted: new Set(),
+    placed: new Set(),
     updaters: [],
     placedParts: null,
   };
@@ -343,10 +343,10 @@ function cardKitOver<T extends Kit>(card: CardContext, kit: T): CardKit<T> {
         updateContributedPart(part, deps);
       }
     },
-    appendUnmountedBoxes(element) {
+    appendUnplacedBoxes(element) {
       for (const field of card.boxes.keys()) {
-        if (!card.mounted.has(field)) {
-          mountTextBox(card, element, field);
+        if (!card.placed.has(field)) {
+          placeTextBox(card, element, field);
         }
       }
     },
@@ -428,7 +428,7 @@ function itemTextBoxes(
 
 // Places the item's box for `field` in its default field; the field hides
 // while it is not in the kind's `boxes.shown` for the item's answer.
-function mountTextBox(
+function placeTextBox(
   card: CardContext,
   parent: HTMLElement,
   field: string,
@@ -437,8 +437,8 @@ function mountTextBox(
   if (box === undefined) {
     throw new Error(`${card.item.kind} card has no ${field} box`);
   }
-  if (card.mounted.has(field)) {
-    throw new Error(`${card.item.kind} card mounted ${field} twice`);
+  if (card.placed.has(field)) {
+    throw new Error(`${card.item.kind} card placed ${field} twice`);
   }
   const { caption } = box;
   const { anchor } = card;
@@ -451,7 +451,7 @@ function mountTextBox(
     (fieldElement) => card.deps.placeBox(fieldElement, box.target, box.text),
   );
   appendBoxKeys(built, anchor);
-  card.mounted.add(field);
+  card.placed.add(field);
   const { item, kind } = card;
   card.updaters.push((current) => {
     const shown = kind.boxes.shown(kindAnswer(current, item));
@@ -518,7 +518,7 @@ function buildBaseKit(card: CardContext): Kit {
       return header;
     },
     position: card.position,
-    textBox: (parent, field) => mountTextBox(card, parent, field),
+    textBox: (parent, field) => placeTextBox(card, parent, field),
     contributedParts: (parent) => placeContributedParts(card, parent),
   };
 }
@@ -529,7 +529,7 @@ function buildBaseKit(card: CardContext): Kit {
 function buildAnswerKit(card: CardContext): AnswerKit {
   const { item } = card;
   const kit = buildBaseKit(card);
-  const mountIfField = (parent: HTMLElement, field: string) => {
+  const placeIfField = (parent: HTMLElement, field: string) => {
     if (card.boxes.has(field)) {
       kit.textBox(parent, field);
     }
@@ -537,7 +537,7 @@ function buildAnswerKit(card: CardContext): AnswerKit {
   return {
     ...kit,
     answerControls(parent) {
-      mountIfField(parent, 'notes');
+      placeIfField(parent, 'notes');
       const toggles = element('div', 'toggles');
       const notApplicable = textButton(
         'Not applicable',
@@ -553,7 +553,7 @@ function buildAnswerKit(card: CardContext): AnswerKit {
       appendCardKeys(card, dontAsk, formsCommand('toggleDontAsk'));
       toggles.append(notApplicable, dontAsk);
       parent.append(toggles);
-      mountIfField(parent, 'dontAskReason');
+      placeIfField(parent, 'dontAskReason');
       card.updaters.push((current) => {
         const answer = itemAnswer(current, item);
         showPressed(notApplicable, answer.notApplicable);

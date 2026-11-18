@@ -106,7 +106,7 @@ export function buildLayoutCard(
 // What a layout's card or pane places its text boxes and anchors its keys
 // through, and where it records each anchor the kit names and each slot
 // subscription and markdown mount it makes.
-interface MountingDeps {
+interface PlacingDeps {
   placeBox(parent: HTMLElement, target: TextTarget, text: string): HTMLElement;
   releaseBox(target: TextTarget): void;
   keys: Pick<KeyHints, 'anchor'>;
@@ -118,7 +118,7 @@ interface MountingDeps {
 // rolled-back or disposed draw detaches the box's frame and the editor lives
 // on, and each anchor it names, and each anchor the kit names and each slot
 // subscription and markdown mount it records, also recorded in `rollback`.
-export function recordingDeps<D extends MountingDeps>(
+export function recordingDeps<D extends PlacingDeps>(
   deps: D,
   rollback: RollbackDeps,
 ): D {
@@ -180,7 +180,7 @@ function buildCard(
     (card as LayoutCard | undefined)?.element,
     `${item.kind} card`,
   );
-  kit.appendUnmountedBoxes(element);
+  kit.appendUnplacedBoxes(element);
   kit.appendUnplacedParts(element);
   return { element, card, kit };
 }

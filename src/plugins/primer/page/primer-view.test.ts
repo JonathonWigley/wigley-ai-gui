@@ -661,8 +661,8 @@ describe('primer item card', () => {
     const [mark] = findAll(card, 'ui-toggle-mark');
     expect(mark.classList.contains('is-selected')).toBe(false);
     expect(card.textContent.includes('Added')).toBe(false);
-    expect(boxes.isMounted(itemText2)).toBe(false);
-    expect(boxes.isMounted(itemComment2)).toBe(true);
+    expect(boxes.isPlaced(itemText2)).toBe(false);
+    expect(boxes.isPlaced(itemComment2)).toBe(true);
     expect(findAll(card, 'primer-box')).toHaveLength(1);
   });
 
@@ -672,8 +672,8 @@ describe('primer item card', () => {
 
     expect(findAll(card, 'primer-card-heading')).toEqual([]);
     expect(card.textContent.includes('Added')).toBe(true);
-    expect(boxes.isMounted(itemText2)).toBe(true);
-    expect(boxes.isMounted(itemComment2)).toBe(true);
+    expect(boxes.isPlaced(itemText2)).toBe(true);
+    expect(boxes.isPlaced(itemComment2)).toBe(true);
     expect(findAll(card, 'primer-box')).toHaveLength(2);
   });
 
@@ -723,7 +723,7 @@ describe('primer item card', () => {
     expect(mark.classList.contains('is-selected')).toBe(true);
     expect(findAll(card, 'primer-box')).toEqual([frame]);
     expect(
-      boxes.isMounted({
+      boxes.isPlaced({
         primerId: 'p1',
         target: { field: 'itemComment', entryId: '1', item: 2 },
       }),
@@ -788,7 +788,7 @@ describe('primer add-item box', () => {
 
     expect(itemCount(setup)).toBe(2);
     expect(setup.store.get().forms[0].newItemTexts['1']).toBe('Test the store');
-    expect(setup.boxes.isMounted(newItem1)).toBe(true);
+    expect(setup.boxes.isPlaced(newItem1)).toBe(true);
   });
 
   it('adds the item once on leaveBox', () => {
@@ -842,7 +842,7 @@ describe('primer add-item box', () => {
     expect(addedLines(setup.logs)).toEqual([
       expect.stringContaining('item 20 on task 1'),
     ]);
-    expect(setup.boxes.isMounted(newItem1)).toBe(false);
+    expect(setup.boxes.isPlaced(newItem1)).toBe(false);
     expect(findAll(setup.popup, 'primer-field')).toHaveLength(1);
     const active = setup.boxes.active();
     expect(active === null ? null : boxKey(active)).toBe('p1/task/1/comment');
@@ -865,7 +865,7 @@ describe('primer add-item box', () => {
 
     setup.run('addItem');
 
-    expect(setup.boxes.isMounted(newItem1)).toBe(false);
+    expect(setup.boxes.isPlaced(newItem1)).toBe(false);
     expect(setup.logs).toEqual([expect.stringContaining('task 1')]);
   });
 });
@@ -1288,8 +1288,8 @@ describe('primer layout', () => {
         `layout ${USER_LAYOUT} task card failed: card broke`,
       ),
     );
-    expect(boxes.isMounted(taskComment1)).toBe(true);
-    expect(boxes.isMounted(newItem1)).toBe(true);
+    expect(boxes.isPlaced(taskComment1)).toBe(true);
+    expect(boxes.isPlaced(newItem1)).toBe(true);
     expect(findAll(pane(popup, 'primer-card'), 'primer-box')).toHaveLength(2);
   });
 

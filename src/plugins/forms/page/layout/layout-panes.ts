@@ -639,7 +639,7 @@ function drawReview(
   let drawn: RoundState | null = null;
   // The rows the latest update redraws; null when they were unchanged.
   let changedRows: ReviewRow[] | null = null;
-  let isNoteMounted = false;
+  let isNotePlaced = false;
   const input: ReviewInput = {
     round: roundInfo(round.round),
     rows: answerableItems(round).map((item, row) => ({
@@ -691,10 +691,10 @@ function drawReview(
       return line;
     },
     roundNote(noteParent) {
-      if (isNoteMounted) {
-        throw new Error('review pane mounted note twice');
+      if (isNotePlaced) {
+        throw new Error('review pane placed note twice');
       }
-      isNoteMounted = true;
+      isNotePlaced = true;
       const note = buildField(
         noteParent,
         'field-note',
@@ -730,7 +730,7 @@ function drawReview(
     (review(parent, input, kit) as LayoutPane | undefined)?.element,
     'review',
   );
-  if (!isNoteMounted) {
+  if (!isNotePlaced) {
     kit.roundNote(paneElement);
   }
   return {

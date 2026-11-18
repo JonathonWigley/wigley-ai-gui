@@ -710,7 +710,7 @@ describe('plugin kind kit', () => {
       const { kit, round } = pollKit(oneBoxPollKind(false, shown), deps);
       const card = new FakeElement('div');
 
-      kit.appendUnmountedBoxes(asHtml(card));
+      kit.appendUnplacedBoxes(asHtml(card));
       kit.update(round);
 
       const [field] = findAll(card, 'field-why');
