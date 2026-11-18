@@ -1481,6 +1481,44 @@ describe('the sessions list in the page part', () => {
     await setup.harness.stop();
   });
 
+  // Breaks: a listClose whose close lands after the part stopped still
+  // focusing the list, or one that lands live leaving the keys where they went.
+  it.each([
+    { case: 'the part is live', stopsFirst: false, refocused: true },
+    { case: 'the part stopped first', stopsFirst: true, refocused: false },
+  ])(
+    'listClose_CloseLands_RefocusesTheListOnlyWhileLive ($case)',
+    async ({ stopsFirst, refocused }) => {
+      const answer = Promise.withResolvers<null>();
+      const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+        closeReply: () => answer.promise,
+      });
+      setup.harness.setSideBarShown(true);
+      setup.harness.mode(MODE_ID).focusSideBar?.();
+      const focused = () =>
+        (document as unknown as FocusFakeDocument).activeElement;
+      setup.harness.started().commands.listClose({ arg: undefined });
+      await settle();
+      const outside = document.createElement('textarea') as unknown as {
+        focus(): void;
+      };
+      outside.focus();
+      const elsewhere = focused();
+      expect(setup.closes).toHaveLength(1);
+
+      if (stopsFirst) {
+        await setup.harness.stop();
+      }
+      answer.resolve(null);
+      await settle();
+
+      expect(focused() === elsewhere).toBe(!refocused);
+      if (!stopsFirst) {
+        await setup.harness.stop();
+      }
+    },
+  );
+
   it('focusMain_SetsIdle_WhenThePaneShowsNoTab', async () => {
     const setup = await startWithList(['s1'], 's1');
     setup.mode.focusSideBar?.();

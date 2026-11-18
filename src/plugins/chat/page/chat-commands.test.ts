@@ -1445,6 +1445,7 @@ describe('chat commands', () => {
     reply: string;
     refusal?: Error;
     clipboardFailure?: Error;
+    boxAfter?: string;
     shown: () => ChatSession;
     slashCommands?: () => SlashCommands;
     act: (run: ReturnType<typeof setUp>) => void;
@@ -1452,6 +1453,7 @@ describe('chat commands', () => {
     {
       reply: 'a refused send',
       refusal: refused,
+      boxAfter: '',
       shown: typedHi,
       act: (run) => run.handlers.send({ arg: undefined }),
     },
@@ -1538,9 +1540,17 @@ describe('chat commands', () => {
     },
   ])(
     'logs, toasts, marks and puts back nothing for $reply landing after the part stopped',
-    async ({ refusal, clipboardFailure, shown, slashCommands, act }) => {
+    async ({
+      refusal,
+      clipboardFailure,
+      boxAfter,
+      shown,
+      slashCommands,
+      act,
+    }) => {
+      const shownSession = shown();
       const run = setUp(
-        shown(),
+        shownSession,
         refusal,
         true,
         slashCommands?.() ?? createSlashCommands(),
@@ -1556,6 +1566,11 @@ describe('chat commands', () => {
       expect(run.toasts).toEqual([]);
       expect(run.logs).toEqual(logsAtStop);
       expect(run.marked).toEqual(markedAtStop);
+      if (boxAfter !== undefined) {
+        expect((shownSession.box as ReturnType<typeof box>).held.text).toBe(
+          boxAfter,
+        );
+      }
     },
   );
 

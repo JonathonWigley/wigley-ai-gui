@@ -175,7 +175,6 @@ function startChatroom(
   const hooks = new Map<string, HookHandler>();
   const instructions: string[] = [];
   userUnreadGate.next = null;
-  heldReads.rooms = null;
   heldReads.rooms = options.heldRooms ?? null;
   heldReads.endClaimsOf = null;
   teardown.fails = null;

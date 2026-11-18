@@ -332,8 +332,8 @@ export type PressedFocusAction = 'keep' | 'letGo' | 'toBox';
 // A selection the press made in the pane stays, and so does the focus it came
 // with. A text box the press focused keeps the keys, the Chat box going
 // through `toBox` to enter insert mode at its caret. Any other focus, or one
-// outside the pane, lets go. Over an open popup any focus in the pane stays, and one outside it
-// lets go with no chat box under the popup taking the keys.
+// outside the pane, lets go. Over an open popup any focus in the pane stays,
+// and one outside it lets go with no chat box under the popup taking the keys.
 export function pressedFocusAction(
   facts: PressedPaneFacts,
 ): PressedFocusAction {

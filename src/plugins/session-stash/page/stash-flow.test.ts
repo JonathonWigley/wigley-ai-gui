@@ -114,7 +114,7 @@ describe('stashSession', () => {
       calls: ['ask'],
     },
   ])(
-    'stashSession_PageStopsDuringTheAsk_DoesNothingMore ($case)',
+    'does nothing more when the page stops during the ask ($case)',
     async (test) => {
       let isStopped = false;
       const { deps, calls, logged, toasts } = flowSetup(
@@ -143,7 +143,7 @@ describe('stashSession', () => {
     },
   );
 
-  it('stashSession_PageStopsDuringTheClose_DropsAndLogsNothing', async () => {
+  it('drops and logs nothing when the page stops during the close', async () => {
     let isStopped = false;
     const { deps, calls, logged } = flowSetup(true, false, {
       isStopped: () => isStopped,

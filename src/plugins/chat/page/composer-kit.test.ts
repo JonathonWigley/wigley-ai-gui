@@ -1037,7 +1037,7 @@ describe('composer surface activity dock', () => {
   );
 
   it('dispose still disposes the working line parts when the dock part throws', () => {
-    const { surface, anchors } = setUpSurface({
+    const { surface, anchors, slot } = setUpSurface({
       working: userPart(),
       workingLine: userPart(),
     });
@@ -1045,13 +1045,30 @@ describe('composer surface activity dock', () => {
     const partAnchors = anchors.filter(
       (anchor) => anchor.command === chatCommand('newSession'),
     );
-    partAnchors[0].disposeError = new Error('anchor refused');
+    const inDock = (anchor: (typeof anchors)[number]) => {
+      for (
+        let at: FakeElement | null = asFake(anchor.element);
+        at !== null;
+        at = at.parentNode
+      ) {
+        if (at === slot) {
+          return true;
+        }
+      }
+      return false;
+    };
+    const dockAnchor = partAnchors.find(inDock);
+    const laterAnchors = partAnchors.filter((anchor) => !inDock(anchor));
+    if (dockAnchor === undefined) {
+      throw new Error('the dock part drew no anchor in its slot');
+    }
+    dockAnchor.disposeError = new Error('anchor refused');
 
     expect(() => surface.dispose()).toThrow('anchor refused');
 
-    expect(partAnchors.length).toBeGreaterThan(1);
-    expect(partAnchors.map((anchor) => anchor.isDisposed)).toEqual(
-      partAnchors.map(() => true),
+    expect(laterAnchors.length).toBeGreaterThan(0);
+    expect(laterAnchors.map((anchor) => anchor.isDisposed)).toEqual(
+      laterAnchors.map(() => true),
     );
   });
 });

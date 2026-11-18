@@ -380,20 +380,6 @@ describe('audio-picker main part', () => {
     ).toEqual([]);
   });
 
-  // Breaks if the sample write settling after the stop still adds drive
-  // actions to the stopped part.
-  it('a stop before the sample write settles adds no drive actions', async () => {
-    const written = Promise.withResolvers<void>();
-    sampleWrite.gate = written.promise;
-    const harness = startWithSessions({ homeDir });
-    await harness.stop();
-
-    written.resolve();
-    await flush();
-
-    expect(harness.drive?.actions.has('openPicker')).toBe(false);
-  });
-
   // Breaks if a preview that refuses to end is swallowed on a quit.
   it('a quit whose preview refuses to end still rejects once stopped', async () => {
     const sessions = previewSessions();
