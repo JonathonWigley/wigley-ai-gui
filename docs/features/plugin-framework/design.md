@@ -378,8 +378,9 @@ Settled in the 2026-11-09 interview for Lane E of `docs/features/intent-alignmen
   plugin was rejected: a global `:w` per plugin needs a claiming rule to do what the per-editor event already does.
   The pinned vim engine (`@replit/codemirror-vim-core` 0.1.0) has no ex undefine, so a dispose cannot bring back an
   earlier command: `defineEx` refuses a name, or a prefix, that names one of vim's own ex commands (a pinned list
-  that a test checks) and one another definition holds, and a dispose leaves a stub, so `:name` then reports an
-  unknown command.
+  that a test checks) and one another definition holds. A dispose swaps the handler for a no-op, then deletes the
+  command's entry in vim's command table through `Vim.map` and `Vim.unmap`, so `:name` reports vim's `Not an editor
+  command` and the prefix is free again.
 - **Plugin remaps.** A manifest's `keys.remaps` takes the user keymap's `{ mode, keys, to }` shape and layers in
   dependency order under the user's keymap, as binds do. A disabled plugin's remaps leave the served keymap and the
   layer under them shows through again; a paused plugin keeps them, since a remap has no handler to restart.

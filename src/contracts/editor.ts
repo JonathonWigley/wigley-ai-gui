@@ -226,7 +226,8 @@ export interface EditorHost {
   // prefix that vim would run another command for when typed alone, whether
   // that command is vim's own or a live definition's (the host's included): a
   // prefix that would take a typed form from it. After the returned handle's
-  // `dispose`, `:name` reports an unknown command.
+  // `dispose`, `:name` reports vim's `Not an editor command` and the prefix is
+  // free again.
   defineEx(name: string, prefix: string, handler: ExHandler): Disposable;
   // Replaces the keymap every editor follows, at once in every open editor and
   // in every editor created after. The caller has checked the keymap with

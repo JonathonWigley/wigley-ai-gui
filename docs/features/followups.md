@@ -429,14 +429,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **`ask_round` still names three item kinds** — *agent-ready*: its description says "question, finding or notice, and
   may carry any mix of the three" (`src/plugins/forms/main/tool-definitions.ts:53`), also when plugin kinds are
   registered. Build that sentence from the registered kinds.
-- **`defineEx` leaves a throwing stub and a held prefix after `dispose`, and its shadow check depends on start
-  order** — *needs a feature plan*: a disposed definition leaves a stub in vim's tables, and its prefix stays there,
-  since vim has no call to remove an ex command (`defineHostEx`, `src/renderer/codemirror-vim/codemirror-vim-host.ts:164-189`).
-  The stub throws, so `:name` after the plugin stops raises an uncaught renderer error. The shadow check reads only
-  the live `defined` map (`exDefinitionProblem`, `src/renderer/codemirror-vim/ex-definitions.ts:111-149`, called from
-  `definePluginEx` at `codemirror-vim-host.ts:191-210`), so whether a reloading plugin's definition is refused depends
-  on which definitions are live when it starts. Options: have the stub show vim's own message without throwing; keep a
-  per-name record of every name and prefix ever defined, and check against that.
 
 ## Features
 

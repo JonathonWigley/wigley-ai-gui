@@ -1,8 +1,103 @@
 import { EditorState } from '@codemirror/state';
-import { describe, expect, it } from 'vitest';
+import { Vim } from '@replit/codemirror-vim';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { FuzzyMatcher } from '../../contracts/fuzzy';
 import { CHIP_DRAWING, CHIP_PATHS } from './chip-paths.test-support';
 import { fileChipExtension } from './chip-decorations';
-import { insertionOf } from './codemirror-vim-host';
+import { createCodeMirrorVimHost, insertionOf } from './codemirror-vim-host';
+
+type VimEditor = Parameters<typeof Vim.handleEx>[0];
+
+interface FakeNode {
+  readonly textContent: string;
+  children: FakeNode[];
+}
+
+// The DOM vim builds its message from: an element's text is its children's.
+function fakeNode(text = ''): FakeNode {
+  const node = {
+    style: {},
+    children: [] as FakeNode[],
+    nodeType: 1,
+    get textContent(): string {
+      return text + node.children.map((child) => child.textContent).join('');
+    },
+    setAttribute: () => undefined,
+    appendChild: (child: FakeNode) => node.children.push(child),
+  };
+  return node;
+}
+
+// An editor as far as vim's ex dispatch reads one, with each message vim
+// shows collected in `messages`; the host hosts no such editor.
+function promptEditor(messages: string[]): VimEditor {
+  const editor = {
+    state: { vim: { visualMode: false } },
+    operation: (run: () => void) => run(),
+    getCursor: () => ({ line: 0, ch: 0 }),
+    openNotification: (message: FakeNode) => {
+      messages.push(message.textContent);
+    },
+  };
+  return editor as unknown as VimEditor;
+}
+
+describe('defineEx', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      name: 'a disposed command is unknown to vim, which says so itself',
+      typed: 'hostgone',
+      disposes: true,
+      messages: ['Not an editor command ":hostgone"'],
+      logged: [],
+    },
+    {
+      name: 'a disposed command typed with an argument shows all of it',
+      typed: 'hostgone! hi',
+      disposes: true,
+      messages: ['Not an editor command ":hostgone! hi"'],
+      logged: [],
+    },
+    {
+      name: 'a throw from a live command is logged and leaves vim silent',
+      typed: 'hostgone',
+      disposes: false,
+      messages: [],
+      logged: [
+        'editor: ex command hostgone failed: A bound key or ex command ran in an editor this host did not create',
+      ],
+    },
+  ])('$name', ({ typed, disposes, messages, logged }) => {
+    vi.stubGlobal('document', {
+      createElement: () => fakeNode(),
+      createTextNode: (text: string) => fakeNode(text),
+    });
+    const lines: string[] = [];
+    const host = createCodeMirrorVimHost(
+      { leader: '<Space>', remaps: [], binds: [] },
+      () => false,
+      (source, message) => lines.push(`${source}: ${message}`),
+      CHIP_DRAWING,
+      {} as FuzzyMatcher,
+    );
+    const handle = host.defineEx('hostgone', 'hostg', () => undefined);
+    if (disposes) {
+      handle.dispose();
+    }
+    const shown: string[] = [];
+
+    Vim.handleEx(promptEditor(shown), typed);
+
+    expect({ shown, lines }).toEqual({ shown: messages, lines: logged });
+    if (!disposes) {
+      handle.dispose();
+    }
+  });
+});
 
 describe('insertionOf', () => {
   it.each([

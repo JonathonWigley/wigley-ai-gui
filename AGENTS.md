@@ -944,7 +944,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
   watches, aborts its running processes, destroys its editors, drops its ex commands (`editor.defineEx`: after the
-  drop `:name` reports an unknown command; the pinned engine cannot restore an earlier command, so `defineEx` refuses
+  drop `:name` reports vim's `Not an editor command` and its prefix is free again; the pinned engine cannot restore an earlier command, so `defineEx` refuses
   a name or prefix that names one of vim's own) and zeroes its alert counts. `services.log` is
   scoped to the plugin: a plugin calls `log(message)`, and the line shows as `[<id>] message` under its own id. The page's services add `picker` (the shared list picker,
   wired to the plugin's scope, log and overlay), `chooseFolder` (the native folder dialog, null when dismissed) and

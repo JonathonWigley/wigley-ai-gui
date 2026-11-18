@@ -143,11 +143,29 @@ function defineInsertAction(
   Vim.mapCommand(group.keys, 'action', name, undefined, { context: 'insert' });
 }
 
+// Gives vim `command` as ex command `name`, logging a throw from it. Vim
+// shows a throw as `Error: …` and rethrows it out of the prompt's Enter.
+function defineLoggedEx(
+  log: Log,
+  name: string,
+  prefix: string,
+  command: ExCommand,
+) {
+  Vim.defineEx(name, prefix, (cm: VimEditor, params) => {
+    try {
+      command(cm, params);
+    } catch (error) {
+      log('editor', `ex command ${name} failed: ${errorText(error)}`);
+    }
+  });
+}
+
 // Each group's ex command, or an insert group's action, hands `run` the
 // group's binds and the editor its keys fired in.
 function defineBindCommands(
   groups: BindGroup[],
   hosted: HostedEditor[],
+  log: Log,
   run: RunBinds,
 ) {
   groups.forEach((group, index) => {
@@ -155,25 +173,39 @@ function defineBindCommands(
     if (group.mode === 'insert') {
       defineInsertAction(group, name, hosted, run);
     } else {
-      Vim.defineEx(name, name, (cm: VimEditor) => {
+      defineLoggedEx(log, name, name, (cm: VimEditor) => {
         run(group.binds, hostedEntryOf(cm, hosted).editor);
       });
     }
   });
 }
 
-// Files `name` in `defined` and gives vim `command` for it. Vim
-// (@replit/codemirror-vim-core 0.1.0) has no call to remove or read back an ex
-// command, so the dispose, while `defined` still holds this definition, leaves
-// a stub that reports `:name` as unknown.
+// Vim (@replit/codemirror-vim-core 0.1.0) has no call to remove an ex command,
+// but `map` files an ex mapping under the key `defineEx` filed `prefix` under,
+// and `unmap` deletes it, so vim then knows no `:name` and reports it as it
+// reports any unknown command. The handler is replaced first, so vim holds no
+// disposed plugin's code.
+function removeVimEx(name: string, prefix: string) {
+  Vim.defineEx(name, prefix, () => undefined);
+  Vim.map(`:${prefix}`, `:${prefix}`, '');
+  if (Vim.unmap(`:${prefix}`, '') !== true) {
+    throw new Error(
+      `Vim kept no ex mapping under :${prefix} to remove ex command ${name} with`,
+    );
+  }
+}
+
+// Files `name` in `defined` and gives vim `command` for it, logged. The
+// dispose, while `defined` still holds this definition, removes it from vim.
 function defineHostEx(
   defined: Map<string, ExDefinition>,
+  log: Log,
   name: string,
   prefix: string,
   command: ExCommand,
 ): Disposable {
   const definition: ExDefinition = { prefix };
-  Vim.defineEx(name, prefix, command);
+  defineLoggedEx(log, name, prefix, command);
   defined.set(name, definition);
   return {
     dispose: () => {
@@ -181,15 +213,12 @@ function defineHostEx(
         return;
       }
       defined.delete(name);
-      Vim.defineEx(name, prefix, () => {
-        throw new Error(`Not an editor command ":${name}"`);
-      });
+      removeVimEx(name, prefix);
     },
   };
 }
 
-// A plugin's ex command: `handler` hears the editor it ran in, and a throw
-// from it is logged rather than left to vim's prompt.
+// A plugin's ex command: `handler` hears the editor it ran in.
 function definePluginEx(
   defined: Map<string, ExDefinition>,
   hosted: HostedEditor[],
@@ -202,13 +231,9 @@ function definePluginEx(
   if (problem !== null) {
     throw new Error(problem);
   }
-  return defineHostEx(defined, name, prefix, (cm, params) => {
+  return defineHostEx(defined, log, name, prefix, (cm, params) => {
     const { editor } = hostedEntryOf(cm, hosted);
-    try {
-      handler(editor, exCallOf(params.argString));
-    } catch (error) {
-      log('editor', `ex command ${name} failed: ${errorText(error)}`);
-    }
+    handler(editor, exCallOf(params.argString));
   });
 }
 
@@ -219,9 +244,10 @@ function definePluginEx(
 function defineDocumentCommands(
   defined: Map<string, ExDefinition>,
   hosted: HostedEditor[],
+  log: Log,
 ) {
   for (const command of DOCUMENT_COMMANDS) {
-    defineHostEx(defined, command.name, command.prefix, (cm, params) => {
+    defineHostEx(defined, log, command.name, command.prefix, (cm, params) => {
       const { documentEvents } = hostedEntryOf(cm, hosted);
       if (documentEvents !== undefined) {
         command.raise(documentEvents, exCallOf(params.argString));
@@ -789,6 +815,19 @@ function leaveFocusedEditor(target: EditorView, hosted: HostedEditor[]) {
   }
 }
 
+// A key typed in vim's prompt, or anywhere else in the editor outside its
+// text, stops at the editor, as a text box's typed keys do. The prompt's Enter
+// closes the prompt before its command runs, which leaves the key outside
+// every editor for a page key handler, and vim stops it only when the command
+// returns.
+function keepPromptKeysInEditor(view: EditorView) {
+  view.dom.addEventListener('keydown', (event) => {
+    if (!view.contentDOM.contains(event.target as Node)) {
+      event.stopPropagation();
+    }
+  });
+}
+
 function hostedViewOf(element: Element, hosted: HostedEditor[]): EditorView {
   const match = hosted.find(({ view }) => view.dom.contains(element));
   if (!match) {
@@ -930,7 +969,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   // again.
   const unmappedLeaders = new Set<string>();
   const pendingKeys = new PendingKeys();
-  defineBindCommands(groups, hosted, run);
+  defineBindCommands(groups, hosted, log, run);
 
   const applyKeymap = (cm: VimEditor) => {
     mapScrollMotions();
@@ -943,7 +982,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   };
 
   const exDefinitions = new Map<string, ExDefinition>();
-  defineDocumentCommands(exDefinitions, hosted);
+  defineDocumentCommands(exDefinitions, hosted, log);
   defineChipMotions();
   const leaving = (left: EditorView) =>
     discardUnfinishedInput(vimEditorOf(left));
@@ -960,6 +999,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     const cm = vimEditorOf(view);
     requireKeyBuffer(cm);
     const cursorRedraw = redrawCursorOnResize(view);
+    keepPromptKeysInEditor(view);
     if (!isKeymapApplied) {
       applyKeymap(cm);
     }
@@ -996,8 +1036,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
         cursorRedraw.disconnect();
         pendingKeys.forget(cm);
         // Destroying the view nulls cm.state.vim, which vim still reads after
-        // an ex command or key it is running returns: `:q` lands here. Vim's
-        // prompt stops the Enter that ran the command, so no page key hears it.
+        // an ex command or key it is running returns: `:q` lands here. The
+        // Enter that ran the command stops at the editor, so no page key hears it.
         queueMicrotask(() => view.destroy());
       },
     });
@@ -1087,7 +1127,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
       }
       keymap = next;
       groups = nextGroups;
-      defineBindCommands(groups, hosted, run);
+      defineBindCommands(groups, hosted, log, run);
       isKeymapApplied = false;
       const first = hosted[0];
       if (first !== undefined) {
