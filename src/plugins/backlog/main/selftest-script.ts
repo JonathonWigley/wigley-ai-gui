@@ -30,6 +30,16 @@ function backlogGroups(): SelfTestGroup[] {
   const open: SelfTestStep[] = [
     { keys: [' ', 'k', 'b'], expect: '[backlog] shown', checksFit: true },
     {
+      keys: ['<A-S-o>'],
+      expect: '[sessions] session keys ignored: Sessions mode is hidden',
+      why: 'A session key pressed in Backlog leaves Backlog shown instead of jumping to Sessions.',
+    },
+    {
+      keys: [' ', 'w', 'w'],
+      expect: '[workflow] no shown session for mainAction',
+      why: "A workflow key pressed in Backlog acts on no session the user can't see.",
+    },
+    {
       keys: ['R'],
       expect: '[backlog] loaded 2 homes',
       why: 'The table reads both homes: the git home and the list-shaped home.',

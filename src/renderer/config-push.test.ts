@@ -40,6 +40,7 @@ function fakeTargets(initial: AppConfig) {
   const failing = new Set<'editor' | 'page'>();
   const toasted: string[] = [];
   const themeThenLive: string[] = [];
+  const logged: string[] = [];
   let current = initial;
   const targets: PushTargets = {
     live: {
@@ -81,13 +82,16 @@ function fakeTargets(initial: AppConfig) {
     },
     problems: { show: () => undefined },
     toasts: { show: (text) => toasted.push(text) },
-    log: () => undefined,
+    log: (source, message) => {
+      logged.push(`${source} ${message}`);
+    },
   };
   return {
     targets,
     calls,
     failing,
     toasted,
+    logged,
     themeThenLive,
     current: () => current,
   };
@@ -157,6 +161,18 @@ describe('createConfigPush', () => {
     push(config('known'));
 
     expect(themeThenLive).toEqual(['theme', 'live']);
+  });
+
+  it('logs applied a new config only when the installed config changed', () => {
+    const { push, logged } = start(config('known'));
+
+    push(config('other'));
+    push(config('other'));
+    push(config('known'));
+
+    expect(
+      logged.filter((line) => line === 'config applied a new config'),
+    ).toHaveLength(2);
   });
 
   it('toasts a new problem once across pushes that keep it', () => {

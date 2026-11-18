@@ -75,7 +75,6 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       run: (command) => api.commands.run(command),
       runKey: keyRunner(api.commands, services.log),
       isShown: () => isShown,
-      showMode: () => mode.show(),
       addAgentPane: (spec) => scopedAgents.addAgentPane(spec),
       setContext(detail) {
         contextDetail = detail;

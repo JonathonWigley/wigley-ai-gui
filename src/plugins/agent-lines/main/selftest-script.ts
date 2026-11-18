@@ -106,15 +106,12 @@ export function agentLinesSelfTestScript(
     // dock's tool calls (the Agent calls carry the subagents' prompts) and its
     // done line, end in an ellipsis inside their own boxes, as their CSS says.
     // The tab bar's parts and the dock's one line clip in their own box.
-    // The split handle of the preview pane's Docs tab holds its prompt, hidden
-    // until hovered, over both panes.
     scrollsItself: [
       '.session-group-name',
       '.session-bar-parts',
       '.chat-working-action',
       '.chat-working-line',
       '.chat-working-done',
-      '.ui-split-handle',
     ],
     open() {
       made ??= makeProject().catch((error: unknown) => {

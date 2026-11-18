@@ -143,7 +143,7 @@ function shownLinks(inHead: FakeLink[]) {
 }
 
 describe('createLayoutLoader', () => {
-  it('load_TwoUserLayoutsWithCss_OneLinkEach', async () => {
+  it('links one stylesheet per user layout that has css', async () => {
     const { loader, appended, inHead } = loaderWith();
 
     await loader.load(setOf(entry('a', 4, true), entry('b', 7, true)), [
@@ -161,7 +161,7 @@ describe('createLayoutLoader', () => {
     ]);
   });
 
-  it('load_WithoutCss_ImportsScriptAndAddsNoStylesheet', async () => {
+  it('imports the script and adds no stylesheet for a layout without css', async () => {
     const { loader, appended, imports } = loaderWith();
 
     await loader.load(setOf(entry('mine', 4)), ['mine']);
@@ -170,7 +170,7 @@ describe('createLayoutLoader', () => {
     expect(appended).toEqual([]);
   });
 
-  it('load_WithCss_AddsStylesheetOnlyAfterScriptLoads', async () => {
+  it('adds a layout stylesheet only after its script loads', async () => {
     const script = Promise.withResolvers<unknown>();
     const { loader, appended, inHead } = loaderWith(() => script.promise);
 
@@ -185,7 +185,7 @@ describe('createLayoutLoader', () => {
     ]);
   });
 
-  it('load_SameRevision_ImportsOnce', async () => {
+  it('imports a layout once at the same revision', async () => {
     const { loader, imports } = loaderWith();
     const set = setOf(entry('a', 4));
 
@@ -196,7 +196,7 @@ describe('createLayoutLoader', () => {
     expect(second.layouts.get('a')).toBe(first.layouts.get('a'));
   });
 
-  it('load_NewRevision_ImportsAgainAndKeepsTheLink', async () => {
+  it('imports a layout again at a new revision and keeps its link', async () => {
     const { loader, inHead, imports } = loaderWith();
 
     await loader.load(setOf(entry('a', 4, true, 1)), ['a']);
@@ -298,7 +298,7 @@ describe('createLayoutLoader', () => {
       restyled: [],
     },
   ])(
-    'load_StyleOnlyChange_RelinksWithNoImport ($row)',
+    'relinks the stylesheet with no import on a style-only change ($row)',
     async ({
       first,
       between = [],
@@ -329,7 +329,7 @@ describe('createLayoutLoader', () => {
     },
   );
 
-  it('load_ScriptFails_KeepsLastGoodAndItsLink', async () => {
+  it('keeps the last good layout and its link when a script fails', async () => {
     const broken = new Error('syntax');
     const { loader, inHead } = loaderWith(async (url) => {
       if (url.endsWith('@5')) {
@@ -351,7 +351,7 @@ describe('createLayoutLoader', () => {
     ]);
   });
 
-  it('load_FailedRevision_NotImportedAgain', async () => {
+  it('does not import a failed revision again', async () => {
     const { loader, imports } = loaderWith(async (url) => {
       if (url.endsWith('@5')) {
         throw new Error('syntax');
@@ -367,7 +367,7 @@ describe('createLayoutLoader', () => {
     expect(again.failed).toEqual([]);
   });
 
-  it('load_NameLeavesNamesAtSameRevision_KeepsLayoutAndLink', async () => {
+  it('keeps a layout and its link when its name leaves the names at the same revision', async () => {
     const { loader, inHead, imports } = loaderWith();
     const set = setOf(entry('a', 4, true));
     const first = await loader.load(set, ['a']);
@@ -381,7 +381,7 @@ describe('createLayoutLoader', () => {
     expect(imports).toEqual(['url:a/layout.js@4']);
   });
 
-  it('load_NameLeftOutAtNewRevision_DropsLayoutAndLink', async () => {
+  it('drops a layout and its link when its name is left out at a new revision', async () => {
     const { loader, inHead, imports } = loaderWith();
     await loader.load(setOf(entry('a', 4, true)), ['a']);
 
@@ -392,7 +392,7 @@ describe('createLayoutLoader', () => {
     expect(imports).toEqual(['url:a/layout.js@4']);
   });
 
-  it('load_NameLeavesTheSet_DropsLayoutAndLink', async () => {
+  it('drops a layout and its link when its name leaves the set', async () => {
     const { loader, inHead } = loaderWith();
     await loader.load(setOf(entry('a', 4, true)), ['a']);
 
@@ -402,7 +402,7 @@ describe('createLayoutLoader', () => {
     expect(shownLinks(inHead)).toEqual([]);
   });
 
-  it('load_NeverLoadedName_NotInLayouts', async () => {
+  it('leaves a name that never loaded out of the layouts', async () => {
     const { loader, imports } = loaderWith();
 
     const result = await loader.load(setOf(entry('a', 4)), []);
@@ -411,7 +411,7 @@ describe('createLayoutLoader', () => {
     expect([...result.layouts.keys()]).toEqual(['default']);
   });
 
-  it('load_NameNotInSet_Skipped', async () => {
+  it('skips a name that is not in the set', async () => {
     const { loader, imports } = loaderWith();
 
     const result = await loader.load(setOf(), ['ghost']);
@@ -420,7 +420,7 @@ describe('createLayoutLoader', () => {
     expect([...result.layouts.keys()]).toEqual(['default']);
   });
 
-  it('load_AlwaysHoldsDefault_NoLinkForBuiltIn', async () => {
+  it('always holds the default and links nothing for the built-in', async () => {
     const { loader, appended, imports } = loaderWith();
 
     const result = await loader.load(
@@ -433,7 +433,7 @@ describe('createLayoutLoader', () => {
     expect(appended).toEqual([]);
   });
 
-  it('load_UserLayout_HandsReadTheModuleAndName', async () => {
+  it('hands the read the module and name of a user layout', async () => {
     const reads: [unknown, string][] = [];
     const { loader } = loaderWith(
       async () => ({ default: { tag: 'mine' } }),
@@ -450,7 +450,7 @@ describe('createLayoutLoader', () => {
     expect(result.loaded).toEqual([entry('mine', 4)]);
   });
 
-  it('load_StylesheetLink_NamesOwner', async () => {
+  it('names the owner on a stylesheet link', async () => {
     const { loader, appended } = loaderWith();
 
     await loader.load(setOf(entry('a', 4, true)), ['a']);
@@ -468,7 +468,7 @@ describe('createLayoutLoader', () => {
       shows: 'bundled',
     },
   ])(
-    'load_LiveDefault_ImportedAndReadAsDefault: $row',
+    'imports a live default and reads it as the default: $row',
     async ({ defaults, shows }) => {
       const reads: [unknown, string][] = [];
       const readLayout: TestLayout = { tag: 'read' };
@@ -510,7 +510,7 @@ describe('createLayoutLoader', () => {
       error: 'layout default has no entries.row',
     },
   ])(
-    'load_LiveDefaultLacksAPart_FailsNamingIt: $row',
+    'fails naming the part a live default lacks: $row',
     async ({ live, error }) => {
       const bundled: TestLayout = {
         tag: 'bundled',
@@ -544,7 +544,7 @@ describe('createLayoutLoader', () => {
       shows: { tag: 'url:default/layout.js@3' },
     },
   ])(
-    'load_LiveDefaultFails_KeepsLastGoodElseBundled: $row',
+    'keeps the last good default when a live default fails, else the bundled one: $row',
     async ({ revisions, shows }) => {
       const { loader } = loaderWith(importFailing('url:default/layout.js@4'));
 
@@ -627,7 +627,7 @@ describe('createLayoutLoader', () => {
       ],
     },
   ])(
-    'load_DefaultStylesheetLink_FollowsTheShownDefault: $row',
+    'makes the default stylesheet link follow the shown default: $row',
     async ({ defaultStylesheet, defaults, users, links }) => {
       const { loader, inHead } = loaderWith(
         importFailing('url:default/layout.js@4'),
@@ -644,7 +644,7 @@ describe('createLayoutLoader', () => {
     },
   );
 
-  it('create_DefaultStylesheet_LinkedBeforeAnyLoad', async () => {
+  it('links the default stylesheet on create, before any load', async () => {
     const { loader, appended, inHead } = loaderWith(
       undefined,
       readTestLayout,
@@ -665,7 +665,7 @@ describe('createLayoutLoader', () => {
     });
   });
 
-  it('dispose_DefaultLink_DetachedThenReattached', async () => {
+  it('detaches the default link on dispose and reattaches it after', async () => {
     const { loader, appended, inHead } = loaderWith(
       undefined,
       readTestLayout,

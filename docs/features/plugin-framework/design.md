@@ -330,7 +330,7 @@ Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-a
   stops it and clears its slots, as a switch-off does.
 - **Main imports from a per-revision copy.** Node caches every module by URL, so main copies the plugin folder for each
   revision and imports `main.js` from the copy; a relative import then reloads with it. Each old revision stays in
-  memory until quit, and its folder stays on disk (`docs/features/followups.md`). The page imports `page.js` on the `wigley-plugin:` scheme with the revision in the path, as a
+  memory until quit, and its folder stays on disk until the next launch's first load of the plugin deletes it. The page imports `page.js` on the `wigley-plugin:` scheme with the revision in the path, as a
   layout loads on `wigley-layout:`.
 - **`manifest.json`, not a module.** Main reads what a plugin declares without running its code. The app writes a JSON
   Schema for it, and `validateManifest` runs at load the checks `definePlugin` makes at compile time for a built-in.

@@ -55,7 +55,6 @@ export const practicePagePart: PagePart<typeof practiceManifest> = {
       setFocusTarget: (target) => api.panes.setFocusTarget(target),
       pushScope: (scope) => api.keys.pushScope(scope),
       isShown: () => isShown,
-      showMode: () => mode.show(),
       setOuterPanes: (panes) => api.panes.setOuterPanes(panes),
       addAgentPane: (spec) => scopedAgents.addAgentPane(spec),
       picked: () => mode.picked(),

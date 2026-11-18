@@ -70,8 +70,10 @@ start one whenever a check needs it.
    <id>` brings it back and re-attaches them. That start takes the flags in the run's `start.json`
    when its command line names none, and copies no user config over the kept home. While the host
    still answers, a plain `quit` of the stopped run refuses and deletes nothing: end it with `start
-   --run <id>`, then `quit`. Every `start` deletes each other run folder untouched for over a day
-   whose app is not running, a kept run's included. `.drive/` is git-ignored.
+   --run <id>`, then `quit`. A plain `quit` also waits up to 15 s after its app exits for the
+   session host to end, and if the host still answers, it refuses the same way, deleting nothing.
+   Every `start` deletes each other run folder untouched for over a day whose app and session host
+   are not running. `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something

@@ -168,13 +168,13 @@ function withFolderNameWatch(inner: Files): Files {
 }
 
 describe('start', () => {
-  it('start_WritesLayoutTypes', async () => {
+  it('writes the layout types on start', async () => {
     await start();
 
     expect(await files.read('layout.d.ts')).toBe(LAYOUT_TYPES);
   });
 
-  it('start_LayoutTypes_KitSpecifierRewritten', async () => {
+  it('rewrites the kit specifier in the layout types on start', async () => {
     const repo = "'../../../shared/page/layout-host/kit'";
     await start(
       files,
@@ -186,7 +186,7 @@ describe('start', () => {
     );
   });
 
-  it('start_ListsDefaultFirstThenUsersByName', async () => {
+  it('lists the default first and then users by name', async () => {
     await writeLayouts('beta', 'alpha');
 
     const registry = await start();
@@ -218,7 +218,7 @@ describe('start', () => {
     });
   });
 
-  it('start_UserFolderNamedDefault_IsSkippedAndLogged', async () => {
+  it('skips and logs a user folder named default', async () => {
     await writeLayouts('default', 'alpha');
 
     const registry = await start();
@@ -266,7 +266,7 @@ describe('start', () => {
       expected: defaultEntry(true, false),
     },
   ])(
-    'start_DefaultEntry_FollowsTheDefaultFolder ($row)',
+    'makes the default entry follow the default folder ($row)',
     async ({ folder, written, expected }) => {
       await writeDefaultFiles(...written);
       await writeLayouts('alpha');
@@ -281,7 +281,7 @@ describe('start', () => {
     },
   );
 
-  it('start_DefaultFolderMissing_IsNotWatchedOrMade', async () => {
+  it('neither watches nor makes a missing default folder', async () => {
     const watched: string[] = [];
     const recording: Files = {
       ...defaultFolder,
@@ -297,7 +297,7 @@ describe('start', () => {
     expect(await defaultFolder.stat('')).toBeNull();
   });
 
-  it('start_FolderWithoutLayoutJs_IsNotListed', async () => {
+  it('does not list a folder without a layout.js', async () => {
     await files.write('notes/readme.json', '{}');
 
     const registry = await start();
@@ -307,7 +307,7 @@ describe('start', () => {
 });
 
 describe('watch', () => {
-  it('watch_SaveInAnyUserFolder_BumpsOnlyThatLayout', async () => {
+  it('bumps only that layout on a save in any user folder', async () => {
     await writeLayouts('alpha', 'beta');
     const before = (await start()).current();
 
@@ -317,7 +317,7 @@ describe('watch', () => {
     expect(changesIn(before, sent[0])).toEqual(['beta revision']);
   });
 
-  it('watch_LayoutJsRemoved_SendsSetWithoutIt', async () => {
+  it('sends the set without a layout whose layout.js is removed', async () => {
     await writeLayouts('alpha');
     const registry = await start();
     const before = registry.current();
@@ -329,7 +329,7 @@ describe('watch', () => {
     expect(registry.names()).toEqual(['default']);
   });
 
-  it('watch_LayoutRemovedThenWrittenAgain_TakesAHigherRevision', async () => {
+  it('takes a higher revision for a layout removed and then written again', async () => {
     await writeLayouts('alpha');
     await start();
 
@@ -342,7 +342,7 @@ describe('watch', () => {
     expect(entryIn(sent[1], 'alpha')?.styleRevision).toBe(3);
   });
 
-  it('watch_NewFolder_JoinsTheSet', async () => {
+  it('joins a new folder to the set', async () => {
     const before = (await start()).current();
 
     await writeLayouts('gamma');
@@ -352,7 +352,7 @@ describe('watch', () => {
     expect(entryIn(sent[0], 'gamma')?.revision).toBe(1);
   });
 
-  it('watch_SaveInFolderThatIsNoLayout_SendsNothing', async () => {
+  it('sends nothing for a save in a folder that is no layout', async () => {
     await writeLayouts('alpha');
     const before = (await start()).current();
 
@@ -363,7 +363,7 @@ describe('watch', () => {
     expect(changesIn(before, sent[0])).toEqual(['alpha revision']);
   });
 
-  it('watch_SaveInDefaultFolder_SendsNothing', async () => {
+  it('sends nothing for a save in the default folder', async () => {
     await writeLayouts('alpha');
     const before = (await start()).current();
 
@@ -379,7 +379,7 @@ describe('watch', () => {
     'alpha/4913',
     'alpha/layout.js~',
     'alpha/.#layout.js',
-  ])('watch_EditorSideFile_%s_ChangesNothing', async (sideFile) => {
+  ])('changes nothing for the editor-side file %s', async (sideFile) => {
     await writeLayouts('alpha');
     const before = (await start()).current();
 
@@ -405,7 +405,7 @@ describe('watch', () => {
       changes: ['alpha revision', 'alpha style'],
     },
   ])(
-    'watch_SaveOf_RaisesTheRevisionItsKindKeys ($saved)',
+    'raises the revision its kind keys on a save of $saved',
     async ({ saved, changes }) => {
       await writeLayouts('alpha');
       const before = (await start()).current();
@@ -417,7 +417,7 @@ describe('watch', () => {
     },
   );
 
-  it('watch_LayoutFolderRenamed_OldLeavesAndNewJoins', async () => {
+  it('removes the old name and joins the new one when a layout folder is renamed', async () => {
     await writeLayouts('alpha', 'beta');
     const registry = await start(withFolderNameWatch(files));
     const before = registry.current();
@@ -431,7 +431,7 @@ describe('watch', () => {
 
   // A folder-name report names no file, so the save in `alpha` raises both.
   it.each(['layout.d.ts', 'default/layout.js'])(
-    'watch_FolderNameReportFor_%s_SendsNothing',
+    'sends nothing for a folder-name report for %s',
     async (saved) => {
       await writeLayouts('alpha', 'default');
       const before = (await start(withFolderNameWatch(files))).current();
@@ -463,7 +463,7 @@ describe('watch', () => {
       when: 'starting',
       line: /^\[demo\] default layout watch.*ENOENT/,
     },
-  ])('watch_Fails_LogsIt ($watch, $when)', async ({ watch, when, line }) => {
+  ])('logs a failing watch ($watch, $when)', async ({ watch, when, line }) => {
     await writeDefaultFiles('layout.js');
     await writeLayouts('alpha');
     const failing = withFailingWatch(
@@ -507,7 +507,7 @@ describe('watch', () => {
       changes: ['default live', 'default revision', 'default style'],
     },
   ])(
-    'watch_SaveInDefaultFolder_RaisesTheRevisionItsFileKeys ($saved, from $started)',
+    'raises the revision its file keys on a save in the default folder ($saved, from $started)',
     async ({ saved, started, hasCss, changes }) => {
       await writeDefaultFiles(...started);
       const before = (await startWithDefault()).current();
@@ -562,7 +562,7 @@ describe('watch', () => {
       changes: [['default revision']],
     },
   ])(
-    'watch_MissedChange_ListsAgainOnlyWhatChanged: $change',
+    'lists again only what changed after a missed change: $change',
     async ({ arrange, changes }) => {
       let now = 1;
       files = createMemoryFiles({ now: () => now });
@@ -591,7 +591,7 @@ describe('watch', () => {
 
   // Breaks if a reported save leaves its layout's stamps stale, so the next
   // missed change lists it again.
-  it('watch_ReportedSaveThenMissed_SendsOnce', async () => {
+  it('sends once for a reported save that is then missed', async () => {
     let now = 1;
     files = createMemoryFiles({ now: () => now });
     await writeLayouts('alpha', 'beta');
@@ -611,7 +611,7 @@ describe('watch', () => {
 
   // Breaks if a file whose modified time cannot be read fails the start or a
   // save's listing.
-  it('watch_UnreadableFileTime_StillListsSaves', async () => {
+  it('still lists saves when a file time is unreadable', async () => {
     await writeLayouts('alpha', 'beta');
     const unreadable: Files = {
       ...files,
@@ -630,7 +630,7 @@ describe('watch', () => {
     expect(changesIn(before, sent[0])).toEqual(['alpha revision']);
   });
 
-  it('watch_DefaultLayoutCssRemoved_SendsDefaultWithoutCss', async () => {
+  it('sends the default without css when its layout css is removed', async () => {
     await writeDefaultFiles('layout.js', 'layout.css');
     const before = (await startWithDefault()).current();
 
@@ -646,7 +646,7 @@ describe('watch', () => {
     { saved: 'parts/card.js', started: ['layout.js'] },
     { saved: 'layout.css', started: ['layout.test.ts'] },
   ])(
-    'watch_OtherFileInDefaultFolder_SendsNothing ($saved, from $started)',
+    'sends nothing for another file in the default folder ($saved, from $started)',
     async ({ saved, started }) => {
       await writeDefaultFiles(...started);
       await writeLayouts('alpha');
@@ -660,7 +660,7 @@ describe('watch', () => {
     },
   );
 
-  it('watch_DefaultLayoutJsRemovedThenWritten_BuiltInThenHigherRevision', async () => {
+  it('sends the built-in and then a higher revision when the default layout.js is removed and written again', async () => {
     await writeDefaultFiles('layout.js');
     const before = (await startWithDefault()).current();
 
@@ -676,7 +676,7 @@ describe('watch', () => {
     expect(defaultIn(sent[0])).toEqual(defaultEntry(false, true));
   });
 
-  it('dispose_ClosesTheDefaultWatch', async () => {
+  it('closes the default watch on dispose', async () => {
     await writeDefaultFiles('layout.js');
     const registry = await startWithDefault();
 
@@ -688,7 +688,7 @@ describe('watch', () => {
     expect(sent).toEqual([]);
   });
 
-  it('hasCss_TrueWhenLayoutCssPresent', async () => {
+  it('reports hasCss true when a layout.css is present', async () => {
     await writeLayouts('alpha');
     const registry = await start();
     expect(entryIn(registry.current(), 'alpha')?.hasCss).toBe(false);

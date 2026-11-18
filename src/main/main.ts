@@ -736,6 +736,7 @@ function startCatalog(
       codeRoot: inputs.pluginCode,
       paths,
       importModule: importModuleFrom,
+      removeFolder: (folder) => rm(folder, { recursive: true, force: true }),
       log: pageLog.log,
     }),
     log: pageLog.log,

@@ -153,12 +153,14 @@ export interface ActivityInput {
   // The user has the line open, and the app places the step rows under it. The default layout draws its summary line
   // whether open or not.
   open: boolean;
-  // When the run began: the entry before it, or its first step when the run opens the list.
-  startedAt: number;
+  // When the run began: the entry before it, or its first step when the run opens the list. Null when the transcript
+  // held no time for the run's start (an entry restored from a line with no timestamp); the default layout then draws
+  // no time.
+  startedAt: number | null;
   // When the run ended; null while live.
   endedAt: number | null;
   // The time of this draw or update; the app sends it again once a second while the run is live. A live line's time
-  // is `now - startedAt`, a finished one's `endedAt - startedAt`.
+  // is `now - startedAt`, a finished one's `endedAt - startedAt`, when `startedAt` is known.
   now: number;
 }
 

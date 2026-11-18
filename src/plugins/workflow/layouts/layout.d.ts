@@ -21,7 +21,7 @@
 // - each session's stage and flow, which main folds from the agent's events and writes on each change;
 // - the workflow commands and their keys, and what each runs;
 // - the session each button runs for: a part's buttons run for the session it draws, whether or not that session is
-//   selected; only keys act on the selected session;
+//   selected; only keys act on the session Sessions mode shows, and do nothing in another mode;
 // - the countdown's ticking and its text: while a chip or a strip shows one, the app draws those parts again once a
 //   second;
 // - whether the side pane shows, each session's finished-groups fold, and the scroll of the list `kit.sideList` draws.

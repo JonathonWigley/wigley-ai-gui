@@ -79,18 +79,6 @@
   margin: var(--wg-space-2) var(--wg-space-2) 0;
 }
 
-.backlog-filter-input,
-.backlog-rename-input {
-  background: transparent;
-  border: 0;
-  color: var(--wg-fg);
-  font: inherit;
-  min-width: 0;
-  outline: none;
-  padding: 0;
-  width: 100%;
-}
-
 /* The review scrolls the selected row's item and its commits. */
 .backlog-review {
   height: 100%;

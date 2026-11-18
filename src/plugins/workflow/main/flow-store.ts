@@ -4,7 +4,7 @@ import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { KeyedSlotWriter } from '../../../contracts/state';
 import { errorText } from '../../../shared/error-text';
-import { isJsonObject } from '../../../shared/json';
+import { isJsonObject, isStringArray } from '../../../shared/json';
 import type { ChecklistItem, SessionFlow } from '../contract';
 import { newFlow } from '../flow';
 
@@ -259,7 +259,7 @@ function isSessionFlow(value: unknown): value is SessionFlow {
     'state' in value &&
     typeof value.missedLevel === 'boolean' &&
     typeof value.turnRunning === 'boolean' &&
-    isStringList(value.runningSubagents)
+    isStringArray(value.runningSubagents)
   );
 }
 
@@ -277,11 +277,4 @@ export function isChecklistItem(value: unknown): value is ChecklistItem {
 
 function isStringOrNull(value: unknown): boolean {
   return value === null || typeof value === 'string';
-}
-
-function isStringList(value: unknown): boolean {
-  return (
-    Array.isArray(value) &&
-    (value as unknown[]).every((item) => typeof item === 'string')
-  );
 }

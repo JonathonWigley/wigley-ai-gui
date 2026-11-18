@@ -33,6 +33,7 @@ export const coreThemeTokens: Readonly<Record<string, TokenKind>> = {
   'status-warning-tint': 'color',
   'status-attention-tint': 'color',
   'status-error-tint': 'color',
+  'status-info-tint': 'color',
 
   // Surfaces
   'window-background': 'color',

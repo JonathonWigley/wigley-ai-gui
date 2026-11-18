@@ -17,6 +17,19 @@
   border-color: var(--wg-focus-border);
 }
 
+/* A plain text box (`textBoxInput`) inside the frame: the frame draws the
+   box, so the input draws none of its own. */
+.ui-input > input {
+  background: transparent;
+  border: 0;
+  color: var(--wg-fg);
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
 .ui-input .cm-editor {
   background: transparent;
 }

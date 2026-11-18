@@ -187,8 +187,6 @@ export interface BacklogViewDeps {
   // `backlog.selectRow` and a chunk card's `backlog.selectChunk`.
   runKey<A>(key: CommandKey<A>, arg: A): void;
   isShown(): boolean;
-  // Shows Backlog mode.
-  showMode(): void;
   // Adds scoped-agents' pane for the assistant.
   addAgentPane(spec: AgentPaneSpec): AgentPane;
   // The title bar's detail: the repo filter, or `All repos`.
@@ -357,6 +355,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     | { kind: 'filter'; scope: PushedScope }
     | { kind: 'rename'; scope: PushedScope; chunkId: string }
     | null = null;
+  // The input the open box types into.
+  const openBoxInput = (box: NonNullable<typeof openBox>) =>
+    box.kind === 'filter' ? filterBox : renameBox;
   let loadCount = 0;
   let loadedCount = 0;
   // The saved place's assistant pane waits to open: at the end of the first
@@ -367,6 +368,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   let shownRepo: string | null = null;
   // The pane that last held the keys, which `focusMain` focuses again.
   let lastHostFocus: HostFocus = 'table';
+  // True while a click's `focusin` hands a pane the keys: the click already
+  // put the DOM focus where it belongs, so `syncFocus` leaves it there.
+  let isFocusFromClick = false;
   // The strip cursor the last strip draw revealed; undefined before the
   // first.
   let revealedCursor: string | null | undefined;
@@ -729,7 +733,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   // Moves the DOM focus to the pane the keys act on, when that changed, and
-  // logs the pane that took them. The assistant pane focuses itself.
+  // logs the pane that took them. The assistant pane focuses itself, and a
+  // click's own focus stays put.
   const syncFocus = (state: BacklogState, always: boolean) => {
     const isChanged = state.focus !== shownFocus;
     if (!deps.isShown() || (!always && !isChanged)) {
@@ -738,6 +743,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     shownFocus = state.focus;
     if (isChanged) {
       deps.log(`${state.focus} focused`);
+    }
+    if (isFocusFromClick) {
+      return;
     }
     switch (state.focus) {
       case 'table':
@@ -805,6 +813,40 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     render(true);
   };
+
+  // A focus that lands inside a pane the keys are not on, a click on its
+  // contents, hands that pane the keys and leaves the click's DOM focus. The
+  // open box's input takes the focus without the keys moving: the rename box
+  // sits in the strip while the table may hold them. A pane the reducer
+  // refuses (the review with no row selected) leaves the keys where they
+  // were, so the DOM focus goes back to the pane that holds them, the
+  // assistant's included.
+  for (const [paneElement, focus] of [
+    [tablePane, 'table'],
+    [reviewPane, 'review'],
+    [stripPane, 'strip'],
+  ] as const) {
+    paneElement.addEventListener('focusin', (event) => {
+      const isHeldPane = store.get().focus === focus;
+      const isOpenBoxInput =
+        openBox !== null && event.target === openBoxInput(openBox);
+      if (isHeldPane || isOpenBoxInput) {
+        return;
+      }
+      isFocusFromClick = true;
+      try {
+        setFocus(focus);
+      } finally {
+        isFocusFromClick = false;
+      }
+      const heldFocus = store.get().focus;
+      if (heldFocus === 'assistant') {
+        pane.element.focus();
+      } else if (heldFocus !== focus) {
+        syncFocus(store.get(), true);
+      }
+    });
+  }
 
   // The pane that held the keys last takes them; the table when the review
   // refuses them with no row selected.
@@ -1085,9 +1127,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const pickRepo = () => {
-    if (!deps.isShown()) {
-      deps.showMode();
-    }
     const state = store.get();
     const choices: (string | null)[] = [null, ...repos(state)];
     picker.open({
@@ -1135,15 +1174,18 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const toggleAssistant = () => {
-    if (deps.isShown()) {
-      pane.toggle();
-    } else {
-      deps.showMode();
-      if (!pane.isShown()) {
-        pane.toggle();
-      }
-    }
+    pane.toggle();
     deps.log(pane.isShown() ? 'assistant shown' : 'assistant hidden');
+  };
+
+  // The view keys bound everywhere (`Space v …`) act on Backlog alone: in
+  // another mode the key belongs to that mode, so they do nothing there.
+  const whileShown = (command: BacklogCommand, run: () => void) => () => {
+    if (!deps.isShown()) {
+      deps.log(`${command} ignored: Backlog is hidden`);
+      return;
+    }
+    run();
   };
 
   const commands: Record<BacklogCommand, () => void> = {
@@ -1247,26 +1289,26 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         (error: unknown) => failed('sweep', error, true),
       );
     },
-    toggleDone() {
+    toggleDone: whileShown('toggleDone', () => {
       dispatch({ type: 'toggleDone' });
       deps.log(store.get().isDoneShown ? 'done shown' : 'done hidden');
-    },
-    toggleAgentReadyOnly() {
+    }),
+    toggleAgentReadyOnly: whileShown('toggleAgentReadyOnly', () => {
       dispatch({ type: 'toggleReadyOnly' });
       deps.log(`agent-ready only ${store.get().isReadyOnly ? 'on' : 'off'}`);
-    },
-    toggleAssistant,
-    pickRepo,
-    toggleChunkedHidden() {
+    }),
+    toggleAssistant: whileShown('toggleAssistant', toggleAssistant),
+    pickRepo: whileShown('pickRepo', pickRepo),
+    toggleChunkedHidden: whileShown('toggleChunkedHidden', () => {
       dispatch({ type: 'toggleChunkedHidden' });
       deps.log(
         store.get().isChunkedHidden ? 'chunked hidden' : 'chunked shown',
       );
-    },
-    toggleStaleFirst() {
+    }),
+    toggleStaleFirst: whileShown('toggleStaleFirst', () => {
       dispatch({ type: 'toggleStaleFirst' });
       deps.log(`stale first ${store.get().isStaleFirst ? 'on' : 'off'}`);
-    },
+    }),
     openInDocs() {
       const row = selectedRow(store.get(), matcher);
       if (row !== null) {
@@ -1319,10 +1361,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       parts.setLayouts(next);
       drawPanes();
       render(true);
-      if (openBox?.kind === 'filter') {
-        filterBox.focus();
-      } else if (openBox?.kind === 'rename') {
-        renameBox.focus();
+      if (openBox !== null) {
+        openBoxInput(openBox).focus();
       }
       picker.redraw();
       pane.redraw();

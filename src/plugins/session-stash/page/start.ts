@@ -1,4 +1,3 @@
-import './session-stash.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
@@ -27,7 +26,8 @@ type SessionStashApi = PageApi<
 // `stashSession`: main keeps the note, then sessions' `closeSession` asks what
 // any close asks (chat's end-session confirm mid-turn), main writes the stash
 // once the close lands, and a kept close drops the note. Starting, it has main
-// forget the notes an earlier page kept there.
+// forget the notes an earlier page kept there. A switch-off is refused while
+// the dialog is open.
 export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
   manifest: sessionStashManifest,
   start(api: SessionStashApi) {
@@ -109,6 +109,10 @@ export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
           }
         },
       },
+      mayStop: () =>
+        noteDialog.isOpen()
+          ? 'Stash or cancel the open stash note first'
+          : null,
     };
   },
 };

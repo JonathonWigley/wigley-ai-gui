@@ -27,12 +27,14 @@ import {
 import {
   hostMayBeRunning,
   idleRunIds,
+  isIdleRun,
   QUIT_REMOVED_ENTRIES,
   quitRefusal,
   type RunFolder,
   type StartOptions,
   startPlanOf,
   startRefusal,
+  waitForHostEnd,
 } from './drive-runs.mts';
 import { isAlive, mayReleaseStartLock, takeStartLock } from './start-lock.mts';
 
@@ -44,6 +46,9 @@ const START_TIMEOUT_MS = 120_000;
 // How long a quit may take before the run is terminated: long enough for a
 // recording's encode to finish.
 const QUIT_TIMEOUT_MS = 60_000;
+// How long a plain quit waits, once the app has exited, for the session host to
+// end: it exits seconds after the app's quit ends its sessions.
+const HOST_END_TIMEOUT_MS = 15_000;
 // How long a check that only asks whether a run answers waits for its reply.
 const ANSWER_CHECK_MS = 5_000;
 const POLL_MS = 250;
@@ -125,7 +130,7 @@ async function start(
   if (refusal !== null) {
     throw new Error(refusal);
   }
-  removeIdleRuns(runId);
+  await removeIdleRuns(runId);
   const userConfig =
     options.userConfig && copyUserConfig ? requireUserConfig() : null;
   rmSync(driveFile, { force: true });
@@ -410,12 +415,13 @@ function keptStartOptions(runId: string): StartOptions | null {
   return { packaged, harness, systemStats, userConfig };
 }
 
-// Stops the run's app and, unless `keepSessions`, deletes its scratch folders;
-// a plain quit of a run with no app and a live session host refuses instead,
-// deleting nothing.
+// Stops the run's app and, unless `keepSessions`, waits for its session host to
+// end, then deletes its scratch folders. A plain quit refuses instead, deleting
+// nothing, when the run has no app and a live session host, and when the host
+// still answers `HOST_END_TIMEOUT_MS` after the app exited.
 async function quit(runId: string, keepSessions: boolean): Promise<void> {
+  const runDir = runDirOf(runId);
   if (!keepSessions) {
-    const runDir = runDirOf(runId);
     const appPids = liveAppPids(runDir);
     const refusal = quitRefusal(runId, {
       liveAppPids: appPids,
@@ -427,9 +433,24 @@ async function quit(runId: string, keepSessions: boolean): Promise<void> {
     }
   }
   await stop(runId, { keepSessions });
-  if (!keepSessions) {
-    removeQuitEntries(runId);
+  if (keepSessions) {
+    return;
   }
+  const hostEnded = await waitForHostEnd(runDir, {
+    probe: hostMayBeRunning,
+    pollMs: POLL_MS,
+    timeoutMs: HOST_END_TIMEOUT_MS,
+    now: () => Date.now(),
+    wait,
+  });
+  const refusal = quitRefusal(runId, {
+    liveAppPids: [],
+    hostMayBeRunning: !hostEnded,
+  });
+  if (refusal !== null) {
+    throw new Error(refusal);
+  }
+  removeQuitEntries(runId);
 }
 
 // Stops the run's app, its hosted processes left running, then starts it again
@@ -490,15 +511,25 @@ function removeQuitEntries(runId: string): void {
 }
 
 // Deletes every run folder but `startingRun` that `idleRunIds` names, and
-// prints how many it deleted.
-function removeIdleRuns(startingRun: string): void {
+// prints how many it deleted. It asks after the session host of an idle run
+// with no live app only, so it connects to no fresh or live run's host.
+async function removeIdleRuns(startingRun: string): Promise<void> {
   if (!existsSync(DRIVE_DIR)) {
     return;
   }
-  const runs: RunFolder[] = readdirSync(DRIVE_DIR, { withFileTypes: true })
+  const nowMs = Date.now();
+  const folders = readdirSync(DRIVE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => runFolderOf(entry.name));
-  const idleIds = idleRunIds(runs, startingRun, Date.now());
+  const runs: RunFolder[] = [];
+  for (const folder of folders) {
+    const mayHaveHost =
+      !folder.isLive &&
+      isIdleRun(folder, nowMs) &&
+      (await hostMayBeRunning(runDirOf(folder.id)));
+    runs.push({ ...folder, hostMayBeRunning: mayHaveHost });
+  }
+  const idleIds = idleRunIds(runs, startingRun, nowMs);
   for (const runId of idleIds) {
     rmSync(runDirOf(runId), { recursive: true, force: true });
   }
@@ -507,7 +538,7 @@ function removeIdleRuns(startingRun: string): void {
   }
 }
 
-function runFolderOf(runId: string): RunFolder {
+function runFolderOf(runId: string): Omit<RunFolder, 'hostMayBeRunning'> {
   const runDir = runDirOf(runId);
   const entryTimes = readdirSync(runDir).map(
     (entry) => statSync(path.join(runDir, entry)).mtimeMs,

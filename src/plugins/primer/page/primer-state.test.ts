@@ -15,6 +15,7 @@ import {
   type PrimerAction,
   type PrimerRow,
   type PrimerState,
+  primerPlace,
   type RowPrompt,
   rowPrompt,
   scopeOf,
@@ -1028,6 +1029,67 @@ describe('placeRestored', () => {
       expect(restored.view).toBe('review');
     },
   );
+
+  // Reviewed to the last of three rows, jumped back to `extra-1` and removed
+  // it: the cursor holds 2 over two review rows.
+  function withStaleReviewRow(): PrimerState {
+    const state = applyAll(stateWith(), [
+      { type: 'openReview' },
+      { type: 'reviewBottom' },
+      { type: 'reviewJump' },
+      { type: 'removeExtraTask' },
+    ]);
+    expect(primerOf(state).reviewRow).toBe(2);
+    return state;
+  }
+
+  it('clamps a review cursor the removed tasks left past the last row', () => {
+    const restored = apply(withStaleReviewRow(), {
+      type: 'placeRestored',
+      formId: 'p1',
+      place: {
+        selectedTask: { kind: 'feature' },
+        selectedItem: null,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+        view: 'review',
+        confirmReturnView: 'review',
+      },
+    });
+
+    expect(restored.view).toBe('review');
+    expect(primerOf(restored).reviewRow).toBe(1);
+    expect(
+      primerOf(apply(restored, { type: 'reviewJump' })).selectedTask,
+    ).toEqual({ kind: 'task', entryId: 's1' });
+  });
+
+  it("clamps the cursor when the restored place matches the primer's own", () => {
+    const state = withStaleReviewRow();
+
+    const restored = apply(state, {
+      type: 'placeRestored',
+      formId: 'p1',
+      place: primerPlace(state, primerOf(state)),
+    });
+
+    expect(primerOf(restored).reviewRow).toBe(1);
+  });
+
+  it('keeps the same primer when the place and cursor are already in range', () => {
+    const before = applyAll(stateWith(), [
+      { type: 'openReview' },
+      { type: 'reviewBottom' },
+    ]);
+
+    const restored = apply(before, {
+      type: 'placeRestored',
+      formId: 'p1',
+      place: primerPlace(before, primerOf(before)),
+    });
+
+    expect(primerOf(restored)).toBe(primerOf(before));
+  });
 });
 
 describe('an added item text', () => {

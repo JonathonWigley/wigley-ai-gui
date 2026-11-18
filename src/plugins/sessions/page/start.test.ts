@@ -1079,21 +1079,46 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
-  it('togglePopup_ModeHidden_ShowsTheModeThenActs', async () => {
-    const setup = await startApplied(['s1'], 's1', fakeUiState(), {
-      withOtherMode: true,
-    });
-    const { handle } = setup.addPopup('s1');
-    expect(setup.exports.shownSessionId()).toBeNull();
-    const logged = setup.harness.logs.length;
+  // Breaks: a session key that shows Sessions mode from another mode.
+  it.each([
+    {
+      command: 'togglePopup',
+      logged: 'popup key ignored: Sessions mode is hidden',
+    },
+    {
+      command: 'nextSession',
+      logged: 'session keys ignored: Sessions mode is hidden',
+    },
+    {
+      command: 'prevSession',
+      logged: 'session keys ignored: Sessions mode is hidden',
+    },
+    {
+      command: 'nextTab',
+      logged: 'tab keys ignored: the shown mode has no tabs',
+    },
+    {
+      command: 'prevTab',
+      logged: 'tab keys ignored: the shown mode has no tabs',
+    },
+  ] as const)(
+    '$command_ModeHidden_DoesNothing',
+    async ({ command, logged }) => {
+      const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+        withOtherMode: true,
+      });
+      setup.addPopup('s1');
+      expect(setup.exports.shownSessionId()).toBeNull();
+      const before = setup.harness.logs.length;
 
-    setup.togglePopup();
+      setup.harness.started().commands[command]({ arg: undefined });
 
-    expect(setup.exports.shownSessionId()).toBe('s1');
-    expect(setup.logsSince(logged)).toContain('hid Popup popup in label s1');
-    expect(handle.isVisible()).toBe(false);
-    await setup.harness.stop();
-  });
+      expect(setup.exports.shownSessionId()).toBeNull();
+      expect(setup.activations).toEqual([]);
+      expect(setup.logsSince(before)).toEqual([logged]);
+      await setup.harness.stop();
+    },
+  );
 
   it('panePressed_PopupOpenFocusOutside_LetsGoWithNoChatBox', async () => {
     installFocusFakeDom((name, value) => vi.stubGlobal(name, value));

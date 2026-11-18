@@ -27,25 +27,6 @@
   margin: var(--wg-space-1) var(--wg-space-2);
 }
 
-/* A docs text box inside its input frame: the filter, and the path and name
-   boxes. */
-.docs-box {
-  background: transparent;
-  border: 0;
-  color: var(--wg-fg);
-  font: inherit;
-  min-width: 0;
-  outline: none;
-  padding: 0;
-  width: 100%;
-}
-
-/* Without focus the tree keeps its selected row in the inactive fill. */
-.docs-tree.is-pane-inactive .ui-row.is-selected {
-  background: var(--wg-list-inactive-selection-background);
-  color: var(--wg-fg);
-}
-
 .docs-rows {
   list-style: none;
   margin: 0;

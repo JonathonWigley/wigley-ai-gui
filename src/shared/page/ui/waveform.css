@@ -1,0 +1,19 @@
+/* A bar per peak in a fixed-size box, in the quiet foreground; a layout turns
+   it another colour through `color`. */
+.ui-waveform {
+  color: var(--wg-fg-tertiary);
+  display: inline-block;
+  flex: none;
+  height: var(--wg-space-4);
+  width: calc(var(--wg-space-8) * 2);
+}
+
+.ui-waveform-svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.ui-waveform-bar {
+  fill: currentColor;
+}

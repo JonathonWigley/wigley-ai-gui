@@ -20,6 +20,11 @@
   color: var(--wg-accent);
 }
 
+.ui-tag--info {
+  background: var(--wg-status-info-tint);
+  color: var(--wg-status-info);
+}
+
 .ui-tag--running {
   background: var(--wg-status-running-tint);
   color: var(--wg-status-running);

@@ -73,26 +73,8 @@
   color: var(--wg-status-running);
 }
 
-.audio-picker-waveform {
-  color: var(--wg-fg-tertiary);
-  display: inline-block;
-  flex: none;
-  height: var(--wg-space-4);
-  width: calc(var(--wg-space-8) * 2);
-}
-
 .audio-picker-row.is-cursor .audio-picker-waveform {
   color: var(--wg-accent);
-}
-
-.audio-picker-waveform svg {
-  display: block;
-  height: 100%;
-  width: 100%;
-}
-
-.audio-picker-waveform rect {
-  fill: currentColor;
 }
 
 /* The name is how the user tells files apart, so one too long for its line
