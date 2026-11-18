@@ -187,8 +187,9 @@ export interface SessionPanes {
 // nothing, and the two methods log `projects ignored` and do nothing. `parts`
 // draws through the sessions layout the view's `setLayouts` sets, for the
 // mode's dialogs and the split picker's rows. `pickerItem` reads a session's
-// split picker item: what its side-bar row shows now. `dispose` ends a side bar drag and drops its rows, stops the
-// pane tree watching its size and pointer and drops every frame.
+// split picker item: what its side-bar row shows now. `dispose` stops following
+// the row, bar and section parts, ends a side bar drag and drops its rows, stops
+// the pane tree watching its size and pointer and drops every frame.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
@@ -542,9 +543,11 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     outer: treeView.outer,
   };
   drawPanes();
-  deps.rowParts.onChanged(() => drawSidebar());
-  deps.sections.onChanged(() => drawSidebar());
-  deps.barParts.onChanged(() => tabs.redrawBars());
+  const partChanges = [
+    deps.rowParts.onChanged(() => drawSidebar()),
+    deps.sections.onChanged(() => drawSidebar()),
+    deps.barParts.onChanged(() => tabs.redrawBars()),
+  ];
 
   return {
     element: root,
@@ -607,6 +610,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     dispose() {
       callEach<() => void>(
         [
+          ...partChanges.map((changes) => () => changes.dispose()),
           () => sidebar.dispose(),
           () => treeView.dispose(),
           () => tabs.dropAll(),

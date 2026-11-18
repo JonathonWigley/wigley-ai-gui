@@ -198,7 +198,8 @@ export interface TreeView {
   // view with a place, the first tree with rows takes it in place of its
   // default expansion and first row. The filter applies with its box closed.
   restorePlace(place: TreePlace): void;
-  // Disposes the tree's drawn parts.
+  // Pops an open filter box's scope, keeping its filter, and disposes the
+  // tree's drawn parts.
   dispose(): void;
 }
 
@@ -785,7 +786,10 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       drawnSwitch = null;
       drawnRows = [];
       callEach<() => void>(
-        drawn.map((part) => () => part?.dispose()),
+        [
+          () => view.dismissFilter(),
+          ...drawn.map((part) => () => part?.dispose()),
+        ],
         (step) => step(),
       );
     },

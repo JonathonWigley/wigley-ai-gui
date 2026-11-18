@@ -51,7 +51,8 @@ type KeysApi = PageApi<
 // logging how far it went. The core holds the anchors: this part tells it the
 // `showHints` setting. Records each scope in force and checks it against the
 // core's placed anchors for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
-// `document` listener `dispose` removes.
+// `document` listener `dispose` removes; `dispose` also disposes help's and
+// which-key's draws.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -69,6 +70,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       },
       log: services.log,
     });
+    const whichKeyView = mountWhichKeyView(api.areas.overlay, parts);
     startWhichKey({
       onPending: (listener) => keys.onPending(listener),
       holdPending: () => keys.holdPending(),
@@ -81,7 +83,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           keys.label,
           platform,
         ),
-      view: mountWhichKeyView(api.areas.overlay, parts),
+      view: whichKeyView,
       timers: services.timers,
       delayMs: () => api.settings().whichKeyDelayMs,
       timeoutMs: () => api.settings().whichKeyTimeoutMs,
@@ -204,7 +206,18 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
 
     return {
       dispose() {
-        document.removeEventListener(PLACEMENT_CHECK_EVENT, checkPlacement);
+        callEach<() => void>(
+          [
+            () =>
+              document.removeEventListener(
+                PLACEMENT_CHECK_EVENT,
+                checkPlacement,
+              ),
+            () => help.dispose(),
+            () => whichKeyView.dispose(),
+          ],
+          (step) => step(),
+        );
       },
       commands: {
         toggleHelp(context) {

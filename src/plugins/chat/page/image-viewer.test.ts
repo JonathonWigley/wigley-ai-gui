@@ -12,12 +12,16 @@ const green: ChatImage = { mediaType: 'image/png', data: 'Z3JlZW4=' };
 const blue: ChatImage = { mediaType: 'image/png', data: 'Ymx1ZQ==' };
 
 // The viewer over a layout whose image viewer records each input it draws or
-// updates with in `drawn`; the log records each line in `logs`.
+// updates with in `drawn`; the log records each line in `logs`, `pops` counts
+// each pushed scope's `pop`, and `layoutListeners` counts the viewer's layout
+// subscriptions still held.
 function viewerSetup() {
   const logs: string[] = [];
   const drawn: ImageViewerInput[] = [];
   const log = (line: string) => logs.push(line);
   const noEvent = () => undefined;
+  const pops = { count: 0 };
+  const layoutListeners = { count: 0 };
   const layouts = createChatLayouts(log);
   layouts.set(
     withUser<ChatLayout>(
@@ -34,7 +38,19 @@ function viewerSetup() {
     ),
   );
   const viewer = createImageViewer({
-    layouts,
+    layouts: {
+      ...layouts,
+      onChange(listener: () => void) {
+        layoutListeners.count++;
+        const handle = layouts.onChange(listener);
+        return {
+          dispose() {
+            layoutListeners.count--;
+            handle.dispose();
+          },
+        };
+      },
+    },
     markdown: {},
     keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
     commands: { exists: () => true, argShape: () => undefined, run: noEvent },
@@ -43,12 +59,14 @@ function viewerSetup() {
     log,
     overlay: { contribute: () => ({ dispose: noEvent }) },
     pushScope: () => ({
-      pop: noEvent,
+      pop: () => {
+        pops.count++;
+      },
       dispose: noEvent,
       onBaseChanged: () => ({ dispose: noEvent }),
     }),
   } as unknown as Parameters<typeof createImageViewer>[0]);
-  return { viewer, logs, drawn };
+  return { viewer, logs, drawn, pops, layoutListeners };
 }
 
 // A removal over `images` that records each index it is asked to remove and
@@ -176,5 +194,33 @@ describe('createImageViewer', () => {
     expect(setup.logs.slice(logsBefore)).toEqual(['image viewer closed']);
     expect(calls).toEqual([]);
     expect(listening()).toBe(0);
+  });
+
+  // Breaks: a stop that leaves the open viewer watching its removal, its scope
+  // pushed or its image drawn.
+  it('createImageViewer dispose closes an open viewer', () => {
+    const setup = viewerSetup();
+    const { removal, listening } = removalOver([red, green]);
+    setup.viewer.open([red, green], 1, removal);
+    const logsBefore = setup.logs.length;
+
+    setup.viewer.dispose();
+
+    expect({
+      listening: listening(),
+      pops: setup.pops.count,
+      logs: setup.logs.slice(logsBefore),
+    }).toEqual({ listening: 0, pops: 1, logs: ['image viewer closed'] });
+  });
+
+  // Breaks: a stop that leaves the viewer following the layouts, or ends that
+  // subscription twice.
+  it('createImageViewer dispose ends its layout subscription once', () => {
+    const setup = viewerSetup();
+    expect(setup.layoutListeners.count).toBe(1);
+
+    setup.viewer.dispose();
+
+    expect(setup.layoutListeners.count).toBe(0);
   });
 });

@@ -90,9 +90,10 @@ interface KeptDragReorder {
 // and every section again in the new layouts, with fresh samples, at the same
 // scroll position. `resizeTarget` is the split sample the last draw made,
 // which the resize keys move while the mode shows; each `setLayouts` makes a
-// new one, so the caller reads it again after. `dispose` disposes the HScroller
-// samples' scrollers and observers and the split sample the last draw made; a
-// second `dispose` does nothing.
+// new one, so the caller reads it again after. `dispose` disposes the head's,
+// each section's and the Dialog sample frame's last draws, the HScroller
+// samples' scrollers and observers, and the split and drag samples the last
+// draw made; a second `dispose` does nothing.
 export interface GalleryView {
   element: HTMLElement;
   sheet: HTMLElement;
@@ -199,6 +200,7 @@ export function createGalleryView(
           () => disposeHScrollers(keptHScrollers),
           () => split?.dispose(),
           () => reorder?.dispose(),
+          () => parts.dispose(),
         ],
         (step) => step(),
       );

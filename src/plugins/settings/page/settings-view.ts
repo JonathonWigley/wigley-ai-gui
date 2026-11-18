@@ -360,7 +360,8 @@ export interface SettingsView {
   // nothing.
   controlKindsChanged(): void;
   // The part stopped: a read, write or row action that settles after it draws,
-  // logs, toasts and invokes nothing.
+  // logs, toasts and invokes nothing; every part drawn in the rows pane, the
+  // pane itself and the side bar's draws are disposed.
   dispose(): void;
   // The mode was hidden: a key recording in progress is cancelled.
   hidden(): void;
@@ -1532,6 +1533,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     },
     dispose() {
       isDisposed = true;
+      callEach<() => void>(
+        [disposeEntries, () => rowsPane.dispose(), () => sections.dispose()],
+        (step) => step(),
+      );
     },
     reread: () => refreshQuietly(true),
     shown() {

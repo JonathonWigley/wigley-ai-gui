@@ -242,6 +242,18 @@ describe('galleryView', () => {
     expect(live).toHaveLength(1);
   });
 
+  it("dispose disposes every anchor the head's and the sections' draws named", () => {
+    const recorded = recordingAnchors();
+    const gallery = view(fakeDeps(recorded.keys));
+    expect(recorded.anchors.map((anchor) => anchor.command)).toContain(
+      'gallery.toggleTransparency',
+    );
+
+    gallery.dispose();
+
+    expect(recorded.anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
+  });
+
   it('draws the head with the starting transparency', () => {
     const gallery = view(fakeDeps());
 

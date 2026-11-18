@@ -215,6 +215,22 @@ describe('createTreeView', () => {
     expect(anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
   });
 
+  it("dispose pops the open filter box's scope", () => {
+    const { parts } = fakeDocsParts(() =>
+      withUser(defaultLayout, paneLayout('pane')),
+    );
+    const pop = vi.fn();
+    const tree = createTreeView({
+      ...treeDeps(parts),
+      pushBoxScope: () => ({ ...fakePushedScope(), pop }),
+    });
+    tree.openFilter();
+
+    tree.dispose();
+
+    expect(pop).toHaveBeenCalledOnce();
+  });
+
   it.each([
     { text: 'Reading…', isHidden: false },
     { text: null, isHidden: true },

@@ -576,7 +576,13 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   records each registration a plugin makes through `api`, its per-plugin service views included (timers,
   `files.watch`, `processes.run`, editors and their ex commands, markdown fences and blocks, alert counts), and the host disposes them when the plugin stops. A
   registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
-  DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
+  DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on. A view's
+  `dispose` undoes everything it drew or added outside its own root, since a stop removes the root and nothing else:
+  an element appended to a parent it did not create, a listener on `window`, `document` or an element it did not
+  create, an observer, a timer or animation frame, a Disposable handed back to it (a drawn part, anchors, a pushed
+  scope, a child view) and an entry in state another module holds. A continuation a stop cannot cancel checks its
+  part's `isStopped` (a view's `isDisposed`), which `dispose` sets as its first line, and a teardown of several steps
+  that can throw runs them through `callEach` (`src/shared/call-each.ts`), so one throw skips none of the rest.
 - **A disabled plugin** is one named in the core setting `plugins.disabled`: none of its parts run, and the list applies
   live. Main's plugin switch (`src/main/plugins/plugin-switch.ts`) takes each new list and follows the plugin
   catalog: a plugin that arrives starts, one that leaves stops as a switch-off does, and one with a new entry reloads

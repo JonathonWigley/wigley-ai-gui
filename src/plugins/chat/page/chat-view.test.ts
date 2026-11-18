@@ -41,6 +41,7 @@ import {
   type ChatSessionState,
   chatSessionSlot,
   type ChatSidePart,
+  type ChatStatusPart,
   type ComposerStopExits,
   type QueuedMessage,
   type ReturnedMessage,
@@ -166,7 +167,8 @@ const returnedTwo: ReturnedMessage = {
 // tab's `shown` before it returns, as the sessions plugin may, and
 // `focusAtAddTab` gets the focus as `addTab` returns. `selects` holds the
 // session of each tab handle's `select`; `hasSavedPlace` answers whether
-// `savedPlaces` holds the session. `owners` holds each session's row owner as
+// `savedPlaces` holds the session. `liveSubscriptions` counts the view's own
+// subscriptions to its layouts and part stores still held, by store. `owners` holds each session's row owner as
 // `ownerOf` reads it, null for a session it does not name and undefined for a
 // row not yet arrived; `rowAdded` sets a row's owner and tells the view the row
 // arrived. `addTabs` records each `addTab` session id and `otherShown.count`
@@ -234,6 +236,18 @@ function mounted(
   };
   const layouts = createChatLayouts(log);
   const renderers = createEntryRenderers(log);
+  const statusParts = createPartStore<ChatStatusPart>();
+  // The view's own subscriptions still held, by the store it subscribed to.
+  const liveSubscriptions = new Map<string, number>();
+  const counted = (store: string, handle: { dispose(): void }) => {
+    liveSubscriptions.set(store, (liveSubscriptions.get(store) ?? 0) + 1);
+    return {
+      dispose() {
+        liveSubscriptions.set(store, liveSubscriptions.get(store)! - 1);
+        handle.dispose();
+      },
+    };
+  };
   const kit = {
     markdown: {},
     keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
@@ -357,11 +371,31 @@ function mounted(
       keyCalls.push(['setResizeTarget', target]),
     setFocusTarget: (target: FocusTarget | null) =>
       keyCalls.push(['setFocusTarget', target]),
-    layouts,
-    renderers,
-    composerParts,
-    statusParts: createPartStore(),
-    sideParts,
+    layouts: {
+      ...layouts,
+      onChange: (listener: () => void) =>
+        counted('layouts', layouts.onChange(listener)),
+    },
+    renderers: {
+      ...renderers,
+      onChanged: (listener: () => void) =>
+        counted('renderers', renderers.onChanged(listener)),
+    },
+    composerParts: {
+      ...composerParts,
+      onChanged: (listener: () => void) =>
+        counted('composerParts', composerParts.onChanged(listener)),
+    },
+    statusParts: {
+      ...statusParts,
+      onChanged: (listener: () => void) =>
+        counted('statusParts', statusParts.onChanged(listener)),
+    },
+    sideParts: {
+      ...sideParts,
+      onChanged: (listener: () => void) =>
+        counted('sideParts', sideParts.onChanged(listener)),
+    },
     sideSections: recordingSideTabs(
       createSideSections({
         layouts,
@@ -446,6 +480,7 @@ function mounted(
     renderers,
     sideParts,
     composerParts,
+    liveSubscriptions,
     invoked,
     keyRuns,
     logs,
@@ -2284,5 +2319,30 @@ describe('mountChatView mounts', () => {
 
     expect(childCount(element)).toBe(0);
     expect(mount.keyCalls).toEqual([]);
+  });
+});
+
+describe('mountChatView dispose', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Breaks: a dispose that leaves the view listening to a store, or ends one
+  // subscription twice.
+  it.each([
+    'layouts',
+    'renderers',
+    'composerParts',
+    'statusParts',
+    'sideParts',
+  ])('dispose ends the view subscription to its %s once', (store) => {
+    const mount = mounted();
+    mount.open(stateOf([]));
+    expect(mount.liveSubscriptions.get(store)).toBe(1);
+
+    mount.view.dispose();
+
+    expect(mount.liveSubscriptions.get(store)).toBe(0);
   });
 });

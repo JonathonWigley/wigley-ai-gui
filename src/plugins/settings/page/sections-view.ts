@@ -1,3 +1,4 @@
+import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { rowAction } from '../../../shared/page/ui/row';
@@ -25,7 +26,8 @@ export interface SectionsViewDeps {
 // Settings mode's side bar: the layout's pane, holding one row per section.
 // `draw` draws the rows again, marking the open section selected and drawing
 // the cursor row's focus ring while `hasFocus`; `redrawPane` draws the pane
-// again, as after a new layout, with no rows until the next `draw`.
+// again, as after a new layout, with no rows until the next `draw`. `dispose`
+// disposes the pane and the rows drawn last.
 export interface SectionsView {
   element: HTMLElement;
   draw(
@@ -35,6 +37,7 @@ export interface SectionsView {
     hasFocus: boolean,
   ): void;
   redrawPane(): void;
+  dispose(): void;
 }
 
 export function createSectionsView(deps: SectionsViewDeps): SectionsView {
@@ -46,9 +49,7 @@ export function createSectionsView(deps: SectionsViewDeps): SectionsView {
   const disposeRows = () => {
     const disposes = rowDisposes;
     rowDisposes = [];
-    for (const dispose of disposes) {
-      dispose();
-    }
+    callEach(disposes, (dispose) => dispose());
   };
 
   return {
@@ -71,6 +72,11 @@ export function createSectionsView(deps: SectionsViewDeps): SectionsView {
       pane.dispose();
       pane.built.element.remove();
       pane = deps.drawPane(container);
+    },
+    dispose() {
+      callEach<() => void>([disposeRows, () => pane.dispose()], (step) =>
+        step(),
+      );
     },
   };
 }

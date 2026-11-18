@@ -418,10 +418,15 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     });
   };
 
+  // The pane's part leaves its slot, which the pane tree owns.
   const dropPane = (paneId: string, pane: DrawnPane) => {
     panes.delete(paneId);
     callEach<() => void>(
-      [() => disposeText(pane), () => pane.part?.dispose()],
+      [
+        () => disposeText(pane),
+        () => pane.part?.dispose(),
+        () => pane.part?.built.element.remove(),
+      ],
       (step) => step(),
     );
   };

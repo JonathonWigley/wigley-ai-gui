@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  createPartStore,
+  type PartStore,
+} from '../../../shared/page/contributed-parts';
+import {
   FakeElement,
   findAll,
   installFakeDom,
@@ -8,6 +12,7 @@ import {
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
   NEEDS_YOU_ACTIVITY,
+  type SessionPart,
   type SessionRow,
   type SidebarSection,
 } from '../contract';
@@ -551,6 +556,44 @@ describe('sessions view side bar', () => {
     expect(header.classList.contains('is-dragging')).toBe(false);
     expect(drawnRows(setup.sideBar)[0].title).toContain('label a1');
   });
+
+  // Breaks: a dispose that leaves the view following a part store, or ends one
+  // subscription twice.
+  it.each(['rowParts', 'barParts', 'sections'] as const)(
+    'mountSessionsView dispose ends its subscription to the %s once',
+    (store) => {
+      const live = { rowParts: 0, barParts: 0, sections: 0 };
+      const counted = <P extends { id: string }>(
+        name: keyof typeof live,
+      ): PartStore<P> => {
+        const inner = createPartStore<P>();
+        return {
+          ...inner,
+          onChanged(listener) {
+            live[name]++;
+            const handle = inner.onChanged(listener);
+            return {
+              dispose() {
+                live[name]--;
+                handle.dispose();
+              },
+            };
+          },
+        };
+      };
+      const setup = sessionsViewSetup(
+        counted<SessionPart>('rowParts'),
+        counted<SessionPart>('barParts'),
+        undefined,
+        { sections: counted<SidebarSection>('sections') },
+      );
+      expect(live[store]).toBe(1);
+
+      setup.view.dispose();
+
+      expect(live[store]).toBe(0);
+    },
+  );
 
   it('sidebarDrag_EndedBeforeTheTick_NeverMarksReordering', () => {
     let tick: (() => void) | null = null;

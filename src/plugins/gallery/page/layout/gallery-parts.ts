@@ -52,7 +52,7 @@ export interface SampleCell {
 // its last draw, releasing the anchors it named, and removes its root. A
 // section's draw covers its cells. The Dialog sample's frame keeps one draw
 // too, in one slot. The shown set is `default` alone until the
-// first `setLayouts`.
+// first `setLayouts`. `dispose` disposes every draw kept; their roots stay.
 export interface GalleryParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
   drawHead(
@@ -73,6 +73,7 @@ export interface GalleryParts {
     parent: HTMLElement,
     input: DialogFrameInput,
   ): DrawnPart<DialogFramePart>;
+  dispose(): void;
 }
 
 export function createGalleryParts(deps: GalleryPartsDeps): GalleryParts {
@@ -174,6 +175,7 @@ export function createGalleryParts(deps: GalleryPartsDeps): GalleryParts {
           'dialogFrame',
         ),
       ),
+    dispose: () => parts.dispose(),
   };
 }
 

@@ -6,6 +6,7 @@ import {
 } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { registeredProfiles } from '../../../shared/harness-profiles';
 import type { ChatImage } from '../../../contracts/agent';
@@ -463,7 +464,10 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       mayStop: () => view.mayStop(rows.all().values()),
       dispose: () => {
         isStopped = true;
-        view.dispose();
+        callEach<() => void>(
+          [() => view.dispose(), () => viewer.dispose()],
+          (step) => step(),
+        );
       },
     };
   },

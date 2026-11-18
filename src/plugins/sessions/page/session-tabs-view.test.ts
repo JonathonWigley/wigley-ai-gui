@@ -308,6 +308,18 @@ describe('session tabs view', () => {
     expect(pickHint.parentNode).toBeNull();
   });
 
+  // Breaks: a dispose that disposes each pane part but leaves its element in
+  // the pane tree's slot.
+  it("mountSessionTabsView's dispose removes each pane part from its slot", () => {
+    const { view, area } = viewWithFramedAndEmptyPane();
+    const paneParts = findAll(area, 'session-pane');
+    expect(paneParts).toHaveLength(2);
+
+    view.dispose();
+
+    expect(paneParts.map((part) => part.parentNode)).toEqual([null, null]);
+  });
+
   it.each([
     { case: "a frame's throw still drops the panes", throwing: 'session-area' },
     {

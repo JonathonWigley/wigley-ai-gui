@@ -341,6 +341,21 @@ describe('createSettingsView', () => {
     expect(setup.toasts).toEqual([]);
   });
 
+  it('dispose disposes every anchor the side bar, the rows pane and its rows named', async () => {
+    const { view, anchors } = await shownView();
+    expect(anchors.map((anchor) => anchor.command)).toEqual(
+      expect.arrayContaining([
+        'panes.focusRight',
+        'panes.focusLeft',
+        'settings.edit',
+      ]),
+    );
+
+    view.dispose();
+
+    expect(anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
+  });
+
   it.each([
     { from: 'sections', direction: 'right', after: 'rows', moved: true },
     { from: 'rows', direction: 'left', after: 'rows', moved: false },

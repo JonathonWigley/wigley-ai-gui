@@ -211,6 +211,31 @@ describe('createKeysParts', () => {
     expect(panel.children.map((child) => child.className)).toEqual(['marked']);
   });
 
+  it("help's dispose disposes the frame's anchors and takes out the body", () => {
+    const { parts, anchors } = fakeKeysParts();
+    const overlay = fakeOverlay();
+    const help = mountHelpView(overlay.area, SECTIONS, parts);
+    expect(anchors.map((anchor) => anchor.command)).toContain('keys.closeHelp');
+
+    help.dispose();
+
+    expect(anchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
+    expect(findAll(overlay.root, 'keys-help-sections')).toEqual([]);
+  });
+
+  it("which-key's dispose takes out the contents the last show drew", () => {
+    const { parts } = fakeKeysParts();
+    const overlay = fakeOverlay();
+    const view = mountWhichKeyView(overlay.area, parts);
+    view.show({ title: 'Space', name: null, entries: [] });
+    const [panel] = overlay.root.children;
+    expect(panel.children).toHaveLength(1);
+
+    view.dispose();
+
+    expect(panel.children).toEqual([]);
+  });
+
   it('dialogFrame_Default_CloseRunsCloseHelpAndShowsItsKey', () => {
     const { parts, anchors, runs } = fakeKeysParts();
     const parent = asHtml(new FakeElement('div'));

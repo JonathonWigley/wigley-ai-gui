@@ -202,7 +202,8 @@ export interface ChatTabs extends ChatView {
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
   ready(): void;
-  // Ends every held tab; no tab starts after it.
+  // Ends every held tab and the view's subscriptions to the layouts and part
+  // stores; no tab starts after it.
   dispose(): void;
   composerOf(sessionId: string): ComposerSurface | null;
   sessionFactsSource(sessionId: string): SessionFactsSource | null;
@@ -437,34 +438,38 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       hubToEntries(tab, deps);
     }
   };
-  deps.layouts.onChange(() => {
-    toastedKinds.clear();
-    for (const tab of tabs.values()) {
-      tab.entries.rebuild(tab.state.entries);
-      drawComposer(tab);
-      tab.side.rebuild();
-      leaveUnreachableHub(tab);
-    }
-  });
-  deps.renderers.onChanged(() => {
-    toastedKinds.clear();
-    for (const tab of tabs.values()) {
-      tab.entries.rebuild(tab.state.entries);
-    }
-  });
   const drawEveryComposer = () => {
     for (const tab of tabs.values()) {
       drawComposer(tab);
     }
   };
-  deps.composerParts.onChanged(drawEveryComposer);
-  deps.statusParts.onChanged(drawEveryComposer);
-  deps.sideParts.onChanged(() => {
-    for (const tab of tabs.values()) {
-      tab.side.sync();
-      leaveUnreachableHub(tab);
-    }
-  });
+  // The view's subscriptions to the layouts and part stores, which `dispose`
+  // ends.
+  const storeSubscriptions: Disposable[] = [
+    deps.layouts.onChange(() => {
+      toastedKinds.clear();
+      for (const tab of tabs.values()) {
+        tab.entries.rebuild(tab.state.entries);
+        drawComposer(tab);
+        tab.side.rebuild();
+        leaveUnreachableHub(tab);
+      }
+    }),
+    deps.renderers.onChanged(() => {
+      toastedKinds.clear();
+      for (const tab of tabs.values()) {
+        tab.entries.rebuild(tab.state.entries);
+      }
+    }),
+    deps.composerParts.onChanged(drawEveryComposer),
+    deps.statusParts.onChanged(drawEveryComposer),
+    deps.sideParts.onChanged(() => {
+      for (const tab of tabs.values()) {
+        tab.side.sync();
+        leaveUnreachableHub(tab);
+      }
+    }),
+  ];
   let pendingReveal: string | null = null;
   let lastShown: HeldTab | null = null;
   let isDisposed = false;
@@ -889,8 +894,17 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       mounts.clear();
       awaitingRow.clear();
       writeFocus();
-      callEach(held, tearDownTab);
-      callEach(mounted, (mount) => mount.tab?.root.remove());
+      callEach<() => void>(
+        [
+          () =>
+            callEach(storeSubscriptions, (subscription) =>
+              subscription.dispose(),
+            ),
+          () => callEach(held, tearDownTab),
+          () => callEach(mounted, (mount) => mount.tab?.root.remove()),
+        ],
+        (step) => step(),
+      );
     },
     composerOf: (sessionId) => tabs.get(sessionId)?.composer ?? null,
     sessionFactsSource: (sessionId) => {
