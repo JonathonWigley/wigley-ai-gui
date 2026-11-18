@@ -233,7 +233,7 @@ Boundary rules: `chatroom` reaches other plugins only through `dependsOn`/`reads
 - [x] [Doc re-read](11-doc-re-read.md) — after 01–10
 
 ### Wave 7
-- [ ] [Final verification](12-final-verification.md) — after 01–11
+- [x] [Final verification](12-final-verification.md) — after 01–11
 
 ## Run log
 
@@ -250,6 +250,7 @@ Review base: 7c3eb9665
 - 09 · hard · c8d08397f · diff read: mode, side bar, board, log, composer, row badge, asks-you activity, chatroom.place, layouts and zlr preview present; typecheck and lint clean (one prior 08 warning); tests wait for the test gate · concerns: nothing run before the gate; start.test.ts leans on harness assumptions (mode element, disposed writer value persists, default layout drawn before showLayouts); composer tests find the box by class through kit.textBox; i/r hints sit in the board part for want of a log-header part; main/start.ts top comment line runs long; AGENTS.md lacks chatroom/ in the folder map and zlr in Space z l (task 11)
 - 10 · hard · 9e87c6852 · diff read: seedChatroomFixture, chatroomSelfTestScript, chatroom.seed drive action present; every page line and command matches 09; typecheck and lint clean; self-test waits for the test gate · concerns: open() must finish two launches, three waits and two posts inside the runner's 5 s shown-line wait; board rows reach chatroom.rooms only on a board-feed refresh; <A-h> from the composer and from the log not checked against the keys plugin
 - 11 · standard · 62550ac3a · diff read: 4 planned marks removed, the Done grep prints nothing; check_manifests and --against origin/main pass; check_pointers fails on a learning/candidates pointer that fails the same on origin/main · concerns: no code resolves a thread (design.md now says so); postHuman's comment says uncapped but bodyCap applies to the user's posts; check_pointers fails on main already (learning/candidates/ngc-capability-free-for-every-game.md:4)
+- 12 · opus-low · 8b5f82ed9 · Live session: checks 2–6e pass (selftest --plugin chatroom all passed on 8b5f82ed9; 6b with real Claude: claim warning reached B at PreToolUse); check 7 dropped, covered by the test gate · concerns: PreToolUse additionalContext is quoted by the agent, not logged in stream-json
 ### Contract changes
 - room-store.test-support.ts: describeRoomStoreContract only → also newMessage(room, body) and messageWithEveryField(room, body) · why: the jsonl test and the shared suite share fixtures · consumers: 05, 06, 08 may use them · group 01
 - 02 Produces: SessionList.sessionOfHost(hostId) → sessionOf(info: SessionInfo); createHookRoutes takes sessionOf · why: row-id-first lookup (Lane H's connect order) · consumers: 02 only (08 consumes the routes, not the lookup) · lead, before dispatch
@@ -303,6 +304,7 @@ Review base: 7c3eb9665
 - Follow-ups at close: a viewer resolve action (8); a cap or hash for long room file names (21); hook.py following cd and other git globals (26); a room rewrite when a claim expires (32); the learning-candidate pointer check_pointers fails on (40) — lead
 - Headless pick at re-review 1: a restored row not yet started counts as resting, so no wake starts it until the user runs it; wording fixed, follow-up for wakes that start restored rows — lead
 - Headless pick at re-review 1: the pre-existing short-option cluster misread in hook.py is fixed in cycle 2, beside the bare add -A fix in the same parser — lead
+- Headless pick at the live session: a relative claim path is relative to the calling session's folder, then made repo-relative (08 had it repo-relative already); found by check 6b, a subfolder session's claim never warned — lead
 ### Review rounds
 - Round 1 · implementation review of e23142c0e..0b2771d12 · six lanes (3 correctness, 3 plan-and-design) · NEEDS FIXES: 40 findings (9 Important, 30 Minor, 1 pre-existing), report scratchpad review-0b2771d12.md · lead-applied f8c1e3654 (36, 37, 38, 40's note in 12) · five fix workers dispatched (store, main-a, main-b, page, relay)
 - Round 1 fixes 23178d271: risk High (relay hello protocol, delivery wake rule, hook commit parsing across 41 files) — correctness re-review

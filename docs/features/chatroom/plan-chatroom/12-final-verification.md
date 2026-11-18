@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · runs the listed live checks and reports; it edits no file
 Wave: 7 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11
@@ -118,3 +118,5 @@ Done when: every check above passes, or fails with a fix landed and the check ru
            result is in the report with its capture paths.
 
 ## Proof
+
+Commit 8b5f82ed9 · proof: Live session: checks 2–6e pass (selftest --plugin chatroom all passed on 8b5f82ed9; 6b with real Claude: claim warning reached B at PreToolUse); check 7 dropped, covered by the test gate · concerns: PreToolUse additionalContext is quoted by the agent, not logged in stream-json
