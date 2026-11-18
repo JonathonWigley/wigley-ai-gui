@@ -1,6 +1,6 @@
 # 10 — Split form-state.ts and rename the screen union
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07, 08
 Plan: [plan.md](plan.md)
@@ -186,3 +186,4 @@ This task was drafted against the tree before 07. Where the text above and these
 
 ## Proof
 
+Commit 8b8fd33ba · proof: diff read: round-model.ts, round-answers.ts, round-draft.ts, kinds/finding/finding-answer.ts, form-state.ts keeps state/createFormsState/reducer/roundPlace, FormsScreen; wave 5 compile: typecheck, lint pass; full npm test 14832 pass, 3 known failures · concerns: test-rounds.ts imports changed (types moved since 07); AGENTS.md 'An item kind' and the FormsView name in followups.md, plugin-framework design, master-plan and the Lane L docs are left for task 11

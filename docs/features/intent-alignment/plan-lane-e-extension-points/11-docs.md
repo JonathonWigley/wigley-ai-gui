@@ -1,6 +1,6 @@
 # 11 — Agent docs and the design re-read
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 01–10
 Plan: [plan.md](plan.md)

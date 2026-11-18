@@ -1,6 +1,6 @@
 # 09 — Retro reads action words; proof text in the marketplace and forms.md
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 5 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -200,3 +200,4 @@ One commit per folder, all in the one `ai` worktree:
 
 ## Proof
 
+Commit 2c5350abe, bf8ea4199 · proof: diff read: ORIGIN_ACTION_LABELS gone, _action_pick reads action_label/recommend_action_label with the pre-08 fallback, _card_entries offers every action; README, triage.md, make SKILL.md, forms.md proof text; both manifests 2.16.3 (main holds 2.16.2); retro unittest OK · concerns: check_pointers.py fails on a main-clone learning/candidates file this task did not touch; the doc's 2.12.4 version was stale
