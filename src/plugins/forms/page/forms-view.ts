@@ -136,7 +136,8 @@ interface ConfirmDraws {
 // removed.
 // `scrollBy` scrolls the active round's main column by `step`, down for 1 and
 // up for -1; null when no round is active or it has no view yet. `dispose`
-// destroys every open round view.
+// destroys every open round view and disposes the cancel prompt's last frame
+// and body draws.
 export interface FormsView {
   forgetSession(sessionId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
@@ -280,6 +281,8 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     dispose() {
       statusPart.dispose();
       storeSubscription.dispose();
+      confirmDraws.body?.draw.dispose();
+      confirmDraws.frame?.draw.dispose();
       for (const roundId of roundViews.keys()) {
         destroyRoundView(roundId, shownRounds, deps);
       }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
+import type { KeyHints } from '../../../contracts/plugin';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { createReducerStore } from '../../../shared/page/reducer-store';
@@ -20,6 +21,8 @@ import { apply, initialState, presentedRound, roundOf } from './test-rounds';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import {
+  type RecordedAnchor,
+  recordingAnchors,
   USER_LAYOUT,
   withUser,
 } from '../../../shared/page/layout-host/test-layouts';
@@ -89,13 +92,20 @@ type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
 // holds each added popup's session and whether it was added restored.
 // `presented` is r1 as main presented it; `overlays` holds each element the
 // view contributed to the overlay area, the cancel prompt's scrim, and `view`
-// is the mounted view.
+// is the mounted view; `confirmScopes` logs each push and pop of the cancel
+// prompt's key scope, and `keys` is what the kits anchor through.
 function formPopupSetup(
   others: string[] = [],
   savedPlaces: ReadonlyMap<string, RoundPlace> = new Map(),
   presented = presentedRound('r1'),
+  keys: Pick<KeyHints, 'keysFor' | 'onKeymapChanged' | 'anchor'> = {
+    keysFor: () => null,
+    onKeymapChanged: () => ({ dispose: () => undefined }),
+    anchor: () => ({ dispose: () => undefined }),
+  },
 ) {
   const calls: ScopeCall[] = [];
+  const confirmScopes: string[] = [];
   const restoredAdds: [string, boolean][] = [];
   const activities: [string, string, RowActivity | null][] = [];
   const targets: RegisteredTarget[] = [];
@@ -152,11 +162,14 @@ function formPopupSetup(
     setScope: (view) => calls.push(['setScope', view]),
     setResizeTarget: (target) =>
       calls.push(['setResizeTarget', target === null ? null : 'target']),
-    pushConfirmScope: () => ({
-      pop: () => undefined,
-      dispose: () => undefined,
-      onBaseChanged: () => ({ dispose: () => undefined }),
-    }),
+    pushConfirmScope: () => {
+      confirmScopes.push('push');
+      return {
+        pop: () => confirmScopes.push('pop'),
+        dispose: () => undefined,
+        onBaseChanged: () => ({ dispose: () => undefined }),
+      };
+    },
     store,
     boxes,
     markdown: {
@@ -165,11 +178,7 @@ function formPopupSetup(
       document: async (text) => text,
       ...NO_FENCES,
     },
-    keys: {
-      keysFor: () => null,
-      onKeymapChanged: () => ({ dispose: () => undefined }),
-      anchor: () => ({ dispose: () => undefined }),
-    },
+    keys,
     run: () => undefined,
     commands: fakeKitCommandsOf(formsManifest),
     contributions: createFormsContributions(),
@@ -214,6 +223,7 @@ function formPopupSetup(
     restoredAdds,
     overlays,
     view,
+    confirmScopes,
   };
 }
 
@@ -343,6 +353,80 @@ describe('form cancel prompt layout', () => {
     view.setLayouts(withUser<Layout>(defaultLayout, counting));
 
     expect(bodyDraws).toBe(1);
+  });
+});
+
+// A user layout whose frame and body each anchor a key, and whose frame draws
+// its actions row as `user-frame-actions`.
+const ANCHORING_CONFIRM: Layout = {
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(parent, 'section', 'user-frame');
+    kit.keyHint(panel, 'forms.dismissConfirm', { label: 'user-frame' });
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'user-frame-actions')
+      : null;
+    return { element: panel, body, actions };
+  },
+  confirmBody(parent, input, kit) {
+    const root = kit.el(parent, 'p', 'user-confirm-body', input.body);
+    kit.keyHint(root, 'forms.dismissConfirm', { label: 'user-body' });
+    return root;
+  },
+};
+
+// The anchors `ANCHORING_CONFIRM`'s frame and body drew, in draw order.
+function layoutAnchors(anchors: RecordedAnchor[]): RecordedAnchor[] {
+  return anchors.filter(
+    (anchor) => anchor.label === 'user-frame' || anchor.label === 'user-body',
+  );
+}
+
+describe('form cancel prompt redraw while asked', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('cancelPrompt_SetLayoutsWhileAsked_KeepsScrimAndScopeRedrawsFrame', () => {
+    const { anchors, keys } = recordingAnchors();
+    const { store, view, overlays, confirmScopes } = formPopupSetup(
+      [],
+      new Map(),
+      presentedRound('r1'),
+      keys,
+    );
+    store.dispatch({ type: 'openReview' });
+    store.dispatch({ type: 'askCancel' });
+    view.setLayouts(withUser<Layout>(defaultLayout, ANCHORING_CONFIRM));
+    const drawn = layoutAnchors(anchors);
+    expect(drawn).toHaveLength(2);
+
+    view.setLayouts(withUser<Layout>(defaultLayout, { ...ANCHORING_CONFIRM }));
+
+    const scrim = overlays[0];
+    expect(scrim.hidden).not.toBe(true);
+    expect(scrim.childNodes).toHaveLength(1);
+    const [actions] = findAll(scrim.childNodes[0], 'user-frame-actions');
+    expect(actions.childNodes).toHaveLength(2);
+    expect(confirmScopes).toEqual(['push']);
+    expect(drawn.every((anchor) => anchor.isDisposed)).toBe(true);
+    const redrawn = layoutAnchors(anchors).slice(2);
+    expect(redrawn).toHaveLength(2);
+    expect(redrawn.every((anchor) => !anchor.isDisposed)).toBe(true);
+  });
+
+  it('dispose_DisposesThePromptsLastFrameAndBodyAnchors', () => {
+    const { anchors, keys } = recordingAnchors();
+    const { view } = formPopupSetup([], new Map(), presentedRound('r1'), keys);
+    view.setLayouts(withUser<Layout>(defaultLayout, ANCHORING_CONFIRM));
+    const drawn = layoutAnchors(anchors);
+    expect(drawn).toHaveLength(2);
+    expect(drawn.some((anchor) => anchor.isDisposed)).toBe(false);
+
+    view.dispose();
+
+    expect(drawn.every((anchor) => anchor.isDisposed)).toBe(true);
   });
 });
 
