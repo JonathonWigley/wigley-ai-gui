@@ -1,4 +1,5 @@
 import { desktopCapturer, shell, systemPreferences } from 'electron';
+import type { ScreenAccess } from '../../contracts/screen-capture';
 
 const MAC_SCREEN_SETTINGS_URL =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
@@ -14,12 +15,14 @@ export async function electronCaptureSources(): Promise<
   return sources.map((source) => ({ id: source.id }));
 }
 
-// macOS Screen Recording access. An undetermined grant counts as granted, so
-// the first capture call can show the OS prompt.
-export function macScreenAccess(): 'granted' | 'blocked' {
+// macOS Screen Recording access. `undetermined` lists as granted, so the
+// first capture call can show the OS prompt.
+export function macScreenAccess(): ScreenAccess {
   const status = systemPreferences.getMediaAccessStatus('screen');
-  const isRefused = status === 'denied' || status === 'restricted';
-  return isRefused ? 'blocked' : 'granted';
+  if (status === 'denied' || status === 'restricted') {
+    return 'blocked';
+  }
+  return status === 'not-determined' ? 'undetermined' : 'granted';
 }
 
 // Opens the Screen Recording pane of macOS System Settings.

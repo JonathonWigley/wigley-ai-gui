@@ -111,8 +111,9 @@ The Settings and keys steps show the user's own settings and keymap, read only:
 
 **Off-by-default plugins** (agent lines, the usage tab line, the docs session tab, and any later
 one) start in memory for the demo's run, through the plugin switch's `runDisabledForNow`, which
-starts the built-in plugins the user's `plugins.disabled` lists and leaves any other plugin as it
-is, so their steps can show; `settings.json` is never written, and Stop restores the user's list.
+starts each built-in plugin that both the default settings' `plugins.disabled` and the user's list
+name and leaves any other plugin as it is, so a plugin the user switched off on purpose stays off
+and only the off-by-default steps show; `settings.json` is never written, and Stop restores the user's list.
 
 The **Live view** step streams a real window — the Unity editor when one is running, else the
 app's own — through the existing Screen Recording grant, and stops the stream when the step is

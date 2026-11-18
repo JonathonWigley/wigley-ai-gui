@@ -1,6 +1,7 @@
 import type {
   CaptureWindow,
   ScreenCapture,
+  ScreenAccess,
   ScreenRect,
   WindowList,
 } from '../../contracts/screen-capture';
@@ -23,7 +24,7 @@ export interface ScreenCaptureDeps {
   readonly windows: OsWindowLister;
   // The capture sources of every window, as Electron's desktopCapturer lists them.
   sources(): Promise<readonly { readonly id: string }[]>;
-  access(): 'granted' | 'blocked';
+  access(): ScreenAccess;
   // True on macOS: no window source at all means the app has no grant yet.
   readonly blockedWhenNoSources: boolean;
   openSettings(): Promise<void>;
@@ -31,10 +32,12 @@ export interface ScreenCaptureDeps {
 
 // A ScreenCapture over one OS's adapter: each OS window that has a capture
 // source, in the OS's front-to-back order, with that source's id. A blocked
-// access lists nothing, and a lister or sources call that rejects rejects
+// access lists nothing, an undetermined one lists as granted so the OS can
+// ask, and a lister or sources call that rejects rejects
 // the list with its error.
 export function createScreenCapture(deps: ScreenCaptureDeps): ScreenCapture {
   return {
+    access: () => deps.access(),
     async listWindows(): Promise<WindowList> {
       if (deps.access() === 'blocked') {
         return { access: 'blocked' };

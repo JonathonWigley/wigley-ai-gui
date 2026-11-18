@@ -21,7 +21,14 @@ export type WindowList =
   | { readonly access: 'granted'; readonly windows: readonly CaptureWindow[] }
   | { readonly access: 'blocked' };
 
+// Whether the user granted screen capture to the app, refused it, or was
+// never asked; `undetermined` means the next `listWindows` may raise the OS's
+// prompt.
+export type ScreenAccess = 'granted' | 'blocked' | 'undetermined';
+
 export interface ScreenCapture {
+  // The OS's answer now, asking nothing; `granted` where the OS has no grant.
+  access(): ScreenAccess;
   // Rejects when the OS has no adapter or the window list cannot be read.
   listWindows(): Promise<WindowList>;
   // Opens the OS's screen capture settings; rejects where the OS has none.

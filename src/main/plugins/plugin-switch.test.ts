@@ -84,6 +84,8 @@ interface SetupOptions {
   applied?: readonly string[];
   // `configDisabled()`; `applied` when left out.
   disabled?: readonly string[];
+  // The default settings' `plugins.disabled`; none when left out.
+  offByDefault?: readonly string[];
 }
 
 // ` restart` for a main stop or remove handed `restart`, else nothing.
@@ -117,6 +119,7 @@ function setup({
   entries = manifests.map((each) => entry(each.id, { manifest: each })),
   applied: initial = [],
   disabled = initial,
+  offByDefault = [],
 }: SetupOptions) {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -326,6 +329,7 @@ function setup({
       setPluginProblems: (next) => handedProblems.push(next),
     },
     configDisabled: () => configDisabled.list,
+    offByDefault,
     problem: (message) => problems.push(message),
     servedChanged: () => calls.push('servedChanged'),
     timers: fakeTimers,
@@ -1950,12 +1954,13 @@ describe('createPluginSwitch', () => {
     expect(calls).toEqual([]);
   });
 
-  // Built-ins `a` and `b` and user plugin `u`, the config switching off `a`
-  // and `u`.
+  // Built-ins `a` and `b`, both off by default, and user plugin `u`, the
+  // config switching off `a` and `u`.
   const heldSwitch = () =>
     setup({
       entries: [entry('a'), entry('b'), user('u')],
       applied: ['a', 'u'],
+      offByDefault: ['a', 'b'],
     });
 
   // The calls `step` adds, from the settled switch until it settles again.
@@ -1995,6 +2000,25 @@ describe('createPluginSwitch', () => {
     ]);
     expect(switched.configDisabled.list).toEqual(['a', 'u']);
     expect(switched.handed).toEqual([]);
+  });
+
+  it('runDisabledForNow_UserDisabledNotOffByDefault_StaysOff', async () => {
+    const switched = setup({
+      entries: [entry('a'), entry('b'), user('u')],
+      applied: ['a', 'b', 'u'],
+      offByDefault: ['a'],
+    });
+
+    const calls = await callsDuring(switched, () =>
+      switched.pluginSwitch.runDisabledForNow(),
+    );
+
+    expect(calls).toEqual([
+      'main start a',
+      'applied b,u',
+      'servedChanged',
+      'page start a',
+    ]);
   });
 
   it('runDisabledForNow_Dispose_SwitchesThemOffAgain', async () => {

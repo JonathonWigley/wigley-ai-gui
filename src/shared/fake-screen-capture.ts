@@ -1,4 +1,8 @@
-import type { CaptureWindow, ScreenCapture } from '../contracts/screen-capture';
+import type {
+  CaptureWindow,
+  ScreenAccess,
+  ScreenCapture,
+} from '../contracts/screen-capture';
 
 // The pid of the fake Unity editor that owns the fake's Game View and main
 // editor windows.
@@ -37,11 +41,13 @@ const FAKE_WINDOWS: readonly CaptureWindow[] = [
 ];
 
 // A ScreenCapture over a fixed window list of sample sources, or blocked
-// when `options.access` is `'blocked'`; opening the settings does nothing.
+// when `options.access` is `'blocked'`; `access` reads `options.access`
+// (`granted` by default), and opening the settings does nothing.
 export function createFakeScreenCapture(
-  options: { access?: 'granted' | 'blocked' } = {},
+  options: { access?: ScreenAccess } = {},
 ): ScreenCapture {
   return {
+    access: () => options.access ?? 'granted',
     listWindows: async () =>
       options.access === 'blocked'
         ? { access: 'blocked' }

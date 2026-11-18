@@ -1425,6 +1425,7 @@ function createWindow(
     catalog,
     config: store,
     configDisabled: () => store.current().settings.plugins.disabled,
+    offByDefault: coreDefaultSettings().plugins.disabled,
     problem: (message) => store.setPluginsProblem(message),
     servedChanged() {
       livePage(window)?.send(BRIDGE_CHANNELS.configChanged, served());

@@ -1182,8 +1182,9 @@ export interface MainServices {
 
 // The part of main's plugin switch a main part reaches. `mayDisable` gives the
 // reason turning `pluginId` off would be refused now, or null.
-// `runDisabledForNow` starts every built-in plugin the user switched off, in
-// memory, until the last hold's `dispose`, which applies the config's
+// `runDisabledForNow` starts each built-in plugin that is off by default (the
+// default settings' `plugins.disabled`) and that the user's list still
+// switches off, in memory, until the last hold's `dispose`, which applies the config's
 // `plugins.disabled` again; it never writes `settings.json`, a refused
 // switch-off retries as a config switch-off does, and stopping the calling
 // plugin disposes its hold.

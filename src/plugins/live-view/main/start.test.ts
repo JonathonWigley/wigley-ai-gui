@@ -143,6 +143,7 @@ async function startPart() {
     openAccessSettings: vi.fn((): Promise<void> => Promise.resolve()),
   };
   const screenCapture: ScreenCapture = {
+    access: () => 'granted',
     listWindows: () => capture.list(),
     openAccessSettings: () => capture.openAccessSettings(),
   };

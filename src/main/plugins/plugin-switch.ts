@@ -74,8 +74,8 @@ export interface PluginSwitch extends PluginSwitchService {
   // The reason turning `pluginId` off would be refused now, in words Settings
   // shows (neededBy, then mayStop), or null.
   mayDisable(pluginId: string): Promise<string | null>;
-  // Applies `configDisabled()` without the admitted built-ins, then resolves to
-  // a hold; a rejected apply rejects and holds nothing. The last live hold's
+  // Applies `configDisabled()` without the admitted built-ins that
+  // `offByDefault` names, then resolves to a hold; a rejected apply rejects and holds nothing. The last live hold's
   // first `dispose` applies `configDisabled()` again without waiting, logging a
   // rejection. Writes no config: `deps` holds no writer.
   runDisabledForNow(): Promise<Disposable>;
@@ -118,6 +118,9 @@ export interface PluginSwitchDeps {
   };
   // The `plugins.disabled` the config holds now.
   configDisabled(): readonly string[];
+  // The default settings' `plugins.disabled`: the only plugins
+  // `runDisabledForNow` starts.
+  offByDefault: readonly string[];
   // Sets or clears the switch's config problem.
   problem(message: string | null): void;
   // The applied or paused list changed: push the served config to the page
@@ -1122,7 +1125,8 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     const builtIns = config
       .plugins()
       .filter((entry) => entry.origin === 'built-in')
-      .map(idOf);
+      .map(idOf)
+      .filter((id) => deps.offByDefault.includes(id));
     holdCount += 1;
     try {
       await apply(deps.configDisabled().filter((id) => !builtIns.includes(id)));
