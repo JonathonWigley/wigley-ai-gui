@@ -1,6 +1,6 @@
 # 26 — Doc re-read and follow-up removal
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · a doc-only task: prose checked against settled code
 Wave: 8 · Depends on: every group
@@ -62,3 +62,5 @@ only the removals, the "Split subscribes to its width key" correction when it ap
 Commit: one commit, "Follow-ups sweep (after Lane H): remove the landed items; doc re-read".
 
 ## Proof
+
+Commit a4482d14f · proof: diff read: 34 whole-entry removals (34 bold-title lines gone) and two corrections, nothing else · concerns: app-update design.md rewording not checked against the app-update self-test script

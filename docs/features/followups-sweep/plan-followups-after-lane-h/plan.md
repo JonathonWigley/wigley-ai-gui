@@ -160,7 +160,7 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 - [x] [Every view's dispose against what it drew](25-view-dispose-audit.md) — after 24
 
 ### Wave 8
-- [ ] [Doc re-read and follow-up removal](26-doc-re-read.md) — after every group
+- [x] [Doc re-read and follow-up removal](26-doc-re-read.md) — after every group
 - [ ] [Final verification](27-final-verification.md)
 
 ## Run log
@@ -191,6 +191,7 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 11 · hard · d17f69752 · diff read: createPendingTick replaces the four pendingTick copies (grep pendingTick src empty); shared fakeTimers replaces eleven suite copies (grep 'function fakeTimers' src prints only the shared file); typecheck and lint pass · concerns: toasts.test moved to the shared fake beyond Files; its draw-throws row now asserts armed.size 0, which also passes on a set-then-cleared timer
 - 24 · deep · 592af3fa5 · diff read of the Rule 2 router, switch wiring, detachAll, chat main dispose and session-tabs drop; the sweep sites checked against the worker's per-file list; typecheck and lint (after lead oxfmt over four files) clean · concerns: Rule 3 sweep sites have no test rows (task asks a row per changed site in a tested file); popup.test flipped: a note send landing after stop now toasts nothing; workflow-large countdown timers are guarded, not cancelled; scheduling main's nested finally lets a later error win; residual log-only continuations in rename-dialog, stash-flow, account-commands, sign-in-flow, attachments, and forms/main/start.ts untouched
 - 25 · deep · 212d80115 · diff read of all four lots: 10 gaps fixed with a test row each, 19 views reported clean with reasons; typecheck and lint (lead oxfmt over two test files) clean · concerns: chat's reason box, close-confirm and sign-in dialogs share image-viewer's undisposed layout subscription but sit outside the view list; notes popup never disposes its NotesParts draws and keys start never disposes its title-bar button Drawn; picker, forms and primer views drop their overlay contribute Disposable (harmless while view and part share a lifetime); doc-view's drawnPrompt is disposed only through endConflict; gallery-parts.ts edited outside the lot list
+- 26 · standard · a4482d14f · diff read: 34 whole-entry removals (34 bold-title lines gone) and two corrections, nothing else · concerns: app-update design.md rewording not checked against the app-update self-test script
 ### Contract changes
 ### Rulings
 - 02: the raw-JSON site in malformedEntryField passes { source } to ownsRoot rather than widening its parameter · group 02
