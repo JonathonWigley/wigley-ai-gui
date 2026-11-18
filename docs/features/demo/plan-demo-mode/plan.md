@@ -319,10 +319,10 @@ Critical path: 01 → 06 → 07 → 08 → 16 → 17
 - [x] [Demo page](07-demo-page.md) — after 04, 05, 06, 11, 12, 13
 
 ### Wave 4
-- [ ] [Demo self-test and coverage check](08-demo-selftest.md) — after 06, 07, 09–15
+- [x] [Demo self-test and coverage check](08-demo-selftest.md) — after 06, 07, 09–15
 
 ### Wave 5
-- [ ] [Doc re-read](16-doc-re-read.md)
+- [x] [Doc re-read](16-doc-re-read.md)
 
 ### Wave 6
 - [ ] [Final verification](17-final-verification.md) — after 16
@@ -346,6 +346,8 @@ Review base: 7811ca8a2
 - 14 · deep · c0b932931 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: workflow main's guard checks the profile, so a user profile named demo gets no flow; leadingDone copied into 3 tests; level page tests fake workflowPageKey without showSample; workflow-large-main.test.ts edited outside Files
 - 15 · deep · 1a22ef0a0 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07); one commit per plugin 3d34d2205..1a22ef0a0 · concerns: board feed claims still read the real room during a hold; a real message for the scratch project's room rewrites from the demo service; docs sample split writes the sessionTree width; backlog sample row selections write the backlog place slot; a resumed demo task's nextRun counts from show time; no part disposes its registrations in dispose (the per-plugin view does)
 - 07 · deep · 41780f05a · diff read (composition entries, keymap binds, layouts register); typecheck and lint clean; demo tests 77 pass after the panel test moved to installFocusFakeDom · concerns: test areas spread over the fake API may drop a getter-backed member; two tests wait with a real setTimeout(0); blur on a mode change while the step agent holds the keys has no test (live check)
+- 08 · hard · ec1c6cdf9 · diff read of contract report/selftest wiring; typecheck, lint, layers clean; demo tests 88 pass · concerns: walk step pins screenshot and repeat, so one PNG per press; max 400 unchecked without a selftest run; demo manifest leaves core.plugins out of reads, as settings does
+- 16 · standard · 290ac734e · diff read of design.md, AGENTS.md, keymap.md against landed code · concerns: stale lines outside its files: agent-chat/design.md:369, scoped-agents/design.md:104-107, followups.md:659-668; 08 clauses written from its task doc
 ### Contract changes
 - 11: main registerDemoSteps of sessions, agent-strip, agent-lines and visual take no deps; agents/main/preview.ts exports sampleRoster; chat page fillComposerOf and setHeadless are locals
 - 12: session-extras main registerDemoSteps take no deps where none are needed; SessionStashDeps gains isDemoRunning() and sampleProjectDir; new shared/page/demo-start-prompt.ts (demoStartPrompt); new parts sessionLogPagePart and usageTabLineMainPart for 07

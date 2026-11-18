@@ -1,6 +1,6 @@
 # 16 — Doc re-read against the landed code
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · doc-only: prose checked against settled code
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15 (it reads every group's landed code)
@@ -28,3 +28,5 @@ Done when: every stale line is fixed; `npm run lint` passes (the docs' formatter
 Commit:    one commit for the doc fixes
 
 ## Proof
+
+Commit 290ac734e · proof: diff read of design.md, AGENTS.md, keymap.md against landed code · concerns: stale lines outside its files: agent-chat/design.md:369, scoped-agents/design.md:104-107, followups.md:659-668; 08 clauses written from its task doc

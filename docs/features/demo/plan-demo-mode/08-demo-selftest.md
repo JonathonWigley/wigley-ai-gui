@@ -1,6 +1,6 @@
 # 08 — Demo self-test and coverage check
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds a page-to-main report and a script that walks every plugin's landed steps before the `live` section; nothing a wrong guess here ships to the user's state
 Wave: 4 · Depends on: 06, 07, 09 (its coverage check and step walk expect every plugin's step or skip to have landed), 10 (same), 11 (same), 12 (same), 13 (same), 14 (same), 15 (same)
@@ -110,3 +110,5 @@ Done when: `npm run typecheck`, `npm test` and `npm run lint` pass.
 Commit: one commit for the group: "Demo self-test: Space d keys, a walk through every step, and the coverage check on PluginStatus.demoSkip"
 
 ## Proof
+
+Commit ec1c6cdf9 · proof: diff read of contract report/selftest wiring; typecheck, lint, layers clean; demo tests 88 pass · concerns: walk step pins screenshot and repeat, so one PNG per press; max 400 unchecked without a selftest run; demo manifest leaves core.plugins out of reads, as settings does
