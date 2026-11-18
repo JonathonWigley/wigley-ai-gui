@@ -1,6 +1,6 @@
 # 15 — Git.commitPaths removed
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · removes one contract member, its adapter, its tests and two fakes; no behaviour changes
 Wave: 3 · Depends on: 01, 05 (each lists `AGENTS.md`)
@@ -48,3 +48,7 @@ Done when: compiles (`npm run typecheck`); `npm test` runs the three named test 
 
 Commit: one commit for the group, e.g. "Remove Git.commitPaths, which nothing calls since Backlog's Commit went
 (follow-up: Git.commitPaths has no caller)"
+
+## Proof
+
+Commit 8213e6a96 · proof: diff read: commitPaths gone from contract, adapter, tests, two fakes and AGENTS.md git/ entry; grep empty; typecheck and lint clean · concerns: none

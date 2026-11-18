@@ -143,8 +143,8 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 - [x] [Local commands do not title a row](20-local-command-titles.md) — after 13
 
 ### Wave 3
-- [ ] [Split subscribes to its width key](10-split-width.md) — after 01, 05, 07
-- [ ] [Git.commitPaths removed](15-git-commit-paths.md) — after 01, 05
+- [x] [Split subscribes to its width key](10-split-width.md) — after 01, 05, 07
+- [x] [Git.commitPaths removed](15-git-commit-paths.md) — after 01, 05
 
 ### Wave 4
 - [ ] [DrawnPart reports drewBundled](08-drawn-part-bundled.md) — after 07, 09, 10
@@ -184,6 +184,8 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 01 · deep · 7112b86a0 f36b10d57 · diff read: DocsTreePlace per view, sideBarNarrowed told on beside→hidden, rowIdsIn/selectNearestIn reselect after outside rename/trash, askedOpens on every open checked after both waits; typecheck and lint clean (oxfmt run as lead) · concerns: D makes a reload's restored open lose to any open asked before the first index read (its edits toast as not restored); outside-change page test uses two added views; a page-scoped saved place in the old shape is not read back after this change
 - 14 · standard · fc63ebd3e · diff read: title-only renames in main-api, docs-state and tree-view tests; old-form and old-title-in-docs greps print nothing; typecheck and lint clean · concerns: tree-view.test.ts keeps other old-form titles outside the task's two
 - 05 · hard · f36d169c3 89a777915 · diff read: createSessionsPageModel and its Deps/View/Model interfaces present, start.ts closure-state grep empty, model has no DOM reads; typecheck and lint clean (oxfmt run as lead) · concerns: view callbacks and keysToFocusedPane reference model before its declaration (safe: the mount calls no callback synchronously); model echo test relies on the fake focus calling panesChanged before paneFocused
+- 15 · standard · 8213e6a96 · diff read: commitPaths gone from contract, adapter, tests, two fakes and AGENTS.md git/ entry; grep empty; typecheck and lint clean · concerns: none
+- 10 · hard · ee3469550 · diff read: UiState.on in contract, page store and uiStateOver fake; createSplitDivider subscribes and disposes; manual reloads gone from primer, docs shown, side-sections; typecheck and lint clean · concerns: forms round-view.ts:214 still calls split.reloadWidth() (left per the plan); notes/popup.test.ts's cast fake has no on; harness listeners shared only within one services object
 ### Contract changes
 ### Rulings
 - 02: the raw-JSON site in malformedEntryField passes { source } to ownsRoot rather than widening its parameter · group 02
@@ -197,5 +199,6 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 06: settleInBand takes the PlaceChange; scrollToFocus's settle reports 'list' so a restored place survives · group 06
 - 01: start.test.ts edited outside Tests: startDocsPage passes fakeFuzzyMatcher and restorePending's saved place takes the new shape · group 01
 - 05: rows.on/selection.on and followRows subscribe after the view mounts (before: ahead of the mount); the view takes neither slot, so listener order is unchanged · group 05
+- 10: reloadWidth checks !isDisposed as well as !isDragging (the tree checked only dragging); reloadWidth stays on Split for theme-token widths and forms' caller · group 10
 ### Review rounds
 ### Test gate

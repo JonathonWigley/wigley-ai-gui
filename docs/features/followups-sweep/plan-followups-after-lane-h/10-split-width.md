@@ -1,6 +1,6 @@
 # 10 — Split subscribes to its width key
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds a member to the `UiState` contract every implementer and fake must carry, moves four owners off a manual reload, and the subscription must not fight a drag in progress
 Wave: 3 · Depends on: 01 (`docs/page/start.ts`), 05 (`sessions/page/session-fakes.ts`), 07 (`DESIGN.md`, another section)
@@ -159,3 +159,4 @@ any of them stores, and primer, docs and chat's hub drop their manual reloads (f
 
 ## Proof
 
+Commit ee3469550 · proof: diff read: UiState.on in contract, page store and uiStateOver fake; createSplitDivider subscribes and disposes; manual reloads gone from primer, docs shown, side-sections; typecheck and lint clean · concerns: forms round-view.ts:214 still calls split.reloadWidth() (left per the plan); notes/popup.test.ts's cast fake has no on; harness listeners shared only within one services object
