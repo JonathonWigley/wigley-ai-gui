@@ -542,6 +542,9 @@ describe('round view setLayouts', () => {
         undefined,
         [['r', first]],
       );
+      expect(findAll(asFake(view.element), 'layout-head')).toHaveLength(
+        drawsHead ? 0 : 1,
+      );
 
       view.setLayouts(reloaded(layouts, 'r', next), round);
 

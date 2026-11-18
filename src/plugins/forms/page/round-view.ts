@@ -172,8 +172,9 @@ interface RoundParts {
   // again into its slot; the head draws again in its slot. The notices pane
   // draws again when a notice card's pick changed too.
   redraw(round: RoundState, picks: RoundPicks, changes: RoundPickChanges): void;
-  // Disposes each card's, pane's and strip's last draw, which disposes the
-  // anchors and markdown mounts it made, then the head's.
+  // Disposes each card's and pane's last draw, which disposes the anchors and
+  // markdown mounts it made, then the head's anchors, then each strip's last
+  // draw.
   dispose(): void;
 }
 

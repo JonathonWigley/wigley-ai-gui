@@ -1315,7 +1315,7 @@ function drawCardPart<Kit, Input>(
         kit.kit,
       );
       const element = requireElementIn(buildParent, card?.element, partName);
-      kit.appendUnmountedBoxes(element);
+      kit.appendUnplacedBoxes(element);
       return { element, card: card as PrimerLayoutCard<Input>, kit };
     },
     log: deps.log,
