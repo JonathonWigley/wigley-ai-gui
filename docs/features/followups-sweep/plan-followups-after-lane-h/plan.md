@@ -214,4 +214,5 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - chatroom-view.ts joins lot C and schedules-view.ts lot D (the find's new views) · group 25
 - services.timers counts as registered through api (page-api's trackedTimers clears them at stop); a handed-back drawn part is a gap · group 25
 ### Review rounds
+- Round 1 (pinned 10fda06de): NEEDS FIXES — 11 Important, 17 Minor, 3 pre-existing; open findings took recommended picks (headless). Fix range 8af6aa483^..448fc89ae (8 worker commits, typecheck and lint clean). Risk: High — changes plugin stop ordering (parked-invoke drops), chat main's final-save wait, docs restore of unsaved edits, and teardown/stopped guards across ~40 parts; re-review (correctness) runs.
 ### Test gate
