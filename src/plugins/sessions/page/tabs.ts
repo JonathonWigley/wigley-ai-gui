@@ -211,9 +211,9 @@ export function showsNoSelectionText(state: SessionsState | null): boolean {
 
 // Asks each of the session's views whether it may close, stopping at the
 // first that says no; `atOnce` is the close key's word that a view asked for
-// the session to close at once. `viewsNow` is read again after each answer, so
-// a view added while one was asking (a form popup a round adds under chat's
-// confirm) is asked too; each view is asked once.
+// the session to close at once, or a targeted run's. `viewsNow` is read again
+// after each answer, so a view added while one was asking (a form popup a
+// round adds under chat's confirm) is asked too; each view is asked once.
 export async function mayClose(
   viewsNow: () => readonly Pick<SessionTabView, 'beforeClose'>[],
   atOnce: boolean,

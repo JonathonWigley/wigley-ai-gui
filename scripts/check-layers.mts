@@ -205,6 +205,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/practice/contract.ts',
           'src/plugins/practice/main',
           'src/main/processes',
+          'src/main/processes/node-processes.test-support.ts',
           'src/main/files',
         ],
         packages: ['node:'],
@@ -638,6 +639,34 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },
+  // Finds a program on the PATH with the pure shared program lookup.
+  'src/main/processes/node-processes.ts': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: ['node:'],
+  },
+  // Builds the host's real process runner over the real file adapter.
+  'src/main/processes/node-processes.test-support.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/main/files',
+      'src/main/processes/node-processes.ts',
+    ],
+    packages: ['node:'],
+  },
+  // Runs real programs through the host's process runner, and the lookup on
+  // fake POSIX and Windows platforms.
+  'src/main/processes/node-processes.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/main/processes/node-processes.ts',
+      'src/main/processes/node-processes.test-support.ts',
+    ],
+    packages: ['node:'],
+  },
   'src/main/git': { layers: ['src/contracts'], packages: ['node:'] },
   // Over the shared fakes, and a commit in a real temporary clone through the
   // real process runner.
@@ -648,6 +677,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/shared/paths',
       'src/main/git',
       'src/main/processes',
+      'src/main/processes/node-processes.test-support.ts',
     ],
     packages: ['node:'],
   },
@@ -715,6 +745,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/screen-capture',
       'src/main/files',
       'src/main/processes',
+      'src/main/processes/node-processes.ts',
       'src/main/git',
       'src/main/data-protocol',
       'src/main/drive',

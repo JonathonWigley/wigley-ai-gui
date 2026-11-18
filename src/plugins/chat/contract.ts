@@ -635,6 +635,13 @@ export interface ChatMainExports {
   toolCaller(sessionId: string, toolUseId: string): Promise<string | null>;
   // Whether a session chat owns is headless; false for any other session id.
   isHeadless(sessionId: string): boolean;
+  // Whether a session chat owns is unattended (launched with `unattended`
+  // true); false for any other session id.
+  isUnattended(sessionId: string): boolean;
+  // The name a frame line from this session's agent gives it, by
+  // `frameSenderName`: its title as a rename starts from, else its side-bar
+  // label, else its id.
+  senderName(sessionId: string): string;
   // Whether the harness process of a session chat owns started with the
   // headless note, which is the flag at its last process start (a `/clear`
   // included), or its saved flag when it has not started one in this app run;
@@ -989,3 +996,11 @@ export const chatMoveFocusCommand: CommandKey<
   { sessionId: string; stopId: string },
   'chat.moveFocus'
 > = { id: 'chat.moveFocus' };
+
+// Sends `text` to the chat session `sessionId`, framed as the calling agent's
+// message when an agent runs it; the one command that names its target
+// session in its argument.
+export const chatSendToCommand: CommandKey<
+  { sessionId: string; text: string },
+  'chat.sendTo'
+> = { id: 'chat.sendTo' };

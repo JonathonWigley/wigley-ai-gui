@@ -4080,6 +4080,50 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.isHeadless('row-unknown')).toBe(false);
   });
 
+  it.each([
+    {
+      given: 'a launch with unattended: true',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.launch({
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          message: { text: 'go', images: [] },
+          unattended: true,
+        }),
+      expected: true,
+    },
+    {
+      given: 'a restored unattended row',
+      open: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, record('host-a', { unattended: true }), []);
+        return ROW_ID;
+      },
+      expected: true,
+    },
+    {
+      given: 'a plain start',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        }),
+      expected: false,
+    },
+    {
+      given: 'an unknown id',
+      open: () => 'row-unknown',
+      expected: false,
+    },
+  ])('isUnattended reads the held flag: $given', async ({ open, expected }) => {
+    const test = setUp();
+
+    const sessionId = open(test);
+    await flush();
+
+    expect(test.chat.isUnattended(sessionId)).toBe(expected);
+  });
+
   // The flag at the last process start, whatever it was set to since.
   it.each([
     { given: 'turned on, not cleared', clears: false, expected: false },
@@ -5946,6 +5990,15 @@ describe('createChatSessions titles', () => {
       expected: [[ROW_ID, 'firstMessage', 'fix it']],
     },
     {
+      given: "a first message from another session's agent",
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, {
+          text: '[Message from the agent in session "Planner" — not typed by the user]\n run the tests',
+          images: [],
+        }),
+      expected: [[ROW_ID, 'firstMessage', 'run the tests']],
+    },
+    {
       given: 'a whitespace-only first message',
       act: (chat: ChatSessions) =>
         chat.send(ROW_ID, { text: ' \n\t ', images: [] }),
@@ -5987,6 +6040,12 @@ describe('createChatSessions titles', () => {
       given: 'a title over 200 code points',
       title: '🙂a'.repeat(150),
       expected: '🙂a'.repeat(100),
+    },
+    {
+      given: "a title framed by another session's agent",
+      title:
+        '[Message from the agent in session "Planner" — not typed by the user]\nrun the tests',
+      expected: 'run the tests',
     },
   ])(
     'resume_SetsTheRequestTitleAndSavesIt given $given',

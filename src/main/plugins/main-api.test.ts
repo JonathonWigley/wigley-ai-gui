@@ -29,6 +29,7 @@ import { createRegistrations } from '../../shared/registrations';
 import {
   createRuntimeCommands,
   EMPTY_RUNTIME_CATALOG,
+  type RuntimeCommandsDeps,
 } from '../../shared/runtime-commands';
 import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import type { LayoutService } from '../layouts/layout-service';
@@ -88,7 +89,9 @@ function liveSettings(initial: Record<string, object>) {
 // Main's commands over `state`, sending remote runs to `remote`.
 function mainCommandsOver(
   state: SlotStore,
-  remote: (id: string, arg: unknown) => Promise<void> = () => Promise.resolve(),
+  remote: RuntimeCommandsDeps<
+    MainCommandContext<any>
+  >['remote'] = async () => 'ran',
 ) {
   return createRuntimeCommands<MainCommandContext<any>>({
     process: 'main',
@@ -106,6 +109,7 @@ function apiOver(
   layouts = {} as LayoutService,
   dependency: MainApiDeps['dependency'] = () => undefined,
   overrides: Partial<MainApiDeps> = {},
+  pluginManifest: PluginManifest = manifest,
 ) {
   const registrations = createRegistrations();
   const deps: MainApiDeps = {
@@ -123,7 +127,7 @@ function apiOver(
     commands: mainCommandsOver(createSlotStore(() => {})),
     ...overrides,
   };
-  return { api: createMainApi(manifest, deps), registrations };
+  return { api: createMainApi(pluginManifest, deps), registrations };
 }
 
 // An api over `services`, with `paths` filled in.
@@ -557,6 +561,51 @@ describe('createMainApi', () => {
 
     expect(logged).toEqual([['p', 'hello']]);
   });
+
+  const notDeclared = 'Plugin "p" does not declare readsEverySlot';
+  it.each<{
+    case: string;
+    pluginManifest: PluginManifest;
+    check(state: TestApi['state']): void;
+  }>([
+    {
+      case: 'declared',
+      pluginManifest: { ...manifest, readsEverySlot: true },
+      check(state) {
+        expect(state.readAny('core.mode')).toEqual({
+          kind: 'value',
+          value: 'chat',
+        });
+        expect(state.slotIds()).toEqual(['core.mode', 'q.k']);
+      },
+    },
+    {
+      case: 'not declared',
+      pluginManifest: manifest,
+      check(state) {
+        expect(() => state.readAny('core.mode')).toThrow(notDeclared);
+        expect(() => state.slotIds()).toThrow(notDeclared);
+      },
+    },
+  ])(
+    'readAny and slotIds read every slot only for a manifest that declares readsEverySlot: $case',
+    ({ pluginManifest, check }) => {
+      const state = createSlotStore(() => {});
+      state.publish({ id: 'q.k', process: 'page', kind: 'keyed' }).set('a', 1);
+      state
+        .publish({ id: 'core.mode', process: 'main', kind: 'value' })
+        .set('chat');
+      const { api } = apiOver(
+        liveSettings({ p: {} }),
+        undefined,
+        undefined,
+        { state },
+        pluginManifest,
+      );
+
+      check(api.state);
+    },
+  );
 });
 
 describe('createMainApi recording', () => {
@@ -743,6 +792,7 @@ describe('createMainApi commands', () => {
     const remoteRuns: [string, unknown][] = [];
     const commands = mainCommandsOver(state, async (id, arg) => {
       remoteRuns.push([id, arg]);
+      return 'ran';
     });
     const { api, registrations } = apiOver(
       liveSettings({ p: {} }),

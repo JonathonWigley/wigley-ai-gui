@@ -16,7 +16,7 @@ import { createMemoryFiles } from '../../shared/memory-files';
 import { osPlatform } from '../../shared/os-platform';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
-import { createNodeProcesses } from '../processes/node-processes';
+import { hostNodeProcesses } from '../processes/node-processes.test-support';
 import { createProcessGit } from './process-git';
 
 const ROOT = '/Users/u/dev/m';
@@ -720,7 +720,7 @@ const gitOnPath = (() => {
 })();
 
 describe('createProcessGit over a real clone', () => {
-  const processes = createNodeProcesses();
+  const processes = hostNodeProcesses();
   // The real clone's paths are this machine's, so its OS's adapter reads them.
   const adapter = createProcessGit({
     processes,

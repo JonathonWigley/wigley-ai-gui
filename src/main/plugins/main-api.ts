@@ -22,7 +22,10 @@ import {
 } from '../../shared/plugin-service-views';
 import { scopedFiles } from '../../shared/scoped-files';
 import type { RuntimeCommands } from '../../shared/runtime-commands';
-import { pluginState, type SlotStore } from '../../shared/state/slot-store';
+import {
+  mainPluginState,
+  type SlotStore,
+} from '../../shared/state/slot-store';
 import { trackedTimers } from '../../shared/tracked-timers';
 import type { LayoutService } from '../layouts/layout-service';
 import type { PluginChannels } from './plugin-channel';
@@ -137,7 +140,7 @@ export function createMainApi(
         ),
       names: () => deps.layouts.names(manifest.id),
     },
-    state: pluginState(deps.state, manifest.id, 'main', (handle) =>
+    state: mainPluginState(deps.state, manifest, (handle) =>
       registrations.track(handle),
     ),
     commands: pluginCommands.commands,

@@ -4,6 +4,7 @@ import {
   BRIDGE_CHANNELS,
   type PluginPartsRequest,
 } from '../contracts/bridge';
+import type { CommandHop, CommandOutcome } from '../contracts/commands';
 import type { SlotChange } from '../contracts/state';
 import { gateExternalLinks } from '../shared/external-links';
 import './preload';
@@ -169,40 +170,85 @@ describe('preload chooseFolder and openExternal', () => {
   });
 });
 
+describe('preload runCommand', () => {
+  it('runCommand_Hop_IsTheThirdInvokeArgument', async () => {
+    const invoked: unknown[][] = [];
+    electron.handlers[BRIDGE_CHANNELS.commandRun] = (...args) => {
+      invoked.push([BRIDGE_CHANNELS.commandRun, ...args]);
+      return 'ran';
+    };
+    const hop: CommandHop = { callerSessionId: 'c1', reportErrors: true };
+
+    await expect(bridge.runCommand('p.go', 3, hop)).resolves.toBe('ran');
+
+    expect(invoked).toEqual([[BRIDGE_CHANNELS.commandRun, 'p.go', 3, hop]]);
+  });
+});
+
 describe('preload onRunCommand', () => {
-  function runFromMain(request: number, id: string, arg: unknown) {
+  function runFromMain(
+    request: number,
+    id: string,
+    arg: unknown,
+    hop?: CommandHop,
+  ) {
     const added = electron.onCalls.filter(
       ([channel]) => channel === BRIDGE_CHANNELS.commandRunInPage,
     );
-    added.at(-1)?.[1]({}, request, id, arg);
+    added.at(-1)?.[1]({}, request, id, arg, hop);
   }
 
+  const reportingHop: CommandHop = {
+    targetSessionId: 's1',
+    callerSessionId: 'c1',
+    reportErrors: true,
+  };
+
   it.each([
-    { case: 'resolves', settle: () => Promise.resolve() },
-    { case: 'rejects', settle: () => Promise.reject(new Error('boom')) },
-  ])('onRunCommand_ListenerSettles_SendsDone: $case', async ({ settle }) => {
+    {
+      case: 'resolves',
+      hop: undefined,
+      heardHop: {},
+      settle: (): Promise<CommandOutcome> => Promise.resolve('ran'),
+      done: [BRIDGE_CHANNELS.commandRunDone, 7, 'ran', null],
+    },
+    {
+      case: 'rejects',
+      hop: undefined,
+      heardHop: {},
+      settle: (): Promise<CommandOutcome> => Promise.reject(new Error('boom')),
+      done: [BRIDGE_CHANNELS.commandRunDone, 7, 'skipped', 'boom'],
+    },
+    {
+      case: 'rejects, with a reporting hop',
+      hop: reportingHop,
+      heardHop: reportingHop,
+      settle: (): Promise<CommandOutcome> => Promise.reject(new Error('boom')),
+      done: [BRIDGE_CHANNELS.commandRunDone, 7, 'skipped', 'boom'],
+    },
+  ])('onRunCommand_ListenerSettles_SendsDone: $case', async (row) => {
     electron.sends.length = 0;
     const heard: unknown[][] = [];
     let release = () => {};
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
-    bridge.onRunCommand(async (id, arg) => {
-      heard.push([id, arg]);
+    bridge.onRunCommand(async (id, arg, hop) => {
+      heard.push([id, arg, hop]);
       await held;
-      await settle();
+      return row.settle();
     });
 
-    runFromMain(7, 'p.go', 3);
+    runFromMain(7, 'p.go', 3, row.hop);
     await vi.waitFor(() => {
-      expect(heard).toEqual([['p.go', 3]]);
+      expect(heard).toEqual([['p.go', 3, row.heardHop]]);
     });
     expect(electron.sends).toEqual([]);
 
     release();
 
     await vi.waitFor(() => {
-      expect(electron.sends).toEqual([[BRIDGE_CHANNELS.commandRunDone, 7]]);
+      expect(electron.sends).toEqual([row.done]);
     });
   });
 });

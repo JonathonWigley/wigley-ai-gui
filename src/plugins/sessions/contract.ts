@@ -454,14 +454,15 @@ export interface SessionsChannel extends ChannelShape {
 // false keeping it, for what only the page knows or must ask; a promise
 // answers once the tab has asked the user (chat's end-session confirm).
 // `atOnce` is true when the user's close key runs while any of the session's
-// tabs or popups closes at once. `shown` runs each time this tab becomes the
-// visible tab: the selected tab of the focused chat pane's session while
-// Sessions mode shows and that session has no open popup. Its plugin sets its
-// base key scope there. `hidden` runs when it stops being the visible tab, the
-// mode hiding or a popup opening over it included, before the next surface's
-// `shown`; a tab removed first gets none. `shown` may run inside `addTab`,
-// before its handle returns, so it must not read that handle. `order` places
-// the tab in the strip, as `addTab` says.
+// tabs or popups closes at once, and on an agent's targeted `closeSession`
+// run, which the user's Allow already confirmed. `shown` runs each time this
+// tab becomes the visible tab: the selected tab of the focused chat pane's
+// session while Sessions mode shows and that session has no open popup. Its
+// plugin sets its base key scope there. `hidden` runs when it stops being the
+// visible tab, the mode hiding or a popup opening over it included, before the
+// next surface's `shown`; a tab removed first gets none. `shown` may run
+// inside `addTab`, before its handle returns, so it must not read that handle.
+// `order` places the tab in the strip, as `addTab` says.
 export interface SessionTabView {
   id: string;
   title: string;

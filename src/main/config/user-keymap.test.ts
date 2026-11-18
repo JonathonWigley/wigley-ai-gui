@@ -172,9 +172,9 @@ describe('parseUserKeymap', () => {
   });
 
   it('parseUserKeymap_UnknownToken_NamesEntryPath', () => {
-    const binds = [{ keys: '<F5>', scope: 'any', command: 'test.pick' }];
+    const binds = [{ keys: '<F13>', scope: 'any', command: 'test.pick' }];
 
-    expect(() => parse({ binds })).toThrow(/binds\[0\].*<F5>/);
+    expect(() => parse({ binds })).toThrow(/binds\[0\].*<F13>/);
   });
 
   it.each(['<A-o>', '<', '<lt>', 'ab', '<Tab>', '<tab>'])(

@@ -66,3 +66,27 @@ export interface CommandRunContext {
   readonly id: CommandId;
   readonly arg: unknown;
 }
+
+// The sessions a run carries beside its argument. `targetSessionId` is the
+// session the command acts on, read only by a command declared `targets: true`;
+// `callerSessionId` is the session whose agent asked for the run. A key or a
+// click carries neither.
+export interface CommandSessions {
+  readonly targetSessionId?: string;
+  readonly callerSessionId?: string;
+}
+
+// `reportErrors` makes a run reject with its first failure in time, once the
+// run settles, after logging every failure as a plain run does.
+export interface CommandRunOptions {
+  readonly reportErrors?: true;
+}
+
+// What a run carries to the other process: its sessions and whether it reports.
+export interface CommandHop extends CommandSessions, CommandRunOptions {}
+
+// How a run ended: `ran` when its handler ran to its end and nothing in the run
+// failed; `skipped` when no handler ran, as when an intercept settled without
+// calling `next`, or when a run that does not report failed. `ran` never proves
+// the command's effect.
+export type CommandOutcome = 'ran' | 'skipped';

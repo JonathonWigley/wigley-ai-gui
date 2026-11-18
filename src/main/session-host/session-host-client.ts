@@ -1,7 +1,7 @@
-import type { SpawnOptions } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import type { Clock, Timers } from '../../contracts/ambient';
 import type { Log } from '../../contracts/log';
+import type { ProcessRunner } from '../../contracts/processes';
 import type {
   HostedExit,
   HostedProcess,
@@ -19,6 +19,7 @@ import {
   SESSION_HOST_PROTOCOL,
   type SpawnedEvent,
 } from '../../contracts/session-host-protocol';
+import { errorText } from '../../shared/error-text';
 import {
   HOST_REPLY_LIMIT_MS,
   type HostAnswer,
@@ -35,23 +36,12 @@ const DEFAULT_KEEP_IDLE_MINUTES = 60;
 // SIGTERM, the grace to SIGKILL, the grace from an exit to destroying held pipes, and a margin for the reply.
 const STOP_ALL_REPLY_LIMIT_MS = 2 * HOST_END_GRACE_MS + 2000;
 
-export type SessionHostSpawn = (
-  command: string,
-  args: readonly string[],
-  options: SpawnOptions,
-) => {
-  unref(): void;
-  // node:child_process reports ENOENT, EACCES and EMFILE as an `error` event, not a throw.
-  on(event: 'error', listener: (error: Error) => void): unknown;
-};
-
 export interface SessionHostClientDeps {
   folder: string; // <app instance user data>/session-host
   channel: string; // sessionHostChannel(...)
   hostScript: string; // the built session-host.js
   execPath: string; // process.execPath
-  env: NodeJS.ProcessEnv;
-  spawn: SessionHostSpawn;
+  processes: Pick<ProcessRunner, 'startDetached'>; // starts the host in the app's environment
   clock: Clock;
   timers: Timers;
   log: Log;
@@ -251,29 +241,21 @@ export function createSessionHostClient(
     runWaiting(null, reason);
   };
 
+  // The host's output is dropped; a host that starts and later exits is found by the next connect.
   const startHost = (started: ConnectAttempt) => {
-    try {
-      const host = deps.spawn(
+    deps.processes
+      .startDetached(
         deps.execPath,
         [deps.hostScript, deps.folder, deps.channel],
-        {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true,
-          env: { ...deps.env, ELECTRON_RUN_AS_NODE: '1' },
-        },
-      );
-      host.on('error', (error) => {
+        { setEnv: { ELECTRON_RUN_AS_NODE: '1' } },
+      )
+      .catch((error: unknown) => {
         if (started.ended) {
-          deps.log(LOG_SOURCE, `host spawn error: ${error.message}`);
+          deps.log(LOG_SOURCE, `host spawn error: ${errorText(error)}`);
         } else {
-          failAttempt(started, error.message);
+          failAttempt(started, errorText(error));
         }
       });
-      host.unref();
-    } catch (error) {
-      failAttempt(started, (error as Error).message);
-    }
   };
 
   const waitForNextPoll = (started: ConnectAttempt) =>

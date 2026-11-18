@@ -12,6 +12,7 @@ export function coreDefaultSettings(): Settings {
     plugins: {
       disabled: ['agent-lines', 'usage-tab-line', 'docs-session-tab'],
     },
+    programs: { python: '' },
   };
 }
 
@@ -98,5 +99,10 @@ export const settingInfo: SettingInfos<Settings> = {
     label: 'Disabled plugins',
     description:
       'Plugin ids the app does not run. A change applies at once: the app stops each plugin the list adds and starts each one it drops. Settings mode switches them in its Plugins section.',
+  },
+  'programs.python': {
+    label: 'Python command',
+    description:
+      'The Python the docs index and unity-pool run: a program name or a path; ~ is the home folder. Empty, the app looks on PATH for py -3, python, then python3 on Windows, and python3, then python elsewhere. Applies to the next run.',
   },
 };

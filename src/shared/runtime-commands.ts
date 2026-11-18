@@ -1,4 +1,9 @@
-import type { CommandId } from '../contracts/commands';
+import type {
+  CommandHop,
+  CommandId,
+  CommandOutcome,
+  CommandSessions,
+} from '../contracts/commands';
 import type { RuntimeCatalog } from '../contracts/core-state';
 import type { Disposable } from '../contracts/disposable';
 import type { KeyBind, RuntimeBind } from '../contracts/keymap';
@@ -28,7 +33,8 @@ export const EMPTY_RUNTIME_CATALOG: RuntimeCatalog = {
 };
 
 // `writer` is this process's catalog, `other` the other process's as this process
-// mirrors it, and `served` the commands of the config served now.
+// mirrors it, and `served` the commands of the config served now. `remote` is as
+// `CommandRouterDeps` says.
 export interface RuntimeCommandsDeps<Context extends { arg: unknown }> {
   process: ProcessName;
   registry: CommandRegistry<Context>;
@@ -36,7 +42,11 @@ export interface RuntimeCommandsDeps<Context extends { arg: unknown }> {
   other: SlotReader<RuntimeCatalog>;
   served(): Readonly<Record<CommandId, CommandInfo>>;
   leader(): string;
-  remote(id: CommandId, arg: unknown): Promise<void>;
+  remote(
+    id: CommandId,
+    arg: unknown,
+    hop: CommandHop,
+  ): Promise<CommandOutcome>;
 }
 
 // One process's commands: the registry of its handlers, the router every run takes,
@@ -82,6 +92,44 @@ export function createRuntimeCommands<Context extends { arg: unknown }>(
     infoOf,
     remote: deps.remote,
   });
+  // A served runtime entry neither catalog holds is an old page's, which no
+  // run reaches.
+  const list = (): readonly CommandInfo[] => {
+    const served = Object.values(deps.served()).filter(
+      (info) => info.runtime !== true,
+    );
+    const byId = new Map<CommandId, CommandInfo>();
+    for (const info of [...own().commands, ...theirs().commands, ...served]) {
+      if (!byId.has(info.id)) {
+        byId.set(info.id, info);
+      }
+    }
+    return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : 1));
+  };
+  // Every refusal and failure is a rejection, never a throw at the call.
+  const runFor = async (
+    id: CommandId,
+    arg: unknown,
+    sessions: CommandSessions,
+  ): Promise<CommandOutcome> => {
+    const info = infoOf(id);
+    if (info === undefined) {
+      throw new Error(`Unknown command ${id}`);
+    }
+    const argProblem = checkCommandArg(id, info.arg, arg);
+    if (argProblem !== null) {
+      throw new Error(argProblem);
+    }
+    if (info.runsIn === process && !registry.has(id)) {
+      throw new Error(`${id} has no handler`);
+    }
+    if (sessions.targetSessionId !== undefined && info.targets !== true) {
+      throw new Error(`${id} takes no session`);
+    }
+    return router.run(id, arg, sessions as Omit<Context, 'arg'>, {
+      reportErrors: true,
+    });
+  };
   const update = (change: (catalog: RuntimeCatalog) => RuntimeCatalog) =>
     writer.set(change(own()));
   const registerCommand = (
@@ -176,8 +224,11 @@ export function createRuntimeCommands<Context extends { arg: unknown }>(
     forPlugin(pluginId, track) {
       return {
         commands: {
+          // A plugin's plain run resolves no outcome; `runFor` gives it.
           run: (command: CommandId | { id: string }, arg?: unknown) =>
-            router.run(command, arg),
+            router.run(command, arg).then(() => undefined),
+          runFor,
+          list,
           register: (short, decl, handler) =>
             track(registerCommand(pluginId, short, decl, handler)),
           intercept: (id, wrap) => track(router.intercept(id, wrap, pluginId)),

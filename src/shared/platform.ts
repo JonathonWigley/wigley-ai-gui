@@ -16,7 +16,29 @@ export interface PlatformInputs {
   isDev: boolean;
 }
 
-const DEFAULT_PROGRAMS: PlatformPrograms = { claude: '~/.local/bin/claude' };
+// Windows names `claude.exe` with its extension, so the lookup never picks an npm `claude.cmd` shim.
+const WINDOWS_PROGRAMS: PlatformPrograms = {
+  python: [
+    { command: 'py', args: ['-3'] },
+    { command: 'python', args: [] },
+    { command: 'python3', args: [] },
+  ],
+  claude: [
+    { command: 'claude.exe', args: [] },
+    { command: '~/.local/bin/claude.exe', args: [] },
+  ],
+};
+
+const POSIX_PROGRAMS: PlatformPrograms = {
+  python: [
+    { command: 'python3', args: [] },
+    { command: 'python', args: [] },
+  ],
+  claude: [
+    { command: 'claude', args: [] },
+    { command: '~/.local/bin/claude', args: [] },
+  ],
+};
 
 // The server key of the marketplace plugin's `.mcp.json`.
 export const RELAY_SERVER_NAME = 'wigley-forms';
@@ -41,13 +63,14 @@ function platformRecord(
   os: OsName,
   lifecycle: PlatformLifecycle,
   keys: PlatformKeys,
+  programs: PlatformPrograms,
   inputs: PlatformInputs,
 ): Platform {
   return {
     os,
     lifecycle,
     keys,
-    programs: DEFAULT_PROGRAMS,
+    programs,
     relay: {
       username: inputs.username,
       pid: inputs.pid,
@@ -71,6 +94,7 @@ export function createMacPlatform(inputs: PlatformInputs): Platform {
       hidesFromDockBesideApp: true,
     },
     { optionMatchesByCode: true, altGraphTypes: false },
+    POSIX_PROGRAMS,
     inputs,
   );
 }
@@ -84,6 +108,7 @@ export function createWindowsPlatform(inputs: PlatformInputs): Platform {
       hidesFromDockBesideApp: false,
     },
     { optionMatchesByCode: false, altGraphTypes: true },
+    WINDOWS_PROGRAMS,
     inputs,
   );
 }
@@ -97,6 +122,7 @@ export function createLinuxPlatform(inputs: PlatformInputs): Platform {
       hidesFromDockBesideApp: false,
     },
     { optionMatchesByCode: false, altGraphTypes: true },
+    POSIX_PROGRAMS,
     inputs,
   );
 }

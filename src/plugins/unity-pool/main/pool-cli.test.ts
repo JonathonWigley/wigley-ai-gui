@@ -101,11 +101,7 @@ describe('readActionResult', () => {
 
 describe('runPoolCommand', () => {
   // `stat` answers a file at each path in `present`, recording every path asked.
-  function deps(
-    present: string[],
-    scriptPath: string,
-    pythonCommand = 'python3',
-  ) {
+  function deps(present: string[], scriptPath: string) {
     const statted: string[] = [];
     const processes = new FakeProcesses();
     return {
@@ -124,7 +120,6 @@ describe('runPoolCommand', () => {
         paths: posixPaths,
         homeDir: '/h',
         scriptPath,
-        pythonCommand,
       },
     };
   }
@@ -155,13 +150,20 @@ describe('runPoolCommand', () => {
     expect(run.processes.runs).toEqual([]);
   });
 
-  it.each(['python3', 'py'])(
-    'runPoolCommand_TildeScript_ExpandsAndRunsThePythonWithoutSessionIdentity: %s',
-    async (pythonCommand) => {
-      const run = deps(['/h/x'], '~/x', pythonCommand);
-      const args = poolCommandArgs('/h/x', 'release', 'p', 4);
+  it.each([
+    { command: 'python3', args: [] },
+    { command: 'py', args: ['-3'] },
+  ])(
+    'runPoolCommand_TildeScript_ExpandsAndRunsThePythonWithoutSessionIdentity: $command $args',
+    async (python) => {
+      const run = deps(['/h/x'], '~/x');
+      run.processes.scriptProgram('python', python);
+      const args = [
+        ...python.args,
+        ...poolCommandArgs('/h/x', 'release', 'p', 4),
+      ];
       run.processes.script(
-        pythonCommand,
+        python.command,
         args,
         exited(0, '{"ok": true, "pool": "p", "clone": 4}'),
       );
@@ -171,7 +173,7 @@ describe('runPoolCommand', () => {
       expect(run.statted).toEqual(['/h/x']);
       expect(run.processes.runs).toEqual([
         {
-          command: pythonCommand,
+          command: python.command,
           args,
           cwd: undefined,
           timeoutMs: 30_000,
@@ -189,6 +191,18 @@ describe('runPoolCommand', () => {
       });
     },
   );
+
+  it('runPoolCommand_NoPython_NoPythonAndRunsNothing', async () => {
+    const run = deps(['/s/unity-pool'], '/s/unity-pool');
+    run.processes.scriptProgram('python', null);
+
+    expect(await runPoolCommand(run.deps, 'hold', 'p', 3)).toEqual({
+      ok: false,
+      error: 'no-python',
+      message: 'Python was not found on PATH; set programs.python',
+    });
+    expect(run.processes.runs).toEqual([]);
+  });
 
   it('runPoolCommand_RunRejects_CliFailed', async () => {
     const run = deps(['/s/unity-pool'], '/s/unity-pool');

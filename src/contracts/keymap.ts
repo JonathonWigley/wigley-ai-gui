@@ -61,7 +61,9 @@ export type PendingKeys =
 // Keys pressed in order while no editor has focus; each is a KeyboardEvent.key
 // value. Or a chord, alone in `keys`, written by `CHORD_NOTATION_RULE` in
 // `src/shared/chord-notation.ts` (`<C-h>`, `<D-Enter>`), firing on the page and
-// inside an editor and matching the typed character.
+// inside an editor and matching the typed character (the physical key for an
+// Option chord where `platform.keys` says so, and for a key that types no ASCII
+// character).
 export interface PageBind {
   keys: string[];
   scope: ViewScope;

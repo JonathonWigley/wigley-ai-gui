@@ -28,11 +28,13 @@ import {
 import { registeredProfiles } from '../../../shared/harness-profiles';
 import { isSameJson } from '../../../shared/json';
 import {
+  editableTitle,
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
   sessionsSelectionSlot,
 } from '../../sessions/contract';
+import { frameAgentMessage, frameSenderName } from '../agent-frame';
 import {
   type ChatChannel,
   chatCommandsSlot,
@@ -317,11 +319,12 @@ export function createHarnessFollower(
 // merged with the harness's, signs profiles in and out (cancelling a running
 // sign-in when the page loads again or the part is disposed), registers its
 // chat layouts, opens the layout preview's sample session (held apart from
-// chat's sessions, with no process), offers a drive run its fixtures, and
-// exports to other plugins a background launch, a send, clear and active time
-// read on the sessions it holds, the agent that made a tool call in one of
-// them, a close of every session in a folder or of one
-// session, a registration of
+// chat's sessions, with no process), offers a drive run its fixtures, runs
+// `chat.sendTo`, which sends to a session it holds, framed when an agent asks,
+// and exports to other plugins a background launch, a send, clear, active time,
+// headless, unattended and sender-name reads on the sessions it holds, the agent
+// that made a tool call in one of them, a close of every session in a folder or
+// of one session, a registration of
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, one of the resume
 // sections the start prompt lists, and one of the pool provider a pool
@@ -635,6 +638,14 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         throw new Error(`chat holds no session ${sessionId}`);
       }
     };
+    const senderName = (sessionId: string) => {
+      const titles = sessions.titles(sessionId);
+      return frameSenderName(
+        titles === null ? null : editableTitle(titles),
+        sessions.label(sessionId),
+        sessionId,
+      );
+    };
     const exports = (consumer: Registrations): ChatMainExports => ({
       launch: async (request) => chat.launch(request),
       resume: (request) => chat.resume(request),
@@ -645,6 +656,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
           ? toolCallers.agentOf(sessionId, toolUseId)
           : Promise.resolve(null),
       isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      isUnattended: (sessionId) => chat.isUnattended(sessionId),
+      senderName,
       launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
       defaultProfile,
       restored: () => restored,
@@ -709,7 +722,28 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       },
     });
     return {
-      commands: {},
+      commands: {
+        // Sends as chat's own send does, so it queues behind a running turn;
+        // an agent's run opens the text with the frame line naming its
+        // session. It never runs an app slash command.
+        sendTo: async ({ arg, callerSessionId }) => {
+          const { sessionId, text } = arg;
+          if (text.trim() === '') {
+            throw new Error('chat.sendTo: no text');
+          }
+          if (sessionId === callerSessionId) {
+            throw new Error('chat.sendTo: a session cannot send to itself');
+          }
+          if (!holds(sessionId)) {
+            throw new Error(`chat.sendTo: no chat session ${sessionId}`);
+          }
+          const sent =
+            callerSessionId === undefined
+              ? text
+              : frameAgentMessage(senderName(callerSessionId), text);
+          await chat.send(sessionId, { text: sent, images: [] });
+        },
+      },
       exports,
       dispose: (stop) => {
         if (stop === 'restart') {

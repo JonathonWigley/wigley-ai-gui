@@ -20,7 +20,7 @@ function runtimeWithGo(ran: unknown[]) {
     other: store.read(coreRuntimeMainSlot, 'core'),
     served: () => ({}),
     leader: () => ' ',
-    remote: () => Promise.resolve(),
+    remote: async () => 'ran',
   });
   runtime
     .forPlugin('p', (handle) => handle)

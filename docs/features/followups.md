@@ -336,11 +336,18 @@ What a second harness — Codex, wigley-harness — and the agent settings and p
 
 What Windows support and installers need.
 
-- **Per-platform program lookup and spawning** — *agent-ready*: program lookup and spawning per platform behind
-  `ProcessRunner`: `.cmd`/`.bat` shims through `cmd.exe` on Windows, a `resolveProgram('python')` (`py -3` → `python`
-  → `python3`) for docs' index script (`index-sources.ts` runs `python3`), a PATH lookup for the `claude` command
-  instead of `~/.local/bin/claude`, and spawn/kill handles so the Claude adapter stops importing
-  `node:child_process`.
+- **Session host starts a claude shim on Windows** — *needs a feature plan*: the session host process's own spawn
+  starts `claude` unwrapped, so a `claude-code.command` set to an npm `claude.cmd` cannot start a session, and the
+  PATH lookup looks only for `claude.exe`. The fix puts the session host's adapters (`src/session-host/`) behind the
+  same shim handling, then lets the Windows lookup find shims. Killing a shim's `cmd.exe` also leaves its child
+  running, as `run` does today.
+- **A `.cmd` shim re-parses its arguments once more** — *needs a decision*: `shimLaunch`
+  (`src/shared/program-lookup.ts`) escapes cmd metacharacters once. cross-spawn 7.0.6 escapes twice for a `.cmd`
+  under `node_modules\.bin` (`lib/parse.js` `needsDoubleEscapeMetaChars`, checked), because a cmd-shim batch file
+  re-parses `%*`. The open question is whether that re-parse breaks this code's single escape (the BatBadBut class);
+  the theory, unchecked, is that it matters only when a setting or a bare name resolves to an npm `.cmd` shim and an
+  argument holds cmd metacharacters. Options: escape twice for every `.cmd` shim, or refuse `"` in arguments as the
+  line-break refusal does. Check cmd's parse rules first.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
   `packagerConfig`, no makers).
 - **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`

@@ -156,6 +156,7 @@ describe('applySelfTestConfig', () => {
           keySequenceTimeoutMs: 1,
           shell: { layout: 'default' },
           plugins: { disabled: ['p'] },
+          programs: { python: '' },
         },
         keymap: {
           editor: { leader: ' ', remaps: [], binds: [] },

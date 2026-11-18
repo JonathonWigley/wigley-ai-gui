@@ -1,10 +1,60 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandArg, CommandArgShape } from '../contracts/commands';
+import type {
+  CommandArg,
+  CommandArgShape,
+  CommandHop,
+} from '../contracts/commands';
 import {
   checkCommandArg,
   commandArgLabel,
+  commandHopOf,
   commandTarget,
 } from './command-args';
+
+describe('commandHopOf', () => {
+  it.each<{ case: string; value: unknown; hop: CommandHop }>([
+    { case: 'undefined', value: undefined, hop: {} },
+    { case: 'a string', value: 's1', hop: {} },
+    { case: 'an array', value: ['s1'], hop: {} },
+    {
+      case: 'a well-typed hop',
+      value: {
+        targetSessionId: 's1',
+        callerSessionId: 'c1',
+        reportErrors: true,
+      },
+      hop: {
+        targetSessionId: 's1',
+        callerSessionId: 'c1',
+        reportErrors: true,
+      },
+    },
+    {
+      case: 'non-string ids',
+      value: { targetSessionId: 1, callerSessionId: null, reportErrors: true },
+      hop: { reportErrors: true },
+    },
+    {
+      case: 'a reportErrors other than true',
+      value: {
+        targetSessionId: 's1',
+        callerSessionId: 'c1',
+        reportErrors: 'yes',
+      },
+      hop: { targetSessionId: 's1', callerSessionId: 'c1' },
+    },
+    {
+      case: 'an unknown field',
+      value: { callerSessionId: 'c1', editor: {}, arg: 3 },
+      hop: { callerSessionId: 'c1' },
+    },
+  ])(
+    'commandHopOf_UntrustedValue_KeepsOnlyTheTypedFields: $case',
+    ({ value, hop }) => {
+      expect(commandHopOf(value)).toStrictEqual(hop);
+    },
+  );
+});
 
 describe('checkCommandArg', () => {
   const shape: CommandArgShape = { n: 'number', s: 'string' };

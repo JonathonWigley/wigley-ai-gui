@@ -75,12 +75,14 @@ export const coreCommands: Record<CommandId, CommandDecl> = {
     group: 'links',
     runsIn: 'page',
     arg: 'string',
+    risky: true,
   },
   [CORE_RELOAD_PLUGIN.id]: {
     label: 'reload a plugin',
     group: 'plugins',
     runsIn: 'main',
     arg: 'string',
+    risky: true,
   },
 };
 

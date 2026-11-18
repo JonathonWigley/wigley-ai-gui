@@ -1,4 +1,5 @@
 import type { MainPart } from '../contracts/plugin';
+import { agentCommandsMainPart } from './agent-commands/main/start';
 import { agentLinesMainPart } from './agent-lines/main/start';
 import { appUpdateMainPart } from './app-update/main/start';
 import { audioPickerMainPart } from './audio-picker/main/start';
@@ -44,6 +45,7 @@ export const mainParts: readonly MainPart[] = [
   // Before chat and usage, so Claude's harness is registered when they start.
   claudeCodeMainPart,
   formsMainPart,
+  agentCommandsMainPart,
   primerMainPart,
   audioPickerMainPart,
   chatMainPart,

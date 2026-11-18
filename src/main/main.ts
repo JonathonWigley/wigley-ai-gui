@@ -13,7 +13,6 @@ import {
   shell,
   type WebContents,
 } from 'electron';
-import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -52,7 +51,7 @@ import type { OsName, Platform } from '../contracts/platform';
 import type { ProcessRunner } from '../contracts/processes';
 import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
-import type { AppConfig } from '../contracts/settings';
+import type { AppConfig, Settings } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
 import type { UserConfig } from '../contracts/user-config';
@@ -69,6 +68,7 @@ import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
 import { manifests, withoutRealHarnessPlugins } from '../plugins/manifests';
 import { appEndpointDir } from '../shared/app-endpoint-dir';
+import { commandHopOf } from '../shared/command-args';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
@@ -440,10 +440,23 @@ const files = createNodeFiles({
   trashItem: modeServices.trashItem,
   os: platform.os,
 });
-const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = platform.os === 'windows' ? windowsPaths : posixPaths;
+// The core settings as the config store holds them now; null until the store
+// loads, so a program lookup before then reads no core setting.
+let currentSettings: (() => Settings) | null = null;
+// Programs install under the user's real home, never a self-test's or drive
+// run's temp home.
+const processes = createNodeProcesses({
+  files,
+  paths,
+  os: platform.os,
+  homeDir: os.homedir(),
+  programs: platform.programs,
+  programSetting: (name) =>
+    name === 'python' ? (currentSettings?.().programs.python ?? '') : '',
+});
 // Git runs at most this many at once, so a burst of reads cannot pile up
 // exited children faster than main's event loop reaps them.
 const MAX_GIT_RUNS = 4;
@@ -1139,9 +1152,13 @@ function createWindow(
     leader: () => store.current().keymap.editor.leader,
     remote: pageCommands.run,
   });
+  // The hop comes from the page, so only its typed fields are read.
   ipcMain.handle(
     BRIDGE_CHANNELS.commandRun,
-    (_event, id: string, arg: unknown) => commands.router.run(id, arg),
+    (_event, id: string, arg: unknown, hop: unknown) => {
+      const { reportErrors, ...sessions } = commandHopOf(hop);
+      return commands.router.run(id, arg, sessions, { reportErrors });
+    },
   );
   const { harnesses, ...windowServices } = modeServices.forWindow({
     window,
@@ -1493,6 +1510,7 @@ function startApp() {
         inputs.homeDir,
         catalog,
       );
+      currentSettings = () => store.current().settings;
       onSelfTestExit('the config store', () => store.dispose());
       // Logs its own failure and never rejects, so the start goes on.
       await writePluginTypes({
@@ -1530,8 +1548,7 @@ function startApp() {
         ),
         hostScript: path.join(__dirname, 'session-host.js'),
         execPath: process.execPath,
-        env: process.env,
-        spawn,
+        processes,
         clock,
         timers,
         log: pageLog.log,
