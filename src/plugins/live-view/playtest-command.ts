@@ -16,7 +16,10 @@ const UNITY_VALUE_FLAGS: ReadonlySet<string> = new Set([
   '--tag',
 ]);
 
-const CAPTURE_VALUE_FLAGS: ReadonlySet<string> = new Set(['--fps', '--backend']);
+const CAPTURE_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  '--fps',
+  '--backend',
+]);
 
 const PROJECT_PATH_FLAG = '--project-path';
 
@@ -26,13 +29,17 @@ const CAPTURE_SCRIPT = /^(?:.*\/)?capture\.py$/;
 const JOINED_REDIRECTION = /^(?:[0-9]*(?:>>?|<)&?.+|&>>?.+)$/;
 const BARE_REDIRECTION = /^(?:[0-9]*(?:>>?|<)|&>>?)$/;
 
-// The command's segments, each as its words with quotes and escapes removed.
-// Never throws: an unclosed quote runs to the end of the text.
+type Heredoc = { terminator: string; stripsTabs: boolean };
+
+// The command's segments, each as its words with quotes and escapes removed;
+// heredoc bodies are left out. Never throws: an unclosed quote runs to the end
+// of the text.
 function segmentsOf(text: string): string[][] {
   const segments: string[][] = [];
   let words: string[] = [];
   let word = '';
   let wordStarted = false;
+  let heredocs: Heredoc[] = [];
 
   const endWord = (): void => {
     if (wordStarted) {
@@ -75,7 +82,11 @@ function segmentsOf(text: string): string[][] {
     } else if (char === ' ' || char === '\t') {
       endWord();
       i += 1;
-    } else if (char === '\n' || char === ';') {
+    } else if (char === '\n') {
+      endSegment();
+      i = skipHeredocBodies(text, i + 1, heredocs);
+      heredocs = [];
+    } else if (char === ';') {
       endSegment();
       i += 1;
     } else if (
@@ -84,9 +95,17 @@ function segmentsOf(text: string): string[][] {
     ) {
       endSegment();
       i += 2;
-    } else if (char === '|') {
+    } else if (char === '|' || isBackgroundAmpersand(text, i)) {
       endSegment();
       i += 1;
+    } else if (char === '<' && next === '<') {
+      const isHereString = text[i + 2] === '<';
+      if (!isHereString) {
+        heredocs.push(heredocAt(text, i + 2));
+      }
+      word += isHereString ? '<<<' : '<<';
+      wordStarted = true;
+      i += isHereString ? 3 : 2;
     } else {
       word += char;
       wordStarted = true;
@@ -95,6 +114,56 @@ function segmentsOf(text: string): string[][] {
   }
   endSegment();
   return segments;
+}
+
+// Whether the `&` at `index` runs the command before it in the background,
+// rather than being part of `&&`, `&>`, `>&` or `<&`.
+function isBackgroundAmpersand(text: string, index: number): boolean {
+  const before = text[index - 1];
+  const after = text[index + 1];
+  const joinsRedirection = after === '>' || before === '>' || before === '<';
+  return text[index] === '&' && after !== '&' && !joinsRedirection;
+}
+
+// The heredoc whose `<<` ends just before `start`: its terminator word with
+// quotes removed, and whether `<<-` strips leading tabs from its lines.
+function heredocAt(text: string, start: number): Heredoc {
+  const stripsTabs = text[start] === '-';
+  let i = stripsTabs ? start + 1 : start;
+  while (text[i] === ' ' || text[i] === '\t') {
+    i += 1;
+  }
+  let terminator = '';
+  while (i < text.length && !/[\s;&|<>()]/.test(text[i] ?? '')) {
+    const char = text[i] ?? '';
+    if (char !== "'" && char !== '"' && char !== '\\') {
+      terminator += char;
+    }
+    i += 1;
+  }
+  return { terminator, stripsTabs };
+}
+
+// Skips the bodies of `heredocs`, in order, from the line at `start`, and
+// returns the index of the line after the last terminator.
+function skipHeredocBodies(
+  text: string,
+  start: number,
+  heredocs: readonly Heredoc[],
+): number {
+  let i = start;
+  for (const { terminator, stripsTabs } of heredocs) {
+    while (i < text.length) {
+      const newline = text.indexOf('\n', i);
+      const end = newline === -1 ? text.length : newline;
+      const line = text.slice(i, end);
+      i = end + 1;
+      if ((stripsTabs ? line.replace(/^\t+/, '') : line) === terminator) {
+        break;
+      }
+    }
+  }
+  return Math.min(i, text.length);
 }
 
 // Reads a double-quoted run starting after its opening quote, passing its
@@ -166,7 +235,7 @@ function readArgs(
   while (i < words.length) {
     const word = words[i] ?? '';
     const next = words[i + 1];
-    if (word === '&' || JOINED_REDIRECTION.test(word)) {
+    if (JOINED_REDIRECTION.test(word)) {
       i += 1;
     } else if (BARE_REDIRECTION.test(word)) {
       i += 2;
@@ -219,8 +288,9 @@ function signalOfSegment(words: readonly string[]): PlaytestSignal | null {
 
 // Whether a Bash command's text starts a playtest (`unity command editor_play`,
 // `capture.py start`) or stops one (`unity command editor_stop`), with the
-// `--project-path` it names; the last segment that signals wins. Variables,
-// command substitution and heredocs are read as written, not expanded.
+// `--project-path` it names; the last segment that signals wins. Variables and
+// command substitution are read as written, not expanded, and a heredoc's body
+// signals nothing.
 export function parsePlaytestCommand(command: string): PlaytestSignal | null {
   let signal: PlaytestSignal | null = null;
   for (const words of segmentsOf(command)) {

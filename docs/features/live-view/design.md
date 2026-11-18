@@ -46,6 +46,7 @@ drives, and knows nothing of a particular project.
   lead's row), whose command runs `unity command editor_play` or `capture.py start`, once the call succeeds: a denied
   or failed call opens nothing. A chained command counts (`cd <dir> && unity command editor_play --project-path
   <dir>`); `echo`, text inside quotes, a subshell, `bash -c`, another `unity command`, and `capture.py stop` do not.
+  A heredoc's body does not count either: a command written into a file with `cat > play.sh <<'EOF'` never ran.
 - **Live calls only:** a replayed or restored entry never acts. The watch reads the call's full command from
   chat's `chat.entries` list, since a `toolStarted` event's summary is cut to 80 characters, and counts the entry as
   live only when chat's `agentEvent` `toolStarted` for its `toolUseId` came with `replayed: false`. A restore writes

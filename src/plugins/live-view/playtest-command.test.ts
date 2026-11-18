@@ -96,17 +96,22 @@ describe('parsePlaytestCommand', () => {
     },
     {
       given: 'redirect 2>&1',
-      command: `unity command editor_play --result-only --project-path ${P} 2>&1`,
+      command: `unity command 2>&1 editor_play --project-path ${P}`,
       result: start(P),
     },
     {
       given: 'redirect to a file',
-      command: `unity command editor_play --project-path ${P} > /tmp/o.txt`,
+      command: `unity command > /tmp/o.txt editor_play --project-path ${P}`,
       result: start(P),
     },
     {
       given: 'redirect joined',
-      command: `unity command editor_play --project-path ${P} 2>/dev/null`,
+      command: `unity command 2>/dev/null editor_play --project-path ${P}`,
+      result: start(P),
+    },
+    {
+      given: 'redirect &>',
+      command: `unity command &>/dev/null editor_play --project-path ${P}`,
       result: start(P),
     },
     {
@@ -115,8 +120,13 @@ describe('parsePlaytestCommand', () => {
       result: start(P),
     },
     {
-      given: 'background &',
-      command: `unity command editor_play --project-path ${P} &`,
+      given: 'after a backgrounded command',
+      command: `sleep 2 & unity command editor_play --project-path ${P}`,
+      result: start(P),
+    },
+    {
+      given: 'tab between words',
+      command: `unity command\teditor_play --project-path ${P}`,
       result: start(P),
     },
     {
@@ -243,6 +253,26 @@ describe('parsePlaytestCommand', () => {
       given: 'timeout wrapper',
       command: `timeout 60 unity command editor_play --project-path ${P}`,
       result: null,
+    },
+    {
+      given: 'heredoc body',
+      command: `cat > play.sh <<'EOF'\nunity command editor_play --project-path ${P}\nEOF`,
+      result: null,
+    },
+    {
+      given: 'command after a heredoc',
+      command: `cat > play.sh <<EOF\nunity command editor_stop\nEOF\nunity command editor_play --project-path ${P}`,
+      result: start(P),
+    },
+    {
+      given: 'command after a tab-stripped heredoc',
+      command: `cat <<-"EOF"\n\tunity command editor_play\n\tEOF\nunity command editor_stop --project-path ${P}`,
+      result: stop(P),
+    },
+    {
+      given: 'here-string',
+      command: `cat <<< x\nunity command editor_play --project-path ${P}`,
+      result: start(P),
     },
     {
       given: 'unclosed quote with a signal',
